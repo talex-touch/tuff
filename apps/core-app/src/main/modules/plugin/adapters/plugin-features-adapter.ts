@@ -92,9 +92,17 @@ function resolveFeatureShowInput(feature: IPluginFeature): boolean {
 function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints {
   return {
     ...feature.footerHints,
+    primary: {
+      visible: false,
+      ...feature.footerHints?.primary
+    },
     secondary: {
       visible: false,
       ...feature.footerHints?.secondary
+    },
+    quickSelect: {
+      visible: false,
+      ...feature.footerHints?.quickSelect
     }
   }
 }

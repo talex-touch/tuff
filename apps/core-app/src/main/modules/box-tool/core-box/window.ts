@@ -38,7 +38,7 @@ import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelud
 import { pluginModule } from '../../plugin/plugin-module'
 import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from '../../plugin/runtime/plugin-view-security-profile'
-import { getMainConfig } from '../../storage'
+import { getMainConfig, subscribeMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
@@ -121,6 +121,8 @@ export class WindowManager {
   private customTopPercent: number | null = null // Custom position offset (0-1)
   private readonly pollingService = PollingService.getInstance()
   private suppressBlurHideUntil = 0
+  private pinned = false
+  private appSettingUnsubscribe: (() => void) | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -223,8 +225,9 @@ export class WindowManager {
   public async create(): Promise<TouchWindow> {
     const window = new TouchWindow({ ...BoxWindowOption })
 
-    window.window.setVisibleOnAllWorkspaces(true)
-    window.window.setAlwaysOnTop(true, 'floating')
+    this.ensureAppSettingSubscription()
+    this.pinned = this.resolvePinnedFromSettings()
+    this.applyPinnedStateToWindow(window, this.pinned)
 
     windowAnimation.changeWindow(window)
 
@@ -301,9 +304,7 @@ export class WindowManager {
     })
 
     window.window.on('blur', async () => {
-      const settings = this.getAppSettingConfig()
-
-      if (!settings.tools.autoHide) {
+      if (this.isPinned()) {
         return
       }
 
@@ -964,6 +965,54 @@ export class WindowManager {
 
   public getAppSettingConfig(): AppSetting {
     return getMainConfig(StorageList.APP_SETTING) as AppSetting
+  }
+
+  private ensureAppSettingSubscription(): void {
+    if (this.appSettingUnsubscribe) {
+      return
+    }
+
+    this.appSettingUnsubscribe = subscribeMainConfig(StorageList.APP_SETTING, (settings) => {
+      this.setPinned(settings.tools?.autoHide === false)
+    })
+  }
+
+  public stopAppSettingSubscription(): void {
+    if (!this.appSettingUnsubscribe) {
+      return
+    }
+
+    this.appSettingUnsubscribe()
+    this.appSettingUnsubscribe = null
+  }
+
+  private resolvePinnedFromSettings(): boolean {
+    const settings = this.getAppSettingConfig()
+    return settings?.tools?.autoHide === false
+  }
+
+  private applyPinnedStateToWindow(window: TouchWindow, pinned: boolean): void {
+    if (window.window.isDestroyed()) return
+
+    window.window.setVisibleOnAllWorkspaces(pinned)
+    if (pinned) {
+      window.window.setAlwaysOnTop(true, 'floating')
+      return
+    }
+
+    window.window.setAlwaysOnTop(false)
+  }
+
+  public setPinned(pinned: boolean): void {
+    this.pinned = pinned
+
+    for (const window of this.windows) {
+      this.applyPinnedStateToWindow(window, pinned)
+    }
+  }
+
+  public isPinned(): boolean {
+    return this.pinned
   }
 
   private syncViewCacheConfig(): void {

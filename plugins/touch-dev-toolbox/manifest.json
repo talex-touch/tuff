@@ -13,10 +13,11 @@
   "main": "index.js",
   "permissions": {
     "required": ["search.root-results"],
-    "optional": []
+    "optional": ["network.internet"]
   },
   "permissionReasons": {
-    "search.root-results": "将开发工具箱入口推送到 CoreBox 根搜索结果"
+    "search.root-results": "将开发工具箱入口推送到 CoreBox 根搜索结果",
+    "network.internet": "使用默认浏览器打开开发工具箱链接"
   },
   "searchProviders": [
     {

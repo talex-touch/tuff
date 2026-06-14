@@ -76,11 +76,13 @@ describe('plugin-features-adapter', () => {
     expect(item.meta?.extension?.matchResult).toEqual([{ start: 0, end: 7 }])
   })
 
-  it('hides MetaK footer hints for plugin feature items by default', () => {
+  it('hides footer hints for plugin feature items by default', () => {
     const adapter = new PluginFeaturesAdapter()
     const item = adapter.createTuffItem(createPlugin(), createFeature())
 
+    expect(item.meta?.footerHints?.primary?.visible).toBe(false)
     expect(item.meta?.footerHints?.secondary?.visible).toBe(false)
+    expect(item.meta?.footerHints?.quickSelect?.visible).toBe(false)
   })
 
   it('honors explicit plugin feature footer hint declarations', () => {
@@ -88,6 +90,10 @@ describe('plugin-features-adapter', () => {
     const item = adapter.createTuffItem(createPlugin(), {
       ...createFeature(),
       footerHints: {
+        primary: {
+          visible: true,
+          label: 'Run'
+        },
         secondary: {
           visible: true,
           label: 'More'
@@ -95,6 +101,10 @@ describe('plugin-features-adapter', () => {
       }
     })
 
+    expect(item.meta?.footerHints?.primary).toMatchObject({
+      visible: true,
+      label: 'Run'
+    })
     expect(item.meta?.footerHints?.secondary).toMatchObject({
       visible: true,
       label: 'More'

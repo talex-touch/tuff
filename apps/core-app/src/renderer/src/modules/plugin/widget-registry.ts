@@ -852,18 +852,15 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
       | null
     const setupState = internalInstance?.setupState
     const ctx = args[0]
-    const ctxObject =
-      ctx && typeof ctx === 'object'
-        ? (ctx as Record<string, unknown>)
-        : instance && typeof instance === 'object'
-          ? (instance as unknown as Record<string, unknown>)
-          : null
+    const ctxObject = ctx && typeof ctx === 'object' ? (ctx as Record<string, unknown>) : null
 
-    if (setupState && ctxObject && Object.keys(setupState).length > 0) {
-      const shouldMerge = Object.keys(setupState).some((key) => !(key in ctxObject))
+    if (setupState && Object.keys(setupState).length > 0) {
+      const shouldMerge = !ctxObject || Object.keys(setupState).some((key) => !(key in ctxObject))
       if (shouldMerge) {
         if (isDev) {
-          const missingKeys = Object.keys(setupState).filter((key) => !(key in ctxObject))
+          const missingKeys = Object.keys(setupState).filter(
+            (key) => !ctxObject || !(key in ctxObject)
+          )
           const logKey = `${debugLabel || 'unknown'}:${missingKeys.join(',')}`
           if (!widgetSetupStatePatchLogCache.has(logKey)) {
             widgetSetupStatePatchLogCache.add(logKey)
@@ -877,7 +874,9 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
           instance && typeof instance === 'object' ? (instance as unknown as object) : null
         ) as Record<PropertyKey, unknown>
 
-        copyEnumerableRenderContext(merged, ctxObject)
+        if (ctxObject) {
+          copyEnumerableRenderContext(merged, ctxObject)
+        }
 
         for (const key of Object.keys(setupState)) {
           if (key in merged) {

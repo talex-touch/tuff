@@ -992,6 +992,11 @@ export const CoreBoxEvents = {
     hide: CoreBoxRetainedEvents.ui.hide,
 
     /**
+     * Pin or unpin the CoreBox window above other windows.
+     */
+    setPinned: CoreBoxRetainedEvents.ui.setPinned,
+
+    /**
      * Expand or collapse the CoreBox.
      */
     expand: CoreBoxRetainedEvents.ui.expand,

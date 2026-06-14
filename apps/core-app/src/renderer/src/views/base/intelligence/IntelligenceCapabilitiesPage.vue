@@ -59,6 +59,7 @@ const filteredCapabilities = computed(() => {
 const selectedCapabilityId = ref<string | null>(null)
 const hasPendingCapabilityChanges = ref(false)
 const saveState = ref<'idle' | 'dirty' | 'saved' | 'error'>('idle')
+const saveErrorDetail = ref('')
 const selectedCapability = computed<IntelligenceCapabilityConfig | null>(() => {
   if (!selectedCapabilityId.value) return null
   const values = Object.values(capabilityList.value)
@@ -235,10 +236,12 @@ function onReorderProviders(bindings: IntelligenceCapabilityProviderBinding[]): 
 function markCapabilityDirty(): void {
   hasPendingCapabilityChanges.value = true
   saveState.value = 'dirty'
+  saveErrorDetail.value = ''
 }
 
 async function handleSaveCapabilities(): Promise<void> {
   try {
+    saveErrorDetail.value = ''
     await saveSettings()
     hasPendingCapabilityChanges.value = false
     saveState.value = 'saved'
@@ -250,7 +253,33 @@ async function handleSaveCapabilities(): Promise<void> {
   } catch (error) {
     capabilityPageLog.error('Failed to save capability settings', error)
     saveState.value = 'error'
+    hasPendingCapabilityChanges.value = true
+    saveErrorDetail.value = formatSaveError(error)
   }
+}
+
+function formatSaveError(error: unknown): string {
+  const details =
+    error && typeof error === 'object'
+      ? (error as { details?: { reason?: string; version?: number } }).details
+      : undefined
+  const message = error instanceof Error ? error.message : String(error || '')
+
+  if (details?.reason === 'transport-uninitialized') {
+    return t('settings.intelligence.capabilitySaveErrorTransport')
+  }
+  if (details?.reason === 'conflict') {
+    return t('settings.intelligence.capabilitySaveErrorConflict', {
+      version: details.version ?? '-'
+    })
+  }
+  if (details?.reason === 'remote-failed') {
+    return t('settings.intelligence.capabilitySaveErrorRemote', {
+      version: details.version ?? '-'
+    })
+  }
+
+  return message || t('settings.intelligence.capabilitySaveErrorUnknown')
 }
 
 async function handleCapabilityTest(
@@ -348,6 +377,7 @@ async function handleCapabilityTest(
           :has-pending-changes="hasPendingCapabilityChanges"
           :is-saving="saving"
           :save-state="saveState"
+          :save-error-detail="saveErrorDetail"
           @toggle-provider="onToggleProvider"
           @update-models="onUpdateModels"
           @update-prompt="onUpdatePrompt"

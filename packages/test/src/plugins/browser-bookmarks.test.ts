@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const browserBookmarksUrl = new URL('../../../../plugins/touch-browser-bookmarks/index.js', import.meta.url)
 const browserBookmarksPlugin = loadPluginModule(browserBookmarksUrl)
@@ -151,6 +151,34 @@ describe('browser bookmarks plugin', () => {
     expect(request).not.toHaveBeenCalled()
   })
 
+  it('shows permission sdk unavailable diagnostics without prompting', async () => {
+    const items: Array<{ title?: string, meta?: Record<string, any>, subtitle?: string }> = []
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: withoutGlobal(),
+      plugin: {
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, meta?: Record<string, any>, subtitle?: string }>) { items.push(...next) },
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    }))
+
+    await pluginModule.onFeatureTriggered('browser-bookmarks', 'example.com')
+
+    const openItem = items.find(item => item.title === '默认浏览器打开')
+    expect(openItem?.subtitle).toContain('缺少 network.internet 权限')
+    expect(openItem?.meta?.capability).toMatchObject({
+      status: 'permission-missing',
+      reason: 'permission-sdk-unavailable',
+      permission: 'network.internet',
+    })
+  })
+
   it('blocks external URL opening when network permission is denied', async () => {
     const openUrl = vi.fn()
     const request = vi.fn(async () => false)
@@ -184,6 +212,177 @@ describe('browser bookmarks plugin', () => {
     })
     expect(request).toHaveBeenCalledWith('network.internet', '需要 network.internet 权限以默认浏览器打开网址')
     expect(openUrl).not.toHaveBeenCalled()
+  })
+
+  it('blocks external URL opening when permission sdk is unavailable', async () => {
+    const openUrl = vi.fn()
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      openUrl,
+      permission: withoutGlobal(),
+      plugin: {
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-bookmarks',
+        actionId: 'open-url',
+        payload: { url: 'https://example.com', title: 'Example' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-sdk-unavailable',
+    })
+    expect(openUrl).not.toHaveBeenCalled()
+  })
+
+  it('blocks external URL opening when network permission request fails', async () => {
+    const openUrl = vi.fn()
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      openUrl,
+      permission: {
+        check: async () => false,
+        request: async () => {
+          throw new Error('permission transport failed')
+        },
+      },
+      plugin: {
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-bookmarks',
+        actionId: 'open-url',
+        payload: { url: 'https://example.com', title: 'Example' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-request-failed',
+    })
+    expect(openUrl).not.toHaveBeenCalled()
+  })
+
+  it('blocks URL copy when clipboard.write permission is denied', async () => {
+    const writeText = vi.fn()
+    const request = vi.fn(async () => false)
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      clipboard: { writeText },
+      permission: {
+        check: async () => false,
+        request,
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-bookmarks',
+        actionId: 'copy-url',
+        payload: { url: 'example.com' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+    expect(request).toHaveBeenCalledWith('clipboard.write', '需要剪贴板写入权限以复制链接')
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('blocks URL copy when permission sdk is unavailable', async () => {
+    const writeText = vi.fn()
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      clipboard: { writeText },
+      permission: withoutGlobal(),
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-bookmarks',
+        actionId: 'copy-url',
+        payload: { url: 'example.com' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-sdk-unavailable',
+    })
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('blocks URL copy when clipboard permission request fails', async () => {
+    const writeText = vi.fn()
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      clipboard: { writeText },
+      permission: {
+        check: async () => false,
+        request: async () => {
+          throw new Error('permission transport failed')
+        },
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-bookmarks',
+        actionId: 'copy-url',
+        payload: { url: 'example.com' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-request-failed',
+    })
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('copies URL after clipboard.write permission is granted', async () => {
+    const writeText = vi.fn()
+    const request = vi.fn(async () => true)
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      clipboard: { writeText },
+      permission: {
+        check: async () => false,
+        request,
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-bookmarks',
+        actionId: 'copy-url',
+        payload: { url: 'example.com' },
+      },
+    })
+
+    expect(result).toMatchObject({ externalAction: true, status: 'started' })
+    expect(request).toHaveBeenCalledWith('clipboard.write', '需要剪贴板写入权限以复制链接')
+    expect(writeText).toHaveBeenCalledWith('https://example.com/')
   })
 
   it('opens external URL after network permission is granted and records recent URL', async () => {

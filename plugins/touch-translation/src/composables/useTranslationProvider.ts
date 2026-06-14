@@ -1,4 +1,5 @@
 import type { TranslationProvider } from '../types/translation'
+import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import {
   applyProviderPresentation,
   getEnabledProviderIds,
@@ -32,11 +33,21 @@ export function hasProviderSecretDefinition(providerId: string): boolean {
   return (PROVIDER_SECRET_FIELDS[providerId] || []).length > 0
 }
 
-function getProviderSecretKey(providerId: string, field: string): string {
+export function canPersistProviderSecrets(
+  providerId: string,
+  health: SecureStoreHealthResponse | null | undefined,
+): boolean {
+  if (!hasProviderSecretDefinition(providerId)) {
+    return true
+  }
+  return Boolean(health?.available)
+}
+
+export function getProviderSecretKey(providerId: string, field: string): string {
   return `providers.${providerId}.${field}`
 }
 
-function stripProviderSecrets(providerId: string, config: Record<string, any>): Record<string, any> {
+export function stripProviderSecrets(providerId: string, config: Record<string, any>): Record<string, any> {
   const secretFields = PROVIDER_SECRET_FIELDS[providerId] || []
   const next = { ...config }
   for (const field of secretFields) {
@@ -98,7 +109,7 @@ export function useTranslationProvider() {
     return results.every(Boolean)
   }
 
-  const persistProviderConfig = async (providerId: string, config: Record<string, any>) => {
+  async function persistProviderConfig(providerId: string, config: Record<string, any>) {
     if (hasProviderSecretFields(providerId, config) && !(await saveProviderSecrets(providerId, config))) {
       return
     }
@@ -137,7 +148,7 @@ export function useTranslationProvider() {
   }
 
   // 保存提供者配置到 localStorage
-  const saveProvidersConfig = async () => {
+  async function saveProvidersConfig() {
     const config: Record<string, any> = {}
     providers.forEach((provider, id) => {
       config[id] = {
@@ -150,7 +161,7 @@ export function useTranslationProvider() {
   }
 
   // 从 localStorage 加载提供者配置
-  const loadProvidersConfig = async () => {
+  async function loadProvidersConfig() {
     try {
       // 兼容新版本：使用 getFile 代替 getItem
       const saved = await storage.getFile('providers_config')
@@ -158,7 +169,6 @@ export function useTranslationProvider() {
         const config = saved as Record<string, { enabled?: boolean, config?: Record<string, any> }>
         const enabledIds = getEnabledProviderIds(config) as string[]
         let legacySecretsFound = false
-        let legacySecretsMigrated = true
         await Promise.all(Array.from(providers.entries()).map(async ([id, provider]) => {
           provider.enabled = enabledIds.includes(id)
           if (config[id]?.config && provider.config) {
@@ -168,17 +178,16 @@ export function useTranslationProvider() {
             let providerSecretsMigrated = true
             if (hasLegacySecrets) {
               providerSecretsMigrated = await saveProviderSecrets(id, rawConfig)
-              legacySecretsMigrated = providerSecretsMigrated && legacySecretsMigrated
             }
             const metadataConfig = stripProviderSecrets(id, rawConfig)
             provider.config = {
               ...provider.config,
-              ...(providerSecretsMigrated ? metadataConfig : rawConfig),
+              ...metadataConfig,
               ...(providerSecretsMigrated ? await mergeProviderSecrets(id, metadataConfig) : {}),
             }
           }
         }))
-        if (legacySecretsFound && legacySecretsMigrated) {
+        if (legacySecretsFound) {
           await saveProvidersConfig()
         }
       }
@@ -219,10 +228,17 @@ export function useTranslationProvider() {
   const updateProviderConfig = (id: string, config: Record<string, any>) => {
     const provider = providers.get(id)
     if (provider && provider.config) {
-      provider.config = { ...provider.config, ...config }
-      persistProviderConfig(id, config).catch((err) => {
-        void err
-      })
+      const metadataConfig = stripProviderSecrets(id, config)
+      provider.config = { ...provider.config, ...metadataConfig }
+      persistProviderConfig(id, config)
+        .then(async () => {
+          if (hasProviderSecretFields(id, config)) {
+            provider.config = await mergeProviderSecrets(id, provider.config || {})
+          }
+        })
+        .catch((err) => {
+          void err
+        })
     }
   }
 

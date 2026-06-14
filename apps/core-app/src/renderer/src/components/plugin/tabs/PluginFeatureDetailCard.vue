@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { ComponentPublicInstance } from 'vue'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
-import { TxButton, TxSplitButton } from '@talex-touch/tuffex/button'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import type { TxSelectValue } from '@talex-touch/tuffex/select'
@@ -12,8 +12,6 @@ import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
-import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import WidgetFrame from '~/components/render/WidgetFrame.vue'
 
@@ -35,6 +33,16 @@ interface PreviewIssue {
 interface PreviewSizeOption {
   value: string
   label: string
+}
+
+interface WidgetPathRow {
+  key: string
+  label: string
+  value: string
+  icon: string
+  copyValue?: string | null
+  revealValue?: string | null
+  tone?: 'primary'
 }
 
 const props = defineProps<{
@@ -99,6 +107,75 @@ const { t } = useI18n()
 const currentTab = computed({
   get: () => props.detailTab,
   set: (value: string) => emit('update:detailTab', value)
+})
+
+watch(
+  () => [props.detailTab, props.feature?.id],
+  () => {
+    if (props.detailTab === 'interaction') {
+      emit('update:detailTab', 'overview')
+    }
+  },
+  { immediate: true }
+)
+
+const widgetStatusTone = computed(() => {
+  if (!props.widgetSourceFilePath && !props.widgetSourceUrl && !props.widgetCompiledPath) {
+    return 'is-missing'
+  }
+  if (props.widgetSourceUrl) return 'is-dev'
+  if (props.widgetCompiledPath) return 'is-release'
+  return 'is-neutral'
+})
+
+const widgetStatusIcon = computed(() => {
+  switch (widgetStatusTone.value) {
+    case 'is-dev':
+      return 'i-ri-code-box-line'
+    case 'is-release':
+      return 'i-ri-checkbox-circle-line'
+    case 'is-missing':
+      return 'i-ri-error-warning-line'
+    default:
+      return 'i-ri-information-line'
+  }
+})
+
+const widgetPathRows = computed<WidgetPathRow[]>(() => {
+  const rows: WidgetPathRow[] = [
+    {
+      key: 'source',
+      label: t('plugin.features.widget.sourceFile'),
+      value: props.widgetSourceDisplayPath,
+      icon: 'i-ri-file-code-line',
+      copyValue: props.widgetSourceFilePath,
+      revealValue: props.widgetSourceFilePath
+    }
+  ]
+
+  if (props.widgetSourceUrl) {
+    rows.push({
+      key: 'dev-source',
+      label: t('plugin.features.widget.devSource'),
+      value: props.widgetSourceUrl,
+      icon: 'i-ri-link-m',
+      copyValue: props.widgetSourceUrl
+    })
+  }
+
+  if (props.widgetCompiledDisplayPath) {
+    rows.push({
+      key: 'compiled',
+      label: t('plugin.features.widget.compiledOutput'),
+      value: props.widgetCompiledDisplayPath,
+      icon: 'i-ri-box-3-line',
+      copyValue: props.widgetCompiledPath,
+      revealValue: props.widgetCompiledPath,
+      tone: 'primary'
+    })
+  }
+
+  return rows
 })
 
 const currentPreviewWidgetId = computed<TxSelectValue | undefined>({
@@ -200,34 +277,6 @@ function handleClose(): void {
 
 <template>
   <div class="PluginFeature-Detail">
-    <div class="PluginFeature-DetailHeader">
-      <div class="flex items-center gap-4 py-2">
-        <div
-          class="w-10 h-10 bg-gradient-to-br from-[var(--tx-color-primary)] to-[var(--tx-color-primary-light-3)] rounded-xl flex items-center justify-center overflow-hidden"
-        >
-          <TuffIcon
-            v-if="feature?.icon"
-            :icon="feature.icon"
-            :alt="feature.name"
-            :size="24"
-            class="text-[var(--tx-color-white)]"
-          />
-          <i v-else class="i-ri-function-line text-[var(--tx-color-white)] text-lg" />
-        </div>
-        <div>
-          <h2 class="text-xl font-bold text-[var(--tx-text-color-primary)]">
-            {{ feature?.name }}
-          </h2>
-          <p class="text-sm text-[var(--tx-text-color-regular)]">
-            {{ feature?.desc }}
-          </p>
-        </div>
-      </div>
-      <TxButton size="sm" variant="ghost" icon="i-ri-close-line" @click="handleClose">
-        {{ t('common.close') }}
-      </TxButton>
-    </div>
-
     <div v-if="feature" class="PluginFeature-DetailBody">
       <div class="PluginFeature-DetailContent">
         <TxTabs
@@ -239,9 +288,20 @@ function handleClose(): void {
           :animation="{ indicator: { durationMs: 800 } }"
           borderless
         >
+          <template #nav-right>
+            <TxButton
+              class="PluginFeature-CloseButton"
+              size="sm"
+              variant="ghost"
+              icon="i-ri-close-line"
+              @click="handleClose"
+            >
+              {{ t('common.close') }}
+            </TxButton>
+          </template>
           <TxTabItem name="overview" activation>
             <template #name>{{ t('plugin.features.drawer.overview') }}</template>
-            <TouchScroll class="PluginFeature-TabScroll" no-padding>
+            <TouchScroll class="PluginFeature-TabScroll" no-padding native>
               <div class="PluginFeature-TabScrollContent">
                 <TuffGroupBlock
                   class="PluginFeature-Overview"
@@ -251,6 +311,31 @@ function handleClose(): void {
                     <i class="i-ri-information-line text-[var(--tx-color-primary)]" />
                   </template>
                   <div class="p-4 space-y-3">
+                    <div class="PluginFeature-OverviewIdentity">
+                      <div class="PluginFeature-OverviewIcon">
+                        <TuffIcon
+                          v-if="feature.icon"
+                          :icon="feature.icon"
+                          :alt="feature.name"
+                          :size="24"
+                          class="text-[var(--tx-color-white)]"
+                        />
+                        <i v-else class="i-ri-function-line text-[var(--tx-color-white)]" />
+                      </div>
+                      <div class="PluginFeature-OverviewName">
+                        {{ feature.name }}
+                      </div>
+                    </div>
+                    <div v-if="feature.desc" class="flex justify-between items-start gap-6">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
+                        {{ t('plugin.features.drawer.description') }}
+                      </span>
+                      <span
+                        class="PluginFeature-Description text-sm text-[var(--tx-text-color-primary)]"
+                      >
+                        {{ feature.desc }}
+                      </span>
+                    </div>
                     <div class="flex justify-between items-center">
                       <span class="text-sm text-[var(--tx-text-color-regular)]">
                         {{ t('plugin.features.drawer.featureId') }}
@@ -311,13 +396,55 @@ function handleClose(): void {
                     </div>
                   </div>
                 </TuffGroupBlock>
+
+                <TuffGroupBlock
+                  v-if="feature?.interaction"
+                  class="PluginFeature-Interaction"
+                  :name="t('plugin.features.interaction.title')"
+                >
+                  <template #icon>
+                    <i class="i-ri-exchange-line text-[var(--tx-color-primary)]" />
+                  </template>
+                  <div class="p-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
+                        {{ t('plugin.features.interaction.type') }}
+                      </span>
+                      <span class="text-sm font-medium">{{ feature.interaction?.type }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
+                        {{ t('plugin.features.interaction.path') }}
+                      </span>
+                      <code class="text-sm bg-[var(--tx-fill-color)] px-2 py-1 rounded">{{
+                        feature.interaction?.path || '-'
+                      }}</code>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
+                        {{ t('plugin.features.interaction.showInput') }}
+                      </span>
+                      <span class="text-sm font-medium">{{
+                        resolveInteractionFlag(feature.interaction?.showInput)
+                      }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
+                        {{ t('plugin.features.interaction.allowInput') }}
+                      </span>
+                      <span class="text-sm font-medium">{{
+                        resolveInteractionFlag(feature.interaction?.allowInput)
+                      }}</span>
+                    </div>
+                  </div>
+                </TuffGroupBlock>
               </div>
             </TouchScroll>
           </TxTabItem>
 
           <TxTabItem name="data">
             <template #name>{{ t('plugin.features.data.tab') }}</template>
-            <TouchScroll class="PluginFeature-TabScroll" no-padding>
+            <TouchScroll class="PluginFeature-TabScroll" no-padding native>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock
@@ -371,59 +498,9 @@ function handleClose(): void {
             </TouchScroll>
           </TxTabItem>
 
-          <TxTabItem v-if="feature?.interaction" name="interaction">
-            <template #name>{{ t('plugin.features.interaction.tab') }}</template>
-            <TouchScroll class="PluginFeature-TabScroll" no-padding>
-              <div class="PluginFeature-TabScrollContent">
-                <div class="space-y-4">
-                  <TuffGroupBlock
-                    class="PluginFeature-Interaction"
-                    :name="t('plugin.features.interaction.title')"
-                  >
-                    <template #icon>
-                      <i class="i-ri-exchange-line text-[var(--tx-color-primary)]" />
-                    </template>
-                    <div class="p-4 space-y-3">
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--tx-text-color-regular)]">
-                          {{ t('plugin.features.interaction.type') }}
-                        </span>
-                        <span class="text-sm font-medium">{{ feature.interaction?.type }}</span>
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--tx-text-color-regular)]">
-                          {{ t('plugin.features.interaction.path') }}
-                        </span>
-                        <code class="text-sm bg-[var(--tx-fill-color)] px-2 py-1 rounded">{{
-                          feature.interaction?.path || '-'
-                        }}</code>
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--tx-text-color-regular)]">
-                          {{ t('plugin.features.interaction.showInput') }}
-                        </span>
-                        <span class="text-sm font-medium">{{
-                          resolveInteractionFlag(feature.interaction?.showInput)
-                        }}</span>
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--tx-text-color-regular)]">
-                          {{ t('plugin.features.interaction.allowInput') }}
-                        </span>
-                        <span class="text-sm font-medium">{{
-                          resolveInteractionFlag(feature.interaction?.allowInput)
-                        }}</span>
-                      </div>
-                    </div>
-                  </TuffGroupBlock>
-                </div>
-              </div>
-            </TouchScroll>
-          </TxTabItem>
-
           <TxTabItem v-if="widgetTabEnabled" name="widget">
-            <template #name>Widget</template>
-            <TouchScroll class="PluginFeature-TabScroll" no-padding>
+            <template #name>{{ t('plugin.features.widget.tab') }}</template>
+            <TouchScroll class="PluginFeature-TabScroll" no-padding native>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock
@@ -434,123 +511,62 @@ function handleClose(): void {
                     <template #icon>
                       <i class="i-ri-layout-2-line text-[var(--tx-color-warning)]" />
                     </template>
-                    <TuffBlockLine
-                      :title="t('plugin.features.widget.status')"
-                      :description="widgetStatus"
-                    />
-                    <TuffBlockSlot
-                      :title="t('plugin.features.widget.details')"
-                      :description="t('plugin.features.widget.detailsDesc')"
-                      default-icon="i-ri-link-m"
-                    >
-                      <div class="space-y-2 w-full">
-                        <div class="flex items-center gap-2 min-w-0">
-                          <code
-                            class="PluginFeature-Path text-xs bg-[var(--tx-fill-color)] px-2 py-1 rounded flex-1 min-w-0"
-                          >
-                            <span class="PluginFeature-PathText">
-                              {{ widgetSourceDisplayPath }}
-                            </span>
-                          </code>
-                          <TxSplitButton
-                            size="sm"
-                            variant="ghost"
-                            icon="i-ri-file-copy-line"
-                            :disabled="isOperationDisabled || !widgetSourceFilePath"
-                            :menu-disabled="isOperationDisabled || !widgetSourceFilePath"
-                            :menu-width="160"
-                            @click="handleCopy(widgetSourceFilePath)"
-                          >
-                            {{ t('plugin.features.widget.copy') }}
-                            <template #menu="{ close }">
-                              <div class="PluginFeature-PathMenu">
-                                <TxButton
-                                  size="sm"
-                                  plain
-                                  block
-                                  icon="i-ri-folder-open-line"
-                                  :disabled="isOperationDisabled || !widgetSourceFilePath"
-                                  @click="
-                                    () => {
-                                      close()
-                                      handleReveal(widgetSourceFilePath)
-                                    }
-                                  "
-                                >
-                                  {{ t('plugin.features.widget.revealFile') }}
-                                </TxButton>
-                              </div>
-                            </template>
-                          </TxSplitButton>
+                    <div class="PluginFeature-WidgetBody">
+                      <div class="PluginFeature-WidgetSummary">
+                        <div class="PluginFeature-WidgetSummaryText">
+                          <span class="PluginFeature-WidgetSummaryTitle">
+                            {{ t('plugin.features.widget.details') }}
+                          </span>
+                          <span class="PluginFeature-WidgetSummaryDesc">
+                            {{ t('plugin.features.widget.detailsDesc') }}
+                          </span>
                         </div>
-                        <div v-if="widgetSourceUrl" class="flex items-center gap-2 min-w-0">
-                          <code
-                            class="PluginFeature-Path text-xs bg-[var(--tx-fill-color)] px-2 py-1 rounded flex-1 min-w-0"
-                          >
-                            <span class="PluginFeature-PathText">
-                              {{ widgetSourceUrl }}
-                            </span>
-                          </code>
-                          <TxButton
-                            size="sm"
-                            plain
-                            icon="i-ri-file-copy-line"
-                            :disabled="isOperationDisabled || !widgetSourceUrl"
-                            @click="handleCopy(widgetSourceUrl)"
-                          >
-                            {{ t('plugin.features.widget.copy') }}
-                          </TxButton>
-                        </div>
+                        <span class="PluginFeature-WidgetStatus" :class="widgetStatusTone">
+                          <i :class="widgetStatusIcon" />
+                          {{ widgetStatus }}
+                        </span>
+                      </div>
+
+                      <div class="PluginFeature-WidgetPathList">
                         <div
-                          v-if="widgetCompiledDisplayPath"
-                          class="flex items-center gap-2 min-w-0"
+                          v-for="row in widgetPathRows"
+                          :key="row.key"
+                          class="PluginFeature-WidgetPathRow"
+                          :class="{ 'is-primary': row.tone === 'primary' }"
                         >
-                          <code
-                            class="PluginFeature-Path PluginFeature-Path--compiled text-xs bg-[var(--tx-color-primary-light-9)] text-[var(--tx-color-primary)] px-2 py-1 rounded flex-1 min-w-0 font-semibold"
-                          >
-                            <span class="PluginFeature-PathText">
-                              {{ widgetCompiledDisplayPath }}
-                            </span>
+                          <div class="PluginFeature-WidgetPathMeta">
+                            <i :class="row.icon" />
+                            <span>{{ row.label }}</span>
+                          </div>
+                          <code class="PluginFeature-Path PluginFeature-WidgetPathValue">
+                            <span class="PluginFeature-PathText">{{ row.value }}</span>
                           </code>
-                          <TxSplitButton
-                            size="sm"
-                            variant="ghost"
-                            icon="i-ri-file-copy-line"
-                            :disabled="isOperationDisabled || !widgetCompiledPath"
-                            :menu-disabled="isOperationDisabled || !widgetCompiledPath"
-                            :menu-width="160"
-                            @click="handleCopy(widgetCompiledPath)"
-                          >
-                            {{ t('plugin.features.widget.copy') }}
-                            <template #menu="{ close }">
-                              <div class="PluginFeature-PathMenu">
-                                <TxButton
-                                  size="sm"
-                                  plain
-                                  block
-                                  icon="i-ri-folder-open-line"
-                                  :disabled="isOperationDisabled || !widgetCompiledPath"
-                                  @click="
-                                    () => {
-                                      close()
-                                      handleReveal(widgetCompiledPath)
-                                    }
-                                  "
-                                >
-                                  {{ t('plugin.features.widget.revealFile') }}
-                                </TxButton>
-                              </div>
-                            </template>
-                          </TxSplitButton>
-                        </div>
-                        <div
-                          v-if="widgetPathAliasNote"
-                          class="text-xs text-[var(--tx-text-color-secondary)]"
-                        >
-                          {{ widgetPathAliasNote }}
+                          <div class="PluginFeature-WidgetPathActions">
+                            <TxButton
+                              size="sm"
+                              variant="ghost"
+                              icon="i-ri-file-copy-line"
+                              :disabled="isOperationDisabled || !row.copyValue"
+                              :aria-label="`${t('plugin.features.widget.copy')} ${row.label}`"
+                              @click="handleCopy(row.copyValue)"
+                            />
+                            <TxButton
+                              v-if="row.revealValue"
+                              size="sm"
+                              variant="ghost"
+                              icon="i-ri-folder-open-line"
+                              :disabled="isOperationDisabled || !row.revealValue"
+                              :aria-label="`${t('plugin.features.widget.revealFile')} ${row.label}`"
+                              @click="handleReveal(row.revealValue)"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </TuffBlockSlot>
+
+                      <div v-if="widgetPathAliasNote" class="PluginFeature-WidgetAlias">
+                        {{ widgetPathAliasNote }}
+                      </div>
+                    </div>
                   </TuffGroupBlock>
 
                   <TuffGroupBlock
@@ -792,17 +808,10 @@ pre {
 
 .PluginFeature-Detail {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.PluginFeature-DetailHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 24px 12px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
+  overflow: hidden;
 }
 
 .PluginFeature-DetailBody {
@@ -839,36 +848,55 @@ pre {
 .PluginFeature-DetailTabs {
   flex: 1;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
 
 .PluginFeature-DetailTabs :deep(.tx-tabs) {
-  min-height: 100%;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 .PluginFeature-DetailTabs :deep(.tx-tabs__auto-sizer) {
-  height: 100%;
+  flex: 1;
   min-height: 0;
+  height: 100%;
 }
 
 .PluginFeature-DetailTabs :deep(.tx-tabs__auto-sizer > *) {
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
 }
 
 .PluginFeature-DetailTabs :deep(.tx-tabs__main) {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+.PluginFeature-DetailTabs :deep(.tx-tabs__select-slot) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .PluginFeature-DetailTabs :deep(.tx-tabs__content-wrapper) {
-  height: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .PluginFeature-DetailTabs :deep(.tx-tabs__nav) {
@@ -877,11 +905,206 @@ pre {
   top: 0;
   z-index: 2;
   background: var(--tx-bg-color-overlay);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
+}
+
+.PluginFeature-DetailTabs :deep(.tx-tabs__nav-bar) {
+  min-height: 64px;
+  justify-content: space-between;
+}
+
+.PluginFeature-DetailTabs :deep(.tx-tabs__nav-inner) {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 8px 16px;
+}
+
+.PluginFeature-DetailTabs :deep(.tx-tabs__nav-extra) {
+  margin-left: auto;
+  padding: 0 20px 0 12px;
+}
+
+.PluginFeature-CloseButton {
+  white-space: nowrap;
 }
 
 .PluginFeature-Json {
   font-size: 12px;
   line-height: 1.6;
+}
+
+.PluginFeature-Description {
+  max-width: min(680px, 72%);
+  text-align: right;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.PluginFeature-OverviewIdentity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--tx-border-color-extra-light);
+}
+
+.PluginFeature-OverviewIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 20px;
+  background: linear-gradient(135deg, var(--tx-color-primary), var(--tx-color-primary-light-3));
+}
+
+.PluginFeature-OverviewName {
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--tx-text-color-primary);
+  overflow-wrap: anywhere;
+}
+
+.PluginFeature-WidgetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 18px 16px;
+}
+
+.PluginFeature-WidgetSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
+}
+
+.PluginFeature-WidgetSummaryText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.PluginFeature-WidgetSummaryTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+}
+
+.PluginFeature-WidgetSummaryDesc {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.PluginFeature-WidgetStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-light);
+}
+
+.PluginFeature-WidgetStatus.is-dev {
+  color: var(--tx-color-warning);
+  background: var(--tx-color-warning-light-9);
+}
+
+.PluginFeature-WidgetStatus.is-release {
+  color: var(--tx-color-success);
+  background: var(--tx-color-success-light-9);
+}
+
+.PluginFeature-WidgetStatus.is-missing {
+  color: var(--tx-color-danger);
+  background: var(--tx-color-danger-light-9);
+}
+
+.PluginFeature-WidgetPathList {
+  display: flex;
+  flex-direction: column;
+}
+
+.PluginFeature-WidgetPathRow {
+  display: grid;
+  grid-template-columns: minmax(108px, 148px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--tx-border-color-extra-light);
+}
+
+.PluginFeature-WidgetPathRow:last-child {
+  border-bottom: 0;
+}
+
+.PluginFeature-WidgetPathMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx-text-color-secondary);
+}
+
+.PluginFeature-WidgetPathMeta > i {
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.PluginFeature-WidgetPathValue {
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--tx-text-color-primary);
+  background: var(--tx-fill-color-lighter);
+  border: 1px solid var(--tx-border-color-extra-light);
+}
+
+.PluginFeature-WidgetPathRow.is-primary .PluginFeature-WidgetPathValue {
+  color: var(--tx-color-primary);
+  background: var(--tx-color-primary-light-9);
+  border-color: var(--tx-color-primary-light-8);
+  font-weight: 600;
+}
+
+.PluginFeature-WidgetPathActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.PluginFeature-WidgetPathActions :deep(.tx-button) {
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.PluginFeature-WidgetAlias {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+  overflow-wrap: anywhere;
 }
 
 .PluginFeature-PreviewControls {
@@ -1087,12 +1310,6 @@ pre {
   unicode-bidi: plaintext;
 }
 
-.PluginFeature-PathMenu {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .PluginFeature-DevWarning {
   display: flex;
   align-items: center;
@@ -1135,5 +1352,20 @@ pre {
   font-size: 12px;
   color: var(--tx-text-color-regular);
   word-break: break-word;
+}
+
+@media (max-width: 720px) {
+  .PluginFeature-WidgetSummary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .PluginFeature-WidgetPathRow {
+    grid-template-columns: 1fr auto;
+  }
+
+  .PluginFeature-WidgetPathMeta {
+    grid-column: 1 / -1;
+  }
 }
 </style>

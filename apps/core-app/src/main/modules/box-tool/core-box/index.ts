@@ -203,6 +203,7 @@ export class CoreBoxModule extends BaseModule {
 
     searchLogger.destroy()
     coreBoxManager.destroy()
+    windowManager.stopAppSettingSubscription()
     clearRegisteredMainRuntime('core-box')
   }
 

@@ -8,6 +8,8 @@ import type {
   CoreBoxGetBoundsResponse,
   CoreBoxForwardKeyEvent,
   CoreBoxHideRequest,
+  CoreBoxSetPinnedRequest,
+  CoreBoxSetPinnedResponse,
   CoreBoxSetHeightRequest,
   CoreBoxSetHeightResponse,
   CoreBoxSetPositionOffsetRequest,
@@ -163,6 +165,10 @@ export const CoreBoxRetainedEvents = {
       .module('ui')
       .event('hide')
       .define<CoreBoxHideRequest | void, void>(),
+    setPinned: defineEvent('core-box')
+      .module('ui')
+      .event('set-pinned')
+      .define<CoreBoxSetPinnedRequest, CoreBoxSetPinnedResponse>(),
     expand: defineEvent('core-box')
       .module('ui')
       .event('expand')

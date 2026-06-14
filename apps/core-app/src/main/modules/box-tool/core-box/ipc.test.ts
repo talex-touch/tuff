@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   getBoxItemManager: vi.fn(() => ({
     clear: vi.fn()
   })),
+  setPinned: vi.fn(),
+  isPinned: vi.fn(() => false),
   searchEngineCore: {
     getActivationState: vi.fn(() => []),
     getCurrentGatherController: vi.fn(() => null),
@@ -63,6 +65,10 @@ vi.mock('../../../core/runtime-accessor', () => ({
 
 vi.mock('../../../utils/logger', () => ({
   createLogger: vi.fn(() => mocks.logger)
+}))
+
+vi.mock('../../../utils/legacy-alias-telemetry', () => ({
+  withLegacyAliasTelemetry: vi.fn((handler) => handler)
 }))
 
 vi.mock('../../plugin/plugin-module', () => ({
@@ -141,6 +147,8 @@ vi.mock('./window', () => ({
     current: null,
     enableClipboardMonitoring: vi.fn(),
     enableInputMonitoring: vi.fn(),
+    setPinned: mocks.setPinned,
+    isPinned: mocks.isPinned,
     setHeight: vi.fn(),
     setPositionOffset: vi.fn()
   }
@@ -157,6 +165,7 @@ describe('CoreBox IPC hide transport', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.handlers.clear()
+    mocks.isPinned.mockReturnValue(false)
     ipcManager.unregister()
     ipcManager.register()
   })
@@ -177,5 +186,16 @@ describe('CoreBox IPC hide transport', () => {
     handler?.()
 
     expect(mocks.trigger).toHaveBeenCalledWith(false, { immediate: false })
+  })
+
+  it('applies canonical window pin requests through the window manager', () => {
+    mocks.isPinned.mockReturnValue(true)
+    const handler = mocks.handlers.get(CoreBoxEvents.ui.setPinned.toEventName())
+
+    expect(handler).toBeTypeOf('function')
+    const response = handler?.({ pinned: true })
+
+    expect(mocks.setPinned).toHaveBeenCalledWith(true)
+    expect(response).toEqual({ pinned: true })
   })
 })

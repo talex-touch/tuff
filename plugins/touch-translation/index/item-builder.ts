@@ -51,7 +51,7 @@ export function createSuccessItem(
     .setTitle(translatedText)
     .setSubtitle(subtitle)
     .setIcon({ type: 'file', value: 'assets/logo.svg' })
-    .createAndAddAction('copy-translation', 'copy', '复制', translatedText)
+    .createAndAddAction('copy-translation', 'plugin', '复制', { text: translatedText })
     .addTag('Translation', 'green')
     .setMeta({
       pluginName: PLUGIN_NAME,

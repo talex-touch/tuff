@@ -1,11 +1,12 @@
-const { plugin, clipboard, logger, TuffItemBuilder } = globalThis
+const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis
+const { Buffer } = require('node:buffer')
 const crypto = require('node:crypto')
 
 const PLUGIN_NAME = 'touch-text-tools'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const COPY_ACTION_ID = 'copy'
-const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/
+const BASE64_PATTERN = /^[\d+/a-z]+={0,2}$/i
 
 function getQueryText(query) {
   if (typeof query === 'string')
@@ -24,6 +25,23 @@ function truncateText(value, max = 96) {
   if (text.length <= max)
     return text
   return `${text.slice(0, max - 1)}…`
+}
+
+async function ensurePermission(permissionId, reason) {
+  if (!permission?.check || !permission?.request)
+    return false
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission)
+      return true
+    const granted = await permission.request(permissionId, reason)
+    return Boolean(granted)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-text-tools] Failed to request permission', error)
+    return false
+  }
 }
 
 function isProbablyBase64(text) {
@@ -53,7 +71,7 @@ function buildCopyItem({ id, featureId, title, subtitle, output }) {
       featureId,
       defaultAction: COPY_ACTION_ID,
     })
-    .createAndAddAction(COPY_ACTION_ID, 'copy', '复制', output)
+    .createAndAddAction(COPY_ACTION_ID, 'plugin', '复制', { text: output })
     .build()
 }
 
@@ -164,7 +182,7 @@ const pluginLifecycle = {
             output: decodeURIComponent(rawText),
           })
         }
-        catch (error) {
+        catch {
           items.push(buildInfoItem({
             id: `${featureId}-url-invalid`,
             featureId,
@@ -193,7 +211,7 @@ const pluginLifecycle = {
             output: JSON.stringify(parsed),
           })
         }
-        catch (error) {
+        catch {
           items.push(buildInfoItem({
             id: `${featureId}-json-invalid`,
             featureId,
@@ -251,7 +269,7 @@ const pluginLifecycle = {
       if (item?.meta?.defaultAction !== COPY_ACTION_ID)
         return
 
-      const copyAction = item.actions?.find((action) => action.type === COPY_ACTION_ID)
+      const copyAction = item.actions?.find(action => action.id === COPY_ACTION_ID || action.type === COPY_ACTION_ID)
       if (!copyAction?.payload)
         return
 
@@ -260,12 +278,24 @@ const pluginLifecycle = {
       if (typeof payloadText !== 'string')
         return
 
+      const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制文本工具结果')
+      if (!canCopy) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'permission-denied',
+          message: '缺少 clipboard.write 权限',
+        }
+      }
+
       clipboard.writeText(payloadText)
       logger?.log?.('[touch-text-tools] Copied to clipboard')
 
       const isFeatureExecution = Boolean(item.meta?.featureId)
       if (!isFeatureExecution)
         plugin.box.hide()
+      return { externalAction: true, status: 'started' }
     }
     catch (error) {
       logger?.error?.('[touch-text-tools] Action failed', error)

@@ -622,7 +622,7 @@ function resolveWidgetStatus(feature?: PluginFeatureWithCommandsData | null): st
     return t('plugin.features.widget.statusMissing')
   }
   if (resolvePrecompiledWidgetEntry(feature)) {
-    return 'precompiled'
+    return t('plugin.features.widget.statusPrecompiled')
   }
   return isPluginDev.value
     ? t('plugin.features.widget.statusDev')
@@ -807,6 +807,9 @@ function handlePreviewRenderError(error: Error): void {
       v-model:animating="isDetailAnimating"
       :reference="detailSourceEl"
       :closable="false"
+      :scrollable="false"
+      height="calc(82dvh - 24px)"
+      max-height="calc(82dvh - 24px)"
       size="lg"
       @closed="handleDetailClosed"
     >

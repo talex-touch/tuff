@@ -4,6 +4,7 @@ import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-se
 import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
+import { createHash } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
@@ -529,7 +530,7 @@ export class RecommendationEngine {
   }
 
   /** Invalidate in-memory recommendation cache */
-  private invalidateCache(): void {
+  public invalidateCache(): void {
     this.recommendationCache = null
   }
 
@@ -546,8 +547,17 @@ export class RecommendationEngine {
     const contextStartedAt = performance.now()
     const context = await this.contextProvider.getCurrentContext()
     const semanticSettings = await this.getRecommendationSemanticSettings()
-    const contextCacheKey = this.buildRecommendationCacheKey(context, semanticSettings)
     const contextDuration = performance.now() - contextStartedAt
+
+    const pinnedStartedAt = performance.now()
+    const pinnedItems = await this.getPinnedItems()
+    const pinnedDuration = performance.now() - pinnedStartedAt
+    const pinnedCacheSignature = this.buildPinnedCacheSignature(pinnedItems)
+    const contextCacheKey = this.buildRecommendationCacheKey(
+      context,
+      semanticSettings,
+      pinnedCacheSignature
+    )
 
     if (!options.forceRefresh && this.recommendationCache) {
       const cacheAge = Date.now() - this.recommendationCache.timestamp
@@ -565,6 +575,7 @@ export class RecommendationEngine {
           cacheLayer: 'memory',
           durationMs: Math.round(performance.now() - startTime),
           contextMs: Math.round(contextDuration),
+          pinnedMs: Math.round(pinnedDuration),
           itemsCount: this.recommendationCache.items.length
         })
         return {
@@ -577,25 +588,28 @@ export class RecommendationEngine {
       }
     }
 
-    const cached = await this.getCachedRecommendations(context, semanticSettings)
+    const cached = await this.getCachedRecommendations(
+      context,
+      semanticSettings,
+      pinnedCacheSignature
+    )
     if (cached && !options.forceRefresh) {
       this.recordRecommendationPerf('recommendation.total', {
         cacheLayer: 'db',
         durationMs: Math.round(performance.now() - startTime),
         contextMs: Math.round(contextDuration),
+        pinnedMs: Math.round(pinnedDuration),
         itemsCount: cached.items.length
       })
       return {
         items: cached.items,
         context,
         duration: performance.now() - startTime,
-        fromCache: true
+        fromCache: true,
+        containerLayout: this.buildContainerLayout(options, cached.items)
       }
     }
 
-    const pinnedStartedAt = performance.now()
-    const pinnedItems = await this.getPinnedItems()
-    const pinnedDuration = performance.now() - pinnedStartedAt
     let pinnedTuffItems = await this.itemRebuilder.rebuildItems(
       pinnedItems.map((item) => ({
         ...item,
@@ -620,8 +634,9 @@ export class RecommendationEngine {
       const filteredFallback = this.dedupeItems(fallbackItems).filter(
         (item) => !pinnedKeys.has(this.getItemIdentity(item))
       )
-      const finalItems = this.dedupeItems([...filteredFallback, ...pinnedTuffItems]).slice(
-        0,
+      const finalItems = this.combineRecommendedWithPinned(
+        filteredFallback,
+        pinnedTuffItems,
         options.limit || 10
       )
 
@@ -667,7 +682,7 @@ export class RecommendationEngine {
       const filteredFallback = this.dedupeItems(fallbackItems).filter(
         (item) => !pinnedKeys.has(this.getItemIdentity(item))
       )
-      const finalItems = this.dedupeItems([...filteredFallback, ...pinnedTuffItems]).slice(0, limit)
+      const finalItems = this.combineRecommendedWithPinned(filteredFallback, pinnedTuffItems, limit)
 
       this.recommendationCache = {
         items: finalItems,
@@ -722,9 +737,9 @@ export class RecommendationEngine {
       }
     }
 
-    const combinedItems = this.dedupeItems([...filteredItems, ...pinnedTuffItems]).slice(0, limit)
+    const combinedItems = this.combineRecommendedWithPinned(filteredItems, pinnedTuffItems, limit)
 
-    await this.cacheRecommendations(context, semanticSettings, combinedItems)
+    await this.cacheRecommendations(context, semanticSettings, pinnedCacheSignature, combinedItems)
     const duration = performance.now() - startTime
     recommendationLog.debug('Generated recommendations', {
       meta: { durationMs: Math.round(duration), itemCount: combinedItems.length }
@@ -805,6 +820,22 @@ export class RecommendationEngine {
       },
       sections
     }
+  }
+
+  private combineRecommendedWithPinned(
+    recommendItems: TuffItem[],
+    pinnedItems: TuffItem[],
+    limit: number
+  ): TuffItem[] {
+    if (limit <= 0) return []
+
+    const visiblePinnedItems = this.dedupeItems(pinnedItems).slice(0, limit)
+    const pinnedIdentityKeys = new Set(visiblePinnedItems.map((item) => this.getItemIdentity(item)))
+    const visibleRecommendItems = this.dedupeItems(recommendItems)
+      .filter((item) => !pinnedIdentityKeys.has(this.getItemIdentity(item)))
+      .slice(0, Math.max(0, limit - visiblePinnedItems.length))
+
+    return [...visibleRecommendItems, ...visiblePinnedItems]
   }
 
   /**
@@ -1656,19 +1687,32 @@ export class RecommendationEngine {
 
   private buildRecommendationCacheKey(
     context: ContextSignal,
-    semanticSettings: RecommendationSemanticSettings
+    semanticSettings: RecommendationSemanticSettings,
+    pinnedCacheSignature = ''
   ): string {
     const baseKey = this.contextProvider.generateCacheKey(context)
-    if (isDefaultRecommendationSemanticSettings(semanticSettings)) {
-      return baseKey
+    const segments = [baseKey, `pin:${pinnedCacheSignature || 'none'}`]
+    if (!isDefaultRecommendationSemanticSettings(semanticSettings)) {
+      segments.push(
+        `sem:local${semanticSettings.localVectorEnabled ? 1 : 0}`,
+        `aiEmb${semanticSettings.aiEmbeddingEnabled ? 1 : 0}`,
+        `aiRank${semanticSettings.aiRerankEnabled ? 1 : 0}`
+      )
     }
 
-    return [
-      baseKey,
-      `sem:local${semanticSettings.localVectorEnabled ? 1 : 0}`,
-      `aiEmb${semanticSettings.aiEmbeddingEnabled ? 1 : 0}`,
-      `aiRank${semanticSettings.aiRerankEnabled ? 1 : 0}`
-    ].join('|')
+    return segments.join('|')
+  }
+
+  private buildPinnedCacheSignature(pinnedItems: ItemCandidate[]): string {
+    if (pinnedItems.length === 0) return ''
+
+    const signaturePayload = pinnedItems.map((item) => ({
+      sourceId: item.sourceId,
+      itemId: item.itemId,
+      sourceType: item.sourceType
+    }))
+
+    return createHash('sha256').update(JSON.stringify(signaturePayload)).digest('hex').slice(0, 16)
   }
 
   /**
@@ -2150,9 +2194,14 @@ export class RecommendationEngine {
    */
   private async getCachedRecommendations(
     context: ContextSignal,
-    semanticSettings: RecommendationSemanticSettings
+    semanticSettings: RecommendationSemanticSettings,
+    pinnedCacheSignature = ''
   ): Promise<{ items: TuffItem[] } | null> {
-    const cacheKey = this.buildRecommendationCacheKey(context, semanticSettings)
+    const cacheKey = this.buildRecommendationCacheKey(
+      context,
+      semanticSettings,
+      pinnedCacheSignature
+    )
     const cached = await this.dbUtils.getRecommendationCache(cacheKey)
 
     if (!cached) return null
@@ -2175,9 +2224,14 @@ export class RecommendationEngine {
   private async cacheRecommendations(
     context: ContextSignal,
     semanticSettings: RecommendationSemanticSettings,
+    pinnedCacheSignature: string,
     items: TuffItem[]
   ): Promise<void> {
-    const cacheKey = this.buildRecommendationCacheKey(context, semanticSettings)
+    const cacheKey = this.buildRecommendationCacheKey(
+      context,
+      semanticSettings,
+      pinnedCacheSignature
+    )
     const expiresAt = new Date(Date.now() + this.CACHE_DURATION_MS)
 
     void this.dbUtils.setRecommendationCache(cacheKey, items, expiresAt).catch((error) => {

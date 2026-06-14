@@ -1,4 +1,4 @@
-const { plugin, clipboard, logger, TuffItemBuilder } = globalThis
+const { plugin, clipboard, logger, TuffItemBuilder, permission } = globalThis
 
 const PLUGIN_NAME = 'touch-emoji-symbols'
 const SOURCE_ID = 'plugin-features'
@@ -111,6 +111,23 @@ function searchEmojiSymbols(query, limit = MAX_RESULTS) {
     .slice(0, limit)
 }
 
+async function ensurePermission(permissionId, reason) {
+  if (!permission?.check || !permission?.request)
+    return false
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission)
+      return true
+    const granted = await permission.request(permissionId, reason)
+    return Boolean(granted)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-emoji-symbols] Failed to request permission', error)
+    return false
+  }
+}
+
 function buildCopyItem({ featureId, entry }) {
   return new TuffItemBuilder(`${featureId}-${entry.id}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
@@ -122,7 +139,7 @@ function buildCopyItem({ featureId, entry }) {
       featureId,
       defaultAction: COPY_ACTION_ID,
     })
-    .createAndAddAction(COPY_ACTION_ID, 'copy', '复制', entry.value)
+    .createAndAddAction(COPY_ACTION_ID, 'plugin', '复制', { text: entry.value })
     .build()
 }
 
@@ -180,13 +197,25 @@ const pluginLifecycle = {
         return
 
       const copyAction = Array.isArray(item.actions)
-        ? item.actions.find(action => action.type === COPY_ACTION_ID)
+        ? item.actions.find(action => action.id === COPY_ACTION_ID || action.type === COPY_ACTION_ID)
         : null
       const output = typeof copyAction?.payload === 'string' ? copyAction.payload : copyAction?.payload?.text
       if (typeof output !== 'string')
         return
 
+      const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制 Emoji 或符号')
+      if (!canCopy) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'permission-denied',
+          message: '缺少 clipboard.write 权限',
+        }
+      }
+
       clipboard.writeText(output)
+      return { externalAction: true, status: 'started' }
     }
     catch (error) {
       logger?.error?.('[touch-emoji-symbols] Action failed', error)

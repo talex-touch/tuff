@@ -321,18 +321,41 @@ function upsertBookmark(items, payload, now = Date.now()) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return { granted: true }
+    }
+
+    const granted = await permission.request(permissionId, reason)
+    if (granted) {
+      return { granted: true }
+    }
+
+    return {
+      granted: false,
+      reason: 'permission-denied',
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-browser-bookmarks] Failed to request permission', error)
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
+  }
 }
 
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check)
-    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+    return { granted: false, status: 'permission-missing', reason: 'permission-sdk-unavailable' }
 
   try {
     const granted = Boolean(await permission.check(permissionId))
@@ -517,15 +540,23 @@ function buildRecentItems(featureId, recentItems, networkCapabilityState) {
 }
 
 async function tryCopyUrl(url) {
-  if (!clipboard?.writeText)
-    return false
+  if (!clipboard?.writeText) {
+    return {
+      copied: false,
+      reason: 'clipboard-unavailable',
+    }
+  }
 
-  const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制链接')
-  if (!canCopy)
-    return false
+  const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制链接')
+  if (!permissionResult.granted) {
+    return {
+      copied: false,
+      reason: permissionResult.reason || 'permission-denied',
+    }
+  }
 
   clipboard.writeText(url)
-  return true
+  return { copied: true }
 }
 
 function resolveGroupOrder(groups) {
@@ -709,16 +740,20 @@ const pluginLifecycle = {
         if (!url)
           return
 
-        const copied = await tryCopyUrl(url)
-        if (!copied) {
+        const copyResult = await tryCopyUrl(url)
+        if (!copyResult.copied) {
           return {
             externalAction: true,
             success: false,
-            message: '复制失败：缺少 clipboard.write 权限',
+            status: 'blocked',
+            reason: copyResult.reason || 'permission-denied',
+            message: copyResult.reason === 'clipboard-unavailable'
+              ? '当前环境不支持写入剪贴板'
+              : '复制失败：缺少 clipboard.write 权限',
           }
         }
 
-        return { externalAction: true }
+        return { externalAction: true, status: 'started' }
       }
 
       if (actionId === 'add-bookmark') {
@@ -743,13 +778,13 @@ const pluginLifecycle = {
         if (!url)
           return
 
-        const canOpen = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开网址')
-        if (!canOpen) {
+        const permissionResult = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开网址')
+        if (!permissionResult.granted) {
           return {
             externalAction: true,
             success: false,
             status: 'blocked',
-            reason: 'permission-denied',
+            reason: permissionResult.reason || 'permission-denied',
             message: '缺少 network.internet 权限',
           }
         }

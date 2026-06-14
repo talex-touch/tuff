@@ -11,6 +11,10 @@
   },
   "description": "智能问答：在 CoreBox 里直接提问并复制回答",
   "main": "index.js",
+  "dev": {
+    "enable": true,
+    "source": true
+  },
   "build": {
     "index": {
       "entry": "index.js",
@@ -59,6 +63,13 @@
       "push": true,
       "priority": 200,
       "acceptedInputTypes": ["text", "image"],
+      "interaction": {
+        "type": "widget",
+        "path": "ask-panel",
+        "showInput": true,
+        "allowInput": true,
+        "forceMax": true
+      },
       "platform": {
         "win32": true,
         "darwin": true,

@@ -98,7 +98,8 @@ function resolveActionCommandKind(action) {
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check) {
     return {
-      granted: true,
+      granted: false,
+      reason: 'permission-sdk-unavailable',
     }
   }
 
@@ -186,18 +187,23 @@ function buildActionCapability(featureId, action, platform = process.platform, c
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
+  if (!permission?.check || !permission?.request)
+    return { granted: false, reason: 'permission-sdk-unavailable' }
 
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission)
+      return { granted: true, reason: '' }
 
-  if (typeof permission.request !== 'function')
-    return false
-
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+    const granted = await permission.request(permissionId, reason)
+    return granted
+      ? { granted: true, reason: '' }
+      : { granted: false, reason: 'permission-denied' }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-quick-actions] Failed to request permission', error)
+    return { granted: false, reason: 'permission-request-failed' }
+  }
 }
 
 function resolveActions(platform = process.platform) {
@@ -580,12 +586,14 @@ async function runActionWithGuards(action) {
     }
   }
 
-  const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, PERMISSION_REASON)
-  if (!hasPermission) {
+  const permissionState = await ensurePermission(SHELL_PERMISSION_ID, PERMISSION_REASON)
+  if (!permissionState.granted) {
     return {
       status: 'blocked',
-      reason: 'permission-denied',
-      message: '缺少 system.shell 权限',
+      reason: permissionState.reason,
+      message: permissionState.reason === 'permission-sdk-unavailable'
+        ? '权限系统不可用，无法执行系统快捷动作'
+        : '缺少 system.shell 权限',
     }
   }
 

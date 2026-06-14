@@ -5,7 +5,114 @@
 
 ## 2026-06-14
 
-### fix(corebox): hide plugin MetaK hints unless declared
+### fix(plugin): preserve Dev Toolbox network permission block reasons
+
+- `plugins/touch-dev-toolbox/index.js`
+- `packages/test/src/plugins/dev-toolbox.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Dev Toolbox link opening now uses structured `network.internet` permission results.
+  - Execution preserves `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` before calling the external URL opener.
+  - Focused tests cover denied, missing SDK, request-failed, and granted open paths; real browser/platform opening evidence remains separate.
+
+### fix(plugin): preserve Snippets clipboard permission block reasons
+
+- `plugins/touch-snippets/index.js`
+- `packages/test/src/plugins/snippets.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Snippet copy and snippet-pack export now use structured `clipboard.write` permission results.
+  - Execution preserves `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` before writing clipboard data or updating snippet usage metadata.
+  - Focused tests cover denied, missing SDK, and request-failed clipboard paths; real clipboard runtime evidence remains separate platform evidence.
+
+### fix(plugin): preserve Batch Rename file permission block reasons
+
+- `plugins/touch-batch-rename/index.js`
+- `packages/test/src/plugins/batch-rename.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Batch Rename now consumes structured `fs.read` / `fs.write` permission results for preview, apply, and undo flows.
+  - Apply and undo execution preserve `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` before writing rename state, reading rollback state, or touching files.
+  - Focused coverage pins denied, missing SDK, and request-failed file permission paths; real filesystem rename/undo evidence remains separate platform/runtime evidence.
+
+### fix(plugins): preserve browser data permission block reasons
+
+- `plugins/touch-browser-data/index.js`
+- `plugins/touch-browser-data/index.test.cjs`
+- `plugins/touch-browser-bookmarks/index.js`
+- `packages/test/src/plugins/browser-bookmarks.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Data local bookmark scan, external URL open, and URL copy paths now consume structured permission results, preserving `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` before reading local Bookmarks JSON, opening external URLs, or writing the clipboard.
+  - Browser Bookmarks external URL open and copy URL paths now preserve the same concrete permission block reasons; unavailable clipboard support remains a distinct `clipboard-unavailable` block.
+  - Focused tests cover missing SDK and request-failed paths without reading browser files, calling `openUrl`, or writing clipboard data.
+
+### fix(plugins): preserve browser and window permission block reasons
+
+- `plugins/touch-browser-open/index.js`
+- `plugins/touch-window-manager/index.js`
+- `packages/test/src/plugins/browser-open.test.ts`
+- `packages/test/src/plugins/window-manager.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Open execution now preserves `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` for `system.shell` browser-open actions instead of collapsing unavailable SDK and request failures into a denied state.
+  - Window Manager execution now preserves the same concrete shell permission block reasons before AppleScript, PowerShell, or app/window operations run.
+  - Browser Open network suggestions and copy URL paths keep their existing boolean gate behavior, but continue failing closed when permission is unavailable or denied.
+  - 验证：`pnpm -C "packages/test" exec vitest run "src/plugins/browser-open.test.ts" "src/plugins/window-manager.test.ts"` 通过。
+
+### fix(plugin): preserve System Actions permission block reasons
+
+- `plugins/touch-system-actions/index.js`
+- `packages/test/src/plugins/system-actions.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - System Actions shell execution now preserves `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` instead of collapsing every runtime permission failure to a denied state.
+  - Shell-backed system actions still block before invoking the shell runner when permission is unavailable, denied, or failing; `open-main-window` remains a native window action independent from shell permission.
+  - Focused package-level coverage pins missing SDK, denied, and request-failed execution paths; real OS shutdown/restart/lock/audio/display behavior remains separate platform evidence.
+  - 验证：`pnpm -C "packages/test" exec vitest run "src/plugins/system-actions.test.ts"` 通过。
+
+### fix(plugin): preserve Quick Actions permission block reasons
+
+- `plugins/touch-quick-actions/index.js`
+- `packages/test/src/plugins/quick-actions.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Quick Actions shell execution now preserves `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` instead of mapping every request failure to a denied state.
+  - Missing permission SDK returns a distinct blocked message before confirmation prompts and before shell execution.
+  - Focused package-level coverage pins missing SDK and denied execution paths; real OS quick action behavior remains separate platform evidence.
+
+### fix(plugin): preserve Workspace Scripts permission block reasons
+
+- `plugins/touch-workspace-scripts/index.js`
+- `packages/test/src/plugins/workspace-scripts.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Workspace Scripts command execution now preserves `permission-sdk-unavailable`, `permission-denied`, and `permission-request-failed` reasons instead of treating every request failure as a generic denied state.
+  - Execution still blocks before confirmation prompts and before invoking the shell runner whenever permission is unavailable or denied.
+  - Focused package-level coverage pins missing SDK and denied permission execution paths; real workspace command execution and platform shell behavior remain separate follow-ups.
+
+### fix(plugin): preserve Window Presets permission block reasons
+
+- `plugins/touch-window-presets/index.js`
+- `packages/test/src/plugins/window-presets.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Window Presets execution now preserves concrete permission block reasons such as `permission-denied`, `permission-sdk-unavailable`, and `permission-request-failed` instead of collapsing runtime failures to `permission-missing`.
+  - Blocked preset execution returns user-visible messages for denied, unavailable, request-failed, and check-failed paths while keeping the listing path as non-mutating diagnostics.
+  - Focused package-level coverage pins denied and missing permission SDK execution paths plus message mapping; real OS window manipulation evidence remains a separate follow-up.
+
+### fix(plugin): preserve Snipaste permission block reasons
+
+- `plugins/touch-snipaste/index.js`
+- `plugins/touch-snipaste/index.test.cjs`
+- `packages/test/src/plugins/snipaste.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Snipaste execution now preserves concrete permission block reasons such as `permission-denied`, `permission-sdk-unavailable`, and `permission-request-failed` instead of collapsing all permission failures to `permission-missing`.
+  - Blocked action messages now map those reasons to user-visible diagnostics while still failing before spawning Snipaste.
+  - Added package-level official plugin coverage for denied and missing permission SDK execution paths; real Snipaste platform execution evidence remains a separate follow-up.
+
+### fix(corebox): hide plugin footer unless declared
 
 - `apps/core-app/src/renderer/src/components/render/CoreBoxFooter.vue`
 - `apps/core-app/src/renderer/src/components/render/coreBoxFooterHints.ts`
@@ -16,11 +123,408 @@
 - `apps/core-app/src/main/modules/plugin/plugin-feature.ts`
 - `packages/utils/plugin/index.ts`
 - `packages/utils/plugin/sdk/meta/README.md`
-  - Plugin feature entries and plugin-provided widget items now hide the CoreBox footer MetaK/Quick Actions hint by default; plugins must explicitly declare `footerHints.secondary.visible: true` to show it.
+  - Plugin feature entries and plugin-provided widget items now hide the full CoreBox footer by default; plugins must explicitly declare `footerHints.primary.visible`, `footerHints.secondary.visible`, or `footerHints.quickSelect.visible` as `true` to show it.
+  - Plugin feature footer defaults now disable primary, secondary, and quick-select hints together, preventing widget-only plugin surfaces from showing the default `CoreBox` / plugin name / enter-action footer strip.
   - Plugin feature manifests now preserve `footerHints` through the runtime feature model and generated `TuffItem.meta`, reusing the existing TUFF footer-hints SDK contract.
   - MetaOverlay execution now returns explicit success/failure, hides immediately on selection, and guards duplicate Enter/click dispatch.
   - MetaOverlay item actions now route common `navigate` / `copy` / `open` / `execute` action types through the renderer action pipeline instead of always falling back to default item execution.
   - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts" "src/renderer/src/modules/box/adapter/hooks/useActionPanel.test.ts" "src/main/modules/box-tool/core-box/meta-overlay.test.ts" "src/renderer/src/components/render/coreBoxFooterHints.test.ts"` 通过；`pnpm -C "apps/core-app" exec vue-tsc --noEmit --pretty false` 通过。
+
+### fix(plugin): block translation secret saves without secure storage
+
+- `plugins/touch-translation/src/components/ProviderConfigModal.vue`
+- `plugins/touch-translation/ProviderConfigModal.test.ts`
+- `plugins/touch-translation/src/composables/useTranslationProvider.ts`
+- `plugins/touch-translation/translation-helper.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Translation provider config saves now refresh secure-store health before emitting a save for providers with secret fields.
+  - When secure-store is unavailable, the config modal shows a blocking error and does not emit the save event, avoiding a UI-level false success before secrets can be protected.
+  - Added a small `canPersistProviderSecrets()` helper plus focused helper/component coverage for unavailable/degraded/available health states and blocked save emission; OS credential backend evidence remains a separate gate.
+
+### fix(plugin): keep failed translation secrets out of runtime config
+
+- `plugins/touch-translation/src/composables/useTranslationProvider.ts`
+- `plugins/touch-translation/translation-provider-secret.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Translation provider config updates now strip secret fields before updating the in-memory provider config and only merge secret values back after `usePluginSecret()` successfully persists them.
+  - If secure-store writes fail, normal plugin storage is not updated and the runtime provider config does not retain the submitted secret values, avoiding a false configured state.
+  - Focused coverage pins both legacy secret sanitization and failed secret-update behavior; system secure-store backend availability and OS credential evidence remain separate follow-ups.
+
+### fix(corebox): sync window pin state to BrowserWindow
+
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.test.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/views/box/MainBoxHeader.vue`
+- `packages/utils/transport/events/core-box-retained.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/core-box.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - CoreBox header pin toggles now send a retained transport event to the main process so `BrowserWindow.setAlwaysOnTop` and visible-on-all-workspaces are updated immediately instead of only flipping renderer storage.
+  - Window creation now derives the initial pinned state from `app-setting.tools.autoHide`, so unpinned CoreBox windows no longer start as always-on-top by default.
+  - Main-process blur handling now reads the in-memory pinned state, avoiding stale storage reads while the auto-save pipeline is still flushing.
+  - App-setting updates from other surfaces, such as Settings, now resync existing CoreBox windows through the same pinned-state path.
+  - Focused IPC coverage asserts the new `core-box:ui:set-pinned` handler delegates to `WindowManager` and returns the applied state.
+
+### feat(search): feed Quicklinks from visible root results
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-root-results-feed.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-root-results-feed.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-sources.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Quicklinks runtime now loads a read-only snapshot from visible CoreBox root results owned by linked quicklink providers, so official plugin root-result items can be observed by the Indexed Source scan/reconcile boundary.
+  - The feed consumes `BoxItemManager.getVisibleItems()`, preserving existing provider enable/order filtering and `search.root-results` gates instead of reading plugin storage directly.
+  - Root-result feed mapping only accepts explicit HTTP(S) URLs from plugin payload or subtitle fallback and records provider metadata; invalid/non-web URLs are skipped.
+  - Focused coverage pins linked-provider filtering, empty-feed degraded evidence, and payload URL fail-closed behavior; persistent plugin feed storage, user clear/rebuild UI, and durable job history remain separate follow-ups.
+
+### fix(search): degrade Everything without authorized roots
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/everything-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/everything-indexed-source.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Everything indexed source health now treats Windows enabled/available state without authorized File roots as `degraded` with `indexing-root-policy-file-roots-empty`, instead of exposing a ready-looking external source before root authorization exists.
+  - Diagnostic evidence continues to expose only root counts and path-filtering counts/reasons, not authorized root paths.
+  - Focused coverage pins the root-empty degraded evidence; Windows real-device CLI/SDK strategy, registry PATH probing, performance baseline, and platform evidence remain separate follow-ups.
+
+### fix(corebox): keep pinned recommendations fresh
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - CoreBox recommendation pin/unpin now invalidates the relevant in-memory search and recommendation caches, so refreshed results do not reuse stale pin state.
+  - Recommendation cache keys now include a privacy-safe pinned item signature, including the empty pinned state, avoiding stale persisted recommendation cache after pin state changes or upgrades from older cache entries.
+  - Empty-query recommendations now reserve visible slots for pinned items before applying the limit, preventing full recommendation lists from truncating pinned items.
+  - Persisted recommendation cache hits now return the same container layout metadata as freshly generated recommendations, keeping pinned sections renderable from cache.
+
+### fix(search): preserve File indexed source scan completion batches
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/file-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/file-indexed-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-scan-scheduler.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - File indexed source scans now preserve empty `done` batches so the indexing runtime store boundary can observe completion/flush signals even when the final scan has no records.
+  - Quicklinks enabled empty feeds now emit the same empty `done` scan batch, while disabled Quicklinks still produce no scan batches and remain `quicklinks-provider-disabled`.
+  - ScanScheduler focused coverage now pins that empty terminal batches still reach `store.applyBatch()` and count as completed batches while contributing zero records.
+  - Quicklinks `clearIndex` now fails closed with `quicklinks-clear-handler-not-configured` when an enabled source has no persistent clear handler, avoiding a false clear success before the official feed/UI is wired.
+  - Quicklinks default runtime-feed evidence now exposes `clearHandlerConfigured`, keeping the missing persistent clear handler visible in diagnostics without expanding the public `IndexedSourceHealth` contract.
+  - Empty non-terminal batches are still filtered, keeping the existing no-op write behavior for intermediate batches.
+  - Focused tests cover File and Quicklinks source scan output, Quicklinks clear handler gating, and adjacent ScanScheduler/store adapter paths; persistent Quicklinks feed, user clear/rebuild UI, durable job history, and platform watcher evidence remain separate follow-ups.
+
+### fix(plugin): fail closed on mismatched precompiled widget metadata
+
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Packaged precompiled widget loading now verifies `metaPath` JSON against the manifest widget entry before registration.
+  - Mismatched or malformed metadata returns `WIDGET_PRECOMPILED_INTEGRITY_MISMATCH`, clears any cached widget runtime, emits a widget failure, and does not fall back to runtime compilation for packaged plugins.
+  - Focused WidgetManager coverage asserts the fail-closed path and confirms neither source loading nor runtime compilation is invoked; renderer visual evidence and packaged plugin matrix remain separate follow-ups.
+
+### fix(plugin): route utility copy actions through plugin permission gates
+
+- `plugins/touch-emoji-symbols/index.js`
+- `plugins/touch-emoji-symbols/index.test.cjs`
+- `plugins/touch-text-tools/index.js`
+- `packages/test/src/plugins/text-tools.test.ts`
+- `plugins/touch-dev-utils/index.js`
+- `packages/test/src/plugins/dev-utils.test.ts`
+- `plugins/touch-translation/index/item-builder.ts`
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/translation-helper.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Emoji Symbols, Text Tools, and Dev Utils now build secondary copy actions as plugin actions instead of host-level `copy` actions, so auxiliary copy commands cannot bypass the plugin `clipboard.write` request/block path.
+  - Translation success item builders now use `copy-translation` plugin actions with structured `{ text }` payloads; execution stays backward-compatible with older `type: "copy"` payloads but still routes through the same permission gate.
+  - A follow-up scan found no remaining official plugin generated host-level `copy` actions outside compatibility handlers and focused test fixtures.
+  - Focused tests cover generated action metadata plus denied/no-SDK/granted clipboard paths; this is clipboard capability evidence only and does not change broader plugin runtime/package evidence.
+
+### fix(plugin): gate browser data URL copies
+
+- `plugins/touch-browser-data/index.js`
+- `plugins/touch-browser-data/index.test.cjs`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Data bookmark URL copy now uses a plugin action with an explicit `clipboard.write` permission gate instead of relying on a host-level copy action payload.
+  - Execution now returns `blocked` / `permission-denied` when clipboard permission or the permission SDK is unavailable, and only calls `clipboard.writeText` after permission is granted.
+  - Focused CJS tests cover action metadata, denied/no-SDK copy blocking, and granted copy; real browser profile, packaged Settings UI, and durable indexing runtime evidence remain separate follow-ups.
+
+### fix(plugin): gate intelligence answer copies
+
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/intelligence.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Intelligence answer copy now returns explicit `blocked` / `permission-denied` when `clipboard.write` is denied or the permission SDK is unavailable, and `started` after a granted clipboard handoff.
+  - Focused tests cover denied, no-SDK, and granted copy paths without invoking the Intelligence SDK or writing the clipboard when the boundary is unavailable.
+  - This is clipboard capability evidence only; packaged Electron CoreBox AI Ask text/OCR success and failure-path UI evidence remain open.
+
+### fix(plugin): gate browser bookmarks URL copies
+
+- `plugins/touch-browser-bookmarks/index.js`
+- `packages/test/src/plugins/browser-bookmarks.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Bookmarks URL copy now returns explicit `blocked` / `permission-denied` when `clipboard.write` is denied, matching the rest of the plugin clipboard capability contract.
+  - Focused tests cover denied copy without calling `clipboard.writeText` and granted copy normalizing the URL before writing to the clipboard.
+  - This is clipboard capability evidence only; real browser profile, packaged Settings UI, and durable indexing runtime evidence remain separate follow-ups.
+
+### fix(plugin): keep translation provider secrets out of normal storage
+
+- `plugins/touch-translation/src/composables/useTranslationProvider.ts`
+- `plugins/touch-translation/translation-helper.test.ts`
+- `plugins/touch-translation/translation-provider-secret.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `touch-translation` legacy provider config migration now strips provider secret fields before merging config back into normal plugin storage, even when secure-store migration is unavailable or fails.
+  - `providers_config` is rewritten with sanitized metadata when legacy plaintext secrets are detected, so `apiKey` / `secretKey` / `token` style fields are not preserved in the ordinary config payload.
+  - Focused helper/runtime coverage pins provider secret key derivation, secret stripping, and sanitized rewrite behavior when secure-store migration fails; OS Keychain/Credential Locker/libsecret coverage, legacy secret cleanup evidence, and packaged runtime evidence remain separate gates.
+
+### test(sdkapi): align bundled plugin marker evidence
+
+- `packages/test/src/common/sdk-version.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Updated the package-level SDK marker test to treat `260615` as the current marker while keeping `260428` explicitly supported.
+  - Bundled plugin manifest evidence now requires every official plugin to declare a supported sdkapi marker and keeps `touch-intelligence` as the only plugin on the current marker until more runtimes need the new boundary.
+  - This preserves fail-closed unsupported marker behavior without forcing a blind manifest sweep across plugins that do not need the newest runtime contract yet.
+
+### fix(core-app): restore plugin feature detail scrolling
+
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/flip-dialog.utils.ts`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`
+- `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Plugin feature detail overlays now preserve a bounded flex layout through the header, tab container, and custom scroll panes so long `overview` / `data` content can scroll inside the dialog instead of being clipped.
+  - The feature detail overlay now uses an explicit dialog height, disables the outer overlay scroll layer, and uses native tab-pane scrolling so mouse wheel events target one bounded scroll container.
+  - Feature descriptions now live in the Overview section instead of the dialog title area, keeping the header focused on the feature name.
+  - Feature icon/name identity now lives at the top of the Overview card, leaving the dialog header for the close action.
+  - The close action now uses the `TxTabs` `nav-right` slot so it sits on the same row as the feature detail tabs.
+  - Interaction details now render below the Overview card instead of in a separate tab.
+  - Widget details now render as a dedicated status summary plus labeled path rows with direct copy/reveal actions, reducing cramped path/output presentation and localizing the precompiled status label.
+  - `TxTabs` now forwards tab `icon` / `name` slots to regenerated navigation items, so localized tab labels render instead of raw tab IDs.
+  - `FlipDialog` accepts an optional `height` style variable; default behavior remains unchanged.
+
+### fix(plugin): fail closed browser open permission sdk gaps
+
+- `plugins/touch-browser-open/index.js`
+- `packages/test/src/plugins/browser-open.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Open now treats a missing plugin permission SDK as `permission-sdk-unavailable` during non-mutating capability diagnostics instead of marking `system.shell` as granted.
+  - Browser open, web search handoff, remote suggestions, and copy-url execution paths now fail closed when permission check/request APIs are unavailable or throw, avoiding shell/network/clipboard mutation without a runtime permission boundary.
+  - Focused tests cover missing permission SDK diagnostics, blocked browser-open execution, and blocked clipboard copy without calling `clipboard.writeText`.
+  - This is focused plugin capability evidence only; platform browser launch evidence and broader remaining shell/OS plugins still require separate review.
+
+### fix(plugin): fail closed quick actions permission sdk gaps
+
+- `plugins/touch-quick-actions/index.js`
+- `packages/test/src/plugins/quick-actions.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Quick Actions now treats a missing plugin permission SDK as `permission-sdk-unavailable` during non-mutating shell capability diagnostics instead of assuming `system.shell` is granted.
+  - Shell execution now fails closed when permission check/request APIs are unavailable or throw, returning blocked before confirmation or shell runner execution.
+  - Focused tests inject the existing test-only shell runner hook to isolate permission behavior, covering missing SDK diagnostics and blocked execution without relying on local `safe-shell` availability.
+  - This is focused shell capability evidence only; OS-level behavior and remaining system plugins still need separate review.
+
+### fix(plugin): fail closed system actions permission sdk gaps
+
+- `plugins/touch-system-actions/index.js`
+- `packages/test/src/plugins/system-actions.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - System Actions now treats a missing plugin permission SDK as `permission-sdk-unavailable` when shell execution is otherwise available, instead of assuming `system.shell` is granted.
+  - Shell actions fail closed when permission check/request APIs are unavailable or throw; safe-shell unavailable still blocks before permission prompting.
+  - `open-main-window` execution now matches its native capability contract and no longer performs an unrelated `system.shell` permission request before resolving the action.
+  - Focused tests cover permission SDK unavailable diagnostics, native main-window execution without permission SDK, and shell action blocking without execution.
+
+### fix(plugin): fail closed workspace scripts permission sdk gaps
+
+- `plugins/touch-workspace-scripts/index.js`
+- `packages/test/src/plugins/workspace-scripts.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Workspace Scripts now treats missing permission check/request APIs as `permission-sdk-unavailable` for shell capability diagnostics instead of assuming `system.shell` is granted.
+  - Run-command execution now fails closed when the permission SDK is unavailable or throws, before confirmation prompts and before invoking the shell runner.
+  - Focused tests cover the permission-sdk-unavailable diagnostic and denied execution path without running a workspace command.
+  - This remains local plugin capability evidence; real workspace script execution and platform shell behavior require separate evidence.
+
+### fix(plugin): fail closed window manager permission sdk gaps
+
+- `plugins/touch-window-manager/index.js`
+- `packages/test/src/plugins/window-manager.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Window Manager now treats missing permission check/request APIs as `permission-sdk-unavailable` for non-mutating shell capability diagnostics.
+  - Window action execution now fails closed when the permission SDK is unavailable or throws, before invoking AppleScript/PowerShell/open handoff paths.
+  - Focused tests cover the missing SDK diagnostic and blocked execution without performing a real window operation.
+  - This is permission-boundary evidence only; macOS/Windows real window management evidence remains a separate platform item.
+
+### fix(plugin): fail closed window presets and snipaste permission sdk gaps
+
+- `plugins/touch-window-presets/index.js`
+- `packages/test/src/plugins/window-presets.test.ts`
+- `plugins/touch-snipaste/index.js`
+- `plugins/touch-snipaste/index.test.cjs`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Window Presets now treats missing permission check/request APIs as `permission-sdk-unavailable` during listing and blocks preset execution before running PowerShell.
+  - Snipaste now treats missing permission SDK as `permission-sdk-unavailable` for capability diagnostics and blocks before spawning Snipaste.
+  - Focused tests cover missing permission SDK diagnostics and execution blocking without running real window preset or Snipaste commands.
+  - This is local capability-boundary evidence only; Windows preset behavior and real Snipaste launch evidence remain separate platform checks.
+
+### fix(plugin): fail closed browser data permission sdk gaps
+
+- `plugins/touch-browser-data/index.js`
+- `plugins/touch-browser-data/index.test.cjs`
+- `plugins/touch-browser-bookmarks/index.js`
+- `packages/test/src/plugins/browser-bookmarks.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Data now fails closed when permission APIs are unavailable: `fs.read` absence blocks local Bookmarks JSON scanning, and `network.internet` absence blocks external URL opening.
+  - Browser Bookmarks now reports `permission-sdk-unavailable` in non-mutating network diagnostics and blocks external URL opening before `openUrl` when permission APIs are unavailable.
+  - Focused tests cover no-SDK diagnostics and blocked execution without reading browser profiles or opening external URLs.
+  - This is permission-boundary evidence only; real browser profile, packaged Settings UI, and durable indexing runtime evidence remain separate follow-ups.
+
+### fix(plugin): fail closed clipboard utility permission sdk gaps
+
+- `plugins/touch-dev-utils/index.js`
+- `packages/test/src/plugins/dev-utils.test.ts`
+- `plugins/touch-text-tools/index.js`
+- `packages/test/src/plugins/text-tools.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Dev Utils and Text Tools now fail closed when clipboard permission APIs are unavailable or throw, instead of treating missing SDK globals as granted.
+  - Copy actions return blocked before `clipboard.writeText`, and Text Tools also keeps CoreBox visible when the permission boundary is unavailable.
+  - Focused tests cover denied permission and missing permission SDK paths for both utility copy flows.
+  - This is clipboard capability evidence only; broader plugin runtime/package evidence remains separate.
+
+### test(core-app): pin plugin clipboard transport permission guard
+
+- `apps/core-app/src/main/modules/clipboard.transport.test.ts`
+- `packages/test/src/plugins/manifest-boundary.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added focused coverage that a plugin renderer `ClipboardEvents.write` call enforces `clipboard.write` before mutating the system clipboard.
+  - Denied plugin writes now have regression evidence for `CLIPBOARD_CAPABILITY_UNAVAILABLE` and skip the clipboard write handler, covering widget/Surface paths that use the SDK clipboard transport.
+  - Updated the manifest boundary allowlist for the newly explicit `touch-intelligence:intelligence-ask` full-height widget contract.
+  - This is transport-boundary evidence only; widget UI failure feedback and packaged runtime evidence remain separate follow-ups.
+
+### fix(plugin): gate utility clipboard copy actions
+
+- `plugins/touch-dev-utils/index.js`
+- `plugins/touch-text-tools/index.js`
+- `packages/test/src/plugins/dev-utils.test.ts`
+- `packages/test/src/plugins/text-tools.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Dev Utils and Text Tools now request `clipboard.write` before copying generated utility output from CoreBox.
+  - Denied writes return explicit `blocked` / `permission-denied` results and skip `clipboard.writeText`; granted writes return `started`.
+  - Scoped plugin ESLint now passes for both touched plugin preludes; this is focused clipboard capability evidence only.
+
+### fix(plugin): gate translation result clipboard copies
+
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `packages/test/src/plugins/translation.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Translation copy actions now request `clipboard.write` before writing translated text to the clipboard.
+  - Network, AI, and clipboard permission helpers now fail closed when permission SDK APIs are unavailable or throw; no-SDK copy does not write the clipboard or hide CoreBox.
+  - Denied writes return explicit `blocked` / `permission-denied` state and do not hide CoreBox or write clipboard contents; granted writes keep the existing copy and hide behavior.
+  - Focused tests cover denied/granted/no-SDK copy paths, no-SDK network/AI helper blocking, and existing runtime-sync checks; local ignored `dist/build` and bundled runtime copies were refreshed via plugin build/sync, but release-packaged evidence remains a separate gate.
+
+### fix(plugin): gate dev toolbox external links
+
+- `plugins/touch-dev-toolbox/index.js`
+- `plugins/touch-dev-toolbox/manifest.json`
+- `packages/test/src/plugins/dev-toolbox.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Dev Toolbox now declares optional `network.internet` for opening configured toolbox links in the default browser.
+  - Executing an `open-link` item requests `network.internet`, returns `blocked` when denied, when the permission SDK is unavailable/throws, or when `openUrl` is unavailable, awaits `openUrl` when granted, and returns `started` on successful handoff.
+  - This is focused capability evidence for this plugin only; remaining network/shell/OS surfaces still require separate review.
+
+### fix(plugin): avoid sticky denied translation permissions
+
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `packages/test/src/plugins/translation.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Translation network/AI permission helpers now cache granted state only; denied `network.internet` / `intelligence.basic` checks are re-evaluated on the next execution path so later user approval does not require plugin reload.
+  - Added focused coverage that a denied network request is not sticky and a later granted check succeeds without issuing a second request prompt.
+  - This updates canonical prelude/source behavior; packaged artifact refresh remains part of the later release build/sync path.
+
+### test(plugin): pin intelligence permission blocking evidence
+
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/intelligence.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added focused coverage that CoreBox AI Ask execution requests `intelligence.basic`, blocks without invoking the Intelligence SDK when denied, and pushes a retryable visible error item with `PERMISSION_DENIED` metadata.
+  - Missing or throwing permission SDK APIs now fail closed before Intelligence SDK invocation, matching the denied-permission visible error path.
+  - This is permission-boundary evidence for the plugin execution path only; packaged Electron text/OCR success and failure-path UI evidence remains open for `2.5.0` visible experience.
+
+### fix(plugin): return blocked status for batch rename write denial
+
+- `plugins/touch-batch-rename/index.js`
+- `packages/test/src/plugins/batch-rename.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Batch Rename `apply` and `undo` actions now return an explicit `blocked` result with `permission-denied` when `fs.write` is denied.
+  - Missing or throwing permission SDK APIs now fail closed: preview generation does not expose an apply action without `fs.read`, and undo blocks before reading rollback state without `fs.write`.
+  - Added focused coverage that `apply` requests `fs.write` only after a preview plan exists, does not persist `last-rename.json` when denied, and `undo` does not read rollback state when write permission is denied.
+  - This is fs.write execution-boundary evidence only; real platform file operation evidence remains separate.
+
+### fix(plugin): gate snippets clipboard writes
+
+- `plugins/touch-snippets/index.js`
+- `packages/test/src/plugins/snippets.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Touch Snippets now requests `clipboard.write` before copying snippet content or exporting a snippet pack to the clipboard.
+  - Missing or throwing permission SDK APIs now fail closed for snippet copy/export actions, so clipboard writes and usage metadata updates are skipped when the boundary is unavailable.
+  - Denied writes return an explicit `blocked` / `permission-denied` result and skip `clipboard.writeText`; snippet copy also avoids updating usage metadata when copy is blocked.
+  - Updated the focused test entry to target the unified `touch-snippets` runtime instead of retired `touch-code-snippets` / `touch-text-snippets` placeholders.
+
+### fix(plugin): gate emoji clipboard copies
+
+- `plugins/touch-emoji-symbols/index.js`
+- `plugins/touch-emoji-symbols/index.test.cjs`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Emoji Symbols now requests `clipboard.write` before copying an emoji or symbol from CoreBox.
+  - Missing or throwing permission SDK APIs now fail closed before `clipboard.writeText`, matching the broader clipboard capability contract.
+  - Denied writes return explicit `blocked` / `permission-denied` state and skip `clipboard.writeText`; granted writes return `started`.
+  - This is focused clipboard capability evidence for the plugin action path only; expanded data set, recent usage, and Store evidence remain separate follow-ups.
+
+### test(plugin): pin manifest trust-boundary evidence
+
+- `packages/test/src/plugins/manifest-boundary.test.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/everything-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/everything-indexed-source.test.ts`
+  - Added repository-wide official plugin manifest boundary coverage for supported `sdkapi` markers, permission reasons, explicit `manifest.searchProviders`, `search.root-results` consent gates, high-risk shell provider scope mapping, explicit `interaction.forceMax`, and metadata-only indexed source declarations.
+  - Added a runtime regression that regular widget activations stay normal-height unless `interaction.forceMax` is explicitly declared.
+  - Everything indexed source diagnostics now expose privacy-safe evidence for backend/path-filtering/root-count state without leaking authorized root paths.
+  - 验证：`pnpm -C "packages/test" exec vitest run "src/plugins/manifest-boundary.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts" "src/renderer/src/modules/box/adapter/hooks/useResize.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/everything-indexed-source.test.ts"` 通过。
 
 ### feat(core-app): add sticky manual save for capability config
 
@@ -29,8 +533,11 @@
 - `apps/core-app/src/renderer/src/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue`
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/renderer/storage/base-storage.ts`
   - Capability configuration now exposes a bottom sticky save bar with dirty/saving/saved/error states.
   - Manual save flushes pending prompt edits and forces the Intelligence settings storage to persist immediately, while keeping the existing auto-save path intact.
+  - Save failures now show actionable details for storage transport initialization, version conflicts, and remote persistence failures instead of only a generic retry message.
+  - Renderer storage now converts nested Vue reactive/ref values into plain cloneable payloads before transport save, avoiding Electron IPC `An object could not be cloned` failures when capability bindings contain reactive model/provider rows.
   - 验证：`pnpm -C "apps/core-app" run typecheck:web` 通过。
 
 ### feat(core-app): enrich intelligence capability test result metrics
@@ -46,6 +553,26 @@
   - Capability testers share one result builder for metrics and stability signals, avoiding duplicated per-capability formatting logic.
   - The test result panel now renders metrics, stability, reasoning, and response preview with theme-safe contrast.
   - 验证：`pnpm -C "apps/core-app" run typecheck:node`、`pnpm -C "apps/core-app" run typecheck:web`、`pnpm -C "packages/tuff-intelligence" run build` 均通过。
+
+### feat(plugin): migrate touch-intelligence to widget surface
+
+- `plugins/touch-intelligence/manifest.json`
+- `plugins/touch-intelligence/index.js`
+- `plugins/touch-intelligence/widgets/ask-panel.vue`
+- `packages/test/src/plugins/intelligence.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/components/render/WidgetFrame.vue`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/tuff/modules/plugins/touch-intelligence/*`
+  - `touch-intelligence` now declares `interaction.type=widget` for `intelligence-ask`, with `ask-panel` as the stable widget surface and explicit `forceMax` sizing.
+  - The plugin prelude now pushes one custom-render widget item for chatbot idle, OCR pending, chat pending, ready and error states; prompt submission happens inside the widget instead of a CoreBox ready-to-send row.
+  - CoreBox Enter handling now re-executes the active widget plugin feature with the current input text, so AI Ask sends the latest typed prompt instead of staying in the ready-to-send state or using stale widget payload.
+  - Image-only clipboard input no longer auto-routes to `vision.ocr`; OCR is only enabled when the user explicitly asks an AI prompt with image context.
+  - The Ask widget follows the AI Elements chatbot shape with a full-height Conversation area, suggestions, bottom PromptInput-style composer, model/meta controls, and typed `PluginEvents.api.featureInputChanged` submission.
+  - Fixed the widget registry render patch so it no longer enumerates Vue component public instances while merging setup state, removing the dev warning shown by `widget-registry.ts`.
+  - Built and synchronized the latest precompiled widget runtime into the local CoreApp dev/plugin userData directories so local dev loads the widget implementation after restart/reload.
+  - 验证：`pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"`、`pnpm -C "plugins/touch-intelligence" run build`、`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/plugin/widget-registry.test.ts"` 与 related `git diff --check` 通过。
 
 ### feat(tuffex): add AI Elements Vue adapter for intelligence answers
 

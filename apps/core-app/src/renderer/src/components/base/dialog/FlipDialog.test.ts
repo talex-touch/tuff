@@ -100,10 +100,12 @@ describe('flip-dialog utils', () => {
     const customStyle = resolveFlipDialogCardStyleVariables({
       size: 'md',
       width: '900px',
+      height: '70dvh',
       maxHeight: '70dvh',
       minHeight: '480px'
     })
     expect(customStyle['--flip-dialog-width']).toBe('900px')
+    expect(customStyle['--flip-dialog-height']).toBe('70dvh')
     expect(customStyle['--flip-dialog-max-height']).toBe('70dvh')
     expect(customStyle['--flip-dialog-min-height']).toBe('480px')
   })

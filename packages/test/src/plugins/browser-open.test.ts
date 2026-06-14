@@ -353,6 +353,145 @@ describe('browser open plugin', () => {
     expect(requested).toEqual([])
   })
 
+  it('reports browser-open permission diagnostics when permission SDK is unavailable', async () => {
+    const items: Array<{ title?: string, meta?: any }> = []
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: withoutGlobal(),
+      plugin: {
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, meta?: any }>) { items.push(...next) },
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+
+    const defaultOpen = items.find(item => item.title === '默认浏览器打开')
+    const diagnostic = items.find(item => item.title === '打开能力')
+    expect(defaultOpen?.meta?.capability).toMatchObject({
+      status: 'permission-missing',
+      reason: 'permission-sdk-unavailable',
+      permission: 'system.shell',
+    })
+    expect(diagnostic?.meta?.capability).toMatchObject({
+      status: 'permission-missing',
+      reason: 'permission-sdk-unavailable',
+      permission: 'system.shell',
+    })
+  })
+
+  it('blocks browser-open actions when permission SDK is unavailable', async () => {
+    const globals = createPluginGlobals({
+      permission: withoutGlobal(),
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-open',
+        actionId: 'default-open',
+        payload: {
+          url: 'https://example.com',
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-sdk-unavailable',
+    })
+  })
+
+  it('blocks browser-open actions when shell permission is denied', async () => {
+    const globals = createPluginGlobals({
+      permission: {
+        check: async () => false,
+        request: async () => false,
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-open',
+        actionId: 'default-open',
+        payload: {
+          url: 'https://example.com',
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+  })
+
+  it('blocks browser-open actions when shell permission request fails', async () => {
+    const globals = createPluginGlobals({
+      permission: {
+        check: async () => false,
+        request: async () => {
+          throw new Error('permission transport failed')
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-open',
+        actionId: 'default-open',
+        payload: {
+          url: 'https://example.com',
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-request-failed',
+    })
+  })
+
+  it('blocks copy url when clipboard permission SDK is unavailable', async () => {
+    const writeText = vi.fn()
+    const globals = createPluginGlobals({
+      clipboard: {
+        writeText,
+      },
+      permission: withoutGlobal(),
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-open',
+        actionId: 'copy-url',
+        payload: {
+          url: 'https://example.com',
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      success: false,
+    })
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
   it('pushes direct search and remote suggestions in engine mode', async () => {
     const items: Array<{ title?: string }> = []
     const globals = createPluginGlobals({

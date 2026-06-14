@@ -1,4 +1,4 @@
-const { plugin, logger, TuffItemBuilder, permission, openUrl } = globalThis
+const { plugin, clipboard, logger, TuffItemBuilder, permission, openUrl } = globalThis
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -345,18 +345,41 @@ function searchBookmarks(bookmarks, keyword, limit = MAX_RESULTS) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request)
-    return true
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return { granted: true }
+    }
+
+    const granted = await permission.request(permissionId, reason)
+    if (granted) {
+      return { granted: true }
+    }
+
+    return {
+      granted: false,
+      reason: 'permission-denied',
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-browser-data] Failed to request permission', error)
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
+  }
 }
 
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check)
-    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+    return { granted: false, status: 'permission-missing', reason: 'permission-sdk-unavailable' }
 
   try {
     const granted = Boolean(await permission.check(permissionId))
@@ -443,8 +466,15 @@ function buildBookmarkItem(featureId, bookmark, index, networkCapabilityState = 
         status: networkCapabilityState.status,
         reason: networkCapabilityState.reason,
       }),
+      actions: {
+        copyUrl: {
+          actionId: 'copy-url',
+          payload: { url: bookmark.url },
+          permission: 'clipboard.write',
+        },
+      },
     })
-    .createAndAddAction('copy-url', 'copy', '复制 URL', bookmark.url)
+    .createAndAddAction('copy-url', 'plugin', '复制 URL', { url: bookmark.url })
     .build()
 }
 
@@ -499,8 +529,8 @@ function buildResultItems(featureId, query, scanResult, networkCapabilityState =
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     try {
-      const canRead = await ensurePermission('fs.read', '需要只读扫描浏览器 Bookmarks JSON 文件')
-      if (!canRead) {
+      const permissionResult = await ensurePermission('fs.read', '需要只读扫描浏览器 Bookmarks JSON 文件')
+      if (!permissionResult.granted) {
         plugin.feature.clearItems()
         plugin.feature.pushItems([
           buildInfoItem({
@@ -546,13 +576,13 @@ const pluginLifecycle = {
 
     try {
       if (item.meta?.actionId === 'open-url') {
-        const canOpen = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开浏览器书签')
-        if (!canOpen) {
+        const permissionResult = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开浏览器书签')
+        if (!permissionResult.granted) {
           return {
             externalAction: true,
             success: false,
             status: 'blocked',
-            reason: 'permission-denied',
+            reason: permissionResult.reason || 'permission-denied',
             message: '缺少 network.internet 权限',
           }
         }
@@ -567,6 +597,32 @@ const pluginLifecycle = {
           }
         }
         await openUrl(url)
+        return { externalAction: true, status: 'started' }
+      }
+
+      if (item.meta?.actionId === 'copy-url') {
+        const permissionResult = await ensurePermission('clipboard.write', '需要 clipboard.write 权限以复制浏览器书签 URL')
+        if (!permissionResult.granted) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: permissionResult.reason || 'permission-denied',
+            message: '缺少 clipboard.write 权限',
+          }
+        }
+
+        if (typeof clipboard?.writeText !== 'function') {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'clipboard-unavailable',
+            message: '当前环境不支持写入剪贴板',
+          }
+        }
+
+        clipboard.writeText(url)
         return { externalAction: true, status: 'started' }
       }
     }

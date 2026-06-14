@@ -1,7 +1,5 @@
-import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
-import { createIntelligenceClient } from '@talex-touch/tuff-intelligence/client'
 import type { IntelligenceImageTranslateE2eResult } from '@talex-touch/tuff-intelligence/client'
-import { AccountEvents } from '@talex-touch/utils/transport/events'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence/client'
 import {
   applyProviderPresentation,
   DEFAULT_ENABLED_PROVIDER_IDS,
@@ -15,8 +13,11 @@ import {
   PERMISSION_DENIED_MESSAGE,
   resolveTargetLanguage,
 } from '@talex-touch/utils/plugin'
+import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
+import { AccountEvents } from '@talex-touch/utils/transport/events'
 import { GoogleProvider, TuffIntelligenceProvider } from './providers'
 import { parseImageDataUrl, toImageDataUrl } from './utils'
+
 const { plugin, clipboard, logger, permission, TuffItemBuilder, touchChannel } = globalThis as any
 
 const PLUGIN_NAME = 'touch-translation'
@@ -93,47 +94,72 @@ const providers = new Map([
 ])
 
 async function ensureNetworkPermission(): Promise<boolean> {
-  if (!permission) {
-    return true
-  }
-  if (networkPermissionState === true) {
-    return true
-  }
-  if (networkPermissionState === false) {
+  if (!permission?.check || !permission?.request)
     return false
-  }
-
-  const hasNetwork = await permission.check('network.internet')
-  if (hasNetwork) {
-    networkPermissionState = true
+  if (networkPermissionState === true)
     return true
+
+  try {
+    const hasNetwork = await permission.check('network.internet')
+    if (hasNetwork) {
+      networkPermissionState = true
+      return true
+    }
+
+    const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
+    if (granted) {
+      networkPermissionState = true
+      return true
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to request network permission', error)
   }
 
-  const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
-  networkPermissionState = Boolean(granted)
-  return networkPermissionState
+  return false
 }
 
 async function ensureAiPermission(): Promise<boolean> {
-  if (!permission) {
+  if (!permission?.check || !permission?.request)
+    return false
+  if (aiPermissionState === true)
     return true
+
+  try {
+    const hasAi = await permission.check('intelligence.basic')
+    if (hasAi) {
+      aiPermissionState = true
+      return true
+    }
+
+    const granted = await permission.request('intelligence.basic', '需要 AI 权限以使用智能翻译')
+    if (granted) {
+      aiPermissionState = true
+      return true
+    }
   }
-  if (aiPermissionState === true) {
-    return true
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to request AI permission', error)
   }
-  if (aiPermissionState === false) {
+
+  return false
+}
+
+async function ensureClipboardWritePermission(): Promise<boolean> {
+  if (!permission?.check || !permission?.request)
+    return false
+
+  try {
+    const hasClipboardWrite = await permission.check('clipboard.write')
+    if (hasClipboardWrite)
+      return true
+    const granted = await permission.request('clipboard.write', '需要剪贴板写入权限以复制翻译结果')
+    return Boolean(granted)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to request clipboard permission', error)
     return false
   }
-
-  const hasAi = await permission.check('intelligence.basic')
-  if (hasAi) {
-    aiPermissionState = true
-    return true
-  }
-
-  const granted = await permission.request('intelligence.basic', '需要 AI 权限以使用智能翻译')
-  aiPermissionState = Boolean(granted)
-  return aiPermissionState
 }
 
 function extractQueryText(query: unknown): string {
@@ -155,7 +181,7 @@ function extractImageDataUrl(query: unknown): string | null {
     (input: any) =>
       input?.type === 'image'
       && typeof input?.content === 'string'
-      && input.content.startsWith('data:image/')
+      && input.content.startsWith('data:image/'),
   )
   return imageInput?.content || null
 }
@@ -812,15 +838,40 @@ const pluginLifecycle = {
 
   async onItemAction(item: any) {
     if (item.meta?.defaultAction === 'copy') {
-      const copyAction = item.actions.find((action: any) => action.type === 'copy')
+      const copyAction = item.actions.find((action: any) => action.id === 'copy-translation' || action.type === 'copy')
       if (copyAction && copyAction.payload) {
-        clipboard.writeText(copyAction.payload)
-        logger.log('Copied to clipboard:', copyAction.payload)
+        const canCopy = await ensureClipboardWritePermission()
+        if (!canCopy) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'permission-denied',
+            message: '缺少 clipboard.write 权限',
+          }
+        }
+
+        const payloadText = typeof copyAction.payload === 'object'
+          ? copyAction.payload.text
+          : copyAction.payload
+        if (!payloadText) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'invalid-payload',
+            message: '复制内容为空',
+          }
+        }
+
+        clipboard.writeText(payloadText)
+        logger.log('Copied to clipboard:', payloadText)
 
         const isFeatureExecution = Boolean(item.meta?.featureId)
         if (!isFeatureExecution) {
           plugin.box.hide()
         }
+        return { externalAction: true, status: 'started' }
       }
       else {
         logger.warn('No copy action or payload found for item:', item)
@@ -833,6 +884,7 @@ module.exports = {
   ...pluginLifecycle,
   __test: {
     canUseTuffIntelligenceProvider,
+    ensureClipboardWritePermission,
     filterAuthorizedProviderIds,
     resolveTuffIntelligenceAuthToken,
   },

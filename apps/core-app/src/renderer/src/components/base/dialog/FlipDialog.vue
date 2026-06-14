@@ -34,6 +34,7 @@ interface FlipDialogProps extends /* @vue-ignore */ FlipDialogPassThroughProps {
   hideReferenceOnOpen?: boolean
   size?: FlipDialogSize
   width?: string
+  height?: string
   maxHeight?: string
   minHeight?: string
 }
@@ -94,6 +95,7 @@ const dialogCardStyle = computed(() =>
   resolveFlipDialogCardStyleVariables({
     size: props.size,
     width: props.width,
+    height: props.height,
     maxHeight: props.maxHeight,
     minHeight: props.minHeight
   })
@@ -277,6 +279,7 @@ defineExpose({
 
 .FlipDialog-Card {
   width: var(--flip-dialog-width, min(920px, calc(100vw - 40px)));
+  height: var(--flip-dialog-height, auto);
   max-height: var(--flip-dialog-max-height, calc(82dvh - 24px));
   min-height: var(--flip-dialog-min-height, 0);
 }

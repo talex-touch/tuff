@@ -422,6 +422,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: stretch;
   justify-content: stretch;
+
+  :deep(> *) {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .WidgetFrame-Empty {

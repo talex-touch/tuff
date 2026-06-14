@@ -20,7 +20,6 @@ import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
 import { appSetting } from '~/modules/storage/app-storage'
-import { getCustomRenderer } from '~/modules/box/custom-render'
 import { isDefaultWidgetRenderer } from '@talex-touch/utils/plugin/widget'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
@@ -101,9 +100,12 @@ const isWidgetActivationActive = computed(() => {
   if (!activeActivations.value || activeActivations.value.length === 0) return false
   return activeActivations.value.some((activation) => {
     const meta = activation?.meta as {
-      feature?: { meta?: { interaction?: { type?: string } } }
+      feature?: { meta?: { interaction?: { type?: string } }; interaction?: { type?: string } }
     }
-    return meta?.feature?.meta?.interaction?.type === 'widget'
+    return (
+      meta?.feature?.meta?.interaction?.type === 'widget' ||
+      meta?.feature?.interaction?.type === 'widget'
+    )
   })
 })
 
@@ -117,7 +119,6 @@ const widgetRenderItem = computed(() => {
     return null
   }
   if (isDefaultWidgetRenderer(custom.content)) return null
-  if (!getCustomRenderer(custom.content)) return null
   return item
 })
 
@@ -510,8 +511,19 @@ onBeforeUnmount(() => {
   }
 })
 
-function handleTogglePin(): void {
-  appSetting.tools.autoHide = !appSetting.tools.autoHide
+async function handleTogglePin(): Promise<void> {
+  const nextPinned = appSetting.tools.autoHide
+  const previousAutoHide = appSetting.tools.autoHide
+
+  appSetting.tools.autoHide = !nextPinned
+
+  try {
+    const response = await transport.send(CoreBoxEvents.ui.setPinned, { pinned: nextPinned })
+    appSetting.tools.autoHide = !response.pinned
+  } catch (error) {
+    appSetting.tools.autoHide = previousAutoHide
+    devLog('[CoreBox] Failed to toggle window pin:', error)
+  }
 }
 
 function handleItemTrigger(index: number, item: TuffItem): void {

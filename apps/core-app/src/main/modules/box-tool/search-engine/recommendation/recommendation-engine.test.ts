@@ -343,7 +343,7 @@ describe('RecommendationEngine', () => {
   it('does not reuse persisted recommendation cache across time slots', async () => {
     const dbUtils = createDbUtils()
     dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
-      if (cacheKey !== 'morning|1') return null
+      if (cacheKey !== 'morning|1|pin:none') return null
 
       return {
         cacheKey,
@@ -392,8 +392,122 @@ describe('RecommendationEngine', () => {
 
     expect(morning.items[0]?.id).toBe('cached-morning-app')
     expect(afternoon.items[0]?.id).toBe('fresh-afternoon-app')
-    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(1, 'morning|1')
-    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(2, 'afternoon|1')
+    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(1, 'morning|1|pin:none')
+    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(2, 'afternoon|1|pin:none')
+    expect(getCandidates).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps pinned items visible when recommendations already fill the limit', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const candidates = Array.from({ length: 10 }, (_, index) => ({
+      sourceId: `source-${index}`,
+      itemId: `recommended-${index}`,
+      sourceType: `type-${index}`,
+      source: 'frequent' as const,
+      usageStats: createUsageStats(`recommended-${index}`, { executeCount: 10 - index })
+    }))
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => [
+        {
+          sourceId: 'pinned-source',
+          itemId: 'pinned-app',
+          sourceType: 'app',
+          usageStats: createUsageStats('pinned-app')
+        }
+      ]),
+      getCandidates: vi.fn(async () => ({
+        items: candidates,
+        perf: candidatePerf(candidates.length)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+    const ids = result.items.map((item) => item.id)
+
+    expect(ids).toContain('pinned-app')
+    expect(ids).toHaveLength(10)
+    expect(ids.at(-1)).toBe('pinned-app')
+    expect(result.containerLayout?.sections?.at(-1)).toMatchObject({
+      id: 'pinned',
+      itemIds: ['pinned-app']
+    })
+  })
+
+  it('separates persisted recommendation cache by pinned items', async () => {
+    const dbUtils = createDbUtils()
+    dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
+      if (cacheKey.endsWith('pin:none')) return null
+
+      return {
+        cacheKey,
+        recommendedItems: JSON.stringify([
+          {
+            id: 'cached-pinned-app',
+            source: { id: 'pinned-source', type: 'app', name: 'pinned-source' },
+            kind: 'app',
+            render: { mode: 'default', basic: { title: 'cached-pinned-app' } },
+            meta: {
+              pinned: { isPinned: true },
+              recommendation: { source: 'pinned' }
+            }
+          }
+        ]),
+        createdAt: new Date('2026-05-04T09:00:00.000Z'),
+        expiresAt: new Date(Date.now() + 60_000)
+      }
+    })
+
+    const engine = new RecommendationEngine(dbUtils as never)
+    const pinnedSets = [
+      [
+        {
+          sourceId: 'pinned-source',
+          itemId: 'cached-pinned-app',
+          sourceType: 'app',
+          usageStats: createUsageStats('cached-pinned-app')
+        }
+      ],
+      []
+    ]
+    const getCandidates = vi.fn(async () => ({
+      items: [
+        {
+          sourceId: 'app-provider',
+          itemId: 'fresh-app',
+          sourceType: 'app',
+          source: 'frequent' as const,
+          usageStats: createUsageStats('fresh-app', { executeCount: 2 })
+        }
+      ],
+      perf: candidatePerf(1)
+    }))
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}|${context.time.dayOfWeek}`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => pinnedSets.shift() ?? []),
+      getCandidates
+    })
+
+    const cached = await engine.recommend({ limit: 1 })
+    const fresh = await engine.recommend({ limit: 1 })
+
+    expect(cached.items[0]?.id).toBe('cached-pinned-app')
+    expect(fresh.items[0]?.id).toBe('fresh-app')
+    expect(dbUtils.getRecommendationCache.mock.calls[0]?.[0]).toContain('pin:')
+    expect(dbUtils.getRecommendationCache.mock.calls[1]?.[0]).toBe('morning|1|pin:none')
     expect(getCandidates).toHaveBeenCalledTimes(1)
   })
 

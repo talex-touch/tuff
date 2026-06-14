@@ -11,7 +11,6 @@ const {
 
 const crypto = require('node:crypto')
 const {
-  CALL_FAILED_MESSAGE,
   DEFAULT_ENABLED_PROVIDER_IDS,
   NO_INPUT_OCR_MESSAGE,
   NO_INPUT_SCREENSHOT_MESSAGE,
@@ -144,49 +143,74 @@ async function mergeProviderSecrets(providerId, config) {
 }
 
 async function ensureNetworkPermission() {
-  if (!permission) {
-    return true
-  }
-
-  if (networkPermissionState === true) {
-    return true
-  }
-  if (networkPermissionState === false) {
+  if (!permission?.check || !permission?.request)
     return false
-  }
 
-  const hasNetwork = await permission.check('network.internet')
-  if (hasNetwork) {
-    networkPermissionState = true
+  if (networkPermissionState === true)
     return true
+
+  try {
+    const hasNetwork = await permission.check('network.internet')
+    if (hasNetwork) {
+      networkPermissionState = true
+      return true
+    }
+
+    const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
+    if (granted) {
+      networkPermissionState = true
+      return true
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to request network permission', error)
   }
 
-  const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
-  networkPermissionState = Boolean(granted)
-  return networkPermissionState
+  return false
 }
 
 async function ensureAiPermission() {
-  if (!permission) {
+  if (!permission?.check || !permission?.request)
+    return false
+
+  if (aiPermissionState === true)
     return true
+
+  try {
+    const hasAi = await permission.check('intelligence.basic')
+    if (hasAi) {
+      aiPermissionState = true
+      return true
+    }
+
+    const granted = await permission.request('intelligence.basic', '需要 AI 权限以使用智能翻译')
+    if (granted) {
+      aiPermissionState = true
+      return true
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to request AI permission', error)
   }
 
-  if (aiPermissionState === true) {
-    return true
+  return false
+}
+
+async function ensureClipboardWritePermission() {
+  if (!permission?.check || !permission?.request)
+    return false
+
+  try {
+    const hasClipboardWrite = await permission.check('clipboard.write')
+    if (hasClipboardWrite)
+      return true
+    const granted = await permission.request('clipboard.write', '需要剪贴板写入权限以复制翻译结果')
+    return Boolean(granted)
   }
-  if (aiPermissionState === false) {
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to request clipboard permission', error)
     return false
   }
-
-  const hasAi = await permission.check('intelligence.basic')
-  if (hasAi) {
-    aiPermissionState = true
-    return true
-  }
-
-  const granted = await permission.request('intelligence.basic', '需要 AI 权限以使用智能翻译')
-  aiPermissionState = Boolean(granted)
-  return aiPermissionState
 }
 
 function extractQueryText(query) {
@@ -323,7 +347,7 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
     targetLang,
     providersToShow,
     requestId,
-    nextSeq
+    nextSeq,
   )
 
   const usesNetworkProviders = providersToShow.some(provider => provider.id !== 'tuffintelligence')
@@ -351,7 +375,7 @@ function upsertFeatureItem(item) {
     plugin.feature.updateItem(item.id, item)
     return
   }
-  catch (error) {
+  catch {
     // ignore and fallback to pushItems
   }
 
@@ -607,7 +631,7 @@ function upsertRequestErrorWidget(featureId, textToTranslate, nextSeq, error) {
     targetLang,
     [],
     `translation-error-${Date.now()}-${nextSeq}`,
-    nextSeq
+    nextSeq,
   )
 
   state.requestSeq = nextSeq
@@ -1456,7 +1480,7 @@ const pluginLifecycle = {
           targetLang,
           providersToShow,
           `translation-${Date.now()}-${nextSeq}`,
-          nextSeq
+          nextSeq,
         )
         upsertWidgetItem(featureId)
 
@@ -1518,15 +1542,40 @@ const pluginLifecycle = {
   async onItemAction(item) {
     try {
       if (item.meta?.defaultAction === 'copy') {
-        const copyAction = item.actions.find(action => action.type === 'copy')
+        const copyAction = item.actions.find(action => action.id === 'copy-translation' || action.type === 'copy')
         if (copyAction && copyAction.payload) {
-          clipboard.writeText(copyAction.payload)
-          logger?.log?.('Copied to clipboard:', copyAction.payload)
+          const canCopy = await ensureClipboardWritePermission()
+          if (!canCopy) {
+            return {
+              externalAction: true,
+              success: false,
+              status: 'blocked',
+              reason: 'permission-denied',
+              message: '缺少 clipboard.write 权限',
+            }
+          }
+
+          const payloadText = typeof copyAction.payload === 'object'
+            ? copyAction.payload.text
+            : copyAction.payload
+          if (!payloadText) {
+            return {
+              externalAction: true,
+              success: false,
+              status: 'blocked',
+              reason: 'invalid-payload',
+              message: '复制内容为空',
+            }
+          }
+
+          clipboard.writeText(payloadText)
+          logger?.log?.('Copied to clipboard:', payloadText)
 
           const isFeatureExecution = Boolean(item.meta?.featureId)
           if (!isFeatureExecution) {
             plugin.box.hide()
           }
+          return { externalAction: true, status: 'started' }
         }
         else {
           logger?.warn?.('No copy action or payload found for item:', item)
@@ -1547,6 +1596,8 @@ module.exports = {
     detectLanguage,
     getEnabledProviderIds,
     getProviderSecretKey,
+    ensureNetworkPermission,
+    ensureClipboardWritePermission,
     getTranslationProviderLabel,
     canUseTuffIntelligenceProvider,
     filterAuthorizedProviderConfigs,

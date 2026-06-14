@@ -2617,7 +2617,8 @@ export class SearchEngineCore
         return {
           items: result.items,
           duration: result.duration,
-          fromCache: result.fromCache
+          fromCache: result.fromCache,
+          containerLayout: result.containerLayout
         }
       } catch (error) {
         searchEngineLog.error('Failed to get recommendations', { error })
@@ -2654,6 +2655,8 @@ export class SearchEngineCore
         const { sourceId, itemId, sourceType } = data
         const isPinned = await instance.dbUtils.togglePin(sourceId, itemId, sourceType)
         instance.invalidatePinnedCache()
+        instance.searchCache.clear()
+        instance.recommendationEngine?.invalidateCache()
         return { success: true, isPinned }
       } catch (error) {
         searchEngineLog.error('Failed to toggle pin', { error })

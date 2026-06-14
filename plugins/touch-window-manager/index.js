@@ -38,19 +38,43 @@ function truncateText(value, max = 56) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return { granted: true }
+    }
+
+    const granted = await permission.request(permissionId, reason)
+    if (granted) {
+      return { granted: true }
+    }
+
+    return {
+      granted: false,
+      reason: 'permission-denied',
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-window-manager] Failed to request permission', error)
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
+  }
 }
 
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check) {
     return {
-      granted: true,
+      granted: false,
+      reason: 'permission-sdk-unavailable',
     }
   }
 
@@ -970,9 +994,14 @@ const pluginLifecycle = {
       return { externalAction: true, status: 'blocked', reason: shellStatus.reason }
     }
 
-    const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以管理应用窗口')
-    if (!canRun)
-      return { externalAction: true, status: 'blocked', reason: 'permission-denied' }
+    const permissionResult = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以管理应用窗口')
+    if (!permissionResult.granted) {
+      return {
+        externalAction: true,
+        status: 'blocked',
+        reason: permissionResult.reason || 'permission-denied',
+      }
+    }
 
     try {
       await executeAction(actionId, payload)

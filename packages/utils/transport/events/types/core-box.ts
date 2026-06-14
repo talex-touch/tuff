@@ -89,6 +89,14 @@ export interface CoreBoxHideRequest {
   reason?: 'execute' | 'shortcut' | 'manual' | string
 }
 
+export interface CoreBoxSetPinnedRequest {
+  pinned: boolean
+}
+
+export interface CoreBoxSetPinnedResponse {
+  pinned: boolean
+}
+
 export interface CoreBoxInputVisibilityResponse {
   hidden?: boolean
   shown?: boolean

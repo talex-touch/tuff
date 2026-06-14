@@ -712,8 +712,9 @@ export function useSearch(
 
     searchResults.value = []
 
-    const currentQueryText =
-      typeof searchResult.value?.query?.text === 'string'
+    const currentQueryText = isPluginFeature
+      ? searchVal.value
+      : typeof searchResult.value?.query?.text === 'string'
         ? searchResult.value.query.text
         : searchVal.value
     const currentInputs = buildQueryInputs({
@@ -730,6 +731,7 @@ export function useSearch(
       : null
 
     if (isPluginFeature && serializedSearchResult?.query) {
+      serializedSearchResult.query.text = currentQueryText
       serializedSearchResult.query.inputs = currentInputs
     }
 
