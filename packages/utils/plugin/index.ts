@@ -9,6 +9,7 @@ import type {
   SearchProviderDescriptor,
   SearchProviderManifestDescriptor,
 } from '../search'
+import type { TuffFooterHints } from '../core-box/tuff/tuff-dsl'
 import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
@@ -291,6 +292,10 @@ export interface IPluginFeature {
    * Effective only when plugin sdkapi reaches the Omni transfer baseline.
    */
   omniTransfer?: IFeatureOmniTransfer
+  /**
+   * CoreBox footer hint declaration for this feature entry.
+   */
+  footerHints?: TuffFooterHints
 }
 
 export interface IFeatureInteraction {

@@ -112,8 +112,9 @@ describe('MetaOverlayManager action execution', () => {
   })
 
   it('bridges builtin actions to the CoreBox renderer action pipeline', async () => {
-    await metaOverlayManager.executeAction('reveal-in-finder', item)
+    const result = await metaOverlayManager.executeAction('reveal-in-finder', item)
 
+    expect(result).toEqual({ success: true })
     expect(mocks.sendToPlugin).not.toHaveBeenCalled()
     expect(mocks.sendTo).toHaveBeenCalledWith(
       mocks.coreBoxWindow.window.webContents,
@@ -137,8 +138,9 @@ describe('MetaOverlayManager action execution', () => {
       }
     })
 
-    await metaOverlayManager.executeAction('plugin-action', item)
+    const result = await metaOverlayManager.executeAction('plugin-action', item)
 
+    expect(result).toEqual({ success: true })
     expect(mocks.sendTo).not.toHaveBeenCalledWith(
       mocks.coreBoxWindow.window.webContents,
       CoreBoxEvents.metaOverlay.itemAction,
@@ -154,5 +156,13 @@ describe('MetaOverlayManager action execution', () => {
       CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted,
       { actionId: 'plugin-action', item, pluginId: 'plugin-a' }
     )
+  })
+
+  it('returns a failure when action execution has no item context', async () => {
+    const result = await metaOverlayManager.executeAction('toggle-pin')
+
+    expect(result).toEqual({ success: false, error: 'Missing item context' })
+    expect(mocks.sendTo).not.toHaveBeenCalled()
+    expect(mocks.sendToPlugin).not.toHaveBeenCalled()
   })
 })
