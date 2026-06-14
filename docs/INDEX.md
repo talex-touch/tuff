@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-06-13
+> 更新时间：2026-06-14
 > 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主入口
@@ -39,6 +39,7 @@
 - `docs/plan-prd/02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md` - Legacy/兼容/结构治理统一实施 PRD。
 - `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 Plan PRD。
 - `docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md` - Tuff 2.5.3 本地知识检索与上下文构建 PRD。
+- `docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md` - Tuff 2.5.4 ContextHygiene 与自动记忆治理 PRD。
 - `docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md` - Tuff 2.5.5 本地开源模型运行时 PRD。
 - `docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md` - Tuff 2.5.8 ASR Provider Runtime PRD。
 - `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md` - CloudShare 插件内容包发布与 Store 展示 PRD。
@@ -79,6 +80,7 @@
 - `retired-ai-app/deploy/README.zh-CN.md` - AI 1Panel 部署手册。
 - 2.5.0 Intelligence 当前切片：CoreBox AI Ask handoff session、Nexus `/api/v1/intelligence/invoke` credits 扣减与 CoreApp credits summary、Tuff-native Tool Kit foundation、Nexus docs prerender、OmniPanel Writing Tools、Workflow service、agent/tool channels 与 Assistant typed transport 已进入 dev 分支；AI 不是空壳，但仍缺 packaged Electron 文本/OCR成功与失败路径证据，不能标记为体验闭环。下一步优先补 CoreBox AI Ask 文本/OCR、OmniPanel Writing Tools、Nexus invoke 未登录/provider 不可用/quota 不足/model 不支持、provider metadata chips 与 packaged Electron UI evidence；仍不得抢占 `2.4.11` 稳定化与债务退场主线。
 - 2.5.3 本地知识方向：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项，不把向量数据库作为 MVP 第一优先级。
+- 2.5.4 ContextHygiene 方向：Session Boundary、Checkpoint、Rolling Summary、MemoryPolicy 与 ContextPackage 优先；新会话默认不继承旧 session 原文，旧会话只在相关时检索召回。
 - 2.5.5 本地模型方向：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重按需下载到用户数据目录。
 - 2.5.8 ASR 方向：本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto`；TTS 不进入 Stable。
 - Nexus Provider Registry / Scene 编排：Provider 列表已暴露 capability adapter readiness，能在运行前标出声明能力缺少可执行 Scene adapter 的配置风险；真实 adapter 执行仍由 Scene Orchestrator 负责。

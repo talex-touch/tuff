@@ -1,6 +1,6 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-06-13
+> 更新时间：2026-06-14
 > 定位：PRD / 规划主入口。历史长文已下沉到 `CHANGES` 与专题文档；当前执行项以 `TODO.md` 为准。
 
 ## 快速入口
@@ -69,6 +69,7 @@
 - CoreApp 统一网络/代理设置已接入高级设置，走 typed Network SDK 配置系统代理/直连/自定义代理、timeout/retry/cooldown；后续仍需真实代理连通 evidence 与 secure credential 编辑入口。
 - Tuff 2.5.0 AI 桌面入口：CoreBox AI Ask、handoff session、Nexus invoke credits 扣减、CoreApp credits summary、Tuff-native Tool Kit foundation、Nexus docs prerender routes、OmniPanel Writing Tools MVP、Workflow service 与 agent/tool channels 已进入 dev 切片；下一步优先补文本/OCR success、auth/provider/quota/model unsupported failure、provider metadata chips 与 packaged Electron UI evidence。Workflow/Skills/Automation 保持 Beta，Assistant/语音/多模态生成保持 Experimental。
 - Tuff 2.5.3 本地知识检索：方向已锁定为 SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项，不把向量数据库作为 MVP 第一优先级。
+- Tuff 2.5.4 ContextHygiene 与自动记忆治理：方向已锁定为 Session Boundary / Checkpoint / Rolling Summary / MemoryPolicy / ContextPackage，默认轻上下文，新会话不继承旧 session 原文，旧会话只在相关时检索召回。
 - Tuff 2.5.5 本地开源模型运行时：方向已锁定为“不强依赖 Ollama，优先内置 GGUF / llama.cpp runtime”；Ollama 仅作为可选兼容后端，模型权重按需下载到用户数据目录，不进入应用安装包。
 - Tuff 2.5.8 ASR Provider Runtime：方向已锁定为本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto` 策略；TTS 不进入该版本 Stable。
 - App Data Plugins 与 Everything 收口：新增 Roadmap、Raycast/uTools 常用能力差距矩阵与 Indexing Runtime V1 统一搜索源计划，Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地；Browser Data 已有 source-level diagnostics 与书签 URL 打开 `network.internet` gate，后续聚焦统一 source health、历史扫描、写索引、disable/clear/rebuild UI、Everything/App Launcher evidence、Quicklinks、Context Actions，以及 Windows Everything SDK/CLI 策略、路径授权过滤与真机 evidence；Nexus SDK 插件开发任务流文档已落地，TuffEx 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
@@ -84,6 +85,7 @@
 - [Legacy/兼容/结构治理统一实施 PRD](./02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md)
 - [Tuff 2.5.0 AI 桌面入口收口 Plan PRD](./03-features/ai-2.5.0-plan-prd.md)
 - [Tuff 2.5.3 本地知识检索 PRD](./03-features/ai-2.5.3-local-knowledge-retrieval-prd.md)
+- [Tuff 2.5.4 ContextHygiene 与自动记忆治理 PRD](./03-features/ai-2.5.4-context-hygiene-memory-prd.md)
 - [Tuff 2.5.5 本地开源模型运行时 PRD](./03-features/ai-2.5.5-local-model-runtime-prd.md)
 - [Tuff 2.5.8 ASR Provider Runtime PRD](./03-features/ai-2.5.8-asr-provider-runtime-prd.md)
 - [CloudShare 插件内容包发布 PRD](./03-features/cloudshare-plugin-content-prd.md)
