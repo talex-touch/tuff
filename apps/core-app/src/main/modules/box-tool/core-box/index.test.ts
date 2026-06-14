@@ -18,7 +18,24 @@ const mocks = vi.hoisted(() => {
       },
       app: {}
     })),
-    registerMainShortcut: vi.fn(() => true),
+    getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
+    showCoreBox: false,
+    coreBoxManagerTrigger: vi.fn(),
+    getCurScreen: vi.fn(() => ({ id: 1 })),
+    updatePosition: vi.fn(),
+    setHeight: vi.fn(),
+    markExpanded: vi.fn(),
+    stopAppSettingSubscription: vi.fn(),
+    currentWindow: null as null | {
+      window: {
+        isDestroyed: () => boolean
+        isVisible: () => boolean
+        isFocused: () => boolean
+      }
+    },
+    registerMainShortcut: vi.fn(
+      (_id: string, _defaultAccelerator: string, _callback: () => void, _options?: unknown) => true
+    ),
     unregisterMainShortcut: vi.fn((id: string) => {
       callOrder.push(`unregister:${id}`)
       return true
@@ -63,7 +80,9 @@ vi.mock('../../../utils/logger', () => ({
 }))
 
 vi.mock('../../../utils/dev-process-manager', () => ({
-  devProcessManager: {}
+  devProcessManager: {
+    isShuttingDownProcess: vi.fn(() => false)
+  }
 }))
 
 vi.mock('../../../utils/perf-monitor', () => ({
@@ -88,7 +107,7 @@ vi.mock('../../global-shortcon', () => ({
 }))
 
 vi.mock('../../storage', () => ({
-  getMainConfig: vi.fn()
+  getMainConfig: mocks.getMainConfig
 }))
 
 vi.mock('../search-engine/search-core', () => ({
@@ -113,13 +132,25 @@ vi.mock('../search-engine/search-logger', () => ({
 vi.mock('./manager', () => ({
   coreBoxManager: {
     init: vi.fn(),
-    destroy: mocks.coreBoxManagerDestroy
+    destroy: mocks.coreBoxManagerDestroy,
+    trigger: mocks.coreBoxManagerTrigger,
+    markExpanded: mocks.markExpanded,
+    get showCoreBox() {
+      return mocks.showCoreBox
+    }
   }
 }))
 
 vi.mock('./window', () => ({
   windowManager: {
-    create: vi.fn()
+    create: vi.fn(),
+    getCurScreen: mocks.getCurScreen,
+    updatePosition: mocks.updatePosition,
+    setHeight: mocks.setHeight,
+    stopAppSettingSubscription: mocks.stopAppSettingSubscription,
+    get current() {
+      return mocks.currentWindow
+    }
   }
 }))
 
@@ -128,6 +159,9 @@ import { CoreBoxModule } from './index'
 describe('CoreBoxModule', () => {
   beforeEach(() => {
     mocks.callOrder.length = 0
+    mocks.showCoreBox = false
+    mocks.currentWindow = null
+    mocks.getMainConfig.mockReturnValue({ beginner: { init: true } })
     vi.clearAllMocks()
   })
 
@@ -151,6 +185,104 @@ describe('CoreBoxModule', () => {
       expect.any(Function),
       expect.objectContaining({ enabled: false })
     )
+  })
+
+  it('opens CoreBox when manager state is stale but real window is hidden', async () => {
+    mocks.showCoreBox = true
+    mocks.currentWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => false,
+        isFocused: () => false
+      }
+    }
+
+    const module = new CoreBoxModule()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+
+    const toggleRegistration = mocks.registerMainShortcut.mock.calls.find(
+      ([id]) => id === 'core.box.toggle'
+    )
+    const toggleHandler = toggleRegistration?.[2] as (() => void) | undefined
+
+    expect(toggleHandler).toBeDefined()
+    toggleHandler?.()
+
+    expect(mocks.coreBoxManagerTrigger).toHaveBeenCalledWith(true, {
+      triggeredByShortcut: true
+    })
+    expect(mocks.coreBoxManagerTrigger).not.toHaveBeenCalledWith(false)
+  })
+
+  it('brings CoreBox forward when visible but not focused', async () => {
+    mocks.currentWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => true,
+        isFocused: () => false
+      }
+    }
+
+    const module = new CoreBoxModule()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+
+    const toggleRegistration = mocks.registerMainShortcut.mock.calls.find(
+      ([id]) => id === 'core.box.toggle'
+    )
+    const toggleHandler = toggleRegistration?.[2] as (() => void) | undefined
+
+    toggleHandler?.()
+
+    expect(mocks.coreBoxManagerTrigger).toHaveBeenCalledWith(true, {
+      triggeredByShortcut: true
+    })
+    expect(mocks.coreBoxManagerTrigger).not.toHaveBeenCalledWith(false)
+  })
+
+  it('ignores layout updates while CoreBox window is hidden', async () => {
+    mocks.currentWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => false,
+        isFocused: () => false
+      }
+    }
+
+    const module = new CoreBoxModule()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+    ;(
+      module as unknown as {
+        applyLayoutUpdate: (payload: {
+          height: number
+          resultCount: number
+          loading: boolean
+          recommendationPending: boolean
+          activationCount: number
+        }) => void
+      }
+    ).applyLayoutUpdate({
+      height: 64,
+      resultCount: 0,
+      loading: false,
+      recommendationPending: false,
+      activationCount: 0
+    })
+
+    expect(mocks.coreBoxManagerTrigger).not.toHaveBeenCalled()
+    expect(mocks.markExpanded).not.toHaveBeenCalled()
+    expect(mocks.setHeight).not.toHaveBeenCalled()
   })
 
   it('cleans up shortcuts and disposers before clearing runtime registration', async () => {

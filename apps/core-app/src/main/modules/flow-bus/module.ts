@@ -303,7 +303,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       coreBoxManager.exitUIMode()
 
       // Hide CoreBox
-      if (!coreBoxWindow.window.isDestroyed()) coreBoxWindow.window.hide()
+      if (!coreBoxWindow.window.isDestroyed()) {
+        coreBoxManager.trigger(false, { immediate: true })
+      }
 
       flowBusModuleLog.info('Detach completed', {
         meta: {

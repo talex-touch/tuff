@@ -96,18 +96,36 @@ const resultTransitionName = computed(() => {
   return enabled && !lowBatteryMode.value ? 'result-switch' : ''
 })
 
-const isWidgetActivationActive = computed(() => {
-  if (!activeActivations.value || activeActivations.value.length === 0) return false
-  return activeActivations.value.some((activation) => {
+const activeWidgetFeatureItem = computed(() => {
+  if (!activeActivations.value || activeActivations.value.length === 0) return null
+  for (const activation of activeActivations.value) {
+    if (activation.id !== 'plugin-features') continue
     const meta = activation?.meta as {
-      feature?: { meta?: { interaction?: { type?: string } }; interaction?: { type?: string } }
+      feature?: TuffItem & {
+        meta?: { interaction?: { type?: string } }
+        interaction?: { type?: string }
+      }
     }
-    return (
-      meta?.feature?.meta?.interaction?.type === 'widget' ||
-      meta?.feature?.interaction?.type === 'widget'
-    )
-  })
+    const feature = meta?.feature
+    if (
+      feature &&
+      (feature.meta?.interaction?.type === 'widget' || feature.interaction?.type === 'widget')
+    ) {
+      return feature
+    }
+  }
+  return null
 })
+
+const isWidgetActivationActive = computed(() => Boolean(activeWidgetFeatureItem.value))
+const canSubmitWidgetPrompt = computed(
+  () => Boolean(activeWidgetFeatureItem.value && searchVal.value.trim()) && !loading.value
+)
+
+function handleSubmitWidgetPrompt(): void {
+  if (!canSubmitWidgetPrompt.value || !activeWidgetFeatureItem.value) return
+  void handleExecute(activeWidgetFeatureItem.value)
+}
 
 const widgetRenderItem = computed(() => {
   if (res.value.length !== 1) return null
@@ -739,6 +757,16 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
 
         <div class="CoreBox-Configure" :style="getCanvasAreaStyle('actions')">
           <IndexingHintTag :query="searchVal" />
+          <button
+            v-if="isWidgetActivationActive"
+            class="CoreBox-SendButton"
+            type="button"
+            :disabled="!canSubmitWidgetPrompt"
+            aria-label="发送"
+            @click.stop="handleSubmitWidgetPrompt"
+          >
+            <TuffIcon :icon="{ type: 'class', value: 'i-ri-send-plane-2-fill' }" />
+          </button>
           <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
         </div>
       </template>
@@ -1076,10 +1104,37 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
 
 .CoreBox-Configure {
   display: flex;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0 0.5rem;
 
   cursor: pointer;
   font-size: 1.25em;
+
+  .CoreBox-SendButton {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border: none;
+    border-radius: 999px;
+    background: var(--tx-color-primary);
+    color: white;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition:
+      opacity 0.16s ease,
+      transform 0.16s ease;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+    }
+
+    &:not(:disabled):hover {
+      transform: translateY(-1px);
+    }
+  }
 
   .cancel-button {
     color: var(--tx-color-danger);

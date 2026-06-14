@@ -6,6 +6,7 @@
 .vscode-test/
 .cursor/
 .codex/
+.pi/
 
 # ========================
 # Logs / Debug / Reports

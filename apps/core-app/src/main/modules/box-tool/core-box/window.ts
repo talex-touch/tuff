@@ -251,7 +251,9 @@ export class WindowManager {
           })
         }
 
-        window.window.hide()
+        if (!coreBoxManager.showCoreBox) {
+          window.window.hide()
+        }
       } catch (error) {
         coreBoxWindowLog.error('Failed to load content in new box window', { error })
       }
@@ -301,6 +303,14 @@ export class WindowManager {
       this.windows = this.windows.filter((w) => w !== window)
       metaOverlayManager.destroy()
       coreBoxWindowLog.debug('BoxWindow closed')
+    })
+
+    window.window.on('show', () => {
+      coreBoxManager.syncVisibility(true)
+    })
+
+    window.window.on('hide', () => {
+      coreBoxManager.syncVisibility(false)
     })
 
     window.window.on('blur', async () => {
@@ -668,9 +678,21 @@ export class WindowManager {
     this.updatePosition(window)
 
     const shouldFocus = triggeredByShortcut || coreBoxManager.isUIMode || !!this.uiView
-    this.suppressBlurHideUntil = Date.now() + 400
+    this.suppressBlurHideUntil = Date.now() + (triggeredByShortcut ? 800 : 400)
+    if (triggeredByShortcut) {
+      try {
+        app.focus({ steal: true })
+      } catch {
+        app.focus()
+      }
+    }
+
     if (shouldFocus) {
       window.window.show()
+      if (triggeredByShortcut) {
+        ;(window.window as { moveTop?: () => void }).moveTop?.()
+        window.window.focus()
+      }
     } else {
       window.window.showInactive()
     }
@@ -793,6 +815,11 @@ export class WindowManager {
 
     const currentWindow = this.current
     if (currentWindow) {
+      if (!currentWindow.window.isVisible()) {
+        coreBoxWindowLog.debug('Skip shrinking hidden CoreBox window')
+        return
+      }
+
       // Skip if already shrunk or shrinking (within tolerance)
       const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
       if (Math.abs(currentHeight - COREBOX_MIN_HEIGHT) < 5) {
@@ -858,6 +885,12 @@ export class WindowManager {
       return
     }
 
+    const isVisible = currentWindow.window.isVisible()
+    if (!isVisible) {
+      coreBoxWindowLog.debug('Skip setting height for hidden CoreBox window')
+      return
+    }
+
     // Skip if already at target height (within tolerance)
     const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
     if (Math.abs(currentHeight - safeHeight) < COREBOX_HEIGHT_TARGET_TOLERANCE) {
@@ -872,7 +905,6 @@ export class WindowManager {
     const logVerbose =
       settings.searchEngine?.logsEnabled === true || settings.diagnostics?.verboseLogs === true
     const animationEnabled = settings.animation?.coreBoxResize === true
-    const isVisible = currentWindow.window.isVisible()
 
     if (isVisible && animationEnabled) {
       this.animateWindowBounds(currentWindow, bounds, { minHeight: safeHeight })
