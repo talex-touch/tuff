@@ -136,7 +136,9 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 自动压缩必须结构化：保留目标、决策、约束、产物、未完成事项和记忆候选，不保存普通流水账摘要作为唯一依据。
 - Memory 分层治理：区分临时上下文、会话摘要、任务记忆、用户偏好、知识记忆与敏感记忆；敏感信息默认不进入普通记忆。
 - ContextPackage 可解释：每段被注入的历史、记忆或检索片段都要带来源、reason 与 token 预算。
-- LangChain 只作为执行/编排层，Tuff-owned SQLite Session / Checkpoint / Memory 模型仍是业务 SoT。
+- P0 rollout 收窄为 CoreBox-only、feature flag、deterministic scope、SQLite session/turn/checkpoint/package log/tombstone、token budget prune 与 explain metadata；结构化压缩和 Memory suggested flow 后移 P1。
+- Sensitive / secret turns 不得进入 FTS、embedding、context log 或可同步 payload；删除 memory 必须 tombstone 并在 prepareTurn 二次过滤，防止旧 summary/cache/sync 回灌。
+- LangChain 只作为执行/编排层，Tuff-owned SQLite Session / Checkpoint / Memory 模型仍是业务 SoT，外部 tracing/cache/vectorstore 默认禁用。
 
 ### 2.5.5 - 本地开源模型运行时
 

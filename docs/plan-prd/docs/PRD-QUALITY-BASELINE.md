@@ -103,7 +103,7 @@
 - Provider metadata chips 至少展示 capability/provider/model/latency/trace 中的可用字段；缺失字段必须有 pending/unavailable fallback，不能渲染空 footer。
 - Provider secret、API key、prompt/response 明文不得进入普通配置、localStorage、日志或同步 JSON；审计默认只记录 trace/provider/model/latency/usage/success/errorCode。
 - `2.5.3` / `2.5.4` / `2.5.5` / `2.5.8` 在当前稳定窗口只允许文档、schema 或小型 SDK 探索，不得把本地知识库、自动长期记忆、本地大模型、语音或多模态生成提前作为 `2.4.11` 或 `2.5.0 Stable` blocker。
-- ContextHygiene 必须可解释 prompt 组装来源；MemoryPolicy 必须在写入前拦截 API key、token、恢复码、口令等敏感内容，ContextPackage 日志默认只记录 source id、reason、token estimate 与 trace，不保存完整 prompt/response。
+- ContextHygiene 必须可解释 prompt 组装来源；MemoryPolicy 必须在写入前拦截 API key、token、恢复码、口令等敏感内容，ContextPackage 日志默认只记录 source id、reason、token estimate 与 trace，不保存完整 prompt/response。Sensitive / secret turns 不得进入 FTS、embedding、context log 或可同步 payload；删除 memory 必须通过 tombstone 与 prepareTurn 二次过滤防止回灌；LangChain adapter 默认禁止外部 tracing/cache/remote vectorstore，除非经 Tuff 托管 adapter 脱敏、授权和审计。
 
 ### 4.9 App Data / Indexing Runtime
 
