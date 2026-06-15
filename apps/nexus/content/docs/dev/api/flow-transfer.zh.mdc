@@ -421,6 +421,7 @@ code: |
 
 - Flow Transfer 在主进程维护目标列表与路由，负责权限校验与能力匹配。
 - Sender/Target 通过标准化 payload 进行交换，避免插件间耦合。
+- 所有 Flow 操作都会记录到审计日志（`flow_audit_logs` 表），用于安全审计和问题排查。
 
 ## 最佳实践
 

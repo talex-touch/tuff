@@ -923,3 +923,53 @@ export const fxRates = sqliteTable(
     updatedIdx: index('idx_fx_rates_updated').on(table.updatedAt)
   })
 )
+
+// =============================================================================
+// 9. Flow Transfer 审计日志 (Flow Transfer Audit Logs)
+// =============================================================================
+
+/**
+ * Flow Transfer 审计日志表
+ * 记录每次插件间数据流转的详细信息，用于审计、问题排查和使用统计
+ */
+export const flowAuditLogs = sqliteTable(
+  'flow_audit_logs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sessionId: text('session_id').notNull(),
+    timestamp: integer('timestamp').notNull(),
+
+    // 发送方信息
+    senderId: text('sender_id').notNull(), // pluginId or 'corebox'
+    senderType: text('sender_type', { enum: ['plugin', 'corebox', 'system'] }).notNull(),
+
+    // 接收方信息
+    targetId: text('target_id'), // fullTargetId (pluginId:targetId)
+    targetPluginId: text('target_plugin_id'),
+    targetType: text('target_type', { enum: ['plugin', 'native'] }).notNull(),
+
+    // 载荷信息
+    payloadType: text('payload_type', {
+      enum: ['text', 'image', 'files', 'json', 'html', 'custom']
+    }).notNull(),
+    payloadSize: integer('payload_size'), // 估算的字节大小
+
+    // 结果信息
+    state: text('state', { enum: ['DELIVERED', 'FAILED', 'CANCELLED', 'TIMEOUT'] }).notNull(),
+    errorCode: text('error_code'), // FlowErrorCode
+    errorMessage: text('error_message'),
+
+    // 性能信息
+    latency: integer('latency'), // 毫秒
+
+    // 元数据
+    metadata: text('metadata') // JSON string for additional info
+  },
+  (table) => ({
+    sessionIdx: index('idx_flow_audit_session').on(table.sessionId),
+    timestampIdx: index('idx_flow_audit_timestamp').on(table.timestamp),
+    senderIdx: index('idx_flow_audit_sender').on(table.senderId),
+    targetIdx: index('idx_flow_audit_target').on(table.targetPluginId),
+    stateIdx: index('idx_flow_audit_state').on(table.state)
+  })
+)
