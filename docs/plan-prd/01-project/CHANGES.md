@@ -5,6 +5,14 @@
 
 ## 2026-06-15
 
+### fix(nexus): backfill release sync D1 schema columns
+
+- `apps/nexus/server/utils/releasesStore.ts`
+- `apps/nexus/server/utils/releasesStore.test.ts`
+  - Nexus release storage now backfills legacy D1 columns for `app_releases` and `app_release_assets` during schema initialization, preventing `Sync Nexus Release` from failing with a 500 when older production tables miss newer release metadata columns.
+  - Added focused D1 mock coverage for creating a release against a legacy schema before CI calls `POST /api/releases`.
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/releasesStore.test.ts"` 通过。
+
 ### fix(ci): restore release and CLI package checks
 
 - `apps/core-app/scripts/build-target/runtime-modules.js`
