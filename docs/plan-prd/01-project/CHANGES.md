@@ -1,7 +1,49 @@
 # 变更日志
 
-> 更新时间：2026-06-14
+> 更新时间：2026-06-15
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
+
+## 2026-06-15
+
+### fix(corebox): collapse search loading and empty result states
+
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/views/box/search-state.ts`
+- `apps/core-app/src/renderer/src/views/box/search-state.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - CoreBox now keeps the result area collapsed for active keyword searches and zero-result keyword searches, so users only see the input box while waiting or when no matches are found.
+  - Removed the no-results retry/settings action card, indexed-source diagnostics rendering, and unused searching/no-results locale strings from the CoreBox search-state path.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/box/search-state.test.ts"` 通过。
+
+### fix(core-app): package OpenAI runtime dependencies for AI calls
+
+- `apps/core-app/scripts/build-target/after-pack.js`
+- `apps/core-app/scripts/build-target.js`
+- `apps/core-app/src/main/core/runtime-modules.contract.test.ts`
+  - Packaged app afterPack sync now uses the platform runtime module closure, so OpenAI SDK Node shim dependencies such as `formdata-node`, `form-data-encoder`, `abort-controller`, and `agentkeepalive` are copied when absent from `app.asar`.
+  - Final build verification now checks the same platform runtime closure instead of only the base packaged manifest, preventing AI runtime dependency gaps from passing release builds.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/core/runtime-modules.contract.test.ts"` 通过。
+
+### fix(core-app): compact plugin permission request card
+
+- `apps/core-app/src/renderer/src/components/permission/PermissionRequestToast.vue`
+  - Reduced plugin permission request card width, padding, typography, and action button scale so permission prompts render as a compact confirmation card instead of an oversized overlay.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/permission/permission-request-card.test.ts"` 通过。
+
+### fix(flow): persist Flow audit logs safely
+
+- `apps/core-app/src/main/db/schema.ts`
+- `apps/core-app/src/main/modules/flow-bus/flow-audit-logger.ts`
+- `apps/core-app/resources/db/migrations/0022_flow_audit_logs.sql`
+  - Added the runtime migration for `flow_audit_logs`, indexed `session_id` without making it unique, and classified native share audit rows from `targetPluginId` / `fullTargetId` so ACK flows and native targets are recorded correctly.
+
+### fix(plugin): run workspace scripts without shell parsing
+
+- `plugins/touch-workspace-scripts/index.js`
+- `plugins/touch-workspace-scripts/index.test.cjs`
+- `packages/test/src/plugins/workspace-scripts.test.ts`
+  - Workspace script commands now run through structured `spawnCommandSafe(command, args)` instead of a shell string; shell chaining/redirection/substitution is blocked, and package-script caching is scoped by workspace path.
 
 ## 2026-06-14
 

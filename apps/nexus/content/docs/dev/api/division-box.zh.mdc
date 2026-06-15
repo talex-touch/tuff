@@ -399,6 +399,135 @@ code: |
 - DivisionBox 以 `WebContentsView` 作为承载层，由主进程统一管理生命周期。
 - SDK 负责封装窗口创建、状态变更与事件订阅，隔离底层实现。
 
+## 生命周期详解
+
+### prepare 阶段
+
+`prepare` 是 DivisionBox 会话的初始状态，发生在 `open()` 调用后、窗口创建前。
+
+**触发时机**：
+- 调用 `divisionBox.open(config)` 时立即进入
+- 主进程验证配置、分配 sessionId、创建 DivisionBoxSession 实例
+
+**资源管理**：
+- 分配 sessionId（自增计数器）
+- 验证 URL 协议和权限
+- 初始化会话状态存储
+- 如果配置了 `keepAlive`，注册到 LRU 缓存管理器
+
+**异常处理**：
+- URL 协议不支持 → 返回 `DivisionBoxError`（`INVALID_URL`）
+- 权限不足 → 返回 `DivisionBoxError`（`PERMISSION_DENIED`）
+- 资源超限（超过 `MAX_ACTIVE_SESSIONS`）→ 返回 `DivisionBoxError`（`RESOURCE_LIMIT_EXCEEDED`）
+
+### attach 阶段
+
+`attach` 发生在窗口创建完成后，视图已附加到 DivisionBox 窗口。
+
+**触发时机**：
+- WebContentsView 创建并附加到 BrowserWindow
+- 插件 UI 开始加载（`did-start-loading` 事件）
+
+**资源管理**：
+- 创建 WebContentsView 实例
+- 加载指定 URL
+- 注册 IPC 通道监听
+- 如果是从 CoreBox detach，转移 UI view 所有权
+
+**异常处理**：
+- URL 加载失败 → 触发 `did-fail-load`，状态转为 `destroy`
+- WebContents 崩溃 → 触发 `render-process-gone`，状态转为 `destroy`
+
+### active 阶段
+
+`active` 表示 DivisionBox 正在被用户交互。
+
+**触发时机**：
+- 窗口获得焦点
+- 页面完成加载（`did-finish-load`）
+- 从 `inactive` 恢复时（窗口重新获得焦点）
+
+**资源管理**：
+- 正常运行状态，无需特殊资源管理
+- 可以安全地执行 IPC 通信
+
+### inactive 阶段
+
+`inactive` 表示 DivisionBox 窗口失去焦点或被其他窗口遮挡。
+
+**触发时机**：
+- 窗口失去焦点（`blur` 事件）
+- 被其他 DivisionBox 或 CoreBox 窗口覆盖
+
+**资源管理**：
+- 如果 `keepAlive=false`，可能触发延迟销毁
+- 如果 `keepAlive=true`，保持资源但降低优先级
+- LRU 缓存可能在此阶段回收低优先级会话
+
+**异常处理**：
+- 长时间 inactive 可能触发内存压力回收
+- 超过 LRU 缓存上限时，最久未使用的会话被销毁
+
+### detach 阶段
+
+`detach` 发生在 DivisionBox 窗口关闭或会话被显式分离时。
+
+**触发时机**：
+- 调用 `divisionBox.close(sessionId)` 时
+- 窗口被用户关闭（`close` 事件）
+- 资源超限触发的强制销毁
+
+**资源管理**：
+- 如果 `keepAlive=true`，会话进入 LRU 缓存等待恢复
+- 如果 `keepAlive=false`，直接进入 `destroy` 阶段
+- 释放 WebContentsView 和关联资源
+
+**异常处理**：
+- 关闭动画可能被中断（`force: true`）
+- 缓存满时可能立即销毁而非缓存
+
+### destroy 阶段
+
+`destroy` 是会话的最终状态，资源已完全释放。
+
+**触发时机**：
+- `keepAlive=false` 时的 `detach` 后
+- `keepAlive=true` 但被 LRU 回收时
+- 内存压力触发的强制销毁
+- 资源超限触发的强制销毁
+
+**资源管理**：
+- 释放所有关联资源
+- 从 session map 中移除
+- 从 LRU 缓存中移除
+- 注销 IPC 通道监听
+- 触发 `session-destroyed` 事件
+
+**异常处理**：
+- 此阶段不应有异常，资源必须完全释放
+- 如果释放失败，记录错误日志但不阻止状态转换
+
+### 状态转换图
+
+```mermaid
+stateDiagram-v2
+    [*] --> prepare: open()
+    prepare --> attach: 窗口创建完成
+    attach --> active: 窗口获得焦点
+    active --> inactive: 窗口失去焦点
+    inactive --> active: 窗口重新获得焦点
+    inactive --> detach: close() / 资源回收
+    active --> detach: close() / 资源回收
+    attach --> detach: close() / 资源回收
+    detach --> [*]: keepAlive=false
+    detach --> prepare: keepAlive=true, 恢复
+    prepare --> destroy: 加载失败 / 资源超限
+    attach --> destroy: 加载失败 / 崩溃
+    active --> destroy: 崩溃
+    inactive --> destroy: LRU 回收 / 内存压力
+    destroy --> [*]
+```
+
 ## 最佳实践
 
 1. **使用 keepAlive**：对于频繁使用的面板，启用 `keepAlive` 提升响应速度
@@ -406,6 +535,7 @@ code: |
 3. **保存状态**：使用 `updateState/getState` 保存用户数据
 4. **监听状态变化**：及时响应 `inactive` 状态，释放不必要的资源
 5. **处理销毁事件**：监听 `session-destroyed` 清理相关资源
+6. **理解生命周期**：根据业务需求选择合适的生命周期钩子
 
 ## 相关文档
 
