@@ -44,7 +44,6 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
       '@libsql/client',
       '@libsql/core',
       '@libsql/hrana-client',
-      '@libsql/isomorphic-fetch',
       '@libsql/isomorphic-ws',
       'libsql',
       '@neon-rs/load',
