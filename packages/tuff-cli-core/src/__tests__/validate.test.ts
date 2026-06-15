@@ -1,6 +1,7 @@
 import os from 'node:os'
 import path from 'node:path'
 import fs from 'fs-extra'
+import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin/sdk-version'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runValidate } from '../validate'
 
@@ -84,7 +85,7 @@ describe('manifest validate', () => {
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Manifest is valid'))
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Outdated sdkapi (260228). Recommended: 260428'),
+        expect.stringContaining(`Outdated sdkapi (260228). Recommended: ${CURRENT_SDK_VERSION}`),
       )
     })
   })

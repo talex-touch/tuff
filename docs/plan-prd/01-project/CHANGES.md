@@ -5,6 +5,14 @@
 
 ## 2026-06-15
 
+### fix(ci): restore release and CLI package checks
+
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+- `packages/tuff-cli-core/src/__tests__/validate.test.ts`
+  - Removed the stale `@libsql/isomorphic-fetch` runtime module entry from the release packaging manifest because the current locked `@libsql/client` dependency tree no longer installs that package.
+  - Updated the CLI sdkapi warning test to derive the recommended marker from `CURRENT_SDK_VERSION`, keeping the assertion aligned with the `260615` SDK marker.
+  - 验证：`pnpm -C "packages/tuff-cli-core" test`、`pnpm -C "apps/core-app" exec vitest run "src/main/core/runtime-modules.contract.test.ts"`、`node --input-type=module -e "import('./apps/core-app/scripts/build-target/runtime-modules.js').then((m)=>{const entries=m.collectPackagedRuntimeModuleEntries(); console.log(entries.some((entry)=>entry.name==='@libsql/isomorphic-fetch') ? 'has-stale-fetch' : 'no-stale-fetch'); console.log(entries.length)})"` 通过。
+
 ### fix(corebox): collapse search loading and empty result states
 
 - `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
