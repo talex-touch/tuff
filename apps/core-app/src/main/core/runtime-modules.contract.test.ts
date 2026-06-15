@@ -22,6 +22,7 @@ const {
   copyRuntimeModuleToNodeModules,
   resolvePlatformRuntimeModules,
   resolveRuntimeModuleTargetDir,
+  getPlatformRuntimeRootModules,
   syncMissingPackagedRuntimeModules,
   verifyPackagedEsbuildBinaries
 } = require('../../../scripts/build-target/runtime-modules.js')
@@ -164,6 +165,25 @@ describe('runtime module manifest contract', () => {
     ])
   })
 
+  it('keeps OpenAI Node shim dependencies in the packaged platform runtime closure', () => {
+    const names = collectRuntimeModuleClosure(getPlatformRuntimeRootModules('mac', 'arm64'), {
+      dedupeBy: 'name',
+      dependencyTypes: ['dependencies', 'optionalDependencies', 'peerDependencies'],
+      includeTargetNodeModules: false,
+      logger: { warn: () => undefined },
+      maxDepth: 20,
+      missingDependencyStrategy: 'warn',
+      skipDependency: (dependencyName: string) => dependencyName.startsWith('@talex-touch/')
+    }).modules.map((entry: { name: string }) => entry.name)
+
+    expect(names).toContain('@langchain/openai')
+    expect(names).toContain('openai')
+    expect(names).toContain('formdata-node')
+    expect(names).toContain('form-data-encoder')
+    expect(names).toContain('abort-controller')
+    expect(names).toContain('agentkeepalive')
+  })
+
   it('keeps esbuild and platform binaries in packaged runtime resources', () => {
     const resourceNames = collectResourceResolvableRuntimeModuleEntries([
       { name: 'esbuild', location: 'resources' }
@@ -293,12 +313,16 @@ describe('runtime module manifest contract', () => {
       }
     )
 
-    await createPackage(path.join(pnpmStore, 'runtime-root@1.0.0/node_modules'), 'versioned-child', {
-      version: '1.0.0',
-      dependencies: {
-        'runtime-grandchild': '1.0.0'
+    await createPackage(
+      path.join(pnpmStore, 'runtime-root@1.0.0/node_modules'),
+      'versioned-child',
+      {
+        version: '1.0.0',
+        dependencies: {
+          'runtime-grandchild': '1.0.0'
+        }
       }
-    })
+    )
     await createPackage(
       path.join(pnpmStore, 'versioned-child@2.0.0/node_modules'),
       'versioned-child',
@@ -351,15 +375,23 @@ describe('runtime module manifest contract', () => {
       }
     )
 
-    await createPackage(path.join(pnpmStore, 'runtime-root-a@1.0.0/node_modules'), 'duplicate-child', {
-      version: '2.0.0'
-    })
-    await createPackage(path.join(pnpmStore, 'runtime-root-b@1.0.0/node_modules'), 'duplicate-child', {
-      version: '1.0.0',
-      dependencies: {
-        'duplicate-grandchild': '1.0.0'
+    await createPackage(
+      path.join(pnpmStore, 'runtime-root-a@1.0.0/node_modules'),
+      'duplicate-child',
+      {
+        version: '2.0.0'
       }
-    })
+    )
+    await createPackage(
+      path.join(pnpmStore, 'runtime-root-b@1.0.0/node_modules'),
+      'duplicate-child',
+      {
+        version: '1.0.0',
+        dependencies: {
+          'duplicate-grandchild': '1.0.0'
+        }
+      }
+    )
     await createPackage(paths.workspaceNodeModules, 'duplicate-grandchild')
 
     symlinkSync(runtimeRootA, path.join(paths.targetNodeModules, 'runtime-root-a'))
@@ -422,6 +454,54 @@ describe('runtime module manifest contract', () => {
       true
     )
     expect(existsSync(path.join(resourcesDir, 'node_modules/required-peer/package.json'))).toBe(
+      true
+    )
+  })
+
+  it('syncs missing platform runtime transitive dependencies after packaging', async () => {
+    const paths = createTempWorkspace()
+    const appOutDir = path.join(paths.root, 'dist/mac-arm64/tuff.app/Contents')
+    const resourcesDir = path.join(appOutDir, 'Resources')
+    const emptyAsarSource = path.join(paths.root, 'empty-asar')
+
+    await createPackage(paths.workspaceNodeModules, 'runtime-root', {
+      dependencies: {
+        'openai-like': '1.0.0'
+      }
+    })
+    await createPackage(paths.workspaceNodeModules, 'openai-like', {
+      dependencies: {
+        'formdata-node': '1.0.0',
+        'form-data-encoder': '1.0.0',
+        'abort-controller': '1.0.0',
+        agentkeepalive: '1.0.0'
+      }
+    })
+    await createPackage(paths.workspaceNodeModules, 'formdata-node')
+    await createPackage(paths.workspaceNodeModules, 'form-data-encoder')
+    await createPackage(paths.workspaceNodeModules, 'abort-controller')
+    await createPackage(paths.workspaceNodeModules, 'agentkeepalive')
+    await mkdir(emptyAsarSource, { recursive: true })
+    writeJson(path.join(emptyAsarSource, 'package.json'), { name: 'empty-app' })
+    await mkdir(resourcesDir, { recursive: true })
+
+    const { createPackage: createAsarPackage } = require('@electron/asar')
+    await createAsarPackage(emptyAsarSource, path.join(resourcesDir, 'app.asar'))
+
+    const copiedModules = syncMissingPackagedRuntimeModules(appOutDir, {
+      ...paths,
+      requiredModules: ['runtime-root']
+    })
+
+    expect(copiedModules).toEqual([
+      'runtime-root',
+      'openai-like',
+      'formdata-node',
+      'form-data-encoder',
+      'abort-controller',
+      'agentkeepalive'
+    ])
+    expect(existsSync(path.join(resourcesDir, 'node_modules/formdata-node/package.json'))).toBe(
       true
     )
   })

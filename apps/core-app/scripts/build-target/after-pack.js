@@ -3,6 +3,7 @@ const path = require('node:path')
 const plist = require('simple-plist')
 const {
   findPackagedResourcesDir,
+  getPlatformRuntimeRootModules,
   syncMissingPackagedRuntimeModules,
   syncPackagedResourceModules
 } = require('./runtime-modules')
@@ -138,11 +139,15 @@ function pruneCrossPlatformFfprobeBinaries(context) {
 
 module.exports = async function afterPack(context) {
   ensureMacMainAppLsuiElement(context)
+  const targetArch = resolveTargetArchNames(context)[0]
+  const requiredModules = getPlatformRuntimeRootModules(context.electronPlatformName, targetArch)
+
   syncPackagedResourceModules(context.appOutDir, {
     logPrefix: '[afterPack]'
   })
   syncMissingPackagedRuntimeModules(context.appOutDir, {
-    logPrefix: '[afterPack]'
+    logPrefix: '[afterPack]',
+    requiredModules
   })
   pruneCrossPlatformFfprobeBinaries(context)
 }
