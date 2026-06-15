@@ -794,6 +794,8 @@ export class OmniPanelModule extends BaseModule {
       return this.panelWindow
     }
 
+    // OmniPanel is the slide-out command panel — always visible across all
+    // macOS Spaces so it's reachable without the user needing to switch.
     const window = new TouchWindow({ ...OmniPanelWindowOption })
     window.window.setVisibleOnAllWorkspaces(true)
     window.window.setAlwaysOnTop(true, 'floating')

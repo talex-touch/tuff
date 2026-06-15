@@ -4,10 +4,7 @@ import type {
   IndexedWritePlanServiceOptions,
   IndexedWriteUpdateRecord
 } from '@talex-touch/utils/search'
-import {
-  IndexedWritePlanService,
-  mapIndexedWritePathUpdateRecord
-} from '@talex-touch/utils/search'
+import { IndexedWritePlanService, mapIndexedWritePathUpdateRecord } from '@talex-touch/utils/search'
 
 export type FileProviderIncrementalFileRecord = IndexedWriteIncomingRecord & {
   lastIndexedAt?: Date | number | string | null

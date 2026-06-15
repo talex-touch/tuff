@@ -52,7 +52,7 @@ export function sanitizeMarkdownHtml(html: string): string {
       if (!isAllowedUrl(value)) return ''
       return ` ${name.toLowerCase()}=${quote}${sanitizeAttributeValue(value.trim())}${quote}`
     })
-    .replace(/\s+(href|src)\s*=\s*([^\s>]+)/gi, (_match, name: string, value: string) => {
+    .replace(/\s+(href|src)\s*=\s*([^\s>"']+)/gi, (_match, name: string, value: string) => {
       if (!isAllowedUrl(value)) return ''
       return ` ${name.toLowerCase()}="${sanitizeAttributeValue(value.trim())}"`
     })

@@ -1,22 +1,32 @@
+# Included workspace roots
 packages:
-  - 'packages/*'
-  - packages/tuffex/packages/components
-  - 'apps/core-app'
-  - 'apps/nexus'
-  - 'plugins/*'
+  - 'packages/*'                  # Shared SDK / utils / types / tuffex
+  - packages/tuffex/packages/components # Nested tuffex component package
+  - 'apps/core-app'               # Electron main product
+  - 'apps/nexus'                  # Documentation & ecosystem site (Nuxt)
+  - 'plugins/*'                   # Official & example plugins
+
+  # --- Exclusions ---
+  # Archived / prototype apps not part of active workspace
   - '!apps/g-*'
   - '!apps/quota-*'
+
+  # Build artifacts (prevent pnpm from crawling generated files)
   - '!apps/**/out/**'
   - '!apps/**/dist/**'
-  - '!apps/**/.output/**'
-  - '!apps/**/.nuxt/**'
+  - '!apps/**/.output/**'         # Nuxt output
+  - '!apps/**/.nuxt/**'           # Nuxt dev cache
   - '!apps/**/.vitepress/**'
-  - '!apps/**/node_modules/**'
   - '!packages/**/dist/**'
   - '!packages/**/.vitepress/**'
-  - '!packages/**/node_modules/**'
   - '!plugins/**/dist/**'
+
+  # node_modules — avoid double-indexing
+  - '!apps/**/node_modules/**'
+  - '!packages/**/node_modules/**'
   - '!plugins/**/node_modules/**'
+
+  # Runtime plugin installs inside core-app (managed separately)
   - '!apps/core-app/tuff/modules/plugins/**'
 
 catalog:

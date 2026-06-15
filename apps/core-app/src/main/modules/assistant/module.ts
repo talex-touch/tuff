@@ -443,6 +443,8 @@ export class AssistantModule extends BaseModule {
       maxHeight: setting.size
     })
 
+    // Floating ball stays visible on every macOS Space and full-screen app
+    // so the voice assistant is always one click away regardless of context.
     touchWindow.window.setAlwaysOnTop(true, 'floating')
     touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
     touchWindow.window.setFullScreenable(false)
@@ -486,6 +488,8 @@ export class AssistantModule extends BaseModule {
       height: VOICE_PANEL_HEIGHT
     })
 
+    // Voice panel mirrors floating-ball visibility: always accessible across
+    // all Spaces and full-screen apps.
     touchWindow.window.setAlwaysOnTop(true, 'floating')
     touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
     touchWindow.window.setFullScreenable(false)
