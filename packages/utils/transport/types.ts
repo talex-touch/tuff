@@ -623,6 +623,20 @@ export interface ITuffTransportMain {
   ) => void
 
   /**
+   * Broadcasts a message to a specific plugin's renderer (fire-and-forget).
+   *
+   * @typeParam TReq - Request payload type
+   * @param pluginName - Name of the target plugin
+   * @param event - Type-safe event definition or string event name
+   * @param payload - Request payload
+   */
+  broadcastPlugin: <TReq>(
+    pluginName: string,
+    event: TuffEvent<TReq, void> | string,
+    payload: TReq,
+  ) => void
+
+  /**
    * Plugin key manager for security.
    */
   readonly keyManager: PluginKeyManager

@@ -474,6 +474,11 @@ class TouchChannel {
     }
   }
 
+  /**
+   * Register a channel handler.
+   * @deprecated Use `TuffTransport.on()` instead.
+   * This method will be removed in a future version.
+   */
   regChannel(type: ChannelType, eventName: string, callback: ChannelCallback): () => void {
     const map = this.channelMap.get(type)!
 
@@ -715,6 +720,8 @@ class TouchChannel {
   /**
    * Broadcast a message without waiting for a response.
    * Use for notification-style messages that don't need acknowledgment.
+   * @deprecated Use `TuffMainTransport.broadcast()` instead.
+   * This method will be removed in a future version.
    */
   broadcast(type: ChannelType, eventName: string, arg: unknown): void {
     this.broadcastTo(this.app.window.window, type, eventName, arg)
@@ -722,6 +729,8 @@ class TouchChannel {
 
   /**
    * Broadcast a message to a specific window without waiting for a response.
+   * @deprecated Use `TuffMainTransport.broadcastToWindow()` instead.
+   * This method will be removed in a future version.
    */
   broadcastTo(
     win: Electron.BrowserWindow | WebContentsView | undefined,
@@ -785,6 +794,8 @@ class TouchChannel {
 
   /**
    * Broadcast a message to a plugin without waiting for a response.
+   * @deprecated Use `TuffMainTransport.broadcastPlugin()` instead.
+   * This method will be removed in a future version.
    */
   broadcastPlugin(pluginName: string, eventName: string, arg?: unknown): void {
     const uiView = WindowManager.getInstance().getUIView()

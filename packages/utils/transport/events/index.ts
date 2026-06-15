@@ -448,6 +448,7 @@ import { CoreBoxRetainedEvents } from "./core-box-retained";
 import { SyncEvents } from "./sync";
 import { TerminalEvents } from "./terminal";
 import { OpenerEvents } from "./opener";
+import { PluginBroadcastEvents } from "./plugin-broadcast";
 
 // ============================================================================
 // Clipboard Events
@@ -2740,6 +2741,7 @@ export const TuffEvents = {
   coreBoxRetained: CoreBoxRetainedEvents,
   storage: StorageEvents,
   plugin: PluginEvents,
+  pluginBroadcast: PluginBroadcastEvents,
   store: StoreEvents,
   network: NetworkEvents,
   native: NativeEvents,
@@ -2762,4 +2764,4 @@ export const TuffEvents = {
 } as const;
 
 // Export MetaOverlayEvents separately for convenience
-export { AccountEvents, AppEvents, AuthEvents, CoreBoxRetainedEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };
+export { AccountEvents, AppEvents, AuthEvents, CoreBoxRetainedEvents, MetaOverlayEvents, OpenerEvents, PluginBroadcastEvents, SyncEvents, TerminalEvents };

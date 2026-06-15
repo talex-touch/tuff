@@ -148,8 +148,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     const hasContent = query.text || (query.inputs && query.inputs.length > 0)
 
-    const channel = getRegisteredMainRuntime('plugin-module').channel
-    channel.broadcastPlugin(plugin.name, CoreBoxEvents.input.change.toEventName(), {
+    const { transport } = getRegisteredMainRuntime('plugin-module')
+    transport.broadcastPlugin(plugin.name, CoreBoxEvents.input.change, {
       input: payload.input,
       query,
       source: payload.source
