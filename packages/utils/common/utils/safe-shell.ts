@@ -112,6 +112,21 @@ export function spawnSafe(
   return spawn(safeCommand, safeArgs, { ...options, shell: false })
 }
 
+/**
+ * Spawn a command through the system shell (shell: true).
+ *
+ * ⚠️ CALLER MUST VALIDATE the command string — this function only filters
+ * null bytes and newlines. Shell metacharacters (`&&`, `|`, `;`, `` ` ``,
+ * `$()`, etc.) are NOT blocked and will be interpreted by the shell.
+ *
+ * Prefer {@link spawnSafe} or {@link spawnCommandSafe} when you can split
+ * command + args yourself. Only use this when you genuinely need shell
+ * interpretation (e.g. `pnpm` on Windows requires `.cmd` resolution).
+ *
+ * @param command - Full shell command string. Caller is responsible for
+ *   ensuring it does not contain untrusted shell metacharacters.
+ * @param options - Standard `SpawnOptions`. `shell` is forced to `true`.
+ */
 export function spawnShellCommand(
   command: string,
   options: SpawnOptions = {}
@@ -119,4 +134,23 @@ export function spawnShellCommand(
   const { spawn } = requireChildProcess()
   const safeCommand = assertShellValue(command, 'COMMAND')
   return spawn(safeCommand, [], { ...options, shell: true })
+}
+
+/**
+ * Safely spawn a command with explicit args, never through a shell.
+ *
+ * This is the preferred API for programmatic command execution — it avoids
+ * shell injection entirely because args are passed as an array and
+ * `shell: false` is forced.
+ *
+ * @param command - Executable name or path (validated against null bytes/newlines).
+ * @param args - Argument array (each arg validated against null bytes).
+ * @param options - Standard `SpawnOptions`. `shell` is forced to `false`.
+ */
+export function spawnCommandSafe(
+  command: string,
+  args: string[] = [],
+  options: SpawnOptions = {}
+): ChildProcess {
+  return spawnSafe(command, args, options)
 }
