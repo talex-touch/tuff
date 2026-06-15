@@ -68,12 +68,12 @@ defineProps<{
 <style scoped lang="scss">
 .PermissionRequestToast {
   display: grid;
-  width: min(680px, calc(100vw - 32px));
-  max-width: 680px;
-  gap: 18px;
-  padding: 26px 30px 24px;
+  width: min(480px, calc(100vw - 32px));
+  max-width: 480px;
+  gap: 12px;
+  padding: 18px 20px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  border-radius: 16px;
   background: rgba(16, 16, 18, 0.96);
   color: rgba(245, 247, 252, 0.94);
   box-shadow:
@@ -84,7 +84,7 @@ defineProps<{
 
 .PermissionRequestToast-Title {
   margin: 0;
-  font-size: 25px;
+  font-size: 18px;
   font-weight: 760;
   line-height: 1.2;
   letter-spacing: 0;
@@ -94,27 +94,27 @@ defineProps<{
 .PermissionRequestToast-Message,
 .PermissionRequestToast-Timeout {
   margin: 0;
-  font-size: 24px;
-  font-weight: 650;
-  line-height: 1.45;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
   letter-spacing: 0;
   color: rgba(232, 236, 246, 0.86);
 }
 
 .PermissionRequestToast-List {
   display: grid;
-  gap: 4px;
-  margin: 4px 0 0;
+  gap: 6px;
+  margin: 2px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .PermissionRequestToast-Item {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 14px minmax(0, 1fr);
   align-items: start;
-  font-size: 24px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.4;
   letter-spacing: 0;
   color: rgba(232, 236, 246, 0.9);
@@ -134,26 +134,26 @@ defineProps<{
 }
 
 .PermissionRequestToast-Timeout {
-  margin-top: 8px;
+  margin-top: 2px;
 }
 
 .PermissionRequestToast-Actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 14px;
-  margin-top: -4px;
+  gap: 10px;
+  margin-top: 2px;
 }
 
 .PermissionRequestToast-Action {
-  min-width: 122px;
-  min-height: 52px;
-  padding: 0 28px;
-  border: 2px solid rgba(255, 255, 255, 0.24);
+  min-width: 88px;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
   background: transparent;
   color: rgba(232, 236, 246, 0.82);
-  font-size: 24px;
+  font-size: 14px;
   font-weight: 650;
   line-height: 1;
   letter-spacing: 0;
@@ -205,18 +205,18 @@ defineProps<{
 
 @media (max-width: 520px) {
   .PermissionRequestToast {
-    gap: 14px;
-    padding: 22px 24px;
+    gap: 12px;
+    padding: 16px;
   }
 
   .PermissionRequestToast-Title {
-    font-size: 21px;
+    font-size: 17px;
   }
 
   .PermissionRequestToast-Message,
   .PermissionRequestToast-Timeout,
   .PermissionRequestToast-Item {
-    font-size: 18px;
+    font-size: 14px;
   }
 
   .PermissionRequestToast-Actions {
@@ -226,9 +226,9 @@ defineProps<{
 
   .PermissionRequestToast-Action {
     flex: 1 1 100%;
-    min-height: 44px;
-    padding: 0 18px;
-    font-size: 17px;
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
   }
 }
 </style>
