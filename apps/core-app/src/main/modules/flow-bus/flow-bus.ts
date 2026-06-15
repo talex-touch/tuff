@@ -17,6 +17,7 @@ import type {
 import { FlowErrorCode } from '@talex-touch/utils/types/flow'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
+import { flowAuditLogger } from './flow-audit-logger'
 import { flowBusDispatchLog } from './logger'
 import { flowSessionManager } from './session-manager'
 import { flowTargetRegistry } from './target-registry'
@@ -260,6 +261,13 @@ export class FlowBus {
       // Record usage
       flowTargetRegistry.recordUsage(targetInfo.fullId)
 
+      // Audit log for successful delivery
+      void flowAuditLogger.logSessionComplete({
+        ...updatedSession,
+        state: 'DELIVERED',
+        updatedAt: Date.now()
+      })
+
       // Wait for acknowledgment if required
       if (options.requireAck) {
         flowSessionManager.updateState(session.sessionId, 'PROCESSING')
@@ -268,6 +276,9 @@ export class FlowBus {
           session.sessionId,
           options.timeout ?? flowSessionManager.getDefaultTimeout()
         )
+
+        // Audit log for final state after ack
+        void flowAuditLogger.logSessionComplete(finalSession)
 
         return {
           sessionId: session.sessionId,
@@ -287,6 +298,14 @@ export class FlowBus {
         message: error instanceof Error ? error.message : 'Delivery failed'
       }
       flowSessionManager.setError(session.sessionId, flowError)
+
+      // Audit log for failed delivery
+      void flowAuditLogger.logSessionComplete({
+        ...updatedSession,
+        state: 'FAILED',
+        error: flowError,
+        updatedAt: Date.now()
+      })
 
       // Execute fallback if specified
       if (options.fallbackAction === 'copy') {
@@ -508,7 +527,20 @@ export class FlowBus {
   cancel(sessionId: string): boolean {
     // Also resolve any pending selection
     this.resolveTargetSelection(sessionId, null)
-    return flowSessionManager.cancel(sessionId)
+
+    const session = flowSessionManager.getSession(sessionId)
+    const result = flowSessionManager.cancel(sessionId)
+
+    // Audit log for cancellation
+    if (result && session) {
+      void flowAuditLogger.logSessionComplete({
+        ...session,
+        state: 'CANCELLED',
+        updatedAt: Date.now()
+      })
+    }
+
+    return result
   }
 
   /**
