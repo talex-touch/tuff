@@ -1567,7 +1567,8 @@ class OcrService {
       const channel = this.transportChannel as {
         broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
       }
-      channel.broadcastPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent.toEventName(), {
+      const transport = getTuffTransportMain(channel, channel)
+      transport.broadcastPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent, {
         clipboardId,
         patch
       })

@@ -44,6 +44,7 @@ type MainChannelBridge = {
     eventName: string,
     arg?: unknown,
   ) => void
+  broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
 }
 
 type InvokeHandler<TReq, TRes> = (
@@ -803,5 +804,44 @@ export class TuffMainTransport implements ITuffTransportMain {
 
     const eventName = event.toEventName()
     this.channel.broadcast(BRIDGE_CHANNEL.MAIN, eventName, payload)
+  }
+
+  /**
+   * Broadcasts a message to a specific plugin's renderer (fire-and-forget).
+   *
+   * @param pluginName - Name of the target plugin
+   * @param event - Type-safe event definition or string event name
+   * @param payload - Event payload
+   *
+   * @example
+   * ```typescript
+   * import { PluginBroadcastEvents } from '@talex-touch/utils/transport/events'
+   *
+   * // Using type-safe event definition
+   * transport.broadcastPlugin('my-plugin', PluginBroadcastEvents.stateChanged, {
+   *   pluginName: 'my-plugin',
+   *   state: 'active'
+   * })
+   *
+   * // Using string event name (for backward compatibility)
+   * transport.broadcastPlugin('my-plugin', 'my-event-name', { data: 'value' })
+   * ```
+   */
+  broadcastPlugin<TReq>(
+    pluginName: string,
+    event: TuffEvent<TReq, void> | string,
+    payload: TReq,
+  ): void {
+    let eventName: string
+
+    if (typeof event === 'string') {
+      eventName = event
+    }
+    else {
+      assertTuffEvent(event, 'TuffMainTransport.broadcastPlugin')
+      eventName = event.toEventName()
+    }
+
+    this.channel.broadcastPlugin(pluginName, eventName, payload)
   }
 }

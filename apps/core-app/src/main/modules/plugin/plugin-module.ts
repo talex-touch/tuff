@@ -644,7 +644,7 @@ const INTERNAL_PLUGIN_NAMES = new Set<string>()
 function createPluginModuleInternal(
   pluginPath: string,
   transport: ITuffTransportMain,
-  channel: PluginLifecycleChannel,
+  _channel: PluginLifecycleChannel,
   mainWindowId: number
 ): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
@@ -937,11 +937,7 @@ function createPluginModuleInternal(
           `Deactivating plugin ${pluginTag(active)}: ${PluginStatus[previousPlugin.status]} → ENABLED`
         )
 
-        channel.broadcastPlugin(
-          active,
-          PluginEvents.lifecycleSignal.inactive.toEventName(),
-          undefined
-        )
+        transport.broadcastPlugin(active, PluginEvents.lifecycleSignal.inactive, undefined)
 
         if (previousPlugin.status === PluginStatus.ACTIVE) {
           previousPlugin.status = PluginStatus.ENABLED
@@ -980,11 +976,7 @@ function createPluginModuleInternal(
       plugin.status = PluginStatus.ACTIVE
       active = pluginName
 
-      channel.broadcastPlugin(
-        pluginName,
-        PluginEvents.lifecycleSignal.active.toEventName(),
-        undefined
-      )
+      transport.broadcastPlugin(pluginName, PluginEvents.lifecycleSignal.active, undefined)
     } else {
       // Clear active plugin if no name provided
       active = ''

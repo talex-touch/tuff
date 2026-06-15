@@ -1023,6 +1023,13 @@ export class WindowManager {
     return settings?.tools?.autoHide === false
   }
 
+  /**
+   * Pin the CoreBox popup across all macOS Spaces.
+   *
+   * When pinned: the search window is always-on-top across every Space so
+   * the user can invoke CoreBox from anywhere without switching.
+   * When unpinned: window follows its parent Space (default macOS behavior).
+   */
   private applyPinnedStateToWindow(window: TouchWindow, pinned: boolean): void {
     if (window.window.isDestroyed()) return
 
@@ -1647,7 +1654,8 @@ export class WindowManager {
   }
 
   private broadcastPluginMessage(pluginName: string, eventName: string, data?: unknown): void {
-    this.touchApp.channel.broadcastPlugin(pluginName, eventName, data)
+    const transport = this.getTransport()
+    transport.broadcastPlugin(pluginName, eventName, data)
   }
 
   private broadcastCoreBoxUiResume(
