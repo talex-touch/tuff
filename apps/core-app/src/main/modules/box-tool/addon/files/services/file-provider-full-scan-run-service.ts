@@ -94,5 +94,4 @@ export class FileProviderFullScanRunService<TContext> {
       finishPerfContext()
     }
   }
-
 }

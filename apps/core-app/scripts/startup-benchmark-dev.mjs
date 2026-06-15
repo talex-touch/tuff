@@ -26,8 +26,7 @@ let activeDataRoot = ''
 let expectedPackageVersion = null
 
 function resolveReportRoots(target, profile) {
-  const prefix =
-    target === 'packaged' ? `startup-packaged-${profile}-runs` : 'startup-dev-runs'
+  const prefix = target === 'packaged' ? `startup-packaged-${profile}-runs` : 'startup-dev-runs'
   const reportRoot = path.resolve(
     repoRoot,
     'docs',
@@ -151,15 +150,21 @@ async function readExpectedPackageVersion() {
 }
 
 function resolveAppBundlePath(appPath) {
-  return appPath.endsWith('/Contents/MacOS/tuff') ? path.resolve(appPath, '..', '..', '..') : appPath
+  return appPath.endsWith('/Contents/MacOS/tuff')
+    ? path.resolve(appPath, '..', '..', '..')
+    : appPath
 }
 
 function readMacBundleVersion(appBundlePath) {
   if (process.platform !== 'darwin') return null
   const infoPlistPath = path.resolve(appBundlePath, 'Contents', 'Info.plist')
-  const result = spawnSync('/usr/bin/plutil', ['-extract', 'CFBundleShortVersionString', 'raw', infoPlistPath], {
-    encoding: 'utf8'
-  })
+  const result = spawnSync(
+    '/usr/bin/plutil',
+    ['-extract', 'CFBundleShortVersionString', 'raw', infoPlistPath],
+    {
+      encoding: 'utf8'
+    }
+  )
   if (result.status !== 0) return null
   const version = result.stdout.trim()
   return version || null
@@ -1061,7 +1066,8 @@ async function analyzeBench(options) {
       target: previousRunData.target ?? options.target,
       profile: previousRunData.profile ?? options.profile,
       launchMethod:
-        previousRunData.launchMethod ?? (options.target === 'packaged' ? options.launchMethod : 'exec'),
+        previousRunData.launchMethod ??
+        (options.target === 'packaged' ? options.launchMethod : 'exec'),
       command: previousRunData.command ?? 'analyze',
       userDataDir: previousRunData.userDataDir ?? null,
       artifact: previousRunData.artifact ?? null,
