@@ -229,6 +229,21 @@ async function ensureReleasesSchema(db: D1Database) {
     );
   `).run()
 
+  await ensureTableColumns(db, RELEASES_TABLE, [
+    { name: 'notes_html', ddl: 'notes_html TEXT' },
+    { name: 'published_at', ddl: 'published_at TEXT' },
+    { name: 'min_app_version', ddl: 'min_app_version TEXT' },
+    { name: 'is_critical', ddl: 'is_critical INTEGER NOT NULL DEFAULT 0' },
+  ])
+
+  await ensureTableColumns(db, RELEASE_ASSETS_TABLE, [
+    { name: 'source_type', ddl: `source_type TEXT NOT NULL DEFAULT 'upload'` },
+    { name: 'file_key', ddl: 'file_key TEXT' },
+    { name: 'sha256', ddl: 'sha256 TEXT' },
+    { name: 'content_type', ddl: `content_type TEXT NOT NULL DEFAULT 'application/octet-stream'` },
+    { name: 'download_count', ddl: 'download_count INTEGER NOT NULL DEFAULT 0' },
+  ])
+
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_releases_channel ON ${RELEASES_TABLE}(channel);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_releases_status ON ${RELEASES_TABLE}(status);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_assets_release_id ON ${RELEASE_ASSETS_TABLE}(release_id);`).run()
@@ -236,6 +251,20 @@ async function ensureReleasesSchema(db: D1Database) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_revisions_tag ON ${RELEASE_REVISIONS_TABLE}(tag);`).run()
 
   schemaInitialized = true
+}
+
+async function ensureTableColumns(
+  db: D1Database,
+  table: string,
+  definitions: Array<{ name: string, ddl: string }>,
+) {
+  const { results } = await db.prepare(`PRAGMA table_info(${table});`).all<{ name?: string }>()
+  const columns = new Set((results ?? []).map(item => item.name).filter(Boolean) as string[])
+
+  for (const definition of definitions) {
+    if (!columns.has(definition.name))
+      await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition.ddl};`).run()
+  }
 }
 
 function mapReleaseRow(row: D1ReleaseRow): AppRelease {
