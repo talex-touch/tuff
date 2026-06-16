@@ -1,7 +1,17 @@
 # 变更日志
 
-> 更新时间：2026-06-15
+> 更新时间：2026-06-16
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
+
+## 2026-06-16
+
+### fix(corebox): keep built-in preview widget renderer registered
+
+- `apps/core-app/src/renderer/src/modules/box/custom-render/index.ts`
+- `apps/core-app/src/renderer/src/modules/box/custom-render/index.test.ts`
+  - Protected built-in CoreBox custom renderers such as `core-preview-card` and `core-intelligence-answer` from plugin widget unregister/failure cleanup paths, preventing preview cards from falling back to `Widget renderer 未注册`.
+  - Dynamic plugin widgets still register/unregister normally, while attempts to override built-in renderer ids restore the built-in component instead.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/box/custom-render/index.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/plugin/widget-registry.test.ts"` 通过。
 
 ## 2026-06-15
 
