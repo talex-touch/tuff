@@ -19,6 +19,24 @@ function readNonEmptyEnv(name, fallback) {
   return value || fallback
 }
 
+function isTruthyEnv(name) {
+  const value = process.env[name]?.trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function hasNonEmptyEnv(name) {
+  return Boolean(process.env[name]?.trim())
+}
+
+function shouldUseCustomDevElectronDist() {
+  return (
+    isTruthyEnv('TUFF_DEV_ELECTRON_CUSTOM_BUNDLE') ||
+    isTruthyEnv('TUFF_DEV_ELECTRON_PREPARE_ONLY') ||
+    hasNonEmptyEnv('TUFF_DEV_ELECTRON_BUNDLE_ID') ||
+    hasNonEmptyEnv('TUFF_DEV_ELECTRON_BUNDLE_NAME')
+  )
+}
+
 function sanitizePathSegment(value) {
   return value.replace(/[^a-zA-Z0-9._-]/g, '-')
 }
@@ -50,7 +68,7 @@ function getElectronVersion(electronDist) {
 }
 
 function ensureDevElectronDist() {
-  if (process.platform !== 'darwin') return null
+  if (process.platform !== 'darwin' || !shouldUseCustomDevElectronDist()) return null
 
   const bundleIdentifier = readNonEmptyEnv(
     'TUFF_DEV_ELECTRON_BUNDLE_ID',
