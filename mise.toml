@@ -1,3 +1,12 @@
 [tools]
 node = "24"
 pnpm = "10"
+
+[tasks."ai-docs:dev"]
+description = "Fast AI docs validation"
+run = "node scripts/ai-docs/verify-ai-docs.mjs"
+
+[tasks."ai-docs:verify"]
+description = "Release AI docs validation"
+depends = ["ai-docs:dev"]
+run = "git diff --check -- mise.toml scripts/ai-docs docs/plan-prd/04-implementation docs/plan-prd/03-features docs/plan-prd/TODO.md docs/INDEX.md"
