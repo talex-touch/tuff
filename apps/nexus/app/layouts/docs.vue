@@ -25,15 +25,26 @@ const isTuffexDocs = computed(() => {
   const path = normalizedDocsPath.value
   return path.startsWith('/docs/dev/components') || path.startsWith('/docs/dev/tools/tuffex')
 })
+
+const isTutorialDocs = computed(() => {
+  const path = normalizedDocsPath.value
+  return path === '/docs/guide' || path.startsWith('/docs/guide/')
+})
 </script>
 
 <template>
-  <div class="docs-layout-root relative min-h-screen flex flex-col bg-white text-black dark:bg-dark dark:text-light">
+  <div
+    class="docs-layout-root relative min-h-screen flex flex-col bg-white text-black dark:bg-dark dark:text-light"
+    :class="{ 'docs-layout-root--tutorial dark': isTutorialDocs }"
+  >
     <div class="docs-layout-stage relative flex-1">
       <div class="docs-layout-background pointer-events-none absolute inset-0 overflow-hidden">
         <Transition name="tuffex-docs-hero-bg-fade">
           <div v-if="isTuffexDocs" class="docs-tuffex-hero-bg-frame">
             <TuffexDocsHeroBackground />
+          </div>
+          <div v-else-if="isTutorialDocs" class="docs-tutorial-background" aria-hidden="true">
+            <div class="docs-tutorial-background__beam" />
           </div>
           <div v-else class="docs-background absolute left-1/2 h-[420px] w-[820px] rounded-[200px] from-primary/6 via-primary/3 to-transparent bg-gradient-to-br blur-3xl -top-32 -translate-x-1/2 dark:from-light/10 dark:via-light/5 dark:to-transparent" />
         </Transition>
@@ -111,6 +122,14 @@ const isTuffexDocs = computed(() => {
   isolation: isolate;
 }
 
+.docs-layout-root--tutorial {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(96, 165, 250, 0.22), transparent 34%),
+    radial-gradient(circle at 78% 78%, rgba(168, 85, 247, 0.18), transparent 32%),
+    linear-gradient(135deg, #050607 0%, #111217 58%, #050607 100%);
+  color: var(--tx-text-color-primary, #f5f7fa);
+}
+
 .docs-layout-stage {
   isolation: isolate;
 }
@@ -139,6 +158,25 @@ const isTuffexDocs = computed(() => {
   min-height: 520px;
   overflow: hidden;
   opacity: 0.42;
+}
+
+.docs-tutorial-background {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(96, 165, 250, 0.2), transparent 28%),
+    radial-gradient(circle at 76% 72%, rgba(168, 85, 247, 0.16), transparent 30%);
+  filter: blur(18px);
+  opacity: 0.62;
+}
+
+.docs-tutorial-background__beam {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(115deg, transparent 22%, rgba(255, 255, 255, 0.08) 42%, transparent 58%),
+    radial-gradient(circle at 20% 72%, rgba(64, 158, 255, 0.18), transparent 28%);
+  transform: rotate(-8deg);
 }
 
 .tuffex-docs-hero-bg-fade-enter-active,
