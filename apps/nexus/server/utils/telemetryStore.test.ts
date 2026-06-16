@@ -241,6 +241,7 @@ class MockD1Database {
 
 const state = vi.hoisted(() => ({
   db: null as MockD1Database | null,
+  maintenanceSchedules: [] as Array<{ event: unknown, db: unknown }>,
 }))
 
 vi.mock('./cloudflare', () => ({
@@ -250,6 +251,12 @@ vi.mock('./cloudflare', () => ({
 
 vi.mock('./ipSecurityStore', () => ({
   resolveRequestIp: () => '127.0.0.1',
+}))
+
+vi.mock('./telemetryRetentionMaintenance', () => ({
+  scheduleTelemetryRetentionMaintenance: (event: unknown, db: unknown) => {
+    state.maintenanceSchedules.push({ event, db })
+  },
 }))
 
 vi.mock('./requestGeo', () => ({
@@ -279,6 +286,7 @@ function makeEvent() {
 describe('telemetryStore search provider metrics', () => {
   beforeEach(() => {
     state.db = new MockD1Database()
+    state.maintenanceSchedules = []
   })
 
   it('records anonymous provider metrics without search query text', async () => {
@@ -457,6 +465,8 @@ describe('telemetryStore search provider metrics', () => {
     expect(analytics.searches.byQueryLengthBucket).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: '11-30', events: 1 }),
     ]))
+    expect(state.maintenanceSchedules.length).toBeGreaterThan(0)
+    expect(state.maintenanceSchedules.at(-1)?.db).toBe(state.db)
   })
 
   it('records visit governance hotspot metadata from sanitized telemetry', async () => {

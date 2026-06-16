@@ -8,6 +8,7 @@ import { resolveRequestIp } from './ipSecurityStore'
 import { assertNotificationChannelConfig, resolveNotificationChannelProfile, resolveNotificationChannelReadiness } from './notificationChannelCatalog'
 import { assertStorageChannelPolicyConfig } from './storageChannelCatalog'
 import { isPlainObject, normalizeNumber, normalizeString } from './telemetrySanitizer'
+import { scheduleTelemetryRetentionMaintenance } from './telemetryRetentionMaintenance'
 
 const EVENTS_TABLE = 'platform_governance_events'
 const CONFIGS_TABLE = 'platform_governance_configs'
@@ -7410,6 +7411,8 @@ export async function recordPlatformGovernanceEvent(
     record.occurredAt,
     record.createdAt,
   ).run()
+
+  scheduleTelemetryRetentionMaintenance(event, db)
 
   return record
 }
