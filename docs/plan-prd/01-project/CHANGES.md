@@ -9,7 +9,11 @@
 
 - `apps/nexus/server/utils/telemetryRetentionStore.ts`
 - `apps/nexus/server/api/admin/maintenance/retention.post.ts`
-- `.github/workflows/nexus-maintenance.yml`
+- `apps/nexus/server/utils/telemetryRetentionCore.ts`
+- `workers/nexus-maintenance/src/index.ts`
+- `workers/nexus-maintenance/wrangler.toml`
+- `workers/nexus-maintenance/README.md`
+- `package.json`
 - `apps/nexus/server/utils/apiKeyScopes.ts`
 - `apps/nexus/app/pages/dashboard/api-keys.vue`
 - `apps/nexus/i18n/locales/{en,zh}.ts`
@@ -17,9 +21,9 @@
 - `apps/nexus/server/utils/__tests__/auth-api-key-scopes.test.ts`
   - Added a protected maintenance API for telemetry/governance retention with dry-run by default, bounded batch deletion, and daily telemetry aggregate backfill before deleting old detail rows.
   - Added `maintenance:write` as an admin-only API key scope and exposed it in the dashboard API key permission picker.
-  - Added a scheduled GitHub workflow that can call the retention API every 6 hours with a 7-day telemetry detail window, 14-day governance detail window, and 10k-row batch limit; manual dispatch defaults to dry-run.
+  - Added an independent Cloudflare Worker Cron that runs retention every 6 hours with a 7-day telemetry detail window, 14-day governance detail window, and 10k-row batch limit; the protected Nexus API remains available for manual dry-runs and operator-triggered cleanup.
   - Production read-only sizing found `telemetry_events` has about 359k rows older than 7 days and `platform_governance_events` has about 23k rows older than 14 days under the default policy.
-  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/telemetryRetentionStore.test.ts" "server/utils/__tests__/auth-api-key-scopes.test.ts"` 通过。
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/telemetryRetentionStore.test.ts" "server/utils/__tests__/auth-api-key-scopes.test.ts"`、scoped Nexus/Worker ESLint、`pnpm exec wrangler deploy --dry-run --config "workers/nexus-maintenance/wrangler.toml" --env production --outdir "/tmp/tuff-nexus-maintenance-dry-run"` 通过。
 
 ### fix(nexus): backfill release sync D1 schema columns
 
