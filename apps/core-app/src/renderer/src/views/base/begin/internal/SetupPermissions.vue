@@ -177,11 +177,13 @@ async function checkAllPermissions(): Promise<void> {
       }
     }
 
-    // Check notification permission (optional)
-    try {
-      await checkPermission('notifications')
-    } catch (error) {
-      setupPermissionsLog.warn('Failed to check notification permission', error)
+    // Check notification permission (macOS only, optional)
+    if (isMacOS.value) {
+      try {
+        await checkPermission('notifications')
+      } catch (error) {
+        setupPermissionsLog.warn('Failed to check notification permission', error)
+      }
     }
 
     // Check admin privileges (Windows, optional)
@@ -480,6 +482,7 @@ function getStatusIconClass(status: string): string {
         </TuffBlockSlot>
 
         <TuffBlockSlot
+          v-if="isMacOS"
           class="PermissionSlot"
           :title="t('setupPermissions.notifications')"
           :description="t('setupPermissions.notificationsDesc')"
