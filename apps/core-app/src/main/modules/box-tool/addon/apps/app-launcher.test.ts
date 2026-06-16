@@ -282,6 +282,34 @@ describe('app launcher', () => {
     expect(spawnSafeMock).not.toHaveBeenCalled()
   })
 
+  it('launches Windows UWP apps through explorer without observing early exit', async () => {
+    const child = createDetachedChildProcessMock()
+    spawnSafeMock.mockReturnValue(child)
+
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Codex',
+          path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+          launchKind: 'uwp',
+          launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App'
+        })
+      )
+    ).resolves.toEqual({ status: 'handedOff' })
+
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'explorer.exe',
+      ['shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App'],
+      expect.objectContaining({
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    )
+    expect(child.once).not.toHaveBeenCalled()
+    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
+  })
+
   it('launches allowed Steam protocol URLs through shell.openExternal', async () => {
     shellOpenExternalMock.mockResolvedValue(undefined)
 

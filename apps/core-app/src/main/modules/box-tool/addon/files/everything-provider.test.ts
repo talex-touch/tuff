@@ -404,6 +404,33 @@ describe('everything-provider fallback chain', () => {
     expect(provider.pathFilteringStatus.lastChecked).toEqual(expect.any(Number))
   })
 
+  it('matches Everything results with Windows slash and case differences', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    indexingRootPolicy.setSourceRoots('file-provider', [
+      {
+        sourceId: 'file-provider',
+        path: 'C:/Users/demo/Documents/',
+        permissionState: 'granted'
+      }
+    ])
+
+    const allowed = buildResult('c:\\users\\demo\\documents\\nested\\ALLOWED.txt')
+    vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue([allowed])
+
+    await expect(provider.searchEverything('allowed', 10)).resolves.toEqual([allowed])
+    expect(provider.pathFilteringStatus).toEqual(
+      expect.objectContaining({
+        allowedRootCount: 1,
+        lastRawResultCount: 1,
+        lastFilteredResultCount: 1,
+        lastDroppedResultCount: 0,
+        reason: null
+      })
+    )
+  })
+
   it('fails closed when File Index watch roots are empty', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'

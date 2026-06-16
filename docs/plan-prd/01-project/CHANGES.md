@@ -5,6 +5,17 @@
 
 ## 2026-06-16
 
+### fix(core-app): harden Windows UWP launch and local icon paths
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+- `apps/core-app/src/renderer/src/modules/tuffex/icon-config.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+  - Windows UWP apps such as Codex continue to launch through `explorer.exe shell:AppsFolder\\...`, but the handoff no longer treats early `explorer.exe` exit codes as app launch failures.
+  - Added Windows drive/UNC `tfile` icon URL coverage so renderer-generated local icon paths round-trip through the main-process file protocol.
+  - Added Everything path-filtering regression coverage for Windows slash/case differences, keeping authorized File Index roots usable while preserving fail-closed filtering.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-launcher.test.ts" "src/main/modules/box-tool/addon/apps/app-provider.test.ts" "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/main/modules/file-protocol/index.test.ts" "src/renderer/src/modules/tuffex/icon-config.test.ts"` 通过。
+
 ### fix(corebox): keep built-in preview widget renderer registered
 
 - `apps/core-app/src/renderer/src/modules/box/custom-render/index.ts`
