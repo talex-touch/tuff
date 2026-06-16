@@ -3990,6 +3990,7 @@
     "pinned": "已固定",
     "unpinned": "已取消固定",
     "pinFailed": "固定失败",
+    "send": "发送",
     "copied": "已复制",
     "flowSent": "已发送到目标插件",
     "flowFailed": "流转失败",

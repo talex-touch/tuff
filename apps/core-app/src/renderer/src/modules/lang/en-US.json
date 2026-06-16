@@ -3998,6 +3998,7 @@
     "pinned": "Pinned",
     "unpinned": "Unpinned",
     "pinFailed": "Pin failed",
+    "send": "Send",
     "copied": "Copied",
     "flowSent": "Sent to target plugin",
     "flowFailed": "Flow transfer failed",

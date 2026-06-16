@@ -930,6 +930,10 @@ export interface TuffMeta {
   interaction?: {
     type: 'webcontent' | 'widget' | 'index'
     path?: string
+    showInput?: boolean
+    allowInput?: boolean
+    sendMode?: boolean
+    forceMax?: boolean
   }
 
   /**
