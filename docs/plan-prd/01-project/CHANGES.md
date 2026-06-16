@@ -1,7 +1,27 @@
 # 变更日志
 
-> 更新时间：2026-06-16
+> 更新时间：2026-06-17
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
+
+## 2026-06-17
+
+### feat(core-app): add Intelligence local knowledge and ContextHygiene foundation
+
+- `packages/utils/types/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/db/schema.ts`
+- `apps/core-app/resources/db/migrations/0023_intelligence_context_knowledge.sql`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-error-normalizer.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-local-knowledge-engine.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-context-hygiene.ts`
+  - Added typed Intelligence domain SDK events for local knowledge indexing/search/context building and ContextHygiene prepare/save/delete flows, without adding raw `intelligence:*` IPC.
+  - Added CoreApp SQLite SoT tables for knowledge documents/chunks plus ContextHygiene sessions, turns, checkpoints, compression snapshots, memory items, tombstones and context package logs; knowledge chunks are indexed through FTS5 with triggers.
+  - Added `LocalKnowledgeEngine` with document/chunk indexing, FTS search, source/time/permission/metadata filters, citation output, token-budgeted Context Builder, and degraded `fts-search-failed` behavior instead of fake empty success.
+  - Added CoreBox-only `ContextHygieneService` P0 foundation with deterministic light/session/retrieval scope, checkpoint creation, context package explain metadata, secret memory rejection, memory tombstone deletion and secret/sensitive turn redaction before SQLite persistence.
+  - Added stable Intelligence error normalization for auth, provider unavailable, quota, model/capability unsupported, network, invalid request and unknown failures; current handler preserves compatibility by surfacing normalized code in the existing response error string.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-error-normalizer.test.ts" "src/main/modules/ai/intelligence-local-knowledge-engine.test.ts" "src/main/modules/ai/intelligence-context-hygiene.test.ts"` 通过，3 files / 11 tests。`pnpm -C "apps/core-app" run typecheck:node` 当前被工作区既有 `packages/utils/__tests__/plugin-features-sdk.test.ts` 的 `interaction` 字段错误阻断，未发现本轮 AI 文件新增 typecheck 错误。
+  - Packaged Electron 文本/OCR成功与固定失败路径截图/录屏 evidence 仍未采集，不能把 `2.5.0` AI 体验闭环标记为完成。
 
 ## 2026-06-16
 
@@ -22,6 +42,17 @@
 - `apps/core-app/scripts/dev-electron-wrapper.mjs`
   - macOS `pnpm core:dev` now defaults back to Electron's npm-provided runtime instead of copying, patching, and ad-hoc signing a custom dev bundle, avoiding renderer helper `SIGKILL` / `ERR_FAILED (-2) loading 'http://127.0.0.1:5173'` on current Electron 41 dev startup.
   - The custom dev bundle path remains available for isolated capture/debug runs via `TUFF_DEV_ELECTRON_CUSTOM_BUNDLE=1`, `TUFF_DEV_ELECTRON_BUNDLE_ID`, `TUFF_DEV_ELECTRON_BUNDLE_NAME`, or `TUFF_DEV_ELECTRON_PREPARE_ONLY=1`.
+
+### fix(corebox): theme monochrome result icons
+
+- `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- `packages/tuffex/packages/components/src/icon/src/svg-color-mode.ts`
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+- `apps/core-app/src/renderer/src/components/render/BoxGridItem.vue`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+  - CoreBox result icons now default to theme-color rendering instead of preserving black SVG source colors, while multi-color SVGs still render as images to keep brand/logo colors intact.
+  - `TxIcon` now consumes `--icon-color` and only masks SVGs detected as monochrome/neutral; explicit `colorful: true` continues to preserve original colors through plugin loading, feature items, and pushed root-result items.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/icon/__tests__/icon.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/components/render/icon-color-mode.test.ts" "src/renderer/src/components/base/tuff-icon-rendering.test.ts" "src/main/core/tuff-icon.test.ts" "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin.test.ts"` 通过。
 
 ### fix(core-app): harden Windows UWP launch and local icon paths
 

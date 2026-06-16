@@ -1,6 +1,6 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-06-14
+> 更新时间：2026-06-17
 > 定位：PRD / 规划主入口。历史长文已下沉到 `CHANGES` 与专题文档；当前执行项以 `TODO.md` 为准。
 
 ## 快速入口
@@ -23,6 +23,7 @@
 - 范围约束：`2.5.0` AI、Provider Registry 高级策略、SRP 大拆分可继续规划/小切片，但不得抢占 `2.4.11` 稳定化与债务退场主线。
 - 当前工作区口径：2026-06-13 `touch-music` / `touch-image` 已完成 starter asset、模板 README 与过时入口残留清理；`touch-music` 已从全量 `@talex-touch/tuffex/style.css` 收敛到 `base.css` + 组件子路径样式；新增 `docs/plan-prd/04-implementation/Release-2.4.11-Closure-2026-06-13.md` 作为本轮 0 + 1 收口清单。下一步先跑最近路径验证、`quality:pr`、publish manifest preflight 与 `git diff --check`，再处理 release integrity / npm publish 真实证据。
 - 2026-06-13 Plugin widget surface follow-up：widget manager 缓存注册命中已避免重复预编译读取/运行时编译，renderer registry 以 `widgetId + hash` 幂等跳过重复注册；`interaction.forceMax` 明确为显式最大高度合同，普通 widget 不再按类型默认强制最大高度，官方全高 widget 已在 manifest 显式声明并补 focused tests。
+- 2026-06-16 CoreBox send-mode follow-up：Plugin SDK / Tuff DSL 新增 `interaction.sendMode`，widget 默认进入发送模式，激活期间右侧 pin 被发送按钮替换；Nexus 长期授权二次认证跳转不再触发 browser closed presence。
 - 2026-06-13 Nexus docs SEO/prerender 当前口径：docs catch-all 已补完整 metadata/OG/Twitter/canonical/alternate/robots/TechArticle JSON-LD，并把 SEO head 抽到可测 helper；`no_prefix` 暂不切全站策略，docs 通过显式 `/en/docs/**`、`/zh/docs/**` 路由与页内 locale 同步完成过渡。prerender evidence helper 复用实际 route 枚举并验证真实 `content/docs` 根索引、developer quickstart、components index、guide start 与稳定 docs API；Worker bundle 静态路由期望已对齐 localized docs 输出；focused prerender/SEO Vitest 与 scoped ESLint 已通过。该切片不改变 `quality:pr` / `quality:release` 门禁，只作为 docs render/SEO 最近路径证据。
 - 2026-06-02 UI/兼容/占位复核：新增自动化增量审计报告，继续未发现生产路径 P0 fixed fake-success；当前新增高信号点是 TuffEx `base.css` + 子路径 `style.css` + on-demand style plugin 必须同时覆盖 dev/prod 构建证据，README/Nexus docs 旧 `style.css` 推荐示例需降级为 legacy full-style 用法。TuffEx dist 当前存在 `base.css` 9554 bytes 与 `components.css` 313566 bytes，但本轮 shell 缺 `pnpm`/`corepack` 且 Node 为 Codex `v24.14.0`，无法把 `audit:exports` / `audit:size` 写成已通过；`git diff --check` 通过。
 - 2026-06-02 UI/安全实现切片：已收口 shared Markdown 默认 sanitize、Update release notes safe renderer、preload loading overlay DOM 构建、CoreApp 非敏感 UI preference facade、首批语义控件、Nexus local marker/privacy preference 口径与 cloud preset `not-shipped` unavailable contract。新增 focused tests，但当前 Codex Node `v24.14.0` 与 Rollup optional native module 签名问题阻塞 Vitest，需在 Volta Node `22.16.0` + `pnpm@10.32.1` 补跑。
@@ -30,7 +31,7 @@
 - 2026-06-04/05 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；Nexus TuffEx public docs 推荐用法已同步为 `base.css` + 组件子路径 + 局部 `style.css`，full `style.css` 只保留为迁移期兼容示例；Nexus release notes `notesHtml` 已接共享 `sanitizeMarkdownHtml()`。2026-06-05 使用临时 ad-hoc Node `22.16.0` + pnpm `10.32.1` 补齐 TuffEx `build` / `audit:exports` / `audit:size` / `audit:types`、Nexus `typecheck` / `build` 与 PreviewSDK focused test；Nexus visual smoke 因无 CDP 浏览器服务与 3200 dev/preview server 未执行。剩余高信号点是 CoreApp/TuffEx dialog HTML boundary、Widget runtime sandbox evidence 与 Windows/macOS 真机 evidence。
 - 2026-06-06 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；确认上一条已推送代码基线与远端同步，默认 automation shell 仍是 Codex Node `v24.14.0` 且无裸 `pnpm/corepack`，但 `/tmp/talex-touch-node22-adhoc` 仍有 Node `22.16.0` + pnpm `10.32.1` 临时验证入口。本轮静态分层确认 escaped highlight / safe Markdown / AI answer escape 不应误判为假实现；CoreApp/TuffEx dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片，后续优先收主路径语义控件与 Windows/macOS 真机 evidence。
 - 2026-06-07 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；当时确认 `HEAD=686ec013e`、root/CoreApp `2.4.11-beta.7`、`@talex-touch/tuff-cli@0.0.7`。`tuffcli publish` 现已补齐 focused evidence：过期 app JWT 会在交互式 publish 里自动走 browser OAuth device flow 刷新，API key 会在上传前预检 `plugin:read` + `plugin:publish` scopes，`TUFF_NON_INTERACTIVE=1` 继续 fail-closed；上传 POST 也已与 publisher probe 对齐携带 device headers，方便统一设备归因与审计。`touch-music` / `touch-image` starter asset 清理已在 2026-06-13 落地，UI 下一步回到语义控件与平台真机 evidence。
-- AI 现实口径：AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但仍缺 packaged Electron 文本/OCR成功与失败路径证据，不能标记为体验闭环。`2.5.3` 本地知识检索、`2.5.5` 本地模型 runtime、`2.5.8` ASR 只保持 PRD 锁方向，当前稳定窗口不提前实现。
+- AI 现实口径：AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport；2026-06-17 已补 CoreApp Intelligence typed SDK、SQLite knowledge/context SoT、FTS5 LocalKnowledgeEngine、Context Builder 与 CoreBox-only ContextHygiene P0 foundation，但仍缺 packaged Electron 文本/OCR成功与失败路径证据，不能标记为体验闭环。`2.5.5` 本地模型 runtime、`2.5.8` ASR 只保持 PRD 锁方向，当前稳定窗口不提前实现。
 
 ## 当前 Goal / Progress Snapshot
 
@@ -70,6 +71,7 @@
 - Tuff 2.5.0 AI 桌面入口：CoreBox AI Ask、handoff session、Nexus invoke credits 扣减、CoreApp credits summary、Tuff-native Tool Kit foundation、Nexus docs prerender routes、OmniPanel Writing Tools MVP、Workflow service 与 agent/tool channels 已进入 dev 切片；下一步优先补文本/OCR success、auth/provider/quota/model unsupported failure、provider metadata chips 与 packaged Electron UI evidence。Workflow/Skills/Automation 保持 Beta，Assistant/语音/多模态生成保持 Experimental。
 - Tuff 2.5.3 本地知识检索：方向已锁定为 SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项，不把向量数据库作为 MVP 第一优先级。
 - Tuff 2.5.4 ContextHygiene 与自动记忆治理：方向已锁定为 Session Boundary / Checkpoint / Rolling Summary / MemoryPolicy / ContextPackage，默认轻上下文，新会话不继承旧 session 原文，旧会话只在相关时检索召回。
+- 2026-06-17 AI 2.5.3/2.5.4 foundation：CoreApp 已新增 `documents/chunks` + FTS5、knowledge search/buildContext typed SDK、context sessions/turns/checkpoints/snapshots/memory/tombstones/package logs schema，以及 CoreBox-only prepareTurn / saveMemory / deleteMemory 服务；当前作为 SDK/schema/runtime foundation，不替代 packaged AI UI evidence。
 - Tuff 2.5.5 本地开源模型运行时：方向已锁定为“不强依赖 Ollama，优先内置 GGUF / llama.cpp runtime”；Ollama 仅作为可选兼容后端，模型权重按需下载到用户数据目录，不进入应用安装包。
 - Tuff 2.5.8 ASR Provider Runtime：方向已锁定为本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto` 策略；TTS 不进入该版本 Stable。
 - App Data Plugins 与 Everything 收口：新增 Roadmap、Raycast/uTools 常用能力差距矩阵与 Indexing Runtime V1 统一搜索源计划，Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地；Browser Data 已有 source-level diagnostics 与书签 URL 打开 `network.internet` gate，后续聚焦统一 source health、历史扫描、写索引、disable/clear/rebuild UI、Everything/App Launcher evidence、Quicklinks、Context Actions，以及 Windows Everything SDK/CLI 策略、路径授权过滤与真机 evidence；Nexus SDK 插件开发任务流文档已落地，TuffEx 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
