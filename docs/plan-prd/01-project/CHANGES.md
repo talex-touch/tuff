@@ -5,6 +5,18 @@
 
 ## 2026-06-16
 
+### fix(corebox+nexus): add feature send mode and preserve long auth reauth
+
+- `packages/utils/plugin/index.ts`
+- `packages/utils/plugin/sdk/features.ts`
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/nexus/app/pages/device-auth.vue`
+  - Added `interaction.sendMode` plus Feature SDK helpers so plugin features can explicitly request CoreBox send-mode behavior.
+  - CoreBox now replaces the window pin action with a send action while a send-mode widget/feature is active, preventing pinning from the feature composer.
+  - Nexus device authorization no longer reports the browser as closed while redirecting to long-term authorization reauth, so app polling can continue after the second-factor round trip.
+
 ### fix(core-app): restore macOS core dev startup
 
 - `apps/core-app/scripts/dev-electron-wrapper.mjs`

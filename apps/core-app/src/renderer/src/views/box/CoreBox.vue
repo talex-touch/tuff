@@ -95,35 +95,57 @@ const resultTransitionName = computed(() => {
   return enabled && !lowBatteryMode.value ? 'result-switch' : ''
 })
 
-const activeWidgetFeatureItem = computed(() => {
+type CoreBoxSendFeatureItem = TuffItem & {
+  meta?: { interaction?: { type?: string; sendMode?: boolean } }
+  interaction?: { type?: string; sendMode?: boolean }
+}
+
+function getFeatureInteraction(feature: CoreBoxSendFeatureItem | null | undefined) {
+  return feature?.meta?.interaction || feature?.interaction
+}
+
+function isWidgetFeature(feature: CoreBoxSendFeatureItem | null | undefined): boolean {
+  return getFeatureInteraction(feature)?.type === 'widget'
+}
+
+function isSendModeFeature(feature: CoreBoxSendFeatureItem | null | undefined): boolean {
+  const interaction = getFeatureInteraction(feature)
+  if (!interaction) return false
+  if (interaction.sendMode === false) return false
+  return interaction.sendMode === true || interaction.type === 'widget'
+}
+
+const activeSendTargetItem = computed<CoreBoxSendFeatureItem | null>(() => {
   if (!activeActivations.value || activeActivations.value.length === 0) return null
   for (const activation of activeActivations.value) {
     if (activation.id !== 'plugin-features') continue
-    const meta = activation?.meta as {
-      feature?: TuffItem & {
-        meta?: { interaction?: { type?: string } }
-        interaction?: { type?: string }
-      }
-    }
+    const meta = activation?.meta as { feature?: CoreBoxSendFeatureItem }
     const feature = meta?.feature
-    if (
-      feature &&
-      (feature.meta?.interaction?.type === 'widget' || feature.interaction?.type === 'widget')
-    ) {
-      return feature
-    }
+    if (feature && isSendModeFeature(feature)) return feature
+  }
+  return null
+})
+
+const activeWidgetFeatureItem = computed<CoreBoxSendFeatureItem | null>(() => {
+  if (!activeActivations.value || activeActivations.value.length === 0) return null
+  for (const activation of activeActivations.value) {
+    if (activation.id !== 'plugin-features') continue
+    const meta = activation?.meta as { feature?: CoreBoxSendFeatureItem }
+    const feature = meta?.feature
+    if (feature && isWidgetFeature(feature)) return feature
   }
   return null
 })
 
 const isWidgetActivationActive = computed(() => Boolean(activeWidgetFeatureItem.value))
-const canSubmitWidgetPrompt = computed(
-  () => Boolean(activeWidgetFeatureItem.value && searchVal.value.trim()) && !loading.value
+const isSendModeActive = computed(() => Boolean(activeSendTargetItem.value))
+const canSubmitFeaturePrompt = computed(
+  () => Boolean(activeSendTargetItem.value && searchVal.value.trim()) && !loading.value
 )
 
-function handleSubmitWidgetPrompt(): void {
-  if (!canSubmitWidgetPrompt.value || !activeWidgetFeatureItem.value) return
-  void handleExecute(activeWidgetFeatureItem.value)
+function handleSubmitFeaturePrompt(): void {
+  if (!canSubmitFeaturePrompt.value || !activeSendTargetItem.value) return
+  void handleExecute(activeSendTargetItem.value)
 }
 
 const widgetRenderItem = computed(() => {
@@ -708,16 +730,16 @@ const customCss = computed(() => {
         <div class="CoreBox-Configure" :style="getCanvasAreaStyle('actions')">
           <IndexingHintTag :query="searchVal" />
           <button
-            v-if="isWidgetActivationActive"
+            v-if="isSendModeActive"
             class="CoreBox-SendButton"
             type="button"
-            :disabled="!canSubmitWidgetPrompt"
-            aria-label="发送"
-            @click.stop="handleSubmitWidgetPrompt"
+            :disabled="!canSubmitFeaturePrompt"
+            :aria-label="t('corebox.send', '发送')"
+            @click.stop="handleSubmitFeaturePrompt"
           >
             <TuffIcon :icon="{ type: 'class', value: 'i-ri-send-plane-2-fill' }" />
           </button>
-          <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+          <TuffIcon v-else :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
         </div>
       </template>
     </div>

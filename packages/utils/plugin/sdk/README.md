@@ -71,6 +71,28 @@ unsubscribe()
 // feature.onKeyEvent() 已移除；旧 core-box:key-event 没有生产发送端。
 ```
 
+发送型 feature 可在声明中开启 `interaction.sendMode`，使 CoreBox 激活期间把右侧 pin 按钮替换为发送按钮。widget feature 默认启用发送模式；非 widget feature 可显式声明。
+
+```typescript
+import { withSendMode } from '@talex-touch/utils/plugin/sdk'
+
+features.addFeature(withSendMode({
+  id: 'ask-assistant',
+  name: 'Ask Assistant',
+  desc: 'Send the current CoreBox input to the assistant',
+  icon: { type: 'emoji', value: '✨' },
+  push: true,
+  platform: {},
+  commands: [{ type: 'over', value: '' }],
+  interaction: {
+    type: 'webcontent',
+    path: '/assistant',
+    showInput: true,
+    allowInput: true,
+  },
+}))
+```
+
 ### 3. 键盘事件自动处理
 
 当插件的 UI View 附加到 CoreBox 时，系统会自动处理以下行为：
