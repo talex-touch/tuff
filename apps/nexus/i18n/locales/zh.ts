@@ -1037,6 +1037,10 @@ export default {
               label: '版本发布',
               description: '管理版本同步、元数据、发布与资源',
             },
+            maintenance: {
+              label: '维护任务',
+              description: '运行受保护的清理与保留任务',
+            },
           },
           items: {
             pluginRead: {
@@ -1074,6 +1078,10 @@ export default {
             releaseEvidence: {
               label: '写入发布证据',
               description: '记录 2.5.0 回归、文档门禁与平台阻塞矩阵证据',
+            },
+            maintenanceWrite: {
+              label: '运行维护任务',
+              description: '运行运营数据的保留与清理任务',
             },
           },
         },

@@ -6,7 +6,7 @@ import { getServerSession } from '#auth'
 import { createError, getHeader } from 'h3'
 import { consumeLoginToken, createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
 import { validateApiKey } from './apiKeyStore'
-import { hasRequiredScope } from './apiKeyScopes'
+import { hasRequiredScope, isAdminOnlyApiKeyScope } from './apiKeyScopes'
 import { readCloudflareBindings } from './cloudflare'
 import { ensurePersonalTeam } from './creditsStore'
 
@@ -161,7 +161,7 @@ export async function requireApiKey(event: H3Event, requiredScopes: string[] = [
     }
   }
 
-  const requiresAdmin = requiredScopes.some(scope => scope.startsWith('release:'))
+  const requiresAdmin = requiredScopes.some(scope => isAdminOnlyApiKeyScope(scope))
   if (requiresAdmin && user.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Admin permission required.' })
   }
