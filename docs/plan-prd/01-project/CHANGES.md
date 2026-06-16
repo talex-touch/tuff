@@ -5,6 +5,32 @@
 
 ## 2026-06-16
 
+### feat(core-app): add Everything one-click install command
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a copyable PowerShell command in the Everything settings install guide that downloads official portable Everything plus `es.exe`, stores them under the user profile, adds the CLI directory to the user `PATH`, and starts Everything for the follow-up status check.
+  - Kept the existing manual download and custom `es.exe` path flow as fallback paths for locked-down Windows environments.
+  - 验证：待执行 focused renderer checks after implementation.
+
+### fix(core-app): launch Windows dev wrapper through cmd shell
+
+- `apps/core-app/scripts/dev-electron-wrapper.mjs`
+  - Windows `pnpm core:dev` no longer spawns `pnpm.cmd` directly from the dev wrapper.
+  - The wrapper now follows the repo's existing Windows-safe `cmd.exe /d /s /c ...` launch path for `pnpm exec electron-vite dev`, avoiding the local `spawn EINVAL` failure while preserving the existing macOS dev bundle flow.
+  - 楠岃瘉锛歚cmd /c pnpm core:dev` 鍙噸鏂拌繘鍏?Electron dev build/launch 娴佺▼锛堥暱椹籨ev 杩涚▼鎸夎秴鏃舵埅鏂級銆?
+
+### fix(core-app): hide macOS-only notification permission entry on Windows
+
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.test.ts`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+  - Notification permission setup UI now renders only on macOS, so Windows no longer shows a misleading "Notification Permission" card or macOS-specific guidance/action.
+  - Main-process permission metadata now reports Windows/Linux notification status as non-requestable, keeping renderer affordances aligned with actual platform capability boundaries.
+
 ### fix(core-app): harden Windows UWP launch and local icon paths
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`

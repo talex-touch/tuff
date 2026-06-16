@@ -239,8 +239,10 @@ async function checkAllPermissions(): Promise<void> {
       await checkPermission('accessibility')
     }
 
-    // Check notification permission
-    await checkPermission('notifications')
+    // Check notification permission (macOS only)
+    if (isMacOS.value) {
+      await checkPermission('notifications')
+    }
 
     // Check admin privileges (Windows)
     if (isWindows.value) {
@@ -563,6 +565,7 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      v-if="isMacOS"
       :title="t('settings.setup.notifications')"
       :description="t('settings.setup.notificationsDesc')"
       :active="permissions.notifications.status === 'granted'"
