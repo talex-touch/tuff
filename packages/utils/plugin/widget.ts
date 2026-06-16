@@ -36,6 +36,8 @@ export const WIDGET_ALLOWED_PACKAGES = [
   '@talex-touch/utils/transport',
   '@talex-touch/utils/common',
   '@talex-touch/utils/types',
+  '@talex-touch/tuffex',
+  '@talex-touch/tuffex/ai-elements',
 ] as const
 
 export type WidgetAllowedPackage = (typeof WIDGET_ALLOWED_PACKAGES)[number]

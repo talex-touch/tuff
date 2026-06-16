@@ -5,6 +5,24 @@
 
 ## 2026-06-17
 
+### feat(intelligence): wire true chat streaming into CoreBox AI Ask
+
+- `packages/utils/types/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `plugins/touch-intelligence/index.js`
+- `packages/tuffex/packages/components/src/ai-elements/src/TxAiConversation.vue`
+- `packages/tuffex/packages/components/src/ai-elements/src/TxAiMessage.vue`
+  - Added typed `intelligence:api:stream` and `IntelligenceSdk.stream()` with LangChain-style `start` / `delta` / `usage` / `metadata` / `end` events instead of UI-side fake streaming.
+  - Connected CoreApp `TuffIntelligenceSDK.stream()` to provider `chatStream()` for `text.chat`, preserving provider selection, prompt template rendering, capability filtering and quota checks; unsupported capabilities fail explicitly.
+  - Registered a protected main-process stream channel and injected a permission-checked `globalThis.intelligence.stream()` into plugin preludes so `touch-intelligence` can push widget updates on each real delta.
+  - Updated TuffEx AI conversation/message components so avatars are hidden by default and only shown via explicit `showAvatar`, while pending/streaming messages render through component-owned states.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-sdk.test.ts" "src/main/modules/plugin/plugin.test.ts"`、`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/intelligence-client-hard-cut.test.ts"`、`pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"`、`pnpm -C "packages/tuffex" run typecheck`、`pnpm -C "plugins/touch-intelligence" run build` 通过。
+
 ### feat(core-app): add Intelligence local knowledge and ContextHygiene foundation
 
 - `packages/utils/types/intelligence.ts`

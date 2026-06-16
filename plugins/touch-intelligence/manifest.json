@@ -68,6 +68,7 @@
         "path": "ask-panel",
         "showInput": true,
         "allowInput": true,
+        "sendMode": true,
         "forceMax": true
       },
       "platform": {

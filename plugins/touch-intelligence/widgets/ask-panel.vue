@@ -1,13 +1,31 @@
 <script lang="ts">
-import { computed, defineComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { TxAiConversation } from '@talex-touch/tuffex/ai-elements'
+import { computed, defineComponent, nextTick, ref, watch } from 'vue'
 
 type IntelligenceWidgetStatus = 'idle' | 'ocr-pending' | 'chat-pending' | 'ready' | 'error'
+
+interface IntelligenceWidgetAttachment {
+  type?: 'image' | string
+  title?: string
+  detail?: string
+  preview?: string
+}
 
 interface IntelligenceWidgetMessage {
   id?: string
   role?: 'user' | 'assistant' | 'system' | 'tool' | string
   content?: string
   status?: 'pending' | 'streaming' | 'complete' | 'error' | string
+  attachments?: IntelligenceWidgetAttachment[]
+}
+
+interface IntelligenceImageContext {
+  type?: 'image' | string
+  title?: string
+  preview?: string
+  ocrText?: string
+  status?: 'attached' | 'ready' | 'unsupported' | string
+  note?: string
 }
 
 interface IntelligenceWidgetPayload {
@@ -24,10 +42,14 @@ interface IntelligenceWidgetPayload {
   errorCode?: string
   errorMessage?: string
   messages?: IntelligenceWidgetMessage[]
+  imageContext?: IntelligenceImageContext | null
 }
 
 export default defineComponent({
   name: 'ask-panel',
+  components: {
+    TxAiConversation,
+  },
   props: {
     item: { type: Object, required: true },
     payload: { type: Object as () => IntelligenceWidgetPayload | undefined, required: false },
@@ -35,8 +57,6 @@ export default defineComponent({
   },
   setup(props) {
     const contentRef = ref<HTMLElement | null>(null)
-    const renderedMessages = ref<IntelligenceWidgetMessage[]>([])
-    let streamTimer: ReturnType<typeof setInterval> | null = null
     const widgetPayload = computed<IntelligenceWidgetPayload>(() => props.payload ?? {})
     const status = computed<IntelligenceWidgetStatus>(() => {
       const value = widgetPayload.value.status
@@ -55,86 +75,54 @@ export default defineComponent({
       return []
     })
     const isEmpty = computed(() => messages.value.length === 0)
+    const imageContext = computed(() => widgetPayload.value.imageContext || null)
     const isBusy = computed(() => status.value === 'ocr-pending' || status.value === 'chat-pending')
     const errorCode = computed(() => String(widgetPayload.value.errorCode || '').trim())
     const errorMessage = computed(() => String(widgetPayload.value.errorMessage || '').trim())
     const isPermissionDenied = computed(() => errorCode.value === 'PERMISSION_DENIED')
-    function clearStreamTimer() {
-      if (!streamTimer) return
-      clearInterval(streamTimer)
-      streamTimer = null
-    }
 
     function cloneMessage(message: IntelligenceWidgetMessage): IntelligenceWidgetMessage {
-      return { ...message }
-    }
-
-    function syncRenderedMessages() {
-      clearStreamTimer()
-      const nextMessages = messages.value.map(cloneMessage)
-      const lastIndex = nextMessages.length - 1
-      const lastMessage = nextMessages[lastIndex]
-      const shouldStream =
-        status.value === 'ready' &&
-        lastMessage?.role === 'assistant' &&
-        lastMessage.status === 'complete' &&
-        Boolean(lastMessage.content?.trim())
-
-      if (!shouldStream) {
-        renderedMessages.value = nextMessages
-        scrollToBottom()
-        return
+      return {
+        ...message,
+        attachments: message.attachments?.map(attachment => ({ ...attachment })),
       }
-
-      const fullContent = lastMessage.content || ''
-      renderedMessages.value = nextMessages.map((message, index) =>
-        index === lastIndex ? { ...message, content: '', status: 'streaming' } : message,
-      )
-
-      let cursor = 0
-      streamTimer = setInterval(() => {
-        cursor = Math.min(fullContent.length, cursor + Math.max(1, Math.ceil(fullContent.length / 36)))
-        renderedMessages.value = renderedMessages.value.map((message, index) =>
-          index === lastIndex
-            ? {
-                ...message,
-                content: fullContent.slice(0, cursor),
-                status: cursor >= fullContent.length ? 'complete' : 'streaming',
-              }
-            : message,
-        )
-        scrollToBottom()
-        if (cursor >= fullContent.length) {
-          clearStreamTimer()
-        }
-      }, 28)
     }
 
-    function scrollToBottom() {
+    const visibleMessages = computed(() => messages.value.map(cloneMessage))
+
+    function scrollToBottom(force = false) {
       void nextTick(() => {
         const el = contentRef.value
         if (!el) return
-        el.scrollTop = el.scrollHeight
+        const apply = () => {
+          el.scrollTop = el.scrollHeight
+          el.scrollTo?.({ top: el.scrollHeight, behavior: force ? 'auto' : 'smooth' })
+        }
+        apply()
+        requestAnimationFrame(() => {
+          apply()
+          requestAnimationFrame(apply)
+        })
       })
     }
 
     watch(
-      () => [messages.value, status.value, widgetPayload.value.updatedAt],
-      () => syncRenderedMessages(),
-      { immediate: true, deep: true },
+      () => [visibleMessages.value, status.value, widgetPayload.value.updatedAt],
+      () => scrollToBottom(true),
+      { immediate: true, deep: true, flush: 'post' },
     )
-
-    onBeforeUnmount(() => clearStreamTimer())
 
     return {
       contentRef,
       status,
-      messages: renderedMessages,
+      messages: visibleMessages,
       isEmpty,
+      imageContext,
       isBusy,
       errorCode,
       errorMessage,
       isPermissionDenied,
+      scrollToBottom,
     }
   },
 })
@@ -152,29 +140,23 @@ export default defineComponent({
           <span>Messages will appear here as the conversation progresses.</span>
         </div>
 
-        <template v-else>
-          <article
-            v-for="(message, index) in messages"
-            :key="message.id || `${message.role}-${index}`"
-            :class="[
-              'AiMessage',
-              `AiMessage--${message.role === 'user' ? 'user' : 'assistant'}`,
-              { 'is-streaming': message.status === 'streaming' || message.status === 'pending' },
-              { 'is-error': status === 'error' && index === messages.length - 1 },
-            ]"
-          >
-            <div class="AiMessage__content">
-              <template v-if="message.status === 'streaming' || message.status === 'pending'">
-                <span class="AiTypingDot" />
-                <span class="AiTypingDot" />
-                <span class="AiTypingDot" />
-              </template>
-              <template v-else>
-                {{ message.content }}
-              </template>
-            </div>
-          </article>
-        </template>
+        <TxAiConversation
+          v-else
+          class="AiChatbot__aiConversation"
+          :messages="messages"
+          :markdown="true"
+          :compact="false"
+          :show-avatar="false"
+          empty-text="Start a conversation"
+        />
+
+        <div v-if="imageContext" class="AiImageContext" :class="`is-${imageContext.status || 'attached'}`">
+          <img v-if="imageContext.preview" :src="imageContext.preview" alt="图片上下文" />
+          <div>
+            <strong>{{ imageContext.title || '图片上下文' }}</strong>
+            <span>{{ imageContext.note || '图片已作为上下文引用。' }}</span>
+          </div>
+        </div>
 
         <div v-if="status === 'error' && errorMessage" class="AiChatbot__errorNotice">
           <strong>{{ isPermissionDenied ? '需要授权 AI 权限' : '请求失败' }}</strong>
@@ -183,7 +165,7 @@ export default defineComponent({
         </div>
       </div>
 
-      <button class="AiChatbot__scrollButton" type="button" aria-label="Scroll to bottom">
+      <button class="AiChatbot__scrollButton" type="button" aria-label="Scroll to bottom" @click="scrollToBottom(true)">
         ↓
       </button>
     </div>
@@ -286,7 +268,6 @@ export default defineComponent({
   color: var(--ai-chat-text);
   font-size: 14px;
   line-height: 1.65;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 
@@ -307,10 +288,129 @@ export default defineComponent({
 }
 
 .AiMessage.is-streaming .AiMessage__content {
-  display: inline-flex;
   min-width: 58px;
+}
+
+.AiMarkdown {
+  display: inline;
+}
+
+.AiMarkdown :deep(p) {
+  margin: 0 0 0.85em;
+}
+
+.AiMarkdown :deep(p:last-child),
+.AiMarkdown :deep(ul:last-child),
+.AiMarkdown :deep(pre:last-child) {
+  margin-bottom: 0;
+}
+
+.AiMarkdown :deep(h1),
+.AiMarkdown :deep(h2),
+.AiMarkdown :deep(h3),
+.AiMarkdown :deep(h4),
+.AiMarkdown :deep(h5),
+.AiMarkdown :deep(h6) {
+  margin: 1em 0 0.5em;
+  color: var(--ai-chat-text);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.AiMarkdown :deep(h1) { font-size: 1.45em; }
+.AiMarkdown :deep(h2) { font-size: 1.32em; }
+.AiMarkdown :deep(h3) { font-size: 1.18em; }
+
+.AiMarkdown :deep(ul) {
+  margin: 0 0 0.85em;
+  padding-left: 1.25em;
+}
+
+.AiMarkdown :deep(li + li) {
+  margin-top: 0.35em;
+}
+
+.AiMarkdown :deep(code) {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ai-chat-text) 10%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.AiMarkdown :deep(pre) {
+  overflow-x: auto;
+  margin: 0 0 0.85em;
+  padding: 12px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ai-chat-text) 8%, transparent);
+}
+
+.AiMarkdown :deep(pre code) {
+  padding: 0;
+  background: transparent;
+}
+
+.AiMarkdown :deep(strong) {
+  font-weight: 700;
+}
+
+.AiMessage__attachments {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.AiAttachment,
+.AiImageContext {
+  display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 10px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ai-chat-assistant-bg) 72%, transparent);
+}
+
+.AiAttachment img,
+.AiImageContext img {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.AiAttachment figcaption,
+.AiImageContext div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.AiAttachment strong,
+.AiImageContext strong {
+  color: var(--ai-chat-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.AiAttachment span,
+.AiImageContext span {
+  color: var(--ai-chat-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.AiImageContext {
+  max-width: min(78%, 720px);
+}
+
+.AiImageContext.is-unsupported {
+  border-color: var(--ai-chat-danger-border);
+  background: var(--ai-chat-danger-bg);
 }
 
 .AiTypingDot {
@@ -365,5 +465,8 @@ export default defineComponent({
 @keyframes ai-conversation-dot {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
   40% { transform: translateY(-3px); opacity: 1; }
+}
+
+  46%, 100% { opacity: 0; }
 }
 </style>

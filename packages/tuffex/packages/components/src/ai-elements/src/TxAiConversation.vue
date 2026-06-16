@@ -9,11 +9,13 @@ const props = withDefaults(
     markdown?: boolean
     compact?: boolean
     emptyText?: string
+    showAvatar?: boolean
   }>(),
   {
     markdown: true,
     compact: false,
     emptyText: 'No messages yet',
+    showAvatar: false,
   },
 )
 
@@ -21,7 +23,9 @@ defineOptions({
   name: 'TxAiConversation',
 })
 
-const normalizedMessages = computed(() => props.messages.filter(message => message.content?.trim()))
+const normalizedMessages = computed(() =>
+  props.messages.filter(message => message.content?.trim() || message.status === 'pending' || message.status === 'streaming'),
+)
 </script>
 
 <template>
@@ -39,6 +43,7 @@ const normalizedMessages = computed(() => props.messages.filter(message => messa
         :message="message"
         :markdown="markdown"
         :compact="compact"
+        :show-avatar="showAvatar"
       />
     </div>
   </section>

@@ -16,6 +16,7 @@ import type {
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
+import type { StreamContext } from '@talex-touch/utils/transport/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { ApiResponse } from '../../utils/safe-handler'
 import {
@@ -954,9 +955,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     intelligenceLog.info('Registering IPC channels')
 
-    const { registerSafe, registerProtectedSafe } = this.createChannelRegistrars(this.transport)
+    const { registerSafe, registerProtectedSafe, registerProtectedStream } =
+      this.createChannelRegistrars(this.transport)
 
-    this.registerInvokeChannels(registerProtectedSafe)
+    this.registerInvokeChannels(registerProtectedSafe, registerProtectedStream)
     this.registerKnowledgeChannels(registerProtectedSafe)
     this.registerContextChannels(registerProtectedSafe)
     this.registerCapabilityChannels(registerSafe)
@@ -1004,9 +1006,28 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       )
     }
 
+    const registerProtectedStream = <TReq, TChunk>(
+      event: TuffEvent<TReq, AsyncIterable<TChunk>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void
+    ) => {
+      transport.onStream(event, async (payload, context) => {
+        try {
+          await withPermission({ permissionId }, async (nextPayload: TReq, nextContext) => {
+            await handler(nextPayload, nextContext as unknown as StreamContext<TChunk>)
+          })(payload, context as unknown as HandlerContext)
+        } catch (error) {
+          createErrorLogger(action)(error)
+          context.error(error instanceof Error ? error : new Error(String(error)))
+        }
+      })
+    }
+
     return {
       registerSafe,
-      registerProtectedSafe
+      registerProtectedSafe,
+      registerProtectedStream
     }
   }
 
@@ -1016,6 +1037,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       action: string,
       permissionId: string,
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void,
+    registerProtectedStream: <TReq, TChunk>(
+      event: TuffEvent<TReq, AsyncIterable<TChunk>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void
     ) => void
   ): void {
     registerProtectedSafe(
@@ -1043,6 +1070,30 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
         return result
+      }
+    )
+
+    registerProtectedStream(
+      intelligenceApiEvents.stream,
+      'Stream capability',
+      'intelligence.basic',
+      async (data, streamContext) => {
+        if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
+          throw new Error('Invalid stream payload')
+        }
+
+        const { capabilityId, payload, options } = data
+        ensureIntelligenceConfigLoaded()
+        intelligenceLog.info(`Streaming capability: ${capabilityId}`)
+        try {
+          for await (const event of tuffIntelligence.stream(capabilityId, payload, options)) {
+            if (streamContext.isCancelled()) break
+            streamContext.emit(event)
+          }
+          streamContext.end()
+        } catch (error) {
+          throw normalizeCapabilityInvokeError(capabilityId, error)
+        }
       }
     )
 

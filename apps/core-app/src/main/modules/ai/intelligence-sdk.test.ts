@@ -401,6 +401,71 @@ describe('TuffIntelligenceSDK invoke', () => {
     expect(payload.messages[1]).toEqual({ role: 'user', content: 'hello' })
   })
 
+  it('streams text.chat deltas from provider chatStream', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat capability',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+
+    async function* streamChunks() {
+      yield { delta: '你', done: false }
+      yield { delta: '好', done: false }
+      yield {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
+      }
+    }
+
+    const provider = createProvider(
+      {
+        id: 'chat-local',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Chat Local',
+        enabled: true,
+        priority: 1,
+        models: ['chat-local'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chatStream = vi.fn(() => streamChunks())
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'text.chat': {
+          providers: [{ providerId: 'chat-local', priority: 1 }]
+        }
+      }
+    })
+
+    const events = []
+    for await (const event of sdk.stream('text.chat', {
+      messages: [{ role: 'user', content: 'hello' }]
+    })) {
+      events.push(event)
+    }
+
+    expect(events.map((event) => event.type)).toEqual(['start', 'delta', 'delta', 'usage', 'end'])
+    expect(events.filter((event) => event.type === 'delta').map((event) => event.delta)).toEqual([
+      '你',
+      '好'
+    ])
+    expect(events.at(-1)).toMatchObject({
+      type: 'end',
+      result: '你好',
+      content: '你好',
+      usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
+    })
+  })
+
   it('dispatches audio.tts to provider TTS capability', async () => {
     intelligenceCapabilityRegistry.register({
       id: 'audio.tts',
