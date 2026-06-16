@@ -69,6 +69,8 @@ extraResources:
     to: resources/tray_icon_16x16.png
   - from: resources/tray_icon_22x22.png
     to: resources/tray_icon_22x22.png
+  - from: resources/scripts/macos-apply-update.sh
+    to: resources/scripts/macos-apply-update.sh
 
 win:
   executableName: tuff

@@ -214,8 +214,8 @@ describe('auth secure storage preference', () => {
     getSecureStoreHealthMock.mockResolvedValue({
       backend: 'local-secret',
       available: true,
-      degraded: true,
-      reason: 'Using local root secret; system credential storage is disabled'
+      degraded: false,
+      reason: 'Using local encrypted root secret; system credential storage is disabled'
     })
     getSecureStoreValueMock.mockResolvedValue(null)
     setSecureStoreValueMock.mockResolvedValue(true)
@@ -396,8 +396,8 @@ describe('auth secure storage preference', () => {
     getSecureStoreHealthMock.mockResolvedValue({
       backend: 'local-secret',
       available: true,
-      degraded: true,
-      reason: 'Using local root secret; system credential storage is disabled'
+      degraded: false,
+      reason: 'Using local encrypted root secret; system credential storage is disabled'
     })
     getSecureStoreValueMock.mockResolvedValue('fallback-token')
 

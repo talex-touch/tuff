@@ -1,5 +1,6 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import type { AppContext, Component } from 'vue'
+import { nextZIndex } from '@talex-touch/tuffex/utils'
 import { createVNode, getCurrentInstance, render } from 'vue'
 import TBlowDialog from '~/components/base/dialog/TBlowDialog.vue'
 import TBottomDialog from '~/components/base/dialog/TBottomDialog.vue'
@@ -169,7 +170,7 @@ export async function forTouchTip(
     const dialogManager = useDialogManager()
 
     root.id = dialogId
-    root.style.zIndex = `${10000 + dialogManager.getStackSize()}`
+    root.style.zIndex = `${nextZIndex()}`
 
     document.body.appendChild(root)
 
@@ -214,7 +215,7 @@ export async function forDialogMention(
     const dialogManager = useDialogManager()
 
     root.id = dialogId
-    root.style.zIndex = `${10000 + dialogManager.getStackSize()}`
+    root.style.zIndex = `${nextZIndex()}`
 
     document.body.appendChild(root)
 
@@ -305,7 +306,7 @@ export async function blowMention(
           ? 'render'
           : 'component'
 
-    root.style.zIndex = `${10000 + dialogManager.getStackSize()}`
+    root.style.zIndex = `${nextZIndex()}`
     document.body.appendChild(root)
 
     const { cleanup, id } = renderComponent(

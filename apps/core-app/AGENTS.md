@@ -3,7 +3,7 @@
 ## 存储与同步规则（core-app 必须遵守）
 
 - SQLite 是本地唯一权威源（SoT）；JSON 只允许作为“同步载荷格式”，且必须密文（如 `payload_enc`/`payload_ref`）。
-- `deviceId` 只能做设备标识，不允许直接作为密钥材料；口令/恢复码/密钥等敏感信息本地必须走系统安全存储（优先 Electron `safeStorage` 或等价能力），禁止明文写入 localStorage/JSON/日志。
+- `deviceId` 只能做设备标识，不允许直接作为密钥材料；口令/恢复码/密钥等敏感信息本地必须走 CoreApp secure-store 的本机随机 root 密钥加密保护，禁止访问系统钥匙串 / Credential Locker / libsecret / Electron `safeStorage`，禁止明文写入 localStorage/JSON/日志。
 - 首次引导是否展示必须等待 storage hydration 完成后再判定；启用同步必须先登录。
 - 新同步能力只走 `/api/v1/sync/*`（以及 `/api/v1/keys/*`、`/api/v1/devices/*`），禁止新增依赖旧 `/api/sync/*`。
 

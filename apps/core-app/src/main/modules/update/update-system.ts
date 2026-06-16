@@ -1467,12 +1467,20 @@ export class UpdateSystem {
 
   private async tryInstallMacAppBundle(packagePath: string): Promise<boolean> {
     const lower = packagePath.toLowerCase()
-    if (!app.isPackaged || (!lower.endsWith('.app') && !lower.endsWith('.zip'))) {
+    if (!app.isPackaged || !['.app', '.zip', '.dmg'].some((ext) => lower.endsWith(ext))) {
       return false
     }
 
     const targetAppPath = this.resolveCurrentMacAppBundlePath()
     if (!targetAppPath) {
+      return false
+    }
+
+    const scriptPath = this.resolveMacApplyUpdateScriptPath()
+    if (!scriptPath) {
+      updateSystemLog.warn('macOS apply update script is unavailable', {
+        meta: { path: packagePath }
+      })
       return false
     }
 
@@ -1483,93 +1491,41 @@ export class UpdateSystem {
       '.mac-install-stage',
       `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
     )
+    const logPath = path.join(stageRoot, 'apply-update.log')
 
     try {
       await fse.ensureDir(stageRoot)
+      await fs.chmod(scriptPath, 0o755).catch(() => undefined)
 
-      const scriptPath = path.join(stageRoot, 'apply-update.sh')
-      const logPath = path.join(stageRoot, 'apply-update.log')
-      const scriptContent = [
-        '#!/bin/bash',
-        `SRC_PACKAGE=${JSON.stringify(packagePath)}`,
-        `DEST_APP=${JSON.stringify(targetAppPath)}`,
-        `STAGE_ROOT=${JSON.stringify(stageRoot)}`,
-        `PID=${process.pid}`,
-        `LOG_FILE=${JSON.stringify(logPath)}`,
-        'WORK_APP="$STAGE_ROOT/new.app"',
-        'EXTRACT_DIR="$STAGE_ROOT/extract"',
-        '',
-        'echo "[self-update] started" > "$LOG_FILE"',
-        'mkdir -p "$STAGE_ROOT" >> "$LOG_FILE" 2>&1 || exit 0',
-        'for i in {1..90}; do',
-        '  if ! kill -0 "$PID" >/dev/null 2>&1; then',
-        '    break',
-        '  fi',
-        '  sleep 1',
-        'done',
-        'if kill -0 "$PID" >/dev/null 2>&1; then',
-        '  echo "[self-update] pid still alive, sending TERM" >> "$LOG_FILE"',
-        '  kill -TERM "$PID" >/dev/null 2>&1 || true',
-        '  for i in {1..10}; do',
-        '    if ! kill -0 "$PID" >/dev/null 2>&1; then',
-        '      break',
-        '    fi',
-        '    sleep 1',
-        '  done',
-        'fi',
-        'if kill -0 "$PID" >/dev/null 2>&1; then',
-        '  echo "[self-update] pid still alive, sending KILL" >> "$LOG_FILE"',
-        '  kill -KILL "$PID" >/dev/null 2>&1 || true',
-        '  for i in {1..5}; do',
-        '    if ! kill -0 "$PID" >/dev/null 2>&1; then',
-        '      break',
-        '    fi',
-        '    sleep 1',
-        '  done',
-        'fi',
-        '',
-        'prepare_source() {',
-        '  rm -rf "$WORK_APP" >> "$LOG_FILE" 2>&1 || true',
-        '  if [[ "$SRC_PACKAGE" == *.app ]]; then',
-        '    ditto "$SRC_PACKAGE" "$WORK_APP" >> "$LOG_FILE" 2>&1',
-        '    return $?',
-        '  fi',
-        '',
-        '  rm -rf "$EXTRACT_DIR" >> "$LOG_FILE" 2>&1 || true',
-        '  mkdir -p "$EXTRACT_DIR" >> "$LOG_FILE" 2>&1 || return 1',
-        '  ditto -x -k "$SRC_PACKAGE" "$EXTRACT_DIR" >> "$LOG_FILE" 2>&1 || return 1',
-        '  APP_CANDIDATE="$(/usr/bin/find "$EXTRACT_DIR" -maxdepth 6 -type d -name "*.app" | /usr/bin/head -n 1)"',
-        '  if [ -z "$APP_CANDIDATE" ]; then',
-        '    echo "[self-update] cannot find .app in archive: $SRC_PACKAGE" >> "$LOG_FILE"',
-        '    return 1',
-        '  fi',
-        '  ditto "$APP_CANDIDATE" "$WORK_APP" >> "$LOG_FILE" 2>&1',
-        '}',
-        '',
-        'if prepare_source && rm -rf "$DEST_APP" >> "$LOG_FILE" 2>&1 && ditto "$WORK_APP" "$DEST_APP" >> "$LOG_FILE" 2>&1; then',
-        '  xattr -dr com.apple.quarantine "$DEST_APP" >> "$LOG_FILE" 2>&1 || true',
-        '  open "$DEST_APP" >> "$LOG_FILE" 2>&1 || true',
-        '  rm -rf "$STAGE_ROOT" >/dev/null 2>&1 || true',
-        'else',
-        '  open "$DEST_APP" >> "$LOG_FILE" 2>&1 || open "$SRC_PACKAGE" >> "$LOG_FILE" 2>&1 || true',
-        'fi',
-        'exit 0',
-        ''
-      ].join('\n')
-
-      await fs.writeFile(scriptPath, scriptContent, { mode: 0o755 })
-
-      const installerProcess = spawn('/bin/bash', [scriptPath], {
-        detached: true,
-        stdio: 'ignore'
-      })
+      const installerProcess = spawn(
+        '/bin/bash',
+        [
+          scriptPath,
+          '--source',
+          packagePath,
+          '--dest',
+          targetAppPath,
+          '--stage',
+          stageRoot,
+          '--pid',
+          String(process.pid),
+          '--log',
+          logPath
+        ],
+        {
+          detached: true,
+          stdio: 'ignore'
+        }
+      )
       installerProcess.unref()
 
       this.requestAppQuit('mac-app-update')
       updateSystemLog.info('Scheduled macOS app replacement install', {
         meta: {
           from: packagePath,
-          to: targetAppPath
+          to: targetAppPath,
+          scriptPath,
+          logPath
         }
       })
       return true
@@ -1577,10 +1533,22 @@ export class UpdateSystem {
       await fse.remove(stageRoot).catch(() => null)
       updateSystemLog.warn('Failed to run macOS app replacement install', {
         error,
-        meta: { path: packagePath }
+        meta: { path: packagePath, scriptPath }
       })
       return false
     }
+  }
+
+  private resolveMacApplyUpdateScriptPath(): string | null {
+    const candidates = [
+      process.resourcesPath
+        ? path.join(process.resourcesPath, 'resources', 'scripts', 'macos-apply-update.sh')
+        : null,
+      path.join(app.getAppPath(), 'resources', 'scripts', 'macos-apply-update.sh'),
+      path.resolve(process.cwd(), 'resources', 'scripts', 'macos-apply-update.sh')
+    ].filter((candidate): candidate is string => Boolean(candidate))
+
+    return candidates.find((candidate) => fse.existsSync(candidate)) ?? null
   }
 
   private resolveCurrentMacAppBundlePath(): string | null {

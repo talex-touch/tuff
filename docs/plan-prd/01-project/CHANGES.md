@@ -4797,6 +4797,18 @@
 ### test(ci): restore targeted Nexus sync route test path
 
 - `package.json`
+### refactor(core-app): remove Electron safeStorage and stabilize launch/update overlays
+
+- `apps/core-app/src/main/utils/secure-store.ts`
+- `apps/core-app/src/main/core/silent-launch.ts`
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/resources/scripts/macos-apply-update.sh`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+  - CoreApp secure-store now uses only the local encrypted root secret backend and never calls Electron `safeStorage` / system Keychain; legacy `safe-storage` envelopes are unreadable by design and require re-login or secret re-entry.
+  - Silent launch intent now combines settings, login-item hidden state, explicit `--silent` args, and secondary launch data so login startup does not show the main window.
+  - macOS fallback update install now delegates to a packaged script that supports `.app`, `.zip`, `.dmg`, quarantine xattr cleanup, rollback, and administrator password prompts when copy permissions require elevation.
+  - Renderer overlay stacking now seeds TuffEx z-index into the legacy app overlay range and moves key plugin/flow dialogs onto the shared allocator.
+
 - `apps/nexus/test/api/sync/sync-routes-410.test.ts`
   - Updated root `pnpm test:targeted` to run the current Nexus sync route test path under `apps/nexus/test/api/sync/` instead of the retired Nitro route-tree `server/api/sync/__tests__/` path.
   - This unblocks the PR Quality path that failed after Nexus API tests were moved out of `server/api`.

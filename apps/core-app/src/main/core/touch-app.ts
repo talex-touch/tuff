@@ -21,6 +21,7 @@ import {
 } from './main-window-state'
 import { ModuleManager } from './module-manager'
 import { innerRootPath } from './precore'
+import { resolveSilentLaunchIntent } from './silent-launch'
 import { TouchConfig } from './touch-config'
 import { TouchWindow } from './touch-window'
 
@@ -350,9 +351,13 @@ export class TouchApp implements TalexTouch.TouchApp {
     checkDirWithCreate(this.rootPath, true)
 
     const appSettingsFromDisk = this.readAppSettingsConfigFromDisk()
+    const silentLaunchIntent = resolveSilentLaunchIntent({
+      app,
+      argv: process.argv,
+      settings: appSettingsFromDisk
+    })
 
-    this._startSilent =
-      (appSettingsFromDisk as { window?: { startSilent?: boolean } }).window?.startSilent === true
+    this._startSilent = silentLaunchIntent.silent
     const initialBounds = this.resolveInitialMainWindowBounds(appSettingsFromDisk)
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
@@ -370,7 +375,9 @@ export class TouchApp implements TalexTouch.TouchApp {
     }
 
     if (this._startSilent) {
-      mainLog.info('Silent start mode enabled, window will not auto-show')
+      mainLog.info('Silent start mode enabled, window will not auto-show', {
+        meta: { source: silentLaunchIntent.source }
+      })
     }
 
     this.window = new TouchWindow(_windowOptions)

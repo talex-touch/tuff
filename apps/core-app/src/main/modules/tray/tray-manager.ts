@@ -27,6 +27,7 @@ type TrayTouchAppRuntime = {
   window: { window: Electron.BrowserWindow }
   config: { data?: unknown }
   isQuitting?: boolean
+  isSilentStart?: () => boolean
   version?: string
 }
 
@@ -45,6 +46,7 @@ export class TrayManager extends BaseModule {
   private windowDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
   private touchApp: TrayTouchAppRuntime | null = null
+  private suppressNextMacActivateShow = false
 
   private readonly appEmitter = app as unknown as {
     on: (eventName: string, handler: (...args: unknown[]) => void) => void
@@ -61,6 +63,7 @@ export class TrayManager extends BaseModule {
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.touchApp = (ctx.runtime?.app ?? ctx.app) as TrayTouchAppRuntime
+    this.suppressNextMacActivateShow = this.touchApp.isSilentStart?.() === true
     this.menuBuilder.setTouchApp(this.touchApp as TrayTouchAppRuntime & { channel: unknown })
     this.syncWindowVisibilityState()
 
@@ -367,6 +370,11 @@ export class TrayManager extends BaseModule {
         const safeWindow = useAliveTarget(mainWindow)
         if (!safeWindow) return
         if (!safeWindow.isVisible()) {
+          if (this.suppressNextMacActivateShow) {
+            this.suppressNextMacActivateShow = false
+            trayManagerLog.info('Skip first macOS activate show after silent launch')
+            return
+          }
           safeWindow.show()
           safeWindow.focus()
         }
