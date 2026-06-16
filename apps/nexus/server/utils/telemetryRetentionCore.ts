@@ -101,6 +101,45 @@ async function backfillTelemetryDailyStats(db: D1Database, cutoff: string) {
   `).bind(cutoff).run()
 }
 
+async function backfillGovernanceDailyStats(db: D1Database, cutoff: string) {
+  await ensureDailyStatsSchema(db)
+  await db.prepare(`
+    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+    SELECT substr(occurred_at, 1, 10), 'governance_total_events', '', COUNT(*)
+    FROM ${GOVERNANCE_EVENTS_TABLE}
+    WHERE occurred_at < ?1
+    GROUP BY substr(occurred_at, 1, 10)
+    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
+  `).bind(cutoff).run()
+
+  await db.prepare(`
+    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+    SELECT substr(occurred_at, 1, 10), 'governance_scope', scope, COUNT(*)
+    FROM ${GOVERNANCE_EVENTS_TABLE}
+    WHERE occurred_at < ?1
+    GROUP BY substr(occurred_at, 1, 10), scope
+    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
+  `).bind(cutoff).run()
+
+  await db.prepare(`
+    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+    SELECT substr(occurred_at, 1, 10), 'governance_action', action, COUNT(*)
+    FROM ${GOVERNANCE_EVENTS_TABLE}
+    WHERE occurred_at < ?1
+    GROUP BY substr(occurred_at, 1, 10), action
+    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
+  `).bind(cutoff).run()
+
+  await db.prepare(`
+    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+    SELECT substr(occurred_at, 1, 10), 'governance_scope_action', scope || ':' || action, COUNT(*)
+    FROM ${GOVERNANCE_EVENTS_TABLE}
+    WHERE occurred_at < ?1
+    GROUP BY substr(occurred_at, 1, 10), scope, action
+    ON CONFLICT(date, stat_type, stat_key) DO NOTHING;
+  `).bind(cutoff).run()
+}
+
 async function cleanupTable(
   db: D1Database,
   table: RetentionTableResult['table'],
@@ -146,8 +185,10 @@ export async function runTelemetryRetentionForDatabase(
   const telemetryCutoff = resolveCutoff(now, telemetryRetentionDays)
   const governanceCutoff = resolveCutoff(now, governanceRetentionDays)
 
-  if (!dryRun)
+  if (!dryRun) {
     await backfillTelemetryDailyStats(db, telemetryCutoff)
+    await backfillGovernanceDailyStats(db, governanceCutoff)
+  }
 
   const tables = [
     await cleanupTable(db, TELEMETRY_TABLE, 'created_at', telemetryCutoff, batchLimit, dryRun),

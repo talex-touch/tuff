@@ -5,6 +5,7 @@ import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflar
 import { resolveRequestIp } from './ipSecurityStore'
 import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { resolveRequestGeo } from './requestGeo'
+import { scheduleTelemetryRetentionMaintenance } from './telemetryRetentionMaintenance'
 import {
   MAX_PROVIDER_DURATION_MS,
   MAX_SEARCH_DURATION_MS,
@@ -640,6 +641,8 @@ export async function recordTelemetryEvent(
       }
     }
   }
+
+  scheduleTelemetryRetentionMaintenance(event, db)
 }
 
 async function incrementDailyStat(
