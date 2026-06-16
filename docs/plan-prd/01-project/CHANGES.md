@@ -5,6 +5,12 @@
 
 ## 2026-06-16
 
+### fix(core-app): restore macOS core dev startup
+
+- `apps/core-app/scripts/dev-electron-wrapper.mjs`
+  - macOS `pnpm core:dev` now defaults back to Electron's npm-provided runtime instead of copying, patching, and ad-hoc signing a custom dev bundle, avoiding renderer helper `SIGKILL` / `ERR_FAILED (-2) loading 'http://127.0.0.1:5173'` on current Electron 41 dev startup.
+  - The custom dev bundle path remains available for isolated capture/debug runs via `TUFF_DEV_ELECTRON_CUSTOM_BUNDLE=1`, `TUFF_DEV_ELECTRON_BUNDLE_ID`, `TUFF_DEV_ELECTRON_BUNDLE_NAME`, or `TUFF_DEV_ELECTRON_PREPARE_ONLY=1`.
+
 ### fix(core-app): harden Windows UWP launch and local icon paths
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
