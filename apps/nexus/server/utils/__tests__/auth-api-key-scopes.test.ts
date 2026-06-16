@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { API_KEY_SCOPES, DEFAULT_PLUGIN_API_KEY_SCOPES, hasRequiredScope, isApiKeyScope } from '../apiKeyScopes'
+import { API_KEY_SCOPES, DEFAULT_PLUGIN_API_KEY_SCOPES, hasRequiredScope, isAdminOnlyApiKeyScope, isApiKeyScope } from '../apiKeyScopes'
 
 describe('auth API key scopes', () => {
-  it('exposes only granular release scopes for new API keys', () => {
+  it('exposes granular release and maintenance scopes for new API keys', () => {
     expect(API_KEY_SCOPES).toContain('release:write')
     expect(API_KEY_SCOPES).toContain('release:evidence')
+    expect(API_KEY_SCOPES).toContain('maintenance:write')
     expect(API_KEY_SCOPES).not.toContain('release:sync')
   })
 
@@ -19,6 +20,12 @@ describe('auth API key scopes', () => {
     expect(hasRequiredScope(['release:sync'], 'release:write')).toBe(false)
     expect(hasRequiredScope(['release:sync'], 'release:evidence')).toBe(false)
     expect(hasRequiredScope(['release:evidence'], 'release:evidence')).toBe(true)
+  })
+
+  it('marks release and maintenance scopes as admin-only', () => {
+    expect(isAdminOnlyApiKeyScope('release:write')).toBe(true)
+    expect(isAdminOnlyApiKeyScope('maintenance:write')).toBe(true)
+    expect(isAdminOnlyApiKeyScope('plugin:publish')).toBe(false)
   })
 
   it('defaults plugin API keys to read and publish scopes', () => {

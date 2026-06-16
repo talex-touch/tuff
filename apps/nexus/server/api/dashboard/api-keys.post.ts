@@ -1,7 +1,7 @@
 import { createError, readBody } from 'h3'
 import { createApiKey } from '../../utils/apiKeyStore'
 import { getUserById } from '../../utils/authStore'
-import { DEFAULT_PLUGIN_API_KEY_SCOPES, isApiKeyScope } from '../../utils/apiKeyScopes'
+import { DEFAULT_PLUGIN_API_KEY_SCOPES, isAdminOnlyApiKeyScope, isApiKeyScope } from '../../utils/apiKeyScopes'
 import { requireAuth } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
     : DEFAULT_PLUGIN_API_KEY_SCOPES
   const keyScopes = (isAdmin
     ? requestedScopes
-    : requestedScopes.filter((scope: string) => !scope.startsWith('release:'))
+    : requestedScopes.filter((scope: string) => !isAdminOnlyApiKeyScope(scope))
   )
 
   if (!keyScopes.length)

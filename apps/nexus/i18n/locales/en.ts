@@ -1038,6 +1038,10 @@ export default {
               label: 'Releases',
               description: 'Manage release sync, metadata, publishing and assets',
             },
+            maintenance: {
+              label: 'Maintenance',
+              description: 'Run protected cleanup and retention jobs',
+            },
           },
           items: {
             pluginRead: {
@@ -1075,6 +1079,10 @@ export default {
             releaseEvidence: {
               label: 'Write Release Evidence',
               description: 'Record 2.5.0 regression, docs guard, and platform blocker matrix evidence',
+            },
+            maintenanceWrite: {
+              label: 'Run Maintenance',
+              description: 'Run retention and cleanup jobs for operational data',
             },
           },
         },

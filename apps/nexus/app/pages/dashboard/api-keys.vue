@@ -287,6 +287,20 @@ const scopeTree = computed<ApiKeyScopeGroup[]>(() => [
       },
     ],
   },
+  {
+    id: 'maintenance',
+    label: t('dashboard.sections.apiKeys.scopes.groups.maintenance.label'),
+    description: t('dashboard.sections.apiKeys.scopes.groups.maintenance.description'),
+    adminOnly: true,
+    children: [
+      {
+        id: 'maintenance:write',
+        label: t('dashboard.sections.apiKeys.scopes.items.maintenanceWrite.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.maintenanceWrite.description'),
+        sensitive: true,
+      },
+    ],
+  },
 ])
 
 const availableScopeTree = computed(() => scopeTree.value.filter(group => !group.adminOnly || isAdmin.value))
