@@ -282,6 +282,30 @@ describe('widget-registry runtime hosts', () => {
     })
   })
 
+  it('allows widgets to consume TuffEx AI Elements from the sandbox cache', async () => {
+    const payload = {
+      ...makePayload(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'const { TxAiConversation } = require("@talex-touch/tuffex/ai-elements")',
+          'module.exports = { setup: () => () => h(TxAiConversation, { messages: [], emptyText: "empty" }) }'
+        ].join('\n')
+      ),
+      dependencies: ['vue', '@talex-touch/tuffex/ai-elements']
+    }
+
+    await handleWidgetRegister(payload)
+
+    const evidence = getWidgetSandboxEvidence(payload.widgetId)
+    expect(evidence).toMatchObject({
+      declaredDependencies: ['vue', '@talex-touch/tuffex/ai-elements'],
+      allowedDependencies: ['vue', '@talex-touch/tuffex/ai-elements'],
+      blockedDependencies: [],
+      undeclaredDependencies: []
+    })
+  })
+
   it('blocks declared dependencies that are outside the widget allowlist', async () => {
     const payload = {
       ...makePayload(

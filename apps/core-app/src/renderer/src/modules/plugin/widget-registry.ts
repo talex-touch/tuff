@@ -17,6 +17,8 @@ import * as TalexUtilsTransport from '@talex-touch/utils/transport'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
+import * as Tuffex from '@talex-touch/tuffex'
+import * as TuffexAiElements from '@talex-touch/tuffex/ai-elements'
 import * as Vue from 'vue'
 import {
   getCustomRenderer,
@@ -625,7 +627,9 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/utils/core-box': TalexUtilsCoreBox,
   '@talex-touch/utils/transport': TalexUtilsTransport,
   '@talex-touch/utils/common': TalexUtilsCommon,
-  '@talex-touch/utils/types': TalexUtilsTypes
+  '@talex-touch/utils/types': TalexUtilsTypes,
+  '@talex-touch/tuffex': Tuffex,
+  '@talex-touch/tuffex/ai-elements': TuffexAiElements
 }
 
 function normalizeWidgetDependencies(dependencies?: string[]): string[] {

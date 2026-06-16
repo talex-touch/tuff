@@ -453,6 +453,33 @@ export interface IntelligenceStreamChunk {
   usage?: IntelligenceUsageInfo
 }
 
+export type IntelligenceStreamEventType = 'start' | 'delta' | 'message' | 'usage' | 'metadata' | 'end'
+
+export interface IntelligenceStreamEvent<T = unknown> {
+  type: IntelligenceStreamEventType
+  capabilityId: string
+  requestId?: string
+  traceId?: string
+  provider?: string
+  model?: string
+  delta?: string
+  content?: string
+  message?: IntelligenceMessage
+  result?: T
+  usage?: IntelligenceUsageInfo
+  metadata?: Record<string, unknown>
+}
+
+export interface IntelligenceStreamOptions<T = unknown> {
+  onStart?: (event: IntelligenceStreamEvent<T>) => void
+  onDelta?: (delta: string, event: IntelligenceStreamEvent<T>) => void
+  onMessage?: (message: IntelligenceMessage, event: IntelligenceStreamEvent<T>) => void
+  onUsage?: (usage: IntelligenceUsageInfo, event: IntelligenceStreamEvent<T>) => void
+  onMetadata?: (metadata: Record<string, unknown>, event: IntelligenceStreamEvent<T>) => void
+  onEnd?: (event: IntelligenceStreamEvent<T>) => void
+  onError?: (error: Error) => void
+}
+
 /**
  * Descriptor for a registered capability.
  */
