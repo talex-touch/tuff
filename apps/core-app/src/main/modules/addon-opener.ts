@@ -18,6 +18,7 @@ import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolve
 import type { AppSecondaryLaunch } from '../core/eventbus/touch-event'
 import { TalexEvents } from '../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../core/runtime-accessor'
+import { resolveSilentLaunchIntent } from '../core/silent-launch'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { focusMainWindowIfAlive, registerMacOSOpenUrlHandler } from './addon-opener-handlers'
@@ -156,14 +157,25 @@ export class AddonOpenerModule extends BaseModule {
     this.appDisposers.push(
       this.on(ctx, TalexEvents.APP_SECONDARY_LAUNCH, (event) => {
         const secondaryLaunch = event as AppSecondaryLaunch
-        const focused = focusMainWindowIfAlive(touchApp.window.window)
-        if (!focused) {
-          addonOpenerLog.warn(
-            'Skip focusing main window for secondary launch because it is unavailable'
-          )
+        const silentLaunchIntent = resolveSilentLaunchIntent({
+          argv: secondaryLaunch.argv,
+          data: secondaryLaunch.data
+        })
+        const url = secondaryLaunch.argv.find((value) => value.startsWith(`${APP_SCHEMA}://`))
+
+        if (!silentLaunchIntent.silent || url) {
+          const focused = focusMainWindowIfAlive(touchApp.window.window)
+          if (!focused) {
+            addonOpenerLog.warn(
+              'Skip focusing main window for secondary launch because it is unavailable'
+            )
+          }
+        } else {
+          addonOpenerLog.info('Skip focusing main window for silent secondary launch', {
+            meta: { source: silentLaunchIntent.source }
+          })
         }
 
-        const url = secondaryLaunch.argv.find((value) => value.startsWith(`${APP_SCHEMA}://`))
         if (url) {
           onSchema(url)
         }

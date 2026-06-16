@@ -78,7 +78,7 @@
 
 ### 0.5 Storage / Sync 规则（必须遵守）
 - **Storage Rule**：SQLite 是本地唯一权威源（SoT）；JSON 只允许作为“同步载荷格式”，且必须是密文（如 `payload_enc`/`payload_ref`），禁止把业务明文 dump 成 JSON 直接同步/落盘。
-- **Security Rule**：`deviceId` 只能做设备标识，不允许直接作为密钥材料（派生/加密根）；口令/恢复码/密钥等敏感信息本地必须用系统安全存储（Keychain / Credential Locker / libsecret / Electron safeStorage 或等价能力）保护，禁止明文写入 localStorage/JSON/日志。
+- **Security Rule**：`deviceId` 只能做设备标识，不允许直接作为密钥材料（派生/加密根）；口令/恢复码/密钥等敏感信息本地必须使用 CoreApp secure-store 的本机随机 root 密钥加密保护，禁止访问系统钥匙串 / Credential Locker / libsecret / Electron safeStorage，禁止明文写入 localStorage/JSON/日志。
 - **Sync Compatibility Rule**：新同步能力必须走 `/api/v1/sync/*`（以及配套 `/api/v1/keys/*`、`/api/v1/devices/*`）；旧 `/api/sync/*` 只允许迁移期只读，禁止新增依赖。
 - **Onboarding Rule**：首次引导是否展示，必须等待 storage hydration 完成后再判定，避免“每次启动都弹引导”。
 

@@ -147,11 +147,6 @@ vi.mock('electron', () => ({
   powerMonitor: {
     on: vi.fn()
   },
-  safeStorage: {
-    isEncryptionAvailable: vi.fn(() => false),
-    encryptString: vi.fn((value: string) => Buffer.from(value, 'utf8')),
-    decryptString: vi.fn(() => '')
-  },
   shell: {
     openExternal: vi.fn(),
     showItemInFolder: vi.fn(),

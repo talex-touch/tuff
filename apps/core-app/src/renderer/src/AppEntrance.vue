@@ -1,5 +1,6 @@
 <script name="AppEntrance" setup lang="ts">
 import { useArgMapper } from '@talex-touch/utils/renderer'
+import { configureZIndex } from '@talex-touch/tuffex/utils'
 import { Toaster } from 'vue-sonner'
 import type { AppEntranceMode } from './modules/devtools/app-entrance-log'
 import { logAppEntranceMode } from './modules/devtools/app-entrance-log'
@@ -50,6 +51,8 @@ async function initializeEntrance(): Promise<void> {
   )
   init.value = true
 }
+
+configureZIndex({ seed: 10000 })
 
 onMounted(() => {
   void initializeEntrance()

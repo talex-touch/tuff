@@ -6,6 +6,7 @@
  * Used when dispatching a flow without a preferred target.
  */
 import type { FlowPayload, FlowTargetInfo } from '@talex-touch/utils'
+import { nextZIndex } from '@talex-touch/tuffex/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
@@ -41,6 +42,8 @@ const inputRef = ref<HTMLInputElement>()
 const consentVisible = ref(false)
 const consentLoading = ref(false)
 const consentTarget = ref<FlowTargetInfo | null>(null)
+const selectorZIndex = ref(nextZIndex())
+const consentZIndex = ref(nextZIndex())
 
 const filteredTargets = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -204,7 +207,8 @@ function getPayloadPreview(): string {
     <Transition name="flow-selector">
       <div
         v-if="visible"
-        class="FlowSelector fixed inset-0 z-[9999] flex items-center justify-center"
+        class="FlowSelector fixed inset-0 flex items-center justify-center"
+        :style="{ zIndex: selectorZIndex }"
       >
         <!-- Backdrop -->
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="handleClose" />
@@ -353,7 +357,11 @@ function getPayloadPreview(): string {
 
   <Teleport to="body">
     <Transition name="flow-selector">
-      <div v-if="consentVisible" class="fixed inset-0 z-[10000] flex items-center justify-center">
+      <div
+        v-if="consentVisible"
+        class="fixed inset-0 flex items-center justify-center"
+        :style="{ zIndex: consentZIndex }"
+      >
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="handleConsentDeny" />
         <div
           class="relative w-[420px] bg-[var(--tx-bg-color)] rounded-xl shadow-2xl overflow-hidden p-5"

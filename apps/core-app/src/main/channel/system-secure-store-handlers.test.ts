@@ -43,7 +43,7 @@ describe('registerSystemSecureStoreHandlers', () => {
     getSecureStoreHealthMock.mockReturnValue({
       backend: 'local-secret',
       available: true,
-      degraded: true
+      degraded: false
     })
   })
 
@@ -162,7 +162,7 @@ describe('registerSystemSecureStoreHandlers', () => {
 
     const result = handlers.get(AppEvents.system.getSecureStoreHealth.toEventName())?.({}, {})
 
-    expect(result).toEqual({ backend: 'local-secret', available: true, degraded: true })
+    expect(result).toEqual({ backend: 'local-secret', available: true, degraded: false })
     expect(getSecureStoreHealthMock).toHaveBeenCalledWith('/tmp/tuff')
   })
 
