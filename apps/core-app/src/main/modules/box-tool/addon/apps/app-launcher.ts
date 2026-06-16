@@ -197,7 +197,7 @@ async function launchShellPath(target: string): Promise<AppLaunchOutcome> {
 async function launchSpawnCommand(
   command: string,
   args: string[],
-  options?: { cwd?: string }
+  options?: { cwd?: string; observeEarlyExit?: boolean }
 ): Promise<AppLaunchOutcome> {
   const child = spawnSafe(command, args, {
     cwd: options?.cwd,
@@ -205,7 +205,10 @@ async function launchSpawnCommand(
     stdio: 'ignore',
     windowsHide: true
   })
-  const outcome = observeEarlySpawnFailure(child)
+  const shouldObserveEarlyExit = options?.observeEarlyExit !== false
+  const outcome = shouldObserveEarlyExit
+    ? observeEarlySpawnFailure(child)
+    : Promise.resolve<AppLaunchOutcome>({ status: 'handedOff' })
   child.unref()
   return await outcome
 }
@@ -284,11 +287,9 @@ export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOut
     if (request.launchKind === 'uwp') {
       const explorerTarget = `shell:AppsFolder\\${request.launchTarget}`
       appLauncherLog.info(`Launching Windows Store app: ${explorerTarget}`)
-      const outcome = await launchSpawnCommand('explorer.exe', [explorerTarget])
-      if (outcome.status === 'failed' && outcome.error) {
-        notifyLaunchFailure(request, outcome.error)
-      }
-      return outcome
+      return await launchSpawnCommand('explorer.exe', [explorerTarget], {
+        observeEarlyExit: false
+      })
     }
 
     if (request.launchKind === 'protocol') {

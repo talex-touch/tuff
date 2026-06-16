@@ -888,7 +888,13 @@ describe('appProvider rebuild maintenance', () => {
     expect(shellOpenPathMock).not.toHaveBeenCalled()
   })
 
-  it('launches Windows Store apps through explorer shell target', async () => {
+  it('launches Windows Store apps through explorer shell handoff', async () => {
+    const child = {
+      once: vi.fn(),
+      removeListener: vi.fn(),
+      unref: vi.fn()
+    }
+    spawnSafeMock.mockReturnValue(child)
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
@@ -915,6 +921,7 @@ describe('appProvider rebuild maintenance', () => {
         windowsHide: true
       }
     )
+    expect(child.once).not.toHaveBeenCalled()
     expect(shellOpenPathMock).not.toHaveBeenCalled()
   })
 

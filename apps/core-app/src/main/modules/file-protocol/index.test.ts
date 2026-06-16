@@ -34,4 +34,16 @@ describe('file-protocol canonical tfile parsing', () => {
       'C:/Users/demo/report.txt'
     )
   })
+
+  it('accepts encoded Windows drive URLs emitted by toTfileUrl', () => {
+    expect(__test__.extractAbsolutePath('tfile://C%3A/Users/demo/report.txt')).toBe(
+      'C:/Users/demo/report.txt'
+    )
+  })
+
+  it('accepts UNC URLs emitted by toTfileUrl', () => {
+    expect(__test__.extractAbsolutePath('tfile:////server/share/icon.svg')).toBe(
+      '//server/share/icon.svg'
+    )
+  })
 })
