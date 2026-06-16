@@ -6,6 +6,19 @@ import type {
   IntelligenceProviderConfig,
   IntelligenceTtsSpeakPayload,
   IntelligenceTtsSpeakResult,
+  type BuildContextInput,
+  type BuildContextResult,
+  type IndexChunkInput,
+  type IndexChunkResult,
+  type IndexDocumentInput,
+  type IndexDocumentResult,
+  type KnowledgeSearchInput,
+  type KnowledgeSearchResult,
+  type MemoryItem,
+  type MemoryTombstone,
+  type MemoryUpsertInput,
+  type PrepareContextTurnInput,
+  type PrepareContextTurnResult,
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceApprovalTicket,
@@ -343,6 +356,13 @@ export interface IntelligenceSdk {
     callerId: string
     callerType?: IntelligenceQuotaConfig['callerType']
   }) => Promise<IntelligenceCurrentUsage>
+  knowledgeIndexDocument: (payload: IndexDocumentInput) => Promise<IndexDocumentResult>
+  knowledgeIndexChunk: (payload: IndexChunkInput) => Promise<IndexChunkResult>
+  knowledgeSearch: (payload: KnowledgeSearchInput) => Promise<KnowledgeSearchResult>
+  knowledgeBuildContext: (payload: BuildContextInput) => Promise<BuildContextResult>
+  contextPrepareTurn: (payload: PrepareContextTurnInput) => Promise<PrepareContextTurnResult>
+  contextSaveMemory: (payload: MemoryUpsertInput) => Promise<MemoryItem>
+  contextDeleteMemory: (payload: { memoryId: string, reason?: string }) => Promise<MemoryTombstone>
 
   agentSessionStart: (payload?: IntelligenceAgentSessionStartPayload) => Promise<TuffIntelligenceAgentSession>
   agentSessionHeartbeat: (payload: IntelligenceAgentSessionHeartbeatPayload) => Promise<{ sessionId: string, heartbeatAt: string }>
@@ -491,6 +511,40 @@ export const intelligenceApiEvents = {
     .module('api')
     .event('local-environment')
     .define<void, IntelligenceApiResponse<IntelligenceLocalEnvironmentSummary>>(),
+} as const
+
+export const intelligenceKnowledgeEvents = {
+  indexDocument: defineEvent('intelligence')
+    .module('knowledge')
+    .event('index-document')
+    .define<IndexDocumentInput, IntelligenceApiResponse<IndexDocumentResult>>(),
+  indexChunk: defineEvent('intelligence')
+    .module('knowledge')
+    .event('index-chunk')
+    .define<IndexChunkInput, IntelligenceApiResponse<IndexChunkResult>>(),
+  search: defineEvent('intelligence')
+    .module('knowledge')
+    .event('search')
+    .define<KnowledgeSearchInput, IntelligenceApiResponse<KnowledgeSearchResult>>(),
+  buildContext: defineEvent('intelligence')
+    .module('knowledge')
+    .event('build-context')
+    .define<BuildContextInput, IntelligenceApiResponse<BuildContextResult>>(),
+} as const
+
+export const intelligenceContextEvents = {
+  prepareTurn: defineEvent('intelligence')
+    .module('context')
+    .event('prepare-turn')
+    .define<PrepareContextTurnInput, IntelligenceApiResponse<PrepareContextTurnResult>>(),
+  saveMemory: defineEvent('intelligence')
+    .module('context')
+    .event('memory:save')
+    .define<MemoryUpsertInput, IntelligenceApiResponse<MemoryItem>>(),
+  deleteMemory: defineEvent('intelligence')
+    .module('context')
+    .event('memory:delete')
+    .define<{ memoryId: string, reason?: string }, IntelligenceApiResponse<MemoryTombstone>>(),
 } as const
 
 export const intelligenceAgentEvents = {
@@ -740,6 +794,41 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async getCurrentUsage(payload) {
       const response = await transport.send(intelligenceApiEvents.getCurrentUsage, payload)
       return assertApiResponse(response, 'Failed to get current usage')
+    },
+
+    async knowledgeIndexDocument(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.indexDocument, payload)
+      return assertApiResponse(response, 'Failed to index knowledge document')
+    },
+
+    async knowledgeIndexChunk(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.indexChunk, payload)
+      return assertApiResponse(response, 'Failed to index knowledge chunk')
+    },
+
+    async knowledgeSearch(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.search, payload)
+      return assertApiResponse(response, 'Failed to search local knowledge')
+    },
+
+    async knowledgeBuildContext(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.buildContext, payload)
+      return assertApiResponse(response, 'Failed to build local knowledge context')
+    },
+
+    async contextPrepareTurn(payload) {
+      const response = await transport.send(intelligenceContextEvents.prepareTurn, payload)
+      return assertApiResponse(response, 'Failed to prepare intelligence context')
+    },
+
+    async contextSaveMemory(payload) {
+      const response = await transport.send(intelligenceContextEvents.saveMemory, payload)
+      return assertApiResponse(response, 'Failed to save intelligence memory')
+    },
+
+    async contextDeleteMemory(payload) {
+      const response = await transport.send(intelligenceContextEvents.deleteMemory, payload)
+      return assertApiResponse(response, 'Failed to delete intelligence memory')
     },
 
     async getLocalEnvironment() {
