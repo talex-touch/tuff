@@ -422,7 +422,7 @@ describe('OmniPanelModule selection capture diagnostics', () => {
 })
 
 describe('OmniPanelModule auto-mount', () => {
-  it('keeps the keyboard shortcut disabled by default', () => {
+  it('keeps all OmniPanel triggers disabled by default', () => {
     const module = new OmniPanelModule() as unknown as {
       getSettingsSnapshot: (setting: Record<string, unknown>) => {
         enableShortcut: boolean
@@ -433,20 +433,20 @@ describe('OmniPanelModule auto-mount', () => {
 
     expect(module.getSettingsSnapshot({})).toMatchObject({
       enableShortcut: false,
-      enableMouseLongPress: true,
+      enableMouseLongPress: false,
       autoMountFirstFeatureOnPluginInstall: false
     })
     expect(
       module.getSettingsSnapshot({
         omniPanel: {
           enableShortcut: true,
-          enableMouseLongPress: false,
+          enableMouseLongPress: true,
           autoMountFirstFeatureOnPluginInstall: true
         }
       })
     ).toMatchObject({
       enableShortcut: true,
-      enableMouseLongPress: false,
+      enableMouseLongPress: true,
       autoMountFirstFeatureOnPluginInstall: true
     })
   })

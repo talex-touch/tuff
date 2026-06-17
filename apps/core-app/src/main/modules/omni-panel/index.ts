@@ -434,7 +434,9 @@ export class OmniPanelModule extends BaseModule {
       enableShortcut:
         typeof omniPanel.enableShortcut === 'boolean' ? omniPanel.enableShortcut : false,
       enableMouseLongPress:
-        typeof omniPanel.enableMouseLongPress === 'boolean' ? omniPanel.enableMouseLongPress : true,
+        typeof omniPanel.enableMouseLongPress === 'boolean'
+          ? omniPanel.enableMouseLongPress
+          : false,
       mouseLongPressDurationMs: normalizeMouseLongPressDurationMs(
         omniPanel.mouseLongPressDurationMs
       ),
@@ -587,7 +589,7 @@ export class OmniPanelModule extends BaseModule {
         enableMouseLongPress:
           typeof omniPanelRaw.enableMouseLongPress === 'boolean'
             ? omniPanelRaw.enableMouseLongPress
-            : true,
+            : false,
         mouseLongPressDurationMs: normalizeMouseLongPressDurationMs(
           omniPanelRaw.mouseLongPressDurationMs
         ),

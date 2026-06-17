@@ -5,6 +5,29 @@
 
 ## 2026-06-17
 
+### fix(core-app): keep js-tiktoken ESM files in packaged builds
+
+- `apps/core-app/electron-builder.yml`
+  - Removed the packaged-build exclusion for `js-tiktoken/dist/**/*.js` because `@langchain/core` imports `js-tiktoken/lite` through ESM and resolves the package export to `dist/lite.js`.
+  - Updated the packaging comment so future size pruning does not remove the ESM runtime files needed by Intelligence provider connection tests.
+
+### fix(nexus): restore Intelligence admin panel lazy component
+
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.test.ts`
+  - Replaced the nonexistent `LazyDashboardIntelligenceIntelligenceAdminPanel` tag with the Nuxt-generated `LazyDashboardIntelligenceAdminPanel` component so `/dashboard/admin/intelligence` renders its admin panel instead of only the dashboard navigation shell.
+  - Added a page contract test to keep the lazy component name aligned with Nuxt auto-import generation.
+
+### chore(release): prepare 2.4.12-beta.8 and disable OmniPanel by default
+
+- `package.json`
+- `apps/core-app/package.json`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+  - Bumped the root and CoreApp package versions from `2.4.12-beta.7` to `2.4.12-beta.8` for the next beta build.
+  - Changed the missing-config OmniPanel mouse long-press default to disabled, matching the already-disabled shortcut default while preserving explicit user opt-in settings.
+  - Updated OmniPanel settings coverage so default installs keep all OmniPanel triggers disabled unless explicitly enabled.
+
 ### fix(corebox): tighten compact launch height and reduce search IPC pressure
 
 - `apps/core-app/src/main/config/default.ts`
