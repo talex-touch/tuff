@@ -13,7 +13,7 @@ describe('provider-runtime', () => {
     vi.clearAllMocks()
   })
 
-  it('injects the app auth token into Nexus-managed providers', () => {
+  it('injects the app auth token without re-enabling disabled Nexus-managed providers', () => {
     authMocks.getAuthToken.mockReturnValue('Bearer app-token')
 
     const provider = normalizeProviderForRuntime({
@@ -26,7 +26,7 @@ describe('provider-runtime', () => {
     })
 
     expect(provider).toMatchObject({
-      enabled: true,
+      enabled: false,
       apiKey: 'app-token',
       metadata: {
         origin: 'tuff-nexus',

@@ -32,6 +32,14 @@
 - 2026-06-01 AI 判断：AI 不是空壳，CoreApp 已有 Intelligence module、provider runtime、workflow service、agent/tool channels，OmniPanel Writing Tools 与 Assistant typed transport 也已有 dev 切片；但不能宣称体验闭环。当前最优雅的 AI 后续不是本地大模型或语音，而是补 `2.5.0` 文本 + OCR 证据和失败路径：CoreBox AI Ask 文本/OCR、OmniPanel Writing Tools、Nexus invoke 未登录/provider 不可用/quota 不足/model 不支持、provider metadata chips 与 packaged Electron UI evidence。`2.5.3` / `2.5.4` / `2.5.5` / `2.5.8` 维持 PRD 锁方向，不抢 `2.4.11` 稳定化窗口；其中 `2.5.4` 聚焦 ContextHygiene、Session Boundary、Checkpoint、Rolling Summary、MemoryPolicy 与 ContextPackage，避免所有问题默认继承同一个长上下文。
 - 2026-06-01 当前 goal/progress：本轮 P1-APP-DATA 的主目标是把跨平台 indexing apps、实时监听、搜索补漏与 provider 设置收敛到统一 SDK/Runtime 抽象。已落地 Search Provider SDK 边界、插件 provider 注册 policy、`search.root-results` 权限 gate、Settings provider enable/order、source-to-provider link、File indexing progress ETA diagnostics、Browser Bookmarks consent-gated skeleton、Quicklinks linked provider enablement；剩余按 File write/store boundary、Browser Bookmarks 官方插件 owned lifecycle、Everything productionization、Quicklinks persistent feed/UI evidence、Browser History/System Settings/Obsidian/VSCode 的顺序推进。
 
+## 2026-06-17 touch-intelligence 未闭环补充
+
+- CoreBox AI Ask widget 已完成真实 streaming 主链路提交，但本地实测暴露 provider routing 问题：禁用区的 Tuff Nexus 仍可能因 runtime token 注入和 `text.chat` capability binding 被带入流式调用，导致 `NEXUS_STREAM_UNSUPPORTED`；当前修复方向是保留 Nexus provider 的 disabled 状态，并让 capability options 只返回 provider 与 binding 均启用的候选。
+- Ollama / Local Model 是当前用户预期 provider；当前已补 `LocalProvider.chatStream()` 优先走 Ollama `/api/chat` + NDJSON stream、404 才回退 OpenAI-compatible，但仍需在 CoreApp 重启后用真实本地 Ollama 验证 `local-default` 作为 `text.chat` 首选 provider 时，`intelligence.stream()` 不再访问 Nexus，且 token delta 能进入 widget props 增量渲染。
+- `touch-intelligence` 仍需 packaged/dev runtime evidence：重启 CoreApp、重载插件、确认 Enter/send 显式发送、无输入暂停自动提交、图片上下文不触发 image-only OCR、权限拒绝/SDK 不可用/error fallback UI、历史持久化与深色主题均按预期工作。
+- Stream 能力范围仍需显式收口：Stable 当前只承诺 `text.chat`；`vision.ocr` 维持非流式，translate/summarize/code 等能力是否扩展 stream 要单独评估 provider 支持、fallback 语义与 UI evidence。
+- 后续质量门禁：继续保留 related-only 提交；至少跑 CoreApp AI focused tests、plugin focused tests、`packages/tuffex` typecheck、`plugins/touch-intelligence` build、runtime plugin sync 与 `git diff --check`，若全量 typecheck 仍被既有 `useSearch.core.test.ts` fixture 类型问题阻塞，需记录为非本轮回归。
+
 ## P0 - 2.4.11 必须收口
 
 | ID | 事项 | 状态 | 验收/证据 |

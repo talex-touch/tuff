@@ -4,6 +4,7 @@ import type {
   IntelligenceChatPayload,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligenceStreamChunk,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
@@ -24,6 +25,10 @@ interface OllamaChatResponse {
   }
   prompt_eval_count?: number
   eval_count?: number
+}
+
+interface OllamaChatStreamResponse extends OllamaChatResponse {
+  done?: boolean
 }
 
 const LOCAL_DIRECT_PROXY = { mode: 'direct' as const }
@@ -51,6 +56,51 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
     return options.modelPreference?.[0] || this.config.defaultModel || this.defaultChatModel
   }
 
+  private buildOllamaChatBody(
+    payload: IntelligenceChatPayload,
+    options: IntelligenceInvokeOptions,
+    stream: boolean
+  ): Record<string, unknown> {
+    return {
+      model: this.resolveLocalChatModel(options),
+      messages: payload.messages,
+      stream,
+      options: {
+        ...(typeof payload.temperature === 'number' ? { temperature: payload.temperature } : {}),
+        ...(typeof payload.maxTokens === 'number' ? { num_predict: payload.maxTokens } : {})
+      }
+    }
+  }
+
+  private buildOllamaChatRequest(
+    payload: IntelligenceChatPayload,
+    options: IntelligenceInvokeOptions,
+    stream: boolean
+  ) {
+    return {
+      method: 'POST' as const,
+      url: `${this.resolveOllamaBaseUrl()}/api/chat`,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: this.buildOllamaChatBody(payload, options, stream),
+      proxyOverride: LOCAL_DIRECT_PROXY,
+      timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
+      retryPolicy: {
+        maxRetries: 0,
+        retryOnNetworkError: false,
+        retryOnTimeout: false,
+        retryableStatusCodes: []
+      },
+      cooldownPolicy: {
+        key: `${this.config.id}:ollama.chat`,
+        failureThreshold: 2,
+        cooldownMs: 15_000,
+        autoResetOnSuccess: true
+      }
+    }
+  }
+
   async chat(
     payload: IntelligenceChatPayload,
     options: IntelligenceInvokeOptions
@@ -61,37 +111,8 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
 
     try {
       const response = await getNetworkService().request<OllamaChatResponse>({
-        method: 'POST',
-        url: `${this.resolveOllamaBaseUrl()}/api/chat`,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: {
-          model,
-          messages: payload.messages,
-          stream: false,
-          options: {
-            ...(typeof payload.temperature === 'number'
-              ? { temperature: payload.temperature }
-              : {}),
-            ...(typeof payload.maxTokens === 'number' ? { num_predict: payload.maxTokens } : {})
-          }
-        },
-        responseType: 'json',
-        proxyOverride: LOCAL_DIRECT_PROXY,
-        timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
-        retryPolicy: {
-          maxRetries: 0,
-          retryOnNetworkError: false,
-          retryOnTimeout: false,
-          retryableStatusCodes: []
-        },
-        cooldownPolicy: {
-          key: `${this.config.id}:ollama.chat`,
-          failureThreshold: 2,
-          cooldownMs: 15_000,
-          autoResetOnSuccess: true
-        }
+        ...this.buildOllamaChatRequest(payload, options, false),
+        responseType: 'json'
       })
 
       const content = response.data.message?.content ?? ''
@@ -113,6 +134,60 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
         throw error
       }
       return await super.chat(payload, options)
+    }
+  }
+
+  async *chatStream(
+    payload: IntelligenceChatPayload,
+    options: IntelligenceInvokeOptions
+  ): AsyncGenerator<IntelligenceStreamChunk> {
+    try {
+      const response = await getNetworkService().requestStream(
+        this.buildOllamaChatRequest(payload, options, true)
+      )
+      let buffer = ''
+      for await (const chunk of response.stream) {
+        buffer += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed) continue
+          const parsed = JSON.parse(trimmed) as OllamaChatStreamResponse
+          const delta = parsed.message?.content ?? ''
+          if (delta) {
+            yield { delta, done: false }
+          }
+          if (parsed.done) {
+            yield {
+              delta: '',
+              done: true,
+              usage: {
+                promptTokens: parsed.prompt_eval_count ?? 0,
+                completionTokens: parsed.eval_count ?? 0,
+                totalTokens: (parsed.prompt_eval_count ?? 0) + (parsed.eval_count ?? 0)
+              }
+            }
+            return
+          }
+        }
+      }
+
+      const trimmed = buffer.trim()
+      if (trimmed) {
+        const parsed = JSON.parse(trimmed) as OllamaChatStreamResponse
+        const delta = parsed.message?.content ?? ''
+        if (delta) {
+          yield { delta, done: false }
+        }
+      }
+      yield { delta: '', done: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (!message.includes('404')) {
+        throw error
+      }
+      yield* super.chatStream(payload, options)
     }
   }
 

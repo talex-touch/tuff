@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createSendModeInteraction, withSendMode } from '../plugin/sdk/features'
+import type { IPluginFeature } from '../plugin'
 
 describe('Plugin Features SDK helpers', () => {
   it('enables send mode without dropping interaction fields', () => {
@@ -20,7 +21,7 @@ describe('Plugin Features SDK helpers', () => {
   })
 
   it('adds a default widget send interaction when feature has no interaction', () => {
-    const feature = withSendMode({
+    const feature = withSendMode<IPluginFeature>({
       id: 'ask',
       name: 'Ask',
       desc: 'Ask assistant',
