@@ -3,7 +3,42 @@
 > 更新时间：2026-06-16
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-17
+
+### fix(corebox): tighten compact launch height and reduce search IPC pressure
+
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/views/box/BoxInput.vue`
+- `apps/core-app/src/renderer/src/views/box/PrefixPart.vue`
+- `apps/core-app/src/renderer/src/views/box/PrefixIcon.vue`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+  - Tightened the CoreBox compact/shrink visual height from 60px to 56px and aligned the renderer header, result offset, input box, logo, BrowserWindow initial size, minimum size, and layout IPC minimum around the same value.
+  - Kept full search ranking, metrics, and result recording intact while limiting the initial and incremental item payloads sent to the renderer to the visible 80-item CoreBox cap, reducing large `core-box:search-update` IPC payload pressure seen during single-character searches.
+  - Renderer search updates now merge by item id and cap stored visible results at 80, so enrichment updates replace existing rows instead of growing an unbounded internal list.
+
 ## 2026-06-16
+
+### fix(corebox): align compact window height on Windows
+
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.test.ts`
+  - Unified the CoreBox compact/header height at 60px across BrowserWindow minimum size, renderer measurement, layout IPC validation, and WebContentsView attachment bounds.
+  - Initialized CoreBox at the compact 720x60 bounds and made hidden-state shrink use the cursor display, preventing first-show placement from being calculated from an offscreen/stale window.
+  - Allowed collapsed shrink bounds to be applied even while the CoreBox window is hidden or already compact-height but too wide, preventing the next Windows show from briefly reusing a stale wide/tall window.
+  - Removed the unconditional result-area display rule so an empty CoreBox no longer exposes the result container strip under the input.
+  - Verification: `cmd /c pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/core-box/index.test.ts" "src/main/modules/box-tool/core-box/ipc.test.ts" "src/main/modules/box-tool/core-box/window.test.ts"`, `cmd /c pnpm -C "apps/core-app" run typecheck:node`, and `cmd /c pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` passed.
 
 ### feat(core-app): add Everything one-click install command
 
