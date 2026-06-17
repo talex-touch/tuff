@@ -8,12 +8,16 @@
 ### feat(core-app): add Everything one-click install command
 
 - `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
 - `docs/plan-prd/01-project/CHANGES.md`
-  - Added a copyable PowerShell command in the Everything settings install guide that downloads official portable Everything plus `es.exe`, stores them under the user profile, adds the CLI directory to the user `PATH`, and starts Everything for the follow-up status check.
+  - Added a copyable PowerShell command in the Everything install guide that downloads official portable Everything plus `es.exe`, stores them under the user profile, adds the CLI directory to the user `PATH`, and starts Everything for the follow-up status check.
+  - Simplified the install dialog around the recommended automatic portable install path, keeping manual Everything/CLI downloads and the full command under an advanced settings section.
+  - Moved the long install command, version/path detail, backend attempt errors, SDK/CLI diagnostic detail, and evidence actions into FlipDialog overlays so the settings list keeps only status, backend summary, CLI path selection, and one compact action strip.
+  - Added a `FlipDialog` card class passthrough and scoped Everything dialog padding so install and diagnostics dialogs keep consistent header/body spacing without changing other overlay users.
   - Kept the existing manual download and custom `es.exe` path flow as fallback paths for locked-down Windows environments.
-  - 验证：待执行 focused renderer checks after implementation.
+  - 验证：JSON locale parse、Everything install PowerShell script parse、`cmd /c pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` 与 scoped `git diff --check` 通过；`SettingEverything.vue` scoped ESLint 返回 0 errors，但保留该文件既有 CRLF/Prettier warnings，未做全文件换行符改写。
 
 ### fix(core-app): launch Windows dev wrapper through cmd shell
 
