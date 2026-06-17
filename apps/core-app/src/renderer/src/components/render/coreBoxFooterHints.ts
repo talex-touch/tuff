@@ -4,6 +4,29 @@ export function isPluginFooterItem(item: TuffItem | null | undefined): boolean {
   return item?.source?.type === 'plugin' || Boolean(item?.meta?.pluginName)
 }
 
+function isPluginWidgetFooterItem(item: TuffItem | null | undefined): boolean {
+  if (!isPluginFooterItem(item)) {
+    return false
+  }
+  return item?.meta?.interaction?.type === 'widget' || item?.render?.mode === 'custom'
+}
+
+function hasExplicitVisibleFooterHint(item: TuffItem | null | undefined): boolean {
+  return (
+    item?.meta?.footerHints?.primary?.visible === true ||
+    item?.meta?.footerHints?.secondary?.visible === true ||
+    item?.meta?.footerHints?.quickSelect?.visible === true
+  )
+}
+
+function hasExplicitHiddenFooterHints(item: TuffItem | null | undefined): boolean {
+  return (
+    item?.meta?.footerHints?.primary?.visible === false &&
+    item?.meta?.footerHints?.secondary?.visible === false &&
+    item?.meta?.footerHints?.quickSelect?.visible === false
+  )
+}
+
 export function resolvePrimaryFooterHintVisible(item: TuffItem | null | undefined): boolean {
   if (!item) {
     return false
@@ -12,7 +35,7 @@ export function resolvePrimaryFooterHintVisible(item: TuffItem | null | undefine
   if (explicit !== undefined) {
     return explicit
   }
-  return !isPluginFooterItem(item)
+  return !isPluginWidgetFooterItem(item)
 }
 
 export function resolveSecondaryFooterHintVisible(item: TuffItem | null | undefined): boolean {
@@ -23,7 +46,7 @@ export function resolveSecondaryFooterHintVisible(item: TuffItem | null | undefi
   if (explicit !== undefined) {
     return explicit
   }
-  return !isPluginFooterItem(item)
+  return !isPluginWidgetFooterItem(item)
 }
 
 export function resolveQuickSelectFooterHintVisible(
@@ -37,20 +60,18 @@ export function resolveQuickSelectFooterHintVisible(
   if (explicit !== undefined) {
     return explicit
   }
-  return !isPluginFooterItem(item) && fallbackVisible
+  return !isPluginWidgetFooterItem(item) && fallbackVisible
 }
 
 export function resolveCoreBoxFooterVisible(item: TuffItem | null | undefined): boolean {
   if (!item) {
     return false
   }
-  if (!isPluginFooterItem(item)) {
-    return true
+  if (isPluginWidgetFooterItem(item)) {
+    return hasExplicitVisibleFooterHint(item)
   }
-
-  return (
-    item?.meta?.footerHints?.primary?.visible === true ||
-    item?.meta?.footerHints?.secondary?.visible === true ||
-    item?.meta?.footerHints?.quickSelect?.visible === true
-  )
+  if (isPluginFooterItem(item) && hasExplicitHiddenFooterHints(item)) {
+    return false
+  }
+  return true
 }

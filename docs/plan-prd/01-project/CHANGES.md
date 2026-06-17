@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-06-16
+> 更新时间：2026-06-17
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 2026-06-17
@@ -22,6 +22,93 @@
   - Tightened the CoreBox compact/shrink visual height from 60px to 56px and aligned the renderer header, result offset, input box, logo, BrowserWindow initial size, minimum size, and layout IPC minimum around the same value.
   - Kept full search ranking, metrics, and result recording intact while limiting the initial and incremental item payloads sent to the renderer to the visible 80-item CoreBox cap, reducing large `core-box:search-update` IPC payload pressure seen during single-character searches.
   - Renderer search updates now merge by item id and cap stored visible results at 80, so enrichment updates replace existing rows instead of growing an unbounded internal list.
+
+### fix(file-search): render native file result icons
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.test.ts`
+  - Spotlight/Linux native file search results now reuse the existing async icon worker cache, warming missing icons without blocking search results.
+  - File result mapping now preserves cached `data:` icon URLs instead of falling back to the generic file glyph, so native results can render real file icons.
+  - Focused coverage verifies cached icons render and missing icons are queued for warmup.
+
+### fix(file-index): deepen macOS watcher and prioritize shallow indexing
+
+- `packages/utils/search/indexing-watch-path-policy.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - macOS File Index watch roots now use depth 5 instead of shallow special-casing, so deeper newly added files can trigger realtime indexing.
+  - File content indexing now groups by relative depth under the matched watch root: shallow files dispatch first, deeper files receive incremental delay while still being admitted into the same DB/search-index pipeline.
+  - Focused coverage pins the macOS depth policy and depth-prioritized worker scheduling.
+
+### fix(corebox): restore plugin feature footer defaults
+
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/renderer/src/components/render/coreBoxFooterHints.ts`
+- `packages/utils/plugin/sdk/meta/README.md`
+  - Plugin root feature results no longer force all CoreBox footer hints hidden by default, so default search lists can show the footer bar again.
+  - Plugin widget/custom render items still hide the footer by default unless `footerHints.*.visible` is explicitly enabled.
+  - Explicit plugin footer hint declarations remain authoritative, including all-hidden declarations.
+
+### docs(project): add current execution plan
+
+- `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/04-implementation/README.md`
+  - Added a short-term execution SoT that turns the current project progress into P0/P1 plan items.
+  - Updated entry documents from the stale `2.4.11-beta.8` / `HEAD=47787615b` snapshot to the current root/CoreApp `2.4.12-beta.6` / `HEAD=fb7424772` snapshot.
+  - Clarified the next execution order: documentation drift, AI provider routing, packaged AI evidence, release integrity, npm publish evidence, File write/store boundary, Windows/Everything evidence and Nexus production governance evidence.
+
+### fix(core-app+ci): default auth credential protection and tuff-intelligence CI
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/auth/index.test.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `docs/plan-prd/TODO.md`
+  - Restored auth credential protection to default-on via `auth.useSecureStorage=true`; missing preferences and legacy default-disabled values migrate back to local root-key secure-store unless the user explicitly disabled protection.
+  - Kept the disable switch behind advanced settings and removed the visible settings copy suffix about system keychains/credential stores.
+  - Fixed `@talex-touch/tuff-intelligence` package CI dts build by explicitly typing `IntelligenceSdk.stream()` parameters.
+
+### feat(intelligence): wire true chat streaming into CoreBox AI Ask
+
+- `packages/utils/types/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `plugins/touch-intelligence/index.js`
+- `packages/tuffex/packages/components/src/ai-elements/src/TxAiConversation.vue`
+- `packages/tuffex/packages/components/src/ai-elements/src/TxAiMessage.vue`
+  - Added typed `intelligence:api:stream` and `IntelligenceSdk.stream()` with LangChain-style `start` / `delta` / `usage` / `metadata` / `end` events instead of UI-side fake streaming.
+  - Connected CoreApp `TuffIntelligenceSDK.stream()` to provider `chatStream()` for `text.chat`, preserving provider selection, prompt template rendering, capability filtering and quota checks; unsupported capabilities fail explicitly.
+  - Registered a protected main-process stream channel and injected a permission-checked `globalThis.intelligence.stream()` into plugin preludes so `touch-intelligence` can push widget updates on each real delta.
+  - Updated TuffEx AI conversation/message components so avatars are hidden by default and only shown via explicit `showAvatar`, while pending/streaming messages render through component-owned states.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-sdk.test.ts" "src/main/modules/plugin/plugin.test.ts"`、`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/intelligence-client-hard-cut.test.ts"`、`pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"`、`pnpm -C "packages/tuffex" run typecheck`、`pnpm -C "plugins/touch-intelligence" run build` 通过。
+
+### feat(core-app): add Intelligence local knowledge and ContextHygiene foundation
+
+- `packages/utils/types/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/db/schema.ts`
+- `apps/core-app/resources/db/migrations/0023_intelligence_context_knowledge.sql`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-error-normalizer.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-local-knowledge-engine.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-context-hygiene.ts`
+  - Added typed Intelligence domain SDK events for local knowledge indexing/search/context building and ContextHygiene prepare/save/delete flows, without adding raw `intelligence:*` IPC.
+  - Added CoreApp SQLite SoT tables for knowledge documents/chunks plus ContextHygiene sessions, turns, checkpoints, compression snapshots, memory items, tombstones and context package logs; knowledge chunks are indexed through FTS5 with triggers.
+  - Added `LocalKnowledgeEngine` with document/chunk indexing, FTS search, source/time/permission/metadata filters, citation output, token-budgeted Context Builder, and degraded `fts-search-failed` behavior instead of fake empty success.
+  - Added CoreBox-only `ContextHygieneService` P0 foundation with deterministic light/session/retrieval scope, checkpoint creation, context package explain metadata, secret memory rejection, memory tombstone deletion and secret/sensitive turn redaction before SQLite persistence.
+  - Added stable Intelligence error normalization for auth, provider unavailable, quota, model/capability unsupported, network, invalid request and unknown failures; current handler preserves compatibility by surfacing normalized code in the existing response error string.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-error-normalizer.test.ts" "src/main/modules/ai/intelligence-local-knowledge-engine.test.ts" "src/main/modules/ai/intelligence-context-hygiene.test.ts"` 通过，3 files / 11 tests。`pnpm -C "apps/core-app" run typecheck:node` 当前被工作区既有 `packages/utils/__tests__/plugin-features-sdk.test.ts` 的 `interaction` 字段错误阻断，未发现本轮 AI 文件新增 typecheck 错误。
+  - Packaged Electron 文本/OCR成功与固定失败路径截图/录屏 evidence 仍未采集，不能把 `2.5.0` AI 体验闭环标记为完成。
 
 ## 2026-06-16
 
@@ -59,7 +146,7 @@
 - `apps/core-app/scripts/dev-electron-wrapper.mjs`
   - Windows `pnpm core:dev` no longer spawns `pnpm.cmd` directly from the dev wrapper.
   - The wrapper now follows the repo's existing Windows-safe `cmd.exe /d /s /c ...` launch path for `pnpm exec electron-vite dev`, avoiding the local `spawn EINVAL` failure while preserving the existing macOS dev bundle flow.
-  - 楠岃瘉锛歚cmd /c pnpm core:dev` 鍙噸鏂拌繘鍏?Electron dev build/launch 娴佺▼锛堥暱椹籨ev 杩涚▼鎸夎秴鏃舵埅鏂級銆?
+  - 验证：`cmd /c pnpm core:dev` 可重新进入 Electron dev build/launch 流程（长跑 dev 进程按超时截断）。
 
 ### fix(core-app): hide macOS-only notification permission entry on Windows
 
@@ -69,6 +156,35 @@
 - `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
   - Notification permission setup UI now renders only on macOS, so Windows no longer shows a misleading "Notification Permission" card or macOS-specific guidance/action.
   - Main-process permission metadata now reports Windows/Linux notification status as non-requestable, keeping renderer affordances aligned with actual platform capability boundaries.
+
+### fix(corebox+nexus): add feature send mode and preserve long auth reauth
+
+- `packages/utils/plugin/index.ts`
+- `packages/utils/plugin/sdk/features.ts`
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/nexus/app/pages/device-auth.vue`
+  - Added `interaction.sendMode` plus Feature SDK helpers so plugin features can explicitly request CoreBox send-mode behavior.
+  - CoreBox now replaces the window pin action with a send action while a send-mode widget/feature is active, preventing pinning from the feature composer.
+  - Nexus device authorization no longer reports the browser as closed while redirecting to long-term authorization reauth, so app polling can continue after the second-factor round trip.
+
+### fix(core-app): restore macOS core dev startup
+
+- `apps/core-app/scripts/dev-electron-wrapper.mjs`
+  - macOS `pnpm core:dev` now defaults back to Electron's npm-provided runtime instead of copying, patching, and ad-hoc signing a custom dev bundle, avoiding renderer helper `SIGKILL` / `ERR_FAILED (-2) loading 'http://127.0.0.1:5173'` on current Electron 41 dev startup.
+  - The custom dev bundle path remains available for isolated capture/debug runs via `TUFF_DEV_ELECTRON_CUSTOM_BUNDLE=1`, `TUFF_DEV_ELECTRON_BUNDLE_ID`, `TUFF_DEV_ELECTRON_BUNDLE_NAME`, or `TUFF_DEV_ELECTRON_PREPARE_ONLY=1`.
+
+### fix(corebox): theme monochrome result icons
+
+- `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- `packages/tuffex/packages/components/src/icon/src/svg-color-mode.ts`
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+- `apps/core-app/src/renderer/src/components/render/BoxGridItem.vue`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+  - CoreBox result icons now default to theme-color rendering instead of preserving black SVG source colors, while multi-color SVGs still render as images to keep brand/logo colors intact.
+  - `TxIcon` now consumes `--icon-color` and only masks SVGs detected as monochrome/neutral; explicit `colorful: true` continues to preserve original colors through plugin loading, feature items, and pushed root-result items.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/icon/__tests__/icon.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/components/render/icon-color-mode.test.ts" "src/renderer/src/components/base/tuff-icon-rendering.test.ts" "src/main/core/tuff-icon.test.ts" "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin.test.ts"` 通过。
 
 ### fix(core-app): harden Windows UWP launch and local icon paths
 

@@ -916,6 +916,51 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('intelligence sdk maps capability stream to typed transport stream and callbacks', async () => {
+    const transport = createTransportMock()
+    const sdk = createIntelligenceSdk(transport as any)
+    const onStart = vi.fn()
+    const onDelta = vi.fn()
+    const onEnd = vi.fn()
+
+    await sdk.stream(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'hello' }] },
+      { onStart, onDelta, onEnd },
+      { metadata: { caller: 'test' } },
+    )
+
+    expect(transport.stream).toHaveBeenCalledTimes(1)
+    const [event, payload, options] = transport.stream.mock.calls[0] || []
+    expect(event?.toEventName?.()).toBe('intelligence:api:stream')
+    expect(event).toMatchObject({
+      namespace: 'intelligence',
+      module: 'api',
+      action: 'stream',
+    })
+    expect(payload).toEqual({
+      capabilityId: 'text.chat',
+      payload: { messages: [{ role: 'user', content: 'hello' }] },
+      options: { metadata: { caller: 'test' }, stream: true },
+    })
+
+    options.onData({ type: 'start', capabilityId: 'text.chat', traceId: 'trace_1' })
+    options.onData({ type: 'delta', capabilityId: 'text.chat', delta: 'he' })
+    options.onData({ type: 'end', capabilityId: 'text.chat' })
+    expect(onStart).toHaveBeenCalledWith({ type: 'start', capabilityId: 'text.chat', traceId: 'trace_1' })
+    expect(onDelta).toHaveBeenCalledWith('he', { type: 'delta', capabilityId: 'text.chat', delta: 'he' })
+    expect(onEnd).toHaveBeenCalledWith({ type: 'end', capabilityId: 'text.chat' })
+  })
+
+  it('intelligence sdk stream throws when stream transport is unavailable', async () => {
+    const transport = { send: vi.fn() }
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await expect(
+      sdk.stream('text.chat', { messages: [] }, { onDelta: vi.fn() }),
+    ).rejects.toThrow('stream-capable transport')
+  })
+
   it('intelligence sdk maps session subscribe to typed transport stream', async () => {
     const transport = createTransportMock()
     const sdk = createIntelligenceSdk(transport as any)

@@ -46,6 +46,7 @@ const longTermReasonText = computed(() => {
   return t('auth.deviceAuthLongBlocked', '当前设备或登录地不在常用范围，暂不允许长期授权。')
 })
 const autoCloseRequested = ref(false)
+const reauthRedirecting = ref(false)
 const longTermOptionEnabled = computed(() => longTermAvailable.value && longTermAllowed.value)
 const reauthRequired = computed(() => grantType.value === 'long' && longTermOptionEnabled.value)
 const reauthReady = computed(() => route.query.reauth === '1')
@@ -73,6 +74,9 @@ function buildRedirectUrl(target: 'long'): string {
 }
 
 async function requestReauth(): Promise<void> {
+  reauthRedirecting.value = true
+  stopPresenceHeartbeat()
+  await reportPresence('heartbeat')
   await navigateTo({
     path: '/sign-in',
     query: {
@@ -139,6 +143,8 @@ async function startPresenceHeartbeat(): Promise<void> {
 }
 
 function handleBeforeUnload(): void {
+  if (reauthRedirecting.value)
+    return
   void reportPresence('closed', true)
 }
 
@@ -311,7 +317,8 @@ watch(
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   stopPresenceHeartbeat()
-  void reportPresence('closed', true)
+  if (!reauthRedirecting.value)
+    void reportPresence('closed', true)
 })
 </script>
 

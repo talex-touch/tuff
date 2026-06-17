@@ -21,7 +21,6 @@ export function normalizeProviderForRuntime(
   const authToken = toNexusApiKey(getAuthToken())
   return {
     ...provider,
-    enabled: true,
     apiKey: authToken || provider.apiKey || 'guest',
     metadata: {
       ...(provider.metadata || {}),

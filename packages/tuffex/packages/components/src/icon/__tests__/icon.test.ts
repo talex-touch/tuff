@@ -16,6 +16,13 @@ describe('txIcon', () => {
     expect(classIcon.find('i').classes()).toContain('i-ri-home-line')
     expect(classIcon.attributes('style')).toContain('font-size: 20px')
 
+    const themedIcon = mount(TxIcon, {
+      props: { name: 'i-ri-home-line' },
+      attrs: { style: '--icon-color: rgb(1, 2, 3);' },
+    })
+
+    expect(themedIcon.attributes('style')).toContain('--icon-color: rgb(1, 2, 3)')
+
     const builtin = mount(TxIcon, {
       props: { name: 'close' },
     })
@@ -80,6 +87,22 @@ describe('txIcon', () => {
 
     expect(colorful.find('img').attributes('src')).toBe('/color.svg')
     expect(colorful.find('.tuff-icon__svg-mask').exists()).toBe(false)
+  })
+
+  it('keeps multi-color svg as image in theme-color mode', async () => {
+    const svgFetcher = vi.fn(async () => '<svg><rect fill="#0F172A"/><path stroke="#60A5FA" d="M0 0h1v1"/></svg>')
+    const wrapper = mount(TxIcon, {
+      props: {
+        icon: { type: 'url', value: '/brand.svg' },
+        svgFetcher,
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(svgFetcher).toHaveBeenCalledWith('/brand.svg')
+    })
+    expect(wrapper.find('img').attributes('src')).toBe('/brand.svg')
+    expect(wrapper.find('.tuff-icon__svg-mask').exists()).toBe(false)
   })
 
   it('renders status indicator with computed sizing', () => {

@@ -14,6 +14,7 @@ export interface AiMessageProps {
   message: AiElementMessage
   markdown?: boolean
   compact?: boolean
+  showAvatar?: boolean
 }
 
 export interface AiConversationProps {
@@ -21,4 +22,5 @@ export interface AiConversationProps {
   markdown?: boolean
   compact?: boolean
   emptyText?: string
+  showAvatar?: boolean
 }

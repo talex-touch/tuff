@@ -15,6 +15,7 @@ import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import type { FileIndexSettings } from './types'
+import { EverythingIconCache } from './everything-icon-cache'
 import { mapFileToTuffItem } from './utils'
 
 export interface NativeFileSearchCapabilities {
@@ -44,6 +45,7 @@ type LinuxNativeSearchBackend = 'locate' | 'tracker3' | 'tracker' | 'baloo'
 const nativeFileSearchLog = getLogger('file-provider').child('Native')
 const execFileAsync = promisify(execFile)
 const NATIVE_SEARCH_MAX_RESULTS = 50
+const NATIVE_ICON_WARMUP_LIMIT = 12
 const MAC_SPOTLIGHT_DEFAULT_PATH_NAMES = [
   'documents',
   'downloads',
@@ -171,10 +173,12 @@ async function toNativeResult(filePath: string): Promise<NativeFileSearchResult 
 function buildNativeSearchItems(
   provider: Pick<NativeFileSearchProvider, 'id' | 'name'>,
   query: TuffQuery,
-  results: NativeFileSearchResult[]
+  results: NativeFileSearchResult[],
+  iconCache?: EverythingIconCache
 ): TuffSearchResult {
   const searchText = query.text.trim()
   const now = Date.now()
+  let scheduledIconWarmups = 0
   const items = results.flatMap((result, index) => {
     const fileObj = {
       id: index,
@@ -192,7 +196,19 @@ function buildNativeSearchItems(
       embeddingStatus: 'none' as const
     } satisfies typeof filesSchema.$inferSelect
 
-    const item = mapFileToTuffItem(fileObj, {}, provider.id, provider.name || provider.id)
+    const cachedIcon = iconCache?.get(result.path)
+    const item = mapFileToTuffItem(
+      fileObj,
+      cachedIcon ? { icon: cachedIcon } : {},
+      provider.id,
+      provider.name || provider.id,
+      cachedIcon || result.isDir || scheduledIconWarmups >= NATIVE_ICON_WARMUP_LIMIT
+        ? undefined
+        : (file) => {
+            scheduledIconWarmups += 1
+            void iconCache?.ensure(file.path)
+          }
+    )
     const daysSinceModified = (now - result.mtime.getTime()) / (1000 * 3600 * 24)
     const recencyScore = Number.isFinite(daysSinceModified)
       ? Math.exp(-0.05 * Math.max(0, daysSinceModified))
@@ -234,6 +250,7 @@ abstract class BaseNativeFileSearchProvider implements NativeFileSearchProvider 
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
   readonly priority = 'fast' as const
   readonly expectedDuration = 75
+  private readonly iconCache = new EverythingIconCache()
   protected available = false
   protected lastError: string | null = null
 
@@ -290,7 +307,7 @@ abstract class BaseNativeFileSearchProvider implements NativeFileSearchProvider 
         results: results.length,
         duration: formatDuration(performance.now() - startedAt)
       })
-      return buildNativeSearchItems(this, query, results)
+      return buildNativeSearchItems(this, query, results, this.iconCache)
     } catch (error) {
       if (!isAbortError(error)) {
         this.lastError = error instanceof Error ? error.message : String(error)

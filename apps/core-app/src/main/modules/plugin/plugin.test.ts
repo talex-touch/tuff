@@ -477,6 +477,81 @@ describe('TouchPlugin.triggerFeature', () => {
     )
   })
 
+  it('preserves explicit colorful icon intent on pushed root result items', async () => {
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [{ providerId: 'test-plugin.root-results', enabled: true, order: 10 }]
+      }
+    }
+
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.searchProviders = [
+      {
+        id: 'test-plugin.root-results',
+        displayName: 'Test Plugin Results',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 100,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      }
+    ]
+    plugin.status = PluginStatus.ENABLED
+
+    await plugin.getFeatureUtil().boxItems.push({
+      id: 'colorful-provider-item',
+      source: { type: 'plugin', id: 'custom', name: 'custom' },
+      render: {
+        mode: 'default',
+        basic: {
+          title: 'Colorful item',
+          icon: { type: 'url', value: 'https://example.test/logo.svg', colorful: true }
+        }
+      }
+    } satisfies TuffItem)
+
+    expect(boxItemManagerMock.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        render: expect.objectContaining({
+          basic: expect.objectContaining({
+            icon: expect.objectContaining({ colorful: true })
+          })
+        })
+      })
+    )
+  })
+
   it('routes multi-provider push items by feature id and filters only disabled providers', async () => {
     appSettingsMock.value = {
       searchProviders: {

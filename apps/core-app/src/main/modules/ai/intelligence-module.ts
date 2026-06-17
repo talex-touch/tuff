@@ -16,6 +16,7 @@ import type {
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
+import type { StreamContext } from '@talex-touch/utils/transport/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { ApiResponse } from '../../utils/safe-handler'
 import {
@@ -23,7 +24,11 @@ import {
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
-import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
+import {
+  intelligenceApiEvents,
+  intelligenceContextEvents,
+  intelligenceKnowledgeEvents
+} from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi } from '../../utils/safe-handler'
@@ -60,6 +65,9 @@ import { IntelligenceProviderManager } from './runtime/provider-manager'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 import { intelligenceTtsService } from './intelligence-tts-service'
 import type { CapabilityTestPayload } from './capability-testers/base-tester'
+import { contextHygieneService } from './intelligence-context-hygiene'
+import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
+import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 
 const intelligenceLog = createLogger('Intelligence')
 const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
@@ -267,16 +275,13 @@ function normalizeCapabilityInvokeError(capabilityId: string, error: unknown): E
   const message = baseError.message || ''
   const capabilityUnsupported = /capability not supported|is unsupported/i.test(message)
   if (!capabilityUnsupported) {
-    return baseError
+    return toNormalizedIntelligenceError(baseError, { capabilityId })
   }
 
-  const normalized = new Error(
-    `[INTELLIGENCE_CAPABILITY_UNSUPPORTED:${capabilityId}] ${message}`
-  ) as Error & { code?: string; capabilityId?: string; cause?: unknown }
-  normalized.code = 'INTELLIGENCE_CAPABILITY_UNSUPPORTED'
-  normalized.capabilityId = capabilityId
-  normalized.cause = error
-  return normalized
+  return toNormalizedIntelligenceError(
+    Object.assign(baseError, { code: 'INTELLIGENCE_CAPABILITY_UNSUPPORTED' }),
+    { capabilityId }
+  )
 }
 
 const intelligenceAgentEvents = {
@@ -950,9 +955,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     intelligenceLog.info('Registering IPC channels')
 
-    const { registerSafe, registerProtectedSafe } = this.createChannelRegistrars(this.transport)
+    const { registerSafe, registerProtectedSafe, registerProtectedStream } =
+      this.createChannelRegistrars(this.transport)
 
-    this.registerInvokeChannels(registerProtectedSafe)
+    this.registerInvokeChannels(registerProtectedSafe, registerProtectedStream)
+    this.registerKnowledgeChannels(registerProtectedSafe)
+    this.registerContextChannels(registerProtectedSafe)
     this.registerCapabilityChannels(registerSafe)
     this.registerStatsChannels(registerSafe)
     this.registerEnvironmentChannels(registerSafe)
@@ -998,9 +1006,28 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       )
     }
 
+    const registerProtectedStream = <TReq, TChunk>(
+      event: TuffEvent<TReq, AsyncIterable<TChunk>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void
+    ) => {
+      transport.onStream(event, async (payload, context) => {
+        try {
+          await withPermission({ permissionId }, async (nextPayload: TReq, nextContext) => {
+            await handler(nextPayload, nextContext as unknown as StreamContext<TChunk>)
+          })(payload, context as unknown as HandlerContext)
+        } catch (error) {
+          createErrorLogger(action)(error)
+          context.error(error instanceof Error ? error : new Error(String(error)))
+        }
+      })
+    }
+
     return {
       registerSafe,
-      registerProtectedSafe
+      registerProtectedSafe,
+      registerProtectedStream
     }
   }
 
@@ -1010,6 +1037,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       action: string,
       permissionId: string,
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void,
+    registerProtectedStream: <TReq, TChunk>(
+      event: TuffEvent<TReq, AsyncIterable<TChunk>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void
     ) => void
   ): void {
     registerProtectedSafe(
@@ -1037,6 +1070,30 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
         return result
+      }
+    )
+
+    registerProtectedStream(
+      intelligenceApiEvents.stream,
+      'Stream capability',
+      'intelligence.basic',
+      async (data, streamContext) => {
+        if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
+          throw new Error('Invalid stream payload')
+        }
+
+        const { capabilityId, payload, options } = data
+        ensureIntelligenceConfigLoaded()
+        intelligenceLog.info(`Streaming capability: ${capabilityId}`)
+        try {
+          for await (const event of tuffIntelligence.stream(capabilityId, payload, options)) {
+            if (streamContext.isCancelled()) break
+            streamContext.emit(event)
+          }
+          streamContext.end()
+        } catch (error) {
+          throw normalizeCapabilityInvokeError(capabilityId, error)
+        }
       }
     )
 
@@ -1079,6 +1136,73 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
         return result
       }
+    )
+  }
+
+  private registerKnowledgeChannels(
+    registerProtectedSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerProtectedSafe(
+      intelligenceKnowledgeEvents.indexDocument,
+      'Index local knowledge document',
+      'intelligence.basic',
+      async (data) => localKnowledgeEngine.indexDocument(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceKnowledgeEvents.indexChunk,
+      'Index local knowledge chunk',
+      'intelligence.basic',
+      async (data) => localKnowledgeEngine.indexChunk(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceKnowledgeEvents.search,
+      'Search local knowledge',
+      'intelligence.basic',
+      async (data) => localKnowledgeEngine.search(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceKnowledgeEvents.buildContext,
+      'Build local knowledge context',
+      'intelligence.basic',
+      async (data) => localKnowledgeEngine.buildContext(data)
+    )
+  }
+
+  private registerContextChannels(
+    registerProtectedSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerProtectedSafe(
+      intelligenceContextEvents.prepareTurn,
+      'Prepare intelligence context turn',
+      'intelligence.basic',
+      async (data) => contextHygieneService.prepareTurn(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceContextEvents.saveMemory,
+      'Save intelligence memory',
+      'intelligence.basic',
+      async (data) => contextHygieneService.saveMemory(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceContextEvents.deleteMemory,
+      'Delete intelligence memory',
+      'intelligence.basic',
+      async (data) => contextHygieneService.deleteMemory(data.memoryId, data.reason)
     )
   }
 

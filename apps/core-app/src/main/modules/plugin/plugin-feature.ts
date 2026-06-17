@@ -141,7 +141,13 @@ export class PluginFeature implements IPluginFeature {
     this.id = options.id
     this.name = options.name
     this.desc = options.desc
-    this.icon = new TuffIconImpl(pluginPath, options.icon.type, options.icon.value, dev)
+    this.icon = new TuffIconImpl(
+      pluginPath,
+      options.icon.type,
+      options.icon.value,
+      dev,
+      options.icon.colorful
+    )
     this.keywords = options.keywords
     this.push = options.push
     this.platform = options.platform
@@ -176,7 +182,8 @@ export class PluginFeature implements IPluginFeature {
       icon: {
         type: this.icon.type,
         value: this.icon.value,
-        status: this.icon.status
+        status: this.icon.status,
+        colorful: this.icon.colorful
       },
       keywords: this.keywords,
       push: this.push,

@@ -4,6 +4,8 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
   IntelligenceProviderConfig,
+  IntelligenceStreamEvent,
+  IntelligenceStreamOptions,
   IntelligenceTtsSpeakPayload,
   IntelligenceTtsSpeakResult,
   TuffIntelligenceAgentSession,
@@ -313,6 +315,12 @@ export interface IntelligenceSdk {
     payload: unknown,
     options?: IntelligenceInvokeOptions,
   ) => Promise<IntelligenceInvokeResult<T>>
+  stream: <T = unknown>(
+    capabilityId: string,
+    payload: unknown,
+    options: IntelligenceStreamOptions<T>,
+    invokeOptions?: IntelligenceInvokeOptions,
+  ) => Promise<StreamController>
   ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
   chatLangChain: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
   testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
@@ -395,6 +403,14 @@ export const intelligenceApiEvents = {
     payload: unknown
     options?: IntelligenceInvokeOptions
   }, IntelligenceApiResponse<IntelligenceInvokeResult<unknown>>>(),
+  stream: defineEvent('intelligence')
+    .module('api')
+    .event('stream')
+    .define<{
+    capabilityId: string
+    payload: unknown
+    options?: IntelligenceInvokeOptions
+  }, AsyncIterable<IntelligenceStreamEvent<unknown>>>(),
   ttsSpeak: defineEvent('intelligence')
     .module('api')
     .event('tts-speak')
@@ -660,6 +676,34 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     ) {
       const response = await transport.send(intelligenceApiEvents.invoke, { capabilityId, payload, options })
       return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
+    },
+
+    async stream<T = unknown>(
+      capabilityId: string,
+      payload: unknown,
+      options: IntelligenceStreamOptions<T>,
+      invokeOptions?: IntelligenceInvokeOptions,
+    ) {
+      if (typeof transport.stream !== 'function') {
+        throw new TypeError('Intelligence streaming requires a stream-capable transport')
+      }
+      return transport.stream(
+        intelligenceApiEvents.stream,
+        { capabilityId, payload, options: { ...invokeOptions, stream: true } },
+        {
+          onData: (event) => {
+            const typedEvent = event as IntelligenceStreamEvent<T>
+            if (typedEvent.type === 'start') options.onStart?.(typedEvent)
+            else if (typedEvent.type === 'delta') options.onDelta?.(typedEvent.delta || '', typedEvent)
+            else if (typedEvent.type === 'message' && typedEvent.message) options.onMessage?.(typedEvent.message, typedEvent)
+            else if (typedEvent.type === 'usage' && typedEvent.usage) options.onUsage?.(typedEvent.usage, typedEvent)
+            else if (typedEvent.type === 'metadata' && typedEvent.metadata) options.onMetadata?.(typedEvent.metadata, typedEvent)
+            else if (typedEvent.type === 'end') options.onEnd?.(typedEvent)
+          },
+          onError: options.onError,
+          onEnd: () => options.onEnd?.({ type: 'end', capabilityId }),
+        },
+      )
     },
 
     async ttsSpeak(payload) {

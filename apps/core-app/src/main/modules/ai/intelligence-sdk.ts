@@ -50,6 +50,7 @@ import type {
   IntelligenceSentimentAnalyzePayload,
   IntelligenceSentimentAnalyzeResult,
   IntelligenceStreamChunk,
+  IntelligenceStreamEvent,
   IntelligenceTTSPayload,
   IntelligenceSummarizePayload,
   IntelligenceTranslatePayload,
@@ -502,6 +503,138 @@ export class TuffIntelligenceSDK {
       }
     } finally {
       disposeInvoke()
+    }
+  }
+
+  async *stream<T = unknown>(
+    capabilityId: string,
+    payload: unknown,
+    options: IntelligenceInvokeOptions = {}
+  ): AsyncGenerator<IntelligenceStreamEvent<T>> {
+    const payloadRecord =
+      payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
+    const disposeStream = enterPerfContext('Intelligence.stream', {
+      capabilityId,
+      payloadType: typeof payload,
+      messageCount: Array.isArray(payloadRecord?.messages)
+        ? payloadRecord?.messages.length
+        : undefined,
+      caller: options.metadata?.caller
+    })
+
+    try {
+      const capability = intelligenceCapabilityRegistry.get(capabilityId)
+      if (!capability) {
+        throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
+      }
+      if (capability.type !== 'chat') {
+        throw new Error(`[Intelligence] Capability ${capabilityId} does not support streaming`)
+      }
+
+      const caller = options.metadata?.caller
+      if (this.config.enableQuota && caller) {
+        const quotaCheck = await this.checkQuota(caller)
+        if (!quotaCheck.allowed) {
+          throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
+        }
+      }
+
+      const { runtimeOptions, promptTemplate, promptVariables } = this.prepareRuntimeOptions(
+        capabilityId,
+        { ...options, stream: true }
+      )
+      const manager = ensureProviderManager()
+      const availableProviders = this.resolveAvailableProviders(
+        manager,
+        capabilityId,
+        capability.type,
+        capability.supportedProviders,
+        runtimeOptions,
+        true
+      )
+      const strategyResult = await strategyManager.select({
+        capabilityId,
+        options: runtimeOptions,
+        availableProviders
+      })
+      const provider = manager.get(strategyResult.selectedProvider.id)
+      if (!provider) {
+        throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
+      }
+
+      this.applyModelPreference(runtimeOptions, strategyResult.selectedProvider, capabilityId)
+      let renderedTemplate = promptTemplate
+      if (promptTemplate) {
+        try {
+          renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
+        } catch (error) {
+          logWarn('Failed to render prompt template, falling back to raw template', error)
+        }
+      }
+
+      const chatPayload = payload as IntelligenceChatPayload
+      const nextPayload: IntelligenceChatPayload = {
+        ...chatPayload,
+        messages: this.applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
+      }
+      const startTime = Date.now()
+      const traceId = intelligenceAuditLogger.generateTraceId()
+      let accumulated = ''
+      let finalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+
+      yield {
+        type: 'start',
+        capabilityId,
+        requestId:
+          typeof runtimeOptions.metadata?.requestId === 'string'
+            ? runtimeOptions.metadata.requestId
+            : undefined,
+        traceId,
+        provider: strategyResult.selectedProvider.id,
+        model: runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel,
+        metadata: runtimeOptions.metadata
+      }
+
+      for await (const chunk of provider.chatStream(nextPayload, runtimeOptions)) {
+        if (chunk.usage) {
+          finalUsage = chunk.usage
+          yield {
+            type: 'usage',
+            capabilityId,
+            traceId,
+            usage: chunk.usage
+          }
+        }
+        if (chunk.delta) {
+          accumulated += chunk.delta
+          yield {
+            type: 'delta',
+            capabilityId,
+            traceId,
+            delta: chunk.delta,
+            content: accumulated,
+            provider: strategyResult.selectedProvider.id,
+            model:
+              runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel
+          }
+        }
+      }
+
+      yield {
+        type: 'end',
+        capabilityId,
+        traceId,
+        result: accumulated as T,
+        content: accumulated,
+        usage: finalUsage,
+        provider: strategyResult.selectedProvider.id,
+        model: runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel,
+        metadata: {
+          latency: Date.now() - startTime
+        }
+      }
+    } finally {
+      disposeStream()
     }
   }
 

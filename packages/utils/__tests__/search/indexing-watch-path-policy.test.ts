@@ -10,28 +10,28 @@ describe('indexing watch path policy', () => {
     expect(insensitive).toBe(sensitive.toLowerCase())
   })
 
-  it('uses shallow macOS watch depth for Applications and Downloads roots', () => {
+  it('uses deeper macOS watch depth for file index roots', () => {
     expect(
       getIndexedWatchDepthForPath({
         platform: 'darwin',
         watchPath: '/Users/test/Downloads'
       })
-    ).toBe(1)
+    ).toBe(5)
     expect(
       getIndexedWatchDepthForPath({
         platform: 'darwin',
         watchPath: '/Applications'
       })
-    ).toBe(1)
-  })
-
-  it('uses platform defaults for other roots', () => {
+    ).toBe(5)
     expect(
       getIndexedWatchDepthForPath({
         platform: 'darwin',
         watchPath: '/Users/test/Documents'
       })
-    ).toBe(2)
+    ).toBe(5)
+  })
+
+  it('uses platform defaults for non-macOS roots', () => {
     expect(
       getIndexedWatchDepthForPath({
         platform: 'win32',
