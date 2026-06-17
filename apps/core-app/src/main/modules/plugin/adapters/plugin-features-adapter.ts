@@ -271,7 +271,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         name: plugin.name,
         icon: {
           type: mapIconType((plugin.icon as ITuffIcon).type),
-          value: (plugin.icon as ITuffIcon).value
+          value: (plugin.icon as ITuffIcon).value,
+          colorful: (plugin.icon as ITuffIcon).colorful
         },
         meta: {
           pluginName,
@@ -437,7 +438,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           subtitle: feature.desc,
           icon: {
             type: mapIconType((feature.icon as ITuffIcon).type),
-            value: (feature.icon as ITuffIcon).value
+            value: (feature.icon as ITuffIcon).value,
+            colorful: (feature.icon as ITuffIcon).colorful
           }
         }
       },

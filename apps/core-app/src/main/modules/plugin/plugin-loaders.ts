@@ -1,4 +1,4 @@
-import type { ManifestDivisionBoxConfig } from '@talex-touch/utils'
+import type { ITuffIcon, ManifestDivisionBoxConfig } from '@talex-touch/utils'
 import type { ManifestPermissionReasons, ManifestPermissions } from '@talex-touch/utils/permission'
 import type {
   IPluginBuildInfo,
@@ -14,7 +14,6 @@ import type {
   SearchProviderManifestResolutionIssue,
   SearchProviderManifestDescriptor
 } from '@talex-touch/utils/search'
-import type { TuffIconType } from '@talex-touch/utils/types/icon'
 import path from 'node:path'
 import {
   generatePermissionIssue,
@@ -53,10 +52,7 @@ interface PluginManifest {
    * Category id synced with Nexus (e.g., 'utilities', 'productivity').
    */
   category?: string
-  icon: {
-    type: TuffIconType
-    value: string
-  }
+  icon: ITuffIcon
   dev?: IPluginDev
   build?: IPluginBuildInfo
   platforms?: Record<string, boolean>
@@ -312,7 +308,8 @@ abstract class BasePluginLoader {
       this.pluginPath,
       pluginInfo.icon.type,
       pluginInfo.icon.value,
-      this.touchPlugin.dev
+      this.touchPlugin.dev,
+      pluginInfo.icon.colorful
     )
     await icon.init()
     this.touchPlugin.icon = icon

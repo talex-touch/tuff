@@ -16,15 +16,23 @@ export class TuffIconImpl implements ITuffIcon {
   type: TuffIconType
   value: string
   status?: 'normal' | 'loading' | 'error'
+  colorful?: boolean
 
   private rootPath: string
   private devConfig?: IPluginDev
 
-  constructor(rootPath: string, type: TuffIconType, value: string, devConfig?: IPluginDev) {
+  constructor(
+    rootPath: string,
+    type: TuffIconType,
+    value: string,
+    devConfig?: IPluginDev,
+    colorful?: boolean
+  ) {
     this.rootPath = rootPath
     this.type = type
     this.value = value
     this.status = 'normal'
+    this.colorful = colorful
     this.devConfig = devConfig
   }
 

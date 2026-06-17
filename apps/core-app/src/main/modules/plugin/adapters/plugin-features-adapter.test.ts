@@ -32,7 +32,7 @@ vi.mock('../view/plugin-view-loader', () => ({
 
 vi.mock('../../../core/runtime-accessor', () => ({
   getRegisteredMainRuntime: vi.fn(() => ({
-    channel: {
+    transport: {
       broadcastPlugin: vi.fn()
     }
   }))
@@ -83,6 +83,20 @@ describe('plugin-features-adapter', () => {
     expect(item.meta?.footerHints?.primary?.visible).toBe(false)
     expect(item.meta?.footerHints?.secondary?.visible).toBe(false)
     expect(item.meta?.footerHints?.quickSelect?.visible).toBe(false)
+  })
+
+  it('preserves explicit colorful feature icons for CoreBox rendering', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const item = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      icon: { type: 'file', value: 'assets/logo.svg', colorful: true }
+    })
+
+    expect(item.render.basic?.icon).toMatchObject({
+      type: 'file',
+      value: 'assets/logo.svg',
+      colorful: true
+    })
   })
 
   it('honors explicit plugin feature footer hint declarations', () => {
