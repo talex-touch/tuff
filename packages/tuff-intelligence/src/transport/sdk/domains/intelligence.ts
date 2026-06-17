@@ -678,7 +678,12 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
     },
 
-    async stream<T = unknown>(capabilityId, payload, options, invokeOptions) {
+    async stream<T = unknown>(
+      capabilityId: string,
+      payload: unknown,
+      options: IntelligenceStreamOptions<T>,
+      invokeOptions?: IntelligenceInvokeOptions,
+    ) {
       if (typeof transport.stream !== 'function') {
         throw new TypeError('Intelligence streaming requires a stream-capable transport')
       }
