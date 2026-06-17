@@ -13,6 +13,7 @@ TuffIcon.install = (app: App) => {
 }
 
 const TxIcon = TuffIcon
+export { shouldRenderSvgAsMask } from './src/svg-color-mode'
 export { TuffIcon, TX_ICON_CONFIG_KEY, TxIcon, TxStatusIcon }
 export type { TxStatusIconProps, TxStatusIconTone } from './src/status-icon'
 export type {

@@ -1,0 +1,371 @@
+generated: 2026-06-16T16:39:45.495Z
+goalId: ud-57vyom
+goal: 把 AI 2.5.x 文档体系收口成一份可执行、可验证的近期实施计划，明确 2.5.0 → 2.5.3 → 2.5.4 顺序，并保持
+  2.5.5/2.5.8 为方向锁定不抢主线。
+doneCriteria: "`mise run ai-docs:verify` 存在且通过，并引用真实输出；本地开发套件 `mise run
+  ai-docs:dev` 存在且通过；本地 release-readiness 套件 `mise run ai-docs:verify` 覆盖当前
+  scope；changed-file/affected-target 执行存在，或有确定性 safe fallback 文档化；最小 GitHub
+  workflow 存在，并与本地 `mise run ai-docs:verify` 尽量同源；若无法观察 GitHub run
+  pass，则阻塞而不是完成；新增/更新的 AI 执行计划文档必须覆盖：2.5.0 可见体验证据、2.5.3 Context Builder 基座、2.5.4
+  ContextHygiene、2.5.5/2.5.8 非当前抢占范围、验证门禁、风险和后续切片；清理调试输出、scratch 文件、临时
+  TODO，以及本轮新增的 guardrail 违规。"
+verifyCommand: mise run ai-docs:verify
+phase: cleanup
+askBefore:
+  - git commit
+  - git push
+  - 删除/移动大量文件
+  - mise use <tool>@<version>
+  - 任何外部网络/生产 API 调用
+  - 发布、部署、npm publish
+decisionStyle: 优先最小可验证文档与自动化切片，不提前实现 2.5.5/2.5.8 或扩大 Stable 承诺。
+budget:
+  used: 1
+  max: 200
+currentTaskId: T-008
+tasks:
+  - id: T-001
+    title: Inspect current automation foundation
+    phase: bootstrap
+    status: done
+    dependencies: []
+    blocks:
+      - T-002
+    prerequisites:
+      - description: No production/document changes have started.
+        cleared: true
+    validationSteps:
+      - List existing mise tasks and workflow gates.
+      - Identify canonical gates/rules/failure conditions for AI docs scope.
+      - Record whether local dev, release, affected-target, cache, parallel,
+        GitHub parity exist.
+    ciCommands:
+      - mise tasks ls --json
+      - mise exec -- git status --short
+    styleguideRules:
+      - "AGENTS.md: use Simplified Chinese for user-facing summaries."
+      - "pi-config: bootstrap before RED."
+      - "Mise-first CLI policy: prefer mise tasks or mise exec."
+    guardrails:
+      - Do not edit files in this task.
+      - Do not claim any gate passes until output is quoted.
+    learnings:
+      - "`mise tasks ls --json` returned `[]`; no canonical mise task suite
+        exists yet, so bootstrap is mandatory before RED."
+    gotchas:
+      - Existing docs may exceed 200 LOC; avoid editing oversized files unless
+        replanned.
+      - GitHub Actions access may be unavailable.
+      - Worktree already contains many unrelated modified/untracked files;
+        restrict edits to AI docs automation and implementation-plan files only.
+    context:
+      - path: mise.toml
+        why: Candidate source for local validation tasks.
+      - path: .github/workflows
+        why: Candidate source for GitHub parity.
+      - path: docs/plan-prd/TODO.md
+        why: Current AI roadmap source of truth.
+      - path: .github/workflows/ci.yml
+        why: Existing CI uses pnpm quality:pr, not a mise AI docs gate.
+  - id: T-002
+    title: Bootstrap local AI docs gates
+    phase: bootstrap
+    status: done
+    dependencies:
+      - T-001
+    blocks:
+      - T-003
+      - T-004
+    prerequisites:
+      - description: Existing automation inventory is known.
+        cleared: true
+    validationSteps:
+      - Add or reuse one canonical AI docs gate definition.
+      - Provide sub-second/few-second local dev validation.
+      - Provide deterministic release-readiness validation.
+      - Provide changed-file/affected-target execution or documented safe
+        fallback.
+      - Provide deterministic no-cache or cache behavior.
+      - Use safe parallel execution only where deterministic.
+      - Run local dev and verify gates.
+    ciCommands:
+      - mise run ai-docs:dev
+      - mise run ai-docs:verify
+    styleguideRules:
+      - "pi-config §0: eight bootstrap items must exist before RED."
+      - "pi-config §1: no unnecessary slowdown."
+      - "Repository AGENTS.md: project automation goes through existing
+        toolchain conventions."
+    guardrails:
+      - Do not add package.json scripts.
+      - Keep new scripts/files under 200 LOC.
+      - Prefer existing tasks/workflows over new machinery.
+    learnings:
+      - "Local bootstrap gates now exist: `mise run ai-docs:dev` and `mise run
+        ai-docs:verify` both pass locally in 44.5ms verify output."
+    gotchas:
+      - If mise.toml exceeds structural constraints, block or replan before
+        editing.
+      - If a tool is missing, ask before `mise use`.
+      - If package manager is unavailable, prefer existing mise-pinned tools
+        before asking to install.
+    context:
+      - path: mise.toml
+        why: Canonical place for project automation tasks.
+      - path: docs/plan-prd/docs/PRD-QUALITY-BASELINE.md
+        why: Quality baseline may define gate expectations.
+      - path: scripts/ai-docs/README.md
+        why: Canonical AI docs gates/rules/fallback/parity description.
+  - id: T-003
+    title: Bootstrap GitHub parity workflow
+    phase: bootstrap
+    status: done
+    dependencies:
+      - T-002
+    blocks:
+      - T-004
+    prerequisites:
+      - description: Local AI docs verify task exists and passes.
+        cleared: true
+    validationSteps:
+      - Add or verify minimal GitHub workflow for the same AI docs gate.
+      - Ensure workflow permissions are read-only unless a write job is
+        explicitly guarded.
+      - Verify local workflow command matches `mise run ai-docs:verify`.
+      - If GitHub run status is accessible, confirm latest run success;
+        otherwise record blocker condition.
+    ciCommands:
+      - mise run ai-docs:verify
+      - mise exec -- git diff --check
+    styleguideRules:
+      - "pi-config §0: matching minimal GitHub Agentic Workflow."
+      - "pi-config §9: local and GitHub gates match as closely as environments
+        allow."
+    guardrails:
+      - Do not push to trigger CI without explicit approval.
+      - Do not claim GitHub pass without observed output.
+    learnings:
+      - "Added `.github/workflows/ai-docs.yml` with `permissions: contents:
+        read` and `run: mise run ai-docs:verify`; local verify passed in
+        103.8ms."
+    gotchas:
+      - Local parity is not the same as remote GitHub pass.
+      - If no CI surface exists, completion must block.
+      - Remote GitHub workflow pass is not observable until a push/PR run
+        exists; final completion must block if no run evidence is available.
+    context:
+      - path: .github/workflows
+        why: GitHub workflow parity scope.
+      - path: mise.toml
+        why: Workflow should call the same local gate.
+      - path: .github/workflows/ai-docs.yml
+        why: Minimal GitHub parity workflow for AI docs gate.
+  - id: T-004
+    title: Add failing AI docs contract gate
+    phase: red
+    status: done
+    dependencies:
+      - T-002
+      - T-003
+    blocks:
+      - T-005
+    prerequisites:
+      - description: Bootstrap foundation exists and passes for current baseline.
+        cleared: true
+    validationSteps:
+      - Add a public-boundary verification that expects the AI execution plan
+        document and required sections.
+      - Run `mise run ai-docs:verify`.
+      - Confirm it fails because the production document is missing or
+        incomplete.
+      - Quote the failing output in task learnings.
+    ciCommands:
+      - mise run ai-docs:verify
+    styleguideRules:
+      - "pi-config §5–6: tests verify observable docs contract, not
+        implementation internals."
+      - "pi-config: RED must fail before GREEN."
+    guardrails:
+      - Do not create the final plan document in RED.
+      - Keep verification deterministic and fast.
+      - Avoid real network, DB, or filesystem mutation outside repo files.
+    learnings:
+      - "RED confirmed: `mise run ai-docs:verify` failed because
+        `docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md`
+        did not exist; output included `Error: ENOENT: no such file or
+        directory`."
+    gotchas:
+      - A test that only checks file existence is too weak; require content
+        sections and key decisions.
+      - The RED failure currently prints a Node stack trace for a missing file;
+        refactor should improve gate failure readability without weakening the
+        contract.
+    context:
+      - path: docs/plan-prd/03-features/ai-2.5.0-plan-prd.md
+        why: Source for 2.5.0 evidence requirements.
+      - path: docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md
+        why: Source for ContextHygiene requirements.
+  - id: T-005
+    title: Create AI execution plan document
+    phase: green
+    status: done
+    dependencies:
+      - T-004
+    blocks:
+      - T-006
+    prerequisites:
+      - description: RED gate fails for the intended missing/incomplete docs contract.
+        cleared: true
+    validationSteps:
+      - Add a focused AI 2.5.x execution plan document under
+        docs/plan-prd/04-implementation.
+      - Cover current context-management doc status and remaining AI docs work.
+      - "Encode execution order: 2.5.0 evidence, 2.5.3 Context Builder, 2.5.4
+        ContextHygiene."
+      - Keep 2.5.5 local model and 2.5.8 ASR as locked future directions.
+      - Run `mise run ai-docs:verify` and confirm the RED gate turns green.
+    ciCommands:
+      - mise run ai-docs:dev
+      - mise run ai-docs:verify
+    styleguideRules:
+      - "Repository AGENTS.md: docs affecting behavior/architecture must sync
+        planning docs where feasible."
+      - "pi-config: smallest GREEN change to satisfy failing contract."
+    guardrails:
+      - Do not implement runtime AI features in this goal.
+      - Do not expand Stable beyond text + OCR.
+      - Keep new document under 200 LOC.
+      - Do not edit oversized existing docs unless replanned.
+    learnings:
+      - "GREEN confirmed: `mise run ai-docs:verify` passed after adding
+        `docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md`;
+        plan doc is 96 LOC."
+    gotchas:
+      - Avoid duplicating entire PRDs; summarize with links and decisions.
+      - Do not treat 2.5.5/2.5.8 as current implementation blockers.
+    context:
+      - path: docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md
+        why: Source for Context Builder sequencing.
+      - path: docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md
+        why: Source for future local model boundary.
+      - path: docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md
+        why: Source for future ASR boundary.
+      - path: docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md
+        why: AI 2.5.x execution plan created by GREEN task.
+  - id: T-006
+    title: Refactor gates and wording
+    phase: refactor
+    status: done
+    dependencies:
+      - T-005
+    blocks:
+      - T-007
+    prerequisites:
+      - description: GREEN implementation passes the focused AI docs gate.
+        cleared: true
+    validationSteps:
+      - Remove duplication between verification logic and document wording.
+      - Ensure validation is incremental, deterministic, and fast.
+      - Clarify risks, non-goals, and evidence surfaces.
+      - Re-run local dev and verify gates.
+    ciCommands:
+      - mise run ai-docs:dev
+      - mise run ai-docs:verify
+    styleguideRules:
+      - "pi-config §1: speed improvements belong in REFACTOR."
+      - "KISS/YAGNI: avoid broader automation than current docs scope requires."
+    guardrails:
+      - Do not broaden scope to production code.
+      - Do not add hidden global state or slow full-repo scans without cause.
+    learnings:
+      - Refactored missing-file handling into a readable gate failure path;
+        `mise run ai-docs:verify` still passed in 37.6ms and changed files
+        remain below 200 LOC.
+    gotchas:
+      - Refactor must preserve externally observable docs contract.
+    context:
+      - path: mise.toml
+        why: Ensure tasks remain focused and fast.
+      - path: .github/workflows
+        why: Ensure parity remains aligned.
+  - id: T-007
+    title: Cleanup production-shaped diff
+    phase: cleanup
+    status: done
+    dependencies:
+      - T-006
+    blocks:
+      - T-008
+    prerequisites:
+      - description: Refactor validation passes.
+        cleared: true
+    validationSteps:
+      - Remove debug prints, scratch files, temporary TODOs, and commented-out
+        blocks added by this loop.
+      - Check changed files for structural constraints.
+      - Confirm no unapproved high-risk operation occurred.
+      - Run whitespace/diff validation.
+    ciCommands:
+      - mise exec -- git diff --check
+      - mise exec -- git status --short
+    styleguideRules:
+      - "pi-config §9: cleanup before completion."
+      - "Repository AGENTS.md: do not commit or push unless requested."
+    guardrails:
+      - Do not hide failures with eslint-disable or weakened checks.
+      - Do not leave temporary files.
+    learnings:
+      - Scoped `git diff --check` produced no output for touched files; changed
+        files are within LOC limits, and only required verifier stdout uses
+        `console.log`.
+    gotchas:
+      - A clean-looking diff is not proof of done; final verify still required.
+      - "`git diff -- <paths> --stat` treated `--stat` as a pathspec after `--`;
+        do not use that output as diff-stat evidence."
+    context:
+      - path: .
+        why: Whole changed-file cleanup scope.
+  - id: T-008
+    title: Run final verification
+    phase: cleanup
+    status: blocked
+    dependencies:
+      - T-007
+    blocks: []
+    prerequisites:
+      - description: Cleanup completed and diff is production-shaped.
+        cleared: true
+    validationSteps:
+      - Run `mise run ai-docs:verify`.
+      - Quote the literal stdout/stderr.
+      - If GitHub run evidence is unavailable, call until_done_block instead of
+        until_done_complete.
+      - Confirm all done criteria literally hold.
+    ciCommands:
+      - mise run ai-docs:verify
+    styleguideRules:
+      - "pi-config §9: only verifyCommand output or literal done-criterion
+        evidence counts."
+      - "until-done skill: completion evidence must quote command output."
+    guardrails:
+      - Never call until_done_complete on proxy signals.
+      - Do not paraphrase final command output.
+    learnings:
+      - "Final local verify passed: `[ai-docs:dev] $ node
+        scripts/ai-docs/verify-ai-docs.mjs ... AI docs verification passed ...
+        [ai-docs:verify] $ git diff --check -- mise.toml scripts/ai-docs
+        docs/plan-prd/… Finished in 46.2ms`."
+      - "Attempted approved push after commit `36365b054 docs(ai): add AI 2.5
+        execution plan gate`, but GitHub rejected it: `refusing to allow an
+        OAuth App to create or update workflow .github/workflows/ai-docs.yml
+        without workflow scope`. Local verify still passed in 44.4ms."
+    gotchas:
+      - Same evidence must not be resubmitted if the judge rejects completion.
+      - Cannot complete until GitHub workflow pass is observed or the North Star
+        is changed via a new /until-done setup; local workflow parity is not
+        enough under the approved done criteria.
+      - Current GitHub OAuth credentials cannot push workflow changes; need a
+        token/session with `workflow` scope or a human push.
+    context:
+      - path: .until-done/tasks.yaml
+        why: Human-reviewable task record after activation.

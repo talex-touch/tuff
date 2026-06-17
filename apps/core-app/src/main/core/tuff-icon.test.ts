@@ -46,6 +46,25 @@ describe('TuffIconImpl dev source behavior', () => {
     expect(pathExistsMock).toHaveBeenCalledTimes(1)
   })
 
+  it('preserves explicit colorful intent while resolving file icons', async () => {
+    const icon = new TuffIconImpl(
+      '/tmp/plugin',
+      'file',
+      'icons/logo.svg',
+      {
+        enable: true,
+        source: true,
+        address: 'http://localhost:3733'
+      },
+      true
+    )
+
+    await icon.init()
+
+    expect(icon.colorful).toBe(true)
+    expect(icon.value).toBe(path.resolve('/tmp/plugin', 'icons/logo.svg'))
+  })
+
   it('uses dev server URL only when dev.source is true and local file is missing', async () => {
     pathExistsMock.mockResolvedValue(false)
     const icon = new TuffIconImpl('/tmp/plugin', 'file', 'icons/logo.svg', {

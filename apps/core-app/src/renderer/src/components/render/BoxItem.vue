@@ -7,6 +7,7 @@ import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { getOpenerByExtension, useOpenerAutoResolve } from '~/modules/openers'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import { renderHighlightedTextHtml } from './highlight-html'
+import { shouldRenderCoreBoxIconColorful } from './icon-color-mode'
 import ItemSubtitle from './ItemSubtitle.vue'
 import { formatResultSignalReason, resolveResultSignal, resolveSourceMeta } from './sourceMeta'
 
@@ -94,6 +95,10 @@ const noticeIcon = computed<ITuffIcon | null>(() => {
   return { type: 'class', value: 'i-ri-information-line', status: 'normal' }
 })
 const effectiveIcon = computed(() => noticeIcon.value || displayIcon.value)
+const shouldRenderIconColorful = computed(() => {
+  if (noticeIcon.value) return false
+  return shouldRenderCoreBoxIconColorful(props.render.basic?.icon)
+})
 const shouldShowNoticeReason = computed(
   () => isNoticeItem.value && noticeDescription.value.length > 0
 )
@@ -115,7 +120,7 @@ const shouldShowNoticeReason = computed(
         :icon="effectiveIcon"
         :alt="resolvedTitle || 'Tuff Item'"
         :size="32"
-        :colorful="noticeIcon ? false : (render?.basic?.icon?.colorful ?? true)"
+        :colorful="shouldRenderIconColorful"
         style="--icon-color: var(--tx-text-color-primary)"
       />
       <span
