@@ -1,5 +1,9 @@
+import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import type { IntelligenceVisionOcrPayload } from '@talex-touch/tuff-intelligence'
+import type {
+  IntelligenceStreamChunk,
+  IntelligenceVisionOcrPayload
+} from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 
 vi.mock('@talex-touch/tuff-native', () => ({
@@ -13,7 +17,8 @@ import { LocalProvider } from './local-provider'
 const mockedGetNativeOcrSupport = vi.mocked(getNativeOcrSupport)
 const mockedRecognizeImageText = vi.mocked(recognizeImageText)
 const networkMocks = vi.hoisted(() => ({
-  request: vi.fn()
+  request: vi.fn(),
+  requestStream: vi.fn()
 }))
 
 vi.mock('../../network', () => ({
@@ -102,6 +107,62 @@ describe('LocalProvider.visionOcr', () => {
 })
 
 describe('LocalProvider.chat', () => {
+  it('streams Ollama /api/chat chunks through the unified network service', async () => {
+    networkMocks.requestStream.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      url: 'http://localhost:11434/api/chat',
+      stream: Readable.from([
+        '{"message":{"content":"hel"},"done":false}\n',
+        '{"message":{"content":"lo"},"done":false}\n',
+        '{"done":true,"prompt_eval_count":3,"eval_count":2}\n'
+      ])
+    })
+
+    const provider = new LocalProvider({
+      id: 'local-default',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Local Model',
+      enabled: true,
+      priority: 3,
+      baseUrl: 'http://localhost:11434/v1',
+      defaultModel: 'llama3.1:8b',
+      models: ['llama3.1:8b']
+    })
+
+    const chunks: IntelligenceStreamChunk[] = []
+    for await (const chunk of provider.chatStream(
+      {
+        messages: [{ role: 'user', content: 'ping' }]
+      },
+      {}
+    )) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks).toEqual([
+      { delta: 'hel', done: false },
+      { delta: 'lo', done: false },
+      {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 3, completionTokens: 2, totalTokens: 5 }
+      }
+    ])
+    expect(networkMocks.requestStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: 'http://localhost:11434/api/chat',
+        proxyOverride: { mode: 'direct' },
+        body: expect.objectContaining({
+          model: 'llama3.1:8b',
+          stream: true
+        })
+      })
+    )
+  })
+
   it('uses Ollama /api/chat through the unified network service', async () => {
     networkMocks.request.mockResolvedValueOnce({
       data: {

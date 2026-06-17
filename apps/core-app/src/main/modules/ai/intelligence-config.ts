@@ -446,7 +446,15 @@ export function getCapabilityOptions(capabilityId: string): {
     return {}
   }
 
-  const enabledBindings = config.providers?.filter((binding) => binding.enabled !== false) ?? []
+  const enabledProviderIds = new Set(
+    (stored?.providers ?? [])
+      .filter((provider) => provider.enabled !== false)
+      .map((provider) => provider.id)
+  )
+  const enabledBindings =
+    config.providers?.filter(
+      (binding) => binding.enabled !== false && enabledProviderIds.has(binding.providerId)
+    ) ?? []
   return {
     allowedProviderIds: enabledBindings.length
       ? enabledBindings.map((binding) => binding.providerId)

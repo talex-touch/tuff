@@ -7,6 +7,7 @@ import {
   type IntelligenceProviderAdapter,
   type IntelligenceProviderConfig,
   type IntelligenceProviderManagerAdapter,
+  type IntelligenceStreamEvent,
   type IntelligenceTTSResult,
   type IntelligenceVisionOcrPayload,
   type IntelligenceVisionOcrResult
@@ -446,8 +447,8 @@ describe('TuffIntelligenceSDK invoke', () => {
       }
     })
 
-    const events = []
-    for await (const event of sdk.stream('text.chat', {
+    const events: IntelligenceStreamEvent<string>[] = []
+    for await (const event of sdk.stream<string>('text.chat', {
       messages: [{ role: 'user', content: 'hello' }]
     })) {
       events.push(event)
