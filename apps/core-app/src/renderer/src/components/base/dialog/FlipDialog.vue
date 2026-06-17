@@ -22,10 +22,7 @@ import {
   type FlipDialogReference,
   type FlipDialogSize
 } from './flip-dialog.utils'
-type FlipDialogPassThroughProps = Omit<
-  FlipOverlayProps,
-  'modelValue' | 'source' | 'cardClass' | 'cardStyle'
->
+type FlipDialogPassThroughProps = Omit<FlipOverlayProps, 'modelValue' | 'source' | 'cardStyle'>
 
 interface FlipDialogProps extends /* @vue-ignore */ FlipDialogPassThroughProps {
   modelValue?: boolean
@@ -89,7 +86,11 @@ const resolvedReference = computed<FlipDialogReference>(() => {
   })
 })
 
-const dialogCardClass = computed(() => `FlipDialog-Card FlipDialog-Card--${props.size}`)
+const dialogCardClass = computed(() => {
+  return ['FlipDialog-Card', `FlipDialog-Card--${props.size}`, props.cardClass]
+    .filter(Boolean)
+    .join(' ')
+})
 
 const dialogCardStyle = computed(() =>
   resolveFlipDialogCardStyleVariables({

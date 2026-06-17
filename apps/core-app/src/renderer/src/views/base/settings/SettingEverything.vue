@@ -30,6 +30,7 @@ import {
 } from './everything-diagnostic-evidence'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
@@ -47,10 +48,41 @@ const openFileEvent = defineRawEvent<
   { filePaths?: string[] }
 >('dialog:open-file')
 
+const EVERYTHING_INSTALL_SCRIPT = [
+  "$ErrorActionPreference='Stop'",
+  "$base=Join-Path $env:LOCALAPPDATA 'Tuff\\Everything'",
+  "$cliDir=Join-Path $env:LOCALAPPDATA 'Tuff\\EverythingCLI'",
+  "$tmp=Join-Path $env:TEMP 'tuff-everything-install'",
+  'New-Item -ItemType Directory -Force -Path $base,$cliDir,$tmp | Out-Null',
+  "$arch=if($env:PROCESSOR_ARCHITECTURE -eq 'ARM64'){'ARM64'}elseif($env:PROCESSOR_ARCHITECTURE -eq 'x86' -and -not $env:PROCESSOR_ARCHITEW6432){'x86'}else{'x64'}",
+  "$everythingFile=if($arch -eq 'ARM64'){'Everything-1.4.1.1032.ARM64.zip'}elseif($arch -eq 'x86'){'Everything-1.4.1.1032.x86.zip'}else{'Everything-1.4.1.1032.x64.zip'}",
+  "$cliFile=if($arch -eq 'ARM64'){'ES-1.1.0.30.ARM64.zip'}elseif($arch -eq 'x86'){'ES-1.1.0.30.x86.zip'}else{'ES-1.1.0.30.x64.zip'}",
+  '$everythingZip=Join-Path $tmp $everythingFile',
+  '$cliZip=Join-Path $tmp $cliFile',
+  "Invoke-WebRequest ('https://www.voidtools.com/' + $everythingFile) -UseBasicParsing -OutFile $everythingZip",
+  "Invoke-WebRequest ('https://www.voidtools.com/' + $cliFile) -UseBasicParsing -OutFile $cliZip",
+  'Expand-Archive -Path $everythingZip -DestinationPath $base -Force',
+  'Expand-Archive -Path $cliZip -DestinationPath $cliDir -Force',
+  "$userPath=[Environment]::GetEnvironmentVariable('Path','User')",
+  "$parts=@(); if($userPath){$parts=$userPath -split ';' | Where-Object { $_ }}",
+  "if($parts -notcontains $cliDir){[Environment]::SetEnvironmentVariable('Path', (($parts + $cliDir) -join ';'), 'User')}",
+  "$env:Path += ';' + $cliDir",
+  "Start-Process -FilePath (Join-Path $base 'Everything.exe') -ArgumentList '-startup'",
+  'Start-Sleep -Seconds 2',
+  "& (Join-Path $cliDir 'es.exe') -v",
+  "Write-Host 'Everything portable and es.exe are ready. Return to Tuff and click Check Now.'"
+].join('; ')
+const EVERYTHING_INSTALL_COMMAND = EVERYTHING_INSTALL_SCRIPT
+
 const everythingStatus = ref<EverythingStatusResponse | null>(null)
 const isChecking = ref(false)
 const isTesting = ref(false)
 const isSavingCliPath = ref(false)
+const installDialogVisible = ref(false)
+const installDialogSource = ref<HTMLElement | null>(null)
+const installAdvancedVisible = ref(false)
+const diagnosticsDialogVisible = ref(false)
+const diagnosticsDialogSource = ref<HTMLElement | null>(null)
 
 function mapBackendLabel(backend: EverythingBackendType): string {
   if (backend === 'sdk-napi') return t('settings.settingEverything.backendSdk')
@@ -72,6 +104,10 @@ function mapDiagnosticStageLabel(stage: EverythingDiagnosticStage): string {
 }
 
 let statusCheckInterval: NodeJS.Timeout | null = null
+
+function resolveActionSource(event: MouseEvent): HTMLElement | null {
+  return event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+}
 
 async function checkStatus(refresh = false) {
   if (isChecking.value) return
@@ -215,6 +251,27 @@ function openCLIDownload() {
   window.open('https://www.voidtools.com/support/everything/command_line_interface/', '_blank')
 }
 
+function openInstallDialog(event: MouseEvent) {
+  installDialogSource.value = resolveActionSource(event)
+  installAdvancedVisible.value = false
+  installDialogVisible.value = true
+}
+
+function openDiagnosticsDialog(event: MouseEvent) {
+  diagnosticsDialogSource.value = resolveActionSource(event)
+  diagnosticsDialogVisible.value = true
+}
+
+async function copyEverythingInstallCommand() {
+  try {
+    await navigator.clipboard.writeText(EVERYTHING_INSTALL_COMMAND)
+    toast.success(t('settings.settingEverything.installCommandCopied'))
+  } catch (error) {
+    settingEverythingLog.error('Failed to copy Everything install command', error)
+    toast.error(t('settings.settingEverything.installCommandCopyFailed'))
+  }
+}
+
 function buildCurrentEverythingEvidence() {
   if (!everythingStatus.value) return null
 
@@ -308,9 +365,20 @@ const cliPathDescription = computed(() => {
     : t('settings.settingEverything.cliPathAutoDesc')
 })
 
+const cliPathSummaryText = computed(() => {
+  if (everythingStatus.value?.esPath) return everythingStatus.value.esPath
+  if (everythingStatus.value?.configuredCliPath) return everythingStatus.value.configuredCliPath
+  return t('settings.settingEverything.pathUnknown')
+})
+
 const healthText = computed(() => {
   if (!everythingStatus.value) return '-'
   return mapHealthLabel(everythingStatus.value.health)
+})
+
+const backendSummaryText = computed(() => {
+  if (!everythingStatus.value) return '-'
+  return `${backendText.value} / ${healthText.value}`
 })
 
 const diagnosticSummary = computed(() => {
@@ -324,6 +392,22 @@ const diagnosticSummary = computed(() => {
   return failedCount > 0
     ? t('settings.settingEverything.diagnosticsFailed', { count: failedCount })
     : t('settings.settingEverything.diagnosticsHealthy')
+})
+
+const backendAttemptEntries = computed(() => {
+  return Object.entries(everythingStatus.value?.backendAttemptErrors ?? {})
+})
+
+const hasDiagnosticsDetail = computed(() => {
+  return Boolean(everythingStatus.value)
+})
+
+const diagnosticsDialogDescription = computed(() => {
+  return (
+    everythingStatus.value?.healthReason ||
+    everythingStatus.value?.lastBackendError ||
+    diagnosticSummary.value
+  )
 })
 
 const lastCheckedText = computed(() => {
@@ -369,7 +453,7 @@ onUnmounted(() => {
   >
     <TuffBlockSlot
       :title="t('settings.settingEverything.statusTitle')"
-      :description="statusText"
+      :description="t('settings.settingEverything.statusDesc')"
       :active="everythingStatus?.enabled && everythingStatus?.available"
       default-icon="i-carbon-ai-status"
       active-icon="i-carbon-ai-status-complete"
@@ -380,50 +464,26 @@ onUnmounted(() => {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-if="everythingStatus?.available"
-      :title="t('settings.settingEverything.versionTitle')"
-      :description="everythingStatus.esPath || t('settings.settingEverything.pathUnknown')"
-      default-icon="i-carbon-information"
-      active-icon="i-carbon-information"
-    >
-      <div class="version-info">
-        {{ everythingStatus.version || t('settings.settingEverything.versionUnknown') }}
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
       v-if="everythingStatus"
-      :title="t('settings.settingEverything.backendTitle')"
-      :description="t('settings.settingEverything.backendDesc')"
+      :title="t('settings.settingEverything.backendSummaryTitle')"
+      :description="
+        everythingStatus.healthReason || t('settings.settingEverything.backendSummaryDesc')
+      "
       default-icon="i-carbon-data-view"
       active-icon="i-carbon-data-view"
     >
-      <div class="version-info">
-        {{ backendText }}
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="everythingStatus"
-      :title="t('settings.settingEverything.healthTitle')"
-      :description="everythingStatus.healthReason || t('settings.settingEverything.healthDesc')"
-      default-icon="i-carbon-pulse"
-      active-icon="i-carbon-pulse"
-    >
-      <div class="version-info">
-        {{ healthText }}
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="everythingStatus"
-      :title="t('settings.settingEverything.fallbackChainTitle')"
-      :description="t('settings.settingEverything.fallbackChainDesc')"
-      default-icon="i-carbon-flow-stream"
-      active-icon="i-carbon-flow-stream"
-    >
-      <div class="version-info">
-        {{ fallbackChainText }}
+      <div class="summary-actions">
+        <div class="version-info">
+          {{ backendSummaryText }}
+        </div>
+        <TxButton
+          v-if="hasDiagnosticsDetail"
+          variant="flat"
+          size="sm"
+          @click="openDiagnosticsDialog"
+        >
+          {{ t('settings.settingEverything.viewDiagnostics') }}
+        </TxButton>
       </div>
     </TuffBlockSlot>
 
@@ -435,174 +495,254 @@ onUnmounted(() => {
       active-icon="i-carbon-terminal"
     >
       <div class="cli-path-panel">
-        <div class="cli-path-row">
-          <span>{{ t('settings.settingEverything.configuredCliPath') }}</span>
-          <code>{{ configuredCliPathText }}</code>
-        </div>
-        <div class="cli-path-row">
-          <span>{{ t('settings.settingEverything.activeCliPath') }}</span>
-          <code>{{ activeCliPathText }}</code>
-        </div>
-        <div class="install-buttons">
-          <TxButton variant="flat" :disabled="isSavingCliPath" @click="selectCliPath">
+        <code>{{ cliPathSummaryText }}</code>
+        <div class="compact-actions">
+          <TxButton variant="flat" size="sm" :disabled="isSavingCliPath" @click="selectCliPath">
             {{ t('settings.settingEverything.cliPathSelect') }}
           </TxButton>
           <TxButton
             v-if="everythingStatus.configuredCliPath"
             variant="flat"
+            size="sm"
             :disabled="isSavingCliPath"
             @click="clearCliPath"
           >
             {{ t('settings.settingEverything.cliPathClear') }}
           </TxButton>
-          <TxButton variant="flat" :disabled="isChecking" @click="checkStatus(true)">
-            {{
-              isChecking
-                ? t('settings.settingEverything.checking')
-                : t('settings.settingEverything.checkNow')
-            }}
-          </TxButton>
         </div>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="showDiagnostics"
-      :title="t('settings.settingEverything.diagnosticsTitle')"
-      :description="diagnosticSummary"
-      default-icon="i-carbon-debug"
-      active-icon="i-carbon-debug"
-    >
-      <div class="diagnostics-list">
-        <div v-for="stage in diagnosticStages" :key="stage" class="diagnostic-row">
-          <span class="diagnostic-stage">{{ mapDiagnosticStageLabel(stage) }}</span>
-          <span
-            class="diagnostic-status"
-            :class="[
-              everythingStatus?.diagnostics?.stages[stage]?.status === 'success'
-                ? 'text-green-500'
-                : 'text-red-500'
-            ]"
-          >
-            {{ everythingStatus?.diagnostics?.stages[stage]?.status || '-' }}
-          </span>
-          <span class="diagnostic-duration">
-            {{ everythingStatus?.diagnostics?.stages[stage]?.duration ?? '-' }}ms
-          </span>
-        </div>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="showToggle"
-      :title="t('settings.settingEverything.enableTitle')"
-      :description="t('settings.settingEverything.enableDesc')"
-      default-icon="i-carbon-power"
-      active-icon="i-carbon-power"
-    >
-      <TxButton
-        variant="flat"
-        :type="!everythingStatus?.enabled ? 'primary' : undefined"
-        @click="toggleEverything"
-      >
-        {{
-          everythingStatus?.enabled
-            ? t('settings.settingEverything.disable')
-            : t('settings.settingEverything.enable')
-        }}
-      </TxButton>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="showToggle && everythingStatus?.enabled"
-      :title="t('settings.settingEverything.testTitle')"
-      :description="t('settings.settingEverything.testDesc')"
-      default-icon="i-carbon-test-tool"
-      active-icon="i-carbon-test-tool"
-    >
-      <TxButton variant="flat" :disabled="isTesting" @click="testSearch">
-        {{
-          isTesting
-            ? t('settings.settingEverything.testing')
-            : t('settings.settingEverything.testNow')
-        }}
-      </TxButton>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="showInstallGuide"
-      :title="t('settings.settingEverything.installTitle')"
-      :description="t('settings.settingEverything.installDesc')"
-      default-icon="i-carbon-download"
-      active-icon="i-carbon-download"
-    >
-      <div class="install-buttons">
-        <TxButton variant="flat" type="primary" @click="openEverythingDownload">
-          {{ t('settings.settingEverything.downloadEverything') }}
-        </TxButton>
-        <TxButton variant="flat" @click="openCLIDownload">
-          {{ t('settings.settingEverything.downloadCLI') }}
-        </TxButton>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="everythingStatus?.error"
-      :title="t('settings.settingEverything.errorTitle')"
-      :description="everythingStatus.error"
-      default-icon="i-carbon-warning-alt"
-      active-icon="i-carbon-warning-alt"
-    >
-      <div class="error-message">
-        {{ everythingStatus.error }}
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="everythingStatus?.lastBackendError"
-      :title="t('settings.settingEverything.backendErrorTitle')"
-      :description="everythingStatus.lastBackendError"
-      default-icon="i-carbon-warning-alt-inverted"
-      active-icon="i-carbon-warning-alt-inverted"
-    >
-      <div class="error-message">
-        {{ everythingStatus.lastBackendError }}
       </div>
     </TuffBlockSlot>
 
     <TuffBlockSlot
       v-if="everythingStatus"
-      :title="t('settings.settingEverything.lastCheckedTitle')"
-      :description="lastCheckedText"
-      default-icon="i-carbon-time"
-      active-icon="i-carbon-time"
+      :title="t('settings.settingEverything.actionsTitle')"
+      :description="t('settings.settingEverything.actionsDesc', { time: lastCheckedText })"
+      default-icon="i-carbon-settings-adjust"
+      active-icon="i-carbon-settings-adjust"
     >
-      <TxButton variant="flat" :disabled="isChecking" @click="checkStatus(true)">
+      <div class="action-strip">
+        <TxButton
+          variant="flat"
+          size="sm"
+          :type="showInstallGuide ? 'primary' : undefined"
+          @click="openInstallDialog"
+        >
+          {{ t('settings.settingEverything.openInstallGuide') }}
+        </TxButton>
+        <TxButton variant="flat" size="sm" :disabled="isChecking" @click="checkStatus(true)">
+          {{
+            isChecking
+              ? t('settings.settingEverything.checking')
+              : t('settings.settingEverything.checkNow')
+          }}
+        </TxButton>
+        <TxButton
+          v-if="showToggle && everythingStatus.enabled"
+          variant="flat"
+          size="sm"
+          :disabled="isTesting"
+          @click="testSearch"
+        >
+          {{
+            isTesting
+              ? t('settings.settingEverything.testing')
+              : t('settings.settingEverything.testNow')
+          }}
+        </TxButton>
+        <TxButton
+          v-if="showToggle"
+          variant="flat"
+          size="sm"
+          :type="!everythingStatus.enabled ? 'primary' : undefined"
+          @click="toggleEverything"
+        >
+          {{
+            everythingStatus.enabled
+              ? t('settings.settingEverything.disable')
+              : t('settings.settingEverything.enable')
+          }}
+        </TxButton>
+      </div>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
+
+  <FlipDialog
+    v-model="installDialogVisible"
+    :reference="installDialogSource"
+    :header-title="t('settings.settingEverything.installDialogTitle')"
+    :header-desc="t('settings.settingEverything.installCommandDesc')"
+    card-class="everything-flip-dialog"
+    size="lg"
+  >
+    <template #default>
+      <div class="everything-dialog">
+        <div class="install-recommend-card">
+          <div class="install-recommend-icon">
+            <span class="i-carbon-shield-check" />
+          </div>
+          <div class="install-recommend-content">
+            <div class="install-recommend-title">
+              {{ t('settings.settingEverything.installAutoTitle') }}
+            </div>
+            <div class="install-recommend-desc">
+              {{ t('settings.settingEverything.installAutoDesc') }}
+            </div>
+            <div class="install-recommend-tags">
+              <span>{{ t('settings.settingEverything.installAutoTagPortable') }}</span>
+              <span>{{ t('settings.settingEverything.installAutoTagNoAdmin') }}</span>
+              <span>{{ t('settings.settingEverything.installAutoTagOfficial') }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="install-primary-actions">
+          <TxButton variant="flat" type="primary" @click="copyEverythingInstallCommand">
+            {{ t('settings.settingEverything.installAutoCopy') }}
+          </TxButton>
+          <TxButton variant="flat" @click="installAdvancedVisible = !installAdvancedVisible">
+            {{
+              installAdvancedVisible
+                ? t('settings.settingEverything.installAdvancedHide')
+                : t('settings.settingEverything.installAdvancedShow')
+            }}
+          </TxButton>
+        </div>
+
+        <div v-if="installAdvancedVisible" class="dialog-section install-advanced">
+          <div class="dialog-section-title">
+            {{ t('settings.settingEverything.installAdvancedTitle') }}
+          </div>
+          <div class="install-buttons">
+            <TxButton variant="flat" @click="openEverythingDownload">
+              {{ t('settings.settingEverything.downloadEverything') }}
+            </TxButton>
+            <TxButton variant="flat" @click="openCLIDownload">
+              {{ t('settings.settingEverything.downloadCLI') }}
+            </TxButton>
+          </div>
+
+          <div class="dialog-section">
+            <div class="dialog-section-title">
+              {{ t('settings.settingEverything.installCommandTitle') }}
+            </div>
+            <pre class="install-command-code"><code>{{ EVERYTHING_INSTALL_COMMAND }}</code></pre>
+          </div>
+        </div>
+      </div>
+    </template>
+  </FlipDialog>
+
+  <FlipDialog
+    v-model="diagnosticsDialogVisible"
+    :reference="diagnosticsDialogSource"
+    :header-title="t('settings.settingEverything.diagnosticsTitle')"
+    :header-desc="diagnosticsDialogDescription"
+    card-class="everything-flip-dialog"
+    size="lg"
+  >
+    <template #header-actions>
+      <TxButton variant="flat" size="sm" @click="copyEverythingEvidence">
+        {{ t('settings.settingEverything.copyEvidence') }}
+      </TxButton>
+      <TxButton variant="flat" size="sm" @click="saveEverythingEvidence">
+        {{ t('settings.settingEverything.saveEvidence') }}
+      </TxButton>
+      <TxButton variant="flat" size="sm" :disabled="isChecking" @click="checkStatus(true)">
         {{
           isChecking
             ? t('settings.settingEverything.checking')
             : t('settings.settingEverything.checkNow')
         }}
       </TxButton>
-    </TuffBlockSlot>
+    </template>
 
-    <TuffBlockSlot
-      v-if="everythingStatus"
-      :title="t('settings.settingEverything.evidenceTitle')"
-      :description="t('settings.settingEverything.evidenceDesc')"
-      default-icon="i-carbon-document-export"
-      active-icon="i-carbon-document-export"
-    >
-      <div class="install-buttons">
-        <TxButton variant="flat" @click="copyEverythingEvidence">
-          {{ t('settings.settingEverything.copyEvidence') }}
-        </TxButton>
-        <TxButton variant="flat" @click="saveEverythingEvidence">
-          {{ t('settings.settingEverything.saveEvidence') }}
-        </TxButton>
+    <template #default>
+      <div class="everything-dialog">
+        <div class="dialog-section">
+          <div class="dialog-section-title">
+            {{ t('settings.settingEverything.backendSummaryTitle') }}
+          </div>
+          <div class="diagnostic-grid">
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.backendTitle') }}</span>
+              <strong>{{ backendText }}</strong>
+            </div>
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.healthTitle') }}</span>
+              <strong>{{ healthText }}</strong>
+            </div>
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.versionTitle') }}</span>
+              <strong>
+                {{ everythingStatus?.version || t('settings.settingEverything.versionUnknown') }}
+              </strong>
+            </div>
+            <div class="diagnostic-card diagnostic-card--wide">
+              <span>{{ t('settings.settingEverything.fallbackChainTitle') }}</span>
+              <strong>{{ fallbackChainText }}</strong>
+            </div>
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.configuredCliPath') }}</span>
+              <strong>{{ configuredCliPathText }}</strong>
+            </div>
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.activeCliPath') }}</span>
+              <strong>{{ activeCliPathText }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="showDiagnostics" class="dialog-section">
+          <div class="dialog-section-title">
+            {{ t('settings.settingEverything.diagnosticsTitle') }}
+          </div>
+          <div class="diagnostics-list diagnostics-list--dialog">
+            <div v-for="stage in diagnosticStages" :key="stage" class="diagnostic-row">
+              <span class="diagnostic-stage">{{ mapDiagnosticStageLabel(stage) }}</span>
+              <span
+                class="diagnostic-status"
+                :class="[
+                  everythingStatus?.diagnostics?.stages[stage]?.status === 'success'
+                    ? 'text-green-500'
+                    : 'text-red-500'
+                ]"
+              >
+                {{ everythingStatus?.diagnostics?.stages[stage]?.status || '-' }}
+              </span>
+              <span class="diagnostic-duration">
+                {{ everythingStatus?.diagnostics?.stages[stage]?.duration ?? '-' }}ms
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="
+            everythingStatus?.error ||
+            everythingStatus?.lastBackendError ||
+            backendAttemptEntries.length > 0
+          "
+          class="dialog-section"
+        >
+          <div class="dialog-section-title">
+            {{ t('settings.settingEverything.errorTitle') }}
+          </div>
+          <div v-if="everythingStatus?.error" class="error-message">
+            {{ everythingStatus.error }}
+          </div>
+          <div v-if="everythingStatus?.lastBackendError" class="error-message">
+            {{ everythingStatus.lastBackendError }}
+          </div>
+          <div v-if="backendAttemptEntries.length > 0" class="backend-attempt-list">
+            <div v-for="[target, error] in backendAttemptEntries" :key="target" class="attempt-row">
+              <code>{{ target }}</code>
+              <span>{{ error }}</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </TuffBlockSlot>
-  </TuffGroupBlock>
+    </template>
+  </FlipDialog>
 </template>
 
 <style scoped lang="scss">
@@ -626,24 +766,44 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
+.install-primary-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.compact-actions,
+.action-strip {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-strip {
+  min-width: min(460px, 54vw);
+}
+
+.summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .cli-path-panel {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   min-width: 280px;
   max-width: 520px;
-}
-
-.cli-path-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
-  color: var(--tuff-text-secondary);
 
   code {
     min-width: 0;
+    max-width: 260px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -657,6 +817,10 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 4px;
   min-width: 220px;
+
+  &--dialog {
+    min-width: 0;
+  }
 }
 
 .diagnostic-row {
@@ -684,5 +848,205 @@ onUnmounted(() => {
   font-size: 12px;
   font-family: 'JetBrains Mono', monospace;
   word-break: break-word;
+}
+
+:deep(.everything-flip-dialog.FlipDialog-Card) {
+  .TxFlipOverlay-Header {
+    padding: 18px 20px 12px;
+  }
+
+  .TxFlipOverlay-Body {
+    padding: 0 20px 20px;
+    box-sizing: border-box;
+  }
+}
+
+.everything-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: min(680px, calc(100vw - 64px));
+  box-sizing: border-box;
+}
+
+.install-recommend-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(34, 197, 94, 0.08)),
+    rgba(255, 255, 255, 0.04);
+}
+
+.install-recommend-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+  font-size: 20px;
+}
+
+.install-recommend-content {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.install-recommend-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tuff-text-primary);
+}
+
+.install-recommend-desc {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--tuff-text-secondary);
+}
+
+.install-recommend-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+
+  span {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--tuff-text-secondary);
+    font-size: 11px;
+  }
+}
+
+.install-advanced {
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dialog-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tuff-text-primary);
+}
+
+.install-command-code {
+  max-height: 220px;
+  margin: 0;
+  padding: 12px;
+  overflow: hidden auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--tuff-text-primary);
+  font-size: 11px;
+  line-height: 1.6;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.diagnostic-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+
+  span {
+    font-size: 12px;
+    color: var(--tuff-text-secondary);
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--tuff-text-primary);
+  }
+
+  &--wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.backend-attempt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attempt-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+
+  code,
+  span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  code {
+    color: var(--tuff-text-primary);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  span {
+    color: var(--tuff-text-secondary);
+  }
+}
+
+@media (max-width: 767px) {
+  :deep(.everything-flip-dialog.FlipDialog-Card) {
+    .TxFlipOverlay-Header {
+      padding: 16px 16px 10px;
+    }
+
+    .TxFlipOverlay-Body {
+      padding: 0 16px 16px;
+    }
+  }
+
+  .everything-dialog {
+    min-width: 0;
+  }
+
+  .install-recommend-card {
+    grid-template-columns: 1fr;
+  }
+
+  .diagnostic-grid,
+  .attempt-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
