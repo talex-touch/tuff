@@ -89,22 +89,8 @@ function resolveFeatureShowInput(feature: IPluginFeature): boolean {
   return hasAcceptedInputTypes || allowInput
 }
 
-function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints {
-  return {
-    ...feature.footerHints,
-    primary: {
-      visible: false,
-      ...feature.footerHints?.primary
-    },
-    secondary: {
-      visible: false,
-      ...feature.footerHints?.secondary
-    },
-    quickSelect: {
-      visible: false,
-      ...feature.footerHints?.quickSelect
-    }
-  }
+function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints | undefined {
+  return feature.footerHints
 }
 
 export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {

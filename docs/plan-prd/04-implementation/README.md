@@ -15,6 +15,7 @@
 
 | 文件 | 有效状态 | 当前边界 / 下一动作 |
 | --- | --- | --- |
+| `Current-Execution-Plan-2026-06-17.md` | 当前参考 / 短期 SoT | 当前项目进程与 P0/P1 执行计划；先收敛文档口径，再补 AI provider routing、packaged AI evidence、release integrity、NPM publish evidence、File write/store boundary 与平台/治理证据。 |
 | `ActiveGoalClosure-2026-05-23.md` | 当前参考 | 本轮 2.4.11 稳定化、插件 capability、open PR 与后续 Intelligence 小切片的执行顺序；每个点位仍需按分支/worktree、related-only commit、验证后合并。 |
 | `ActiveGoalBranchCleanup-2026-05-23.md` | 已完成 / 分支收口记录 | 记录 Nexus Data Governance 当前目标进度、已合并/已覆盖分支、污染分支丢弃依据、本地/远程删除清单与 post-cleanup 验证；后续只作为追溯入口。 |
 | `AssistantExperiment-VoiceFloatingBall-260223.md` | 历史参考 / 待重写 | 实验能力默认关闭；继续推进前需重写为当前 Assistant / OmniPanel 能力边界。 |

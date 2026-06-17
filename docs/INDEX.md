@@ -7,6 +7,7 @@
 
 - `docs/plan-prd/README.md` - PRD / 规划主索引。
 - `docs/plan-prd/TODO.md` - 当前 2 周执行清单。
+- `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md` - 当前项目进程与 P0/P1 执行计划。
 - `docs/plan-prd/01-project/CHANGES.md` - 近 30 天变更日志与历史归档入口。
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` - 产品总览与路线图。
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 质量基线与门禁约束。
@@ -16,7 +17,7 @@
 
 ## 当前状态快照
 
-- 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前代码版本已到 `2.4.11-beta.8`，当前本地 `HEAD=47787615b fix(tuffex): make style entry build idempotent` 且 `master` 相对 `origin/master` 领先 9 个提交；`2.4.11-beta.6` 发布后 Gate D strict 复核通过的证据仍作为最近完整发布链路记录；Nexus 资产 sha256/signatureUrl 与 signature endpoint 缺口仍按 release integrity debt 跟踪。
+- 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前代码版本已到 root / CoreApp `2.4.12-beta.6`，当前本地 `HEAD=fb7424772 fix: restore auth secure storage defaults` 且 `master` 相对 `origin/master` 领先 1 个提交；`2.4.11-beta.6` 发布后 Gate D strict 复核通过的证据仍作为最近完整发布链路记录；`2.4.11` release checklist 已通过，Nexus 资产 sha256/signatureUrl 与 signature endpoint 缺口仍按 release integrity debt 跟踪；短期执行 SoT 见 `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md`。
 - 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，并收口 release checklist、质量门禁、release integrity 与 npm publish evidence；按最新维护决策，Windows/macOS 真机人工回归不纳入本轮阻塞项。CoreBox app launch handoff 已补 immediate hide，避免慢启动期间 launcher 可见卡死；AI compat 生产退役端点已钉住 HTTP `410` 与迁移目标，不再返回可消费占位 payload。
 - 下一版本门槛：`2.5.0` AI 桌面入口收口，Stable 只承诺文本 + OCR；Workflow/Skills/Automation 保持 Beta。
 - CoreApp 性能当前切片：2026-05-28 已新增启动、CoreBox 搜索、常驻 CPU/内存、构建与包体的第一轮性能基线执行计划，并新增 `build:vite` 与 `perf:bundle:size` 分析入口；当前不改变 `build`、`quality:pr` 或 `quality:release` 门禁。
@@ -73,6 +74,7 @@
 - `docs/plan-prd/04-implementation/performance/CoreAppPerformanceBaseline-2026-05-28.md` - CoreApp 启动、CoreBox 搜索、常驻 CPU/内存、构建与包体第一轮性能基线与优化门槛。
 - `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析。
 - `docs/plan-prd/report/performance-audit-2026-06-07.md` - 搜索/索引/IPC/启动性能审计与本轮优化（debounce 调优、结果渲染上限、scanDirectory 重构、InteractiveTerminal 泄漏修复）。
+- `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md` - 当前项目进程、P0/P1 执行顺序、质量门禁与 guardrails。
 - `docs/plan-prd/04-implementation/Release-2.4.11-Closure-2026-06-13.md` - `2.4.11` 当前 release checklist、质量门禁与发布证据收口清单。
 - `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md` - 当前 2.4.11 稳定化、插件 capability 与后续 Intelligence 小切片执行顺序。
 - `docs/plan-prd/04-implementation/ActiveGoalBranchCleanup-2026-05-23.md` - 当前 goal 进度与截图分支清理记录。

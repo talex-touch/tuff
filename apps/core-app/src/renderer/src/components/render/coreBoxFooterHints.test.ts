@@ -19,7 +19,42 @@ function item(overrides: Partial<TuffItem>): TuffItem {
 }
 
 describe('coreBoxFooterHints', () => {
+  it('keeps the footer visible for plugin feature items by default', () => {
+    const pluginFeature = item({
+      source: { type: 'plugin', id: 'plugin-features' },
+      kind: 'feature',
+      meta: {
+        pluginName: 'touch-translation',
+        featureId: 'translate'
+      }
+    })
+
+    expect(isPluginFooterItem(pluginFeature)).toBe(true)
+    expect(resolveCoreBoxFooterVisible(pluginFeature)).toBe(true)
+    expect(resolvePrimaryFooterHintVisible(pluginFeature)).toBe(true)
+    expect(resolveSecondaryFooterHintVisible(pluginFeature)).toBe(true)
+    expect(resolveQuickSelectFooterHintVisible(pluginFeature, true)).toBe(true)
+  })
+
   it('hides the footer for plugin-provided widget items by default', () => {
+    const pluginWidget = item({
+      source: { type: 'plugin', id: 'plugin-features' },
+      kind: 'feature',
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        interaction: { type: 'widget' }
+      }
+    })
+
+    expect(isPluginFooterItem(pluginWidget)).toBe(true)
+    expect(resolveCoreBoxFooterVisible(pluginWidget)).toBe(false)
+    expect(resolvePrimaryFooterHintVisible(pluginWidget)).toBe(false)
+    expect(resolveSecondaryFooterHintVisible(pluginWidget)).toBe(false)
+    expect(resolveQuickSelectFooterHintVisible(pluginWidget, true)).toBe(false)
+  })
+
+  it('hides the footer for plugin-provided custom render items by default', () => {
     const pluginWidget = item({
       source: { type: 'plugin', id: 'plugin-features' },
       render: {

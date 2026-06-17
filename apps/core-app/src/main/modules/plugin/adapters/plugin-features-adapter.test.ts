@@ -76,13 +76,11 @@ describe('plugin-features-adapter', () => {
     expect(item.meta?.extension?.matchResult).toEqual([{ start: 0, end: 7 }])
   })
 
-  it('hides footer hints for plugin feature items by default', () => {
+  it('does not force footer hints hidden for plugin feature items by default', () => {
     const adapter = new PluginFeaturesAdapter()
     const item = adapter.createTuffItem(createPlugin(), createFeature())
 
-    expect(item.meta?.footerHints?.primary?.visible).toBe(false)
-    expect(item.meta?.footerHints?.secondary?.visible).toBe(false)
-    expect(item.meta?.footerHints?.quickSelect?.visible).toBe(false)
+    expect(item.meta?.footerHints).toBeUndefined()
   })
 
   it('preserves explicit colorful feature icons for CoreBox rendering', () => {

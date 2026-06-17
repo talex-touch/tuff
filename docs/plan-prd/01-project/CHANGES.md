@@ -23,6 +23,26 @@
   - File content indexing now groups by relative depth under the matched watch root: shallow files dispatch first, deeper files receive incremental delay while still being admitted into the same DB/search-index pipeline.
   - Focused coverage pins the macOS depth policy and depth-prioritized worker scheduling.
 
+### fix(corebox): restore plugin feature footer defaults
+
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/renderer/src/components/render/coreBoxFooterHints.ts`
+- `packages/utils/plugin/sdk/meta/README.md`
+  - Plugin root feature results no longer force all CoreBox footer hints hidden by default, so default search lists can show the footer bar again.
+  - Plugin widget/custom render items still hide the footer by default unless `footerHints.*.visible` is explicitly enabled.
+  - Explicit plugin footer hint declarations remain authoritative, including all-hidden declarations.
+
+### docs(project): add current execution plan
+
+- `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/04-implementation/README.md`
+  - Added a short-term execution SoT that turns the current project progress into P0/P1 plan items.
+  - Updated entry documents from the stale `2.4.11-beta.8` / `HEAD=47787615b` snapshot to the current root/CoreApp `2.4.12-beta.6` / `HEAD=fb7424772` snapshot.
+  - Clarified the next execution order: documentation drift, AI provider routing, packaged AI evidence, release integrity, npm publish evidence, File write/store boundary, Windows/Everything evidence and Nexus production governance evidence.
+
 ### fix(core-app+ci): default auth credential protection and tuff-intelligence CI
 
 - `packages/utils/common/storage/entity/app-settings.ts`
