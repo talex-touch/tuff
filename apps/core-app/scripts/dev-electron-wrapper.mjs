@@ -14,9 +14,21 @@ const defaultDevBundleIdentifier = 'com.tagzxia.app.tuff.dev'
 const defaultDevBundleName = 'Tuff Dev'
 const signArgs = ['--force', '--sign', '-', '--timestamp=none']
 const NULL_BYTE_PATTERN = /\0/
+const CMD_ESCAPE_PATTERN = /([()%!^"<>&|])/g
 
-function quoteWindowsShellArg(value) {
-  return /[\s"]/g.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value
+function readCommandPathEnv(name) {
+  const value = process.env[name]?.trim()
+  if (!value) return null
+  if (NULL_BYTE_PATTERN.test(value)) throw new Error(`${name}_NULL_BYTE`)
+  return value
+}
+
+function isNodeScriptPath(value) {
+  return /\.(?:c|m)?js$/i.test(value)
+}
+
+function quoteWindowsCmdArg(value) {
+  return `"${assertCommandArg(value).replace(CMD_ESCAPE_PATTERN, '^$1')}"`
 }
 
 function assertCommandSegment(value, label) {
@@ -60,24 +72,26 @@ function sanitizePathSegment(value) {
 
 function runElectronVite(env) {
   const args = ['exec', 'electron-vite', 'dev', ...process.argv.slice(2)].map(assertCommandArg)
-  const child =
-    process.platform === 'win32'
-      ? spawn(
-          process.env.ComSpec || 'cmd.exe',
-          ['/d', '/s', '/c', ['pnpm', ...args].map(quoteWindowsShellArg).join(' ')],
-          {
-            cwd: appRoot,
-            env,
-            shell: false,
-            stdio: 'inherit'
-          }
-        )
-      : spawn(assertCommandSegment('pnpm', 'COMMAND'), args, {
-          cwd: appRoot,
-          env,
-          shell: false,
-          stdio: 'inherit'
-        })
+  const npmExecPath = readCommandPathEnv('npm_execpath')
+  const command =
+    process.platform === 'win32' && npmExecPath && isNodeScriptPath(npmExecPath)
+      ? assertCommandSegment(process.execPath, 'NODE')
+      : process.platform === 'win32'
+        ? assertCommandSegment(process.env.ComSpec || 'cmd.exe', 'COMMAND')
+        : assertCommandSegment('pnpm', 'COMMAND')
+  const commandArgs =
+    command === process.execPath && npmExecPath
+      ? [npmExecPath, ...args]
+      : process.platform === 'win32'
+        ? ['/d', '/s', '/c', ['pnpm', ...args].map(quoteWindowsCmdArg).join(' ')]
+        : args
+
+  const child = spawn(command, commandArgs, {
+    cwd: appRoot,
+    env,
+    shell: false,
+    stdio: 'inherit'
+  })
 
   child.on('error', (error) => {
     console.error('[dev] Failed to launch electron-vite dev', error)

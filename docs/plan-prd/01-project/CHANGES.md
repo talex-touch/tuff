@@ -138,6 +138,7 @@
   - Simplified the install dialog around the recommended automatic portable install path, keeping manual Everything/CLI downloads and the full command under an advanced settings section.
   - Moved the long install command, version/path detail, backend attempt errors, SDK/CLI diagnostic detail, and evidence actions into FlipDialog overlays so the settings list keeps only status, backend summary, CLI path selection, and one compact action strip.
   - Added a `FlipDialog` card class passthrough and scoped Everything dialog padding so install and diagnostics dialogs keep consistent header/body spacing without changing other overlay users.
+  - Added fixed SHA-256 checks for the official Everything and `es.exe` ZIP payloads before extraction/startup, so the copied installer stops if a downloaded artifact does not match the pinned version.
   - Kept the existing manual download and custom `es.exe` path flow as fallback paths for locked-down Windows environments.
   - 验证：JSON locale parse、Everything install PowerShell script parse、`cmd /c pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` 与 scoped `git diff --check` 通过；`SettingEverything.vue` scoped ESLint 返回 0 errors，但保留该文件既有 CRLF/Prettier warnings，未做全文件换行符改写。
 
@@ -145,7 +146,7 @@
 
 - `apps/core-app/scripts/dev-electron-wrapper.mjs`
   - Windows `pnpm core:dev` no longer spawns `pnpm.cmd` directly from the dev wrapper.
-  - The wrapper now follows the repo's existing Windows-safe `cmd.exe /d /s /c ...` launch path for `pnpm exec electron-vite dev`, avoiding the local `spawn EINVAL` failure while preserving the existing macOS dev bundle flow.
+  - The wrapper now launches pnpm through the Node CLI entry from `npm_execpath` on Windows, avoiding `cmd.exe /c` argument string parsing and preserving arbitrary dev arguments while keeping the existing macOS dev bundle flow.
   - 验证：`cmd /c pnpm core:dev` 可重新进入 Electron dev build/launch 流程（长跑 dev 进程按超时截断）。
 
 ### fix(core-app): hide macOS-only notification permission entry on Windows
