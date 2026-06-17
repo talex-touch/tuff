@@ -5,6 +5,15 @@
 
 ## 2026-06-17
 
+### fix(file-index): deepen macOS watcher and prioritize shallow indexing
+
+- `packages/utils/search/indexing-watch-path-policy.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - macOS File Index watch roots now use depth 5 instead of shallow special-casing, so deeper newly added files can trigger realtime indexing.
+  - File content indexing now groups by relative depth under the matched watch root: shallow files dispatch first, deeper files receive incremental delay while still being admitted into the same DB/search-index pipeline.
+  - Focused coverage pins the macOS depth policy and depth-prioritized worker scheduling.
+
 ### fix(core-app+ci): default auth credential protection and tuff-intelligence CI
 
 - `packages/utils/common/storage/entity/app-settings.ts`

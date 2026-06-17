@@ -35,13 +35,9 @@ export function normalizeIndexedWatchPath(
 
 export function getIndexedWatchDepthForPath(input: IndexedWatchDepthPolicyInput): number {
   const platform = input.platform ?? getCurrentPlatform()
-  const lower = input.watchPath.toLowerCase()
 
   if (platform === 'darwin') {
-    if (lower.endsWith('/applications') || lower.endsWith('/downloads')) {
-      return 1
-    }
-    return 2
+    return 5
   }
 
   if (platform === 'win32') {
