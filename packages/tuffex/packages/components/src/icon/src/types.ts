@@ -8,6 +8,8 @@ export interface TxIconSource {
   type: TxIconType
   value: string
   status?: TxIconStatus
+  /** Icon color for monochrome rendering */
+  color?: string
   /** Icon colorful mode (only for URL/file type) */
   colorful?: boolean
   /** Error message (when status is error) */

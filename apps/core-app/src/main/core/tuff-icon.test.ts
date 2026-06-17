@@ -46,7 +46,7 @@ describe('TuffIconImpl dev source behavior', () => {
     expect(pathExistsMock).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves explicit colorful intent while resolving file icons', async () => {
+  it('preserves explicit color and colorful intent while resolving file icons', async () => {
     const icon = new TuffIconImpl(
       '/tmp/plugin',
       'file',
@@ -56,12 +56,14 @@ describe('TuffIconImpl dev source behavior', () => {
         source: true,
         address: 'http://localhost:3733'
       },
-      true
+      true,
+      '#22c55e'
     )
 
     await icon.init()
 
     expect(icon.colorful).toBe(true)
+    expect(icon.color).toBe('#22c55e')
     expect(icon.value).toBe(path.resolve('/tmp/plugin', 'icons/logo.svg'))
   })
 

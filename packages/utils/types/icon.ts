@@ -39,6 +39,12 @@ export interface ITuffIcon {
   value: string
 
   /**
+   * Icon color.
+   * @desc Applies to monochrome class/builtin/SVG-mask rendering. URL/file icons keep source colors when colorful is true.
+   */
+  color?: string
+
+  /**
    * Icon Colorful (Only for URL type)
    * @desc This prop defines whether a URL icon should be rendered in colorful mode.
    * It is only applicable when the icon type is 'url'.

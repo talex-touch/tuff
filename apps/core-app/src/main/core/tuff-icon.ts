@@ -16,6 +16,7 @@ export class TuffIconImpl implements ITuffIcon {
   type: TuffIconType
   value: string
   status?: 'normal' | 'loading' | 'error'
+  color?: string
   colorful?: boolean
 
   private rootPath: string
@@ -26,13 +27,15 @@ export class TuffIconImpl implements ITuffIcon {
     type: TuffIconType,
     value: string,
     devConfig?: IPluginDev,
-    colorful?: boolean
+    colorful?: boolean,
+    color?: string
   ) {
     this.rootPath = rootPath
     this.type = type
     this.value = value
     this.status = 'normal'
     this.colorful = colorful
+    this.color = color
     this.devConfig = devConfig
   }
 

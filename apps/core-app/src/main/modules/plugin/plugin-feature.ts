@@ -146,7 +146,8 @@ export class PluginFeature implements IPluginFeature {
       options.icon.type,
       options.icon.value,
       dev,
-      options.icon.colorful
+      options.icon.colorful,
+      options.icon.color
     )
     this.keywords = options.keywords
     this.push = options.push
@@ -183,6 +184,7 @@ export class PluginFeature implements IPluginFeature {
         type: this.icon.type,
         value: this.icon.value,
         status: this.icon.status,
+        color: this.icon.color,
         colorful: this.icon.colorful
       },
       keywords: this.keywords,

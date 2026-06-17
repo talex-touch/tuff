@@ -5,7 +5,11 @@ import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
-import { shouldRenderCoreBoxIconColorful } from './icon-color-mode'
+import {
+  normalizeCoreBoxIcon,
+  resolveCoreBoxIconColor,
+  shouldRenderCoreBoxIconColorful
+} from './icon-color-mode'
 
 interface Props {
   item: TuffItem
@@ -17,27 +21,10 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
-const displayIcon = computed<ITuffIcon>(() => {
-  const icon = props.render?.basic?.icon
-
-  if (!icon) {
-    return { type: 'url', value: '', status: 'normal' }
-  }
-
-  if (typeof icon === 'string') {
-    return { type: 'url', value: icon, status: 'normal' }
-  }
-
-  if ('value' in icon && icon.value?.length) {
-    return {
-      type: icon.type || 'url',
-      value: icon.value,
-      status: icon.status || 'normal'
-    }
-  }
-
-  return { type: 'url', value: '', status: 'normal' }
-})
+const displayIcon = computed<ITuffIcon>(() => normalizeCoreBoxIcon(props.render?.basic?.icon))
+const iconStyle = computed(() => ({
+  '--icon-color': resolveCoreBoxIconColor(displayIcon.value)
+}))
 
 const isPinned = computed(() => props.item.meta?.pinned?.isPinned)
 const title = computed(() => resolveI18nText(props.render.basic?.title || '', t))
@@ -62,7 +49,7 @@ const recommendationBadge = computed(() => {
         :alt="title"
         :size="36"
         :colorful="shouldRenderIconColorful"
-        style="--icon-color: var(--tx-text-color-primary)"
+        :style="iconStyle"
       />
       <span v-if="isPinned" class="BoxGridItem-Pin">
         <i class="i-ri-pushpin-2-fill" />
