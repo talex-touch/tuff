@@ -229,7 +229,7 @@ interface MetaAction {
 
 ## CoreBox footer hints
 
-插件 feature / widget item 默认不展示 CoreBox footer。需要展示时，在 feature 或 item 的 `meta.footerHints` 中显式声明至少一个可见 hint：
+插件普通 feature 默认展示 CoreBox footer；插件 widget / custom render item 默认不展示 CoreBox footer。需要让 widget / custom render 展示时，在 feature 或 item 的 `meta.footerHints` 中显式声明至少一个可见 hint：
 
 ```typescript
 {
@@ -242,7 +242,7 @@ interface MetaAction {
 }
 ```
 
-未声明时仍可通过快捷键打开 MetaOverlay，但 footer 本身不会展示。
+普通插件 feature 未声明时仍展示默认 footer hints；widget / custom render 未声明时仍可通过快捷键打开 MetaOverlay，但 footer 本身不会展示。
 
 ## 完整示例
 
@@ -305,7 +305,7 @@ export default {
 3. **清理**: 插件卸载时应该调用 `unregisterAll()` 清理所有操作
 4. **快捷键**: 快捷键仅在 MetaOverlay 打开时有效
 5. **平台分享**: 不要自行猜测 AirDrop 或系统分享是否可用，先调用 `getNativeShareTargets()`；不可用时回退到 `mail`、复制或插件自定义流程
-6. **Footer 展示**: 插件 feature / widget item 默认不展示 CoreBox footer，只有显式声明 `footerHints.primary.visible` / `footerHints.secondary.visible` / `footerHints.quickSelect.visible` 为 `true` 才展示
+6. **Footer 展示**: 插件普通 feature 默认展示 CoreBox footer；插件 widget / custom render item 默认不展示，只有显式声明 `footerHints.primary.visible` / `footerHints.secondary.visible` / `footerHints.quickSelect.visible` 为 `true` 才展示
 
 ## 后续可开放能力
 
