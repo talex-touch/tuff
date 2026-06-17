@@ -44,9 +44,8 @@ files:
   - '!**/native-screenshot/target/**'
   - '!**/*.rlib'
   - '!**/*.rmeta'
-  # js-tiktoken ships dual ESM(.js)+CJS(.cjs); the CJS-only main process loads .cjs via require,
-  # so the ~11MB of ESM duplicates never load (verified: .cjs are self-contained, no .cjs->.js deps).
-  - '!**/node_modules/js-tiktoken/dist/**/*.js'
+  # Keep js-tiktoken ESM runtime files: @langchain/core imports js-tiktoken/lite via ESM,
+  # which resolves to dist/lite.js from the package exports map in packaged builds.
   # tesseract.js is unused — OCR runs through the native module (@talex-touch/tuff-native,
   # ocr-worker.ts recognizeImageText); no source references tesseract at all. Its ~29MB WASM
   # core shipped for nothing. (Vestigial dep — ideally also drop tesseract.js from package.json.)
