@@ -5,6 +5,19 @@
 
 ## 2026-06-17
 
+### fix(core-app+ci): default auth credential protection and tuff-intelligence CI
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/auth/index.test.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `docs/plan-prd/TODO.md`
+  - Restored auth credential protection to default-on via `auth.useSecureStorage=true`; missing preferences and legacy default-disabled values migrate back to local root-key secure-store unless the user explicitly disabled protection.
+  - Kept the disable switch behind advanced settings and removed the visible settings copy suffix about system keychains/credential stores.
+  - Fixed `@talex-touch/tuff-intelligence` package CI dts build by explicitly typing `IntelligenceSdk.stream()` parameters.
+
 ### feat(intelligence): wire true chat streaming into CoreBox AI Ask
 
 - `packages/utils/types/intelligence.ts`

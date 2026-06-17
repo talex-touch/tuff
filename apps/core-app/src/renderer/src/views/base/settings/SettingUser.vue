@@ -66,6 +66,8 @@ function ensureAuthSettings() {
   }
   if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
     appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
+  } else if (!appSetting.auth.secureStorageUserOverridden && !appSetting.auth.useSecureStorage) {
+    appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false
@@ -191,7 +193,7 @@ const secureStorageDescription = computed(() => {
     return '本地安全上下文不可用，登录凭证仅在本次运行内保持。'
   }
   if (health.backend === 'local-secret') {
-    return '本地加密保护已启用：凭证由本机 root 密钥加密保存，重启后仍可保持登录状态；不会访问系统钥匙串或凭据库。'
+    return '本地加密保护已启用：凭证由本机 root 密钥加密保存，重启后仍可保持登录状态。'
   }
   return '本地安全上下文不可用，登录凭证仅在本次运行内保持。'
 })
