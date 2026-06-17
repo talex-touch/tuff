@@ -7,7 +7,11 @@ import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { getOpenerByExtension, useOpenerAutoResolve } from '~/modules/openers'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import { renderHighlightedTextHtml } from './highlight-html'
-import { shouldRenderCoreBoxIconColorful } from './icon-color-mode'
+import {
+  normalizeCoreBoxIcon,
+  resolveCoreBoxIconColor,
+  shouldRenderCoreBoxIconColorful
+} from './icon-color-mode'
 import ItemSubtitle from './ItemSubtitle.vue'
 import { formatResultSignalReason, resolveResultSignal, resolveSourceMeta } from './sourceMeta'
 
@@ -24,27 +28,7 @@ const { t } = useI18n()
 
 const resolvedTitle = computed(() => resolveI18nText(props.render.basic?.title || '', t))
 
-const displayIcon = computed<ITuffIcon>(() => {
-  const icon = props.render?.basic?.icon
-
-  if (!icon) {
-    return { type: 'url', value: '', status: 'normal' }
-  }
-
-  if (typeof icon === 'string') {
-    return { type: 'url', value: icon, status: 'normal' }
-  }
-
-  if ('value' in icon && icon.value?.length) {
-    return {
-      type: icon.type || 'url',
-      value: icon.value,
-      status: icon.status || 'normal'
-    }
-  }
-
-  return { type: 'url', value: '', status: 'normal' }
-})
+const displayIcon = computed<ITuffIcon>(() => normalizeCoreBoxIcon(props.render?.basic?.icon))
 
 const fileExtension = computed(() => {
   if (props.item.kind !== 'file') return null
@@ -95,6 +79,11 @@ const noticeIcon = computed<ITuffIcon | null>(() => {
   return { type: 'class', value: 'i-ri-information-line', status: 'normal' }
 })
 const effectiveIcon = computed(() => noticeIcon.value || displayIcon.value)
+const iconStyle = computed(() => ({
+  '--icon-color': noticeIcon.value
+    ? 'var(--tx-text-color-primary, #e5e7eb)'
+    : resolveCoreBoxIconColor(displayIcon.value)
+}))
 const shouldRenderIconColorful = computed(() => {
   if (noticeIcon.value) return false
   return shouldRenderCoreBoxIconColorful(props.render.basic?.icon)
@@ -121,7 +110,7 @@ const shouldShowNoticeReason = computed(
         :alt="resolvedTitle || 'Tuff Item'"
         :size="32"
         :colorful="shouldRenderIconColorful"
-        style="--icon-color: var(--tx-text-color-primary)"
+        :style="iconStyle"
       />
       <span
         v-if="showFrequency"

@@ -83,17 +83,52 @@ describe('plugin-features-adapter', () => {
     expect(item.meta?.footerHints).toBeUndefined()
   })
 
-  it('preserves explicit colorful feature icons for CoreBox rendering', () => {
+  it('preserves explicit color and colorful feature icons for CoreBox rendering', () => {
     const adapter = new PluginFeaturesAdapter()
     const item = adapter.createTuffItem(createPlugin(), {
       ...createFeature(),
-      icon: { type: 'file', value: 'assets/logo.svg', colorful: true }
+      icon: { type: 'file', value: 'assets/logo.svg', color: '#22c55e', colorful: true }
     })
 
     expect(item.render.basic?.icon).toMatchObject({
       type: 'file',
       value: 'assets/logo.svg',
+      color: '#22c55e',
       colorful: true
+    })
+  })
+
+  it('keeps class feature icons in the themed icon branch', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const item = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      icon: { type: 'class', value: 'i-ri-clipboard-line' }
+    })
+
+    expect(item.render.basic?.icon).toMatchObject({
+      type: 'class',
+      value: 'i-ri-clipboard-line'
+    })
+  })
+
+  it('normalizes legacy remixicon values to UnoCSS icon classes', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const dashItem = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      icon: { type: 'remixicon' as never, value: 'ri-clipboard-line' }
+    })
+    const colonItem = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      icon: { type: 'remixicon' as never, value: 'ri:json-line' }
+    })
+
+    expect(dashItem.render.basic?.icon).toMatchObject({
+      type: 'class',
+      value: 'i-ri-clipboard-line'
+    })
+    expect(colonItem.render.basic?.icon).toMatchObject({
+      type: 'class',
+      value: 'i-ri-json-line'
     })
   })
 

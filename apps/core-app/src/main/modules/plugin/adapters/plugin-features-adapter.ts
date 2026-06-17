@@ -64,13 +64,24 @@ function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   }
 }
 
+function normalizeClassIconValue(value: string): string {
+  if (value.startsWith('ri:')) return `i-ri-${value.slice(3)}`
+  if (value.startsWith('ri-')) return `i-${value}`
+  return value
+}
+
 function mapIconType(type: string): TuffIconType {
   switch (type) {
     case 'file':
       return 'file'
-    case 'remixicon':
+    case 'url':
+      return 'url'
     case 'class':
-      return 'emoji'
+    case 'remixicon':
+      return 'class'
+    case 'builtin':
+      return 'builtin'
+    case 'emoji':
     default:
       return 'emoji'
   }
@@ -248,6 +259,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       const query = searchQuery
 
       const shouldShowInput = resolveFeatureShowInput(feature)
+      const pluginIconType = mapIconType((plugin.icon as ITuffIcon).type)
+      const pluginIconValue = (plugin.icon as ITuffIcon).value
 
       // IMPORTANT: Pre-activate the provider BEFORE loading the plugin view
       // This ensures items pushed by the plugin during onFeatureTriggered
@@ -256,8 +269,10 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         id: this.id,
         name: plugin.name,
         icon: {
-          type: mapIconType((plugin.icon as ITuffIcon).type),
-          value: (plugin.icon as ITuffIcon).value,
+          type: pluginIconType,
+          value:
+            pluginIconType === 'class' ? normalizeClassIconValue(pluginIconValue) : pluginIconValue,
+          color: (plugin.icon as ITuffIcon).color,
           colorful: (plugin.icon as ITuffIcon).colorful
         },
         meta: {
@@ -408,6 +423,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   ): TuffItem {
     const searchTokens = feature.searchTokens ?? buildFeatureSearchTokens(feature)
     feature.searchTokens = searchTokens
+    const iconType = mapIconType((feature.icon as ITuffIcon).type)
+    const iconValue = (feature.icon as ITuffIcon).value
 
     return {
       id: `${plugin.name}/${feature.id}`,
@@ -423,8 +440,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           title: feature.name,
           subtitle: feature.desc,
           icon: {
-            type: mapIconType((feature.icon as ITuffIcon).type),
-            value: (feature.icon as ITuffIcon).value,
+            type: iconType,
+            value: iconType === 'class' ? normalizeClassIconValue(iconValue) : iconValue,
+            color: (feature.icon as ITuffIcon).color,
             colorful: (feature.icon as ITuffIcon).colorful
           }
         }

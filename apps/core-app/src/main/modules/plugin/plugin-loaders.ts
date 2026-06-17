@@ -309,7 +309,8 @@ abstract class BasePluginLoader {
       pluginInfo.icon.type,
       pluginInfo.icon.value,
       this.touchPlugin.dev,
-      pluginInfo.icon.colorful
+      pluginInfo.icon.colorful,
+      pluginInfo.icon.color
     )
     await icon.init()
     this.touchPlugin.icon = icon

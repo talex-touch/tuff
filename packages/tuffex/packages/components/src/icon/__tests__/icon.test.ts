@@ -22,6 +22,13 @@ describe('txIcon', () => {
     })
 
     expect(themedIcon.attributes('style')).toContain('--icon-color: rgb(1, 2, 3)')
+    expect(themedIcon.attributes('style')).toContain('color: var(--icon-color, currentColor)')
+
+    const coloredIcon = mount(TxIcon, {
+      props: { icon: { type: 'class', value: 'i-ri-home-line', color: '#22c55e' } },
+    })
+
+    expect(coloredIcon.attributes('style')).toContain('color: rgb(34, 197, 94)')
 
     const builtin = mount(TxIcon, {
       props: { name: 'close' },
@@ -68,7 +75,7 @@ describe('txIcon', () => {
     const svgFetcher = vi.fn(async () => '<svg viewBox="0 0 1 1"></svg>')
     const mask = mount(TxIcon, {
       props: {
-        icon: { type: 'url', value: '/icon.svg' },
+        icon: { type: 'url', value: '/icon.svg?plugin=demo#icon' },
         svgFetcher,
       },
     })
@@ -76,7 +83,7 @@ describe('txIcon', () => {
     await vi.waitFor(() => {
       expect(mask.find('.tuff-icon__svg-mask').exists()).toBe(true)
     })
-    expect(svgFetcher).toHaveBeenCalledWith('/icon.svg')
+    expect(svgFetcher).toHaveBeenCalledWith('/icon.svg?plugin=demo#icon')
 
     const colorful = mount(TxIcon, {
       props: {
@@ -87,6 +94,24 @@ describe('txIcon', () => {
 
     expect(colorful.find('img').attributes('src')).toBe('/color.svg')
     expect(colorful.find('.tuff-icon__svg-mask').exists()).toBe(false)
+  })
+
+  it('recognizes svg data urls as theme-color mask candidates', async () => {
+    const dataUrl = 'data:image/svg+xml;utf8,<svg viewBox="0 0 1 1"><path d=\'M0 0h1\'/></svg>'
+    const svgFetcher = vi.fn(async () => '<svg viewBox="0 0 1 1"></svg>')
+    const wrapper = mount(TxIcon, {
+      props: {
+        icon: { type: 'url', value: dataUrl },
+        svgFetcher,
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('.tuff-icon__svg-mask').exists()).toBe(true)
+    })
+    const maskStyle = wrapper.find('.tuff-icon__svg-mask').attributes('style') ?? ''
+    expect(maskStyle).toContain('%27')
+    expect(svgFetcher).not.toHaveBeenCalled()
   })
 
   it('keeps multi-color svg as image in theme-color mode', async () => {

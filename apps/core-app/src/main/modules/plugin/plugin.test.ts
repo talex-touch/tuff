@@ -477,7 +477,7 @@ describe('TouchPlugin.triggerFeature', () => {
     )
   })
 
-  it('preserves explicit colorful icon intent on pushed root result items', async () => {
+  it('preserves explicit color and colorful icon intent on pushed root result items', async () => {
     appSettingsMock.value = {
       searchProviders: {
         providers: [{ providerId: 'test-plugin.root-results', enabled: true, order: 10 }]
@@ -536,7 +536,12 @@ describe('TouchPlugin.triggerFeature', () => {
         mode: 'default',
         basic: {
           title: 'Colorful item',
-          icon: { type: 'url', value: 'https://example.test/logo.svg', colorful: true }
+          icon: {
+            type: 'url',
+            value: 'https://example.test/logo.svg',
+            color: '#22c55e',
+            colorful: true
+          }
         }
       }
     } satisfies TuffItem)
@@ -545,7 +550,7 @@ describe('TouchPlugin.triggerFeature', () => {
       expect.objectContaining({
         render: expect.objectContaining({
           basic: expect.objectContaining({
-            icon: expect.objectContaining({ colorful: true })
+            icon: expect.objectContaining({ color: '#22c55e', colorful: true })
           })
         })
       })

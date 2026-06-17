@@ -1845,13 +1845,15 @@ export class TouchPlugin implements ITouchPlugin {
           processedItem.icon.type,
           processedItem.icon.value,
           this.dev,
-          processedItem.icon.colorful
+          processedItem.icon.colorful,
+          processedItem.icon.color
         )
         await icon.init()
         processedItem.icon = {
           type: icon.type,
           value: icon.value,
           status: icon.status,
+          color: icon.color,
           colorful: icon.colorful
         }
       }
@@ -1868,7 +1870,8 @@ export class TouchPlugin implements ITouchPlugin {
           basicIcon.type,
           basicIcon.value,
           this.dev,
-          basicIcon.colorful
+          basicIcon.colorful,
+          basicIcon.color
         )
         await icon.init()
         processedItem.render = {
@@ -1879,6 +1882,7 @@ export class TouchPlugin implements ITouchPlugin {
               type: icon.type,
               value: icon.value,
               status: icon.status,
+              color: icon.color,
               colorful: icon.colorful
             }
           }

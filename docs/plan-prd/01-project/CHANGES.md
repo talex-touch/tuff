@@ -1,9 +1,27 @@
 # 变更日志
 
-> 更新时间：2026-06-17
+> 更新时间：2026-06-18
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 2026-06-17
+
+### fix(corebox): preserve themed icon color rendering
+
+- `apps/core-app/src/renderer/src/components/render/icon-color-mode.ts`
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+- `apps/core-app/src/renderer/src/components/render/BoxGridItem.vue`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/core/tuff-icon.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-feature.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- `packages/tuffex/packages/components/src/icon/src/types.ts`
+- `packages/utils/types/icon.ts`
+  - CoreBox result items now normalize icons without dropping `color` / `colorful` / `error` metadata, keep `i-*` / legacy `ri-*` / `ri:*` values in the class-icon branch, and preserve plugin feature `class` / `remixicon` icons instead of degrading them to emoji text.
+  - TuffEx `TxIcon` now applies `ITuffIcon.color` / `TxIconSource.color` to monochrome class, builtin, and SVG-mask rendering, while CoreBox falls back to `var(--tx-text-color-primary, #e5e7eb)` when no explicit icon color is provided.
+  - TuffEx `TxIcon` now recognizes SVG sources with query/hash suffixes and `data:image/svg+xml` URLs as theme-color mask candidates, safely encodes mask data URLs, so monochrome SVGs can inherit `--icon-color` instead of rendering as black images.
+  - Verification: `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/components/render/icon-color-mode.test.ts" "src/main/core/tuff-icon.test.ts" "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts" "src/main/modules/plugin/plugin.test.ts"` and `pnpm -C "packages/tuffex" exec vitest run "packages/components/src/icon/__tests__/icon.test.ts"` passed.
 
 ### fix(core-app): keep js-tiktoken ESM files in packaged builds
 

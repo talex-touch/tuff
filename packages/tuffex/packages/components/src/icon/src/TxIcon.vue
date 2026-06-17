@@ -86,6 +86,7 @@ const safeIcon = computed<TxIconSource>(() => {
 
 const isLoading = computed(() => safeIcon.value.status === 'loading')
 const isError = computed(() => safeIcon.value.status === 'error')
+const iconColor = computed(() => safeIcon.value.color || 'var(--icon-color, currentColor)')
 
 const isAddressable = computed(() => safeIcon.value.type === 'url' || safeIcon.value.type === 'file')
 
@@ -114,9 +115,26 @@ const resolvedUrl = computed(() => {
   return rawValue
 })
 
+function isSvgSource(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized)
+    return false
+  if (normalized.startsWith('data:image/svg+xml'))
+    return true
+
+  let decoded = normalized
+  try {
+    decoded = decodeURIComponent(normalized)
+  }
+  catch {}
+
+  const [path] = decoded.split(/[?#]/)
+  return path?.endsWith('.svg') ?? false
+}
+
 const isSvg = computed(() => {
   const v = resolvedUrl.value
-  return typeof v === 'string' && v.toLowerCase().endsWith('.svg')
+  return typeof v === 'string' && isSvgSource(v)
 })
 
 const svgContent = ref<string>('')
@@ -136,11 +154,36 @@ const builtin = computed(() => {
   return (builtinIcons as any)[safeIcon.value.value] ?? null
 })
 
+function encodeSvgDataUrlContent(content: string): string {
+  return encodeURIComponent(content).replace(/'/g, '%27')
+}
+
 const svgDataUrl = computed(() => {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
+  return `data:image/svg+xml;utf8,${encodeSvgDataUrlContent(svgContent.value ?? '')}`
 })
 
+function decodeSvgDataUrl(url: string): string | null {
+  const match = /^data:image\/svg\+xml(?:;[^,]*)?,(.*)$/i.exec(url)
+  if (!match?.[1])
+    return null
+
+  try {
+    if (/^data:image\/svg\+xml(?:;[^,]*)?;base64,/i.test(url))
+      return atob(match[1])
+    return decodeURIComponent(match[1])
+  }
+  catch {
+    return match[1]
+  }
+}
+
 async function fetchSvg(url: string) {
+  const dataSvg = decodeSvgDataUrl(url)
+  if (dataSvg !== null) {
+    svgContent.value = dataSvg
+    return
+  }
+
   if (!svgFetcher.value) {
     svgContent.value = ''
     return
@@ -179,7 +222,7 @@ watch(
     role="img"
     :data-icon-type="safeIcon.type"
     :data-icon-value="safeIcon.value"
-    :style="{ fontSize: size ? `${size}px` : undefined }"
+    :style="{ fontSize: size ? `${size}px` : undefined, color: iconColor }"
   >
     <span v-if="!safeIcon.value" class="tuff-icon__empty"><slot name="empty">
       <img v-if="empty" :alt="alt" :src="empty">
@@ -238,7 +281,6 @@ watch(
   overflow: hidden;
   max-width: 1em;
   max-height: 1em;
-  color: var(--icon-color, currentColor);
 
   img {
     display: block;
