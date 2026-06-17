@@ -20,10 +20,9 @@ import { getMainConfig } from '../../storage'
 import SearchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import { coreBoxManager } from './manager'
-import { windowManager } from './window'
+import { COREBOX_MIN_HEIGHT, windowManager } from './window'
 
 const coreBoxLog = createLogger('CoreBox')
-const COREBOX_MIN_HEIGHT = 64
 const SEARCH_DIAGNOSTICS_BURST_DURATION_MS = 30_000
 const COREBOX_SHORTCUT_OWNER = 'module.corebox'
 const COREBOX_SHORTCUT_CLOSE_GRACE_MS = 800

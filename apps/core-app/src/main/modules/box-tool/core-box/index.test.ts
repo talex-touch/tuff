@@ -142,6 +142,7 @@ vi.mock('./manager', () => ({
 }))
 
 vi.mock('./window', () => ({
+  COREBOX_MIN_HEIGHT: 56,
   windowManager: {
     create: vi.fn(),
     getCurScreen: mocks.getCurScreen,
@@ -273,7 +274,7 @@ describe('CoreBoxModule', () => {
         }) => void
       }
     ).applyLayoutUpdate({
-      height: 64,
+      height: 56,
       resultCount: 0,
       loading: false,
       recommendationPending: false,

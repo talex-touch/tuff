@@ -35,7 +35,7 @@ import { coreBoxKeyTransport } from './key-transport'
 import { translateCoreBoxImageItem } from './image-translate'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
-import { getCoreBoxWindow, windowManager } from './window'
+import { COREBOX_MIN_HEIGHT, getCoreBoxWindow, windowManager } from './window'
 
 const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
 const resolveKeyManager = (channel: unknown): unknown =>
@@ -574,11 +574,11 @@ export class IpcManager {
 
     const handleSetHeight = (payload: { height: number }) => {
       const { height } = payload
-      if (typeof height !== 'number' || height < 60 || height > 650) {
-        throw new Error('Invalid height (must be 60-650)')
+      if (typeof height !== 'number' || height < COREBOX_MIN_HEIGHT || height > 650) {
+        throw new Error(`Invalid height (must be ${COREBOX_MIN_HEIGHT}-650)`)
       }
 
-      if (height > 60 && coreBoxManager.isCollapsed) {
+      if (height > COREBOX_MIN_HEIGHT && coreBoxManager.isCollapsed) {
         coreBoxManager.markExpanded()
       }
 
