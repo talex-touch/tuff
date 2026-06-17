@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   })),
   setPinned: vi.fn(),
   isPinned: vi.fn(() => false),
+  isCollapsed: false,
   searchEngineCore: {
     getActivationState: vi.fn(() => []),
     getCurrentGatherController: vi.fn(() => null),
@@ -123,7 +124,7 @@ vi.mock('./manager', () => ({
       return false
     },
     get isCollapsed() {
-      return false
+      return mocks.isCollapsed
     }
   }
 }))
@@ -142,6 +143,7 @@ vi.mock('./meta-overlay', () => ({
 }))
 
 vi.mock('./window', () => ({
+  COREBOX_MIN_HEIGHT: 56,
   getCoreBoxWindow: vi.fn(() => null),
   windowManager: {
     current: null,
@@ -166,6 +168,7 @@ describe('CoreBox IPC hide transport', () => {
     vi.clearAllMocks()
     mocks.handlers.clear()
     mocks.isPinned.mockReturnValue(false)
+    mocks.isCollapsed = false
     ipcManager.unregister()
     ipcManager.register()
   })
@@ -197,5 +200,21 @@ describe('CoreBox IPC hide transport', () => {
 
     expect(mocks.setPinned).toHaveBeenCalledWith(true)
     expect(response).toEqual({ pinned: true })
+  })
+
+  it('uses the CoreBox header height as the layout minimum', () => {
+    const handler = mocks.handlers.get(CoreBoxEvents.layout.setHeight.toEventName())
+
+    expect(handler).toBeTypeOf('function')
+    expect(() => handler?.({ height: 55 })).toThrow('Invalid height (must be 56-650)')
+
+    const minResponse = handler?.({ height: 56 })
+    expect(minResponse).toEqual({ height: 56 })
+    expect(mocks.markExpanded).not.toHaveBeenCalled()
+
+    mocks.isCollapsed = true
+    const expandedResponse = handler?.({ height: 57 })
+    expect(expandedResponse).toEqual({ height: 57 })
+    expect(mocks.markExpanded).toHaveBeenCalledTimes(1)
   })
 })

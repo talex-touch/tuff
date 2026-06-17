@@ -1048,18 +1048,14 @@ div.CoreBoxRes {
 
   flex-direction: row;
 
-  top: 64px;
+  top: 56px;
 
   width: 100%;
-  height: calc(100% - 64px);
+  height: calc(100% - 56px);
   overflow: hidden;
 
   border-radius: 0 0 var(--corebox-container-radius, 8px) var(--corebox-container-radius, 8px);
   border-top: 1px solid var(--tx-border-color);
-
-  .core-box & {
-    display: flex;
-  }
 
   .CoreBoxRes-Main {
     position: relative;
@@ -1252,7 +1248,7 @@ div.CoreBox {
   display: none;
 
   width: 100%;
-  height: 64px;
+  height: 56px;
 
   left: 0;
   top: 0;

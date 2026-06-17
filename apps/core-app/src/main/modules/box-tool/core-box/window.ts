@@ -47,7 +47,9 @@ import { viewCacheManager } from './view-cache'
 import { getLiveViewWebContents } from './web-contents-view-guard'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
-const COREBOX_MIN_HEIGHT = 64
+export const COREBOX_WIDTH = 720
+export const COREBOX_HEADER_HEIGHT = 56
+export const COREBOX_MIN_HEIGHT = COREBOX_HEADER_HEIGHT
 const COREBOX_HEIGHT_TARGET_TOLERANCE = 4
 const COREBOX_ANIMATION_RETARGET_TOLERANCE = 12
 const BLOCKED_COREBOX_FUNCTION_KEYS = new Set(
@@ -345,9 +347,9 @@ export class WindowManager {
         const bounds = window.window.getBounds()
         this.uiView.setBounds({
           x: 0,
-          y: 60,
+          y: COREBOX_HEADER_HEIGHT,
           width: bounds.width,
-          height: Math.max(0, bounds.height - 60)
+          height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
         })
       } catch (error) {
         coreBoxWindowLog.warn('Failed to update UI view bounds on resize', { error })
@@ -482,7 +484,7 @@ export class WindowManager {
     this.boundsAnimationState = createState(currentBounds, restoreResizable, token)
 
     try {
-      browserWindow.setMinimumSize(720, COREBOX_MIN_HEIGHT)
+      browserWindow.setMinimumSize(COREBOX_WIDTH, COREBOX_MIN_HEIGHT)
     } catch (error) {
       coreBoxWindowLog.warn('Failed to relax minimum size before bounds animation', { error })
     }
@@ -548,7 +550,7 @@ export class WindowManager {
             this.lastSetBounds = { height: state.target.height, y: state.target.y }
             this.syncMetaOverlayBounds()
             if (typeof state.minHeight === 'number') {
-              state.browserWindow.setMinimumSize(720, state.minHeight)
+              state.browserWindow.setMinimumSize(COREBOX_WIDTH, state.minHeight)
             }
           } catch (error) {
             coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
@@ -594,7 +596,7 @@ export class WindowManager {
 
     const rawWidth = size.width
     const rawHeight = size.height
-    const windowWidth = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 900
+    const windowWidth = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : COREBOX_WIDTH
     let windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : COREBOX_MIN_HEIGHT
 
     const margin = 12
@@ -780,8 +782,10 @@ export class WindowManager {
 
     const currentWindow = this.current
     if (currentWindow) {
-      const display = this.getDisplayForWindow(currentWindow)
-      const bounds = this.calculateCoreBoxBounds(display, { width: 720, height })
+      const display = currentWindow.window.isVisible()
+        ? this.getDisplayForWindow(currentWindow)
+        : this.getCurScreen()
+      const bounds = this.calculateCoreBoxBounds(display, { width: COREBOX_WIDTH, height })
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
@@ -795,7 +799,7 @@ export class WindowManager {
           currentWindow.window.setBounds(bounds, false)
           this.lastSetBounds = { height: bounds.height, y: bounds.y }
           this.syncMetaOverlayBounds()
-          currentWindow.window.setMinimumSize(720, height)
+          currentWindow.window.setMinimumSize(COREBOX_WIDTH, height)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
         }
@@ -815,23 +819,29 @@ export class WindowManager {
 
     const currentWindow = this.current
     if (currentWindow) {
-      if (!currentWindow.window.isVisible()) {
-        coreBoxWindowLog.debug('Skip shrinking hidden CoreBox window')
-        return
-      }
-
-      // Skip if already shrunk or shrinking (within tolerance)
-      const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
-      if (Math.abs(currentHeight - COREBOX_MIN_HEIGHT) < 5) {
-        return
-      }
-
-      const display = this.getDisplayForWindow(currentWindow)
+      const display = currentWindow.window.isVisible()
+        ? this.getDisplayForWindow(currentWindow)
+        : this.getCurScreen()
       const bounds = this.calculateCoreBoxBounds(display, {
-        width: 720,
+        width: COREBOX_WIDTH,
         height: COREBOX_MIN_HEIGHT
       })
       if (!bounds) return
+
+      const rawBounds = currentWindow.window.getBounds()
+      const currentBounds = {
+        ...rawBounds,
+        height: this.lastSetBounds?.height ?? rawBounds.height,
+        y: this.lastSetBounds?.y ?? rawBounds.y
+      }
+      if (
+        Math.abs(currentBounds.x - bounds.x) < 3 &&
+        Math.abs(currentBounds.y - bounds.y) < 3 &&
+        Math.abs(currentBounds.width - bounds.width) < 3 &&
+        Math.abs(currentBounds.height - bounds.height) < 5
+      ) {
+        return
+      }
 
       const settings = this.getAppSettingConfig()
       const logVerbose =
@@ -844,7 +854,7 @@ export class WindowManager {
         this.stopBoundsAnimation()
         const restoreResizable = this.prepareTemporaryResize(currentWindow.window)
         try {
-          currentWindow.window.setMinimumSize(720, COREBOX_MIN_HEIGHT)
+          currentWindow.window.setMinimumSize(COREBOX_WIDTH, COREBOX_MIN_HEIGHT)
           currentWindow.window.setBounds(bounds, false)
           this.lastSetBounds = { height: bounds.height, y: bounds.y }
           this.syncMetaOverlayBounds()
@@ -898,7 +908,10 @@ export class WindowManager {
     }
 
     const display = this.getDisplayForWindow(currentWindow)
-    const bounds = this.calculateCoreBoxBounds(display, { width: 720, height: safeHeight })
+    const bounds = this.calculateCoreBoxBounds(display, {
+      width: COREBOX_WIDTH,
+      height: safeHeight
+    })
     if (!bounds) return
 
     const settings = this.getAppSettingConfig()
@@ -912,7 +925,7 @@ export class WindowManager {
       this.stopBoundsAnimation()
       const restoreResizable = this.prepareTemporaryResize(currentWindow.window)
       try {
-        currentWindow.window.setMinimumSize(720, safeHeight)
+        currentWindow.window.setMinimumSize(COREBOX_WIDTH, safeHeight)
         currentWindow.window.setBounds(bounds, false)
         this.lastSetBounds = { height: bounds.height, y: bounds.y }
         this.syncMetaOverlayBounds()
@@ -1251,9 +1264,9 @@ export class WindowManager {
         const bounds = currentWindow.window.getBounds()
         this.uiView.setBounds({
           x: 0,
-          y: 60,
+          y: COREBOX_HEADER_HEIGHT,
           width: bounds.width,
-          height: Math.max(0, bounds.height - 60)
+          height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
         })
 
         const uiWebContents = this.getAliveUIViewWebContents()
@@ -1460,9 +1473,9 @@ export class WindowManager {
     const bounds = currentWindow.window.getBounds()
     this.uiView.setBounds({
       x: 0,
-      y: 60,
+      y: COREBOX_HEADER_HEIGHT,
       width: bounds.width,
-      height: bounds.height - 60
+      height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
     })
 
     coreBoxWindowLog.debug(`AttachUIView - resolved URL ${url}`)
@@ -1750,9 +1763,9 @@ export class WindowManager {
       const bounds = currentWindow.window.getBounds()
       view.setBounds({
         x: 0,
-        y: 60,
+        y: COREBOX_HEADER_HEIGHT,
         width: bounds.width,
-        height: Math.max(0, bounds.height - 60)
+        height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
       })
     } catch (error) {
       coreBoxWindowLog.error('Failed to restore extracted UI view', { error })
