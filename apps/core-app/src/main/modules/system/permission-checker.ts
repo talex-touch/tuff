@@ -148,14 +148,14 @@ export class PermissionChecker {
     if (process.platform === 'win32') {
       return {
         status: PermissionStatus.UNSUPPORTED,
-        canRequest: true,
+        canRequest: false,
         message: 'Windows notification permission cannot be verified programmatically'
       }
     }
 
     return {
       status: PermissionStatus.UNSUPPORTED,
-      canRequest: true,
+      canRequest: false,
       message: 'Linux notification permission depends on desktop environment and is not verifiable'
     }
   }

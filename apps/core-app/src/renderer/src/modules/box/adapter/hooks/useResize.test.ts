@@ -70,7 +70,7 @@ describe('useResize forceMax activation', () => {
       window.setTimeout(() => callback(performance.now()), 0)
     )
     vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id))
-    document.body.innerHTML = '<div class="CoreBox" style="height: 64px"></div>'
+    document.body.innerHTML = '<div class="CoreBox" style="height: 56px"></div>'
   })
 
   afterEach(() => {

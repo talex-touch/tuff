@@ -111,7 +111,7 @@ const placeholder = computed(() => {
   display: flex;
   align-items: center;
   font-size: 22px;
-  height: 52px !important;
+  height: 48px !important;
 }
 
 .BoxInput-Display {

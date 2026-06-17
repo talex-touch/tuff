@@ -89,7 +89,9 @@ describe('permission-checker', () => {
     const linux = withPlatform('linux', () => PermissionChecker.getInstance().checkNotifications())
 
     expect(windows.status).toBe(PermissionStatus.UNSUPPORTED)
+    expect(windows.canRequest).toBe(false)
     expect(linux.status).toBe(PermissionStatus.UNSUPPORTED)
+    expect(linux.canRequest).toBe(false)
   })
 
   it('marks macOS notification permission as unverifiable when native notifications are supported', () => {

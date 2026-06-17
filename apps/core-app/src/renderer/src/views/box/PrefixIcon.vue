@@ -68,8 +68,8 @@ onBeforeUnmount(() => {
 .ProgressRing {
   position: absolute;
   inset: 0;
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   transform: rotate(-90deg);
   pointer-events: none;
 }

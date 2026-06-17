@@ -96,6 +96,7 @@ interface SearchCacheEntry {
 
 const SEARCH_CACHE_TTL_MS = 5_000
 const SEARCH_CACHE_MAX_SIZE = 100
+const SEARCH_FRONTEND_ITEM_LIMIT = 80
 const SEARCH_TRACE_SCHEMA = 'search-trace/v1'
 const SEARCH_TRACE_SLOW_THRESHOLD_MS = 800
 
@@ -206,6 +207,12 @@ export class SearchEngineCore
     }
 
     this.searchCache.set(cacheKey, { result, timestamp: Date.now() })
+  }
+
+  private limitFrontendItems(items: TuffItem[]): TuffItem[] {
+    return items.length > SEARCH_FRONTEND_ITEM_LIMIT
+      ? items.slice(0, SEARCH_FRONTEND_ITEM_LIMIT)
+      : items
   }
 
   private getSearchProviderUserConfigs() {
@@ -1506,10 +1513,13 @@ export class SearchEngineCore
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         const coreBoxWindow = windowManager.current?.window
         if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+          const frontendItems = this.limitFrontendItems(itemsToSend)
+          if (frontendItems.length === 0) return
+
           const transport = this.getTransport()
           void transport
             .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.update, {
-              items: itemsToSend,
+              items: frontendItems,
               searchId: sessionId
             })
             .catch(() => {})
@@ -1554,8 +1564,9 @@ export class SearchEngineCore
                 this._updateActivationState(update.newResults)
 
                 const totalDuration = Date.now() - startTime
+                const frontendItems = this.limitFrontendItems(sortedItems)
                 const initialResult = new TuffSearchResultBuilder(query)
-                  .setItems(sortedItems)
+                  .setItems(frontendItems)
                   .setDuration(totalDuration)
                   .setSources(update.sourceStats || [])
                   .build()
@@ -1715,8 +1726,9 @@ export class SearchEngineCore
             this._updateActivationState(update.newResults)
 
             const totalDuration = Date.now() - startTime
+            const frontendItems = this.limitFrontendItems(sortedItems)
             const initialResult = new TuffSearchResultBuilder(query)
-              .setItems(sortedItems)
+              .setItems(frontendItems)
               .setDuration(totalDuration)
               .setSources(update.sourceStats || [])
               .build()
