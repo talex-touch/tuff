@@ -1,6 +1,7 @@
 import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligenceStreamOptions,
   IntelligenceTtsSpeakPayload,
   IntelligenceTtsSpeakResult,
 } from '../../types/intelligence'
@@ -14,6 +15,12 @@ export interface IntelligenceSDK {
     payload: any,
     options?: IntelligenceInvokeOptions,
   ) => Promise<IntelligenceInvokeResult<T>>
+  stream: <T = any>(
+    capabilityId: string,
+    payload: any,
+    options: IntelligenceStreamOptions<T>,
+    invokeOptions?: IntelligenceInvokeOptions,
+  ) => Promise<unknown>
   ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
 }
 
@@ -53,11 +60,21 @@ async function invokeCapability<T = any>(
   return getClient().invoke<T>(capabilityId, payload, options)
 }
 
+async function streamCapability<T = any>(
+  capabilityId: string,
+  payload: any,
+  options: IntelligenceStreamOptions<T>,
+  invokeOptions?: IntelligenceInvokeOptions,
+): Promise<unknown> {
+  return getClient().stream<T>(capabilityId, payload, options, invokeOptions)
+}
+
 async function ttsSpeak(payload: IntelligenceTtsSpeakPayload): Promise<IntelligenceTtsSpeakResult> {
   return getClient().ttsSpeak(payload)
 }
 
 export const intelligence: IntelligenceSDK = {
   invoke: invokeCapability,
+  stream: streamCapability,
   ttsSpeak,
 }

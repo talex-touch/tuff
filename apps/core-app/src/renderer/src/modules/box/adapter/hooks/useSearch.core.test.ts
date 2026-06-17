@@ -323,6 +323,58 @@ describe('useSearch CoreBox reopen behavior', () => {
     expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
   })
 
+  it('suppresses regular search while a send-mode feature is active', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    const featureItem = {
+      id: 'touch-assistant/ask',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: 'Ask' } },
+      meta: {
+        pluginName: 'touch-assistant',
+        featureId: 'ask',
+        interaction: { type: 'webcontent', showInput: true, allowInput: true, sendMode: true },
+        extension: {
+          acceptedInputTypes: ['text']
+        }
+      }
+    } as TuffItem
+
+    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:execute') {
+        return [
+          {
+            id: 'plugin-features',
+            meta: {
+              pluginName: 'touch-assistant',
+              featureId: 'ask',
+              feature: featureItem
+            },
+            hideResults: false,
+            showInput: true
+          }
+        ]
+      }
+      if (eventName.includes('provider')) return []
+      if (eventName === 'core-box:query') return createSearchResult(getSearchQueryText(payload))
+      return undefined
+    })
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+    state.send.mockClear()
+
+    hook.searchVal.value = 'ask something'
+    await nextTick()
+    await flushPromises()
+
+    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+  })
+
   it('does not invalidate an in-flight search when duplicate query is skipped', async () => {
     const firstSearch = {
       resolve: null as ((result: TuffSearchResult) => void) | null

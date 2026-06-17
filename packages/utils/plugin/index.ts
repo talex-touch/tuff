@@ -320,6 +320,12 @@ export interface IFeatureInteraction {
    */
   allowInput?: boolean
   /**
+   * Whether CoreBox should treat the input action as a send action while this feature is active.
+   * When enabled, the CoreBox window pin action is replaced by a send button.
+   * Defaults to true for widget features and false for other interaction types.
+   */
+  sendMode?: boolean
+  /**
    * Whether CoreBox should expand to its maximum height when this feature is active.
    */
   forceMax?: boolean

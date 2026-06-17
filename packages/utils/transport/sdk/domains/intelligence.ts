@@ -4,8 +4,23 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
   IntelligenceProviderConfig,
+  IntelligenceStreamEvent,
+  IntelligenceStreamOptions,
   IntelligenceTtsSpeakPayload,
   IntelligenceTtsSpeakResult,
+  BuildContextInput,
+  BuildContextResult,
+  IndexChunkInput,
+  IndexChunkResult,
+  IndexDocumentInput,
+  IndexDocumentResult,
+  KnowledgeSearchInput,
+  KnowledgeSearchResult,
+  MemoryItem,
+  MemoryTombstone,
+  MemoryUpsertInput,
+  PrepareContextTurnInput,
+  PrepareContextTurnResult,
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceApprovalTicket,
@@ -313,6 +328,12 @@ export interface IntelligenceSdk {
     payload: unknown,
     options?: IntelligenceInvokeOptions,
   ) => Promise<IntelligenceInvokeResult<T>>
+  stream: <T = unknown>(
+    capabilityId: string,
+    payload: unknown,
+    options: IntelligenceStreamOptions<T>,
+    invokeOptions?: IntelligenceInvokeOptions,
+  ) => Promise<StreamController>
   ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
   chatLangChain: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
   testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
@@ -343,6 +364,13 @@ export interface IntelligenceSdk {
     callerId: string
     callerType?: IntelligenceQuotaConfig['callerType']
   }) => Promise<IntelligenceCurrentUsage>
+  knowledgeIndexDocument: (payload: IndexDocumentInput) => Promise<IndexDocumentResult>
+  knowledgeIndexChunk: (payload: IndexChunkInput) => Promise<IndexChunkResult>
+  knowledgeSearch: (payload: KnowledgeSearchInput) => Promise<KnowledgeSearchResult>
+  knowledgeBuildContext: (payload: BuildContextInput) => Promise<BuildContextResult>
+  contextPrepareTurn: (payload: PrepareContextTurnInput) => Promise<PrepareContextTurnResult>
+  contextSaveMemory: (payload: MemoryUpsertInput) => Promise<MemoryItem>
+  contextDeleteMemory: (payload: { memoryId: string, reason?: string }) => Promise<MemoryTombstone>
 
   agentSessionStart: (payload?: IntelligenceAgentSessionStartPayload) => Promise<TuffIntelligenceAgentSession>
   agentSessionHeartbeat: (payload: IntelligenceAgentSessionHeartbeatPayload) => Promise<{ sessionId: string, heartbeatAt: string }>
@@ -395,6 +423,14 @@ export const intelligenceApiEvents = {
     payload: unknown
     options?: IntelligenceInvokeOptions
   }, IntelligenceApiResponse<IntelligenceInvokeResult<unknown>>>(),
+  stream: defineEvent('intelligence')
+    .module('api')
+    .event('stream')
+    .define<{
+    capabilityId: string
+    payload: unknown
+    options?: IntelligenceInvokeOptions
+  }, AsyncIterable<IntelligenceStreamEvent<unknown>>>(),
   ttsSpeak: defineEvent('intelligence')
     .module('api')
     .event('tts-speak')
@@ -491,6 +527,40 @@ export const intelligenceApiEvents = {
     .module('api')
     .event('local-environment')
     .define<void, IntelligenceApiResponse<IntelligenceLocalEnvironmentSummary>>(),
+} as const
+
+export const intelligenceKnowledgeEvents = {
+  indexDocument: defineEvent('intelligence')
+    .module('knowledge')
+    .event('index-document')
+    .define<IndexDocumentInput, IntelligenceApiResponse<IndexDocumentResult>>(),
+  indexChunk: defineEvent('intelligence')
+    .module('knowledge')
+    .event('index-chunk')
+    .define<IndexChunkInput, IntelligenceApiResponse<IndexChunkResult>>(),
+  search: defineEvent('intelligence')
+    .module('knowledge')
+    .event('search')
+    .define<KnowledgeSearchInput, IntelligenceApiResponse<KnowledgeSearchResult>>(),
+  buildContext: defineEvent('intelligence')
+    .module('knowledge')
+    .event('build-context')
+    .define<BuildContextInput, IntelligenceApiResponse<BuildContextResult>>(),
+} as const
+
+export const intelligenceContextEvents = {
+  prepareTurn: defineEvent('intelligence')
+    .module('context')
+    .event('prepare-turn')
+    .define<PrepareContextTurnInput, IntelligenceApiResponse<PrepareContextTurnResult>>(),
+  saveMemory: defineEvent('intelligence')
+    .module('context')
+    .event('memory:save')
+    .define<MemoryUpsertInput, IntelligenceApiResponse<MemoryItem>>(),
+  deleteMemory: defineEvent('intelligence')
+    .module('context')
+    .event('memory:delete')
+    .define<{ memoryId: string, reason?: string }, IntelligenceApiResponse<MemoryTombstone>>(),
 } as const
 
 export const intelligenceAgentEvents = {
@@ -662,6 +732,29 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
     },
 
+    async stream<T = unknown>(capabilityId, payload, options, invokeOptions) {
+      if (typeof transport.stream !== 'function') {
+        throw new Error('Intelligence streaming requires a stream-capable transport')
+      }
+      return transport.stream(
+        intelligenceApiEvents.stream,
+        { capabilityId, payload, options: { ...invokeOptions, stream: true } },
+        {
+          onData: (event) => {
+            const typedEvent = event as IntelligenceStreamEvent<T>
+            if (typedEvent.type === 'start') options.onStart?.(typedEvent)
+            else if (typedEvent.type === 'delta') options.onDelta?.(typedEvent.delta || '', typedEvent)
+            else if (typedEvent.type === 'message' && typedEvent.message) options.onMessage?.(typedEvent.message, typedEvent)
+            else if (typedEvent.type === 'usage' && typedEvent.usage) options.onUsage?.(typedEvent.usage, typedEvent)
+            else if (typedEvent.type === 'metadata' && typedEvent.metadata) options.onMetadata?.(typedEvent.metadata, typedEvent)
+            else if (typedEvent.type === 'end') options.onEnd?.(typedEvent)
+          },
+          onError: options.onError,
+          onEnd: () => options.onEnd?.({ type: 'end', capabilityId }),
+        },
+      )
+    },
+
     async ttsSpeak(payload) {
       const response = await transport.send(intelligenceApiEvents.ttsSpeak, payload)
       return assertApiResponse(response, 'Intelligence TTS speak failed')
@@ -740,6 +833,41 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async getCurrentUsage(payload) {
       const response = await transport.send(intelligenceApiEvents.getCurrentUsage, payload)
       return assertApiResponse(response, 'Failed to get current usage')
+    },
+
+    async knowledgeIndexDocument(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.indexDocument, payload)
+      return assertApiResponse(response, 'Failed to index knowledge document')
+    },
+
+    async knowledgeIndexChunk(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.indexChunk, payload)
+      return assertApiResponse(response, 'Failed to index knowledge chunk')
+    },
+
+    async knowledgeSearch(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.search, payload)
+      return assertApiResponse(response, 'Failed to search local knowledge')
+    },
+
+    async knowledgeBuildContext(payload) {
+      const response = await transport.send(intelligenceKnowledgeEvents.buildContext, payload)
+      return assertApiResponse(response, 'Failed to build local knowledge context')
+    },
+
+    async contextPrepareTurn(payload) {
+      const response = await transport.send(intelligenceContextEvents.prepareTurn, payload)
+      return assertApiResponse(response, 'Failed to prepare intelligence context')
+    },
+
+    async contextSaveMemory(payload) {
+      const response = await transport.send(intelligenceContextEvents.saveMemory, payload)
+      return assertApiResponse(response, 'Failed to save intelligence memory')
+    },
+
+    async contextDeleteMemory(payload) {
+      const response = await transport.send(intelligenceContextEvents.deleteMemory, payload)
+      return assertApiResponse(response, 'Failed to delete intelligence memory')
     },
 
     async getLocalEnvironment() {

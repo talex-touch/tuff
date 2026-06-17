@@ -291,7 +291,7 @@ export function useSearch(
     return activations?.some((activation) => activation.id === 'plugin-features') ?? false
   }
 
-  function hasWidgetPluginFeatureActivation(activations: IProviderActivate[] | null): boolean {
+  function hasSendModePluginFeatureActivation(activations: IProviderActivate[] | null): boolean {
     return (
       activations?.some((activation) => {
         if (activation.id !== 'plugin-features') return false
@@ -299,15 +299,16 @@ export function useSearch(
           activation.meta as
             | {
                 feature?: {
-                  meta?: { interaction?: { type?: string } }
-                  interaction?: { type?: string }
+                  meta?: { interaction?: { type?: string; sendMode?: boolean } }
+                  interaction?: { type?: string; sendMode?: boolean }
                 }
               }
             | undefined
         )?.feature
-        return (
-          feature?.meta?.interaction?.type === 'widget' || feature?.interaction?.type === 'widget'
-        )
+        const interaction = feature?.meta?.interaction || feature?.interaction
+        if (!interaction) return false
+        if (interaction.sendMode === false) return false
+        return interaction.sendMode === true || interaction.type === 'widget'
       }) ?? false
     )
   }
@@ -929,7 +930,7 @@ export function useSearch(
   })
 
   watch(searchVal, (val) => {
-    if (hasWidgetPluginFeatureActivation(activeActivations.value)) {
+    if (hasSendModePluginFeatureActivation(activeActivations.value)) {
       const cancelable = debouncedSearch as unknown as { cancel?: () => void }
       cancelable.cancel?.()
       if (!val) {

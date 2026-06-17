@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { TxIconConfig, TxIconSource } from './types'
 import { computed, inject, ref, watch } from 'vue'
+import { shouldRenderSvgAsMask } from './svg-color-mode'
 import { TX_ICON_CONFIG_KEY } from './types'
 
 defineOptions({
@@ -118,19 +119,22 @@ const isSvg = computed(() => {
   return typeof v === 'string' && v.toLowerCase().endsWith('.svg')
 })
 
+const svgContent = ref<string>('')
+
 // colorful logic aligned with core-app:
 // colorful=true -> render as <img> (preserve original colors)
-// colorful=false -> render as mask (use currentColor)
+// colorful=false -> render monochrome SVGs as mask (use currentColor)
 const shouldPreserveColor = computed(() => props.colorful || safeIcon.value.colorful === true)
-const shouldUseMask = computed(() => isSvg.value && !shouldPreserveColor.value)
+const shouldInspectSvgColor = computed(() => isSvg.value && !shouldPreserveColor.value)
+const shouldUseMask = computed(
+  () => shouldInspectSvgColor.value && shouldRenderSvgAsMask(svgContent.value),
+)
 
 const builtin = computed(() => {
   if (safeIcon.value.type !== 'builtin')
     return null
   return (builtinIcons as any)[safeIcon.value.value] ?? null
 })
-
-const svgContent = ref<string>('')
 
 const svgDataUrl = computed(() => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
@@ -151,10 +155,14 @@ async function fetchSvg(url: string) {
 }
 
 watch(
-  () => ({ url: resolvedUrl.value, shouldUseMask: shouldUseMask.value, type: safeIcon.value.type }),
+  () => ({
+    url: resolvedUrl.value,
+    shouldInspectSvgColor: shouldInspectSvgColor.value,
+    type: safeIcon.value.type,
+  }),
   (v) => {
-    // Fetch SVG content only when using mask mode (not colorful)
-    if (isAddressable.value && v.shouldUseMask && v.url) {
+    // Fetch SVG content only when theme-color mode may need a mask.
+    if (isAddressable.value && v.shouldInspectSvgColor && v.url) {
       fetchSvg(v.url)
       return
     }
@@ -230,6 +238,7 @@ watch(
   overflow: hidden;
   max-width: 1em;
   max-height: 1em;
+  color: var(--icon-color, currentColor);
 
   img {
     display: block;

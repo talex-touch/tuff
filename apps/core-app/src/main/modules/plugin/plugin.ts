@@ -1736,20 +1736,70 @@ export class TouchPlugin implements ITouchPlugin {
         })
       }
     }
-    const intelligence = createIntelligenceClient({
+    const hasPluginPermission = (permissionId: string): boolean => {
+      const permissionModule = getPermissionModule()
+      if (!permissionModule) return false
+      return permissionModule.getStore().hasPermission(pluginName, permissionId, this.sdkapi)
+    }
+    const permission = {
+      check: async (permissionId: string) => hasPluginPermission(permissionId),
+      request: async (permissionId: string) => hasPluginPermission(permissionId)
+    }
+    const baseIntelligence = createIntelligenceClient({
       send: (eventName, payload) =>
         touchChannel.send(eventName, withPluginSdkapiPayload(payload, this.sdkapi))
     })
-    const permission = {
-      check: async (permissionId: string) => {
-        const permissionModule = getPermissionModule()
-        if (!permissionModule) return false
-        return permissionModule.getStore().hasPermission(pluginName, permissionId, this.sdkapi)
-      },
-      request: async (permissionId: string) => {
-        const permissionModule = getPermissionModule()
-        if (!permissionModule) return false
-        return permissionModule.getStore().hasPermission(pluginName, permissionId, this.sdkapi)
+    const intelligence = {
+      ...baseIntelligence,
+      stream: async <T = unknown>(
+        capabilityId: string,
+        payload: unknown,
+        options: {
+          onStart?: (event: unknown) => void
+          onDelta?: (delta: string, event: unknown) => void
+          onMessage?: (message: unknown, event: unknown) => void
+          onUsage?: (usage: unknown, event: unknown) => void
+          onMetadata?: (metadata: Record<string, unknown>, event: unknown) => void
+          onEnd?: (event: unknown) => void
+          onError?: (error: Error) => void
+        },
+        invokeOptions?: Record<string, unknown>
+      ) => {
+        if (!hasPluginPermission('intelligence.basic')) {
+          const error = new Error("Permission 'intelligence.basic' denied")
+          options.onError?.(error)
+          throw error
+        }
+        try {
+          const { tuffIntelligence } = await import('../ai/intelligence-sdk')
+          for await (const event of tuffIntelligence.stream<T>(capabilityId, payload, {
+            ...invokeOptions,
+            stream: true,
+            metadata: {
+              ...((invokeOptions?.metadata as Record<string, unknown> | undefined) ?? {}),
+              caller: `plugin:${pluginName}`
+            }
+          })) {
+            const row = event as {
+              type?: string
+              delta?: string
+              message?: unknown
+              usage?: unknown
+              metadata?: Record<string, unknown>
+            }
+            if (row.type === 'start') options.onStart?.(event)
+            else if (row.type === 'delta') options.onDelta?.(row.delta || '', event)
+            else if (row.type === 'message' && row.message) options.onMessage?.(row.message, event)
+            else if (row.type === 'usage' && row.usage) options.onUsage?.(row.usage, event)
+            else if (row.type === 'metadata' && row.metadata)
+              options.onMetadata?.(row.metadata, event)
+            else if (row.type === 'end') options.onEnd?.(event)
+          }
+        } catch (error) {
+          const normalized = error instanceof Error ? error : new Error(String(error))
+          options.onError?.(normalized)
+          throw normalized
+        }
       }
     }
 
@@ -1794,13 +1844,15 @@ export class TouchPlugin implements ITouchPlugin {
           this.pluginPath,
           processedItem.icon.type,
           processedItem.icon.value,
-          this.dev
+          this.dev,
+          processedItem.icon.colorful
         )
         await icon.init()
         processedItem.icon = {
           type: icon.type,
           value: icon.value,
-          status: icon.status
+          status: icon.status,
+          colorful: icon.colorful
         }
       }
 
@@ -1811,7 +1863,13 @@ export class TouchPlugin implements ITouchPlugin {
         processedItem.render.basic.icon.type === 'file'
       ) {
         const basicIcon = processedItem.render.basic.icon
-        const icon = new TuffIconImpl(this.pluginPath, basicIcon.type, basicIcon.value, this.dev)
+        const icon = new TuffIconImpl(
+          this.pluginPath,
+          basicIcon.type,
+          basicIcon.value,
+          this.dev,
+          basicIcon.colorful
+        )
         await icon.init()
         processedItem.render = {
           ...processedItem.render,
@@ -1820,7 +1878,8 @@ export class TouchPlugin implements ITouchPlugin {
             icon: {
               type: icon.type,
               value: icon.value,
-              status: icon.status
+              status: icon.status,
+              colorful: icon.colorful
             }
           }
         }

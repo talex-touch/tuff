@@ -418,6 +418,8 @@ function ensureAuthSettings(appSettings: AppSetting): void {
   }
   if (typeof authSettings.useSecureStorage !== 'boolean') {
     authSettings.useSecureStorage = appSettingOriginData.auth.useSecureStorage
+  } else if (!authSettings.secureStorageUserOverridden && !authSettings.useSecureStorage) {
+    authSettings.useSecureStorage = appSettingOriginData.auth.useSecureStorage
   }
   if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
     authSettings.secureStorageReminderShown = false

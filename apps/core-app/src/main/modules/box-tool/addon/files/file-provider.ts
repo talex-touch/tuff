@@ -803,6 +803,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDatabaseFilePath: () => this.databaseFilePath,
       getProviderId: () => this.id,
       getProviderType: () => this.type,
+      getWatchPaths: () => this.watchPaths,
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
       indexFiles: (dbPath, providerId, providerType, files) =>
         this.fileIndexWorker.indexFiles(dbPath, providerId, providerType, files),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)

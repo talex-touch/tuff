@@ -791,7 +791,234 @@ export const intelligenceWorkflowRunSteps = sqliteTable(
 )
 
 // =============================================================================
-// 12. Analytics (Performance & Telemetry)
+// 12. Intelligence Local Knowledge & Context Hygiene
+// =============================================================================
+
+export const intelligenceKnowledgeDocuments = sqliteTable(
+  'intelligence_knowledge_documents',
+  {
+    id: text('id').primaryKey(),
+    sourceType: text('source_type', {
+      enum: ['file', 'clipboard', 'web', 'plugin', 'manual', 'session']
+    }).notNull(),
+    sourceUri: text('source_uri'),
+    title: text('title').notNull(),
+    contentHash: text('content_hash').notNull(),
+    permissionScope: text('permission_scope').notNull().default('default'),
+    metadata: text('metadata'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    sourceIdx: index('idx_intelligence_knowledge_documents_source').on(table.sourceType),
+    permissionIdx: index('idx_intelligence_knowledge_documents_permission').on(
+      table.permissionScope
+    ),
+    updatedIdx: index('idx_intelligence_knowledge_documents_updated').on(table.updatedAt)
+  })
+)
+
+export const intelligenceKnowledgeChunks = sqliteTable(
+  'intelligence_knowledge_chunks',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => intelligenceKnowledgeDocuments.id, { onDelete: 'cascade' }),
+    chunkIndex: integer('chunk_index').notNull(),
+    content: text('content').notNull(),
+    contentHash: text('content_hash').notNull(),
+    tokenEstimate: integer('token_estimate').notNull().default(0),
+    metadata: text('metadata'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    documentIdx: index('idx_intelligence_knowledge_chunks_document').on(
+      table.documentId,
+      table.chunkIndex
+    ),
+    updatedIdx: index('idx_intelligence_knowledge_chunks_updated').on(table.updatedAt)
+  })
+)
+
+export const intelligenceContextSessions = sqliteTable(
+  'intelligence_context_sessions',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner', { enum: ['corebox', 'workflow', 'assistant', 'system'] }).notNull(),
+    status: text('status', { enum: ['active', 'archived', 'expired'] }).notNull(),
+    objective: text('objective'),
+    summary: text('summary'),
+    metadata: text('metadata'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    archivedAt: integer('archived_at')
+  },
+  (table) => ({
+    ownerStatusIdx: index('idx_intelligence_context_sessions_owner_status').on(
+      table.owner,
+      table.status
+    ),
+    updatedIdx: index('idx_intelligence_context_sessions_updated').on(table.updatedAt)
+  })
+)
+
+export const intelligenceContextTurns = sqliteTable(
+  'intelligence_context_turns',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intelligenceContextSessions.id, { onDelete: 'cascade' }),
+    role: text('role', { enum: ['user', 'assistant', 'system', 'tool'] }).notNull(),
+    content: text('content').notNull(),
+    privacyLevel: text('privacy_level', { enum: ['normal', 'sensitive', 'secret'] }).notNull(),
+    tokenEstimate: integer('token_estimate').notNull().default(0),
+    metadata: text('metadata'),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    sessionIdx: index('idx_intelligence_context_turns_session').on(
+      table.sessionId,
+      table.createdAt
+    ),
+    privacyIdx: index('idx_intelligence_context_turns_privacy').on(table.privacyLevel)
+  })
+)
+
+export const intelligenceContextCheckpoints = sqliteTable(
+  'intelligence_context_checkpoints',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intelligenceContextSessions.id, { onDelete: 'cascade' }),
+    type: text('type', {
+      enum: [
+        'session_start',
+        'session_end',
+        'task_switch',
+        'auto_prune',
+        'manual_reset',
+        'memory_snapshot',
+        'compression_snapshot'
+      ]
+    }).notNull(),
+    reason: text('reason').notNull(),
+    summary: text('summary'),
+    contextScope: text('context_scope', { enum: ['none', 'light', 'session', 'retrieval'] })
+      .notNull()
+      .default('light'),
+    metadata: text('metadata'),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    sessionIdx: index('idx_intelligence_context_checkpoints_session').on(
+      table.sessionId,
+      table.createdAt
+    ),
+    typeIdx: index('idx_intelligence_context_checkpoints_type').on(table.type)
+  })
+)
+
+export const intelligenceCompressionSnapshots = sqliteTable(
+  'intelligence_compression_snapshots',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intelligenceContextSessions.id, { onDelete: 'cascade' }),
+    goal: text('goal'),
+    currentState: text('current_state'),
+    decisions: text('decisions').notNull().default('[]'),
+    constraints: text('constraints').notNull().default('[]'),
+    artifacts: text('artifacts').notNull().default('[]'),
+    openQuestions: text('open_questions').notNull().default('[]'),
+    sourceTurnFrom: text('source_turn_from'),
+    sourceTurnTo: text('source_turn_to'),
+    metadata: text('metadata'),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    sessionIdx: index('idx_intelligence_compression_snapshots_session').on(
+      table.sessionId,
+      table.createdAt
+    )
+  })
+)
+
+export const intelligenceMemoryItems = sqliteTable(
+  'intelligence_memory_items',
+  {
+    id: text('id').primaryKey(),
+    type: text('type', {
+      enum: ['preference', 'project', 'task', 'knowledge', 'temporary']
+    }).notNull(),
+    scope: text('scope', { enum: ['global', 'workspace', 'project', 'session'] }).notNull(),
+    content: text('content').notNull(),
+    summary: text('summary').notNull(),
+    tags: text('tags').notNull().default('[]'),
+    confidence: real('confidence').notNull().default(1),
+    sourceSessionId: text('source_session_id'),
+    sourceTurnId: text('source_turn_id'),
+    privacyLevel: text('privacy_level', { enum: ['normal', 'sensitive', 'secret'] }).notNull(),
+    ttl: integer('ttl'),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    lastUsedAt: integer('last_used_at'),
+    usageCount: integer('usage_count').notNull().default(0)
+  },
+  (table) => ({
+    scopeTypeIdx: index('idx_intelligence_memory_items_scope_type').on(table.scope, table.type),
+    enabledIdx: index('idx_intelligence_memory_items_enabled').on(table.enabled),
+    sourceSessionIdx: index('idx_intelligence_memory_items_source_session').on(
+      table.sourceSessionId
+    )
+  })
+)
+
+export const intelligenceMemoryTombstones = sqliteTable(
+  'intelligence_memory_tombstones',
+  {
+    id: text('id').primaryKey(),
+    memoryId: text('memory_id').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    memoryIdx: index('idx_intelligence_memory_tombstones_memory').on(table.memoryId),
+    createdIdx: index('idx_intelligence_memory_tombstones_created').on(table.createdAt)
+  })
+)
+
+export const intelligenceContextPackageLogs = sqliteTable(
+  'intelligence_context_package_logs',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => intelligenceContextSessions.id, { onDelete: 'cascade' }),
+    scope: text('scope', { enum: ['none', 'light', 'session', 'retrieval'] }).notNull(),
+    traceId: text('trace_id'),
+    tokenBudget: integer('token_budget').notNull(),
+    tokenEstimate: integer('token_estimate').notNull(),
+    items: text('items').notNull().default('[]'),
+    metadata: text('metadata'),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    sessionIdx: index('idx_intelligence_context_package_logs_session').on(
+      table.sessionId,
+      table.createdAt
+    ),
+    traceIdx: index('idx_intelligence_context_package_logs_trace').on(table.traceId)
+  })
+)
+
+// =============================================================================
+// 13. Analytics (Performance & Telemetry)
 // =============================================================================
 
 export const analyticsSnapshots = sqliteTable(

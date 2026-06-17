@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileProviderIndexSchedulerService } from './file-provider-index-scheduler-service'
 
-function createService(options: { dbPath?: string | null } = {}) {
+function createService(
+  options: { dbPath?: string | null; watchPaths?: string[]; depthDelayMs?: number } = {}
+) {
   const indexFiles = vi.fn(async () => ({ processed: 0, failed: 0 }))
   const logWarn = vi.fn()
   const dbPath = Object.prototype.hasOwnProperty.call(options, 'dbPath')
@@ -11,11 +13,14 @@ function createService(options: { dbPath?: string | null } = {}) {
     getDatabaseFilePath: () => dbPath ?? null,
     getProviderId: () => 'file-provider',
     getProviderType: () => 'file',
+    getWatchPaths: () => options.watchPaths ?? ['/tmp'],
+    normalizePath: (rawPath) => rawPath.toLowerCase(),
     indexFiles,
     logWarn,
     config: {
       backgroundContentMinBytes: 10,
       backgroundDelayMs: 20,
+      depthDelayMs: options.depthDelayMs ?? 20,
       chunkSize: 2
     }
   })
@@ -161,6 +166,46 @@ describe('file-provider-index-scheduler-service', () => {
 
     expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
       expect.objectContaining({ id: 1, path: '/tmp/large.bin' })
+    ])
+  })
+
+  it('prioritizes shallower watch-root files before deeper files', async () => {
+    const { indexFiles, service } = createService({
+      watchPaths: ['/tmp/root'],
+      depthDelayMs: 20
+    })
+
+    service.schedule(
+      [
+        {
+          id: 1,
+          path: '/tmp/root/a.txt',
+          name: 'a.txt',
+          size: 1,
+          mtime: 1000,
+          ctime: 1000
+        },
+        {
+          id: 2,
+          path: '/tmp/root/one/two/three/deep.txt',
+          name: 'deep.txt',
+          size: 1,
+          mtime: 1000,
+          ctime: 1000
+        }
+      ],
+      'watch'
+    )
+
+    expect(indexFiles).toHaveBeenCalledTimes(1)
+    expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
+      expect.objectContaining({ id: 1, path: '/tmp/root/a.txt' })
+    ])
+
+    await vi.advanceTimersByTimeAsync(40)
+    expect(indexFiles).toHaveBeenCalledTimes(2)
+    expect(indexFiles).toHaveBeenLastCalledWith('/tmp/index.db', 'file-provider', 'file', [
+      expect.objectContaining({ id: 2, path: '/tmp/root/one/two/three/deep.txt' })
     ])
   })
 

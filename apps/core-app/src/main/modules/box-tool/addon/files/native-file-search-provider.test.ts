@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, getMainConfigMock, getPathMock, statMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  getMainConfigMock: vi.fn(),
-  getPathMock: vi.fn(),
-  statMock: vi.fn()
-}))
+const { execFileMock, getMainConfigMock, getPathMock, iconCacheEnsureMock, statMock } = vi.hoisted(
+  () => ({
+    execFileMock: vi.fn(),
+    getMainConfigMock: vi.fn(),
+    getPathMock: vi.fn(),
+    iconCacheEnsureMock: vi.fn(),
+    statMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -52,6 +55,16 @@ vi.mock('../../search-engine/search-logger', () => ({
   }
 }))
 
+vi.mock('./everything-icon-cache', () => ({
+  EverythingIconCache: vi.fn(() => ({
+    get: vi.fn((filePath: string) =>
+      filePath.includes('cached-icon') ? 'data:image/png;base64,cached' : null
+    ),
+    ensure: iconCacheEnsureMock,
+    clear: vi.fn()
+  }))
+}))
+
 import { __test__, macSpotlightFileProvider } from './native-file-search-provider'
 
 interface SearchableSpotlightProvider {
@@ -66,6 +79,7 @@ describe('native-file-search-provider', () => {
     execFileMock.mockReset()
     getMainConfigMock.mockReset()
     getPathMock.mockReset()
+    iconCacheEnsureMock.mockReset()
     statMock.mockReset()
     getMainConfigMock.mockReturnValue({ extraPaths: [] })
     getPathMock.mockImplementation((name: string) => {
@@ -168,6 +182,51 @@ describe('native-file-search-provider', () => {
     expect(results).toEqual([])
     expect(execFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
+  })
+
+  it('uses cached file icons and warms missing icons for Spotlight results', async () => {
+    execFileMock.mockImplementation((_command, args, _options, callback) => {
+      if (Array.isArray(args) && args.includes('-version')) {
+        callback(null, { stdout: 'mdfind test' })
+        return
+      }
+      callback(null, {
+        stdout: '/Users/demo/Documents/cached-icon.docx\0/Users/demo/Documents/missing-icon.pdf\0'
+      })
+    })
+    statMock.mockResolvedValue({
+      size: 12,
+      mtime: new Date('2026-05-12T00:00:00.000Z'),
+      ctime: new Date('2026-05-12T00:00:00.000Z'),
+      isDirectory: () => false
+    })
+
+    await macSpotlightFileProvider.onLoad()
+    const result = await macSpotlightFileProvider.onSearch(
+      { text: 'icon' },
+      new AbortController().signal
+    )
+
+    expect(result.items).toHaveLength(2)
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        render: expect.objectContaining({
+          basic: expect.objectContaining({
+            icon: { type: 'url', value: 'data:image/png;base64,cached' }
+          })
+        })
+      })
+    )
+    expect(result.items[1]).toEqual(
+      expect.objectContaining({
+        render: expect.objectContaining({
+          basic: expect.objectContaining({
+            icon: { type: 'class', value: 'i-ri-file-line' }
+          })
+        })
+      })
+    )
+    expect(iconCacheEnsureMock).toHaveBeenCalledWith('/Users/demo/Documents/missing-icon.pdf')
   })
 
   it('checks Spotlight result containment using case-insensitive root keys', () => {

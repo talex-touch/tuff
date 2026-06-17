@@ -375,6 +375,107 @@ function mapInvokeResult(result, prompt, requestId, handoffSessionId = '', input
   }
 }
 
+async function streamChatAnswer({
+  client,
+  featureId,
+  requestId,
+  payload,
+  invokeOptions,
+  displayPrompt,
+  handoffSessionId,
+  inputKinds,
+  imageDataUrl,
+  ocrText,
+  history,
+  session,
+}) {
+  if (typeof client?.stream !== 'function')
+    return null
+
+  let answer = ''
+  let provider = ''
+  let model = ''
+  let traceId = ''
+  let latency = 0
+  const startedAt = Date.now()
+
+  try {
+    await new Promise((resolve, reject) => {
+      client.stream('text.chat', payload, {
+        onStart(event) {
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+        },
+        onDelta(delta, event) {
+          if (!canCommitResponse(session, requestId))
+            return
+          answer = normalizeText(event?.content) || `${answer}${normalizeText(delta)}`
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+          pushWidgetState(featureId, {
+            requestId,
+            prompt: displayPrompt,
+            answer,
+            provider,
+            model,
+            traceId,
+            latency: Date.now() - startedAt,
+            handoffSessionId,
+            status: 'chat-pending',
+            stage: 'chat',
+            capabilityId: 'text.chat',
+            inputKinds,
+            imageDataUrl,
+            ocrText,
+            history,
+          })
+        },
+        onUsage(eventUsage, event) {
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+          void eventUsage
+        },
+        onEnd(event) {
+          answer = normalizeText(event?.content) || normalizeText(event?.result) || answer
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+          latency = normalizeLatency(event?.metadata?.latency) || Date.now() - startedAt
+          resolve()
+        },
+        onError(error) {
+          reject(error)
+        },
+      }, invokeOptions).catch(reject)
+    })
+  }
+  catch (error) {
+    const message = toErrorMessage(error).toLowerCase()
+    if (message.includes('stream-capable transport') || message.includes('transport.stream')) {
+      return null
+    }
+    throw error
+  }
+
+  if (!answer)
+    throw createPluginError('EMPTY_RESPONSE')
+
+  return {
+    requestId,
+    prompt: displayPrompt,
+    answer,
+    provider,
+    model,
+    traceId,
+    latency,
+    handoffSessionId,
+    inputKinds: normalizeStringList(inputKinds),
+  }
+}
+
 function toErrorMessage(error) {
   if (!error)
     return ''
@@ -573,6 +674,16 @@ function buildWidgetMessages(state = {}) {
       role: 'user',
       content: prompt,
       status: 'complete',
+      attachments: state.imageDataUrl
+        ? [
+            {
+              type: 'image',
+              title: '剪贴板图片',
+              detail: state.ocrText ? '已作为 OCR 上下文引用' : '作为图片上下文引用',
+              preview: state.imageDataUrl,
+            },
+          ]
+        : [],
     })
   }
   if (answer) {
@@ -580,7 +691,7 @@ function buildWidgetMessages(state = {}) {
       id: `${normalizeText(state.requestId) || 'draft'}-assistant`,
       role: 'assistant',
       content: answer,
-      status: 'complete',
+      status: state.status === 'chat-pending' ? 'streaming' : 'complete',
     })
   }
   else if (state.status === 'error') {
@@ -595,11 +706,32 @@ function buildWidgetMessages(state = {}) {
     messages.push({
       id: `${normalizeText(state.requestId) || 'draft'}-assistant-pending`,
       role: 'assistant',
-      content: state.status === 'ocr-pending' ? '正在识别图片文字…' : '正在生成回答…',
+      content: '',
       status: 'streaming',
     })
   }
   return messages
+}
+
+function buildImageContext(state = {}) {
+  const hasImage = Boolean(state.imageDataUrl || state.ocrText || normalizeStringList(state.inputKinds).includes(INPUT_TYPE_IMAGE))
+  if (!hasImage)
+    return null
+
+  const errorCode = normalizeText(state.errorCode)
+  const unsupported = errorCode === 'MODEL_UNSUPPORTED' || errorCode === 'PROVIDER_UNAVAILABLE'
+  return {
+    type: 'image',
+    title: '剪贴板图片上下文',
+    preview: normalizeText(state.imageDataUrl),
+    ocrText: normalizeText(state.ocrText),
+    status: unsupported ? 'unsupported' : state.ocrText ? 'ready' : 'attached',
+    note: unsupported
+      ? '当前默认模型或 Provider 不支持图片/OCR，请切换支持 vision.ocr 的模型后重试。'
+      : state.ocrText
+        ? '图片已识别为文字上下文并参与回答。'
+        : '图片将作为上下文参与本次提问。',
+  }
 }
 
 function buildWidgetPayload(state = {}) {
@@ -619,6 +751,8 @@ function buildWidgetPayload(state = {}) {
     errorCode: normalizeText(state.errorCode),
     errorMessage: normalizeText(state.errorMessage),
     messages: buildWidgetMessages(state),
+    imageContext: buildImageContext(state),
+    streamMode: 'visual-reveal',
     updatedAt: Date.now(),
   }
 }
@@ -1012,24 +1146,42 @@ async function dispatchPrompt({
         capabilityId: 'text.chat',
         handoffSessionId,
         inputKinds,
+        imageDataUrl,
+        ocrText: resolvedOcrText,
         history: resolvedHistory,
       })
     }
 
     const chatPrompt = normalizedPrompt || '请总结剪贴板图片中的文字。'
     const payload = buildInvokePayload(chatPrompt, resolvedHistory, { ocrText: resolvedOcrText })
-    const result = await client.invoke(
-      'text.chat',
+    const invokeOptions = buildInvokeOptions({
+      featureId: resolvedFeatureId,
+      requestId,
+      capabilityId: 'text.chat',
+      inputKinds,
+      sessionId: handoffSessionId,
+    })
+    const streamed = await streamChatAnswer({
+      client,
+      featureId: resolvedFeatureId,
+      requestId,
       payload,
-      buildInvokeOptions({
-        featureId: resolvedFeatureId,
-        requestId,
-        capabilityId: 'text.chat',
-        inputKinds,
-        sessionId: handoffSessionId,
-      }),
+      invokeOptions,
+      displayPrompt,
+      handoffSessionId,
+      inputKinds,
+      imageDataUrl,
+      ocrText: resolvedOcrText,
+      history: resolvedHistory,
+      session,
+    })
+    const mapped = streamed || mapInvokeResult(
+      await client.invoke('text.chat', payload, invokeOptions),
+      displayPrompt,
+      requestId,
+      handoffSessionId,
+      inputKinds,
     )
-    const mapped = mapInvokeResult(result, displayPrompt, requestId, handoffSessionId, inputKinds)
 
     if (!mapped.answer) {
       throw createPluginError('EMPTY_RESPONSE')
@@ -1062,6 +1214,8 @@ async function dispatchPrompt({
       status: 'ready',
       stage: 'chat',
       capabilityId: 'text.chat',
+      imageDataUrl,
+      ocrText: resolvedOcrText,
       history: resolvedHistory,
     })
   }
@@ -1082,6 +1236,8 @@ async function dispatchPrompt({
       stage: 'error',
       capabilityId: imageDataUrl && !resolvedOcrText ? 'vision.ocr' : 'text.chat',
       inputKinds,
+      imageDataUrl,
+      ocrText: resolvedOcrText,
       errorCode: normalizedError.code,
       errorMessage: normalizedError.message,
       handoffSessionId: session.handoffSessionId,

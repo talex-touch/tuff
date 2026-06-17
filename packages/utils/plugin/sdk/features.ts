@@ -8,7 +8,7 @@
  * @module plugin/sdk/features
  */
 
-import type { IPluginFeature } from '../index'
+import type { IFeatureInteraction, IPluginFeature } from '../index'
 
 /**
  * Features管理器接口
@@ -88,6 +88,30 @@ export interface IFeaturesManager {
     byPriority: Record<number, number>
     averagePriority: number
   }
+}
+
+/**
+ * Creates an interaction config that activates CoreBox send mode.
+ */
+export function createSendModeInteraction(
+  interaction: IFeatureInteraction,
+): IFeatureInteraction {
+  return {
+    ...interaction,
+    sendMode: true,
+  }
+}
+
+/**
+ * Returns a feature declaration with CoreBox send mode enabled.
+ */
+export function withSendMode<T extends IPluginFeature>(feature: T): T {
+  return {
+    ...feature,
+    interaction: feature.interaction
+      ? createSendModeInteraction(feature.interaction)
+      : ({ type: 'widget', sendMode: true } satisfies IFeatureInteraction),
+  } as T
 }
 
 /**

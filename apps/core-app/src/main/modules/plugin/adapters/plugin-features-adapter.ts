@@ -89,22 +89,8 @@ function resolveFeatureShowInput(feature: IPluginFeature): boolean {
   return hasAcceptedInputTypes || allowInput
 }
 
-function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints {
-  return {
-    ...feature.footerHints,
-    primary: {
-      visible: false,
-      ...feature.footerHints?.primary
-    },
-    secondary: {
-      visible: false,
-      ...feature.footerHints?.secondary
-    },
-    quickSelect: {
-      visible: false,
-      ...feature.footerHints?.quickSelect
-    }
-  }
+function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints | undefined {
+  return feature.footerHints
 }
 
 export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
@@ -271,7 +257,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         name: plugin.name,
         icon: {
           type: mapIconType((plugin.icon as ITuffIcon).type),
-          value: (plugin.icon as ITuffIcon).value
+          value: (plugin.icon as ITuffIcon).value,
+          colorful: (plugin.icon as ITuffIcon).colorful
         },
         meta: {
           pluginName,
@@ -437,7 +424,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           subtitle: feature.desc,
           icon: {
             type: mapIconType((feature.icon as ITuffIcon).type),
-            value: (feature.icon as ITuffIcon).value
+            value: (feature.icon as ITuffIcon).value,
+            colorful: (feature.icon as ITuffIcon).colorful
           }
         }
       },

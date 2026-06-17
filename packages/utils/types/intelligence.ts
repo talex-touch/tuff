@@ -453,6 +453,33 @@ export interface IntelligenceStreamChunk {
   usage?: IntelligenceUsageInfo
 }
 
+export type IntelligenceStreamEventType = 'start' | 'delta' | 'message' | 'usage' | 'metadata' | 'end'
+
+export interface IntelligenceStreamEvent<T = unknown> {
+  type: IntelligenceStreamEventType
+  capabilityId: string
+  requestId?: string
+  traceId?: string
+  provider?: string
+  model?: string
+  delta?: string
+  content?: string
+  message?: IntelligenceMessage
+  result?: T
+  usage?: IntelligenceUsageInfo
+  metadata?: Record<string, unknown>
+}
+
+export interface IntelligenceStreamOptions<T = unknown> {
+  onStart?: (event: IntelligenceStreamEvent<T>) => void
+  onDelta?: (delta: string, event: IntelligenceStreamEvent<T>) => void
+  onMessage?: (message: IntelligenceMessage, event: IntelligenceStreamEvent<T>) => void
+  onUsage?: (usage: IntelligenceUsageInfo, event: IntelligenceStreamEvent<T>) => void
+  onMetadata?: (metadata: Record<string, unknown>, event: IntelligenceStreamEvent<T>) => void
+  onEnd?: (event: IntelligenceStreamEvent<T>) => void
+  onError?: (error: Error) => void
+}
+
 /**
  * Descriptor for a registered capability.
  */
@@ -1324,6 +1351,242 @@ export interface IntelligenceRerankResult {
     originalRank: number
     metadata?: Record<string, any>
   }>
+}
+
+export type KnowledgeSourceType = 'file' | 'clipboard' | 'web' | 'plugin' | 'manual' | 'session'
+
+export interface KnowledgeDocument {
+  id: string
+  sourceType: KnowledgeSourceType
+  sourceUri?: string
+  title: string
+  contentHash: string
+  permissionScope: string
+  metadata?: Record<string, any>
+  createdAt: number
+  updatedAt: number
+}
+
+export interface KnowledgeChunk {
+  id: string
+  documentId: string
+  chunkIndex: number
+  content: string
+  contentHash: string
+  tokenEstimate: number
+  metadata?: Record<string, any>
+  createdAt: number
+  updatedAt: number
+}
+
+export interface IndexDocumentInput {
+  id?: string
+  sourceType: KnowledgeSourceType
+  sourceUri?: string
+  title: string
+  content: string
+  permissionScope?: string
+  metadata?: Record<string, any>
+  chunkSize?: number
+}
+
+export interface IndexDocumentResult {
+  document: KnowledgeDocument
+  chunks: KnowledgeChunk[]
+}
+
+export interface IndexChunkInput {
+  id?: string
+  documentId: string
+  chunkIndex?: number
+  content: string
+  metadata?: Record<string, any>
+}
+
+export interface IndexChunkResult {
+  chunk: KnowledgeChunk
+}
+
+export interface KnowledgeSearchInput {
+  query: string
+  limit?: number
+  sourceType?: KnowledgeSourceType | KnowledgeSourceType[]
+  timeRange?: { from?: number, to?: number }
+  permissionScope?: string | string[]
+  metadata?: Record<string, string | number | boolean>
+}
+
+export interface KnowledgeSearchHit {
+  chunk: KnowledgeChunk
+  document: KnowledgeDocument
+  score: number
+  citation: {
+    documentId: string
+    chunkId: string
+    title: string
+    sourceUri?: string
+    sourceType: KnowledgeSourceType
+    updatedAt: number
+  }
+}
+
+export interface KnowledgeSearchResult {
+  status: 'ok' | 'degraded' | 'unavailable'
+  hits: KnowledgeSearchHit[]
+  degradedReason?: string
+}
+
+export interface BuildContextInput extends KnowledgeSearchInput {
+  tokenBudget: number
+  maxChunks?: number
+  dedupe?: boolean
+}
+
+export interface BuildContextResult {
+  status: 'ok' | 'degraded' | 'unavailable'
+  contextText: string
+  chunks: KnowledgeSearchHit[]
+  tokenEstimate: number
+  citations: KnowledgeSearchHit['citation'][]
+  degradedReason?: string
+}
+
+export type ContextScope = 'none' | 'light' | 'session' | 'retrieval'
+export type ContextPrivacyLevel = 'normal' | 'sensitive' | 'secret'
+
+export interface ContextSession {
+  id: string
+  owner: 'corebox' | 'workflow' | 'assistant' | 'system'
+  status: 'active' | 'archived' | 'expired'
+  objective?: string
+  summary?: string
+  metadata?: Record<string, any>
+  createdAt: number
+  updatedAt: number
+  archivedAt?: number
+}
+
+export interface ContextTurn {
+  id: string
+  sessionId: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  privacyLevel: ContextPrivacyLevel
+  tokenEstimate: number
+  metadata?: Record<string, any>
+  createdAt: number
+}
+
+export interface ContextCheckpoint {
+  id: string
+  sessionId: string
+  type:
+    | 'session_start'
+    | 'session_end'
+    | 'task_switch'
+    | 'auto_prune'
+    | 'manual_reset'
+    | 'memory_snapshot'
+    | 'compression_snapshot'
+  reason: string
+  summary?: string
+  contextScope: ContextScope
+  metadata?: Record<string, any>
+  createdAt: number
+}
+
+export interface CompressionSnapshot {
+  id: string
+  sessionId: string
+  goal?: string
+  currentState?: string
+  decisions: string[]
+  constraints: string[]
+  artifacts: string[]
+  openQuestions: string[]
+  sourceTurnFrom?: string
+  sourceTurnTo?: string
+  metadata?: Record<string, any>
+  createdAt: number
+}
+
+export interface MemoryItem {
+  id: string
+  type: 'preference' | 'project' | 'task' | 'knowledge' | 'temporary'
+  scope: 'global' | 'workspace' | 'project' | 'session'
+  content: string
+  summary: string
+  tags: string[]
+  confidence: number
+  sourceSessionId?: string
+  sourceTurnId?: string
+  privacyLevel: ContextPrivacyLevel
+  ttl?: number
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  lastUsedAt?: number
+  usageCount: number
+}
+
+export interface MemoryTombstone {
+  id: string
+  memoryId: string
+  reason: string
+  createdAt: number
+}
+
+export interface ContextPackage {
+  id: string
+  sessionId: string
+  scope: ContextScope
+  traceId?: string
+  tokenBudget: number
+  tokenEstimate: number
+  items: Array<{
+    sourceType: 'current_input' | 'recent_turn' | 'summary' | 'memory' | 'retrieval'
+    sourceId: string
+    reason: string
+    content: string
+    tokenEstimate: number
+  }>
+  metadata?: Record<string, any>
+  createdAt: number
+}
+
+export interface PrepareContextTurnInput {
+  owner?: ContextSession['owner']
+  sessionId?: string
+  input: string
+  objective?: string
+  explicitScope?: ContextScope
+  continueSession?: boolean
+  privacyLevel?: ContextPrivacyLevel
+  tokenBudget?: number
+  traceId?: string
+  metadata?: Record<string, any>
+}
+
+export interface PrepareContextTurnResult {
+  session: ContextSession
+  turn: ContextTurn
+  checkpoint?: ContextCheckpoint
+  package: ContextPackage
+}
+
+export interface MemoryUpsertInput {
+  id?: string
+  type: MemoryItem['type']
+  scope: MemoryItem['scope']
+  content: string
+  summary?: string
+  tags?: string[]
+  confidence?: number
+  sourceSessionId?: string
+  sourceTurnId?: string
+  privacyLevel?: ContextPrivacyLevel
+  ttl?: number
+  enabled?: boolean
 }
 
 // ============================================================================
