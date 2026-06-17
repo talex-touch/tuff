@@ -28,7 +28,7 @@ function isNodeScriptPath(value) {
 }
 
 function quoteWindowsCmdArg(value) {
-  return `"${assertCommandArg(value).replace(CMD_ESCAPE_PATTERN, '^$1')}"`
+  return `"${assertCommandArg(value).replace(CMD_ESCAPE_PATTERN, '$1$1')}"`
 }
 
 function assertCommandSegment(value, label) {

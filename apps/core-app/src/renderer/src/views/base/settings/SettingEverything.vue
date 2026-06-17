@@ -56,7 +56,7 @@ const EVERYTHING_INSTALL_SCRIPT = [
   "$expectedHashes=@{'Everything-1.4.1.1032.x64.zip'='698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c';'Everything-1.4.1.1032.x86.zip'='156db5beb747d69470518a7b9b55af11efc4d3285ddb7cc013c0cc13ced5f237';'Everything-1.4.1.1032.ARM64.zip'='23dca1a64574bf30c9988bbaf5f1d201a0ec7ee9a15e12270ae92a52183cccc8';'ES-1.1.0.30.x64.zip'='30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268';'ES-1.1.0.30.x86.zip'='7e9f04cb92e9eb0440655a395537b204e98e3accd5335e610649d323b15f5117';'ES-1.1.0.30.ARM64.zip'='af5f02b29d6e91b7e70d3b6809bbfe931af671d981e060ecb4f015c30f9697b9'}",
   "function Assert-ExpectedHash($file,$path){$expected=$expectedHashes[$file];if(-not $expected){throw ('Missing expected hash for ' + $file)};$actual=(Get-FileHash -Algorithm SHA256 -Path $path).Hash.ToLowerInvariant();if($actual -ne $expected){throw ('Hash mismatch for ' + $file + ': expected ' + $expected + ', got ' + $actual)}}",
   'New-Item -ItemType Directory -Force -Path $base,$cliDir,$tmp | Out-Null',
-  "$arch=if($env:PROCESSOR_ARCHITECTURE -eq 'ARM64'){'ARM64'}elseif($env:PROCESSOR_ARCHITECTURE -eq 'x86' -and -not $env:PROCESSOR_ARCHITEW6432){'x86'}else{'x64'}",
+  "$nativeArch=if($env:PROCESSOR_ARCHITEW6432){$env:PROCESSOR_ARCHITEW6432}else{$env:PROCESSOR_ARCHITECTURE};$arch=if($nativeArch -eq 'ARM64'){'ARM64'}elseif($nativeArch -eq 'x86'){'x86'}else{'x64'}",
   "$everythingFile=if($arch -eq 'ARM64'){'Everything-1.4.1.1032.ARM64.zip'}elseif($arch -eq 'x86'){'Everything-1.4.1.1032.x86.zip'}else{'Everything-1.4.1.1032.x64.zip'}",
   "$cliFile=if($arch -eq 'ARM64'){'ES-1.1.0.30.ARM64.zip'}elseif($arch -eq 'x86'){'ES-1.1.0.30.x86.zip'}else{'ES-1.1.0.30.x64.zip'}",
   '$everythingZip=Join-Path $tmp $everythingFile',
@@ -257,18 +257,18 @@ function openCLIDownload() {
   window.open('https://www.voidtools.com/support/everything/command_line_interface/', '_blank')
 }
 
-function openInstallDialog(event: MouseEvent) {
+function openInstallDialog(event: MouseEvent): void {
   installDialogSource.value = resolveActionSource(event)
   installAdvancedVisible.value = false
   installDialogVisible.value = true
 }
 
-function openDiagnosticsDialog(event: MouseEvent) {
+function openDiagnosticsDialog(event: MouseEvent): void {
   diagnosticsDialogSource.value = resolveActionSource(event)
   diagnosticsDialogVisible.value = true
 }
 
-async function copyEverythingInstallCommand() {
+async function copyEverythingInstallCommand(): Promise<void> {
   try {
     await navigator.clipboard.writeText(EVERYTHING_INSTALL_COMMAND)
     toast.success(t('settings.settingEverything.installCommandCopied'))
