@@ -197,6 +197,21 @@ export function useSearch(
   const INPUT_CHANGE_DEBOUNCE_MS = 25
   const inputTransport = createCoreBoxInputTransport(transport, INPUT_CHANGE_DEBOUNCE_MS)
 
+  function limitRenderedItems(items: TuffItem[]): TuffItem[] {
+    return items.length > MAX_RENDERED_RESULTS ? items.slice(0, MAX_RENDERED_RESULTS) : items
+  }
+
+  function mergeRenderedItems(current: TuffItem[], incoming: TuffItem[]): TuffItem[] {
+    const itemsById = new Map<string, TuffItem>()
+    for (const item of current) {
+      itemsById.set(item.id, item)
+    }
+    for (const item of incoming) {
+      itemsById.set(item.id, item)
+    }
+    return Array.from(itemsById.values()).slice(0, MAX_RENDERED_RESULTS)
+  }
+
   let searchSequence = 0
   let recommendationTimeoutId: ReturnType<typeof setTimeout> | null = null
   let inFlightQueryKey: string | null = null
@@ -397,7 +412,7 @@ export function useSearch(
   }
 
   const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
-    const filteredItems = filterDetachedItems(initialResult.items)
+    const filteredItems = limitRenderedItems(filterDetachedItems(initialResult.items))
     currentSearchId.value = initialResult.sessionId || null
     searchResult.value = isDetachedDivisionMode()
       ? { ...initialResult, items: filteredItems }
@@ -589,7 +604,7 @@ export function useSearch(
       }
 
       currentSearchId.value = initialResult.sessionId || null
-      const filteredItems = filterDetachedItems(initialResult.items)
+      const filteredItems = limitRenderedItems(filterDetachedItems(initialResult.items))
       searchResult.value = isDetachedDivisionMode()
         ? { ...initialResult, items: filteredItems }
         : initialResult
@@ -613,7 +628,7 @@ export function useSearch(
             sessionId: currentSearchId.value,
             itemCount: pendingUpdates.length
           })
-          searchResults.value = [...searchResults.value, ...pendingUpdates]
+          searchResults.value = mergeRenderedItems(searchResults.value, pendingUpdates)
         }
       }
       logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
@@ -936,13 +951,13 @@ export function useSearch(
   const activeItem = computed(() => res.value[boxOptions.focus])
 
   const unregSearchUpdate = transport.on(CoreBoxEvents.search.update, (data) => {
-    const filteredItems = filterDetachedItems(data.items ?? [])
+    const filteredItems = limitRenderedItems(filterDetachedItems(data.items ?? []))
     const itemCount = filteredItems.length
     if (!data.searchId) return
     if (!currentSearchId.value) {
       if (itemCount > 0) {
         const queued = pendingSearchUpdatesById.get(data.searchId) ?? []
-        pendingSearchUpdatesById.set(data.searchId, [...queued, ...filteredItems])
+        pendingSearchUpdatesById.set(data.searchId, mergeRenderedItems(queued, filteredItems))
         logDebug('[useSearch] Queued search update (no active session):', {
           sessionId: data.searchId,
           itemCount,
@@ -973,7 +988,7 @@ export function useSearch(
       itemCount,
       currentTotal: searchResults.value.length
     })
-    searchResults.value = [...searchResults.value, ...filteredItems]
+    searchResults.value = mergeRenderedItems(searchResults.value, filteredItems)
   })
 
   const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {

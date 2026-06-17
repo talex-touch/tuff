@@ -5,6 +5,24 @@
 
 ## 2026-06-17
 
+### fix(corebox): tighten compact launch height and reduce search IPC pressure
+
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/views/box/BoxInput.vue`
+- `apps/core-app/src/renderer/src/views/box/PrefixPart.vue`
+- `apps/core-app/src/renderer/src/views/box/PrefixIcon.vue`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+  - Tightened the CoreBox compact/shrink visual height from 60px to 56px and aligned the renderer header, result offset, input box, logo, BrowserWindow initial size, minimum size, and layout IPC minimum around the same value.
+  - Kept full search ranking, metrics, and result recording intact while limiting the initial and incremental item payloads sent to the renderer to the visible 80-item CoreBox cap, reducing large `core-box:search-update` IPC payload pressure seen during single-character searches.
+  - Renderer search updates now merge by item id and cap stored visible results at 80, so enrichment updates replace existing rows instead of growing an unbounded internal list.
+
 ### fix(file-search): render native file result icons
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
@@ -93,6 +111,52 @@
   - Packaged Electron 文本/OCR成功与固定失败路径截图/录屏 evidence 仍未采集，不能把 `2.5.0` AI 体验闭环标记为完成。
 
 ## 2026-06-16
+
+### fix(corebox): align compact window height on Windows
+
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.test.ts`
+  - Unified the CoreBox compact/header height at 60px across BrowserWindow minimum size, renderer measurement, layout IPC validation, and WebContentsView attachment bounds.
+  - Initialized CoreBox at the compact 720x60 bounds and made hidden-state shrink use the cursor display, preventing first-show placement from being calculated from an offscreen/stale window.
+  - Allowed collapsed shrink bounds to be applied even while the CoreBox window is hidden or already compact-height but too wide, preventing the next Windows show from briefly reusing a stale wide/tall window.
+  - Removed the unconditional result-area display rule so an empty CoreBox no longer exposes the result container strip under the input.
+  - Verification: `cmd /c pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/core-box/index.test.ts" "src/main/modules/box-tool/core-box/ipc.test.ts" "src/main/modules/box-tool/core-box/window.test.ts"`, `cmd /c pnpm -C "apps/core-app" run typecheck:node`, and `cmd /c pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` passed.
+
+### feat(core-app): add Everything one-click install command
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a copyable PowerShell command in the Everything install guide that downloads official portable Everything plus `es.exe`, stores them under the user profile, adds the CLI directory to the user `PATH`, and starts Everything for the follow-up status check.
+  - Simplified the install dialog around the recommended automatic portable install path, keeping manual Everything/CLI downloads and the full command under an advanced settings section.
+  - Moved the long install command, version/path detail, backend attempt errors, SDK/CLI diagnostic detail, and evidence actions into FlipDialog overlays so the settings list keeps only status, backend summary, CLI path selection, and one compact action strip.
+  - Added a `FlipDialog` card class passthrough and scoped Everything dialog padding so install and diagnostics dialogs keep consistent header/body spacing without changing other overlay users.
+  - Added fixed SHA-256 checks for the official Everything and `es.exe` ZIP payloads before extraction/startup, so the copied installer stops if a downloaded artifact does not match the pinned version, including ARM64 archive selection from emulated Windows shells.
+  - Kept the existing manual download and custom `es.exe` path flow as fallback paths for locked-down Windows environments.
+  - 验证：JSON locale parse、Everything install PowerShell script parse、`cmd /c pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` 与 scoped `git diff --check` 通过；`SettingEverything.vue` scoped ESLint 返回 0 errors，但保留该文件既有 CRLF/Prettier warnings，未做全文件换行符改写。
+
+### fix(core-app): launch Windows dev wrapper through cmd shell
+
+- `apps/core-app/scripts/dev-electron-wrapper.mjs`
+  - Windows `pnpm core:dev` no longer spawns `pnpm.cmd` directly from the dev wrapper.
+  - The wrapper now launches pnpm through the Node CLI entry from `npm_execpath` on Windows, with a safer escaped `cmd.exe` fallback for non-JS launchers while keeping the existing macOS dev bundle flow.
+  - 验证：`cmd /c pnpm core:dev` 可重新进入 Electron dev build/launch 流程（长跑 dev 进程按超时截断）。
+
+### fix(core-app): hide macOS-only notification permission entry on Windows
+
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.test.ts`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+  - Notification permission setup UI now renders only on macOS, so Windows no longer shows a misleading "Notification Permission" card or macOS-specific guidance/action.
+  - Main-process permission metadata now reports Windows/Linux notification status as non-requestable, keeping renderer affordances aligned with actual platform capability boundaries.
 
 ### fix(corebox+nexus): add feature send mode and preserve long auth reauth
 
