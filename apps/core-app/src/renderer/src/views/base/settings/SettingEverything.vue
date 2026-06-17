@@ -53,6 +53,8 @@ const EVERYTHING_INSTALL_SCRIPT = [
   "$base=Join-Path $env:LOCALAPPDATA 'Tuff\\Everything'",
   "$cliDir=Join-Path $env:LOCALAPPDATA 'Tuff\\EverythingCLI'",
   "$tmp=Join-Path $env:TEMP 'tuff-everything-install'",
+  "$expectedHashes=@{'Everything-1.4.1.1032.x64.zip'='698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c';'Everything-1.4.1.1032.x86.zip'='156db5beb747d69470518a7b9b55af11efc4d3285ddb7cc013c0cc13ced5f237';'Everything-1.4.1.1032.ARM64.zip'='23dca1a64574bf30c9988bbaf5f1d201a0ec7ee9a15e12270ae92a52183cccc8';'ES-1.1.0.30.x64.zip'='30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268';'ES-1.1.0.30.x86.zip'='7e9f04cb92e9eb0440655a395537b204e98e3accd5335e610649d323b15f5117';'ES-1.1.0.30.ARM64.zip'='af5f02b29d6e91b7e70d3b6809bbfe931af671d981e060ecb4f015c30f9697b9'}",
+  "function Assert-ExpectedHash($file,$path){$expected=$expectedHashes[$file];if(-not $expected){throw ('Missing expected hash for ' + $file)};$actual=(Get-FileHash -Algorithm SHA256 -Path $path).Hash.ToLowerInvariant();if($actual -ne $expected){throw ('Hash mismatch for ' + $file + ': expected ' + $expected + ', got ' + $actual)}}",
   'New-Item -ItemType Directory -Force -Path $base,$cliDir,$tmp | Out-Null',
   "$arch=if($env:PROCESSOR_ARCHITECTURE -eq 'ARM64'){'ARM64'}elseif($env:PROCESSOR_ARCHITECTURE -eq 'x86' -and -not $env:PROCESSOR_ARCHITEW6432){'x86'}else{'x64'}",
   "$everythingFile=if($arch -eq 'ARM64'){'Everything-1.4.1.1032.ARM64.zip'}elseif($arch -eq 'x86'){'Everything-1.4.1.1032.x86.zip'}else{'Everything-1.4.1.1032.x64.zip'}",
@@ -61,16 +63,20 @@ const EVERYTHING_INSTALL_SCRIPT = [
   '$cliZip=Join-Path $tmp $cliFile',
   "Invoke-WebRequest ('https://www.voidtools.com/' + $everythingFile) -UseBasicParsing -OutFile $everythingZip",
   "Invoke-WebRequest ('https://www.voidtools.com/' + $cliFile) -UseBasicParsing -OutFile $cliZip",
+  'Assert-ExpectedHash $everythingFile $everythingZip',
+  'Assert-ExpectedHash $cliFile $cliZip',
   'Expand-Archive -Path $everythingZip -DestinationPath $base -Force',
   'Expand-Archive -Path $cliZip -DestinationPath $cliDir -Force',
+  "$everythingExe=Join-Path $base 'Everything.exe'",
+  "$esExe=Join-Path $cliDir 'es.exe'",
   "$userPath=[Environment]::GetEnvironmentVariable('Path','User')",
   "$parts=@(); if($userPath){$parts=$userPath -split ';' | Where-Object { $_ }}",
   "if($parts -notcontains $cliDir){[Environment]::SetEnvironmentVariable('Path', (($parts + $cliDir) -join ';'), 'User')}",
   "$env:Path += ';' + $cliDir",
-  "Start-Process -FilePath (Join-Path $base 'Everything.exe') -ArgumentList '-startup'",
+  "Start-Process -FilePath $everythingExe -ArgumentList '-startup'",
   'Start-Sleep -Seconds 2',
-  "& (Join-Path $cliDir 'es.exe') -v",
-  "Write-Host 'Everything portable and es.exe are ready. Return to Tuff and click Check Now.'"
+  '& $esExe -v',
+  "Write-Host 'Everything portable and es.exe are verified and ready. Return to Tuff and click Check Now.'"
 ].join('; ')
 const EVERYTHING_INSTALL_COMMAND = EVERYTHING_INSTALL_SCRIPT
 
