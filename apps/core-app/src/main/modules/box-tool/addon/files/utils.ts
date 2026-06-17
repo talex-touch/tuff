@@ -87,10 +87,10 @@ export function mapFileToTuffItem(
       type: 'file',
       value: file.path
     }
-  } else if (_extensions.icon && !_extensions.icon.startsWith('data:')) {
+  } else if (_extensions.icon) {
     icon = {
       type: 'url',
-      value: toTfileUrl(_extensions.icon)
+      value: _extensions.icon.startsWith('data:') ? _extensions.icon : toTfileUrl(_extensions.icon)
     }
   } else {
     // Trigger lazy load if callback provided

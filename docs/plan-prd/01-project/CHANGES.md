@@ -5,6 +5,15 @@
 
 ## 2026-06-17
 
+### fix(file-search): render native file result icons
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.test.ts`
+  - Spotlight/Linux native file search results now reuse the existing async icon worker cache, warming missing icons without blocking search results.
+  - File result mapping now preserves cached `data:` icon URLs instead of falling back to the generic file glyph, so native results can render real file icons.
+  - Focused coverage verifies cached icons render and missing icons are queued for warmup.
+
 ### fix(file-index): deepen macOS watcher and prioritize shallow indexing
 
 - `packages/utils/search/indexing-watch-path-policy.ts`
