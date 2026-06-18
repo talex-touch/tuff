@@ -298,6 +298,22 @@ describe('matchFeature', () => {
       expect(result.matchedAlias).toBeUndefined()
     })
 
+    it('maps camel-case title initials back to title ranges', () => {
+      const result = matchFeature({
+        title: 'MacCleaner Pro',
+        searchTokens: buildSearchTokens({ title: 'MacCleaner Pro' }),
+        query: 'cp',
+        enableFuzzy: false
+      })
+
+      expect(result.matched).toBe(true)
+      expect(result.matchRanges).toEqual([
+        { start: 3, end: 4 },
+        { start: 11, end: 12 }
+      ])
+      expect(result.matchedAlias).toBeUndefined()
+    })
+
     it('preserves buildSearchTokens field displays for external matches', () => {
       const tokens = buildSearchTokens({
         title: '翻译',
