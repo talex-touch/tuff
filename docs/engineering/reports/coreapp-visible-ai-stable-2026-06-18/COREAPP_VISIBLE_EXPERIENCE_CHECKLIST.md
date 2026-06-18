@@ -36,7 +36,7 @@
   - The packaged artifact version does not match the package baseline.
   - The app does not reach startup health or renderer-ready markers.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### Packaged cold startup benchmark
@@ -62,7 +62,7 @@
   - The run uses the normal user profile instead of an isolated benchmark profile.
   - Cold-start timing is collected from a stale packaged artifact.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### First-screen visual state
@@ -87,7 +87,7 @@
   - The screenshot is taken after manual navigation that hides startup state.
   - The first screen is blank, indefinitely loading, or missing startup health access.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### CoreBox search states
@@ -114,7 +114,7 @@
   - A screenshot only shows populated results and misses idle/no-result states.
   - Reason/status text overlaps row content or is clipped.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### App Index manager workbench
@@ -140,7 +140,7 @@
   - The manager has no diagnostic/source filter evidence.
   - Filtered empty state cannot be distinguished from an unconfigured app index.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### Browser login recovery
@@ -166,7 +166,7 @@
   - The dialog only shows a generic error without manual recovery actions.
   - The device authorization session is cancelled before the user can copy recovery data.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### CoreBox AI Ask preview
@@ -211,21 +211,10 @@
   - Local/Ollama preferred routing calls a disabled Nexus provider.
 - Artifact paths:
   - packaged-corebox-hotkey-capture.json
-  - packaged-corebox-hotkey-page-01.png
-  - packaged-corebox-hotkey-page-02.png
-  - packaged-corebox-hotkey-page-03.png
   - packaged-corebox-hotkey-page-04.png
   - packaged-ai-ask-provider-enabled-probe.json
-  - packaged-ai-ask-provider-enabled-probe-output.json
-  - packaged-ai-ask-provider-enabled-probe.log
-  - packaged-ai-ask-provider-enabled-before-input.png
-  - packaged-ai-ask-provider-enabled-after-input.png
   - packaged-ai-ask-provider-enabled-after-enter.png
   - packaged-ai-ask-runtime-permission-denied-probe.json
-  - packaged-ai-ask-runtime-permission-denied-probe-output.json
-  - packaged-ai-ask-runtime-permission-denied-probe.log
-  - packaged-ai-ask-runtime-permission-denied-before-input.png
-  - packaged-ai-ask-runtime-permission-denied-after-input.png
   - packaged-ai-ask-runtime-permission-denied-after-enter.png
 - Notes:
 
@@ -253,7 +242,7 @@
   - No selected-text context or recovery hint is visible.
   - Clipboard replace can happen without confirmation evidence.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### Assistant floating ball entry
@@ -283,7 +272,7 @@
   - The dragged position is lost after reopening or monitor bounds are not respected.
   - Clicking the floating ball does not open a usable text panel.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### Assistant clipboard image translation
@@ -313,7 +302,7 @@
   - The action writes only to clipboard and does not show a visible translation result.
   - Permission/provider failures collapse into a generic error without a recovery hint.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### Workflow Use Model and Review Queue
@@ -339,7 +328,7 @@
   - Use Model output bypasses Review Queue.
   - Failed copy/replace actions cannot be retried or cleared from the queue.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### Nexus Provider Registry observability
@@ -365,7 +354,7 @@
   - The screenshot uses seed/mock data without marking it as non-production evidence.
   - Unknown or degraded provider state has no next-action hint.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ### Legacy intelligence provider retirement evidence
@@ -391,7 +380,7 @@
   - Dry-run-only evidence is used to claim registry-primary runtime readiness.
   - The copied evidence contains provider secrets or raw API keys.
 - Artifact paths:
-  -
+  - _none_
 - Notes:
 
 ## Final Verification

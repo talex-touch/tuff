@@ -23,9 +23,10 @@
 - 采集 readiness 输出：`coreapp-visible-readiness.json` 与 `coreapp-visible-readiness-output.json`。
 - 采集 readiness 退出码：`coreapp-visible-readiness-exit-code.txt`，当前为 `1`。
 - Packaged CDP live probe：`packaged-cdp-live-capture.json`、`packaged-cdp-page-01.png`、`packaged-cdp-page-02.png`、`packaged-cdp-page-03.png`、`packaged-cdp-live-capture.log`。
-- Packaged CoreBox hotkey probe：`packaged-corebox-hotkey-capture.json`、`packaged-corebox-hotkey-page-01.png` 到 `packaged-corebox-hotkey-page-04.png`、`packaged-corebox-hotkey-capture.log`。
-- Packaged CoreBox AI Ask provider-enabled probe：`packaged-ai-ask-provider-enabled-probe.json`、`packaged-ai-ask-provider-enabled-probe-output.json`、`packaged-ai-ask-provider-enabled-probe.log`、`packaged-ai-ask-provider-enabled-before-input.png`、`packaged-ai-ask-provider-enabled-after-input.png`、`packaged-ai-ask-provider-enabled-after-enter.png`。
-- Packaged CoreBox AI Ask runtime permission-denied probe：`packaged-ai-ask-runtime-permission-denied-probe.json`、`packaged-ai-ask-runtime-permission-denied-probe-output.json`、`packaged-ai-ask-runtime-permission-denied-probe.log`、`packaged-ai-ask-runtime-permission-denied-before-input.png`、`packaged-ai-ask-runtime-permission-denied-after-input.png`、`packaged-ai-ask-runtime-permission-denied-after-enter.png`。
+- Packaged CoreBox hotkey evidence：`packaged-corebox-hotkey-capture.json` 与 `packaged-corebox-hotkey-page-04.png`。
+- Packaged CoreBox AI Ask model-unsupported evidence：`packaged-ai-ask-provider-enabled-probe.json` 与 `packaged-ai-ask-provider-enabled-after-enter.png`。
+- Packaged CoreBox AI Ask runtime permission-denied evidence：`packaged-ai-ask-runtime-permission-denied-probe.json` 与 `packaged-ai-ask-runtime-permission-denied-after-enter.png`。
+- Raw probe logs, pid files, `*-output.json` mirrors and duplicate stage screenshots are intentionally not required by the manifest and should stay local / ignored unless a future investigation needs them.
 
 ## 当前采集 readiness
 
@@ -81,3 +82,4 @@ pnpm -C "apps/core-app" run visible:experience:verify -- --input "../../docs/eng
 - `packaged-cdp-page-*.png` 与 `packaged-corebox-hotkey-page-*.png` 只证明 CDP 截图链路和 CoreBox 入口可见。
 - focused tests、build、typecheck、manifest/checklist 生成都不能替代 packaged Electron 文本/OCR成功、固定失败路径和 routing trace。
 - 成功态仍需要登录态、有效 provider/model 或本地 Local/Ollama 环境；当前 isolated profile 不具备成功态闭环条件。
+- Report hygiene: keep this directory to summary docs, manifest/checklist, strict/readiness outputs and final evidence screenshots/JSON; put exploratory captures under `raw/` or `_local/` so `.gitignore` keeps them out of commits.

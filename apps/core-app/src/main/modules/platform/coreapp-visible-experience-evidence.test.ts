@@ -194,6 +194,8 @@ describe('CoreApp visible experience evidence', () => {
       '- [ ] Clicking the floating ball opens the Voice Panel beside the ball'
     )
     expect(template).toContain('- Recommended artifacts:')
+    expect(template).toContain('- Artifact paths:\n  - _none_')
+    expect(template).not.toContain('  - \n')
     expect(template).toContain('evidence/coreapp-visible/corebox-no-result.png')
     expect(template).toContain('evidence/coreapp-visible/corebox-ai-ocr-success.png')
     expect(template).toContain('evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png')
