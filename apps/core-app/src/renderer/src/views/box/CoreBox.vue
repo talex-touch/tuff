@@ -150,17 +150,23 @@ function handleSubmitFeaturePrompt(): void {
   void handleExecute(activeSendTargetItem.value)
 }
 
-const widgetRenderItem = computed(() => {
-  if (res.value.length !== 1) return null
-  const item = res.value[0]
+function isPluginWidgetRenderItem(item: TuffItem | null | undefined): item is TuffItem {
   const render = item?.render
-  if (render?.mode !== 'custom') return null
+  if (render?.mode !== 'custom') return false
   const custom = render.custom
   if (!custom || !['vue', 'webcomponent', 'arrow'].includes(custom.type) || !custom.content) {
-    return null
+    return false
   }
-  if (isDefaultWidgetRenderer(custom.content)) return null
-  return item
+  return !isDefaultWidgetRenderer(custom.content)
+}
+
+const widgetRenderItem = computed(() => {
+  if (isWidgetActivationActive.value) {
+    return res.value.find(isPluginWidgetRenderItem) ?? null
+  }
+  if (res.value.length !== 1) return null
+  const item = res.value[0]
+  return isPluginWidgetRenderItem(item) ? item : null
 })
 
 const lastWidgetItem = ref<TuffItem | null>(null)

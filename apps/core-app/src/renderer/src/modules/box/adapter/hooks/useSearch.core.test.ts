@@ -316,11 +316,87 @@ describe('useSearch CoreBox reopen behavior', () => {
     expect(executePayload?.searchResult?.query.text).toBe('translate hello')
     expect(hook.searchVal.value).toBe('translate hello')
     expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+    expect(hook.activeActivations.value?.[0]?.meta).toMatchObject({
+      pluginName: 'touch-translation',
+      featureId: 'translate',
+      feature: expect.objectContaining({ id: 'touch-translation/translate' })
+    })
+    expect(hook.res.value[0]).toMatchObject({
+      id: 'touch-translation/translate/widget-fallback',
+      render: {
+        mode: 'custom',
+        custom: {
+          type: 'vue',
+          content: 'touch-translation::translate',
+          data: {
+            prompt: 'translate hello',
+            status: 'chat-pending'
+          }
+        }
+      }
+    })
 
     window.dispatchEvent(new CustomEvent('corebox:shown'))
     await flushPromises()
 
     expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+  })
+
+  it('keeps widget feature metadata when search end returns compressed activation', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = 'ai hello'
+    await nextTick()
+    await flushPromises()
+
+    state.send.mockClear()
+    const featureItem = {
+      id: 'touch-intelligence/intelligence-ask',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: '智能问答' } },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        interaction: { type: 'widget', allowInput: true, sendMode: true },
+        extension: { acceptedInputTypes: ['text'] }
+      }
+    } as TuffItem
+
+    state.send.mockImplementation(async (event: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:execute') {
+        return { activeProviders: ['plugin-features:touch-intelligence'] }
+      }
+      if (eventName.includes('provider')) return []
+      return undefined
+    })
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+
+    state.listeners.get('core-box:search:end')?.({
+      searchId: 'session-1',
+      activate: [{ id: 'plugin-features', meta: { pluginName: 'touch-intelligence' } }],
+      sources: []
+    })
+    await flushPromises()
+
+    expect(hook.activeActivations.value?.[0]?.meta).toMatchObject({
+      pluginName: 'touch-intelligence',
+      featureId: 'intelligence-ask',
+      feature: expect.objectContaining({ id: 'touch-intelligence/intelligence-ask' })
+    })
+    expect(hook.res.value[0]).toMatchObject({
+      render: {
+        mode: 'custom',
+        custom: {
+          content: 'touch-intelligence::intelligence-ask',
+          data: { prompt: 'ai hello', status: 'chat-pending' }
+        }
+      }
+    })
   })
 
   it('suppresses regular search while a send-mode feature is active', async () => {
