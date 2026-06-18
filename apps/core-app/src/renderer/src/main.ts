@@ -16,6 +16,7 @@ import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
 import { resolveInitialLanguagePreference, setupI18n } from '~/modules/lang'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
+import { waitForHydrationSoftTimeout } from '~/modules/startup/hydration-timeout'
 import { createCoreAppIconConfig } from '~/modules/tuffex/icon-config'
 
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -103,6 +104,8 @@ async function ensureRouter(): Promise<Router> {
 preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')
 
+const APP_SETTINGS_HYDRATION_SOFT_TIMEOUT_MS = 600
+
 registerDefaultCustomRenderers()
 
 /**
@@ -110,7 +113,7 @@ registerDefaultCustomRenderers()
  */
 async function bootstrap() {
   initializeRendererStorage(transport)
-  await appSettings.whenHydrated()
+  await waitForInitialAppSettingsHydration()
   const router = isLightweightWindow ? null : await ensureRouter()
   const initialLanguage = resolveInitialLanguage()
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
@@ -142,6 +145,19 @@ async function bootstrap() {
   schedulePluginStoreInitialization()
 
   preloadDebugStep('Renderer shell mounted', 0.02)
+}
+
+async function waitForInitialAppSettingsHydration(): Promise<void> {
+  await waitForHydrationSoftTimeout(appSettings, {
+    timeoutMs: APP_SETTINGS_HYDRATION_SOFT_TIMEOUT_MS,
+    setTimeoutFn: window.setTimeout.bind(window),
+    clearTimeoutFn: window.clearTimeout.bind(window),
+    onTimeout: () => {
+      mainLog.warn('App settings hydration soft timeout before renderer mount', {
+        timeoutMs: APP_SETTINGS_HYDRATION_SOFT_TIMEOUT_MS
+      })
+    }
+  })
 }
 
 /**

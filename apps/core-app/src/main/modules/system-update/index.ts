@@ -110,6 +110,8 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
   private db: LibSQLDatabase<typeof schema> | null = null
   private baseUrl = NEXUS_BASE_URL
   private channel: AppPreviewChannel = this.resolveChannel()
+  private startupInitListener: (() => void) | null = null
+  private startupInitTimer: NodeJS.Timeout | null = null
   private startupRefreshTimer: NodeJS.Timeout | null = null
 
   constructor() {
@@ -118,20 +120,18 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.db = databaseModule.getDb()
-    await this.ensureState()
-    await this.hydrateFxRates()
-    this.scheduleStartupRefresh()
-    fxRateProvider.start()
-
-    const initialDelayMs =
-      SYSTEM_UPDATE_POLL_INTERVAL_MS +
-      SYSTEM_UPDATE_POLL_STAGGER_MS +
-      this.resolveJitter(SYSTEM_UPDATE_POLL_STAGGER_JITTER_MS)
-    this.scheduleRefreshPoll(initialDelayMs)
-    this.pollingService.start()
+    this.scheduleStartupInit()
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): void {
+    if (this.startupInitListener) {
+      touchEventBus.off(TouchEvents.ALL_MODULES_LOADED, this.startupInitListener)
+      this.startupInitListener = null
+    }
+    if (this.startupInitTimer) {
+      clearTimeout(this.startupInitTimer)
+      this.startupInitTimer = null
+    }
     if (this.startupRefreshTimer) {
       clearTimeout(this.startupRefreshTimer)
       this.startupRefreshTimer = null
@@ -142,6 +142,39 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
 
   private resolveJitter(maxMs: number): number {
     return Math.floor(Math.random() * Math.max(1, maxMs))
+  }
+
+  private scheduleStartupInit(): void {
+    if (this.startupInitListener || this.startupInitTimer) {
+      return
+    }
+
+    this.startupInitListener = () => {
+      this.startupInitListener = null
+      this.startupInitTimer = setTimeout(() => {
+        this.startupInitTimer = null
+        void this.runStartupInit()
+      }, 0)
+    }
+    touchEventBus.once(TouchEvents.ALL_MODULES_LOADED, this.startupInitListener)
+  }
+
+  private async runStartupInit(): Promise<void> {
+    try {
+      await this.ensureState()
+      await this.hydrateFxRates()
+      this.scheduleStartupRefresh()
+      fxRateProvider.start()
+
+      const initialDelayMs =
+        SYSTEM_UPDATE_POLL_INTERVAL_MS +
+        SYSTEM_UPDATE_POLL_STAGGER_MS +
+        this.resolveJitter(SYSTEM_UPDATE_POLL_STAGGER_JITTER_MS)
+      this.scheduleRefreshPoll(initialDelayMs)
+      this.pollingService.start()
+    } catch (error) {
+      log.warn('System update startup init skipped', { meta: toErrorMeta(error) })
+    }
   }
 
   private scheduleStartupRefresh(): void {

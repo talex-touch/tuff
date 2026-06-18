@@ -1,0 +1,85 @@
+{
+  "runNo": 11,
+  "timestamp": "2026-06-18T04:32:41.144Z",
+  "timeoutMs": 120000,
+  "traceDeprecation": false,
+  "target": "dev",
+  "profile": "hot",
+  "launchMethod": "exec",
+  "command": "pnpm -C \"apps/core-app\" exec electron-vite dev",
+  "artifact": null,
+  "wallTimeMs": 23449,
+  "processExitCode": null,
+  "processSignal": "SIGTERM",
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": 9400,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": null,
+  "warnCount": 10,
+  "errorCount": 4,
+  "warnLines": [
+    "[12:32:53.227] [WARN] [Perf:EventLoop] Event loop lag diagnostics 5.8s lagMs=5843 slowPollingRecent=[]",
+    "\u001b[33m[2026-06-18T12:32:53.227] [WARN] default - \u001b[39m[12:32:53.227] [WARN] [Perf:EventLoop] Event loop lag diagnostics 5.8s lagMs=5843 slowPollingRecent=[]",
+    "[12:32:56.539] [WARN] [Perf:EventLoop] Severe event-loop lag window reached (2x >= 2000ms in 30s)",
+    "\u001b[33m[2026-06-18T12:32:56.539] [WARN] default - \u001b[39m[12:32:56.539] [WARN] [Perf:EventLoop] Severe event-loop lag window reached (2x >= 2000ms in 30s)",
+    "[12:32:56.539] [WARN] [CoreBox] Auto-enabled search diagnostics burst after severe event-loop lag lagMs=3063 thresholdMs=2000 windowMs=30000 cooldownMs=120000 triggerCount=2",
+    "\u001b[33m[2026-06-18T12:32:56.539] [WARN] default - \u001b[39m[12:32:56.539] [WARN] [CoreBox] Auto-enabled search diagnostics burst after severe event-loop lag lagMs=3063 thresholdMs=2000 windowMs=30000 cooldownMs=120000 triggerCount=2",
+    "[12:32:56.539] [WARN] [Perf:EventLoop] Event loop lag diagnostics 3.1s lagMs=3063 slowPollingRecent=[{\"id\":\"storage.polling\",\"lane\":\"io\",\"durationMs\":0,\"ageMs\":3282,\"intervalMs\":5000,\"schedulerDelayMs\":944,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":944,\"droppedCount\":0,\"coalescedCount\":0,\"count\":1}]",
+    "\u001b[33m[2026-06-18T12:32:56.539] [WARN] default - \u001b[39m[12:32:56.539] [WARN] [Perf:EventLoop] Event loop lag diagnostics 3.1s lagMs=3063 slowPollingRecent=[{\"id\":\"storage.polling\",\"lane\":\"io\",\"durationMs\":0,\"ageMs\":3282,\"intervalMs\":5000,\"schedulerDelayMs\":944,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":944,\"droppedCount\":0,\"coalescedCount\":0,\"count\":1}]",
+    "[12:32:56.568] [WARN] [Clipboard] Clipboard check skipped due to recent severe event loop lag lagMs=3063 lagAgeMs=29",
+    "\u001b[33m[2026-06-18T12:32:56.568] [WARN] default - \u001b[39m[12:32:56.568] [WARN] [Clipboard] Clipboard check skipped due to recent severe event loop lag lagMs=3063 lagAgeMs=29"
+  ],
+  "errorLines": [
+    "[12:32:53.227] [ERROR] [Perf:EventLoop] Event loop lag 5.8s (recent=intelligence-audit.flush 0ms | suspect=native_or_system_stall) lagMs=5843 contexts=[] pollingActive=[] pollingRecent=[{\"id\":\"intelligence-audit.flush\",\"lane\":\"serial\",\"durationMs\":0,\"ageMs\":1781757173227,\"intervalMs\":30000,\"schedulerDelayMs\":0,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":0,\"droppedCount\":0,\"coalescedCount\":0,\"count\":0},{\"id\":\"flow-bus.cleanup\",\"lane\":\"serial\",\"durationMs\":0,\"ageMs\":1781757173227,\"inter… primaryPollingRecent=intelligence-audit.flush 0ms queueDepthByLane={\"critical\":{\"queued\":0,\"inFlight\":0},\"realtime\":{\"queued\":0,\"inFlight\":0},\"io\":{\"queued\":0,\"inFlight\":0},\"maintenance\":{\"queued\":0,\"inFlight\":0},\"serial\":{\"queued\":0,\"inFlight\":0}} pollingDroppedCount=0 pollingCoalescedCount=0 suspectedCause=native_or_system_stall slowPollingRecent=[] heap={\"totalHeapSize\":102432768,\"usedHeapSize\":53673684,\"heapSizeLimit\":4294967296}",
+    "\u001b[91m[2026-06-18T12:32:53.227] [ERROR] error - \u001b[39m[12:32:53.227] [ERROR] [Perf:EventLoop] Event loop lag 5.8s (recent=intelligence-audit.flush 0ms | suspect=native_or_system_stall) lagMs=5843 contexts=[] pollingActive=[] pollingRecent=[{\"id\":\"intelligence-audit.flush\",\"lane\":\"serial\",\"durationMs\":0,\"ageMs\":1781757173227,\"intervalMs\":30000,\"schedulerDelayMs\":0,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":0,\"droppedCount\":0,\"coalescedCount\":0,\"count\":0},{\"id\":\"flow-bus.cleanup\",\"lane\":\"serial\",\"durationMs\":0,\"ageMs\":1781757173227,\"inter… primaryPollingRecent=intelligence-audit.flush 0ms queueDepthByLane={\"critical\":{\"queued\":0,\"inFlight\":0},\"realtime\":{\"queued\":0,\"inFlight\":0},\"io\":{\"queued\":0,\"inFlight\":0},\"maintenance\":{\"queued\":0,\"inFlight\":0},\"serial\":{\"queued\":0,\"inFlight\":0}} pollingDroppedCount=0 pollingCoalescedCount=0 suspectedCause=native_or_system_stall slowPollingRecent=[] heap={\"totalHeapSize\":102432768,\"usedHeapSize\":53673684,\"heapSizeLimit\":4294967296}",
+    "[12:32:56.539] [ERROR] [Perf:EventLoop] Event loop lag 3.1s (recent=storage.polling 0ms | suspect=unattributed_main_thread_block) lagMs=3063 contexts=[] pollingActive=[] pollingRecent=[{\"id\":\"storage.polling\",\"lane\":\"io\",\"durationMs\":0,\"ageMs\":3282,\"intervalMs\":5000,\"schedulerDelayMs\":944,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":944,\"droppedCount\":0,\"coalescedCount\":0,\"count\":1},{\"id\":\"intelligence-audit.flush\",\"lane\":\"serial\",\"durationMs\":0,\"ageMs\":1781757176539,\"intervalMs\":3000… primaryPollingRecent=storage.polling 0ms queueDepthByLane={\"critical\":{\"queued\":0,\"inFlight\":0},\"realtime\":{\"queued\":0,\"inFlight\":0},\"io\":{\"queued\":0,\"inFlight\":0},\"maintenance\":{\"queued\":0,\"inFlight\":0},\"serial\":{\"queued\":0,\"inFlight\":0}} pollingDroppedCount=0 pollingCoalescedCount=0 suspectedCause=unattributed_main_thread_block slowPollingRecent=[{\"id\":\"storage.polling\",\"lane\":\"io\",\"durationMs\":0,\"ageMs\":3282,\"intervalMs\":5000,\"schedulerDelayMs\":944,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":944,\"droppedCount\":0,\"coalescedCount\":0,\"count\":1}]",
+    "\u001b[91m[2026-06-18T12:32:56.539] [ERROR] error - \u001b[39m[12:32:56.539] [ERROR] [Perf:EventLoop] Event loop lag 3.1s (recent=storage.polling 0ms | suspect=unattributed_main_thread_block) lagMs=3063 contexts=[] pollingActive=[] pollingRecent=[{\"id\":\"storage.polling\",\"lane\":\"io\",\"durationMs\":0,\"ageMs\":3282,\"intervalMs\":5000,\"schedulerDelayMs\":944,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":944,\"droppedCount\":0,\"coalescedCount\":0,\"count\":1},{\"id\":\"intelligence-audit.flush\",\"lane\":\"serial\",\"durationMs\":0,\"ageMs\":1781757176539,\"intervalMs\":3000… primaryPollingRecent=storage.polling 0ms queueDepthByLane={\"critical\":{\"queued\":0,\"inFlight\":0},\"realtime\":{\"queued\":0,\"inFlight\":0},\"io\":{\"queued\":0,\"inFlight\":0},\"maintenance\":{\"queued\":0,\"inFlight\":0},\"serial\":{\"queued\":0,\"inFlight\":0}} pollingDroppedCount=0 pollingCoalescedCount=0 suspectedCause=unattributed_main_thread_block slowPollingRecent=[{\"id\":\"storage.polling\",\"lane\":\"io\",\"durationMs\":0,\"ageMs\":3282,\"intervalMs\":5000,\"schedulerDelayMs\":944,\"maxDurationMs\":0,\"maxSchedulerDelayMs\":944,\"droppedCount\":0,\"coalescedCount\":0,\"count\":1}]"
+  ],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "SystemUpdate",
+      "durationMs": 5900
+    },
+    {
+      "name": "DownloadCenter",
+      "durationMs": 3200
+    },
+    {
+      "name": "Intelligence",
+      "durationMs": 42
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 37
+    },
+    {
+      "name": "OmniPanel",
+      "durationMs": 31
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 25
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 16
+    },
+    {
+      "name": "Database",
+      "durationMs": 15
+    }
+  ],
+  "maxEventLoopLagMs": 5800,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "startup_logs_nonzero",
+    "startup_health_over_budget",
+    "event_loop_lag",
+    "slow_module:SystemUpdate",
+    "slow_module:DownloadCenter"
+  ],
+  "analysisCutoffReached": true
+}
