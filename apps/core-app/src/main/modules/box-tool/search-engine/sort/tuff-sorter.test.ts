@@ -416,6 +416,30 @@ describe('tuff-sorter ranking strategy', () => {
     expect(sorted[0]?.id).toBe('app-raycast')
   })
 
+  it('低置信 app fuzzy 命中不应压过 plugin token 命中', () => {
+    const appItem = createItem({
+      id: 'app-managed-client',
+      kind: 'app',
+      title: 'ManagedClient',
+      sourceId: 'app-provider',
+      matchResult: [{ start: 7, end: 10 }],
+      matchSource: 'name-fuzzy'
+    })
+
+    const featureItem = createItem({
+      id: 'feature-clipboard-history',
+      kind: 'feature',
+      title: '剪贴板历史记录',
+      sourceId: 'plugin-features',
+      searchTokens: ['clipboard', 'clipboard-history', 'clipb'],
+      matchResult: [{ start: 0, end: '剪贴板历史记录'.length }],
+      matchSource: 'token'
+    })
+
+    const sorted = tuffSorter.sort([appItem, featureItem], { text: 'clipb' } as TuffQuery, signal)
+    expect(sorted[0]?.id).toBe('feature-clipboard-history')
+  })
+
   it('别名/tag 伪高亮不应压过真实标题命中', () => {
     const aliasMatchedItem = createItem({
       id: 'app-erase-assistant',

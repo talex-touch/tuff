@@ -239,4 +239,47 @@ describe('search-processing-service', () => {
     expect(render?.basic?.title).toBe('NeteaseMusic 2')
     expect(meta?.extension?.source).toBe('alternate-name')
   })
+
+  it('matches localized app titles through English app tokens', async () => {
+    const rows = [
+      createAppSearchRow({
+        name: 'wechatwebdevtools',
+        displayName: '微信开发者工具',
+        path: '/Applications/wechatwebdevtools.app',
+        extensions: {
+          appIdentity: '/Applications/wechatwebdevtools.app',
+          bundleId: 'com.tencent.wechatwebdevtools',
+          launchKind: 'path',
+          launchTarget: '/Applications/wechatwebdevtools.app'
+        }
+      })
+    ] as unknown as Parameters<typeof processSearchResults>[0]
+    const query = { text: 'wechatw', inputs: [] } as Parameters<typeof processSearchResults>[1]
+
+    const items = await processSearchResults(rows, query, false, {})
+    const meta = items[0]?.meta as
+      | {
+          extension?: {
+            source?: string
+            matchResult?: Array<{ start: number; end: number }>
+            matchAlias?: { text?: string; matchResult?: Array<{ start: number; end: number }> }
+            searchTokens?: Array<{ value?: string; source?: string }>
+          }
+        }
+      | undefined
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.render.basic?.title).toBe('微信开发者工具')
+    expect(meta?.extension?.source).toBe('name')
+    expect(meta?.extension?.matchResult).toEqual([])
+    expect(meta?.extension?.matchAlias).toEqual({
+      text: 'Wechatwebdevtools',
+      matchResult: [{ start: 0, end: 'wechatw'.length }]
+    })
+    expect(meta?.extension?.searchTokens).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: 'wechatwebdevtools', source: 'name' })
+      ])
+    )
+  })
 })

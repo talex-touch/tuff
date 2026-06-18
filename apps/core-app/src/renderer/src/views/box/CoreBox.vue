@@ -8,9 +8,10 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
 import ActionPanel from '~/components/render/ActionPanel.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
@@ -55,6 +56,7 @@ const boxInputRef = ref()
 const transport = useTuffTransport()
 const router = useRouter()
 const { t } = useI18n()
+const { isMac } = useRendererPlatform()
 const boxOptions = reactive<IBoxOptions>({
   lastHidden: -1,
   mode: BoxMode.INPUT,
@@ -775,12 +777,13 @@ const customCss = computed(() => {
               @trigger="handleItemTrigger(0, widgetItemToRender)"
             />
           </div>
-          <TouchScroll
+          <TxScroll
             v-else
             ref="scrollbar"
             no-padding
             class="scroll-area"
-            :native-auto-fallback="false"
+            :native="isMac"
+            :native-auto-fallback="!isMac"
           >
             <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
               <Transition :name="resultTransitionName" mode="out-in">
@@ -835,7 +838,7 @@ const customCss = computed(() => {
                 </div>
               </div>
             </div>
-          </TouchScroll>
+          </TxScroll>
           <CoreBoxFooter
             :display="isWidgetMode || !!res.length"
             :item="widgetItemToRender ?? activeItem ?? null"
@@ -1100,8 +1103,7 @@ div.CoreBoxRes {
 
     :deep(.tx-scroll__native) {
       overflow-x: hidden !important;
-      overflow-y: scroll !important;
-      scrollbar-gutter: stable both-edges;
+      overflow-y: auto !important;
     }
   }
 }

@@ -76,6 +76,63 @@ describe('plugin-features-adapter', () => {
     expect(item.meta?.extension?.matchResult).toEqual([{ start: 0, end: 7 }])
   })
 
+  it('preserves matched alias metadata for visible token highlighting', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const item = adapter.createTuffItem(createPlugin(), createFeature(), [], 'token', {
+      text: 'Clipboard',
+      matchRanges: [{ start: 0, end: 'Clipboard'.length }]
+    })
+
+    expect(item.meta?.extension?.matchAlias).toEqual({
+      text: 'Clipboard',
+      matchResult: [{ start: 0, end: 'Clipboard'.length }]
+    })
+  })
+
+  it('includes feature id in generated search tokens for alias/id matching', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const feature = {
+      ...createFeature(),
+      id: 'clipboard-history',
+      name: '剪贴板历史记录',
+      desc: '查看和管理剪贴板历史记录'
+    }
+    const item = adapter.createTuffItem(createPlugin(), feature)
+
+    expect(item.meta?.extension?.searchTokens).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: 'clipboard-history', source: 'id' })
+      ])
+    )
+  })
+
+  it('generates typed pinyin evidence for compound Chinese feature names', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const feature = {
+      ...createFeature(),
+      id: 'wechat-message',
+      name: '微信消息',
+      desc: '发送微信消息'
+    }
+    const item = adapter.createTuffItem(createPlugin(), feature)
+
+    expect(item.meta?.extension?.searchTokens).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: 'wxxx',
+          source: 'initials',
+          segments: [
+            { tokenStart: 0, tokenEnd: 1, titleStart: 0, titleEnd: 1 },
+            { tokenStart: 1, tokenEnd: 2, titleStart: 1, titleEnd: 2 },
+            { tokenStart: 2, tokenEnd: 3, titleStart: 2, titleEnd: 3 },
+            { tokenStart: 3, tokenEnd: 4, titleStart: 3, titleEnd: 4 }
+          ]
+        }),
+        expect.objectContaining({ value: 'wechat-message', source: 'id' })
+      ])
+    )
+  })
+
   it('does not force footer hints hidden for plugin feature items by default', () => {
     const adapter = new PluginFeaturesAdapter()
     const item = adapter.createTuffItem(createPlugin(), createFeature())

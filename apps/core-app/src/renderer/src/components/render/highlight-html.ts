@@ -25,7 +25,7 @@ export function renderHighlightedTextHtml(
 ): string {
   if (!matchedIndices?.length) return escapeHtml(text)
 
-  const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = options
+  const { className = 'CoreBoxTextHighlight', base = 0, inclusiveEnd = false } = options
   const textLength = text.length
   const normalizedRanges = matchedIndices
     .map((range) => {

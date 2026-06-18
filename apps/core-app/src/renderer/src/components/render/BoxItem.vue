@@ -22,11 +22,38 @@ interface Props {
   quickKey?: string
 }
 
+interface MatchAliasRange {
+  start: number
+  end: number
+}
+
+function isMatchAliasRange(value: unknown): value is MatchAliasRange {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as MatchAliasRange).start === 'number' &&
+    typeof (value as MatchAliasRange).end === 'number'
+  )
+}
+
 const props = defineProps<Props>()
 
 const { t } = useI18n()
 
 const resolvedTitle = computed(() => resolveI18nText(props.render.basic?.title || '', t))
+const matchAlias = computed(() => {
+  const rawAlias = props.item.meta?.extension?.matchAlias
+  if (!rawAlias || typeof rawAlias !== 'object') return null
+
+  const text = (rawAlias as { text?: unknown }).text
+  const matchResult = (rawAlias as { matchResult?: unknown }).matchResult
+  if (typeof text !== 'string' || !text.trim()) return null
+
+  return {
+    text,
+    matchResult: Array.isArray(matchResult) ? matchResult.filter(isMatchAliasRange) : []
+  }
+})
 
 const displayIcon = computed<ITuffIcon>(() => normalizeCoreBoxIcon(props.render?.basic?.icon))
 
@@ -133,10 +160,18 @@ const shouldShowNoticeReason = computed(
 
     <div class="BoxItem__content flex-1 overflow-hidden">
       <!-- eslint-disable vue/no-v-html -->
-      <h5
-        class="text-sm font-semibold truncate"
-        v-html="renderHighlightedTextHtml(resolvedTitle, props.item.meta?.extension?.matchResult)"
-      />
+      <h5 class="BoxItemTitle text-sm font-semibold truncate">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <span
+          v-html="renderHighlightedTextHtml(resolvedTitle, props.item.meta?.extension?.matchResult)"
+        />
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <span
+          v-if="matchAlias"
+          class="BoxItemMatchAlias"
+          v-html="renderHighlightedTextHtml(matchAlias.text, matchAlias.matchResult)"
+        />
+      </h5>
       <!-- eslint-enable vue/no-v-html -->
       <div v-if="isNoticeItem" class="BoxItemNoticeMeta">
         <span v-if="noticeAccessory" class="BoxItemNoticeMeta__source">{{ noticeAccessory }}</span>
@@ -186,6 +221,43 @@ const shouldShowNoticeReason = computed(
 
 .BoxItem__content {
   min-width: 0;
+}
+
+.BoxItemTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.BoxItemTitle > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.BoxItem__content :deep(.CoreBoxTextHighlight) {
+  color: var(--tx-color-primary);
+  font-weight: 700;
+}
+
+.BoxItemMatchAlias {
+  display: inline-block;
+  flex: 0 1 min(42%, 160px);
+  min-width: 0;
+  max-width: min(42%, 160px);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-color-primary) 10%, var(--tx-fill-color-light));
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .BoxItemSignals {

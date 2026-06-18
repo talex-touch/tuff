@@ -189,4 +189,28 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     expect(navigate).toHaveBeenCalledWith('/settings/plugins')
     expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
   })
+
+  it('passes actionId when routing execute item actions', async () => {
+    useActionPanel()
+    const item = createItem({
+      actions: [
+        {
+          id: 'quick-ops-copy-file-hash',
+          type: 'execute',
+          label: 'Copy Hashes'
+        }
+      ]
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'quick-ops-copy-file-hash',
+      item
+    })
+    await flushAsyncAction()
+
+    expect(state.send).toHaveBeenCalledWith(CoreBoxEvents.item.execute, {
+      item: JSON.parse(JSON.stringify(item)),
+      actionId: 'quick-ops-copy-file-hash'
+    })
+  })
 })
