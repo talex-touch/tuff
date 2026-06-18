@@ -91,6 +91,7 @@ export class DownloadCenterModule extends BaseModule {
 
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
+  private startupBackgroundTimer: NodeJS.Timeout | null = null
   private errorLoggerInitInFlight: Promise<void> | null = null
 
   // Performance optimizations
@@ -155,11 +156,7 @@ export class DownloadCenterModule extends BaseModule {
     // 注册Transport通道
     this.registerTransportHandlers()
 
-    // 启动网络监控
-    this.startNetworkMonitoring()
-
-    // 启动任务调度器
-    this.startTaskScheduler()
+    this.scheduleStartupBackgroundTasks()
 
     const t3 = performance.now()
 
@@ -188,6 +185,11 @@ export class DownloadCenterModule extends BaseModule {
 
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     this.isRunning = false
+
+    if (this.startupBackgroundTimer) {
+      clearTimeout(this.startupBackgroundTimer)
+      this.startupBackgroundTimer = null
+    }
 
     this.pollingService.unregister(this.networkMonitorTaskId)
     this.pollingService.unregister(this.progressUpdateTaskId)
@@ -238,6 +240,18 @@ export class DownloadCenterModule extends BaseModule {
       .finally(() => {
         this.errorLoggerInitInFlight = null
       })
+  }
+
+  private scheduleStartupBackgroundTasks(): void {
+    if (this.startupBackgroundTimer) {
+      return
+    }
+
+    this.startupBackgroundTimer = setTimeout(() => {
+      this.startupBackgroundTimer = null
+      this.startNetworkMonitoring()
+      this.startTaskScheduler()
+    }, 0)
   }
 
   // 添加下载任务
@@ -1092,11 +1106,13 @@ export class DownloadCenterModule extends BaseModule {
       })
     }
 
-    // 初始网络状态检查
-    this.networkMonitor.monitorNetwork(getMonitorOptions()).then((status) => {
-      this.priorityCalculator.setNetworkStatus(status)
-      applyDiagnosticsMeta()
-    })
+    // 初始网络状态检查只使用 light mode，避免首屏阶段触发外部测速请求。
+    void this.networkMonitor
+      .monitorNetwork({ cacheTtlMs: 120000, mode: 'light' })
+      .then((status) => {
+        this.priorityCalculator.setNetworkStatus(status)
+        applyDiagnosticsMeta()
+      })
 
     // 定期更新网络状态
     if (this.pollingService.isRegistered(this.networkMonitorTaskId)) {

@@ -96,6 +96,7 @@ export class StorageModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private updateStreams = new Set<StreamContext<StorageUpdateNotification>>()
+  private isDestroying = false
 
   pluginConfigs = new Map<string, object>()
   PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
@@ -137,6 +138,7 @@ export class StorageModule extends BaseModule {
   }
 
   async onInit({ file, app }: ModuleInitContext<TalexEvents>): Promise<void> {
+    this.isDestroying = false
     pluginConfigPath = path.join(file.dirPath!, 'plugins')
     fse.ensureDirSync(pluginConfigPath)
     storageLog.info(`Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`)
@@ -157,6 +159,7 @@ export class StorageModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
+    this.isDestroying = true
     await this.pollingService.stop()
     this.lruManager.stopCleanup()
     this.cache.clear()
@@ -335,6 +338,10 @@ export class StorageModule extends BaseModule {
 
     this.transportDisposers.push(
       this.transport.onStream(StorageEvents.app.updated, (_payload, context) => {
+        if (this.isDestroying) {
+          context.end()
+          return
+        }
         this.updateStreams.add(context)
       })
     )

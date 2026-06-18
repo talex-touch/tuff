@@ -1,0 +1,63 @@
+{
+  "runNo": 9,
+  "timestamp": "2026-06-18T04:29:36.142Z",
+  "timeoutMs": 120000,
+  "traceDeprecation": false,
+  "target": "dev",
+  "profile": "hot",
+  "launchMethod": "exec",
+  "command": "pnpm -C \"apps/core-app\" exec electron-vite dev",
+  "artifact": null,
+  "wallTimeMs": 15740,
+  "processExitCode": null,
+  "processSignal": "SIGTERM",
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": 668,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": null,
+  "warnCount": 0,
+  "errorCount": 0,
+  "warnLines": [],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "DownloadCenter",
+      "durationMs": 375
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 37
+    },
+    {
+      "name": "OmniPanel",
+      "durationMs": 35
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 25
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 21
+    },
+    {
+      "name": "Database",
+      "durationMs": 20
+    },
+    {
+      "name": "SentryService",
+      "durationMs": 16
+    },
+    {
+      "name": "search-engine-core",
+      "durationMs": 14
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": true,
+  "blockingIssues": [],
+  "analysisCutoffReached": true
+}

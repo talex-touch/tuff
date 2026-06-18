@@ -1,0 +1,32 @@
+{
+  "runNo": 4,
+  "timestamp": "2026-06-18T04:27:50.161Z",
+  "timeoutMs": 120000,
+  "traceDeprecation": false,
+  "target": "dev",
+  "profile": "hot",
+  "launchMethod": "exec",
+  "command": "pnpm -C \"apps/core-app\" exec electron-vite dev",
+  "artifact": null,
+  "wallTimeMs": 2361,
+  "processExitCode": 0,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": null,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": null,
+  "warnCount": 0,
+  "errorCount": 0,
+  "warnLines": [],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "startup_health_missing"
+  ],
+  "analysisCutoffReached": false
+}

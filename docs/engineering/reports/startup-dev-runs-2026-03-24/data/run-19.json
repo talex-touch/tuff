@@ -1,0 +1,63 @@
+{
+  "runNo": 19,
+  "timestamp": "2026-06-18T04:37:10.130Z",
+  "timeoutMs": 120000,
+  "traceDeprecation": false,
+  "target": "dev",
+  "profile": "hot",
+  "launchMethod": "exec",
+  "command": "pnpm -C \"apps/core-app\" exec electron-vite dev",
+  "artifact": null,
+  "wallTimeMs": 14496,
+  "processExitCode": null,
+  "processSignal": "SIGTERM",
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": 546,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": null,
+  "warnCount": 0,
+  "errorCount": 0,
+  "warnLines": [],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "DownloadCenter",
+      "durationMs": 268
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 36
+    },
+    {
+      "name": "OmniPanel",
+      "durationMs": 35
+    },
+    {
+      "name": "NetworkModule",
+      "durationMs": 23
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 20
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 18
+    },
+    {
+      "name": "Database",
+      "durationMs": 13
+    },
+    {
+      "name": "search-engine-core",
+      "durationMs": 12
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": true,
+  "blockingIssues": [],
+  "analysisCutoffReached": true
+}

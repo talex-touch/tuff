@@ -160,12 +160,11 @@ applyLoggerConfig({ diagnostics: { verboseLogs: false } })
 // Permission module instance
 const permissionModule = new PermissionModule()
 
-const modulesToLoad = [
+const foregroundModulesToLoad = [
   databaseModule,
   storageModule,
   fileProtocolModule,
   shortcutModule,
-  extensionLoaderModule,
   commonChannelModule,
   trayManagerModule,
   nativeCapabilitiesModule,
@@ -191,10 +190,13 @@ const modulesToLoad = [
   addonOpenerModule,
   clipboardModule,
   tuffDashboardModule,
-  FileSystemWatcher,
   terminalModule,
   downloadCenterModule
 ]
+
+const deferredModulesToLoad = [extensionLoaderModule, FileSystemWatcher]
+
+const modulesToLoad = [...foregroundModulesToLoad, ...deferredModulesToLoad]
 const optionalModulesToLoad = new Set([trayManagerModule])
 
 // Record when Electron becomes ready
@@ -213,69 +215,70 @@ app.whenReady().then(async () => {
 
   electronReadyTime = Date.now()
   const startupTimer = mainLog.time('Startup health check passed', 'success')
-  const moduleLoadTimer = mainLog.time('All modules loaded', 'success')
+  const foregroundModuleLoadTimer = mainLog.time('Foreground modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
-
-  let modulesLoaded = false
-  let loadedModuleCount = 0
 
   try {
     const analytics = getStartupAnalytics()
     const touchApp = genTouchApp()
     const modulesStartTime = Date.now()
+    const moduleLoadMetrics: ModuleLoadMetric[] = []
 
-    const moduleLoadMetrics = (await loadStartupModules({
-      modules: modulesToLoad,
+    const handleModuleLoaded = async (
+      moduleCtor: (typeof modulesToLoad)[number],
+      metric: ModuleLoadMetric
+    ) => {
+      const moduleOrder = modulesToLoad.indexOf(moduleCtor)
+      const normalizedMetric: ModuleLoadMetric = {
+        ...metric,
+        order: moduleOrder >= 0 ? moduleOrder : metric.order
+      }
+      moduleLoadMetrics.push(normalizedMetric)
+      analytics.trackModuleLoad(
+        normalizedMetric.name,
+        normalizedMetric.loadTime,
+        normalizedMetric.order
+      )
+
+      if (moduleCtor === storageModule) {
+        try {
+          const appSettings = getMainConfig(StorageList.APP_SETTING)
+          applyLoggerConfig(appSettings)
+          subscribeMainConfig(StorageList.APP_SETTING, (data) => {
+            applyLoggerConfig(data)
+          })
+        } catch (error) {
+          mainLog.warn('Failed to load logger configuration', { error })
+        }
+
+        try {
+          const themeStyle = getMainConfig(StorageList.THEME_STYLE)
+          applyNativeThemeSource(themeStyle)
+          subscribeMainConfig(StorageList.THEME_STYLE, (data) => {
+            applyNativeThemeSource(data)
+          })
+        } catch (error) {
+          mainLog.warn('Failed to load native theme source', { error })
+        }
+      }
+    }
+
+    const foregroundModuleMetrics = (await loadStartupModules({
+      modules: foregroundModulesToLoad,
       loadModule: async (moduleCtor) => {
         return await touchApp.moduleManager.loadModule(moduleCtor)
       },
       optionalModules: optionalModulesToLoad,
       onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
-        mainLog.warn('Optional module failed to load, continue startup', {
+        mainLog.warn('Optional foreground module failed to load, continue startup', {
           meta: { module: metric.name }
         })
       },
-      onLoaded: async (moduleCtor, metric) => {
-        analytics.trackModuleLoad(metric.name, metric.loadTime, metric.order)
-
-        if (moduleCtor === storageModule) {
-          try {
-            const appSettings = getMainConfig(StorageList.APP_SETTING)
-            applyLoggerConfig(appSettings)
-            subscribeMainConfig(StorageList.APP_SETTING, (data) => {
-              applyLoggerConfig(data)
-            })
-          } catch (error) {
-            mainLog.warn('Failed to load logger configuration', { error })
-          }
-
-          try {
-            const themeStyle = getMainConfig(StorageList.THEME_STYLE)
-            applyNativeThemeSource(themeStyle)
-            subscribeMainConfig(StorageList.THEME_STYLE, (data) => {
-              applyNativeThemeSource(data)
-            })
-          } catch (error) {
-            mainLog.warn('Failed to load native theme source', { error })
-          }
-        }
-      }
+      onLoaded: handleModuleLoaded
     })) as ModuleLoadMetric[]
 
-    const totalModulesLoadTime = Date.now() - modulesStartTime
-    loadedModuleCount = moduleLoadMetrics.length
-    modulesLoaded = true
-    moduleLoadTimer.end('All modules loaded', {
-      meta: { modules: loadedModuleCount }
-    })
-
-    // Set main process metrics
-    analytics.setMainProcessMetrics({
-      processCreationTime: process.getCreationTime() || Date.now(),
-      electronReadyTime,
-      modulesLoadTime: totalModulesLoadTime,
-      totalModules: modulesToLoad.length,
-      moduleDetails: moduleLoadMetrics
+    foregroundModuleLoadTimer.end('Foreground modules loaded', {
+      meta: { modules: foregroundModuleMetrics.length }
     })
 
     const rendererInitPromise = touchApp.waitUntilInitialized()
@@ -288,30 +291,78 @@ app.whenReady().then(async () => {
       await rendererInitPromise
     }
 
-    touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
-
-    // Start the global polling service after all modules are loaded.
-    pollingService.start()
-
     startupTimer.end('Startup health check passed', {
-      meta: { modules: loadedModuleCount }
+      meta: { modules: foregroundModuleMetrics.length }
     })
 
-    if (startupBenchmarkEnabled) {
-      mainLog.info('Startup benchmark mode: scheduling app quit after startup health check', {
-        meta: { exitDelayMs: startupBenchmarkExitDelayMs }
+    const finalizeModuleBootstrap = (): void => {
+      analytics.setMainProcessMetrics({
+        processCreationTime: process.getCreationTime() || Date.now(),
+        electronReadyTime,
+        modulesLoadTime: Date.now() - modulesStartTime,
+        totalModules: modulesToLoad.length,
+        moduleDetails: [...moduleLoadMetrics]
       })
-      setTimeout(() => {
-        app.quit()
-      }, startupBenchmarkExitDelayMs)
+
+      touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
+
+      // Start the global polling service after all modules are loaded or deferred loading has failed.
+      pollingService.start()
+
+      if (startupBenchmarkEnabled) {
+        mainLog.info('Startup benchmark mode: scheduling app quit after deferred modules settled', {
+          meta: { exitDelayMs: startupBenchmarkExitDelayMs }
+        })
+        setTimeout(() => {
+          app.quit()
+        }, startupBenchmarkExitDelayMs)
+      }
     }
+
+    const loadDeferredModules = async (): Promise<void> => {
+      const deferredModuleLoadTimer = mainLog.time('Deferred modules loaded', 'success')
+      const deferredStartedAt = Date.now()
+      try {
+        const deferredModuleMetrics = (await loadStartupModules({
+          modules: deferredModulesToLoad,
+          loadModule: async (moduleCtor) => {
+            return await touchApp.moduleManager.loadModule(moduleCtor)
+          },
+          optionalModules: optionalModulesToLoad,
+          onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
+            mainLog.warn('Optional deferred module failed to load, continue startup', {
+              meta: { module: metric.name }
+            })
+          },
+          onLoaded: handleModuleLoaded
+        })) as ModuleLoadMetric[]
+
+        deferredModuleLoadTimer.end('Deferred modules loaded', {
+          meta: {
+            modules: deferredModuleMetrics.length,
+            totalModules: moduleLoadMetrics.length,
+            durationMs: Date.now() - deferredStartedAt
+          }
+        })
+      } catch (error) {
+        deferredModuleLoadTimer.end('Deferred module bootstrap failed', {
+          level: 'warn',
+          error
+        })
+        mainLog.error('Deferred module bootstrap failed', { error })
+      } finally {
+        finalizeModuleBootstrap()
+      }
+    }
+
+    setImmediate(() => {
+      void loadDeferredModules()
+    })
   } catch (error) {
-    if (!modulesLoaded) {
-      moduleLoadTimer.end('Module bootstrap failed', {
-        level: 'warn',
-        error
-      })
-    }
+    foregroundModuleLoadTimer.end('Foreground module bootstrap failed', {
+      level: 'warn',
+      error
+    })
     startupTimer.end('Bootstrap failed', {
       level: 'warn',
       error

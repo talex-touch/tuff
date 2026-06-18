@@ -3,6 +3,28 @@
 > 更新时间：2026-06-18
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-18
+
+### perf(core-app): defer non-critical startup work from first render
+
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/main/modules/download/download-center.ts`
+- `apps/core-app/src/main/modules/system-update/index.ts`
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/modules/startup/hydration-timeout.ts`
+- `apps/core-app/src/renderer/src/modules/startup/hydration-timeout.test.ts`
+- `apps/core-app/src/renderer/src/components/render/box-item-icon-color.test.ts`
+  - CoreApp startup now loads foreground modules first, waits for renderer readiness, then starts clearly non-critical `ExtensionLoader` and `FileSystemWatcher` as a deferred serial phase; module load analytics keep the original global module order and are finalized only after deferred modules settle.
+  - Renderer app settings hydration now has a 600ms soft timeout before shell mount; first-run onboarding remains safe because `MainWindowRuntimeServices` still waits for real `appSettings.whenHydrated()` before deciding whether to show Beginner.
+  - `UpdateService` now keeps settings, transport handlers, and the DownloadCenter-backed `UpdateSystem` bridge on the foreground path, while release cache hydrate, macOS autoUpdater setup, and startup auto-check are scheduled after `ALL_MODULES_LOADED`; startup timers/listeners are cleared on destroy.
+  - `DownloadCenter` now keeps queue, workers, notification service, and transport handlers available during foreground init, but starts network monitor and the task scheduler after onInit returns; the initial network check uses light mode instead of external speed/latency probes to reduce startup stalls.
+  - `SystemUpdate` now keeps foreground init to acquiring the DB handle and defers state ensure, FX rate hydration, polling, and startup refresh until after `ALL_MODULES_LOADED`, keeping hot-data synchronization out of the first-render module chain.
+  - Storage update streams now reject late stream starts during destroy with `context.end()`, reducing dev benchmark shutdown noise; the CoreBox icon-color regression test type guard was tightened so full web typecheck is useful again.
+  - Verification: `pnpm -C "apps/core-app" run typecheck`, targeted ESLint for changed startup/storage/download/system-update/icon files, and targeted Vitest for startup loader, hydration timeout, update action controller, and icon-color rendering passed; dev startup benchmark evidence in `docs/engineering/reports/startup-dev-runs-2026-03-24/` now has post-fix runs 12-20 passing consecutively with 0 WARN / 0 ERROR.
+
+
 ## 2026-06-17
 
 ### fix(corebox): preserve themed icon color rendering

@@ -145,6 +145,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private updateRepository: UpdateRepository | null = null
   private releaseCacheStore: ReleaseCacheStore = { version: 1, entries: {} }
   private releaseCacheLoadPromise: Promise<void> | null = null
+  private startupBackgroundTimer: NodeJS.Timeout | null = null
+  private startupAutoCheckTimer: NodeJS.Timeout | null = null
+  private startupBackgroundListener: (() => void) | null = null
+  private updateSystemInitListener: (() => void) | null = null
   private autoDownloadTasks: Map<string, string> = new Map()
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
@@ -227,6 +231,62 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     return true
   }
 
+  private scheduleStartupBackgroundTasks(): void {
+    if (this.startupBackgroundListener || this.startupBackgroundTimer) {
+      return
+    }
+
+    this.startupBackgroundListener = () => {
+      this.startupBackgroundListener = null
+      this.startupBackgroundTimer = setTimeout(() => {
+        this.startupBackgroundTimer = null
+        this.runStartupBackgroundTasks()
+      }, 0)
+    }
+    touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, this.startupBackgroundListener)
+  }
+
+  private runStartupBackgroundTasks(): void {
+    this.scheduleReleaseCacheLoad()
+    this.setupMacAutoUpdater()
+    this.restoreMacPendingInstallVersion()
+
+    if (!app.isPackaged) {
+      updateLog.info('Development mode detected, skipping automatic update checks')
+      return
+    }
+
+    if (this.settings.enabled && this.settings.frequency !== 'never') {
+      this.startPolling()
+      this.startupAutoCheckTimer = setTimeout(() => {
+        this.startupAutoCheckTimer = null
+        void this.checkForUpdates(false)
+      }, 5000)
+    }
+  }
+
+  private clearStartupBackgroundTasks(): void {
+    if (this.startupBackgroundListener) {
+      touchEventBus.off(TalexEvents.ALL_MODULES_LOADED, this.startupBackgroundListener)
+      this.startupBackgroundListener = null
+    }
+
+    if (this.startupBackgroundTimer) {
+      clearTimeout(this.startupBackgroundTimer)
+      this.startupBackgroundTimer = null
+    }
+
+    if (this.startupAutoCheckTimer) {
+      clearTimeout(this.startupAutoCheckTimer)
+      this.startupAutoCheckTimer = null
+    }
+
+    if (this.updateSystemInitListener) {
+      touchEventBus.off(TalexEvents.ALL_MODULES_LOADED, this.updateSystemInitListener)
+      this.updateSystemInitListener = null
+    }
+  }
+
   /**
    * Initialize update service
    */
@@ -247,11 +307,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     // Load settings
     this.loadSettings()
-    this.scheduleReleaseCacheLoad()
-    this.setupMacAutoUpdater()
 
     if (!this.tryInitUpdateSystem(ctx)) {
-      touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, () => {
+      this.updateSystemInitListener = () => {
+        this.updateSystemInitListener = null
         if (!this.initContext) {
           return
         }
@@ -259,21 +318,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         if (!this.tryInitUpdateSystem(this.initContext)) {
           updateLog.warn('DownloadCenter module not found, UpdateSystem not initialized')
         }
-      })
+      }
+      touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, this.updateSystemInitListener)
     }
 
-    if (!app.isPackaged) {
-      updateLog.info('Development mode detected, skipping automatic update checks')
-      return
-    }
-
-    if (this.settings.enabled && this.settings.frequency !== 'never') {
-      this.startPolling()
-
-      setTimeout(() => {
-        void this.checkForUpdates(false)
-      }, 5000)
-    }
+    this.scheduleStartupBackgroundTasks()
   }
 
   /**
@@ -281,6 +330,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   async onDestroy(): Promise<void> {
     updateLog.info('Destroying update service')
+
+    this.clearStartupBackgroundTasks()
 
     // Unregister polling task
     this.pollingService.unregister(UPDATE_POLL_TASK_ID)
@@ -682,6 +733,19 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return
     }
     autoUpdater.allowPrerelease = this.getEffectiveChannel() !== AppPreviewChannel.RELEASE
+  }
+
+  private restoreMacPendingInstallVersion(): void {
+    if (!this.macAutoUpdaterInitialized) {
+      return
+    }
+
+    const pendingVersion = (this.settings.pendingInstallVersion ?? '').trim()
+    if (!pendingVersion || !this.isUpdateCandidate(pendingVersion)) {
+      return
+    }
+
+    this.macUpdateDownloadedVersion = pendingVersion
   }
 
   private async downloadMacUpdate(release: GitHubRelease): Promise<void> {
@@ -2171,6 +2235,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private async waitForReleaseCacheLoad(): Promise<void> {
+    this.scheduleReleaseCacheLoad()
     if (!this.releaseCacheLoadPromise) return
     try {
       await this.releaseCacheLoadPromise
@@ -2488,8 +2553,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           if (!this.isUpdateCandidate(pendingVersion)) {
             this.settings.pendingInstallVersion = null
             shouldSaveSettings = true
-          } else if (this.isMacAutoUpdaterEnabled()) {
-            this.macUpdateDownloadedVersion = pendingVersion
           }
         }
 

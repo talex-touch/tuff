@@ -1,0 +1,72 @@
+{
+  "runNo": 1,
+  "timestamp": "2026-06-18T01:27:21.860Z",
+  "timeoutMs": 120000,
+  "traceDeprecation": false,
+  "target": "dev",
+  "profile": "hot",
+  "launchMethod": "exec",
+  "command": "pnpm -C \"apps/core-app\" exec electron-vite dev",
+  "artifact": null,
+  "wallTimeMs": 81436,
+  "processExitCode": null,
+  "processSignal": "SIGTERM",
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": 431,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": null,
+  "warnCount": 6,
+  "errorCount": 0,
+  "warnLines": [
+    "[09:27:32.904] [WARN] [TouchApp] Startup guard: detected running release build pids=753",
+    "\u001b[33m[2026-06-18T09:27:32.904] [WARN] default - \u001b[39m[09:27:32.904] [WARN] [TouchApp] Startup guard: detected running release build pids=753",
+    "[09:28:32.844] [WARN] [TouchApp] Startup guard: trying graceful shutdown for release build pids=753",
+    "\u001b[33m[2026-06-18T09:28:32.844] [WARN] default - \u001b[39m[09:28:32.844] [WARN] [TouchApp] Startup guard: trying graceful shutdown for release build pids=753",
+    "[09:28:34.345] [WARN] [TouchApp] Startup guard: forcing release build shutdown pids=753",
+    "\u001b[33m[2026-06-18T09:28:34.345] [WARN] default - \u001b[39m[09:28:34.345] [WARN] [TouchApp] Startup guard: forcing release build shutdown pids=753"
+  ],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "DownloadCenter",
+      "durationMs": 132
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 48
+    },
+    {
+      "name": "Database",
+      "durationMs": 28
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 26
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 22
+    },
+    {
+      "name": "OmniPanel",
+      "durationMs": 18
+    },
+    {
+      "name": "Clipboard",
+      "durationMs": 15
+    },
+    {
+      "name": "search-engine-core",
+      "durationMs": 13
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "startup_logs_nonzero"
+  ],
+  "analysisCutoffReached": true
+}
