@@ -63,6 +63,152 @@ interface DetachedDivisionPayload {
   query?: string
 }
 
+type PluginFeatureItem = TuffItem & {
+  interaction?: { type?: string; sendMode?: boolean }
+  meta?: TuffItem['meta'] & {
+    featureId?: string
+    interaction?: { type?: string; sendMode?: boolean }
+    pluginName?: string
+  }
+}
+
+function getPluginFeatureInteraction(feature: PluginFeatureItem | null | undefined) {
+  return feature?.meta?.interaction || feature?.interaction
+}
+
+function isWidgetFeatureItem(feature: PluginFeatureItem | null | undefined): boolean {
+  return getPluginFeatureInteraction(feature)?.type === 'widget'
+}
+
+function getActivationFeature(
+  activation: IProviderActivate | null | undefined
+): PluginFeatureItem | null {
+  const meta = isRecord(activation?.meta) ? activation?.meta : null
+  const feature = meta?.feature
+  return isRecord(feature) ? (feature as unknown as PluginFeatureItem) : null
+}
+
+function findWidgetActivationFeature(
+  activations: IProviderActivate[] | null
+): PluginFeatureItem | null {
+  if (!activations?.length) return null
+  for (const activation of activations) {
+    if (activation.id !== 'plugin-features') continue
+    const feature = getActivationFeature(activation)
+    if (isWidgetFeatureItem(feature)) return feature
+  }
+  return null
+}
+
+function getPluginFeatureMeta(
+  feature: PluginFeatureItem
+): { pluginName: string; featureId: string } | null {
+  const pluginName = typeof feature.meta?.pluginName === 'string' ? feature.meta.pluginName : ''
+  const featureId = typeof feature.meta?.featureId === 'string' ? feature.meta.featureId : ''
+  if (!pluginName || !featureId) return null
+  return { pluginName, featureId }
+}
+
+function createWidgetFallbackItem(feature: PluginFeatureItem, queryText: string): TuffItem | null {
+  const meta = getPluginFeatureMeta(feature)
+  if (!meta) return null
+
+  const prompt = queryText.trim()
+  const rendererId = `${meta.pluginName}::${meta.featureId}`
+  const messages = prompt
+    ? [
+        {
+          id: `${meta.featureId}-fallback-user`,
+          role: 'user',
+          content: prompt,
+          status: 'complete'
+        },
+        {
+          id: `${meta.featureId}-fallback-assistant-pending`,
+          role: 'assistant',
+          content: '',
+          status: 'streaming'
+        }
+      ]
+    : []
+
+  return {
+    ...feature,
+    id: `${meta.pluginName}/${meta.featureId}/widget-fallback`,
+    kind: feature.kind || 'feature',
+    render: {
+      mode: 'custom',
+      custom: {
+        type: 'vue',
+        content: rendererId,
+        data: {
+          prompt,
+          status: prompt ? 'chat-pending' : 'idle',
+          stage: 'chat',
+          capabilityId: 'text.chat',
+          inputKinds: prompt ? ['text'] : [],
+          messages
+        }
+      },
+      basic: feature.render?.basic
+    },
+    meta: {
+      ...feature.meta,
+      status: prompt ? 'chat-pending' : 'idle',
+      keepCoreBoxOpen: true,
+      widgetFallback: true
+    }
+  } as TuffItem
+}
+
+function hasPluginWidgetRenderItem(items: TuffItem[]): boolean {
+  return items.some((item) => {
+    const custom = item.render?.mode === 'custom' ? item.render.custom : null
+    return Boolean(
+      custom &&
+      ['vue', 'webcomponent', 'arrow'].includes(custom.type) &&
+      custom.content &&
+      !String(custom.content).startsWith('core-')
+    )
+  })
+}
+
+function mergePluginFeatureActivationState(
+  next: IProviderActivate[] | null,
+  previous: IProviderActivate[] | null,
+  feature?: TuffItem
+): IProviderActivate[] | null {
+  if (!next?.length) return next
+  const fallbackFeature = isRecord(feature) ? (feature as unknown as PluginFeatureItem) : null
+
+  return next.map((activation) => {
+    if (activation.id !== 'plugin-features') return activation
+    const nextMeta = isRecord(activation.meta) ? activation.meta : {}
+    const pluginName = typeof nextMeta.pluginName === 'string' ? nextMeta.pluginName : undefined
+    const previousActivation = previous?.find((item) => {
+      if (item.id !== 'plugin-features') return false
+      const previousMeta = isRecord(item.meta) ? item.meta : {}
+      if (!pluginName) return true
+      return previousMeta.pluginName === pluginName
+    })
+    const previousMeta = isRecord(previousActivation?.meta) ? previousActivation.meta : {}
+    const preservedFeature = nextMeta.feature || previousMeta.feature || fallbackFeature
+
+    return {
+      ...previousActivation,
+      ...activation,
+      hideResults: activation.hideResults ?? previousActivation?.hideResults ?? false,
+      showInput: activation.showInput ?? previousActivation?.showInput,
+      forceMax: activation.forceMax ?? previousActivation?.forceMax,
+      meta: {
+        ...previousMeta,
+        ...nextMeta,
+        ...(preservedFeature ? { feature: preservedFeature } : {})
+      }
+    }
+  })
+}
+
 export function useSearch(
   boxOptions: IBoxOptions,
   clipboardOptions?: IClipboardOptions
@@ -170,6 +316,14 @@ export function useSearch(
     })
 
     const result = Array.from(itemsMap.values())
+    const widgetFeature = findWidgetActivationFeature(activeActivations.value)
+    if (widgetFeature && !hasPluginWidgetRenderItem(result)) {
+      const fallback = createWidgetFallbackItem(widgetFeature, searchVal.value)
+      if (fallback) {
+        result.unshift(fallback)
+      }
+    }
+
     return filterDetachedItems(result).slice(0, MAX_RENDERED_RESULTS)
   })
 
@@ -788,8 +942,10 @@ export function useSearch(
               item: serializedItem
             }
       )
-      const newActivationState = toActivations(
-        activationState as ActivationState | IProviderActivate[] | null
+      const newActivationState = mergePluginFeatureActivationState(
+        toActivations(activationState as ActivationState | IProviderActivate[] | null),
+        activeActivations.value,
+        isPluginFeature ? itemToExecute : undefined
       )
       activeActivations.value = newActivationState
       pluginFeatureActivated = isPluginFeature && hasPluginFeatureActivation(newActivationState)
@@ -1088,11 +1244,15 @@ export function useSearch(
       return
     }
 
+    const nextActivationState = mergePluginFeatureActivationState(
+      data.activate || null,
+      activeActivations.value
+    )
     if (searchResult.value) {
-      searchResult.value.activate = data.activate
+      searchResult.value.activate = nextActivationState ?? undefined
       searchResult.value.sources = data.sources ?? []
     }
-    activeActivations.value = data.activate || null
+    activeActivations.value = nextActivationState
     loading.value = false
     recommendationPending.value = false
   }

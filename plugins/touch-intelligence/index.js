@@ -414,7 +414,7 @@ async function streamChatAnswer({
           provider = normalizeText(event?.provider) || provider
           model = normalizeText(event?.model) || model
           traceId = normalizeText(event?.traceId) || traceId
-          pushWidgetState(featureId, {
+          void pushWidgetState(featureId, {
             requestId,
             prompt: displayPrompt,
             answer,
@@ -853,9 +853,16 @@ function buildWidgetItem(featureId, state = {}) {
     .build()
 }
 
-function pushWidgetState(featureId, state = {}) {
-  plugin.feature.clearItems()
-  plugin.feature.pushItems([buildWidgetItem(featureId, state)])
+async function pushWidgetState(featureId, state = {}) {
+  try {
+    plugin.feature.clearItems()
+    await plugin.feature.pushItems([buildWidgetItem(featureId, state)])
+    return true
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] failed to push widget state', error)
+    return false
+  }
 }
 
 function buildSendItem(featureId, draft) {
@@ -1138,7 +1145,7 @@ async function dispatchPrompt({
         })
       }
 
-      pushWidgetState(resolvedFeatureId, {
+      await pushWidgetState(resolvedFeatureId, {
         prompt: displayPrompt,
         requestId,
         status: 'chat-pending',
@@ -1209,7 +1216,7 @@ async function dispatchPrompt({
     session.lastReadyDraftId = ''
     session.lastReadyPromptKey = ''
 
-    pushWidgetState(resolvedFeatureId, {
+    await pushWidgetState(resolvedFeatureId, {
       ...mapped,
       status: 'ready',
       stage: 'chat',
@@ -1229,7 +1236,7 @@ async function dispatchPrompt({
     session.lastReadyPromptKey = ''
     const normalizedError = normalizeInvokeError(error)
     logger?.error?.('[touch-intelligence] invoke failed', error)
-    pushWidgetState(resolvedFeatureId, {
+    await pushWidgetState(resolvedFeatureId, {
       prompt: displayPrompt,
       requestId,
       status: 'error',
@@ -1269,12 +1276,10 @@ const pluginLifecycle = {
         session.history = storedHistory
       }
 
-      plugin.feature.clearItems()
-
       if (!queryContext.shouldShowEntry) {
         session.lastReadyDraftId = ''
         session.lastReadyPromptKey = ''
-        pushWidgetState(resolvedFeatureId, {
+        await pushWidgetState(resolvedFeatureId, {
           status: 'idle',
           stage: 'chat',
           capabilityId: 'text.chat',
@@ -1295,7 +1300,7 @@ const pluginLifecycle = {
       )
       if (!hasPermission) {
         const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
-        pushWidgetState(resolvedFeatureId, {
+        await pushWidgetState(resolvedFeatureId, {
           ...draft,
           prompt: displayPrompt,
           status: 'error',
@@ -1312,7 +1317,7 @@ const pluginLifecycle = {
       markPendingRequest(session, requestId)
       session.lastReadyDraftId = ''
       session.lastReadyPromptKey = ''
-      pushWidgetState(resolvedFeatureId, {
+      await pushWidgetState(resolvedFeatureId, {
         ...draft,
         prompt: displayPrompt,
         requestId,
@@ -1337,7 +1342,7 @@ const pluginLifecycle = {
     catch (error) {
       const normalizedError = normalizeInvokeError(error)
       logger?.error?.('[touch-intelligence] Failed to handle feature', error)
-      pushWidgetState(featureId, {
+      await pushWidgetState(featureId, {
         status: 'error',
         stage: 'error',
         errorCode: normalizedError.code,
@@ -1391,7 +1396,7 @@ const pluginLifecycle = {
         )
         if (!hasPermission) {
           const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
-          pushWidgetState(featureId, {
+          await pushWidgetState(featureId, {
             prompt: displayPrompt,
             status: 'error',
             stage: 'error',
@@ -1413,7 +1418,7 @@ const pluginLifecycle = {
 
         const requestId = crypto.randomUUID()
         markPendingRequest(session, requestId)
-        pushWidgetState(featureId, {
+        await pushWidgetState(featureId, {
           prompt: displayPrompt,
           requestId,
           status: draft.imageDataUrl ? 'ocr-pending' : 'chat-pending',
