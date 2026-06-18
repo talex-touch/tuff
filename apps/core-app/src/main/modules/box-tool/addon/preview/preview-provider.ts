@@ -4,21 +4,25 @@ import type {
   PreviewAbilityResult,
   PreviewCardPayload,
   PreviewSdk,
+  TuffAction,
   TuffItem
 } from '@talex-touch/utils'
 import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-engine/types'
 import crypto from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { hasQuickOpsDeveloperCommand } from '@talex-touch/utils/core-box/preview'
 import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
-import { clipboard } from 'electron'
+import { app, clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
 import { createLogger } from '../../../../utils/logger'
 
 const PREVIEW_COMPONENT_NAME = DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD
 const SOURCE_ID = 'preview-provider'
 const PREVIEW_COPY_PRIMARY_ACTION_ID = 'preview-copy-primary'
+const PREVIEW_SAVE_QR_SVG_ACTION_ID = 'preview-save-qr-svg'
 const previewLog = createLogger('PreviewProvider')
 
 interface PreparedPreviewQuery {
@@ -99,8 +103,13 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     // Preview provider does not keep activation state.
   }
 
-  async onExecute({ item, searchResult }: IExecuteArgs): Promise<null> {
+  async onExecute({ item, searchResult, actionId }: IExecuteArgs): Promise<null> {
     const payload = this.extractPayload(item)
+    if (actionId === PREVIEW_SAVE_QR_SVG_ACTION_ID) {
+      await this.saveQrSvg(payload, searchResult?.query ?? { text: '', inputs: [] })
+      return null
+    }
+
     if (payload?.primaryValue) {
       clipboard.writeText(payload.primaryValue)
       try {
@@ -168,7 +177,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       .setFinalScore(1)
 
     if (payload.primaryValue) {
-      builder.setActions([
+      const actions: TuffAction[] = [
         {
           id: PREVIEW_COPY_PRIMARY_ACTION_ID,
           type: 'copy',
@@ -176,7 +185,18 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
           icon: { type: 'class', value: 'i-ri-file-copy-line' },
           payload: { text: payload.primaryValue }
         }
-      ])
+      ]
+
+      if (isQrSvgPayload(payload)) {
+        actions.push({
+          id: PREVIEW_SAVE_QR_SVG_ACTION_ID,
+          type: 'execute',
+          label: '保存 SVG 到临时目录',
+          icon: { type: 'class', value: 'i-ri-save-line' }
+        })
+      }
+
+      builder.setActions(actions)
     }
 
     if (payload.title) {
@@ -191,6 +211,35 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     const custom = item.render.custom
     if (custom?.type !== 'vue') return undefined
     return custom.data as PreviewCardPayload | undefined
+  }
+
+  private async saveQrSvg(
+    payload: PreviewCardPayload | undefined,
+    query: TuffQuery
+  ): Promise<void> {
+    if (!isQrSvgPayload(payload)) return
+
+    const svg = extractQrSvg(payload)
+    if (!svg) return
+
+    const outputDir = path.join(app.getPath('temp'), 'tuff-quickops')
+    await mkdir(outputDir, { recursive: true })
+    const filePath = path.join(outputDir, `qr-code-${crypto.randomUUID()}.svg`)
+    await writeFile(filePath, svg, { flag: 'wx' })
+    clipboard.writeText(filePath)
+
+    try {
+      await this.recordHistory(
+        {
+          ...payload,
+          primaryValue: filePath,
+          primaryLabel: 'SVG 文件路径'
+        },
+        query
+      )
+    } catch (error) {
+      previewLog.error('Failed to record QR SVG save history', { error })
+    }
   }
 
   private withQuickOpsClipboardInput(query: TuffQuery): TuffQuery {
@@ -242,5 +291,23 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     } else {
       previewLog.warn('Preview history save returned null')
     }
+  }
+}
+
+function isQrSvgPayload(payload: PreviewCardPayload | undefined): payload is PreviewCardPayload {
+  return payload?.meta?.quickOps?.render?.kind === 'qr-code-svg'
+}
+
+function extractQrSvg(payload: PreviewCardPayload): string | null {
+  const render = payload.meta?.quickOps?.render
+  const dataUrl = typeof render?.dataUrl === 'string' ? render.dataUrl : payload.primaryValue
+  const prefix = 'data:image/svg+xml;charset=utf-8,'
+  if (!dataUrl.startsWith(prefix)) return null
+
+  try {
+    const svg = decodeURIComponent(dataUrl.slice(prefix.length))
+    return svg.startsWith('<svg ') ? svg : null
+  } catch {
+    return null
   }
 }

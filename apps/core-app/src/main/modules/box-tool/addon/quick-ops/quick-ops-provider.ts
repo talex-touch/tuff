@@ -27,7 +27,7 @@ import {
   resolveSoa,
   resolveTxt
 } from 'node:dns/promises'
-import { mkdir, readdir, readFile, stat, statfs, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, statfs, writeFile } from 'node:fs/promises'
 import { createServer, isIP } from 'node:net'
 import {
   cpus,
@@ -104,6 +104,13 @@ interface QuickOpsActionMeta {
   screenMode?: QuickOpsScreenCleanMode
 }
 
+interface QuickOpsFileExecuteMeta {
+  operation?: string
+  sourcePath?: string
+  targetDirectory?: string
+  targetPath?: string
+}
+
 interface QuickOpsLocalIpInfo {
   name: string
   family: string
@@ -177,6 +184,18 @@ interface QuickOpsTempTextFileInfo {
 interface QuickOpsTempDirectoryInfo {
   path: string
   directoryName: string
+}
+
+interface QuickOpsRecentDownloadInfo {
+  path: string
+  fileName: string
+  size: number
+  modifiedAt: number
+}
+
+interface QuickOpsRecentDownloadMoveInfo extends QuickOpsRecentDownloadInfo {
+  targetDirectory: string
+  targetPath: string
 }
 
 interface QuickOpsFilePathInfo {
@@ -468,15 +487,39 @@ const SCREEN_CLEAN_KEYWORDS = [
   'wipe screen',
   'black clean screen',
   'white clean screen',
+  'solid color screen',
+  'screen color test',
+  'screen test',
+  'dead pixel test',
+  'red screen test',
+  'green screen test',
+  'blue screen test',
   '清洁屏幕',
   '擦屏幕',
   '屏幕清洁',
   '黑色清洁屏幕',
   '白色清洁屏幕',
   '白底清洁屏幕',
-  '黑底清洁屏幕'
+  '黑底清洁屏幕',
+  '纯色屏幕',
+  '屏幕纯色',
+  '屏幕测试',
+  '坏点测试',
+  '红色屏幕测试',
+  '绿色屏幕测试',
+  '蓝色屏幕测试'
 ]
 const SCREEN_CLEAN_WHITE_KEYWORDS = ['white', 'light', '白色', '白底']
+const SCREEN_COLOR_TEST_KEYWORDS = [
+  'solid color screen',
+  'screen color test',
+  'screen test',
+  'dead pixel test',
+  '纯色屏幕',
+  '屏幕纯色',
+  '屏幕测试',
+  '坏点测试'
+]
 const SCREEN_CLEAN_STOP_KEYWORDS = [
   'stop clean screen',
   'stop screen clean',
@@ -654,6 +697,28 @@ const COMMON_DIRECTORY_KEYWORDS = [
   '应用数据目录',
   '打开日志',
   '日志目录'
+]
+const RECENT_DOWNLOAD_KEYWORDS = [
+  'recent download',
+  'latest download',
+  'last download',
+  'recent downloads',
+  'latest downloads',
+  '最近下载',
+  '最新下载',
+  '最近下载文件',
+  '最新下载文件',
+  '打开最近下载',
+  '打开最新下载'
+]
+const MOVE_RECENT_DOWNLOAD_KEYWORDS = [
+  'move recent download',
+  'move latest download',
+  'move last download',
+  '移动最近下载',
+  '移动最新下载',
+  '移动最近下载文件',
+  '移动最新下载文件'
 ]
 const TUFF_DIAGNOSTICS_KEYWORDS = [
   'tuff diagnostics',
@@ -839,9 +904,17 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
-    const meta = (args.item.meta?.extension as { quickOps?: QuickOpsActionMeta } | undefined)
-      ?.quickOps
+    const meta = (
+      args.item.meta?.extension as
+        | { quickOps?: QuickOpsActionMeta & QuickOpsFileExecuteMeta }
+        | undefined
+    )?.quickOps
     if (!meta) return null
+
+    if (meta.operation === 'recent-download-move') {
+      await executeRecentDownloadMove(meta)
+      return null
+    }
 
     switch (meta.action) {
       case 'keep-awake-start':
@@ -1032,6 +1105,14 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
 
     if (matchesKeyword(text, TEMP_DIRECTORY_KEYWORDS)) {
       return [await this.buildTempDirectoryResultItem(rawText)]
+    }
+
+    if (matchesKeyword(text, MOVE_RECENT_DOWNLOAD_KEYWORDS)) {
+      return [await this.buildRecentDownloadMoveResultItem(rawText)]
+    }
+
+    if (matchesKeyword(text, RECENT_DOWNLOAD_KEYWORDS)) {
+      return [await this.buildRecentDownloadResultItem()]
     }
 
     if (matchesKeyword(text, COMMON_DIRECTORY_KEYWORDS)) {
@@ -1937,6 +2018,180 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
             riskLevel: 'safe',
             directoryId: info.id,
             path: info.path
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildRecentDownloadResultItem(): Promise<TuffItem> {
+    const result = await findRecentDownloadFile()
+    if ('degradedReason' in result) {
+      return this.buildRecentDownloadUnavailableItem(result.degradedReason, result.message)
+    }
+
+    return this.buildRecentDownloadItem(result)
+  }
+
+  private async buildRecentDownloadMoveResultItem(rawText: string): Promise<TuffItem> {
+    const targetDirectory = stripMoveRecentDownloadCommand(rawText)
+    if (!targetDirectory) {
+      return this.buildRecentDownloadMoveUnavailableItem(
+        'recent-download-move-missing-target',
+        '请输入目标目录，例如 move recent download to "/target/folder"'
+      )
+    }
+
+    const result = await prepareRecentDownloadMove(targetDirectory)
+    if ('degradedReason' in result) {
+      return this.buildRecentDownloadMoveUnavailableItem(result.degradedReason, result.message)
+    }
+
+    return this.buildRecentDownloadMoveItem(result)
+  }
+
+  private buildRecentDownloadItem(info: QuickOpsRecentDownloadInfo): TuffItem {
+    const folderPath = path.dirname(info.path)
+    return new TuffItemBuilder(`quick-ops:recent-download:${info.path}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`最近下载 ${info.fileName}`)
+      .setSubtitle(
+        `QuickOps Files · ${formatFileSize(info.size)} · ${new Date(info.modifiedAt).toLocaleString()}`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-download' })
+      .setActions([
+        {
+          id: 'quick-ops-open-recent-download',
+          type: 'open',
+          label: '打开文件',
+          primary: true,
+          payload: {
+            path: info.path
+          }
+        },
+        {
+          id: 'quick-ops-open-recent-download-folder',
+          type: 'open',
+          label: '打开所在文件夹',
+          payload: {
+            path: folderPath
+          }
+        },
+        {
+          id: 'quick-ops-copy-recent-download-path',
+          type: 'copy',
+          label: '复制文件路径',
+          payload: {
+            text: info.path
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'recent-download',
+            riskLevel: 'safe',
+            path: info.path,
+            size: info.size,
+            modifiedAt: info.modifiedAt
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildRecentDownloadMoveItem(info: QuickOpsRecentDownloadMoveInfo): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:recent-download:move:${info.path}:${info.targetPath}`,
+      this.type,
+      this.id
+    )
+      .setKind('action')
+      .setTitle(`移动最近下载 ${info.fileName}`)
+      .setSubtitle(`QuickOps Files · 移动到 ${info.targetDirectory}`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-move' })
+      .setActions([
+        {
+          id: 'quick-ops-move-recent-download',
+          type: 'execute',
+          label: '确认移动文件',
+          primary: true,
+          confirm: {
+            title: '移动最近下载文件',
+            message: `将 ${info.path} 移动到 ${info.targetPath}`,
+            danger: true
+          }
+        },
+        {
+          id: 'quick-ops-copy-recent-download-move-target',
+          type: 'copy',
+          label: '复制目标路径',
+          payload: {
+            text: info.targetPath
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'recent-download-move',
+            riskLevel: 'dangerous',
+            sourcePath: info.path,
+            targetDirectory: info.targetDirectory,
+            targetPath: info.targetPath,
+            size: info.size,
+            modifiedAt: info.modifiedAt
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildRecentDownloadMoveUnavailableItem(
+    degradedReason: string,
+    message: string
+  ): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:recent-download:move:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法移动最近下载文件')
+      .setSubtitle(`QuickOps Files · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-move' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'recent-download-move',
+            riskLevel: 'dangerous',
+            degradedReason
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildRecentDownloadUnavailableItem(degradedReason: string, message: string): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:recent-download:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('未找到最近下载文件')
+      .setSubtitle(`QuickOps Files · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-download' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'recent-download',
+            riskLevel: 'safe',
+            degradedReason
           }
         }
       })
@@ -3143,6 +3398,232 @@ export function resolveCommonDirectory(text: string): QuickOpsCommonDirectoryInf
   }
 }
 
+export async function findRecentDownloadFile(): Promise<
+  QuickOpsRecentDownloadInfo | QuickOpsDegradedResult
+> {
+  const downloadsPath = app.getPath('downloads')
+  try {
+    const entries = await readdir(downloadsPath, { withFileTypes: true })
+    const files: QuickOpsRecentDownloadInfo[] = []
+
+    for (const entry of entries) {
+      if (!entry.isFile()) continue
+
+      const filePath = path.join(downloadsPath, entry.name)
+      const fileInfo = await stat(filePath)
+      if (!fileInfo.isFile()) continue
+
+      files.push({
+        path: filePath,
+        fileName: entry.name,
+        size: fileInfo.size,
+        modifiedAt: fileInfo.mtimeMs
+      })
+    }
+
+    files.sort((left, right) => right.modifiedAt - left.modifiedAt)
+    const latest = files[0]
+    if (!latest) {
+      return {
+        degradedReason: 'recent-download-empty',
+        message: 'Downloads 目录没有可打开的普通文件'
+      }
+    }
+
+    return latest
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'EACCES' || code === 'EPERM'
+          ? 'recent-download-permission-denied'
+          : 'recent-download-read-failed',
+      message:
+        code === 'EACCES' || code === 'EPERM'
+          ? '没有权限读取 Downloads 目录'
+          : '无法读取 Downloads 目录'
+    }
+  }
+}
+
+export async function prepareRecentDownloadMove(
+  targetDirectory: string
+): Promise<QuickOpsRecentDownloadMoveInfo | QuickOpsDegradedResult> {
+  const normalizedTargetDirectory = targetDirectory.trim()
+  if (!normalizedTargetDirectory || !path.isAbsolute(normalizedTargetDirectory)) {
+    return {
+      degradedReason: 'recent-download-move-invalid-target',
+      message: '目标目录必须是绝对路径'
+    }
+  }
+
+  const latest = await findRecentDownloadFile()
+  if ('degradedReason' in latest) return latest
+
+  try {
+    const directoryInfo = await stat(normalizedTargetDirectory)
+    if (!directoryInfo.isDirectory()) {
+      return {
+        degradedReason: 'recent-download-move-target-not-directory',
+        message: '目标路径不是目录'
+      }
+    }
+
+    const targetPath = path.join(normalizedTargetDirectory, latest.fileName)
+    try {
+      await stat(targetPath)
+      return {
+        degradedReason: 'recent-download-move-target-exists',
+        message: '目标目录中已存在同名文件'
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        return {
+          degradedReason: 'recent-download-move-target-check-failed',
+          message: '无法检查目标路径'
+        }
+      }
+    }
+
+    return {
+      ...latest,
+      targetDirectory: normalizedTargetDirectory,
+      targetPath
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'ENOENT'
+          ? 'recent-download-move-target-missing'
+          : code === 'EACCES' || code === 'EPERM'
+            ? 'recent-download-move-target-permission-denied'
+            : 'recent-download-move-target-read-failed',
+      message:
+        code === 'ENOENT'
+          ? '目标目录不存在'
+          : code === 'EACCES' || code === 'EPERM'
+            ? '没有权限读取目标目录'
+            : '无法读取目标目录'
+    }
+  }
+}
+
+export async function moveRecentDownloadFile(
+  sourcePath: string,
+  targetPath: string
+): Promise<{ path: string; targetPath: string } | QuickOpsDegradedResult> {
+  if (!sourcePath || !targetPath || !path.isAbsolute(sourcePath) || !path.isAbsolute(targetPath)) {
+    return {
+      degradedReason: 'recent-download-move-invalid-path',
+      message: '移动路径无效'
+    }
+  }
+
+  if (!isPathInsideDirectory(sourcePath, app.getPath('downloads'))) {
+    return {
+      degradedReason: 'recent-download-move-source-outside-downloads',
+      message: '源文件不在 Downloads 目录内'
+    }
+  }
+
+  try {
+    const sourceInfo = await stat(sourcePath)
+    if (!sourceInfo.isFile()) {
+      return {
+        degradedReason: 'recent-download-move-source-not-file',
+        message: '源路径不是普通文件'
+      }
+    }
+
+    const targetDirectory = path.dirname(targetPath)
+    const targetDirectoryInfo = await stat(targetDirectory)
+    if (!targetDirectoryInfo.isDirectory()) {
+      return {
+        degradedReason: 'recent-download-move-target-not-directory',
+        message: '目标路径不是目录'
+      }
+    }
+
+    try {
+      await stat(targetPath)
+      return {
+        degradedReason: 'recent-download-move-target-exists',
+        message: '目标目录中已存在同名文件'
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        return {
+          degradedReason: 'recent-download-move-target-check-failed',
+          message: '无法检查目标路径'
+        }
+      }
+    }
+
+    await rename(sourcePath, targetPath)
+    return {
+      path: sourcePath,
+      targetPath
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'ENOENT'
+          ? 'recent-download-move-source-missing'
+          : code === 'EACCES' || code === 'EPERM'
+            ? 'recent-download-move-permission-denied'
+            : 'recent-download-move-failed',
+      message:
+        code === 'ENOENT'
+          ? '源文件不存在'
+          : code === 'EACCES' || code === 'EPERM'
+            ? '没有权限移动文件'
+            : '移动文件失败'
+    }
+  }
+}
+
+function isPathInsideDirectory(filePath: string, directoryPath: string): boolean {
+  const relative = path.relative(directoryPath, filePath)
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+async function executeRecentDownloadMove(meta: QuickOpsFileExecuteMeta): Promise<void> {
+  const result = await moveRecentDownloadFile(meta.sourcePath ?? '', meta.targetPath ?? '')
+  if ('degradedReason' in result) {
+    notificationModule.showInternalSystemNotification({
+      id: `quick-ops:recent-download-move:${Date.now()}`,
+      title: 'QuickOps 移动失败',
+      message: result.message,
+      level: 'warning',
+      system: { silent: false },
+      meta: {
+        quickOps: {
+          operation: 'recent-download-move',
+          degradedReason: result.degradedReason
+        }
+      }
+    })
+    return
+  }
+
+  notificationModule.showInternalSystemNotification({
+    id: `quick-ops:recent-download-move:${Date.now()}`,
+    title: 'QuickOps 已移动文件',
+    message: `${path.basename(result.path)} 已移动到 ${result.targetPath}`,
+    level: 'success',
+    system: { silent: false },
+    meta: {
+      quickOps: {
+        operation: 'recent-download-move',
+        sourcePath: result.path,
+        targetPath: result.targetPath
+      }
+    }
+  })
+}
+
 export function createDiagnosticsInfo(settings: QuickOpsResolvedSettings): QuickOpsDiagnosticsInfo {
   const networkInfo = createNetworkStatusInfo()
   return {
@@ -4038,6 +4519,21 @@ function stripTempDirectoryCommand(rawText: string): string {
   return stripCommandSeparators(text.slice(match[0].length))
 }
 
+function stripMoveRecentDownloadCommand(rawText: string): string {
+  const text = rawText.trim()
+  const moveRecentDownloadCommandPattern =
+    /^(?:move\s+(?:recent|latest|last)\s+downloads?|移动(?:最近|最新)下载(?:文件)?)(?=\s|:|：|-|到|至|$)/i
+  const match = moveRecentDownloadCommandPattern.exec(text)
+  if (!match) return ''
+
+  return stripCommandSeparators(
+    text
+      .slice(match[0].length)
+      .trim()
+      .replace(/^(?:to|into|到|至)\s*/i, '')
+  )
+}
+
 function stripCommandSeparators(value: string): string {
   const stripped = value.replace(/^(?::|：|-|->)?\s*/, '').trim()
   if (
@@ -4334,8 +4830,12 @@ function parseScreenCleanMode(
   text: string,
   defaultMode: QuickOpsScreenCleanMode
 ): QuickOpsScreenCleanMode {
+  if (matchesKeyword(text, ['red', '红色', '红屏'])) return 'red'
+  if (matchesKeyword(text, ['green', '绿色', '绿屏'])) return 'green'
+  if (matchesKeyword(text, ['blue', '蓝色', '蓝屏'])) return 'blue'
   if (matchesKeyword(text, SCREEN_CLEAN_WHITE_KEYWORDS)) return 'white'
   if (matchesKeyword(text, ['black', 'dark', '黑色', '黑底'])) return 'black'
+  if (matchesKeyword(text, SCREEN_COLOR_TEST_KEYWORDS)) return 'red'
   return defaultMode
 }
 
@@ -4633,7 +5133,7 @@ function getActionTitle(parsed: ParsedQuickOpsQuery): string {
     case 'pomodoro-stop':
       return '停止番茄钟'
     case 'screen-clean-start':
-      return `${screenMode === 'white' ? '白底' : '黑底'}清洁屏幕 ${formatDuration(durationMs ?? DEFAULT_SCREEN_CLEAN_DURATION_MS)}`
+      return `${getScreenModeLabel(screenMode ?? 'black')} ${formatDuration(durationMs ?? DEFAULT_SCREEN_CLEAN_DURATION_MS)}`
     case 'screen-clean-stop':
       return '退出清洁屏幕'
     case 'stopwatch-start':
@@ -4684,7 +5184,7 @@ function getActionSubtitle(parsed: ParsedQuickOpsQuery): string {
     case 'pomodoro-stop':
       return 'QuickOps Pomodoro · 停止当前番茄钟'
     case 'screen-clean-start':
-      return `QuickOps Screen · 打开${screenMode === 'white' ? '白底' : '黑底'}全屏遮罩，到期自动退出`
+      return `QuickOps Screen · 打开${getScreenModeSubtitle(screenMode ?? 'black')}，到期自动退出`
     case 'screen-clean-stop':
       return 'QuickOps Screen · 关闭当前清洁屏幕遮罩'
     case 'stopwatch-start':
@@ -4707,6 +5207,33 @@ function getActionIcon(action: QuickOpsAction): string {
   if (action.startsWith('pomodoro')) return 'i-carbon-timer'
   if (action.startsWith('screen-clean')) return 'i-carbon-screen'
   return 'i-carbon-timer'
+}
+
+function getScreenModeLabel(screenMode: QuickOpsScreenCleanMode): string {
+  switch (screenMode) {
+    case 'white':
+      return '白底清洁屏幕'
+    case 'red':
+      return '红色屏幕测试'
+    case 'green':
+      return '绿色屏幕测试'
+    case 'blue':
+      return '蓝色屏幕测试'
+    case 'black':
+      return '黑底清洁屏幕'
+  }
+}
+
+function getScreenModeSubtitle(screenMode: QuickOpsScreenCleanMode): string {
+  switch (screenMode) {
+    case 'red':
+    case 'green':
+    case 'blue':
+      return `${getScreenModeLabel(screenMode)}全屏纯色遮罩`
+    case 'white':
+    case 'black':
+      return `${screenMode === 'white' ? '白底' : '黑底'}全屏遮罩`
+  }
 }
 
 function getSessionRemainingMs(session: QuickOpsSession): number {

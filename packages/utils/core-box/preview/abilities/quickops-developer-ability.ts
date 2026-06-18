@@ -18,6 +18,7 @@ type QuickOpsOperation =
   | "date-convert"
   | "uuid-v4"
   | "short-id"
+  | "qr-code"
   | "jwt-decode"
   | "regex-test"
   | "markdown-table-format"
@@ -60,6 +61,7 @@ const OPERATION_LABELS: Record<QuickOpsOperation, string> = {
   "date-convert": "日期 / 时区转换",
   "uuid-v4": "UUID v4 生成",
   "short-id": "短 ID 生成",
+  "qr-code": "QR Code 生成",
   "jwt-decode": "JWT 解码",
   "regex-test": "Regex 测试",
   "markdown-table-format": "Markdown 表格整理",
@@ -84,6 +86,16 @@ const MAX_REGEX_TARGET_LENGTH = 2000;
 const MAX_REGEX_MATCHES = 20;
 const MAX_TABLE_ROWS = 100;
 const MAX_TABLE_COLUMNS = 20;
+const MAX_QR_CODE_BYTE_LENGTH = 134;
+const QR_ECC_LEVEL = "L";
+const QR_VERSIONS = [
+  { version: 1, size: 21, blockCount: 1, dataCodewordsPerBlock: 19, eccCodewordsPerBlock: 7 },
+  { version: 2, size: 25, blockCount: 1, dataCodewordsPerBlock: 34, eccCodewordsPerBlock: 10 },
+  { version: 3, size: 29, blockCount: 1, dataCodewordsPerBlock: 55, eccCodewordsPerBlock: 15 },
+  { version: 4, size: 33, blockCount: 1, dataCodewordsPerBlock: 80, eccCodewordsPerBlock: 20 },
+  { version: 5, size: 37, blockCount: 1, dataCodewordsPerBlock: 108, eccCodewordsPerBlock: 26 },
+  { version: 6, size: 41, blockCount: 2, dataCodewordsPerBlock: 68, eccCodewordsPerBlock: 18 },
+] as const;
 const UTC_OFFSET_PATTERN = /\b(?:UTC|GMT)\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?\b/i;
 
 export class QuickOpsDeveloperAbility extends BasePreviewAbility {
@@ -94,7 +106,7 @@ export class QuickOpsDeveloperAbility extends BasePreviewAbility {
     input: {
       maxLength: 5000,
       syntax:
-        "QuickOps developer commands: json, url encode/decode, base64 encode/decode, jwt decode, regex test, markdown table, csv to markdown, markdown to csv, timestamp, date/timezone, uuid, short id, case upper/lower/camel/snake/kebab",
+        "QuickOps developer commands: json, url encode/decode, base64 encode/decode, jwt decode, regex test, markdown table, csv to markdown, markdown to csv, timestamp, date/timezone, uuid, short id, qr code, case upper/lower/camel/snake/kebab",
       notes: "Pure TypeScript transforms only; no network, no dynamic code execution.",
     },
     dependencies: ["parser"],
@@ -241,6 +253,9 @@ function parseCommandText(text: string): { operation: QuickOpsOperation; input: 
 
   const shortId = parseShortIdCommand(normalized);
   if (shortId) return shortId;
+
+  const qrCode = parseQrCodeCommand(normalized);
+  if (qrCode) return qrCode;
 
   const caseConvert = parseCaseCommand(normalized);
   if (caseConvert) return caseConvert;
@@ -486,6 +501,19 @@ function parseShortIdCommand(text: string): { operation: QuickOpsOperation; inpu
   };
 }
 
+function parseQrCodeCommand(text: string): { operation: QuickOpsOperation; input: string } | null {
+  const prefixMatch = new RegExp(
+    `^(qr\\s*code|qrcode|qr|generate\\s+qr\\s*code|生成\\s*二维码|二维码)${COMMAND_END}`,
+    "i",
+  ).exec(text);
+  if (!prefixMatch) return null;
+
+  return {
+    operation: "qr-code",
+    input: stripCommandInput(text, prefixMatch[0].length),
+  };
+}
+
 function parseCaseCommand(text: string): { operation: QuickOpsOperation; input: string } | null {
   const prefixMatch = new RegExp(
     `^(case|text\\s+case|convert\\s+case|大小写|命名转换|转换命名)${COMMAND_END}`,
@@ -578,6 +606,8 @@ function executeQuickOpsCommand(parsed: ParsedQuickOpsCommand): PreviewCardPaylo
       return buildUuidPayload(parsed);
     case "short-id":
       return buildShortIdPayload(parsed);
+    case "qr-code":
+      return buildQrCodePayload(parsed);
     case "case-upper":
     case "case-lower":
     case "case-camel":
@@ -1137,6 +1167,386 @@ function buildShortIdPayload(parsed: ParsedQuickOpsCommand): PreviewCardPayload 
     secondaryLabel: "长度",
     secondaryValue: length.toString(),
   });
+}
+
+function buildQrCodePayload(parsed: ParsedQuickOpsCommand): PreviewCardPayload {
+  const input = parsed.input.trim();
+  if (!input) return buildErrorPayload(parsed, "QR Code input is required");
+
+  const encoded = new TextEncoder().encode(input);
+  if (encoded.length > MAX_QR_CODE_BYTE_LENGTH) {
+    return buildErrorPayload(
+      parsed,
+      `QR Code input must be ${MAX_QR_CODE_BYTE_LENGTH} bytes or fewer`,
+    );
+  }
+
+  const qr = createQrCodeSvg(encoded);
+  if (!qr) return buildErrorPayload(parsed, "QR Code input is too large for local preview");
+
+  return buildSimplePayload(parsed, qr.dataUrl, {
+    primaryLabel: "SVG Data URL",
+    secondaryLabel: "版本",
+    secondaryValue: `v${qr.version}-${QR_ECC_LEVEL}`,
+    description: "本地生成 SVG QR Code，不上传内容。",
+    sections: [
+      {
+        rows: [
+          { label: "输入来源", value: parsed.inputSource === "clipboard" ? "剪贴板" : "CoreBox 输入" },
+          { label: "字节数", value: encoded.length.toString() },
+          { label: "尺寸", value: `${qr.size}x${qr.size}` },
+          { label: "SVG", value: qr.svg, copyable: true },
+        ],
+      },
+    ],
+    meta: {
+      quickOps: {
+        category: "developer",
+        operation: parsed.operation,
+        inputSource: parsed.inputSource,
+        inputLength: parsed.input.length,
+        byteLength: encoded.length,
+        qrVersion: qr.version,
+        qrEccLevel: QR_ECC_LEVEL,
+        qrSize: qr.size,
+        render: {
+          kind: "qr-code-svg",
+          dataUrl: qr.dataUrl,
+        },
+      },
+    },
+  });
+}
+
+function createQrCodeSvg(data: Uint8Array): {
+  version: number;
+  size: number;
+  svg: string;
+  dataUrl: string;
+} | null {
+  const version = QR_VERSIONS.find((item) => getQrBitLength(data.length) <= getQrDataCodewordCount(item) * 8);
+  if (!version) return null;
+
+  const modules = createEmptyQrModules(version.size);
+  drawQrFunctionPatterns(modules);
+  const dataCodewords = buildQrDataCodewords(data, getQrDataCodewordCount(version));
+  const codewords = buildQrFinalCodewords(dataCodewords, version);
+  drawQrDataCodewords(modules, codewords);
+
+  const darkModules = modules.map((row) => row.map((module) => !!module.dark));
+  const svg = renderQrSvg(darkModules, 4);
+  return {
+    version: version.version,
+    size: version.size,
+    svg,
+    dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+  };
+}
+
+function getQrBitLength(byteLength: number): number {
+  return 4 + 8 + byteLength * 8;
+}
+
+function getQrDataCodewordCount(version: (typeof QR_VERSIONS)[number]): number {
+  return version.blockCount * version.dataCodewordsPerBlock;
+}
+
+function createEmptyQrModules(size: number): Array<Array<{ dark: boolean; reserved: boolean }>> {
+  return Array.from({ length: size }, () =>
+    Array.from({ length: size }, () => ({ dark: false, reserved: false })),
+  );
+}
+
+function drawQrFunctionPatterns(modules: Array<Array<{ dark: boolean; reserved: boolean }>>): void {
+  const size = modules.length;
+  drawFinderPattern(modules, 0, 0);
+  drawFinderPattern(modules, size - 7, 0);
+  drawFinderPattern(modules, 0, size - 7);
+  drawAlignmentPatterns(modules);
+
+  for (let index = 8; index < size - 8; index += 1) {
+    setQrModule(modules, 6, index, index % 2 === 0, true);
+    setQrModule(modules, index, 6, index % 2 === 0, true);
+  }
+
+  setQrModule(modules, 8, size - 8, true, true);
+  reserveQrFormatAreas(modules);
+}
+
+function drawFinderPattern(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  left: number,
+  top: number,
+): void {
+  for (let y = -1; y <= 7; y += 1) {
+    for (let x = -1; x <= 7; x += 1) {
+      const row = top + y;
+      const column = left + x;
+      if (!isQrCoordinateInBounds(modules, column, row)) continue;
+
+      const inPattern = x >= 0 && x <= 6 && y >= 0 && y <= 6;
+      const dark =
+        inPattern &&
+        (x === 0 || x === 6 || y === 0 || y === 6 || (x >= 2 && x <= 4 && y >= 2 && y <= 4));
+      setQrModule(modules, column, row, dark, true);
+    }
+  }
+}
+
+function drawAlignmentPatterns(modules: Array<Array<{ dark: boolean; reserved: boolean }>>): void {
+  const center = modules.length - 7;
+  if (center <= 14) return;
+
+  drawAlignmentPattern(modules, center, center);
+}
+
+function drawAlignmentPattern(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  centerColumn: number,
+  centerRow: number,
+): void {
+  for (let y = -2; y <= 2; y += 1) {
+    for (let x = -2; x <= 2; x += 1) {
+      const distance = Math.max(Math.abs(x), Math.abs(y));
+      setQrModule(modules, centerColumn + x, centerRow + y, distance !== 1, true);
+    }
+  }
+}
+
+function reserveQrFormatAreas(modules: Array<Array<{ dark: boolean; reserved: boolean }>>): void {
+  const size = modules.length;
+  for (let index = 0; index < 9; index += 1) {
+    if (index !== 6) {
+      reserveQrModule(modules, 8, index);
+      reserveQrModule(modules, index, 8);
+    }
+  }
+  for (let index = 0; index < 8; index += 1) {
+    reserveQrModule(modules, size - 1 - index, 8);
+    reserveQrModule(modules, 8, size - 1 - index);
+  }
+}
+
+function buildQrDataCodewords(data: Uint8Array, dataCodewords: number): number[] {
+  const bits: number[] = [0, 1, 0, 0];
+  appendQrBits(bits, data.length, 8);
+  for (const byte of data) appendQrBits(bits, byte, 8);
+
+  const capacityBits = dataCodewords * 8;
+  appendQrBits(bits, 0, Math.min(4, capacityBits - bits.length));
+  while (bits.length % 8 !== 0) bits.push(0);
+
+  const codewords: number[] = [];
+  for (let index = 0; index < bits.length; index += 8) {
+    codewords.push(bits.slice(index, index + 8).reduce((value, bit) => (value << 1) | bit, 0));
+  }
+
+  let pad = 0xec;
+  while (codewords.length < dataCodewords) {
+    codewords.push(pad);
+    pad = pad === 0xec ? 0x11 : 0xec;
+  }
+  return codewords;
+}
+
+function buildQrFinalCodewords(
+  dataCodewords: number[],
+  version: (typeof QR_VERSIONS)[number],
+): number[] {
+  const dataBlocks = Array.from({ length: version.blockCount }, (_, index) => {
+    const start = index * version.dataCodewordsPerBlock;
+    return dataCodewords.slice(start, start + version.dataCodewordsPerBlock);
+  });
+  const eccBlocks = dataBlocks.map((block) =>
+    computeReedSolomonRemainder(block, version.eccCodewordsPerBlock),
+  );
+
+  return [
+    ...interleaveQrBlocks(dataBlocks, version.dataCodewordsPerBlock),
+    ...interleaveQrBlocks(eccBlocks, version.eccCodewordsPerBlock),
+  ];
+}
+
+function interleaveQrBlocks(blocks: number[][], codewordsPerBlock: number): number[] {
+  const output: number[] = [];
+  for (let codewordIndex = 0; codewordIndex < codewordsPerBlock; codewordIndex += 1) {
+    for (const block of blocks) {
+      output.push(block[codewordIndex] ?? 0);
+    }
+  }
+  return output;
+}
+
+function appendQrBits(bits: number[], value: number, length: number): void {
+  for (let index = length - 1; index >= 0; index -= 1) {
+    bits.push((value >>> index) & 1);
+  }
+}
+
+function computeReedSolomonRemainder(data: number[], degree: number): number[] {
+  const generator = buildReedSolomonGenerator(degree);
+  const result = [...data, ...Array.from({ length: degree }, () => 0)];
+
+  for (let index = 0; index < data.length; index += 1) {
+    const coefficient = result[index];
+    if (coefficient === 0) continue;
+
+    for (let generatorIndex = 0; generatorIndex < generator.length; generatorIndex += 1) {
+      result[index + generatorIndex] ^= reedSolomonMultiply(generator[generatorIndex], coefficient);
+    }
+  }
+
+  return result.slice(result.length - degree);
+}
+
+function buildReedSolomonGenerator(degree: number): number[] {
+  let generator = [1];
+  for (let index = 0; index < degree; index += 1) {
+    generator = reedSolomonMultiplyPoly(generator, [1, reedSolomonExp(index)]);
+  }
+  return generator;
+}
+
+function reedSolomonMultiplyPoly(left: number[], right: number[]): number[] {
+  const result = Array.from({ length: left.length + right.length - 1 }, () => 0);
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
+      result[leftIndex + rightIndex] ^= reedSolomonMultiply(left[leftIndex], right[rightIndex]);
+    }
+  }
+  return result;
+}
+
+function reedSolomonMultiply(left: number, right: number): number {
+  let output = 0;
+  let a = left;
+  let b = right;
+  while (b > 0) {
+    if (b & 1) output ^= a;
+    a <<= 1;
+    if (a & 0x100) a ^= 0x11d;
+    b >>>= 1;
+  }
+  return output;
+}
+
+function reedSolomonExp(power: number): number {
+  let output = 1;
+  for (let index = 0; index < power; index += 1) {
+    output = reedSolomonMultiply(output, 2);
+  }
+  return output;
+}
+
+function drawQrDataCodewords(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  codewords: number[],
+): void {
+  const bits = codewords.flatMap((codeword) =>
+    Array.from({ length: 8 }, (_, index) => (codeword >>> (7 - index)) & 1),
+  );
+  const size = modules.length;
+  let bitIndex = 0;
+  let upwards = true;
+
+  for (let right = size - 1; right >= 1; right -= 2) {
+    if (right === 6) right -= 1;
+
+    for (let vertical = 0; vertical < size; vertical += 1) {
+      const row = upwards ? size - 1 - vertical : vertical;
+      for (let offset = 0; offset < 2; offset += 1) {
+        const column = right - offset;
+        if (modules[row][column].reserved) continue;
+
+        const bit = bits[bitIndex] ?? 0;
+        const dark = bit === 1;
+        setQrModule(modules, column, row, shouldApplyQrMask(column, row) ? !dark : dark, false);
+        bitIndex += 1;
+      }
+    }
+    upwards = !upwards;
+  }
+
+  drawQrFormatBits(modules);
+}
+
+function shouldApplyQrMask(column: number, row: number): boolean {
+  return (column + row) % 2 === 0;
+}
+
+function drawQrFormatBits(modules: Array<Array<{ dark: boolean; reserved: boolean }>>): void {
+  const size = modules.length;
+  const bits = getQrFormatBits();
+  const first = [
+    [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+    [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+  ];
+  const second = [
+    [size - 1, 8], [size - 2, 8], [size - 3, 8], [size - 4, 8],
+    [size - 5, 8], [size - 6, 8], [size - 7, 8], [size - 8, 8],
+    [8, size - 7], [8, size - 6], [8, size - 5], [8, size - 4],
+    [8, size - 3], [8, size - 2], [8, size - 1],
+  ];
+
+  for (let index = 0; index < bits.length; index += 1) {
+    setQrModule(modules, first[index][0], first[index][1], bits[index] === 1, true);
+    setQrModule(modules, second[index][0], second[index][1], bits[index] === 1, true);
+  }
+}
+
+function getQrFormatBits(): number[] {
+  const format = (0b01 << 3) | 0b000;
+  let value = format << 10;
+  const generator = 0b10100110111;
+  for (let bit = 14; bit >= 10; bit -= 1) {
+    if (((value >>> bit) & 1) === 1) value ^= generator << (bit - 10);
+  }
+  const masked = ((format << 10) | value) ^ 0b101010000010010;
+  return Array.from({ length: 15 }, (_, index) => (masked >>> index) & 1);
+}
+
+function renderQrSvg(modules: boolean[][], quietZone: number): string {
+  const size = modules.length;
+  const viewBoxSize = size + quietZone * 2;
+  const rects: string[] = [];
+  for (let row = 0; row < size; row += 1) {
+    for (let column = 0; column < size; column += 1) {
+      if (modules[row][column]) {
+        rects.push(`<rect x="${column + quietZone}" y="${row + quietZone}" width="1" height="1"/>`);
+      }
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxSize} ${viewBoxSize}" shape-rendering="crispEdges"><rect width="${viewBoxSize}" height="${viewBoxSize}" fill="#fff"/><g fill="#000">${rects.join("")}</g></svg>`;
+}
+
+function reserveQrModule(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  column: number,
+  row: number,
+): void {
+  if (!isQrCoordinateInBounds(modules, column, row)) return;
+  modules[row][column].reserved = true;
+}
+
+function setQrModule(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  column: number,
+  row: number,
+  dark: boolean,
+  reserved: boolean,
+): void {
+  if (!isQrCoordinateInBounds(modules, column, row)) return;
+  modules[row][column].dark = dark;
+  modules[row][column].reserved ||= reserved;
+}
+
+function isQrCoordinateInBounds(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  column: number,
+  row: number,
+): boolean {
+  return row >= 0 && row < modules.length && column >= 0 && column < modules.length;
 }
 
 function parseShortIdLength(input: string): number | null {

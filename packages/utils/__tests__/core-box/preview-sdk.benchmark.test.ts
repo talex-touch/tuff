@@ -111,6 +111,12 @@ const benchmarkCases: PreviewBenchmarkCase[] = [
     budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
   },
   {
+    id: "quickops-qr-code",
+    query: { text: "qr code https://tuff.talex.app", inputs: [] },
+    expectedAbilityId: "preview.quickops.developer",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
     id: "quickops-uuid-tail-no-result",
     query: { text: "uuid history", inputs: [] },
     expectNoResult: true,

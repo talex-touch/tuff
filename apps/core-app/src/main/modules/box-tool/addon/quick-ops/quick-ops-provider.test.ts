@@ -309,6 +309,11 @@ function getQuickOpsMeta(item: TuffItem):
       pomodoroMode?: string
       screenMode?: string
       riskLevel?: string
+      category?: string
+      operation?: string
+      sourcePath?: string
+      targetDirectory?: string
+      targetPath?: string
     }
   | undefined {
   return (
@@ -323,6 +328,11 @@ function getQuickOpsMeta(item: TuffItem):
         pomodoroMode?: string
         screenMode?: string
         riskLevel?: string
+        category?: string
+        operation?: string
+        sourcePath?: string
+        targetDirectory?: string
+        targetPath?: string
       }
     }
   )?.quickOps
@@ -2151,6 +2161,235 @@ describe('QuickOpsProvider', () => {
     })
   })
 
+  it('opens the most recent downloaded file with copy-only path actions', async () => {
+    fsMocks.readdir.mockImplementation(async (targetPath: string, options?: unknown) => {
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      return actual.readdir(targetPath, options as Parameters<typeof actual.readdir>[1])
+    })
+    const root = await mkdtemp(path.join(tmpdir(), 'quick-ops-downloads-'))
+    tempDirs.push(root)
+    const downloads = path.join(root, 'Downloads')
+    await mkdir(path.join(downloads, 'folder'), { recursive: true })
+    const oldFile = path.join(downloads, 'old.zip')
+    const latestFile = path.join(downloads, 'latest.dmg')
+    await writeFile(oldFile, 'old')
+    await writeFile(latestFile, 'latest')
+    const oldDate = new Date('2024-01-01T00:00:00Z')
+    const latestDate = new Date('2024-02-01T00:00:00Z')
+    const { utimes } = await import('node:fs/promises')
+    await Promise.all([
+      utimes(oldFile, oldDate, oldDate),
+      utimes(latestFile, latestDate, latestDate)
+    ])
+    electronMocks.getPath.mockImplementation((name: string) =>
+      name === 'downloads' ? downloads : `/mock/${name}`
+    )
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const result = await provider.onSearch(
+      { text: 'recent download', inputs: [] },
+      new AbortController().signal
+    )
+
+    const item = expectFirstItem(result.items)
+    expect(item.kind).toBe('result')
+    expect(item.render.basic?.title).toBe('最近下载 latest.dmg')
+    expect(item.render.basic?.subtitle).toContain('QuickOps Files')
+    expect(item.actions?.[0]).toMatchObject({
+      id: 'quick-ops-open-recent-download',
+      type: 'open',
+      primary: true,
+      payload: {
+        path: latestFile
+      }
+    })
+    expect(item.actions?.[1]).toMatchObject({
+      id: 'quick-ops-open-recent-download-folder',
+      type: 'open',
+      payload: {
+        path: downloads
+      }
+    })
+    expect(item.actions?.[2]).toMatchObject({
+      id: 'quick-ops-copy-recent-download-path',
+      type: 'copy',
+      payload: {
+        text: latestFile
+      }
+    })
+    expect(item.meta?.extension).toMatchObject({
+      quickOps: {
+        category: 'files',
+        operation: 'recent-download',
+        riskLevel: 'safe',
+        path: latestFile,
+        size: 6
+      }
+    })
+
+    const openDownloads = await provider.onSearch(
+      { text: 'open downloads', inputs: [] },
+      new AbortController().signal
+    )
+    expect(getQuickOpsMeta(expectFirstItem(openDownloads.items))).toMatchObject({
+      operation: 'open-common-directory',
+      directoryId: 'downloads',
+      path: downloads
+    })
+  })
+
+  it('moves the most recent downloaded file only through a dangerous confirmed execute action', async () => {
+    fsMocks.readdir.mockImplementation(async (targetPath: string, options?: unknown) => {
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      return actual.readdir(targetPath, options as Parameters<typeof actual.readdir>[1])
+    })
+    const root = await mkdtemp(path.join(tmpdir(), 'quick-ops-download-move-'))
+    tempDirs.push(root)
+    const downloads = path.join(root, 'Downloads')
+    const target = path.join(root, 'Archive')
+    await mkdir(downloads, { recursive: true })
+    await mkdir(target, { recursive: true })
+    const latestFile = path.join(downloads, 'latest.zip')
+    await writeFile(latestFile, 'latest')
+    electronMocks.getPath.mockImplementation((name: string) =>
+      name === 'downloads' ? downloads : `/mock/${name}`
+    )
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const result = await provider.onSearch(
+      { text: `move recent download to "${target}"`, inputs: [] },
+      new AbortController().signal
+    )
+
+    const item = expectFirstItem(result.items)
+    const targetPath = path.join(target, 'latest.zip')
+    expect(item.kind).toBe('action')
+    expect(item.render.basic?.title).toBe('移动最近下载 latest.zip')
+    expect(item.actions?.[0]).toMatchObject({
+      id: 'quick-ops-move-recent-download',
+      type: 'execute',
+      primary: true,
+      confirm: {
+        title: '移动最近下载文件',
+        danger: true
+      }
+    })
+    expect(item.actions?.[0]?.confirm?.message).toContain(targetPath)
+    expect(getQuickOpsMeta(item)).toMatchObject({
+      category: 'files',
+      operation: 'recent-download-move',
+      riskLevel: 'dangerous',
+      sourcePath: latestFile,
+      targetDirectory: target,
+      targetPath
+    })
+
+    await provider.onExecute({
+      item,
+      actionId: 'quick-ops-move-recent-download'
+    } satisfies IExecuteArgs)
+
+    await expect(stat(latestFile)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(targetPath, 'utf8')).toBe('latest')
+    expect(notificationMocks.showInternalSystemNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'QuickOps 已移动文件',
+        level: 'success',
+        meta: {
+          quickOps: expect.objectContaining({
+            operation: 'recent-download-move',
+            sourcePath: latestFile,
+            targetPath
+          })
+        }
+      })
+    )
+  })
+
+  it('degrades recent download move when target is missing or would overwrite a file', async () => {
+    fsMocks.readdir.mockImplementation(async (targetPath: string, options?: unknown) => {
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      return actual.readdir(targetPath, options as Parameters<typeof actual.readdir>[1])
+    })
+    const root = await mkdtemp(path.join(tmpdir(), 'quick-ops-download-move-edge-'))
+    tempDirs.push(root)
+    const downloads = path.join(root, 'Downloads')
+    const target = path.join(root, 'Archive')
+    await mkdir(downloads, { recursive: true })
+    await mkdir(target, { recursive: true })
+    await writeFile(path.join(downloads, 'latest.zip'), 'latest')
+    await writeFile(path.join(target, 'latest.zip'), 'exists')
+    electronMocks.getPath.mockImplementation((name: string) =>
+      name === 'downloads' ? downloads : `/mock/${name}`
+    )
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const overwrite = await provider.onSearch(
+      { text: `移动最近下载到 "${target}"`, inputs: [] },
+      new AbortController().signal
+    )
+
+    expect(expectFirstItem(overwrite.items).meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'recent-download-move',
+        riskLevel: 'dangerous',
+        degradedReason: 'recent-download-move-target-exists'
+      }
+    })
+
+    const missingTarget = await provider.onSearch(
+      { text: `move latest download to "${path.join(root, 'Missing')}"`, inputs: [] },
+      new AbortController().signal
+    )
+
+    const missingItem = expectFirstItem(missingTarget.items)
+    expect(missingItem.kind).toBe('notification')
+    expect(missingItem.render.basic?.title).toBe('无法移动最近下载文件')
+    expect(missingItem.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'recent-download-move',
+        degradedReason: 'recent-download-move-target-missing'
+      }
+    })
+  })
+
+  it('shows degraded recent download results for empty or unreadable downloads folders', async () => {
+    fsMocks.readdir.mockResolvedValue([])
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const empty = await provider.onSearch(
+      { text: '最近下载文件', inputs: [] },
+      new AbortController().signal
+    )
+
+    expect(expectFirstItem(empty.items).meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'recent-download',
+        degradedReason: 'recent-download-empty'
+      }
+    })
+
+    fsMocks.readdir.mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }))
+    const denied = await provider.onSearch(
+      { text: 'latest download', inputs: [] },
+      new AbortController().signal
+    )
+
+    const item = expectFirstItem(denied.items)
+    expect(item.kind).toBe('notification')
+    expect(item.render.basic?.title).toBe('未找到最近下载文件')
+    expect(item.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'recent-download',
+        degradedReason: 'recent-download-permission-denied'
+      }
+    })
+  })
+
   it('resolves app data and logs common directories', async () => {
     electronMocks.getPath.mockImplementation((name: string) => `/quickops/${name}`)
     const { QuickOpsProvider } = await import('./quick-ops-provider')
@@ -3559,13 +3798,70 @@ describe('QuickOpsProvider', () => {
     expect(windows.every((window) => window.screenMode === 'white')).toBe(true)
   })
 
+  it('starts solid color screen test overlays from screen-clean runtime', async () => {
+    const { QuickOpsProvider, QuickOpsSessionManager } = await import('./quick-ops-provider')
+    const { factory, windows } = createWindowHarness()
+    const provider = new QuickOpsProvider(new QuickOpsSessionManager(vi.fn(), factory as never))
+    const result = await provider.onSearch(
+      { text: 'red screen test 20s', inputs: [] },
+      new AbortController().signal
+    )
+
+    const item = expectFirstItem(result.items)
+    expect(getQuickOpsMeta(item)).toEqual({
+      action: 'screen-clean-start',
+      durationMs: 20 * 1000,
+      screenMode: 'red',
+      riskLevel: 'stateful'
+    })
+    expect(item.render.basic?.title).toBe('红色屏幕测试 20秒')
+    expect(item.render.basic?.subtitle).toContain('红色屏幕测试全屏纯色遮罩')
+
+    await provider.onExecute({ item } satisfies IExecuteArgs)
+
+    expect(windows.every((window) => window.screenMode === 'red')).toBe(true)
+  })
+
+  it('defaults generic screen color tests to red and supports Chinese color keywords', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const generic = await provider.onSearch(
+      { text: 'screen color test 15s', inputs: [] },
+      new AbortController().signal
+    )
+    const chinese = await provider.onSearch(
+      { text: '蓝色屏幕测试 15s', inputs: [] },
+      new AbortController().signal
+    )
+
+    expect(getQuickOpsMeta(expectFirstItem(generic.items))).toEqual({
+      action: 'screen-clean-start',
+      durationMs: 15 * 1000,
+      screenMode: 'red',
+      riskLevel: 'stateful'
+    })
+    expect(getQuickOpsMeta(expectFirstItem(chinese.items))).toEqual({
+      action: 'screen-clean-start',
+      durationMs: 15 * 1000,
+      screenMode: 'blue',
+      riskLevel: 'stateful'
+    })
+  })
+
   it('renders screen-clean overlay data URLs with stable visual and exit affordances', async () => {
     const { createScreenCleanOverlayUrl } = await import('./quick-ops-session-manager')
 
     const blackUrl = createScreenCleanOverlayUrl(30_000, 'black')
     const whiteUrl = createScreenCleanOverlayUrl(60_000, 'white')
+    const redUrl = createScreenCleanOverlayUrl(20_000, 'red')
+    const greenUrl = createScreenCleanOverlayUrl(20_000, 'green')
+    const blueUrl = createScreenCleanOverlayUrl(20_000, 'blue')
     const blackHtml = decodeURIComponent(blackUrl.replace('data:text/html;charset=utf-8,', ''))
     const whiteHtml = decodeURIComponent(whiteUrl.replace('data:text/html;charset=utf-8,', ''))
+    const redHtml = decodeURIComponent(redUrl.replace('data:text/html;charset=utf-8,', ''))
+    const greenHtml = decodeURIComponent(greenUrl.replace('data:text/html;charset=utf-8,', ''))
+    const blueHtml = decodeURIComponent(blueUrl.replace('data:text/html;charset=utf-8,', ''))
 
     expect(blackUrl.startsWith('data:text/html;charset=utf-8,')).toBe(true)
     expect(blackHtml).toContain('background: #050505')
@@ -3579,6 +3875,12 @@ describe('QuickOpsProvider', () => {
 
     expect(whiteHtml).toContain('background: #f7f7f2')
     expect(whiteHtml).toContain('QuickOps 白底清洁屏幕 · 1分钟 后自动退出 · 长按 Esc 退出')
+    expect(redHtml).toContain('background: #ff0000')
+    expect(redHtml).toContain('QuickOps 红色屏幕测试 · 20秒 后自动退出 · 长按 Esc 退出')
+    expect(greenHtml).toContain('background: #00ff00')
+    expect(greenHtml).toContain('QuickOps 绿色屏幕测试 · 20秒 后自动退出 · 长按 Esc 退出')
+    expect(blueHtml).toContain('background: #0000ff')
+    expect(blueHtml).toContain('QuickOps 蓝色屏幕测试 · 20秒 后自动退出 · 长按 Esc 退出')
   })
 
   it('closes screen-clean overlays on expiry and manual stop', async () => {
