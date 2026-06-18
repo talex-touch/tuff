@@ -13,6 +13,8 @@ type LightfallUniformLocations = Record<string, WebGLUniformLocation>
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let rafId: number | null = null
 let resizeHandler: (() => void) | null = null
+let pointerMoveHandler: ((event: PointerEvent) => void) | null = null
+let pointerLeaveHandler: (() => void) | null = null
 let webglCleanupHandler: (() => void) | null = null
 
 const appVersion = computed(() => packageJson.value?.version || '')
@@ -56,6 +58,7 @@ void main() {
 precision highp float;
 
 uniform vec3  iResolution;
+uniform vec2  iMouse;
 uniform float iTime;
 
 uniform vec3  uColor0;
@@ -69,6 +72,7 @@ uniform vec3  uColor7;
 uniform int   uColorCount;
 
 uniform vec3  uBgColor;
+uniform vec3  uMouseColor;
 uniform float uSpeed;
 uniform int   uStreakCount;
 uniform float uStreakWidth;
@@ -79,6 +83,9 @@ uniform float uTwinkle;
 uniform float uZoom;
 uniform float uBgGlow;
 uniform float uOpacity;
+uniform float uMouseEnabled;
+uniform float uMouseStrength;
+uniform float uMouseRadius;
 
 varying vec2 vUv;
 
@@ -135,6 +142,14 @@ void mainImage(out vec4 o, vec2 C) {
   vec2 P = vec2(2.0, 1.0) * uv0 - (r / r.x) * vec2(0.0, 1.0);
   vec4 O = vec4(uBgColor * 90.0 * uBgGlow / (1e3 * dot(P, P) + 6.0), 0.0);
 
+  float mGlow = 0.0;
+  if (uMouseEnabled > 0.5) {
+    vec2 mN = (iMouse + iMouse - r) / r.x;
+    float md = length(uv0 - mN);
+    mGlow = exp(-md * md / max(uMouseRadius * uMouseRadius, 1e-4)) * uMouseStrength;
+    O.rgb += uMouseColor * mGlow * 0.25;
+  }
+
   float zr = 5e-4 * uStreakWidth;
   vec2 rr = vec2(max(length(fw), 1e-5));
   float tail = 19.0 / max(uStreakLength, 0.05);
@@ -148,6 +163,7 @@ void mainImage(out vec4 o, vec2 C) {
     float h = fract(8663.0 * ic);
     vec3 col = palette(h);
     float weight = mix(1.5, 1.0 + sin(T + 7.0 * h + 4.0), uTwinkle);
+    weight *= (1.0 + mGlow * 2.0);
     vec2 inner = vec2(length(max(Pp, vec2(-1.0, 0.0))), length(Pp) - zr) - zr;
     vec2 sm = vec2(1.0) - smoothstep(-rr, rr, inner);
     O.rgb += dot(sm, vec2(exp(tail * Pp.y) * 0.38, 1.35)) * col * weight;
@@ -171,6 +187,9 @@ void main() {
   let width = 0
   let height = 0
   let dpr = Math.min(window.devicePixelRatio || 1, 2)
+  let lastFrameTime = 0
+  const mouseTarget: [number, number] = [0, 0]
+  const mouseCurrent: [number, number] = [0, 0]
 
   const hexToRgb = (hex: string): RGB => {
     const color = hex.replace('#', '').padEnd(6, '0')
@@ -229,6 +248,7 @@ void main() {
 
   const uniformNames = [
     'iResolution',
+    'iMouse',
     'iTime',
     'uColor0',
     'uColor1',
@@ -240,6 +260,7 @@ void main() {
     'uColor7',
     'uColorCount',
     'uBgColor',
+    'uMouseColor',
     'uSpeed',
     'uStreakCount',
     'uStreakWidth',
@@ -249,7 +270,10 @@ void main() {
     'uTwinkle',
     'uZoom',
     'uBgGlow',
-    'uOpacity'
+    'uOpacity',
+    'uMouseEnabled',
+    'uMouseStrength',
+    'uMouseRadius'
   ]
   const uniforms: LightfallUniformLocations = {}
   for (const name of uniformNames) {
@@ -290,6 +314,12 @@ void main() {
     backgroundGlowColor[1],
     backgroundGlowColor[2]
   )
+  gl.uniform3f(
+    uniforms.uMouseColor,
+    colorState.average[0],
+    colorState.average[1],
+    colorState.average[2]
+  )
   gl.uniform1f(uniforms.uSpeed, 0.5)
   gl.uniform1i(uniforms.uStreakCount, 2)
   gl.uniform1f(uniforms.uStreakWidth, 1)
@@ -300,10 +330,18 @@ void main() {
   gl.uniform1f(uniforms.uZoom, 3)
   gl.uniform1f(uniforms.uBgGlow, 0)
   gl.uniform1f(uniforms.uOpacity, 0.65)
+  gl.uniform1f(uniforms.uMouseEnabled, 1)
+  gl.uniform1f(uniforms.uMouseStrength, 0.5)
+  gl.uniform1f(uniforms.uMouseRadius, 0.2)
 
   gl.enable(gl.BLEND)
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
   gl.clearColor(0, 0, 0, 0)
+
+  const moveMouseToCenter = () => {
+    mouseTarget[0] = canvas.width * 0.5
+    mouseTarget[1] = canvas.height * 0.5
+  }
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect()
@@ -315,11 +353,24 @@ void main() {
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.useProgram(program)
     gl.uniform3f(uniforms.iResolution, canvas.width, canvas.height, 1)
+    moveMouseToCenter()
+    mouseCurrent[0] = mouseTarget[0]
+    mouseCurrent[1] = mouseTarget[1]
   }
+
+  const host = canvas.parentElement
+  pointerMoveHandler = (event: PointerEvent) => {
+    const rect = canvas.getBoundingClientRect()
+    mouseTarget[0] = (event.clientX - rect.left) * dpr
+    mouseTarget[1] = (rect.height - (event.clientY - rect.top)) * dpr
+  }
+  pointerLeaveHandler = moveMouseToCenter
 
   resize()
   resizeHandler = resize
   window.addEventListener('resize', resize)
+  host?.addEventListener('pointermove', pointerMoveHandler)
+  host?.addEventListener('pointerleave', pointerLeaveHandler)
 
   webglCleanupHandler = () => {
     gl.deleteBuffer(positionBuffer)
@@ -333,12 +384,23 @@ void main() {
       return
     }
 
+    const elapsedSeconds = lastFrameTime
+      ? Math.min(0.05, (frameTime - lastFrameTime) / 1000)
+      : 0.016
+    lastFrameTime = frameTime
+
+    const dampening = 0.15
+    const factor = 1 - Math.exp(-elapsedSeconds / dampening)
+    mouseCurrent[0] += (mouseTarget[0] - mouseCurrent[0]) * factor
+    mouseCurrent[1] += (mouseTarget[1] - mouseCurrent[1]) * factor
+
     gl.clear(gl.COLOR_BUFFER_BIT)
     gl.useProgram(program)
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
     gl.enableVertexAttribArray(positionLocation)
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
     gl.uniform1f(uniforms.iTime, frameTime * 0.001)
+    gl.uniform2f(uniforms.iMouse, mouseCurrent[0], mouseCurrent[1])
     gl.drawArrays(gl.TRIANGLES, 0, 3)
 
     rafId = window.requestAnimationFrame(draw)
@@ -355,6 +417,14 @@ onBeforeUnmount(() => {
   if (resizeHandler) {
     window.removeEventListener('resize', resizeHandler)
     resizeHandler = null
+  }
+  if (pointerMoveHandler) {
+    canvasRef.value?.parentElement?.removeEventListener('pointermove', pointerMoveHandler)
+    pointerMoveHandler = null
+  }
+  if (pointerLeaveHandler) {
+    canvasRef.value?.parentElement?.removeEventListener('pointerleave', pointerLeaveHandler)
+    pointerLeaveHandler = null
   }
   if (webglCleanupHandler) {
     webglCleanupHandler()
