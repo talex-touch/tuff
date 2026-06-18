@@ -227,7 +227,8 @@ describe('PreviewProvider', () => {
   })
 
   it('exposes and executes QR SVG save action through Tuff temp directory', async () => {
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>'
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges"><rect width="8" height="8" fill="#fff"/><g fill="#000"><rect x="1" y="1" width="1" height="1"/><rect x="6" y="6" width="1" height="1"/></g></svg>'
     const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
     const sdk = createSdk()
     vi.mocked(sdk.resolve).mockResolvedValue({
@@ -262,6 +263,12 @@ describe('PreviewProvider', () => {
       label: '保存 SVG 到临时目录',
       icon: { type: 'class', value: 'i-ri-save-line' }
     })
+    expect(item.actions).toContainEqual({
+      id: 'preview-save-qr-png',
+      type: 'execute',
+      label: '保存 PNG 到临时目录',
+      icon: { type: 'class', value: 'i-ri-image-line' }
+    })
 
     await provider.onExecute({
       item,
@@ -280,6 +287,38 @@ describe('PreviewProvider', () => {
     expect(clipboardModuleMock.saveCustomEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         content: savedPath,
+        rawContent: 'qr code https://tuff.talex.app',
+        category: 'preview'
+      })
+    )
+
+    vi.mocked(fsMocks.writeFile).mockClear()
+    vi.mocked(electronMocks.writeText).mockClear()
+    vi.mocked(clipboardModuleMock.saveCustomEntry).mockClear()
+
+    await provider.onExecute({
+      item,
+      searchResult,
+      actionId: 'preview-save-qr-png'
+    } satisfies IExecuteArgs)
+
+    expect(fsMocks.writeFile).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/tuff-quickops\/qr-code-[\w-]+\.png$/),
+      expect.any(Buffer),
+      { flag: 'wx' }
+    )
+    const pngPath = vi.mocked(fsMocks.writeFile).mock.calls[0]?.[0]
+    const png = vi.mocked(fsMocks.writeFile).mock.calls[0]?.[1] as Buffer
+    expect(png.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    )
+    expect(png.subarray(12, 16).toString('ascii')).toBe('IHDR')
+    expect(png.readUInt32BE(16)).toBe(64)
+    expect(png.readUInt32BE(20)).toBe(64)
+    expect(electronMocks.writeText).toHaveBeenCalledWith(pngPath)
+    expect(clipboardModuleMock.saveCustomEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: pngPath,
         rawContent: 'qr code https://tuff.talex.app',
         category: 'preview'
       })
