@@ -1,7 +1,40 @@
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxScroll from '../src/TxScroll.vue'
+
+const betterScrollMock = vi.hoisted(() => {
+  const instances: BetterScrollMock[] = []
+
+  class BetterScrollMock {
+    static use = vi.fn()
+
+    x = 0
+    y = 0
+    maxScrollX = 0
+    maxScrollY = -1
+    refresh = vi.fn()
+    destroy = vi.fn()
+    scrollTo = vi.fn()
+    on = vi.fn()
+
+    constructor() {
+      instances.push(this)
+    }
+  }
+
+  return { BetterScrollMock, instances }
+})
+
+vi.mock('@better-scroll/core', () => ({ default: betterScrollMock.BetterScrollMock }))
+vi.mock('@better-scroll/scroll-bar', () => ({ default: {} }))
+
+afterEach(() => {
+  betterScrollMock.instances.length = 0
+  betterScrollMock.BetterScrollMock.use.mockClear()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 function defineReadonlyNumber(target: HTMLElement, key: string, value: number) {
   Object.defineProperty(target, key, {
@@ -138,5 +171,73 @@ describe('txScroll', () => {
     native.dispatchEvent(touchEvent('touchend', 60, 'changedTouches'))
     await nextTick()
     expect(wrapper.emitted('pulling-down')).toHaveLength(2)
+  })
+
+  it('coalesces BetterScroll refresh requests into one animation frame', async () => {
+    let resizeCallback: ResizeObserverCallback | null = null
+    let mutationCallback: MutationCallback | null = null
+    let rafCallback: FrameRequestCallback | null = null
+
+    vi.stubGlobal(
+      'ResizeObserver',
+      vi.fn((callback: ResizeObserverCallback) => {
+        resizeCallback = callback
+        return { observe: vi.fn(), disconnect: vi.fn() }
+      }),
+    )
+    vi.stubGlobal(
+      'MutationObserver',
+      vi.fn((callback: MutationCallback) => {
+        mutationCallback = callback
+        return { observe: vi.fn(), disconnect: vi.fn() }
+      }),
+    )
+
+    const requestAnimationFrameMock = vi.fn((callback: FrameRequestCallback) => {
+      rafCallback = callback
+      return 1
+    })
+    const cancelAnimationFrameMock = vi.fn()
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock)
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrameMock)
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: requestAnimationFrameMock,
+    })
+    Object.defineProperty(window, 'cancelAnimationFrame', {
+      configurable: true,
+      value: cancelAnimationFrameMock,
+    })
+
+    const wrapper = mount(TxScroll, {
+      props: {
+        nativeAutoFallback: false,
+      },
+    })
+
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const betterScroll = betterScrollMock.instances[0]
+    expect(betterScroll).toBeTruthy()
+
+    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(1)
+    rafCallback?.(0)
+    betterScroll.refresh.mockClear()
+    requestAnimationFrameMock.mockClear()
+    rafCallback = null
+
+    resizeCallback?.([], {} as ResizeObserver)
+    mutationCallback?.([], {} as MutationObserver)
+    resizeCallback?.([], {} as ResizeObserver)
+
+    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(1)
+    expect(betterScroll.refresh).not.toHaveBeenCalled()
+
+    rafCallback?.(16)
+    expect(betterScroll.refresh).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
   })
 })

@@ -63,6 +63,12 @@ const benchmarkCases: PreviewBenchmarkCase[] = [
     budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
   },
   {
+    id: "currency-static",
+    query: { text: "10 USD to CNY", inputs: [] },
+    expectedAbilityId: "preview.currency",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
     id: "percentage",
     query: { text: "80 的 20%", inputs: [] },
     expectedAbilityId: "preview.percent",
@@ -84,6 +90,42 @@ const benchmarkCases: PreviewBenchmarkCase[] = [
     id: "text-stats",
     query: { text: "words hello world", inputs: [] },
     expectedAbilityId: "preview.textstats",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "quickops-regex",
+    query: { text: "regex /hello/i hello world", inputs: [] },
+    expectedAbilityId: "preview.quickops.developer",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "quickops-csv-table",
+    query: { text: "csv to markdown name,role\nBoss,Developer", inputs: [] },
+    expectedAbilityId: "preview.quickops.developer",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "quickops-timezone",
+    query: { text: "timezone 2024-03-09T16:00:00Z UTC+08:00", inputs: [] },
+    expectedAbilityId: "preview.quickops.developer",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "quickops-uuid-tail-no-result",
+    query: { text: "uuid history", inputs: [] },
+    expectNoResult: true,
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "currency-unknown-code-no-result",
+    query: { text: "10 foo to bar", inputs: [] },
+    expectNoResult: true,
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "quickops-regex-missing-literal-no-result",
+    query: { text: "regex hello world", inputs: [] },
+    expectNoResult: true,
     budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
   },
   {

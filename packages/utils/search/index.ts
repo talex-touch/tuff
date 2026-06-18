@@ -4,8 +4,10 @@
  * @module search
  */
 
+export * from './app-search-tokens'
 export * from './feature-matcher'
 export * from './fuzzy-match'
+export * from './search-token-builder'
 export * from './indexing-progress-estimator'
 export * from './indexing-progress-stream'
 export * from './indexing-auto-scan-policy'

@@ -2,7 +2,9 @@ import type { PreviewAbility } from "../types";
 import { AdvancedExpressionAbility } from "./advanced-expression-ability";
 import { BasicExpressionAbility } from "./basic-expression-ability";
 import { ColorPreviewAbility } from "./color-ability";
+import { CurrencyPreviewAbility } from "./currency-ability";
 import { PercentageAbility } from "./percentage-ability";
+import { QuickOpsDeveloperAbility } from "./quickops-developer-ability";
 import { ScientificConstantsAbility } from "./scientific-constants-ability";
 import { TextStatsAbility } from "./text-stats-ability";
 import { TimeDeltaAbility } from "./time-delta-ability";
@@ -14,7 +16,19 @@ export {
   evaluateBasicExpression,
 } from "./basic-expression-ability";
 export { ColorPreviewAbility } from "./color-ability";
+export {
+  CurrencyPreviewAbility,
+  normalizeCurrency,
+  parseCurrencyQuery,
+  type CurrencyRate,
+  type ParsedCurrencyQuery,
+} from "./currency-ability";
 export { PercentageAbility } from "./percentage-ability";
+export {
+  hasQuickOpsDeveloperCommand,
+  QuickOpsDeveloperAbility,
+  parseQuickOpsCommand,
+} from "./quickops-developer-ability";
 export {
   ScientificConstantsAbility,
   findScientificConstant,
@@ -47,6 +61,8 @@ export function createDefaultPurePreviewAbilities(): PreviewAbility[] {
     new ScientificConstantsAbility(),
     new ColorPreviewAbility(),
     new TimeDeltaAbility(),
+    new CurrencyPreviewAbility(),
+    new QuickOpsDeveloperAbility(),
     new PercentageAbility(),
     new TextStatsAbility(),
   ];

@@ -130,7 +130,7 @@ const nativeScrollStyle = computed(() => {
 let bs: BetterScroll | null = null
 let ro: ResizeObserver | null = null
 let mo: MutationObserver | null = null
-let refreshTimer: number | null = null
+let refreshRaf: number | null = null
 const {
   isWheeling,
   getOptions: getWheelOptions,
@@ -163,11 +163,14 @@ function updateScrollAbility() {
 }
 
 function scheduleRefresh() {
-  refreshTimer && window.clearTimeout(refreshTimer)
-  refreshTimer = window.setTimeout(() => {
+  if (refreshRaf !== null)
+    return
+
+  refreshRaf = window.requestAnimationFrame(() => {
+    refreshRaf = null
     bs?.refresh?.()
     updateScrollAbility()
-  }, 16)
+  })
 }
 
 function emitScroll(scrollTop: number, scrollLeft: number) {
@@ -272,8 +275,10 @@ function destroyBetterScroll() {
     mo = null
   }
 
-  refreshTimer && window.clearTimeout(refreshTimer)
-  refreshTimer = null
+  if (refreshRaf !== null) {
+    window.cancelAnimationFrame(refreshRaf)
+    refreshRaf = null
+  }
   if (bs) {
     bs.destroy()
     bs = null
@@ -287,10 +292,7 @@ function setupResizeObserver() {
     return
 
   ro = new ResizeObserver(() => {
-    if (bs) {
-      bs.refresh()
-      updateScrollAbility()
-    }
+    scheduleRefresh()
   })
 
   if (wrapperRef.value)
@@ -555,8 +557,11 @@ watch(
 <style lang="scss" scoped>
 .tx-scroll {
   display: block;
+  position: relative;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .tx-scroll__native {

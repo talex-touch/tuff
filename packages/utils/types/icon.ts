@@ -45,9 +45,9 @@ export interface ITuffIcon {
   color?: string
 
   /**
-   * Icon Colorful (Only for URL type)
-   * @desc This prop defines whether a URL icon should be rendered in colorful mode.
-   * It is only applicable when the icon type is 'url'.
+   * Icon Colorful (Only for URL/file type)
+   * @desc This prop defines whether an addressable SVG icon should preserve source colors.
+   * It is only applicable when the icon type is 'url' or 'file'.
    */
   colorful?: boolean
 

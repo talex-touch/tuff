@@ -222,6 +222,7 @@ export interface CoreBoxClearItemsPayload {
 export interface CoreBoxExecuteRequest {
   item: unknown
   searchResult?: unknown
+  actionId?: string
 }
 
 export interface CoreBoxTogglePinRequest {

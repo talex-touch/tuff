@@ -8,6 +8,7 @@ import type {
   IndexedSourceManifestDescriptor,
   SearchProviderDescriptor,
   SearchProviderManifestDescriptor,
+  FeatureSearchTokenInput,
 } from '../search'
 import type { TuffFooterHints } from '../core-box/tuff/tuff-dsl'
 import type { ITuffIcon } from '../types/icon'
@@ -271,7 +272,7 @@ export interface IPluginFeature {
   /**
    * Internal search tokens generated at runtime for better matching
    */
-  searchTokens?: string[]
+  searchTokens?: FeatureSearchTokenInput[]
   /**
    * Priority of the feature for sorting in search results
    * Higher numbers have higher priority (displayed first)
