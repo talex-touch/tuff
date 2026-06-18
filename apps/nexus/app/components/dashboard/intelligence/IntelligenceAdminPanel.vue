@@ -163,6 +163,12 @@ interface CreditLedgerItem {
 
 // ── State ──
 const activeTab = ref('overview')
+const providersRequested = ref(false)
+const sceneRegistryRequested = ref(false)
+const settingsRequested = ref(false)
+const overviewRequested = ref(false)
+const auditRequested = ref(false)
+const ipBansRequested = ref(false)
 const providers = ref<Provider[]>([])
 const registryProviders = ref<ProviderRegistryRecord[]>([])
 const scenes = ref<SceneRegistryRecord[]>([])
@@ -172,7 +178,7 @@ const settings = ref<Settings>({
   enableCache: false,
   cacheExpiration: 3600,
 })
-const loading = ref(true)
+const loading = ref(false)
 const error = ref<string | null>(null)
 const scenesLoading = ref(false)
 const scenesError = ref<string | null>(null)
@@ -290,6 +296,7 @@ function isFeatureNotFoundError(error: any): boolean {
 
 // ── Fetch data ──
 async function fetchProviders() {
+  providersRequested.value = true
   loading.value = true
   error.value = null
   try {
@@ -454,6 +461,7 @@ function hydrateSelectedScene() {
 }
 
 async function fetchSceneRegistry() {
+  sceneRegistryRequested.value = true
   scenesLoading.value = true
   scenesError.value = null
   try {
@@ -700,6 +708,7 @@ async function copyProviderRegistryMigrationEvidence() {
 }
 
 async function fetchSettings() {
+  settingsRequested.value = true
   try {
     const data = await rawFetch<{ settings: Settings }>('/api/dashboard/intelligence/settings')
     if (data.settings)
@@ -709,6 +718,7 @@ async function fetchSettings() {
 }
 
 async function fetchAudits() {
+  auditRequested.value = true
   auditLoading.value = true
   auditError.value = null
   try {
@@ -736,6 +746,7 @@ function applyAuditFilter() {
 }
 
 async function fetchOverview() {
+  overviewRequested.value = true
   overviewLoading.value = true
   overviewError.value = null
   try {
@@ -773,6 +784,7 @@ async function fetchUserUsage() {
 }
 
 async function fetchIpBans() {
+  ipBansRequested.value = true
   if (!ipBanFeatureAvailable.value)
     return
   ipBanLoading.value = true
@@ -963,13 +975,31 @@ function ensureCreditsLoaded() {
   fetchLedger()
 }
 
+function ensureOverviewLoaded() {
+  if (!overviewRequested.value || overviewError.value)
+    fetchOverview()
+  if (!ipBansRequested.value || ipBanError.value)
+    fetchIpBans()
+}
+
+function ensureProviderAdminLoaded() {
+  if (!providersRequested.value || error.value)
+    fetchProviders()
+  if (!sceneRegistryRequested.value || scenesError.value)
+    fetchSceneRegistry()
+  if (!settingsRequested.value)
+    fetchSettings()
+}
+
+function ensureAuditsLoaded() {
+  if (!settingsRequested.value)
+    fetchSettings()
+  if (!auditRequested.value || auditError.value)
+    fetchAudits()
+}
+
 onMounted(() => {
-  fetchProviders()
-  fetchSceneRegistry()
-  fetchSettings()
-  fetchAudits()
-  fetchOverview()
-  fetchIpBans()
+  ensureOverviewLoaded()
 })
 
 watch([auditPage, auditPageSize], () => {
@@ -988,16 +1018,18 @@ watch(() => ledgerPagination.value.page, () => {
 })
 
 watch(activeTab, (value) => {
-  if (value === 'overview' && !overviewLoading.value && !overviewData.value)
-    fetchOverview()
-  if (value === 'audits' && !auditLoading.value)
-    fetchAudits()
+  if (value === 'overview')
+    ensureOverviewLoaded()
+  if (value === 'providers')
+    ensureProviderAdminLoaded()
+  if (value === 'audits')
+    ensureAuditsLoaded()
   if (value === 'credits')
     ensureCreditsLoaded()
 })
 
-function openProviderRegistry() {
-  navigateTo('/dashboard/admin/provider-registry')
+function openServiceChannels() {
+  activeTab.value = 'serviceChannels'
 }
 
 function providerRegistryDisplayId(provider: Provider): string | null {
@@ -1715,9 +1747,9 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.providers.modelsSubtitle', 'Providers expose available models; scenes decide which provider/model path is used.') }}
                 </p>
               </div>
-              <TxButton variant="primary" size="small" @click="openProviderRegistry">
+              <TxButton variant="primary" size="small" @click="openServiceChannels">
                 <span class="i-carbon-launch mr-1 text-base" />
-                {{ t('dashboard.sections.intelligence.providers.openRegistry', '打开 Provider Registry') }}
+                {{ t('dashboard.sections.intelligence.providers.openRegistry', '打开服务渠道') }}
               </TxButton>
             </div>
 
@@ -1882,7 +1914,7 @@ function formatEndpointCandidates(list?: string[]) {
                       variant="secondary"
                       size="mini"
                       class="rounded-lg"
-                      @click="openProviderRegistry"
+                      @click="openServiceChannels"
                     >
                       <span class="i-carbon-settings-adjust text-base" />
                       <span class="ml-1 text-[11px]">
@@ -1904,8 +1936,8 @@ function formatEndpointCandidates(list?: string[]) {
               <p class="mt-1 text-sm text-black/50 dark:text-white/50">
                 {{ t('dashboard.sections.intelligence.providers.empty') }}
               </p>
-              <TxButton variant="primary" class="mt-4" @click="openProviderRegistry">
-                {{ t('dashboard.sections.intelligence.providers.openRegistry', '打开 Provider Registry') }}
+              <TxButton variant="primary" class="mt-4" @click="openServiceChannels">
+                {{ t('dashboard.sections.intelligence.providers.openRegistry', '打开服务渠道') }}
               </TxButton>
             </div>
           </section>
@@ -2124,6 +2156,16 @@ function formatEndpointCandidates(list?: string[]) {
               </TxButton>
             </div>
           </section>
+        </div>
+      </TxTabItem>
+
+      <TxTabItem name="serviceChannels" icon-class="i-carbon-cloud-service-management">
+        <template #name>
+          {{ t('dashboard.sections.intelligence.tabs.serviceChannels', '服务渠道') }}
+        </template>
+
+        <div v-if="activeTab === 'serviceChannels'" class="space-y-6">
+          <LazyDashboardProviderRegistryAdminPanel />
         </div>
       </TxTabItem>
 

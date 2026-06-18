@@ -227,11 +227,6 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-machine-learning-model',
     },
     {
-      id: 'provider-registry',
-      label: t('dashboard.sections.menu.providerRegistry', 'Provider Registry'),
-      icon: 'i-carbon-cloud-service-management',
-    },
-    {
       id: 'governance',
       label: t('dashboard.sections.menu.governance', 'Data Governance'),
       icon: 'i-carbon-data-vis-4',
@@ -294,7 +289,7 @@ const activeSection = computed(() => {
   if (route.path.startsWith('/dashboard/admin/intelligence-agent'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/provider-registry'))
-    return 'provider-registry'
+    return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/governance'))
     return 'governance'
   if (route.path.startsWith('/dashboard/admin/intelligence'))

@@ -5,6 +5,19 @@
 
 ## 2026-06-18
 
+### feat(nexus): fold service channels into Intelligence admin
+
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.vue`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.test.ts`
+- `apps/nexus/app/components/dashboard/DashboardNav.test.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+  - Folded the Provider Registry / 服务渠道 entry into the Intelligence admin experience: the standalone route remains compatible, but the admin sidebar now highlights it under Intelligence instead of exposing a separate top-level item.
+  - Added a lazy 服务渠道 tab inside Intelligence that reuses the existing Provider Registry admin panel only when the tab is active, keeping Provider Registry as the underlying service-channel source of truth without duplicating forms.
+  - Reduced Intelligence initial load fan-out to overview and IP-ban data; provider summaries, scene registry/settings, audits, and credits now load when their tabs are opened.
+  - Updated Chinese and English labels so the AI provider tab reads as a provider summary while configuration actions point users to Service Channels.
+
 ### fix(nexus): hide team credit pool for personal accounts
 
 - `apps/nexus/server/utils/creditsStore.ts`
