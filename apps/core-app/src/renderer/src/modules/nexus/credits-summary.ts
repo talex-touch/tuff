@@ -13,6 +13,7 @@ export interface CreditSummaryState {
   personalRemaining: ComputedRef<number>
   personalUsed: ComputedRef<number>
   personalQuota: ComputedRef<number>
+  hasTeamPool: ComputedRef<boolean>
   teamRemaining: ComputedRef<number>
   teamUsed: ComputedRef<number>
   teamQuota: ComputedRef<number>
@@ -40,9 +41,16 @@ export function useCreditsSummary(): CreditSummaryState {
   const personalRemaining = computed(() => summary.value?.user.remaining ?? 0)
   const personalUsed = computed(() => summary.value?.user.used ?? 0)
   const personalQuota = computed(() => summary.value?.user.quota ?? 0)
-  const teamRemaining = computed(() => summary.value?.team.remaining ?? 0)
-  const teamUsed = computed(() => summary.value?.team.used ?? 0)
-  const teamQuota = computed(() => summary.value?.team.quota ?? 0)
+  const hasTeamPool = computed(
+    () =>
+      summary.value?.teamContext?.type === 'organization' &&
+      summary.value?.teamContext?.hasTeamPool !== false
+  )
+  const teamRemaining = computed(() =>
+    hasTeamPool.value ? (summary.value?.team.remaining ?? 0) : 0
+  )
+  const teamUsed = computed(() => (hasTeamPool.value ? (summary.value?.team.used ?? 0) : 0))
+  const teamQuota = computed(() => (hasTeamPool.value ? (summary.value?.team.quota ?? 0) : 0))
 
   async function refresh() {
     if (!isLoggedIn.value) {
@@ -106,6 +114,7 @@ export function useCreditsSummary(): CreditSummaryState {
     personalRemaining,
     personalUsed,
     personalQuota,
+    hasTeamPool,
     teamRemaining,
     teamUsed,
     teamQuota,

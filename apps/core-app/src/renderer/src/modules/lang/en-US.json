@@ -421,7 +421,7 @@
   },
   "creditsSummary": {
     "title": "AI Credits",
-    "description": "View remaining, used, and total Nexus AI credits.",
+    "description": "View personal remaining, used, and quota for Nexus AI credits.",
     "notice": "Nexus official provider calls consume this quota by the totalTokens returned by the model.",
     "loginRequired": "Sign in to view remaining credits and usage.",
     "loading": "Loading credits information.",

@@ -615,7 +615,8 @@ export default {
     },
     credits: {
       title: 'AI 积分',
-      subtitle: '个人额度与团队池按月重置',
+      subtitle: '个人额度按月重置',
+      subtitleWithTeam: '个人额度与团队池按月重置',
       teamPool: '团队池额度',
       personalPool: '个人额度',
       used: '已使用 {n}',

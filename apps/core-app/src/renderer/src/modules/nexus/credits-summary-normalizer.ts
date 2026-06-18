@@ -4,10 +4,18 @@ export interface CreditBalance {
   remaining: number
 }
 
+export interface CreditTeamContext {
+  id: string
+  name: string
+  type: 'personal' | 'organization'
+  hasTeamPool: boolean
+}
+
 export interface CreditSummary {
   month: string
   user: CreditBalance
   team: CreditBalance
+  teamContext: CreditTeamContext | null
 }
 
 interface RawCreditBalance {
@@ -19,6 +27,7 @@ interface RawCreditSummary {
   month?: unknown
   user?: RawCreditBalance | null
   team?: RawCreditBalance | null
+  teamContext?: unknown
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,11 +50,24 @@ function normalizeCreditBalance(value: unknown): CreditBalance {
   }
 }
 
+function normalizeCreditTeamContext(value: unknown): CreditTeamContext | null {
+  if (!isRecord(value)) return null
+
+  const type = value.type === 'organization' ? 'organization' : 'personal'
+  return {
+    id: typeof value.id === 'string' ? value.id : '',
+    name: typeof value.name === 'string' ? value.name : '',
+    type,
+    hasTeamPool: type === 'organization' && value.hasTeamPool !== false
+  }
+}
+
 export function normalizeCreditSummary(value: unknown): CreditSummary {
   const source = isRecord(value) ? (value as RawCreditSummary) : {}
   return {
     month: typeof source.month === 'string' ? source.month : '',
     user: normalizeCreditBalance(source.user),
-    team: normalizeCreditBalance(source.team)
+    team: normalizeCreditBalance(source.team),
+    teamContext: normalizeCreditTeamContext(source.teamContext)
   }
 }
