@@ -302,26 +302,27 @@ onMounted(() => {
       @search="handleSearch"
     />
 
+    <StoreGridView
+      v-show="tabs === 'store'"
+      :plugins="displayedPlugins"
+      :view-type="viewType"
+      :loading="loading"
+      :installed-names="installedPluginNames"
+      :installed-versions="installedPluginVersions"
+      @install="onInstall"
+      @open-detail="openPluginDetail"
+    />
+
     <Transition name="store-tabs" mode="out-in">
-      <StoreGridView
-        v-if="tabs === 'store'"
-        key="store"
-        :plugins="displayedPlugins"
-        :view-type="viewType"
-        :loading="loading"
-        :installed-names="installedPluginNames"
-        :installed-versions="installedPluginVersions"
-        @install="onInstall"
-        @open-detail="openPluginDetail"
-      />
       <StorePublisher
-        v-else-if="tabs === 'publisher' && showPublisherTab"
+        v-if="tabs === 'publisher' && showPublisherTab"
         key="publisher"
         class="flex-1 min-h-0"
       />
       <StoreDocs v-else-if="tabs === 'docs'" key="docs" class="flex-1 min-h-0" />
       <StoreCliBeta v-else-if="tabs === 'cli'" key="cli" class="flex-1 min-h-0" />
-      <PluginInstalled v-else key="installed" class="flex-1 min-h-0" />
+      <PluginInstalled v-else-if="tabs === 'installed'" key="installed" class="flex-1 min-h-0" />
+      <div v-else key="store-spacer" class="store-tab-spacer" aria-hidden="true" />
     </Transition>
   </div>
 
@@ -368,6 +369,10 @@ onMounted(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+}
+
+.store-tab-spacer {
+  display: none;
 }
 
 .store-tabs-enter-active,

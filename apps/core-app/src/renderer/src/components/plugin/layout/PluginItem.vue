@@ -4,7 +4,7 @@ import { TxPopover } from '@talex-touch/tuffex/popover'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
 
@@ -42,7 +42,7 @@ const pluginSummary = computed(() => {
       </template>
       <div class="plugin-issues-panel">
         <div class="plugin-issues-title">Plugin Issues</div>
-        <TouchScroll native no-padding class="issues-list h-60">
+        <TxScroll native no-padding class="issues-list h-60">
           <div
             v-for="(issue, index) in plugin.issues"
             :key="index"
@@ -68,7 +68,7 @@ const pluginSummary = computed(() => {
               </p>
             </div>
           </div>
-        </TouchScroll>
+        </TxScroll>
       </div>
     </TxPopover>
 

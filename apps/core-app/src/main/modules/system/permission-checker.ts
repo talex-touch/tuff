@@ -2,12 +2,14 @@ import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { execFileSync, spawn } from 'node:child_process'
 import * as fs from 'node:fs'
+import { promises as fsp } from 'node:fs'
 import process from 'node:process'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { Notification, shell, systemPreferences } from 'electron'
 import { BaseModule } from '../abstract-base-module'
+import { getFileAccessRootDescriptors, type FileAccessRootDescriptor } from './file-access-roots'
 
 export enum PermissionType {
   ACCESSIBILITY = 'accessibility',
@@ -37,6 +39,14 @@ const systemPermissionOpenSettingsEvent = defineEvent('system')
   .module('permission')
   .event('open-settings')
   .define<void, boolean>()
+const systemPermissionFileAccessRootsEvent = defineEvent('system')
+  .module('permission')
+  .event('file-access-roots')
+  .define<void, FileAccessRootCheckResult[]>()
+const systemPermissionRequestFileAccessRootsEvent = defineEvent('system')
+  .module('permission')
+  .event('request-file-access-roots')
+  .define<void, FileAccessRootCheckResult[]>()
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const permissionCheckerLog = getLogger('permission-checker')
@@ -77,6 +87,16 @@ function resolveDefaultFileAccessPath(platform: NodeJS.Platform): {
 }
 
 interface PermissionCheckResult {
+  status: PermissionStatus
+  canRequest: boolean
+  message?: string
+}
+
+interface FileAccessRootCheckOptions {
+  probeAccess?: boolean
+}
+
+export interface FileAccessRootCheckResult extends FileAccessRootDescriptor {
   status: PermissionStatus
   canRequest: boolean
   message?: string
@@ -293,6 +313,50 @@ export class PermissionChecker {
         }
       }
     }
+  }
+
+  private createDeferredFileAccessResult(
+    root: FileAccessRootDescriptor
+  ): FileAccessRootCheckResult {
+    return {
+      ...root,
+      status: PermissionStatus.NOT_DETERMINED,
+      canRequest: true,
+      message:
+        'File access is listed for user-confirmed onboarding or settings authorization and was not probed silently.'
+    }
+  }
+
+  public checkFileAccessRoots(
+    options: FileAccessRootCheckOptions = {}
+  ): FileAccessRootCheckResult[] {
+    const probeAccess = options.probeAccess ?? process.platform !== 'darwin'
+
+    return getFileAccessRootDescriptors().map((root) => {
+      if (!probeAccess) {
+        return this.createDeferredFileAccessResult(root)
+      }
+
+      return {
+        ...root,
+        ...this.checkFileAccess(root.path)
+      }
+    })
+  }
+
+  public async requestFileAccessRoots(): Promise<FileAccessRootCheckResult[]> {
+    const roots = getFileAccessRootDescriptors()
+    for (const root of roots) {
+      if (process.platform !== 'darwin') break
+
+      try {
+        await fsp.readdir(root.path)
+      } catch {
+        // Reading protected macOS folders from a user action triggers the OS permission prompt.
+      }
+    }
+
+    return this.checkFileAccessRoots({ probeAccess: true })
   }
 
   /**
@@ -574,6 +638,24 @@ export class PermissionCheckerModule extends BaseModule {
       } catch (error) {
         permissionCheckerLog.error('Failed to open system settings', { error })
         return false
+      }
+    })
+
+    transport.on(systemPermissionFileAccessRootsEvent, () => {
+      try {
+        return this.checker.checkFileAccessRoots()
+      } catch (error) {
+        permissionCheckerLog.error('Failed to check file access roots', { error })
+        return []
+      }
+    })
+
+    transport.on(systemPermissionRequestFileAccessRootsEvent, async () => {
+      try {
+        return await this.checker.requestFileAccessRoots()
+      } catch (error) {
+        permissionCheckerLog.error('Failed to request file access roots', { error })
+        return this.checker.checkFileAccessRoots()
       }
     })
   }

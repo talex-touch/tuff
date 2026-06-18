@@ -8,7 +8,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { vDraggable } from 'vue-draggable-plus'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { appSetting } from '~/modules/storage/app-storage'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
 
@@ -206,7 +206,7 @@ watch(
     <template #default>
       <div class="StoreSourceEditor">
         <div class="StoreSourceEditor-Container">
-          <TouchScroll native no-padding class="StoreSourceEditor-Scroller">
+          <TxScroll native no-padding class="StoreSourceEditor-Scroller">
             <TransitionGroup
               v-draggable="[sources, draggableOptions]"
               name="source-flip"
@@ -299,7 +299,7 @@ watch(
                 </div>
               </div>
             </div>
-          </TouchScroll>
+          </TxScroll>
         </div>
       </div>
     </template>

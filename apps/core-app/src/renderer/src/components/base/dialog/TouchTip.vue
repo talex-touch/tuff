@@ -271,11 +271,11 @@ $fake-inner-opacity: 0.75;
 
 // Dialog wrapper styles
 .TouchTip-Wrapper {
-  z-index: 1000;
-  position: absolute;
+  z-index: inherit;
+  position: fixed;
 
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100dvh;
 
   top: 0;
   left: 0;

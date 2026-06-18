@@ -548,6 +548,10 @@ describe('useWorkflowEditor', () => {
 
     expect(
       resolveReviewQueueMetaChips({
+        workflowId: 'workflow-1',
+        workflowName: 'Review Workflow',
+        stepId: 'model-step',
+        stepName: 'Summarize',
         capabilityId: 'text.summarize',
         provider: 'openai',
         model: 'gpt-4.1-mini',
@@ -559,6 +563,11 @@ describe('useWorkflowEditor', () => {
         error: 'Clipboard permission denied'
       })
     ).toEqual([
+      {
+        labelKey: 'reviewMetaSource',
+        fallback: 'Source',
+        value: 'Review Workflow / Summarize'
+      },
       {
         labelKey: 'reviewMetaCapability',
         fallback: 'Capability',

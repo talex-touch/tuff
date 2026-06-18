@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 // Legacy adaptor: new CoreApp code should use TxDrawer from @talex-touch/tuffex/drawer.
 import { useModelWrapper } from '@talex-touch/utils/renderer'
-import TouchScroll from '../TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 
 const props = withDefaults(
   defineProps<{
@@ -34,7 +34,7 @@ function handleClose(): void {
       <div
         class="TuffDrawer-Main overflow-hidden absolute top-0 right-0 bottom-0 z-[999] w-[60%] transition-cubic fake-background shadow-2xl flex flex-col"
       >
-        <TouchScroll class="absolute inset-0">
+        <TxScroll class="absolute inset-0">
           <template #header>
             <header class="p-4 border-b border-[--tx-border-color]">
               <h2 class="text-xl font-bold">
@@ -43,7 +43,7 @@ function handleClose(): void {
             </header>
           </template>
           <slot />
-        </TouchScroll>
+        </TxScroll>
       </div>
     </div>
   </teleport>

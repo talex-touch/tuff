@@ -1,11 +1,13 @@
 <script setup lang="ts" name="SetupPermissions">
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { useNotificationSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
+import { StorageList } from '@talex-touch/utils'
 import type { Component } from 'vue'
-import { inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { inject, onBeforeUnmount, onMounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -14,6 +16,14 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import {
+  createRequiredFileAccessRootKey,
+  type FileAccessRootCheckResult,
+  resolveRequiredFileAccessStatus,
+  summarizeRequiredFileAccessStatus,
+  systemPermissionFileAccessRoots,
+  systemPermissionRequestFileAccessRoots
+} from '~/modules/system/system-permission-roots'
 import {
   type SystemPermissionCheckResult,
   type SystemPermissionStatus,
@@ -60,6 +70,11 @@ const permissions = ref({
     checked: false,
     required: false // Optional
   },
+  microphone: {
+    status: 'notDetermined' as SystemPermissionStatus,
+    checked: false,
+    required: false // Optional
+  },
   adminPrivileges: {
     status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
@@ -77,11 +92,32 @@ const traySettingsAvailable = ref(false)
 
 const isLoading = ref(false)
 const isContinuing = ref(false)
+const fileAccessRoots = ref<FileAccessRootCheckResult[]>([])
+const fileAccessDialogVisible = ref(false)
 let permissionRequestRevision = 0
+
+function createDefaultPermissionAudit() {
+  return {
+    at: 0,
+    version: '',
+    appUpdate: false,
+    missing: [] as string[]
+  }
+}
+
+async function saveAppSettings(): Promise<void> {
+  await transport.send(StorageEvents.app.save, {
+    key: StorageList.APP_SETTING,
+    value: toRaw(appSetting),
+    clear: false
+  })
+}
 
 // Initialize appSettingtata.setup if not exists
 if (!appSetting.setup) {
   appSetting.setup = {
+    fileAccess: false,
+    fileAccessRootKey: '',
     accessibility: false,
     notifications: false,
     microphone: false,
@@ -90,8 +126,19 @@ if (!appSetting.setup) {
     adminPrivileges: false,
     hideDock: false,
     runAsAdmin: false,
-    customDesktop: false
+    customDesktop: false,
+    lastPermissionAudit: createDefaultPermissionAudit()
   }
+} else if (!appSetting.setup.lastPermissionAudit) {
+  appSetting.setup.lastPermissionAudit = createDefaultPermissionAudit()
+}
+
+if (appSetting.setup.fileAccess === undefined) {
+  appSetting.setup.fileAccess = false
+}
+
+if (appSetting.setup.fileAccessRootKey === undefined) {
+  appSetting.setup.fileAccessRootKey = ''
 }
 
 // Check permissions on mount
@@ -134,6 +181,16 @@ function applyPermissionResult(type: string, result: SystemPermissionCheckResult
     return
   }
 
+  if (type === 'microphone') {
+    permissions.value.microphone = {
+      status: result.status,
+      checked: true,
+      required: false
+    }
+    appSetting.setup.microphone = result.status === 'granted'
+    return
+  }
+
   if (type === 'adminPrivileges') {
     permissions.value.adminPrivileges = {
       status: result.status,
@@ -141,6 +198,28 @@ function applyPermissionResult(type: string, result: SystemPermissionCheckResult
       required: false
     }
     appSetting.setup.adminPrivileges = result.status === 'granted'
+  }
+}
+
+function applyFileAccessRoots(roots: FileAccessRootCheckResult[]): void {
+  const probedStatus = summarizeRequiredFileAccessStatus(roots)
+  const rootKey = createRequiredFileAccessRootKey(roots)
+  fileAccessRoots.value = roots
+  permissions.value.fileAccess = {
+    status: resolveRequiredFileAccessStatus(
+      roots,
+      appSetting.setup.fileAccess === true,
+      appSetting.setup.fileAccessRootKey ?? ''
+    ),
+    checked: true,
+    required: true
+  }
+  if (probedStatus === 'granted') {
+    appSetting.setup.fileAccess = true
+    appSetting.setup.fileAccessRootKey = rootKey
+  } else if (probedStatus === 'denied') {
+    appSetting.setup.fileAccess = false
+    appSetting.setup.fileAccessRootKey = ''
   }
 }
 
@@ -157,6 +236,11 @@ async function checkPermission(type: string): Promise<SystemPermissionCheckResul
   return result
 }
 
+async function checkFileAccessRoots(): Promise<void> {
+  const roots = await transport.send(systemPermissionFileAccessRoots)
+  applyFileAccessRoots(Array.isArray(roots) ? roots : [])
+}
+
 async function checkAllPermissions(): Promise<void> {
   if (isLoading.value) {
     // Already checking, avoid duplicate requests
@@ -166,7 +250,7 @@ async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
   try {
     // Check file access permission (required)
-    await checkPermission('fileAccess')
+    await checkFileAccessRoots()
 
     // Check accessibility permission (macOS, optional)
     if (isMacOS.value) {
@@ -174,6 +258,14 @@ async function checkAllPermissions(): Promise<void> {
         await checkPermission('accessibility')
       } catch (error) {
         setupPermissionsLog.warn('Failed to check accessibility permission', error)
+      }
+    }
+
+    if (isMacOS.value || isWindows.value) {
+      try {
+        await checkPermission('microphone')
+      } catch (error) {
+        setupPermissionsLog.warn('Failed to check microphone permission', error)
       }
     }
 
@@ -251,11 +343,34 @@ async function requestPermission(type: string): Promise<void> {
       return
     }
 
+    if (type === 'microphone' && isMacOS.value) {
+      await waitForPermissionGrant(() => checkPermission(type), {
+        shouldContinue: () => requestRevision === permissionRequestRevision
+      })
+      return
+    }
+
     setTimeout(() => {
       void checkPermission(type)
     }, 2000)
   } catch (error) {
     setupPermissionsLog.error(`Failed to request permission ${type}`, error)
+    toast.error(t('setupPermissions.requestFailed'))
+  }
+}
+
+async function requestFileAccessRoots(): Promise<void> {
+  try {
+    const roots = await transport.send(systemPermissionRequestFileAccessRoots)
+    applyFileAccessRoots(Array.isArray(roots) ? roots : [])
+    await saveAppSettings()
+    if (permissions.value.fileAccess.status === 'granted') {
+      toast.success(t('common.success'))
+      return
+    }
+    toast.info(t('setupPermissions.fileAccessPrompted'))
+  } catch (error) {
+    setupPermissionsLog.error('Failed to request file access roots', error)
     toast.error(t('setupPermissions.requestFailed'))
   }
 }
@@ -334,15 +449,22 @@ async function handleContinue(): Promise<void> {
       () => {
         // Save all settings before proceeding
         appSetting.setup = {
+          fileAccess: permissions.value.fileAccess.status === 'granted',
+          fileAccessRootKey:
+            permissions.value.fileAccess.status === 'granted'
+              ? createRequiredFileAccessRootKey(fileAccessRoots.value)
+              : '',
           accessibility: permissions.value.accessibility.status === 'granted',
           notifications: permissions.value.notifications.status === 'granted',
-          microphone: appSetting.setup.microphone ?? false,
+          microphone: permissions.value.microphone.status === 'granted',
           autoStart: settings.value.autoStart,
           showTray: settings.value.showTray,
           adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
           hideDock: settings.value.hideDock ?? false,
           runAsAdmin: appSetting.setup.runAsAdmin ?? false,
-          customDesktop: appSetting.setup.customDesktop ?? false
+          customDesktop: appSetting.setup.customDesktop ?? false,
+          lastPermissionAudit:
+            appSetting.setup.lastPermissionAudit ?? createDefaultPermissionAudit()
         }
       }
     )
@@ -384,6 +506,17 @@ function getStatusIconClass(status: string): string {
       return 'i-carbon-information'
   }
 }
+
+function getFileAccessPurposeText(purpose: string): string {
+  return t(`setupPermissions.fileAccessPurposes.${purpose}`)
+}
+
+function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): SystemPermissionStatus {
+  if (permissions.value.fileAccess.status === 'granted' && root.required) {
+    return 'granted'
+  }
+  return root.status
+}
 </script>
 
 <template>
@@ -391,6 +524,9 @@ function getStatusIconClass(status: string): string {
     <div class="SetupPermissions-Header">
       <h1>{{ t('setupPermissions.title') }}</h1>
       <p>{{ t('setupPermissions.description') }}</p>
+      <p class="SetupPermissions-PrivacyNote">
+        {{ t('setupPermissions.privacyNote') }}
+      </p>
     </div>
 
     <div class="SetupPermissions-Content">
@@ -421,8 +557,9 @@ function getStatusIconClass(status: string): string {
               :icon="getStatusIconClass(permissions.fileAccess.status)"
               :text="getStatusText(permissions.fileAccess.status)"
             />
-            <TxButton size="sm" :loading="isLoading" @click.stop="checkAllPermissions">
-              {{ t('setupPermissions.recheck') }}
+            <TxButton size="sm" type="primary" @click.stop="fileAccessDialogVisible = true">
+              <span class="i-carbon-folder-details" aria-hidden="true" />
+              {{ t('setupPermissions.manageFileAccess') }}
             </TxButton>
           </div>
         </TuffBlockSlot>
@@ -477,6 +614,33 @@ function getStatusIconClass(status: string): string {
               @click.stop="checkAllPermissions"
             >
               {{ t('setupPermissions.recheck') }}
+            </TxButton>
+          </div>
+        </TuffBlockSlot>
+
+        <TuffBlockSlot
+          v-if="isMacOS || isWindows"
+          class="PermissionSlot"
+          :title="t('setupPermissions.microphone')"
+          :description="t('setupPermissions.microphoneDesc')"
+          :active="permissions.microphone.status === 'granted'"
+          default-icon="i-carbon-microphone"
+          active-icon="i-carbon-microphone-filled"
+        >
+          <div class="PermissionActions">
+            <TuffStatusBadge
+              size="md"
+              :status-key="permissions.microphone.status"
+              :icon="getStatusIconClass(permissions.microphone.status)"
+              :text="getStatusText(permissions.microphone.status)"
+            />
+            <TxButton
+              v-if="permissions.microphone.status !== 'granted'"
+              size="sm"
+              type="primary"
+              @click.stop="requestPermission('microphone')"
+            >
+              {{ t('setupPermissions.openSettings') }}
             </TxButton>
           </div>
         </TuffBlockSlot>
@@ -549,6 +713,68 @@ function getStatusIconClass(status: string): string {
         {{ t('setupPermissions.continue') }}
       </TxButton>
     </div>
+
+    <TModal
+      v-model="fileAccessDialogVisible"
+      :title="t('setupPermissions.fileAccessDialogTitle')"
+      width="720px"
+    >
+      <div class="FileAccessDialog">
+        <p class="FileAccessDialog-Desc">
+          {{ t('setupPermissions.fileAccessDialogDesc') }}
+        </p>
+        <div class="FileAccessDialog-Actions">
+          <TuffStatusBadge
+            size="md"
+            :status-key="permissions.fileAccess.status"
+            :icon="getStatusIconClass(permissions.fileAccess.status)"
+            :text="getStatusText(permissions.fileAccess.status)"
+          />
+          <TxButton
+            v-if="permissions.fileAccess.status !== 'granted'"
+            size="sm"
+            type="primary"
+            @click="requestFileAccessRoots"
+          >
+            {{ t('setupPermissions.requestFileAccess') }}
+          </TxButton>
+          <TxButton size="sm" :loading="isLoading" @click="checkAllPermissions">
+            {{ t('setupPermissions.recheck') }}
+          </TxButton>
+        </div>
+        <ul v-if="fileAccessRoots.length" class="FileAccessRootList">
+          <li v-for="root in fileAccessRoots" :key="root.path" class="FileAccessRootItem">
+            <span
+              class="FileAccessRootStatus"
+              :data-status="getFileAccessRootDisplayStatus(root)"
+            />
+            <span class="FileAccessRootMeta">
+              <strong>{{ t(`setupPermissions.fileAccessRoots.${root.id}`) }}</strong>
+              <small>{{ getFileAccessPurposeText(root.purpose) }} · {{ root.path }}</small>
+            </span>
+            <span class="FileAccessRootBadges">
+              <TuffStatusBadge
+                size="sm"
+                :status-key="getFileAccessRootDisplayStatus(root)"
+                :icon="getStatusIconClass(getFileAccessRootDisplayStatus(root))"
+                :text="getStatusText(getFileAccessRootDisplayStatus(root))"
+              />
+              <span v-if="root.required" class="required-badge">
+                {{ t('setupPermissions.required') }}
+              </span>
+            </span>
+          </li>
+        </ul>
+        <p v-else class="FileAccessDialog-Empty">
+          {{ t('setupPermissions.fileAccessNoRoots') }}
+        </p>
+      </div>
+      <template #footer>
+        <TxButton @click="fileAccessDialogVisible = false">
+          {{ t('common.close') }}
+        </TxButton>
+      </template>
+    </TModal>
   </div>
 </template>
 
@@ -574,6 +800,12 @@ function getStatusIconClass(status: string): string {
       font-size: 0.96rem;
       color: var(--tx-text-color-regular);
       line-height: 1.45;
+    }
+
+    .SetupPermissions-PrivacyNote {
+      margin-top: 0.45rem;
+      color: var(--tx-text-color-secondary);
+      font-size: 0.84rem;
     }
   }
 
@@ -624,6 +856,103 @@ function getStatusIconClass(status: string): string {
   gap: 10px;
   flex-wrap: wrap;
   width: 100%;
+}
+
+.FileAccessDialog {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.FileAccessDialog-Desc {
+  margin: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.FileAccessDialog-Actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.FileAccessDialog-Empty {
+  margin: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.84rem;
+}
+
+.FileAccessRootList {
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
+  max-height: min(420px, 55vh);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.FileAccessRootItem {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-background-color) 82%, transparent);
+}
+
+.FileAccessRootBadges {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.FileAccessRootStatus {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--tx-text-color-placeholder);
+
+  &[data-status='granted'] {
+    background: var(--tx-color-success);
+  }
+
+  &[data-status='denied'] {
+    background: var(--tx-color-danger);
+  }
+
+  &[data-status='notDetermined'] {
+    background: var(--tx-color-warning);
+  }
+}
+
+.FileAccessRootMeta {
+  min-width: 0;
+
+  strong,
+  small {
+    display: block;
+  }
+
+  strong {
+    color: var(--tx-text-color-primary);
+    font-size: 0.84rem;
+    line-height: 1.35;
+  }
+
+  small {
+    color: var(--tx-text-color-secondary);
+    font-size: 0.76rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
 }
 
 @media (max-width: 900px) {

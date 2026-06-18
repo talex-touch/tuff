@@ -10,7 +10,7 @@ import type { TxSelectValue } from '@talex-touch/tuffex/select'
 import { TuffSwitch } from '@talex-touch/tuffex/switch'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { useI18n } from 'vue-i18n'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import WidgetFrame from '~/components/render/WidgetFrame.vue'
@@ -301,7 +301,7 @@ function handleClose(): void {
           </template>
           <TxTabItem name="overview" activation>
             <template #name>{{ t('plugin.features.drawer.overview') }}</template>
-            <TouchScroll class="PluginFeature-TabScroll" no-padding native>
+            <TxScroll class="PluginFeature-TabScroll" no-padding native>
               <div class="PluginFeature-TabScrollContent">
                 <TuffGroupBlock
                   class="PluginFeature-Overview"
@@ -439,12 +439,12 @@ function handleClose(): void {
                   </div>
                 </TuffGroupBlock>
               </div>
-            </TouchScroll>
+            </TxScroll>
           </TxTabItem>
 
           <TxTabItem name="data">
             <template #name>{{ t('plugin.features.data.tab') }}</template>
-            <TouchScroll class="PluginFeature-TabScroll" no-padding native>
+            <TxScroll class="PluginFeature-TabScroll" no-padding native>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock
@@ -457,12 +457,12 @@ function handleClose(): void {
                       <i class="i-ri-database-2-line text-[var(--tx-color-info)]" />
                     </template>
                     <div class="p-4">
-                      <TouchScroll native no-padding direction="horizontal">
+                      <TxScroll native no-padding direction="horizontal">
                         <pre
                           class="PluginFeature-Json text-xs text-[var(--tx-text-color-secondary)]"
                           >{{ formatJson(feature) }}</pre
                         >
-                      </TouchScroll>
+                      </TxScroll>
                     </div>
                   </TuffGroupBlock>
 
@@ -478,12 +478,12 @@ function handleClose(): void {
                       <i class="i-ri-terminal-box-line text-[var(--tx-color-primary)]" />
                     </template>
                     <div class="p-4">
-                      <TouchScroll native no-padding direction="horizontal">
+                      <TxScroll native no-padding direction="horizontal">
                         <pre
                           class="PluginFeature-Json text-xs text-[var(--tx-text-color-secondary)]"
                           >{{ formatJson(command) }}</pre
                         >
-                      </TouchScroll>
+                      </TxScroll>
                     </div>
                   </TuffGroupBlock>
 
@@ -495,12 +495,12 @@ function handleClose(): void {
                   </div>
                 </div>
               </div>
-            </TouchScroll>
+            </TxScroll>
           </TxTabItem>
 
           <TxTabItem v-if="widgetTabEnabled" name="widget">
             <template #name>{{ t('plugin.features.widget.tab') }}</template>
-            <TouchScroll class="PluginFeature-TabScroll" no-padding native>
+            <TxScroll class="PluginFeature-TabScroll" no-padding native>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock
@@ -762,7 +762,7 @@ function handleClose(): void {
                   </TuffGroupBlock>
                 </div>
               </div>
-            </TouchScroll>
+            </TxScroll>
           </TxTabItem>
         </TxTabs>
       </div>

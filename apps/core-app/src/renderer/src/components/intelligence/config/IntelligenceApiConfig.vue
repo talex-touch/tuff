@@ -1,5 +1,6 @@
 <script lang="ts" name="IntelligenceApiConfig" setup>
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxPopover } from '@talex-touch/tuffex/popover'
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
@@ -277,16 +278,33 @@ async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
       :active="!!testResult"
       guidance
     >
-      <div class="flex items-center gap-2">
-        <div class="flex max-w-[200px] truncate">
-          <div v-if="testResult" class="flex items-center gap-2 text-green-600 text-sm">
+      <div class="aisdk-api-config__test-row">
+        <div class="aisdk-api-config__test-status">
+          <div v-if="testResult" class="aisdk-api-config__test-success">
             <i class="i-carbon-checkmark-filled-warning" />
             <span>{{ testResult }}</span>
           </div>
-          <div v-else-if="testError" class="flex items-center gap-2 text-red-600 text-sm">
-            <i class="i-carbon-warning-filled" />
-            <span>{{ testError }}</span>
-          </div>
+          <TxPopover
+            v-else-if="testError"
+            trigger="hover"
+            placement="top-end"
+            :width="360"
+            :max-width="420"
+            :open-delay="160"
+            :close-delay="80"
+            panel-background="refraction"
+            panel-shadow="soft"
+          >
+            <template #reference>
+              <div class="aisdk-api-config__test-error" :title="testError">
+                <i class="i-carbon-warning-filled" />
+                <span>{{ testError }}</span>
+              </div>
+            </template>
+            <p class="aisdk-api-config__error-popover">
+              {{ testError }}
+            </p>
+          </TxPopover>
         </div>
         <TxButton
           variant="flat"
@@ -303,6 +321,54 @@ async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
 </template>
 
 <style lang="scss" scoped>
+.aisdk-api-config__test-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.aisdk-api-config__test-status {
+  display: flex;
+  align-items: center;
+  max-width: min(240px, 32vw);
+  min-width: 0;
+}
+
+.aisdk-api-config__test-success,
+.aisdk-api-config__test-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.875rem;
+}
+
+.aisdk-api-config__test-success {
+  color: var(--tx-color-success);
+}
+
+.aisdk-api-config__test-error {
+  color: var(--tx-color-danger);
+  cursor: help;
+}
+
+.aisdk-api-config__test-success span,
+.aisdk-api-config__test-error span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aisdk-api-config__error-popover {
+  margin: 0;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--tx-text-color-primary);
+  line-height: 1.5;
+}
+
 .animate-spin {
   animation: spin 1s linear infinite;
 }

@@ -15,6 +15,11 @@ import {
   resolveQuickSelectFooterHintVisible,
   resolveSecondaryFooterHintVisible
 } from './coreBoxFooterHints'
+import {
+  normalizeCoreBoxIcon,
+  resolveCoreBoxIconColor,
+  shouldRenderCoreBoxIconColorful
+} from './icon-color-mode'
 import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
@@ -62,25 +67,12 @@ onBeforeUnmount(() => {
   unsubscribeIndex?.()
 })
 
-const displayIcon = computed(() => {
-  const icon = props.item?.render?.basic?.icon
-  const defaultIcon = {
-    type: 'url',
-    value: '',
-    status: 'normal'
-  } as ITuffIcon
-
-  if (typeof icon === 'string') {
-    defaultIcon.value = icon
-  }
-
-  if (icon && typeof icon === 'object' && 'value' in icon) {
-    if (icon.value?.length) {
-      defaultIcon.value = icon.value
-    }
-  }
-
-  return defaultIcon
+const displayIcon = computed<ITuffIcon>(() => normalizeCoreBoxIcon(props.item?.render?.basic?.icon))
+const iconStyle = computed(() => ({
+  '--icon-color': resolveCoreBoxIconColor(displayIcon.value)
+}))
+const shouldRenderIconColorful = computed(() => {
+  return shouldRenderCoreBoxIconColorful(props.item?.render?.basic?.icon)
 })
 
 const title = computed(() => resolveCoreBoxFooterTitle(props.item, t))
@@ -196,11 +188,12 @@ const keyHints = computed(() => {
       </template>
       <template v-else>
         <TuffIcon
-          colorful
           :icon="displayIcon"
           :alt="title"
           :empty="DefaultIcon"
           :size="20"
+          :colorful="shouldRenderIconColorful"
+          :style="iconStyle"
           class="FooterIcon"
         />
         <div class="FooterText">

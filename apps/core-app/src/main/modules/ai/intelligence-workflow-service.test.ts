@@ -101,6 +101,18 @@ describe('IntelligenceWorkflowService workflow normalization', () => {
       'builtin.meeting-summary',
       'builtin.batch-text-processing'
     ])
+    expect(
+      Object.fromEntries(
+        savedWorkflows.map((workflow) => [
+          workflow.id,
+          workflow.triggers.map((trigger) => trigger.type)
+        ])
+      )
+    ).toEqual({
+      'builtin.organize-recent-clipboard': ['manual', 'clipboard.batch'],
+      'builtin.meeting-summary': ['manual'],
+      'builtin.batch-text-processing': ['manual', 'clipboard.batch']
+    })
     expect(savedWorkflows.map((workflow) => workflow.metadata)).toMatchObject([
       {
         builtin: true,
@@ -135,6 +147,13 @@ describe('IntelligenceWorkflowService workflow normalization', () => {
     )
     expect(
       savedWorkflows.flatMap((workflow) => workflow.steps).every((step) => step.kind === 'model')
+    ).toBe(true)
+    expect(
+      savedWorkflows
+        .flatMap((workflow) => workflow.steps)
+        .every((step) => {
+          return step.output?.reviewPolicy === 'preview'
+        })
     ).toBe(true)
   })
 

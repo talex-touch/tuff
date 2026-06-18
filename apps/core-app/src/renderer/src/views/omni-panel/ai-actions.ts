@@ -32,6 +32,11 @@ export interface OmniPanelAiPreviewResult {
   latency: number
 }
 
+export interface OmniPanelAiErrorResult {
+  message: string
+  errorCode?: string
+}
+
 export interface OmniPanelAiPreviewChip {
   labelKey: string
   fallback: string
@@ -182,6 +187,7 @@ export function resolveOmniPanelAiPreviewChips(input: {
   capabilityId: string
   provider?: string
   model?: string
+  traceId?: string
   latency?: number
 }): OmniPanelAiPreviewChip[] {
   const chips: OmniPanelAiPreviewChip[] = [
@@ -207,6 +213,15 @@ export function resolveOmniPanelAiPreviewChips(input: {
       labelKey: 'corebox.omniPanel.aiMetaModel',
       fallback: 'Model',
       value: model
+    })
+  }
+
+  const traceId = input.traceId?.trim()
+  if (traceId) {
+    chips.push({
+      labelKey: 'corebox.omniPanel.aiMetaTrace',
+      fallback: 'Trace',
+      value: traceId
     })
   }
 
@@ -267,6 +282,39 @@ export function resolveOmniPanelAiPreviewStatus(input: {
     labelFallback: 'Ready',
     detailFallback: 'Review the result and metadata before copying or replacing clipboard.',
     tone: 'success'
+  }
+}
+
+export function normalizeOmniPanelAiError(
+  error: unknown,
+  fallback: string
+): OmniPanelAiErrorResult {
+  if (error instanceof Error) {
+    const errorCode =
+      typeof (error as Error & { code?: unknown }).code === 'string'
+        ? (error as Error & { code: string }).code.trim() || undefined
+        : undefined
+
+    return {
+      message: error.message || fallback,
+      errorCode
+    }
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    return {
+      message:
+        typeof record.message === 'string' && record.message.trim()
+          ? record.message.trim()
+          : fallback,
+      errorCode:
+        typeof record.code === 'string' && record.code.trim() ? record.code.trim() : undefined
+    }
+  }
+
+  return {
+    message: typeof error === 'string' && error.trim() ? error.trim() : fallback
   }
 }
 

@@ -33,6 +33,7 @@ import { networkModule } from './modules/network'
 import { nativeCapabilitiesModule } from './modules/native-capabilities'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
+import { quickOpsModule } from './modules/quick-ops'
 import { sentryModule } from './modules/sentry'
 import { syncModule } from './modules/sync'
 import { authModule } from './modules/auth'
@@ -173,6 +174,7 @@ const foregroundModulesToLoad = [
   permissionCheckerModule,
   permissionModule, // Plugin permission management - before plugin module
   notificationModule,
+  quickOpsModule,
   sentryModule,
   buildVerificationModule,
   updateServiceModule,

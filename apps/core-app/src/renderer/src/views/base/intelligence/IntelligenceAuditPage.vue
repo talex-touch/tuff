@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
 import IntelligenceUsageChart from '~/components/intelligence/audit/IntelligenceUsageChart.vue'
 import IntelligenceUsageStats from '~/components/intelligence/audit/IntelligenceUsageStats.vue'
@@ -35,7 +35,7 @@ function handleCacheExpirationBlur() {
 
 <template>
   <div class="flex h-full flex-col" role="main" aria-label="Intelligence Audit & Settings">
-    <TouchScroll no-padding class="flex-1">
+    <TxScroll no-padding class="flex-1">
       <div class="p-6">
         <!-- Usage Statistics Section -->
         <TuffGroupBlock
@@ -152,7 +152,7 @@ function handleCacheExpirationBlur() {
           </TuffBlockInput>
         </TuffGroupBlock>
       </div>
-    </TouchScroll>
+    </TxScroll>
   </div>
 </template>
 

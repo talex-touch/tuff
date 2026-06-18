@@ -72,35 +72,50 @@ describe('CoreApp visible experience evidence', () => {
     )
   })
 
-  it('requires CoreBox AI Ask text, OCR, and recoverable failure recent paths', () => {
+  it('requires CoreBox AI Ask text, OCR, permission, routing, and recoverable failure recent paths', () => {
     const coreboxAiAsk = COREAPP_VISIBLE_EXPERIENCE_SURFACES.find(
       (surface) => surface.id === 'corebox-ai-ask'
     )
 
     expect(coreboxAiAsk).toBeDefined()
+    expect(coreboxAiAsk?.collectionSteps).toEqual(
+      expect.arrayContaining([
+        'Capture permission denied and Local/Ollama routing cases; local preferred routing must not reach a disabled Nexus provider.'
+      ])
+    )
     expect(coreboxAiAsk?.requiredEvidence).toEqual(
       expect.arrayContaining([
         'CoreBox AI Ask text.chat success preview is visible',
         'CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible',
         'Provider, model, latency, trace id, and input kind metadata are visible for text and OCR paths',
+        'Copy failure remains visible inside the preview',
         'Logged-out failure shows a sign-in recovery hint',
         'Provider unavailable failure shows a provider health or settings recovery hint',
         'Quota exhausted failure shows a credits or team quota recovery hint',
-        'Model unsupported failure shows a supported model or capability recovery hint'
+        'Model unsupported failure shows a supported model or capability recovery hint',
+        'Permission denied failure does not call Intelligence SDK and shows a permission recovery hint',
+        'Local/Ollama preferred routing does not call disabled Nexus provider and shows routing trace or provider metadata'
       ])
     )
     expect(coreboxAiAsk?.recommendedArtifacts).toEqual(
       expect.arrayContaining([
         'evidence/coreapp-visible/corebox-ai-text-success.png',
         'evidence/coreapp-visible/corebox-ai-ocr-success.png',
+        'evidence/coreapp-visible/corebox-ai-copy-failure.png',
         'evidence/coreapp-visible/corebox-ai-failure-logged-out.png',
         'evidence/coreapp-visible/corebox-ai-failure-provider-unavailable.png',
         'evidence/coreapp-visible/corebox-ai-failure-quota-exhausted.png',
-        'evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png'
+        'evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png',
+        'evidence/coreapp-visible/corebox-ai-failure-permission-denied.png',
+        'evidence/coreapp-visible/corebox-ai-local-ollama-routing.png'
       ])
     )
-    expect(coreboxAiAsk?.blockedWhen).toContain(
-      'Text success and OCR success are not captured as separate recent paths.'
+    expect(coreboxAiAsk?.blockedWhen).toEqual(
+      expect.arrayContaining([
+        'Text success and OCR success are not captured as separate recent paths.',
+        'Permission denied still invokes Intelligence SDK.',
+        'Local/Ollama preferred routing calls a disabled Nexus provider.'
+      ])
     )
   })
 
@@ -168,6 +183,12 @@ describe('CoreApp visible experience evidence', () => {
     expect(template).toContain(
       '- [ ] Provider unavailable failure shows a provider health or settings recovery hint'
     )
+    expect(template).toContain(
+      '- [ ] Permission denied failure does not call Intelligence SDK and shows a permission recovery hint'
+    )
+    expect(template).toContain(
+      '- [ ] Local/Ollama preferred routing does not call disabled Nexus provider and shows routing trace or provider metadata'
+    )
     expect(template).toContain('- [ ] No-result state shows retry and File Index settings actions')
     expect(template).toContain(
       '- [ ] Clicking the floating ball opens the Voice Panel beside the ball'
@@ -176,6 +197,8 @@ describe('CoreApp visible experience evidence', () => {
     expect(template).toContain('evidence/coreapp-visible/corebox-no-result.png')
     expect(template).toContain('evidence/coreapp-visible/corebox-ai-ocr-success.png')
     expect(template).toContain('evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png')
+    expect(template).toContain('evidence/coreapp-visible/corebox-ai-failure-permission-denied.png')
+    expect(template).toContain('evidence/coreapp-visible/corebox-ai-local-ollama-routing.png')
     expect(template).toContain(
       'evidence/coreapp-visible/assistant-clipboard-image-translate-result.png'
     )

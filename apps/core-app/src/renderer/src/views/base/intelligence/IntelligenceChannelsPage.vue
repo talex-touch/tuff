@@ -363,30 +363,6 @@ useKeyboardNavigation({
             <i class="i-carbon-add" aria-hidden="true" />
             <span>{{ t('settings.intelligence.addChannel') }}</span>
           </TxButton>
-          <TxButton
-            variant="secondary"
-            class="w-full"
-            native-type="button"
-            :loading="isSyncingFromNexus"
-            :disabled="isSyncingFromNexus"
-            :aria-label="t('settings.intelligence.syncFromNexus')"
-            @click="syncProvidersFromNexus"
-          >
-            <i v-if="!isSyncingFromNexus" class="i-carbon-cloud-download" aria-hidden="true" />
-            <span>
-              {{
-                isSyncingFromNexus
-                  ? t('settings.intelligence.syncingFromNexus')
-                  : t('settings.intelligence.syncFromNexus')
-              }}
-            </span>
-          </TxButton>
-          <p v-if="syncMessage" class="text-xs text-[var(--tx-color-success)]">
-            {{ syncMessage }}
-          </p>
-          <p v-if="syncError" class="text-xs text-[var(--tx-color-danger)]">
-            {{ syncError }}
-          </p>
         </div>
       </template>
 
@@ -397,11 +373,15 @@ useKeyboardNavigation({
             :provider="selectedProvider"
             :test-result="testResult"
             :is-testing="isTesting"
+            :is-syncing-from-nexus="isSyncingFromNexus"
+            :sync-message="syncMessage"
+            :sync-error="syncError"
             @update="handleUpdateProvider"
             @test="handleTestProvider"
             @delete="handleDeleteProvider"
             @duplicate="handleDuplicateProvider"
             @edit-basic="handleOpenBasicEditor"
+            @sync-nexus="syncProvidersFromNexus"
           />
           <IntelligenceEmptyState v-else />
         </div>

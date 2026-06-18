@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { IExecuteArgs } from '@talex-touch/utils'
+import { TuffInputType, type IExecuteArgs } from '@talex-touch/utils'
 import type { PreviewSdk } from '@talex-touch/utils/core-box/preview'
 
 const electronMocks = vi.hoisted(() => ({
+  readText: vi.fn(),
   writeText: vi.fn()
 }))
 
@@ -12,6 +13,7 @@ const clipboardModuleMock = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   clipboard: {
+    readText: electronMocks.readText,
     writeText: electronMocks.writeText
   }
 }))
@@ -68,6 +70,7 @@ function createSdk(): PreviewSdk {
 describe('PreviewProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    electronMocks.readText.mockReturnValue('')
     clipboardModuleMock.saveCustomEntry.mockResolvedValue({ id: 1 })
   })
 
@@ -89,6 +92,24 @@ describe('PreviewProvider', () => {
     expect(result.items[0]?.meta?.preview).toEqual({
       abilityId: 'preview.expression.basic',
       confidence: 0.6
+    })
+  })
+
+  it('exposes a host copy action for the preview primary value', async () => {
+    const sdk = createSdk()
+    const provider = new PreviewProvider(sdk)
+
+    const result = await provider.onSearch(
+      { text: '2 + 2', inputs: [] },
+      new AbortController().signal
+    )
+
+    expect(result.items[0]?.actions).toContainEqual({
+      id: 'preview-copy-primary',
+      type: 'copy',
+      label: '复制结果',
+      icon: { type: 'class', value: 'i-ri-file-copy-line' },
+      payload: { text: '4' }
     })
   })
 
@@ -122,6 +143,49 @@ describe('PreviewProvider', () => {
         })
       })
     )
+  })
+
+  it('passes text clipboard inputs to PreviewSDK abilities', async () => {
+    const sdk = createSdk()
+    const provider = new PreviewProvider(sdk)
+    const query = {
+      text: 'json',
+      inputs: [{ type: TuffInputType.Text, content: '{"ok":true}' }]
+    }
+
+    await provider.onSearch(query, new AbortController().signal)
+
+    expect(sdk.resolve).toHaveBeenCalledWith({
+      query,
+      signal: expect.any(AbortSignal)
+    })
+    expect(provider.supportedInputTypes).toEqual([TuffInputType.Text, TuffInputType.Html])
+  })
+
+  it('uses Electron clipboard text as default QuickOps command input', async () => {
+    electronMocks.readText.mockReturnValue('{"ok":true}')
+    const sdk = createSdk()
+    const provider = new PreviewProvider(sdk)
+
+    await provider.onSearch({ text: 'json', inputs: [] }, new AbortController().signal)
+
+    expect(electronMocks.readText).toHaveBeenCalledTimes(1)
+    expect(sdk.resolve).toHaveBeenCalledWith({
+      query: {
+        text: 'json',
+        inputs: [{ type: TuffInputType.Text, content: '{"ok":true}' }]
+      },
+      signal: expect.any(AbortSignal)
+    })
+  })
+
+  it('does not read Electron clipboard for non-QuickOps previews', async () => {
+    const sdk = createSdk()
+    const provider = new PreviewProvider(sdk)
+
+    await provider.onSearch({ text: '2 + 2', inputs: [] }, new AbortController().signal)
+
+    expect(electronMocks.readText).not.toHaveBeenCalled()
   })
 
   it('copies primary value and records preview history on execute', async () => {

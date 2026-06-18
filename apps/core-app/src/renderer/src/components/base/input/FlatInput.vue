@@ -70,8 +70,10 @@ function onKeyDown(e) {
 .FlatInput-Container {
   :deep(.tx-tag) {
     position: absolute;
-
-    top: -30px;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    pointer-events: none;
   }
 
   &:hover {

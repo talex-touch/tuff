@@ -11,7 +11,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import CapabilityTestInput from '~/components/intelligence/capabilities/CapabilityTestInput.vue'
 import CapabilityTestResult from '~/components/intelligence/capabilities/CapabilityTestResult.vue'
 import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
@@ -537,7 +537,7 @@ onBeforeUnmount(() => {
       </template>
 
       <template #main>
-        <TouchScroll v-if="selectedPrompt" :key="selectedPrompt.id" class="h-full">
+        <TxScroll v-if="selectedPrompt" :key="selectedPrompt.id" class="h-full">
           <template #header>
             <div class="prompt-main-header">
               <div>
@@ -804,7 +804,7 @@ onBeforeUnmount(() => {
               </TuffBlockSlot>
             </TuffGroupBlock>
           </div>
-        </TouchScroll>
+        </TxScroll>
 
         <div v-else class="prompt-empty-state" role="status">
           <i class="i-carbon-idea text-4xl text-[var(--tx-border-color)]" aria-hidden="true" />

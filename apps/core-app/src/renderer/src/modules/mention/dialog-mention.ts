@@ -72,6 +72,7 @@ export function captureAppContext(): void {
  * Counter for generating unique dialog IDs
  */
 let dialogIdCounter = 0
+const activeAtomicDialogs = new Map<string, Promise<void>>()
 
 /**
  * Generate a unique dialog ID
@@ -162,14 +163,22 @@ function renderComponent(
 export async function forTouchTip(
   title: string,
   message: string,
-  buttons: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }]
+  buttons: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }],
+  atomicKey?: string
 ): Promise<void> {
-  return new Promise<void>((resolve) => {
+  if (atomicKey) {
+    const activeDialog = activeAtomicDialogs.get(atomicKey)
+    if (activeDialog) return activeDialog
+  }
+
+  const pending = new Promise<void>((resolve) => {
     const root = document.createElement('div')
     const dialogId = generateDialogId('touch-tip')
     const dialogManager = useDialogManager()
 
     root.id = dialogId
+    root.style.position = 'fixed'
+    root.style.inset = '0'
     root.style.zIndex = `${nextZIndex()}`
 
     document.body.appendChild(root)
@@ -184,6 +193,9 @@ export async function forTouchTip(
           dialogManager.unregister(id)
           cleanup()
           document.body.removeChild(root)
+          if (atomicKey) {
+            activeAtomicDialogs.delete(atomicKey)
+          }
           resolve()
         }
       },
@@ -192,6 +204,12 @@ export async function forTouchTip(
       true
     )
   })
+
+  if (atomicKey) {
+    activeAtomicDialogs.set(atomicKey, pending)
+  }
+
+  return pending
 }
 
 /**

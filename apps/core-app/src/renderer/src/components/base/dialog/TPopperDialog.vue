@@ -4,7 +4,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import { sleep } from '@talex-touch/utils/common'
 import { defineComponent, onMounted, provide, ref } from 'vue'
-import TouchScroll from '../TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 
 interface Props {
   close: () => void
@@ -62,7 +62,7 @@ provide('destroy', destroy)
         <p v-if="title" id="dialog-title" class="text-1.5rem font-600 text-center">
           {{ title }}
         </p>
-        <TouchScroll
+        <TxScroll
           id="dialog-content"
           native
           no-padding
@@ -83,7 +83,7 @@ provide('destroy', destroy)
           >
             {{ message }}
           </span>
-        </TouchScroll>
+        </TxScroll>
         <TxButton
           class="absolute w-[calc(100%-40px)] bottom-1.5rem"
           variant="flat"

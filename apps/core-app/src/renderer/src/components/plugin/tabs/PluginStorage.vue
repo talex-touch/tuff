@@ -11,7 +11,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
@@ -541,7 +541,7 @@ watch(
                     <div>{{ t('plugin.storage.table.lastModified') }}</div>
                     <div class="text-right">{{ t('plugin.storage.table.actions') }}</div>
                   </div>
-                  <TouchScroll no-padding class="flex-1" @scroll="emit('scroll', $event)">
+                  <TxScroll no-padding class="flex-1" @scroll="emit('scroll', $event)">
                     <div class="divide-y divide-[var(--tx-border-color-lighter)]">
                       <div v-for="entry in entries" :key="entry.path" class="PluginStorage-Row">
                         <div class="flex items-center gap-3 min-w-0">
@@ -575,7 +575,7 @@ watch(
                         </div>
                       </div>
                     </div>
-                  </TouchScroll>
+                  </TxScroll>
                 </div>
               </div>
 

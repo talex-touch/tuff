@@ -1,6 +1,6 @@
 <script setup lang="ts" name="TuffAsideTemplate">
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TuffAsideSearchBar from './TuffAsideSearchBar.vue'
 
 const props = withDefaults(
@@ -37,7 +37,7 @@ const emit = defineEmits<{
   <div class="TuffAsideTemplate">
     <aside class="TuffAsideTemplate-Aside w-76" aria-label="Tuff aside layout">
       <slot name="aside">
-        <TouchScroll class="TuffAsideTemplate-AsideDefault">
+        <TxScroll class="TuffAsideTemplate-AsideDefault">
           <template #header>
             <header
               v-if="$slots['aside-header']"
@@ -67,7 +67,7 @@ const emit = defineEmits<{
           <div class="TuffAsideTemplate-AsideBody">
             <slot />
           </div>
-        </TouchScroll>
+        </TxScroll>
       </slot>
       <div v-if="$slots.footer" class="TuffAsideTemplate-Footer fake-background">
         <slot name="footer" />
