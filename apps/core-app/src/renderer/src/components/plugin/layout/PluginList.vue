@@ -48,7 +48,7 @@ watch(
 </script>
 
 <template>
-  <TouchScroll v-if="plugins" class="PluginList-Container cubic-transition">
+  <TxScroll v-if="plugins" class="PluginList-Container cubic-transition">
     <div class="PluginList-Toolbox w-full">
       <div class="search-wrapper">
         <i class="i-ri-search-line search-icon" />
@@ -82,7 +82,7 @@ watch(
     <div class="PluginList-Add transition-cubic fake-background">
       <div id="newPluginBtn" class="new-plus" @click="() => emits('add-plugin')" />
     </div>
-  </TouchScroll>
+  </TxScroll>
 </template>
 
 <style lang="scss" scoped>

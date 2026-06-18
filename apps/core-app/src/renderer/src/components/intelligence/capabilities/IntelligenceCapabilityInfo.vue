@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import CapabilityHeader from './CapabilityHeader.vue'
@@ -307,12 +307,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <TouchScroll>
+  <TxScroll>
     <template #header>
       <CapabilityHeader :capability="capability">
-        <template #notice>
-          {{ t('settings.intelligence.capabilityFooterHint') }}
-        </template>
         <template #actions>
           <TxButton
             class="capability-info__test-button"
@@ -417,7 +414,7 @@ onBeforeUnmount(() => {
         </TxButton>
       </div>
     </template>
-  </TouchScroll>
+  </TxScroll>
 
   <FlipDialog
     v-model="showModelDialog"

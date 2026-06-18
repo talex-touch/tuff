@@ -13,7 +13,7 @@ import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -285,7 +285,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <TouchScroll class="capability-details-touch h-full flex flex-col">
+  <TxScroll class="capability-details-touch h-full flex flex-col">
     <template #header>
       <div class="capability-details-header">
         <div>
@@ -421,7 +421,7 @@ onBeforeUnmount(() => {
         </TuffBlockSlot>
       </div>
     </div>
-  </TouchScroll>
+  </TxScroll>
 
   <FlipDialog
     v-model="showModelDialog"

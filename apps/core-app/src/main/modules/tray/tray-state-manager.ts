@@ -8,13 +8,19 @@ export interface TrayState {
   activeDownloads: number
   hasUpdate: boolean
   updateVersion?: string
+  quickOpsSessions: Array<{
+    id: string
+    title: string
+    detail: string
+  }>
 }
 
 export class TrayStateManager {
   private state: TrayState = {
     windowVisible: true,
     activeDownloads: 0,
-    hasUpdate: false
+    hasUpdate: false,
+    quickOpsSessions: []
   }
 
   /**
@@ -89,7 +95,8 @@ export class TrayStateManager {
     this.state = {
       windowVisible: true,
       activeDownloads: 0,
-      hasUpdate: false
+      hasUpdate: false,
+      quickOpsSessions: []
     }
   }
 }

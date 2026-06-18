@@ -12,7 +12,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -254,7 +254,7 @@ function getPayloadPreview(): string {
           </div>
 
           <!-- Target List -->
-          <TouchScroll native no-padding class="flex-1 min-h-0">
+          <TxScroll native no-padding class="flex-1 min-h-0">
             <div class="p-2">
               <div v-if="loading" class="flex items-center justify-center py-8">
                 <i
@@ -328,7 +328,7 @@ function getPayloadPreview(): string {
                 </TxButton>
               </div>
             </div>
-          </TouchScroll>
+          </TxScroll>
 
           <!-- Footer -->
           <div

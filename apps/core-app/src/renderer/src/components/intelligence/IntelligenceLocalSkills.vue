@@ -1,7 +1,8 @@
 <script setup name="IntelligenceLocalSkills" lang="ts">
 import type {
   IntelligenceLocalEnvironmentSummary,
-  IntelligenceLocalSkillGateStatus
+  IntelligenceLocalSkillGateStatus,
+  IntelligenceLocalToolSummary
 } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
@@ -76,6 +77,21 @@ function formatGateSummary(): string {
 
 function gateStatusLabel(status: IntelligenceLocalSkillGateStatus): string {
   return t(`settings.intelligence.localSkills.gateStatus.${status}`)
+}
+
+function formatToolPath(tool: IntelligenceLocalToolSummary): string {
+  return tool.executablePath || tool.configRoots[0] || tool.id
+}
+
+function toolChipTitle(tool: IntelligenceLocalToolSummary): string {
+  const lines = [tool.name]
+  if (tool.executablePath) {
+    lines.push(tool.executablePath)
+  }
+  if (tool.configRoots.length) {
+    lines.push(...tool.configRoots)
+  }
+  return lines.join('\n')
 }
 
 function skillChipTitle(skill: IntelligenceLocalSkillChipDisplay): string {
@@ -159,6 +175,18 @@ onMounted(() => {
 
     <div v-if="environment" class="local-skills__chips">
       <span
+        v-for="tool in installedTools"
+        :key="tool.id"
+        class="local-skills__tool-chip"
+        :title="toolChipTitle(tool)"
+      >
+        <i class="i-carbon-terminal" aria-hidden="true" />
+        <span>{{ tool.name }}</span>
+        <span class="local-skills__tool-path">
+          {{ formatToolPath(tool) }}
+        </span>
+      </span>
+      <span
         v-for="skill in visibleSkillChips"
         :key="skill.id"
         class="local-skills__chip"
@@ -202,6 +230,7 @@ onMounted(() => {
 }
 
 .local-skills__chip,
+.local-skills__tool-chip,
 .local-skills__hint {
   display: inline-flex;
   align-items: center;
@@ -212,6 +241,19 @@ onMounted(() => {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
   background: var(--tx-fill-color-light);
+}
+
+.local-skills__tool-chip {
+  max-width: 100%;
+  color: var(--tx-text-color-primary);
+}
+
+.local-skills__tool-path {
+  max-width: min(520px, 48vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tx-color-primary);
 }
 
 .local-skills__chip-status {

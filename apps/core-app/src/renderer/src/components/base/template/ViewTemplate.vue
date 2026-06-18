@@ -2,7 +2,7 @@
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import TouchScroll from '../TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { resolveI18nLabel } from '~/utils/i18n-helpers'
 
 const props = withDefaults(
@@ -54,11 +54,11 @@ const routeTitleSource = computed(() => {
         :opacity="0.9"
         :z-index="20"
       />
-      <TouchScroll no-padding class="ViewTemplate-Scroll">
+      <TxScroll no-padding class="ViewTemplate-Scroll">
         <div class="View-Container px-4 py-6">
           <slot />
         </div>
-      </TouchScroll>
+      </TxScroll>
     </div>
 
     <div

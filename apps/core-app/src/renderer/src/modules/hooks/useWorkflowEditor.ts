@@ -626,6 +626,10 @@ export function resolveReviewQueueMetaChips(
   item: Pick<
     WorkflowReviewQueueItem,
     | 'capabilityId'
+    | 'workflowId'
+    | 'workflowName'
+    | 'stepId'
+    | 'stepName'
     | 'provider'
     | 'model'
     | 'traceId'
@@ -637,6 +641,13 @@ export function resolveReviewQueueMetaChips(
   >
 ): WorkflowReviewQueueMetaChip[] {
   const chips: WorkflowReviewQueueMetaChip[] = [
+    {
+      labelKey: 'reviewMetaSource',
+      fallback: 'Source',
+      value: [item.workflowName || item.workflowId, item.stepName || item.stepId]
+        .filter((value) => typeof value === 'string' && value.trim().length > 0)
+        .join(' / ')
+    },
     {
       labelKey: 'reviewMetaCapability',
       fallback: 'Capability',

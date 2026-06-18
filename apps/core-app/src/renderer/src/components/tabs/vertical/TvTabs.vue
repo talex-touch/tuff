@@ -2,7 +2,7 @@
 import type { Component, VNode, VNodeChild } from 'vue'
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { defineComponent, h, nextTick, onMounted, reactive, ref, useSlots } from 'vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 
 export default defineComponent({
@@ -338,7 +338,7 @@ export default defineComponent({
                 })
               ]),
               h(
-                TouchScroll,
+                TxScroll,
                 {
                   noPadding: true,
                   onScroll: (info: { scrollTop: number; scrollLeft: number }) =>

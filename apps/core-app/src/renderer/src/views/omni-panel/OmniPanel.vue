@@ -27,6 +27,7 @@ import {
   createOmniPanelAiInputPreview,
   isOmniPanelAiAction,
   normalizeOmniPanelAiResult,
+  normalizeOmniPanelAiError,
   resolveOmniPanelAiPreviewChips,
   resolveOmniPanelAiPreviewStatus,
   resolveOmniPanelAiInput,
@@ -77,6 +78,7 @@ interface AiPreviewState {
   latency: number
   status: 'running' | 'done' | 'error'
   error?: string
+  errorCode?: string
 }
 
 const aiPreview = ref<AiPreviewState | null>(null)
@@ -150,7 +152,10 @@ const aiPreviewMetaChips = computed(() => {
 })
 const aiPreviewErrorRecovery = computed(() =>
   aiPreview.value?.status === 'error'
-    ? resolveIntelligenceErrorRecovery({ error: aiPreview.value.error }, t)
+    ? resolveIntelligenceErrorRecovery(
+        { error: aiPreview.value.error, errorCode: aiPreview.value.errorCode },
+        t
+      )
     : null
 )
 
@@ -281,7 +286,8 @@ async function executeAiFeature(
       status: 'done'
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : t('corebox.omniPanel.executeFailed')
+    const fallback = t('corebox.omniPanel.executeFailed')
+    const normalizedError = normalizeOmniPanelAiError(error, fallback)
     omniPanelLog.error('Failed to execute OmniPanel AI feature', error)
     aiPreview.value = {
       featureId: actionId,
@@ -294,10 +300,11 @@ async function executeAiFeature(
       traceId: '',
       latency: 0,
       status: 'error',
-      error: message
+      error: normalizedError.message,
+      errorCode: normalizedError.errorCode
     }
     aiClipboardError.value = ''
-    toast.error(message)
+    toast.error(normalizedError.message)
   } finally {
     executingId.value = null
   }

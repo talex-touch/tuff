@@ -211,6 +211,19 @@ function createDefaultManualTrigger(): WorkflowDefinition['triggers'] {
   ]
 }
 
+function createClipboardBatchTrigger(limit: number): WorkflowDefinition['triggers'][number] {
+  return {
+    id: 'clipboard-batch',
+    type: 'clipboard.batch',
+    enabled: true,
+    label: '剪贴板批处理',
+    config: {
+      limit,
+      acceptedInputTypes: ['text', 'html']
+    }
+  }
+}
+
 function createDefaultTemplateContextSources(limit: number): WorkflowDefinition['contextSources'] {
   return [
     {
@@ -252,7 +265,7 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
     description: '读取最近剪贴板历史，按主题分组并生成可复制的整理结果。',
     version: '1',
     enabled: true,
-    triggers: createDefaultManualTrigger(),
+    triggers: [...createDefaultManualTrigger(), createClipboardBatchTrigger(8)],
     contextSources: createDefaultTemplateContextSources(8),
     toolSources: ['builtin'],
     approvalPolicy: createDefaultTemplateApprovalPolicy(),
@@ -368,7 +381,7 @@ function createBatchTextProcessingTemplate(): WorkflowDefinition {
     description: '按多段文本逐条执行整理、改写、摘要或翻译建议，保留逐条结果。',
     version: '1',
     enabled: true,
-    triggers: createDefaultManualTrigger(),
+    triggers: [...createDefaultManualTrigger(), createClipboardBatchTrigger(12)],
     contextSources: createDefaultTemplateContextSources(12),
     toolSources: ['builtin'],
     approvalPolicy: createDefaultTemplateApprovalPolicy(),

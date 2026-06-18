@@ -10,6 +10,7 @@ import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { hasQuickOpsDeveloperCommand } from '@talex-touch/utils/core-box/preview'
 import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
@@ -17,6 +18,7 @@ import { createLogger } from '../../../../utils/logger'
 
 const PREVIEW_COMPONENT_NAME = DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD
 const SOURCE_ID = 'preview-provider'
+const PREVIEW_COPY_PRIMARY_ACTION_ID = 'preview-copy-primary'
 const previewLog = createLogger('PreviewProvider')
 
 interface PreparedPreviewQuery {
@@ -51,7 +53,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   readonly id = SOURCE_ID
   readonly type = 'system' as const
   readonly name = '即时预览'
-  readonly supportedInputTypes = [TuffInputType.Text]
+  readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Html]
   readonly priority = 'fast' as const
   readonly expectedDuration = 200
 
@@ -60,12 +62,13 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const startedAt = performance.now()
     const preparedQuery = extractExplicitCalculatorQuery(query)
+    const sdkQuery = this.withQuickOpsClipboardInput(preparedQuery.sdkQuery)
     const normalized = preparedQuery.sdkQuery.text?.trim() ?? ''
     if (!normalized) {
       return this.createEmptyResult(query, startedAt)
     }
 
-    const result = await this.sdk.resolve({ query: preparedQuery.sdkQuery, signal })
+    const result = await this.sdk.resolve({ query: sdkQuery, signal })
     if (!result) {
       return this.createEmptyResult(query, startedAt)
     }
@@ -164,6 +167,18 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       .setClassName('core-preview-card')
       .setFinalScore(1)
 
+    if (payload.primaryValue) {
+      builder.setActions([
+        {
+          id: PREVIEW_COPY_PRIMARY_ACTION_ID,
+          type: 'copy',
+          label: '复制结果',
+          icon: { type: 'class', value: 'i-ri-file-copy-line' },
+          payload: { text: payload.primaryValue }
+        }
+      ])
+    }
+
     if (payload.title) {
       builder.setTitle(payload.title)
     }
@@ -176,6 +191,27 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     const custom = item.render.custom
     if (custom?.type !== 'vue') return undefined
     return custom.data as PreviewCardPayload | undefined
+  }
+
+  private withQuickOpsClipboardInput(query: TuffQuery): TuffQuery {
+    if (!hasQuickOpsDeveloperCommand(query)) return query
+    if (query.inputs?.some((input) => input.content?.trim() || input.rawContent?.trim())) {
+      return query
+    }
+
+    const text = clipboard.readText().trim()
+    if (!text) return query
+
+    return {
+      ...query,
+      inputs: [
+        ...(query.inputs ?? []),
+        {
+          type: TuffInputType.Text,
+          content: text
+        }
+      ]
+    }
   }
 
   private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {

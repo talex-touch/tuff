@@ -38,8 +38,56 @@ const {
 } = useIntelligenceManager()
 
 const searchQuery = ref('')
+const CAPABILITY_USAGE_ORDER = [
+  'text.chat',
+  'text.translate',
+  'text.summarize',
+  'intent.detect',
+  'keywords.extract',
+  'content.extract',
+  'sentiment.analyze',
+  'code.generate',
+  'code.explain',
+  'code.review',
+  'vision.ocr',
+  'image.caption',
+  'image.analyze',
+  'image.translate.e2e',
+  'audio.transcribe',
+  'audio.tts',
+  'embedding.generate'
+] as const
+const capabilityUsageRank = new Map<string, number>(
+  CAPABILITY_USAGE_ORDER.map((id, index) => [id, index])
+)
+
+function getCapabilityUsageRank(capability: IntelligenceCapabilityConfig): number {
+  const exactRank = capabilityUsageRank.get(capability.id)
+  if (exactRank !== undefined) return exactRank
+
+  const searchable = `${capability.id} ${capability.label || ''}`.toLowerCase()
+  if (searchable.includes('chat') || searchable.includes('对话')) return 0.5
+  if (searchable.includes('translate') || searchable.includes('翻译')) return 1.5
+  if (searchable.includes('summar') || searchable.includes('摘要')) return 2.5
+  if (searchable.includes('intent') || searchable.includes('意图')) return 3.5
+  if (searchable.includes('code') || searchable.includes('代码')) return 7.5
+  if (
+    searchable.includes('image') ||
+    searchable.includes('vision') ||
+    searchable.includes('图像')
+  ) {
+    return 10.5
+  }
+  if (searchable.includes('audio') || searchable.includes('音频')) return 14.5
+  return 1000
+}
+
 const capabilityList = computed<IntelligenceCapabilityConfig[]>(() =>
-  Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id))
+  Object.values(capabilities.value || {}).sort((a, b) => {
+    const rankDiff = getCapabilityUsageRank(a) - getCapabilityUsageRank(b)
+    if (rankDiff !== 0) return rankDiff
+    return (a.label || a.id).localeCompare(b.label || b.id)
+  })
 )
 const providerMap = computed(
   () => new Map(providers.value.map((provider) => [provider.id, provider]))

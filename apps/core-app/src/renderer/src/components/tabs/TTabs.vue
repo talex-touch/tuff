@@ -2,7 +2,7 @@
 // Legacy tabs surface: new CoreApp code should import TxTabs from @talex-touch/tuffex/tabs.
 import type { Component, VNode, VNodeChild } from 'vue'
 import { defineComponent, h, nextTick, ref } from 'vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TTabHeader from '~/components/tabs/TTabHeader.vue'
 import TTabItem from '~/components/tabs/TTabItem.vue'
 
@@ -190,7 +190,7 @@ export default defineComponent({
       const contentWrapper = h('div', { class: 'TTabs-ContentWrapper' }, defaultSlot)
 
       const scrollableContent = h(
-        TouchScroll,
+        TxScroll,
         {
           noPadding: true
         },

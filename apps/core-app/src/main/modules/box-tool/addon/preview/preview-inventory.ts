@@ -19,6 +19,7 @@ const CORE_APP_ADAPTER_ABILITY_IDS = new Set(['preview.currency'])
 const MIGRATED_ABILITY_IDS = new Set([
   'preview.expression.advanced',
   'preview.expression.basic',
+  'preview.currency',
   'preview.percent',
   'preview.textstats',
   'preview.color',
@@ -60,10 +61,13 @@ const EXTERNAL_DYNAMIC_EXECUTION_ITEMS: DynamicExecutionInventoryItem[] = [
 
 export function listPreviewAbilityInventory(): PreviewAbilityInventoryItem[] {
   return previewAbilityRegistry.list().map((ability) => {
-    const status = MIGRATED_ABILITY_IDS.has(ability.id)
-      ? 'migrated'
-      : CORE_APP_ADAPTER_ABILITY_IDS.has(ability.id)
-        ? 'adapter'
+    const isCoreAppAdapter =
+      CORE_APP_ADAPTER_ABILITY_IDS.has(ability.id) &&
+      (ability.safety.usesNetwork || ability.safety.usesCache)
+    const status = isCoreAppAdapter
+      ? 'adapter'
+      : MIGRATED_ABILITY_IDS.has(ability.id)
+        ? 'migrated'
         : 'planned'
     const owner = status === 'migrated' ? 'preview-sdk' : 'core-app'
     return toPreviewAbilityInventoryItem(ability, owner, status)

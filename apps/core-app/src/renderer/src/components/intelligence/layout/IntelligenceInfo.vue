@@ -28,7 +28,7 @@ import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TouchScroll from '~/components/base/TouchScroll.vue'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
@@ -43,6 +43,9 @@ const props = defineProps<{
   provider: IntelligenceProviderConfig
   testResult?: TestResult | null
   isTesting?: boolean
+  isSyncingFromNexus?: boolean
+  syncMessage?: string
+  syncError?: string
 }>()
 
 const emits = defineEmits<{
@@ -51,6 +54,7 @@ const emits = defineEmits<{
   delete: []
   duplicate: []
   editBasic: []
+  syncNexus: []
 }>()
 
 const { t } = useI18n()
@@ -141,10 +145,14 @@ function handleChange() {
 async function handleLogin() {
   await loginWithBrowser()
 }
+
+function handleSyncFromNexus() {
+  emits('syncNexus')
+}
 </script>
 
 <template>
-  <TouchScroll class="IntelligenceInfo-root h-full flex flex-col">
+  <TxScroll class="IntelligenceInfo-root h-full flex flex-col">
     <template #header>
       <IntelligenceHeader
         :provider="localProvider"
@@ -174,7 +182,7 @@ async function handleLogin() {
         >
           <TxButton
             v-if="!isLoggedIn"
-            class="nexus-status__login"
+            class="nexus-status__action"
             variant="flat"
             size="sm"
             native-type="button"
@@ -189,7 +197,34 @@ async function handleLogin() {
             />
             <span>{{ t('settings.intelligence.nexusInvokeLoginAction') }}</span>
           </TxButton>
+          <TxButton
+            v-else
+            class="nexus-status__action"
+            variant="flat"
+            size="sm"
+            native-type="button"
+            :disabled="isSyncingFromNexus"
+            :loading="isSyncingFromNexus"
+            @click.stop="handleSyncFromNexus"
+          >
+            <i v-if="!isSyncingFromNexus" class="i-carbon-cloud-download" aria-hidden="true" />
+            <span>
+              {{
+                isSyncingFromNexus
+                  ? t('settings.intelligence.syncingFromNexus')
+                  : t('settings.intelligence.syncFromNexus')
+              }}
+            </span>
+          </TxButton>
         </TuffBlockSlot>
+        <div v-if="syncMessage || syncError" class="nexus-status__sync-result">
+          <p v-if="syncMessage" class="is-success">
+            {{ syncMessage }}
+          </p>
+          <p v-if="syncError" class="is-error">
+            {{ syncError }}
+          </p>
+        </div>
       </TuffGroupBlock>
 
       <template v-if="!isNexusManagedProvider">
@@ -243,7 +278,7 @@ async function handleLogin() {
         <IntelligenceRateLimitConfig v-model="localProvider" @change="handleChange" />
       </TuffGroupBlock>
     </div>
-  </TouchScroll>
+  </TxScroll>
 </template>
 
 <style lang="scss" scoped>
@@ -257,9 +292,30 @@ async function handleLogin() {
   }
 }
 
-.nexus-status__login {
+.nexus-status__action {
   flex-shrink: 0;
   min-width: 112px;
+}
+
+.nexus-status__sync-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 16px 12px 56px;
+
+  p {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .is-success {
+    color: var(--tx-color-success);
+  }
+
+  .is-error {
+    color: var(--tx-color-danger);
+  }
 }
 
 .animate-spin {

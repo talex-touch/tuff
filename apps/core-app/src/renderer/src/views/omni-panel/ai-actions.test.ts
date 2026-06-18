@@ -4,6 +4,7 @@ import {
   createOmniPanelAiInputPreview,
   isOmniPanelAiAction,
   looksLikeCode,
+  normalizeOmniPanelAiError,
   normalizeOmniPanelAiResult,
   resolveOmniPanelAiPreviewChips,
   resolveOmniPanelAiPreviewStatus,
@@ -136,6 +137,7 @@ describe('omni-panel ai actions', () => {
       capabilityId: 'text.rewrite',
       provider: '  nexus ',
       model: '',
+      traceId: ' trace-1 ',
       latency: 12.6
     })
 
@@ -149,6 +151,11 @@ describe('omni-panel ai actions', () => {
         labelKey: 'corebox.omniPanel.aiMetaProvider',
         fallback: 'Provider',
         value: 'nexus'
+      },
+      {
+        labelKey: 'corebox.omniPanel.aiMetaTrace',
+        fallback: 'Trace',
+        value: 'trace-1'
       },
       {
         labelKey: 'corebox.omniPanel.aiMetaLatency',
@@ -182,5 +189,19 @@ describe('omni-panel ai actions', () => {
   it('identifies only built-in AI action ids', () => {
     expect(isOmniPanelAiAction('builtin.ai.translate')).toBe(true)
     expect(isOmniPanelAiAction('builtin.translate')).toBe(false)
+  })
+
+  it('keeps provider error codes for recovery copy', () => {
+    const error = new Error('sign in required') as Error & { code?: string }
+    error.code = 'NEXUS_AUTH_REQUIRED'
+
+    expect(normalizeOmniPanelAiError(error, 'fallback')).toEqual({
+      message: 'sign in required',
+      errorCode: 'NEXUS_AUTH_REQUIRED'
+    })
+
+    expect(normalizeOmniPanelAiError('network failed', 'fallback')).toEqual({
+      message: 'network failed'
+    })
   })
 })

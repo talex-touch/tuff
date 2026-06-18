@@ -108,7 +108,8 @@ export function useStoreInstall() {
             return true
           }
         }
-      ]
+      ],
+      `store-upgrade:${plugin.providerId || 'default'}:${plugin.id}`
     )
 
     return confirmed

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { usePermissionStartup } from '~/composables/usePermissionStartup'
+import { useStartupPermissionAudit } from '~/composables/useStartupPermissionAudit'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
 import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
@@ -15,6 +16,7 @@ const emit = defineEmits<{
 
 const { initializeLanguage } = useLanguage()
 const runtimeLog = createRendererLogger('MainWindowRuntime')
+const { runAudit: runStartupPermissionAudit } = useStartupPermissionAudit()
 
 captureAppContext()
 usePermissionStartup()
@@ -31,6 +33,7 @@ async function init(): Promise<void> {
   useDropperResolver()
 
   await appSettings.whenHydrated()
+  void runStartupPermissionAudit()
   if (!appSetting?.beginner?.init) {
     emit('beginnerRequired')
   }

@@ -277,7 +277,7 @@ onMounted(() => {
 
 .TGroupBlock-Main {
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .TGroupBlock-Main :deep(.TBlockSelection) {
@@ -310,5 +310,9 @@ onMounted(() => {
   --fake-radius: 0 !important;
   border: 1px solid var(--tx-border-color-lighter);
   transition: border-color 0.25s ease;
+
+  &.expand {
+    overflow: visible;
+  }
 }
 </style>
