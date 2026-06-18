@@ -10,17 +10,19 @@
 
 已落地：
 
-- QuickOps Developer P0/P1 能力先进入 `packages/utils/core-box/preview` 的 PreviewSDK：`QuickOpsDeveloperAbility` 支持 JSON 格式化 / 压缩 / 校验、URL 编解码、Base64 编解码、JWT 解码、Regex 受限测试、Markdown/CSV 表格转换、时间戳转换、日期 / 固定 UTC offset 时区转换、静态离线货币估算、UUID v4 / 短 ID 生成和大小写 / 命名风格转换。
-- CoreApp `PreviewProvider` 已注册该能力，并声明支持 Text / HTML 输入；CoreBox 可以用 `json`、`url encode`、`base64 decode`、`timestamp`、`timezone 2024-03-09T16:00:00Z UTC+08:00`、`uuid v4`、`case snake` 等命令触发。
+- QuickOps Developer P0/P1 能力先进入 `packages/utils/core-box/preview` 的 PreviewSDK：`QuickOpsDeveloperAbility` 支持 JSON 格式化 / 压缩 / 校验、URL 编解码、Base64 编解码、JWT 解码、Regex 受限测试、Markdown/CSV 表格转换、时间戳转换、日期 / 固定 UTC offset 时区转换、静态离线货币估算、UUID v4 / 短 ID 生成、QR Code SVG 生成和大小写 / 命名风格转换。
+- CoreApp `PreviewProvider` 已注册该能力，并声明支持 Text / HTML 输入；CoreBox 可以用 `json`、`url encode`、`base64 decode`、`timestamp`、`timezone 2024-03-09T16:00:00Z UTC+08:00`、`uuid v4`、`qr code https://tuff.talex.app`、`case snake` 等命令触发。
 - CoreApp `PreviewProvider` 会为包含 `primaryValue` 的 preview item 暴露 `preview-copy-primary` host copy action，Action Panel 可直接复制预览主结果；这只覆盖 PreviewSDK 主结果复制入口，不等同于全量 QuickOps host copy-action / Flow action / 企业策略闭环。
 - 当 `json` / `base64 decode` 这类命令没有显式输入时，CoreApp PreviewProvider 会读取本地文本剪贴板作为默认输入；错误以 preview payload 的 warning / error label 返回，不把原始内容写入日志。
 - PreviewSDK 默认 registry 已把更多 QuickOps no-result 边界纳入 benchmark：`uuid history` 不再被误识别为 UUID 生成，未知货币代码不会进入静态汇率估算，缺少 `/pattern/` 字面量的 `regex hello world` 不触发 Regex 预览；CoreApp 剪贴板兜底检测也复用同一命令边界，避免非命令输入触发剪贴板读取。
-- CoreApp 新增 `QuickOpsProvider` 最小状态型入口，CoreBox 可搜索 `keep awake 30m` / `禁止息屏 1小时` / `extend keep awake 15m` / `延长保持唤醒 15分钟` / `prevent system sleep 30m` / `禁止系统睡眠 30分钟` / `timer 10m` / `计时 25分钟` / `pause timer` / `暂停计时` / `resume timer` / `继续计时` / `extend timer 5m` / `延长计时 5分钟` / `pomodoro` / `番茄钟` / `pomodoro cycle` / `循环番茄钟` / `pomodoro cycle 4 rounds 25m 5m` / `循环番茄钟 4轮 25分钟 5分钟` / `pomodoro 25/5` / `长番茄钟` / `pomodoro custom 40/8` / `自定义番茄钟 45/10` / 设置中的自定义番茄钟模板名称或别名 / `pause pomodoro` / `暂停番茄钟` / `resume pomodoro` / `继续番茄钟` / `clean screen` / `清洁屏幕` / `白底清洁屏幕` / `stop clean screen` / `退出清洁屏幕` / `stopwatch` / `秒表` / `秒表分段`，并支持运行中会话查询、暂停、恢复、延长、停止、快速计时器到点通知、番茄钟 25/5 与 50/10 内置模板、命令式自定义专注/休息模板、设置驱动的自定义模板列表 schema / 别名解析、专注/休息循环、1-12 轮有限循环与阶段到点通知、清洁屏幕黑/白底全屏遮罩、秒表分段和到期自动清理。
+- CoreApp 新增 `QuickOpsProvider` 最小状态型入口，CoreBox 可搜索 `keep awake 30m` / `禁止息屏 1小时` / `extend keep awake 15m` / `延长保持唤醒 15分钟` / `prevent system sleep 30m` / `禁止系统睡眠 30分钟` / `timer 10m` / `计时 25分钟` / `pause timer` / `暂停计时` / `resume timer` / `继续计时` / `extend timer 5m` / `延长计时 5分钟` / `pomodoro` / `番茄钟` / `pomodoro cycle` / `循环番茄钟` / `pomodoro cycle 4 rounds 25m 5m` / `循环番茄钟 4轮 25分钟 5分钟` / `pomodoro 25/5` / `长番茄钟` / `pomodoro custom 40/8` / `自定义番茄钟 45/10` / 设置中的自定义番茄钟模板名称或别名 / `pause pomodoro` / `暂停番茄钟` / `resume pomodoro` / `继续番茄钟` / `clean screen` / `清洁屏幕` / `白底清洁屏幕` / `red screen test` / `screen color test` / `蓝色屏幕测试` / `stop clean screen` / `退出清洁屏幕` / `stopwatch` / `秒表` / `秒表分段`，并支持运行中会话查询、暂停、恢复、延长、停止、快速计时器到点通知、番茄钟 25/5 与 50/10 内置模板、命令式自定义专注/休息模板、设置驱动的自定义模板列表 schema / 别名解析、专注/休息循环、1-12 轮有限循环与阶段到点通知、清洁屏幕黑/白底全屏遮罩、红/绿/蓝纯色屏幕测试遮罩、秒表分段和到期自动清理。
 - QuickOps Network 只读查询已接入 CoreBox：`local ip` / `本机 IP` 使用 Node `networkInterfaces()` 展示非 internal IPv4 / IPv6、网卡名与复制动作；`port 3000` / `端口 3000` 使用 Node TCP bind 探测本地端口可用 / 已占用状态，占用时 best-effort 通过 macOS/Linux `lsof` 或 Windows PowerShell `Get-NetTCPConnection` 追加 PID / 进程归因并提供复制动作，若已解析 PID，会额外提供 copy-only 终止命令（macOS/Linux `kill <pid>`、Windows `Stop-Process -Id <pid>`），但不直接执行 kill；`dns example.com` / `DNS 查询 example.com` 使用 Node DNS resolver 查询 A / AAAA / CNAME / MX 记录，`deep dns example.com` / `深度 DNS 查询 example.com` 追加 NS / TXT / SOA 记录并提供复制动作；`network status` / `网络状态` 汇总非 internal 本机地址、系统 DNS server 列表和 `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` 环境变量代理状态，代理 URL 凭据会脱敏；`proxy status` / `system proxy` / `系统代理` 只读读取 macOS `scutil --proxy`、Windows 当前用户 Internet Settings 与 Linux GNOME proxy mode，并复制脱敏系统代理摘要，探测失败时返回 degraded/fallback 摘要且不外联；`public ip` / `公网 IP` 默认关闭，只有用户在高级设置显式开启 `allowPublicIpLookup` 后才向 `https://api.ipify.org?format=json` 发起一次只读 GET，并在结果中标注来源。无可展示网卡、无效端口、端口不可绑定、非法域名、无可用 DNS 记录、系统代理探测失败、公网 IP 外部服务失败或返回非法地址时返回 degraded notification；真实公网外部服务、真实 kill / 二次确认 UI、真实平台网卡 / 端口归因 / DNS / 系统代理 evidence 仍后置。
 - QuickOps Files 打开常用目录已接入 CoreBox：`open desktop` / `打开桌面`、`open downloads` / `打开下载`、`open documents` / `打开文档`、`open app data` / `打开应用数据`、`open logs` / `打开日志` 返回目录 open action 与复制路径动作；真实系统打开端到端 evidence 后置。
+- QuickOps Files 最近下载文件已接入 CoreBox：`recent download` / `latest download` / `最近下载文件` 只读扫描 Downloads 首层普通文件，按修改时间返回最新文件的打开文件、打开所在文件夹和复制路径动作；空目录、无权限或读取失败返回 degraded notification。真实系统打开 evidence、移动到指定目录和高风险确认 UI 后置。
 - QuickOps Files 本地只读文件 Hash 已接入 CoreBox：`hash "/path/to/file"` 支持单个普通文件 MD5 / SHA1 / SHA256 计算与复制动作；`文件 hash` + Files input 支持单文件或多文件 MD5 / SHA1 / SHA256 摘要复制；`file base64 "/path/to/file"` / `文件 base64` + Files input 支持 1MB 以内单文件 Base64 编码复制和多文件 Base64 摘要复制；`base64 decode file <payload>` / `base64 解码文件 <payload>` 支持把 1MB 以内 Base64 payload 解码到 Tuff 临时目录新文件，并返回打开所在文件夹与复制路径动作；目标不存在、目录、权限不足、读取失败、Base64 非法、写入失败或任一文件超过上限时返回 degraded notification，不输出部分成功摘要；文件搜索结果项已追加 Hash/Base64 execute 动作，分别复制 MD5 / SHA1 / SHA256 摘要和 1MB 上限内 Base64 内容。真实平台权限 / 大文件 / 解码写入 evidence 后置。
 - QuickOps Files 复制路径格式已接入 CoreBox：`copy path "/path/to/file"` / `复制文件路径` + Files input 支持原始路径、Shell 转义路径、file URL、Windows 路径转 WSL `/mnt/<drive>/...` 与 WSL `/mnt/<drive>/...` 转 Windows 路径复制动作；文件搜索结果项已追加同一组路径 copy-only 动作，不改变原有 open file 主动作。
 - QuickOps Files 临时工作区已接入 CoreBox：`scratch note` / `临时文本` 会在 `app.getPath('temp')/tuff-quickops` 下创建 `.txt` scratch note，支持命令尾随内容、64KB 上限、打开与复制路径动作；`temp dir` / `临时目录` 会在同一临时根目录下创建安全命名目录，支持打开与复制路径动作；写入权限不足、内容超限或创建失败时返回 degraded notification，不写入用户目录。
+- CoreBox PreviewResultCard 已为 QuickOps QR payload 提供 SVG 图片预览；主结果仍是 SVG data URL，可通过现有 preview copy action 复制，并可通过 `preview-save-qr-svg` execute action 保存 SVG 到 `app.getPath('temp')/tuff-quickops` 临时目录后复制路径。当前 QR 生成限定本地 Byte mode、ECC-L、版本 1-6 和 134 bytes 输入上限；PNG 导出和 v7+ 更高容量 QR 后置。
 - QuickOps System 脱敏诊断信息复制已接入 CoreBox：`tuff diagnostics` / `复制诊断信息` 返回 schema version、版本、平台、OS、Node/Electron runtime、CPU/内存/uptime 摘要、脱敏 Home/userData/logs 路径、网络地址/DNS/proxy 计数和 QuickOps 默认参数摘要；不读取日志、不复制完整配置、不包含原始 Home 路径或代理凭据。
 - QuickOps System 系统信息复制已接入 CoreBox：`system info` / `系统信息` 返回 OS type/release、platform/arch、CPU 型号/核心数、总内存/可用内存、uptime 与 load average；不读取敏感路径、不外联、不触碰系统状态。
 - QuickOps System 磁盘空间与关键目录占用复制已接入 CoreBox：`disk space` / `磁盘空间` 使用 Node `statfs()` 只读汇总 Home 与 Tuff userData 所在文件系统的 free/used/total 和使用率，路径做 Home 脱敏；`directory usage` / `目录占用` 对 Desktop / Downloads / Documents / Tuff userData / Logs 做 bounded shallow scan，只统计每个目录首批直接子项的文件数、目录数、其他条目数与直接文件大小；`deep directory usage` / `深度目录占用` 对同一组关键目录执行 bounded recursive scan（深度 3、每目录 200 项、总 1000 项），复制递归文件大小和条目统计；读取失败返回 degraded notification。真实平台目录权限 evidence 后置。
@@ -30,15 +32,15 @@
 - 托盘菜单已接入首版 QuickOps 状态：无运行会话时显示 idle 项；有运行会话时显示运行数量、每个会话的运行/暂停状态与剩余/已用时，并提供“停止全部 QuickOps 会话”动作。
 - `AppSetting.quickOps` 已补默认偏好字段，QuickOpsProvider 会只读解析全局启用开关、CoreBox 运行中状态展示开关、默认保持唤醒/系统睡眠阻止/计时器/番茄钟/休息/清洁屏幕时长、25/5 与 50/10 内置番茄钟模板启用状态、自定义番茄钟模板列表、清洁屏幕默认黑/白底，以及公网 IP 查询 opt-in 开关；设置页已提供对应默认偏好、内置番茄钟模板开关、高级设置中的公网 IP 查询开关和自定义模板摘要入口，并有 renderer focused test 覆盖控件可见性、非法旧配置归一化、模板开关保留、自定义模板归一化和高级设置可见性。
 - 显示器保持唤醒首版使用 Electron `powerSaveBlocker.start('prevent-display-sleep')`；系统睡眠阻止使用 `powerSaveBlocker.start('prevent-app-suspension')`；停止或到期时调用 `powerSaveBlocker.stop()`，不修改系统电源计划。
-- 清洁屏幕首版使用 Electron `BrowserWindow` 为每个 display 创建本地 `data:` 全屏遮罩窗口，默认 60 秒后自动退出，支持黑/白底、长按 Esc 退出、CoreBox 停止项、窗口关闭、provider deactivate/destroy 清理；当前不读取屏幕内容、不上传数据、不持久化配置。
+- 清洁屏幕 / 屏幕测试首版使用 Electron `BrowserWindow` 为每个 display 创建本地 `data:` 全屏遮罩窗口，默认 60 秒后自动退出，支持黑/白底、红/绿/蓝纯色测试、长按 Esc 退出、CoreBox 停止项、窗口关闭、provider deactivate/destroy 清理；当前不读取屏幕内容、不上传数据、不持久化配置。
 - `SearchEngineCore.destroy()` 已清理已注册 provider，`QuickOpsProvider.onDestroy()` 会停止所有运行中 session；当前已有 regression test 覆盖 SearchEngine destroy 触发 provider cleanup。
-- 已通过 `packages/utils` PreviewSDK focused test 与 CoreApp PreviewProvider focused test 覆盖命令输入、剪贴板输入、URL/Base64/JSON/JWT 解码/Regex 受限测试/Markdown/CSV 表格转换/时间戳/日期与固定 UTC offset 时区转换/静态离线货币估算/UUID v4/短 ID/大小写转换结果和 provider input passthrough；CoreApp 仍保留 Nexus / cache-backed 实时汇率 adapter，不把静态 fallback 等同于实时汇率完成。
-- 已通过 CoreApp QuickOpsProvider focused test 覆盖保持唤醒动作生成、默认偏好解析、全局启用开关、运行中状态展示开关、延长会话、系统睡眠阻止、powerSaveBlocker 启停、到期清理、计时器会话、计时器暂停/恢复/延长、番茄钟首个专注段开始/查询/暂停/恢复/停止/通知、循环番茄钟专注到休息再回到下一轮专注的状态转换、有限轮数循环最终专注段完成后停止、每 N 轮长休息策略和有限循环最终轮不追加休息、25/5 与 50/10 内置模板解析、内置模板启用开关解析、`pomodoro custom 40/8` / `自定义番茄钟 45/10` 命令式自定义模板解析、设置驱动自定义模板名称/别名解析、禁用模板 fallback 与无效模板忽略、清洁屏幕黑/白底 overlay 创建/查询/停止/到期/销毁清理、overlay data URL 视觉合同（黑/白底、倒计时提示、隐藏光标、长按 Esc 退出、无外链资源）、秒表开始/暂停/继续/分段/重置、本机 IP 查询、无非 internal 网卡地址 degraded 结果、公网 IP 默认关闭不外联、显式开启后复制查询结果、外部服务失败和非法地址 degraded 结果、本地端口可用 / 已占用 / 无效端口探测、占用端口 PID / 进程归因与归因失败 fallback、网络状态地址/DNS server/环境变量代理摘要和空地址/空 DNS 摘要、macOS/Windows/Linux 系统代理只读探测、系统代理凭据脱敏和探测失败 degraded fallback、打开常用目录 open/copy action 与 appData/logs 映射、单文件 Hash 路径命令、Files input 单文件、多文件 Files input 摘要、缺失文件/目录/多文件任一非法路径 degraded 结果、复制路径格式路径命令、Files input、Windows/WSL 路径互转与无目标 degraded 结果、脱敏诊断信息复制且不泄露原始 Home 路径/完整配置、系统信息复制且不泄露原始 Home 路径、磁盘空间复制且不泄露原始 Home 路径和读取失败 degraded 结果、电池状态 macOS 输出、Windows/Linux 解析、无电池 degraded 结果、低电量未充电通知策略和充电/健康电量不通知、停止项和计时器到点通知；file provider utils focused test 覆盖文件搜索结果路径 copy-only actions、file URL 与 Windows/WSL 路径互转；SettingTools QuickOps renderer test 覆盖默认偏好设置入口、内置番茄钟模板开关、公网 IP 高级设置开关、非法旧配置归一化、自定义模板归一化/高级摘要和高级设置显示；QuickOpsModule focused test 覆盖模块 stop/destroy 清理共享 runtime；TrayManager focused test 覆盖托盘 idle 状态、运行中会话摘要与停止全部动作。
+- 已通过 `packages/utils` PreviewSDK focused test 与 CoreApp PreviewProvider focused test 覆盖命令输入、剪贴板输入、URL/Base64/JSON/JWT 解码/Regex 受限测试/Markdown/CSV 表格转换/时间戳/日期与固定 UTC offset 时区转换/静态离线货币估算/UUID v4/短 ID/QR Code SVG/大小写转换结果和 provider input passthrough；CoreApp 仍保留 Nexus / cache-backed 实时汇率 adapter，不把静态 fallback 等同于实时汇率完成。
+- 已通过 CoreApp QuickOpsProvider focused test 覆盖保持唤醒动作生成、默认偏好解析、全局启用开关、运行中状态展示开关、延长会话、系统睡眠阻止、powerSaveBlocker 启停、到期清理、计时器会话、计时器暂停/恢复/延长、番茄钟首个专注段开始/查询/暂停/恢复/停止/通知、循环番茄钟专注到休息再回到下一轮专注的状态转换、有限轮数循环最终专注段完成后停止、每 N 轮长休息策略和有限循环最终轮不追加休息、25/5 与 50/10 内置模板解析、内置模板启用开关解析、`pomodoro custom 40/8` / `自定义番茄钟 45/10` 命令式自定义模板解析、设置驱动自定义模板名称/别名解析、禁用模板 fallback 与无效模板忽略、清洁屏幕黑/白底 overlay 创建/查询/停止/到期/销毁清理、红/绿/蓝纯色屏幕测试 overlay、overlay data URL 视觉合同（黑/白底、红/绿/蓝背景、倒计时提示、隐藏光标、长按 Esc 退出、无外链资源）、秒表开始/暂停/继续/分段/重置、本机 IP 查询、无非 internal 网卡地址 degraded 结果、公网 IP 默认关闭不外联、显式开启后复制查询结果、外部服务失败和非法地址 degraded 结果、本地端口可用 / 已占用 / 无效端口探测、占用端口 PID / 进程归因与归因失败 fallback、网络状态地址/DNS server/环境变量代理摘要和空地址/空 DNS 摘要、macOS/Windows/Linux 系统代理只读探测、系统代理凭据脱敏和探测失败 degraded fallback、打开常用目录 open/copy action 与 appData/logs 映射、最近下载文件按 mtime 选择最新普通文件和空目录 / 权限失败 degraded 结果、单文件 Hash 路径命令、Files input 单文件、多文件 Files input 摘要、缺失文件/目录/多文件任一非法路径 degraded 结果、复制路径格式路径命令、Files input、Windows/WSL 路径互转与无目标 degraded 结果、脱敏诊断信息复制且不泄露原始 Home 路径/完整配置、系统信息复制且不泄露原始 Home 路径、磁盘空间复制且不泄露原始 Home 路径和读取失败 degraded 结果、电池状态 macOS 输出、Windows/Linux 解析、无电池 degraded 结果、低电量未充电通知策略和充电/健康电量不通知、停止项和计时器到点通知；file provider utils focused test 覆盖文件搜索结果路径 copy-only actions、file URL 与 Windows/WSL 路径互转；SettingTools QuickOps renderer test 覆盖默认偏好设置入口、内置番茄钟模板开关、公网 IP 高级设置开关、非法旧配置归一化、自定义模板归一化/高级摘要和高级设置显示；QuickOpsModule focused test 覆盖模块 stop/destroy 清理共享 runtime；TrayManager focused test 覆盖托盘 idle 状态、运行中会话摘要与停止全部动作。
 
 未落地：
 
-- 清洁屏幕真实视觉截图/录屏 evidence、番茄钟联动保持唤醒等更复杂组合策略、packaged app quit 证据等 v1.0 完整状态型验收项仍按 Phase 1 继续推进。
-- 公网 IP 真实外部服务 evidence、真实端口 kill、QuickOps Dashboard、Flow / AI action adapter、企业策略与高风险确认 UI 仍未进入实现。
+- 清洁屏幕 / 纯色屏幕测试真实视觉截图/录屏 evidence、番茄钟联动保持唤醒等更复杂组合策略、packaged app quit 证据等 v1.0 完整状态型验收项仍按 Phase 1 继续推进。
+- 公网 IP 真实外部服务 evidence、真实端口 kill、最近下载文件移动到指定目录、QuickOps Dashboard、Flow / AI action adapter、企业策略与高风险确认 UI 仍未进入实现。
 
 ## 1. 命名结论
 
@@ -115,7 +117,7 @@ Tuff QuickOps 是 CoreApp 随应用内置的一组本地系统快捷工具，不
 | 屏幕清洁模式 | P0 | Windows / macOS / Linux | Electron 全屏遮罩，支持黑/白底、倒计时、长按 Esc 退出 |
 | 立即锁屏 | P1 | Windows / macOS / Linux | 低风险系统调用，但需清晰区分锁屏 / 睡眠 / 关屏 |
 | 立即关闭屏幕 | P1 | Windows / macOS / Linux | 只关闭显示器，不进入睡眠；平台差异较大 |
-| 屏幕纯色 / 坏点测试 | P1 | Windows / macOS / Linux | 清洁屏幕能力延展，适合屏幕维护 |
+| 屏幕纯色 / 坏点测试 | P1 | Windows / macOS / Linux | 已复用清洁屏幕 overlay 接入红 / 绿 / 蓝纯色测试，支持 `screen color test` / `red screen test` / `蓝色屏幕测试`；真实视觉 evidence 后置 |
 
 ### 5.2 时间与专注类
 
@@ -156,7 +158,7 @@ Tuff QuickOps 是 CoreApp 随应用内置的一组本地系统快捷工具，不
 | 复制文件路径 | P1 | 已接入原始路径、Shell 转义路径、file URL 和 Windows/WSL 路径互转；文件搜索结果路径 copy-only 动作已接入 |
 | 新建临时文本文件 | P2 | 已接入 `scratch note` / `临时文本`；仅写入 Tuff 临时目录，支持 64KB 内容上限、打开和复制路径动作 |
 | 创建临时目录 | P2 | 已接入 `temp dir` / `临时目录`；仅写入 Tuff 临时目录，目录名会做安全清理，支持打开和复制路径动作 |
-| 最近下载文件 | P2 | 打开、复制路径、移动到指定目录 |
+| 最近下载文件 | P2 | 已接入最近普通下载文件打开、打开所在文件夹和复制路径；移动到指定目录后置，需高风险确认 UI |
 | 清理空目录 / 批量重命名 | P3 | 高风险，后置且必须确认 |
 
 ### 5.5 网络与开发者类
@@ -166,7 +168,7 @@ Tuff QuickOps 是 CoreApp 随应用内置的一组本地系统快捷工具，不
 | 本机 IP 查询 | P1 | 已接入本地只读查询；展示 IPv4 / IPv6 / 网卡名，一键复制 |
 | 公网 IP 查询 | P1 | 已接入默认关闭的 opt-in 查询；高级设置开启后向 `https://api.ipify.org?format=json` 发起只读 GET 并标注来源；真实外部服务 evidence 后置 |
 | 端口可用性探测 | P1 | 已接入本地只读 TCP bind 探测；`port 3000` / `端口 3000` 展示可用 / 已占用，占用时 best-effort 展示 PID / 进程归因，并提供 copy-only 终止命令 |
-| QR Code 生成 | P1 | 文本 / URL 生成二维码，本地渲染 |
+| QR Code 生成 | P1 | 已进入 PreviewSDK；支持短文本 / URL 本地 SVG QR Code 生成、CoreBox 图片预览、SVG data URL 复制和 SVG 保存到 Tuff 临时目录，当前限制 Byte mode、ECC-L、版本 1-6 和 134 bytes 输入上限；PNG 导出 / v7+ 更高容量 QR 后置 |
 | DNS 查询 | P2 | 已接入本地只读 A / AAAA / CNAME / MX 查询；`deep dns example.com` / `深度 DNS 查询 example.com` 已追加 NS / TXT / SOA 记录；真实平台 DNS evidence 后置 |
 | Ping 工具 | P2 | 简单连通性测试，不替代专业网络工具 |
 | HTTP 快速请求 | P2 | 轻量 GET/POST，敏感 header 不落日志 |
@@ -222,7 +224,7 @@ Tuff QuickOps 是 CoreApp 随应用内置的一组本地系统快捷工具，不
 | 包 | 功能 | 验收重点 |
 | --- | --- | --- |
 | Power Tools | 禁止息屏、禁止系统睡眠、临时保持唤醒、取消保持唤醒 | 有剩余时间、有停止入口、退出自动清理、不可用时有 reason |
-| Screen Tools | 屏幕清洁模式 | 全屏遮罩、黑/白底、倒计时、长按 Esc 退出 |
+| Screen Tools | 屏幕清洁模式、屏幕纯色 / 坏点测试 | 全屏遮罩、黑/白底、红/绿/蓝纯色、倒计时、长按 Esc 退出 |
 | Timer Tools | 快速计时器、秒表、番茄钟 | 支持暂停/恢复/停止，到点通知，状态可见 |
 | Developer Tools | JSON 格式化、URL 编解码、Base64 编解码、时间戳转换 | 默认剪贴板输入，错误可读，不记录敏感内容 |
 
@@ -230,9 +232,10 @@ Tuff QuickOps 是 CoreApp 随应用内置的一组本地系统快捷工具，不
 
 | 包 | 功能 |
 | --- | --- |
-| Developer Tools | UUID 生成、QR Code 生成、大小写转换 |
-| Files Tools | 打开常用目录（Desktop / Downloads / Documents / App Data / Logs 已接入）、文件 Hash（单文件路径命令 / Files input 单文件 / Files input 多文件已接入）、文件 Base64（1MB 内单文件编码复制 / 多文件摘要复制 / 临时文件解码落盘已接入）、复制路径格式（原始路径 / Shell 路径 / file URL / Windows-WSL 互转已接入，文件搜索结果路径动作已接入）、临时文本文件与临时目录（Tuff 临时目录内创建已接入） |
+| Developer Tools | UUID 生成、QR Code 生成（本地 SVG 预览已接入）、大小写转换 |
+| Files Tools | 打开常用目录（Desktop / Downloads / Documents / App Data / Logs 已接入）、最近下载文件（Downloads 首层普通文件按修改时间打开 / 打开所在文件夹 / 复制路径已接入）、文件 Hash（单文件路径命令 / Files input 单文件 / Files input 多文件已接入）、文件 Base64（1MB 内单文件编码复制 / 多文件摘要复制 / 临时文件解码落盘已接入）、复制路径格式（原始路径 / Shell 路径 / file URL / Windows-WSL 互转已接入，文件搜索结果路径动作已接入）、临时文本文件与临时目录（Tuff 临时目录内创建已接入） |
 | Network Tools | 本机 IP（已接入）、公网 IP（默认关闭 opt-in 查询已接入；真实外部服务 evidence 后置）、端口可用性探测（含占用 PID / 进程归因，已接入）、DNS 查询（A / AAAA / CNAME / MX 已接入；深度 NS / TXT / SOA 已接入）、网络状态摘要（地址 / DNS server / 环境变量代理已接入）、系统代理状态（macOS/Windows/Linux 只读探测已接入） |
+| Screen Tools | 屏幕纯色 / 坏点测试（红 / 绿 / 蓝纯色 overlay 已接入；真实视觉 evidence 后置） |
 | System Tools | 立即锁屏、Tuff 诊断信息复制（脱敏摘要已接入）、系统信息复制（OS/CPU/内存/运行时间/load average 已接入）、磁盘空间复制（Home/userData 文件系统容量已接入）、关键目录占用（Desktop / Downloads / Documents / Tuff Data / Logs bounded shallow/deep scan 已接入）、电池状态（电量/充电状态已接入） |
 | UX | 托盘运行状态、计时悬浮窗、最近使用、常用工具固定 |
 
@@ -579,7 +582,7 @@ AI 自然语言示例：
 - UUID v4 与短 ID 已进入 PreviewSDK；Preview 主结果复制动作已接入
 - 日期 / 固定 UTC offset 时区转换已进入 PreviewSDK；仅做本地纯转换，不包含 IANA 地区名或夏令时规则
 - 静态离线货币估算已进入 PreviewSDK；实时汇率 / Nexus / cache-backed adapter 仍保留在 CoreApp 路径
-- QR Code
+- QR Code 已进入 PreviewSDK；支持短文本 / URL 本地 SVG 生成、CoreBox 图片预览、SVG data URL 复制、SVG 保存到 Tuff 临时目录和 v1-v6 / 134 bytes 输入，PNG 导出和 v7+ 更高容量 QR 后置
 - 本机 IP 已接入；公网 IP 默认关闭 opt-in 查询已接入，真实外部服务 evidence 后置
 - 端口可用性探测已接入；占用时 PID / 进程归因和 copy-only 终止命令已接入；真正 kill / 二次确认 UI 后置
 - DNS 查询已接入 A / AAAA / CNAME / MX 只读查询，深度 DNS 查询已追加 NS / TXT / SOA；真实平台 DNS evidence 后置
@@ -612,13 +615,13 @@ AI 自然语言示例：
 
 ### v1.0 功能验收
 
-- [ ] CoreBox 能搜索并执行 v1.0 QuickOps 工具。部分完成：Developer P0 已经 PreviewSDK 接入；显示器保持唤醒、系统睡眠阻止、快速计时器、秒表、清洁屏幕黑/白底 overlay、托盘运行状态和停止全部动作、默认偏好只读解析与设置页编辑入口、本机 IP 查询、端口可用性探测、打开常用目录、单文件 Hash、单文件 / 多文件 Base64 编码复制、Base64 临时文件解码落盘、复制路径格式与 Windows/WSL 路径互转、Tuff 脱敏诊断信息复制、系统信息、磁盘空间、关键目录占用、番茄钟首个专注段、循环专注/休息、1-12 轮有限循环、每 N 轮长休息、25/5、50/10 内置模板、内置模板设置页开关、命令式自定义模板和设置驱动自定义模板名称/别名解析已接入；番茄钟联动保持唤醒等复杂组合策略仍待实现。
+- [ ] CoreBox 能搜索并执行 v1.0 QuickOps 工具。部分完成：Developer P0 已经 PreviewSDK 接入；显示器保持唤醒、系统睡眠阻止、快速计时器、秒表、清洁屏幕黑/白底 overlay、托盘运行状态和停止全部动作、默认偏好只读解析与设置页编辑入口、本机 IP 查询、端口可用性探测、打开常用目录、最近下载文件、单文件 Hash、单文件 / 多文件 Base64 编码复制、Base64 临时文件解码落盘、复制路径格式与 Windows/WSL 路径互转、Tuff 脱敏诊断信息复制、系统信息、磁盘空间、关键目录占用、番茄钟首个专注段、循环专注/休息、1-12 轮有限循环、每 N 轮长休息、25/5、50/10 内置模板、内置模板设置页开关、命令式自定义模板和设置驱动自定义模板名称/别名解析已接入；番茄钟联动保持唤醒等复杂组合策略仍待实现。
 - [x] 保持唤醒支持开始、查询、延长、停止、到期自动恢复。
 - [x] 系统睡眠阻止支持开始、查询、停止、到期自动恢复。
 - [ ] 应用退出时能清理保持唤醒子进程或 native session。部分完成：Provider deactivate/destroy 会 stopAll，`QuickOpsModule` stop/destroy 会清理共享 runtime，SearchEngine destroy regression 已覆盖 provider cleanup；仍需 packaged app quit 证据。
 - [ ] 屏幕清洁模式支持全屏、倒计时、长按退出。部分完成：首版已支持多 display 全屏遮罩、黑/白底、默认倒计时、长按 Esc 退出、停止项、到期、provider destroy 清理、托盘状态、默认黑/白底偏好读取与设置页编辑入口；overlay data URL 视觉合同已由 focused test 覆盖黑/白底、倒计时提示、隐藏光标、长按 Esc 和无外链资源；设置页回归 test 已覆盖 QuickOps 默认偏好控件与归一化；真实视觉截图/录屏 evidence 仍待补齐。
 - [ ] 计时器、秒表、番茄钟支持暂停、恢复、停止和通知。部分完成：快速计时器已支持开始、查询、暂停、恢复、延长 5 分钟、停止、到点系统通知和到期清理；秒表已支持开始、查询、暂停、恢复、分段、重置；番茄钟已支持首个专注段开始、查询、暂停、恢复、停止、到点系统通知、到期清理、循环模式下专注段/休息段自动轮换、有限轮数循环最终完成通知、每 N 轮长休息、25/5、50/10 内置模板、内置模板设置页开关、命令式自定义模板和设置驱动自定义模板名称/别名解析；联动保持唤醒等复杂组合策略仍待实现。
-- [x] JSON / URL / Base64 / JWT 解码 / Regex 受限测试 / Markdown/CSV 表格转换 / 时间戳 / 日期与固定 UTC offset 时区转换 / 静态离线货币估算 / UUID v4 / 短 ID / 大小写转换工具能处理 CoreBox 文本输入；文本剪贴板输入可作为需要输入的命令默认输入并返回可读错误，Preview 主结果可通过 host copy action 复制；日期 / 时区转换仅支持固定 UTC offset，不包含 IANA 地区名或夏令时规则；静态货币估算不代表实时汇率；JWT 仅解码 header/payload 且明确不验证签名；Regex 仅本地测试且有长度、match 数量和复杂度保护；Markdown/CSV 表格转换仅处理本地文本并限制表格大小。
+- [x] JSON / URL / Base64 / JWT 解码 / Regex 受限测试 / Markdown/CSV 表格转换 / 时间戳 / 日期与固定 UTC offset 时区转换 / 静态离线货币估算 / UUID v4 / 短 ID / QR Code SVG / 大小写转换工具能处理 CoreBox 文本输入；文本剪贴板输入可作为需要输入的命令默认输入并返回可读错误，Preview 主结果可通过 host copy action 复制；日期 / 时区转换仅支持固定 UTC offset，不包含 IANA 地区名或夏令时规则；静态货币估算不代表实时汇率；JWT 仅解码 header/payload 且明确不验证签名；Regex 仅本地测试且有长度、match 数量和复杂度保护；Markdown/CSV 表格转换仅处理本地文本并限制表格大小；QR Code 当前限定短文本 / URL、本地 SVG、Byte mode、ECC-L、版本 1-6 和 134 bytes 输入上限，支持 SVG 保存到 Tuff 临时目录。
 
 ### 平台验收
 

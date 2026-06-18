@@ -50,6 +50,13 @@ const detailRows = computed(() => {
   return rows.slice(0, 4)
 })
 
+const qrCodeSrc = computed(() => {
+  const render = resolvedPayload.value?.meta?.quickOps?.render
+  if (render?.kind !== 'qr-code-svg') return ''
+  const dataUrl = typeof render.dataUrl === 'string' ? render.dataUrl : ''
+  return dataUrl.startsWith('data:image/svg+xml') ? dataUrl : ''
+})
+
 const accentStyle = computed(() => {
   const accent = resolvedPayload.value?.accentColor
   return accent ? { color: accent } : undefined
@@ -83,8 +90,11 @@ const accentStyle = computed(() => {
         <div class="primary-label">
           {{ resolvedPayload?.primaryLabel || '结果' }}
         </div>
+        <div v-if="qrCodeSrc" class="qr-preview">
+          <img :src="qrCodeSrc" alt="QR Code" />
+        </div>
         <div class="primary-value" :style="accentStyle">
-          {{ resolvedPayload?.primaryValue || '--' }}
+          {{ qrCodeSrc ? 'SVG Data URL' : resolvedPayload?.primaryValue || '--' }}
           <span v-if="resolvedPayload?.primaryUnit" class="primary-unit">
             {{ resolvedPayload?.primaryUnit }}
           </span>
@@ -221,6 +231,22 @@ const accentStyle = computed(() => {
       font-size: 16px;
       margin-left: 8px;
       color: var(--tx-text-color-secondary);
+    }
+  }
+
+  .qr-preview {
+    width: 148px;
+    height: 148px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid var(--tx-border-color-lighter);
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
     }
   }
 

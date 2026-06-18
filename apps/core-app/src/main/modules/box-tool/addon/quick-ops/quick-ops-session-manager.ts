@@ -12,7 +12,7 @@ export type QuickOpsSessionKind =
   | 'screen-clean'
   | 'stopwatch'
 
-export type QuickOpsScreenCleanMode = 'black' | 'white'
+export type QuickOpsScreenCleanMode = 'black' | 'white' | 'red' | 'green' | 'blue'
 export type QuickOpsPomodoroMode = 'focus-only' | 'cycle'
 export type QuickOpsPomodoroPhase = 'focus' | 'break'
 
@@ -656,7 +656,7 @@ function createScreenCleanWindow(
   session: QuickOpsSession,
   onClosed: (window: ElectronBrowserWindow) => void
 ): ElectronBrowserWindow {
-  const isWhiteMode = session.screenMode === 'white'
+  const palette = getScreenCleanPalette(session.screenMode ?? 'black')
   const window = new BrowserWindow({
     x: bounds.x,
     y: bounds.y,
@@ -671,7 +671,7 @@ function createScreenCleanWindow(
     movable: false,
     minimizable: false,
     maximizable: false,
-    backgroundColor: isWhiteMode ? '#ffffff' : '#000000',
+    backgroundColor: palette.windowBackground,
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
@@ -694,10 +694,7 @@ export function createScreenCleanOverlayUrl(
   screenMode: QuickOpsScreenCleanMode
 ): string {
   const durationLabel = formatDuration(durationMs)
-  const isWhiteMode = screenMode === 'white'
-  const backgroundColor = isWhiteMode ? '#f7f7f2' : '#050505'
-  const textColor = isWhiteMode ? 'rgba(0, 0, 0, 0.62)' : 'rgba(255, 255, 255, 0.74)'
-  const progressColor = isWhiteMode ? 'rgba(0, 0, 0, 0.72)' : 'rgba(255, 255, 255, 0.78)'
+  const palette = getScreenCleanPalette(screenMode)
   const html = `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -711,8 +708,8 @@ export function createScreenCleanOverlayUrl(
         height: 100%;
         margin: 0;
         overflow: hidden;
-        background: ${backgroundColor};
-        color: ${textColor};
+        background: ${palette.background};
+        color: ${palette.text};
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         user-select: none;
         cursor: none;
@@ -734,7 +731,7 @@ export function createScreenCleanOverlayUrl(
         margin-left: 10px;
         align-self: center;
         border-radius: 999px;
-        background: ${progressColor};
+        background: ${palette.progress};
         transition: width 1.2s linear;
       }
 
@@ -744,7 +741,7 @@ export function createScreenCleanOverlayUrl(
     </style>
   </head>
   <body>
-    <div id="hint" class="hint">QuickOps ${isWhiteMode ? '白底' : '黑底'}清洁屏幕 · ${escapeHtml(durationLabel)} 后自动退出 · 长按 Esc 退出<span class="hold-progress"></span></div>
+    <div id="hint" class="hint">QuickOps ${palette.label} · ${escapeHtml(durationLabel)} 后自动退出 · 长按 Esc 退出<span class="hold-progress"></span></div>
     <script>
       const hint = document.getElementById('hint')
       let closeTimer = null
@@ -767,6 +764,57 @@ export function createScreenCleanOverlayUrl(
   </body>
 </html>`
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
+}
+
+function getScreenCleanPalette(screenMode: QuickOpsScreenCleanMode): {
+  label: string
+  windowBackground: string
+  background: string
+  text: string
+  progress: string
+} {
+  switch (screenMode) {
+    case 'white':
+      return {
+        label: '白底清洁屏幕',
+        windowBackground: '#ffffff',
+        background: '#f7f7f2',
+        text: 'rgba(0, 0, 0, 0.62)',
+        progress: 'rgba(0, 0, 0, 0.72)'
+      }
+    case 'red':
+      return {
+        label: '红色屏幕测试',
+        windowBackground: '#ff0000',
+        background: '#ff0000',
+        text: 'rgba(255, 255, 255, 0.86)',
+        progress: 'rgba(255, 255, 255, 0.9)'
+      }
+    case 'green':
+      return {
+        label: '绿色屏幕测试',
+        windowBackground: '#00ff00',
+        background: '#00ff00',
+        text: 'rgba(0, 0, 0, 0.68)',
+        progress: 'rgba(0, 0, 0, 0.76)'
+      }
+    case 'blue':
+      return {
+        label: '蓝色屏幕测试',
+        windowBackground: '#0000ff',
+        background: '#0000ff',
+        text: 'rgba(255, 255, 255, 0.86)',
+        progress: 'rgba(255, 255, 255, 0.9)'
+      }
+    case 'black':
+      return {
+        label: '黑底清洁屏幕',
+        windowBackground: '#000000',
+        background: '#050505',
+        text: 'rgba(255, 255, 255, 0.74)',
+        progress: 'rgba(255, 255, 255, 0.78)'
+      }
+  }
 }
 
 function escapeHtml(value: string): string {

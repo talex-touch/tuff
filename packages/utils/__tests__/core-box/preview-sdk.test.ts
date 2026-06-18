@@ -24,6 +24,10 @@ function signal(): AbortSignal {
   return new AbortController().signal;
 }
 
+function decodeSvgDataUrl(value: string): string {
+  return decodeURIComponent(value.replace("data:image/svg+xml;charset=utf-8,", ""));
+}
+
 describe("PreviewSDK", () => {
   it("resolves abilities by priority and returns pure preview payloads", async () => {
     const sdk = createPreviewSdk({
@@ -203,6 +207,10 @@ describe("PreviewSDK", () => {
       query: { text: "short id 12", inputs: [] },
       signal: signal(),
     });
+    const qrCode = await sdk.resolve({
+      query: { text: "qr code https://tuff.talex.app", inputs: [] },
+      signal: signal(),
+    });
     const jwt = await sdk.resolve({
       query: {
         text:
@@ -261,6 +269,30 @@ describe("PreviewSDK", () => {
         operation: "short-id",
         inputSource: "query",
       }),
+    );
+    expect(qrCode?.payload.primaryValue).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+    expect(qrCode?.payload.secondaryValue).toBe("v2-L");
+    const qrSvg = decodeSvgDataUrl(qrCode?.payload.primaryValue ?? "");
+    expect(qrSvg).toContain('viewBox="0 0 33 33"');
+    expect(qrSvg).toContain('<rect width="33" height="33" fill="#fff"/>');
+    expect(qrSvg).toContain('<g fill="#000"><rect');
+    expect(qrCode?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "qr-code",
+        inputSource: "query",
+        byteLength: 22,
+        qrVersion: 2,
+        qrEccLevel: "L",
+      }),
+    );
+    expect(qrCode?.payload.meta?.quickOps.render).toEqual(
+      expect.objectContaining({
+        kind: "qr-code-svg",
+        dataUrl: qrCode?.payload.primaryValue,
+      }),
+    );
+    expect(qrCode?.payload.sections?.[0]?.rows.find((row) => row.label === "SVG")?.value).toContain(
+      "<svg",
     );
     expect(jwt?.payload.primaryValue).toBe('{\n  "sub": "boss",\n  "iat": 1710000000\n}');
     expect(jwt?.payload.sections?.[0]?.rows[0]?.value).toBe(
@@ -411,6 +443,21 @@ describe("PreviewSDK", () => {
       query: { text: "timezone 2024-03-09T16:00:00Z UTC+15", inputs: [] },
       signal: signal(),
     });
+    const qrFromClipboard = await sdk.resolve({
+      query: {
+        text: "二维码",
+        inputs: [{ type: TuffInputType.Text, content: "hello" }],
+      },
+      signal: signal(),
+    });
+    const maxQr = await sdk.resolve({
+      query: { text: `qr ${"x".repeat(134)}`, inputs: [] },
+      signal: signal(),
+    });
+    const overlongQr = await sdk.resolve({
+      query: { text: `qr ${"x".repeat(135)}`, inputs: [] },
+      signal: signal(),
+    });
 
     expect(decoded?.payload.primaryValue).toBe("Hello");
     expect(decoded?.payload.meta?.quickOps).toEqual(
@@ -476,12 +523,33 @@ describe("PreviewSDK", () => {
     );
     expect(invalidTimezone?.payload.primaryLabel).toBe("错误");
     expect(invalidTimezone?.payload.warnings?.[0]).toContain("date/timezone");
+    expect(qrFromClipboard?.payload.primaryValue).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+    expect(qrFromClipboard?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "qr-code",
+        inputSource: "clipboard",
+        byteLength: 5,
+        qrVersion: 1,
+      }),
+    );
+    expect(maxQr?.payload.secondaryValue).toBe("v6-L");
+    expect(decodeSvgDataUrl(maxQr?.payload.primaryValue ?? "")).toContain('viewBox="0 0 49 49"');
+    expect(maxQr?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "qr-code",
+        byteLength: 134,
+        qrVersion: 6,
+      }),
+    );
+    expect(overlongQr?.payload.primaryLabel).toBe("错误");
+    expect(overlongQr?.payload.warnings?.[0]).toContain("134 bytes");
   });
 
   it("keeps QuickOps clipboard fallback detection command-specific", () => {
     expect(hasQuickOpsDeveloperCommand({ text: "json" })).toBe(true);
     expect(hasQuickOpsDeveloperCommand({ text: "base64 decode" })).toBe(true);
     expect(hasQuickOpsDeveloperCommand({ text: "uuid v4" })).toBe(true);
+    expect(hasQuickOpsDeveloperCommand({ text: "qr code" })).toBe(true);
     expect(hasQuickOpsDeveloperCommand({ text: "uuid history" })).toBe(false);
   });
 

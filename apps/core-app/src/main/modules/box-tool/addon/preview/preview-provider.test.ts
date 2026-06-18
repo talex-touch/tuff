@@ -3,8 +3,14 @@ import { TuffInputType, type IExecuteArgs } from '@talex-touch/utils'
 import type { PreviewSdk } from '@talex-touch/utils/core-box/preview'
 
 const electronMocks = vi.hoisted(() => ({
+  getPath: vi.fn(),
   readText: vi.fn(),
   writeText: vi.fn()
+}))
+
+const fsMocks = vi.hoisted(() => ({
+  mkdir: vi.fn(),
+  writeFile: vi.fn()
 }))
 
 const clipboardModuleMock = vi.hoisted(() => ({
@@ -12,11 +18,16 @@ const clipboardModuleMock = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  app: {
+    getPath: electronMocks.getPath
+  },
   clipboard: {
     readText: electronMocks.readText,
     writeText: electronMocks.writeText
   }
 }))
+
+vi.mock('node:fs/promises', () => fsMocks)
 
 vi.mock('../../../clipboard', () => ({
   clipboardModule: clipboardModuleMock
@@ -70,7 +81,10 @@ function createSdk(): PreviewSdk {
 describe('PreviewProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    electronMocks.getPath.mockReturnValue('/tmp')
     electronMocks.readText.mockReturnValue('')
+    fsMocks.mkdir.mockResolvedValue(undefined)
+    fsMocks.writeFile.mockResolvedValue(undefined)
     clipboardModuleMock.saveCustomEntry.mockResolvedValue({ id: 1 })
   })
 
@@ -207,6 +221,66 @@ describe('PreviewProvider', () => {
       expect.objectContaining({
         content: '4',
         rawContent: '2 + 2',
+        category: 'preview'
+      })
+    )
+  })
+
+  it('exposes and executes QR SVG save action through Tuff temp directory', async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>'
+    const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    const sdk = createSdk()
+    vi.mocked(sdk.resolve).mockResolvedValue({
+      abilityId: 'preview.quickops.developer',
+      confidence: 0.8,
+      payload: {
+        abilityId: 'preview.quickops.developer',
+        title: 'QR Code 生成',
+        primaryLabel: 'SVG Data URL',
+        primaryValue: dataUrl,
+        meta: {
+          quickOps: {
+            operation: 'qr-code',
+            render: {
+              kind: 'qr-code-svg',
+              dataUrl
+            }
+          }
+        }
+      }
+    })
+    const provider = new PreviewProvider(sdk)
+    const searchResult = await provider.onSearch(
+      { text: 'qr code https://tuff.talex.app', inputs: [] },
+      new AbortController().signal
+    )
+    const item = searchResult.items[0]!
+
+    expect(item.actions).toContainEqual({
+      id: 'preview-save-qr-svg',
+      type: 'execute',
+      label: '保存 SVG 到临时目录',
+      icon: { type: 'class', value: 'i-ri-save-line' }
+    })
+
+    await provider.onExecute({
+      item,
+      searchResult,
+      actionId: 'preview-save-qr-svg'
+    } satisfies IExecuteArgs)
+
+    expect(fsMocks.mkdir).toHaveBeenCalledWith('/tmp/tuff-quickops', { recursive: true })
+    expect(fsMocks.writeFile).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/tuff-quickops\/qr-code-[\w-]+\.svg$/),
+      svg,
+      { flag: 'wx' }
+    )
+    const savedPath = vi.mocked(fsMocks.writeFile).mock.calls[0]?.[0]
+    expect(electronMocks.writeText).toHaveBeenCalledWith(savedPath)
+    expect(clipboardModuleMock.saveCustomEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: savedPath,
+        rawContent: 'qr code https://tuff.talex.app',
         category: 'preview'
       })
     )
