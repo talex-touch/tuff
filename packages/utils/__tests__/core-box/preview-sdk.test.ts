@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PreviewAbility } from "../../core-box/preview";
+import { TuffInputType } from "../../core-box/tuff";
 import {
   AdvancedExpressionAbility,
   BasicExpressionAbility,
   ColorPreviewAbility,
+  CurrencyPreviewAbility,
   PercentageAbility,
+  QuickOpsDeveloperAbility,
   ScientificConstantsAbility,
   TextStatsAbility,
   TimeDeltaAbility,
@@ -13,6 +16,7 @@ import {
   createPreviewSdk,
   createStaticPreviewSafetyPolicy,
   evaluateBasicExpression,
+  hasQuickOpsDeveloperCommand,
   runPreviewSdkBenchmark,
 } from "../../core-box/preview";
 
@@ -96,13 +100,19 @@ describe("PreviewSDK", () => {
       query: { text: "1h", inputs: [] },
       signal: signal(),
     });
+    const currency = await new CurrencyPreviewAbility().execute({
+      query: { text: "10 USD to CNY", inputs: [] },
+      signal: signal(),
+    });
 
     expect(advanced?.payload.primaryValue).toBe("4");
     expect(constant?.payload.title).toBe("真空光速");
     expect(time?.payload.subtitle).toBe("时长换算");
+    expect(currency?.payload.primaryValue).toBe("72.50 CNY");
+    expect(currency?.payload.warnings?.[0]).toContain("静态离线汇率");
   });
 
-  it("keeps time, percentage and unit boundaries specific in default registry order", async () => {
+  it("keeps time, percentage, unit and QuickOps boundaries specific in default registry order", async () => {
     const sdk = createPreviewSdk({
       abilities: createDefaultPurePreviewAbilities(),
     });
@@ -123,6 +133,22 @@ describe("PreviewSDK", () => {
       query: { text: "10 kg to m", inputs: [] },
       signal: signal(),
     });
+    const currency = await sdk.resolve({
+      query: { text: "€10 to CNY", inputs: [] },
+      signal: signal(),
+    });
+    const uuidHistory = await sdk.resolveWithDiagnostics({
+      query: { text: "uuid history", inputs: [] },
+      signal: signal(),
+    });
+    const unknownCurrency = await sdk.resolveWithDiagnostics({
+      query: { text: "10 foo to bar", inputs: [] },
+      signal: signal(),
+    });
+    const regexMissingLiteral = await sdk.resolveWithDiagnostics({
+      query: { text: "regex hello world", inputs: [] },
+      signal: signal(),
+    });
 
     expect(chineseTime?.abilityId).toBe("preview.time");
     expect(chineseTime?.payload.subtitle).toBe("时间偏移");
@@ -132,6 +158,331 @@ describe("PreviewSDK", () => {
     expect(invalidRelativeTime.diagnostics.status).toBe("no-match");
     expect(incompatibleUnit.result).toBeNull();
     expect(incompatibleUnit.diagnostics.status).toBe("no-match");
+    expect(currency?.abilityId).toBe("preview.currency");
+    expect(currency?.payload.meta?.currency).toEqual(
+      expect.objectContaining({
+        source: "EUR",
+        target: "CNY",
+        rateSource: "static",
+      }),
+    );
+    expect(uuidHistory.result).toBeNull();
+    expect(uuidHistory.diagnostics.status).toBe("no-match");
+    expect(unknownCurrency.result).toBeNull();
+    expect(unknownCurrency.diagnostics.status).toBe("no-match");
+    expect(regexMissingLiteral.result).toBeNull();
+    expect(regexMissingLiteral.diagnostics.status).toBe("no-match");
+  });
+
+  it("resolves QuickOps developer commands from query text", async () => {
+    const sdk = createPreviewSdk({
+      abilities: [new QuickOpsDeveloperAbility()],
+    });
+
+    const formattedJson = await sdk.resolve({
+      query: { text: 'json {"ok":true}', inputs: [] },
+      signal: signal(),
+    });
+    const encodedUrl = await sdk.resolve({
+      query: { text: "url encode hello world", inputs: [] },
+      signal: signal(),
+    });
+    const timestamp = await sdk.resolve({
+      query: { text: "timestamp 1710000000", inputs: [] },
+      signal: signal(),
+    });
+    const timezone = await sdk.resolve({
+      query: { text: "timezone 2024-03-09T16:00:00Z UTC+08:00", inputs: [] },
+      signal: signal(),
+    });
+    const uuid = await sdk.resolve({
+      query: { text: "uuid v4", inputs: [] },
+      signal: signal(),
+    });
+    const shortId = await sdk.resolve({
+      query: { text: "short id 12", inputs: [] },
+      signal: signal(),
+    });
+    const jwt = await sdk.resolve({
+      query: {
+        text:
+          "jwt decode eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJib3NzIiwiaWF0IjoxNzEwMDAwMDAwfQ.signature",
+        inputs: [],
+      },
+      signal: signal(),
+    });
+    const regex = await sdk.resolve({
+      query: { text: "regex /boss/i hello Boss", inputs: [] },
+      signal: signal(),
+    });
+    const csvTable = await sdk.resolve({
+      query: { text: "csv to markdown name,role\nBoss,Developer", inputs: [] },
+      signal: signal(),
+    });
+    const markdownToCsv = await sdk.resolve({
+      query: { text: "markdown to csv | name | role |\n| --- | --- |\n| Boss | Developer |", inputs: [] },
+      signal: signal(),
+    });
+    const snakeCase = await sdk.resolve({
+      query: { text: "case snake helloWorld Test", inputs: [] },
+      signal: signal(),
+    });
+    const kebabCaseQuery = await sdk.resolve({
+      query: { text: "case kebab-case helloWorld Test", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(formattedJson?.abilityId).toBe("preview.quickops.developer");
+    expect(formattedJson?.payload.primaryValue).toBe('{\n  "ok": true\n}');
+    expect(encodedUrl?.payload.primaryValue).toBe("hello%20world");
+    expect(timestamp?.payload.secondaryValue).toBe("2024-03-09T16:00:00.000Z");
+    expect(timezone?.payload.primaryValue).toBe("2024-03-10 00:00:00 UTC+08:00");
+    expect(timezone?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "date-convert",
+        inputSource: "query",
+        targetOffsetMinutes: 480,
+      }),
+    );
+    expect(timezone?.payload.warnings?.[0]).toContain("固定 UTC offset");
+    expect(uuid?.payload.primaryValue).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(uuid?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "uuid-v4",
+        inputSource: "query",
+      }),
+    );
+    expect(shortId?.payload.primaryValue).toMatch(/^[\w-]{12}$/);
+    expect(shortId?.payload.secondaryValue).toBe("12");
+    expect(shortId?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "short-id",
+        inputSource: "query",
+      }),
+    );
+    expect(jwt?.payload.primaryValue).toBe('{\n  "sub": "boss",\n  "iat": 1710000000\n}');
+    expect(jwt?.payload.sections?.[0]?.rows[0]?.value).toBe(
+      '{\n  "alg": "HS256",\n  "typ": "JWT"\n}',
+    );
+    expect(jwt?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "jwt-decode",
+        inputSource: "query",
+        signatureVerified: false,
+      }),
+    );
+    expect(regex?.payload.primaryValue).toBe("匹配");
+    expect(regex?.payload.secondaryValue).toBe("1");
+    expect(regex?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "regex-test",
+        inputSource: "query",
+        patternLength: 4,
+        targetLength: 10,
+        matchCount: 1,
+      }),
+    );
+    expect(csvTable?.payload.primaryValue).toBe(
+      "| name | role      |\n| ---- | --------- |\n| Boss | Developer |",
+    );
+    expect(csvTable?.payload.secondaryValue).toBe("2x2");
+    expect(csvTable?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "csv-to-markdown",
+        inputSource: "query",
+      }),
+    );
+    expect(markdownToCsv?.payload.primaryValue).toBe("name,role\nBoss,Developer");
+    expect(markdownToCsv?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "markdown-to-csv",
+        inputSource: "query",
+      }),
+    );
+    expect(snakeCase?.payload.primaryValue).toBe("hello_world_test");
+    expect(snakeCase?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "case-snake",
+        inputSource: "query",
+      }),
+    );
+    expect(kebabCaseQuery?.payload.primaryValue).toBe("hello-world-test");
+    expect(kebabCaseQuery?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "case-kebab",
+        inputSource: "query",
+      }),
+    );
+  });
+
+  it("uses text clipboard input for QuickOps developer commands", async () => {
+    const sdk = createPreviewSdk({
+      abilities: [new QuickOpsDeveloperAbility()],
+    });
+
+    const decoded = await sdk.resolve({
+      query: {
+        text: "base64 decode",
+        inputs: [{ type: TuffInputType.Text, content: "SGVsbG8=" }],
+      },
+      signal: signal(),
+    });
+    const invalidJson = await sdk.resolve({
+      query: {
+        text: "json",
+        inputs: [{ type: TuffInputType.Text, content: "{bad" }],
+      },
+      signal: signal(),
+    });
+    const kebabCase = await sdk.resolve({
+      query: {
+        text: "case kebab",
+        inputs: [{ type: TuffInputType.Text, content: "Hello world_test" }],
+      },
+      signal: signal(),
+    });
+    const jwtFromClipboard = await sdk.resolve({
+      query: {
+        text: "jwt decode",
+        inputs: [
+          {
+            type: TuffInputType.Text,
+            content:
+              "eyJhbGciOiJub25lIn0.eyJyb2xlIjoiZGV2ZWxvcGVyIn0.",
+          },
+        ],
+      },
+      signal: signal(),
+    });
+    const regexFromClipboard = await sdk.resolve({
+      query: {
+        text: "regex /dev\\w+/g",
+        inputs: [{ type: TuffInputType.Text, content: "developer devtools" }],
+      },
+      signal: signal(),
+    });
+    const overlongRegexTarget = await sdk.resolve({
+      query: {
+        text: "regex /a/",
+        inputs: [{ type: TuffInputType.Text, content: "a".repeat(2001) }],
+      },
+      signal: signal(),
+    });
+    const complexRegex = await sdk.resolve({
+      query: { text: "regex /(a+)+$/ aaaa", inputs: [] },
+      signal: signal(),
+    });
+    const formattedMarkdownTable = await sdk.resolve({
+      query: {
+        text: "markdown table",
+        inputs: [
+          {
+            type: TuffInputType.Text,
+            content: "| name | role |\n|---|---|\n| Boss | Dev |",
+          },
+        ],
+      },
+      signal: signal(),
+    });
+    const quotedCsvTable = await sdk.resolve({
+      query: {
+        text: "csv to markdown",
+        inputs: [{ type: TuffInputType.Text, content: 'name,note\nBoss,"a,b"' }],
+      },
+      signal: signal(),
+    });
+    const invalidCsvTable = await sdk.resolve({
+      query: {
+        text: "csv to markdown",
+        inputs: [{ type: TuffInputType.Text, content: 'name,note\nBoss,"broken' }],
+      },
+      signal: signal(),
+    });
+    const timezoneFromClipboard = await sdk.resolve({
+      query: {
+        text: "date UTC-05",
+        inputs: [{ type: TuffInputType.Text, content: "2024-03-09T16:00:00Z" }],
+      },
+      signal: signal(),
+    });
+    const invalidTimezone = await sdk.resolve({
+      query: { text: "timezone 2024-03-09T16:00:00Z UTC+15", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(decoded?.payload.primaryValue).toBe("Hello");
+    expect(decoded?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "base64-decode",
+        inputSource: "clipboard",
+      }),
+    );
+    expect(invalidJson?.payload.primaryLabel).toBe("错误");
+    expect(invalidJson?.payload.warnings?.[0]).toContain("JSON");
+    expect(kebabCase?.payload.primaryValue).toBe("hello-world-test");
+    expect(kebabCase?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "case-kebab",
+        inputSource: "clipboard",
+      }),
+    );
+    expect(jwtFromClipboard?.payload.primaryValue).toBe('{\n  "role": "developer"\n}');
+    expect(jwtFromClipboard?.payload.secondaryValue).toBe("无签名段");
+    expect(jwtFromClipboard?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "jwt-decode",
+        inputSource: "clipboard",
+        signatureVerified: false,
+      }),
+    );
+    expect(regexFromClipboard?.payload.primaryValue).toBe("匹配");
+    expect(regexFromClipboard?.payload.secondaryValue).toBe("2");
+    expect(regexFromClipboard?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "regex-test",
+        inputSource: "clipboard",
+        matchCount: 2,
+      }),
+    );
+    expect(overlongRegexTarget?.payload.primaryLabel).toBe("错误");
+    expect(overlongRegexTarget?.payload.warnings?.[0]).toContain(
+      "Regex target text",
+    );
+    expect(complexRegex?.payload.primaryLabel).toBe("错误");
+    expect(complexRegex?.payload.warnings?.[0]).toContain("too complex");
+    expect(formattedMarkdownTable?.payload.primaryValue).toBe(
+      "| name | role |\n| ---- | ---- |\n| Boss | Dev  |",
+    );
+    expect(formattedMarkdownTable?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "markdown-table-format",
+        inputSource: "clipboard",
+      }),
+    );
+    expect(quotedCsvTable?.payload.primaryValue).toBe(
+      "| name | note |\n| ---- | ---- |\n| Boss | a,b  |",
+    );
+    expect(invalidCsvTable?.payload.primaryLabel).toBe("错误");
+    expect(invalidCsvTable?.payload.warnings?.[0]).toContain("CSV");
+    expect(timezoneFromClipboard?.payload.primaryValue).toBe("2024-03-09 11:00:00 UTC-05:00");
+    expect(timezoneFromClipboard?.payload.meta?.quickOps).toEqual(
+      expect.objectContaining({
+        operation: "date-convert",
+        inputSource: "clipboard",
+        targetOffsetMinutes: -300,
+      }),
+    );
+    expect(invalidTimezone?.payload.primaryLabel).toBe("错误");
+    expect(invalidTimezone?.payload.warnings?.[0]).toContain("date/timezone");
+  });
+
+  it("keeps QuickOps clipboard fallback detection command-specific", () => {
+    expect(hasQuickOpsDeveloperCommand({ text: "json" })).toBe(true);
+    expect(hasQuickOpsDeveloperCommand({ text: "base64 decode" })).toBe(true);
+    expect(hasQuickOpsDeveloperCommand({ text: "uuid v4" })).toBe(true);
+    expect(hasQuickOpsDeveloperCommand({ text: "uuid history" })).toBe(false);
   });
 
   it("guards overlong input before ability matching", async () => {

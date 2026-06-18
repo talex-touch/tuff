@@ -1518,6 +1518,7 @@ export interface ISortMiddleware {
 export interface IExecuteArgs {
   item: TuffItem
   searchResult?: TuffSearchResult
+  actionId?: string
 }
 
 export interface ISearchProvider<C> {

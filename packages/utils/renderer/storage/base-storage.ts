@@ -185,6 +185,22 @@ export function createStorageDataProxy<TData extends object>(
  */
 export type SaveResult = StorageSaveResult
 
+interface LoadRemoteOptions {
+  retryDirtySave?: boolean
+  throwOnError?: boolean
+}
+
+interface LoadRemoteResult {
+  shouldRetrySave: boolean
+}
+
+interface ExecuteSaveOptions {
+  force?: boolean
+  conflictRetryDepth?: number
+}
+
+const MAX_CONFLICT_RETRY_DEPTH = 2
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -419,9 +435,9 @@ export class TouchStorage<T extends object> {
    * Load from remote and update version
    * @private
    */
-  async #loadFromRemoteWithVersion(): Promise<void> {
+  async #loadFromRemoteWithVersion(options: LoadRemoteOptions = {}): Promise<LoadRemoteResult> {
     if (!transport) {
-      return
+      return { shouldRetrySave: false }
     }
     try {
       const versionedResult = await this.#getVersionedAsync()
@@ -438,6 +454,7 @@ export class TouchStorage<T extends object> {
           this.#currentVersion = versionedResult.version
           this.#isRemoteUpdate = true
           this.assignData(remoteData, true, true)
+          const remoteSnapshot = cloneValue(toPlainStorageValue(this.data) as T) as T
           if (patchHasChanges && patch) {
             this.#applyPatchSilently(patch)
             this.#localDirty = true
@@ -447,15 +464,21 @@ export class TouchStorage<T extends object> {
           }
           this.#isRemoteUpdate = false
 
-          this.#lastSyncedSnapshot = cloneValue(toPlainStorageValue(this.data) as T) as T
+          this.#lastSyncedSnapshot = patchHasChanges
+            ? remoteSnapshot
+            : cloneValue(toPlainStorageValue(this.data) as T) as T
           this.#hydrated = true
           this.#notifyHydrated()
-          if (this.#pendingSave || patchHasChanges) {
+          const shouldRetrySave = this.#pendingSave || patchHasChanges
+          if (shouldRetrySave) {
             this.#pendingSave = false
-            void this.saveToRemote({ force: true })
+            if (options.retryDirtySave !== false) {
+              this.#saveToRemoteInBackground({ force: true })
+            }
           }
+          return { shouldRetrySave }
         }
-        return
+        return { shouldRetrySave: false }
       }
 
       const result = await this.#getAsync()
@@ -466,15 +489,23 @@ export class TouchStorage<T extends object> {
       this.#lastSyncedSnapshot = cloneValue(toPlainStorageValue(this.data) as T) as T
       this.#hydrated = true
       this.#notifyHydrated()
-      if (this.#pendingSave) {
+      const shouldRetrySave = this.#pendingSave
+      if (shouldRetrySave) {
         this.#pendingSave = false
-        void this.saveToRemote({ force: true })
+        if (options.retryDirtySave !== false) {
+          this.#saveToRemoteInBackground({ force: true })
+        }
       }
+      return { shouldRetrySave }
     }
     catch (error) {
       console.error(`[TouchStorage] Failed to load "${this.#qualifiedName}" from remote:`, error)
       this.#hydrated = true
       this.#notifyHydrated()
+      if (options.throwOnError) {
+        throw error
+      }
+      return { shouldRetrySave: false }
     }
   }
 
@@ -523,7 +554,7 @@ export class TouchStorage<T extends object> {
    * await store.saveToRemote();
    * ```
    */
-  async #executeSave(options?: { force?: boolean }): Promise<void> {
+  async #executeSave(options?: ExecuteSaveOptions): Promise<void> {
     if (!transport) {
       console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: no transport`)
       if (isElectronRenderer()) {
@@ -553,6 +584,9 @@ export class TouchStorage<T extends object> {
     }
 
     const rawData = toPlainStorageValue(this.data)
+    if (!isEqual(this.#lastSyncedSnapshot, rawData)) {
+      this.#localDirty = true
+    }
     console.debug(`[TouchStorage] #executeSave("${this.#qualifiedName}") SAVING, background.source=`, (rawData as any)?.background?.source)
 
     this.savingState.value = true
@@ -571,14 +605,37 @@ export class TouchStorage<T extends object> {
         this.#localDirty = false
       }
       else if (result.conflict) {
-        // Conflict detected - reload from remote
         console.warn(`[TouchStorage] Conflict detected for "${this.#qualifiedName}", reloading...`)
-        void this.#loadFromRemoteWithVersion()
-        throw new TouchStorageSaveError('Storage save conflict detected; latest data is being reloaded', {
-          key: this.#qualifiedName,
-          reason: 'conflict',
-          version: result.version,
-        })
+        const conflictRetryDepth = options?.conflictRetryDepth ?? 0
+        if (conflictRetryDepth >= MAX_CONFLICT_RETRY_DEPTH) {
+          throw new TouchStorageSaveError('Storage save conflict persisted after reload', {
+            key: this.#qualifiedName,
+            reason: 'conflict',
+            version: result.version,
+          })
+        }
+        try {
+          const loadResult = await this.#loadFromRemoteWithVersion({
+            retryDirtySave: false,
+            throwOnError: true,
+          })
+          if (loadResult.shouldRetrySave) {
+            await this.#executeSave({
+              force: true,
+              conflictRetryDepth: conflictRetryDepth + 1,
+            })
+          }
+        }
+        catch (error) {
+          if (error instanceof TouchStorageSaveError) {
+            throw error
+          }
+          throw new TouchStorageSaveError('Storage save conflict reload failed', {
+            key: this.#qualifiedName,
+            reason: 'remote-failed',
+            version: result.version,
+          })
+        }
       }
       else {
         throw new TouchStorageSaveError('Storage save returned an unsuccessful result', {
@@ -651,7 +708,17 @@ export class TouchStorage<T extends object> {
       }
     })
 
-    this.saveToRemote(options)
+    this.#saveToRemoteInBackground(options)
+  }
+
+  #saveToRemoteInBackground(options?: ExecuteSaveOptions): void {
+    void this.saveToRemote(options).catch((error) => {
+      this.#handleBackgroundSaveError(error)
+    })
+  }
+
+  #handleBackgroundSaveError(error: unknown): void {
+    console.error(`[TouchStorage] Background save failed for "${this.#qualifiedName}":`, error)
   }
 
   #applyPatchSilently(patch: StoragePatch): void {
@@ -870,7 +937,9 @@ export class TouchStorage<T extends object> {
       return
 
     console.debug(`[TouchStorage] saveSync("${this.#qualifiedName}") called, background.source=`, (toRaw(this.data) as any)?.background?.source)
-    void this.#executeSave({ force: true })
+    void this.#executeSave({ force: true }).catch((error) => {
+      this.#handleBackgroundSaveError(error)
+    })
   }
 
   /**

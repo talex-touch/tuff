@@ -53,6 +53,7 @@ function createLegacyChannelMock(seed: Record<string, unknown> = {}) {
 describe('renderer storage transport bootstrap', () => {
   afterEach(() => {
     getSubscriptionManager().dispose()
+    vi.restoreAllMocks()
   })
 
   it('subscribes and reads through StorageEvents app transport by default', async () => {
@@ -180,6 +181,137 @@ describe('renderer storage transport bootstrap', () => {
         },
       }),
     )
+  })
+
+  it('reloads and retries without rejecting when save detects a version conflict', async () => {
+    const transport = createTransportMock()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let getVersionedCalls = 0
+    let saveCalls = 0
+
+    transport.send.mockImplementation(async (event: unknown, payload?: { key?: string }) => {
+      if (event === StorageEvents.app.save) {
+        saveCalls++
+        if (saveCalls === 1) {
+          return { success: false, version: 2, conflict: true }
+        }
+        return { success: true, version: 3 }
+      }
+      if (event === StorageEvents.app.getVersioned && payload?.key === 'conflict-save.ini') {
+        getVersionedCalls++
+        return getVersionedCalls === 1
+          ? { data: { source: 'initial', theme: 'light' }, version: 1 }
+          : { data: { source: 'remote', theme: 'light' }, version: 2 }
+      }
+      return null
+    })
+
+    initializeRendererStorage(transport as any)
+    const storage = new TouchStorage('conflict-save.ini', {
+      source: 'initial',
+      theme: 'light',
+    })
+
+    await storage.whenHydrated()
+    storage.data.theme = 'dark'
+
+    await expect(storage.saveToRemote({ force: true })).resolves.toBeUndefined()
+    await vi.waitFor(() => expect(saveCalls).toBe(2), { timeout: 2000 })
+
+    expect(storage.data.source).toBe('remote')
+    expect(storage.data.theme).toBe('dark')
+    expect(storage.getVersion()).toBe(3)
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Conflict detected for "conflict-save.ini"'),
+    )
+    expect(transport.send).toHaveBeenLastCalledWith(
+      StorageEvents.app.save,
+      expect.objectContaining({
+        key: 'conflict-save.ini',
+        value: { source: 'remote', theme: 'dark' },
+        version: 2,
+      }),
+    )
+  })
+
+  it('rejects explicit save when conflict reload fails', async () => {
+    const transport = createTransportMock()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let getVersionedCalls = 0
+
+    transport.send.mockImplementation(async (event: unknown, payload?: { key?: string }) => {
+      if (event === StorageEvents.app.save) {
+        return { success: false, version: 2, conflict: true }
+      }
+      if (event === StorageEvents.app.getVersioned && payload?.key === 'conflict-reload-fail.ini') {
+        getVersionedCalls++
+        if (getVersionedCalls === 1) {
+          return { data: { source: 'initial' }, version: 1 }
+        }
+        throw new Error('reload unavailable')
+      }
+      return null
+    })
+
+    initializeRendererStorage(transport as any)
+    const storage = new TouchStorage('conflict-reload-fail.ini', { source: 'initial' })
+
+    await storage.whenHydrated()
+    storage.data.source = 'local'
+
+    await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
+      details: {
+        key: 'conflict-reload-fail.ini',
+        reason: 'remote-failed',
+        version: 2,
+      },
+    })
+    expect(storage.savingState.value).toBe(false)
+  })
+
+  it('rejects explicit save when conflict retry save fails', async () => {
+    const transport = createTransportMock()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let getVersionedCalls = 0
+    let saveCalls = 0
+
+    transport.send.mockImplementation(async (event: unknown, payload?: { key?: string }) => {
+      if (event === StorageEvents.app.save) {
+        saveCalls++
+        return saveCalls === 1
+          ? { success: false, version: 2, conflict: true }
+          : undefined as unknown as null
+      }
+      if (event === StorageEvents.app.getVersioned && payload?.key === 'conflict-retry-fail.ini') {
+        getVersionedCalls++
+        return getVersionedCalls === 1
+          ? { data: { source: 'initial', theme: 'light' }, version: 1 }
+          : { data: { source: 'remote', theme: 'light' }, version: 2 }
+      }
+      return null
+    })
+
+    initializeRendererStorage(transport as any)
+    const storage = new TouchStorage('conflict-retry-fail.ini', {
+      source: 'initial',
+      theme: 'light',
+    })
+
+    await storage.whenHydrated()
+    storage.data.theme = 'dark'
+
+    await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
+      details: {
+        key: 'conflict-retry-fail.ini',
+        reason: 'remote-failed',
+        version: 2,
+      },
+    })
+    expect(storage.data.source).toBe('remote')
+    expect(storage.data.theme).toBe('dark')
+    expect(storage.savingState.value).toBe(false)
+    expect(saveCalls).toBe(2)
   })
 
   it('reports remote save failure when transport returns undefined', async () => {

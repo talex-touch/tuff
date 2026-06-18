@@ -10,7 +10,7 @@ export interface TxIconSource {
   status?: TxIconStatus
   /** Icon color for monochrome rendering */
   color?: string
-  /** Icon colorful mode (only for URL/file type) */
+  /** Preserve source colors for addressable SVG icons */
   colorful?: boolean
   /** Error message (when status is error) */
   error?: string

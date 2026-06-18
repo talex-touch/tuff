@@ -237,6 +237,30 @@ const _appSettingOriginData = {
   searchEngine: {
     logsEnabled: false,
   },
+  quickOps: {
+    enabled: true,
+    showRunningSessionsInCoreBox: true,
+    defaultKeepAwakeDurationMinutes: 60,
+    defaultSystemAwakeDurationMinutes: 60,
+    defaultTimerDurationMinutes: 25,
+    defaultTimerExtendMinutes: 5,
+    defaultPomodoroFocusMinutes: 25,
+    defaultPomodoroBreakMinutes: 5,
+    pomodoroTemplates: {
+      classic: true,
+      long: true,
+      custom: [] as Array<{
+        name: string
+        aliases: string[]
+        focusMinutes: number
+        breakMinutes: number
+        enabled: boolean
+      }>,
+    },
+    defaultScreenCleanDurationSeconds: 60,
+    defaultScreenCleanMode: 'black' as 'black' | 'white',
+    allowPublicIpLookup: false,
+  },
   diagnostics: {
     verboseLogs: false,
   },
@@ -345,6 +369,8 @@ const _appSettingOriginData = {
     startSilent: false,
   },
   setup: {
+    fileAccess: false,
+    fileAccessRootKey: '',
     accessibility: false,
     notifications: false,
     microphone: false,
@@ -354,6 +380,12 @@ const _appSettingOriginData = {
     hideDock: false,
     runAsAdmin: false,
     customDesktop: false,
+    lastPermissionAudit: {
+      at: 0,
+      version: '',
+      appUpdate: false,
+      missing: [] as string[],
+    },
   },
   layout: 'simple',
   layoutAtomConfig: defaultLayoutAtomSimple,
