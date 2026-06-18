@@ -642,17 +642,35 @@ async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: st
   `).bind(scope, scopeId, month, quota).run()
 }
 
+async function resolveActiveCreditTeam(event: H3Event, userId: string) {
+  const personalTeamId = await ensurePersonalTeam(event, userId)
+  const teams = await listUserTeams(event, userId)
+  const organizationTeam = teams.find(team => team.type === 'organization') || null
+  const personalTeam = teams.find(team => team.id === personalTeamId) || null
+  const activeTeam = organizationTeam || personalTeam
+  return {
+    personalTeamId,
+    activeTeam,
+    teamId: activeTeam?.id || personalTeamId,
+    hasTeamPool: activeTeam?.type === 'organization',
+  }
+}
+
 export async function getCreditSummary(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const teamId = await ensurePersonalTeam(event, userId)
-  await ensureBalance(event, 'team', teamId)
+  const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
+
+  await ensureBalance(event, 'team', activeCreditTeam.personalTeamId)
+  if (activeCreditTeam.hasTeamPool)
+    await ensureBalance(event, 'team', activeCreditTeam.teamId)
   await ensureBalance(event, 'user', userId)
+
   const month = getMonthKey()
   const plan = await resolvePlanForScope(event, 'user', userId)
   const teamBalance = await db.prepare(`
     SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
-  `).bind(teamId, month).first()
+  `).bind(activeCreditTeam.teamId, month).first()
   const userBalance = await db.prepare(`
     SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
   `).bind(userId, month).first()
@@ -663,6 +681,14 @@ export async function getCreditSummary(event: H3Event, userId: string) {
     month,
     team: normalizeCreditBalanceRow(teamBalance),
     user: normalizeCreditBalanceRow(userBalance),
+    teamContext: activeCreditTeam.activeTeam
+      ? {
+          id: activeCreditTeam.activeTeam.id,
+          name: activeCreditTeam.activeTeam.name,
+          type: activeCreditTeam.activeTeam.type,
+          hasTeamPool: activeCreditTeam.hasTeamPool,
+        }
+      : null,
     boost: boost
       ? {
           ...boost,
@@ -894,8 +920,8 @@ export async function consumeCredits(
 ): Promise<CreditConsumptionResult> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const teamId = await ensurePersonalTeam(event, userId)
-  await ensureBalance(event, 'team', teamId)
+  const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
+  await ensureBalance(event, 'team', activeCreditTeam.teamId)
   await ensureBalance(event, 'user', userId)
   const normalizedAmount = normalizeCreditAmount(amount)
   if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
@@ -904,7 +930,7 @@ export async function consumeCredits(
   const month = getMonthKey()
   const teamBalance = await db.prepare(`
     SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
-  `).bind(teamId, month).first()
+  `).bind(activeCreditTeam.teamId, month).first()
   const userBalance = await db.prepare(`
     SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
   `).bind(userId, month).first()
@@ -924,7 +950,7 @@ export async function consumeCredits(
     UPDATE ${CREDIT_BALANCES_TABLE}
     SET used = used + ?
     WHERE scope = 'team' AND scope_id = ? AND month = ?
-  `).bind(normalizedAmount, teamId, month).run()
+  `).bind(normalizedAmount, activeCreditTeam.teamId, month).run()
 
   await db.prepare(`
     UPDATE ${CREDIT_BALANCES_TABLE}
@@ -938,11 +964,11 @@ export async function consumeCredits(
   await db.prepare(`
     INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
     VALUES (?, 'team', ?, ?, ?, ?, ?)
-  `).bind(id, teamId, -normalizedAmount, reason, now, JSON.stringify(ledgerMetadata)).run()
+  `).bind(id, activeCreditTeam.teamId, -normalizedAmount, reason, now, JSON.stringify(ledgerMetadata)).run()
 
   return {
     ledgerId: id,
-    teamId,
+    teamId: activeCreditTeam.teamId,
     userId,
     amount: normalizedAmount,
     reason,
@@ -954,13 +980,13 @@ export async function consumeCredits(
 export async function listCreditLedger(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const teamId = await ensurePersonalTeam(event, userId)
+  const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
   const result = await db.prepare(`
     SELECT * FROM ${CREDIT_LEDGER_TABLE}
-    WHERE (scope = 'team' AND scope_id = ?) OR (scope = 'user' AND scope_id = ?)
+    WHERE (scope = 'team' AND scope_id IN (?, ?)) OR (scope = 'user' AND scope_id = ?)
     ORDER BY created_at DESC
     LIMIT 100
-  `).bind(teamId, userId).all()
+  `).bind(activeCreditTeam.teamId, activeCreditTeam.personalTeamId, userId).all()
   return (result.results ?? []).map((row: any) => ({
     ...row,
     delta: resolveCreditAmount(row?.delta ?? 0)

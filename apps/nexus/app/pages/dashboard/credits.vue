@@ -23,6 +23,11 @@ const creditTab = ref<'overview' | 'signin' | 'apis' | 'audits' | 'models'>('ove
 
 const teamBalance = computed(() => summary.value?.team ?? null)
 const userBalance = computed(() => summary.value?.user ?? null)
+const teamContext = computed(() => summary.value?.teamContext ?? null)
+const hasTeamPool = computed(() => teamContext.value?.type === 'organization' && teamContext.value?.hasTeamPool !== false)
+const creditsSubtitle = computed(() => hasTeamPool.value
+  ? t('dashboard.credits.subtitleWithTeam', '个人额度与团队池按月重置')
+  : t('dashboard.credits.subtitle', '个人额度按月重置'))
 const boost = computed(() => summary.value?.boost ?? null)
 const boostRequirements = computed(() => boost.value?.requirements ?? {})
 const canClaimBoost = computed(() => Boolean(boost.value?.canClaimNow))
@@ -103,7 +108,7 @@ const userRemaining = computed(() => Math.max(0, userQuota.value - userUsed.valu
 const teamQuota = computed(() => teamBalance.value?.quota ?? 0)
 const teamUsed = computed(() => teamBalance.value?.used ?? 0)
 const teamRemaining = computed(() => Math.max(0, teamQuota.value - teamUsed.value))
-const totalQuota = computed(() => userQuota.value + teamQuota.value)
+const totalQuota = computed(() => userQuota.value + (hasTeamPool.value ? teamQuota.value : 0))
 const personalShare = computed(() => {
   const total = totalQuota.value
   if (!total)
@@ -245,7 +250,7 @@ function handleGoAccount() {
         {{ t('dashboard.credits.title', 'AI 积分') }}
       </h1>
       <p class="mt-2 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.credits.subtitle', '个人额度与团队池按月重置') }}
+        {{ creditsSubtitle }}
       </p>
     </header>
 
@@ -278,6 +283,7 @@ function handleGoAccount() {
       </TxStatCard>
 
       <TxStatCard
+        v-if="hasTeamPool"
         :value="formatNumber(teamRemaining)"
         :label="t('dashboard.credits.stats.teamRemaining', '团队池剩余')"
         icon-class="i-carbon-group text-5xl text-[var(--tx-color-success)] sm:text-6xl"
@@ -308,6 +314,7 @@ function handleGoAccount() {
       </TxStatCard>
 
       <TxStatCard
+        v-if="hasTeamPool"
         :value="`${personalSharePercent}%`"
         :label="t('dashboard.credits.stats.personalShare', '个人占比')"
         icon-class="i-carbon-pie-chart text-5xl text-[var(--tx-color-info)] sm:text-6xl"
@@ -389,7 +396,7 @@ function handleGoAccount() {
               </TxButton>
             </div>
 
-            <div class="grid gap-4 lg:grid-cols-2">
+            <div class="grid gap-4" :class="hasTeamPool ? 'lg:grid-cols-2' : 'lg:grid-cols-1'">
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
                 <div class="flex items-center justify-between text-xs text-black/40 dark:text-white/40">
                   <span>{{ t('dashboard.credits.trend.title', '消耗趋势') }}</span>
@@ -425,7 +432,7 @@ function handleGoAccount() {
                 </p>
               </div>
 
-              <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <div v-if="hasTeamPool" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
                 <div class="flex items-center justify-between text-xs text-black/40 dark:text-white/40">
                   <span>{{ t('dashboard.credits.share.title', '个人占比') }}</span>
                   <span>{{ t('dashboard.credits.share.subtitle', { personal: formatNumber(userQuota), total: formatNumber(totalQuota) }) }}</span>

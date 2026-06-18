@@ -616,7 +616,8 @@ export default {
     },
     credits: {
       title: 'AI Credits',
-      subtitle: 'Personal and team pools reset monthly',
+      subtitle: 'Personal credits reset monthly',
+      subtitleWithTeam: 'Personal and team pools reset monthly',
       teamPool: 'Team pool',
       personalPool: 'Personal pool',
       used: 'Used {n}',

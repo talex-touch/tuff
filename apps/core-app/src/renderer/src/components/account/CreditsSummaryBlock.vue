@@ -94,7 +94,11 @@ function refreshCredits() {
       </div>
     </TuffBlockSlot>
 
-    <div v-if="credits.isLoggedIn.value && credits.summary.value" class="credits-summary">
+    <div
+      v-if="credits.isLoggedIn.value && credits.summary.value"
+      class="credits-summary"
+      :class="{ 'credits-summary--personal': !credits.hasTeamPool.value }"
+    >
       <div class="credits-metric credits-metric--primary">
         <span class="credits-metric__label">{{
           t('creditsSummary.personalRemaining', '个人剩余')
@@ -119,7 +123,7 @@ function refreshCredits() {
           formatCredits(credits.personalQuota.value)
         }}</strong>
       </div>
-      <div class="credits-metric">
+      <div v-if="credits.hasTeamPool.value" class="credits-metric">
         <span class="credits-metric__label">{{
           t('creditsSummary.teamRemaining', '团队池剩余')
         }}</span>
@@ -181,6 +185,10 @@ function refreshCredits() {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 8px 12px 12px;
+}
+
+.credits-summary--personal {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .credits-metric {

@@ -5,6 +5,20 @@
 
 ## 2026-06-18
 
+### fix(nexus): hide team credit pool for personal accounts
+
+- `apps/nexus/server/utils/creditsStore.ts`
+- `apps/nexus/app/pages/dashboard/credits.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/core-app/src/renderer/src/modules/nexus/credits-summary*.ts`
+- `apps/core-app/src/renderer/src/components/account/CreditsSummaryBlock.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - Credits summary now exposes active team context while keeping the legacy `team` balance field compatible.
+  - Nexus and CoreApp hide team-pool remaining and personal/team share UI unless the active team is an organization team, so personal accounts no longer see misleading team pool quota.
+  - Personal-account copy now describes monthly personal credits instead of implying a shared team pool.
+
 ### perf(core-app): defer non-critical startup work from first render
 
 - `apps/core-app/src/main/index.ts`
