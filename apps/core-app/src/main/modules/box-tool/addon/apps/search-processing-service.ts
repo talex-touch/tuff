@@ -1,20 +1,23 @@
 import type { TuffItem, TuffQuery } from '@talex-touch/utils/core-box'
+import type {
+  FeatureMatchAlias,
+  FeatureMatchResult,
+  FeatureSearchToken,
+  FeatureSearchTokenSource
+} from '@talex-touch/utils/search'
 import type { files as filesSchema } from '../../../../db/schema'
 import type { Range } from './highlighting-service'
 import fs from 'node:fs'
-import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { startTiming, timingLogger } from '@talex-touch/utils'
-import { toTfileUrl } from '@talex-touch/utils/network'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search/fuzzy-match'
-import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
+import { toTfileUrl } from '@talex-touch/utils/network'
+import { buildAppSearchTokens, matchFeature } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
 import type { AppLaunchKind } from './app-types'
-import { formatLog, generateAcronym, LogStyle, parseStringList } from './app-utils'
+import { formatLog, LogStyle, parseStringList } from './app-utils'
 import { resolveDisplayName } from './display-name-sync-utils'
-import { calculateHighlights } from './highlighting-service'
 import { createLogger } from '../../../../utils/logger'
 import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
 
@@ -33,6 +36,8 @@ interface AppMatchState {
   highlights: Range[]
   score: number
   source: string
+  alias?: FeatureMatchAlias
+  searchTokens?: FeatureSearchToken[]
 }
 
 export function isSearchableAppRow(app: AppSearchRow): boolean {
@@ -80,14 +85,16 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
       },
       extension: {
         matchResult: match.highlights,
+        matchAlias: match.alias
+          ? {
+              text: match.alias.text,
+              matchResult: match.alias.matchRanges
+            }
+          : undefined,
+        searchTokens: match.searchTokens,
         source: match.source,
         keyWords: [
-          ...new Set([
-            displayName,
-            name,
-            ...alternateNames,
-            path.basename(keywordPath).split('.')[0] || ''
-          ])
+          ...new Set([displayName, name, ...alternateNames, deriveAppFileName(keywordPath)])
         ].filter(Boolean)
       }
     })
@@ -123,6 +130,74 @@ function resolveAppIcon(rawIconValue: string): { type: 'url' | 'file' | 'class';
   return { type: 'url', value: toTfileUrl(rawIconValue) }
 }
 
+function getPinyinSyllables(text: string): string[] {
+  return pinyin(text, { toneType: 'none' })
+    .split(/\s+/)
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+function basenameAny(filePath: string): string {
+  const value = filePath.trim()
+  if (!value) return ''
+
+  const parts = value.split(/[\\/]/).filter(Boolean)
+  return parts[parts.length - 1] || value
+}
+
+function deriveAppFileName(filePath: string): string {
+  const baseName = basenameAny(filePath)
+  return baseName.replace(/\.(app|exe|lnk|desktop)$/i, '')
+}
+
+function normalizeAppMatchScore(score: number): number {
+  if (!Number.isFinite(score)) return 0
+  return Math.max(0, Math.min(1, score / 1000))
+}
+
+function resolveAppMatchSource(result: FeatureMatchResult): string {
+  if (result.matchedTokenSource) {
+    return mapTokenSourceToAppMatchSource(result.matchedTokenSource, result.matchType)
+  }
+
+  if (result.matchRanges.length > 0) {
+    return result.matchType === 'fuzzy' ? 'name-fuzzy' : 'name'
+  }
+
+  return result.matchType === 'fuzzy' ? 'name-fuzzy' : 'description'
+}
+
+function mapTokenSourceToAppMatchSource(
+  source: FeatureSearchTokenSource,
+  matchType: FeatureMatchResult['matchType']
+): string {
+  switch (source) {
+    case 'title':
+    case 'name':
+    case 'pinyin':
+      return matchType === 'fuzzy' ? 'name-fuzzy' : 'name'
+    case 'initials':
+      return 'initials'
+    case 'alternate-name':
+      return 'alternate-name'
+    case 'alternate-initials':
+      return 'alternate-initials'
+    case 'alias':
+      return 'tag'
+    case 'description':
+      return 'description'
+    case 'path':
+    case 'displayPath':
+    case 'fileName':
+    case 'bundleId':
+    case 'appIdentity':
+    case 'launchTarget':
+      return 'path'
+    default:
+      return 'token'
+  }
+}
+
 export function mapAppsToRecommendationItems(apps: AppSearchRow[]): ProcessedTuffItem[] {
   return apps.filter(isSearchableAppRow).map((app) =>
     buildProcessedAppItem(app, {
@@ -140,231 +215,63 @@ export async function processSearchResults(
   aliases: Record<string, string[]> // 需要传入别名数据
 ): Promise<ProcessedTuffItem[]> {
   const processStart = startTiming()
-  const lowerCaseQuery = query.text.toLowerCase()
+  const queryText = query.text.trim()
   const processedItems: ProcessedTuffItem[] = []
 
   for (const app of apps) {
     if (!isSearchableAppRow(app)) {
       continue
     }
+
     const name = app.name
     const displayName = resolveDisplayName(app.displayName, app.name)
-    const potentialTitles = Array.from(new Set([displayName, name].filter(Boolean))) as string[]
     const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
-    const uniqueId = app.extensions.appIdentity || app.path || app.extensions.bundleId || ''
-
-    let bestSource: string = 'unknown'
-    let bestHighlights: Range[] = []
-    let score = 0
+    const appIdentity = app.extensions.appIdentity || ''
+    const uniqueId = appIdentity || app.path || app.extensions.bundleId || ''
     const aliasList =
       aliases[uniqueId] || aliases[app.path] || aliases[app.extensions.bundleId || ''] || []
-
-    const ensureHighlights = (raw: Range[] | null | undefined, fallbackTitle: string): Range[] => {
-      if (raw && raw.length > 0) {
-        return raw
+    const displayPath = app.extensions.displayPath || app.path
+    const description = app.extensions.description || ''
+    const searchTokens = buildAppSearchTokens(
+      {
+        title: displayName,
+        name,
+        alternateNames,
+        aliases: aliasList,
+        path: app.path,
+        displayPath,
+        fileName: deriveAppFileName(displayPath || app.path || name),
+        bundleId: app.extensions.bundleId || '',
+        appIdentity,
+        launchTarget: app.extensions.launchTarget || app.path,
+        description
+      },
+      {
+        getSyllables: getPinyinSyllables,
+        onError: (error) =>
+          searchProcessingLog.warn('Failed to generate app pinyin tokens', { error })
       }
-      const length = fallbackTitle.length
-      if (length === 0) {
-        return []
-      }
-      const highlightLength = Math.min(length, Math.max(lowerCaseQuery.length, 1))
-      return [{ start: 0, end: highlightLength }]
-    }
+    )
 
-    const updateMatch = (
-      source: string,
-      rawHighlights: Range[] | null | undefined,
-      newScore: number,
-      fallbackTitle: string
-    ): void => {
-      if (newScore <= score) return
-      const resolvedHighlights = ensureHighlights(rawHighlights, fallbackTitle)
-      if (resolvedHighlights.length === 0) return
-      bestSource = source
-      bestHighlights = resolvedHighlights
-      score = newScore
-    }
+    const result = matchFeature({
+      title: displayName,
+      desc: description,
+      searchTokens,
+      query: queryText,
+      enableFuzzy: isFuzzySearch
+    })
 
-    // --- 1. 来源推断与区间计算 ---
-    if (isFuzzySearch) {
-      // 模糊搜索：使用新的 fuzzyMatch 算法，支持 typo 容错
-      const fuzzyResult = fuzzyMatch(displayName, lowerCaseQuery, 2)
-      if (fuzzyResult.matched && fuzzyResult.score >= 0.4) {
-        updateMatch(
-          'name-fuzzy',
-          indicesToRanges(fuzzyResult.matchedIndices),
-          fuzzyResult.score * 0.5, // edit distance 0 → ~0.5, distance 1 → ~0.4
-          displayName
-        )
-      } else {
-        // 回退到原有的滑窗算法
-        let minFuzzyDist = Infinity
-        let bestFuzzyStart = -1
-        let bestFuzzyEnd = -1
-
-        for (let i = 0; i <= displayName.length - lowerCaseQuery.length; i++) {
-          const sub = displayName.substring(i, i + lowerCaseQuery.length).toLowerCase()
-          const dist = levenshteinDistance(sub, lowerCaseQuery)
-          if (dist < minFuzzyDist) {
-            minFuzzyDist = dist
-            bestFuzzyStart = i
-            bestFuzzyEnd = i + lowerCaseQuery.length
-          }
-        }
-
-        if (minFuzzyDist <= 2 && bestFuzzyStart !== -1) {
-          const clampedStart = Math.max(0, bestFuzzyStart)
-          const clampedEnd = Math.min(displayName.length, Math.max(clampedStart + 1, bestFuzzyEnd))
-          // edit distance 1 → 0.5, distance 2 → 0.3
-          updateMatch(
-            'name-fuzzy',
-            [{ start: clampedStart, end: clampedEnd }],
-            minFuzzyDist === 1 ? 0.5 : 0.3,
-            displayName
-          )
-        }
-      }
-    }
-
-    if (aliasList.some((alias) => alias.toLowerCase().includes(lowerCaseQuery))) {
-      updateMatch('tag', calculateHighlights(displayName, lowerCaseQuery), 0.7, displayName)
-    }
-
-    for (const title of potentialTitles) {
-      if (!title) continue
-      const normalizedTitle = title.toLowerCase()
-
-      // Check for exact substring match
-      if (normalizedTitle.includes(lowerCaseQuery)) {
-        updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.9, title)
-      }
-
-      // Check for multi-word query match (each word matches in order)
-      const queryParts = lowerCaseQuery.split(/\s+/).filter(Boolean)
-      if (queryParts.length > 1) {
-        let allPartsMatch = true
-        let searchIndex = 0
-        for (const part of queryParts) {
-          const idx = normalizedTitle.indexOf(part, searchIndex)
-          if (idx === -1) {
-            allPartsMatch = false
-            break
-          }
-          searchIndex = idx + part.length
-        }
-        if (allPartsMatch) {
-          updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.85, title)
-        }
-      }
-
-      const acronym = generateAcronym(title)
-      if (acronym) {
-        const normalizedAcronym = acronym.toLowerCase()
-        if (
-          lowerCaseQuery.includes(normalizedAcronym) ||
-          normalizedAcronym.includes(lowerCaseQuery)
-        ) {
-          updateMatch('initials', calculateHighlights(title, acronym), 0.8, title)
-        }
-      }
-
-      if (/[\u4E00-\u9FA5]/.test(title)) {
-        const fullPinyin = pinyin(title, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
-        const firstPinyin = pinyin(title, { pattern: 'first', toneType: 'none' })
-          .replace(/\s/g, '')
-          .toLowerCase()
-
-        if (fullPinyin.includes(lowerCaseQuery)) {
-          updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.65, title)
-        } else if (firstPinyin.includes(lowerCaseQuery)) {
-          updateMatch('initials', calculateHighlights(title, lowerCaseQuery), 0.6, title)
-        }
-      }
-    }
-
-    for (const alternateName of alternateNames) {
-      const normalizedAlternateName = alternateName.toLowerCase()
-
-      if (normalizedAlternateName.includes(lowerCaseQuery)) {
-        updateMatch('alternate-name', null, 0.86, displayName)
-      }
-
-      const queryParts = lowerCaseQuery.split(/\s+/).filter(Boolean)
-      if (queryParts.length > 1) {
-        let allPartsMatch = true
-        let searchIndex = 0
-        for (const part of queryParts) {
-          const idx = normalizedAlternateName.indexOf(part, searchIndex)
-          if (idx === -1) {
-            allPartsMatch = false
-            break
-          }
-          searchIndex = idx + part.length
-        }
-        if (allPartsMatch) {
-          updateMatch('alternate-name', null, 0.81, displayName)
-        }
-      }
-
-      const acronym = generateAcronym(alternateName)
-      if (acronym) {
-        const normalizedAcronym = acronym.toLowerCase()
-        if (
-          lowerCaseQuery.includes(normalizedAcronym) ||
-          normalizedAcronym.includes(lowerCaseQuery)
-        ) {
-          updateMatch('alternate-initials', null, 0.76, displayName)
-        }
-      }
-
-      if (/[\u4E00-\u9FA5]/.test(alternateName)) {
-        const fullPinyin = pinyin(alternateName, { toneType: 'none' })
-          .replace(/\s/g, '')
-          .toLowerCase()
-        const firstPinyin = pinyin(alternateName, { pattern: 'first', toneType: 'none' })
-          .replace(/\s/g, '')
-          .toLowerCase()
-
-        if (fullPinyin.includes(lowerCaseQuery)) {
-          updateMatch('alternate-name', null, 0.64, displayName)
-        } else if (firstPinyin.includes(lowerCaseQuery)) {
-          updateMatch('alternate-initials', null, 0.59, displayName)
-        }
-      }
-    }
-
-    // Path match: check if query appears in the app path
-    if (app.path) {
-      const normalizedPath = app.path.toLowerCase()
-      if (normalizedPath.includes(lowerCaseQuery)) {
-        updateMatch('path', calculateHighlights(displayName, lowerCaseQuery), 0.35, displayName)
-      }
-    }
-
-    // Description match: check if query appears in app description (via extensions)
-    const description = app.extensions.description
-    if (description) {
-      const normalizedDesc = description.toLowerCase()
-      if (normalizedDesc.includes(lowerCaseQuery)) {
-        updateMatch(
-          'description',
-          calculateHighlights(displayName, lowerCaseQuery),
-          0.4,
-          displayName
-        )
-      }
-    }
-
-    // 如果没有任何匹配，跳过此项
-    if (score === 0 || bestHighlights.length === 0) {
+    if (!result.matched) {
       continue
     }
 
     processedItems.push(
       buildProcessedAppItem(app, {
-        highlights: bestHighlights,
-        score,
-        source: bestSource
+        highlights: result.matchRanges,
+        alias: result.matchedAlias,
+        score: normalizeAppMatchScore(result.score),
+        source: resolveAppMatchSource(result),
+        searchTokens
       })
     )
   }

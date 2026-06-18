@@ -169,14 +169,16 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         }
         if (itemAction?.type === 'execute') {
           await transport.send(CoreBoxEvents.item.execute, {
-            item: JSON.parse(JSON.stringify(targetItem))
+            item: JSON.parse(JSON.stringify(targetItem)),
+            actionId
           })
           return
         }
         devLog('[useActionPanel] Fallback execute for MetaOverlay action:', actionId, targetItem.id)
         try {
           await transport.send(CoreBoxEvents.item.execute, {
-            item: JSON.parse(JSON.stringify(targetItem))
+            item: JSON.parse(JSON.stringify(targetItem)),
+            actionId
           })
         } catch (error) {
           devLog('[useActionPanel] Fallback execute failed:', error)

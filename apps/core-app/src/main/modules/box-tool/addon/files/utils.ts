@@ -3,6 +3,7 @@ import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-consta
 import type { files as filesSchema } from '../../../../db/schema'
 import type { ScannedFileInfo } from './types'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import {
   isIndexableFile as globalIsIndexableFile,
@@ -14,6 +15,10 @@ import {
   VIDEO_THUMBNAIL_EXTENSIONS,
   normalizeExtension
 } from './thumbnail-config'
+import {
+  QUICK_OPS_FILE_BASE64_ACTION_ID,
+  QUICK_OPS_FILE_HASH_ACTION_ID
+} from './quick-ops-file-actions'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
@@ -135,7 +140,18 @@ export function mapFileToTuffItem(
         payload: {
           path: path.dirname(file.path)
         }
-      }
+      },
+      {
+        id: QUICK_OPS_FILE_HASH_ACTION_ID,
+        type: 'execute',
+        label: 'Copy Hashes'
+      },
+      {
+        id: QUICK_OPS_FILE_BASE64_ACTION_ID,
+        type: 'execute',
+        label: 'Copy Base64'
+      },
+      ...buildQuickOpsFilePathActions(file.path)
     ],
     meta: {
       file: {
@@ -149,4 +165,81 @@ export function mapFileToTuffItem(
       }
     }
   }
+}
+
+function buildQuickOpsFilePathActions(filePath: string): NonNullable<TuffItem['actions']> {
+  const windowsPath = convertWslPathToWindowsPath(filePath)
+  const wslPath = convertWindowsPathToWslPath(filePath)
+  const actions: NonNullable<TuffItem['actions']> = [
+    {
+      id: 'quick-ops-copy-file-path',
+      type: 'copy',
+      label: 'Copy Path',
+      payload: {
+        text: filePath
+      }
+    },
+    {
+      id: 'quick-ops-copy-shell-path',
+      type: 'copy',
+      label: 'Copy Shell Path',
+      payload: {
+        text: escapeShellPath(filePath)
+      }
+    },
+    {
+      id: 'quick-ops-copy-file-url',
+      type: 'copy',
+      label: 'Copy File URL',
+      payload: {
+        text: pathToFileURL(filePath).href
+      }
+    }
+  ]
+
+  if (windowsPath) {
+    actions.push({
+      id: 'quick-ops-copy-windows-path',
+      type: 'copy',
+      label: 'Copy Windows Path',
+      payload: {
+        text: windowsPath
+      }
+    })
+  }
+
+  if (wslPath) {
+    actions.push({
+      id: 'quick-ops-copy-wsl-path',
+      type: 'copy',
+      label: 'Copy WSL Path',
+      payload: {
+        text: wslPath
+      }
+    })
+  }
+
+  return actions
+}
+
+function escapeShellPath(filePath: string): string {
+  return `'${filePath.replace(/'/g, "'\\''")}'`
+}
+
+function convertWindowsPathToWslPath(filePath: string): string | undefined {
+  const match = /^([a-zA-Z]):[\\/](.*)$/.exec(filePath)
+  if (!match) return undefined
+
+  const drive = match[1].toLowerCase()
+  const rest = match[2].replace(/\\/g, '/')
+  return `/mnt/${drive}/${rest}`
+}
+
+function convertWslPathToWindowsPath(filePath: string): string | undefined {
+  const match = /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/.exec(filePath)
+  if (!match) return undefined
+
+  const drive = match[1].toUpperCase()
+  const rest = match[2]?.replace(/\//g, '\\') ?? ''
+  return rest ? `${drive}:\\${rest}` : `${drive}:\\`
 }

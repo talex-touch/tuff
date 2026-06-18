@@ -108,12 +108,18 @@ export class FileProviderIndexFlushExecutorService {
     }
   }
 
-  private resolveBatchMetadata(entries: IndexWorkerFileResult[]): { withContent: number } {
-    return buildIndexedWriteFlushBatchMetrics(entries, [
-      {
-        key: 'withContent',
-        count: (entry) => Boolean(entry.indexItem.content && entry.indexItem.content.length > 0)
-      }
-    ])
+  private resolveBatchMetadata(entries: IndexWorkerFileResult[]): {
+    storeBoundary: 'indexed-write-flush'
+    withContent: number
+  } {
+    return {
+      storeBoundary: 'indexed-write-flush',
+      ...buildIndexedWriteFlushBatchMetrics(entries, [
+        {
+          key: 'withContent',
+          count: (entry) => Boolean(entry.indexItem.content && entry.indexItem.content.length > 0)
+        }
+      ])
+    }
   }
 }

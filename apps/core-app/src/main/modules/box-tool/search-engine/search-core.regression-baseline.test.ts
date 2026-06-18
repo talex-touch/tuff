@@ -2,13 +2,19 @@ import type { TuffItem, TuffQuery } from '@talex-touch/utils'
 import { TuffInputType } from '@talex-touch/utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { everythingReadyMock, fileHasSearchFiltersMock, fileStartupNoticeMock, appSettingsMock } =
-  vi.hoisted(() => ({
-    everythingReadyMock: vi.fn(() => false),
-    fileHasSearchFiltersMock: vi.fn(() => false),
-    fileStartupNoticeMock: vi.fn<() => TuffItem | null>(() => null),
-    appSettingsMock: { value: { beginner: { init: true } } as Record<string, unknown> }
-  }))
+const {
+  everythingReadyMock,
+  fileHasSearchFiltersMock,
+  fileStartupNoticeMock,
+  appSettingsMock,
+  quickOpsDestroyMock
+} = vi.hoisted(() => ({
+  everythingReadyMock: vi.fn(() => false),
+  fileHasSearchFiltersMock: vi.fn(() => false),
+  fileStartupNoticeMock: vi.fn<() => TuffItem | null>(() => null),
+  appSettingsMock: { value: { beginner: { init: true } } as Record<string, unknown> },
+  quickOpsDestroyMock: vi.fn()
+}))
 
 vi.mock('../../../utils/perf-context', () => ({
   enterPerfContext: () => () => {}
@@ -18,6 +24,7 @@ vi.mock('../../../core/eventbus/touch-event', () => ({
   TalexEvents: {},
   touchEventBus: {
     on: vi.fn(),
+    once: vi.fn(),
     off: vi.fn(),
     emit: vi.fn()
   },
@@ -66,6 +73,7 @@ vi.mock('../../sentry', () => ({
 vi.mock('../../storage', () => ({
   storageModule: {},
   getMainConfig: vi.fn(() => appSettingsMock.value),
+  isMainStorageReady: vi.fn(() => false),
   subscribeMainConfig: vi.fn(() => () => {})
 }))
 
@@ -96,7 +104,8 @@ vi.mock('../addon/files/file-provider', () => ({
     supportedInputTypes: [TuffInputType.Text, TuffInputType.Files],
     onSearch: vi.fn(),
     hasSearchFilters: fileHasSearchFiltersMock,
-    buildStartupDegradedNotice: fileStartupNoticeMock
+    buildStartupDegradedNotice: fileStartupNoticeMock,
+    setIndexedSourceRuntimeResetDelegate: vi.fn()
   }
 }))
 
@@ -106,6 +115,16 @@ vi.mock('../addon/preview', () => ({
     type: 'preview',
     supportedInputTypes: [TuffInputType.Text],
     onSearch: vi.fn()
+  }
+}))
+
+vi.mock('../addon/quick-ops/quick-ops-provider', () => ({
+  quickOpsProvider: {
+    id: 'quick-ops-provider',
+    type: 'system',
+    supportedInputTypes: [TuffInputType.Text],
+    onSearch: vi.fn(),
+    onDestroy: quickOpsDestroyMock
   }
 }))
 
@@ -188,6 +207,37 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
     sendToWindow: vi.fn()
   }))
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getLocale: vi.fn(() => 'en-US'),
+    commandLine: {
+      appendSwitch: vi.fn()
+    }
+  },
+  BrowserWindow: class BrowserWindow {},
+  nativeTheme: {},
+  powerSaveBlocker: {
+    start: vi.fn(() => 1),
+    stop: vi.fn(),
+    isStarted: vi.fn(() => false)
+  },
+  screen: {
+    getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
+    getDisplayNearestPoint: vi.fn(() => ({
+      id: 1,
+      bounds: { x: 0, y: 0, width: 100, height: 100 }
+    }))
+  },
+  WebContentsView: class WebContentsView {}
+}))
+
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  WIN10: false,
+  MicaBrowserWindow: class MicaBrowserWindow {},
+  useMicaElectron: vi.fn()
 }))
 
 import { SearchEngineCore } from './search-core'
@@ -295,6 +345,7 @@ afterEach(() => {
   everythingReadyMock.mockReset().mockReturnValue(false)
   fileHasSearchFiltersMock.mockReset().mockReturnValue(false)
   fileStartupNoticeMock.mockReset().mockReturnValue(null)
+  quickOpsDestroyMock.mockReset()
   appSettingsMock.value = { beginner: { init: true } }
 })
 
@@ -609,5 +660,24 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
     } as TuffQuery)
 
     expect(enabled.cacheKey).not.toBe(disabled.cacheKey)
+  })
+
+  it('destroys registered providers during search engine destroy', () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      registerProvider: (provider: (typeof MOCK_PROVIDERS)[number]) => void
+      destroy: () => void
+    }
+
+    core.registerProvider({
+      id: 'quick-ops-provider',
+      type: 'system',
+      supportedInputTypes: [TuffInputType.Text],
+      onSearch: vi.fn(),
+      onDestroy: quickOpsDestroyMock
+    } as unknown as (typeof MOCK_PROVIDERS)[number])
+
+    core.destroy()
+
+    expect(quickOpsDestroyMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -496,6 +496,15 @@ export function useKeyboard(
     return rect.height
   }
 
+  function getScrollViewport(activeEl: HTMLElement): HTMLElement | null {
+    const scrollRoot = activeEl.closest('.scroll-area') as HTMLElement | null
+    return (
+      scrollRoot?.querySelector<HTMLElement>('.tx-scroll__native') ??
+      scrollRoot?.querySelector<HTMLElement>('.tx-scroll__wrapper') ??
+      null
+    )
+  }
+
   /**
    * Checks if CoreBox is currently in UI mode (plugin view attached).
    */
@@ -887,19 +896,26 @@ export function useKeyboard(
 
       if (activeEl && sb) {
         const scrollInfo = sb.getScrollInfo()
-        const containerHeight = scrollInfo.clientHeight
         const scrollTop = scrollInfo.scrollTop
+        const viewport = getScrollViewport(activeEl)
+        const viewportRect = viewport?.getBoundingClientRect()
+        const itemRect = activeEl.getBoundingClientRect()
 
+        const containerHeight = viewportRect?.height ?? scrollInfo.clientHeight
         const footerInset = getFooterInset()
         const effectiveHeight = Math.max(1, containerHeight - footerInset)
 
-        const itemTop = activeEl.offsetTop
-        const itemHeight = activeEl.offsetHeight
+        const itemTop = viewportRect
+          ? itemRect.top - viewportRect.top
+          : activeEl.offsetTop - scrollTop
+        const itemBottom = viewportRect
+          ? itemRect.bottom - viewportRect.top
+          : activeEl.offsetTop + activeEl.offsetHeight - scrollTop
 
-        if (itemTop < scrollTop) {
-          sb.scrollTo(0, itemTop)
-        } else if (itemTop + itemHeight > scrollTop + effectiveHeight) {
-          sb.scrollTo(0, itemTop + itemHeight - effectiveHeight)
+        if (itemTop < 0) {
+          sb.scrollTo(0, Math.max(0, scrollTop + itemTop))
+        } else if (itemBottom > effectiveHeight) {
+          sb.scrollTo(0, Math.max(0, scrollTop + itemBottom - effectiveHeight))
         }
       }
     })

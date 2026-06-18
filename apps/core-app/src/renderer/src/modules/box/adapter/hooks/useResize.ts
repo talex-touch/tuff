@@ -81,7 +81,7 @@ function calculateDesiredHeight(resultCount: number): number {
   const headerHeight = getHeaderHeight()
   if (resultCount === 0) return clampHeight(headerHeight)
 
-  const scrollRoot = document.querySelector('.CoreBoxRes-Main .touch-scroll')
+  const scrollRoot = document.querySelector('.CoreBoxRes-Main .scroll-area')
   if (!scrollRoot) {
     logResizeDebug('calculateDesiredHeight:scrollRootMissing', {
       resultCount,
@@ -136,6 +136,8 @@ export function useResize(options: UseResizeOptions): void {
   let pendingSource: string | null = null
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   let throttleTimer: ReturnType<typeof setTimeout> | null = null
+  let resultContentObserver: ResizeObserver | null = null
+  let observedResultContent: HTMLElement | null = null
 
   function sendLayoutUpdate(source: string, options: { force?: boolean } = {}): void {
     const activationCount = activeActivations.value?.length ?? 0
@@ -211,6 +213,27 @@ export function useResize(options: UseResizeOptions): void {
     }, RESULT_LAYOUT_SETTLE_MS)
   }
 
+  function observeResultContent(): void {
+    if (typeof ResizeObserver === 'undefined') return
+
+    const resultContent = document.querySelector(
+      '.CoreBoxRes-Main .CoreBoxRes-ScrollContent'
+    ) as HTMLElement | null
+    if (resultContent === observedResultContent) return
+
+    resultContentObserver?.disconnect()
+    resultContentObserver = null
+    observedResultContent = resultContent
+
+    if (!resultContent) return
+
+    resultContentObserver = new ResizeObserver(() => {
+      scheduleLayoutUpdate('content:resize')
+      scheduleSettledLayoutUpdate('content:resize:settled')
+    })
+    resultContentObserver.observe(resultContent)
+  }
+
   onBeforeUnmount(() => {
     if (rafId) {
       cancelAnimationFrame(rafId)
@@ -224,6 +247,9 @@ export function useResize(options: UseResizeOptions): void {
       clearTimeout(throttleTimer)
       throttleTimer = null
     }
+    resultContentObserver?.disconnect()
+    resultContentObserver = null
+    observedResultContent = null
 
     window.removeEventListener('corebox:shown', handleCoreBoxShown)
     window.removeEventListener('corebox:layout-refresh', handleLayoutRefresh)
@@ -231,6 +257,7 @@ export function useResize(options: UseResizeOptions): void {
 
   onMounted(() => {
     setTimeout(() => {
+      observeResultContent()
       scheduleLayoutUpdate('mounted')
     }, 100)
 
@@ -239,10 +266,12 @@ export function useResize(options: UseResizeOptions): void {
   })
 
   function handleCoreBoxShown(): void {
+    observeResultContent()
     sendLayoutUpdate('shown', { force: true })
   }
 
   function handleLayoutRefresh(): void {
+    observeResultContent()
     scheduleLayoutUpdate('manual')
   }
 
@@ -250,6 +279,7 @@ export function useResize(options: UseResizeOptions): void {
     () => results.value,
     (newResults, oldResults) => {
       if (newResults === oldResults) return
+      observeResultContent()
       scheduleLayoutUpdate('results')
       scheduleSettledLayoutUpdate('results:settled')
     },

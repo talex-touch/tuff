@@ -51,6 +51,7 @@ import {
   macSpotlightFileProvider
 } from '../addon/files/native-file-search-provider'
 import { previewProvider } from '../addon/preview'
+import { quickOpsProvider } from '../addon/quick-ops/quick-ops-provider'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
@@ -438,6 +439,7 @@ export class SearchEngineCore
     this.registerProvider(fileProvider)
 
     this.registerProvider(PluginFeaturesAdapter)
+    this.registerProvider(quickOpsProvider)
     this.registerProvider(previewProvider)
   }
 
@@ -2582,16 +2584,17 @@ export class SearchEngineCore
     })
 
     transport.on(CoreBoxEvents.item.execute, async (payload) => {
-      const { item, searchResult } = payload as {
+      const { item, searchResult, actionId } = payload as {
         item: TuffItem
         searchResult?: TuffSearchResult
+        actionId?: string
       }
       const provider = instance.providers.get(item.source.id)
       if (!provider || !provider.onExecute) {
         return instance.getActivationState()
       }
 
-      const activationResult = await provider.onExecute({ item, searchResult })
+      const activationResult = await provider.onExecute({ item, searchResult, actionId })
 
       if (activationResult) {
         let activation: IProviderActivate
@@ -2708,6 +2711,7 @@ export class SearchEngineCore
     }
     this.currentGatherController?.abort()
     this.clearOnboardingSubscription()
+    this.destroyProviders()
 
     // 停止汇总服务
     this.usageSummaryService?.stop()
@@ -2721,6 +2725,24 @@ export class SearchEngineCore
     this.usageStatsQueue?.forceFlush().catch((error) => {
       searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
     })
+  }
+
+  private destroyProviders(): void {
+    for (const provider of this.providers.values()) {
+      try {
+        if ('onDestroy' in provider && typeof provider.onDestroy === 'function') {
+          provider.onDestroy()
+        } else {
+          provider.onDeactivate?.()
+        }
+      } catch (error) {
+        searchEngineLog.warn(`Provider '${provider.id}' cleanup failed`, { error })
+      }
+    }
+    this.providers.clear()
+    this.providersToLoad = []
+    this.activatedProviders = null
+    this.providersLoaded = false
   }
 }
 

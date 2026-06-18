@@ -1,75 +1,20 @@
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { FeatureSearchToken } from '@talex-touch/utils/search'
+import {
+  addSimpleTextSearchTokens,
+  addTitlePinyinSearchTokens,
+  addTitleSearchTokens
+} from '@talex-touch/utils/search'
 import { pinyin } from 'pinyin-pro'
 import { createLogger } from '../../../utils/logger'
 
 const featureSearchTokensLog = createLogger('PluginSystem').child('FeatureSearchTokens')
 
-const CHINESE_CHAR_REGEX = /[\u4E00-\u9FFF]/u
-const INVALID_CHAR_REGEX = /[^a-z0-9\u4E00-\u9FFF]+/gi
-const WORD_SEPARATORS = /[\s\-_]+/
-const CAMEL_BOUNDARY = /([a-z])([A-Z])/g
-
-function normalizeInput(text?: string): string {
-  if (!text) return ''
-  return text.trim()
-}
-
-function splitWords(text: string): string[] {
-  if (!text) return []
-
-  const lower = text.replace(CAMEL_BOUNDARY, '$1 $2').toLowerCase()
-  const cleaned = lower.replace(INVALID_CHAR_REGEX, ' ')
-  return cleaned
-    .split(WORD_SEPARATORS)
-    .map((part) => part.trim())
+function getPinyinSyllables(text: string): string[] {
+  return pinyin(text, { toneType: 'none' })
+    .split(/\s+/)
+    .map((part) => part.trim().toLowerCase())
     .filter(Boolean)
-}
-
-function collectInitials(words: string[]): string | null {
-  if (words.length < 2) return null
-
-  const initials = words
-    .map((word) => word[0])
-    .join('')
-    .trim()
-
-  return initials.length > 0 ? initials : null
-}
-
-function addPinyinTokens(text: string, tokens: Set<string>): void {
-  if (!CHINESE_CHAR_REGEX.test(text)) return
-
-  try {
-    const full = pinyin(text, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
-    if (full) tokens.add(full)
-
-    const first = pinyin(text, { pattern: 'first', toneType: 'none' })
-      .replace(/\s/g, '')
-      .toLowerCase()
-    if (first) tokens.add(first)
-  } catch (err) {
-    // 保守处理，拼音模块异常时不影响主流程
-    featureSearchTokensLog.warn('Failed to generate pinyin tokens', { error: err })
-  }
-}
-
-function addTokensFromText(text: string, tokens: Set<string>): void {
-  const normalized = normalizeInput(text)
-  if (!normalized) return
-
-  const lower = normalized.toLowerCase()
-  tokens.add(lower)
-
-  const compact = lower.replace(/\s+/g, '')
-  if (compact) tokens.add(compact)
-
-  const words = splitWords(normalized)
-  words.forEach((word) => tokens.add(word))
-
-  const initials = collectInitials(words)
-  if (initials) tokens.add(initials)
-
-  addPinyinTokens(normalized, tokens)
 }
 
 function collectCommandTokens(commands: IPluginFeature['commands']): string[] {
@@ -78,23 +23,29 @@ function collectCommandTokens(commands: IPluginFeature['commands']): string[] {
     if (typeof cmd.value === 'string') {
       values.push(cmd.value)
     } else if (Array.isArray(cmd.value)) {
-      values.push(...cmd.value.filter((v): v is string => typeof v === 'string'))
+      values.push(...cmd.value.filter((value): value is string => typeof value === 'string'))
     }
   }
   return values
 }
 
-export function buildFeatureSearchTokens(feature: IPluginFeature): string[] {
-  const tokens = new Set<string>()
+export function buildFeatureSearchTokens(feature: IPluginFeature): FeatureSearchToken[] {
+  const tokens: FeatureSearchToken[] = []
 
-  addTokensFromText(feature.name, tokens)
-  addTokensFromText(feature.desc, tokens)
+  addSimpleTextSearchTokens(tokens, feature.id, 'id', feature.id)
+  addTitleSearchTokens(tokens, feature.name)
+  addTitlePinyinSearchTokens(tokens, feature.name, {
+    getSyllables: getPinyinSyllables,
+    onError: (error) => featureSearchTokensLog.warn('Failed to generate pinyin tokens', { error })
+  })
+  addSimpleTextSearchTokens(tokens, feature.desc, 'description', feature.desc)
 
-  if (feature.keywords?.length) {
-    feature.keywords.forEach((keyword) => addTokensFromText(keyword, tokens))
-  }
+  feature.keywords?.forEach((keyword) =>
+    addSimpleTextSearchTokens(tokens, keyword, 'keyword', keyword)
+  )
+  collectCommandTokens(feature.commands).forEach((cmd) =>
+    addSimpleTextSearchTokens(tokens, cmd, 'command', cmd)
+  )
 
-  collectCommandTokens(feature.commands).forEach((cmd) => addTokensFromText(cmd, tokens))
-
-  return Array.from(tokens)
+  return tokens
 }

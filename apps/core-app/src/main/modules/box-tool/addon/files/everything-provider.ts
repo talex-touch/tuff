@@ -54,6 +54,7 @@ import {
 import { EverythingIconCache } from './everything-icon-cache'
 import { fileProvider } from './file-provider'
 import { expandWindowsEnvironmentVariables } from '../apps/app-provider-path-utils'
+import { executeQuickOpsFileAction, isQuickOpsFileExecuteAction } from './quick-ops-file-actions'
 import { mapFileToTuffItem } from './utils'
 
 const execFileAsync = promisify(execFile)
@@ -1421,6 +1422,21 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const filePath = args.item.meta?.file?.path
     if (!filePath) {
       this.logError('File path not found in TuffItem')
+      return null
+    }
+
+    if (isQuickOpsFileExecuteAction(args.actionId)) {
+      try {
+        await executeQuickOpsFileAction(args.actionId, filePath, {
+          warn: (message, meta) => this.logWarn(message, undefined, meta),
+          error: (message, error, meta) => this.logError(message, error, meta)
+        })
+      } catch (err) {
+        this.logError('QuickOps file action failed', err, {
+          path: filePath,
+          actionId: args.actionId
+        })
+      }
       return null
     }
 

@@ -11,7 +11,7 @@ import type {
   TuffSourceType
 } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
-import type { MatchRange } from '@talex-touch/utils/search'
+import type { FeatureMatchAlias, MatchRange } from '@talex-touch/utils/search'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
@@ -419,7 +419,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     plugin: ITouchPlugin,
     feature: IPluginFeature,
     matchResult?: MatchRange[],
-    matchSource?: string
+    matchSource?: string,
+    matchAlias?: FeatureMatchAlias
   ): TuffItem {
     const searchTokens = feature.searchTokens ?? buildFeatureSearchTokens(feature)
     feature.searchTokens = searchTokens
@@ -477,6 +478,12 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           searchTokens,
           // Match result for UI highlighting
           matchResult,
+          matchAlias: matchAlias
+            ? {
+                text: matchAlias.text,
+                matchResult: matchAlias.matchRanges
+              }
+            : undefined,
           source: matchSource,
           // Include acceptedInputTypes for frontend UI decisions
           acceptedInputTypes: feature.acceptedInputTypes
@@ -577,6 +584,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
 
         let matchResult: MatchRange[] | undefined
+        let matchAlias: FeatureMatchAlias | undefined
         let matchScore = 0
         let matchSource: string | undefined
 
@@ -591,6 +599,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
           if (result.matched) {
             matchResult = result.matchRanges
+            matchAlias = result.matchedAlias
             matchScore = result.score
             matchSource = result.matchedToken
               ? result.matchType === 'fuzzy'
@@ -611,7 +620,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
               plugin,
               feature,
               matchResult,
-              matchSource || (matchesCommand || matchesClipboardCommand ? 'command' : 'input')
+              matchSource || (matchesCommand || matchesClipboardCommand ? 'command' : 'input'),
+              matchAlias
             ),
             matchScore: 1000 + (feature.priority ?? 0)
           })
@@ -621,7 +631,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         // Fuzzy text match fallback
         if (matchResult && matchScore > 0) {
           matchedItems.push({
-            item: this.createTuffItem(plugin, feature, matchResult, matchSource),
+            item: this.createTuffItem(plugin, feature, matchResult, matchSource, matchAlias),
             matchScore: matchScore + (feature.priority ?? 0)
           })
         }

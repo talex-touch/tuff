@@ -113,7 +113,7 @@ describe('file-provider-index-flush-executor-service', () => {
       pending: 1,
       inflight: 0,
       reason: 'persisted',
-      metadata: { withContent: 2 },
+      metadata: { storeBoundary: 'indexed-write-flush', withContent: 2 },
       durationMs: 45
     })
     expect(waitForCapacity).toHaveBeenCalledWith(3)
@@ -140,7 +140,7 @@ describe('file-provider-index-flush-executor-service', () => {
       pending: 1,
       inflight: 0,
       reason: 'not-ready',
-      metadata: { withContent: 1 }
+      metadata: { storeBoundary: 'indexed-write-flush', withContent: 1 }
     })
     expect(persistAndIndex).not.toHaveBeenCalled()
     expect(pending.has(1)).toBe(true)
@@ -165,10 +165,11 @@ describe('file-provider-index-flush-executor-service', () => {
 
   it('returns idle when storage dependencies are unavailable', async () => {
     const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
-    const { executor, persistAndIndex } = createExecutor({
-      pending,
-      dbUtils: null
-    })
+    const { executor, persistAndIndex, waitForCapacity, ensureSearchIndexWorkerReady, inflight } =
+      createExecutor({
+        pending,
+        dbUtils: null
+      })
 
     await expect(executor.execute()).resolves.toMatchObject({
       status: 'idle',
@@ -176,6 +177,10 @@ describe('file-provider-index-flush-executor-service', () => {
       pending: 1,
       reason: 'unavailable'
     })
+    expect(pending.has(1)).toBe(true)
+    expect(inflight.size).toBe(0)
+    expect(ensureSearchIndexWorkerReady).not.toHaveBeenCalled()
+    expect(waitForCapacity).not.toHaveBeenCalled()
     expect(persistAndIndex).not.toHaveBeenCalled()
   })
 })

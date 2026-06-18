@@ -21,6 +21,7 @@ const APP_TITLE_PREFIX_INTENT_BONUS = 480_000
 const APP_TITLE_SUBSTRING_INTENT_BONUS = 180_000
 const APP_EXACT_TOKEN_INTENT_BONUS = 6_200_000
 const APP_PREFIX_TOKEN_INTENT_BONUS = 5_700_000
+const LOW_CONFIDENCE_APP_FUZZY_MATCH_CAP = 160
 const LOW_CONFIDENCE_FEATURE_FREQUENCY_CAP = 18
 const LOW_CONFIDENCE_FEATURE_RECENCY_CAP = 1
 
@@ -50,12 +51,24 @@ function getMatchSource(item: TuffItem): string | null {
   return typeof source === 'string' && source ? source : null
 }
 
-function hasSearchTokenMatch(item: TuffItem, normalizedKey: string): boolean {
+function getSearchTokenValues(item: TuffItem): string[] {
   const rawTokens = item.meta?.extension?.searchTokens
-  if (!Array.isArray(rawTokens)) return false
+  if (!Array.isArray(rawTokens)) return []
 
-  return rawTokens.some((token) => {
-    if (typeof token !== 'string') return false
+  return rawTokens
+    .map((token) => {
+      if (typeof token === 'string') return token
+      if (token && typeof token === 'object') {
+        const value = (token as { value?: unknown }).value
+        return typeof value === 'string' ? value : ''
+      }
+      return ''
+    })
+    .filter(Boolean)
+}
+
+function hasSearchTokenMatch(item: TuffItem, normalizedKey: string): boolean {
+  return getSearchTokenValues(item).some((token) => {
     const lowerToken = token.toLowerCase()
     return (
       lowerToken === normalizedKey ||
@@ -66,21 +79,11 @@ function hasSearchTokenMatch(item: TuffItem, normalizedKey: string): boolean {
 }
 
 function hasExactSearchTokenMatch(item: TuffItem, normalizedKey: string): boolean {
-  const rawTokens = item.meta?.extension?.searchTokens
-  if (!Array.isArray(rawTokens)) return false
-
-  return rawTokens.some((token) => {
-    if (typeof token !== 'string') return false
-    return token.toLowerCase() === normalizedKey
-  })
+  return getSearchTokenValues(item).some((token) => token.toLowerCase() === normalizedKey)
 }
 
 function hasSearchTokenPrefixMatch(item: TuffItem, normalizedKey: string): boolean {
-  const rawTokens = item.meta?.extension?.searchTokens
-  if (!Array.isArray(rawTokens)) return false
-
-  return rawTokens.some((token) => {
-    if (typeof token !== 'string') return false
+  return getSearchTokenValues(item).some((token) => {
     const lowerToken = token.toLowerCase()
     return lowerToken !== normalizedKey && lowerToken.startsWith(normalizedKey)
   })
@@ -158,10 +161,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   const titleLength = titleLower.length
   const hasDirectTitleMatch = titleLower.includes(normalizedKey)
   const matchSource = getMatchSource(item)
-  const rawTokens = item.meta?.extension?.searchTokens
-  const searchTokens = Array.isArray(rawTokens)
-    ? rawTokens.filter((t): t is string => typeof t === 'string' && Boolean(t))
-    : []
+  const searchTokens = getSearchTokenValues(item)
   const isTokenBackedMatch = matchSource === 'token' || matchSource === 'fuzzy-token'
 
   // Visible title matches should beat hidden token/source matches. This keeps
@@ -176,7 +176,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     const { start, end } = matchRanges[0]
     const matchLength = end - start
 
-    let score = 400
+    let score = matchSource === 'name-fuzzy' ? 120 : 400
 
     // 1. Match length reward
     score += (matchLength / titleLength) * 100 // Match length reward
@@ -196,8 +196,12 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
       score += 200
     }
 
-    // Non-title sources (tag/path/description) may use fallback highlight ranges.
-    // Prevent synthetic ranges from outranking direct title matches.
+    // Non-title sources and typo-tolerant title matches may use synthetic ranges.
+    // Keep them as recall signals so unrelated fuzzy apps do not outrank intent tokens.
+    if (matchSource === 'name-fuzzy') {
+      return Math.min(Math.round(score), LOW_CONFIDENCE_APP_FUZZY_MATCH_CAP)
+    }
+
     if (
       !hasDirectTitleMatch &&
       (matchSource === 'tag' || matchSource === 'path' || matchSource === 'description')

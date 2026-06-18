@@ -1,0 +1,4854 @@
+import type {
+  AppSetting,
+  IExecuteArgs,
+  IProviderActivate,
+  ISearchProvider,
+  TuffItem,
+  TuffQuery,
+  TuffSearchResult
+} from '@talex-touch/utils'
+import type { ProviderContext } from '../../search-engine/types'
+import type {
+  QuickOpsPomodoroMode,
+  QuickOpsScreenCleanMode,
+  QuickOpsSession,
+  QuickOpsSessionChangeListener,
+  QuickOpsSessionKind
+} from './quick-ops-session-manager'
+import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { getServers } from 'node:dns'
+import {
+  resolve4,
+  resolve6,
+  resolveCname,
+  resolveMx,
+  resolveNs,
+  resolveSoa,
+  resolveTxt
+} from 'node:dns/promises'
+import { mkdir, readdir, readFile, stat, statfs, writeFile } from 'node:fs/promises'
+import { createServer, isIP } from 'node:net'
+import {
+  cpus,
+  freemem,
+  homedir,
+  loadavg,
+  networkInterfaces,
+  release,
+  totalmem,
+  type,
+  uptime
+} from 'node:os'
+import path from 'node:path'
+import { performance } from 'node:perf_hooks'
+import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
+import { app } from 'electron'
+import {
+  StorageList,
+  TuffInputType,
+  TuffItemBuilder,
+  TuffSearchResultBuilder
+} from '@talex-touch/utils'
+import {
+  DEFAULT_KEEP_AWAKE_DURATION_MS,
+  DEFAULT_KEEP_AWAKE_EXTEND_DURATION_MS,
+  DEFAULT_POMODORO_BREAK_DURATION_MS,
+  DEFAULT_POMODORO_DURATION_MS,
+  DEFAULT_SCREEN_CLEAN_DURATION_MS,
+  DEFAULT_SYSTEM_AWAKE_DURATION_MS,
+  DEFAULT_TIMER_DURATION_MS,
+  DEFAULT_TIMER_EXTEND_DURATION_MS,
+  formatDuration,
+  getSessionDisplayDurationMs,
+  QuickOpsSessionManager
+} from './quick-ops-session-manager'
+import { notificationModule } from '../../../notification'
+import { getMainConfig } from '../../../storage'
+
+export { formatDuration, QuickOpsSessionManager } from './quick-ops-session-manager'
+
+const execFileAsync = promisify(execFile)
+
+type QuickOpsAction =
+  | 'keep-awake-start'
+  | 'keep-awake-extend'
+  | 'keep-awake-stop'
+  | 'system-awake-start'
+  | 'system-awake-stop'
+  | 'timer-start'
+  | 'timer-extend'
+  | 'timer-pause'
+  | 'timer-resume'
+  | 'timer-stop'
+  | 'pomodoro-start'
+  | 'pomodoro-pause'
+  | 'pomodoro-resume'
+  | 'pomodoro-stop'
+  | 'screen-clean-start'
+  | 'screen-clean-stop'
+  | 'stopwatch-start'
+  | 'stopwatch-pause'
+  | 'stopwatch-resume'
+  | 'stopwatch-lap'
+  | 'stopwatch-reset'
+interface QuickOpsActionMeta {
+  action: QuickOpsAction
+  durationMs?: number
+  breakDurationMs?: number
+  pomodoroCycles?: number
+  pomodoroLongBreakMs?: number
+  pomodoroLongBreakEvery?: number
+  pomodoroMode?: QuickOpsPomodoroMode
+  screenMode?: QuickOpsScreenCleanMode
+}
+
+interface QuickOpsLocalIpInfo {
+  name: string
+  family: string
+  address: string
+}
+
+interface QuickOpsPortProbeInfo {
+  port: number
+  host: string
+  available: boolean
+  process?: QuickOpsPortProcessInfo
+  degradedReason?: string
+  errorCode?: string
+}
+
+interface QuickOpsPortProcessInfo {
+  pid: number
+  name?: string
+  command?: string
+  source: 'lsof' | 'windows-nettcpconnection'
+}
+
+interface QuickOpsPublicIpInfo {
+  address: string
+  source: string
+}
+
+interface QuickOpsDegradedResult {
+  degradedReason: string
+  message: string
+}
+
+interface QuickOpsFileHashInfo {
+  path: string
+  fileName: string
+  size: number
+  md5: string
+  sha1: string
+  sha256: string
+}
+
+interface QuickOpsFileHashBatchInfo {
+  files: QuickOpsFileHashInfo[]
+  totalSize: number
+}
+
+interface QuickOpsFileBase64Info {
+  path: string
+  fileName: string
+  size: number
+  base64: string
+}
+
+interface QuickOpsFileBase64BatchInfo {
+  files: QuickOpsFileBase64Info[]
+  totalSize: number
+}
+
+interface QuickOpsFileBase64DecodeInfo {
+  path: string
+  fileName: string
+  size: number
+}
+
+interface QuickOpsTempTextFileInfo {
+  path: string
+  fileName: string
+  size: number
+}
+
+interface QuickOpsTempDirectoryInfo {
+  path: string
+  directoryName: string
+}
+
+interface QuickOpsFilePathInfo {
+  path: string
+  fileName: string
+  shellPath: string
+  fileUrl: string
+  windowsPath?: string
+  wslPath?: string
+}
+
+type QuickOpsCommonDirectoryId = 'desktop' | 'downloads' | 'documents' | 'app-data' | 'logs'
+
+interface QuickOpsCommonDirectoryInfo {
+  id: QuickOpsCommonDirectoryId
+  title: string
+  subtitle: string
+  path: string
+}
+
+interface QuickOpsDiagnosticsInfo {
+  schemaVersion: number
+  appVersion: string
+  platform: NodeJS.Platform
+  arch: string
+  osType: string
+  osRelease: string
+  nodeVersion: string
+  electronVersion: string
+  userDataDir: string
+  logsDir: string
+  homeDir: string
+  cpuCount: number
+  totalMemoryBytes: number
+  freeMemoryBytes: number
+  uptimeSeconds: number
+  localAddressCount: number
+  dnsServerCount: number
+  proxyStatus: QuickOpsNetworkStatusInfo['proxyStatus']
+  proxySources: string[]
+  quickOpsEnabled: boolean
+  showRunningSessionsInCoreBox: boolean
+  defaultKeepAwakeDurationMs: number
+  defaultTimerDurationMs: number
+  defaultPomodoroFocusMs: number
+  defaultPomodoroBreakMs: number
+  defaultScreenCleanDurationMs: number
+}
+
+interface QuickOpsSystemInfo {
+  osType: string
+  osRelease: string
+  platform: NodeJS.Platform
+  arch: string
+  cpuModel: string
+  cpuCount: number
+  totalMemoryBytes: number
+  freeMemoryBytes: number
+  uptimeSeconds: number
+  loadAverage: number[]
+}
+
+interface QuickOpsDiskSpaceEntry {
+  label: string
+  path: string
+  totalBytes: number
+  freeBytes: number
+  usedBytes: number
+  usedPercent: number
+}
+
+interface QuickOpsDiskSpaceInfo {
+  entries: QuickOpsDiskSpaceEntry[]
+}
+
+interface QuickOpsDirectoryUsageTarget {
+  label: string
+  path: string
+}
+
+interface QuickOpsDirectoryUsageEntry {
+  label: string
+  path: string
+  directFileBytes: number
+  totalFileBytes?: number
+  fileCount: number
+  directoryCount: number
+  otherCount: number
+  scannedEntryCount: number
+  truncated: boolean
+}
+
+interface QuickOpsDirectoryUsageInfo {
+  entries: QuickOpsDirectoryUsageEntry[]
+  maxEntriesPerDirectory: number
+  maxTotalEntries?: number
+  scanDepth: number
+}
+
+interface QuickOpsBatteryStatusInfo {
+  levelPercent: number | null
+  charging: boolean | null
+  status: string
+  source: 'macos-pmset' | 'windows-cim' | 'linux-sysfs'
+}
+
+interface QuickOpsProxyInfo {
+  source: string
+  value: string
+}
+
+interface QuickOpsSystemProxyEntry {
+  source: 'environment' | 'macos-system' | 'windows-system' | 'linux-gsettings'
+  name: string
+  value: string
+}
+
+interface QuickOpsSystemProxyInfo {
+  platform: NodeJS.Platform
+  status: 'detected' | 'not-detected' | 'degraded'
+  environment: QuickOpsProxyInfo[]
+  system: QuickOpsSystemProxyEntry[]
+  degradedReason?: string
+  degradedMessage?: string
+}
+
+interface QuickOpsNetworkStatusInfo {
+  addresses: QuickOpsLocalIpInfo[]
+  dnsServers: string[]
+  proxyStatus: 'detected' | 'not-detected'
+  proxies: QuickOpsProxyInfo[]
+}
+
+type QuickOpsDnsRecordType = 'A' | 'AAAA' | 'CNAME' | 'MX' | 'NS' | 'TXT' | 'SOA'
+
+interface QuickOpsDnsRecord {
+  type: QuickOpsDnsRecordType
+  value: string
+  priority?: number
+}
+
+interface QuickOpsDnsQueryInfo {
+  hostname: string
+  records: QuickOpsDnsRecord[]
+  failedTypes: QuickOpsDnsRecordType[]
+  deep: boolean
+}
+
+interface ParsedQuickOpsQuery {
+  action: QuickOpsAction
+  durationMs?: number
+  breakDurationMs?: number
+  pomodoroCycles?: number
+  pomodoroLongBreakMs?: number
+  pomodoroLongBreakEvery?: number
+  pomodoroMode?: QuickOpsPomodoroMode
+  screenMode?: QuickOpsScreenCleanMode
+}
+
+type ParsedPomodoroCycle = Pick<
+  ParsedQuickOpsQuery,
+  | 'durationMs'
+  | 'breakDurationMs'
+  | 'pomodoroCycles'
+  | 'pomodoroLongBreakMs'
+  | 'pomodoroLongBreakEvery'
+  | 'pomodoroMode'
+>
+
+interface QuickOpsResolvedSettings {
+  enabled: boolean
+  showRunningSessionsInCoreBox: boolean
+  defaultKeepAwakeDurationMs: number
+  defaultSystemAwakeDurationMs: number
+  defaultTimerDurationMs: number
+  defaultTimerExtendMs: number
+  defaultPomodoroFocusMs: number
+  defaultPomodoroBreakMs: number
+  pomodoroTemplates: {
+    classic: boolean
+    long: boolean
+    custom: QuickOpsCustomPomodoroTemplate[]
+  }
+  defaultScreenCleanDurationMs: number
+  defaultScreenCleanMode: QuickOpsScreenCleanMode
+  allowPublicIpLookup: boolean
+}
+
+type QuickOpsSettingsInput = Partial<Omit<AppSetting['quickOps'], 'pomodoroTemplates'>> & {
+  pomodoroTemplates?: Partial<AppSetting['quickOps']['pomodoroTemplates']>
+}
+type QuickOpsSettingsResolver = () => QuickOpsSettingsInput | undefined
+type QuickOpsBatteryNotifier = (info: QuickOpsBatteryStatusInfo) => void
+
+interface QuickOpsCustomPomodoroTemplate {
+  name: string
+  aliases: string[]
+  focusMinutes: number
+  breakMinutes: number
+  enabled: boolean
+}
+
+const KEEP_AWAKE_KEYWORDS = [
+  'keep awake',
+  'caffeine',
+  'stay awake',
+  '禁止息屏',
+  '不要黑屏',
+  '保持唤醒',
+  '防止睡眠'
+]
+
+const KEEP_AWAKE_STOP_KEYWORDS = [
+  'stop keep awake',
+  'stop caffeine',
+  'cancel keep awake',
+  '停止保持唤醒',
+  '取消保持唤醒',
+  '停止禁止息屏'
+]
+
+const KEEP_AWAKE_EXTEND_KEYWORDS = [
+  'extend keep awake',
+  'extend caffeine',
+  'extend stay awake',
+  '延长保持唤醒',
+  '延长禁止息屏',
+  '保持唤醒延长'
+]
+
+const SYSTEM_AWAKE_KEYWORDS = [
+  'prevent system sleep',
+  'keep system awake',
+  'no system sleep',
+  '禁止系统睡眠',
+  '防止系统睡眠',
+  '不要系统睡眠'
+]
+
+const SYSTEM_AWAKE_STOP_KEYWORDS = [
+  'stop prevent system sleep',
+  'stop system awake',
+  'cancel system awake',
+  '停止禁止系统睡眠',
+  '取消禁止系统睡眠',
+  '停止系统唤醒'
+]
+
+const TIMER_KEYWORDS = ['timer', 'start timer', '计时', '倒计时', '开始计时']
+const TIMER_EXTEND_KEYWORDS = [
+  'extend timer',
+  'snooze timer',
+  'add timer',
+  '延长计时',
+  '计时延长',
+  '再计时'
+]
+const TIMER_PAUSE_KEYWORDS = ['pause timer', '暂停计时', '暂停倒计时']
+const TIMER_RESUME_KEYWORDS = ['resume timer', 'continue timer', '继续计时', '恢复计时']
+const TIMER_STOP_KEYWORDS = ['stop timer', 'cancel timer', '停止计时', '取消计时']
+const POMODORO_KEYWORDS = ['pomodoro', 'start pomodoro', '番茄钟', '开始番茄钟']
+const POMODORO_CYCLE_KEYWORDS = [
+  'pomodoro cycle',
+  'start pomodoro cycle',
+  'cycle pomodoro',
+  '循环番茄钟',
+  '番茄钟循环'
+]
+const POMODORO_CUSTOM_TEMPLATE_KEYWORDS = [
+  'custom pomodoro',
+  'pomodoro custom',
+  'custom pomodoro template',
+  '自定义番茄钟',
+  '番茄钟自定义',
+  '自定义番茄模板'
+]
+const POMODORO_PAUSE_KEYWORDS = ['pause pomodoro', '暂停番茄钟']
+const POMODORO_RESUME_KEYWORDS = [
+  'resume pomodoro',
+  'continue pomodoro',
+  '继续番茄钟',
+  '恢复番茄钟'
+]
+const POMODORO_STOP_KEYWORDS = ['stop pomodoro', 'cancel pomodoro', '停止番茄钟', '取消番茄钟']
+const SCREEN_CLEAN_KEYWORDS = [
+  'clean screen',
+  'screen clean',
+  'screen cleaning',
+  'wipe screen',
+  'black clean screen',
+  'white clean screen',
+  '清洁屏幕',
+  '擦屏幕',
+  '屏幕清洁',
+  '黑色清洁屏幕',
+  '白色清洁屏幕',
+  '白底清洁屏幕',
+  '黑底清洁屏幕'
+]
+const SCREEN_CLEAN_WHITE_KEYWORDS = ['white', 'light', '白色', '白底']
+const SCREEN_CLEAN_STOP_KEYWORDS = [
+  'stop clean screen',
+  'stop screen clean',
+  'cancel clean screen',
+  '停止清洁屏幕',
+  '退出清洁屏幕',
+  '关闭清洁屏幕'
+]
+const STOPWATCH_KEYWORDS = ['stopwatch', 'start stopwatch', '秒表', '开始秒表']
+const STOPWATCH_PAUSE_KEYWORDS = ['pause stopwatch', '暂停秒表']
+const STOPWATCH_RESUME_KEYWORDS = ['resume stopwatch', 'continue stopwatch', '继续秒表', '恢复秒表']
+const STOPWATCH_LAP_KEYWORDS = ['lap stopwatch', 'split stopwatch', '秒表分段', '记录分段']
+const STOPWATCH_RESET_KEYWORDS = [
+  'reset stopwatch',
+  'stop stopwatch',
+  'clear stopwatch',
+  '重置秒表',
+  '停止秒表',
+  '清空秒表'
+]
+const STATUS_KEYWORDS = ['quickops', 'quick ops', 'quickops 状态', 'quick ops status', '运行中']
+const LOCAL_IP_KEYWORDS = [
+  'local ip',
+  'lan ip',
+  'ip address',
+  'network ip',
+  '本机 ip',
+  '本机ip',
+  '内网 ip',
+  '内网ip',
+  '局域网 ip',
+  '局域网ip',
+  'ip 地址',
+  'ip地址'
+]
+const PUBLIC_IP_KEYWORDS = [
+  'public ip',
+  'external ip',
+  'wan ip',
+  'internet ip',
+  '公网 ip',
+  '公网ip',
+  '外网 ip',
+  '外网ip',
+  '出口 ip',
+  '出口ip'
+]
+const PUBLIC_IP_LOOKUP_URL = 'https://api.ipify.org?format=json'
+const PUBLIC_IP_LOOKUP_TIMEOUT_MS = 5_000
+const PORT_QUERY_PATTERN = /(?:^|\s)(?:port|端口)\s*[:#-]?\s*(\d{1,5})(?:\s|$)/
+const FILE_BASE64_MAX_BYTES = 1 * 1024 * 1024
+const FILE_BASE64_DECODE_OUTPUT_NAME = 'decoded-base64.bin'
+const TEMP_TEXT_FILE_MAX_BYTES = 64 * 1024
+const DNS_QUERY_COMMANDS = [
+  'dns query',
+  'dns lookup',
+  'dns 查询',
+  'dns查询',
+  'dns',
+  '域名解析',
+  '解析域名'
+]
+const DEEP_DNS_QUERY_COMMANDS = [
+  'deep dns query',
+  'deep dns lookup',
+  'deep dns',
+  'dns deep',
+  'dns full',
+  'dns all',
+  '深度 dns 查询',
+  '深度dns查询',
+  '深度 dns',
+  '深度dns',
+  '完整 dns 查询',
+  '完整dns查询'
+]
+const BASIC_DNS_RECORD_TYPES: QuickOpsDnsRecordType[] = ['A', 'AAAA', 'CNAME', 'MX']
+const DEEP_DNS_RECORD_TYPES: QuickOpsDnsRecordType[] = [
+  ...BASIC_DNS_RECORD_TYPES,
+  'NS',
+  'TXT',
+  'SOA'
+]
+const FILE_HASH_KEYWORDS = [
+  'file hash',
+  'hash file',
+  'hash',
+  'checksum',
+  'sha256',
+  'sha1',
+  'md5',
+  '文件 hash',
+  '文件hash',
+  '计算 hash',
+  '计算hash',
+  '校验和'
+]
+const FILE_BASE64_KEYWORDS = [
+  'file base64',
+  'base64 file',
+  'base64 encode file',
+  'encode file base64',
+  '文件 base64',
+  '文件base64',
+  'base64 文件',
+  'base64编码文件',
+  '文件转 base64',
+  '文件转base64'
+]
+const FILE_BASE64_DECODE_KEYWORDS = [
+  'file base64 decode',
+  'base64 decode file',
+  'decode file base64',
+  'decode base64 file',
+  'base64 解码文件',
+  'base64解码文件',
+  '文件 base64 解码',
+  '文件base64解码'
+]
+const FILE_PATH_KEYWORDS = [
+  'copy file path',
+  'copy path',
+  'file path',
+  'path format',
+  '复制文件路径',
+  '复制路径',
+  '文件路径',
+  '路径格式'
+]
+const TEMP_TEXT_FILE_KEYWORDS = [
+  'scratch note',
+  'temp text',
+  'temp text file',
+  'temporary text file',
+  'new temp text',
+  'new scratch note',
+  '临时文本',
+  '临时文本文件',
+  '新建临时文本',
+  '草稿文本',
+  '临时便签'
+]
+const TEMP_DIRECTORY_KEYWORDS = [
+  'temp dir',
+  'temp directory',
+  'temp folder',
+  'temporary directory',
+  'temporary folder',
+  'new temp dir',
+  'new temp folder',
+  '临时目录',
+  '临时文件夹',
+  '新建临时目录',
+  '创建临时目录'
+]
+const COMMON_DIRECTORY_KEYWORDS = [
+  'open desktop',
+  'desktop folder',
+  'open downloads',
+  'downloads folder',
+  'download folder',
+  'open documents',
+  'documents folder',
+  'open app data',
+  'app data folder',
+  'open logs',
+  'logs folder',
+  '打开桌面',
+  '桌面目录',
+  '打开下载',
+  '下载目录',
+  '打开文档',
+  '文档目录',
+  '打开应用数据',
+  '应用数据目录',
+  '打开日志',
+  '日志目录'
+]
+const TUFF_DIAGNOSTICS_KEYWORDS = [
+  'tuff diagnostics',
+  'tuff diagnostic',
+  'tuff full diagnostics',
+  'full diagnostics',
+  'diagnostics bundle',
+  'diagnostic bundle',
+  'copy diagnostics',
+  'copy diagnostic',
+  'diagnostic info',
+  'diagnostics info',
+  '诊断信息',
+  '完整诊断包',
+  '复制完整诊断包',
+  '诊断包',
+  '复制诊断',
+  '复制诊断信息',
+  'tuff 诊断',
+  'tuff诊断'
+]
+const SYSTEM_INFO_KEYWORDS = [
+  'system info',
+  'system information',
+  'sys info',
+  'os info',
+  'machine info',
+  '系统信息',
+  '系统状态',
+  '机器信息',
+  '设备信息'
+]
+const DISK_SPACE_KEYWORDS = [
+  'disk space',
+  'disk usage',
+  'storage space',
+  'storage usage',
+  '磁盘空间',
+  '磁盘容量',
+  '存储空间',
+  '存储容量'
+]
+const DIRECTORY_USAGE_KEYWORDS = [
+  'directory usage',
+  'folder usage',
+  'dir usage',
+  'directory size',
+  'folder size',
+  '目录占用',
+  '目录大小',
+  '文件夹占用',
+  '文件夹大小',
+  '关键目录占用'
+]
+const DIRECTORY_USAGE_MAX_ENTRIES = 200
+const DIRECTORY_USAGE_DEEP_MAX_DEPTH = 3
+const DIRECTORY_USAGE_DEEP_MAX_TOTAL_ENTRIES = 1_000
+const DEEP_DIRECTORY_USAGE_KEYWORDS = [
+  'deep directory usage',
+  'recursive directory usage',
+  'deep folder usage',
+  'recursive folder usage',
+  '深度目录占用',
+  '递归目录占用',
+  '目录递归占用',
+  '深度目录大小',
+  '递归目录大小'
+]
+const LOW_BATTERY_WARNING_THRESHOLD_PERCENT = 20
+const BATTERY_STATUS_KEYWORDS = [
+  'battery',
+  'battery status',
+  'power status',
+  '电池',
+  '电池状态',
+  '电量',
+  '电源状态'
+]
+const NETWORK_STATUS_KEYWORDS = [
+  'network status',
+  'network summary',
+  'network info',
+  '网络状态',
+  '网络摘要',
+  '网络信息'
+]
+const SYSTEM_PROXY_STATUS_KEYWORDS = [
+  'proxy status',
+  'system proxy',
+  'proxy settings',
+  '系统代理',
+  '代理状态',
+  '代理设置',
+  '系统代理状态'
+]
+const PROXY_ENV_NAMES = [
+  'HTTPS_PROXY',
+  'HTTP_PROXY',
+  'ALL_PROXY',
+  'NO_PROXY',
+  'https_proxy',
+  'http_proxy',
+  'all_proxy',
+  'no_proxy'
+]
+
+const COMMON_DIRECTORY_DEFINITIONS: Array<{
+  id: QuickOpsCommonDirectoryId
+  title: string
+  subtitle: string
+  appPathName: Parameters<typeof app.getPath>[0]
+  aliases: string[]
+}> = [
+  {
+    id: 'desktop',
+    title: '桌面',
+    subtitle: 'Desktop',
+    appPathName: 'desktop',
+    aliases: ['desktop', '桌面']
+  },
+  {
+    id: 'downloads',
+    title: '下载',
+    subtitle: 'Downloads',
+    appPathName: 'downloads',
+    aliases: ['downloads', 'download', '下载']
+  },
+  {
+    id: 'documents',
+    title: '文档',
+    subtitle: 'Documents',
+    appPathName: 'documents',
+    aliases: ['documents', 'document', '文档']
+  },
+  {
+    id: 'app-data',
+    title: '应用数据',
+    subtitle: 'User Data',
+    appPathName: 'userData',
+    aliases: ['app data', 'user data', 'userdata', '应用数据', '用户数据']
+  },
+  {
+    id: 'logs',
+    title: '日志',
+    subtitle: 'Logs',
+    appPathName: 'logs',
+    aliases: ['logs', 'log', '日志']
+  }
+]
+
+export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
+  readonly id = 'quick-ops-provider'
+  readonly type = 'system' as const
+  readonly name = 'QuickOps'
+  readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
+  readonly priority = 'fast' as const
+  readonly expectedDuration = 30
+
+  constructor(
+    private readonly sessions = new QuickOpsSessionManager(),
+    private readonly resolveSettings: QuickOpsSettingsResolver = readQuickOpsSettings,
+    private readonly notifyLowBattery: QuickOpsBatteryNotifier = showLowBatteryNotification
+  ) {}
+
+  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+    const startedAt = performance.now()
+    if (signal.aborted) {
+      return this.createResult(query, startedAt, [])
+    }
+
+    const settings = getQuickOpsResolvedSettings(this.resolveSettings())
+    if (!settings.enabled) {
+      return this.createResult(query, startedAt, [])
+    }
+
+    const text = query.text ?? ''
+    const parsed = parseQuickOpsQuery(text, settings)
+    const informationalItems = parsed ? null : await this.buildInformationalItems(query, settings)
+    const items = parsed
+      ? [this.buildActionItem(parsed)]
+      : informationalItems || this.buildRunningSessionItems(query)
+    return this.createResult(query, startedAt, items)
+  }
+
+  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
+    const meta = (args.item.meta?.extension as { quickOps?: QuickOpsActionMeta } | undefined)
+      ?.quickOps
+    if (!meta) return null
+
+    switch (meta.action) {
+      case 'keep-awake-start':
+        this.sessions.startKeepAwake(meta.durationMs)
+        break
+      case 'keep-awake-extend':
+        if (
+          !this.sessions.extendKeepAwake(meta.durationMs ?? DEFAULT_KEEP_AWAKE_EXTEND_DURATION_MS)
+        ) {
+          this.sessions.startKeepAwake(meta.durationMs ?? DEFAULT_KEEP_AWAKE_EXTEND_DURATION_MS)
+        }
+        break
+      case 'keep-awake-stop':
+        this.sessions.stop('keep-awake')
+        break
+      case 'system-awake-start':
+        this.sessions.startSystemAwake(meta.durationMs)
+        break
+      case 'system-awake-stop':
+        this.sessions.stop('system-awake')
+        break
+      case 'timer-start':
+        this.sessions.startTimer(meta.durationMs)
+        break
+      case 'timer-extend':
+        if (!this.sessions.extendTimer(meta.durationMs ?? DEFAULT_TIMER_EXTEND_DURATION_MS)) {
+          this.sessions.startTimer(meta.durationMs ?? DEFAULT_TIMER_EXTEND_DURATION_MS)
+        }
+        break
+      case 'timer-pause':
+        this.sessions.pauseTimer()
+        break
+      case 'timer-resume':
+        this.sessions.resumeTimer()
+        break
+      case 'timer-stop':
+        this.sessions.stop('timer')
+        break
+      case 'pomodoro-start':
+        this.sessions.startPomodoro(
+          meta.durationMs,
+          meta.pomodoroMode,
+          meta.breakDurationMs,
+          meta.pomodoroCycles,
+          meta.pomodoroLongBreakMs,
+          meta.pomodoroLongBreakEvery
+        )
+        break
+      case 'pomodoro-pause':
+        this.sessions.pausePomodoro()
+        break
+      case 'pomodoro-resume':
+        this.sessions.resumePomodoro()
+        break
+      case 'pomodoro-stop':
+        this.sessions.stop('pomodoro')
+        break
+      case 'screen-clean-start':
+        this.sessions.startScreenClean(meta.durationMs, meta.screenMode)
+        break
+      case 'screen-clean-stop':
+        this.sessions.stop('screen-clean')
+        break
+      case 'stopwatch-start':
+        this.sessions.startStopwatch()
+        break
+      case 'stopwatch-pause':
+        this.sessions.pauseStopwatch()
+        break
+      case 'stopwatch-resume':
+        this.sessions.resumeStopwatch()
+        break
+      case 'stopwatch-lap':
+        this.sessions.lapStopwatch()
+        break
+      case 'stopwatch-reset':
+        this.sessions.stop('stopwatch')
+        break
+    }
+
+    return null
+  }
+
+  onDeactivate(): void {
+    this.sessions.stopAll('provider-deactivate')
+  }
+
+  onDestroy(): void {
+    this.sessions.stopAll('provider-destroy')
+  }
+
+  cleanup(reason = 'cleanup'): void {
+    this.sessions.stopAll(reason)
+  }
+
+  subscribeSessions(listener: QuickOpsSessionChangeListener): () => void {
+    return this.sessions.subscribe(listener)
+  }
+
+  private buildRunningSessionItems(query: TuffQuery): TuffItem[] {
+    const settings = getQuickOpsResolvedSettings(this.resolveSettings())
+    if (!settings.showRunningSessionsInCoreBox) return []
+
+    const text = query.text?.trim() ?? ''
+    if (text && !matchesKeyword(text.toLowerCase(), STATUS_KEYWORDS)) {
+      return []
+    }
+
+    return this.sessions.list().map((session) => this.buildSessionItem(session))
+  }
+
+  private buildActionItem(parsed: ParsedQuickOpsQuery): TuffItem {
+    const isStop = parsed.action.endsWith('-stop')
+    const title = getActionTitle(parsed)
+    const subtitle = getActionSubtitle(parsed)
+
+    return new TuffItemBuilder(
+      [
+        'quick-ops',
+        parsed.action,
+        parsed.pomodoroMode ?? 'default',
+        parsed.durationMs ?? 'default',
+        parsed.breakDurationMs ?? 'default',
+        parsed.pomodoroCycles ?? 'infinite',
+        parsed.pomodoroLongBreakMs ?? 'default',
+        parsed.pomodoroLongBreakEvery ?? 'default'
+      ].join(':'),
+      this.type,
+      this.id
+    )
+      .setKind('action')
+      .setTitle(title)
+      .setSubtitle(subtitle)
+      .setIcon({ type: 'class', value: getActionIcon(parsed.action) })
+      .setActions([
+        {
+          id: `quick-ops-${parsed.action}`,
+          type: 'execute',
+          label: title,
+          primary: true
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            action: parsed.action,
+            durationMs: parsed.durationMs,
+            breakDurationMs: parsed.breakDurationMs,
+            pomodoroCycles: parsed.pomodoroCycles,
+            pomodoroLongBreakMs: parsed.pomodoroLongBreakMs,
+            pomodoroLongBreakEvery: parsed.pomodoroLongBreakEvery,
+            pomodoroMode: parsed.pomodoroMode,
+            screenMode: parsed.screenMode,
+            riskLevel: isStop ? 'safe' : 'stateful'
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildInformationalItems(
+    query: TuffQuery,
+    settings: QuickOpsResolvedSettings
+  ): Promise<TuffItem[] | null> {
+    const rawText = query.text ?? ''
+    const text = rawText.trim().toLowerCase()
+    if (!text) return null
+
+    if (matchesKeyword(text, FILE_HASH_KEYWORDS)) {
+      return [await this.buildFileHashResultItem(rawText, query)]
+    }
+
+    if (matchesKeyword(text, FILE_BASE64_DECODE_KEYWORDS)) {
+      return [await this.buildFileBase64DecodeResultItem(rawText)]
+    }
+
+    if (matchesKeyword(text, FILE_BASE64_KEYWORDS)) {
+      return [await this.buildFileBase64ResultItem(rawText, query)]
+    }
+
+    if (matchesKeyword(text, FILE_PATH_KEYWORDS)) {
+      return [this.buildFilePathResultItem(rawText, query)]
+    }
+
+    if (matchesKeyword(text, TEMP_TEXT_FILE_KEYWORDS)) {
+      return [await this.buildTempTextFileResultItem(rawText)]
+    }
+
+    if (matchesKeyword(text, TEMP_DIRECTORY_KEYWORDS)) {
+      return [await this.buildTempDirectoryResultItem(rawText)]
+    }
+
+    if (matchesKeyword(text, COMMON_DIRECTORY_KEYWORDS)) {
+      return [this.buildCommonDirectoryItem(resolveCommonDirectory(text))]
+    }
+
+    if (matchesKeyword(text, TUFF_DIAGNOSTICS_KEYWORDS)) {
+      return [this.buildDiagnosticsItem(createDiagnosticsInfo(settings))]
+    }
+
+    if (matchesKeyword(text, SYSTEM_INFO_KEYWORDS)) {
+      return [this.buildSystemInfoItem(createSystemInfo())]
+    }
+
+    if (matchesKeyword(text, DISK_SPACE_KEYWORDS)) {
+      return [await this.buildDiskSpaceResultItem()]
+    }
+
+    if (matchesKeyword(text, DEEP_DIRECTORY_USAGE_KEYWORDS)) {
+      return [await this.buildDirectoryUsageResultItem({ deep: true })]
+    }
+
+    if (matchesKeyword(text, DIRECTORY_USAGE_KEYWORDS)) {
+      return [await this.buildDirectoryUsageResultItem({ deep: false })]
+    }
+
+    if (matchesKeyword(text, BATTERY_STATUS_KEYWORDS)) {
+      return [await this.buildBatteryStatusResultItem()]
+    }
+
+    if (matchesKeyword(text, SYSTEM_PROXY_STATUS_KEYWORDS)) {
+      return [this.buildSystemProxyStatusItem(await createSystemProxyInfo())]
+    }
+
+    if (matchesKeyword(text, NETWORK_STATUS_KEYWORDS)) {
+      return [this.buildNetworkStatusItem(createNetworkStatusInfo())]
+    }
+
+    const dnsQuery = parseDnsQuery(rawText)
+    if (dnsQuery) {
+      return [await this.buildDnsQueryResultItem(dnsQuery.hostname, dnsQuery.deep)]
+    }
+
+    const port = parsePortQuery(text)
+    if (port !== null) {
+      if (!isValidTcpPort(port)) {
+        return [this.buildInvalidPortItem(port)]
+      }
+
+      return [this.buildPortProbeItem(await probeLocalTcpPort(port))]
+    }
+
+    if (matchesKeyword(text, PUBLIC_IP_KEYWORDS)) {
+      if (!settings.allowPublicIpLookup) {
+        return [this.buildPublicIpDisabledItem()]
+      }
+
+      return [this.buildPublicIpLookupItem(await lookupPublicIp())]
+    }
+
+    if (!matchesKeyword(text, LOCAL_IP_KEYWORDS)) return null
+
+    const addresses = getLocalIpAddresses()
+    if (addresses.length === 0) {
+      return [this.buildLocalIpUnavailableItem()]
+    }
+
+    return [this.buildLocalIpItem(addresses)]
+  }
+
+  private buildPublicIpLookupItem(result: QuickOpsPublicIpInfo | QuickOpsDegradedResult): TuffItem {
+    if ('degradedReason' in result) {
+      return new TuffItemBuilder('quick-ops:public-ip:unavailable', this.type, this.id)
+        .setKind('notification')
+        .setTitle('公网 IP 查询失败')
+        .setSubtitle(`QuickOps Network · ${result.message}`)
+        .setIcon({ type: 'class', value: 'i-carbon-network-public' })
+        .setMeta({
+          extension: {
+            quickOps: {
+              category: 'network',
+              operation: 'public-ip',
+              riskLevel: 'safe',
+              source: PUBLIC_IP_LOOKUP_URL,
+              degradedReason: result.degradedReason
+            }
+          }
+        })
+        .build()
+    }
+
+    return new TuffItemBuilder('quick-ops:public-ip', this.type, this.id)
+      .setKind('result')
+      .setTitle(`公网 IP ${result.address}`)
+      .setSubtitle(`QuickOps Network · Source ${result.source}`)
+      .setIcon({ type: 'class', value: 'i-carbon-network-public' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-public-ip',
+          type: 'copy',
+          label: '复制公网 IP',
+          primary: true,
+          payload: {
+            text: `${result.address}\nSource: ${result.source}`
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'public-ip',
+            riskLevel: 'safe',
+            address: result.address,
+            source: result.source
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildPublicIpDisabledItem(): TuffItem {
+    return new TuffItemBuilder('quick-ops:public-ip:disabled', this.type, this.id)
+      .setKind('notification')
+      .setTitle('公网 IP 查询未启用')
+      .setSubtitle('QuickOps Network · 该命令需要外部只读请求，请先在高级设置中启用')
+      .setIcon({ type: 'class', value: 'i-carbon-network-public' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'public-ip',
+            riskLevel: 'safe',
+            source: PUBLIC_IP_LOOKUP_URL,
+            degradedReason: 'public-ip-disabled'
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildFileHashResultItem(rawText: string, query: TuffQuery): Promise<TuffItem> {
+    const batchCandidates = resolveFileHashPaths(rawText, query)
+    if (batchCandidates.length > 1) {
+      const batchResult = await computeFileHashBatch(batchCandidates)
+      if ('degradedReason' in batchResult) {
+        return this.buildFileHashUnavailableItem(
+          batchResult.degradedReason,
+          batchResult.message,
+          batchResult.path
+        )
+      }
+
+      return this.buildFileHashBatchItem(batchResult)
+    }
+
+    const candidate = resolveFileHashPath(rawText, query)
+    if (!candidate) {
+      return this.buildFileHashUnavailableItem('file-hash-missing-file', '未找到要计算 Hash 的文件')
+    }
+
+    const result = await computeFileHashes(candidate)
+    if ('degradedReason' in result) {
+      return this.buildFileHashUnavailableItem(result.degradedReason, result.message, candidate)
+    }
+
+    return this.buildFileHashItem(result)
+  }
+
+  private buildLocalIpItem(addresses: QuickOpsLocalIpInfo[]): TuffItem {
+    const primary = addresses[0]
+    const summary = addresses.map((item) => `${item.name}: ${item.address}`).join(' · ')
+    const copyText = addresses
+      .map((item) => `${item.name} ${item.family} ${item.address}`)
+      .join('\n')
+
+    return new TuffItemBuilder('quick-ops:local-ip', this.type, this.id)
+      .setKind('result')
+      .setTitle(`本机 IP ${primary?.address ?? ''}`.trim())
+      .setSubtitle(`QuickOps Network · ${summary}`)
+      .setIcon({ type: 'class', value: 'i-carbon-network-4' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-local-ip',
+          type: 'copy',
+          label: '复制本机 IP',
+          primary: true,
+          payload: {
+            text: copyText
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'local-ip',
+            riskLevel: 'safe',
+            addresses
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildLocalIpUnavailableItem(): TuffItem {
+    return new TuffItemBuilder('quick-ops:local-ip:unavailable', this.type, this.id)
+      .setKind('notification')
+      .setTitle('未找到本机 IP')
+      .setSubtitle('QuickOps Network · 当前没有可展示的非 internal 网卡地址')
+      .setIcon({ type: 'class', value: 'i-carbon-network-4' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'local-ip',
+            riskLevel: 'safe',
+            degradedReason: 'local-ip-unavailable'
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildPortProbeItem(probe: QuickOpsPortProbeInfo): TuffItem {
+    const state = probe.available ? '可用' : '已占用'
+    const processText = probe.process
+      ? ` · PID ${probe.process.pid}${probe.process.name ? ` ${probe.process.name}` : ''}`
+      : ''
+    const subtitle = probe.available
+      ? `QuickOps Network · ${probe.host}:${probe.port} 当前可绑定`
+      : `QuickOps Network · ${probe.host}:${probe.port} 当前不可绑定，仅做本地只读探测${processText}`
+    const copyText = [
+      `${probe.host}:${probe.port} ${state}`,
+      probe.process
+        ? `PID ${probe.process.pid}${probe.process.name ? ` ${probe.process.name}` : ''}`
+        : null,
+      probe.process?.command ? `Command: ${probe.process.command}` : null
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join('\n')
+    const actions: NonNullable<TuffItem['actions']> = [
+      {
+        id: 'quick-ops-copy-port-probe',
+        type: 'copy',
+        label: '复制端口状态',
+        primary: true,
+        payload: {
+          text: copyText
+        }
+      }
+    ]
+
+    if (!probe.available && probe.process) {
+      actions.push({
+        id: 'quick-ops-copy-port-release-command',
+        type: 'copy',
+        label: '复制终止命令',
+        payload: {
+          text: createPortReleaseCommand(probe.process)
+        }
+      })
+    }
+
+    return new TuffItemBuilder(`quick-ops:port:${probe.port}`, this.type, this.id)
+      .setKind(probe.available ? 'result' : 'notification')
+      .setTitle(`端口 ${probe.port} ${state}`)
+      .setSubtitle(subtitle)
+      .setIcon({ type: 'class', value: 'i-carbon-port-input' })
+      .setActions(actions)
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'port-probe',
+            riskLevel: 'safe',
+            port: probe.port,
+            host: probe.host,
+            available: probe.available,
+            process: probe.process,
+            degradedReason: probe.degradedReason,
+            errorCode: probe.errorCode
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildInvalidPortItem(port: number): TuffItem {
+    return new TuffItemBuilder(`quick-ops:port:invalid:${port}`, this.type, this.id)
+      .setKind('notification')
+      .setTitle('端口号无效')
+      .setSubtitle('QuickOps Network · 请输入 1 到 65535 之间的 TCP 端口')
+      .setIcon({ type: 'class', value: 'i-carbon-port-input' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'port-probe',
+            riskLevel: 'safe',
+            port,
+            degradedReason: 'invalid-port'
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileHashItem(info: QuickOpsFileHashInfo): TuffItem {
+    const copyText = [`MD5 ${info.md5}`, `SHA1 ${info.sha1}`, `SHA256 ${info.sha256}`].join('\n')
+
+    return new TuffItemBuilder(`quick-ops:file-hash:${info.path}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`文件 Hash ${info.fileName}`)
+      .setSubtitle(
+        `QuickOps Files · ${formatFileSize(info.size)} · SHA256 ${info.sha256.slice(0, 16)}...`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-data-check' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-file-hash',
+          type: 'copy',
+          label: '复制文件 Hash',
+          primary: true,
+          payload: {
+            text: copyText
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-hash',
+            riskLevel: 'safe',
+            path: info.path,
+            size: info.size,
+            md5: info.md5,
+            sha1: info.sha1,
+            sha256: info.sha256
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileHashBatchItem(info: QuickOpsFileHashBatchInfo): TuffItem {
+    const copyText = formatFileHashBatchInfo(info)
+
+    return new TuffItemBuilder('quick-ops:file-hash:batch', this.type, this.id)
+      .setKind('result')
+      .setTitle(`文件 Hash ${info.files.length} 个文件`)
+      .setSubtitle(`QuickOps Files · ${formatFileSize(info.totalSize)} · SHA256 summaries copied`)
+      .setIcon({ type: 'class', value: 'i-carbon-data-check' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-file-hash-batch',
+          type: 'copy',
+          label: '复制多文件 Hash',
+          primary: true,
+          payload: {
+            text: copyText
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-hash',
+            riskLevel: 'safe',
+            fileCount: info.files.length,
+            totalSize: info.totalSize,
+            files: info.files.map((file) => ({
+              path: file.path,
+              size: file.size,
+              md5: file.md5,
+              sha1: file.sha1,
+              sha256: file.sha256
+            }))
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileHashUnavailableItem(
+    degradedReason: string,
+    message: string,
+    filePath?: string
+  ): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:file-hash:unavailable:${filePath ?? degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法计算文件 Hash')
+      .setSubtitle(`QuickOps Files · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-data-check' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-hash',
+            riskLevel: 'safe',
+            path: filePath,
+            degradedReason
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildFileBase64ResultItem(rawText: string, query: TuffQuery): Promise<TuffItem> {
+    const inputPaths = resolveFilesInputPaths(query)
+    if (inputPaths.length > 1) {
+      const batchResult = await encodeFileBase64Batch(inputPaths)
+      if ('degradedReason' in batchResult) {
+        return this.buildFileBase64UnavailableItem(
+          batchResult.degradedReason,
+          batchResult.message,
+          batchResult.path
+        )
+      }
+
+      return this.buildFileBase64BatchItem(batchResult)
+    }
+
+    const candidate = resolveFileBase64Path(rawText, query)
+    if (!candidate) {
+      return this.buildFileBase64UnavailableItem('file-base64-missing-file', '未找到要编码的文件')
+    }
+
+    const result = await encodeFileBase64(candidate)
+    if ('degradedReason' in result) {
+      return this.buildFileBase64UnavailableItem(result.degradedReason, result.message, candidate)
+    }
+
+    return this.buildFileBase64Item(result)
+  }
+
+  private async buildFileBase64DecodeResultItem(rawText: string): Promise<TuffItem> {
+    const payload = stripFileBase64DecodeCommand(rawText)
+    if (!payload) {
+      return this.buildFileBase64DecodeUnavailableItem(
+        'file-base64-decode-missing-input',
+        '未找到要解码的 Base64 内容'
+      )
+    }
+
+    const result = await decodeFileBase64ToTempFile(payload)
+    if ('degradedReason' in result) {
+      return this.buildFileBase64DecodeUnavailableItem(result.degradedReason, result.message)
+    }
+
+    return this.buildFileBase64DecodeItem(result)
+  }
+
+  private buildFileBase64DecodeItem(info: QuickOpsFileBase64DecodeInfo): TuffItem {
+    return new TuffItemBuilder(`quick-ops:file-base64-decode:${info.path}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`Base64 已解码为 ${info.fileName}`)
+      .setSubtitle(`QuickOps Files · ${formatFileSize(info.size)} · temporary file`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-export' })
+      .setActions([
+        {
+          id: 'quick-ops-open-base64-decoded-file',
+          type: 'open',
+          label: '打开所在文件夹',
+          primary: true,
+          payload: {
+            path: info.path
+          }
+        },
+        {
+          id: 'quick-ops-copy-base64-decoded-path',
+          type: 'copy',
+          label: '复制文件路径',
+          payload: {
+            text: info.path
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-base64-decode',
+            riskLevel: 'safe',
+            path: info.path,
+            size: info.size,
+            maxSize: FILE_BASE64_MAX_BYTES
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileBase64DecodeUnavailableItem(degradedReason: string, message: string): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:file-base64-decode:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法解码 Base64 文件')
+      .setSubtitle(`QuickOps Files · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-export' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-base64-decode',
+            riskLevel: 'safe',
+            degradedReason,
+            maxSize: FILE_BASE64_MAX_BYTES
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileBase64Item(info: QuickOpsFileBase64Info): TuffItem {
+    return new TuffItemBuilder(`quick-ops:file-base64:${info.path}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`文件 Base64 ${info.fileName}`)
+      .setSubtitle(`QuickOps Files · ${formatFileSize(info.size)} · copy-only`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-attachment' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-file-base64',
+          type: 'copy',
+          label: '复制 Base64',
+          primary: true,
+          payload: {
+            text: info.base64
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-base64',
+            riskLevel: 'safe',
+            path: info.path,
+            size: info.size,
+            maxSize: FILE_BASE64_MAX_BYTES
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileBase64BatchItem(info: QuickOpsFileBase64BatchInfo): TuffItem {
+    const text = formatFileBase64BatchInfo(info)
+    return new TuffItemBuilder('quick-ops:file-base64:batch', this.type, this.id)
+      .setKind('result')
+      .setTitle(`文件 Base64 ${info.files.length} 个文件`)
+      .setSubtitle(`QuickOps Files · ${formatFileSize(info.totalSize)} · copy-only batch`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-multiple-01' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-file-base64-batch',
+          type: 'copy',
+          label: '复制全部 Base64',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-base64',
+            riskLevel: 'safe',
+            fileCount: info.files.length,
+            totalSize: info.totalSize,
+            maxSizePerFile: FILE_BASE64_MAX_BYTES
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileBase64UnavailableItem(
+    degradedReason: string,
+    message: string,
+    filePath?: string
+  ): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:file-base64:unavailable:${filePath ?? degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法编码文件 Base64')
+      .setSubtitle(`QuickOps Files · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-attachment' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-base64',
+            riskLevel: 'safe',
+            path: filePath,
+            degradedReason,
+            maxSize: FILE_BASE64_MAX_BYTES
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFilePathResultItem(rawText: string, query: TuffQuery): TuffItem {
+    const candidate = resolveFilePathTarget(rawText, query)
+    if (!candidate) {
+      return this.buildFilePathUnavailableItem('file-path-missing-file', '未找到要复制路径的文件')
+    }
+
+    return this.buildFilePathItem(createFilePathInfo(candidate))
+  }
+
+  private buildFilePathItem(info: QuickOpsFilePathInfo): TuffItem {
+    const pathFormats = [info.path, info.shellPath, info.fileUrl]
+    const actions: NonNullable<TuffItem['actions']> = [
+      {
+        id: 'quick-ops-copy-file-path',
+        type: 'copy',
+        label: '复制路径',
+        primary: true,
+        payload: {
+          text: info.path
+        }
+      },
+      {
+        id: 'quick-ops-copy-file-shell-path',
+        type: 'copy',
+        label: '复制 Shell 路径',
+        payload: {
+          text: info.shellPath
+        }
+      },
+      {
+        id: 'quick-ops-copy-file-url',
+        type: 'copy',
+        label: '复制 file URL',
+        payload: {
+          text: info.fileUrl
+        }
+      }
+    ]
+
+    if (info.windowsPath) {
+      pathFormats.push(info.windowsPath)
+      actions.push({
+        id: 'quick-ops-copy-file-windows-path',
+        type: 'copy',
+        label: '复制 Windows 路径',
+        payload: {
+          text: info.windowsPath
+        }
+      })
+    }
+
+    if (info.wslPath) {
+      pathFormats.push(info.wslPath)
+      actions.push({
+        id: 'quick-ops-copy-file-wsl-path',
+        type: 'copy',
+        label: '复制 WSL 路径',
+        payload: {
+          text: info.wslPath
+        }
+      })
+    }
+
+    const copyText = pathFormats.join('\n')
+    actions.push({
+      id: 'quick-ops-copy-file-path-all',
+      type: 'copy',
+      label: '复制全部路径格式',
+      payload: {
+        text: copyText
+      }
+    })
+
+    return new TuffItemBuilder(`quick-ops:file-path:${info.path}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`复制路径 ${info.fileName}`)
+      .setSubtitle(
+        `QuickOps Files · ${[
+          '原始路径',
+          'Shell 转义路径',
+          'file URL',
+          info.windowsPath ? 'Windows 路径' : '',
+          info.wslPath ? 'WSL 路径' : ''
+        ]
+          .filter(Boolean)
+          .join(' / ')}`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-document-export' })
+      .setActions(actions)
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-path',
+            riskLevel: 'safe',
+            path: info.path,
+            shellPath: info.shellPath,
+            fileUrl: info.fileUrl,
+            windowsPath: info.windowsPath,
+            wslPath: info.wslPath
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFilePathUnavailableItem(degradedReason: string, message: string): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:file-path:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法复制文件路径')
+      .setSubtitle(`QuickOps Files · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-export' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'file-path',
+            riskLevel: 'safe',
+            degradedReason
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildTempTextFileResultItem(rawText: string): Promise<TuffItem> {
+    const result = await createTempTextFile(stripTempTextFileCommand(rawText))
+    if ('degradedReason' in result) {
+      return this.buildTempFileUnavailableItem(
+        'temp-text-file',
+        '无法创建临时文本文件',
+        result.degradedReason,
+        result.message
+      )
+    }
+
+    return new TuffItemBuilder(`quick-ops:temp-text-file:${result.path}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`临时文本 ${result.fileName}`)
+      .setSubtitle(`QuickOps Files · ${formatFileSize(result.size)} · temporary file`)
+      .setIcon({ type: 'class', value: 'i-carbon-document-add' })
+      .setActions([
+        {
+          id: 'quick-ops-open-temp-text-file',
+          type: 'open',
+          label: '打开临时文本',
+          primary: true,
+          payload: {
+            path: result.path
+          }
+        },
+        {
+          id: 'quick-ops-copy-temp-text-file-path',
+          type: 'copy',
+          label: '复制文件路径',
+          payload: {
+            text: result.path
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'temp-text-file',
+            riskLevel: 'safe',
+            path: result.path,
+            size: result.size,
+            maxSize: TEMP_TEXT_FILE_MAX_BYTES
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildTempDirectoryResultItem(rawText: string): Promise<TuffItem> {
+    const result = await createTempDirectory(stripTempDirectoryCommand(rawText))
+    if ('degradedReason' in result) {
+      return this.buildTempFileUnavailableItem(
+        'temp-directory',
+        '无法创建临时目录',
+        result.degradedReason,
+        result.message
+      )
+    }
+
+    return new TuffItemBuilder(`quick-ops:temp-directory:${result.path}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`临时目录 ${result.directoryName}`)
+      .setSubtitle('QuickOps Files · temporary directory')
+      .setIcon({ type: 'class', value: 'i-carbon-folder-add' })
+      .setActions([
+        {
+          id: 'quick-ops-open-temp-directory',
+          type: 'open',
+          label: '打开临时目录',
+          primary: true,
+          payload: {
+            path: result.path
+          }
+        },
+        {
+          id: 'quick-ops-copy-temp-directory-path',
+          type: 'copy',
+          label: '复制目录路径',
+          payload: {
+            text: result.path
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'temp-directory',
+            riskLevel: 'safe',
+            path: result.path
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildTempFileUnavailableItem(
+    operation: 'temp-text-file' | 'temp-directory',
+    title: string,
+    degradedReason: string,
+    message: string
+  ): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:${operation}:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle(title)
+      .setSubtitle(`QuickOps Files · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-warning' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation,
+            riskLevel: 'safe',
+            degradedReason
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildCommonDirectoryItem(info: QuickOpsCommonDirectoryInfo): TuffItem {
+    return new TuffItemBuilder(`quick-ops:common-directory:${info.id}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`打开${info.title}目录`)
+      .setSubtitle(`QuickOps Files · ${info.subtitle} · ${info.path}`)
+      .setIcon({ type: 'class', value: 'i-carbon-folder' })
+      .setActions([
+        {
+          id: 'quick-ops-open-common-directory',
+          type: 'open',
+          label: '打开目录',
+          primary: true,
+          payload: {
+            path: info.path
+          }
+        },
+        {
+          id: 'quick-ops-copy-common-directory-path',
+          type: 'copy',
+          label: '复制目录路径',
+          payload: {
+            text: info.path
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'files',
+            operation: 'open-common-directory',
+            riskLevel: 'safe',
+            directoryId: info.id,
+            path: info.path
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildDiagnosticsItem(info: QuickOpsDiagnosticsInfo): TuffItem {
+    const text = formatDiagnosticsInfo(info)
+
+    return new TuffItemBuilder('quick-ops:tuff-diagnostics', this.type, this.id)
+      .setKind('result')
+      .setTitle('复制 Tuff 诊断信息')
+      .setSubtitle(`QuickOps System · ${info.appVersion} · ${info.platform}/${info.arch}`)
+      .setIcon({ type: 'class', value: 'i-carbon-debug' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-diagnostics',
+          type: 'copy',
+          label: '复制诊断信息',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'tuff-diagnostics',
+            riskLevel: 'safe',
+            schemaVersion: info.schemaVersion,
+            appVersion: info.appVersion,
+            platform: info.platform,
+            arch: info.arch,
+            userDataDir: info.userDataDir,
+            logsDir: info.logsDir,
+            localAddressCount: info.localAddressCount,
+            dnsServerCount: info.dnsServerCount,
+            proxyStatus: info.proxyStatus,
+            redacted: true
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildSystemInfoItem(info: QuickOpsSystemInfo): TuffItem {
+    const text = formatSystemInfo(info)
+
+    return new TuffItemBuilder('quick-ops:system-info', this.type, this.id)
+      .setKind('result')
+      .setTitle('复制系统信息')
+      .setSubtitle(
+        `QuickOps System · ${info.osType} ${info.osRelease} · ${formatBytes(info.totalMemoryBytes)} RAM`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-information' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-system-info',
+          type: 'copy',
+          label: '复制系统信息',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'system-info',
+            riskLevel: 'safe',
+            platform: info.platform,
+            arch: info.arch,
+            osType: info.osType,
+            osRelease: info.osRelease,
+            cpuCount: info.cpuCount,
+            totalMemoryBytes: info.totalMemoryBytes
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildDiskSpaceResultItem(): Promise<TuffItem> {
+    const result = await createDiskSpaceInfo()
+    if ('degradedReason' in result) {
+      return this.buildDiskSpaceUnavailableItem(result.degradedReason, result.message)
+    }
+
+    return this.buildDiskSpaceItem(result)
+  }
+
+  private buildDiskSpaceItem(info: QuickOpsDiskSpaceInfo): TuffItem {
+    const text = formatDiskSpaceInfo(info)
+    const primary = info.entries[0]
+
+    return new TuffItemBuilder('quick-ops:disk-space', this.type, this.id)
+      .setKind('result')
+      .setTitle('复制磁盘空间')
+      .setSubtitle(
+        `QuickOps System · ${primary?.label ?? 'Disk'} ${formatBytes(primary?.freeBytes ?? 0)} free / ${formatBytes(primary?.totalBytes ?? 0)} total`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-data-base' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-disk-space',
+          type: 'copy',
+          label: '复制磁盘空间',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'disk-space',
+            riskLevel: 'safe',
+            entries: info.entries
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildDiskSpaceUnavailableItem(degradedReason: string, message: string): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:disk-space:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法读取磁盘空间')
+      .setSubtitle(`QuickOps System · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-data-base' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'disk-space',
+            riskLevel: 'safe',
+            degradedReason
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildDirectoryUsageResultItem(options: { deep: boolean }): Promise<TuffItem> {
+    const result = await createDirectoryUsageInfo(undefined, options)
+    if ('degradedReason' in result) {
+      return this.buildDirectoryUsageUnavailableItem(
+        result.degradedReason,
+        result.message,
+        result.path,
+        options.deep ? DIRECTORY_USAGE_DEEP_MAX_DEPTH : 1
+      )
+    }
+
+    return this.buildDirectoryUsageItem(result)
+  }
+
+  private buildDirectoryUsageItem(info: QuickOpsDirectoryUsageInfo): TuffItem {
+    const text = formatDirectoryUsageInfo(info)
+    const primary = info.entries[0]
+
+    return new TuffItemBuilder('quick-ops:directory-usage', this.type, this.id)
+      .setKind('result')
+      .setTitle('复制关键目录占用')
+      .setSubtitle(
+        `QuickOps System · ${info.entries.length} directories · depth ${info.scanDepth} · first ${info.maxEntriesPerDirectory} entries each`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-folder-details' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-directory-usage',
+          type: 'copy',
+          label: '复制目录占用',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'directory-usage',
+            riskLevel: 'safe',
+            entries: info.entries,
+            primaryPath: primary?.path,
+            maxEntriesPerDirectory: info.maxEntriesPerDirectory,
+            maxTotalEntries: info.maxTotalEntries,
+            scanDepth: info.scanDepth
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildDirectoryUsageUnavailableItem(
+    degradedReason: string,
+    message: string,
+    failedPath?: string,
+    scanDepth = 1
+  ): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:directory-usage:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法读取关键目录占用')
+      .setSubtitle(`QuickOps System · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-folder-details' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'directory-usage',
+            riskLevel: 'safe',
+            degradedReason,
+            path: failedPath ? redactHomePath(failedPath) : undefined,
+            scanDepth
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildBatteryStatusResultItem(): Promise<TuffItem> {
+    const result = await createBatteryStatusInfo()
+    if ('degradedReason' in result) {
+      return this.buildBatteryStatusUnavailableItem(result.degradedReason, result.message)
+    }
+
+    if (shouldNotifyLowBattery(result)) {
+      this.notifyLowBattery(result)
+    }
+
+    return this.buildBatteryStatusItem(result)
+  }
+
+  private buildBatteryStatusItem(info: QuickOpsBatteryStatusInfo): TuffItem {
+    const text = formatBatteryStatusInfo(info)
+    const level = info.levelPercent === null ? 'unknown' : `${info.levelPercent}%`
+    const charging =
+      info.charging === null ? 'unknown' : info.charging ? 'charging' : 'not charging'
+
+    return new TuffItemBuilder('quick-ops:battery-status', this.type, this.id)
+      .setKind('result')
+      .setTitle(`电池状态 ${level}`)
+      .setSubtitle(`QuickOps System · ${charging} · ${info.status}`)
+      .setIcon({ type: 'class', value: 'i-carbon-battery-charging' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-battery-status',
+          type: 'copy',
+          label: '复制电池状态',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'battery-status',
+            riskLevel: 'safe',
+            levelPercent: info.levelPercent,
+            charging: info.charging,
+            status: info.status,
+            source: info.source
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildBatteryStatusUnavailableItem(degradedReason: string, message: string): TuffItem {
+    return new TuffItemBuilder(
+      `quick-ops:battery-status:unavailable:${degradedReason}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('无法读取电池状态')
+      .setSubtitle(`QuickOps System · ${message}`)
+      .setIcon({ type: 'class', value: 'i-carbon-battery-empty' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'battery-status',
+            riskLevel: 'safe',
+            degradedReason
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildNetworkStatusItem(info: QuickOpsNetworkStatusInfo): TuffItem {
+    const text = formatNetworkStatusInfo(info)
+    const addressSummary =
+      info.addresses.length > 0
+        ? `${info.addresses.length} local address${info.addresses.length === 1 ? '' : 'es'}`
+        : 'no local address'
+    const dnsSummary =
+      info.dnsServers.length > 0 ? `${info.dnsServers.length} DNS server(s)` : 'no DNS server'
+    const proxySummary =
+      info.proxyStatus === 'detected'
+        ? `${info.proxies.length} proxy env${info.proxies.length === 1 ? '' : 's'}`
+        : 'no proxy env'
+
+    return new TuffItemBuilder('quick-ops:network-status', this.type, this.id)
+      .setKind('result')
+      .setTitle('复制网络状态')
+      .setSubtitle(`QuickOps Network · ${addressSummary} · ${dnsSummary} · ${proxySummary}`)
+      .setIcon({ type: 'class', value: 'i-carbon-network-3' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-network-status',
+          type: 'copy',
+          label: '复制网络状态',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'network-status',
+            riskLevel: 'safe',
+            addressCount: info.addresses.length,
+            dnsServerCount: info.dnsServers.length,
+            proxyStatus: info.proxyStatus,
+            proxyCount: info.proxies.length,
+            proxies: info.proxies
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildSystemProxyStatusItem(info: QuickOpsSystemProxyInfo): TuffItem {
+    const text = formatSystemProxyInfo(info)
+    const count = info.environment.length + info.system.length
+    const statusSummary =
+      info.status === 'degraded'
+        ? 'system probe degraded'
+        : count > 0
+          ? `${count} proxy source${count === 1 ? '' : 's'}`
+          : 'no proxy source'
+
+    return new TuffItemBuilder('quick-ops:system-proxy-status', this.type, this.id)
+      .setKind('result')
+      .setTitle('复制系统代理状态')
+      .setSubtitle(`QuickOps Network · ${info.platform} · ${statusSummary}`)
+      .setIcon({ type: 'class', value: 'i-carbon-network-public' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-system-proxy-status',
+          type: 'copy',
+          label: '复制系统代理状态',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'system-proxy-status',
+            riskLevel: 'safe',
+            platform: info.platform,
+            status: info.status,
+            environmentCount: info.environment.length,
+            systemCount: info.system.length,
+            degradedReason: info.degradedReason,
+            environment: info.environment,
+            system: info.system
+          }
+        }
+      })
+      .build()
+  }
+
+  private async buildDnsQueryResultItem(hostname: string, deep = false): Promise<TuffItem> {
+    const info = await createDnsQueryInfo(hostname, deep)
+    if ('degradedReason' in info) {
+      return new TuffItemBuilder(`quick-ops:dns-query:unavailable:${hostname}`, this.type, this.id)
+        .setKind('notification')
+        .setTitle('DNS 查询失败')
+        .setSubtitle(`QuickOps Network · ${hostname} · ${info.message}`)
+        .setIcon({ type: 'class', value: 'i-carbon-dns-services' })
+        .setMeta({
+          extension: {
+            quickOps: {
+              category: 'network',
+              operation: 'dns-query',
+              riskLevel: 'safe',
+              hostname,
+              deep,
+              degradedReason: info.degradedReason
+            }
+          }
+        })
+        .build()
+    }
+
+    return new TuffItemBuilder(`quick-ops:dns-query:${hostname}`, this.type, this.id)
+      .setKind('result')
+      .setTitle(`DNS 查询 ${hostname}`)
+      .setSubtitle(
+        `QuickOps Network · ${info.records.length} record(s)${
+          info.failedTypes.length > 0 ? ` · ${info.failedTypes.join('/')} unavailable` : ''
+        }`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-dns-services' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-dns-query',
+          type: 'copy',
+          label: '复制 DNS 查询结果',
+          primary: true,
+          payload: {
+            text: formatDnsQueryInfo(info)
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'network',
+            operation: 'dns-query',
+            riskLevel: 'safe',
+            hostname: info.hostname,
+            recordCount: info.records.length,
+            failedTypes: info.failedTypes,
+            deep: info.deep
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildSessionItem(session: QuickOpsSession): TuffItem {
+    const remainingMs = getSessionRemainingMs(session)
+    const stopAction = getStopAction(session.kind)
+    const subtitle =
+      session.kind === 'stopwatch'
+        ? `QuickOps · 已用时 ${formatDuration(remainingMs)}${formatLapSummary(session)}`
+        : `QuickOps · 剩余 ${formatDuration(remainingMs)}${formatPomodoroCycleSummary(session)}`
+
+    return new TuffItemBuilder(`quick-ops:session:${session.kind}`, this.type, this.id)
+      .setKind('action')
+      .setTitle(`${session.title}${session.pausedAt ? '暂停中' : '运行中'}`)
+      .setSubtitle(subtitle)
+      .setIcon({
+        type: 'class',
+        value: getSessionIcon(session.kind)
+      })
+      .setActions([
+        {
+          id: `quick-ops-${stopAction}`,
+          type: 'execute',
+          label: getSessionStopLabel(session.kind),
+          primary: true
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            action: stopAction,
+            durationMs: remainingMs,
+            sessionId: session.id,
+            riskLevel: 'safe'
+          }
+        }
+      })
+      .build()
+  }
+
+  private createResult(query: TuffQuery, startedAt: number, items: TuffItem[]): TuffSearchResult {
+    const duration = performance.now() - startedAt
+    return new TuffSearchResultBuilder(query)
+      .setItems(items)
+      .setDuration(duration)
+      .setSources([
+        {
+          providerId: this.id,
+          providerName: this.name,
+          duration,
+          resultCount: items.length,
+          status: 'success'
+        }
+      ])
+      .build()
+  }
+}
+
+export function getLocalIpAddresses(): QuickOpsLocalIpInfo[] {
+  return Object.entries(networkInterfaces())
+    .flatMap(([name, values]) =>
+      (values ?? []).map((value) => ({
+        name,
+        family: value.family,
+        address: value.address,
+        internal: value.internal
+      }))
+    )
+    .filter((value) => !value.internal && value.address)
+    .sort((left, right) => {
+      if (left.family !== right.family) return left.family === 'IPv4' ? -1 : 1
+      return left.name.localeCompare(right.name)
+    })
+    .map(({ name, family, address }) => ({ name, family, address }))
+}
+
+export async function lookupPublicIp(
+  fetchImpl: typeof fetch = globalThis.fetch
+): Promise<QuickOpsPublicIpInfo | QuickOpsDegradedResult> {
+  if (typeof fetchImpl !== 'function') {
+    return {
+      degradedReason: 'public-ip-fetch-unavailable',
+      message: '当前运行时不支持 fetch'
+    }
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), PUBLIC_IP_LOOKUP_TIMEOUT_MS)
+
+  try {
+    const response = await fetchImpl(PUBLIC_IP_LOOKUP_URL, {
+      method: 'GET',
+      headers: {
+        accept: 'application/json'
+      },
+      signal: controller.signal
+    })
+    if (!response.ok) {
+      return {
+        degradedReason: 'public-ip-request-failed',
+        message: `外部服务返回 HTTP ${response.status}`
+      }
+    }
+
+    const payload = (await response.json()) as { ip?: unknown }
+    const address = typeof payload.ip === 'string' ? payload.ip.trim() : ''
+    if (!isValidIpAddress(address)) {
+      return {
+        degradedReason: 'public-ip-invalid-response',
+        message: '外部服务返回了不可识别的 IP 地址'
+      }
+    }
+
+    return {
+      address,
+      source: PUBLIC_IP_LOOKUP_URL
+    }
+  } catch {
+    return {
+      degradedReason: 'public-ip-request-failed',
+      message: '无法连接公网 IP 查询服务'
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function isValidIpAddress(address: string): boolean {
+  if (!address || address.length > 45) return false
+  return isIP(address) !== 0
+}
+
+export function createNetworkStatusInfo(): QuickOpsNetworkStatusInfo {
+  const proxies = getProxyEnvironmentInfo()
+  return {
+    addresses: getLocalIpAddresses(),
+    dnsServers: getServers(),
+    proxyStatus: proxies.length > 0 ? 'detected' : 'not-detected',
+    proxies
+  }
+}
+
+export function formatNetworkStatusInfo(info: QuickOpsNetworkStatusInfo): string {
+  const addresses =
+    info.addresses.length > 0
+      ? info.addresses.map((item) => `${item.name} ${item.family} ${item.address}`).join('\n')
+      : 'No non-internal local address'
+  const dnsServers = info.dnsServers.length > 0 ? info.dnsServers.join('\n') : 'No DNS server'
+  const proxyInfo =
+    info.proxies.length > 0
+      ? info.proxies.map((item) => `${item.source}: ${item.value}`).join('\n')
+      : 'No proxy environment variable detected'
+
+  return [
+    'Local Addresses:',
+    addresses,
+    '',
+    'DNS Servers:',
+    dnsServers,
+    '',
+    'Proxy:',
+    proxyInfo
+  ].join('\n')
+}
+
+export function parseDnsQuery(text: string): { hostname: string; deep: boolean } | null {
+  const normalized = text.trim()
+  if (!normalized) return null
+
+  for (const command of DEEP_DNS_QUERY_COMMANDS) {
+    const pattern = new RegExp(`^${escapeRegExp(command)}\\s+(.+)$`, 'i')
+    const match = normalized.match(pattern)
+    const hostname = match?.[1]?.trim()
+    const normalizedHostname = hostname ? normalizeDnsHostname(hostname) : null
+    if (normalizedHostname) return { hostname: normalizedHostname, deep: true }
+  }
+
+  for (const command of DNS_QUERY_COMMANDS) {
+    const pattern = new RegExp(`^${escapeRegExp(command)}\\s+(.+)$`, 'i')
+    const match = normalized.match(pattern)
+    const hostname = match?.[1]?.trim()
+    const normalizedHostname = hostname ? normalizeDnsHostname(hostname) : null
+    if (normalizedHostname) return { hostname: normalizedHostname, deep: false }
+  }
+
+  return null
+}
+
+export function normalizeDnsHostname(value: string): string | null {
+  const withoutProtocol = value.replace(/^[a-z][a-z\d+.-]*:\/\//i, '')
+  const hostname = withoutProtocol.split(/[/?#]/)[0]?.replace(/\.$/, '').trim().toLowerCase()
+  if (!hostname || hostname.length > 253) return null
+  if (hostname.includes('..')) return null
+  if (/[^a-z0-9.-]/.test(hostname)) return null
+  if (!hostname.includes('.')) return null
+
+  const labels = hostname.split('.')
+  if (
+    labels.some(
+      (label) =>
+        label.length === 0 || label.length > 63 || label.startsWith('-') || label.endsWith('-')
+    )
+  ) {
+    return null
+  }
+
+  return hostname
+}
+
+export async function createDnsQueryInfo(
+  hostname: string,
+  deep = false
+): Promise<
+  | QuickOpsDnsQueryInfo
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  const normalizedHostname = normalizeDnsHostname(hostname)
+  if (!normalizedHostname) {
+    return {
+      degradedReason: 'dns-query-invalid-hostname',
+      message: '请输入有效域名'
+    }
+  }
+
+  const results = await Promise.allSettled([
+    resolve4(normalizedHostname),
+    resolve6(normalizedHostname),
+    resolveCname(normalizedHostname),
+    resolveMx(normalizedHostname),
+    ...(deep
+      ? [
+          resolveNs(normalizedHostname),
+          resolveTxt(normalizedHostname),
+          resolveSoa(normalizedHostname)
+        ]
+      : [])
+  ])
+  const records: QuickOpsDnsRecord[] = []
+  const failedTypes: QuickOpsDnsRecordType[] = []
+
+  appendDnsRecordResults(records, failedTypes, 'A', results[0])
+  appendDnsRecordResults(records, failedTypes, 'AAAA', results[1])
+  appendDnsRecordResults(records, failedTypes, 'CNAME', results[2])
+  appendDnsRecordResults(records, failedTypes, 'MX', results[3])
+  if (deep) {
+    appendDnsRecordResults(records, failedTypes, 'NS', results[4])
+    appendDnsRecordResults(records, failedTypes, 'TXT', results[5])
+    appendDnsRecordResults(records, failedTypes, 'SOA', results[6])
+  }
+
+  if (records.length === 0) {
+    return {
+      degradedReason: 'dns-query-no-records',
+      message: `未解析到 ${getDnsRecordTypes(deep).join(' / ')} 记录`
+    }
+  }
+
+  return {
+    hostname: normalizedHostname,
+    records,
+    failedTypes,
+    deep
+  }
+}
+
+export function formatDnsQueryInfo(info: QuickOpsDnsQueryInfo): string {
+  const grouped = new Map<QuickOpsDnsRecordType, QuickOpsDnsRecord[]>()
+  info.records.forEach((record) => {
+    const records = grouped.get(record.type) ?? []
+    records.push(record)
+    grouped.set(record.type, records)
+  })
+
+  const sections = [`Host: ${info.hostname}`]
+  getDnsRecordTypes(info.deep).forEach((type) => {
+    const records = grouped.get(type)
+    if (!records?.length) return
+    sections.push(
+      `${type}:`,
+      ...records.map((record) =>
+        record.type === 'MX' && record.priority !== undefined
+          ? `${record.priority} ${record.value}`
+          : record.value
+      )
+    )
+  })
+
+  if (info.failedTypes.length > 0) {
+    sections.push(`Unavailable: ${info.failedTypes.join(', ')}`)
+  }
+
+  return sections.join('\n')
+}
+
+export function getProxyEnvironmentInfo(env: NodeJS.ProcessEnv = process.env): QuickOpsProxyInfo[] {
+  return PROXY_ENV_NAMES.flatMap((name) => {
+    const value = env[name]?.trim()
+    return value ? [{ source: name, value: redactProxyValue(value) }] : []
+  })
+}
+
+export async function createSystemProxyInfo(): Promise<QuickOpsSystemProxyInfo> {
+  const environment = getProxyEnvironmentInfo()
+  try {
+    const system = await getSystemProxyEntries()
+    return {
+      platform: process.platform,
+      status: environment.length + system.length > 0 ? 'detected' : 'not-detected',
+      environment,
+      system
+    }
+  } catch (error) {
+    return {
+      platform: process.platform,
+      status: 'degraded',
+      environment,
+      system: [],
+      degradedReason: 'system-proxy-probe-failed',
+      degradedMessage: error instanceof Error ? error.message : 'Unable to read system proxy'
+    }
+  }
+}
+
+export function formatSystemProxyInfo(info: QuickOpsSystemProxyInfo): string {
+  const envText =
+    info.environment.length > 0
+      ? info.environment.map((item) => `${item.source}: ${item.value}`).join('\n')
+      : 'No proxy environment variable detected'
+  const systemText =
+    info.system.length > 0
+      ? info.system.map((item) => `${item.name}: ${item.value}`).join('\n')
+      : 'No enabled system proxy detected'
+  const statusText =
+    info.status === 'degraded' && info.degradedMessage
+      ? `${info.status} (${info.degradedMessage})`
+      : info.status
+
+  return [
+    `Platform: ${info.platform}`,
+    `Status: ${statusText}`,
+    '',
+    'Environment Proxy:',
+    envText,
+    '',
+    'System Proxy:',
+    systemText,
+    '',
+    'Safety: read-only local proxy settings; credentials redacted; no external connectivity check'
+  ].join('\n')
+}
+
+async function getSystemProxyEntries(): Promise<QuickOpsSystemProxyEntry[]> {
+  if (process.platform === 'darwin') return getMacSystemProxyEntries()
+  if (process.platform === 'win32') return getWindowsSystemProxyEntries()
+  if (process.platform === 'linux') return getLinuxSystemProxyEntries()
+  return []
+}
+
+async function getMacSystemProxyEntries(): Promise<QuickOpsSystemProxyEntry[]> {
+  const { stdout } = await execFileAsync('scutil', ['--proxy'], { timeout: 3000 })
+  return parseMacSystemProxyEntries(stdout)
+}
+
+async function getWindowsSystemProxyEntries(): Promise<QuickOpsSystemProxyEntry[]> {
+  const { stdout } = await execFileAsync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      [
+        "$settings = Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'",
+        '[PSCustomObject]@{',
+        'ProxyEnable=$settings.ProxyEnable;',
+        'ProxyServer=$settings.ProxyServer;',
+        'AutoConfigURL=$settings.AutoConfigURL;',
+        'ProxyOverride=$settings.ProxyOverride',
+        '} | ConvertTo-Json -Compress'
+      ].join(' ')
+    ],
+    { timeout: 5000 }
+  )
+  return parseWindowsSystemProxyEntries(stdout)
+}
+
+async function getLinuxSystemProxyEntries(): Promise<QuickOpsSystemProxyEntry[]> {
+  const { stdout } = await execFileAsync('gsettings', ['get', 'org.gnome.system.proxy', 'mode'], {
+    timeout: 3000
+  })
+  return parseLinuxSystemProxyEntries(stdout)
+}
+
+export function parseMacSystemProxyEntries(stdout: string): QuickOpsSystemProxyEntry[] {
+  const values = new Map<string, string>()
+  stdout.split(/\r?\n/).forEach((line) => {
+    const match = /^\s*([A-Za-z][A-Za-z0-9]+)\s*:\s*(.+?)\s*$/.exec(line)
+    if (!match?.[1] || !match[2]) return
+    values.set(match[1], match[2])
+  })
+
+  const entries: QuickOpsSystemProxyEntry[] = []
+  appendMacProxyEntry(entries, values, 'HTTP', 'HTTPEnable', 'HTTPProxy', 'HTTPPort')
+  appendMacProxyEntry(entries, values, 'HTTPS', 'HTTPSEnable', 'HTTPSProxy', 'HTTPSPort')
+  appendMacProxyEntry(entries, values, 'SOCKS', 'SOCKSEnable', 'SOCKSProxy', 'SOCKSPort')
+
+  if (values.get('ProxyAutoConfigEnable') === '1') {
+    const pacUrl = values.get('ProxyAutoConfigURLString')
+    entries.push({
+      source: 'macos-system',
+      name: 'PAC',
+      value: pacUrl ? redactProxyValue(pacUrl) : 'enabled'
+    })
+  }
+
+  if (values.get('ProxyAutoDiscoveryEnable') === '1') {
+    entries.push({
+      source: 'macos-system',
+      name: 'Auto Discovery',
+      value: 'enabled'
+    })
+  }
+
+  return entries
+}
+
+export function parseWindowsSystemProxyEntries(stdout: string): QuickOpsSystemProxyEntry[] {
+  const trimmed = stdout.trim()
+  if (!trimmed) return []
+
+  const payload = JSON.parse(trimmed) as
+    | {
+        ProxyEnable?: number | boolean | string
+        ProxyServer?: string
+        AutoConfigURL?: string
+        ProxyOverride?: string
+      }
+    | Array<{
+        ProxyEnable?: number | boolean | string
+        ProxyServer?: string
+        AutoConfigURL?: string
+        ProxyOverride?: string
+      }>
+  const settings = Array.isArray(payload) ? payload[0] : payload
+  if (!settings) return []
+
+  const entries: QuickOpsSystemProxyEntry[] = []
+  if (isTruthyProxyFlag(settings.ProxyEnable) && settings.ProxyServer) {
+    entries.push({
+      source: 'windows-system',
+      name: 'ProxyServer',
+      value: redactProxyValue(settings.ProxyServer)
+    })
+  }
+  if (settings.AutoConfigURL) {
+    entries.push({
+      source: 'windows-system',
+      name: 'AutoConfigURL',
+      value: redactProxyValue(settings.AutoConfigURL)
+    })
+  }
+  if (settings.ProxyOverride) {
+    entries.push({
+      source: 'windows-system',
+      name: 'ProxyOverride',
+      value: settings.ProxyOverride
+    })
+  }
+
+  return entries
+}
+
+export function parseLinuxSystemProxyEntries(stdout: string): QuickOpsSystemProxyEntry[] {
+  const mode = stdout.trim().replace(/^['"]|['"]$/g, '')
+  if (!mode || mode === 'none') return []
+
+  return [
+    {
+      source: 'linux-gsettings',
+      name: 'GNOME Proxy Mode',
+      value: mode
+    }
+  ]
+}
+
+async function createMacBatteryStatusInfo(): Promise<QuickOpsBatteryStatusInfo> {
+  const { stdout } = await execFileAsync('pmset', ['-g', 'batt'], { timeout: 3000 })
+  const info = parseMacBatteryStatus(stdout)
+  if (!info) throw new Error('Unable to parse pmset battery output')
+  return info
+}
+
+async function createWindowsBatteryStatusInfo(): Promise<QuickOpsBatteryStatusInfo> {
+  const { stdout } = await execFileAsync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      'Get-CimInstance Win32_Battery | Select-Object -Property EstimatedChargeRemaining,BatteryStatus | ConvertTo-Json -Compress'
+    ],
+    { timeout: 5000 }
+  )
+  const trimmed = stdout.trim()
+  if (!trimmed) {
+    throw new Error('No Windows battery data')
+  }
+
+  const info = parseWindowsBatteryStatus(trimmed)
+  if (!info) throw new Error('Unable to parse Windows battery output')
+  return info
+}
+
+async function createLinuxBatteryStatusInfo(): Promise<QuickOpsBatteryStatusInfo> {
+  const base = '/sys/class/power_supply'
+  const entries = await readdir(base)
+  for (const entry of entries) {
+    const root = path.join(base, entry)
+    const typeText = await readFile(path.join(root, 'type'), 'utf8').catch(() => '')
+    if (typeText.trim().toLowerCase() !== 'battery') continue
+
+    const [capacity, status] = await Promise.all([
+      readFile(path.join(root, 'capacity'), 'utf8'),
+      readFile(path.join(root, 'status'), 'utf8').catch(() => 'unknown')
+    ])
+    const info = parseLinuxBatteryStatus(capacity, status)
+    if (info) return info
+  }
+
+  throw new Error('No Linux battery data')
+}
+
+export function parsePortQuery(text: string): number | null {
+  const match = text.match(PORT_QUERY_PATTERN)
+  if (!match?.[1]) return null
+
+  const port = Number(match[1])
+  return Number.isInteger(port) ? port : null
+}
+
+export function isValidTcpPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65_535
+}
+
+export function createPortReleaseCommand(processInfo: QuickOpsPortProcessInfo): string {
+  if (processInfo.source === 'windows-nettcpconnection') {
+    return `Stop-Process -Id ${processInfo.pid}`
+  }
+
+  return `kill ${processInfo.pid}`
+}
+
+export function probeLocalTcpPort(
+  port: number,
+  host = '127.0.0.1'
+): Promise<QuickOpsPortProbeInfo> {
+  return new Promise((resolve) => {
+    const server = createServer()
+    let settled = false
+
+    const settle = (result: QuickOpsPortProbeInfo): void => {
+      if (settled) return
+      settled = true
+      server.removeAllListeners()
+      if (server.listening) {
+        server.close(() => resolve(result))
+        return
+      }
+      resolve(result)
+    }
+
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EADDRINUSE') {
+        settle({
+          port,
+          host,
+          available: false,
+          degradedReason: 'port-probe-failed',
+          errorCode: error.code
+        })
+        return
+      }
+
+      void getPortProcessInfo(port)
+        .catch(() => null)
+        .then((processInfo) =>
+          settle({
+            port,
+            host,
+            available: false,
+            process: processInfo ?? undefined,
+            degradedReason: 'port-occupied',
+            errorCode: error.code
+          })
+        )
+    })
+    server.listen({ port, host, exclusive: true }, () => {
+      settle({ port, host, available: true })
+    })
+  })
+}
+
+export async function getPortProcessInfo(port: number): Promise<QuickOpsPortProcessInfo | null> {
+  if (!isValidTcpPort(port)) return null
+
+  if (process.platform === 'win32') {
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        [
+          `$connections = Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue`,
+          '$connections | Select-Object -First 1 -ExpandProperty OwningProcess | ForEach-Object {',
+          '$p = Get-Process -Id $_ -ErrorAction SilentlyContinue',
+          '[PSCustomObject]@{ Pid = $_; Name = $p.ProcessName; Path = $p.Path } | ConvertTo-Json -Compress',
+          '}'
+        ].join('; ')
+      ],
+      { timeout: 1200, windowsHide: true }
+    )
+    return parseWindowsPortProcessInfo(stdout)
+  }
+
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    const { stdout } = await execFileAsync(
+      'lsof',
+      ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-F', 'pc'],
+      { timeout: 1200 }
+    )
+    return parseLsofPortProcessInfo(stdout)
+  }
+
+  return null
+}
+
+export function parseLsofPortProcessInfo(output: string): QuickOpsPortProcessInfo | null {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  let pid: number | null = null
+  let command: string | undefined
+
+  for (const line of lines) {
+    const prefix = line[0]
+    const value = line.slice(1).trim()
+    if (prefix === 'p') {
+      const parsedPid = Number(value)
+      if (Number.isInteger(parsedPid) && parsedPid > 0) pid = parsedPid
+      continue
+    }
+    if (prefix === 'c' && value) command = value
+  }
+
+  if (pid === null) return null
+  return {
+    pid,
+    name: command,
+    command,
+    source: 'lsof'
+  }
+}
+
+export function parseWindowsPortProcessInfo(output: string): QuickOpsPortProcessInfo | null {
+  const trimmed = output.trim()
+  if (!trimmed) return null
+
+  const data = JSON.parse(trimmed) as
+    | {
+        Pid?: number | string
+        Name?: string
+        Path?: string
+      }
+    | Array<{
+        Pid?: number | string
+        Name?: string
+        Path?: string
+      }>
+  const processInfo = Array.isArray(data) ? data[0] : data
+  if (!processInfo?.Pid) return null
+
+  const pid = Number(processInfo.Pid)
+  if (!Number.isInteger(pid) || pid <= 0) return null
+
+  return {
+    pid,
+    name: processInfo.Name || undefined,
+    command: processInfo.Path || processInfo.Name || undefined,
+    source: 'windows-nettcpconnection'
+  }
+}
+
+export function resolveFileHashPath(rawText: string, query: TuffQuery): string | null {
+  return resolveFileHashPaths(rawText, query)[0] ?? null
+}
+
+export function resolveFileHashPaths(rawText: string, query: TuffQuery): string[] {
+  const inputPaths = resolveFilesInputPaths(query)
+  if (inputPaths.length > 0) return inputPaths
+
+  const textPath = stripFileHashCommand(rawText)
+  return textPath ? [textPath] : []
+}
+
+export function resolveFileBase64Path(rawText: string, query: TuffQuery): string | null {
+  const inputPaths = resolveFilesInputPaths(query)
+  if (inputPaths.length === 1) return inputPaths[0] ?? null
+  if (inputPaths.length > 1) return null
+
+  const textPath = stripFileBase64Command(rawText)
+  return textPath || null
+}
+
+export function resolveFilePathTarget(rawText: string, query: TuffQuery): string | null {
+  const inputPath = resolveFirstFilesInputPath(query)
+  if (inputPath) return inputPath
+
+  const textPath = stripFilePathCommand(rawText)
+  return textPath || null
+}
+
+export function createFilePathInfo(filePath: string): QuickOpsFilePathInfo {
+  return {
+    path: filePath,
+    fileName: getFilePathDisplayName(filePath),
+    shellPath: escapeShellPath(filePath),
+    fileUrl: pathToFileURL(filePath).href,
+    windowsPath: convertWslPathToWindowsPath(filePath),
+    wslPath: convertWindowsPathToWslPath(filePath)
+  }
+}
+
+export function resolveCommonDirectory(text: string): QuickOpsCommonDirectoryInfo {
+  const directory =
+    COMMON_DIRECTORY_DEFINITIONS.find((item) => matchesKeyword(text, item.aliases)) ??
+    COMMON_DIRECTORY_DEFINITIONS[0]
+
+  return {
+    id: directory.id,
+    title: directory.title,
+    subtitle: directory.subtitle,
+    path: app.getPath(directory.appPathName)
+  }
+}
+
+export function createDiagnosticsInfo(settings: QuickOpsResolvedSettings): QuickOpsDiagnosticsInfo {
+  const networkInfo = createNetworkStatusInfo()
+  return {
+    schemaVersion: 2,
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    osType: type(),
+    osRelease: release(),
+    nodeVersion: process.versions.node ?? 'unknown',
+    electronVersion: process.versions.electron ?? 'unknown',
+    userDataDir: redactHomePath(app.getPath('userData')),
+    logsDir: redactHomePath(app.getPath('logs')),
+    homeDir: redactHomePath(homedir()),
+    cpuCount: cpus().length,
+    totalMemoryBytes: totalmem(),
+    freeMemoryBytes: freemem(),
+    uptimeSeconds: uptime(),
+    localAddressCount: networkInfo.addresses.length,
+    dnsServerCount: networkInfo.dnsServers.length,
+    proxyStatus: networkInfo.proxyStatus,
+    proxySources: networkInfo.proxies.map((item) => item.source),
+    quickOpsEnabled: settings.enabled,
+    showRunningSessionsInCoreBox: settings.showRunningSessionsInCoreBox,
+    defaultKeepAwakeDurationMs: settings.defaultKeepAwakeDurationMs,
+    defaultTimerDurationMs: settings.defaultTimerDurationMs,
+    defaultPomodoroFocusMs: settings.defaultPomodoroFocusMs,
+    defaultPomodoroBreakMs: settings.defaultPomodoroBreakMs,
+    defaultScreenCleanDurationMs: settings.defaultScreenCleanDurationMs
+  }
+}
+
+export function formatDiagnosticsInfo(info: QuickOpsDiagnosticsInfo): string {
+  return [
+    `Schema: quickops-diagnostics/v${info.schemaVersion}`,
+    `Tuff ${info.appVersion}`,
+    `Platform: ${info.platform}/${info.arch}`,
+    `OS: ${info.osType} ${info.osRelease}`,
+    `Runtime: Node ${info.nodeVersion}, Electron ${info.electronVersion}`,
+    `CPU: ${info.cpuCount} logical cores`,
+    `Memory: ${formatBytes(info.freeMemoryBytes)} free / ${formatBytes(info.totalMemoryBytes)} total`,
+    `Uptime: ${formatDuration(Math.round(info.uptimeSeconds) * 1000)}`,
+    `Home: ${info.homeDir}`,
+    `UserData: ${info.userDataDir}`,
+    `Logs: ${info.logsDir}`,
+    `Network: localAddresses=${info.localAddressCount}, dnsServers=${info.dnsServerCount}, proxy=${info.proxyStatus}`,
+    `Proxy Sources: ${info.proxySources.length > 0 ? info.proxySources.join(', ') : 'none'}`,
+    `QuickOps: enabled=${info.quickOpsEnabled}, showRunning=${info.showRunningSessionsInCoreBox}`,
+    [
+      'Defaults:',
+      `keepAwake=${formatDuration(info.defaultKeepAwakeDurationMs)}`,
+      `timer=${formatDuration(info.defaultTimerDurationMs)}`,
+      `pomodoro=${formatDuration(info.defaultPomodoroFocusMs)}/${formatDuration(info.defaultPomodoroBreakMs)}`,
+      `screenClean=${formatDuration(info.defaultScreenCleanDurationMs)}`
+    ].join(' '),
+    'Safety: redacted paths only; no log contents; no full configuration dump'
+  ].join('\n')
+}
+
+export function createSystemInfo(): QuickOpsSystemInfo {
+  const cpuList = cpus()
+  return {
+    osType: type(),
+    osRelease: release(),
+    platform: process.platform,
+    arch: process.arch,
+    cpuModel: cpuList[0]?.model ?? 'unknown',
+    cpuCount: cpuList.length,
+    totalMemoryBytes: totalmem(),
+    freeMemoryBytes: freemem(),
+    uptimeSeconds: uptime(),
+    loadAverage: loadavg()
+  }
+}
+
+export function formatSystemInfo(info: QuickOpsSystemInfo): string {
+  return [
+    `OS: ${info.osType} ${info.osRelease}`,
+    `Platform: ${info.platform}/${info.arch}`,
+    `CPU: ${info.cpuModel} x${info.cpuCount}`,
+    `Memory: ${formatBytes(info.freeMemoryBytes)} free / ${formatBytes(info.totalMemoryBytes)} total`,
+    `Uptime: ${formatDuration(Math.round(info.uptimeSeconds) * 1000)}`,
+    `Load Average: ${info.loadAverage.map((value) => value.toFixed(2)).join(', ')}`
+  ].join('\n')
+}
+
+export async function createDiskSpaceInfo(): Promise<
+  | QuickOpsDiskSpaceInfo
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  const targets = [
+    { label: 'Home', path: homedir() },
+    { label: 'Tuff Data', path: app.getPath('userData') }
+  ].filter((target) => target.path)
+
+  try {
+    const entries = await Promise.all(
+      targets.map(async (target) => {
+        const info = await statfs(target.path)
+        const totalBytes = info.blocks * info.bsize
+        const freeBytes = info.bavail * info.bsize
+        const usedBytes = Math.max(0, totalBytes - freeBytes)
+        const usedPercent = totalBytes > 0 ? Number(((usedBytes / totalBytes) * 100).toFixed(1)) : 0
+
+        return {
+          label: target.label,
+          path: redactHomePath(target.path),
+          totalBytes,
+          freeBytes,
+          usedBytes,
+          usedPercent
+        }
+      })
+    )
+
+    return { entries }
+  } catch {
+    return {
+      degradedReason: 'disk-space-read-failed',
+      message: '读取文件系统容量失败'
+    }
+  }
+}
+
+export function formatDiskSpaceInfo(info: QuickOpsDiskSpaceInfo): string {
+  return info.entries
+    .map((entry) =>
+      [
+        `${entry.label}: ${entry.path}`,
+        `Free: ${formatBytes(entry.freeBytes)}`,
+        `Used: ${formatBytes(entry.usedBytes)} (${entry.usedPercent}%)`,
+        `Total: ${formatBytes(entry.totalBytes)}`
+      ].join('\n')
+    )
+    .join('\n\n')
+}
+
+export async function createDirectoryUsageInfo(
+  targets: QuickOpsDirectoryUsageTarget[] = getDefaultDirectoryUsageTargets(),
+  options: { deep?: boolean } = {}
+): Promise<
+  | QuickOpsDirectoryUsageInfo
+  | {
+      degradedReason: string
+      message: string
+      path?: string
+    }
+> {
+  const normalizedTargets = dedupeDirectoryUsageTargets(targets)
+  const deep = options.deep === true
+  try {
+    const entries = await Promise.all(
+      normalizedTargets.map((target) => scanDirectoryUsageTarget(target, { deep }))
+    )
+    return {
+      entries,
+      maxEntriesPerDirectory: DIRECTORY_USAGE_MAX_ENTRIES,
+      maxTotalEntries: deep ? DIRECTORY_USAGE_DEEP_MAX_TOTAL_ENTRIES : undefined,
+      scanDepth: deep ? DIRECTORY_USAGE_DEEP_MAX_DEPTH : 1
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    const failedPath = (error as NodeJS.ErrnoException).path
+    return {
+      degradedReason:
+        code === 'ENOENT'
+          ? 'directory-usage-directory-missing'
+          : code === 'EACCES' || code === 'EPERM'
+            ? 'directory-usage-permission-denied'
+            : 'directory-usage-read-failed',
+      message:
+        code === 'ENOENT'
+          ? '目录不存在'
+          : code === 'EACCES' || code === 'EPERM'
+            ? '没有权限读取目录'
+            : '读取目录占用失败',
+      path: typeof failedPath === 'string' ? failedPath : undefined
+    }
+  }
+}
+
+export function formatDirectoryUsageInfo(info: QuickOpsDirectoryUsageInfo): string {
+  const scanLine =
+    info.scanDepth > 1
+      ? `Scan: recursive depth ${info.scanDepth}, max ${info.maxEntriesPerDirectory} entries per directory, max ${info.maxTotalEntries} entries total`
+      : `Scan: direct children only, max ${info.maxEntriesPerDirectory} entries per directory`
+  return [
+    scanLine,
+    ...info.entries.map((entry) =>
+      [
+        `${entry.label}: ${entry.path}`,
+        `Direct file size: ${formatBytes(entry.directFileBytes)}`,
+        entry.totalFileBytes === undefined
+          ? ''
+          : `Recursive file size: ${formatBytes(entry.totalFileBytes)}`,
+        `Entries: ${entry.fileCount} files, ${entry.directoryCount} directories, ${entry.otherCount} other`,
+        `Scanned: ${entry.scannedEntryCount}${entry.truncated ? ' (truncated)' : ''}`
+      ]
+        .filter(Boolean)
+        .join('\n')
+    )
+  ].join('\n\n')
+}
+
+function getDefaultDirectoryUsageTargets(): QuickOpsDirectoryUsageTarget[] {
+  return [
+    { label: 'Desktop', path: getSafeAppPath('desktop') },
+    { label: 'Downloads', path: getSafeAppPath('downloads') },
+    { label: 'Documents', path: getSafeAppPath('documents') },
+    { label: 'Tuff Data', path: getSafeAppPath('userData') },
+    { label: 'Logs', path: getSafeAppPath('logs') }
+  ].filter((target) => target.path)
+}
+
+function getSafeAppPath(name: Parameters<typeof app.getPath>[0]): string {
+  try {
+    return app.getPath(name)
+  } catch {
+    return ''
+  }
+}
+
+function dedupeDirectoryUsageTargets(
+  targets: QuickOpsDirectoryUsageTarget[]
+): QuickOpsDirectoryUsageTarget[] {
+  const seen = new Set<string>()
+  return targets.filter((target) => {
+    if (!target.path || seen.has(target.path)) return false
+    seen.add(target.path)
+    return true
+  })
+}
+
+async function scanDirectoryUsageTarget(
+  target: QuickOpsDirectoryUsageTarget,
+  options: { deep: boolean }
+): Promise<QuickOpsDirectoryUsageEntry> {
+  const entries = await readdir(target.path, { withFileTypes: true })
+  const scannedEntries = entries.slice(0, DIRECTORY_USAGE_MAX_ENTRIES)
+  let directFileBytes = 0
+  let fileCount = 0
+  let directoryCount = 0
+  let otherCount = 0
+
+  for (const entry of scannedEntries) {
+    if (entry.isFile()) {
+      fileCount += 1
+      const fileInfo = await stat(path.join(target.path, entry.name))
+      directFileBytes += fileInfo.size
+      continue
+    }
+
+    if (entry.isDirectory()) {
+      directoryCount += 1
+      continue
+    }
+
+    otherCount += 1
+  }
+
+  let totalFileBytes: number | undefined
+  let deepScannedEntryCount = 0
+  let deepTruncated = false
+  if (options.deep) {
+    const deepUsage = await scanDirectoryUsageDeep(target.path, 0, {
+      scannedEntries: 0,
+      truncated: false
+    })
+    totalFileBytes = deepUsage.totalFileBytes
+    fileCount = deepUsage.fileCount
+    directoryCount = deepUsage.directoryCount
+    otherCount = deepUsage.otherCount
+    deepScannedEntryCount = deepUsage.scannedEntryCount
+    deepTruncated = deepUsage.truncated
+  }
+
+  return {
+    label: target.label,
+    path: redactHomePath(target.path),
+    directFileBytes,
+    totalFileBytes,
+    fileCount,
+    directoryCount,
+    otherCount,
+    scannedEntryCount: options.deep ? deepScannedEntryCount : scannedEntries.length,
+    truncated: options.deep ? deepTruncated : entries.length > scannedEntries.length
+  }
+}
+
+async function scanDirectoryUsageDeep(
+  directoryPath: string,
+  depth: number,
+  state: { scannedEntries: number; truncated: boolean }
+): Promise<{
+  totalFileBytes: number
+  fileCount: number
+  directoryCount: number
+  otherCount: number
+  scannedEntryCount: number
+  truncated: boolean
+}> {
+  if (
+    depth >= DIRECTORY_USAGE_DEEP_MAX_DEPTH ||
+    state.scannedEntries >= DIRECTORY_USAGE_DEEP_MAX_TOTAL_ENTRIES
+  ) {
+    return {
+      totalFileBytes: 0,
+      fileCount: 0,
+      directoryCount: 0,
+      otherCount: 0,
+      scannedEntryCount: state.scannedEntries,
+      truncated: true
+    }
+  }
+
+  const entries = await readdir(directoryPath, { withFileTypes: true })
+  const remainingBudget = Math.max(0, DIRECTORY_USAGE_DEEP_MAX_TOTAL_ENTRIES - state.scannedEntries)
+  const scanLimit = Math.min(DIRECTORY_USAGE_MAX_ENTRIES, remainingBudget)
+  const scannedEntries = entries.slice(0, scanLimit)
+  state.scannedEntries += scannedEntries.length
+  if (entries.length > scannedEntries.length) {
+    state.truncated = true
+  }
+
+  let totalFileBytes = 0
+  let fileCount = 0
+  let directoryCount = 0
+  let otherCount = 0
+
+  for (const entry of scannedEntries) {
+    const entryPath = path.join(directoryPath, entry.name)
+    if (entry.isFile()) {
+      fileCount += 1
+      const fileInfo = await stat(entryPath)
+      totalFileBytes += fileInfo.size
+      continue
+    }
+
+    if (entry.isDirectory()) {
+      directoryCount += 1
+      const child = await scanDirectoryUsageDeep(entryPath, depth + 1, state)
+      totalFileBytes += child.totalFileBytes
+      fileCount += child.fileCount
+      directoryCount += child.directoryCount
+      otherCount += child.otherCount
+      state.truncated ||= child.truncated
+      continue
+    }
+
+    otherCount += 1
+  }
+
+  return {
+    totalFileBytes,
+    fileCount,
+    directoryCount,
+    otherCount,
+    scannedEntryCount: state.scannedEntries,
+    truncated: state.truncated
+  }
+}
+
+export async function createBatteryStatusInfo(): Promise<
+  | QuickOpsBatteryStatusInfo
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  try {
+    if (process.platform === 'darwin') return await createMacBatteryStatusInfo()
+    if (process.platform === 'win32') return await createWindowsBatteryStatusInfo()
+    if (process.platform === 'linux') return await createLinuxBatteryStatusInfo()
+    return {
+      degradedReason: 'battery-status-unsupported-platform',
+      message: '当前平台暂不支持电池状态读取'
+    }
+  } catch {
+    return {
+      degradedReason: 'battery-status-read-failed',
+      message: '读取电池状态失败'
+    }
+  }
+}
+
+export function formatBatteryStatusInfo(info: QuickOpsBatteryStatusInfo): string {
+  return [
+    `Level: ${info.levelPercent === null ? 'unknown' : `${info.levelPercent}%`}`,
+    `Charging: ${info.charging === null ? 'unknown' : info.charging ? 'yes' : 'no'}`,
+    `Status: ${info.status}`,
+    `Source: ${info.source}`
+  ].join('\n')
+}
+
+export function shouldNotifyLowBattery(info: QuickOpsBatteryStatusInfo): boolean {
+  return (
+    info.levelPercent !== null &&
+    info.levelPercent <= LOW_BATTERY_WARNING_THRESHOLD_PERCENT &&
+    info.charging === false
+  )
+}
+
+function showLowBatteryNotification(info: QuickOpsBatteryStatusInfo): void {
+  notificationModule.showInternalSystemNotification({
+    id: `quick-ops:low-battery:${info.levelPercent}`,
+    title: 'QuickOps 低电量提醒',
+    message: `当前电量 ${info.levelPercent}%，请及时接入电源。`,
+    level: 'warning',
+    dedupeKey: 'quick-ops:low-battery',
+    system: { silent: false },
+    meta: {
+      quickOps: {
+        operation: 'battery-status',
+        levelPercent: info.levelPercent,
+        charging: info.charging,
+        source: info.source
+      }
+    }
+  })
+}
+
+export function parseMacBatteryStatus(output: string): QuickOpsBatteryStatusInfo | null {
+  const levelMatch = /(\d{1,3})%/.exec(output)
+  const statusMatch = /;\s*([^;]+);/.exec(output)
+  if (!levelMatch) return null
+
+  const status = statusMatch?.[1]?.trim() || 'unknown'
+  return {
+    levelPercent: clampBatteryLevel(Number(levelMatch[1])),
+    charging: isChargingBatteryStatus(status),
+    status,
+    source: 'macos-pmset'
+  }
+}
+
+export function parseWindowsBatteryStatus(output: string): QuickOpsBatteryStatusInfo | null {
+  const data = JSON.parse(output) as
+    | {
+        EstimatedChargeRemaining?: number
+        BatteryStatus?: number
+      }
+    | Array<{
+        EstimatedChargeRemaining?: number
+        BatteryStatus?: number
+      }>
+  const battery = Array.isArray(data) ? data[0] : data
+  if (!battery || battery.EstimatedChargeRemaining === undefined) return null
+
+  const status = windowsBatteryStatusToText(battery.BatteryStatus)
+  return {
+    levelPercent: clampBatteryLevel(Number(battery.EstimatedChargeRemaining)),
+    charging: isWindowsBatteryCharging(battery.BatteryStatus),
+    status,
+    source: 'windows-cim'
+  }
+}
+
+export function parseLinuxBatteryStatus(
+  capacity: string,
+  status: string
+): QuickOpsBatteryStatusInfo | null {
+  const level = Number(capacity.trim())
+  if (!Number.isFinite(level)) return null
+
+  const normalizedStatus = status.trim() || 'unknown'
+  return {
+    levelPercent: clampBatteryLevel(level),
+    charging: isChargingBatteryStatus(normalizedStatus),
+    status: normalizedStatus,
+    source: 'linux-sysfs'
+  }
+}
+
+export function formatFileHashBatchInfo(info: QuickOpsFileHashBatchInfo): string {
+  return info.files
+    .map((file) =>
+      [
+        `${file.fileName}`,
+        `Path: ${file.path}`,
+        `Size: ${formatFileSize(file.size)}`,
+        `MD5 ${file.md5}`,
+        `SHA1 ${file.sha1}`,
+        `SHA256 ${file.sha256}`
+      ].join('\n')
+    )
+    .join('\n\n')
+}
+
+export function formatFileBase64BatchInfo(info: QuickOpsFileBase64BatchInfo): string {
+  return info.files
+    .map((file) =>
+      [
+        `${file.fileName}`,
+        `Path: ${file.path}`,
+        `Size: ${formatFileSize(file.size)}`,
+        file.base64
+      ].join('\n')
+    )
+    .join('\n\n')
+}
+
+export async function computeFileHashes(filePath: string): Promise<
+  | QuickOpsFileHashInfo
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  try {
+    const info = await stat(filePath)
+    if (!info.isFile()) {
+      return {
+        degradedReason: 'file-hash-not-file',
+        message: '目标不是普通文件'
+      }
+    }
+
+    const buffer = await readFile(filePath)
+    return {
+      path: filePath,
+      fileName: path.basename(filePath) || filePath,
+      size: info.size,
+      md5: createHash('md5').update(buffer).digest('hex'),
+      sha1: createHash('sha1').update(buffer).digest('hex'),
+      sha256: createHash('sha256').update(buffer).digest('hex')
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'ENOENT'
+          ? 'file-hash-file-missing'
+          : code === 'EACCES' || code === 'EPERM'
+            ? 'file-hash-permission-denied'
+            : 'file-hash-read-failed',
+      message:
+        code === 'ENOENT'
+          ? '文件不存在'
+          : code === 'EACCES' || code === 'EPERM'
+            ? '没有权限读取文件'
+            : '读取文件失败'
+    }
+  }
+}
+
+export async function computeFileHashBatch(filePaths: string[]): Promise<
+  | QuickOpsFileHashBatchInfo
+  | {
+      degradedReason: string
+      message: string
+      path?: string
+    }
+> {
+  const files: QuickOpsFileHashInfo[] = []
+
+  for (const filePath of filePaths) {
+    const result = await computeFileHashes(filePath)
+    if ('degradedReason' in result) {
+      return {
+        degradedReason: result.degradedReason,
+        message: result.message,
+        path: filePath
+      }
+    }
+    files.push(result)
+  }
+
+  return {
+    files,
+    totalSize: files.reduce((sum, file) => sum + file.size, 0)
+  }
+}
+
+export async function encodeFileBase64(filePath: string): Promise<
+  | QuickOpsFileBase64Info
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  try {
+    const info = await stat(filePath)
+    if (!info.isFile()) {
+      return {
+        degradedReason: 'file-base64-not-file',
+        message: '目标不是普通文件'
+      }
+    }
+
+    if (info.size > FILE_BASE64_MAX_BYTES) {
+      return {
+        degradedReason: 'file-base64-too-large',
+        message: `文件超过 ${formatFileSize(FILE_BASE64_MAX_BYTES)} 上限`
+      }
+    }
+
+    const buffer = await readFile(filePath)
+    return {
+      path: filePath,
+      fileName: path.basename(filePath) || filePath,
+      size: info.size,
+      base64: buffer.toString('base64')
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'ENOENT'
+          ? 'file-base64-file-missing'
+          : code === 'EACCES' || code === 'EPERM'
+            ? 'file-base64-permission-denied'
+            : 'file-base64-read-failed',
+      message:
+        code === 'ENOENT'
+          ? '文件不存在'
+          : code === 'EACCES' || code === 'EPERM'
+            ? '没有权限读取文件'
+            : '读取文件失败'
+    }
+  }
+}
+
+export async function encodeFileBase64Batch(filePaths: string[]): Promise<
+  | QuickOpsFileBase64BatchInfo
+  | {
+      degradedReason: string
+      message: string
+      path?: string
+    }
+> {
+  const files: QuickOpsFileBase64Info[] = []
+
+  for (const filePath of filePaths) {
+    const result = await encodeFileBase64(filePath)
+    if ('degradedReason' in result) {
+      return {
+        degradedReason: result.degradedReason,
+        message: result.message,
+        path: filePath
+      }
+    }
+    files.push(result)
+  }
+
+  return {
+    files,
+    totalSize: files.reduce((sum, file) => sum + file.size, 0)
+  }
+}
+
+export async function decodeFileBase64ToTempFile(input: string): Promise<
+  | QuickOpsFileBase64DecodeInfo
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  const normalized = input.replace(/\s+/g, '')
+  if (!normalized) {
+    return {
+      degradedReason: 'file-base64-decode-missing-input',
+      message: '未找到要解码的 Base64 内容'
+    }
+  }
+
+  if (!isValidBase64Payload(normalized)) {
+    return {
+      degradedReason: 'file-base64-decode-invalid-input',
+      message: 'Base64 内容格式无效'
+    }
+  }
+
+  const buffer = Buffer.from(normalized, 'base64')
+  if (
+    buffer.length === 0 ||
+    buffer.toString('base64').replace(/=+$/, '') !== normalized.replace(/=+$/, '')
+  ) {
+    return {
+      degradedReason: 'file-base64-decode-invalid-input',
+      message: 'Base64 内容格式无效'
+    }
+  }
+
+  if (buffer.length > FILE_BASE64_MAX_BYTES) {
+    return {
+      degradedReason: 'file-base64-decode-too-large',
+      message: `解码后文件超过 ${formatFileSize(FILE_BASE64_MAX_BYTES)} 上限`
+    }
+  }
+
+  try {
+    const outputDir = path.join(app.getPath('temp'), 'tuff-quickops')
+    await mkdir(outputDir, { recursive: true })
+    const outputPath = path.join(
+      outputDir,
+      `base64-${Date.now()}-${FILE_BASE64_DECODE_OUTPUT_NAME}`
+    )
+    await writeFile(outputPath, buffer, { flag: 'wx' })
+    return {
+      path: outputPath,
+      fileName: path.basename(outputPath),
+      size: buffer.length
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'EACCES' || code === 'EPERM'
+          ? 'file-base64-decode-permission-denied'
+          : 'file-base64-decode-write-failed',
+      message: code === 'EACCES' || code === 'EPERM' ? '没有权限写入临时文件' : '写入临时文件失败'
+    }
+  }
+}
+
+export async function createTempTextFile(input: string): Promise<
+  | QuickOpsTempTextFileInfo
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  const content = input.trim() || 'Tuff QuickOps scratch note\n'
+  const size = Buffer.byteLength(content, 'utf8')
+  if (size > TEMP_TEXT_FILE_MAX_BYTES) {
+    return {
+      degradedReason: 'temp-text-file-too-large',
+      message: `临时文本超过 ${formatFileSize(TEMP_TEXT_FILE_MAX_BYTES)} 上限`
+    }
+  }
+
+  try {
+    const outputDir = await ensureQuickOpsTempDir()
+    const outputPath = path.join(outputDir, `scratch-${Date.now()}.txt`)
+    await writeFile(outputPath, content, { flag: 'wx' })
+    return {
+      path: outputPath,
+      fileName: path.basename(outputPath),
+      size
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'EACCES' || code === 'EPERM'
+          ? 'temp-text-file-permission-denied'
+          : 'temp-text-file-write-failed',
+      message: code === 'EACCES' || code === 'EPERM' ? '没有权限写入临时文件' : '写入临时文件失败'
+    }
+  }
+}
+
+export async function createTempDirectory(input: string): Promise<
+  | QuickOpsTempDirectoryInfo
+  | {
+      degradedReason: string
+      message: string
+    }
+> {
+  try {
+    const outputDir = await ensureQuickOpsTempDir()
+    const directoryName = sanitizeTempDirectoryName(input) || `scratch-${Date.now()}`
+    const outputPath = path.join(outputDir, directoryName)
+    await mkdir(outputPath, { recursive: false })
+    return {
+      path: outputPath,
+      directoryName
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      degradedReason:
+        code === 'EACCES' || code === 'EPERM'
+          ? 'temp-directory-permission-denied'
+          : 'temp-directory-create-failed',
+      message: code === 'EACCES' || code === 'EPERM' ? '没有权限创建临时目录' : '创建临时目录失败'
+    }
+  }
+}
+
+async function ensureQuickOpsTempDir(): Promise<string> {
+  const outputDir = path.join(app.getPath('temp'), 'tuff-quickops')
+  await mkdir(outputDir, { recursive: true })
+  return outputDir
+}
+
+function sanitizeTempDirectoryName(input: string): string {
+  return input
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64)
+}
+
+function isValidBase64Payload(value: string): boolean {
+  return value.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(value)
+}
+
+function parseFilesInput(raw: string): string[] {
+  const trimmed = raw.trim()
+  if (!trimmed) return []
+
+  if (trimmed.startsWith('[') || trimmed.startsWith('"')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === 'string')
+      }
+      if (typeof parsed === 'string') return [parsed]
+    } catch {
+      return []
+    }
+  }
+
+  return [trimmed]
+}
+
+function resolveFirstFilesInputPath(query: TuffQuery): string | null {
+  return resolveFilesInputPaths(query)[0] ?? null
+}
+
+function resolveFilesInputPaths(query: TuffQuery): string[] {
+  const fileInputs = query.inputs?.filter((input) => input.type === TuffInputType.Files) ?? []
+  for (const input of fileInputs) {
+    const paths = parseFilesInput(input.content)
+    const selected = paths.filter((item) => item.trim())
+    if (selected.length > 0) return selected
+  }
+  return []
+}
+
+function stripFileHashCommand(rawText: string): string {
+  const text = rawText.trim()
+  const fileHashCommandPattern =
+    /^(?:file\s+hash|hash\s+file|hash|checksum|sha256|sha1|md5|文件\s*hash|计算\s*hash|校验和)(?=\s|:|：|-|$)/i
+  const match = fileHashCommandPattern.exec(text)
+  if (!match) return ''
+
+  return stripCommandSeparators(text.slice(match[0].length))
+}
+
+function stripFileBase64Command(rawText: string): string {
+  const text = rawText.trim()
+  const fileBase64CommandPattern =
+    /^(?:file\s+base64|base64\s+file|base64\s+encode\s+file|encode\s+file\s+base64|文件\s*base64|base64\s*文件|base64编码文件|文件转\s*base64)(?=\s|:|：|-|$)/i
+  const match = fileBase64CommandPattern.exec(text)
+  if (!match) return ''
+
+  return stripCommandSeparators(text.slice(match[0].length))
+}
+
+function stripFileBase64DecodeCommand(rawText: string): string {
+  const text = rawText.trim()
+  const fileBase64DecodeCommandPattern =
+    /^(?:file\s+base64\s+decode|base64\s+decode\s+file|decode\s+file\s+base64|decode\s+base64\s+file|base64\s*解码文件|文件\s*base64\s*解码)(?=\s|:|：|-|$)/i
+  const match = fileBase64DecodeCommandPattern.exec(text)
+  if (!match) return ''
+
+  return stripCommandSeparators(text.slice(match[0].length))
+}
+
+function stripFilePathCommand(rawText: string): string {
+  const text = rawText.trim()
+  const filePathCommandPattern =
+    /^(?:copy\s+file\s+path|copy\s+path|file\s+path|path\s+format|复制文件路径|复制路径|文件路径|路径格式)(?=\s|:|：|-|$)/i
+  const match = filePathCommandPattern.exec(text)
+  if (!match) return ''
+
+  return stripCommandSeparators(text.slice(match[0].length))
+}
+
+function stripTempTextFileCommand(rawText: string): string {
+  const text = rawText.trim()
+  const tempTextCommandPattern =
+    /^(?:scratch\s+note|temp\s+text(?:\s+file)?|temporary\s+text\s+file|new\s+temp\s+text|new\s+scratch\s+note|临时文本(?:文件)?|新建临时文本|草稿文本|临时便签)(?=\s|:|：|-|$)/i
+  const match = tempTextCommandPattern.exec(text)
+  if (!match) return ''
+
+  return stripCommandSeparators(text.slice(match[0].length))
+}
+
+function stripTempDirectoryCommand(rawText: string): string {
+  const text = rawText.trim()
+  const tempDirectoryCommandPattern =
+    /^(?:temp\s+(?:dir|directory|folder)|temporary\s+(?:directory|folder)|new\s+temp\s+(?:dir|folder)|临时目录|临时文件夹|新建临时目录|创建临时目录)(?=\s|:|：|-|$)/i
+  const match = tempDirectoryCommandPattern.exec(text)
+  if (!match) return ''
+
+  return stripCommandSeparators(text.slice(match[0].length))
+}
+
+function stripCommandSeparators(value: string): string {
+  const stripped = value.replace(/^(?::|：|-|->)?\s*/, '').trim()
+  if (
+    (stripped.startsWith('"') && stripped.endsWith('"')) ||
+    (stripped.startsWith("'") && stripped.endsWith("'"))
+  ) {
+    return stripped.slice(1, -1)
+  }
+  return stripped
+}
+
+function escapeShellPath(filePath: string): string {
+  return `'${filePath.replace(/'/g, "'\\''")}'`
+}
+
+function getFilePathDisplayName(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  return path.posix.basename(normalized) || filePath
+}
+
+function convertWindowsPathToWslPath(filePath: string): string | undefined {
+  const match = /^([a-zA-Z]):[\\/](.*)$/.exec(filePath)
+  if (!match) return undefined
+
+  const drive = match[1].toLowerCase()
+  const rest = match[2].replace(/\\/g, '/')
+  return `/mnt/${drive}/${rest}`
+}
+
+function convertWslPathToWindowsPath(filePath: string): string | undefined {
+  const match = /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/.exec(filePath)
+  if (!match) return undefined
+
+  const drive = match[1].toUpperCase()
+  const rest = match[2]?.replace(/\//g, '\\') ?? ''
+  return rest ? `${drive}:\\${rest}` : `${drive}:\\`
+}
+
+function redactProxyValue(value: string): string {
+  try {
+    const parsed = new URL(value)
+    if (parsed.host || parsed.username || parsed.password) {
+      if (parsed.username) parsed.username = '***'
+      if (parsed.password) parsed.password = '***'
+      return parsed.toString()
+    }
+  } catch {
+    // Fall through to non-URL proxy formats such as host lists and Windows ProxyServer values.
+  }
+
+  const redactedInlineCredentials = value.replace(/([=;]|^)([^=;@\s]+):([^=;@\s]+)@/g, '$1***:***@')
+  if (redactedInlineCredentials !== value) return redactedInlineCredentials
+
+  return value.replace(/^([^@\s]+)@/, '***@')
+}
+
+function appendMacProxyEntry(
+  entries: QuickOpsSystemProxyEntry[],
+  values: Map<string, string>,
+  name: string,
+  enabledKey: string,
+  hostKey: string,
+  portKey: string
+): void {
+  if (values.get(enabledKey) !== '1') return
+
+  const host = values.get(hostKey)
+  const port = values.get(portKey)
+  entries.push({
+    source: 'macos-system',
+    name,
+    value: redactProxyHostPort(host, port)
+  })
+}
+
+function redactProxyHostPort(host: string | undefined, port: string | undefined): string {
+  if (!host) return 'enabled'
+  const redactedHost = redactProxyValue(host)
+  return port ? `${redactedHost}:${port}` : redactedHost
+}
+
+function isTruthyProxyFlag(value: number | boolean | string | undefined): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') return ['1', 'true'].includes(value.trim().toLowerCase())
+  return false
+}
+
+function clampBatteryLevel(value: number): number | null {
+  if (!Number.isFinite(value)) return null
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+function isWindowsBatteryCharging(status: number | undefined): boolean | null {
+  if (status === undefined) return null
+  return [2, 6, 7, 8, 9, 11].includes(status)
+}
+
+function isChargingBatteryStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase()
+  return [
+    'ac',
+    'charged',
+    'charging',
+    'finishing charge',
+    'full',
+    'fully charged',
+    'not charging'
+  ].includes(normalized)
+}
+
+function windowsBatteryStatusToText(status: number | undefined): string {
+  const labels: Record<number, string> = {
+    1: 'Discharging',
+    2: 'AC',
+    3: 'Fully Charged',
+    4: 'Low',
+    5: 'Critical',
+    6: 'Charging',
+    7: 'Charging and High',
+    8: 'Charging and Low',
+    9: 'Charging and Critical',
+    10: 'Undefined',
+    11: 'Partially Charged'
+  }
+  return status === undefined ? 'unknown' : (labels[status] ?? `Unknown (${status})`)
+}
+
+function redactHomePath(value: string): string {
+  const home = homedir()
+  if (!home || value === home) return value === home ? '~' : value
+
+  const relative = path.relative(home, value)
+  if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) {
+    return path.join('~', relative)
+  }
+  return value
+}
+
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = size / 1024
+  for (const unit of units) {
+    if (value < 1024) return `${value.toFixed(value >= 10 ? 1 : 2)} ${unit}`
+    value /= 1024
+  }
+  return `${value.toFixed(1)} PB`
+}
+
+function formatBytes(size: number): string {
+  if (!Number.isFinite(size) || size < 0) return 'unknown'
+  if (size < 1024) return `${size} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = size / 1024
+  for (const unit of units) {
+    if (value < 1024) return `${value.toFixed(value >= 10 ? 1 : 2)} ${unit}`
+    value /= 1024
+  }
+  return `${value.toFixed(1)} PB`
+}
+
+export function parseQuickOpsQuery(
+  rawText: string,
+  settings: QuickOpsResolvedSettings = getQuickOpsResolvedSettings()
+): ParsedQuickOpsQuery | null {
+  const text = rawText.trim()
+  if (!text) return null
+  const normalized = text.toLowerCase()
+
+  if (matchesKeyword(normalized, KEEP_AWAKE_STOP_KEYWORDS)) {
+    return { action: 'keep-awake-stop' }
+  }
+  if (matchesKeyword(normalized, SYSTEM_AWAKE_STOP_KEYWORDS)) {
+    return { action: 'system-awake-stop' }
+  }
+  if (matchesKeyword(normalized, KEEP_AWAKE_EXTEND_KEYWORDS)) {
+    return {
+      action: 'keep-awake-extend',
+      durationMs: parseDurationMs(normalized) ?? DEFAULT_KEEP_AWAKE_EXTEND_DURATION_MS
+    }
+  }
+  if (matchesKeyword(normalized, TIMER_STOP_KEYWORDS)) {
+    return { action: 'timer-stop' }
+  }
+  if (matchesKeyword(normalized, TIMER_PAUSE_KEYWORDS)) {
+    return { action: 'timer-pause' }
+  }
+  if (matchesKeyword(normalized, TIMER_RESUME_KEYWORDS)) {
+    return { action: 'timer-resume' }
+  }
+  if (matchesKeyword(normalized, POMODORO_STOP_KEYWORDS)) {
+    return { action: 'pomodoro-stop' }
+  }
+  if (matchesKeyword(normalized, POMODORO_PAUSE_KEYWORDS)) {
+    return { action: 'pomodoro-pause' }
+  }
+  if (matchesKeyword(normalized, POMODORO_RESUME_KEYWORDS)) {
+    return { action: 'pomodoro-resume' }
+  }
+  if (matchesKeyword(normalized, SCREEN_CLEAN_STOP_KEYWORDS)) {
+    return { action: 'screen-clean-stop' }
+  }
+  if (matchesKeyword(normalized, STOPWATCH_PAUSE_KEYWORDS)) {
+    return { action: 'stopwatch-pause' }
+  }
+  if (matchesKeyword(normalized, STOPWATCH_RESUME_KEYWORDS)) {
+    return { action: 'stopwatch-resume' }
+  }
+  if (matchesKeyword(normalized, STOPWATCH_LAP_KEYWORDS)) {
+    return { action: 'stopwatch-lap' }
+  }
+  if (matchesKeyword(normalized, STOPWATCH_RESET_KEYWORDS)) {
+    return { action: 'stopwatch-reset' }
+  }
+  if (matchesKeyword(normalized, TIMER_EXTEND_KEYWORDS)) {
+    return {
+      action: 'timer-extend',
+      durationMs: parseDurationMs(normalized) ?? settings.defaultTimerExtendMs
+    }
+  }
+  if (matchesKeyword(normalized, KEEP_AWAKE_KEYWORDS)) {
+    return {
+      action: 'keep-awake-start',
+      durationMs: parseDurationMs(normalized) ?? settings.defaultKeepAwakeDurationMs
+    }
+  }
+  if (matchesKeyword(normalized, SYSTEM_AWAKE_KEYWORDS)) {
+    return {
+      action: 'system-awake-start',
+      durationMs: parseDurationMs(normalized) ?? settings.defaultSystemAwakeDurationMs
+    }
+  }
+  if (matchesKeyword(normalized, TIMER_KEYWORDS)) {
+    return {
+      action: 'timer-start',
+      durationMs: parseDurationMs(normalized) ?? settings.defaultTimerDurationMs
+    }
+  }
+  const customPomodoroTemplate = parseCustomPomodoroTemplate(normalized, settings)
+  if (customPomodoroTemplate) {
+    return {
+      action: 'pomodoro-start',
+      ...customPomodoroTemplate,
+      pomodoroMode: 'cycle'
+    }
+  }
+  if (matchesKeyword(normalized, POMODORO_CYCLE_KEYWORDS)) {
+    return {
+      action: 'pomodoro-start',
+      ...parsePomodoroCycle(normalized, settings)
+    }
+  }
+  if (matchesKeyword(normalized, POMODORO_CUSTOM_TEMPLATE_KEYWORDS)) {
+    return {
+      action: 'pomodoro-start',
+      ...parsePomodoroCycle(normalized, settings)
+    }
+  }
+  if (matchesKeyword(normalized, POMODORO_KEYWORDS)) {
+    const durationParts = parseDurationPartsMs(normalized)
+    const template = parsePomodoroTemplate(normalized, settings)
+    if (durationParts.length >= 2 || template) {
+      return {
+        action: 'pomodoro-start',
+        ...parsePomodoroCycle(normalized, settings)
+      }
+    }
+
+    return {
+      action: 'pomodoro-start',
+      durationMs: durationParts[0] ?? settings.defaultPomodoroFocusMs
+    }
+  }
+  if (matchesKeyword(normalized, SCREEN_CLEAN_KEYWORDS)) {
+    return {
+      action: 'screen-clean-start',
+      durationMs: parseDurationMs(normalized) ?? settings.defaultScreenCleanDurationMs,
+      screenMode: parseScreenCleanMode(normalized, settings.defaultScreenCleanMode)
+    }
+  }
+  if (matchesKeyword(normalized, STOPWATCH_KEYWORDS)) {
+    return { action: 'stopwatch-start' }
+  }
+
+  return null
+}
+
+function matchesKeyword(text: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => text.includes(keyword))
+}
+
+function parseScreenCleanMode(
+  text: string,
+  defaultMode: QuickOpsScreenCleanMode
+): QuickOpsScreenCleanMode {
+  if (matchesKeyword(text, SCREEN_CLEAN_WHITE_KEYWORDS)) return 'white'
+  if (matchesKeyword(text, ['black', 'dark', '黑色', '黑底'])) return 'black'
+  return defaultMode
+}
+
+const DURATION_PATTERN =
+  /(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s|小时|分钟|分|秒)/gi
+
+export function parseDurationMs(text: string): number | null {
+  const matches = parseDurationPartsMs(text)
+  if (matches.length === 0) return null
+
+  const total = matches.reduce((sum, durationMs) => sum + durationMs, 0)
+
+  return total > 0 ? total : null
+}
+
+export function parseDurationPartsMs(text: string): number[] {
+  const matches = Array.from(text.matchAll(DURATION_PATTERN))
+  const durations: number[] = []
+
+  for (const match of matches) {
+    const amount = Number(match[1])
+    const unit = (match[2] ?? '').toLowerCase()
+    if (!Number.isFinite(amount)) continue
+    if (unit === 'h' || unit.startsWith('hour') || unit.startsWith('hr') || unit === '小时') {
+      durations.push(amount * 60 * 60 * 1000)
+    } else if (unit === 'm' || unit.startsWith('min') || unit === '分钟' || unit === '分') {
+      durations.push(amount * 60 * 1000)
+    } else {
+      durations.push(amount * 1000)
+    }
+  }
+
+  return durations.filter((durationMs) => durationMs > 0)
+}
+
+function parsePomodoroCycle(
+  text: string,
+  settings: QuickOpsResolvedSettings = getQuickOpsResolvedSettings()
+): ParsedPomodoroCycle {
+  const durationParts = parseDurationPartsMs(text)
+  const template = parsePomodoroTemplate(text, settings)
+
+  return {
+    durationMs: durationParts[0] ?? template?.durationMs ?? settings.defaultPomodoroFocusMs,
+    breakDurationMs:
+      durationParts[1] ?? template?.breakDurationMs ?? settings.defaultPomodoroBreakMs,
+    pomodoroCycles: parsePomodoroCycles(text),
+    ...parsePomodoroLongBreak(text),
+    pomodoroMode: 'cycle'
+  }
+}
+
+function parsePomodoroCycles(text: string): number | undefined {
+  const match = text.match(
+    /(?:^|[^\d])(?<cycles>\d{1,2})\s*(?:rounds?|cycles?|sets?|轮|次)(?:[^\d]|$)/i
+  )
+  const cycles = Number(match?.groups?.cycles)
+  if (!Number.isInteger(cycles) || cycles < 1 || cycles > 12) return undefined
+  return cycles
+}
+
+function parsePomodoroLongBreak(
+  text: string
+): Pick<ParsedPomodoroCycle, 'pomodoroLongBreakMs' | 'pomodoroLongBreakEvery'> {
+  const durationMatch = text.match(
+    /(?:long\s+break|longbreak|长休息|长间歇|长暂停)\s*(?<amount>\d+(?:\.\d+)?)\s*(?<unit>hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s|小时|分钟|分|秒)/i
+  )
+  if (!durationMatch?.groups) return {}
+
+  const amount = Number(durationMatch.groups.amount)
+  const unit = durationMatch.groups.unit.toLowerCase()
+  if (!Number.isFinite(amount) || amount <= 0) return {}
+
+  const durationMs = parseDurationPartsMs(`${amount}${unit}`)[0] ?? 0
+  if (durationMs < 60 * 1000 || durationMs > 60 * 60 * 1000) return {}
+
+  const everyMatch = text.match(
+    /(?:every|each|per|after|每|每隔)\s*(?<cycles>\d{1,2})\s*(?:rounds?|cycles?|sets?|轮|次)?/i
+  )
+  const every = Number(everyMatch?.groups?.cycles)
+  if (!Number.isInteger(every) || every < 2 || every > 12) return {}
+
+  return {
+    pomodoroLongBreakMs: durationMs,
+    pomodoroLongBreakEvery: every
+  }
+}
+
+function readQuickOpsSettings(): AppSetting['quickOps'] | undefined {
+  return (getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined)?.quickOps
+}
+
+function getQuickOpsResolvedSettings(settings?: QuickOpsSettingsInput): QuickOpsResolvedSettings {
+  return {
+    enabled: settings?.enabled !== false,
+    showRunningSessionsInCoreBox: settings?.showRunningSessionsInCoreBox !== false,
+    defaultKeepAwakeDurationMs: minutesToMs(
+      settings?.defaultKeepAwakeDurationMinutes,
+      DEFAULT_KEEP_AWAKE_DURATION_MS
+    ),
+    defaultSystemAwakeDurationMs: minutesToMs(
+      settings?.defaultSystemAwakeDurationMinutes,
+      DEFAULT_SYSTEM_AWAKE_DURATION_MS
+    ),
+    defaultTimerDurationMs: minutesToMs(
+      settings?.defaultTimerDurationMinutes,
+      DEFAULT_TIMER_DURATION_MS
+    ),
+    defaultTimerExtendMs: minutesToMs(
+      settings?.defaultTimerExtendMinutes,
+      DEFAULT_TIMER_EXTEND_DURATION_MS
+    ),
+    defaultPomodoroFocusMs: minutesToMs(
+      settings?.defaultPomodoroFocusMinutes,
+      DEFAULT_POMODORO_DURATION_MS
+    ),
+    defaultPomodoroBreakMs: minutesToMs(
+      settings?.defaultPomodoroBreakMinutes,
+      DEFAULT_POMODORO_BREAK_DURATION_MS
+    ),
+    pomodoroTemplates: {
+      classic: settings?.pomodoroTemplates?.classic !== false,
+      long: settings?.pomodoroTemplates?.long !== false,
+      custom: normalizeCustomPomodoroTemplates(settings?.pomodoroTemplates?.custom)
+    },
+    defaultScreenCleanDurationMs: secondsToMs(
+      settings?.defaultScreenCleanDurationSeconds,
+      DEFAULT_SCREEN_CLEAN_DURATION_MS
+    ),
+    defaultScreenCleanMode: settings?.defaultScreenCleanMode === 'white' ? 'white' : 'black',
+    allowPublicIpLookup: settings?.allowPublicIpLookup === true
+  }
+}
+
+function minutesToMs(value: unknown, fallbackMs: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallbackMs
+  return Math.max(1_000, value * 60 * 1000)
+}
+
+function secondsToMs(value: unknown, fallbackMs: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallbackMs
+  return Math.max(1_000, value * 1000)
+}
+
+function parsePomodoroTemplate(
+  text: string,
+  settings: QuickOpsResolvedSettings = getQuickOpsResolvedSettings()
+): Pick<ParsedPomodoroCycle, 'durationMs' | 'breakDurationMs'> | null {
+  const customTemplate = parseCustomPomodoroTemplate(text, settings)
+  if (customTemplate) return customTemplate
+
+  if (
+    settings.pomodoroTemplates.classic &&
+    matchesKeyword(text, ['classic pomodoro', 'standard pomodoro', '经典番茄钟'])
+  ) {
+    return toPomodoroTemplate(25, 5)
+  }
+  if (
+    settings.pomodoroTemplates.long &&
+    matchesKeyword(text, ['long pomodoro', 'deep pomodoro', '长番茄钟'])
+  ) {
+    return toPomodoroTemplate(50, 10)
+  }
+
+  const customMatch = text.match(
+    /(?:custom pomodoro|pomodoro custom|自定义番茄钟|番茄钟自定义|自定义番茄模板)[^\d]*(?<focus>\d{1,3})\s*[\/／]\s*(?<break>\d{1,2})(?:[^\d]|$)/
+  )
+  if (customMatch?.groups) {
+    const focusMinutes = Number(customMatch.groups.focus)
+    const breakMinutes = Number(customMatch.groups.break)
+    if (isValidPomodoroTemplate(focusMinutes, breakMinutes)) {
+      return toPomodoroTemplate(focusMinutes, breakMinutes)
+    }
+  }
+
+  const match = text.match(/(?:^|[^\d])(?<focus>25|50)\s*[\/／]\s*(?<break>5|10)(?:[^\d]|$)/)
+  if (!match?.groups) return null
+
+  const focusMinutes = Number(match.groups.focus)
+  const breakMinutes = Number(match.groups.break)
+  if (focusMinutes === 25 && breakMinutes === 5 && settings.pomodoroTemplates.classic) {
+    return toPomodoroTemplate(25, 5)
+  }
+  if (focusMinutes === 50 && breakMinutes === 10 && settings.pomodoroTemplates.long) {
+    return toPomodoroTemplate(50, 10)
+  }
+  return null
+}
+
+function parseCustomPomodoroTemplate(
+  text: string,
+  settings: QuickOpsResolvedSettings = getQuickOpsResolvedSettings()
+): Pick<ParsedPomodoroCycle, 'durationMs' | 'breakDurationMs'> | null {
+  const customTemplate = settings.pomodoroTemplates.custom.find(
+    (template) =>
+      template.enabled &&
+      [template.name, ...template.aliases].some((keyword) =>
+        matchesPomodoroTemplateKeyword(text, keyword)
+      )
+  )
+  if (!customTemplate) return null
+
+  return toPomodoroTemplate(customTemplate.focusMinutes, customTemplate.breakMinutes)
+}
+
+function normalizeCustomPomodoroTemplates(value: unknown): QuickOpsCustomPomodoroTemplate[] {
+  if (!Array.isArray(value)) return []
+
+  const templates: QuickOpsCustomPomodoroTemplate[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    const name = typeof record.name === 'string' ? record.name.trim() : ''
+    const aliases = Array.isArray(record.aliases)
+      ? record.aliases
+          .filter((alias): alias is string => typeof alias === 'string')
+          .map((alias) => alias.trim())
+          .filter(Boolean)
+      : []
+    const focusMinutes = Number(record.focusMinutes)
+    const breakMinutes = Number(record.breakMinutes)
+    if (!name || !isValidPomodoroTemplate(focusMinutes, breakMinutes)) continue
+
+    templates.push({
+      name,
+      aliases: aliases.slice(0, 6),
+      focusMinutes,
+      breakMinutes,
+      enabled: record.enabled !== false
+    })
+    if (templates.length >= 8) break
+  }
+  return templates
+}
+
+function matchesPomodoroTemplateKeyword(text: string, keyword: string): boolean {
+  const normalizedKeyword = keyword.trim().toLowerCase()
+  if (!normalizedKeyword) return false
+  return new RegExp(`(?:^|\\s)${escapeRegExp(normalizedKeyword)}(?:\\s|$)`, 'i').test(text)
+}
+
+function isValidPomodoroTemplate(focusMinutes: number, breakMinutes: number): boolean {
+  return (
+    Number.isInteger(focusMinutes) &&
+    Number.isInteger(breakMinutes) &&
+    focusMinutes >= 1 &&
+    focusMinutes <= 180 &&
+    breakMinutes >= 1 &&
+    breakMinutes <= 60
+  )
+}
+
+function toPomodoroTemplate(
+  focusMinutes: number,
+  breakMinutes: number
+): Pick<ParsedPomodoroCycle, 'durationMs' | 'breakDurationMs'> {
+  return {
+    durationMs: focusMinutes * 60 * 1000,
+    breakDurationMs: breakMinutes * 60 * 1000
+  }
+}
+
+function getActionTitle(parsed: ParsedQuickOpsQuery): string {
+  const { action, durationMs, screenMode } = parsed
+  switch (action) {
+    case 'keep-awake-start':
+      return `保持唤醒 ${formatDuration(durationMs ?? DEFAULT_KEEP_AWAKE_DURATION_MS)}`
+    case 'keep-awake-extend':
+      return `延长保持唤醒 ${formatDuration(durationMs ?? DEFAULT_KEEP_AWAKE_EXTEND_DURATION_MS)}`
+    case 'keep-awake-stop':
+      return '停止保持唤醒'
+    case 'system-awake-start':
+      return `防止系统睡眠 ${formatDuration(durationMs ?? DEFAULT_SYSTEM_AWAKE_DURATION_MS)}`
+    case 'system-awake-stop':
+      return '停止防止系统睡眠'
+    case 'timer-start':
+      return `开始计时 ${formatDuration(durationMs ?? DEFAULT_TIMER_DURATION_MS)}`
+    case 'timer-extend':
+      return `延长计时 ${formatDuration(durationMs ?? DEFAULT_TIMER_EXTEND_DURATION_MS)}`
+    case 'timer-pause':
+      return '暂停计时器'
+    case 'timer-resume':
+      return '继续计时器'
+    case 'timer-stop':
+      return '停止计时器'
+    case 'pomodoro-start':
+      if (parsed.pomodoroMode === 'cycle') {
+        return `开始循环番茄钟 ${formatDuration(durationMs ?? DEFAULT_POMODORO_DURATION_MS)} / ${formatDuration(parsed.breakDurationMs ?? DEFAULT_POMODORO_BREAK_DURATION_MS)}休息${formatPomodoroCyclesSuffix(parsed.pomodoroCycles)}${formatPomodoroLongBreakSuffix(parsed)}`
+      }
+      return `开始番茄钟 ${formatDuration(durationMs ?? DEFAULT_POMODORO_DURATION_MS)}`
+    case 'pomodoro-pause':
+      return '暂停番茄钟'
+    case 'pomodoro-resume':
+      return '继续番茄钟'
+    case 'pomodoro-stop':
+      return '停止番茄钟'
+    case 'screen-clean-start':
+      return `${screenMode === 'white' ? '白底' : '黑底'}清洁屏幕 ${formatDuration(durationMs ?? DEFAULT_SCREEN_CLEAN_DURATION_MS)}`
+    case 'screen-clean-stop':
+      return '退出清洁屏幕'
+    case 'stopwatch-start':
+      return '开始秒表'
+    case 'stopwatch-pause':
+      return '暂停秒表'
+    case 'stopwatch-resume':
+      return '继续秒表'
+    case 'stopwatch-lap':
+      return '记录秒表分段'
+    case 'stopwatch-reset':
+      return '重置秒表'
+  }
+}
+
+function getActionSubtitle(parsed: ParsedQuickOpsQuery): string {
+  const { action, durationMs, screenMode } = parsed
+  switch (action) {
+    case 'keep-awake-start':
+      return `QuickOps · 防止屏幕关闭，到期后自动恢复`
+    case 'keep-awake-extend':
+      return 'QuickOps · 有运行会话时延长剩余时间，否则按该时长开启'
+    case 'keep-awake-stop':
+      return 'QuickOps · 停止当前保持唤醒会话'
+    case 'system-awake-start':
+      return 'QuickOps · 防止系统暂停应用，到期后自动恢复'
+    case 'system-awake-stop':
+      return 'QuickOps · 停止当前防止系统睡眠会话'
+    case 'timer-start':
+      return `QuickOps Timer · ${formatDuration(durationMs ?? DEFAULT_TIMER_DURATION_MS)} 后到期`
+    case 'timer-extend':
+      return 'QuickOps Timer · 有运行计时器时延长剩余时间，否则按该时长开启'
+    case 'timer-pause':
+      return 'QuickOps Timer · 暂停当前计时器并保留剩余时间'
+    case 'timer-resume':
+      return 'QuickOps Timer · 按暂停前剩余时间继续计时'
+    case 'timer-stop':
+      return 'QuickOps Timer · 停止当前计时器'
+    case 'pomodoro-start':
+      if (parsed.pomodoroMode === 'cycle') {
+        return `QuickOps Pomodoro · ${formatDuration(durationMs ?? DEFAULT_POMODORO_DURATION_MS)} 专注与 ${formatDuration(parsed.breakDurationMs ?? DEFAULT_POMODORO_BREAK_DURATION_MS)} 休息${parsed.pomodoroCycles ? `循环 ${parsed.pomodoroCycles} 轮` : '自动循环'}${formatPomodoroLongBreakSubtitle(parsed)}`
+      }
+      return `QuickOps Pomodoro · ${formatDuration(durationMs ?? DEFAULT_POMODORO_DURATION_MS)} 专注计时`
+    case 'pomodoro-pause':
+      return 'QuickOps Pomodoro · 暂停当前番茄钟并保留剩余时间'
+    case 'pomodoro-resume':
+      return 'QuickOps Pomodoro · 按暂停前剩余时间继续专注'
+    case 'pomodoro-stop':
+      return 'QuickOps Pomodoro · 停止当前番茄钟'
+    case 'screen-clean-start':
+      return `QuickOps Screen · 打开${screenMode === 'white' ? '白底' : '黑底'}全屏遮罩，到期自动退出`
+    case 'screen-clean-stop':
+      return 'QuickOps Screen · 关闭当前清洁屏幕遮罩'
+    case 'stopwatch-start':
+      return 'QuickOps Stopwatch · 开始记录经过时间'
+    case 'stopwatch-pause':
+      return 'QuickOps Stopwatch · 暂停当前秒表'
+    case 'stopwatch-resume':
+      return 'QuickOps Stopwatch · 继续当前秒表'
+    case 'stopwatch-lap':
+      return 'QuickOps Stopwatch · 记录当前分段时间'
+    case 'stopwatch-reset':
+      return 'QuickOps Stopwatch · 停止并清空当前秒表'
+  }
+}
+
+function getActionIcon(action: QuickOpsAction): string {
+  if (action.startsWith('keep-awake')) return 'i-carbon-cafe'
+  if (action.startsWith('system-awake')) return 'i-carbon-power'
+  if (action.startsWith('stopwatch')) return 'i-carbon-stopwatch'
+  if (action.startsWith('pomodoro')) return 'i-carbon-timer'
+  if (action.startsWith('screen-clean')) return 'i-carbon-screen'
+  return 'i-carbon-timer'
+}
+
+function getSessionRemainingMs(session: QuickOpsSession): number {
+  return getSessionDisplayDurationMs(session)
+}
+
+function getStopAction(kind: QuickOpsSessionKind): QuickOpsAction {
+  switch (kind) {
+    case 'keep-awake':
+      return 'keep-awake-stop'
+    case 'system-awake':
+      return 'system-awake-stop'
+    case 'timer':
+      return 'timer-stop'
+    case 'pomodoro':
+      return 'pomodoro-stop'
+    case 'screen-clean':
+      return 'screen-clean-stop'
+    case 'stopwatch':
+      return 'stopwatch-reset'
+  }
+}
+
+function getSessionIcon(kind: QuickOpsSessionKind): string {
+  switch (kind) {
+    case 'keep-awake':
+      return 'i-carbon-cafe'
+    case 'system-awake':
+      return 'i-carbon-power'
+    case 'timer':
+      return 'i-carbon-timer'
+    case 'pomodoro':
+      return 'i-carbon-timer'
+    case 'screen-clean':
+      return 'i-carbon-screen'
+    case 'stopwatch':
+      return 'i-carbon-stopwatch'
+  }
+}
+
+function getSessionStopLabel(kind: QuickOpsSessionKind): string {
+  switch (kind) {
+    case 'keep-awake':
+      return '停止保持唤醒'
+    case 'system-awake':
+      return '停止防止系统睡眠'
+    case 'timer':
+      return '停止计时器'
+    case 'pomodoro':
+      return '停止番茄钟'
+    case 'screen-clean':
+      return '退出清洁屏幕'
+    case 'stopwatch':
+      return '重置秒表'
+  }
+}
+
+function formatLapSummary(session: QuickOpsSession): string {
+  const laps = session.laps ?? []
+  if (session.kind !== 'stopwatch' || laps.length === 0) return ''
+  return ` · 分段 ${laps.length} · 最近 ${formatDuration(laps[laps.length - 1] ?? 0)}`
+}
+
+function formatPomodoroCyclesSuffix(cycles: number | undefined): string {
+  return cycles ? ` · ${cycles}轮` : ''
+}
+
+function formatPomodoroLongBreakSuffix(parsed: ParsedQuickOpsQuery): string {
+  if (!parsed.pomodoroLongBreakMs || !parsed.pomodoroLongBreakEvery) return ''
+  return ` · 每${parsed.pomodoroLongBreakEvery}轮长休息${formatDuration(parsed.pomodoroLongBreakMs)}`
+}
+
+function formatPomodoroLongBreakSubtitle(parsed: ParsedQuickOpsQuery): string {
+  if (!parsed.pomodoroLongBreakMs || !parsed.pomodoroLongBreakEvery) return ''
+  return `，每 ${parsed.pomodoroLongBreakEvery} 轮长休息 ${formatDuration(parsed.pomodoroLongBreakMs)}`
+}
+
+function formatPomodoroCycleSummary(session: QuickOpsSession): string {
+  const pomodoro = session.pomodoro
+  if (!pomodoro?.totalCycles) return ''
+  return ` · 第 ${pomodoro.cycle}/${pomodoro.totalCycles} 轮`
+}
+
+function appendDnsRecordResults(
+  records: QuickOpsDnsRecord[],
+  failedTypes: QuickOpsDnsRecordType[],
+  type: QuickOpsDnsRecordType,
+  result:
+    | PromiseSettledResult<
+        string[] | string[][] | Array<{ exchange: string; priority: number }> | { nsname: string }
+      >
+    | undefined
+): void {
+  if (!result || result.status === 'rejected') {
+    failedTypes.push(type)
+    return
+  }
+
+  if (type === 'SOA') {
+    const value = (result.value as { nsname?: string }).nsname
+    if (!value) {
+      failedTypes.push(type)
+      return
+    }
+    records.push({ type, value })
+    return
+  }
+
+  if ((result.value as unknown[]).length === 0) {
+    failedTypes.push(type)
+    return
+  }
+
+  if (type === 'MX') {
+    ;(result.value as Array<{ exchange: string; priority: number }>).forEach((record) => {
+      records.push({
+        type,
+        value: record.exchange,
+        priority: record.priority
+      })
+    })
+    return
+  }
+
+  if (type === 'TXT') {
+    ;(result.value as string[][]).forEach((record) => {
+      records.push({ type, value: record.join('') })
+    })
+    return
+  }
+
+  ;(result.value as string[]).forEach((value) => {
+    records.push({ type, value })
+  })
+}
+
+function getDnsRecordTypes(deep: boolean): QuickOpsDnsRecordType[] {
+  return deep ? DEEP_DNS_RECORD_TYPES : BASIC_DNS_RECORD_TYPES
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+export const quickOpsProvider = new QuickOpsProvider()
