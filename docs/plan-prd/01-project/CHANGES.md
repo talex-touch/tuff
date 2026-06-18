@@ -1,9 +1,287 @@
 # 变更日志
 
-> 更新时间：2026-06-18
+> 更新时间：2026-06-19
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-19
+
+### test(utils): tighten QuickOps PreviewSDK no-result boundaries
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Tightened UUID parsing so `uuid history` and other unknown UUID tail queries no longer generate random UUID values or trigger CoreApp PreviewProvider clipboard fallback.
+  - Added focused no-result coverage for unknown static currency codes and Regex queries missing the required `/pattern/flags` literal.
+  - Upgraded the PreviewSDK benchmark from 18 to 21 cases by adding these no-result boundaries as a standing fake-success regression gate.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 13 tests; `pnpm -C "packages/utils" run benchmark:preview` passed with 21/21 matched and 0 budget exceeded; scoped utils ESLint passed.
+  - This does not close QR Code, Flow/AI adapter, enterprise policy, real platform evidence, real port kill / confirmation UI or packaged app quit evidence.
+
 ## 2026-06-18
+
+### docs(ai): capture packaged CoreBox AI model-unsupported evidence
+
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-corebox-hotkey-capture.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-ask-provider-enabled-probe.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-ask-provider-enabled-after-enter.png`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-ask-runtime-permission-denied-probe.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-ask-runtime-permission-denied-after-enter.png`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+  - Proved the packaged CoreBox entry path with packaged app + isolated userData + CDP + `Command+E`; the captured target has `bodyClass: "MacIntel core-box"` and `inputIdExists: true`.
+  - Preseeded only the temporary isolated profile with `touch-intelligence`, plugin enablement, `search.root-results` / `intelligence.basic` grants, onboarding completion and `touch-intelligence.intelligence-ask` search-provider enablement; no real user profile was mutated.
+  - Captured a real packaged CoreBox AI Ask visible model/capability failure: `packaged-ai-ask-provider-enabled-after-enter.png` shows `NEXUS_STREAM_UNSUPPORTED` with a supported `text.chat / vision.ocr` capability recovery hint.
+  - Captured a real packaged CoreBox AI Ask runtime permission failure: after the plugin loaded, the probe revoked `intelligence.basic` through packaged renderer IPC and `packaged-ai-ask-runtime-permission-denied-after-enter.png` shows the permission recovery hint without entering Intelligence SDK provider invocation.
+  - Recorded the startup-time missing-permission blocker: when `intelligence.basic` is absent before plugin enablement, `touch-intelligence` is blocked before CoreBox AI Ask UI appears, so that run is not permission-denied UI evidence.
+  - Updated the manifest/checklist so `corebox-ai-ask` remains `pending` while the model/capability unsupported and permission-denied checklist items are checked.
+  - This does not close text/OCR success, logged-out, provider unavailable, quota exhausted or Local/Ollama routing evidence; strict visible-experience verification remains expected to fail until all required surfaces are passed.
+
+### feat(core-app): expose PreviewSDK primary result copy action
+
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a `preview-copy-primary` host `copy` action for preview items that expose `primaryValue`, so Action Panel can copy the PreviewSDK primary result directly.
+  - Kept existing execute semantics unchanged: executing the preview item still copies the primary value and records preview history.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/preview/preview-provider.test.ts"` passed with 1 file / 7 tests.
+  - This only closes the PreviewSDK primary-result copy affordance; it does not close QR Code, Flow/AI adapter, enterprise policy, true kill / confirmation UI, real platform evidence or packaged app quit evidence.
+
+### feat(utils): add QuickOps fixed-offset date and timezone previews
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `date` / `timezone` / `时区转换` handling to `QuickOpsDeveloperAbility`, producing local time, UTC, Unix seconds, Unix milliseconds and optional fixed `UTC±HH[:MM]` target output.
+  - Supports query input and text clipboard fallback, including the common command shape where the date comes from the clipboard and the query only supplies the target offset.
+  - Kept the boundary explicit: this is a pure local fixed-offset conversion and does not claim IANA timezone names or daylight-saving rules.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 12 tests; `pnpm -C "packages/utils" run benchmark:preview` passed with 17/17 matched and 0 budget exceeded.
+  - This does not close QR Code, Flow/AI adapter, enterprise policy, real platform evidence or packaged app quit evidence.
+
+### feat(utils): add static PreviewSDK currency fallback
+
+- `packages/utils/core-box/preview/abilities/currency-ability.ts`
+- `packages/utils/core-box/preview/abilities/index.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-inventory.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a pure `preview.currency` fallback to PreviewSDK using static offline exchange rates and shared aliases/symbols for quick estimation.
+  - Kept CoreApp's Nexus / cache-backed realtime currency adapter in place; CoreApp inventory now classifies currency by actual safety flags so the realtime adapter remains an adapter while the SDK fallback can be migrated.
+  - Added focused tests for direct currency execution and default registry matching, plus a `currency-static` benchmark case.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 12 tests; `pnpm -C "packages/utils" run benchmark:preview` passed with 18/18 matched and 0 budget exceeded; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/preview/preview-inventory.test.ts"` passed with 1 file / 2 tests.
+  - This does not close realtime FX evidence, QR Code, Flow/AI adapter, enterprise policy, real platform evidence or packaged app quit evidence.
+
+### feat(utils): add QuickOps Markdown and CSV table previews
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `markdown table`, `csv to markdown`, and `markdown to csv` to `QuickOpsDeveloperAbility`.
+  - The commands are pure local text transforms, support CoreBox query input and text clipboard fallback, and cap table size at 100 rows / 20 columns.
+  - CSV parsing supports quoted fields and escaped quotes for common table cleanup workflows; invalid CSV/Markdown table input returns error payloads instead of fake success.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 12 tests; `pnpm -C "packages/utils" run benchmark:preview` passed with 16/16 matched and 0 budget exceeded.
+  - This does not close QR Code, host copy-action support, Flow/AI adapter, enterprise policy, real platform evidence or packaged app quit evidence.
+
+### feat(utils): add bounded QuickOps Regex preview command
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `regex /pattern/flags text` / `正则 /pattern/ text` to `QuickOpsDeveloperAbility`.
+  - The command runs only local JavaScript `RegExp` matching, does not use network or dynamic code execution, and limits pattern length, target text length and displayed matches.
+  - Added guardrails for invalid patterns, overlong target text, obvious nested-quantifier backtracking risk and backreferences.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 12 tests; `pnpm -C "packages/utils" run benchmark:preview` passed with 15/15 matched and 0 budget exceeded.
+  - This does not close host copy-action support, QR Code, Flow/AI adapter, enterprise policy, real platform evidence or packaged app quit evidence.
+
+### feat(utils): add QuickOps JWT decode preview command
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `jwt decode` / `解析 JWT` / `解码 JWT` to `QuickOpsDeveloperAbility`.
+  - The command performs local Base64URL decode of JWT header and payload only; it does not verify signatures, does not accept secrets/keys, and marks `signatureVerified: false` in QuickOps metadata.
+  - Supports CoreBox query input and text clipboard fallback, returning formatted JSON rows for header and payload with clear error payloads for invalid JWT structure or invalid JSON.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 12 tests; `pnpm -C "packages/utils" run benchmark:preview` passed with 14/14 matched and 0 budget exceeded; scoped `git diff --check` passed.
+  - Scoped ESLint for the touched utils files remains blocked by pre-existing package-wide style rules in this area; this slice did not run a broad format-only rewrite.
+  - This does not close Regex testing, host copy-action support, QR Code, Flow/AI adapter, enterprise policy, real platform evidence or packaged app quit evidence.
+
+### feat(utils): add QuickOps short ID preview command
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `short id` / `短 ID` to `QuickOpsDeveloperAbility`, generating local URL-safe random IDs with `crypto.getRandomValues`.
+  - Supports optional 4-32 character length input, defaults to 10 characters, and returns an error payload when the runtime lacks `crypto.getRandomValues` or the requested length is out of range.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 12 tests; `pnpm -C "packages/utils" run benchmark:preview` passed with 14/14 matched and 0 budget exceeded.
+  - Scoped ESLint on the touched utils files is still blocked by pre-existing package-wide style rules in this area (double quotes / semicolons / import ordering across the whole file); no semantic lint failure specific to the short-ID path was found.
+  - This does not close host copy-action support, QR Code, Flow/AI adapter, enterprise policy, real platform evidence or packaged app quit evidence.
+
+### refactor(search): share tokenized app and feature matching utilities
+
+- `packages/utils/search/search-token-builder.ts`
+- `packages/utils/search/app-search-tokens.ts`
+- `packages/utils/search/feature-matcher.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/feature-search-tokens.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+  - Extracted reusable typed search-token builders into `@talex-touch/utils/search`, with pinyin supplied by CoreApp callers so the public utils package does not gain a hard `pinyin-pro` dependency.
+  - Rewired plugin Feature token generation to use the shared builder and upgraded App search to the same tokenized matcher path, covering display name, raw app name, alternate names, aliases, bundle/app identity, launch target, file name, path, description, pinyin and initials.
+  - App results now expose `searchTokens` and `matchAlias` metadata like Feature results, so localized app titles can be recalled by English app tokens such as `wechatw -> 微信开发者工具` without synthetic title highlights.
+  - Validation: `pnpm -C "packages/utils" exec vitest run "__tests__/search/feature-matcher.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/search-processing-service.test.ts"` passed; `pnpm -C "apps/core-app" run typecheck:node` passed; scoped `git diff --check` passed.
+
+### feat(core-app): add QuickOps temporary workspace files
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added QuickOps Files commands for local temporary workspace creation: `scratch note` / `临时文本` writes a `.txt` scratch note under `app.getPath('temp')/tuff-quickops`, and `temp dir` / `临时目录` creates a sanitized directory under the same Tuff temp root.
+  - Kept the write surface bounded and low risk: scratch note content is capped at 64KB, writes never target user-selected directories, paths are returned through open/copy actions, and write/create failures degrade to notifications.
+  - Added focused tests for scratch note creation, sanitized temp directory creation, and scratch note size-limit degradation.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed with 1 file / 87 tests; scoped ESLint passed; `pnpm -C "apps/core-app" run typecheck:node` passed.
+  - This does not close real platform write/open evidence, true port kill / confirmation UI, Flow/AI adapter, enterprise policy, visual evidence or packaged app quit evidence.
+
+### feat(core-app): add opt-in QuickOps public IP lookup
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a default-off `quickOps.allowPublicIpLookup` setting and exposed it only in advanced Tools settings, with invalid stored values normalized back to `false`.
+  - Added `public ip` / `公网 IP` handling to QuickOps Network: disabled mode returns a notification without calling external services; opt-in mode performs one read-only GET to `https://api.ipify.org?format=json`, validates the returned IP with `node:net.isIP`, and copies the address with source attribution.
+  - Added focused provider tests for disabled/no-fetch behavior, opt-in success, external service failure, invalid response degradation, plus renderer settings tests for the advanced switch and normalization.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed with 2 files / 88 tests; scoped ESLint passed; `pnpm -C "apps/core-app" run typecheck:node` passed; `pnpm -C "apps/core-app" run typecheck:web` passed.
+  - This does not close real external public-IP service evidence, real port kill / confirmation UI, real system proxy/open/file permission/troubleshooting/battery evidence, Flow/AI adapter, enterprise policy, visual evidence or packaged app quit evidence.
+
+### feat(core-app): add QuickOps pomodoro long break cycles
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-session-manager.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added bounded QuickOps pomodoro long-break parameters for cycle mode: `long break` / `长休息` supports a 1-60 minute long break every 2-12 cycles, while finite cycles still stop after the final focus segment without adding an extra break.
+  - Extended CoreBox action metadata, title/subtitle copy, runtime pomodoro state and focused tests to cover English and Chinese parsing plus long-break transition behavior.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed with 1 file / 81 tests.
+  - This does not close real visual/platform evidence, Flow/AI adapter, enterprise policy, true port kill or packaged app quit evidence.
+
+### docs(ai): archive AI Stable visible evidence capture preflight
+
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-strict-verify-output.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-readiness.json`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+  - Generated a fresh CoreApp visible-experience manifest/checklist for AI Stable capture and verified that the strict gate still fails because packaged Electron artifacts and checked evidence are missing.
+  - Archived readiness output: packaged artifact `apps/core-app/dist/mac-arm64/tuff.app` matches `2.4.12-beta.8`, browser-only smoke remains warning-only, Electron dev capture remote debugging is blocked, and macOS Screen Recording permission is unchecked.
+  - Probed the packaged app directly with isolated userData and `--remote-debugging-port=9342`; CDP targets and current-page screenshots were captured, proving the packaged CDP screenshot chain is usable.
+  - Kept all AI Stable evidence items open: the packaged CDP screenshots only show current app surfaces, not CoreBox AI text/OCR success, fixed failures, or Local/Ollama routing evidence.
+
+### test(core-app): align CoreBox AI visible evidence gate with AI Stable matrix
+
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+- `docs/plan-prd/04-implementation/Project-Roadmap-Audit-2026-06-18.md`
+  - Extended CoreBox AI Ask visible-experience requirements to match the AI Stable matrix by adding permission denied and Local/Ollama routing evidence alongside text, OCR, logged-out, provider unavailable, quota exhausted, and model unsupported paths.
+  - Added recommended artifacts for `corebox-ai-failure-permission-denied.png` and `corebox-ai-local-ollama-routing.png`, plus block conditions for permission-denied SDK invocation and disabled Nexus routing leaks.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/coreapp-visible-experience-evidence.test.ts"` passed with 1 file / 9 tests.
+  - This is a source/evidence-contract update only; packaged Electron screenshots/recordings for the eight AI Stable items remain open.
+
+### docs(ai): record AI 2.5.0 Step 1 automation evidence
+
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+- `docs/plan-prd/TODO.md`
+  - Marked Step 1 recently-path automation complete after `pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/intelligence-sdk.test.ts" "src/main/modules/ai/intelligence-error-normalizer.test.ts" "src/main/modules/plugin/plugin.test.ts"` passed with 3 files / 22 tests.
+  - Recorded `pnpm -C "plugins/touch-intelligence" run build` success, including `dist/touch-intelligence-1.0.2.tpex` output, and `pnpm -C "packages/tuffex" run typecheck` success.
+  - Kept all packaged Electron success/failure/routing evidence items open because focused tests and build/typecheck do not prove AI Stable experience completion.
+
+### docs(ai): reconcile 2.5.0 stable scope
+
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+- `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`
+- `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/INDEX.md`
+- `GOAL.md`
+  - Locked AI 2.5.0 Step 0 scope: Stable only covers CoreBox `text.chat`, explicit `vision.ocr -> text.chat`, Nexus/provider routing, Local/Ollama routing, fixed failure paths, and provider/model/trace metadata.
+  - Moved OmniPanel Writing Tools, Workflow Use Model, Review Queue, Template Center, Skills and Automation to MVP/Beta evidence queues, so they cannot block or substitute Stable CoreBox text/OCR evidence.
+  - Rewrote acceptance into staged validation: Step 0 documentation scope, Step 1 focused automation, Step 2 packaged Electron success paths, Step 3 packaged Electron failure paths, and Step 4 Beta evidence follow-up.
+  - Restated that SDK/schema/focused tests, mock provider, dry-run, memory fallback or local fake response cannot be used to claim packaged Electron AI experience completion.
+
+### docs(perf): add Windows startup optimization PRD
+
+- `docs/plan-prd/04-implementation/performance/WindowsStartupOptimization-2026-06-18.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added a Windows-specific startup optimization PRD that separates Time to First Window, CoreBox interactive, and background full-ready instead of treating all startup work as one blocking phase.
+  - Documented likely Windows bottlenecks: Defender / AV scanning, Electron cold start, serial main-module initialization, plugin small-file I/O, Everything / File Provider startup checks, renderer first-screen bundle weight, and window effects.
+  - Locked the first implementation order: observe with real Windows packaged hot/cold benchmark, keep critical startup minimal, move plugin scan / watchers / Everything status / Terminal / update work to after-window or idle, then evaluate plugin summary cache and renderer lazy loading.
+  - Clarified that this does not change build or release gates and must not bypass Storage hydration, onboarding, plugin permissions, SDK hard-cut, secure-store, or typed transport constraints.
+
+### docs(project): add evidence/pricing SoT and split agent guidance
+
+- `AGENTS.md`
+- `apps/core-app/AGENTS.md`
+- `apps/nexus/AGENTS.md`
+- `plugins/AGENTS.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/04-implementation/README.md`
+- `docs/plan-prd/04-implementation/Pricing-SoT-2026-06-18.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-Platform-2026-06-18.md`
+- `docs/plan-prd/03-features/nexus/NEXUS-SUBSCRIPTION-PRD.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Added Pricing SoT for the Pioneer `0 元 / $0` phase and explicitly kept Pro/Plus/Team/Enterprise pricing, credits unit price, team seats, Pioneer protection and checkout provider as undecided.
+  - Added AI Stable, Nexus Governance and Platform Capability evidence matrices so release/governance/platform readiness is tracked through explicit evidence items instead of broad roadmap prose.
+  - Downgraded the old Nexus subscription PRD to historical status and pointed current pricing/subscription decisions to the Pricing SoT.
+  - Slimmed active README/INDEX entry points by replacing repeated UI/compat audit report links and old implementation snapshots with index-level links.
+  - Split AGENTS guidance into a compact root hard-rule file plus scoped CoreApp, Nexus and plugins files, avoiding stale dependency/module/version facts in the root instruction.
+  - Reconciled Roadmap vNext, Project Roadmap Audit, TODO, README and INDEX so Pricing SoT and the three evidence matrices are linked from the active execution surfaces, while stale "pricing SoT not landed yet" wording was removed.
+
+### docs(project): clarify roadmap audit and vNext execution口径
+
+- `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`
+- `docs/plan-prd/04-implementation/Project-Roadmap-Audit-2026-06-18.md`
+- `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - Added Roadmap vNext as the R0-R9 execution SoT: R0 docs口径 cleanup, R1 Release Integrity, R2 AI 2.5.0 Stable, R3 Search / Indexing Runtime, R4 QuickOps, R5 Plugin Trust Boundary, R6 UI / TuffEx, R7 Nexus Governance, R8 i18n / Domain Lexicon / Catalog, and R9 AI 2.5.x follow-up.
+  - Locked the new publish口径: public package publishing is no longer a standalone Roadmap blocker or evidence item; after version changes, the project tracks GitHub automatic release/publish workflow results instead.
+  - Locked the validation口径: owner-completed real-device manual regression is no longer tracked as Roadmap work, platform-special evidence or a release blocker.
+  - Synced active entry docs to root/CoreApp `2.4.12-beta.8` and local `HEAD=6b156fa31`, while explicitly noting the dirty worktree must be split by related-only batches.
+  - Clarified that `v2.4.11-beta.6` remains the latest complete release-chain evidence, but Nexus release asset `sha256`, `signatureUrl` and signature endpoint remain R1 Release Integrity debt.
+  - Clarified that AI cannot be marked as Stable experience-complete until packaged Electron text/OCR success and fixed failure-path evidence are captured.
+  - Established the current pricing口径: Pioneer is `0 元 / $0`, while Pro/Plus/Team/Enterprise pricing, credits unit price and team seat pricing are not yet formalized.
 
 ### feat(nexus): fold service channels into Intelligence admin
 
@@ -18,6 +296,32 @@
   - Reduced Intelligence initial load fan-out to overview and IP-ban data; provider summaries, scene registry/settings, audits, and credits now load when their tabs are opened.
   - Updated Chinese and English labels so the AI provider tab reads as a provider summary while configuration actions point users to Service Channels.
 
+### fix(corebox): stabilize result highlight and feature token ranking
+
+- `packages/utils/search/feature-matcher.ts`
+- `packages/utils/__tests__/search/feature-matcher.test.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/feature-search-tokens.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.test.ts`
+- `apps/core-app/src/renderer/src/components/render/highlight-html.ts`
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+- `apps/core-app/src/renderer/src/components/render/box-item-match-alias.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
+  - CoreBox title highlights now use a stable semantic class rendered through `BoxItem` scoped styles, so v-html highlight spans no longer depend on dynamic utility-class extraction.
+  - Feature matching now consumes typed token evidence (`source`, `display`, `segments`) instead of guessing from raw strings: initials like `jtb` can highlight `剪贴板`, while English id/alias tokens like `clipboard` surface a visible `Clipboard` alias pill with its own highlight instead of painting the full Chinese title.
+  - Plugin feature ids, titles, descriptions, keywords, commands, pinyin, and initials now participate as source-tagged search tokens, and the plugin feature adapter carries `matchAlias` metadata through to renderer items for visible token-hit explanation.
+  - App `name-fuzzy` matches are treated as low-confidence recall in global sorting, preventing typo-tolerant app hits like `ManagedClient` from outranking explicit plugin token intent such as Clipboard History for `clipb`.
+  - Verification: `pnpm -C "packages/utils" exec vitest run "__tests__/search/feature-matcher.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts" "src/renderer/src/components/render/box-item-match-alias.test.ts" "src/renderer/src/components/render/highlight-html.test.ts" "src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts"` passed.
+
+### fix(utils): make renderer storage save conflicts non-fatal
+
+- `packages/utils/renderer/storage/base-storage.ts`
+- `packages/utils/__tests__/renderer-storage-transport.test.ts`
+  - Renderer `TouchStorage` now treats version conflicts as a reload-and-retry path instead of throwing an uncaught `TouchStorageSaveError` into auto-save callers.
+  - Conflict reload preserves local dirty changes, refreshes the remote baseline, retries in the background, and catches background save failures so DevTools no longer shows `Uncaught (in promise)` for expected storage conflicts.
+  - Verification: `pnpm -C "packages/utils" exec vitest run "__tests__/renderer-storage-transport.test.ts"` and targeted packages/utils ESLint passed.
+
 ### fix(nexus): hide team credit pool for personal accounts
 
 - `apps/nexus/server/utils/creditsStore.ts`
@@ -31,6 +335,102 @@
   - Credits summary now exposes active team context while keeping the legacy `team` balance field compatible.
   - Nexus and CoreApp hide team-pool remaining and personal/team share UI unless the active team is an organization team, so personal accounts no longer see misleading team pool quota.
   - Personal-account copy now describes monthly personal credits instead of implying a shared team pool.
+
+### docs(project): add 2.6.0 i18n lexicon catalog plan
+
+- `docs/plan-prd/03-features/i18n-lexicon-catalog-2.6.0-prd.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added the 2.6.0 planning PRD for converging UI messages, transport messages, Domain Lexicon, plugin localized metadata, and Cloud Catalog into separate, verifiable layers.
+  - Clarified that units, currencies, time zones, capability labels, and search aliases still require multilingual support, but must use canonical ids with localized labels and aliases through Domain Lexicon instead of ordinary UI locale files.
+  - Documented the plugin developer SDK direction for locale access, `LocalizedText` resolution, and plugin-scoped lexicon registration.
+  - Documented the CatalogService baseline for download, signature/hash verification, schema validation, SQLite import, activation, and rollback while keeping SQLite as the local source of truth.
+  - Synced README, TODO, global index, roadmap, and quality baseline so new UI copy cannot continue with Chinese fallback or hard-coded bilingual ternaries, and cloud catalog JSON cannot become a local business SoT.
+
+### feat(corebox): add QuickOps state sessions
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-session-manager.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/tray/tray-menu-builder.ts`
+- `apps/core-app/src/main/modules/tray/tray-state-manager.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added the first stateful QuickOps provider for CoreBox, covering keep-awake, system-awake, and quick timer commands with running-session status and stop actions.
+  - Extracted `QuickOpsSessionManager` from the provider so power blocker, timer, pomodoro, stopwatch, screen-clean overlay, session change subscription, and cleanup lifecycles live in a dedicated runtime while `QuickOpsProvider` focuses on query parsing and CoreBox item construction.
+  - Added `QuickOpsModule` to the CoreApp module loading chain so the shared QuickOps provider/runtime is cleaned on module stop and destroy while SearchEngine keeps only the provider registration responsibility.
+  - Tray menu now shows QuickOps idle/running state, active session summaries with remaining/elapsed time, and a stop-all QuickOps action wired through the shared provider cleanup path.
+  - Keep-awake uses Electron `powerSaveBlocker.start('prevent-display-sleep')` and stops the blocker on manual stop, replacement, extension reschedule, expiry, provider deactivate, or provider destroy without changing persistent system power settings.
+  - Keep-awake now supports `extend keep awake 15m` / `延长保持唤醒 15分钟`; extension reuses the active blocker and reschedules expiry, while an inactive session falls back to starting a keep-awake session for the requested duration.
+  - System-awake now supports `prevent system sleep 30m` / `禁止系统睡眠 30分钟` via Electron `powerSaveBlocker.start('prevent-app-suspension')`, with an independent session and stop action from display keep-awake.
+  - Quick timer sessions support parsed durations, running status, `pause timer` / `暂停计时`, `resume timer` / `继续计时`, `extend timer 5m` / `延长计时 5分钟`, stop actions, expiry cleanup, tray status, and a system notification when the timer finishes; Flow/AI adapters and packaged app quit evidence remain tracked in the QuickOps PRD.
+  - Pomodoro sessions now support the first focus segment from `pomodoro` / `番茄钟`, `pomodoro cycle` / `循环番茄钟` focus-break auto-cycling, finite 1-12 round cycles from commands such as `pomodoro cycle 4 rounds 25m 5m` / `循环番茄钟 4轮 25分钟 5分钟`, built-in 25/5 and 50/10 templates from `pomodoro 25/5`, `番茄钟 25分钟 5分钟`, and `长番茄钟`, built-in template enablement switches in Settings / Tools, command-driven custom templates from `pomodoro custom 40/8` / `自定义番茄钟 45/10`, settings-driven custom template list schema with name/alias matching, pause/resume, running status, stop cleanup, paused wall-clock exclusion, and system notifications when focus, break, or finite-cycle sessions end; long-break and every-N-cycle policies remain tracked in the QuickOps PRD.
+  - Screen cleaning now supports `clean screen` / `清洁屏幕` / `白底清洁屏幕` from CoreBox, creating local sandboxed data-URL fullscreen overlay windows for each display with black/white background choices, hold-Esc exit, status, stop action, timeout cleanup, provider destroy cleanup, and tray status; the overlay data URL contract is covered for black/white backgrounds, countdown hint, hidden cursor, hold-Esc exit, and no external resources, while real screenshot/recording evidence and advanced settings remain tracked in the QuickOps PRD.
+  - `AppSetting.quickOps` now carries the first default preference contract and `QuickOpsProvider` reads it for global enablement, CoreBox running-session visibility, default durations, pomodoro focus/break defaults, built-in pomodoro template enablement, custom pomodoro template aliases, and screen-clean default mode; Settings / Tools exposes the same defaults, built-in template switches, and an advanced custom-template summary through the existing Tuff settings controls, with renderer coverage for control visibility, legacy invalid-value normalization, template switch preservation, custom template normalization, and advanced-only options.
+  - Stopwatch sessions now support `stopwatch` / `秒表`, pause/resume, lap recording, running status, and reset from CoreBox without adding a separate UI surface.
+  - QuickOps Network now supports the first local read-only informational result for `local ip` / `本机 IP`, using Node `networkInterfaces()` to list non-internal IPv4/IPv6 addresses with interface names and a host copy action; no-address cases return a degraded notification, while public IP lookup and port inspection remain tracked as later work.
+  - QuickOps Network also supports local TCP port availability probing for `port 3000` / `端口 3000` via a Node bind check, returning available, occupied, and invalid-port informational/degraded results. Occupied ports now add best-effort read-only PID/process attribution through macOS/Linux `lsof` or Windows PowerShell `Get-NetTCPConnection`; when PID attribution is available the result exposes a copy-only release command (`kill <pid>` or `Stop-Process -Id <pid>`) without executing it, while attribution failure keeps the occupied result without release actions.
+  - QuickOps Network now supports copy-only DNS lookup from `dns example.com` / `DNS 查询 example.com`, resolving A, AAAA, CNAME, and MX records through Node DNS promises with conservative hostname parsing and degraded output when no supported records resolve. Deep DNS lookup from `deep dns example.com` / `深度 DNS 查询 example.com` now adds NS, TXT, and SOA records while real platform DNS evidence remains tracked as later work.
+  - QuickOps Network now supports `network status` / `网络状态` as a safe copy-only summary of non-internal local addresses, system DNS servers from Node `dns.getServers()`, and redacted proxy environment variables from `HTTP(S)_PROXY`, `ALL_PROXY`, and `NO_PROXY`. It also supports `proxy status` / `system proxy` / `系统代理` as a copy-only local system proxy summary from macOS `scutil --proxy`, Windows current-user Internet Settings, and Linux GNOME proxy mode, with credential redaction and degraded fallback when probing fails; real-platform proxy evidence remains tracked as later work.
+  - QuickOps Files now supports common directory results for Desktop, Downloads, Documents, App Data, and Logs, returning open-directory and copy-path actions while real system-open evidence remains tracked as later work.
+  - QuickOps Files now supports local read-only hashing from `hash "/path"`, single-file Files input, multi-file Files input, and file search result execute actions, returning MD5, SHA1, and SHA256 with copy actions; missing files, directories, permission failures, read failures, or any invalid path in a multi-file selection return degraded notifications.
+  - QuickOps Files now supports copy-only Base64 encoding from `file base64 "/path"` or Files input, capped at 1MB per file to keep CoreBox/clipboard payloads bounded. Multiple Files input paths now return a combined copy-only Base64 summary; `base64 decode file <payload>` now decodes valid Base64 payloads up to 1MB into a new Tuff temporary file with open-folder and copy-path actions; missing files, directories, permission failures, read failures, invalid Base64, temp-file write failures, any invalid file in a multi-file selection, and oversized files return degraded notifications while real-platform write evidence remains tracked as later work.
+  - QuickOps Files now supports local read-only path formatting from `copy path "/path"` and Files input, returning raw path, shell-escaped path, file URL, Windows-to-WSL, and WSL-to-Windows copy actions. File search result items now expose the same path-format copy-only actions plus Hash/Base64 execute actions without changing their primary open-file action.
+  - QuickOps System now supports `tuff diagnostics` as an expanded redacted copy-only diagnostics bundle with schema version, app version, platform/OS/runtime, CPU/memory/uptime, redacted Home/userData/logs paths, local network counts, proxy source names, QuickOps defaults, and an explicit safety line without copying log contents, raw home paths, proxy credentials, or full configuration dumps.
+  - QuickOps System now supports `system info` / `系统信息` as a safe copy-only result for OS type/release, platform/arch, CPU model/count, memory, uptime, and load average without reading sensitive paths or calling external services.
+  - QuickOps System now supports `battery status` / `电池状态` as a safe read-only result using macOS `pmset -g batt`, Windows PowerShell/CIM, or Linux `/sys/class/power_supply`, returning level, charging status, source, and degraded output when no battery data is available. Active battery-status queries now trigger a system warning when the reported level is 20% or lower and the device is not charging; real-device evidence remains tracked as later work.
+  - QuickOps System now supports `disk space` / `磁盘空间` as a safe copy-only filesystem capacity summary using Node `statfs()` for Home and Tuff userData filesystems, with redacted paths and degraded output on stat failures. It also supports `directory usage` / `目录占用` as a bounded shallow scan for Desktop, Downloads, Documents, Tuff Data, and Logs, copying direct-child counts and direct file sizes. Explicit `deep directory usage` / `深度目录占用` now adds a bounded recursive scan of the same key directories with depth 3, 200 entries per directory, and 1000 entries total.
+  - SearchEngine destroy now invokes provider destroy/deactivate hooks and clears provider registries; regression coverage verifies provider cleanup is called during SearchEngine destroy.
+  - Verification: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts" "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/main/modules/tray/tray-manager.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/modules/box-tool/addon/preview/preview-provider.test.ts"` passed; targeted ESLint for the QuickOps module/provider/session manager, TrayManager, PreviewProvider, and SearchEngine registration passed; `pnpm -C "apps/core-app" run typecheck:node` passed. Local IP, port-probe, DNS query, network-status, common-directory, file-hash, file-base64, path-format, diagnostics, system-info, battery-status, disk-space, directory-usage, and custom pomodoro template follow-up verification: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed with 83 focused tests after PID/process attribution, copy-only port release commands, DNS query, deep DNS query, diagnostics bundle, single/multi-file Base64, Base64 decode-to-temp-file, low-battery notification policy, shallow/deep directory usage, directory usage degraded coverage, system proxy status coverage, custom pomodoro alias parsing, and Settings custom template normalization coverage; finite pomodoro cycle verification: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed with 80 focused tests after adding finite-cycle parsing, running status, and final completion notification coverage; targeted ESLint for QuickOps provider/test and Settings QuickOps files passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/utils.test.ts"` passed for file-search-result path actions; targeted ESLint for `quick-ops-provider.ts`, `quick-ops-provider.test.ts`, `files/utils.ts`, and `files/utils.test.ts` passed, and `pnpm -C "apps/core-app" run typecheck:node` passed.
+
+### feat(corebox): add QuickOps developer previews
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/core-box/preview/abilities/index.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/abilities/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added `Tuff QuickOps` PRD implementation status and landed the first Developer P0/P1 slice as a pure PreviewSDK ability.
+  - CoreBox preview now supports QuickOps commands for JSON format/minify/validate, URL encode/decode, Base64 encode/decode, timestamp conversion, UUID v4 generation, and upper/lower/camel/snake/kebab case conversion.
+  - PreviewProvider now accepts Text and HTML query inputs and falls back to Electron local text clipboard for input-less QuickOps developer commands without logging raw clipboard content.
+  - Verification: `pnpm -C "packages/utils" exec vitest run "__tests__/core-box/preview-sdk.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/preview/preview-provider.test.ts"` passed.
+
+### feat(core-app): audit startup permissions and guide folder authorization
+
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/main/modules/system/file-access-roots.ts`
+- `apps/core-app/src/renderer/src/composables/useStartupPermissionAudit.ts`
+- `apps/core-app/src/renderer/src/modules/system/system-permission-roots.ts`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+  - CoreApp now registers explicit file-access-root permission channels and lists macOS Documents, Downloads, Desktop, Music, Pictures, Videos, `/Applications`, and configured extra file-index paths with purpose metadata.
+  - Startup runtime waits for app settings hydration, delays the permission audit, then checks file access, accessibility, notifications, microphone, and Windows admin state; the audit records app version/update context and only shows a missing-permission toast after onboarding has completed.
+  - File access grants store a required-root signature so adding custom index paths or changing the required folder set causes the next silent audit to ask users to refresh authorization instead of trusting a stale boolean.
+  - macOS folder checks are split into silent listing and user-confirmed probing so startup/upgrade audits do not trigger TCC folder prompts, while onboarding/settings can still intentionally read the listed roots from a user click to prompt once up front.
+  - The onboarding permission guide now explains why Tuff accesses files, which folders are involved, what each folder is used for, and includes one-click folder authorization plus microphone coverage; Settings exposes the same file-access and microphone recovery path for post-upgrade audits.
+  - File-access folder authorization details now live behind a dedicated "Manage Folder Access" button and `TxModal` in both onboarding and Settings, keeping the permission list compact while preserving grant/recheck controls and required-folder visibility.
+  - The folder authorization dialog now shows an explicit status badge for every root and maps stored whole-set grants to per-row granted display state, avoiding the previous "overall granted + orange unknown dots" ambiguity.
+  - Verification: `pnpm -C "apps/core-app" run typecheck:node` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/system/permission-checker.test.ts"` passed. `typecheck:web` still fails on existing `src/renderer/src/components/render/box-item-icon-color.test.ts(37,49)` typing unrelated to this permission flow.
 
 ### perf(core-app): defer non-critical startup work from first render
 
@@ -51,6 +451,23 @@
   - Storage update streams now reject late stream starts during destroy with `context.end()`, reducing dev benchmark shutdown noise; the CoreBox icon-color regression test type guard was tightened so full web typecheck is useful again.
   - Verification: `pnpm -C "apps/core-app" run typecheck`, targeted ESLint for changed startup/storage/download/system-update/icon files, and targeted Vitest for startup loader, hydration timeout, update action controller, and icon-color rendering passed; dev startup benchmark evidence in `docs/engineering/reports/startup-dev-runs-2026-03-24/` now has post-fix runs 12-20 passing consecutively with 0 WARN / 0 ERROR.
 
+### fix(core-app): polish Intelligence and Store settings UI
+
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceApiConfig.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/layout/IntelligenceInfo.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceCapabilitiesPage.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`
+- `apps/core-app/src/renderer/src/components/base/input/FlatInput.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffGroupBlock.vue`
+- `apps/core-app/src/renderer/src/modules/mention/dialog-mention.ts`
+- `apps/core-app/src/renderer/src/components/base/dialog/TouchTip.vue`
+- `apps/core-app/src/renderer/src/composables/store/useStoreInstall.ts`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+  - Intelligence provider API fields no longer clip inline validation UI, connection-test errors expose the full message in a hover popover, Nexus sync now lives inside the Nexus provider status card after login, and local skills now list the concrete detected CLI tools with paths.
+  - Intelligence capabilities are sorted by common usage with Chat first and no longer show the redundant auto-enable notice.
+  - Store upgrade confirmation dialogs now mount above detail overlays and use an atomic key to avoid duplicate dialogs for the same plugin upgrade; Store market tab stays mounted while switching tabs to avoid blank re-entry.
 
 ## 2026-06-17
 
@@ -148,8 +565,8 @@
 - `docs/INDEX.md`
 - `docs/plan-prd/04-implementation/README.md`
   - Added a short-term execution SoT that turns the current project progress into P0/P1 plan items.
-  - Updated entry documents from the stale `2.4.11-beta.8` / `HEAD=47787615b` snapshot to the current root/CoreApp `2.4.12-beta.6` / `HEAD=fb7424772` snapshot.
-  - Clarified the next execution order: documentation drift, AI provider routing, packaged AI evidence, release integrity, npm publish evidence, File write/store boundary, Windows/Everything evidence and Nexus production governance evidence.
+  - Updated entry documents from the stale `2.4.11-beta.8` / `HEAD=47787615b` snapshot to the then-current root/CoreApp `2.4.12-beta.6` / `HEAD=fb7424772` snapshot; this was superseded on 2026-06-18 by `Project-Roadmap-Audit-2026-06-18.md` with root/CoreApp `2.4.12-beta.8` / `HEAD=6b156fa31`.
+  - Historical note: this execution order was superseded by Roadmap vNext, which removed public package publishing and real-device manual regression from current Roadmap blockers.
 
 ### fix(core-app+ci): default auth credential protection and tuff-intelligence CI
 
@@ -3437,7 +3854,7 @@
 - `docs/plan-prd/01-project/CHANGES.md`
   - Bumped `@talex-touch/tuffex` from `0.3.5` to `0.3.6` so `.github/workflows/package-tuffex-publish.yml` can publish the new package from GitHub Actions on `master` push.
   - Local validation completed with `pnpm -C "packages/tuffex" run build` and `cd packages/tuffex && npm publish --dry-run --access public`.
-  - Direct local `npm publish --access public` was not completed because the local npm session returned `E401 whoami` / `E404 PUT @talex-touch/tuffex`; publish authority is expected to come from the repository `NPM_TOKEN` used by GitHub Actions.
+  - Direct local `npm publish --access public` was not completed because the local npm session returned `E401 whoami` / `E404 PUT @talex-touch/tuffex`; publish authority was expected at the time to come from the repository `NPM_TOKEN` used by GitHub Actions.
 
 ### docs(plan-prd): add UI and architecture compatibility audit
 
@@ -5463,7 +5880,7 @@
   - Local macOS release build completed with `--publish=never`; generated `apps/core-app/dist/mac-arm64/tuff.app` and `apps/core-app/dist/tuff.app.zip`, both reporting `2.4.10` bundle/app version. The mac builder config currently targets `dir`, with zip produced by post-processing.
   - GitHub Actions `Build and Release` for `v2.4.10` completed successfully on Windows/macOS/Linux, published GitHub Release `Release v2.4.10`, and synced Nexus release metadata successfully. Release assets include Windows setup, macOS app zip, Linux AppImage/deb, update YAML files, builder debug files, and `tuff-release-manifest.json`.
   - Package publish workflows now publish when the current package version is missing from npm even if `package.json` did not change relative to the pushed base; the CLI/build-tool workflow also includes `@talex-touch/tuff-core`.
-  - Public npm package publication remains blocked by the repository `NPM_TOKEN`: GitHub package publish runs reached `npm publish` but npm returned `E404 Not Found - PUT https://registry.npmjs.org/@talex-touch%2f...`, which indicates the token cannot publish the `@talex-touch` scope/current packages. Target versions still missing from npm: `@talex-touch/utils@1.0.50`, `@talex-touch/tuffex@0.3.5`, `@talex-touch/unplugin-export-plugin@1.2.16`, `@talex-touch/tuff-cli@0.0.3`, `@talex-touch/tuff-core@0.0.1`, `@talex-touch/tuff-intelligence@0.0.2`.
+  - At the time, public npm package publication remained blocked by the repository `NPM_TOKEN`: GitHub package publish runs reached `npm publish` but npm returned `E404 Not Found - PUT https://registry.npmjs.org/@talex-touch%2f...`, which indicates the token cannot publish the `@talex-touch` scope/current packages. Target versions still missing from npm: `@talex-touch/utils@1.0.50`, `@talex-touch/tuffex@0.3.5`, `@talex-touch/unplugin-export-plugin@1.2.16`, `@talex-touch/tuff-cli@0.0.3`, `@talex-touch/tuff-core@0.0.1`, `@talex-touch/tuff-intelligence@0.0.2`.
   - Fixed the `Tuff CLI Package CI` lint failure from the release push by aligning newly added CLI i18n `remoteFailure` keys with the repository `quote-props` style; `pnpm -C "packages/tuff-cli" run lint` passed, and tests were not run per request.
   - Active planning docs now treat `2.4.10` as the current stable baseline; follow-up execution moved to `2.4.11` stabilization and npm package publish recovery.
 

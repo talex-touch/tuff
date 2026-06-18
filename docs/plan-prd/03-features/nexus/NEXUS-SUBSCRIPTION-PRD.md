@@ -1,9 +1,16 @@
 # NEXUS 订阅系统 PRD
 
-> 状态: 历史文档（待重写，不作为当前 2.4.9 主线执行依据）
+> 状态: 历史文档（待重写，不作为当前 pricing / subscription / credits 决策依据）
+> 当前 pricing SoT: `docs/plan-prd/04-implementation/Pricing-SoT-2026-06-18.md`
 > 替代入口: `docs/plan-prd/TODO.md`（当前主线） / `docs/plan-prd/01-project/CHANGES.md`（历史事实）
 > 版本: 1.0.0
 > 更新时间: 2026-03-16
+
+## 当前口径提醒
+
+- 本文的 `FREE / PRO / PLUS / TEAM / ENTERPRISE` 只保留为历史订阅方案草案，不代表正式价格、credits 单价、团队席位价或 GA 后套餐。
+- 当前公开站只承诺 Pioneer 阶段 `0 元 / $0`；正式定价需以后续重写 PRD 为准，当前边界以 Pricing SoT 为准。
+- 禁止基于本文实现 mock checkout、伪成功购买入口或正式付费权益文案。
 
 ## 概述
 

@@ -44,5 +44,5 @@ git diff --check
 1. P0 先解质量门禁：复核 `test:targeted` 中 Nexus 测试路径，避免旧 `server/api` 路径继续拖垮 PR Quality。
 2. P0 处理 open PR：先解决 #273 / #272 与最新 master 的冲突；#273 checks 已过则优先合，#272 先修 PR Quality。
 3. P0 继续 Transport retained aliases 与 CoreBox retained hide 相关验证，只在当前代码证据不足时补 focused tests。
-4. P0 继续剩余 shell/OS/network capability surface、secret backend、Windows/macOS 真机 evidence 与公共 npm 子包发布权限问题。
+4. P0 继续剩余 shell/OS/network capability surface、secret backend、R1 Release Integrity 与 R2 AI Stable evidence；公共包发布和平台验证不再作为当前 Roadmap blocker。
 5. P1 再推进插件与 Intelligence 增强：skills repository、Provider/Scene 能力、可配置本地工具入口（Codex / ClaudeCode / Gemini 等）必须走 typed SDK / capability gate，不抢占 `2.4.11` 稳定化资源。

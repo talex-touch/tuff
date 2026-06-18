@@ -1,0 +1,25 @@
+[ {
+   "description": "",
+   "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@0c6adfc5aeb5db54737d09156012be70fae7b73c/inspector.html?ws=127.0.0.1:9341/devtools/page/5F5FEB831EBFB97137D81F870AB34F9A",
+   "id": "5F5FEB831EBFB97137D81F870AB34F9A",
+   "title": "",
+   "type": "page",
+   "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+   "webSocketDebuggerUrl": "ws://127.0.0.1:9341/devtools/page/5F5FEB831EBFB97137D81F870AB34F9A"
+}, {
+   "description": "",
+   "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@0c6adfc5aeb5db54737d09156012be70fae7b73c/inspector.html?ws=127.0.0.1:9341/devtools/page/BE500F6FDBEF18227BD7D01AD779EE4F",
+   "id": "BE500F6FDBEF18227BD7D01AD779EE4F",
+   "title": "",
+   "type": "page",
+   "url": "",
+   "webSocketDebuggerUrl": "ws://127.0.0.1:9341/devtools/page/BE500F6FDBEF18227BD7D01AD779EE4F"
+}, {
+   "description": "",
+   "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@0c6adfc5aeb5db54737d09156012be70fae7b73c/inspector.html?ws=127.0.0.1:9341/devtools/page/6439CD7A21DD3180D799DAAF732AF5ED",
+   "id": "6439CD7A21DD3180D799DAAF732AF5ED",
+   "title": "Tuff",
+   "type": "page",
+   "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html",
+   "webSocketDebuggerUrl": "ws://127.0.0.1:9341/devtools/page/6439CD7A21DD3180D799DAAF732AF5ED"
+} ]

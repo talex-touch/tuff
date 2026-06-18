@@ -6,7 +6,7 @@
 
 ## 1. 结论
 
-Tuff 当前不是“基础能力缺失型”项目，而是“最小路径已散落、证据与统一产品模型不足”的项目。CoreBox 全局入口、App Launcher、文件搜索、插件能力、剪贴板、片段、计算/单位换算、Emoji/Symbols、系统动作、窗口管理、AI、OCR/翻译都能在 live tree 找到实现或明确规划；真正阻塞竞品基础体验对齐的，是 Windows/macOS 真机 evidence、Browser Data / Everything / App Launcher 的 release-blocking 样本、Quicklinks 与 Context Actions 的统一模型、Store/SDK 任务流的端到端证据。
+Tuff 当前不是“基础能力缺失型”项目，而是“最小路径已散落、证据与统一产品模型不足”的项目。CoreBox 全局入口、App Launcher、文件搜索、插件能力、剪贴板、片段、计算/单位换算、Emoji/Symbols、系统动作、窗口管理、AI、OCR/翻译都能在 live tree 找到实现或明确规划；真正阻塞竞品基础体验对齐的，是 跨平台运行证据、Browser Data / Everything / App Launcher 的 release-blocking 样本、Quicklinks 与 Context Actions 的统一模型、Store/SDK 任务流的端到端证据。
 
 Raycast / Alfred / uTools 的共同基础能力可以收敛为四层：
 
@@ -25,7 +25,7 @@ Tuff 的最小下一步不应是重做 CoreBox 或插件系统，而是把已有
 | 部分落地 | 有实现切片，但缺统一模型、跨平台覆盖、打包证据或关键边界 |
 | 规划中 | Roadmap/TODO 已有明确方向，但 live tree 未形成可用路径 |
 | 缺失 | 未发现当前产品入口或实现路径 |
-| 需要 evidence | 代码路径存在，但缺真机、打包、失败态、性能或隐私证据，不能对外声明完整体验 |
+| 需要 evidence | 代码路径存在，但缺运行、打包、失败态、性能或隐私证据，不能对外声明完整体验 |
 
 ## 2. 竞品共同基础能力
 
@@ -59,16 +59,16 @@ Tuff 的最小下一步不应是重做 CoreBox 或插件系统，而是把已有
 | --- | --- | --- | --- |
 | CoreBox 全局入口 | 已落地，需要 evidence | `apps/core-app/src/main/modules/box-tool/core-box/index.ts` 注册 `CommandOrControl+E`；`core-box/manager.ts` 控制显示/隐藏/UI mode | 产品能力已落地；发版前还缺 packaged 首显、快捷键冲突、跨屏隐藏/恢复证据 |
 | 搜索编排 | 已落地，需要 evidence | `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` 注册 App/File/Plugin/Preview providers；`sort/tuff-sorter.ts` 注入 match/frequency/recency/pinned；`recommendation/recommendation-engine.ts` 读取时间、剪贴板、前台 app 等上下文 | 能力已落地；缺可读 search trace 证明排序、推荐与 provider health 没有伪成功 |
-| App Launcher | 已落地但需 evidence | `addon/apps/app-provider.ts`、`app-launcher.ts`、`win.ts`、`darwin.ts`、`linux.ts`；TODO 仍要求 Windows/macOS 阻塞级人工回归 | 产品能力已落地，证据缺口 P0 |
-| 文件搜索 | 部分落地，需要 evidence | `addon/files/file-provider.ts`、`everything-provider.ts`、`native-file-search-provider.ts`；`APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md` | Tuff 具备 FileProvider、macOS Spotlight、Linux native、Windows Everything 链路；Everything SDK/CLI 策略、watch-root 过滤与 P50/P95 真机证据未闭环 |
+| App Launcher | 已落地但需 evidence | `addon/apps/app-provider.ts`、`app-launcher.ts`、`win.ts`、`darwin.ts`、`linux.ts`；TODO 仍要求 Windows/macOS 阻塞级验证 | 产品能力已落地，证据缺口 P0 |
+| 文件搜索 | 部分落地，需要 evidence | `addon/files/file-provider.ts`、`everything-provider.ts`、`native-file-search-provider.ts`；`APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md` | Tuff 具备 FileProvider、macOS Spotlight、Linux native、Windows Everything 链路；Everything SDK/CLI 策略、watch-root 过滤与 P50/P95 运行证据未闭环 |
 | Clipboard History | 已落地 | `apps/core-app/src/main/modules/clipboard/*`；`plugins/clipboard-history/manifest.json`；`packages/utils/plugin/sdk/clipboard.ts` | 能力已落地，图片/文件/HTML 回贴与隐私 evidence 仍需补 |
 | Snippets | 已落地但仍需产品化 | `plugins/touch-snippets/index.js` 支持 text/code/prompt/template、`{{date}}` / `{{time}}` / `{{uuid}}` / `{{clipboard}}`、CloudShare pack 和敏感内容过滤；旧 `touch-text-snippets` / `touch-code-snippets` 已退为 placeholder | 搜索、复制、保存、分享包首版可用；hot string/autopaste/cursor/browser-tab/calculator placeholder 后置 |
 | Quicklinks / Web Search | 部分落地 | `plugins/touch-browser-open`、`touch-browser-bookmarks`、`touch-dev-toolbox`、`touch-browser-data` | 有分散能力，缺统一 Quicklinks 数据模型 |
-| Browser Data | 部分落地，需要 evidence | `plugins/touch-browser-data/index.js` 只读扫描 Chrome/Edge/Brave/Arc Bookmarks JSON，输出 source diagnostics；TODO 标记 history/Safari/UI/evidence 后置 | 书签首版已落地，但仍是即时扫描 + 结果 action；History SQLite、Safari、持久索引/清理和真机样本仍是缺口 |
+| Browser Data | 部分落地，需要 evidence | `plugins/touch-browser-data/index.js` 只读扫描 Chrome/Edge/Brave/Arc Bookmarks JSON，输出 source diagnostics；TODO 标记 history/Safari/UI/evidence 后置 | 书签首版已落地，但仍是即时扫描 + 结果 action；History SQLite、Safari、持久索引/清理和运行样本仍是缺口 |
 | Calculator / 单位换算 | 已落地 | `packages/utils/core-box/preview/*`、`apps/core-app/src/main/modules/box-tool/addon/preview/*`、`calculation/*`；PreviewProvider 支持 `calc` / `calculator` / `calculate` / `计算` / `换算` 显式前缀 | 产品能力已落地，Store discoverability/evidence 待补 |
 | Emoji/Symbols | 首版已落地 | `plugins/touch-emoji-symbols/index.js` 内置常用 emoji、箭头、标点、货币、数学符号，复制 action | 首版足够，数据集/recent/Store evidence 后置 |
 | System Actions | 部分落地 | `plugins/touch-system-actions`、`touch-quick-actions`、`addon/system/system-actions-provider.ts`；TODO 记录 shell capability hardening 已推进 | 基础动作存在，平台差异与 typed settings provider 仍缺 |
-| Window Management | 部分落地 | `plugins/touch-window-manager`、`plugins/touch-window-presets`；TODO 记录展示期 non-mutating permission check | 能力存在但依赖 shell/native 差异，真机多屏 evidence 缺口 |
+| Window Management | 部分落地 | `plugins/touch-window-manager`、`plugins/touch-window-presets`；TODO 记录展示期 non-mutating permission check | 能力存在但依赖 shell/native 差异，运行多屏 evidence 缺口 |
 | AI | 进行中 | `plugins/touch-intelligence`、`packages/utils/transport/sdk/domains/intelligence.ts`、`apps/core-app/src/renderer/src/views/base/intelligence/*`、TODO 的 `P1-AI-250` | dev 切片多，packaged answer/failure UI evidence 未闭环 |
 | OCR / 翻译 | 部分落地，需要 evidence | `plugins/touch-translation`、`apps/core-app/src/main/modules/ocr/ocr-service.ts`、`core-box/image-translate.ts`；TODO 的 `P1-TRANSLATION-IMAGE` | 文本翻译、截图翻译、剪贴板图片翻译路径存在；真实剪贴板/截屏/Provider fallback/权限拒绝证据缺 |
 | 插件生态 / SDK | 已落地但需端到端 evidence | `plugins/*/manifest.json`、`packages/utils/plugin/sdk/*`、`apps/nexus/content/docs/dev/api/*`、`tuff-cli` 文档入口、`P1-PUBLISHER` | SDK/API 面较完整，真实 `.tpex` 上传、审核、安装与任务流 evidence 未闭环 |
@@ -79,7 +79,7 @@ Tuff 的最小下一步不应是重做 CoreBox 或插件系统，而是把已有
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 全局入口 | 三者都提供低摩擦全局入口 | `core-box/index.ts`、`core-box/manager.ts`、`global-shortcon` | 已落地 | 证据缺口 | 缺 packaged 启动、首显、快捷键冲突与隐藏/恢复 evidence | P0 | 在 Windows/macOS release-blocking 清单中补 CoreBox hotkey、首显、重复触发、app launch handoff 样本 |
 | App Launcher | 快速启动应用，常用/最近排序 | `addon/apps/app-provider.ts`、`app-launcher.ts`、`search-processing-service.ts` | 已落地 | 证据缺口 | Windows UWP/shortcut/Steam、macOS localized display name、Linux best-effort 样本未完整闭环 | P0 | 输出 10 个常用 app 搜索/启动样本，记录 source、launchKind、失败 reason |
-| 文件搜索 | Raycast Root Search/文件命令搜索索引内文件/文件夹并提供 Action Panel；Alfred 支持 `open`/`find`/`in` 与 File Buffer | `file-provider.ts`、`everything-provider.ts`、`native-file-search-provider.ts` | 部分落地，需要 evidence | 证据缺口 | Everything SDK/CLI 最终策略、P50/P95、watch-root 过滤真机 evidence 缺；FileProvider 内容索引比单纯文件名搜索更激进，因此更需要边界证据 | P0 | 使用 Windows acceptance verifier 覆盖 SDK/CLI/unavailable/target probe/路径过滤；补 macOS/Linux native/file-provider 样本 |
+| 文件搜索 | Raycast Root Search/文件命令搜索索引内文件/文件夹并提供 Action Panel；Alfred 支持 `open`/`find`/`in` 与 File Buffer | `file-provider.ts`、`everything-provider.ts`、`native-file-search-provider.ts` | 部分落地，需要 evidence | 证据缺口 | Everything SDK/CLI 最终策略、P50/P95、watch-root 过滤运行 evidence 缺；FileProvider 内容索引比单纯文件名搜索更激进，因此更需要边界证据 | P0 | 使用 Windows acceptance verifier 覆盖 SDK/CLI/unavailable/target probe/路径过滤；补 macOS/Linux native/file-provider 样本 |
 | 系统动作 | 关机、锁屏、设置、快捷动作 | `touch-system-actions`、`touch-quick-actions`、`system-actions-provider.ts` | 部分落地 | 产品 + 证据缺口 | 系统设置搜索没有统一 typed provider；shell-backed 动作需更多平台 reason | P1 | 新增只读 `platform.settings` source 设计，先列出可打开设置项和 unsupported reason |
 | 剪贴板历史 | 历史搜索、回贴/复制、多类型 | `modules/clipboard/*`、`plugins/clipboard-history`、`plugin/sdk/clipboard.ts` | 已落地 | 证据缺口 | 图片/文件/HTML item action、自动粘贴失败 UI、隐私留存策略 evidence 不足 | P1 | 补 clipboard text/image/files/html 最近路径 smoke，输出留存/清理策略 |
 | Snippets / 片段 | Raycast/Alfred 都支持 keyword expansion、动态占位符和集中管理；uTools 有备忘快贴/插件匹配 | `plugins/touch-snippets/index.js` | 已落地 | 产品缺口 | hot string、cursor/calculator/browser-tab placeholder、autopaste 还未进入首版 | P1 | 固化当前 placeholder contract 和测试；新增 cursor/calculator/browser-tab 前先做 contract 文档 |
@@ -90,7 +90,7 @@ Tuff 的最小下一步不应是重做 CoreBox 或插件系统，而是把已有
 | 搜索排序/推荐 | 常用、最近、上下文排序 | `tuff-sorter.ts`、`recommendation-engine.ts`、`usage-stats-*` | 已落地 | 证据缺口 | 缺可读排序样本说明 title/token/frequency/pinned 如何影响结果 | P1 | 产出 5 组 search trace 样本，覆盖 app/file/feature/preview/pinned |
 | 扩展生态 | Store/Workflow/插件市场 | `plugins/*/manifest.json`、`packages/utils/plugin/sdk/*`、`apps/nexus/content/docs/dev/*` | 已落地但需闭环 | 证据缺口 | `.tpex` 上传、审核、安装、SDK quickstart 到 publish 真实链路缺 | P1 | 用 `touch-snippets` 做一条 dry-run + 本地安装 + Nexus content tab evidence |
 | AI | AI Chat / AI Commands / 智能体 | `touch-intelligence`、`intelligence` SDK、TODO `P1-AI-250` | 进行中 | 证据缺口 | packaged CoreBox AI answer/failure、provider/model/latency/trace 可见 evidence 缺 | P1 | 先完成 CoreBox AI Ask answer/failure packaged capture，不扩 Workflow 范围 |
-| OCR / 翻译 | 文本翻译、截图/OCR、图片翻译 | `touch-translation`、`ocr-service.ts`、`image-translate.ts` | 部分落地 | 证据缺口 | 剪贴板图片、截屏翻译、provider fallback、权限拒绝真机 evidence 缺 | P1 | 复用 `P1-TRANSLATION-IMAGE`，补 packaged Electron 截屏翻译和 fallback 样本 |
+| OCR / 翻译 | 文本翻译、截图/OCR、图片翻译 | `touch-translation`、`ocr-service.ts`、`image-translate.ts` | 部分落地 | 证据缺口 | 剪贴板图片、截屏翻译、provider fallback、权限拒绝运行 evidence 缺 | P1 | 复用 `P1-TRANSLATION-IMAGE`，补 packaged Electron 截屏翻译和 fallback 样本 |
 | Context Actions / Super Panel | Alfred Universal Actions 针对文件/URL/文本；uTools 超级面板对文本/图片/文件/文件夹智能匹配 | `acceptedInputTypes`、`resolveClipboardInputs`、`ContextProvider`、OmniPanel | 部分落地 | 产品缺口 | 当前有 clipboard/context/recommendation 信号，但没有统一“当前上下文 -> 可执行动作”列表合同，selected text 全局入口也未闭环 | P1 | 设计 `ContextActionProvider` 最小合同，先接 selected text 与 clipboard image，不做鼠标面板重写 |
 | Notes / Calendar / Reminders | Raycast Notes/Calendar，Alfred/uTools 可扩展 | Roadmap 中 macOS App Data 调研 | 规划中 | 产品 + 风险缺口 | 涉及 TCC/PII/系统数据库，不应默认扫描 | P2 | 只做权限/隐私/降级 reason 调研，不写索引 |
 | Focus / 专注 | Raycast Focus | 未发现独立 Focus | 缺失 | 产品缺口 | 非基础 P0，且会分散 2.4.11 稳定化 | P3 | 放长期债务，不进入当前主线 |

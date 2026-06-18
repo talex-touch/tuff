@@ -12,17 +12,18 @@ AI 上下文管理已有核心 PRD：`docs/plan-prd/03-features/ai-2.5.4-context
 
 ## 2. 2.5.0 可见体验证据
 
-目标：先证明 Stable AI 桌面入口真实可用，Stable 只承诺文本 + OCR。
+目标：先证明 Stable AI 桌面入口真实可用，Stable 只承诺 CoreBox 文本 + 显式 OCR、provider routing 与固定失败路径。
 
 必须补齐：
 
-- CoreBox AI Ask 文本成功路径。
-- 剪贴板图片 `vision.ocr -> text.chat` 成功路径。
-- 未登录、provider unavailable、quota exhausted、model unsupported 失败路径。
+- CoreBox AI Ask `text.chat` 成功路径。
+- 剪贴板/显式图片 `vision.ocr -> text.chat` 成功路径。
+- 未登录、provider unavailable、quota exhausted、model/capability unsupported、permission denied 失败路径。
+- Local/Ollama 首选 provider 时不访问 disabled Nexus provider 的 routing log/trace。
 - provider / model / trace / latency metadata chips。
 - packaged Electron UI 截图或录屏 artifact。
 
-不进入本阶段：全量多模态生成、语音唤醒、DeepAgent 长任务、完整 Scene orchestration。
+不进入 Stable 阶段：OmniPanel Writing Tools、Workflow Use Model、Review Queue、全量多模态生成、语音唤醒、DeepAgent 长任务、完整 Scene orchestration。
 
 ## 3. 2.5.3 Context Builder 基座
 

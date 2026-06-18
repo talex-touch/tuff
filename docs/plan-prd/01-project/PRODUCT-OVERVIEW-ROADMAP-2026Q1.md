@@ -1,6 +1,6 @@
 # Tuff 产品总览与路线图
 
-> 更新时间：2026-06-17
+> 更新时间：2026-06-18
 > 定位：产品目标与版本路线主入口。压缩前完整快照见 `./archive/PRODUCT-OVERVIEW-ROADMAP-2026Q1-pre-compression-2026-05-14.md`。
 
 ## 1. 产品定义
@@ -21,12 +21,19 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 目标 | 说明 | 当前口径 |
 | --- | --- | --- |
 | 架构目标 | 完成 SDK Hard-Cut，renderer/main/plugin 跨层调用统一走 typed transport / domain SDK | legacy/raw channel 继续收口；retained aliases 分批迁移 |
-| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-25 UI/兼容/占位/架构审计未发现新的 P0 fixed fake-success，并把 legacy alias hard-cut、旧 snippets placeholder、memory fallback 证据分层、preload/dialog 安全收口与 TuffEx visual smoke 列为近期治理项；2026-05-26 已收口 preload debug 运行时日志文本化与同段 debug console 清理；2026-05-29 增量审计继续未发现新的 P0 fixed fake-success，确认 Nexus/TuffEx 组合 demo 与 dashboard chart wrapper 改善 UI 完善度；同日已落地 legacy alias hit telemetry/hard-cut 判定记录、旧 snippets hidden/deprecated/replacedBy 退场、Nexus evidence source enum/UI 分层、dialog message 文本/可信 HTML 分流与 TuffEx visual smoke 脚本；2026-06-06 增量审计继续未发现生产路径 P0 fixed fake-success，dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片；2026-06-13 当前代码版本 root/CoreApp `2.4.11-beta.8`，本地 `HEAD=47787615b fix(tuffex): make style entry build idempotent` 且 `master` 相对 `origin/master` 领先 9 个提交；CLI publish 旧 token 交互刷新已落地且非交互仍 fail-closed，`touch-music`/`touch-image` 示例插件清理已完成；剩余高信号风险收敛为 release checklist/质量门禁、publish/release integrity evidence、UI 语义控件、Widget 扩展边界长尾与 File write/store boundary；Windows/macOS 真机人工回归后移为平台专项，不阻塞本轮 `2.4.11` 收口；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
-| 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`v2.4.10` GitHub Release 与 Nexus release metadata sync 已成功；当前代码版本已到 `v2.4.11-beta.8`，`v2.4.11-beta.6` GitHub prerelease 与 Nexus BETA latest sync 成功、发布后 Gate D strict 通过的证据仍作为最近完整发布链路记录；Nexus 资产 sha256/signatureUrl 与 signature endpoint 仍是 release integrity debt；`@talex-touch/tuffex@0.3.7` 补发链路已完成本地等价验证，`@talex-touch/tuff-cli@0.0.7` 已补 publish 旧 token 刷新体验；其余公共 npm 子包补发仍需仓库 token 覆盖 `@talex-touch` scope |
-| 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 `2.4.11` 稳定化与债务退场 |
-| AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport；2026-06-17 已补 2.5.3/2.5.4 的 typed SDK、SQLite SoT、FTS5 LocalKnowledgeEngine、Context Builder、ContextHygiene P0 foundation 与稳定错误归一化，但体验闭环仍缺 packaged Electron 文本/OCR成功与失败路径证据；2.5.0 Stable 只承诺文本 + OCR，2.5.5 / 2.5.8 保持本地模型运行时与 ASR 的 PRD 锁方向，不抢 2.4.11 稳定化 |
+| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；近期审计继续未发现新的生产路径 P0 fixed fake-success，dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片。当前代码版本 root/CoreApp `2.4.12-beta.8`，本地 `HEAD=6b156fa31 fix(nexus): hide team credit pool for personal accounts`，且工作区存在大量未提交改动，必须按 related-only 拆分验证；剩余高信号风险按 `Roadmap-vNext-2026-06-18.md` 收敛为 R0 口径清理、R1 Release Integrity、R2 AI Stable、R3 Indexing Runtime、R4-R9 后续能力；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；旧 compat registry / legacy allowlist / size allowlist 已退场 |
+| 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`v2.4.10` GitHub Release 与 Nexus release metadata sync 已成功；当前代码版本已到 `2.4.12-beta.8`，但最近完整发布链路证据仍是 `v2.4.11-beta.6` GitHub prerelease、Nexus BETA latest sync 与发布后 Gate D strict；Nexus 资产 sha256/signatureUrl 与 signature endpoint 仍是 R1 Release Integrity debt；公共包发布不再作为独立 Roadmap / blocker / evidence 项，版本变更后以 GitHub 自动发版 workflow 结果为准 |
+| 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 Roadmap vNext：R0 口径清理、R1 Release Integrity、R2 AI Stable、R3 Indexing Runtime；Flow / DivisionBox / Automation / Skills 不作为当前 Stable 完成项 |
+| AI 目标 | CoreBox 成为 2.5.0 Stable 桌面 AI 主入口，OmniPanel/Workflow/Agent 进入 MVP/Beta 证据队列，AI Runtime 可观测、可恢复 | AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport；2026-06-17 已补 2.5.3/2.5.4 的 typed SDK、SQLite SoT、FTS5 LocalKnowledgeEngine、Context Builder、ContextHygiene P0 foundation 与稳定错误归一化，但体验闭环仍缺 packaged Electron CoreBox 文本/OCR成功、固定失败路径与 routing evidence；2.5.0 Stable 只承诺 CoreBox 文本 + 显式 OCR、provider routing 与固定失败路径，2.5.5 / 2.5.8 保持本地模型运行时与 ASR 的 PRD 锁方向，不抢 2.5.0 稳定化 |
 | Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场、高级策略与 Nexus invoke 未登录/provider 不可用/quota 不足/model 不支持的可见证据 |
 | 插件数据源目标 | 官方插件扩展本地 App 数据搜索，并把 Windows Everything 收口到可诊断、可回归、可受控发布 | 已新增 App Data Plugins 与 Everything Roadmap；当前第一优先级是 File write/store boundary 迁移，其次 Browser Bookmarks official `touch-browser-data` runtime source lifecycle，再补 Everything registry PATH、Windows App indexing、手动索引完成通知、Quicklinks feed/UI evidence |
+| i18n / Catalog 目标 | 把 UI messages、transport messages、domain lexicon、plugin localized metadata 与 cloud catalog 分层治理，并开放给插件开发者 | 已新增 2.6.0 PRD；单位、币种、时区、能力标签、搜索别名等领域数据必须支持多语言，但走 canonical id + localized label/aliases 的 Domain Lexicon；cloud catalog 必须经 CatalogService 验签/hash/schema 校验后导入 SQLite |
+
+## 2.1 当前定价口径
+
+- 公开站当前只承诺 Pioneer 阶段全量开放，价格为 `0 元 / $0`。
+- `FREE / PRO / PLUS / TEAM / ENTERPRISE` 仍是权限与套餐分层，不代表正式价格、credits 单价或团队席位价已确定。
+- 当前 pricing SoT 为 `../04-implementation/Pricing-SoT-2026-06-18.md`；GA 后价格、AI credits 赠送/超额策略、Team seat 计费方式与 Pioneer 保价范围未决，不得把付费价格写成已发布。
 
 ## 3. 当前版本路线
 
@@ -43,16 +50,16 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 **非目标**：
 
-- 不把 `v2.4.10` release workflow 成功等同于全量 release gate 全绿；Windows acceptance evidence、release evidence 内容与公共 npm 子包补发仍按 TODO 跟踪。
+- 不把 `v2.4.10` release workflow 成功等同于全量 release gate 全绿；release integrity 继续按 R1 跟踪，公共包发布后续以版本变更后的 GitHub 自动发版 workflow 结果为准。
 - 不把 `2.5.0` AI、Provider 高级策略、SRP 大拆分回填为 `2.4.10` 工作。
 
 ### 2.4.11 - 债务退场与发布收口
 
-**目标**：关闭或显式降权剩余 legacy/compat/size 债务，收口 release checklist、质量门禁、release integrity 与 npm publish evidence；Windows/macOS 真机人工回归后移为平台专项，不作为本轮 release blocker。
+**目标**：关闭或显式降权剩余 legacy/compat/size 债务，收口 release checklist、质量门禁与 R1 Release Integrity；公共包发布不再作为独立 Roadmap / blocker / evidence 项。
 
 **必须解决**：
 
-- `2.4.11` release checklist：最近路径验证、`quality:pr`、publish manifest preflight、`quality:release` 结果记录与 `git diff --check`。
+- `2.4.11` release checklist：最近路径验证、`quality:pr`、publish manifest preflight、`quality:release` 结果记录与 `git diff --check`；publish manifest preflight 只作为 CI hygiene。
 - Release integrity debt：Nexus assets `sha256`、`signatureUrl` 与 signature endpoint 真实发布链路收口。
 - AI 兼容占位成功响应退场。
 - CLI token OS 级 credential backend 收口；当前仅完成 POSIX `0700/0600` 权限缓解与 Windows ACL warning。
@@ -64,7 +71,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ### 2.5.0 - AI 桌面入口收口
 
-**目标**：让 CoreBox / OmniPanel 成为用户可感知的桌面 AI 主入口，并把 Nexus 首页公开叙事收敛为“本地优先的桌面 Agent 指令中心”。
+**目标**：让 CoreBox 成为 2.5.0 Stable 可验收的桌面 AI 主入口，并把 OmniPanel / Workflow / Agent 能力保留在 MVP/Beta 证据队列；Nexus 首页公开叙事继续收敛为“本地优先的桌面 Agent 指令中心”。
 
 **Agent 叙事同步口径**：
 
@@ -74,21 +81,17 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 **Stable**：
 
-- `text.chat`
-- `text.translate`
-- `text.summarize`
-- `text.rewrite`
-- `code.explain`
-- `code.review`
-- `vision.ocr`
-- CoreBox AI Ask
-- OmniPanel Writing Tools MVP
-- 默认 Nexus AI provider / 登录态 invoke
-- 模型路由的可见配置、场景绑定与 provider/model metadata chips
-- 首批桌面上下文输入：剪贴板、选中文本、OCR 结果、活动应用/窗口状态摘要
+- CoreBox AI Ask `text.chat` 成功路径。
+- CoreBox 显式 `vision.ocr -> text.chat` 成功路径。
+- 默认 Nexus AI provider / 登录态 invoke。
+- Local/Ollama 首选 provider routing，不访问 disabled Nexus provider。
+- 未登录、provider unavailable、quota exhausted、model/capability unsupported、permission denied 的固定失败路径。
+- provider/model/latency/trace metadata chips 与安全审计字段。
 
 **Beta**：
 
+- OmniPanel Writing Tools MVP：翻译、摘要、改写、解释、纠错、代码解释/Review、copy/retry/replace clipboard 二次确认。
+- Desktop Context Capsule：剪贴板、选中文本、OCR 结果、活动应用/窗口状态摘要等非敏感上下文。
 - Workflow `Use Model` 节点。
 - Review Queue。
 - Skills Pack / Background Automations 与 AI 联动。
@@ -106,13 +109,13 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 **当前证据缺口**：
 
-- CoreBox AI Ask 文本与 OCR 场景仍需要 packaged Electron success/failure UI evidence。
-- OmniPanel Writing Tools 已有 dev 切片，但需要真实 provider-backed 运行、copy/retry/replace clipboard 与失败恢复证据。
-- Nexus invoke 需要覆盖未登录、provider 不可用、quota 不足、model 不支持的明确错误与 provider metadata chips。
+- CoreBox AI Ask 文本与 OCR 场景仍需要 packaged Electron success/failure UI evidence；固定验收矩阵见 `../04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`。
+- Nexus invoke / provider routing 需要覆盖未登录、provider 不可用、quota 不足、model 不支持、Local/Ollama 首选不访问 disabled Nexus 的明确错误与 provider metadata chips。
+- OmniPanel Writing Tools 已有 dev 切片，但属于 MVP/Beta，需要真实 provider-backed 运行、copy/retry/replace clipboard 与失败恢复证据，不能替代 Stable 文本/OCR evidence。
 - 模型路由需要可见 scene/provider/model 绑定、fallback、latency/token/trace chips 与错误路径证据。
 - 桌面上下文需要证明首批输入只读取已授权或显式传入的数据，并展示 degraded/unsupported reason；前台、焦点、屏幕、UI、轨迹、工作区与通知仍是后续扩展。
 - Agent 工具执行需要内置工具、MCP、插件能力的 permission gate、audit trail、失败恢复和 packaged UI evidence；CDP/视觉交互/Token 节省不能只停留在 copy。
-- Workflow/Skills/Automation 保持 Beta；Assistant、语音、多模态生成保持 Experimental，不进入当前稳定化承诺。
+- OmniPanel Writing Tools、Workflow/Review Queue/Skills/Automation 保持 MVP/Beta；Assistant、语音、多模态生成保持 Experimental，不进入当前稳定化承诺。
 
 ### 2.5.3 - 本地知识检索与上下文构建
 
@@ -165,7 +168,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - VSCode 插件覆盖本地 extensions 与 recent workspaces/projects；Marketplace 搜索不进入首版。
 - macOS App Data 先调研 Notes/Reminders/Calendar/Contacts 的权限与本地只读可行性；无法给出授权/降级 reason 时不接入。
 - Epic 插件先澄清 Epic 指向；若是 Unreal 本地项目，优先 `.uproject` 与最近项目。
-- Everything 收口明确 SDK vs CLI 策略、路径授权过滤与 diagnostic evidence；Windows 真机回归后移为平台专项。
+- Everything 收口明确 SDK vs CLI 策略、路径授权过滤与 diagnostic evidence；平台差异能力必须有可见 degraded/unsupported reason 与 fail-closed 行为。
 - 非目标：不包含更新系统 Nexus Hard-Cut；不做跨 App 写回、账号同步或未授权扫描。
 
 **Indexing Runtime V1 当前批次状态（2026-05-30）**：
@@ -183,7 +186,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - FileProvider 内部 SQLite/FTS 真实写入、scan worker、index worker flush trace、scan_progress/integrity reset 调度仍未完全迁到 runtime task/store 边界。
 - Browser Bookmarks 仍是 CoreApp skeleton + scanner 样板，真正 indexed source、watch root 注册、persistent rebuild、clear/disable UI 仍需迁到官方 `touch-browser-data` 插件并受用户同意约束。
 - Browser History、Quicklinks、System Settings、Obsidian、VSCode 目前只有 SDK descriptor/admission 或计划，尚未实现完整 source lifecycle。
-- Everything SDK/CLI 最终策略、registry PATH 探测、Windows 真机性能/evidence 仍未闭环。
+- Everything SDK/CLI 最终策略、registry PATH 探测、Windows 运行性能/evidence 仍未闭环。
 - Durable job history、跨 source retry/debounce、source health 用户恢复动作、真实平台手工回归仍需补证。
 
 下一批执行顺序：
@@ -193,7 +196,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 3. CLI publish evidence：补过期 app JWT 交互刷新、API key publish 与 `TUFF_NON_INTERACTIVE=1` fail-closed 证据，并评估 upload POST 是否应携带 device headers。
 4. File write/store boundary：继续把 FileProvider 写入、progress、integrity reset 收敛到 runtime store/task，不改变 SQLite/FTS/SearchIndex worker 的真实语义。
 5. Browser Bookmarks official lifecycle：把 metadata-only `manifest.indexedSources` 接到官方 `touch-browser-data` runtime source 注册、显式 consent、watch root、persistent rebuild 与 clear/disable UI。
-6. Everything 与 Windows App evidence：补 registry PATH 探测、Windows 真机性能、手动文件索引完成通知与 fail-closed 诊断验收。
+6. Everything 与 Windows App evidence：补 registry PATH 探测、Windows 运行性能、手动文件索引完成通知与 fail-closed 诊断验收。
 
 建议提交批次：
 
@@ -214,6 +217,18 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - streaming transcription、VAD 断句、会议长音频与 faster-whisper 作为 Beta / Experimental。
 - TTS、语音唤醒、Assistant 悬浮球默认入口不进入 2.5.8 Stable。
 
+### 2.6.0 - i18n / Domain Lexicon / Cloud Catalog 收敛
+
+**目标**：把现有写死中英文、中文 fallback、双语三元表达式和散落单位别名收敛为一套可验证、可扩展、可开放给插件开发者的多语言数据与 catalog 体系。
+
+**方向**：
+
+- UI messages 只承载界面文案；transport messages 只传 key 与 params；单位、币种、时区、能力标签、搜索别名等进入 Domain Lexicon。
+- Domain Lexicon 使用 canonical id + localized label/aliases；解析可匹配多语言 alias，展示按当前 locale label 输出。
+- 插件开发者通过 SDK facade 读取 locale、解析 `LocalizedText`、查询内置词库，并注册 plugin-scoped lexicon，不直接读 `window.$t/window.$i18n`。
+- Cloud Catalog 统一由 CatalogService 下载、验签/hash、schema 校验、导入 SQLite、激活与回滚；JSON 只作为下载载荷，不作为本地业务 SoT。
+- 首批落 locale core、LocalizedText/LocalizedList、单位 registry、插件 localized metadata 合同与 catalog baseline；不把全量翻译债务一次性阻塞在 2.6.0。
+
 ## 4. 质量与安全路线
 
 - Storage：SQLite 为本地 SoT；JSON 只作为密文同步载荷或引用。
@@ -221,19 +236,23 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - Sync：新增同步能力走 `/api/v1/sync/*` 及 keys/devices 配套接口。
 - Transport：新增事件优先 typed builder；retained raw event 必须有 alias registry、dual listen、hit evidence 与 hard-cut 条件。
 - Runtime：生产路径不得返回固定假值成功或可消费占位 payload。
-- Platform：生产路径必须有可见 degraded/unsupported reason 与 fail-closed 行为；Windows/macOS 真机人工回归当前后移为平台专项，不阻塞本轮 `2.4.11` checklist；Linux best-effort 必须有可见 reason。
+- i18n：新增 UI 文案必须进入 message catalog，不得用中文 fallback、硬编码双语三元表达式或直接访问 `window.$t/window.$i18n` 作为生产路径。
+- Domain Lexicon：单位、币种、时区、能力标签、搜索别名等领域词汇必须声明 locale coverage、canonical id、localized label/aliases 与来源；不能散写 locale branch。
+- Catalog：云端下载数据必须签名/hash/schema 校验后导入 SQLite，并提供版本激活与回滚；不得把明文 JSON 当作本地业务 SoT 或混用 private sync 通道。
+- Platform：生产路径必须有可见 degraded/unsupported reason 与 fail-closed 行为；Linux best-effort 必须有可见 reason。
 - CI/CD：GitHub Actions `uses:` 依赖保持 Node 24-compatible major；业务 Node runtime 继续固定 `22.16.0+`；独立 OmniPanel Gate workflow 已删除，不再作为 push/PR/manual 自动门禁；包级 publish workflow 的 path filter 必须覆盖对应 package manifest、publish 脚本、`pnpm-lock.yaml` 与 workspace catalog，避免依赖规格修复漏跑发布流水线。
 
 ## 5. 当前状态快照
 
 - 当前基线：`2.4.10`。
-- `2.4.10` 已作为当前稳定基线；GitHub Release 与 Nexus release metadata sync 已成功；当前代码版本 root/CoreApp `2.4.11-beta.8`，`@talex-touch/tuffex@0.3.9`、`@talex-touch/tuff-cli@0.0.7` 进入当前包口径；其余公共 npm 子包缺失版本仍需确认具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发；`2.4.11` 继续收口 legacy/compat/size 债务与 release checklist。
-- FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
-- 2026-05-22 兼容性/占位实现增量审计未发现新的 P0 假成功；`touch-snipaste`、`touch-window-presets`、Browser Data source diagnostics 与 `touch-quick-actions` 已有 live-tree hardening 证据，`2.4.11` 后续聚焦 Credential Locker/libsecret、widget runtime sandbox regression、裸 console、示例插件调试噪声、SRP 小切片与 release checklist；真实平台 evidence 后移为平台专项。
-- 2026-05-25 UI/兼容/占位/架构审计继续未发现新的 P0 fixed fake-success；2026-05-26 已完成 preload debug DOM 文本化与同段 debug console 清理；2026-05-29 增量审计确认 Nexus/TuffEx 组合 demo 与 dashboard chart wrapper 改善 UI 完善度，同日已完成 legacy retained aliases hit telemetry/hard-cut 判定记录、`touch-text-snippets` / `touch-code-snippets` hidden/deprecated/replacedBy 退场、Nexus `source: memory` evidence source 分层、dialog message 文本/可信 HTML 分流与 TuffEx docs visual smoke 脚本；同日 post-slice 复核确认 UI 方向应继续走专业工具高密度可扫描路线；`v2.4.11-beta.6` 发布成功并通过发布后 Gate D strict 复核，2026-06-13 代码版本已到 `v2.4.11-beta.8`，CLI publish 旧 token 刷新体验已补。当前仍缺完整 release cycle legacy hit=0 观察，以及 Nexus 资产 signatureUrl / signature endpoint 收口；visual smoke 先作为 focused evidence，不改变 `quality:pr` / `quality:release` 门禁。Windows/macOS 真机人工回归不纳入本轮阻塞。
+- `2.4.10` 已作为当前稳定基线；GitHub Release 与 Nexus release metadata sync 已成功；当前代码版本 root/CoreApp `2.4.12-beta.8`；公共包发布不再作为独立 Roadmap / blocker / evidence 项，版本变更后以 GitHub 自动发版 workflow 结果为准；当前主线按 Roadmap vNext 收口 R0 口径清理、R1 Release Integrity、R2 AI Stable 与 R3 Indexing Runtime。
+- FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`2.4.11` release checklist 已有通过记录，但 R1 Release Integrity 未完成前，不得宣称发布链路全闭环。
+- 2026-05-22 兼容性/占位实现增量审计未发现新的 P0 假成功；`touch-snipaste`、`touch-window-presets`、Browser Data source diagnostics 与 `touch-quick-actions` 已有 live-tree hardening 证据，`2.4.11` 后续聚焦 Credential Locker/libsecret、widget runtime sandbox regression、裸 console、示例插件调试噪声、SRP 小切片与 release checklist。
+- 2026-05-25 UI/兼容/占位/架构审计继续未发现新的 P0 fixed fake-success；2026-05-26 已完成 preload debug DOM 文本化与同段 debug console 清理；2026-05-29 增量审计确认 Nexus/TuffEx 组合 demo 与 dashboard chart wrapper 改善 UI 完善度，同日已完成 legacy retained aliases hit telemetry/hard-cut 判定记录、`touch-text-snippets` / `touch-code-snippets` hidden/deprecated/replacedBy 退场、Nexus `source: memory` evidence source 分层、dialog message 文本/可信 HTML 分流与 TuffEx docs visual smoke 脚本；同日 post-slice 复核确认 UI 方向应继续走专业工具高密度可扫描路线；`v2.4.11-beta.6` 发布成功并通过发布后 Gate D strict 复核，2026-06-13 代码版本已到 `v2.4.11-beta.8`，CLI publish 旧 token 刷新体验已补。当前仍缺完整 release cycle legacy hit=0 观察，以及 Nexus 资产 signatureUrl / signature endpoint 收口；visual smoke 先作为 focused evidence，不改变 `quality:pr` / `quality:release` 门禁。平台人工验证已由 owner 完成，不再作为 Roadmap blocker。
 - 2026-06-13 Nexus docs SEO/prerender 收口为过渡方案：全站 i18n 仍保持 `no_prefix`，docs 显式生成 `/en/docs/**`、`/zh/docs/**` 并在页面内同步 locale；真实 docs 根索引已补齐，SEO head/canonical/alternate/robots/OG/Twitter/TechArticle JSON-LD 与 localized prerender evidence 均有 focused Vitest 覆盖，不改变 `quality:pr` / `quality:release` 门禁。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
 - App Data Plugins 与 Everything 已新增专题 Roadmap，近期不进入更新系统 Nexus Hard-Cut 范围；Browser Data、Obsidian、VSCode、macOS App Data、Epic 与 Everything 生产化收口按插件/搜索主线推进。
+- 2.6.0 i18n / Domain Lexicon / Cloud Catalog 已新增专题 PRD；当前为规划与质量约束口径，后续实现不得把单位等领域词汇塞回普通 UI locale，也不得把云端 catalog 作为明文 JSON 本地 SoT。
 - Nexus Provider Registry / Scene 已具备最小运行链路，后续继续补旧 AI provider 表退场、user-scope OCR 绑定策略、success rate/配额/dynamic pricingRef。
 
 ## 6. 关联入口
