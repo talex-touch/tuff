@@ -1,10 +1,13 @@
-import type {
-  IntelligenceMessage,
-  IntelligenceUsageInfo,
-  TuffIntelligenceApprovalTicket,
+import {
+  IntelligenceProviderType,
+  normalizeIntelligencePayload,
+  resolveIntelligenceProviderRoutes,
+  toRuntimeCapabilityId,
+  type IntelligenceMessage,
+  type IntelligenceUsageInfo,
+  type TuffIntelligenceApprovalTicket,
 } from '@talex-touch/tuff-intelligence/light'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
-import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence/light'
 import { createError, type H3Event } from 'h3'
 import { getUserById } from './authStore'
 import { consumeCredits } from './creditsStore'
@@ -95,12 +98,15 @@ interface InvokeModelResult {
 }
 
 interface InvokeModelOptions {
+  capabilityId?: string
   providerId?: string
   model?: string
   timeoutMs?: number
   source?: string
   stage?: string
   sessionId?: string
+  modelPreference?: string[]
+  allowedProviderIds?: string[]
 }
 
 interface NexusInvokeOptions extends InvokeModelOptions {
@@ -774,35 +780,56 @@ async function resolveProviderCandidates(
   event: H3Event,
   userId: string,
   options: {
+    capabilityId?: string
     providerId?: string
     model?: string
     timeoutMs?: number
+    modelPreference?: string[]
+    allowedProviderIds?: string[]
   } = {},
 ): Promise<ResolvedProviderContext[]> {
   const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
-  const enabledProviders = providers.filter(provider => provider.enabled)
-  if (enabledProviders.length <= 0)
+  if (providers.filter(provider => provider.enabled).length <= 0)
     throw new Error('No enabled intelligence providers.')
 
   const settings = await getSettings(event, userId)
-  const orderedProviders = [...enabledProviders].sort((a, b) => a.priority - b.priority)
-  const providerPool = options.providerId
-    ? orderedProviders.filter(provider => provider.id === options.providerId)
-    : (settings.defaultStrategy === 'priority' ? orderedProviders : enabledProviders)
+  const routing = resolveIntelligenceProviderRoutes({
+    capabilityId: options.capabilityId || 'text.chat',
+    providers,
+    options: {
+      providerId: options.providerId,
+      preferredProviderId: options.providerId,
+      model: options.model,
+      timeoutMs: options.timeoutMs,
+      modelPreference: options.modelPreference,
+      allowedProviderIds: options.allowedProviderIds,
+    },
+    defaultStrategy: settings.defaultStrategy,
+    requireApiKey: false,
+  })
 
-  if (providerPool.length <= 0)
-    throw new Error('Target provider not found.')
+  if (routing.routes.length <= 0) {
+    const firstSkipped = routing.skipped[0]
+    if (firstSkipped?.reason === 'provider_not_allowed')
+      throw new Error('Target provider not found.')
+    if (firstSkipped?.reason === 'model_missing')
+      throw new Error('No available intelligence providers: model is missing.')
+    if (firstSkipped?.reason === 'capability_not_supported')
+      throw new Error(`No provider supports ${options.capabilityId || 'text.chat'}.`)
+    throw new Error('No available intelligence providers.')
+  }
 
   const contexts: ResolvedProviderContext[] = []
   const skippedErrors: string[] = []
-  for (const provider of providerPool) {
-    const model = options.model?.trim() || provider.defaultModel || provider.models[0]
+  for (const route of routing.routes) {
+    const provider = route.provider
+    const model = route.model
     if (!model) {
       skippedErrors.push(`Provider "${provider.name}" has no model configured.`)
       continue
     }
 
-    const timeoutMs = Math.max(DEFAULT_TIMEOUT_MS, options.timeoutMs ?? provider.timeout ?? DEFAULT_TIMEOUT_MS)
+    const timeoutMs = Math.max(DEFAULT_TIMEOUT_MS, route.timeoutMs ?? DEFAULT_TIMEOUT_MS)
     const apiKey = provider.type === IntelligenceProviderType.LOCAL
       ? null
       : await getIntelligenceProviderApiKeyWithRegistryFallback(event, userId, provider.id)
@@ -954,21 +981,18 @@ async function invokeLocalChat(
 async function invokeModel(
   event: H3Event,
   userId: string,
-  payload: {
-    providerId?: string
-    model?: string
-    timeoutMs?: number
+  payload: InvokeModelOptions & {
     messages: IntelligenceMessage[]
-    source?: string
-    stage?: string
-    sessionId?: string
   },
 ): Promise<InvokeModelWithFallbackResult> {
   const settings = await getSettings(event, userId)
   const contexts = await resolveProviderCandidates(event, userId, {
+    capabilityId: payload.capabilityId,
     providerId: payload.providerId,
     model: payload.model,
     timeoutMs: payload.timeoutMs,
+    modelPreference: payload.modelPreference,
+    allowedProviderIds: payload.allowedProviderIds,
   })
   const attemptedProviders: string[] = []
   const errors: InvokeModelAttemptError[] = []
@@ -1339,11 +1363,11 @@ function buildCapabilityMessages(capabilityId: string, payload: unknown): Intell
 }
 
 function normalizeCapabilityId(capabilityId: unknown): string {
-  if (typeof capabilityId !== 'string' || !capabilityId.trim()) {
+  const normalized = toRuntimeCapabilityId(capabilityId)
+  if (!normalized) {
     throw createError({ statusCode: 400, statusMessage: 'capabilityId is required.' })
   }
-  const normalized = capabilityId.trim()
-  return normalized === 'chat.completion' ? 'text.chat' : normalized
+  return normalized
 }
 
 function normalizeUsage(usage?: IntelligenceUsageInfo): IntelligenceUsageInfo {
@@ -1678,11 +1702,11 @@ export async function invokeIntelligenceCapability(
   userId: string,
   request: NexusIntelligenceInvokePayload,
 ): Promise<NexusIntelligenceInvokeResult> {
-  const capabilityId = normalizeCapabilityId(request.capabilityId)
+  const normalizedRequest = normalizeIntelligencePayload(request.capabilityId, request.payload)
+  const capabilityId = normalizeCapabilityId(normalizedRequest.capabilityId)
   const options = request.options ?? {}
   const audit = resolveInvokeAuditContext(options)
   const model = options.model
-    || (Array.isArray(options.modelPreference) ? readOptionalString(options.modelPreference[0]) : undefined)
   const providerId = options.providerId
     || options.preferredProviderId
     || undefined
@@ -1695,7 +1719,7 @@ export async function invokeIntelligenceCapability(
     await assertIntelligenceProviderQuota(event, governanceProviderId)
     await recordIntelligenceProviderRequest(event, governanceProviderId, capabilityId)
     const startedAt = now()
-    const ocr = await invokeIntelligenceVisionOcr(event, provider, request.payload)
+    const ocr = await invokeIntelligenceVisionOcr(event, provider, normalizedRequest.payload)
     const result: NexusIntelligenceInvokeResult = {
       capabilityId,
       result: ocr.output,
@@ -1730,11 +1754,14 @@ export async function invokeIntelligenceCapability(
     return result
   }
 
-  const messages = buildCapabilityMessages(capabilityId, request.payload)
+  const messages = buildCapabilityMessages(capabilityId, normalizedRequest.payload)
   const invocation = await invokeModel(event, userId, {
+    capabilityId,
     providerId,
     model,
     timeoutMs,
+    modelPreference: options.modelPreference,
+    allowedProviderIds: options.allowedProviderIds,
     messages,
     source: audit.source,
     stage: `capability:${capabilityId}`,

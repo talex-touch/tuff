@@ -1,7 +1,8 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import type {
-  IntelligencePromptBinding,
-  IntelligencePromptRecord,
+import {
+  resolveIntelligencePromptTemplate,
+  type IntelligencePromptBinding,
+  type IntelligencePromptRecord,
 } from '@talex-touch/tuff-intelligence/light'
 import type { H3Event } from 'h3'
 import crypto from 'uncrypto'
@@ -1169,28 +1170,10 @@ export async function resolveCapabilityPromptTemplate(
     }),
   ])
 
-  const orderedBindings = [
-    ...bindings.filter(item => item.providerId === providerId),
-    ...bindings.filter(item => !item.providerId),
-  ]
-
-  for (const binding of orderedBindings) {
-    const candidates = records.filter(item => {
-      if (item.id !== binding.promptId) return false
-      if (binding.promptVersion && item.version !== binding.promptVersion) return false
-      if (providerId && item.providerId && item.providerId !== providerId) return false
-      return true
-    })
-
-    if (candidates.length <= 0) {
-      continue
-    }
-
-    const selected = [...candidates].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
-    if (selected?.template) {
-      return selected.template
-    }
-  }
-
-  return null
+  return resolveIntelligencePromptTemplate({
+    capabilityId,
+    providerId,
+    promptBindings: bindings,
+    promptRegistry: records,
+  }) ?? null
 }

@@ -161,6 +161,24 @@ describe('intelligenceProviderRegistryBridge', () => {
     })
   })
 
+  it('normalizes image capability aliases through the shared intelligence resolver', async () => {
+    await syncIntelligenceProviderToRegistry({} as any, provider({
+      capabilities: ['text.chat', 'images.generate', 'image.inpaint'],
+    }), 'admin-user-1')
+
+    const input = registryMocks.createProviderRegistryEntry.mock.calls[0][1]
+    expect(input.capabilities.map((item: any) => item.capability)).toEqual([
+      'chat.completion',
+      'image.edit',
+      'image.generate',
+    ])
+    expect(input.capabilities.map((item: any) => item.metadata.originalCapability)).toEqual([
+      'text.chat',
+      'image.edit',
+      'image.generate',
+    ])
+  })
+
   it('maps local intelligence providers to vision.ocr without credential requirement', async () => {
     await syncIntelligenceProviderToRegistry({} as any, provider({
       type: 'local',
