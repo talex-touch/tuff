@@ -131,6 +131,12 @@ output/
 state/
 coreapp-browser-smoke-*.png
 docs/engineering/reports/**/user-data/
+docs/engineering/reports/**/_local/
+docs/engineering/reports/**/raw/
+docs/engineering/reports/**/*-pid.txt
+docs/engineering/reports/**/*-probe-output.json
+docs/engineering/reports/**/*-capture-output.json
+docs/engineering/reports/**/*-dom-probe-output.json
 
 # ========================
 # Project-specific (nexus)

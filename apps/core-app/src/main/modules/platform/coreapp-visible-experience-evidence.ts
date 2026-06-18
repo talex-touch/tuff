@@ -600,7 +600,7 @@ export function renderCoreAppVisibleExperienceEvidenceTemplate(
         lines.push(`  - ${artifactPath}`)
       }
     } else {
-      lines.push('  - ')
+      lines.push('  - _none_')
     }
     lines.push('- Notes:', '')
   }
