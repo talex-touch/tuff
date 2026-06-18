@@ -267,6 +267,63 @@ describe('invokeIntelligenceCapability', () => {
     })
   })
 
+  it('accepts chat.completion alias through shared capability normalizer', async () => {
+    await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'chat.completion',
+      payload: {
+        input: 'hello from alias',
+      },
+    })
+
+    expect(langchainMocks.invoke).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        content: 'hello from alias',
+      }),
+    ]))
+    expect(storeMocks.createAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      metadata: expect.objectContaining({
+        stage: 'capability:text.chat',
+      }),
+    }))
+  })
+
+  it('routes direct invoke through shared provider routing and capability filters', async () => {
+    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValueOnce([
+      provider({
+        id: 'ip_chat_only',
+        priority: 1,
+        capabilities: ['text.chat'],
+      }),
+      provider({
+        id: 'ip_translate',
+        priority: 2,
+        capabilities: ['text.translate'],
+        defaultModel: 'gpt-4o',
+        models: ['gpt-4o'],
+      }),
+    ])
+
+    await invokeIntelligenceCapability(h3Event(), 'user_1', {
+      capabilityId: 'text.translate',
+      payload: {
+        text: 'hello',
+        targetLang: 'zh',
+      },
+      options: {
+        modelPreference: ['gpt-4o'],
+      },
+    })
+
+    expect(providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_1',
+      'ip_translate',
+    )
+    expect(langchainMocks.constructorArgs).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gpt-4o',
+    }))
+  })
+
   it('totalTokens 为 0 时不扣 credits', async () => {
     langchainMocks.invoke.mockResolvedValueOnce({
       content: 'ok',

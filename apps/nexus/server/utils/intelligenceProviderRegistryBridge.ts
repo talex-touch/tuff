@@ -1,4 +1,10 @@
 import type { H3Event } from 'h3'
+import {
+  DEFAULT_CAPABILITIES,
+  toRegistryCapabilityId,
+  toRuntimeCapabilityId,
+  uniqueRegistryCapabilityIds,
+} from '@talex-touch/tuff-intelligence/light'
 import type { IntelligenceProviderRecord } from './intelligenceStore'
 import { getProviderApiKey, listProviders } from './intelligenceStore'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
@@ -6,7 +12,7 @@ import { createProviderRegistryEntry, deleteProviderRegistryEntry, listProviderR
 import { deleteProviderCredential, getProviderCredential, storeProviderCredential } from './providerCredentialStore'
 
 const INTELLIGENCE_PROVIDER_SOURCE = 'intelligence'
-const DEFAULT_AI_CAPABILITIES = ['chat.completion', 'text.summarize'] as const
+const DEFAULT_AI_CAPABILITIES = ['text.chat', 'text.summarize'] as const
 
 const PROVIDER_TYPE_VENDOR: Record<string, 'openai' | 'deepseek' | 'custom'> = {
   openai: 'openai',
@@ -55,21 +61,15 @@ export function buildIntelligenceProviderAuthRef(providerId: string): string {
 }
 
 function normalizeCapabilities(capabilities: string[] | null | undefined, type: string): string[] {
-  const source = capabilities?.length ? capabilities : [...DEFAULT_AI_CAPABILITIES]
-  const normalized = new Set<string>()
-
-  for (const capability of source) {
-    if (capability === 'text.chat') {
-      normalized.add('chat.completion')
-      continue
-    }
-    normalized.add(capability)
-  }
+  const source = capabilities?.length
+    ? capabilities
+    : DEFAULT_AI_CAPABILITIES.filter(capability => DEFAULT_CAPABILITIES[capability])
+  const normalized = new Set(uniqueRegistryCapabilityIds([...source]))
 
   if (type === 'local')
-    normalized.add('vision.ocr')
+    normalized.add(toRegistryCapabilityId('vision.ocr'))
 
-  return [...normalized].sort()
+  return [...normalized].filter(Boolean).sort()
 }
 
 function buildCapabilityInput(capability: string) {
@@ -81,7 +81,7 @@ function buildCapabilityInput(capability: string) {
       : { unit: 'token' },
     metadata: {
       source: INTELLIGENCE_PROVIDER_SOURCE,
-      originalCapability: capability === 'chat.completion' ? 'text.chat' : capability,
+      originalCapability: toRuntimeCapabilityId(capability),
     },
   }
 }
@@ -144,7 +144,7 @@ function readRateLimitMetadata(metadata: Record<string, unknown> | null | undefi
 }
 
 function toLegacyCapability(capability: string): string {
-  return capability === 'chat.completion' ? 'text.chat' : capability
+  return toRuntimeCapabilityId(capability)
 }
 
 function mapRegistryMirrorToIntelligenceProvider(entry: ProviderRegistryRecord): IntelligenceProviderRecord | null {
