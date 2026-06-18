@@ -282,4 +282,40 @@ describe('search-processing-service', () => {
       ])
     )
   })
+
+  it('maps camel-case app title initials to title highlights without alias noise', async () => {
+    const rows = [
+      createAppSearchRow({
+        name: 'MacCleaner Pro',
+        displayName: 'MacCleaner Pro',
+        path: '/Applications/MacCleaner Pro.app',
+        extensions: {
+          appIdentity: '/Applications/MacCleaner Pro.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/MacCleaner Pro.app'
+        }
+      })
+    ] as unknown as Parameters<typeof processSearchResults>[0]
+    const query = { text: 'cp', inputs: [] } as Parameters<typeof processSearchResults>[1]
+
+    const items = await processSearchResults(rows, query, false, {})
+    const meta = items[0]?.meta as
+      | {
+          extension?: {
+            source?: string
+            matchResult?: Array<{ start: number; end: number }>
+            matchAlias?: { text?: string; matchResult?: Array<{ start: number; end: number }> }
+          }
+        }
+      | undefined
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.render.basic?.title).toBe('MacCleaner Pro')
+    expect(meta?.extension?.source).toBe('initials')
+    expect(meta?.extension?.matchResult).toEqual([
+      { start: 3, end: 4 },
+      { start: 11, end: 12 }
+    ])
+    expect(meta?.extension?.matchAlias).toBeUndefined()
+  })
 })

@@ -36,6 +36,13 @@ function isMatchAliasRange(value: unknown): value is MatchAliasRange {
   )
 }
 
+function normalizeAliasComparison(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
 const props = defineProps<Props>()
 
 const { t } = useI18n()
@@ -49,9 +56,25 @@ const matchAlias = computed(() => {
   const matchResult = (rawAlias as { matchResult?: unknown }).matchResult
   if (typeof text !== 'string' || !text.trim()) return null
 
+  const ranges = Array.isArray(matchResult)
+    ? matchResult.filter(
+        (range) =>
+          isMatchAliasRange(range) &&
+          range.start >= 0 &&
+          range.end > range.start &&
+          range.start < text.length
+      )
+    : []
+
+  if (!ranges.length) return null
+
+  if (normalizeAliasComparison(text) === normalizeAliasComparison(resolvedTitle.value)) {
+    return null
+  }
+
   return {
     text,
-    matchResult: Array.isArray(matchResult) ? matchResult.filter(isMatchAliasRange) : []
+    matchResult: ranges
   }
 })
 
@@ -244,20 +267,25 @@ const shouldShowNoticeReason = computed(
 
 .BoxItemMatchAlias {
   display: inline-block;
-  flex: 0 1 min(42%, 160px);
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: min(42%, 160px);
-  padding: 1px 6px;
+  max-width: min(36%, 128px);
+  padding: 0 5px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-primary) 10%, var(--tx-fill-color-light));
+  background: color-mix(in srgb, var(--tx-color-primary) 6%, transparent);
   color: var(--tx-text-color-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+.BoxItemMatchAlias :deep(.CoreBoxTextHighlight) {
+  color: var(--tx-color-primary);
+  font-weight: 700;
 }
 
 .BoxItemSignals {

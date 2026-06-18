@@ -23,8 +23,11 @@ vi.mock('@talex-touch/tuffex/icon', () => ({
   }
 }))
 
-function createFeatureItem(): TuffItem {
-  const render = createRender()
+function createFeatureItem(
+  matchResult: Array<{ start: number; end: number }> = [{ start: 0, end: 'Clipboard'.length }],
+  options: { alias?: string; title?: string } = {}
+): TuffItem {
+  const render = createRender(options.title)
 
   return {
     id: 'clipboard-history/clipboard-history',
@@ -35,19 +38,19 @@ function createFeatureItem(): TuffItem {
       pluginName: 'clipboard-history',
       extension: {
         matchAlias: {
-          text: 'Clipboard',
-          matchResult: [{ start: 0, end: 'Clipboard'.length }]
+          text: options.alias ?? 'Clipboard',
+          matchResult
         }
       }
     }
   } as TuffItem
 }
 
-function createRender(): TuffRender {
+function createRender(title = '剪贴板历史记录'): TuffRender {
   return {
     mode: 'default',
     basic: {
-      title: '剪贴板历史记录',
+      title,
       subtitle: '查看和管理剪贴板历史记录',
       icon: { type: 'class', value: 'i-ri-clipboard-line' }
     }
@@ -73,5 +76,48 @@ describe('BoxItem match alias rendering', () => {
 
     expect(alias.html()).toContain('CoreBoxTextHighlight')
     expect(alias.text()).toBe('Clipboard')
+  })
+
+  it('hides the matched alias when it has no highlight range', () => {
+    const wrapper = mount(BoxItem, {
+      props: {
+        item: createFeatureItem([]),
+        active: false,
+        render: createRender()
+      },
+      global: {
+        stubs: {
+          ItemSubtitle: { template: '<span />' }
+        }
+      }
+    })
+
+    expect(wrapper.find('.BoxItemMatchAlias').exists()).toBe(false)
+  })
+
+  it('hides the matched alias when it only differs from the title by case or separators', () => {
+    const wrapper = mount(BoxItem, {
+      props: {
+        item: createFeatureItem(
+          [
+            { start: 4, end: 5 },
+            { start: 12, end: 13 }
+          ],
+          {
+            alias: 'Mac Cleaner Pro',
+            title: 'MacCleaner Pro'
+          }
+        ),
+        active: false,
+        render: createRender('MacCleaner Pro')
+      },
+      global: {
+        stubs: {
+          ItemSubtitle: { template: '<span />' }
+        }
+      }
+    })
+
+    expect(wrapper.find('.BoxItemMatchAlias').exists()).toBe(false)
   })
 })

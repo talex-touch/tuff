@@ -229,28 +229,35 @@ export function addTitleSearchTokens(tokens: SearchTokenList, title: string | nu
     })
   }
 
-  for (const match of normalized.matchAll(WORD_REGEX)) {
-    const rawWord = match[0]
-    const start = match.index ?? 0
-    const value = rawWord.toLowerCase()
+  const wordParts = collectWordTokenParts(normalized)
+  for (const part of wordParts) {
     addSearchToken(tokens, {
-      value,
+      value: part.value,
       source: 'title',
-      display: rawWord,
-      segments: [{ tokenStart: 0, tokenEnd: value.length, titleStart: start, titleEnd: start + rawWord.length }]
+      display: normalized.slice(part.rawStart, part.rawEnd),
+      segments: [
+        {
+          tokenStart: 0,
+          tokenEnd: part.value.length,
+          titleStart: part.rawStart,
+          titleEnd: part.rawEnd
+        }
+      ]
     })
   }
 
-  const wordMatches = Array.from(normalized.matchAll(WORD_REGEX))
-  if (wordMatches.length >= 2) {
+  if (wordParts.length >= 2) {
     let initials = ''
     const segments: NonNullable<FeatureSearchToken['segments']> = []
-    for (const match of wordMatches) {
-      const rawWord = match[0]
-      const start = match.index ?? 0
+    for (const part of wordParts) {
       const tokenStart = initials.length
-      initials += rawWord[0]?.toLowerCase() || ''
-      segments.push({ tokenStart, tokenEnd: tokenStart + 1, titleStart: start, titleEnd: start + 1 })
+      initials += part.value[0] || ''
+      segments.push({
+        tokenStart,
+        tokenEnd: tokenStart + 1,
+        titleStart: part.rawStart,
+        titleEnd: part.rawStart + 1
+      })
     }
     addSearchToken(tokens, { value: initials, source: 'initials', display: normalized, segments })
   }
