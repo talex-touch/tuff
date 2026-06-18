@@ -5,6 +5,59 @@
 
 ## 2026-06-19
 
+### fix(core-app): keep intelligence widget visible during activation
+
+- `plugins/touch-intelligence/index.js`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts`
+  - Made `touch-intelligence` await widget state pushes on idle, pending, ready and error paths, and removed the duplicate pre-clear before initial widget state creation.
+  - Preserved plugin feature metadata when CoreBox receives compressed `plugin-features:<plugin>` activation snapshots, so widget/send-mode state is not lost after execute or search-end events.
+  - Added a minimal custom-render fallback item for active widget features when pushed root-result items are delayed or filtered, preventing an empty full-height widget panel.
+  - CoreBox widget mode now selects the first plugin custom-render widget item instead of requiring the whole result list to contain exactly one item.
+  - Validation: `pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts"`, `pnpm -C "apps/core-app" run typecheck:web`, and scoped `git diff --check` passed.
+
+### feat(utils): add QuickOps QR Code preview
+
+- `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.test.ts`
+- `apps/core-app/src/renderer/src/components/render/custom/PreviewResultCard.vue`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `qr code` / `二维码` handling to `QuickOpsDeveloperAbility`, generating local SVG QR Code data URLs for short text and URL input without network access or new package dependencies.
+  - Extended the bounded local QR generator to Byte mode, ECC-L, QR versions 1-6, and a 134-byte input cap; oversized input returns a preview error instead of fake success.
+  - Updated CoreApp `PreviewResultCard` to render QR SVG payloads as an inline image while keeping the SVG data URL as the primary copy value.
+  - Added `preview-save-qr-svg` and `preview-save-qr-png` execute actions that write QR files to `app.getPath('temp')/tuff-quickops` with opaque filenames and copy the saved path; v7+ higher-capacity QR remains later work.
+  - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 13 tests; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/preview/preview-provider.test.ts"` passed with 1 file / 8 tests.
+
+### feat(core-app): add QuickOps recent download file lookup
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added QuickOps Files commands for `recent download` / `latest download` / `最近下载文件`, scanning only the top-level Downloads directory for regular files and selecting the newest file by modified time.
+  - Returned open-file, open-containing-folder, and copy-path actions while keeping the operation local, read-only, and safe-risk; empty, permission-denied, and read-failed cases return degraded notifications.
+  - Added `move recent download to "/target"` / `移动最近下载到 "/target"` as a dangerous confirmed execute action that moves the newest Downloads file to an explicit absolute directory, refuses overwrite, and rechecks that the source is still inside Downloads at execution time.
+  - Kept real system-open evidence and real platform move evidence tracked as later work.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed with 1 file / 93 tests.
+
+### feat(core-app): add QuickOps solid color screen tests
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-session-manager.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Extended the existing local screen-clean overlay runtime with red / green / blue solid color screen-test modes, reusing the same `screen-clean` session lifecycle, stop action, timeout cleanup and sandboxed data URL path.
+  - Added CoreBox commands such as `screen color test`, `red screen test`, `blue screen test` and `蓝色屏幕测试`; generic color-test commands default to red.
+  - Kept the safety boundary unchanged: no screen capture, no external resources, no persistence and no system display setting mutation.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed with 1 file / 89 tests.
+  - This does not close real visual screenshot/recording evidence, QR Code, Flow/AI adapter, enterprise policy, real port kill / confirmation UI or packaged app quit evidence.
+
 ### test(utils): tighten QuickOps PreviewSDK no-result boundaries
 
 - `packages/utils/core-box/preview/abilities/quickops-developer-ability.ts`
@@ -19,6 +72,26 @@
   - This does not close QR Code, Flow/AI adapter, enterprise policy, real platform evidence, real port kill / confirmation UI or packaged app quit evidence.
 
 ## 2026-06-18
+
+### chore(docs): separate report raw artifacts from commit evidence
+
+- `.gitignore`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/REPORT-HYGIENE.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json`
+- `docs/engineering/README.md`
+- `docs/engineering/reports/README.md`
+- `docs/plan-prd/TODO.md`
+  - Added report hygiene ignore rules for future `docs/engineering/reports/**/raw/`, `_local/`, pid files and probe/capture output mirrors while keeping curated report summaries and final evidence trackable.
+  - Reduced the CoreBox AI Ask manifest artifact list from raw probe logs/stage mirrors to the six accepted evidence files: CoreBox hotkey capture, model-unsupported probe/screenshot and runtime permission-denied probe/screenshot.
+  - Added `REPORT-HYGIENE.md` to document the commit-worthy set, raw/local-only candidate categories and accepted evidence mapping for this report.
+  - Changed the visible-experience checklist renderer to output `- _none_` for empty artifact paths instead of an empty bullet, preventing generated Markdown trailing whitespace.
+  - After review, removed 57 previously tracked raw files from the Git index and moved 69 local raw files under ignored `raw/`, leaving the curated report directory with summary docs, readiness/strict outputs and accepted evidence files only.
+  - Added a structured 2026-06-19 AI Stable TODO checklist covering provider-unavailable/logged-out/copy-failure packaged evidence, Local/Ollama routing preflight, `NEXUS_STREAM_UNSUPPORTED` routing follow-up, text/OCR success prerequisites, acceptance commands and non-Stable Beta queues.
+  - Added `docs/engineering/reports/README.md` as the global report hygiene entry, including commit boundaries, reviewed cleanup steps, current report directory inventory and follow-up priorities without deleting historical reports.
 
 ### docs(ai): capture packaged CoreBox AI model-unsupported evidence
 
