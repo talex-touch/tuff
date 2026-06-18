@@ -6,7 +6,7 @@
 
 ## TL;DR
 
-AI SDK 用于通过统一 capability/provider/audit 入口调用 AI 能力。当前 2.5.0 Stable 只承诺文本 + OCR；更复杂的 Agent/Workflow/Scene 编排按 Beta 或后续推进。
+AI SDK 用于通过统一 capability/provider/audit 入口调用 AI 能力。当前 2.5.0 Stable 只承诺 CoreBox 文本 + 显式 OCR、provider routing 与固定失败路径；OmniPanel、Agent、Workflow、Scene 编排按 MVP/Beta 或后续推进。
 
 ## 当前使用原则
 
@@ -18,8 +18,8 @@ AI SDK 用于通过统一 capability/provider/audit 入口调用 AI 能力。当
 
 ## 当前能力边界
 
-- Stable：text chat/translate/summarize/rewrite、code explain/review、vision OCR。
-- Beta：Workflow `Use Model`、Review Queue、模板中心、Skills Pack。
+- Stable：CoreBox `text.chat`、显式 `vision.ocr -> text.chat`、Nexus/provider routing、固定失败路径。
+- Beta：OmniPanel Writing Tools、Workflow `Use Model`、Review Queue、模板中心、Skills Pack。
 - Experimental：Assistant、多模态生成编辑、多 Agent 长任务、Scene runtime 全量 orchestration。
 
 ## 关联入口

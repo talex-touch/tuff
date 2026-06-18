@@ -7,7 +7,7 @@
 
 ## TL;DR
 
-本文保留 Intelligence Agents 早期完整设想。当前项目已将 2.5.0 AI 范围收紧为桌面入口收口：Stable 只承诺文本 + OCR，Agent/Workflow 高级能力分层进入 Beta 或后续。
+本文保留 Intelligence Agents 早期完整设想。当前项目已将 2.5.0 AI 范围收紧为桌面入口收口：Stable 只承诺 CoreBox 文本 + 显式 OCR、provider routing 与固定失败路径，Agent/Workflow 高级能力分层进入 Beta 或后续。
 
 ## 历史有效结论
 
@@ -17,8 +17,8 @@
 
 ## 当前项目口径
 
-- CoreBox AI Ask 与 OmniPanel Writing Tools 是 2.5.0 用户主入口。
-- Workflow `Use Model`、Review Queue 与 3 个 P0 模板是近期重点。
+- CoreBox AI Ask 是 2.5.0 Stable 用户主入口。
+- OmniPanel Writing Tools、Workflow `Use Model`、Review Queue 与 3 个 P0 模板是 MVP/Beta 近期重点。
 - 多 Agent 长任务、Assistant、全量多模态生成编辑保持 Experimental / 2.5.x 后续。
 - 插件/Agent 调用工具必须遵守权限与审计规则。
 

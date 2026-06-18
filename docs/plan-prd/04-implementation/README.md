@@ -15,7 +15,12 @@
 
 | 文件 | 有效状态 | 当前边界 / 下一动作 |
 | --- | --- | --- |
-| `Current-Execution-Plan-2026-06-17.md` | 当前参考 / 短期 SoT | 当前项目进程与 P0/P1 执行计划；先收敛文档口径，再补 AI provider routing、packaged AI evidence、release integrity、NPM publish evidence、File write/store boundary 与平台/治理证据。 |
+| `Roadmap-vNext-2026-06-18.md` | 当前 SoT | R0-R9 阶段化路线：口径清理、Release Integrity、AI Stable、Indexing Runtime、QuickOps、Plugin Trust Boundary、UI/TuffEx、Nexus Governance、i18n/Catalog 与 AI 2.5.x 后续。 |
+| `Pricing-SoT-2026-06-18.md` | 当前 SoT | Pioneer 免费、套餐分层占位、credits/seat 待决策与 pricing UI 禁止伪成功规则。 |
+| `Evidence-Matrix-AI-Stable-2026-06-18.md` | 当前验收矩阵 | AI 2.5.0 Stable 文本/OCR 成功与固定失败路径证据矩阵。 |
+| `Evidence-Matrix-Nexus-Governance-2026-06-18.md` | 当前验收矩阵 | Nexus production / preview governance、live send、object storage、D1 与 quota fail-closed 证据矩阵。 |
+| `Evidence-Matrix-Platform-2026-06-18.md` | 非阻塞回归矩阵 | 平台能力 smoke / degraded / fail-closed 要求；不恢复平台验证 blocker。 |
+| `Current-Execution-Plan-2026-06-17.md` | 当前参考 / 短期计划 | 当前项目进程与短期执行计划；已同步为 Roadmap vNext 口径。 |
 | `ActiveGoalClosure-2026-05-23.md` | 当前参考 | 本轮 2.4.11 稳定化、插件 capability、open PR 与后续 Intelligence 小切片的执行顺序；每个点位仍需按分支/worktree、related-only commit、验证后合并。 |
 | `ActiveGoalBranchCleanup-2026-05-23.md` | 已完成 / 分支收口记录 | 记录 Nexus Data Governance 当前目标进度、已合并/已覆盖分支、污染分支丢弃依据、本地/远程删除清单与 post-cleanup 验证；后续只作为追溯入口。 |
 | `AssistantExperiment-VoiceFloatingBall-260223.md` | 历史参考 / 待重写 | 实验能力默认关闭；继续推进前需重写为当前 Assistant / OmniPanel 能力边界。 |
@@ -34,7 +39,7 @@
 | `TransportRetainedEventWireNamePlan-260514.md` | 当前参考 | Transport retained non-conforming event names 的 wire-name 迁移方案；后续按 alias registry、双监听、发送端切换与 hard-cut evidence 分批实施。 |
 | `TuffTransportMigration260111.md` | 历史参考 / 待重写 | 已补 TL;DR；当前边界以 typed event boundary、retained raw definition 清册与 Wave A 为准。 |
 | `TuffTransportPortPlan260111.md` | 方案参考 | 可作为 MessagePort/Port 抽象后续输入；不得替代当前 Transport Wave A 验收。 |
-| `WidgetSandboxIsolation260221.md` | 历史参考 / 待重写 | 部分能力已落地；当前 widget 验收以 DivisionBox detached widget 真机 evidence 为准。 |
+| `WidgetSandboxIsolation260221.md` | 历史参考 / 待重写 | 部分能力已落地；当前 widget 验收以 DivisionBox detached widget 运行证据为准。 |
 | `config-storage-unification.md` | 草案 / 库存参考 | 可用于存储盘点；Source of Truth、同步与敏感信息规则以当前 Storage / Sync 约束为准。 |
 | `performance/PERFORMANCE_REFERENCE.md` | 参考资料 | 只保留性能优化历史与指标说明；不得代替真实设备性能证据。 |
 

@@ -1,0 +1,123 @@
+{
+  "schema": "coreapp-visible-experience-evidence/v1",
+  "generatedAt": "2026-06-18T12:27:45.998Z",
+  "baselineVersion": "2.4.12-beta.8",
+  "verification": {
+    "recommendedCommand": "pnpm -C \"apps/core-app\" run visible:experience:verify -- --input \"../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json\" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireExistingArtifacts --requireNonEmptyArtifacts"
+  },
+  "surfaces": [
+    {
+      "id": "startup-packaged-hot",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "startup-packaged-cold",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "startup-first-screen",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "corebox-search-states",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "app-index-workbench",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "browser-login-recovery",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "corebox-ai-ask",
+      "status": "pending",
+      "artifactPaths": [
+        "packaged-corebox-hotkey-capture.json",
+        "packaged-corebox-hotkey-page-01.png",
+        "packaged-corebox-hotkey-page-02.png",
+        "packaged-corebox-hotkey-page-03.png",
+        "packaged-corebox-hotkey-page-04.png",
+        "packaged-ai-ask-provider-enabled-probe.json",
+        "packaged-ai-ask-provider-enabled-probe-output.json",
+        "packaged-ai-ask-provider-enabled-probe.log",
+        "packaged-ai-ask-provider-enabled-before-input.png",
+        "packaged-ai-ask-provider-enabled-after-input.png",
+        "packaged-ai-ask-provider-enabled-after-enter.png",
+        "packaged-ai-ask-runtime-permission-denied-probe.json",
+        "packaged-ai-ask-runtime-permission-denied-probe-output.json",
+        "packaged-ai-ask-runtime-permission-denied-probe.log",
+        "packaged-ai-ask-runtime-permission-denied-before-input.png",
+        "packaged-ai-ask-runtime-permission-denied-after-input.png",
+        "packaged-ai-ask-runtime-permission-denied-after-enter.png"
+      ],
+      "checkedEvidence": [
+        "Model unsupported failure shows a supported model or capability recovery hint",
+        "Permission denied failure does not call Intelligence SDK and shows a permission recovery hint"
+      ],
+      "notes": "2026-06-18 packaged app + isolated userData + CDP hotkey capture opened the real CoreBox target; bodyClass=MacIntel core-box and inputIdExists=true. 2026-06-18 provider-enabled AI Ask probe loaded touch-intelligence, enabled touch-intelligence.intelligence-ask search provider, entered a real CoreBox query, and captured visible NEXUS_STREAM_UNSUPPORTED model/capability failure UI. This is packaged Electron evidence for AI-STABLE-06 only; text.chat success, OCR success, logged-out, provider unavailable, quota, permission denied, and Local/Ollama routing evidence remain open. 2026-06-18 runtime permission-denied probe loaded touch-intelligence with grants, revoked intelligence.basic through packaged renderer IPC before CoreBox AI Ask execution, and captured visible permission recovery UI without an Intelligence SDK invocation. Startup-time missing intelligence.basic blocks plugin enablement before CoreBox AI Ask UI appears; that attempt is a blocker note, not permission-denied UI evidence.",
+      "checkedAt": "2026-06-18T22:42:00.000Z"
+    },
+    {
+      "id": "omnipanel-writing-tools",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "assistant-floating-ball-entry",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "assistant-screenshot-translate",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "workflow-use-model-review-queue",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "provider-registry-observability",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    },
+    {
+      "id": "provider-migration-evidence",
+      "status": "pending",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": ""
+    }
+  ]
+}
