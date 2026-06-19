@@ -3,14 +3,18 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { toast } from 'vue-sonner'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   type EverythingHealthState,
+  everythingInstallStartEvent,
+  everythingInstallStatusEvent,
   everythingSetCliPathEvent,
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent,
+  type EverythingInstallPhase,
+  type EverythingInstallStatusResponse,
   type EverythingBackendType,
   type EverythingDiagnosticStage,
   type EverythingStatusResponse
@@ -48,47 +52,19 @@ const openFileEvent = defineRawEvent<
   { filePaths?: string[] }
 >('dialog:open-file')
 
-const EVERYTHING_INSTALL_SCRIPT = [
-  "$ErrorActionPreference='Stop'",
-  "$base=Join-Path $env:LOCALAPPDATA 'Tuff\\Everything'",
-  "$cliDir=Join-Path $env:LOCALAPPDATA 'Tuff\\EverythingCLI'",
-  "$tmp=Join-Path $env:TEMP 'tuff-everything-install'",
-  "$expectedHashes=@{'Everything-1.4.1.1032.x64.zip'='698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c';'Everything-1.4.1.1032.x86.zip'='156db5beb747d69470518a7b9b55af11efc4d3285ddb7cc013c0cc13ced5f237';'Everything-1.4.1.1032.ARM64.zip'='23dca1a64574bf30c9988bbaf5f1d201a0ec7ee9a15e12270ae92a52183cccc8';'ES-1.1.0.30.x64.zip'='30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268';'ES-1.1.0.30.x86.zip'='7e9f04cb92e9eb0440655a395537b204e98e3accd5335e610649d323b15f5117';'ES-1.1.0.30.ARM64.zip'='af5f02b29d6e91b7e70d3b6809bbfe931af671d981e060ecb4f015c30f9697b9'}",
-  "function Assert-ExpectedHash($file,$path){$expected=$expectedHashes[$file];if(-not $expected){throw ('Missing expected hash for ' + $file)};$actual=(Get-FileHash -Algorithm SHA256 -Path $path).Hash.ToLowerInvariant();if($actual -ne $expected){throw ('Hash mismatch for ' + $file + ': expected ' + $expected + ', got ' + $actual)}}",
-  'New-Item -ItemType Directory -Force -Path $base,$cliDir,$tmp | Out-Null',
-  "$nativeArch=if($env:PROCESSOR_ARCHITEW6432){$env:PROCESSOR_ARCHITEW6432}else{$env:PROCESSOR_ARCHITECTURE};$arch=if($nativeArch -eq 'ARM64'){'ARM64'}elseif($nativeArch -eq 'x86'){'x86'}else{'x64'}",
-  "$everythingFile=if($arch -eq 'ARM64'){'Everything-1.4.1.1032.ARM64.zip'}elseif($arch -eq 'x86'){'Everything-1.4.1.1032.x86.zip'}else{'Everything-1.4.1.1032.x64.zip'}",
-  "$cliFile=if($arch -eq 'ARM64'){'ES-1.1.0.30.ARM64.zip'}elseif($arch -eq 'x86'){'ES-1.1.0.30.x86.zip'}else{'ES-1.1.0.30.x64.zip'}",
-  '$everythingZip=Join-Path $tmp $everythingFile',
-  '$cliZip=Join-Path $tmp $cliFile',
-  "Invoke-WebRequest ('https://www.voidtools.com/' + $everythingFile) -UseBasicParsing -OutFile $everythingZip",
-  "Invoke-WebRequest ('https://www.voidtools.com/' + $cliFile) -UseBasicParsing -OutFile $cliZip",
-  'Assert-ExpectedHash $everythingFile $everythingZip',
-  'Assert-ExpectedHash $cliFile $cliZip',
-  'Expand-Archive -Path $everythingZip -DestinationPath $base -Force',
-  'Expand-Archive -Path $cliZip -DestinationPath $cliDir -Force',
-  "$everythingExe=Join-Path $base 'Everything.exe'",
-  "$esExe=Join-Path $cliDir 'es.exe'",
-  "$userPath=[Environment]::GetEnvironmentVariable('Path','User')",
-  "$parts=@(); if($userPath){$parts=$userPath -split ';' | Where-Object { $_ }}",
-  "if($parts -notcontains $cliDir){[Environment]::SetEnvironmentVariable('Path', (($parts + $cliDir) -join ';'), 'User')}",
-  "$env:Path += ';' + $cliDir",
-  "Start-Process -FilePath $everythingExe -ArgumentList '-startup'",
-  'Start-Sleep -Seconds 2',
-  '& $esExe -v',
-  "Write-Host 'Everything portable and es.exe are verified and ready. Return to Tuff and click Check Now.'"
-].join('; ')
-const EVERYTHING_INSTALL_COMMAND = EVERYTHING_INSTALL_SCRIPT
-
 const everythingStatus = ref<EverythingStatusResponse | null>(null)
+const everythingInstallStatus = ref<EverythingInstallStatusResponse | null>(null)
 const isChecking = ref(false)
 const isTesting = ref(false)
 const isSavingCliPath = ref(false)
+const isStartingInstall = ref(false)
 const installDialogVisible = ref(false)
 const installDialogSource = ref<HTMLElement | null>(null)
-const installAdvancedVisible = ref(false)
+const installAdvancedDialogVisible = ref(false)
+const installAdvancedDialogSource = ref<HTMLElement | null>(null)
 const diagnosticsDialogVisible = ref(false)
 const diagnosticsDialogSource = ref<HTMLElement | null>(null)
+const lastHandledInstallTerminalJob = ref<string | null>(null)
 
 function mapBackendLabel(backend: EverythingBackendType): string {
   if (backend === 'sdk-napi') return t('settings.settingEverything.backendSdk')
@@ -109,7 +85,12 @@ function mapDiagnosticStageLabel(stage: EverythingDiagnosticStage): string {
   return t('settings.settingEverything.diagnosticCliQuery')
 }
 
+function mapInstallPhaseLabel(phase: EverythingInstallPhase): string {
+  return t(`settings.settingEverything.installPhase.${phase}`)
+}
+
 let statusCheckInterval: NodeJS.Timeout | null = null
+let installStatusCheckInterval: NodeJS.Timeout | null = null
 
 function resolveActionSource(event: MouseEvent): HTMLElement | null {
   return event.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -129,6 +110,35 @@ async function checkStatus(refresh = false) {
   } finally {
     isChecking.value = false
   }
+}
+
+async function checkInstallStatus() {
+  try {
+    everythingInstallStatus.value = await transport.send(everythingInstallStatusEvent)
+    if (isInstallActive.value) {
+      ensureInstallStatusPolling()
+    }
+  } catch (error) {
+    settingEverythingLog.error('Failed to get Everything install status', error)
+  }
+}
+
+function ensureInstallStatusPolling() {
+  if (installStatusCheckInterval) return
+
+  installStatusCheckInterval = setInterval(() => {
+    if (!isInstallActive.value) {
+      stopInstallStatusPolling()
+      return
+    }
+    checkInstallStatus()
+  }, 1000)
+}
+
+function stopInstallStatusPolling() {
+  if (!installStatusCheckInterval) return
+  clearInterval(installStatusCheckInterval)
+  installStatusCheckInterval = null
 }
 
 async function toggleEverything() {
@@ -259,8 +269,13 @@ function openCLIDownload() {
 
 function openInstallDialog(event: MouseEvent): void {
   installDialogSource.value = resolveActionSource(event)
-  installAdvancedVisible.value = false
   installDialogVisible.value = true
+}
+
+function openInstallAdvancedDialog(event: MouseEvent): void {
+  installAdvancedDialogSource.value = resolveActionSource(event)
+  installAdvancedDialogVisible.value = true
+  checkInstallStatus()
 }
 
 function openDiagnosticsDialog(event: MouseEvent): void {
@@ -268,13 +283,41 @@ function openDiagnosticsDialog(event: MouseEvent): void {
   diagnosticsDialogVisible.value = true
 }
 
-async function copyEverythingInstallCommand(): Promise<void> {
+async function startEverythingInstall(): Promise<void> {
+  if (isStartingInstall.value || isInstallActive.value) return
+
+  isStartingInstall.value = true
   try {
-    await navigator.clipboard.writeText(EVERYTHING_INSTALL_COMMAND)
-    toast.success(t('settings.settingEverything.installCommandCopied'))
-  } catch (error) {
-    settingEverythingLog.error('Failed to copy Everything install command', error)
-    toast.error(t('settings.settingEverything.installCommandCopyFailed'))
+    const result = await transport.send(everythingInstallStartEvent)
+    everythingInstallStatus.value = result.status
+
+    if (!result.success || result.status.phase === 'unsupported') {
+      toast.error(result.status.error || t('settings.settingEverything.installUnsupported'))
+      return
+    }
+
+    toast.success(t('settings.settingEverything.installStarted'))
+    ensureInstallStatusPolling()
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    settingEverythingLog.error('Failed to start Everything install', error)
+    toast.error(t('settings.settingEverything.installStartFailed', { error: message }))
+  } finally {
+    isStartingInstall.value = false
+  }
+}
+
+async function refreshInstallAndStatusAfterTerminalPhase() {
+  const phase = everythingInstallStatus.value?.phase
+  if (phase === 'completed') {
+    toast.success(t('settings.settingEverything.installCompleted'))
+    await checkStatus(true)
+  } else if (phase === 'failed') {
+    toast.error(
+      t('settings.settingEverything.installFailed', {
+        error: everythingInstallStatus.value?.error || '-'
+      })
+    )
   }
 }
 
@@ -408,6 +451,47 @@ const hasDiagnosticsDetail = computed(() => {
   return Boolean(everythingStatus.value)
 })
 
+const isInstallActive = computed(() => {
+  const phase = everythingInstallStatus.value?.phase
+  return Boolean(phase && !['idle', 'completed', 'failed', 'unsupported'].includes(phase))
+})
+
+const installPhaseText = computed(() => {
+  return mapInstallPhaseLabel(everythingInstallStatus.value?.phase || 'idle')
+})
+
+const installProgressText = computed(() => {
+  const progress = everythingInstallStatus.value?.progress
+  return typeof progress === 'number' ? `${Math.round(progress)}%` : '-'
+})
+
+const installPrimaryButtonText = computed(() => {
+  if (isStartingInstall.value) return t('settings.settingEverything.installStarting')
+  if (isInstallActive.value) return installPhaseText.value
+  return t('settings.settingEverything.installOneClick')
+})
+
+const installStatusMessage = computed(() => {
+  return (
+    everythingInstallStatus.value?.message || t('settings.settingEverything.installOneClickDesc')
+  )
+})
+
+const installTaskIdText = computed(() => {
+  const taskIds = everythingInstallStatus.value?.taskIds
+  if (!taskIds) return '-'
+
+  return [taskIds.everything, taskIds.cli].filter(Boolean).join(' / ') || '-'
+})
+
+const installErrorText = computed(() => {
+  return everythingInstallStatus.value?.error || '-'
+})
+
+const installAssets = computed(() => {
+  return everythingInstallStatus.value?.assets ?? []
+})
+
 const diagnosticsDialogDescription = computed(() => {
   return (
     everythingStatus.value?.healthReason ||
@@ -435,6 +519,7 @@ const lastCheckedText = computed(() => {
 
 onMounted(async () => {
   await checkStatus(true)
+  await checkInstallStatus()
 
   statusCheckInterval = setInterval(() => {
     checkStatus()
@@ -446,7 +531,21 @@ onUnmounted(() => {
     clearInterval(statusCheckInterval)
     statusCheckInterval = null
   }
+  stopInstallStatusPolling()
 })
+
+watch(
+  () => everythingInstallStatus.value?.phase,
+  async (phase) => {
+    const jobId = everythingInstallStatus.value?.jobId
+    if (!jobId || !phase || !['completed', 'failed'].includes(phase)) return
+    if (lastHandledInstallTerminalJob.value === jobId) return
+
+    lastHandledInstallTerminalJob.value = jobId
+    stopInstallStatusPolling()
+    await refreshInstallAndStatusAfterTerminalPhase()
+  }
+)
 </script>
 
 <template>
@@ -576,47 +675,138 @@ onUnmounted(() => {
     v-model="installDialogVisible"
     :reference="installDialogSource"
     :header-title="t('settings.settingEverything.installDialogTitle')"
-    :header-desc="t('settings.settingEverything.installCommandDesc')"
+    :header-desc="t('settings.settingEverything.installOneClickDesc')"
     card-class="everything-flip-dialog"
     size="lg"
   >
     <template #default>
-      <div class="everything-dialog">
+      <div class="everything-dialog everything-install-dialog">
         <div class="install-recommend-card">
           <div class="install-recommend-icon">
-            <span class="i-carbon-shield-check" />
+            <span class="i-carbon-cloud-download" />
           </div>
           <div class="install-recommend-content">
             <div class="install-recommend-title">
-              {{ t('settings.settingEverything.installAutoTitle') }}
+              {{ t('settings.settingEverything.installOneClickTitle') }}
             </div>
             <div class="install-recommend-desc">
-              {{ t('settings.settingEverything.installAutoDesc') }}
+              {{ installStatusMessage }}
             </div>
             <div class="install-recommend-tags">
               <span>{{ t('settings.settingEverything.installAutoTagPortable') }}</span>
               <span>{{ t('settings.settingEverything.installAutoTagNoAdmin') }}</span>
-              <span>{{ t('settings.settingEverything.installAutoTagOfficial') }}</span>
+              <span>{{ t('settings.settingEverything.installAutoTagPath') }}</span>
             </div>
           </div>
         </div>
 
-        <div class="install-primary-actions">
-          <TxButton variant="flat" type="primary" @click="copyEverythingInstallCommand">
-            {{ t('settings.settingEverything.installAutoCopy') }}
-          </TxButton>
-          <TxButton variant="flat" @click="installAdvancedVisible = !installAdvancedVisible">
-            {{
-              installAdvancedVisible
-                ? t('settings.settingEverything.installAdvancedHide')
-                : t('settings.settingEverything.installAdvancedShow')
-            }}
-          </TxButton>
+        <div v-if="everythingInstallStatus?.jobId" class="install-status-panel">
+          <div class="install-status-main">
+            <span>{{ installPhaseText }}</span>
+            <strong>{{ installProgressText }}</strong>
+          </div>
+          <div class="install-progress-track">
+            <div
+              class="install-progress-fill"
+              :style="{ width: `${everythingInstallStatus.progress || 0}%` }"
+            />
+          </div>
+          <div v-if="everythingInstallStatus.error" class="error-message">
+            {{ everythingInstallStatus.error }}
+          </div>
         </div>
 
-        <div v-if="installAdvancedVisible" class="dialog-section install-advanced">
+        <div class="install-primary-actions">
+          <TxButton
+            variant="flat"
+            type="primary"
+            :disabled="isStartingInstall || isInstallActive"
+            @click="startEverythingInstall"
+          >
+            {{ installPrimaryButtonText }}
+          </TxButton>
+          <TxButton variant="flat" @click="openInstallAdvancedDialog">
+            {{ t('settings.settingEverything.installAdvancedShow') }}
+          </TxButton>
+        </div>
+      </div>
+    </template>
+  </FlipDialog>
+
+  <FlipDialog
+    v-model="installAdvancedDialogVisible"
+    :reference="installAdvancedDialogSource"
+    :header-title="t('settings.settingEverything.installAdvancedTitle')"
+    :header-desc="t('settings.settingEverything.installAdvancedDesc')"
+    card-class="everything-flip-dialog"
+    size="lg"
+  >
+    <template #header-actions>
+      <TxButton variant="flat" size="sm" :disabled="isChecking" @click="checkInstallStatus">
+        {{ t('settings.settingEverything.installRefreshStatus') }}
+      </TxButton>
+    </template>
+
+    <template #default>
+      <div class="everything-dialog">
+        <div class="dialog-section">
           <div class="dialog-section-title">
-            {{ t('settings.settingEverything.installAdvancedTitle') }}
+            {{ t('settings.settingEverything.installStatusTitle') }}
+          </div>
+          <div class="diagnostic-grid">
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.installPhaseTitle') }}</span>
+              <strong>{{ installPhaseText }}</strong>
+            </div>
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.installProgressTitle') }}</span>
+              <strong>{{ installProgressText }}</strong>
+            </div>
+            <div class="diagnostic-card diagnostic-card--wide">
+              <span>{{ t('settings.settingEverything.installTaskIdsTitle') }}</span>
+              <strong>{{ installTaskIdText }}</strong>
+            </div>
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.installTargetDirTitle') }}</span>
+              <strong>{{ everythingInstallStatus?.installDir || '-' }}</strong>
+            </div>
+            <div class="diagnostic-card">
+              <span>{{ t('settings.settingEverything.installCliDirTitle') }}</span>
+              <strong>{{ everythingInstallStatus?.cliDir || '-' }}</strong>
+            </div>
+            <div class="diagnostic-card diagnostic-card--wide">
+              <span>{{ t('settings.settingEverything.activeCliPath') }}</span>
+              <strong>{{ activeCliPathText }}</strong>
+            </div>
+            <div class="diagnostic-card diagnostic-card--wide">
+              <span>{{ t('settings.settingEverything.installCliPathTitle') }}</span>
+              <strong>{{ everythingInstallStatus?.cliPath || '-' }}</strong>
+            </div>
+            <div class="diagnostic-card diagnostic-card--wide">
+              <span>{{ t('settings.settingEverything.installPathPolicyTitle') }}</span>
+              <strong>{{ t('settings.settingEverything.installPathPolicyDesc') }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="dialog-section">
+          <div class="dialog-section-title">
+            {{ t('settings.settingEverything.installAssetsTitle') }}
+          </div>
+          <div class="install-assets-list">
+            <div v-for="asset in installAssets" :key="asset.type" class="install-asset-row">
+              <div>
+                <strong>{{ asset.filename }}</strong>
+                <code>{{ asset.url }}</code>
+              </div>
+              <code>{{ asset.sha256 }}</code>
+            </div>
+          </div>
+        </div>
+
+        <div class="dialog-section">
+          <div class="dialog-section-title">
+            {{ t('settings.settingEverything.installManualLinksTitle') }}
           </div>
           <div class="install-buttons">
             <TxButton variant="flat" @click="openEverythingDownload">
@@ -626,12 +816,14 @@ onUnmounted(() => {
               {{ t('settings.settingEverything.downloadCLI') }}
             </TxButton>
           </div>
+        </div>
 
-          <div class="dialog-section">
-            <div class="dialog-section-title">
-              {{ t('settings.settingEverything.installCommandTitle') }}
-            </div>
-            <pre class="install-command-code"><code>{{ EVERYTHING_INSTALL_COMMAND }}</code></pre>
+        <div v-if="everythingInstallStatus?.error" class="dialog-section">
+          <div class="dialog-section-title">
+            {{ t('settings.settingEverything.errorTitle') }}
+          </div>
+          <div class="error-message">
+            {{ installErrorText }}
           </div>
         </div>
       </div>
@@ -774,6 +966,8 @@ onUnmounted(() => {
 
 .install-primary-actions {
   display: flex;
+  align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -858,11 +1052,11 @@ onUnmounted(() => {
 
 :deep(.everything-flip-dialog.FlipDialog-Card) {
   .TxFlipOverlay-Header {
-    padding: 18px 20px 12px;
+    padding: 20px 22px 12px;
   }
 
   .TxFlipOverlay-Body {
-    padding: 0 20px 20px;
+    padding: 0 22px 22px;
     box-sizing: border-box;
   }
 }
@@ -871,17 +1065,22 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-width: min(680px, calc(100vw - 64px));
+  width: min(720px, calc(100vw - 84px));
+  min-width: 0;
   box-sizing: border-box;
+}
+
+.everything-install-dialog {
+  gap: 14px;
 }
 
 .install-recommend-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid rgba(59, 130, 246, 0.28);
-  border-radius: 12px;
+  border-radius: 8px;
   background:
     linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(34, 197, 94, 0.08)),
     rgba(255, 255, 255, 0.04);
@@ -925,16 +1124,48 @@ onUnmounted(() => {
 
   span {
     padding: 3px 7px;
-    border-radius: 999px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.08);
     color: var(--tuff-text-secondary);
     font-size: 11px;
   }
 }
 
-.install-advanced {
-  padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+.install-status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.install-status-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--tuff-text-secondary);
+
+  strong {
+    color: var(--tuff-text-primary);
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+.install-progress-track {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.install-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #22c55e);
+  transition: width 180ms ease;
 }
 
 .dialog-section {
@@ -947,21 +1178,6 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--tuff-text-primary);
-}
-
-.install-command-code {
-  max-height: 220px;
-  margin: 0;
-  padding: 12px;
-  overflow: hidden auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--tuff-text-primary);
-  font-size: 11px;
-  line-height: 1.6;
-  font-family: 'JetBrains Mono', monospace;
 }
 
 .diagnostic-grid {
@@ -1005,6 +1221,46 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+.install-assets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.install-asset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.46fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+
+  div {
+    min-width: 0;
+  }
+
+  strong,
+  code {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    margin-bottom: 4px;
+    color: var(--tuff-text-primary);
+    font-size: 12px;
+  }
+
+  code {
+    color: var(--tuff-text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
+
 .attempt-row {
   display: grid;
   grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
@@ -1043,16 +1299,26 @@ onUnmounted(() => {
   }
 
   .everything-dialog {
-    min-width: 0;
+    width: min(100%, calc(100vw - 52px));
   }
 
   .install-recommend-card {
     grid-template-columns: 1fr;
   }
 
+  .install-primary-actions,
   .diagnostic-grid,
+  .install-asset-row,
   .attempt-row {
     grid-template-columns: 1fr;
+  }
+
+  .install-primary-actions {
+    align-items: stretch;
+
+    :deep(.TxButton) {
+      justify-content: center;
+    }
   }
 }
 </style>

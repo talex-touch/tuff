@@ -5,6 +5,19 @@
 
 ## 2026-06-19
 
+### feat(core-app): upgrade Everything install to Download Center
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/everything-integration.md`
+  - Replaced the copied PowerShell installer path with typed `everything:install-start` / `everything:install-status` events that create visible Download Center tasks for official portable Everything and ES CLI ZIP assets.
+  - The main process now verifies fixed SHA-256 hashes, extracts into `%LOCALAPPDATA%\Tuff\Everything` and `%LOCALAPPDATA%\Tuff\EverythingCLI`, probes `es.exe -v`, saves the configured CLI path, starts portable Everything, and only appends the CLI directory to the current user's `PATH`.
+  - Reworked the Settings install dialog so the top-level surface has a single one-click install button plus a separate Advanced Settings detail dialog for task IDs, target paths, checksums, manual links, PATH policy, and errors.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts"`.
+
 ### ref(quickops): align bounded SDK surface audit
 
 - `apps/core-app/src/main/modules/quick-ops/quick-ops-surface-audit.ts`
