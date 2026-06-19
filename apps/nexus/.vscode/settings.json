@@ -43,7 +43,7 @@
   "iconify.annotations": true,
   "iconify.inplace": true,
   "debug.javascript.defaultRuntimeExecutable": {
-    "pwa-node": "/Users/talexdreamsoul/.local/share/mise/shims/node"
+    "pwa-node": "node"
   },
   "cSpell.words": [
     "imgable",
@@ -52,7 +52,5 @@
   "vue3snippets.enable-compile-vue-file-on-did-save-code": false,
   "unocss.root": [
     "uno.config.ts"
-  ],
-  "java.jdt.ls.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/17.0.2",
-  "java.import.gradle.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/17.0.2"
+  ]
 }

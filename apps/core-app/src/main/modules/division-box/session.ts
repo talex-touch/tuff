@@ -11,11 +11,17 @@ import type { TouchWindow } from '../../core/touch-window'
 import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
 import path from 'node:path'
-import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
+import {
+  DivisionBoxError,
+  DivisionBoxErrorCode,
+  DivisionBoxState,
+  StorageList
+} from '@talex-touch/utils'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
-import { app, WebContentsView } from 'electron'
+import { app, nativeTheme, WebContentsView } from 'electron'
 import fse from 'fs-extra'
+import { resolveThemeStateFromStyle } from '../../../shared/theme/theme-mode'
 import { getRegisteredMainRuntime } from '../../core/runtime-accessor'
 import { buildWindowWebPreferences } from '../../core/window-security-profile'
 import { useAliveWebContents } from '../../hooks/use-electron-guard'
@@ -23,9 +29,22 @@ import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from '../plugin/runtime/plugin-view-security-profile'
-import { resolveDivisionBoxHeaderHeight } from './layout'
+import { getMainConfig } from '../storage'
+import defaultCoreBoxThemeCss from '../box-tool/core-box/theme/tuff-element.css?raw'
+import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds } from './layout'
 
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
+
+interface ThemeStyleConfig {
+  dark?: boolean
+  auto?: boolean
+  theme?: {
+    style?: {
+      dark?: boolean
+      auto?: boolean
+    }
+  }
+}
 
 /**
  * Type for state change listener callback
@@ -84,6 +103,12 @@ export class DivisionBoxSession {
 
   /** Attached plugin reference */
   private attachedPlugin: TouchPlugin | null = null
+
+  /** Inserted theme stylesheet keys for attached plugin UI views */
+  private uiViewThemeCssKey = new WeakMap<WebContentsView, string>()
+
+  /** Native theme subscription for auto theme sessions */
+  private nativeThemeHandler: (() => void) | null = null
 
   constructor(sessionId: string, config: DivisionBoxConfig) {
     this.sessionId = sessionId
@@ -187,6 +212,118 @@ export class DivisionBoxSession {
     return resolveDivisionBoxHeaderHeight(this.config)
   }
 
+  private applyInitialBounds(): void {
+    if (!this.touchWindow) return
+
+    const browserWindow = this.touchWindow.window
+    if (browserWindow.isDestroyed()) return
+
+    const currentBounds = browserWindow.getBounds()
+    const nextBounds = resolveDivisionBoxInitialWindowBounds(this.config, currentBounds)
+
+    if (
+      nextBounds.x === currentBounds.x &&
+      nextBounds.y === currentBounds.y &&
+      nextBounds.width === currentBounds.width &&
+      nextBounds.height === currentBounds.height
+    ) {
+      return
+    }
+
+    try {
+      const [minWidth, minHeight] = browserWindow.getMinimumSize()
+      browserWindow.setMinimumSize(
+        Math.min(minWidth, nextBounds.width),
+        Math.min(minHeight, nextBounds.height)
+      )
+      browserWindow.setBounds(nextBounds, false)
+    } catch (error) {
+      divisionBoxSessionLog.warn('Failed to apply initial DivisionBox bounds', { error })
+    }
+  }
+
+  private loadThemeStyleConfig(): ThemeStyleConfig {
+    const config = getMainConfig(StorageList.THEME_STYLE) as ThemeStyleConfig | undefined
+    if (config && typeof config === 'object') {
+      return config
+    }
+    return {}
+  }
+
+  private resolveDarkPreference(themeStyle: ThemeStyleConfig): {
+    followSystem: boolean
+    dark: boolean
+  } {
+    const themeState = resolveThemeStateFromStyle(
+      themeStyle.theme?.style ?? themeStyle,
+      nativeTheme.shouldUseDarkColors
+    )
+    return { followSystem: themeState.auto, dark: themeState.isDark }
+  }
+
+  private updateUIViewDarkClass(view: WebContentsView, isDark: boolean): void {
+    const webContents = useAliveWebContents(view)
+    if (!webContents) return
+
+    const theme = isDark ? 'dark' : 'light'
+    const script = `
+      (() => {
+        const root = document.documentElement;
+        if (!root) { return; }
+        const theme = '${theme}';
+        root.classList.toggle('dark', theme === 'dark');
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+      })();
+    `
+
+    void webContents.executeJavaScript(script).catch((error) => {
+      divisionBoxSessionLog.error('Failed to update DivisionBox UI theme class', { error })
+    })
+  }
+
+  private applyThemeToUIView(view: WebContentsView): void {
+    const webContents = useAliveWebContents(view)
+
+    if (webContents) {
+      const previousKey = this.uiViewThemeCssKey.get(view)
+      if (previousKey) {
+        void webContents.removeInsertedCSS(previousKey).catch(() => {})
+        this.uiViewThemeCssKey.delete(view)
+      }
+
+      void webContents
+        .insertCSS(defaultCoreBoxThemeCss)
+        .then((key) => {
+          this.uiViewThemeCssKey.set(view, key)
+        })
+        .catch((error) => {
+          divisionBoxSessionLog.error('Failed to inject DivisionBox UI theme variables', {
+            error
+          })
+        })
+    }
+
+    const { followSystem, dark } = this.resolveDarkPreference(this.loadThemeStyleConfig())
+    this.updateUIViewDarkClass(view, dark)
+
+    if (this.nativeThemeHandler) {
+      nativeTheme.removeListener('updated', this.nativeThemeHandler)
+      this.nativeThemeHandler = null
+    }
+
+    if (followSystem) {
+      const handler = () => {
+        if (!this.uiView || this.uiView !== view || !useAliveWebContents(view)) {
+          return
+        }
+        this.updateUIViewDarkClass(view, nativeTheme.shouldUseDarkColors)
+      }
+      nativeTheme.on('updated', handler)
+      this.nativeThemeHandler = handler
+    }
+  }
+
   /**
    * Registers a state change listener
    *
@@ -238,6 +375,7 @@ export class DivisionBoxSession {
 
       // Update window title with unique identifier for Windows taskbar grouping
       this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
+      this.applyInitialBounds()
 
       // Windows-specific: Set unique AppUserModelId to ensure separate taskbar entries
       if (process.platform === 'win32') {
@@ -410,6 +548,10 @@ export class DivisionBoxSession {
 
     // Handle dom-ready
     this.uiView.webContents.once('dom-ready', () => {
+      if (this.uiView) {
+        this.applyThemeToUIView(this.uiView)
+      }
+
       if (plugin) {
         if (!app.isPackaged || plugin.dev.enable) {
           this.uiView?.webContents.openDevTools({ mode: 'detach' })
@@ -470,6 +612,7 @@ export class DivisionBoxSession {
 
     // Update bounds for the new window
     this.updateUIViewBounds()
+    this.applyThemeToUIView(view)
 
     // Set active plugin
     if (pluginModule.pluginManager) {
@@ -496,8 +639,18 @@ export class DivisionBoxSession {
    * Detaches the UI view from the window
    */
   detachUIView(): void {
+    if (this.nativeThemeHandler) {
+      nativeTheme.removeListener('updated', this.nativeThemeHandler)
+      this.nativeThemeHandler = null
+    }
+
     if (this.uiView) {
       try {
+        const cssKey = this.uiViewThemeCssKey.get(this.uiView)
+        if (cssKey) {
+          void this.uiView.webContents.removeInsertedCSS(cssKey).catch(() => {})
+          this.uiViewThemeCssKey.delete(this.uiView)
+        }
         this.touchWindow?.window.contentView.removeChildView(this.uiView)
         this.uiView.webContents.close()
       } catch (error) {

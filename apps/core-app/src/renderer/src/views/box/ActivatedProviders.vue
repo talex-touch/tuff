@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import type { IProviderActivate } from '@talex-touch/utils'
+import type { IProviderActivate, ITuffIcon } from '@talex-touch/utils'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import type { IUseSearch } from '~/modules/box/adapter/types'
+import {
+  normalizeCoreBoxIcon,
+  shouldRenderCoreBoxIconColorful
+} from '~/components/render/icon-color-mode'
+
+type ProviderIconInput = ITuffIcon | string | null | undefined
 
 const props = withDefaults(
   defineProps<{
@@ -26,6 +33,27 @@ function getUniqueKey(provider: IProviderActivate): string {
 function hasVice(provider: IProviderActivate): boolean {
   return Boolean(provider.meta?.feature || props.closable)
 }
+
+function getProviderIconInput(provider: IProviderActivate): ProviderIconInput {
+  return provider.icon ?? (provider.meta?.pluginIcon as ProviderIconInput)
+}
+
+function getProviderIcon(provider: IProviderActivate): ITuffIcon {
+  return normalizeCoreBoxIcon(getProviderIconInput(provider))
+}
+
+function shouldRenderProviderIconColorful(provider: IProviderActivate): boolean {
+  return shouldRenderCoreBoxIconColorful(getProviderIconInput(provider))
+}
+
+function getProviderIconStyle(provider: IProviderActivate): Record<string, string> {
+  const icon = getProviderIconInput(provider)
+  const explicitColor = typeof icon === 'object' ? icon?.color : undefined
+
+  return {
+    '--icon-color': explicitColor || 'var(--tx-color-primary)'
+  }
+}
 </script>
 
 <template>
@@ -37,9 +65,11 @@ function hasVice(provider: IProviderActivate): boolean {
       :class="{ 'has-vice': hasVice(provider) }"
     >
       <div class="Activated-Provider-PillMajor">
-        <PluginIcon
-          :icon="provider.icon || provider.meta?.pluginIcon"
+        <TuffIcon
+          :icon="getProviderIcon(provider)"
           :alt="provider.name || provider.meta?.pluginName"
+          :colorful="shouldRenderProviderIconColorful(provider)"
+          :style="getProviderIconStyle(provider)"
         />
         <span class="Activated-Provider-PillMajor-Label text-sm truncate">{{
           provider.name || provider.meta?.pluginName || provider.id

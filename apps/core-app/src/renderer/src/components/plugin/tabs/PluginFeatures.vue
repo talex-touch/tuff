@@ -4,6 +4,7 @@ import type { ComponentPublicInstance } from 'vue'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetPrecompiledManifestEntry } from '@talex-touch/utils/plugin/widget'
+import { TxStatCard } from '@talex-touch/tuffex/stat-card'
 import { resolveI18nMessage } from '@talex-touch/utils/i18n'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
@@ -13,7 +14,6 @@ import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { useUiPreference } from '~/modules/storage/ui-preference-storage'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
-import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
 import FeatureCard from '../FeatureCard.vue'
 import PluginFeatureDetailCard from './PluginFeatureDetailCard.vue'
@@ -772,12 +772,12 @@ function handlePreviewRenderError(error: Error): void {
     <!-- Stats Header -->
     <div class="PluginFeature-Header mb-6">
       <div class="grid grid-cols-2 gap-4">
-        <StatCard
+        <TxStatCard
           :value="plugin.features?.length || 0"
           :label="t('plugin.features.stats.features')"
           icon-class="i-ri-function-line text-6xl text-blue-500"
         />
-        <StatCard
+        <TxStatCard
           :value="totalCommands"
           :label="t('plugin.features.stats.commands')"
           icon-class="i-ri-terminal-box-line text-6xl text-[var(--tx-color-success)]"

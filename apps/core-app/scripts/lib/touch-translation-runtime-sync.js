@@ -58,6 +58,9 @@ function syncTouchTranslationBundledRuntime(options = {}) {
     'plugins',
     TOUCH_TRANSLATION_PLUGIN_NAME
   )
+  const runtimePluginRoots = Array.isArray(options.runtimePluginRoots)
+    ? options.runtimePluginRoots.filter(Boolean)
+    : []
 
   if (!fs.existsSync(canonicalBuildRoot) || !fs.existsSync(canonicalDistRoot)) {
     return {
@@ -74,10 +77,22 @@ function syncTouchTranslationBundledRuntime(options = {}) {
     path.join(bundledPluginRoot, 'package.json')
   )
 
+  const syncedRuntimePluginRoots = []
+  for (const runtimePluginRoot of runtimePluginRoots) {
+    copyDirectoryContents(canonicalBuildRoot, runtimePluginRoot)
+    copyDirectoryContents(canonicalDistRoot, path.join(runtimePluginRoot, 'dist'))
+    writeBundledPackageVersion(
+      path.join(canonicalPluginRoot, 'package.json'),
+      path.join(runtimePluginRoot, 'package.json')
+    )
+    syncedRuntimePluginRoots.push(runtimePluginRoot)
+  }
+
   return {
     bundledPluginRoot,
     canonicalBuildRoot,
     canonicalDistRoot,
+    syncedRuntimePluginRoots,
     skipped: false,
     synced: true
   }

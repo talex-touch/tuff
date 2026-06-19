@@ -120,6 +120,20 @@ describe('buildDetachedFeatureConfig', () => {
     expect(detached?.config.ui).toEqual({ showInput: false, initialInput: '' })
   })
 
+  it('preserves source content bounds when detaching from CoreBox', () => {
+    const detached = buildDetachedFeatureConfig(createFeatureItem(), 'time now', {
+      x: 120,
+      y: 80,
+      width: 720,
+      height: 600
+    })
+
+    expect(detached?.config.initialBounds).toEqual({
+      width: 720,
+      height: 544
+    })
+  })
+
   it('does not build DivisionBox config for non-plugin search results', () => {
     const detached = buildDetachedFeatureConfig(
       createFeatureItem({

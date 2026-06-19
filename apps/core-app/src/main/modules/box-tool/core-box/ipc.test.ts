@@ -25,6 +25,10 @@ const mocks = vi.hoisted(() => ({
   setPinned: vi.fn(),
   isPinned: vi.fn(() => false),
   isCollapsed: false,
+  currentWindow: null as null | {
+    isDestroyed: () => boolean
+    isVisible: () => boolean
+  },
   searchEngineCore: {
     getActivationState: vi.fn(() => []),
     getCurrentGatherController: vi.fn(() => null),
@@ -146,7 +150,9 @@ vi.mock('./window', () => ({
   COREBOX_MIN_HEIGHT: 56,
   getCoreBoxWindow: vi.fn(() => null),
   windowManager: {
-    current: null,
+    get current() {
+      return mocks.currentWindow ? { window: mocks.currentWindow } : null
+    },
     enableClipboardMonitoring: vi.fn(),
     enableInputMonitoring: vi.fn(),
     setPinned: mocks.setPinned,
@@ -169,6 +175,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.handlers.clear()
     mocks.isPinned.mockReturnValue(false)
     mocks.isCollapsed = false
+    mocks.currentWindow = null
     ipcManager.unregister()
     ipcManager.register()
   })
@@ -216,5 +223,19 @@ describe('CoreBox IPC hide transport', () => {
     const expandedResponse = handler?.({ height: 57 })
     expect(expandedResponse).toEqual({ height: 57 })
     expect(mocks.markExpanded).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps forceMax expand payloads to maximum CoreBox expansion', () => {
+    mocks.currentWindow = {
+      isDestroyed: () => false,
+      isVisible: () => true
+    }
+    const handler = mocks.handlers.get(CoreBoxEvents.ui.expand.toEventName())
+
+    expect(handler).toBeTypeOf('function')
+    handler?.({ forceMax: true })
+
+    expect(mocks.expand).toHaveBeenCalledWith({ forceMax: true })
+    expect(mocks.shrink).not.toHaveBeenCalled()
   })
 })

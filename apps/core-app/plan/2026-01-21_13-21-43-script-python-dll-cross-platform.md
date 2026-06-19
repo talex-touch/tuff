@@ -1,6 +1,6 @@
 ---
 mode: plan
-cwd: /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app
+cwd: apps/core-app
 task: Provide script and native capability support (Python + DLL) with a cross-platform design
 complexity: complex
 planning_method: builtin

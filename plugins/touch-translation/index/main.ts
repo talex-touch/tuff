@@ -27,6 +27,7 @@ const IMAGE_TRANSLATION_TARGET_LANG = 'zh'
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
 const TUFF_INTELLIGENCE_PROVIDER_ID = 'tuffintelligence'
+const TEXT_TRANSLATE_CAPABILITY_ID = 'text.translate'
 
 interface ProviderState {
   id: string
@@ -87,6 +88,13 @@ const widgetStateByFeature = new Map<string, WidgetState>()
 
 let networkPermissionState: boolean | null = null
 let aiPermissionState: boolean | null = null
+
+function resolveRuntimeChannel() {
+  return (globalThis as any).touchChannel
+    || (globalThis as any).$touchChannel
+    || touchChannel
+    || (globalThis as any).channel
+}
 
 const providers = new Map([
   [TUFF_INTELLIGENCE_PROVIDER_ID, applyProviderPresentation(new TuffIntelligenceProvider())],
@@ -723,21 +731,44 @@ async function filterAuthorizedProviderIds(
 
 async function canUseTuffIntelligenceProvider(): Promise<boolean> {
   const token = await resolveTuffIntelligenceAuthToken()
-  return token.length > 0
+  if (!token || token === 'guest') {
+    return false
+  }
+  return hasAvailableTextTranslateCapability()
 }
 
 async function resolveTuffIntelligenceAuthToken(): Promise<string> {
-  if (!touchChannel?.send) {
+  const runtimeChannel = resolveRuntimeChannel()
+  if (!runtimeChannel?.send) {
     return ''
   }
 
   try {
     const eventName = AccountEvents.auth.getToken.toEventName()
-    const token = await touchChannel?.send?.(eventName)
+    const token = await runtimeChannel.send(eventName)
     return typeof token === 'string' ? token.trim() : ''
   }
   catch {
     return ''
+  }
+}
+
+async function hasAvailableTextTranslateCapability(): Promise<boolean> {
+  try {
+    const runtimeChannel = resolveRuntimeChannel()
+    const aiClient = createIntelligenceClient(runtimeChannel)
+    if (typeof aiClient.getCapabilityStatus !== 'function') {
+      return true
+    }
+
+    const status = await aiClient.getCapabilityStatus({
+      capabilityId: TEXT_TRANSLATE_CAPABILITY_ID,
+    })
+    return Boolean(status?.available)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to check Intelligence text.translate availability', error)
+    return false
   }
 }
 
@@ -886,6 +917,8 @@ module.exports = {
     canUseTuffIntelligenceProvider,
     ensureClipboardWritePermission,
     filterAuthorizedProviderIds,
+    resolveRuntimeChannel,
     resolveTuffIntelligenceAuthToken,
+    hasAvailableTextTranslateCapability,
   },
 }

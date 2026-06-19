@@ -172,6 +172,81 @@ describe('touch-translation shared helpers', () => {
     ).resolves.toEqual(providerConfigs)
   })
 
+  it('filters tuffintelligence out when the account token is guest', async () => {
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        channel: {
+          async send() {
+            return 'guest'
+          },
+        },
+      }),
+    )
+
+    await expect(pluginModule.__test.canUseTuffIntelligenceProvider()).resolves.toBe(false)
+  })
+
+  it('filters tuffintelligence out when text.translate has no Intelligence provider', async () => {
+    const capabilityChecks: unknown[] = []
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        channel: {
+          async send(eventName: string, payload?: unknown) {
+            if (eventName === 'account:auth:get-token') {
+              return 'app-token'
+            }
+            if (eventName === 'intelligence:api:get-capability-status') {
+              capabilityChecks.push(payload)
+              return {
+                ok: true,
+                result: {
+                  capabilityId: 'text.translate',
+                  available: false,
+                  providerIds: [],
+                  reason: 'no-enabled-provider',
+                },
+              }
+            }
+            return null
+          },
+        },
+      }),
+    )
+
+    await expect(pluginModule.__test.canUseTuffIntelligenceProvider()).resolves.toBe(false)
+    expect(capabilityChecks).toEqual([{ capabilityId: 'text.translate' }])
+  })
+
+  it('keeps tuffintelligence when account token and text.translate provider are both available', async () => {
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        channel: {
+          async send(eventName: string) {
+            if (eventName === 'account:auth:get-token') {
+              return 'app-token'
+            }
+            if (eventName === 'intelligence:api:get-capability-status') {
+              return {
+                ok: true,
+                result: {
+                  capabilityId: 'text.translate',
+                  available: true,
+                  providerIds: ['tuff-nexus-default'],
+                },
+              }
+            }
+            return null
+          },
+        },
+      }),
+    )
+
+    await expect(pluginModule.__test.canUseTuffIntelligenceProvider()).resolves.toBe(true)
+  })
+
   it('does not show tuffintelligence in triggered widget state while logged out', async () => {
     vi.useFakeTimers()
     const updatedItems: any[] = []

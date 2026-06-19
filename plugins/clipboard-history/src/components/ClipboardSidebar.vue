@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import type { ClipboardSection } from '~/utils/clipboard-items'
+import ClipboardGlyph from './ClipboardGlyph.vue'
 import { getClipboardSubtitle, getClipboardTitle, resolveListImageSrc } from '~/utils/clipboard-items'
 
 defineProps<{
@@ -33,7 +34,7 @@ function onScroll(event: Event): void {
     <template v-if="loading && sections.length === 0">
       <div class="list-empty">
         <div class="empty-icon">
-          ⌛
+          <ClipboardGlyph class="spin" name="loader" />
         </div>
         <p>正在读取剪贴历史</p>
         <p class="empty-hint">
@@ -45,7 +46,7 @@ function onScroll(event: Event): void {
     <template v-else-if="sections.length === 0">
       <div class="list-empty">
         <div class="empty-icon">
-          📋
+          <ClipboardGlyph name="clipboard" />
         </div>
         <p>暂无剪贴内容</p>
         <p class="empty-hint">
@@ -75,7 +76,7 @@ function onScroll(event: Event): void {
                   :src="resolveListImageSrc(item) || undefined"
                   alt=""
                 >
-                <span v-else class="icon">{{ item.type === 'files' ? '⌘' : 'T' }}</span>
+                <ClipboardGlyph v-else :name="item.type === 'files' ? 'folder' : 'text'" />
               </div>
 
               <div class="item-copy">
@@ -146,6 +147,26 @@ function onScroll(event: Event): void {
     color-mix(in srgb, var(--clipboard-surface-ghost) 60%, transparent),
     color-mix(in srgb, var(--clipboard-surface-ghost) 90%, transparent)
   );
+}
+
+.empty-icon .ClipboardGlyph {
+  width: 24px;
+  height: 24px;
+}
+
+.item-icon .ClipboardGlyph {
+  width: 15px;
+  height: 15px;
+}
+
+.spin {
+  animation: clipboard-spin 0.9s linear infinite;
+}
+
+@keyframes clipboard-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .section-header {
@@ -266,5 +287,11 @@ function onScroll(event: Event): void {
   font-size: 0.78rem;
   color: var(--clipboard-text-disabled);
   margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
 }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import { computed } from 'vue'
+import ClipboardGlyph from './ClipboardGlyph.vue'
 import {
   getClipboardColorTokens,
   getClipboardInfoRows,
@@ -34,7 +35,7 @@ const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.
       <template v-if="!item">
         <div class="list-empty">
           <div class="empty-icon">
-            ↗
+            <ClipboardGlyph name="arrow-left" />
           </div>
           <p>在左侧选择一条剪贴记录以查看详情</p>
         </div>
@@ -492,5 +493,10 @@ const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.
     color-mix(in srgb, var(--clipboard-surface-ghost) 60%, transparent),
     color-mix(in srgb, var(--clipboard-surface-ghost) 90%, transparent)
   );
+}
+
+.empty-icon .ClipboardGlyph {
+  width: 24px;
+  height: 24px;
 }
 </style>

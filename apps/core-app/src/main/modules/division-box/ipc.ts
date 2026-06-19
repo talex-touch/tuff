@@ -60,6 +60,26 @@ function validateConfig(config: unknown): { valid: boolean; error?: string } {
     return { valid: false, error: 'Invalid "initialState" field. Must be an object' }
   }
 
+  if (candidate.initialBounds !== undefined) {
+    if (
+      !candidate.initialBounds ||
+      typeof candidate.initialBounds !== 'object' ||
+      Array.isArray(candidate.initialBounds)
+    ) {
+      return { valid: false, error: 'Invalid "initialBounds" field. Must be an object' }
+    }
+
+    for (const key of ['x', 'y', 'width', 'height'] as const) {
+      const value = candidate.initialBounds[key]
+      if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value))) {
+        return {
+          valid: false,
+          error: `Invalid "initialBounds.${key}" field. Must be a finite number`
+        }
+      }
+    }
+  }
+
   return { valid: true }
 }
 

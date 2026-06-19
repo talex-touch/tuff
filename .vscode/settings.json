@@ -71,7 +71,7 @@
   "javascript.updateImportsOnFileMove.enabled": "always",
   "typescript.updateImportsOnFileMove.enabled": "always",
   "debug.javascript.defaultRuntimeExecutable": {
-    "pwa-node": "/Users/talexdreamsoul/.local/share/mise/shims/node"
+    "pwa-node": "node"
   },
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
@@ -82,12 +82,10 @@
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "python.defaultInterpreterPath": "/Users/talexdreamsoul/.local/share/mise/installs/python/3.11.13/bin/python",
+  "python.defaultInterpreterPath": "python",
   "workbench.colorCustomizations": {
     "activityBar.foreground": "#eaf6fd",
     "statusBarItem.remoteBackground": "#175191",
     "statusBarItem.remoteForeground": "#eaf6fd"
-  },
-  "java.jdt.ls.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/17.0.2",
-  "java.import.gradle.java.home": "/Users/talexdreamsoul/.local/share/mise/installs/java/17.0.2"
+  }
 }

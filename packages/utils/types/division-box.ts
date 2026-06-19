@@ -143,6 +143,9 @@ export interface DivisionBoxConfig {
   /** Initial session state available before the renderer reads session keys */
   initialState?: Record<string, unknown>
 
+  /** Initial window bounds hint used to preserve detached content size */
+  initialBounds?: DivisionBoxInitialBounds
+
   /** WebContentsView preferences (main process only) */
   webPreferences?: any
 }
@@ -181,6 +184,13 @@ export interface DivisionBoxBounds {
   y: number
   width: number
   height: number
+}
+
+export interface DivisionBoxInitialBounds {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
 }
 
 /**

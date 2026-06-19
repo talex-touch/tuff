@@ -65,6 +65,10 @@ export function useBoxItems(): UseBoxItemsReturn {
     return index !== undefined ? items.value[index] : undefined
   }
 
+  const matchesSource = (item: TuffItem, source: string): boolean => {
+    return item.source?.id === source || item.meta?.pluginName === source
+  }
+
   // ==================== 主进程通信 ====================
 
   /**
@@ -208,7 +212,7 @@ export function useBoxItems(): UseBoxItemsReturn {
   const handleClear = ({ source }: { source?: string }): void => {
     if (source) {
       // 清空指定来源
-      items.value = items.value.filter((item) => item.source?.id !== source)
+      items.value = items.value.filter((item) => !matchesSource(item, source))
     } else {
       // 清空所有
       items.value = []

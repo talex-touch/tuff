@@ -1,6 +1,10 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 
-const emptyCoreBoxIcon: ITuffIcon = { type: 'url', value: '', status: 'normal' }
+const fallbackCoreBoxIcon: ITuffIcon = {
+  type: 'class',
+  value: 'i-ri-puzzle-line',
+  status: 'normal'
+}
 const defaultCoreBoxIconColor = 'var(--tx-text-color-primary, #e5e7eb)'
 
 function isClassIconString(value: string): boolean {
@@ -18,7 +22,7 @@ function resolveStringIconType(value: string): ITuffIcon['type'] {
 }
 
 export function normalizeCoreBoxIcon(icon: ITuffIcon | string | undefined | null): ITuffIcon {
-  if (!icon) return { ...emptyCoreBoxIcon }
+  if (!icon) return { ...fallbackCoreBoxIcon }
 
   if (typeof icon === 'string') {
     const rawValue = icon.trim()
@@ -31,7 +35,7 @@ export function normalizeCoreBoxIcon(icon: ITuffIcon | string | undefined | null
   }
 
   if (!('value' in icon) || !icon.value?.length) {
-    return { ...emptyCoreBoxIcon }
+    return { ...fallbackCoreBoxIcon }
   }
 
   return {

@@ -78,6 +78,13 @@ export interface IntelligenceCurrentUsage {
   costThisMonth: number
 }
 
+export interface IntelligenceCapabilityStatus {
+  capabilityId: string
+  available: boolean
+  providerIds: string[]
+  reason?: string
+}
+
 export interface IntelligenceQuotaConfig {
   callerId: string
   callerType: 'plugin' | 'user' | 'system'
@@ -339,6 +346,7 @@ export interface IntelligenceSdk {
   testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
   testCapability: (params: Record<string, unknown>) => Promise<unknown>
   getCapabilityTestMeta: (payload: { capabilityId: string }) => Promise<{ requiresUserInput: boolean, inputHint: string }>
+  getCapabilityStatus: (payload: { capabilityId: string }) => Promise<IntelligenceCapabilityStatus>
   fetchModels: (config: IntelligenceProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
 
   getAuditLogs: (options?: IntelligenceAuditLogQueryOptions) => Promise<IntelligenceAuditLogEntry[]>
@@ -453,6 +461,13 @@ export const intelligenceApiEvents = {
     .define<
       { capabilityId: string },
       IntelligenceApiResponse<{ requiresUserInput: boolean, inputHint: string }>
+    >(),
+  getCapabilityStatus: defineEvent('intelligence')
+    .module('api')
+    .event('get-capability-status')
+    .define<
+      { capabilityId: string },
+      IntelligenceApiResponse<IntelligenceCapabilityStatus>
     >(),
   fetchModels: defineEvent('intelligence')
     .module('api')
@@ -732,7 +747,12 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
     },
 
-    async stream<T = unknown>(capabilityId, payload, options, invokeOptions) {
+    async stream<T = unknown>(
+      capabilityId: string,
+      payload: unknown,
+      options: IntelligenceStreamOptions<T>,
+      invokeOptions?: IntelligenceInvokeOptions,
+    ) {
       if (typeof transport.stream !== 'function') {
         throw new Error('Intelligence streaming requires a stream-capable transport')
       }
@@ -778,6 +798,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async getCapabilityTestMeta(payload) {
       const response = await transport.send(intelligenceApiEvents.getCapabilityTestMeta, payload)
       return assertApiResponse(response, 'Failed to get capability test metadata')
+    },
+
+    async getCapabilityStatus(payload) {
+      const response = await transport.send(intelligenceApiEvents.getCapabilityStatus, payload)
+      return assertApiResponse(response, 'Failed to get capability status')
     },
 
     async fetchModels(config) {

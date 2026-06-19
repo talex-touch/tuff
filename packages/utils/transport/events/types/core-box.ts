@@ -26,6 +26,12 @@ export interface ExpandOptions {
    * Only used if mode is not specified.
    */
   length?: number
+
+  /**
+   * Force CoreBox to expand to maximum height.
+   * Kept for plugin SDK compatibility with `plugin.box.expand({ forceMax: true })`.
+   */
+  forceMax?: boolean
 }
 
 /**
