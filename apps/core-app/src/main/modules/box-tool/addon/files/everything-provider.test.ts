@@ -1,13 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { transportOn, appTaskWaitForIdle, iconWorkerExtract, execFileMock, fileProviderOnSearch } =
-  vi.hoisted(() => ({
-    transportOn: vi.fn(),
-    appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
-    iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
-    execFileMock: vi.fn(),
-    fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> }))
-  }))
+const {
+  transportOn,
+  appTaskWaitForIdle,
+  iconWorkerExtract,
+  execFileMock,
+  fileProviderOnSearch,
+  downloadCenterAddTaskMock,
+  downloadCenterGetTaskStatusMock,
+  zipUncompressMock
+} = vi.hoisted(() => ({
+  transportOn: vi.fn(),
+  appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
+  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
+  execFileMock: vi.fn(),
+  fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> })),
+  downloadCenterAddTaskMock: vi.fn(),
+  downloadCenterGetTaskStatusMock: vi.fn(),
+  zipUncompressMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   shell: {
@@ -17,6 +28,32 @@ vi.mock('electron', () => ({
 
 vi.mock('node:child_process', () => ({
   execFile: execFileMock
+}))
+
+vi.mock('node:fs/promises', () => ({
+  default: {
+    access: vi.fn(),
+    mkdir: vi.fn(() => Promise.resolve()),
+    readFile: vi.fn(() => Promise.resolve(Buffer.from('fixture')))
+  },
+  access: vi.fn(),
+  mkdir: vi.fn(() => Promise.resolve()),
+  readFile: vi.fn(() => Promise.resolve(Buffer.from('fixture')))
+}))
+
+vi.mock('compressing', () => ({
+  default: {
+    zip: {
+      uncompress: zipUncompressMock
+    }
+  }
+}))
+
+vi.mock('../../../download/download-center', () => ({
+  downloadCenterModule: {
+    addTask: downloadCenterAddTaskMock,
+    getTaskStatus: downloadCenterGetTaskStatusMock
+  }
 }))
 
 vi.mock('../../../storage', () => ({
@@ -67,8 +104,11 @@ vi.mock('./file-provider', () => ({
 
 import { everythingProvider } from './everything-provider'
 import { indexingRootPolicy } from '../../search-engine/indexing-root-policy'
+import { DownloadStatus } from '@talex-touch/utils'
 import {
   everythingSetCliPathEvent,
+  everythingInstallStartEvent,
+  everythingInstallStatusEvent,
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent
@@ -95,6 +135,7 @@ interface MutableEverythingProvider {
   sdkAddon: unknown
   esPath: string | null
   configuredCliPath: string | null
+  installJob: unknown
   iconCache: Map<string, string>
   iconExtractions: Map<string, Promise<string | null>>
   searchEverything: (query: string, maxResults: number, signal?: AbortSignal) => Promise<unknown[]>
@@ -118,6 +159,10 @@ interface MutableEverythingProvider {
   parseEverythingOutput: (output: string) => Array<{ path: string; name: string; size: number }>
   parseEverythingSdkOutput: (output: unknown) => Array<{ path: string; isDir: boolean }>
   readWindowsRegistryPathValues: () => Promise<string[]>
+  calculateFileSha256: (filePath: string) => Promise<string>
+  ensureUserPathContains: (cliDir: string) => Promise<void>
+  startEverythingPortable: (everythingExe: string) => void
+  runEverythingInstallJob: (job: unknown) => Promise<void>
   getStatusSnapshot: () => {
     pathFiltering: MutableEverythingProvider['pathFilteringStatus']
   }
@@ -209,6 +254,7 @@ afterEach(() => {
   provider.sdkAddon = null
   provider.esPath = null
   provider.configuredCliPath = null
+  provider.installJob = null
   provider.startupRefreshPromise = null
   provider.iconCache.clear()
   provider.iconExtractions.clear()
@@ -221,6 +267,10 @@ afterEach(() => {
   execFileMock.mockReset()
   fileProviderOnSearch.mockReset()
   fileProviderOnSearch.mockResolvedValue({ items: [] as Array<unknown> })
+  downloadCenterAddTaskMock.mockReset()
+  downloadCenterGetTaskStatusMock.mockReset()
+  zipUncompressMock.mockReset()
+  zipUncompressMock.mockResolvedValue(undefined)
   indexingRootPolicy.clear()
   indexingRootPolicy.setSourceRoots('file-provider', [
     {
@@ -241,7 +291,7 @@ describe('everything-provider fallback chain', () => {
 
       await provider.onLoad({ touchApp: { channel: {} } })
 
-      expect(transportOn).toHaveBeenCalledTimes(4)
+      expect(transportOn).toHaveBeenCalledTimes(6)
       expect(refreshSpy).not.toHaveBeenCalled()
       expect(provider.startupRefreshPromise).toBeInstanceOf(Promise)
     })
@@ -615,6 +665,315 @@ describe('everything-provider fallback chain', () => {
 
     expect(refreshSpy).toHaveBeenCalledWith('toggle-enable')
     expect(result).toEqual({ success: true, enabled: true })
+  })
+
+  it('queues Everything install downloads through Download Center on Windows', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      vi.spyOn(provider, 'calculateFileSha256').mockImplementation(async (filePath) => {
+        if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
+          return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
+        }
+        return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
+      })
+      vi.spyOn(provider, 'ensureUserPathContains').mockResolvedValue(undefined)
+      vi.spyOn(provider, 'startEverythingPortable').mockImplementation(() => undefined)
+      vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
+
+      execFileMock.mockImplementation((_file, _args, _options, callback) => {
+        callback(null, { stdout: 'Everything ES 1.1.0' })
+      })
+      downloadCenterAddTaskMock
+        .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('cli-task')
+      downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
+        id: taskId,
+        filename: taskId === 'cli-task' ? 'ES-1.1.0.30.x64.zip' : 'Everything-1.4.1.1032.x64.zip',
+        status: DownloadStatus.COMPLETED,
+        progress: { percentage: 100, downloadedSize: 1, speed: 0 },
+        metadata: {}
+      }))
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      const installHandler = getTransportHandler<
+        () => Promise<{ success: boolean; status: { jobId: string | null } }>
+      >(everythingInstallStartEvent)
+
+      const result = await installHandler()
+      expect(result.success).toBe(true)
+      expect(result.status.jobId).toBeTruthy()
+
+      await (provider.installJob as { promise: Promise<void> }).promise
+
+      expect(downloadCenterAddTaskMock).toHaveBeenCalledTimes(2)
+      expect(downloadCenterAddTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'https://www.voidtools.com/Everything-1.4.1.1032.x64.zip',
+          filename: 'Everything-1.4.1.1032.x64.zip',
+          module: 'resource_download',
+          metadata: expect.objectContaining({
+            source: 'everything-install',
+            assetType: 'everything',
+            sha256: '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
+          })
+        })
+      )
+      expect(downloadCenterAddTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'https://www.voidtools.com/ES-1.1.0.30.x64.zip',
+          filename: 'ES-1.1.0.30.x64.zip',
+          module: 'resource_download',
+          metadata: expect.objectContaining({
+            source: 'everything-install',
+            assetType: 'cli',
+            sha256: '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
+          })
+        })
+      )
+      expect(zipUncompressMock).toHaveBeenCalledTimes(2)
+      expect(provider.configuredCliPath).toContain('EverythingCLI')
+      expect((provider.installJob as { phase: string }).phase).toBe('completed')
+    })
+  })
+
+  it('returns unsupported install status outside Windows', async () => {
+    await withPlatform('darwin', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.registerChannels({ touchApp: { channel: {} } })
+
+      const installHandler = getTransportHandler<
+        () => Promise<{ success: boolean; status: { phase: string } }>
+      >(everythingInstallStartEvent)
+      const result = await installHandler()
+
+      expect(result.success).toBe(false)
+      expect(result.status.phase).toBe('unsupported')
+      expect(downloadCenterAddTaskMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('registers install status channels on non-Windows load', async () => {
+    await withPlatform('darwin', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+
+      await provider.onLoad({ touchApp: { channel: {} } })
+
+      const installHandler = getTransportHandler<
+        () => Promise<{ success: boolean; status: { phase: string } }>
+      >(everythingInstallStartEvent)
+      const result = await installHandler()
+
+      expect(result.success).toBe(false)
+      expect(result.status.phase).toBe('unsupported')
+      expect(downloadCenterAddTaskMock).not.toHaveBeenCalled()
+      expect(provider.startupRefreshPromise).toBeNull()
+    })
+  })
+
+  it('reuses an active Everything install job instead of creating duplicate downloads', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      vi.spyOn(provider, 'runEverythingInstallJob').mockImplementation(() => new Promise(() => {}))
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      const installHandler = getTransportHandler<
+        () => Promise<{ success: boolean; status: { jobId: string | null } }>
+      >(everythingInstallStartEvent)
+
+      const first = await installHandler()
+      const second = await installHandler()
+
+      expect(first.status.jobId).toBe(second.status.jobId)
+      expect(downloadCenterAddTaskMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('exposes Everything install status through transport', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.registerChannels({ touchApp: { channel: {} } })
+
+      const statusHandler = getTransportHandler<
+        () => Promise<{ phase: string; assets: unknown[] }>
+      >(everythingInstallStatusEvent)
+      const status = await statusHandler()
+
+      expect(status.phase).toBe('idle')
+      expect(status.assets).toHaveLength(2)
+    })
+  })
+
+  it('marks Everything install failed when a downloaded asset hash mismatches', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      vi.spyOn(provider, 'calculateFileSha256').mockResolvedValue('bad-hash')
+      vi.spyOn(provider, 'ensureUserPathContains').mockResolvedValue(undefined)
+      downloadCenterAddTaskMock
+        .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('cli-task')
+      downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
+        id: taskId,
+        filename: `${taskId}.zip`,
+        status: DownloadStatus.COMPLETED,
+        progress: { percentage: 100, downloadedSize: 1, speed: 0 },
+        metadata: {}
+      }))
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      const installHandler = getTransportHandler<
+        () => Promise<{ status: { jobId: string | null } }>
+      >(everythingInstallStartEvent)
+
+      await installHandler()
+      await (provider.installJob as { promise: Promise<void> }).promise
+
+      expect((provider.installJob as { phase: string; error: string }).phase).toBe('failed')
+      expect((provider.installJob as { phase: string; error: string }).error).toContain(
+        'Checksum mismatch'
+      )
+      expect(provider.configuredCliPath).toBeNull()
+      expect(zipUncompressMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('marks Everything install failed when a Download Center task fails', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      downloadCenterAddTaskMock
+        .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('cli-task')
+      downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
+        id: taskId,
+        filename: `${taskId}.zip`,
+        status: taskId === 'cli-task' ? DownloadStatus.FAILED : DownloadStatus.COMPLETED,
+        error: taskId === 'cli-task' ? 'network failed' : null,
+        progress: { percentage: 100, downloadedSize: 1, speed: 0 },
+        metadata: {}
+      }))
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      const installHandler = getTransportHandler<
+        () => Promise<{ status: { jobId: string | null } }>
+      >(everythingInstallStartEvent)
+
+      await installHandler()
+      await (provider.installJob as { promise: Promise<void> }).promise
+
+      expect((provider.installJob as { phase: string; error: string }).phase).toBe('failed')
+      expect((provider.installJob as { phase: string; error: string }).error).toContain(
+        'network failed'
+      )
+      expect(provider.configuredCliPath).toBeNull()
+      expect(zipUncompressMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('marks Everything install failed when extraction fails', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      vi.spyOn(provider, 'calculateFileSha256').mockImplementation(async (filePath) => {
+        if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
+          return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
+        }
+        return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
+      })
+      zipUncompressMock.mockRejectedValueOnce(new Error('extract failed'))
+      downloadCenterAddTaskMock
+        .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('cli-task')
+      downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
+        id: taskId,
+        filename: `${taskId}.zip`,
+        status: DownloadStatus.COMPLETED,
+        progress: { percentage: 100, downloadedSize: 1, speed: 0 },
+        metadata: {}
+      }))
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      const installHandler = getTransportHandler<
+        () => Promise<{ status: { jobId: string | null } }>
+      >(everythingInstallStartEvent)
+
+      await installHandler()
+      await (provider.installJob as { promise: Promise<void> }).promise
+
+      expect((provider.installJob as { phase: string; error: string }).phase).toBe('failed')
+      expect((provider.installJob as { phase: string; error: string }).error).toContain(
+        'extract failed'
+      )
+      expect(provider.configuredCliPath).toBeNull()
+    })
+  })
+
+  it('marks Everything install failed when es.exe probing fails', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      vi.spyOn(provider, 'calculateFileSha256').mockImplementation(async (filePath) => {
+        if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
+          return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
+        }
+        return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
+      })
+      const ensurePathSpy = vi
+        .spyOn(provider, 'ensureUserPathContains')
+        .mockResolvedValue(undefined)
+      vi.spyOn(provider, 'probeEverythingCli').mockRejectedValue(new Error('probe failed'))
+      downloadCenterAddTaskMock
+        .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('cli-task')
+      downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
+        id: taskId,
+        filename: `${taskId}.zip`,
+        status: DownloadStatus.COMPLETED,
+        progress: { percentage: 100, downloadedSize: 1, speed: 0 },
+        metadata: {}
+      }))
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      const installHandler = getTransportHandler<
+        () => Promise<{ status: { jobId: string | null } }>
+      >(everythingInstallStartEvent)
+
+      await installHandler()
+      await (provider.installJob as { promise: Promise<void> }).promise
+
+      expect((provider.installJob as { phase: string; error: string }).phase).toBe('failed')
+      expect((provider.installJob as { phase: string; error: string }).error).toContain(
+        'probe failed'
+      )
+      expect(provider.configuredCliPath).toBeNull()
+      expect(ensurePathSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not duplicate the CLI directory in the current process PATH', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'Path'
+    const originalPath = process.env[pathKey]
+    const cliDir = 'C:\\Users\\demo\\AppData\\Local\\Tuff\\EverythingCLI'
+
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback(null, 'already')
+    })
+
+    try {
+      process.env[pathKey] = `C:\\Tools;${cliDir}\\`
+
+      await provider.ensureUserPathContains(cliDir)
+
+      const normalizedParts = (process.env[pathKey] || '')
+        .split(';')
+        .filter(Boolean)
+        .map((part) =>
+          part
+            .trim()
+            .replace(/[\\/]+$/, '')
+            .toLowerCase()
+        )
+      expect(normalizedParts.filter((part) => part === cliDir.toLowerCase())).toHaveLength(1)
+    } finally {
+      process.env[pathKey] = originalPath
+    }
   })
 
   it('saves a manually selected Everything CLI path after probing it', async () => {
