@@ -41,6 +41,7 @@ code: |
     dialog,           // 系统对话框
     divisionBox,      // DivisionBox SDK
     quickActions,     // QuickActions SDK（MetaK 全局动作与原生分享）
+    quickOps,         // QuickOps SDK（内置本地快捷工具只读能力）
     meta,             // MetaSDK 兼容别名（新代码优先 quickActions）
     
     // 工具

@@ -1018,6 +1018,7 @@
       "features": "Features",
       "permissions": "Permissions",
       "storage": "Storage",
+      "structure": "Structure",
       "logs": "Logs",
       "details": "Details"
     },
@@ -1231,6 +1232,7 @@
       },
       "table": {
         "name": "Name",
+        "source": "Source",
         "type": "Type",
         "size": "Size",
         "lastModified": "Last Modified",
@@ -1259,7 +1261,7 @@
       },
       "confirm": {
         "clearTitle": "Clear Storage",
-        "clearMessage": "Are you sure you want to clear ALL storage for this plugin? This action cannot be undone.",
+        "clearMessage": "Clear this plugin's config, logs, and temporary files? This action cannot be undone.",
         "clearConfirm": "Clear All",
         "cancel": "Cancel"
       },

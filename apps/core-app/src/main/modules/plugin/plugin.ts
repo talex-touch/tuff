@@ -207,6 +207,14 @@ interface StorageTreeNode {
   children?: StorageTreeNode[]
 }
 
+type PluginStorageRootKind = 'config' | 'runtimeLogs' | 'dataLogs' | 'temp'
+
+interface PluginStorageRoot {
+  kind: PluginStorageRootKind
+  name: string
+  path: string
+}
+
 const disallowedArrays = [
   '官方',
   'touch',
@@ -1007,6 +1015,19 @@ export class TouchPlugin implements ITouchPlugin {
 
   getTempPath(): string {
     return path.join(this.getDataPath(), 'temp')
+  }
+
+  private getRuntimeLogsPath(): string {
+    return path.join(this.pluginPath, 'logs')
+  }
+
+  private getStorageRoots(): PluginStorageRoot[] {
+    return [
+      { kind: 'config', name: 'config', path: this.getConfigPath() },
+      { kind: 'runtimeLogs', name: 'logs', path: this.getRuntimeLogsPath() },
+      { kind: 'dataLogs', name: 'data-logs', path: this.getLogsPath() },
+      { kind: 'temp', name: 'temp', path: this.getTempPath() }
+    ]
   }
 
   /**
@@ -2608,18 +2629,7 @@ export class TouchPlugin implements ITouchPlugin {
     maxSize: number
     usagePercent: number
   } {
-    const configPath = this.getConfigPath()
     const maxSize = 10 * 1024 * 1024 // 10MB
-
-    if (!fse.existsSync(configPath)) {
-      return {
-        totalSize: 0,
-        fileCount: 0,
-        dirCount: 0,
-        maxSize,
-        usagePercent: 0
-      }
-    }
 
     let totalSize = 0
     let fileCount = 0
@@ -2641,7 +2651,11 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    calculateSize(configPath)
+    for (const root of this.getStorageRoots()) {
+      if (!fse.existsSync(root.path)) continue
+      dirCount++
+      calculateSize(root.path)
+    }
 
     return {
       totalSize,
@@ -2664,12 +2678,6 @@ export class TouchPlugin implements ITouchPlugin {
     modified: number
     children?: StorageTreeNode[]
   }> {
-    const configPath = this.getConfigPath()
-
-    if (!fse.existsSync(configPath)) {
-      return []
-    }
-
     const buildTree = (dirPath: string, relativePath: string = ''): StorageTreeNode[] => {
       const items = fse.readdirSync(dirPath)
       const result: StorageTreeNode[] = []
@@ -2705,7 +2713,20 @@ export class TouchPlugin implements ITouchPlugin {
       return result
     }
 
-    return buildTree(configPath)
+    return this.getStorageRoots()
+      .filter((root) => fse.existsSync(root.path))
+      .map((root) => {
+        const children = buildTree(root.path, root.name)
+        const stats = fse.statSync(root.path)
+        return {
+          name: root.name,
+          path: root.name,
+          type: 'directory' as const,
+          size: children.reduce((sum, child) => sum + child.size, 0),
+          modified: stats.mtimeMs,
+          children
+        }
+      })
   }
 
   /**
@@ -2801,15 +2822,21 @@ export class TouchPlugin implements ITouchPlugin {
    * @returns 操作结果
    */
   clearStorage(): { success: boolean; error?: string } {
-    const configPath = this.getConfigPath()
-
-    if (!fse.existsSync(configPath)) {
-      return { success: true }
-    }
-
     try {
-      fse.emptyDirSync(configPath)
-      this.broadcastStorageUpdate()
+      for (const root of this.getStorageRoots()) {
+        if (fse.existsSync(root.path)) {
+          fse.emptyDirSync(root.path)
+        } else if (root.kind !== 'runtimeLogs') {
+          fse.ensureDirSync(root.path)
+        }
+      }
+      try {
+        this.broadcastStorageUpdate()
+      } catch (error) {
+        pluginSystemLog.warn(`[Plugin ${this.name}] Failed to broadcast storage cleanup`, {
+          error: toError(error)
+        })
+      }
       return { success: true }
     } catch (error) {
       return {
