@@ -408,6 +408,12 @@ const selectedHistoryItem = computed(() => {
 
 const errorMessage = computed(() => resolvedPayload.value?.error || '')
 const hasResults = computed(() => providers.value.some(provider => provider.status === 'success'))
+const shouldShowIdleSkeleton = computed(() => (
+  status.value === 'idle'
+  && !query.value
+  && providers.value.length === 0
+  && !errorMessage.value
+))
 
 const statusLabel = computed(() => {
   switch (status.value) {
@@ -827,8 +833,11 @@ function clearHistory(): void {
 }
 
 function isPayloadComplete(payload: TranslationWidgetPayload): boolean {
-  if (payload.status === 'complete' || payload.status === 'error') {
+  if (payload.status === 'complete') {
     return true
+  }
+  if (payload.status === 'error') {
+    return buildHistoryResults(payload.providers).length > 0
   }
   if (!payload.providers?.length) {
     return false
@@ -1035,146 +1044,162 @@ onBeforeUnmount(() => {
     </aside>
 
     <section class="TranslationWidget__detail">
-      <header class="TranslationWidget__detail-header">
-        <div class="TranslationWidget__query">
-          <div class="TranslationWidget__query-label">
-            当前输入
-          </div>
-          <div class="TranslationWidget__query-text">
-            {{ query || '请输入要翻译的文本' }}
-          </div>
+      <div v-if="shouldShowIdleSkeleton" class="TranslationWidget__skeleton" aria-hidden="true">
+        <div class="TranslationWidget__skeleton-header">
+          <span class="TranslationWidget__skeleton-line is-label" />
+          <span class="TranslationWidget__skeleton-line is-status" />
         </div>
-        <div v-if="!hasRuntime" class="TranslationWidget__runtime-hint">
-          预览模式
+        <span class="TranslationWidget__skeleton-line is-title" />
+        <span class="TranslationWidget__skeleton-rule" />
+        <div class="TranslationWidget__skeleton-body">
+          <span class="TranslationWidget__skeleton-line is-wide" />
+          <span class="TranslationWidget__skeleton-line is-medium" />
+          <span class="TranslationWidget__skeleton-line is-short" />
         </div>
-        <div class="TranslationWidget__status" :class="`is-${status}`">
-          {{ statusLabel }}
-        </div>
-      </header>
-
-      <div v-if="status === 'idle'" class="TranslationWidget__placeholder">
-        输入文本后将展示翻译详情与多源结果
       </div>
 
-      <div
-        v-else
-        class="TranslationWidget__providers"
-        :class="{ 'is-focused': focusedArea === 'providers' }"
-      >
-        <div v-if="errorMessage" class="TranslationWidget__error">
-          {{ errorMessage }}
+      <template v-else>
+        <header class="TranslationWidget__detail-header">
+          <div class="TranslationWidget__query">
+            <div class="TranslationWidget__query-label">
+              当前输入
+            </div>
+            <div class="TranslationWidget__query-text">
+              {{ query || '请输入要翻译的文本' }}
+            </div>
+          </div>
+          <div v-if="!hasRuntime" class="TranslationWidget__runtime-hint">
+            预览模式
+          </div>
+          <div class="TranslationWidget__status" :class="`is-${status}`">
+            {{ statusLabel }}
+          </div>
+        </header>
+
+        <div v-if="status === 'idle'" class="TranslationWidget__placeholder">
+          输入文本后将展示翻译详情与多源结果
         </div>
 
         <div
-          v-for="provider in orderedProviders"
-          :key="provider.id"
-          class="TranslationWidget__provider"
-          :class="{ 'is-selected': selectedProviderId === provider.id }"
-          @click="selectedProviderId = provider.id; focusArea('providers')"
+          v-else
+          class="TranslationWidget__providers"
+          :class="{ 'is-focused': focusedArea === 'providers' }"
         >
-          <div class="TranslationWidget__provider-header">
-            <span class="TranslationWidget__provider-name">{{ provider.name }}</span>
-            <div class="TranslationWidget__provider-actions">
-              <span class="TranslationWidget__provider-status" :class="`is-${provider.status}`">
-                {{ providerStatusLabel(provider) }}
-              </span>
-              <button
-                v-if="canSpeakProvider(provider)"
-                class="TranslationWidget__audio"
-                type="button"
-                :disabled="synthesizingProviderIds.has(provider.id)"
-                @click.stop="toggleProviderAudio(provider)"
-              >
-                {{ synthesizingProviderIds.has(provider.id) ? '生成中' : isProviderAudioPlaying(provider) ? '停止' : '朗读' }}
-              </button>
-              <button
-                v-if="getProviderCopyText(provider)"
-                class="TranslationWidget__copy"
-                type="button"
-                @click.stop="copyResult(getProviderCopyText(provider))"
-              >
-                {{ provider.status === 'error' ? '复制错误' : '复制' }}
-              </button>
-            </div>
+          <div v-if="errorMessage" class="TranslationWidget__error">
+            {{ errorMessage }}
           </div>
-          <div class="TranslationWidget__provider-body">
-            <template v-if="provider.status === 'success'">
-              {{ provider.translatedText }}
-            </template>
-            <template v-else-if="provider.status === 'error'">
-              {{ getProviderErrorText(provider) }}
-            </template>
-            <template v-else>
-              翻译中...
-            </template>
-          </div>
-          <div
-            v-if="provider.status === 'success' && selectedProviderId === provider.id && hasProviderDetails(provider)"
-            class="TranslationWidget__provider-extra"
-          >
-            <div
-              v-if="provider.transliteration || getProviderPronunciationSummary(provider) || (provider.pronunciations?.length || 0) > 0"
-              class="TranslationWidget__provider-badges"
-            >
-              <span v-if="getProviderPronunciationSummary(provider)" class="TranslationWidget__badge">
-                音标 {{ getProviderPronunciationSummary(provider) }}
-              </span>
-              <span v-if="provider.transliteration" class="TranslationWidget__badge">
-                转写 {{ provider.transliteration }}
-              </span>
-              <span
-                v-for="pronunciation in provider.pronunciations"
-                :key="`${provider.id}-${pronunciation.label || 'audio'}-${pronunciation.text || ''}-${pronunciation.audioUrl || ''}`"
-                class="TranslationWidget__badge is-muted"
-              >
-                {{ pronunciation.label ? `${pronunciation.label} ` : '' }}{{ pronunciation.text || '发音' }}
-              </span>
-            </div>
 
-            <div v-if="provider.meanings?.length" class="TranslationWidget__provider-meanings">
-              <div
-                v-for="meaning in provider.meanings"
-                :key="`${provider.id}-${meaning.partOfSpeech || 'meaning'}-${(meaning.terms || []).join('/')}-${(meaning.definitions || []).join('/')}`"
-                class="TranslationWidget__meaning"
-              >
-                <div class="TranslationWidget__meaning-header">
-                  <span class="TranslationWidget__meaning-pos">
-                    {{ meaning.partOfSpeech || '释义' }}
-                  </span>
-                  <span v-if="meaning.terms?.length" class="TranslationWidget__meaning-terms">
-                    {{ meaning.terms.join(' / ') }}
-                  </span>
-                </div>
-                <ul v-if="meaning.definitions?.length" class="TranslationWidget__meaning-list">
-                  <li
-                    v-for="definition in meaning.definitions"
-                    :key="`${provider.id}-${meaning.partOfSpeech || 'definition'}-${definition}`"
-                  >
-                    {{ definition }}
-                  </li>
-                </ul>
+          <div
+            v-for="provider in orderedProviders"
+            :key="provider.id"
+            class="TranslationWidget__provider"
+            :class="{ 'is-selected': selectedProviderId === provider.id }"
+            @click="selectedProviderId = provider.id; focusArea('providers')"
+          >
+            <div class="TranslationWidget__provider-header">
+              <span class="TranslationWidget__provider-name">{{ provider.name }}</span>
+              <div class="TranslationWidget__provider-actions">
+                <span class="TranslationWidget__provider-status" :class="`is-${provider.status}`">
+                  {{ providerStatusLabel(provider) }}
+                </span>
+                <button
+                  v-if="canSpeakProvider(provider)"
+                  class="TranslationWidget__audio"
+                  type="button"
+                  :disabled="synthesizingProviderIds.has(provider.id)"
+                  @click.stop="toggleProviderAudio(provider)"
+                >
+                  {{ synthesizingProviderIds.has(provider.id) ? '生成中' : isProviderAudioPlaying(provider) ? '停止' : '朗读' }}
+                </button>
+                <button
+                  v-if="getProviderCopyText(provider)"
+                  class="TranslationWidget__copy"
+                  type="button"
+                  @click.stop="copyResult(getProviderCopyText(provider))"
+                >
+                  {{ provider.status === 'error' ? '复制错误' : '复制' }}
+                </button>
               </div>
             </div>
-          </div>
-          <div v-if="provider.status === 'error' && hasProviderErrorDetail(provider)" class="TranslationWidget__provider-error-action">
-            <button class="TranslationWidget__provider-toggle" type="button" @click.stop="toggleProviderError(provider.id)">
-              {{ isErrorExpanded(provider.id) ? '收起详情' : '查看详情' }}
-            </button>
-          </div>
-          <div v-if="provider.status !== 'pending'" class="TranslationWidget__provider-meta">
-            <span v-if="provider.from || provider.to">
-              {{ provider.from || 'auto' }} → {{ provider.to || '' }}
-            </span>
-            <span v-if="provider.provider || provider.model">
-              {{ provider.provider }}{{ provider.model ? `/${provider.model}` : '' }}
-            </span>
-          </div>
-        </div>
+            <div class="TranslationWidget__provider-body">
+              <template v-if="provider.status === 'success'">
+                {{ provider.translatedText }}
+              </template>
+              <template v-else-if="provider.status === 'error'">
+                {{ getProviderErrorText(provider) }}
+              </template>
+              <template v-else>
+                翻译中...
+              </template>
+            </div>
+            <div
+              v-if="provider.status === 'success' && selectedProviderId === provider.id && hasProviderDetails(provider)"
+              class="TranslationWidget__provider-extra"
+            >
+              <div
+                v-if="provider.transliteration || getProviderPronunciationSummary(provider) || (provider.pronunciations?.length || 0) > 0"
+                class="TranslationWidget__provider-badges"
+              >
+                <span v-if="getProviderPronunciationSummary(provider)" class="TranslationWidget__badge">
+                  音标 {{ getProviderPronunciationSummary(provider) }}
+                </span>
+                <span v-if="provider.transliteration" class="TranslationWidget__badge">
+                  转写 {{ provider.transliteration }}
+                </span>
+                <span
+                  v-for="pronunciation in provider.pronunciations"
+                  :key="`${provider.id}-${pronunciation.label || 'audio'}-${pronunciation.text || ''}-${pronunciation.audioUrl || ''}`"
+                  class="TranslationWidget__badge is-muted"
+                >
+                  {{ pronunciation.label ? `${pronunciation.label} ` : '' }}{{ pronunciation.text || '发音' }}
+                </span>
+              </div>
 
-        <div v-if="!orderedProviders.length && !hasResults" class="TranslationWidget__placeholder">
-          当前没有可用的翻译源
+              <div v-if="provider.meanings?.length" class="TranslationWidget__provider-meanings">
+                <div
+                  v-for="meaning in provider.meanings"
+                  :key="`${provider.id}-${meaning.partOfSpeech || 'meaning'}-${(meaning.terms || []).join('/')}-${(meaning.definitions || []).join('/')}`"
+                  class="TranslationWidget__meaning"
+                >
+                  <div class="TranslationWidget__meaning-header">
+                    <span class="TranslationWidget__meaning-pos">
+                      {{ meaning.partOfSpeech || '释义' }}
+                    </span>
+                    <span v-if="meaning.terms?.length" class="TranslationWidget__meaning-terms">
+                      {{ meaning.terms.join(' / ') }}
+                    </span>
+                  </div>
+                  <ul v-if="meaning.definitions?.length" class="TranslationWidget__meaning-list">
+                    <li
+                      v-for="definition in meaning.definitions"
+                      :key="`${provider.id}-${meaning.partOfSpeech || 'definition'}-${definition}`"
+                    >
+                      {{ definition }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div v-if="provider.status === 'error' && hasProviderErrorDetail(provider)" class="TranslationWidget__provider-error-action">
+              <button class="TranslationWidget__provider-toggle" type="button" @click.stop="toggleProviderError(provider.id)">
+                {{ isErrorExpanded(provider.id) ? '收起详情' : '查看详情' }}
+              </button>
+            </div>
+            <div v-if="provider.status !== 'pending'" class="TranslationWidget__provider-meta">
+              <span v-if="provider.from || provider.to">
+                {{ provider.from || 'auto' }} → {{ provider.to || '' }}
+              </span>
+              <span v-if="provider.provider || provider.model">
+                {{ provider.provider }}{{ provider.model ? `/${provider.model}` : '' }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="!orderedProviders.length && !hasResults" class="TranslationWidget__placeholder">
+            当前没有可用的翻译源
+          </div>
         </div>
-      </div>
+      </template>
     </section>
   </div>
 </template>
@@ -1183,12 +1208,13 @@ onBeforeUnmount(() => {
 .TranslationWidget {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
-  gap: 16px;
+  gap: 0;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding: 0;
+  padding: 12px 16px;
+  box-sizing: border-box;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -1198,17 +1224,14 @@ onBeforeUnmount(() => {
 .TranslationWidget__history {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   min-height: 0;
   border-right: 1px solid var(--tx-border-color);
-  padding-right: 12px;
-  border-radius: 12px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  padding-right: 18px;
+  transition: border-color 0.2s ease;
 }
 
 .TranslationWidget__history.is-focused {
   border-color: rgba(64, 158, 255, 0.45);
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.14);
 }
 
 .TranslationWidget__history-header {
@@ -1232,37 +1255,34 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   min-height: 0;
   overflow: auto;
-  padding-right: 4px;
+  border-top: 1px solid var(--tx-border-color-lighter);
+  margin-top: 8px;
 }
 
 .TranslationWidget__history-item {
   position: relative;
-  border: 1px solid rgba(64, 158, 255, 0.16);
-  background: rgba(64, 158, 255, 0.06);
-  border-radius: 12px;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
+  background: transparent;
+  transition: background 0.2s ease;
 }
 
 .TranslationWidget__history-main {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 10px 32px 10px 10px;
+  padding: 10px 28px 10px 0;
   text-align: left;
   cursor: pointer;
 }
 
 .TranslationWidget__history-item:hover {
-  border-color: rgba(64, 158, 255, 0.42);
-  background: rgba(64, 158, 255, 0.14);
+  background: rgba(64, 158, 255, 0.08);
 }
 
 .TranslationWidget__history-item.is-selected {
-  border-color: rgba(64, 158, 255, 0.58);
-  background: rgba(64, 158, 255, 0.2);
+  background: rgba(64, 158, 255, 0.12);
 }
 
 .TranslationWidget__history-text {
@@ -1283,14 +1303,13 @@ onBeforeUnmount(() => {
 
 .TranslationWidget__history-remove {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 0;
   border: none;
-  background: rgba(255, 255, 255, 0.7);
+  background: transparent;
   color: var(--tx-text-color-secondary);
   font-size: 14px;
   cursor: pointer;
-  border-radius: 999px;
   width: 18px;
   height: 18px;
   line-height: 18px;
@@ -1309,16 +1328,97 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  padding-left: 24px;
+}
+
+.TranslationWidget__skeleton {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.TranslationWidget__skeleton-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.TranslationWidget__skeleton-body {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  padding-top: 10px;
+}
+
+.TranslationWidget__skeleton-line {
+  display: block;
+  height: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.12),
+    rgba(148, 163, 184, 0.24),
+    rgba(148, 163, 184, 0.12)
+  );
+  background-size: 180% 100%;
+  animation: TranslationWidgetSkeletonPulse 1.4s ease-in-out infinite;
+}
+
+.TranslationWidget__skeleton-line.is-label {
+  width: 96px;
+}
+
+.TranslationWidget__skeleton-line.is-status {
+  width: 86px;
+}
+
+.TranslationWidget__skeleton-line.is-title {
+  width: min(360px, 72%);
+  height: 26px;
+}
+
+.TranslationWidget__skeleton-line.is-wide {
+  width: 88%;
+}
+
+.TranslationWidget__skeleton-line.is-medium {
+  width: 64%;
+}
+
+.TranslationWidget__skeleton-line.is-short {
+  width: 42%;
+}
+
+.TranslationWidget__skeleton-rule {
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: var(--tx-border-color-lighter);
+}
+
+@keyframes TranslationWidgetSkeletonPulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .TranslationWidget__detail-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
   flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .TranslationWidget__query {
@@ -1341,24 +1441,24 @@ onBeforeUnmount(() => {
 }
 
 .TranslationWidget__status {
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 0;
+  border-radius: 0;
   font-size: 12px;
   font-weight: 600;
-  background: rgba(64, 158, 255, 0.15);
+  background: transparent;
   color: var(--tx-color-primary);
 }
 
 .TranslationWidget__runtime-hint {
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 0;
+  border-radius: 0;
   font-size: 12px;
   color: var(--tx-text-color-secondary);
-  background: var(--tx-fill-color-lighter);
+  background: transparent;
 }
 
 .TranslationWidget__status.is-error {
-  background: rgba(245, 108, 108, 0.15);
+  background: transparent;
   color: var(--tx-color-danger);
 }
 
@@ -1366,28 +1466,26 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   min-height: 0;
   overflow: auto;
-  padding: 2px 4px 2px 2px;
+  padding: 0;
 }
 
 .TranslationWidget__provider {
-  border-radius: 14px;
-  border: 1px solid var(--tx-border-color);
-  background: var(--tx-bg-color-overlay);
-  padding: 12px;
+  border: none;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
+  background: transparent;
+  padding: 12px 0;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: background 0.2s ease;
 }
 
 .TranslationWidget__provider:hover {
-  border-color: rgba(64, 158, 255, 0.36);
+  background: rgba(64, 158, 255, 0.06);
 }
 
 .TranslationWidget__provider.is-selected {
-  border-color: rgba(64, 158, 255, 0.58);
-  background: rgba(64, 158, 255, 0.08);
+  background: rgba(64, 158, 255, 0.1);
 }
 
 .TranslationWidget__provider-header {
@@ -1420,50 +1518,50 @@ onBeforeUnmount(() => {
 }
 
 .TranslationWidget__provider-status {
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 0;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
   color: #64748b;
-  background: rgba(100, 116, 139, 0.14);
+  background: transparent;
   flex-shrink: 0;
 }
 
 .TranslationWidget__provider-status.is-success {
   color: #2563eb;
-  background: rgba(37, 99, 235, 0.14);
+  background: transparent;
 }
 
 .TranslationWidget__provider-status.is-error {
   color: var(--tx-color-danger, #ef4444);
-  background: rgba(239, 68, 68, 0.14);
+  background: transparent;
 }
 
 .TranslationWidget__provider-status.is-pending {
   color: #6b7280;
-  background: rgba(107, 114, 128, 0.14);
+  background: transparent;
 }
 
 .TranslationWidget__copy {
-  border: 1px solid rgba(64, 158, 255, 0.28);
-  background: rgba(64, 158, 255, 0.14);
+  border: 1px solid var(--tx-border-color);
+  background: transparent;
   color: var(--tx-color-primary);
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
+  padding: 2px 6px;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .TranslationWidget__audio {
-  border: 1px solid rgba(125, 211, 252, 0.24);
-  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid var(--tx-border-color);
+  background: transparent;
   color: #38bdf8;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
+  padding: 2px 6px;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -1483,10 +1581,10 @@ onBeforeUnmount(() => {
 }
 
 .TranslationWidget__provider-extra {
-  margin-top: 10px;
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .TranslationWidget__provider-badges {
@@ -1499,12 +1597,12 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  border-radius: 999px;
+  padding: 2px 0;
+  border-radius: 0;
   font-size: 11px;
   color: var(--tx-text-color-primary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  border: none;
 }
 
 .TranslationWidget__badge.is-muted {
@@ -1514,14 +1612,16 @@ onBeforeUnmount(() => {
 .TranslationWidget__provider-meanings {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
+  border-top: 1px solid var(--tx-border-color-lighter);
 }
 
 .TranslationWidget__meaning {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .TranslationWidget__meaning-header {
@@ -1584,16 +1684,18 @@ onBeforeUnmount(() => {
 .TranslationWidget__error {
   font-size: 12px;
   color: var(--tx-color-danger);
-  background: rgba(245, 108, 108, 0.12);
-  border: 1px solid rgba(245, 108, 108, 0.28);
-  border-radius: 10px;
-  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(245, 108, 108, 0.28);
+  border-radius: 0;
+  padding: 8px 0;
 }
 
 @media (max-width: 640px) {
   .TranslationWidget {
     grid-template-columns: 1fr;
     gap: 12px;
+    padding: 10px 12px;
   }
 
   .TranslationWidget__history {
@@ -1601,7 +1703,11 @@ onBeforeUnmount(() => {
     border-right: none;
     padding-right: 0;
     border-bottom: 1px solid var(--tx-border-color);
-    padding-bottom: 12px;
+    padding-bottom: 8px;
+  }
+
+  .TranslationWidget__detail {
+    padding-left: 0;
   }
 
   .TranslationWidget__provider-actions {

@@ -14,6 +14,7 @@ import { toast } from 'vue-sonner'
 import { createRendererLogger } from '../../../../utils/renderer-log'
 
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
+const COREBOX_HEADER_HEIGHT = 56
 const detachLog = createRendererLogger('useDetach')
 
 interface UseDetachOptions {
@@ -67,9 +68,22 @@ function buildDetachedPayload(item: TuffItem, query: string): { item: TuffItem; 
   }
 }
 
+function resolveDetachedContentBounds(
+  bounds?: { x: number; y: number; width: number; height: number } | null
+): DivisionBoxConfig['initialBounds'] | undefined {
+  if (!bounds) return undefined
+  if (!Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) return undefined
+
+  return {
+    width: bounds.width,
+    height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
+  }
+}
+
 export function buildDetachedFeatureConfig(
   item: TuffItem,
-  query: string
+  query: string,
+  sourceBounds?: { x: number; y: number; width: number; height: number } | null
 ): { config: DivisionBoxConfig; isWidget: boolean } | null {
   const interaction = item.meta?.interaction as DetachedFeatureInteraction | undefined
   const showInput =
@@ -100,6 +114,7 @@ export function buildDetachedFeatureConfig(
       keepAlive: true,
       pluginId,
       ui: { showInput, initialInput: showInput ? query : '' },
+      initialBounds: resolveDetachedContentBounds(sourceBounds),
       initialState
     }
   }
@@ -163,9 +178,37 @@ export function useDetach(options: UseDetachOptions) {
   const flowPayload = ref<FlowPayload | null>(null)
   const flowSessionId = ref('')
 
+  async function getCurrentCoreBoxBounds(): Promise<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null> {
+    try {
+      const response = await transport.send(CoreBoxEvents.layout.getBounds)
+      const bounds = response?.bounds
+      if (
+        bounds &&
+        typeof bounds.x === 'number' &&
+        typeof bounds.y === 'number' &&
+        typeof bounds.width === 'number' &&
+        typeof bounds.height === 'number'
+      ) {
+        return bounds
+      }
+    } catch (error) {
+      detachLog.warn('Failed to read CoreBox bounds before detach:', error)
+    }
+    return null
+  }
+
   async function detachFeature(item: TuffItem): Promise<void> {
     try {
-      const detached = buildDetachedFeatureConfig(item, searchVal.value)
+      const detached = buildDetachedFeatureConfig(
+        item,
+        searchVal.value,
+        await getCurrentCoreBoxBounds()
+      )
       if (!detached) {
         return
       }
@@ -196,6 +239,7 @@ export function useDetach(options: UseDetachOptions) {
 
   async function detachUIMode(activation: IProviderActivate): Promise<void> {
     try {
+      const sourceBounds = await getCurrentCoreBoxBounds()
       const config = {
         url: `plugin://${activation.id}/index.html`,
         title: activation.name || activation.id,
@@ -203,7 +247,8 @@ export function useDetach(options: UseDetachOptions) {
         size: 'medium' as const,
         keepAlive: true,
         pluginId: activation.id,
-        ui: { showInput: true, initialInput: searchVal.value }
+        ui: { showInput: true, initialInput: searchVal.value },
+        initialBounds: resolveDetachedContentBounds(sourceBounds)
       }
       const response = await transport.send(DivisionBoxEvents.open, config)
       if (response?.success) {

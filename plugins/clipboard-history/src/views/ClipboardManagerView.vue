@@ -5,6 +5,7 @@ import { useBox } from '@talex-touch/utils/plugin/sdk/box-sdk'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
 import ClipboardActionBar from '~/components/ClipboardActionBar.vue'
 import ClipboardDetail from '~/components/ClipboardDetail.vue'
+import ClipboardGlyph from '~/components/ClipboardGlyph.vue'
 import ClipboardSidebar from '~/components/ClipboardSidebar.vue'
 import type { ClipboardFilter } from '~/utils/clipboard-items'
 import {
@@ -432,7 +433,7 @@ watch(selectedItem, (item) => {
       <section v-else class="empty-canvas">
         <div class="empty-state">
           <div class="empty-state-icon">
-            {{ loading ? '⌛' : '📋' }}
+            <ClipboardGlyph :name="loading ? 'loader' : 'clipboard'" :class="{ spin: loading }" />
           </div>
           <h2>{{ loading ? '正在读取剪贴历史' : '暂无剪贴内容' }}</h2>
           <p>{{ loading ? '稍等一下，最近的记录会很快出现在这里。' : '复制一些文本或图片后会出现在这里。' }}</p>
@@ -563,6 +564,21 @@ watch(selectedItem, (item) => {
     color-mix(in srgb, var(--clipboard-surface-ghost) 60%, transparent),
     color-mix(in srgb, var(--clipboard-surface-ghost) 90%, transparent)
   );
+}
+
+.empty-state-icon .ClipboardGlyph {
+  width: 44px;
+  height: 44px;
+}
+
+.spin {
+  animation: clipboard-spin 0.9s linear infinite;
+}
+
+@keyframes clipboard-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-state h2 {
@@ -722,6 +738,12 @@ watch(selectedItem, (item) => {
 
   .footer-right {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
   }
 }
 </style>

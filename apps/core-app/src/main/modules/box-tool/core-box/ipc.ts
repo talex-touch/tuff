@@ -104,7 +104,7 @@ export class IpcManager {
         return
       }
 
-      if ((data as ExpandOptions).mode === 'max') {
+      if ((data as ExpandOptions).mode === 'max' || (data as ExpandOptions).forceMax === true) {
         coreBoxManager.expand({ forceMax: true })
         return
       }

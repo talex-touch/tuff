@@ -258,6 +258,27 @@ export class DivisionBoxWindowPool {
       divisionBoxWindowPoolLog.debug(`Released window (active: ${this.activeWindows.size})`)
     }
 
+    if (!window.isDestroyed()) {
+      try {
+        window.setMinimumSize(
+          DivisionBoxWindowOption.minWidth ?? 720,
+          DivisionBoxWindowOption.minHeight ?? 400
+        )
+        window.setBounds(
+          {
+            ...window.getBounds(),
+            width: DivisionBoxWindowOption.width ?? 720,
+            height: DivisionBoxWindowOption.height ?? 500
+          },
+          false
+        )
+      } catch (error) {
+        divisionBoxWindowPoolLog.warn('Failed to reset released DivisionBox window bounds', {
+          error
+        })
+      }
+    }
+
     // Refill pool
     if (!this.destroyed && !devProcessManager.isShuttingDownProcess()) {
       setTimeout(() => this.fillPool(), 500)

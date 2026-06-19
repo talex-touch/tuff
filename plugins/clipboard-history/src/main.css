@@ -87,6 +87,47 @@
   --clipboard-border-strong: var(--tx-border-color-dark, var(--tx-border-color));
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --tx-color-primary-light-3: var(--tuff-color-primary-light-3, #3375b9);
+    --tx-color-primary-light-5: var(--tuff-color-primary-light-5, #2a598a);
+    --tx-color-primary-light-7: var(--tuff-color-primary-light-7, #213d5b);
+    --tx-color-primary-light-9: var(--tuff-color-primary-light-9, #18222c);
+    --tx-color-primary-dark-2: var(--tuff-color-primary-dark-2, #66b1ff);
+    --tx-color-danger-light-9: var(--tuff-color-danger-light-9, #4e1f1f);
+    --tx-text-color-primary: var(--tuff-text-color-primary, #e5eaf3);
+    --tx-text-color-regular: var(--tuff-text-color-regular, #cfd3dc);
+    --tx-text-color-secondary: var(--tuff-text-color-secondary, #a3a6ad);
+    --tx-text-color-placeholder: var(--tuff-text-color-placeholder, #8d9095);
+    --tx-text-color-disabled: var(--tuff-text-color-disabled, #6c6e72);
+    --tx-border-color: var(--tuff-border-color, #4c4d4f);
+    --tx-border-color-light: var(--tuff-border-color-light, #414243);
+    --tx-border-color-lighter: var(--tuff-border-color-lighter, #363637);
+    --tx-border-color-extra-light: var(--tuff-border-color-extra-light, #2b2b2c);
+    --tx-bg-color: var(--tuff-bg-color, #141414);
+    --tx-bg-color-page: var(--tuff-bg-color-page, #0a0a0a);
+    --tx-bg-color-overlay: var(--tuff-bg-color-overlay, #1d1e1f);
+    --tx-fill-color: var(--tuff-fill-color, #303030);
+    --tx-fill-color-light: var(--tuff-fill-color-light, #262727);
+    --tx-fill-color-lighter: var(--tuff-fill-color-lighter, #1d1d1d);
+    --tx-fill-color-blank: var(--tuff-fill-color-blank, transparent);
+    --clipboard-color-accent-strong: var(--tx-color-primary-dark-2);
+    --clipboard-text-primary: var(--tx-text-color-primary);
+    --clipboard-text-secondary: var(--tx-text-color-regular);
+    --clipboard-text-muted: var(--tx-text-color-secondary);
+    --clipboard-text-disabled: var(--tx-text-color-disabled);
+    --clipboard-surface-base: var(--tx-bg-color);
+    --clipboard-surface-elevated: var(--tx-bg-color-overlay);
+    --clipboard-surface-subtle: var(--tx-fill-color-light);
+    --clipboard-surface-ghost: var(--tx-fill-color);
+    --clipboard-surface-strong: var(--tx-fill-color-lighter);
+    --clipboard-border-color: var(--tx-border-color);
+    --clipboard-border-strong: var(--tx-border-color-dark, var(--tx-border-color));
+  }
+}
+
 html,
 body,
 #app {

@@ -25,6 +25,7 @@ describe('Plugin Box SDK', () => {
     box.hide()
     box.show()
     await box.expand({ length: 3 })
+    await box.expand({ forceMax: true })
     await box.shrink()
 
     expect(mocks.send).toHaveBeenNthCalledWith(1, CoreBoxEvents.ui.hide, undefined)
@@ -36,6 +37,11 @@ describe('Plugin Box SDK', () => {
     )
     expect(mocks.send).toHaveBeenNthCalledWith(
       4,
+      CoreBoxEvents.ui.expand,
+      { forceMax: true },
+    )
+    expect(mocks.send).toHaveBeenNthCalledWith(
+      5,
       CoreBoxEvents.ui.expand,
       { mode: 'collapse' },
     )

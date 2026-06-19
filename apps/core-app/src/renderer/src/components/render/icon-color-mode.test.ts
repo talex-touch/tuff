@@ -55,6 +55,19 @@ describe('corebox icon color mode', () => {
     )
   })
 
+  it('uses a visible fallback icon when icon metadata is missing', () => {
+    expect(normalizeCoreBoxIcon(undefined)).toEqual({
+      type: 'class',
+      value: 'i-ri-puzzle-line',
+      status: 'normal'
+    })
+    expect(normalizeCoreBoxIcon({ type: 'url', value: '' })).toEqual({
+      type: 'class',
+      value: 'i-ri-puzzle-line',
+      status: 'normal'
+    })
+  })
+
   it('uses explicit icon color when provided', () => {
     expect(
       resolveCoreBoxIconColor({ type: 'class', value: 'i-ri-clipboard-line', color: '#22c55e' })

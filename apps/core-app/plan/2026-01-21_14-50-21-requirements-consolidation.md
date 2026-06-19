@@ -1,6 +1,6 @@
 ---
 mode: plan
-cwd: /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app
+cwd: apps/core-app
 task: 整理所有相关需求并生成统一执行顺序文档
 complexity: complex
 planning_method: builtin

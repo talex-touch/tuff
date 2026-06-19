@@ -17,6 +17,65 @@ describe('CoreApp shared intelligence resolver contract', () => {
     storageMocks.storedConfig = undefined
   })
 
+  it('reports Nexus text.translate unavailable while account token is guest', async () => {
+    const { intelligenceCapabilityRegistry } = await import('./intelligence-capability-registry')
+    const { resolveCapabilityStatus } = await import('./intelligence-capability-status')
+    const { setIntelligenceProviderManager } = await import('./intelligence-sdk')
+
+    intelligenceCapabilityRegistry.clear()
+    intelligenceCapabilityRegistry.register({
+      id: 'text.translate',
+      type: IntelligenceCapabilityType.TRANSLATE,
+      name: 'Translate',
+      description: 'test translate',
+      supportedProviders: [IntelligenceProviderType.CUSTOM]
+    })
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'tuff-nexus-default',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Tuff Nexus',
+          enabled: true,
+          apiKey: 'guest',
+          capabilities: ['text.translate'],
+          metadata: { origin: 'tuff-nexus', tokenMode: 'guest' }
+        }
+      ],
+      globalConfig: { defaultStrategy: 'adaptive-default', enableAudit: true, enableCache: false },
+      capabilities: {
+        'text.translate': {
+          id: 'text.translate',
+          providers: [{ providerId: 'tuff-nexus-default', priority: 1, enabled: true }]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+    setIntelligenceProviderManager(
+      new FakeProviderManager([
+        createChatProvider(
+          {
+            id: 'tuff-nexus-default',
+            type: IntelligenceProviderType.CUSTOM,
+            apiKey: 'guest',
+            capabilities: ['text.translate'],
+            metadata: { origin: 'tuff-nexus', tokenMode: 'guest' }
+          },
+          vi.fn()
+        )
+      ])
+    )
+
+    expect(resolveCapabilityStatus('text.translate')).toEqual({
+      capabilityId: 'text.translate',
+      available: false,
+      providerIds: [],
+      reason: 'no-enabled-provider'
+    })
+  })
+
   it('normalizes capability aliases when reading configured capability options', async () => {
     const { getCapabilityOptions } = await import('./intelligence-config')
     storageMocks.storedConfig = {

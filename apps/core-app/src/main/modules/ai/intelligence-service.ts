@@ -4,6 +4,7 @@ import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/
 import { createLogger } from '../../utils/logger'
 import { capabilityTesterRegistry } from './capability-testers'
 import type { CapabilityTestPayload } from './capability-testers/base-tester'
+import { resolveCapabilityStatus } from './intelligence-capability-status'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
   ensureIntelligenceConfigLoaded,
@@ -117,6 +118,19 @@ export function initIntelligenceSdkService(): void {
       return ok(result)
     } catch (error) {
       logError('Provider test failed:', error)
+      return fail(error)
+    }
+  })
+
+  transport.on(intelligenceApiEvents.getCapabilityStatus, async (data, _context) => {
+    try {
+      if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
+        throw new Error('Invalid capability ID')
+      }
+
+      return ok(resolveCapabilityStatus(data.capabilityId))
+    } catch (error) {
+      logError('Capability status failed:', error)
       return fail(error)
     }
   })

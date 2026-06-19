@@ -273,6 +273,10 @@ export function setIntelligenceProviderManager(manager: IntelligenceProviderMana
   logInfo('Provider manager injected')
 }
 
+export function getIntelligenceProviderManager(): IntelligenceProviderManagerAdapter {
+  return ensureProviderManager()
+}
+
 function ensureProviderManager(): IntelligenceProviderManagerAdapter {
   if (!providerManager) {
     throw new Error('[Intelligence] Provider manager not initialized')

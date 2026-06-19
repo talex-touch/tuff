@@ -41,6 +41,7 @@ import {
   registerBuiltinTools
 } from './agents'
 import { capabilityTesterRegistry } from './capability-testers'
+import { resolveCapabilityStatus } from './intelligence-capability-status'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
   debugPrintConfig,
@@ -1248,6 +1249,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           requiresUserInput: tester.requiresUserInput(),
           inputHint: tester.getDefaultInputHint()
         }
+      }
+    )
+
+    registerSafe(
+      intelligenceApiEvents.getCapabilityStatus,
+      'Get capability status',
+      async (data) => {
+        if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
+          throw new Error('Invalid capability ID')
+        }
+
+        return resolveCapabilityStatus(data.capabilityId)
       }
     )
 

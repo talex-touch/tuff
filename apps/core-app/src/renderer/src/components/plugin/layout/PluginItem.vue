@@ -27,6 +27,23 @@ const pluginSummary = computed(() => {
 
   return props.plugin.desc || props.plugin.loadError?.message || ''
 })
+
+const shouldPreservePluginIconColor = computed(() => {
+  const icon = props.plugin.icon
+  if (!icon || icon.type === 'class' || icon.type === 'builtin' || icon.type === 'emoji') {
+    return false
+  }
+
+  const value = icon.value.trim().toLowerCase()
+  if (!value || value.startsWith('data:image/svg+xml')) return false
+
+  const [path] = value.split(/[?#]/)
+  return !path.endsWith('.svg')
+})
+
+const pluginIconStyle = {
+  '--icon-color': 'currentColor'
+}
 </script>
 
 <template>
@@ -73,12 +90,13 @@ const pluginSummary = computed(() => {
     </TxPopover>
 
     <TuffIcon
-      class="flex-shrink-0 dark:text-white"
+      class="PluginItem-Icon flex-shrink-0"
       :empty="DefaultIcon"
       :icon="plugin.icon"
       :alt="plugin.name"
-      colorful
+      :colorful="shouldPreservePluginIconColor"
       :size="32"
+      :style="pluginIconStyle"
     />
 
     <div class="main-content flex-1 ml-4 flex flex-col justify-center overflow-hidden">
@@ -99,6 +117,8 @@ const pluginSummary = computed(() => {
 
 <style lang="scss" scoped>
 .plugin-item {
+  color: var(--tx-text-color-primary);
+
   &:hover {
     border-color: var(--tx-border-color);
     --fake-inner-opacity: 0.25;

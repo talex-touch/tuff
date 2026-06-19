@@ -2,7 +2,10 @@ import { createApp } from 'vue'
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import ClipboardManagerView from './views/ClipboardManagerView.vue'
+import { initializeClipboardTheme } from './utils/theme'
 import './main.css'
+
+initializeClipboardTheme()
 
 const app = createApp(App)
 

@@ -28,6 +28,7 @@ const PLUGIN_NAME = 'touch-translation'
 const SOURCE_ID = 'plugin-features'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
 const TUFF_INTELLIGENCE_PROVIDER_ID = 'tuffintelligence'
+const TEXT_TRANSLATE_CAPABILITY_ID = 'text.translate'
 const IMAGE_TRANSLATION_ITEM_ID = 'image-translation-widget'
 const IMAGE_TRANSLATION_TARGET_LANG = 'zh'
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
@@ -115,6 +116,10 @@ const widgetStateByFeature = new Map()
 
 let networkPermissionState = null
 let aiPermissionState = null
+
+function resolveRuntimeChannel() {
+  return globalThis.touchChannel || globalThis.$touchChannel || channel || globalThis.channel
+}
 
 function getProviderSecretKey(providerId, field) {
   return `providers.${providerId}.${field}`
@@ -280,14 +285,20 @@ async function resolveTextToTranslate(featureId, query) {
 }
 
 async function resolveTuffIntelligenceAuthToken() {
-  const runtimeChannel = globalThis.touchChannel || globalThis.$touchChannel || channel
+  const runtimeChannel = resolveRuntimeChannel()
   if (!runtimeChannel?.send) {
     return ''
   }
 
   try {
-    const { AccountEvents } = require('@talex-touch/utils/transport/events')
-    const eventName = AccountEvents.auth.getToken.toEventName()
+    let eventName = 'account:auth:get-token'
+    try {
+      const { AccountEvents } = require('@talex-touch/utils/transport/events')
+      eventName = AccountEvents.auth.getToken.toEventName()
+    }
+    catch {
+      // Keep the root CommonJS prelude usable in sandboxed plugin loaders.
+    }
     const token = await runtimeChannel.send(eventName)
     return typeof token === 'string' ? token.trim() : ''
   }
@@ -298,7 +309,28 @@ async function resolveTuffIntelligenceAuthToken() {
 
 async function canUseTuffIntelligenceProvider() {
   const token = await resolveTuffIntelligenceAuthToken()
-  return token.length > 0
+  if (!token || token === 'guest') {
+    return false
+  }
+  return hasAvailableTextTranslateCapability()
+}
+
+async function hasAvailableTextTranslateCapability() {
+  try {
+    const client = getCreateIntelligenceClient()(resolveRuntimeChannel())
+    if (typeof client.getCapabilityStatus !== 'function') {
+      return true
+    }
+
+    const status = await client.getCapabilityStatus({
+      capabilityId: TEXT_TRANSLATE_CAPABILITY_ID,
+    })
+    return Boolean(status?.available)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-translation] Failed to check Intelligence text.translate availability', error)
+    return false
+  }
 }
 
 async function filterAuthorizedProviderConfigs(providersToShow, guards = {
@@ -1601,10 +1633,12 @@ module.exports = {
     getTranslationProviderLabel,
     canUseTuffIntelligenceProvider,
     filterAuthorizedProviderConfigs,
+    hasAvailableTextTranslateCapability,
     mergeProviderSecrets,
     normalizeCallFailureMessage,
     normalizeErrorMessage: normalizeTranslationErrorMessage,
     parseImageDataUrl,
+    resolveRuntimeChannel,
     resolveTargetLanguage,
     resolveTuffIntelligenceAuthToken,
     stripProviderSecrets,
