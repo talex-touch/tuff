@@ -224,18 +224,24 @@ function handleClick(event: MouseEvent | KeyboardEvent): void {
 }
 
 .FeatureCard-Header {
+  gap: 12px;
   margin-bottom: 1rem;
+}
+
+.FeatureCard-HeaderMain {
+  flex: 1 1 auto;
 }
 
 .FeatureCard-Icon {
   flex: 0 0 3rem;
+  overflow: hidden;
   color: var(--tx-color-white);
   background: linear-gradient(135deg, var(--tx-color-primary), var(--tx-color-primary-light-3));
   --icon-color: currentColor;
 }
 
 .FeatureCard-HeaderInfo {
-  flex: 1;
+  flex: 1 1 auto;
 }
 
 .FeatureCard-TitleRow {
@@ -247,6 +253,7 @@ function handleClick(event: MouseEvent | KeyboardEvent): void {
 }
 
 .FeatureCard-InteractionBadge {
+  flex: 0 0 auto;
   text-transform: capitalize;
   border: 1px solid var(--tx-border-color-lighter);
 }
