@@ -247,6 +247,7 @@ onMounted(() => {
   border-bottom: 1px solid var(--tx-border-color-lighter);
   --fake-color: var(--tx-fill-color-dark);
   --fake-inner-opacity: 0.5;
+  --fake-radius: 12px 12px 0 0;
   transition:
     background-color 0.25s ease,
     border-color 0.25s ease;
