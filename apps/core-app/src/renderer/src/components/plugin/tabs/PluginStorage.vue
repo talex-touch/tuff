@@ -54,15 +54,29 @@ const pluginPaths = ref<PluginPaths | null>(null)
 interface StorageEntry {
   name: string
   path: string
+  root: string
   type: 'file' | 'directory'
   size: number
   modified: number
 }
 
-type StorageTreeNode = StorageEntry & { children?: StorageTreeNode[] }
+interface StorageTreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  size: number
+  modified: number
+  children?: StorageTreeNode[]
+}
+
 type PluginPathType = 'plugin' | 'data' | 'config' | 'logs'
 
 const entries = ref<StorageEntry[]>([])
+
+const runtimeLogsPath = computed(() => {
+  const pluginPath = pluginPaths.value?.pluginPath
+  return pluginPath ? `${pluginPath.replace(/[\\/]+$/, '')}/logs` : ''
+})
 
 const usageColorClass = computed(() => {
   const percent = storageStats.value.usagePercent
@@ -103,7 +117,7 @@ const pathItems = computed(() => [
     titleKey: 'plugin.storage.configuration.logsDirectory',
     defaultIcon: 'i-carbon-document',
     pathType: 'logs' as PluginPathType,
-    path: pluginPaths.value?.logsPath ?? ''
+    path: runtimeLogsPath.value
   }
 ])
 
@@ -172,24 +186,27 @@ async function loadStorageData(): Promise<void> {
 function flattenTree(nodes: StorageTreeNode[]): StorageEntry[] {
   const items: StorageEntry[] = []
 
-  function traverse(nodeList: StorageTreeNode[]) {
+  function traverse(nodeList: StorageTreeNode[], rootName?: string) {
     for (const node of nodeList) {
       const type = node.type === 'directory' ? 'directory' : 'file'
+      const currentRoot = rootName || node.name
       items.push({
         name: node.name,
         path: node.path,
+        root: currentRoot,
         type,
         size: node.size || 0,
         modified: node.modified || Date.now()
       })
       if (node.children && Array.isArray(node.children)) {
-        traverse(node.children)
+        traverse(node.children, currentRoot)
       }
     }
   }
 
   traverse(nodes)
   return items.sort((a, b) => {
+    if (a.root !== b.root) return a.root.localeCompare(b.root)
     if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
     return a.name.localeCompare(b.name)
   })
@@ -536,6 +553,7 @@ watch(
                 <div v-else class="h-full flex flex-col overflow-hidden">
                   <div class="PluginStorage-TableHeader">
                     <div>{{ t('plugin.storage.table.name') }}</div>
+                    <div>{{ t('plugin.storage.table.source') }}</div>
                     <div>{{ t('plugin.storage.table.type') }}</div>
                     <div>{{ t('plugin.storage.table.size') }}</div>
                     <div>{{ t('plugin.storage.table.lastModified') }}</div>
@@ -560,6 +578,9 @@ watch(
                               {{ entry.path }}
                             </div>
                           </div>
+                        </div>
+                        <div class="text-xs text-[var(--tx-text-color-secondary)]">
+                          {{ entry.root }}
                         </div>
                         <div class="text-xs text-[var(--tx-text-color-secondary)]">
                           {{ getEntryTypeLabel(entry) }}
@@ -670,7 +691,7 @@ watch(
 
 .PluginStorage-TableHeader {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr 0.6fr;
+  grid-template-columns: 2fr 0.9fr 1fr 1fr 1.5fr 0.6fr;
   gap: 12px;
   padding: 8px 12px;
   font-size: 12px;
@@ -680,7 +701,7 @@ watch(
 
 .PluginStorage-Row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr 0.6fr;
+  grid-template-columns: 2fr 0.9fr 1fr 1fr 1.5fr 0.6fr;
   gap: 12px;
   padding: 12px;
   align-items: center;

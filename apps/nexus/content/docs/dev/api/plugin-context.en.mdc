@@ -41,6 +41,7 @@ code: |
     dialog,           // System dialogs
     divisionBox,      // DivisionBox SDK
     quickActions,     // QuickActions SDK (MetaK global actions and native share)
+    quickOps,         // QuickOps SDK (read-only built-in local tools)
     meta,             // MetaSDK compatibility alias (prefer quickActions)
     
     // Utilities

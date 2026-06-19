@@ -428,6 +428,14 @@ async function handlePrimaryAction(): Promise<void> {
           <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
             <PluginStorage :plugin="plugin" />
           </TvTabItem>
+          <TvTabItem
+            v-if="plugin.dev?.enable || isAppDev"
+            icon="folder-chart-line"
+            name="Structure"
+            :label="t('plugin.tabs.structure')"
+          >
+            <PluginStorage :plugin="plugin" />
+          </TvTabItem>
           <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')" fill>
             <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
           </TvTabItem>

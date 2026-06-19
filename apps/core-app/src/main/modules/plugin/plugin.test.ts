@@ -1215,6 +1215,62 @@ describe('TouchPlugin.triggerFeature', () => {
   })
 })
 
+describe('TouchPlugin storage overview', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('includes runtime logs in storage stats, tree, and cleanup', () => {
+    const existsSync = vi.spyOn(fse, 'existsSync').mockReturnValue(true)
+    const readdirSync = vi.spyOn(fse, 'readdirSync').mockImplementation((targetPath) => {
+      const normalizedPath = String(targetPath)
+      if (normalizedPath.endsWith(path.join('data', 'config'))) return ['settings.json'] as any
+      if (normalizedPath.endsWith(path.join('test-plugin-source', 'logs')))
+        return ['session.log'] as any
+      return [] as any
+    })
+    const statSync = vi.spyOn(fse, 'statSync').mockImplementation((targetPath) => {
+      const normalizedPath = String(targetPath)
+      const isDirectory =
+        normalizedPath.endsWith('config') ||
+        normalizedPath.endsWith('logs') ||
+        normalizedPath.endsWith('data-logs') ||
+        normalizedPath.endsWith('temp')
+      return {
+        isDirectory: () => isDirectory,
+        size: normalizedPath.endsWith('session.log') ? 42 : 20,
+        mtimeMs: 123
+      } as any
+    })
+    const emptyDirSync = vi.spyOn(fse, 'emptyDirSync').mockImplementation(() => undefined)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/test-plugin-source',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+
+    const stats = plugin.getStorageStats()
+    const tree = plugin.getStorageTree()
+    const result = plugin.clearStorage()
+
+    expect(stats.fileCount).toBe(2)
+    expect(stats.totalSize).toBe(62)
+    expect(tree.map((node) => node.name)).toContain('logs')
+    expect(result).toEqual({ success: true })
+    expect(emptyDirSync).toHaveBeenCalledWith('/tmp/test-plugin-source/logs')
+    expect(existsSync).toHaveBeenCalled()
+    expect(readdirSync).toHaveBeenCalled()
+    expect(statSync).toHaveBeenCalled()
+  })
+})
+
 describe('TouchPlugin.setRuntime', () => {
   afterEach(() => {
     vi.restoreAllMocks()

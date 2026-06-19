@@ -1018,6 +1018,7 @@
       "features": "功能",
       "permissions": "权限",
       "storage": "存储",
+      "structure": "结构预览",
       "logs": "日志",
       "details": "详情"
     },
@@ -1231,6 +1232,7 @@
       },
       "table": {
         "name": "名称",
+        "source": "来源",
         "type": "类型",
         "size": "大小",
         "lastModified": "最后修改",
@@ -1259,7 +1261,7 @@
       },
       "confirm": {
         "clearTitle": "清空存储",
-        "clearMessage": "确定要清空该插件的所有存储吗？此操作不可撤销。",
+        "clearMessage": "确定要清空该插件的配置、日志和临时文件吗？此操作不可撤销。",
         "clearConfirm": "清空全部",
         "cancel": "取消"
       },

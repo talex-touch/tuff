@@ -83,6 +83,19 @@
   - Kept `AppSetting.quickOps`, `QuickOpsRuntimeHost`, `QuickOpsSessionManager`, `QuickOpsModule`, typed transport, Flow confirmation, policy/evidence gates, and host capability reads in CoreApp so existing runtime policy and defaults continue to work during migration.
   - Updated TODO, PRD, and Nexus user/developer docs to point users and maintainers at the plugin-owned settings summary and to block private-IPC settings writes or reintroducing CoreApp Tools QuickOps controls.
 
+### fix(core-app): expose plugin runtime logs in storage overview
+
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+  - Plugin storage stats/tree/cleanup now include config, runtime `logs`, data logs, and temp roots, so the Storage view no longer misses session log files written under the plugin runtime directory.
+  - Plugin path APIs open/reveal the same runtime `logs` directory shown in the UI, and dev-mode plugin details now expose a Structure tab that reuses the detailed storage structure preview with a source column.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin.test.ts"`.
+
 ### ref(quickops): move file actions into plugin
 
 - `plugins/touch-quickops/manifest.json`

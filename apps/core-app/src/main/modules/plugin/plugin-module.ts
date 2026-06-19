@@ -107,6 +107,10 @@ type PluginLifecycleChannel = {
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : 'Unknown error'
 
+function getPluginRuntimeLogsPath(plugin: TouchPlugin): string {
+  return path.join(plugin.pluginPath, 'logs')
+}
+
 const logIpcHandlerError = (handler: string, error: unknown): void => {
   pluginIpcLog.error('Plugin IPC handler failed', {
     meta: { handler },
@@ -2701,7 +2705,7 @@ export class PluginModule extends BaseModule {
             pluginPath: resolved.plugin.pluginPath,
             dataPath: resolved.plugin.getDataPath(),
             configPath: resolved.plugin.getConfigPath(),
-            logsPath: resolved.plugin.getLogsPath(),
+            logsPath: getPluginRuntimeLogsPath(resolved.plugin),
             tempPath: resolved.plugin.getTempPath()
           } satisfies PluginPerformanceGetPathsResponse
         } catch (error) {
@@ -3497,7 +3501,7 @@ export class PluginModule extends BaseModule {
             pluginPath: plugin.pluginPath,
             dataPath: plugin.getDataPath(),
             configPath: plugin.getConfigPath(),
-            logsPath: plugin.getLogsPath(),
+            logsPath: getPluginRuntimeLogsPath(plugin),
             tempPath: plugin.getTempPath()
           }
         } catch (error) {
@@ -3539,7 +3543,7 @@ export class PluginModule extends BaseModule {
               targetPath = plugin.getConfigPath()
               break
             case 'logs':
-              targetPath = plugin.getLogsPath()
+              targetPath = getPluginRuntimeLogsPath(plugin)
               break
             case 'temp':
               targetPath = plugin.getTempPath()
@@ -3584,6 +3588,7 @@ export class PluginModule extends BaseModule {
             plugin.pluginPath,
             plugin.getDataPath(),
             plugin.getConfigPath(),
+            getPluginRuntimeLogsPath(plugin),
             plugin.getLogsPath(),
             plugin.getTempPath()
           ].map((root) => path.resolve(root))
