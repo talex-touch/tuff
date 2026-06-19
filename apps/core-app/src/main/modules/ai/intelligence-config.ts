@@ -9,7 +9,9 @@ import {
   DEFAULT_CAPABILITIES,
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROVIDERS,
-  IntelligenceProviderType
+  IntelligenceProviderType,
+  resolveIntelligencePromptTemplate,
+  toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
@@ -207,56 +209,21 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
   return changed
 }
 
-function resolvePromptRecord(
-  registry: IntelligencePromptRecord[],
-  binding: IntelligencePromptBinding
-): IntelligencePromptRecord | undefined {
-  const candidates = registry.filter((item) => {
-    if (item.id !== binding.promptId) return false
-    if (item.status !== 'active') return false
-    if (binding.providerId && item.providerId && item.providerId !== binding.providerId) {
-      return false
-    }
-    return true
-  })
-
-  if (candidates.length <= 0) {
-    return undefined
-  }
-
-  if (binding.promptVersion) {
-    return candidates.find((item) => item.version === binding.promptVersion)
-  }
-
-  return [...candidates].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
-}
-
 function resolveCapabilityPromptTemplate(
   config: IntelligenceSDKPersistedConfig | undefined,
   capabilityId: string
 ): string | undefined {
-  if (!config) {
+  const normalizedCapabilityId = toRuntimeCapabilityId(capabilityId)
+  if (!config || !normalizedCapabilityId) {
     return undefined
   }
 
-  const capability = config.capabilities?.[capabilityId]
-  const promptRegistry = config.promptRegistry ?? []
-  const bindings: IntelligencePromptBinding[] = []
-  if (capability?.promptBinding) {
-    bindings.push(normalizePromptBindingCapability(capabilityId, capability.promptBinding))
-  }
-  bindings.push(
-    ...(config.promptBindings ?? []).filter((item) => item.capabilityId === capabilityId)
-  )
-
-  for (const binding of bindings) {
-    const record = resolvePromptRecord(promptRegistry, binding)
-    if (record?.template) {
-      return record.template
-    }
-  }
-
-  return capability?.promptTemplate
+  return resolveIntelligencePromptTemplate({
+    capabilityId: normalizedCapabilityId,
+    capability: config.capabilities?.[normalizedCapabilityId],
+    promptRegistry: config.promptRegistry,
+    promptBindings: config.promptBindings
+  })
 }
 
 function createDefaultPersistedConfig(): IntelligenceSDKPersistedConfig {
@@ -439,8 +406,9 @@ export function getCapabilityOptions(capabilityId: string): {
 } {
   // 实时从 storage 读取
   const stored = getLatestConfig()
+  const normalizedCapabilityId = toRuntimeCapabilityId(capabilityId)
   const capabilityMap = stored?.capabilities ?? {}
-  const config = capabilityMap[capabilityId]
+  const config = normalizedCapabilityId ? capabilityMap[normalizedCapabilityId] : undefined
 
   if (!config) {
     return {}
@@ -462,14 +430,14 @@ export function getCapabilityOptions(capabilityId: string): {
     modelPreference: enabledBindings
       .flatMap((binding) => binding.models ?? [])
       .filter((model): model is string => Boolean(model)),
-    promptTemplate: resolveCapabilityPromptTemplate(stored, capabilityId)
+    promptTemplate: resolveCapabilityPromptTemplate(stored, normalizedCapabilityId)
   }
 }
 
 export function getCapabilityPrompt(capabilityId: string): string | undefined {
   // 实时从 storage 读取
   const stored = getLatestConfig()
-  return resolveCapabilityPromptTemplate(stored, capabilityId)
+  return resolveCapabilityPromptTemplate(stored, toRuntimeCapabilityId(capabilityId))
 }
 
 export function listCapabilities(): IntelligenceCapabilityRoutingConfig[] {

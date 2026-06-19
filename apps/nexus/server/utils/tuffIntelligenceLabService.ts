@@ -7,11 +7,15 @@ import {
   type IntelligenceUsageInfo,
   type TuffIntelligenceApprovalTicket,
 } from '@talex-touch/tuff-intelligence/light'
-import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
+import {
+  buildCapabilityMessages,
+  normalizeCapabilityMessages,
+} from './tuffIntelligenceCapabilityMessages'
 import { createError, type H3Event } from 'h3'
 import { getUserById } from './authStore'
 import { consumeCredits } from './creditsStore'
 import { resolveProviderBaseUrl } from './intelligenceModels'
+import { resolveIntelligenceProviderAdapter } from './tuffIntelligenceProviderAdapters'
 import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import {
   getIntelligenceProviderApiKeyWithRegistryFallback,
@@ -245,14 +249,6 @@ export interface IntelligenceLabOrchestrationResult {
   traceId: string
 }
 
-const OPENAI_COMPATIBLE_TYPES = new Set([
-  IntelligenceProviderType.OPENAI,
-  IntelligenceProviderType.DEEPSEEK,
-  IntelligenceProviderType.SILICONFLOW,
-  IntelligenceProviderType.CUSTOM,
-])
-const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
-const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
 const PLANNER_MAX_ACTIONS = 8
 const DEFAULT_TIMEOUT_MS = 45_000
 const DEFAULT_PROVIDER_RETRY_COUNT = 1
@@ -405,40 +401,6 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
 
-function extractText(value: unknown): string {
-  if (typeof value === 'string')
-    return value
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === 'string')
-          return item
-        if (item && typeof item === 'object' && 'text' in item)
-          return extractText((item as { text?: unknown }).text)
-        return ''
-      })
-      .join('')
-  }
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    const content = 'content' in record ? extractText(record.content) : ''
-    if (content)
-      return content
-    const reasoningContent = 'reasoning_content' in record ? extractText(record.reasoning_content) : ''
-    if (reasoningContent)
-      return reasoningContent
-    const reasoning = 'reasoning' in record ? extractText(record.reasoning) : ''
-    if (reasoning)
-      return reasoning
-    const analysis = 'analysis' in record ? extractText(record.analysis) : ''
-    if (analysis)
-      return analysis
-    if ('text' in record)
-      return extractText(record.text)
-  }
-  return ''
-}
-
 function numberFrom(...candidates: unknown[]): number {
   for (const item of candidates) {
     if (typeof item === 'number' && Number.isFinite(item))
@@ -469,107 +431,11 @@ function resolveInvokeGovernanceChannel(stage?: string): string {
     : normalized
 }
 
-function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsageInfo {
-  const usageMetadata = asRecord(rawMessage.usage_metadata)
-  const responseMetadata = asRecord(rawMessage.response_metadata)
-  const tokenUsage = asRecord(responseMetadata.tokenUsage)
-
-  const promptTokens = numberFrom(
-    usageMetadata.input_tokens,
-    usageMetadata.prompt_tokens,
-    usageMetadata.promptTokens,
-    tokenUsage.promptTokens,
-    tokenUsage.prompt_tokens,
-  )
-  const completionTokens = numberFrom(
-    usageMetadata.output_tokens,
-    usageMetadata.completion_tokens,
-    usageMetadata.completionTokens,
-    tokenUsage.completionTokens,
-    tokenUsage.completion_tokens,
-  )
-  const totalTokens = numberFrom(
-    usageMetadata.total_tokens,
-    usageMetadata.totalTokens,
-    tokenUsage.totalTokens,
-    tokenUsage.total_tokens,
-    promptTokens + completionTokens,
-  )
-
-  return {
-    promptTokens,
-    completionTokens,
-    totalTokens,
-  }
-}
-
-function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
-  return messages.map((message) => {
-    if (message.role === 'system') {
-      return new SystemMessage(message.content)
-    }
-    if (message.role === 'assistant') {
-      return new AIMessage(message.content)
-    }
-    return new HumanMessage(message.content)
-  })
-}
-
-function trimBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '')
-}
-
-function stripOpenAiEndpointSuffix(value: string): string {
-  const trimmed = trimBaseUrl(value)
-  const lower = trimmed.toLowerCase()
-  for (const suffix of OPENAI_CHAT_SUFFIXES) {
-    if (lower.endsWith(suffix)) {
-      return trimBaseUrl(trimmed.slice(0, -suffix.length))
-    }
-  }
-  return trimmed
-}
-
-function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
-  const trimmed = stripOpenAiEndpointSuffix(baseUrl)
-  const lower = trimmed.toLowerCase()
-  if (OPENAI_VERSION_SUFFIXES.some(suffix => lower.endsWith(suffix))) {
-    return trimmed
-  }
-  return `${trimmed}/v1`
-}
-
-function normalizeAnthropicBaseUrl(baseUrl: string): string {
-  const trimmed = trimBaseUrl(baseUrl)
-  if (trimmed.toLowerCase().endsWith('/v1')) {
-    return trimmed.slice(0, -3)
-  }
-  return trimmed
-}
-
 function sanitizeJsonContent(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed.startsWith('```'))
     return trimmed
   return trimmed.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
-}
-
-function createRequestError(
-  message: string,
-  meta: {
-    endpoint?: string
-    status?: number
-    responseSnippet?: string
-  },
-): ProviderRequestError {
-  const error = new Error(message) as ProviderRequestError
-  if (meta.endpoint)
-    error.endpoint = meta.endpoint
-  if (typeof meta.status === 'number')
-    error.status = meta.status
-  if (meta.responseSnippet)
-    error.responseSnippet = meta.responseSnippet
-  return error
 }
 
 function tryResolveHttpStatus(error: Error): number | null {
@@ -853,131 +719,6 @@ async function resolveProviderCandidates(
   return contexts
 }
 
-async function invokeOpenAiCompatibleChat(
-  context: ResolvedProviderContext,
-  messages: IntelligenceMessage[],
-): Promise<InvokeModelResult> {
-  const traceId = createId('trace')
-  const startedAt = now()
-  const baseUrl = normalizeOpenAiCompatibleBaseUrl(
-    resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
-  )
-  const endpoint = `${baseUrl}/chat/completions`
-
-  try {
-    const { ChatOpenAI } = await import('@langchain/openai') as { ChatOpenAI: any }
-
-    const runner = new ChatOpenAI({
-      apiKey: context.apiKey || 'tuff-local-key',
-      model: context.model,
-      temperature: 0.2,
-      timeout: context.timeoutMs,
-      configuration: { baseURL: baseUrl },
-    })
-
-    const response = await withTimeout(
-      runner.invoke(toLangChainMessages(messages)),
-      context.timeoutMs,
-      `Request timeout after ${context.timeoutMs}ms`,
-    )
-
-    const content = extractText(asRecord(response).content).trim()
-    if (!content) {
-      throw createRequestError('Provider returned empty content.', {
-        endpoint,
-        status: 502,
-        responseSnippet: JSON.stringify(asRecord(response)).slice(0, 400),
-      })
-    }
-
-    return {
-      content,
-      model: context.model,
-      traceId,
-      endpoint: `langchain:${context.provider.type}:chat`,
-      status: 200,
-      latency: now() - startedAt,
-      usage: extractUsageInfo(asRecord(response)),
-    }
-  } catch (error) {
-    const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
-    const detail = normalized as unknown as Record<string, unknown>
-    if (typeof detail.endpoint !== 'string') {
-      detail.endpoint = endpoint
-    }
-    throw normalized
-  }
-}
-
-async function invokeAnthropicChat(
-  context: ResolvedProviderContext,
-  messages: IntelligenceMessage[],
-): Promise<InvokeModelResult> {
-  const traceId = createId('trace')
-  const startedAt = now()
-  const endpoint = `${normalizeAnthropicBaseUrl(
-    resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
-  )}/messages`
-
-  try {
-    const { ChatAnthropic } = await import('@langchain/anthropic') as { ChatAnthropic: any }
-
-    const runner = new ChatAnthropic({
-      anthropicApiKey: context.apiKey || '',
-      model: context.model,
-      maxTokens: 1200,
-      timeout: context.timeoutMs,
-      anthropicApiUrl: normalizeAnthropicBaseUrl(
-        resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
-      ),
-      clientOptions: {
-        baseURL: normalizeAnthropicBaseUrl(
-          resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
-        ),
-      },
-    })
-
-    const response = await withTimeout(
-      runner.invoke(toLangChainMessages(messages)),
-      context.timeoutMs,
-      `Request timeout after ${context.timeoutMs}ms`,
-    )
-
-    const content = extractText(asRecord(response).content).trim()
-    if (!content) {
-      throw createRequestError('Anthropic returned empty content.', {
-        endpoint,
-        status: 502,
-        responseSnippet: JSON.stringify(asRecord(response)).slice(0, 400),
-      })
-    }
-
-    return {
-      content,
-      model: context.model,
-      traceId,
-      endpoint: 'langchain:anthropic:chat',
-      status: 200,
-      latency: now() - startedAt,
-      usage: extractUsageInfo(asRecord(response)),
-    }
-  } catch (error) {
-    const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
-    const detail = normalized as unknown as Record<string, unknown>
-    if (typeof detail.endpoint !== 'string') {
-      detail.endpoint = endpoint
-    }
-    throw normalized
-  }
-}
-
-async function invokeLocalChat(
-  context: ResolvedProviderContext,
-  messages: IntelligenceMessage[],
-): Promise<InvokeModelResult> {
-  return await invokeOpenAiCompatibleChat(context, messages)
-}
-
 async function invokeModel(
   event: H3Event,
   userId: string,
@@ -1177,16 +918,11 @@ async function invokeWithResolvedContext(
   messages: IntelligenceMessage[],
 ): Promise<InvokeModelResult> {
   try {
-    if (context.provider.type === IntelligenceProviderType.ANTHROPIC) {
-      return await invokeAnthropicChat(context, messages)
+    const adapter = resolveIntelligenceProviderAdapter(context.provider.type)
+    if (!adapter) {
+      throw new Error(`Unsupported provider type: ${context.provider.type}`)
     }
-    if (context.provider.type === IntelligenceProviderType.LOCAL) {
-      return await invokeLocalChat(context, messages)
-    }
-    if (OPENAI_COMPATIBLE_TYPES.has(context.provider.type as IntelligenceProviderType)) {
-      return await invokeOpenAiCompatibleChat(context, messages)
-    }
-    throw new Error(`Unsupported provider type: ${context.provider.type}`)
+    return await adapter({ context, messages })
   } catch (error) {
     const normalized = error instanceof Error ? error : new Error(String(error))
     const detail = normalized as unknown as Record<string, unknown>
@@ -1199,37 +935,12 @@ async function invokeWithResolvedContext(
   }
 }
 
-function normalizeMessages(messages: unknown): IntelligenceMessage[] {
-  if (!Array.isArray(messages))
-    return []
-  return messages
-    .map((message) => {
-      const row = asRecord(message)
-      const roleRaw = String(row.role || '').trim().toLowerCase()
-      const role: IntelligenceMessage['role']
-        = roleRaw === 'system' || roleRaw === 'assistant' ? roleRaw : 'user'
-      const content = String(row.content || '').trim()
-      if (!content)
-        return null
-      return { role, content }
-    })
-    .filter((message): message is IntelligenceMessage => Boolean(message))
-}
-
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
 function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function readStringArray(value: unknown): string[] {
-  if (!Array.isArray(value))
-    return []
-  return value
-    .map(item => readOptionalString(item))
-    .filter((item): item is string => Boolean(item))
 }
 
 function parseJsonObject<T extends Record<string, unknown>>(raw: string, fallback: T): T {
@@ -1252,114 +963,6 @@ function parseJsonObject<T extends Record<string, unknown>>(raw: string, fallbac
     }
   }
   return fallback
-}
-
-function toPromptPayload(payload: unknown): Record<string, unknown> {
-  return payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? payload as Record<string, unknown>
-    : {}
-}
-
-function buildCapabilityMessages(capabilityId: string, payload: unknown): IntelligenceMessage[] {
-  const record = toPromptPayload(payload)
-
-  if (capabilityId === 'text.chat' || capabilityId === 'chat.completion') {
-    const messages = normalizeMessages(record.messages)
-    if (messages.length <= 0) {
-      throw createError({ statusCode: 400, statusMessage: 'messages are required.' })
-    }
-    return messages
-  }
-
-  if (capabilityId === 'text.translate') {
-    const text = readOptionalString(record.text)
-    const targetLang = readOptionalString(record.targetLang)
-    if (!text || !targetLang) {
-      throw createError({ statusCode: 400, statusMessage: 'text and targetLang are required.' })
-    }
-    const sourceLang = readOptionalString(record.sourceLang) || 'auto'
-    return [
-      {
-        role: 'system',
-        content: `You are a professional translator. Translate from ${sourceLang} to ${targetLang}. Return only the translated text.`,
-      },
-      { role: 'user', content: text },
-    ]
-  }
-
-  if (capabilityId === 'text.summarize') {
-    const text = readOptionalString(record.text)
-    if (!text) {
-      throw createError({ statusCode: 400, statusMessage: 'text is required.' })
-    }
-    const style = readOptionalString(record.style) || 'concise'
-    const maxLength = readOptionalNumber(record.maxLength)
-    return [
-      {
-        role: 'system',
-        content: `You are a summarization assistant. Style: ${style}.${maxLength ? ` Keep it under ${maxLength} characters.` : ''} Return only the summary.`,
-      },
-      { role: 'user', content: text },
-    ]
-  }
-
-  if (capabilityId === 'text.rewrite') {
-    const text = readOptionalString(record.text)
-    if (!text) {
-      throw createError({ statusCode: 400, statusMessage: 'text is required.' })
-    }
-    const preserveKeywords = readStringArray(record.preserveKeywords)
-    return [
-      {
-        role: 'system',
-        content: [
-          `You are a writing assistant. Rewrite in a ${readOptionalString(record.style) || 'professional'} style with a ${readOptionalString(record.tone) || 'neutral'} tone.`,
-          readOptionalString(record.targetAudience)
-            ? `Target audience: ${readOptionalString(record.targetAudience)}.`
-            : '',
-          preserveKeywords.length ? `Preserve these keywords: ${preserveKeywords.join(', ')}.` : '',
-          'Return only the rewritten text.',
-        ].filter(Boolean).join(' '),
-      },
-      { role: 'user', content: text },
-    ]
-  }
-
-  if (capabilityId === 'code.explain') {
-    const code = readOptionalString(record.code)
-    if (!code) {
-      throw createError({ statusCode: 400, statusMessage: 'code is required.' })
-    }
-    return [
-      {
-        role: 'system',
-        content: `You are a code explanation assistant. Explain ${readOptionalString(record.language) || 'the'} code at ${readOptionalString(record.targetAudience) || 'intermediate'} level with ${readOptionalString(record.depth) || 'detailed'} depth. Return JSON: {"explanation":"...","summary":"...","keyPoints":[],"complexity":"simple|moderate|complex","concepts":[]}.`,
-      },
-      { role: 'user', content: code },
-    ]
-  }
-
-  if (capabilityId === 'code.review') {
-    const code = readOptionalString(record.code)
-    if (!code) {
-      throw createError({ statusCode: 400, statusMessage: 'code is required.' })
-    }
-    const focusAreas = readStringArray(record.focusAreas)
-    return [
-      {
-        role: 'system',
-        content: `You are a code reviewer. Focus on ${focusAreas.length ? focusAreas.join(', ') : 'security, performance, style, bugs, best-practices'}. Return JSON: {"summary":"...","score":0,"issues":[],"improvements":[]}.`,
-      },
-      {
-        role: 'user',
-        content: readOptionalString(record.context)
-          ? `Context:\n${readOptionalString(record.context)}\n\nCode:\n${code}`
-          : code,
-      },
-    ]
-  }
-
-  throw createError({ statusCode: 400, statusMessage: `Unsupported capability: ${capabilityId}` })
 }
 
 function normalizeCapabilityId(capabilityId: unknown): string {
@@ -4127,5 +3730,5 @@ export function sanitizeExecutionResults(payload: unknown): IntelligenceLabExecu
 }
 
 export function normalizeLabMessages(payload: unknown): IntelligenceMessage[] {
-  return normalizeMessages(payload)
+  return normalizeCapabilityMessages(payload)
 }

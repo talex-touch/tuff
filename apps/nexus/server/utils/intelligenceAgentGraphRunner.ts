@@ -25,6 +25,11 @@ import {
   type IntelligenceLabRuntimeMetrics,
   type IntelligenceLabStreamEvent,
 } from './tuffIntelligenceLabService'
+import {
+  resolveNexusAgentRuntimePort,
+  runNexusAgentRuntimeBridge,
+  type NexusAgentRuntimePort,
+} from './intelligenceAgentRuntimeBridge'
 
 const STREAM_CONTRACT_VERSION = 3
 const STREAM_ENGINE = 'intelligence' as const
@@ -51,6 +56,7 @@ interface AgentGraphRuntimeState {
   options?: {
     emit?: (event: IntelligenceLabStreamEvent) => void | Promise<void>
     isDisconnected?: () => boolean
+    runtimePort?: NexusAgentRuntimePort
   }
   sessionId: string
   runId: string
@@ -625,11 +631,21 @@ export async function runIntelligenceAgentGraphStream(
   options?: {
     emit?: (event: IntelligenceLabStreamEvent) => void | Promise<void>
     isDisconnected?: () => boolean
+    runtimePort?: NexusAgentRuntimePort
   },
 ): Promise<IntelligenceLabOrchestrationResult> {
   const objective = String(payload.message || '').trim()
   if (!objective) {
     throw new Error('Message is required.')
+  }
+
+  const runtimePort = resolveNexusAgentRuntimePort(options?.runtimePort)
+  if (runtimePort) {
+    return await runNexusAgentRuntimeBridge(event, userId, {
+      message: objective,
+      sessionId: payload.sessionId?.trim() || createId('session'),
+      timeoutMs: payload.timeoutMs,
+    }, runtimePort, options)
   }
 
   const state: AgentGraphRuntimeState = {

@@ -35,7 +35,6 @@ import type {
   IntelligenceKeywordsExtractResult,
   IntelligenceMessage,
   IntelligencePromptBinding,
-  IntelligencePromptRecord,
   IntelligenceProviderAdapter,
   IntelligenceProviderConfig,
   IntelligenceProviderManagerAdapter,
@@ -62,7 +61,11 @@ import type { AgentTask } from '@talex-touch/utils'
 import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { format } from 'node:util'
 import { PromptTemplate } from '@langchain/core/prompts'
-import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import {
+  IntelligenceProviderType,
+  resolveIntelligencePromptTemplate,
+  toRuntimeCapabilityId
+} from '@talex-touch/tuff-intelligence'
 import { enterPerfContext } from '../../utils/perf-context'
 import { createLogger } from '../../utils/logger'
 import { agentManager } from './agents'
@@ -359,6 +362,7 @@ export class TuffIntelligenceSDK {
     payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<T>> {
+    capabilityId = this.normalizeCapabilityId(capabilityId)
     const payloadRecord =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
     const disposeInvoke = enterPerfContext('Intelligence.invoke', {
@@ -511,6 +515,7 @@ export class TuffIntelligenceSDK {
     payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): AsyncGenerator<IntelligenceStreamEvent<T>> {
+    capabilityId = this.normalizeCapabilityId(capabilityId)
     const payloadRecord =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
     const disposeStream = enterPerfContext('Intelligence.stream', {
@@ -650,6 +655,7 @@ export class TuffIntelligenceSDK {
     instructions?: string
     runtimeOptions: IntelligenceInvokeOptions
   }> {
+    capabilityId = this.normalizeCapabilityId(capabilityId)
     const capability = intelligenceCapabilityRegistry.get(capabilityId)
     if (!capability) {
       throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
@@ -691,6 +697,7 @@ export class TuffIntelligenceSDK {
       selectedProvider.baseUrl || fallbackBaseUrlMap[selectedProvider.type] || ''
     ).trim()
     const apiKey = String(selectedProvider.apiKey || '').trim()
+
     const model = String(
       runtimeOptions.modelPreference?.[0] ||
         selectedProvider.defaultModel ||
@@ -719,70 +726,21 @@ export class TuffIntelligenceSDK {
     }
   }
 
-  private resolvePromptRecord(
-    binding: IntelligencePromptBinding
-  ): IntelligencePromptRecord | undefined {
-    const registry = this.config.promptRegistry ?? []
-    const candidates = registry.filter((item) => {
-      if (item.id !== binding.promptId) return false
-      if (item.status !== 'active') return false
-      if (binding.providerId && item.providerId && item.providerId !== binding.providerId) {
-        return false
-      }
-      return true
-    })
-
-    if (candidates.length <= 0) {
-      return undefined
-    }
-
-    if (binding.promptVersion) {
-      return candidates.find((item) => item.version === binding.promptVersion)
-    }
-
-    return [...candidates].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
-  }
-
-  private normalizePromptBindingCapability(
-    capabilityId: string,
-    binding: IntelligencePromptBinding
-  ): IntelligencePromptBinding {
-    const { capabilityId: _ignored, ...rest } = binding
-    return {
-      capabilityId,
-      ...rest
-    }
+  private normalizeCapabilityId(capabilityId: string): string {
+    return toRuntimeCapabilityId(capabilityId) || capabilityId
   }
 
   private resolvePromptTemplateByBinding(
     capabilityId: string,
     metadataBinding?: IntelligencePromptBinding
   ): string | undefined {
-    const capabilityRouting = this.config.capabilities?.[capabilityId]
-    const orderedBindings: IntelligencePromptBinding[] = []
-
-    if (metadataBinding?.promptId) {
-      orderedBindings.push(this.normalizePromptBindingCapability(capabilityId, metadataBinding))
-    }
-    if (capabilityRouting?.promptBinding?.promptId) {
-      orderedBindings.push(
-        this.normalizePromptBindingCapability(capabilityId, capabilityRouting.promptBinding)
-      )
-    }
-    for (const binding of this.config.promptBindings ?? []) {
-      if (binding.capabilityId === capabilityId) {
-        orderedBindings.push(binding)
-      }
-    }
-
-    for (const binding of orderedBindings) {
-      const record = this.resolvePromptRecord(binding)
-      if (record?.template) {
-        return record.template
-      }
-    }
-
-    return capabilityRouting?.promptTemplate
+    return resolveIntelligencePromptTemplate({
+      capabilityId,
+      capability: this.config.capabilities?.[capabilityId],
+      promptRegistry: this.config.promptRegistry,
+      promptBindings: this.config.promptBindings,
+      metadataBinding
+    })
   }
 
   private prepareRuntimeOptions(
@@ -1416,6 +1374,7 @@ export class TuffIntelligenceSDK {
     payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): AsyncGenerator<IntelligenceStreamChunk> {
+    capabilityId = this.normalizeCapabilityId(capabilityId)
     const capability = intelligenceCapabilityRegistry.get(capabilityId)
     if (!capability) {
       throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
