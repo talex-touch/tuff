@@ -23,7 +23,7 @@ const props = defineProps<{
 }>()
 
 const { t, locale } = useI18n()
-const { user, isAuthenticated } = useAuthUser()
+const { user, isAuthenticated } = useAuthUser({ fetchOnAuth: false, server: false })
 
 const comments = ref<DocComment[]>([])
 const loading = ref(false)

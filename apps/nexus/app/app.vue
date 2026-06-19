@@ -24,11 +24,15 @@ const isAuthShellRoute = computed(() => {
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearch()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
-const { user, pending: authUserPending } = useAuthUser()
+const { user, pending: authUserPending } = useAuthUser({
+  fetchOnAuth: isProtectedRoute,
+  server: false,
+})
 const mounted = ref(false)
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
 const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
+const shouldSyncProfileLocale = computed(() => isProtectedRoute.value)
 const protectedSessionRecheckDone = ref(false)
 const protectedSessionRecheckRunning = ref(false)
 const searchTriggerSelector = '[data-role="global-search-trigger"]'
@@ -40,15 +44,17 @@ const docsRouteLocale = computed(() => {
 })
 await initLocale({
   isAuthenticated: status.value === 'authenticated',
-  profileLocale: user.value?.locale ?? null,
+  profileLocale: status.value === 'authenticated' ? user.value?.locale ?? null : null,
 })
 if (docsRouteLocale.value)
   await setLocaleSerial(docsRouteLocale.value, 'browser')
 
 watch(
-  () => [status.value, user.value?.id ?? null, user.value?.locale ?? null] as const,
-  ([currentStatus, userId, profileLocale]) => {
+  () => [status.value, user.value?.id ?? null, user.value?.locale ?? null, shouldSyncProfileLocale.value] as const,
+  ([currentStatus, userId, profileLocale, canSyncProfileLocale]) => {
     if (!mounted.value)
+      return
+    if (!canSyncProfileLocale)
       return
 
     void syncFromProfileOnAuth({
@@ -116,11 +122,13 @@ onMounted(() => {
         profileLocale: user.value?.locale ?? null,
       })
     }
-    await syncFromProfileOnAuth({
-      status: status.value,
-      userId: user.value?.id ?? null,
-      profileLocale: user.value?.locale ?? null,
-    })
+    if (shouldSyncProfileLocale.value) {
+      await syncFromProfileOnAuth({
+        status: status.value,
+        userId: user.value?.id ?? null,
+        profileLocale: status.value === 'authenticated' ? user.value?.locale ?? null : null,
+      })
+    }
   })()
 })
 
@@ -396,6 +404,7 @@ watchEffect(() => {
 
 <template>
   <VitePwaManifest />
+  <NuxtLoadingIndicator color="#ffffff" />
   <ToastContainer />
   <ClientOnly>
     <LazySearchGlobalSearch v-if="!isAuthShellRoute && globalSearchOpen" />

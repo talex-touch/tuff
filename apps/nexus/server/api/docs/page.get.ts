@@ -12,10 +12,26 @@ function toPlainJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
+function shouldIncludeBody(value: unknown) {
+  if (typeof value !== 'string')
+    return true
+  const normalized = value.trim().toLowerCase()
+  return !['0', 'false', 'no', 'off'].includes(normalized)
+}
+
+function serializeDoc<T extends { body?: unknown } | null>(doc: T, includeBody: boolean) {
+  if (!doc || includeBody)
+    return toPlainJson(doc)
+
+  const { body: _body, ...metadata } = toPlainJson(doc)
+  return toPlainJson(metadata)
+}
+
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
   const locale = normalizeLocale(query.locale)
+  const includeBody = shouldIncludeBody(query.body)
 
   const localizedPath = `${docPath}.${locale}`
   const baseDocPath = docPath.replace(/\/index$/, '')
@@ -26,21 +42,21 @@ export default defineEventHandler(async (event) => {
   const localizedDoc = await queryCollection(event, 'docs').path(localizedPath).first()
   if (localizedDoc) {
     setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-    return toPlainJson(localizedDoc)
+    return serializeDoc(localizedDoc, includeBody)
   }
 
   if (shouldTryIndex) {
     const localizedIndexDoc = await queryCollection(event, 'docs').path(localizedIndexPath).first()
     if (localizedIndexDoc) {
       setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-      return toPlainJson(localizedIndexDoc)
+      return serializeDoc(localizedIndexDoc, includeBody)
     }
   }
 
   const baseDoc = await queryCollection(event, 'docs').path(docPath).first()
   if (baseDoc) {
     setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-    return toPlainJson(baseDoc)
+    return serializeDoc(baseDoc, includeBody)
   }
 
   const fallbackDoc = shouldTryIndex
@@ -49,5 +65,5 @@ export default defineEventHandler(async (event) => {
 
   setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
 
-  return fallbackDoc ? toPlainJson(fallbackDoc) : null
+  return fallbackDoc ? serializeDoc(fallbackDoc, includeBody) : null
 })

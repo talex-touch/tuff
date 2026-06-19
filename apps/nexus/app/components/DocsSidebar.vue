@@ -28,6 +28,14 @@ const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
   verified: 'verified',
 }
 
+const route = useRoute()
+const { t, locale } = useI18n()
+const navRef = ref<HTMLElement | null>(null)
+const sidebarHydrated = ref(false)
+const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
+const normalizedRoutePath = computed(() => normalizeDocsPagePath(route.path))
+const isComponentDocsRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/dev/components'))
+const shouldLoadComponentDocs = computed(() => sidebarHydrated.value && isComponentDocsRoute.value)
 const { data: navigationTreePayload, pending, error } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
@@ -36,19 +44,21 @@ const { data: navigationTreePayload, pending, error } = await useTypedFetch<unkn
     default: () => [],
   },
 )
-const { data: componentDocsPayload, pending: componentDocsPending } = await useTypedFetch<unknown>(
+const {
+  data: componentDocsPayload,
+  pending: componentDocsPending,
+  refresh: refreshComponentDocs,
+} = await useTypedFetch<unknown>(
   '/api/docs/sidebar-components',
   {
     key: 'docs-components-meta',
-    server: true,
+    server: false,
+    lazy: true,
+    immediate: false,
     responseType: 'json',
     default: () => [],
   },
 )
-const route = useRoute()
-const { t, locale } = useI18n()
-const navRef = ref<HTMLElement | null>(null)
-const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 let activeScrollFrame: number | null = null
 
@@ -377,7 +387,6 @@ function sortTree(items: any[], parentPath: string | null): any[] {
 const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value))
 const componentItems = computed(() => filterByLocale(coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[]))
 const lastComponentSections = shallowRef<any[]>([])
-const normalizedRoutePath = computed(() => normalizeDocsPagePath(route.path))
 const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
 
 const allSections = computed(() => {
@@ -536,9 +545,21 @@ const activeTopSection = computed(() => {
   return defaultSection.value
 })
 
-const sidebarPending = computed(() =>
-  pending.value || (activeTopSection.value === 'components' && componentDocsPending.value),
+const sidebarPending = computed(() => pending.value)
+
+watch(
+  shouldLoadComponentDocs,
+  (shouldLoad) => {
+    if (!shouldLoad || coerceJsonArray(componentDocsPayload.value).length)
+      return
+    void refreshComponentDocs()
+  },
+  { immediate: import.meta.client },
 )
+
+onMounted(() => {
+  sidebarHydrated.value = true
+})
 
 const currentSectionData = computed(() => {
   if (isTutorialRoute.value) {
@@ -724,7 +745,7 @@ onBeforeUnmount(() => {
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
           :to="localizedDocsPath(sec.entryPath || sec.basePath)"
-          prefetch
+          :prefetch="false"
           class="flex flex-1 items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium no-underline transition-all duration-200"
           :class="activeTopSection === sec.key
             ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
@@ -750,7 +771,7 @@ onBeforeUnmount(() => {
             <NuxtLink
               v-if="linkTarget(currentSectionData)"
               :to="localizedDocsPath(linkTarget(currentSectionData)!)"
-              prefetch
+              :prefetch="false"
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
@@ -798,7 +819,7 @@ onBeforeUnmount(() => {
             <NuxtLink
               v-if="linkTarget(child)"
               :to="localizedDocsPath(linkTarget(child)!)"
-              prefetch
+              :prefetch="false"
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"

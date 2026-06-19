@@ -35,13 +35,14 @@ watch(
   { immediate: import.meta.client },
 )
 
-const { user } = useAuthUser()
+const { user } = useAuthUser({ fetchOnAuth: false, server: false })
 const isAdmin = computed(() => user.value?.role === 'admin')
 
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 const docPath = computed(() => normalizeDocsPagePath(route.path))
 
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
+const shouldSplitDocBody = computed(() => normalizeDocsPagePath(route.path).includes('/docs/dev/components'))
 
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
@@ -113,12 +114,34 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
     query: computed(() => ({
       path: docPath.value,
       locale: docsLocale.value,
+      body: shouldSplitDocBody.value ? '0' : '1',
     })),
     default: () => null,
   },
 )
+const fullDocRequestKey = computed(() => `doc-full:${docPath.value}:${docsLocale.value}`)
+const {
+  data: fullDoc,
+  refresh: refreshFullDoc,
+  status: fullDocStatus,
+} = await useTypedFetch<Record<string, any> | null>(
+  '/api/docs/page',
+  {
+    key: fullDocRequestKey,
+    query: computed(() => ({
+      path: docPath.value,
+      locale: docsLocale.value,
+      body: '1',
+    })),
+    default: () => null,
+    immediate: computed(() => import.meta.client && shouldSplitDocBody.value),
+    lazy: true,
+    server: false,
+  },
+)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
+const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value : doc.value))
 
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
@@ -160,7 +183,7 @@ if (import.meta.server && viewState.value === 'not-found')
 const { data: navigationTreePayload } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
-    key: 'docs:navigation',
+    key: 'docs-navigation',
     responseType: 'json',
     default: () => [],
   },
@@ -170,6 +193,7 @@ const outlineState = useState<any[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
 const docLocaleState = useState<string>('docs-locale', () => docsLocale.value)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
+const docAssistantContextState = useState<string>('docs-assistant-context', () => '')
 const viewCount = ref<number | null>(null)
 const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
@@ -181,6 +205,7 @@ watch(
     docTitleState.value = ''
     docLocaleState.value = docsLocale.value
     docMetaState.value = {}
+    docAssistantContextState.value = ''
     shouldMountDocClientPanels.value = false
   },
 )
@@ -289,7 +314,7 @@ const heroBreadcrumbs = computed(() => {
   return crumbs
 })
 const heroReadTimeLabel = computed(() => {
-  const text = extractDocText(doc.value?.body).replace(/\s+/g, ' ').trim()
+  const text = extractDocText(renderDoc.value?.body).replace(/\s+/g, ' ').trim()
   if (!text)
     return ''
   if (isZhDocs.value) {
@@ -653,26 +678,28 @@ const pagerNextTitle = computed(() => {
 })
 
 const currentDocRenderKey = computed(() => {
-  const path = typeof doc.value?.path === 'string' ? doc.value.path : docPath.value
+  const source = renderDoc.value ?? doc.value
+  const path = typeof source?.path === 'string' ? source.path : docPath.value
   return `${path}:${docsLocale.value}`
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
+const shouldClientRenderDocBody = computed(() => docScope.value.isComponent)
 let lastEnhancedDocKey = ''
 
 watch(
-  () => [doc.value, docsLocale.value] as const,
-  ([currentDoc]) => {
+  () => [doc.value, renderDoc.value, docsLocale.value] as const,
+  ([currentDoc, currentRenderDoc]) => {
     if (currentDoc) {
-      outlineState.value = buildDocOutlineFromBody(currentDoc.body)
+      outlineState.value = currentRenderDoc?.body ? buildDocOutlineFromBody(currentRenderDoc.body) : []
       const rawTitle = currentDoc.seo?.title ?? currentDoc.title ?? ''
       docTitleState.value = normalizeTitleForLocale(String(rawTitle), currentDoc.path ?? docPath.value)
       docLocaleState.value = resolveDocLocale(currentDoc)
       docMetaState.value = {
         ...docMeta.value,
         assistantTitle: docTitleState.value,
-        assistantContext: buildAssistantContext(currentDoc.body),
       }
-      if (!outlineState.value.length)
+      docAssistantContextState.value = ''
+      if (!outlineState.value.length && !shouldClientRenderDocBody.value)
         void scheduleOutlineSync(120)
       return
     }
@@ -681,6 +708,7 @@ watch(
     docTitleState.value = ''
     docLocaleState.value = docsLocale.value
     docMetaState.value = {}
+    docAssistantContextState.value = ''
   },
   { immediate: true },
 )
@@ -689,7 +717,9 @@ onBeforeUnmount(() => {
   outlineState.value = []
   docTitleState.value = ''
   docMetaState.value = {}
+  docAssistantContextState.value = ''
   clearCodeEnhanceSchedule()
+  clearAssistantContextSchedule()
   clearRenderedCodeHeaders()
   if (import.meta.client) {
     document.removeEventListener('click', handleDocsInlineCodeClick)
@@ -907,6 +937,8 @@ let codeEnhanceTimer: ReturnType<typeof setTimeout> | null = null
 let codeEnhanceRaf: number | null = null
 let codeEnhanceRunId = 0
 const codeHeaderTargets = new Set<HTMLElement>()
+let assistantContextTimer: ReturnType<typeof setTimeout> | null = null
+let assistantContextIdleId: number | null = null
 
 function clearCodeEnhanceSchedule() {
   if (import.meta.server)
@@ -932,6 +964,19 @@ function clearRenderedCodeHeaders() {
     catch {}
   }
   codeHeaderTargets.clear()
+}
+
+function clearAssistantContextSchedule() {
+  if (import.meta.server)
+    return
+  if (assistantContextTimer) {
+    clearTimeout(assistantContextTimer)
+    assistantContextTimer = null
+  }
+  if (assistantContextIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(assistantContextIdleId)
+    assistantContextIdleId = null
+  }
 }
 
 function enhanceCodeBlocks() {
@@ -995,6 +1040,28 @@ async function scheduleCodeEnhance(delay = 0) {
   await queueEnhance()
 }
 
+function scheduleAssistantContextBuild(value: any, delay = 800) {
+  if (import.meta.server)
+    return
+
+  clearAssistantContextSchedule()
+
+  assistantContextTimer = setTimeout(() => {
+    assistantContextTimer = null
+    const build = () => {
+      assistantContextIdleId = null
+      docAssistantContextState.value = buildAssistantContext(value)
+    }
+
+    if ('requestIdleCallback' in window) {
+      assistantContextIdleId = window.requestIdleCallback(build, { timeout: 1200 })
+      return
+    }
+
+    build()
+  }, delay)
+}
+
 // Enhance code blocks on mount
 onMounted(() => {
   docsClientPanelsMounted.value = true
@@ -1013,6 +1080,7 @@ watch(
       lastEnhancedDocKey = renderKey
       void scheduleCodeEnhance(260)
       void scheduleOutlineSync(280)
+      scheduleAssistantContextBuild(renderDoc.value?.body, 700)
     }
   },
   { immediate: true },
@@ -1027,7 +1095,18 @@ watch(
     shouldMountDocClientPanels.value = true
     void scheduleCodeEnhance(260)
     void scheduleOutlineSync(280)
+    scheduleAssistantContextBuild(renderDoc.value?.body, 700)
   },
+)
+
+watch(
+  shouldSplitDocBody,
+  (shouldLoad) => {
+    if (!shouldLoad || !import.meta.client)
+      return
+    void refreshFullDoc()
+  },
+  { immediate: true },
 )
 </script>
 
@@ -1089,9 +1168,44 @@ watch(
               </p>
             </div>
           </div>
+          <ClientOnly v-if="shouldClientRenderDocBody">
+            <ContentRenderer
+              v-if="renderDoc?.body"
+              :key="currentDocRenderKey"
+              :value="renderDoc ?? {}"
+              :class="[
+                'docs-prose',
+                'markdown-body',
+                'max-w-none',
+                'prose',
+                'prose-neutral',
+                'dark:prose-invert',
+                { 'docs-prose--hero': showDocHero },
+              ]"
+            />
+            <div v-else class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
+              <span class="docs-prose-skeleton__line is-wide" />
+              <span class="docs-prose-skeleton__line" />
+              <span class="docs-prose-skeleton__line is-short" />
+              <span class="docs-prose-skeleton__block" />
+              <span class="docs-prose-skeleton__line" />
+              <span class="docs-prose-skeleton__line is-mid" />
+            </div>
+            <template #fallback>
+              <div class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
+                <span class="docs-prose-skeleton__line is-wide" />
+                <span class="docs-prose-skeleton__line" />
+                <span class="docs-prose-skeleton__line is-short" />
+                <span class="docs-prose-skeleton__block" />
+                <span class="docs-prose-skeleton__line" />
+                <span class="docs-prose-skeleton__line is-mid" />
+              </div>
+            </template>
+          </ClientOnly>
           <ContentRenderer
+            v-else
             :key="currentDocRenderKey"
-            :value="doc ?? {}"
+            :value="renderDoc ?? {}"
             :class="[
               'docs-prose',
               'markdown-body',
@@ -1169,7 +1283,7 @@ watch(
               <NuxtLink
                 v-if="pagerPrevPath"
                 :to="localizedDocsPath(pagerPrevPath)"
-                prefetch
+                :prefetch="false"
                 class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
@@ -1183,7 +1297,7 @@ watch(
               <NuxtLink
                 v-if="pagerNextPath"
                 :to="localizedDocsPath(pagerNextPath)"
-                prefetch
+                :prefetch="false"
                 class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center justify-end gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
@@ -1347,6 +1461,68 @@ watch(
 .docs-sync-banner[data-status='migrated'] .docs-sync-banner__icon {
   color: color-mix(in srgb, var(--tx-color-warning) 70%, var(--tx-text-color-primary));
 }
+
+.docs-prose-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 320px;
+}
+
+.docs-prose-skeleton__line,
+.docs-prose-skeleton__block {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 92%, transparent),
+    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 98%, transparent),
+    color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 92%, transparent)
+  );
+  background-size: 220% 100%;
+  animation: docs-prose-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.docs-prose-skeleton__line {
+  width: 74%;
+  height: 14px;
+}
+
+.docs-prose-skeleton__line.is-wide {
+  width: 92%;
+}
+
+.docs-prose-skeleton__line.is-mid {
+  width: 62%;
+}
+
+.docs-prose-skeleton__line.is-short {
+  width: 42%;
+}
+
+.docs-prose-skeleton__block {
+  width: 100%;
+  height: 120px;
+  border-radius: 18px;
+}
+
+@keyframes docs-prose-skeleton-pulse {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-prose-skeleton__line,
+  .docs-prose-skeleton__block {
+    animation: none;
+  }
+}
+
 .docs-hero-breadcrumb {
   display: flex;
   flex-wrap: wrap;

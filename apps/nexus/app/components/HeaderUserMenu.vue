@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { useTheme } from '~/composables/useTheme'
 import { useTypedFetch } from '~/utils/request'
 
-const { data: session, signOut } = useAuth()
+const { data: session, status, signOut } = useAuth()
 const { t, te, locale } = useI18n()
 const route = useRoute()
 const { setManualLocale } = useLocaleOrchestrator()
 const { color, toggleDark } = useTheme()
 
-const { plan } = useSubscriptionData()
-const { data: creditsSummary } = useTypedFetch<any>('/api/credits/summary')
+const isAuthenticated = computed(() => status.value === 'authenticated')
+const { plan, refresh: refreshSubscription } = useSubscriptionData({ immediate: false })
+const { data: creditsSummary, refresh: refreshCreditsSummary } = useTypedFetch<any>('/api/credits/summary', {
+  immediate: false,
+  server: false,
+  default: () => null,
+})
 const userMenuPanelCard = {
   glassOverlayOpacity: 0.16,
   refractionStrength: 74,
@@ -25,6 +30,8 @@ const userMenuOpen = ref(false)
 const languageMenuOpen = ref(false)
 const themeToggleEvent = ref<MouseEvent | null>(null)
 const themeToggleAt = ref(0)
+const accountStatsLoading = ref(false)
+const accountStatsLoaded = ref(false)
 const menuMotionDuration = 207
 let userMenuTimer: ReturnType<typeof setTimeout> | null = null
 let languageMenuTimer: ReturnType<typeof setTimeout> | null = null
@@ -110,6 +117,7 @@ function setUserMenuHover(active: boolean) {
   }
   if (active) {
     userMenuOpen.value = true
+    void loadAccountStats()
     return
   }
   userMenuTimer = setTimeout(() => {
@@ -144,9 +152,27 @@ function shouldNavigateFromAvatar() {
 }
 
 function handleAvatarClick() {
+  void loadAccountStats()
   if (!shouldNavigateFromAvatar())
     return
   handleMenuNavigate('/dashboard')
+}
+
+async function loadAccountStats() {
+  if (!isAuthenticated.value || accountStatsLoading.value || accountStatsLoaded.value)
+    return
+
+  accountStatsLoading.value = true
+  try {
+    await Promise.allSettled([
+      refreshSubscription(),
+      refreshCreditsSummary(),
+    ])
+    accountStatsLoaded.value = true
+  }
+  finally {
+    accountStatsLoading.value = false
+  }
 }
 
 async function handleMenuNavigate(path: string) {
@@ -176,6 +202,15 @@ onBeforeUnmount(() => {
     languageMenuTimer = null
   }
 })
+
+watch(
+  userMenuOpen,
+  (isOpen) => {
+    if (!isOpen)
+      return
+    void loadAccountStats()
+  },
+)
 </script>
 
 <template>
