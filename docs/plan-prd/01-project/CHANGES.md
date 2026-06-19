@@ -5,6 +5,21 @@
 
 ## 2026-06-19
 
+### refactor(quickops): remove legacy CoreBox provider shell
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Removed the legacy `QuickOpsProvider` CoreBox search/execute compatibility shell, including `renderLegacyCoreBoxItems()` / `executeLegacyCoreBoxItem()` and the Tuff item/result builder path.
+  - Kept `QuickOpsRuntimeHost` / `quickOpsRuntime` as the CoreApp host runtime boundary for sessions, Electron/OS capabilities, typed transport helpers, Flow targets, confirmation, policy, and evidence gates.
+  - Replaced the provider-focused regression spec with a runtime-host/helper focused spec that asserts no `QuickOpsProvider` export remains while covering session cleanup, capability/diagnostics summaries, parser helpers, local network/DNS/port, file helpers, proxy parsing, battery parsing, disk/directory summaries, and redaction.
+  - Docs now state that the official `plugins/touch-quickops` plugin is the only QuickOps CoreBox root-results entry; future migratable UI/search/business entries must extend the plugin rather than adding a CoreApp provider.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` (10 tests), `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts" "src/main/modules/plugin/plugin.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/modules/tray/tray-manager.test.ts"` (148 tests), `pnpm -C "plugins/touch-quickops" test` (15 tests), `pnpm plugins:validate`, scoped ESLint, and `git diff --check`.
+  - Validation note: `pnpm -C "apps/core-app" run typecheck:node` is still blocked by unrelated dirty AI work in `src/main/modules/ai/intelligence-shared-resolver-contract.test.ts` where `IntelligenceCapabilityRoutingConfig` rejects `id`; QuickOps no longer contributes node typecheck errors.
+
 ### refactor(quickops): keep runtime host while expanding plugin surface
 
 - `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
@@ -22,7 +37,7 @@
 - `apps/nexus/content/docs/dev/api/quickops.en.mdc`
 - `docs/plan-prd/03-features/tuff-quickops-prd.md`
 - `docs/plan-prd/TODO.md`
-  - Renamed the production QuickOps singleton path from `quickOpsProvider` to `quickOpsRuntime` and exposed `QuickOpsRuntimeHost` as the CoreApp runtime host boundary. The legacy `QuickOpsProvider` class remains only as a compatibility shell around `renderLegacyCoreBoxItems()` / `executeLegacyCoreBoxItem()` for existing regression coverage and migration safety.
+  - Renamed the production QuickOps singleton path from `quickOpsProvider` to `quickOpsRuntime` and exposed `QuickOpsRuntimeHost` as the CoreApp runtime host boundary. A follow-up slice removed the temporary legacy `QuickOpsProvider` compatibility shell, so CoreApp no longer owns a QuickOps CoreBox provider class.
   - Updated QuickOpsModule and tray integration to use `quickOpsRuntime`, keeping CoreApp responsible for host capabilities, session cleanup, typed transport, Flow targets, confirmation, policy, and evidence gates while the default CoreBox entry stays plugin-owned.
   - Expanded `plugins/touch-quickops` root-result rendering to cover additional read-only Ops entries through the public `globalThis.quickOps` facade: port status, DNS query, file hash, file Base64, recent download metadata, common directory, path format, and text format.
   - Extended the official plugin manifest trigger words for the newly migrated read-only entries without adding high-risk execution, private IPC fallback, raw provider registration, or confirmation-token bypass.
