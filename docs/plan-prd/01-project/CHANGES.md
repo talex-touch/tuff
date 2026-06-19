@@ -5,6 +5,23 @@
 
 ## 2026-06-19
 
+### ref(core-app): move QuickOps runtime host out of CoreBox addon
+
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-runtime-host.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-runtime-host.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-session-manager.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/tray/tray-menu-builder.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+  - Moved the remaining CoreApp QuickOps runtime host, runtime-host focused tests, and session manager out of the legacy `box-tool/addon/quick-ops` provider path into the dedicated `modules/quick-ops` boundary.
+  - Updated QuickOpsModule, Tray integration, natural-language adapter, and focused tests to import the host runtime boundary from `quick-ops/quick-ops-runtime-host`, preserving CoreApp host capability ownership without keeping a CoreBox addon/provider path alive.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-runtime-host.test.ts" "src/main/modules/quick-ops/index.test.ts" "src/main/modules/tray/tray-manager.test.ts" "src/main/modules/plugin/plugin.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts"` (158 tests), `pnpm -C "plugins/touch-quickops" test` (15 tests), `pnpm plugins:validate`, scoped ESLint, and `git diff --check`.
+  - Validation note: `pnpm -C "apps/core-app" run typecheck:node` remains blocked only by unrelated dirty AI work in `src/main/modules/ai/intelligence-shared-resolver-contract.test.ts` where `IntelligenceCapabilityRoutingConfig` rejects `id`.
+
 ### refactor(quickops): remove legacy CoreBox provider shell
 
 - `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`

@@ -67,9 +67,13 @@ import {
   formatDuration,
   QuickOpsSessionManager
 } from './quick-ops-session-manager'
-import { getMainConfig } from '../../../storage'
+import { getMainConfig } from '../storage'
 
-export { formatDuration, QuickOpsSessionManager } from './quick-ops-session-manager'
+export {
+  formatDuration,
+  getSessionDisplayDurationMs,
+  QuickOpsSessionManager
+} from './quick-ops-session-manager'
 
 const execFileAsync = promisify(execFile)
 

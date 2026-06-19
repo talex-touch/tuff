@@ -143,10 +143,23 @@ vi.mock('../box-tool/core-box/manager', () => ({
   }
 }))
 
-vi.mock('../box-tool/addon/quick-ops/quick-ops-provider', () => ({
-  formatDuration: (durationMs: number) => `${Math.round(durationMs / 1000)}秒`,
-  getSessionDisplayDurationMs: (session: { elapsedMs?: number; remainingMs?: number }) =>
-    session.elapsedMs ?? session.remainingMs ?? 0,
+vi.mock('../quick-ops/quick-ops-runtime-host', () => ({
+  formatDuration: (durationMs: number) => {
+    if (durationMs % 60_000 === 0) return `${Math.round(durationMs / 60_000)}分钟`
+    return `${Math.round(durationMs / 1000)}秒`
+  },
+  getSessionDisplayDurationMs: (session: {
+    durationMs?: number
+    elapsedMs?: number
+    remainingMs?: number
+    timing?: { elapsedMs?: number; remainingMs?: number }
+  }) =>
+    session.timing?.elapsedMs ??
+    session.timing?.remainingMs ??
+    session.elapsedMs ??
+    session.remainingMs ??
+    session.durationMs ??
+    0,
   quickOpsRuntime: {
     cleanup: quickOpsMock.cleanup,
     subscribeSessions: quickOpsMock.subscribeSessions

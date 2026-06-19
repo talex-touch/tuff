@@ -2,7 +2,7 @@ import type { BrowserWindow as ElectronBrowserWindow, Rectangle } from 'electron
 import type { NotificationRequest } from '@talex-touch/utils/transport/events/types'
 import { BrowserWindow, powerSaveBlocker, screen } from 'electron'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { notificationModule } from '../../../notification'
+import { notificationModule } from '../notification'
 
 export type QuickOpsSessionKind =
   | 'keep-awake'

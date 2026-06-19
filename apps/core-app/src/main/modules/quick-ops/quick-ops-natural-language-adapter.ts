@@ -1,6 +1,6 @@
 import type { FlowDispatchOptions, FlowDispatchResult, FlowPayload } from '@talex-touch/utils'
 import { createHash } from 'node:crypto'
-import { parseDurationMs } from '../box-tool/addon/quick-ops/quick-ops-provider'
+import { parseDurationMs } from './quick-ops-runtime-host'
 import { flowBus } from '../flow-bus/flow-bus'
 
 export type QuickOpsNaturalLanguageDecision =
