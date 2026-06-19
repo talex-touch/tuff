@@ -1,6 +1,6 @@
 <script lang="ts" name="StoreIcon" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { normalizeStoreIcon } from '~/modules/store/providers/store-icon-normalizer'
 
@@ -15,15 +15,18 @@ interface StoreIconProps {
 }
 
 const props = defineProps<StoreIconProps>()
+const failedIconUrl = ref('')
 
 // Icon URL is already fully constructed at source (nexus-store-provider)
 const iconUrl = computed(() => {
   if (!props.item) return null
   const fromProp = typeof props.item.iconUrl === 'string' ? props.item.iconUrl.trim() : ''
-  if (fromProp) return fromProp
+  if (fromProp && fromProp !== failedIconUrl.value) return fromProp
 
   const normalizedIcon = normalizeStoreIcon(props.item.icon)
-  if (normalizedIcon.iconUrl) return normalizedIcon.iconUrl
+  if (normalizedIcon.iconUrl && normalizedIcon.iconUrl !== failedIconUrl.value) {
+    return normalizedIcon.iconUrl
+  }
 
   return null
 })
@@ -72,6 +75,19 @@ const shouldPreserveIconColor = computed(() => {
   const [path] = value.split(/[?#]/)
   return !path.endsWith('.svg')
 })
+
+watch(
+  () => [props.item?.iconUrl, props.item?.icon] as const,
+  () => {
+    failedIconUrl.value = ''
+  }
+)
+
+function handleIconError(): void {
+  if (iconUrl.value) {
+    failedIconUrl.value = iconUrl.value
+  }
+}
 </script>
 
 <template>
@@ -81,6 +97,7 @@ const shouldPreserveIconColor = computed(() => {
       viewTransitionName,
       fontSize: size ? `${size}px` : undefined
     }"
+    @error.capture="handleIconError"
   >
     <TuffIcon :colorful="shouldPreserveIconColor" :icon="tuffIcon" />
   </div>

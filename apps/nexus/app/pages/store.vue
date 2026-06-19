@@ -70,6 +70,14 @@ const requestedPluginSlug = computed(() => {
   return ''
 })
 
+const requestedDetailTab = computed<'overview' | 'versions' | 'content' | 'reviews'>(() => {
+  const value = route.query.tab
+  const tab = Array.isArray(value) ? value[0] : value
+  if (tab === 'versions' || tab === 'content' || tab === 'reviews')
+    return tab
+  return 'overview'
+})
+
 watch(searchQuery, (value) => {
   if (value !== filters.search)
     filters.search = value
@@ -310,7 +318,7 @@ async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement 
   selectedPlugin.value = null
   detailPending.value = true
   detailError.value = null
-  detailTab.value = 'overview'
+  detailTab.value = requestedDetailTab.value
   resetReviewState()
   resetContentPackageState()
   try {
@@ -328,8 +336,8 @@ async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement 
 }
 
 watch(
-  [requestedPluginSlug, allPlugins],
-  ([slug, plugins]) => {
+  [requestedPluginSlug, requestedDetailTab, allPlugins],
+  ([slug, _tab, plugins]) => {
     if (!slug || selectedSlug.value === slug)
       return
 
@@ -341,6 +349,11 @@ watch(
   },
   { immediate: true },
 )
+
+watch(requestedDetailTab, (tab) => {
+  if (selectedSlug.value)
+    detailTab.value = tab
+})
 
 function closePluginDetail() {
   selectedSlug.value = null

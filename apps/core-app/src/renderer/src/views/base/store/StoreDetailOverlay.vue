@@ -8,11 +8,14 @@ import type { StorePluginListItem } from '~/composables/store/useStoreData'
  * - README content rendered from markdown
  * - Sidebar with plugin metadata
  */
-import { SharedPluginDetailMetaList, SharedPluginDetailReadme } from '@talex-touch/utils/renderer'
+import {
+  SharedPluginDetailMetaList,
+  SharedPluginDetailReadme,
+  useAppSdk
+} from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxRating } from '@talex-touch/tuffex/rating'
 import { computed, onMounted, watch } from 'vue'
-import StoreInstallButton from '~/components/store/StoreInstallButton.vue'
 import { useI18n } from 'vue-i18n'
 import StoreDetailSkeleton from '~/components/store/StoreDetailSkeleton.vue'
 import { resolvePluginContentErrorReason } from '~/composables/store/plugin-content-error-utils'
@@ -24,6 +27,8 @@ import { useStoreRating } from '~/composables/store/useStoreRating'
 import { useStoreReadme } from '~/composables/store/useStoreReadme'
 import { usePluginVersionStatus } from '~/composables/store/usePluginVersionStatus'
 import { useStoreInstall } from '~/composables/store/useStoreInstall'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { useAuth } from '~/modules/auth/useAuth'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 const props = withDefaults(
@@ -41,12 +46,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { isLoggedIn } = useAuth()
+const appSdk = useAppSdk()
 
 const { plugins: storePlugins, loading, loadStorePlugins } = useStoreData()
 
 // Plugin version status (for checking installed plugins and upgrade availability)
 const { usePluginStatus } = usePluginVersionStatus()
-const { getInstallTask, handleInstall } = useStoreInstall()
+const { handleInstall } = useStoreInstall()
 
 const activePlugin = computed<StorePluginListItem | null>(() => {
   // Match by both id and providerId to distinguish plugins from different sources
@@ -63,9 +70,6 @@ const notFound = computed(
 
 /** Plugin version status (installed, upgrade available, etc.) */
 const pluginStatus = usePluginStatus(activePlugin)
-const installTask = computed(() =>
-  activePlugin.value ? getInstallTask(activePlugin.value.id, activePlugin.value.providerId) : null
-)
 
 const { detailMeta } = useStoreDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
@@ -89,6 +93,14 @@ const canRate = computed(() => {
 })
 
 const ratingSlug = computed(() => (canRate.value ? activePlugin.value?.id : undefined))
+const canSubmitRating = computed(() => canRate.value && isLoggedIn.value)
+
+type SidebarAction = {
+  key: string
+  label: string
+  icon: string
+  url: string
+}
 
 const {
   loading: ratingLoading,
@@ -111,6 +123,120 @@ const contentErrorText = computed(() => {
 const installErrorText = computed(() => {
   return installError.value ? resolvePluginContentErrorReason(installError.value, t) : null
 })
+
+function readRecordValue(
+  record: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): unknown {
+  if (!record) return undefined
+
+  for (const key of keys) {
+    const value = record[key]
+    if (value) return value
+  }
+
+  return undefined
+}
+
+function normalizeUrlCandidate(value: unknown): string {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return normalizeUrlCandidate((value as Record<string, unknown>).url)
+  }
+
+  if (typeof value !== 'string') return ''
+
+  const raw = value.trim()
+  if (!raw) return ''
+
+  if (raw.startsWith('git+https://')) {
+    return raw.slice(4)
+  }
+
+  const sshGithubMatch = raw.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/i)
+  if (sshGithubMatch?.[1]) {
+    return `https://github.com/${sshGithubMatch[1]}`
+  }
+
+  return raw
+}
+
+function isRepositoryUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    const hostname = parsed.hostname.toLowerCase()
+    return ['github.com', 'gitlab.com', 'bitbucket.org', 'gitee.com'].includes(hostname)
+  } catch {
+    return false
+  }
+}
+
+function buildNexusStoreUrl(tab?: 'versions' | 'reviews'): string {
+  const pluginId = activePlugin.value?.id
+  if (!pluginId) return ''
+
+  const baseUrl = getAuthBaseUrl().replace(/\/$/, '')
+  const url = new URL('/store', `${baseUrl}/`)
+  url.searchParams.set('plugin', pluginId)
+  if (tab) {
+    url.searchParams.set('tab', tab)
+  }
+  return url.toString()
+}
+
+const publishPageUrl = computed(() => (canRate.value ? buildNexusStoreUrl() : ''))
+const versionsPageUrl = computed(() => (canRate.value ? buildNexusStoreUrl('versions') : ''))
+const reviewsPageUrl = computed(() => (canRate.value ? buildNexusStoreUrl('reviews') : ''))
+const repositoryUrl = computed(() => {
+  const plugin = activePlugin.value
+  const candidates = [
+    readRecordValue(plugin?.metadata, 'repository', 'repo', 'repositoryUrl', 'sourceUrl'),
+    plugin?.install?.type === 'git' ? plugin.install.repo : undefined
+  ]
+
+  return candidates.map(normalizeUrlCandidate).find((url) => url && isRepositoryUrl(url)) ?? ''
+})
+
+const sidebarActions = computed<SidebarAction[]>(
+  () =>
+    [
+      publishPageUrl.value
+        ? {
+            key: 'publish',
+            label: t('store.detailDialog.openPublishPage'),
+            icon: 'i-carbon-launch',
+            url: publishPageUrl.value
+          }
+        : null,
+      repositoryUrl.value
+        ? {
+            key: 'repository',
+            label: t('store.detailDialog.openRepository'),
+            icon: 'i-carbon-data-share',
+            url: repositoryUrl.value
+          }
+        : null,
+      versionsPageUrl.value
+        ? {
+            key: 'versions',
+            label: t('store.detailDialog.viewVersions'),
+            icon: 'i-carbon-time',
+            url: versionsPageUrl.value
+          }
+        : null,
+      reviewsPageUrl.value
+        ? {
+            key: 'reviews',
+            label: t('store.detailDialog.viewReviews'),
+            icon: 'i-carbon-chat',
+            url: reviewsPageUrl.value
+          }
+        : null
+    ].filter(Boolean) as SidebarAction[]
+)
+
+function openSidebarAction(url: string): void {
+  void appSdk.openExternal(url)
+}
 
 function formatContentPackageDate(value: string | null | undefined): string {
   if (!value) return t('store.detailDialog.contentUnknownDate')
@@ -153,6 +279,10 @@ async function onInstallContentPackage(contentPackage: PluginContentPackage): Pr
 }
 
 async function onRatingChange(value: number): Promise<void> {
+  if (!canSubmitRating.value) {
+    return
+  }
+
   const previous = userRating.value
   await submitRating(value)
 
@@ -187,19 +317,6 @@ onMounted(() => {
     <StoreDetailSkeleton v-if="loading" />
 
     <div v-else-if="activePlugin" class="h-full flex flex-col p-4">
-      <div class="detail-install-action">
-        <StoreInstallButton
-          :plugin-name="activePlugin.name"
-          :is-installed="pluginStatus.isInstalled"
-          :has-upgrade="pluginStatus.hasUpgrade"
-          :installed-version="pluginStatus.installedVersion"
-          :store-version="pluginStatus.storeVersion"
-          :install-task="installTask"
-          :mini="false"
-          @install="onInstallActivePlugin"
-        />
-      </div>
-
       <div class="detail-content">
         <div class="readme-section">
           <div v-if="readmeLoading" class="readme-state">
@@ -325,7 +442,7 @@ onMounted(() => {
             <div class="rating-row">
               <TxRating
                 v-model="userRating"
-                :disabled="ratingSubmitting"
+                :disabled="ratingSubmitting || !canSubmitRating"
                 @change="onRatingChange"
               />
               <span v-if="ratingAverage !== null" class="rating-meta">
@@ -338,12 +455,32 @@ onMounted(() => {
             <p v-if="ratingErrorText" class="rating-error">
               {{ ratingErrorText }}
             </p>
+            <p v-else-if="!isLoggedIn" class="rating-error">
+              {{ t('store.rating.loginRequired') }}
+            </p>
           </div>
           <SharedPluginDetailMetaList
             v-if="detailMeta.length"
             :items="detailMeta"
             :title="t('store.detailDialog.information')"
           />
+          <div v-if="sidebarActions.length" class="sidebar-actions">
+            <h4>{{ t('store.detailDialog.actions') }}</h4>
+            <button
+              v-for="action in sidebarActions"
+              :key="action.key"
+              class="sidebar-action"
+              type="button"
+              @click="openSidebarAction(action.url)"
+            >
+              <i :class="action.icon" aria-hidden="true" />
+              <span>{{ action.label }}</span>
+            </button>
+            <span
+              class="sidebar-action-icon-seed i-carbon-launch i-carbon-data-share i-carbon-time i-carbon-chat"
+              aria-hidden="true"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -351,23 +488,18 @@ onMounted(() => {
 </template>
 
 <style lang="scss" scoped>
-.detail-install-action {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
-
 .detail-content {
   display: flex;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 16px;
   flex: 1;
   min-height: 0;
+  overflow: auto;
 }
 
 .readme-section {
   flex: 1;
   min-width: 0;
-  overflow: auto;
   background: var(--tx-bg-color-overlay);
   border-radius: 12px;
   padding: 1.5rem;
@@ -378,12 +510,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.55rem;
+  min-height: 30px;
 }
 
 .rating-meta {
-  font-size: 0.85rem;
-  opacity: 0.7;
+  font-size: 0.78rem;
+  color: var(--tx-text-color-secondary);
+  white-space: nowrap;
 }
 
 .rating-error {
@@ -630,76 +764,95 @@ onMounted(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  overflow-y: auto;
+  gap: 0.75rem;
+  position: sticky;
+  top: 0;
   max-height: 100%;
+  overflow-y: auto;
+  padding: 0.15rem 0.15rem 0.15rem 0.65rem;
+  border-left: 1px solid var(--tx-border-color-lighter);
 }
 
 .sidebar-card {
-  background: var(--tx-bg-color-overlay);
-  border-radius: 12px;
-  padding: 1rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 
   h4 {
-    margin: 0 0 0.75rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    opacity: 0.7;
+    margin: 0 0 0.35rem;
+    color: var(--tx-text-color-secondary);
+    font-size: 0.76rem;
+    font-weight: 650;
+    line-height: 1.25;
   }
 }
 
-.meta-list {
+.sidebar-card :deep(.tx-rating) {
+  transform: scale(0.82);
+  transform-origin: left center;
+}
+
+.sidebar-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.15rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--tx-border-color-lighter);
+
+  h4 {
+    margin: 0 0 0.3rem;
+    color: var(--tx-text-color-secondary);
+    font-size: 0.76rem;
+    font-weight: 650;
+    line-height: 1.25;
+  }
 }
 
-.meta-item {
-  .meta-label {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    opacity: 0.6;
-    margin-bottom: 0.25rem;
+.sidebar-action {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 24px;
+  padding: 0.1rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--tx-text-color-regular);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-align: left;
 
-    i {
-      font-size: 0.85rem;
-    }
+  i {
+    color: var(--tx-text-color-secondary);
+    font-size: 0.82rem;
   }
 
-  .meta-value {
-    font-size: 0.9rem;
-    font-weight: 500;
+  span {
     overflow: hidden;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+    text-underline-offset: 3px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  &.highlight-upgrade {
-    .meta-label {
-      color: var(--tx-color-primary);
-      opacity: 1;
-    }
-    .meta-value {
-      color: var(--tx-color-primary);
-      font-weight: 600;
-    }
-  }
+  &:hover {
+    color: var(--tx-color-primary);
 
-  &.highlight-installed {
-    .meta-label {
-      color: var(--tx-color-success);
-      opacity: 0.8;
+    i {
+      color: currentColor;
     }
-    .meta-value {
-      color: var(--tx-color-success);
+
+    span {
+      text-decoration-color: currentColor;
     }
   }
+}
+
+.sidebar-action-icon-seed {
+  display: none;
 }
 
 @media (max-width: 900px) {
@@ -708,8 +861,13 @@ onMounted(() => {
   }
 
   .sidebar {
+    position: static;
     width: 100%;
     max-height: none;
+    padding: 0;
+    border-left: 0;
+    border-top: 1px solid var(--tx-border-color-lighter);
+    padding-top: 1rem;
   }
 
   .content-package {

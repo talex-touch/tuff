@@ -9,6 +9,7 @@ interface DetailMetaItem {
   value: string
   /** Highlight style for special states like upgrade available */
   highlight?: 'upgrade' | 'installed'
+  copyable?: boolean
 }
 
 export function useStoreDetail(
@@ -38,7 +39,7 @@ export function useStoreDetail(
     const meta: DetailMetaItem[] = []
     if (p.author) {
       meta.push({
-        icon: 'i-ri-user-line',
+        icon: 'i-carbon-user',
         label: t('store.detailDialog.author'),
         value: p.author
       })
@@ -57,7 +58,7 @@ export function useStoreDetail(
       }
 
       meta.push({
-        icon: status?.hasUpgrade ? 'i-ri-arrow-up-circle-line' : 'i-ri-price-tag-3-line',
+        icon: status?.hasUpgrade ? 'i-carbon-upgrade' : 'i-carbon-tag',
         label: t('store.detailDialog.version'),
         value: versionValue,
         highlight
@@ -66,18 +67,19 @@ export function useStoreDetail(
 
     const time = formatTimestamp(p.timestamp)
     if (time)
-      meta.push({ icon: 'i-ri-time-line', label: t('store.detailDialog.updateTime'), value: time })
+      meta.push({ icon: 'i-carbon-time', label: t('store.detailDialog.updateTime'), value: time })
 
     meta.push({
-      icon: 'i-ri-shield-user-line',
+      icon: 'i-carbon-security',
       label: t('store.detailDialog.provider'),
       value: p.providerName ? `${p.providerName} (${p.providerType})` : p.providerId
     })
 
     meta.push({
-      icon: 'i-ri-barcode-line',
+      icon: 'i-carbon-information',
       label: t('store.detailDialog.pluginId'),
-      value: p.id
+      value: p.id,
+      copyable: true
     })
     return meta
   })
