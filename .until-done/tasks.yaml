@@ -1,121 +1,132 @@
-generated: 2026-06-16T16:39:45.495Z
-goalId: ud-57vyom
-goal: 把 AI 2.5.x 文档体系收口成一份可执行、可验证的近期实施计划，明确 2.5.0 → 2.5.3 → 2.5.4 顺序，并保持
-  2.5.5/2.5.8 为方向锁定不抢主线。
-doneCriteria: "`mise run ai-docs:verify` 存在且通过，并引用真实输出；本地开发套件 `mise run
-  ai-docs:dev` 存在且通过；本地 release-readiness 套件 `mise run ai-docs:verify` 覆盖当前
-  scope；changed-file/affected-target 执行存在，或有确定性 safe fallback 文档化；最小 GitHub
-  workflow 存在，并与本地 `mise run ai-docs:verify` 尽量同源；若无法观察 GitHub run
-  pass，则阻塞而不是完成；新增/更新的 AI 执行计划文档必须覆盖：2.5.0 可见体验证据、2.5.3 Context Builder 基座、2.5.4
-  ContextHygiene、2.5.5/2.5.8 非当前抢占范围、验证门禁、风险和后续切片；清理调试输出、scratch 文件、临时
-  TODO，以及本轮新增的 guardrail 违规。"
-verifyCommand: mise run ai-docs:verify
+generated: 2026-06-18T18:55:00.181Z
+goalId: ud-26hv7h
+goal: 将 CoreApp/Nexus intelligence 逐步收敛到 @talex-touch/tuff-intelligence 共享
+  resolver、provider adapter 与 runtime 边界，减少重复路由/能力/prompt/agent 实现。
+doneCriteria: "1. Bootstrap for this intelligence scope exists and passes before
+  production tests: canonical gates, local dev suite, local release suite,
+  changed-file/affected execution or documented safe fallback, deterministic
+  cache/no-cache policy, safe parallel execution, matching GitHub Agentic
+  Workflow, and local ↔ GitHub parity check. 2. CoreApp reuses
+  @talex-touch/tuff-intelligence resolver for prompt/capability/provider routing
+  in apps/core-app/src/main/modules/ai/intelligence-config.ts and
+  intelligence-sdk.ts, preserving observable invoke/config behavior. 3. Nexus
+  buildCapabilityMessages/direct invoke supports shared ability normalization
+  for image.generate, image.edit, audio.tts, embedding.generate,
+  keywords.extract, intent.detect, plus fail-closed unsupported behavior. 4.
+  Nexus provider calls are behind swappable provider adapter capability
+  boundaries; business logic does not construct concrete external providers
+  inline. 5. Nexus Agent/Lab is measurably moved toward
+  packages/tuff-intelligence runtime boundaries where viable, with remaining
+  custom code documented behind adapters. 6. Matching GitHub workflow exists and
+  runs the same intelligence verify gate; local parity is verified by the
+  verifyCommand. If live GitHub Actions execution is required but no access is
+  available, the loop must block instead of completing. 7. Cleanup is complete:
+  no debug prints, scratch files, commented-out blocks, TODOs added by this
+  loop, eslint-disable shortcuts, or structural guardrail violations introduced.
+  8. All tests in `mise run intelligence:verify` pass, and the final completion
+  evidence quotes the literal command output."
+verifyCommand: mise run intelligence:verify
 phase: cleanup
 askBefore:
   - git commit
   - git push
-  - 删除/移动大量文件
-  - mise use <tool>@<version>
-  - 任何外部网络/生产 API 调用
-  - 发布、部署、npm publish
-decisionStyle: 优先最小可验证文档与自动化切片，不提前实现 2.5.5/2.5.8 或扩大 Stable 承诺。
+  - triggering GitHub Actions workflow or using networked GitHub API
+  - destructive file/directory deletion or bulk moves
+  - package publish/release/tag creation
+  - production Cloudflare/D1/R2/API operations
+  - changing pinned tool versions with mise use
+  - adding or upgrading dependencies
+decisionStyle: Prefer smallest adapter-based changes that preserve observable
+  behavior, keep feedback fast, and make shared package boundaries explicit.
 budget:
   used: 1
   max: 200
-currentTaskId: T-008
 tasks:
   - id: T-001
-    title: Inspect current automation foundation
-    phase: bootstrap
+    title: Map current intelligence boundaries
+    phase: analysis
     status: done
     dependencies: []
     blocks:
       - T-002
     prerequisites:
-      - description: No production/document changes have started.
+      - description: Contract and task plan approved by user
         cleared: true
     validationSteps:
-      - List existing mise tasks and workflow gates.
-      - Identify canonical gates/rules/failure conditions for AI docs scope.
-      - Record whether local dev, release, affected-target, cache, parallel,
-        GitHub parity exist.
+      - Inspect CoreApp intelligence config/sdk/provider-runtime entry points.
+      - Inspect Nexus invoke/provider registry/agent-lab entry points.
+      - Inspect shared resolver/runtime/provider adapter exports.
+      - Record affected files and current duplication points.
     ciCommands:
       - mise tasks ls --json
-      - mise exec -- git status --short
     styleguideRules:
-      - "AGENTS.md: use Simplified Chinese for user-facing summaries."
-      - "pi-config: bootstrap before RED."
-      - "Mise-first CLI policy: prefer mise tasks or mise exec."
+      - "AGENTS.md: 先读后写，不做无关重构。"
+      - "pi-config: declare active phase and inspect automation before code
+        changes."
     guardrails:
-      - Do not edit files in this task.
-      - Do not claim any gate passes until output is quoted.
+      - No production edits in this task.
+      - Do not rely on proxy signals as completion evidence.
     learnings:
-      - "`mise tasks ls --json` returned `[]`; no canonical mise task suite
-        exists yet, so bootstrap is mandatory before RED."
+      - Activated /until-done contract with verifyCommand `mise run
+        intelligence:verify`; bootstrap is not yet present and must precede RED.
+      - "`mise tasks ls --json` shows only `ai-docs:dev` and `ai-docs:verify`;
+        no intelligence bootstrap gates exist yet."
     gotchas:
-      - Existing docs may exceed 200 LOC; avoid editing oversized files unless
-        replanned.
-      - GitHub Actions access may be unavailable.
-      - Worktree already contains many unrelated modified/untracked files;
-        restrict edits to AI docs automation and implementation-plan files only.
+      - Existing workspace has unrelated modified files; do not attribute broad
+        failures without checking paths.
     context:
-      - path: mise.toml
-        why: Candidate source for local validation tasks.
-      - path: .github/workflows
-        why: Candidate source for GitHub parity.
-      - path: docs/plan-prd/TODO.md
-        why: Current AI roadmap source of truth.
-      - path: .github/workflows/ci.yml
-        why: Existing CI uses pnpm quality:pr, not a mise AI docs gate.
+      - path: apps/core-app/src/main/modules/ai/intelligence-config.ts
+        why: CoreApp prompt/config sync source.
+      - path: apps/core-app/src/main/modules/ai/intelligence-sdk.ts
+        why: CoreApp provider routing and prompt resolution source.
+      - path: apps/nexus/server/utils/tuffIntelligenceLabService.ts
+        why: Nexus invoke/runtime/provider orchestration source.
+      - path: packages/tuff-intelligence/src/resolvers/
+        why: Shared resolver target.
   - id: T-002
-    title: Bootstrap local AI docs gates
+    title: Bootstrap canonical intelligence gates
     phase: bootstrap
     status: done
     dependencies:
       - T-001
     blocks:
       - T-003
-      - T-004
     prerequisites:
-      - description: Existing automation inventory is known.
+      - description: T-001 boundary map is complete
         cleared: true
     validationSteps:
-      - Add or reuse one canonical AI docs gate definition.
-      - Provide sub-second/few-second local dev validation.
-      - Provide deterministic release-readiness validation.
-      - Provide changed-file/affected-target execution or documented safe
-        fallback.
-      - Provide deterministic no-cache or cache behavior.
-      - Use safe parallel execution only where deterministic.
-      - Run local dev and verify gates.
+      - Add canonical intelligence gate definitions to mise.toml only.
+      - Define fast developer gate, release-readiness gate, changed-file
+        fallback, cache/no-cache policy, and parity gate.
+      - Ensure commands use mise-first policy.
+      - Run gate discovery after edits.
     ciCommands:
-      - mise run ai-docs:dev
-      - mise run ai-docs:verify
+      - mise tasks ls --json
+      - mise run intelligence:dev
     styleguideRules:
-      - "pi-config §0: eight bootstrap items must exist before RED."
-      - "pi-config §1: no unnecessary slowdown."
-      - "Repository AGENTS.md: project automation goes through existing
-        toolchain conventions."
+      - "Mise-first CLI policy: project automation goes in mise.toml tasks."
+      - "pi-config §0: bootstrap before RED."
     guardrails:
       - Do not add package.json scripts.
-      - Keep new scripts/files under 200 LOC.
-      - Prefer existing tasks/workflows over new machinery.
+      - Keep automation deterministic and affected-scope first.
+      - If helper scripts are needed, each file must be <=200 LOC and each
+        function <=30 LOC.
     learnings:
-      - "Local bootstrap gates now exist: `mise run ai-docs:dev` and `mise run
-        ai-docs:verify` both pass locally in 44.5ms verify output."
+      - Bootstrap must create `intelligence:*` tasks before RED; current scope
+        has no canonical gate yet.
+      - Added `scripts/intelligence/verify-intelligence.mjs` plus
+        `intelligence:dev`, `intelligence:changed`, `intelligence:release`,
+        `intelligence:parity`, and `intelligence:verify` mise tasks; `mise run
+        intelligence:dev` passes.
     gotchas:
-      - If mise.toml exceeds structural constraints, block or replan before
-        editing.
-      - If a tool is missing, ask before `mise use`.
-      - If package manager is unavailable, prefer existing mise-pinned tools
-        before asking to install.
+      - verifyCommand is locked as `mise run intelligence:verify`; bootstrap
+        must create it before final verification.
+      - "`intelligence:parity` intentionally requires
+        `.github/workflows/intelligence.yml`, so T-003 must add the workflow
+        before verify can pass."
     context:
       - path: mise.toml
-        why: Canonical place for project automation tasks.
-      - path: docs/plan-prd/docs/PRD-QUALITY-BASELINE.md
-        why: Quality baseline may define gate expectations.
-      - path: scripts/ai-docs/README.md
-        why: Canonical AI docs gates/rules/fallback/parity description.
+        why: Canonical local automation source.
   - id: T-003
     title: Bootstrap GitHub parity workflow
     phase: bootstrap
@@ -125,247 +136,778 @@ tasks:
     blocks:
       - T-004
     prerequisites:
-      - description: Local AI docs verify task exists and passes.
+      - description: Local intelligence gates exist
         cleared: true
     validationSteps:
-      - Add or verify minimal GitHub workflow for the same AI docs gate.
-      - Ensure workflow permissions are read-only unless a write job is
-        explicitly guarded.
-      - Verify local workflow command matches `mise run ai-docs:verify`.
-      - If GitHub run status is accessible, confirm latest run success;
-        otherwise record blocker condition.
+      - Add or update a minimal GitHub workflow for intelligence scope.
+      - Workflow must run the same `mise run intelligence:verify` gate.
+      - Guard write/publish operations out of the workflow.
+      - Add local parity check for workflow command drift.
     ciCommands:
-      - mise run ai-docs:verify
-      - mise exec -- git diff --check
+      - mise run intelligence:parity
+      - mise run intelligence:verify
     styleguideRules:
-      - "pi-config §0: matching minimal GitHub Agentic Workflow."
-      - "pi-config §9: local and GitHub gates match as closely as environments
-        allow."
+      - "pi-config §0: matching minimal GitHub Agentic Workflow with local
+        parity."
+      - "Repository AGENTS: no release/tag/publish operations without approval."
     guardrails:
-      - Do not push to trigger CI without explicit approval.
-      - Do not claim GitHub pass without observed output.
+      - Do not trigger GitHub Actions without explicit user approval.
+      - Workflow should be read-only validation only.
     learnings:
-      - "Added `.github/workflows/ai-docs.yml` with `permissions: contents:
-        read` and `run: mise run ai-docs:verify`; local verify passed in
-        103.8ms."
+      - Local gate tasks exist; GitHub parity workflow is the next missing
+        bootstrap item.
+      - "Added `.github/workflows/intelligence.yml` with read-only `contents:
+        read`, mise setup cache, and `mise run intelligence:verify`; `mise run
+        intelligence:parity` and `mise run intelligence:verify` pass locally."
     gotchas:
-      - Local parity is not the same as remote GitHub pass.
-      - If no CI surface exists, completion must block.
-      - Remote GitHub workflow pass is not observable until a push/PR run
-        exists; final completion must block if no run evidence is available.
+      - Live GitHub workflow pass may require user-provided access; block if
+        unavailable and required.
     context:
-      - path: .github/workflows
-        why: GitHub workflow parity scope.
+      - path: .github/workflows/
+        why: Workflow target directory.
       - path: mise.toml
-        why: Workflow should call the same local gate.
-      - path: .github/workflows/ai-docs.yml
-        why: Minimal GitHub parity workflow for AI docs gate.
+        why: Workflow/local parity command source.
   - id: T-004
-    title: Add failing AI docs contract gate
-    phase: red
+    title: Verify bootstrap foundation
+    phase: bootstrap
     status: done
     dependencies:
-      - T-002
       - T-003
     blocks:
       - T-005
     prerequisites:
-      - description: Bootstrap foundation exists and passes for current baseline.
+      - description: Local and GitHub parity gates are defined
         cleared: true
     validationSteps:
-      - Add a public-boundary verification that expects the AI execution plan
-        document and required sections.
-      - Run `mise run ai-docs:verify`.
-      - Confirm it fails because the production document is missing or
-        incomplete.
-      - Quote the failing output in task learnings.
+      - Run local developer suite.
+      - Run local release-readiness suite.
+      - Run changed-file/affected gate or safe fallback.
+      - Run local ↔ GitHub parity gate.
+      - Quote failures exactly if any bootstrap item is not satisfied.
     ciCommands:
-      - mise run ai-docs:verify
+      - mise run intelligence:dev
+      - mise run intelligence:changed
+      - mise run intelligence:release
+      - mise run intelligence:parity
+      - mise run intelligence:verify
     styleguideRules:
-      - "pi-config §5–6: tests verify observable docs contract, not
-        implementation internals."
-      - "pi-config: RED must fail before GREEN."
+      - "Verifiability discipline: bootstrap exists and passes before RED."
+      - "Performance mandate: fast affected gates before broader gates."
     guardrails:
-      - Do not create the final plan document in RED.
-      - Keep verification deterministic and fast.
-      - Avoid real network, DB, or filesystem mutation outside repo files.
+      - No production tests or production code before this task passes.
+      - If any bootstrap item is missing, do not proceed to RED.
     learnings:
-      - "RED confirmed: `mise run ai-docs:verify` failed because
-        `docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md`
-        did not exist; output included `Error: ENOENT: no such file or
-        directory`."
+      - Bootstrap now has local tasks and matching workflow; T-004 will verify
+        each gate independently before RED.
+      - "Verified bootstrap independently: `mise run intelligence:dev`,
+        `intelligence:changed`, `intelligence:release`, and
+        `intelligence:parity` all pass locally before RED."
+      - "Independent bootstrap verification passed: `intelligence:dev`,
+        `intelligence:changed`, `intelligence:release`, and
+        `intelligence:parity` all returned ok."
     gotchas:
-      - A test that only checks file existence is too weak; require content
-        sections and key decisions.
-      - The RED failure currently prints a Node stack trace for a missing file;
-        refactor should improve gate failure readability without weakening the
-        contract.
+      - Broad gates may expose unrelated failures; classify by path before
+        replanning.
+      - The bootstrap gate output includes expected CoreApp test warnings for
+        deliberate fallback scenarios; they are not failures.
     context:
-      - path: docs/plan-prd/03-features/ai-2.5.0-plan-prd.md
-        why: Source for 2.5.0 evidence requirements.
-      - path: docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md
-        why: Source for ContextHygiene requirements.
+      - path: mise.toml
+        why: Bootstrap gates.
+      - path: .github/workflows/
+        why: Parity workflow.
   - id: T-005
-    title: Create AI execution plan document
-    phase: green
+    title: Write CoreApp resolver contract tests
+    phase: red
     status: done
     dependencies:
       - T-004
     blocks:
       - T-006
     prerequisites:
-      - description: RED gate fails for the intended missing/incomplete docs contract.
+      - description: Bootstrap foundation passed
         cleared: true
     validationSteps:
-      - Add a focused AI 2.5.x execution plan document under
-        docs/plan-prd/04-implementation.
-      - Cover current context-management doc status and remaining AI docs work.
-      - "Encode execution order: 2.5.0 evidence, 2.5.3 Context Builder, 2.5.4
-        ContextHygiene."
-      - Keep 2.5.5 local model and 2.5.8 ASR as locked future directions.
-      - Run `mise run ai-docs:verify` and confirm the RED gate turns green.
+      - Add public-behavior tests for CoreApp prompt binding resolution using
+        shared resolver semantics.
+      - Add public-behavior tests for CoreApp capability/provider/model route
+        normalization.
+      - Run focused tests and confirm RED failure before production changes.
     ciCommands:
-      - mise run ai-docs:dev
-      - mise run ai-docs:verify
+      - mise run intelligence:dev
     styleguideRules:
-      - "Repository AGENTS.md: docs affecting behavior/architecture must sync
-        planning docs where feasible."
-      - "pi-config: smallest GREEN change to satisfy failing contract."
+      - "pi-config §5–6: tests target public contracts/boundaries, not private
+        functions."
+      - "CoreApp AGENTS: no raw IPC/channel bypass."
     guardrails:
-      - Do not implement runtime AI features in this goal.
-      - Do not expand Stable beyond text + OCR.
-      - Keep new document under 200 LOC.
-      - Do not edit oversized existing docs unless replanned.
+      - Tests must be deterministic, no network, no DB, no filesystem beyond
+        existing test harness.
+      - Do not assert private call patterns.
     learnings:
-      - "GREEN confirmed: `mise run ai-docs:verify` passed after adding
-        `docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md`;
-        plan doc is 96 LOC."
+      - Bootstrap completed and verified; RED may now begin for CoreApp resolver
+        adoption.
+      - "RED established: `intelligence-shared-resolver-contract.test.ts` fails
+        because `getCapabilityOptions('chat.completion')` returns `{}` instead
+        of normalized `text.chat` options; SDK prompt alias test already
+        passes."
     gotchas:
-      - Avoid duplicating entire PRDs; summarize with links and decisions.
-      - Do not treat 2.5.5/2.5.8 as current implementation blockers.
+      - CoreApp has legacy local helpers; tests must lock observable behavior,
+        not implementation names.
+      - New CoreApp test harness needs Electron/toolkit mocks registered before
+        dynamic imports; static imports caused mock bootstrap failures.
     context:
-      - path: docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md
-        why: Source for Context Builder sequencing.
-      - path: docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md
-        why: Source for future local model boundary.
-      - path: docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md
-        why: Source for future ASR boundary.
-      - path: docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md
-        why: AI 2.5.x execution plan created by GREEN task.
+      - path: apps/core-app/src/main/modules/ai/intelligence-config.test.ts
+        why: Existing config behavior tests.
+      - path: apps/core-app/src/main/modules/ai/intelligence-sdk.test.ts
+        why: Existing SDK behavior tests.
+      - path: packages/tuff-intelligence/src/resolvers/
+        why: Shared resolver semantics.
   - id: T-006
-    title: Refactor gates and wording
-    phase: refactor
+    title: Reuse resolvers in CoreApp config
+    phase: green
     status: done
     dependencies:
       - T-005
     blocks:
-      - T-007
+      - T-006A
     prerequisites:
-      - description: GREEN implementation passes the focused AI docs gate.
+      - description: CoreApp config resolver contract test fails for expected alias reason
         cleared: true
     validationSteps:
-      - Remove duplication between verification logic and document wording.
-      - Ensure validation is incremental, deterministic, and fast.
-      - Clarify risks, non-goals, and evidence surfaces.
-      - Re-run local dev and verify gates.
+      - Replace duplicate config prompt resolution with shared resolver.
+      - Normalize capability aliases in config option/prompt accessors.
+      - Run focused CoreApp shared resolver contract test until config case
+        passes.
     ciCommands:
-      - mise run ai-docs:dev
-      - mise run ai-docs:verify
+      - mise run intelligence:dev
     styleguideRules:
-      - "pi-config §1: speed improvements belong in REFACTOR."
-      - "KISS/YAGNI: avoid broader automation than current docs scope requires."
+      - "CoreApp AGENTS: typed transport/domain SDK, no raw IPC."
+      - "Structural constraints: keep edits minimal in existing large files; put
+        new logic in small helpers."
     guardrails:
-      - Do not broaden scope to production code.
-      - Do not add hidden global state or slow full-repo scans without cause.
+      - Do not change provider secrets/storage behavior.
+      - Do not make SDK production changes in this task.
     learnings:
-      - Refactored missing-file handling into a readable gate failure path;
-        `mise run ai-docs:verify` still passed in 37.6ms and changed files
-        remain below 200 LOC.
+      - Expected RED failure points to missing CoreApp capability alias
+        normalization in `getCapabilityOptions`.
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - CoreApp config now uses shared resolver for prompt lookup and
+        `toRuntimeCapabilityId` for option/prompt access; focused contract test
+        passes.
     gotchas:
-      - Refactor must preserve externally observable docs contract.
+      - CoreApp provider manager uses concrete runtime classes; do not move
+        secret injection into shared package.
     context:
-      - path: mise.toml
-        why: Ensure tasks remain focused and fast.
-      - path: .github/workflows
-        why: Ensure parity remains aligned.
-  - id: T-007
-    title: Cleanup production-shaped diff
-    phase: cleanup
+      - path: apps/core-app/src/main/modules/ai/intelligence-config.ts
+        why: Prompt schema/config sync.
+      - path: packages/tuff-intelligence/src/resolvers/
+        why: Shared resolver implementation.
+  - id: T-006A
+    title: Write CoreApp SDK resolver tests
+    phase: red
     status: done
     dependencies:
       - T-006
     blocks:
+      - T-006B
+    prerequisites:
+      - description: CoreApp config resolver GREEN passes focused test
+        cleared: true
+    validationSteps:
+      - Add SDK public invoke test for `chat.completion` alias resolving to
+        `text.chat`.
+      - Add SDK behavior assertion for shared prompt binding resolver if still
+        not covered.
+      - Run focused test and confirm RED failure before SDK production changes.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - "pi-config §5–6: tests target public SDK behavior, not private methods."
+      - "CoreApp AGENTS: no raw IPC/channel bypass."
+    guardrails:
+      - No production SDK changes in this RED task.
+      - No network, DB, or filesystem in unit tests.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - "RED established for SDK: `sdk.invoke('chat.completion')` fails with
+        `[Intelligence] Capability chat.completion not found`, proving invoke
+        does not normalize shared aliases yet."
+    gotchas:
+      - SDK may already pass prompt alias due legacy helper; capability alias
+        invoke should provide the expected RED.
+    context:
+      - path: apps/core-app/src/main/modules/ai/intelligence-shared-resolver-contract.test.ts
+        why: CoreApp public resolver contract tests.
+      - path: apps/core-app/src/main/modules/ai/intelligence-sdk.ts
+        why: SDK invoke behavior target.
+  - id: T-006B
+    title: Reuse resolvers in CoreApp SDK
+    phase: green
+    status: done
+    dependencies:
+      - T-006A
+    blocks:
+      - T-007
+    prerequisites:
+      - description: CoreApp SDK resolver tests fail for expected alias/routing reason
+        cleared: true
+    validationSteps:
+      - Normalize SDK invoke capability IDs with shared resolver.
+      - Replace duplicate SDK prompt binding resolution with shared resolver.
+      - Use shared provider routing where compatible without changing fallback
+        semantics.
+      - Run focused CoreApp tests until they pass.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - "CoreApp AGENTS: typed transport/domain SDK, no raw IPC."
+      - "Structural constraints: prefer small helper wrappers for new logic."
+    guardrails:
+      - Preserve audit/quota/cache/fallback behavior.
+      - Do not change provider secret/runtime injection.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - SDK now normalizes capability aliases at
+        invoke/stream/invokeStream/deep-agent config entry points and delegates
+        prompt binding resolution to shared `resolveIntelligencePromptTemplate`;
+        focused tests and `mise run intelligence:dev` pass.
+    gotchas:
+      - Fallback uses provider adapter instances while shared routing works on
+        provider-like configs; bridge carefully.
+    context:
+      - path: apps/core-app/src/main/modules/ai/intelligence-sdk.ts
+        why: Runtime invoke routing and prompt resolution.
+      - path: packages/tuff-intelligence/src/resolvers/
+        why: Shared resolver APIs.
+  - id: T-007
+    title: Refactor CoreApp resolver adoption
+    phase: refactor
+    status: done
+    dependencies:
+      - T-006B
+    blocks:
       - T-008
     prerequisites:
-      - description: Refactor validation passes.
+      - description: CoreApp focused tests pass after SDK GREEN
         cleared: true
     validationSteps:
-      - Remove debug prints, scratch files, temporary TODOs, and commented-out
-        blocks added by this loop.
-      - Check changed files for structural constraints.
-      - Confirm no unapproved high-risk operation occurred.
-      - Run whitespace/diff validation.
+      - Remove duplicated helper code made obsolete by shared resolver.
+      - Keep imports minimal and type-only where possible.
+      - Re-run focused CoreApp and shared package tests.
     ciCommands:
-      - mise exec -- git diff --check
-      - mise exec -- git status --short
+      - mise run intelligence:dev
     styleguideRules:
-      - "pi-config §9: cleanup before completion."
-      - "Repository AGENTS.md: do not commit or push unless requested."
+      - "KISS/YAGNI: no extra abstractions beyond resolver adoption."
+      - "Performance mandate: no extra runtime scans or repeated JSON work."
     guardrails:
-      - Do not hide failures with eslint-disable or weakened checks.
-      - Do not leave temporary files.
+      - No behavior changes outside resolver adoption.
+      - No eslint-disable shortcuts.
     learnings:
-      - Scoped `git diff --check` produced no output for touched files; changed
-        files are within LOC limits, and only required verifier stdout uses
-        `console.log`.
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Added CoreApp shared resolver contract test to canonical intelligence
+        gate; no debug/TODO/eslint-disable/legacy residues found in touched
+        CoreApp/shared automation files.
     gotchas:
-      - A clean-looking diff is not proof of done; final verify still required.
-      - "`git diff -- <paths> --stat` treated `--stat` as a pathspec after `--`;
-        do not use that output as diff-stat evidence."
+      - Refactor must not widen provider capability support silently.
+      - New contract test imports CoreApp modules dynamically after mocks; keep
+        this pattern if the test is expanded.
     context:
-      - path: .
-        why: Whole changed-file cleanup scope.
+      - path: packages/tuff-intelligence/src/resolvers/
+        why: Shared implementation after CoreApp adoption.
   - id: T-008
-    title: Run final verification
-    phase: cleanup
-    status: blocked
+    title: Write Nexus ability aggregation tests
+    phase: red
+    status: done
     dependencies:
       - T-007
-    blocks: []
+    blocks:
+      - T-009
     prerequisites:
-      - description: Cleanup completed and diff is production-shaped.
+      - description: CoreApp resolver adoption refactor passes focused gates
         cleared: true
     validationSteps:
-      - Run `mise run ai-docs:verify`.
-      - Quote the literal stdout/stderr.
-      - If GitHub run evidence is unavailable, call until_done_block instead of
-        until_done_complete.
-      - Confirm all done criteria literally hold.
+      - Add public direct-invoke tests for image.generate and image.edit
+        normalization.
+      - Add direct-invoke tests for audio.tts and embedding.generate fail-closed
+        behavior.
+      - Add direct-invoke tests for keywords.extract and intent.detect message
+        construction.
+      - Confirm tests fail before production changes.
     ciCommands:
-      - mise run ai-docs:verify
+      - mise run intelligence:dev
     styleguideRules:
-      - "pi-config §9: only verifyCommand output or literal done-criterion
-        evidence counts."
-      - "until-done skill: completion evidence must quote command output."
+      - "Nexus AGENTS: Provider Registry/Governance boundaries, no secret
+        leakage."
+      - Tests must verify observable API behavior and sanitized audit/ledger
+        output.
     guardrails:
-      - Never call until_done_complete on proxy signals.
-      - Do not paraphrase final command output.
+      - Do not call real providers/network.
+      - Do not persist secrets in logs, JSON payloads, or test snapshots.
     learnings:
-      - "Final local verify passed: `[ai-docs:dev] $ node
-        scripts/ai-docs/verify-ai-docs.mjs ... AI docs verification passed ...
-        [ai-docs:verify] $ git diff --check -- mise.toml scripts/ai-docs
-        docs/plan-prd/… Finished in 46.2ms`."
-      - "Attempted approved push after commit `36365b054 docs(ai): add AI 2.5
-        execution plan gate`, but GitHub rejected it: `refusing to allow an
-        OAuth App to create or update workflow .github/workflows/ai-docs.yml
-        without workflow scope`. Local verify still passed in 44.4ms."
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - "RED established for Nexus ability aggregation: direct invoke for
+        `keywords.extract` and `intent.detect` fails with `Unsupported
+        capability`, while image/audio/embedding shapes already fail closed
+        without model calls."
     gotchas:
-      - Same evidence must not be resubmitted if the judge rejects completion.
-      - Cannot complete until GitHub workflow pass is observed or the North Star
-        is changed via a new /until-done setup; local workflow parity is not
-        enough under the approved done criteria.
-      - Current GitHub OAuth credentials cannot push workflow changes; need a
-        token/session with `workflow` scope or a human push.
+      - Some abilities may normalize input but remain unsupported by concrete
+        providers; unsupported must fail closed.
     context:
-      - path: .until-done/tasks.yaml
-        why: Human-reviewable task record after activation.
+      - path: apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts
+        why: Direct invoke behavior tests.
+      - path: apps/nexus/server/utils/tuffIntelligenceLabService.ts
+        why: buildCapabilityMessages target.
+  - id: T-009
+    title: Implement Nexus ability aggregation
+    phase: green
+    status: done
+    dependencies:
+      - T-008
+    blocks:
+      - T-010
+    prerequisites:
+      - description: Nexus ability tests fail for expected missing behavior
+        cleared: true
+    validationSteps:
+      - Extend shared payload normalization only where reusable.
+      - Extend Nexus message construction for listed abilities.
+      - Add fail-closed unsupported responses with actionable errors.
+      - Run focused Nexus tests until they pass.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - "Capabilities model: external provider calls stay behind boundaries."
+      - "Structural constraints: split helpers instead of growing large service
+        methods."
+    guardrails:
+      - Do not implement real image/audio/embedding provider calls unless
+        already supported by adapter.
+      - Keep tests hermetic and parallel-safe.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Implemented Nexus direct-invoke message construction for
+        `keywords.extract` and `intent.detect`; `image.generate`/`image.edit`
+        aliases plus `audio.tts`/`embedding.generate` remain fail-closed without
+        model calls; new ability test is included in `intelligence:dev`.
+    gotchas:
+      - Image/audio payloads may carry sensitive data; audit/ledger must stay
+        redacted.
+    context:
+      - path: packages/tuff-intelligence/src/resolvers/payloads.ts
+        why: Shared payload normalization.
+      - path: apps/nexus/server/utils/tuffIntelligenceLabService.ts
+        why: Nexus message/fail-closed implementation.
+  - id: T-010
+    title: Refactor ability aggregation
+    phase: refactor
+    status: done
+    dependencies:
+      - T-009
+    blocks:
+      - T-011
+    prerequisites:
+      - description: Nexus ability aggregation tests pass
+        cleared: true
+    validationSteps:
+      - Split ability message builders into small helper module if service file
+        grows.
+      - Remove duplicate alias handling.
+      - Re-run focused Nexus and shared resolver tests.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - File <=200 LOC for new files; each function <=30 LOC.
+      - "Performance mandate: no unnecessary serialization or repeated
+        normalization."
+    guardrails:
+      - Keep `tuffIntelligenceLabService.ts` as orchestration, not capability
+        catalog.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Extracted Nexus capability message construction into
+        `tuffIntelligenceCapabilityMessages.ts`; `tuffIntelligenceLabService.ts`
+        now imports the builder and `normalizeLabMessages` reuses the same
+        normalizer; `mise run intelligence:dev` passes.
+    gotchas:
+      - Do not accidentally turn unsupported abilities into silent text.chat
+        calls.
+    context:
+      - path: apps/nexus/server/utils/
+        why: Candidate location for ability message helper.
+  - id: T-011
+    title: Write provider adapter boundary tests
+    phase: red
+    status: done
+    dependencies:
+      - T-010
+    blocks:
+      - T-012
+    prerequisites:
+      - description: Ability aggregation refactor passes focused gates
+        cleared: true
+    validationSteps:
+      - Add tests proving Nexus invoke/probe uses injectable provider adapter
+        capability.
+      - Verify provider errors, retries, fallback, audit, and quota behavior
+        remain observable.
+      - Confirm tests fail before extracting adapters.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - "pi-config §5: external systems are abstract capabilities."
+      - Tests target service boundary, not private adapter methods.
+    guardrails:
+      - No real network/provider calls.
+      - No inline construction assertions as sole proof; verify behavior through
+        injected fake.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - "RED established for Nexus provider adapter boundary: new direct-invoke
+        test fails because `tuffIntelligenceProviderAdapters` seam does not
+        exist, proving provider calls are still inline."
+    gotchas:
+      - Constructor-call tests can pass while behavior is wrong; prefer fake
+        adapter behavior output.
+    context:
+      - path: apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts
+        why: Existing invoke/probe test surface.
+      - path: apps/nexus/server/utils/tuffIntelligenceLabService.ts
+        why: Current inline provider construction.
+  - id: T-012
+    title: Extract Nexus provider adapters
+    phase: green
+    status: done
+    dependencies:
+      - T-011
+    blocks:
+      - T-013
+    prerequisites:
+      - description: Provider adapter tests fail for expected inline dependency reason
+        cleared: true
+    validationSteps:
+      - Define provider adapter interface in shared or Nexus boundary module.
+      - Move OpenAI/Anthropic/local concrete calls behind adapter
+        implementations.
+      - Inject adapter registry into Nexus business logic/composition.
+      - Run focused tests until they pass.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - Business logic must not construct concrete external dependencies inline.
+      - "Nexus AGENTS: provider secret/API key must not leak."
+    guardrails:
+      - No new dependencies.
+      - Keep concrete provider implementations swappable for deterministic tests.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Added Nexus provider adapter registry plus LangChain concrete adapters;
+        `invokeWithResolvedContext` now resolves swappable adapters instead of
+        constructing concrete provider clients inline; adapter boundary test and
+        `mise run intelligence:dev` pass.
+    gotchas:
+      - Dynamic imports may belong in concrete adapter, not orchestration method.
+    context:
+      - path: packages/tuff-intelligence/src/adapters/
+        why: Shared adapter concepts already exist.
+      - path: apps/nexus/server/utils/tuffIntelligenceLabService.ts
+        why: Extraction source.
+  - id: T-013
+    title: Refactor provider adapter layer
+    phase: refactor
+    status: done
+    dependencies:
+      - T-012
+    blocks:
+      - T-014
+    prerequisites:
+      - description: Provider adapter boundary tests pass
+        cleared: true
+    validationSteps:
+      - Reduce orchestration service to provider selection + adapter invocation.
+      - Ensure retry/fallback logic stays deterministic and observable.
+      - Run focused Nexus tests and shared adapter tests.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - "SOLID: provider adapter owns provider-specific I/O; orchestration owns
+        policy."
+      - "Performance mandate: no extra provider resolution per retry beyond
+        needed."
+    guardrails:
+      - Preserve audit, credits, quota, and usage ledger behavior.
+      - Do not move Nexus governance into shared package.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Provider adapter refactor keeps orchestration in
+        `tuffIntelligenceLabService.ts` and provider-specific LangChain I/O in
+        `tuffIntelligenceLangChainProviderAdapters.ts`; all new files are <=200
+        LOC and `mise run intelligence:dev` passes.
+    gotchas:
+      - Adapter extraction must not bypass Provider Registry credential fallback.
+      - "`tuffIntelligenceLangChainProviderAdapters.ts` sits close to the 200
+        LOC guardrail; keep future adapter-specific additions in separate
+        files."
+    context:
+      - path: apps/nexus/server/utils/intelligenceProviderRegistryBridge.ts
+        why: Credential/provider registry fallback.
+      - path: apps/nexus/server/utils/platformGovernanceStore.ts
+        why: Quota/governance boundary.
+  - id: T-014
+    title: Write runtime convergence tests
+    phase: red
+    status: done
+    dependencies:
+      - T-013
+    blocks:
+      - T-015
+    prerequisites:
+      - description: Provider adapter refactor passes focused gates
+        cleared: true
+    validationSteps:
+      - Add boundary tests for Nexus Agent/Lab stream/session behavior through
+        shared runtime-compatible port.
+      - Verify session trace/checkpoint events remain observable.
+      - Confirm RED failure before runtime bridge changes.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - Tests target public runtime/session stream behavior.
+      - No real DB/network; use deterministic store/adapter fakes.
+    guardrails:
+      - Do not rewrite all Lab behavior if a bridge achieves convergence.
+      - Keep runtime migration incremental.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - "RED established for runtime convergence: new graph runner test fails
+        because `intelligenceAgentRuntimeBridge` does not exist; expected bridge
+        should adapt shared AEP envelopes into Nexus Lab stream events and
+        persist session completion."
+    gotchas:
+      - Existing Lab service is large; avoid deep edits that exceed structural
+        constraints.
+    context:
+      - path: packages/tuff-intelligence/src/runtime/agent-runtime.ts
+        why: Shared runtime target.
+      - path: packages/tuff-intelligence/src/runtime/decision-dispatcher.ts
+        why: Shared dispatch target.
+      - path: apps/nexus/server/utils/intelligenceAgentGraphRunner.ts
+        why: Nexus stream/session orchestration.
+  - id: T-015
+    title: Bridge Nexus runtime to shared ports
+    phase: green
+    status: done
+    dependencies:
+      - T-014
+    blocks:
+      - T-016
+    prerequisites:
+      - description: Runtime convergence tests fail for expected missing bridge
+        cleared: true
+    validationSteps:
+      - Introduce a Nexus runtime adapter/bridge that consumes shared runtime
+        interfaces where viable.
+      - Keep Nexus D1/governance/session storage as concrete adapter
+        implementations.
+      - Run runtime convergence tests until they pass.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - Capabilities must be externally supplied at composition/runtime.
+      - "Nexus AGENTS: no production D1/API operations in tests."
+    guardrails:
+      - Do not force full rewrite if adapter bridge satisfies public behavior.
+      - Document unsupported migration leftovers behind explicit adapter
+        boundary.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Added `intelligenceAgentRuntimeBridge.ts` and connected
+        `runIntelligenceAgentGraphStream` to use a registered
+        shared-runtime-compatible port before falling back to legacy LangGraph;
+        AEP assistant envelopes are adapted to Nexus stream events and
+        persisted; `mise run intelligence:dev` passes.
+    gotchas:
+      - Shared D1RuntimeStoreAdapter may not map 1:1 to existing Nexus runtime
+        tables.
+    context:
+      - path: packages/tuff-intelligence/src/store/d1-runtime-store.ts
+        why: Existing shared D1 adapter reference.
+      - path: apps/nexus/server/utils/tuffIntelligenceRuntimeStore.ts
+        why: Existing Nexus runtime store.
+  - id: T-016
+    title: Refactor runtime convergence
+    phase: refactor
+    status: done
+    dependencies:
+      - T-015
+    blocks:
+      - T-017
+    prerequisites:
+      - description: Runtime convergence tests pass
+        cleared: true
+    validationSteps:
+      - Remove duplicated runtime glue made obsolete by shared bridge.
+      - Keep remaining Nexus-specific code explicitly named as
+        adapter/composition.
+      - Re-run runtime and provider adapter focused tests.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - "KISS/YAGNI: do not generalize beyond proven shared boundary."
+      - "Structural constraints: extract new files instead of growing existing
+        large files."
+    guardrails:
+      - Preserve streaming contract version and event shapes.
+      - No hidden global mutable runtime state.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Runtime bridge now supports explicit `options.runtimePort` injection and
+        keeps the test-only fallback isolated; legacy LangGraph remains default
+        when no port is supplied; runtime focused tests and `mise run
+        intelligence:dev` pass.
+    gotchas:
+      - Event contract drift can break frontend even if unit tests pass; keep
+        event shape snapshots/contract tests.
+    context:
+      - path: apps/nexus/server/utils/intelligenceAgentGraphRunner.ts
+        why: Stream contract owner.
+      - path: packages/tuff-intelligence/src/protocol/
+        why: Shared protocol contract.
+  - id: T-017
+    title: Update intelligence documentation
+    phase: refactor
+    status: done
+    dependencies:
+      - T-016
+    blocks:
+      - T-018
+    prerequisites:
+      - description: Runtime convergence refactor passes focused gates
+        cleared: true
+    validationSteps:
+      - Update docs/CHANGES or plan-prd TODO with shared
+        resolver/adapter/runtime convergence note.
+      - Document local and GitHub intelligence gates.
+      - Run docs/diff checks included in intelligence verify.
+    ciCommands:
+      - mise run intelligence:dev
+    styleguideRules:
+      - "Root AGENTS: behavior/architecture changes sync at least one plan-prd
+        doc."
+      - Docs should describe current SoT, not long history.
+    guardrails:
+      - Do not add broad roadmap claims beyond implemented scope.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Updated `docs/plan-prd/TODO.md` and
+        `docs/plan-prd/01-project/CHANGES.md` with
+        resolver/provider-adapter/runtime-bridge convergence and intelligence
+        gate notes, explicitly limiting evidence to focused/local gates; `mise
+        run intelligence:dev` and scoped `git diff --check` pass.
+    gotchas:
+      - Entry docs should not absorb long audit history.
+    context:
+      - path: docs/plan-prd/TODO.md
+        why: Current execution tracker.
+      - path: docs/plan-prd/01-project/CHANGES.md
+        why: Change log candidate.
+  - id: T-018
+    title: Cleanup production diff
+    phase: cleanup
+    status: done
+    dependencies:
+      - T-017
+    blocks:
+      - T-019
+    prerequisites:
+      - description: All feature/refactor tasks pass focused gates
+        cleared: true
+    validationSteps:
+      - Remove debug prints, scratch files, commented-out blocks, and TODOs
+        added by this loop.
+      - Check no eslint-disable shortcuts were introduced.
+      - Check structural guardrails for new/edited helper files.
+      - Run diff whitespace check.
+    ciCommands:
+      - mise run intelligence:changed
+      - mise exec -- git diff --check
+    styleguideRules:
+      - Definition of done cleanup requirement.
+      - Structural constraints apply to every file written or edited.
+    guardrails:
+      - Do not alter unrelated user changes.
+      - Do not commit or push.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - "Cleanup passed: `mise run intelligence:changed` and global `git diff
+        --check` pass; new/edited helper/test files stay <=200 LOC; no
+        TODO/eslint-disable/debugger/legacy residues were introduced in this
+        loop."
+    gotchas:
+      - Existing unrelated modified files may appear in git status; only clean
+        this loop's changes.
+      - Broad grep finds existing README/example `console.log` and `.until-done`
+        plan text; use scoped production/test paths when checking cleanup
+        residues.
+    context:
+      - path: packages/tuff-intelligence/src/
+        why: New shared helper files.
+      - path: apps/core-app/src/main/modules/ai/
+        why: CoreApp edited files.
+      - path: apps/nexus/server/utils/
+        why: Nexus edited files.
+  - id: T-019
+    title: Run final intelligence verification
+    phase: cleanup
+    status: done
+    dependencies:
+      - T-018
+    blocks: []
+    prerequisites:
+      - description: Production diff is cleanup-ready
+        cleared: true
+    validationSteps:
+      - Run the locked verifyCommand exactly.
+      - Quote the literal stdout/stderr.
+      - Confirm every done criterion is satisfied.
+      - If GitHub live pass is required but unavailable, block instead of
+        completing.
+    ciCommands:
+      - mise run intelligence:verify
+    styleguideRules:
+      - "Verifiability discipline: only verifyCommand output counts for
+        completion."
+      - "until-done: never call complete speculatively."
+    guardrails:
+      - Do not call until_done_complete unless verifyCommand passes and evidence
+        is literal.
+      - Do not paraphrase command output in final evidence.
+    learnings:
+      - "replan: split CoreApp config and SDK resolver adoption so SDK changes
+        still get their own RED before production edits"
+      - Locked verify command `mise run intelligence:verify` passed. Literal
+        output includes `intelligence:verify ok` and `Finished in 18.11s`.
+    gotchas:
+      - Re-running completion with weak evidence will be rejected by judge.
+    context:
+      - path: mise.toml
+        why: Locked verifyCommand definition.
+      - path: .github/workflows/
+        why: Workflow parity evidence.
