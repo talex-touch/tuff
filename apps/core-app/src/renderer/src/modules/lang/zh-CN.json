@@ -1274,6 +1274,21 @@
         "openPathFailed": "打开路径失败"
       }
     },
+    "structure": {
+      "loading": "正在刷新文件结构...",
+      "actions": {
+        "openRoot": "打开根目录",
+        "refresh": "刷新"
+      },
+      "files": {
+        "title": "插件文件",
+        "summary": "{files} 个文件，{directories} 个目录",
+        "empty": "未发现插件文件",
+        "name": "名称",
+        "size": "大小",
+        "modified": "修改时间"
+      }
+    },
     "issues": {
       "title": "插件加载问题",
       "source": "来源"

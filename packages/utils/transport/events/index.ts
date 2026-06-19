@@ -342,6 +342,8 @@ import type {
   PluginApiFeatureInputChangedRequest,
   PluginApiGetManifestRequest,
   PluginApiGetManifestResponse,
+  PluginApiGetFileTreeRequest,
+  PluginApiGetFileTreeResponse,
   PluginApiGetOfficialListRequest,
   PluginApiGetOfficialListResponse,
   PluginApiGetPathsRequest,
@@ -1712,6 +1714,11 @@ export const PluginEvents = {
       .module("api")
       .event("get-paths")
       .define<PluginApiGetPathsRequest, PluginApiGetPathsResponse>(),
+
+    getFileTree: defineEvent("plugin")
+      .module("api")
+      .event("get-file-tree")
+      .define<PluginApiGetFileTreeRequest, PluginApiGetFileTreeResponse>(),
 
     openPath: defineEvent("plugin")
       .module("api")

@@ -1274,6 +1274,21 @@
         "openPathFailed": "Failed to open this path"
       }
     },
+    "structure": {
+      "loading": "Refreshing file structure...",
+      "actions": {
+        "openRoot": "Open Root",
+        "refresh": "Refresh"
+      },
+      "files": {
+        "title": "Plugin Files",
+        "summary": "{files} file(s), {directories} folder(s)",
+        "empty": "No plugin files found",
+        "name": "Name",
+        "size": "Size",
+        "modified": "Modified"
+      }
+    },
     "issues": {
       "title": "Plugin Load Issues",
       "source": "Source"

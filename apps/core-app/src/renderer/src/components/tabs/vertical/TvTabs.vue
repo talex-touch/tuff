@@ -11,6 +11,10 @@ export default defineComponent({
     modelValue: {
       type: Object,
       default: () => ({})
+    },
+    showBlur: {
+      type: Boolean,
+      default: true
     }
   },
   emits: ['update:modelValue', 'scroll'],
@@ -227,8 +231,11 @@ export default defineComponent({
         })
       }
 
-      // 获取选中插槽内容
-      const getSelectSlotContent = (): VNode => {
+      const getActiveSlotState = (): {
+        activeContent: VNodeChild | VNodeChild[] | SlotObject | null
+        activeTabNode: VNode | null
+        isFillSlot: boolean
+      } => {
         // 获取当前激活的内容
         let activeContent: VNodeChild | VNodeChild[] | SlotObject | null = null
         let activeTabNode: VNode | null = null
@@ -268,15 +275,22 @@ export default defineComponent({
           activeTabNode = lastActive.value
         }
 
-        const isFillSlot = resolveTabFill(activeTabNode)
+        return {
+          activeContent,
+          activeTabNode,
+          isFillSlot: resolveTabFill(activeTabNode)
+        }
+      }
 
+      // 获取选中插槽内容
+      const getSelectSlotContent = (slotState = getActiveSlotState()): VNode => {
         return h(
           'div',
           {
             ref: slotWrapper,
-            class: ['TTabs-SelectSlot', 'animated', { 'is-fill-slot': isFillSlot }]
+            class: ['TTabs-SelectSlot', 'animated', { 'is-fill-slot': slotState.isFillSlot }]
           },
-          activeContent ||
+          slotState.activeContent ||
             h(
               'div',
               {
@@ -286,6 +300,9 @@ export default defineComponent({
             )
         )
       }
+
+      const slotState = getActiveSlotState()
+      const selectSlot = getSelectSlotContent(slotState)
 
       return h(
         'div',
@@ -316,38 +333,44 @@ export default defineComponent({
           h(
             'div',
             {
-              class: 'TvTabs-Main'
+              class: ['TvTabs-Main', { 'is-fill-active': slotState.isFillSlot }]
             },
             [
-              h('div', { class: 'TvTabs-BlurTop' }, [
-                h(TxGradualBlur as Component, {
-                  position: 'top',
-                  height: '32px',
-                  strength: 1.4,
-                  opacity: 0.9,
-                  zIndex: 1
-                })
-              ]),
-              h('div', { class: 'TvTabs-BlurBottom' }, [
-                h(TxGradualBlur as Component, {
-                  position: 'bottom',
-                  height: '32px',
-                  strength: 1.4,
-                  opacity: 0.9,
-                  zIndex: 1
-                })
-              ]),
-              h(
-                TxScroll,
-                {
-                  noPadding: true,
-                  onScroll: (info: { scrollTop: number; scrollLeft: number }) =>
-                    emit('scroll', info)
-                },
-                {
-                  default: () => getSelectSlotContent()
-                }
-              )
+              props.showBlur
+                ? h('div', { class: 'TvTabs-BlurTop' }, [
+                    h(TxGradualBlur as Component, {
+                      position: 'top',
+                      height: '32px',
+                      strength: 1.4,
+                      opacity: 0.9,
+                      zIndex: 1
+                    })
+                  ])
+                : null,
+              props.showBlur
+                ? h('div', { class: 'TvTabs-BlurBottom' }, [
+                    h(TxGradualBlur as Component, {
+                      position: 'bottom',
+                      height: '32px',
+                      strength: 1.4,
+                      opacity: 0.9,
+                      zIndex: 1
+                    })
+                  ])
+                : null,
+              slotState.isFillSlot
+                ? selectSlot
+                : h(
+                    TxScroll,
+                    {
+                      noPadding: true,
+                      onScroll: (info: { scrollTop: number; scrollLeft: number }) =>
+                        emit('scroll', info)
+                    },
+                    {
+                      default: () => selectSlot
+                    }
+                  )
             ]
           )
         ]
@@ -431,11 +454,14 @@ export default defineComponent({
 .TTabs-SelectSlot.is-fill-slot {
   align-items: stretch;
   min-height: 0;
+  overflow: hidden;
+  padding: 0.75rem 0.75rem 0;
 }
 
-.TTabs-SelectSlot.is-fill-slot > * {
+.TTabs-SelectSlot.is-fill-slot > *,
+.TTabs-SelectSlot.is-fill-slot > :deep(*) {
   width: 100%;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   align-self: stretch;
 }
@@ -556,6 +582,17 @@ export default defineComponent({
     box-sizing: border-box;
     background: var(--tx-bg-color);
     overflow: hidden;
+  }
+
+  .TvTabs-Main.is-fill-active {
+    display: flex;
+    flex-direction: column;
+    padding-top: 44px;
+  }
+
+  .TvTabs-Main.is-fill-active > .TTabs-SelectSlot {
+    flex: 1;
+    min-height: 0;
   }
 
   position: relative;

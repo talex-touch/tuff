@@ -26,6 +26,7 @@ import PluginLogs from './tabs/PluginLogs.vue'
 import PluginOverview from './tabs/PluginOverview.vue'
 import PluginPermissions from './tabs/PluginPermissions.vue'
 import PluginStorage from './tabs/PluginStorage.vue'
+import PluginStructure from './tabs/PluginStructure.vue'
 
 // Props
 const props = defineProps<{
@@ -297,11 +298,11 @@ async function handlePrimaryAction(): Promise<void> {
 
 <template>
   <div
-    class="plugin-info-root h-full flex flex-col relative"
+    class="plugin-info-root h-full min-h-0 flex flex-col relative overflow-hidden"
     :class="{ 'has-error-glow': hasErrors }"
   >
     <div class="PluginInfo-Body">
-      <div class="PluginInfo-Header flex items-center justify-between px-4 py-2">
+      <div class="PluginInfo-Header flex shrink-0 items-center justify-between px-4 py-2">
         <div class="flex items-center gap-2 min-w-0">
           <div class="relative">
             <StatusIcon
@@ -442,8 +443,8 @@ async function handlePrimaryAction(): Promise<void> {
       </div>
 
       <!-- Tabs Section -->
-      <div class="flex-1 overflow-hidden">
-        <TvTabs v-model="tabsModel" :show-indicator="false">
+      <div class="PluginInfo-TabsShell">
+        <TvTabs v-model="tabsModel" :show-indicator="false" :show-blur="false">
           <TvTabItem icon="dashboard-line" name="Overview" :label="t('plugin.tabs.overview')">
             <PluginOverview :plugin="plugin" />
           </TvTabItem>
@@ -465,8 +466,9 @@ async function handlePrimaryAction(): Promise<void> {
             icon="folder-chart-line"
             name="Structure"
             :label="t('plugin.tabs.structure')"
+            fill
           >
-            <PluginStorage :plugin="plugin" />
+            <PluginStructure :plugin="plugin" />
           </TvTabItem>
           <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')" fill>
             <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
@@ -605,6 +607,13 @@ async function handlePrimaryAction(): Promise<void> {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+}
+
+.PluginInfo-TabsShell {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .plugin-info-root.has-error-glow {

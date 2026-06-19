@@ -426,6 +426,21 @@ export interface PluginApiGetPathsResponse {
   tempPath: string
 }
 
+export interface PluginFileTreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  size: number
+  modified: number
+  children?: PluginFileTreeNode[]
+}
+
+export interface PluginApiGetFileTreeRequest {
+  name: string
+}
+
+export type PluginApiGetFileTreeResponse = PluginFileTreeNode[]
+
 export interface PluginApiOpenPathRequest {
   name: string
   pathType: 'plugin' | 'data' | 'config' | 'logs' | 'temp'
