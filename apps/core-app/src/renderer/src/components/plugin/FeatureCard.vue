@@ -85,6 +85,19 @@ function getPrimaryCommandLabel(): string {
   return getCommandName(primary).toUpperCase()
 }
 
+function shouldPreserveFeatureIconColor(): boolean {
+  const icon = props.feature.icon
+  if (!icon || icon.type === 'class' || icon.type === 'builtin' || icon.type === 'emoji') {
+    return false
+  }
+
+  const value = icon.value.trim().toLowerCase()
+  if (!value || value.startsWith('data:image/svg+xml')) return false
+
+  const [path] = value.split(/[?#]/)
+  return !path.endsWith('.svg')
+}
+
 function handleClick(event: MouseEvent | KeyboardEvent): void {
   if (props.active) return
   emit('click', event)
@@ -101,20 +114,18 @@ function handleClick(event: MouseEvent | KeyboardEvent): void {
   >
     <div class="FeatureCard-Content">
       <div class="FeatureCard-Header flex items-start justify-between">
-        <div class="FeatureCard-HeaderMain flex items-center gap-4">
-          <div
-            class="FeatureCard-Icon w-12 h-12 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center"
-          >
-            <TuffIcon colorful :icon="feature.icon" :size="32">
+        <div class="FeatureCard-HeaderMain flex items-center gap-4 min-w-0">
+          <div class="FeatureCard-Icon w-12 h-12 rounded-xl flex items-center justify-center">
+            <TuffIcon :colorful="shouldPreserveFeatureIconColor()" :icon="feature.icon" :size="28">
               <template #empty>
                 <i class="i-carbon-application" />
               </template>
             </TuffIcon>
           </div>
-          <div class="FeatureCard-HeaderInfo">
-            <div class="FeatureCard-TitleRow flex items-center gap-2">
+          <div class="FeatureCard-HeaderInfo min-w-0">
+            <div class="FeatureCard-TitleRow flex items-center gap-2 min-w-0">
               <h3
-                class="FeatureCard-Title text-lg font-semibold text-[var(--tx-text-color-primary)]"
+                class="FeatureCard-Title text-lg font-semibold text-[var(--tx-text-color-primary)] truncate"
               >
                 {{ feature.name }}
               </h3>
@@ -208,6 +219,7 @@ function handleClick(event: MouseEvent | KeyboardEvent): void {
 }
 
 .FeatureCard-PriorityBadge {
+  flex: 0 0 auto;
   font-weight: 600;
 }
 
@@ -215,8 +227,23 @@ function handleClick(event: MouseEvent | KeyboardEvent): void {
   margin-bottom: 1rem;
 }
 
+.FeatureCard-Icon {
+  flex: 0 0 3rem;
+  color: var(--tx-color-white);
+  background: linear-gradient(135deg, var(--tx-color-primary), var(--tx-color-primary-light-3));
+  --icon-color: currentColor;
+}
+
+.FeatureCard-HeaderInfo {
+  flex: 1;
+}
+
 .FeatureCard-TitleRow {
   line-height: 1.2;
+}
+
+.FeatureCard-Title {
+  min-width: 0;
 }
 
 .FeatureCard-InteractionBadge {
