@@ -10,3 +10,24 @@ run = "node scripts/ai-docs/verify-ai-docs.mjs"
 description = "Release AI docs validation"
 depends = ["ai-docs:dev"]
 run = "git diff --check -- mise.toml scripts/ai-docs docs/plan-prd/04-implementation docs/plan-prd/03-features docs/plan-prd/TODO.md docs/INDEX.md"
+
+[tasks."intelligence:dev"]
+description = "Fast deterministic intelligence validation"
+run = "node scripts/intelligence/verify-intelligence.mjs dev"
+
+[tasks."intelligence:changed"]
+description = "Changed-file intelligence validation with safe focused fallback"
+run = "node scripts/intelligence/verify-intelligence.mjs changed"
+
+[tasks."intelligence:release"]
+description = "Release-readiness intelligence validation"
+run = "node scripts/intelligence/verify-intelligence.mjs release"
+
+[tasks."intelligence:parity"]
+description = "Verify local intelligence gate matches GitHub workflow"
+run = "node scripts/intelligence/verify-intelligence.mjs parity"
+
+[tasks."intelligence:verify"]
+description = "Canonical intelligence verification gate"
+depends = ["intelligence:changed", "intelligence:release", "intelligence:parity"]
+run = "node scripts/intelligence/verify-intelligence.mjs verify"

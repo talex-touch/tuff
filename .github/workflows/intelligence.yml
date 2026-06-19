@@ -1,0 +1,49 @@
+name: Intelligence Gates
+
+on:
+  pull_request:
+    paths:
+      - mise.toml
+      - scripts/intelligence/**
+      - packages/tuff-intelligence/**
+      - apps/core-app/src/main/modules/ai/**
+      - apps/nexus/server/utils/**
+      - docs/plan-prd/TODO.md
+      - docs/plan-prd/01-project/CHANGES.md
+      - .github/workflows/intelligence.yml
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - mise.toml
+      - scripts/intelligence/**
+      - packages/tuff-intelligence/**
+      - apps/core-app/src/main/modules/ai/**
+      - apps/nexus/server/utils/**
+      - docs/plan-prd/TODO.md
+      - docs/plan-prd/01-project/CHANGES.md
+      - .github/workflows/intelligence.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intelligence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup mise
+        uses: jdx/mise-action@v3
+        with:
+          cache: true
+          install: true
+
+      - name: Verify intelligence gates
+        run: mise run intelligence:verify
