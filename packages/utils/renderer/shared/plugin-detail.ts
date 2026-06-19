@@ -33,6 +33,7 @@ export interface SharedPluginMetaItem {
   value: string
   icon?: string
   highlight?: 'upgrade' | 'installed' | 'info'
+  copyable?: boolean
 }
 
 export interface SharedPluginProvider {

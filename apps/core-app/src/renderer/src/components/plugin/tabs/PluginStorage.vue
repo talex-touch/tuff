@@ -3,6 +3,7 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { StorageStats } from '@talex-touch/utils/types/storage'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'
 import { TxStatCard } from '@talex-touch/tuffex/stat-card'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -32,6 +33,7 @@ const pluginStorageLog = createRendererLogger('PluginStorage')
 const loading = ref(false)
 const clearing = ref(false)
 const detailsVisible = ref(false)
+const detailsActionsOpen = ref(false)
 const detailsSource = ref<HTMLElement | null>(null)
 const storageStats = ref<StorageStats>({
   totalSize: 0,
@@ -457,74 +459,86 @@ watch(
     <FlipDialog
       v-model="detailsVisible"
       :reference="detailsSource"
-      :header-title="t('plugin.storage.details.title')"
-      :header-desc="
-        t('plugin.storage.details.description', {
-          files: storageStats.fileCount || 0,
-          directories: storageStats.dirCount || 0
-        })
-      "
+      height="min(760px, calc(100dvh - 96px))"
+      max-height="calc(100dvh - 96px)"
       size="lg"
+      card-class="PluginStorageDetails-Dialog"
+      :scrollable="false"
     >
+      <template #header-display>
+        <div class="PluginStorageDetails-HeaderDisplay">
+          <div class="PluginStorageDetails-TitleRow">
+            <i class="i-ri-folder-5-line text-xl text-[var(--tx-color-primary)]" />
+            <p class="PluginStorageDetails-Title">
+              {{ t('plugin.storage.details.title') }}
+            </p>
+            <span v-if="storagePath" class="PluginStorage-Path" :title="storagePathFull">
+              {{ storagePath }}
+            </span>
+          </div>
+          <p class="PluginStorageDetails-Desc">
+            {{
+              t('plugin.storage.details.description', {
+                files: storageStats.fileCount || 0,
+                directories: storageStats.dirCount || 0
+              })
+            }}
+          </p>
+        </div>
+      </template>
+
+      <template #header-actions>
+        <div class="PluginStorageDetails-Actions">
+          <TxButton
+            size="small"
+            type="primary"
+            plain
+            icon="i-ri-refresh-line"
+            :loading="loading"
+            @click="refreshData"
+          >
+            {{ t('plugin.storage.actions.refresh') }}
+          </TxButton>
+          <TxDropdownMenu
+            v-model="detailsActionsOpen"
+            placement="bottom-end"
+            :min-width="220"
+            :panel-radius="12"
+            :panel-padding="6"
+          >
+            <template #trigger>
+              <TxButton size="small" plain icon="i-ri-more-2-line" :disabled="loading">
+                {{ t('plugin.storage.actions.more') }}
+              </TxButton>
+            </template>
+
+            <TxDropdownItem :disabled="loading" @select="handleOpenInEditor">
+              <span class="PluginStorageDetails-MenuItem">
+                <i class="i-ri-edit-line" />
+                {{ t('plugin.storage.actions.openInEditor') }}
+              </span>
+            </TxDropdownItem>
+            <TxDropdownItem :disabled="loading" @select="handleOpenFolder">
+              <span class="PluginStorageDetails-MenuItem">
+                <i class="i-ri-folder-open-line" />
+                {{ t('plugin.storage.actions.openFolder') }}
+              </span>
+            </TxDropdownItem>
+            <TxDropdownItem danger :disabled="loading || clearing" @select="handleClearStorage">
+              <span class="PluginStorageDetails-MenuItem">
+                <i class="i-ri-delete-bin-2-line" />
+                {{ t('plugin.storage.actions.clearAll') }}
+              </span>
+            </TxDropdownItem>
+          </TxDropdownMenu>
+        </div>
+      </template>
+
       <template #default>
         <div class="PluginStorageDetails-Panel">
           <div class="PluginStorageDetails-Body">
             <div class="PluginStorage-Card flex-1 min-h-0 overflow-hidden flex flex-col">
-              <div class="PluginStorage-CardHeader flex items-center justify-between">
-                <div class="flex items-center gap-2 min-w-0">
-                  <i class="i-ri-folder-5-line text-xl text-[var(--tx-color-primary)]" />
-                  <h3 class="text-lg font-semibold text-[var(--tx-text-color-primary)]">
-                    {{ t('plugin.storage.title') }}
-                  </h3>
-                  <span v-if="storagePath" class="PluginStorage-Path" :title="storagePathFull">
-                    {{ storagePath }}
-                  </span>
-                </div>
-
-                <div class="flex items-center gap-2">
-                  <TxButton
-                    size="small"
-                    type="primary"
-                    plain
-                    icon="i-ri-refresh-line"
-                    :loading="loading"
-                    @click="refreshData"
-                  >
-                    {{ t('plugin.storage.actions.refresh') }}
-                  </TxButton>
-                  <TxButton
-                    size="small"
-                    plain
-                    icon="i-ri-edit-line"
-                    :disabled="loading"
-                    @click="handleOpenInEditor"
-                  >
-                    {{ t('plugin.storage.actions.openInEditor') }}
-                  </TxButton>
-                  <TxButton
-                    size="small"
-                    plain
-                    icon="i-ri-folder-open-line"
-                    :disabled="loading"
-                    @click="handleOpenFolder"
-                  >
-                    {{ t('plugin.storage.actions.openFolder') }}
-                  </TxButton>
-                  <TxButton
-                    size="small"
-                    type="danger"
-                    plain
-                    icon="i-ri-delete-bin-2-line"
-                    :loading="clearing"
-                    :disabled="loading"
-                    @click="handleClearStorage"
-                  >
-                    {{ t('plugin.storage.actions.clearAll') }}
-                  </TxButton>
-                </div>
-              </div>
-
-              <div class="PluginStorageDetails-TableWrap mt-4 flex-1 min-h-0">
+              <div class="PluginStorageDetails-TableWrap flex-1 min-h-0">
                 <div
                   v-if="loading"
                   class="h-full flex items-center justify-center text-sm text-[var(--tx-text-color-secondary)]"
@@ -559,7 +573,11 @@ watch(
                     <div>{{ t('plugin.storage.table.lastModified') }}</div>
                     <div class="text-right">{{ t('plugin.storage.table.actions') }}</div>
                   </div>
-                  <TxScroll no-padding class="flex-1" @scroll="emit('scroll', $event)">
+                  <TxScroll
+                    no-padding
+                    class="PluginStorageDetails-Scroll"
+                    @scroll="emit('scroll', $event)"
+                  >
                     <div class="divide-y divide-[var(--tx-border-color-lighter)]">
                       <div v-for="entry in entries" :key="entry.path" class="PluginStorage-Row">
                         <div class="flex items-center gap-3 min-w-0">
@@ -655,8 +673,85 @@ watch(
 
 <style lang="scss" scoped>
 .PluginStorage-Card {
-  border-radius: 16px;
-  padding: 24px;
+  border-radius: 12px;
+  padding: 0 16px 16px;
+}
+
+.PluginStorage-Footer {
+  flex: 0 0 auto;
+}
+
+.PluginStorageDetails-HeaderDisplay {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.PluginStorageDetails-TitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.PluginStorageDetails-Title {
+  margin: 0;
+  color: var(--tx-text-color-primary);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.PluginStorageDetails-Desc {
+  margin: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.PluginStorageDetails-Actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.PluginStorageDetails-MenuItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+
+  i {
+    flex: 0 0 auto;
+    font-size: 16px;
+  }
+}
+
+:global(.PluginStorageDetails-Dialog .TxFlipOverlay-Header) {
+  align-items: center;
+  padding: 12px 16px 8px;
+}
+
+:global(.PluginStorageDetails-Dialog .TxFlipOverlay-HeaderDisplay) {
+  min-width: 360px;
+}
+
+:global(.PluginStorageDetails-Dialog .TxFlipOverlay-HeaderActions) {
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  :global(.PluginStorageDetails-Dialog .TxFlipOverlay-Header) {
+    align-items: flex-start;
+  }
+
+  .PluginStorageDetails-Actions {
+    max-width: 520px;
+  }
 }
 
 .PluginStorage-Path {
@@ -735,20 +830,33 @@ watch(
 }
 
 .PluginStorageDetails-Body {
-  padding: 16px 20px 20px;
+  padding: 0 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .PluginStorageDetails-TableWrap {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--tx-border-color-lighter);
   border-radius: 12px;
-  min-height: 420px;
+  min-height: 0;
   overflow: hidden;
   background: var(--tx-bg-color-overlay);
+}
+
+.PluginStorageDetails-Scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.PluginStorageDetails-Scroll :deep(.tx-scroll__wrapper),
+.PluginStorageDetails-Scroll :deep(.tx-scroll__content) {
+  min-height: 0;
 }
 
 .animate-spin {

@@ -332,8 +332,10 @@ defineExpose({
 
 <template>
   <TxCard
-    class="PluginLogs-Wrapper w-full min-h-0 h-full flex flex-col flex-grow p-1! self-stretch"
+    class="PluginLogs-Wrapper w-full min-h-0 h-full flex flex-col flex-grow self-stretch"
     variant="solid"
+    :padding="0"
+    :radius="8"
   >
     <section class="plugin-logs-terminal">
       <div class="terminal-body">
@@ -521,21 +523,26 @@ defineExpose({
   display: flex;
   flex-direction: column;
   width: 100%;
+  height: 100%;
   flex: 1;
   min-height: 0;
+  max-height: 100%;
   align-self: stretch;
   background: #0b0d10;
   gap: 0;
   padding: 0;
   margin: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .PluginLogs-Wrapper :deep(.tx-card__body) {
   display: flex;
   flex-direction: column;
   flex: 1;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .plugin-logs-toolbar {
@@ -638,9 +645,10 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  padding: 0.35rem 0.6rem;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
   border-top: 1px solid rgba(148, 163, 184, 0.08);
   background: #0b0d10;
 }

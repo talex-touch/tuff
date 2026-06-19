@@ -55,7 +55,7 @@ function handleClick(): void {
 
 <style scoped lang="scss">
 .PluginFab {
-  --fab-size: 50px;
+  --fab-size: 45px;
   --fab-right: 20px;
   --fab-bottom: 20px;
   position: absolute;
@@ -70,19 +70,38 @@ function handleClick(): void {
   position: absolute;
   right: var(--fab-right);
   bottom: var(--fab-bottom);
-  width: var(--fab-size);
-  height: var(--fab-size);
+  inline-size: var(--fab-size);
+  block-size: var(--fab-size);
+  aspect-ratio: 1 / 1;
   pointer-events: auto;
 }
 
 .PluginFab-Button {
+  display: inline-flex;
+  width: var(--fab-size) !important;
+  height: var(--fab-size) !important;
+  inline-size: var(--fab-size);
+  block-size: var(--fab-size);
+  min-width: var(--fab-size) !important;
+  min-height: var(--fab-size) !important;
+  max-width: var(--fab-size);
+  max-height: var(--fab-size);
+  aspect-ratio: 1 / 1;
+  padding: 0 !important;
+
   :deep(.tx-button) {
     width: var(--fab-size) !important;
     height: var(--fab-size) !important;
+    inline-size: var(--fab-size) !important;
+    block-size: var(--fab-size) !important;
     min-width: var(--fab-size) !important;
+    min-height: var(--fab-size) !important;
+    min-inline-size: var(--fab-size) !important;
+    min-block-size: var(--fab-size) !important;
+    aspect-ratio: 1 / 1;
     padding: 0 !important;
-    --tx-button-radius: 16px;
-    border-radius: 16px !important;
+    --tx-button-radius: 12px;
+    border-radius: 12px !important;
     overflow: visible;
     color: #d39a2d;
     border-color: rgba(245, 158, 11, 0.32);
@@ -106,6 +125,9 @@ function handleClick(): void {
   :deep(.tx-button__inner) {
     width: 100%;
     height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     overflow: visible;
   }
 }
@@ -181,7 +203,7 @@ function handleClick(): void {
 .PluginFab-Symbol {
   position: relative;
   z-index: 1;
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 700;
   line-height: 1;
 }
