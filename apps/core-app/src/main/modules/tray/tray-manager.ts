@@ -18,11 +18,6 @@ import {
 import { useAliveTarget } from '../../hooks/use-electron-guard'
 import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
-import {
-  formatDuration,
-  getSessionDisplayDurationMs,
-  quickOpsRuntime
-} from '../quick-ops/quick-ops-runtime-host'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
@@ -50,7 +45,6 @@ export class TrayManager extends BaseModule {
   private appDisposers: Array<() => void> = []
   private windowDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
-  private quickOpsDisposer: (() => void) | null = null
   private touchApp: TrayTouchAppRuntime | null = null
   private suppressNextMacActivateShow = false
 
@@ -79,7 +73,6 @@ export class TrayManager extends BaseModule {
 
     this.registerWindowEvents()
     this.registerEventListeners()
-    this.registerQuickOpsSessionListener()
 
     if (this.shouldShowTray()) {
       this.initializeTray()
@@ -416,26 +409,6 @@ export class TrayManager extends BaseModule {
     })
   }
 
-  private registerQuickOpsSessionListener(): void {
-    this.quickOpsDisposer = quickOpsRuntime.subscribeSessions((sessions) => {
-      this.updateMenu({
-        quickOpsSessions: sessions.map((session) => {
-          const durationMs = getSessionDisplayDurationMs(session)
-          const detail =
-            session.kind === 'stopwatch'
-              ? t('tray.quickOpsElapsed', { duration: formatDuration(durationMs) })
-              : t('tray.quickOpsRemaining', { duration: formatDuration(durationMs) })
-
-          return {
-            id: session.id,
-            title: `${session.title}${session.pausedAt ? t('tray.quickOpsPaused') : t('tray.quickOpsActive')}`,
-            detail
-          }
-        })
-      })
-    })
-  }
-
   private getHideDockConfig(): boolean {
     try {
       const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
@@ -565,11 +538,6 @@ export class TrayManager extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
-    if (this.quickOpsDisposer) {
-      this.quickOpsDisposer()
-      this.quickOpsDisposer = null
-    }
-
     for (const dispose of this.eventDisposers) {
       try {
         dispose()

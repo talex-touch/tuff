@@ -5,6 +5,25 @@
 
 ## 2026-06-19
 
+### ref(core-app): remove QuickOps tray surface
+
+- `apps/core-app/src/main/modules/tray/tray-state-manager.ts`
+- `apps/core-app/src/main/modules/tray/tray-menu-builder.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Removed the CoreApp tray QuickOps status/menu surface: Tray state no longer stores QuickOps sessions, TrayManager no longer subscribes to `quickOpsRuntime`, and TrayMenuBuilder no longer exposes idle/running/stop-all QuickOps menu items.
+  - Removed the now-unused tray QuickOps i18n keys from the renderer language bundles.
+  - Kept `QuickOpsRuntimeHost`, `QuickOpsSessionManager`, `QuickOpsModule`, typed transport, Flow targets, confirmation, policy, and evidence gates in CoreApp as the runtime host boundary.
+  - Updated TODO, PRD, and Nexus QuickOps user/developer docs to state that running-session status and low-risk stop/pause/resume controls are owned by the official `plugins/touch-quickops` CoreBox root-results surface, while CoreApp tray no longer owns a QuickOps UI entry.
+
 ### ref(core-app): move QuickOps runtime host out of CoreBox addon
 
 - `apps/core-app/src/main/modules/quick-ops/quick-ops-runtime-host.ts`
@@ -98,7 +117,7 @@
   - The plugin now owns the first read-only Ops root-result entries and rendering path for capability, sessions, auditRecent, system info, Tuff diagnostics, disk space, directory usage / deep directory usage, network status, local IP, battery status, and system proxy through the existing `globalThis.quickOps` transition facade.
   - It does not generate mutation actions, execute stateful operations, expose high-risk operations, bypass Flow confirmation, or fallback to private IPC.
   - Tightened the manifest trigger commands from a broad catch-all entry to explicit QuickOps / system / network / disk / diagnostics commands so the migration plugin does not pollute ordinary CoreBox search results.
-  - Updated the QuickOps PRD, TODO, and Nexus user/developer docs to state the extraction target shape: QuickOps business runtime, CoreBox entry, session surface, settings/tray entry points, and extensible orchestration move into the official plugin or plugin-owned runtime boundary, while CoreApp only keeps required host capabilities, Flow confirmation, policy/evidence gates, and migration typed bridges.
+  - Updated the QuickOps PRD, TODO, and Nexus user/developer docs to state the extraction target shape: QuickOps business runtime, CoreBox entry, session surface, settings entry points, and extensible orchestration move into the official plugin or plugin-owned runtime boundary, while CoreApp only keeps required host capabilities, Flow confirmation, policy/evidence gates, and migration typed bridges.
   - Split the remaining QuickOps closure work into separate P0 TODO rows for packaged quit evidence, visual screen evidence, three-platform artifacts, real confirmation UI, high-risk governance, enterprise policy/audit/org locking, and AI UI orchestration.
   - This is still a migration boundary slice; CoreApp owns the stateful provider/session/module runtime during the transition, but the first read-only entry surface is now outside CoreApp in the official plugin. The remaining target is to extract the business runtime into the official plugin or plugin-owned runtime boundary without weakening confirmation, redaction, policy, or evidence gates.
 

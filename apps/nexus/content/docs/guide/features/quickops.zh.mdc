@@ -9,7 +9,7 @@
 3. 选择结果执行、复制结果，或进入 Action Panel 查看可用动作。
 4. 在设置页的 Tools / QuickOps 区域调整默认时长和本地策略开关。
 
-当前 QuickOps 不需要用户额外安装插件；官方 `touch-quickops` 已承接 CoreBox root-result 入口、只读面板和低风险状态控制触发：能力摘要、运行会话、审计摘要、系统信息、脱敏诊断、磁盘空间、目录占用、网络状态、本机 IP、端口状态、DNS 查询、文件 Hash、文件 Base64、最近下载、常用目录、路径格式、文本格式化、电池状态、系统代理，以及 stop/pause/resume/lap/reset 这类当前会话控制。现有状态型 runtime、Flow target、confirmation、settings/tray 和 platform host capability 仍在 CoreApp 本地能力里，并以 `quickOpsRuntime` host boundary 保留。后续会把更多 QuickOps 业务 runtime、状态/诊断面板、settings/tray 入口和可扩展编排迁到官方插件或插件专属 runtime boundary。普通插件和 Flow 仍只能通过受控 SDK / Flow target 读取或触发已开放能力。
+当前 QuickOps 不需要用户额外安装插件；官方 `touch-quickops` 已承接 CoreBox root-result 入口、只读面板和低风险状态控制触发：能力摘要、运行会话、审计摘要、系统信息、脱敏诊断、磁盘空间、目录占用、网络状态、本机 IP、端口状态、DNS 查询、文件 Hash、文件 Base64、最近下载、常用目录、路径格式、文本格式化、电池状态、系统代理，以及 stop/pause/resume/lap/reset 这类当前会话控制。现有状态型 runtime、Flow target、confirmation、settings 和 platform host capability 仍在 CoreApp 本地能力里，并以 `quickOpsRuntime` host boundary 保留。后续会把更多 QuickOps 业务 runtime、状态/诊断面板、settings 入口和可扩展编排迁到官方插件或插件专属 runtime boundary。普通插件和 Flow 仍只能通过受控 SDK / Flow target 读取或触发已开放能力。
 
 ## 常用命令
 
@@ -49,7 +49,7 @@ QuickOps 的设置集中在 Tools / QuickOps 区域：
 | 设置 | 默认 | 说明 |
 | --- | --- | --- |
 | QuickOps 总开关 | 开启 | 关闭后普通工具命令不可用，但能力摘要仍可查询 |
-| 运行中状态展示 | 开启 | 在 CoreBox / 托盘展示运行中的计时、番茄钟、清洁屏幕等会话 |
+| 运行中状态展示 | 开启 | 在 CoreBox / 官方插件状态面展示运行中的计时、番茄钟、清洁屏幕等会话 |
 | 有状态工具 | 开启 | 控制保持唤醒、计时器、番茄钟、秒表、清洁屏幕、临时写入等 |
 | 网络工具 | 开启 | 控制本机 IP、端口、DNS、代理、公网 IP 查询 |
 | 文件工具 | 开启 | 控制 Hash、Base64、路径、常用目录、最近下载、临时文件/目录 |
