@@ -123,7 +123,7 @@ const settings = ref({
 const appIndexSettings = ref<AppIndexSettings | null>(null)
 const traySettingsAvailable = ref(false)
 const fileAccessRoots = ref<FileAccessRootCheckResult[]>([])
-const fileAccessDialogVisible = ref(false)
+const permissionDialogVisible = ref(false)
 
 const isLoading = ref(false)
 let permissionRequestRevision = 0
@@ -624,6 +624,46 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
   }
   return root.status
 }
+
+const permissionSummary = computed(() => {
+  const items = [
+    permissions.value.fileAccess,
+    ...(isMacOS.value ? [permissions.value.accessibility, permissions.value.notifications] : []),
+    ...(isMacOS.value || isWindows.value ? [permissions.value.microphone] : []),
+    ...(isWindows.value ? [permissions.value.adminPrivileges] : [])
+  ]
+  const granted = items.filter((item) => item.status === 'granted').length
+  return {
+    granted,
+    total: items.length,
+    hasMissing: granted < items.length
+  }
+})
+
+const permissionSummaryStatus = computed<SystemPermissionStatus>(() => {
+  if (!permissionSummary.value.hasMissing && permissionSummary.value.total > 0) {
+    return 'granted'
+  }
+  if (
+    [
+      permissions.value.fileAccess,
+      permissions.value.accessibility,
+      permissions.value.notifications,
+      permissions.value.microphone,
+      permissions.value.adminPrivileges
+    ].some((item) => item.status === 'denied')
+  ) {
+    return 'denied'
+  }
+  return 'notDetermined'
+})
+
+const permissionSummaryText = computed(() =>
+  t('setupPermissions.permissionSummary', {
+    granted: permissionSummary.value.granted,
+    total: permissionSummary.value.total
+  })
+)
 </script>
 
 <template>
@@ -636,155 +676,27 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
   >
     <!-- Permissions Section -->
     <TuffBlockSlot
-      :title="t('setupPermissions.fileAccess')"
-      :description="t('setupPermissions.fileAccessDesc')"
-      :active="permissions.fileAccess.status === 'granted'"
-      default-icon="i-carbon-folder-open"
-      active-icon="i-carbon-folder-open"
-    >
-      <div class="PermissionActions">
-        <TuffStatusBadge
-          size="md"
-          :status-key="permissions.fileAccess.status"
-          :icon="getStatusIconClass(permissions.fileAccess.status)"
-          :text="getStatusText(permissions.fileAccess.status)"
-        />
-        <TxButton
-          variant="flat"
-          type="primary"
-          size="sm"
-          @click.stop="fileAccessDialogVisible = true"
-        >
-          <span class="i-carbon-folder-details" aria-hidden="true" />
-          {{ t('setupPermissions.manageFileAccess') }}
-        </TxButton>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="isMacOS"
-      :title="t('settings.setup.accessibility')"
-      :description="t('settings.setup.accessibilityDesc')"
-      :active="permissions.accessibility.status === 'granted'"
-      :disabled="
-        permissions.accessibility.status === 'unsupported' && !permissions.accessibility.canRequest
-      "
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
-    >
-      <template #tags>
-        <TuffMacOSTag />
-      </template>
-      <div class="PermissionActions">
-        <TuffStatusBadge
-          size="md"
-          :status-key="permissions.accessibility.status"
-          :icon="getStatusIconClass(permissions.accessibility.status)"
-          :text="getStatusText(permissions.accessibility.status)"
-        />
-        <TxButton
-          v-if="
-            permissions.accessibility.status !== 'granted' && permissions.accessibility.canRequest
-          "
-          variant="flat"
-          type="primary"
-          size="sm"
-          @click.stop="requestPermission('accessibility')"
-        >
-          {{ t('setupPermissions.openSettings') }}
-        </TxButton>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="isWindows"
-      :title="t('settings.setup.adminPrivileges')"
-      :description="t('settings.setup.adminPrivilegesDesc')"
-      :active="permissions.adminPrivileges.status === 'granted'"
+      :title="t('setupPermissions.permissionsTitle')"
+      :description="t('setupPermissions.permissionCenterDesc')"
+      :active="!permissionSummary.hasMissing"
       default-icon="i-carbon-security"
       active-icon="i-carbon-security"
     >
-      <template #tags>
-        <TuffWindowsTag />
-      </template>
       <div class="PermissionActions">
         <TuffStatusBadge
           size="md"
-          :status-key="permissions.adminPrivileges.status"
-          :icon="getStatusIconClass(permissions.adminPrivileges.status)"
-          :text="getStatusText(permissions.adminPrivileges.status)"
+          :status-key="permissionSummaryStatus"
+          :icon="getStatusIconClass(permissionSummaryStatus)"
+          :text="permissionSummaryText"
         />
         <TxButton
           variant="flat"
           type="primary"
           size="sm"
-          :class="{ 'is-loading': isLoading }"
-          @click.stop="checkAllPermissions"
+          @click.stop="permissionDialogVisible = true"
         >
-          <span v-if="isLoading" class="i-carbon-renew animate-spin" />
-          {{ t('setupPermissions.recheck') }}
-        </TxButton>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="isMacOS || isWindows"
-      :title="t('setupPermissions.microphone')"
-      :description="t('setupPermissions.microphoneDesc')"
-      :active="permissions.microphone.status === 'granted'"
-      :disabled="
-        permissions.microphone.status === 'unsupported' && !permissions.microphone.canRequest
-      "
-      default-icon="i-carbon-microphone"
-      active-icon="i-carbon-microphone-filled"
-    >
-      <div class="PermissionActions">
-        <TuffStatusBadge
-          size="md"
-          :status-key="permissions.microphone.status"
-          :icon="getStatusIconClass(permissions.microphone.status)"
-          :text="getStatusText(permissions.microphone.status)"
-        />
-        <TxButton
-          v-if="permissions.microphone.status !== 'granted' && permissions.microphone.canRequest"
-          variant="flat"
-          type="primary"
-          size="sm"
-          @click.stop="requestPermission('microphone')"
-        >
-          {{ t('setupPermissions.openSettings') }}
-        </TxButton>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="isMacOS"
-      :title="t('settings.setup.notifications')"
-      :description="t('settings.setup.notificationsDesc')"
-      :active="permissions.notifications.status === 'granted'"
-      :disabled="
-        permissions.notifications.status === 'unsupported' && !permissions.notifications.canRequest
-      "
-      default-icon="i-carbon-notification"
-      active-icon="i-carbon-notification"
-    >
-      <div class="PermissionActions">
-        <TuffStatusBadge
-          size="md"
-          :status-key="permissions.notifications.status"
-          :icon="getStatusIconClass(permissions.notifications.status)"
-          :text="getStatusText(permissions.notifications.status)"
-        />
-        <TxButton
-          v-if="
-            permissions.notifications.status !== 'granted' && permissions.notifications.canRequest
-          "
-          variant="flat"
-          type="primary"
-          size="sm"
-          @click.stop="isMacOS ? testNotificationPermission() : requestPermission('notifications')"
-        >
-          {{ t(isMacOS ? 'setupPermissions.testNotification' : 'setupPermissions.openSettings') }}
+          <span class="i-carbon-settings-adjust" aria-hidden="true" />
+          {{ t('setupPermissions.managePermissions') }}
         </TxButton>
       </div>
     </TuffBlockSlot>
@@ -852,20 +764,6 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
     />
 
     <TuffBlockSwitch
-      v-if="isWindows"
-      v-model="settings.runAsAdmin"
-      :title="t('settings.setup.runAsAdmin')"
-      :description="t('settings.setup.runAsAdminDesc')"
-      default-icon="i-carbon-user-avatar"
-      active-icon="i-carbon-user-avatar-filled"
-      @update:model-value="updateRunAsAdmin"
-    >
-      <template #tags>
-        <TuffWindowsTag />
-      </template>
-    </TuffBlockSwitch>
-
-    <TuffBlockSwitch
       v-if="isLinux"
       v-model="settings.customDesktop"
       :title="t('settings.setup.customDesktop')"
@@ -882,30 +780,15 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
   </TuffGroupBlock>
 
   <TModal
-    v-model="fileAccessDialogVisible"
-    :title="t('setupPermissions.fileAccessDialogTitle')"
-    width="720px"
+    v-model="permissionDialogVisible"
+    :title="t('setupPermissions.permissionDialogTitle')"
+    width="820px"
   >
-    <div class="FileAccessDialog">
-      <p class="FileAccessDialog-Desc">
-        {{ t('setupPermissions.fileAccessDialogDesc') }}
-      </p>
-      <div class="FileAccessDialog-Actions">
-        <TuffStatusBadge
-          size="md"
-          :status-key="permissions.fileAccess.status"
-          :icon="getStatusIconClass(permissions.fileAccess.status)"
-          :text="getStatusText(permissions.fileAccess.status)"
-        />
-        <TxButton
-          v-if="permissions.fileAccess.status !== 'granted'"
-          variant="flat"
-          type="primary"
-          size="sm"
-          @click="requestFileAccessRoots"
-        >
-          {{ t('setupPermissions.requestFileAccess') }}
-        </TxButton>
+    <div class="PermissionDialog">
+      <div class="PermissionDialog-Header">
+        <p class="PermissionDialog-Desc">
+          {{ t('setupPermissions.permissionDialogDesc') }}
+        </p>
         <TxButton
           variant="flat"
           size="sm"
@@ -916,32 +799,212 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
           {{ t('setupPermissions.recheck') }}
         </TxButton>
       </div>
-      <ul v-if="fileAccessRoots.length" class="FileAccessRootList">
-        <li v-for="root in fileAccessRoots" :key="root.path" class="FileAccessRootItem">
-          <span class="FileAccessRootStatus" :data-status="getFileAccessRootDisplayStatus(root)" />
-          <span class="FileAccessRootMeta">
-            <strong>{{ t(`setupPermissions.fileAccessRoots.${root.id}`) }}</strong>
-            <small>{{ getFileAccessPurposeText(root.purpose) }} · {{ root.path }}</small>
-          </span>
-          <span class="FileAccessRootBadges">
+
+      <div class="PermissionDialog-Groups">
+        <TuffGroupBlock
+          :name="t('setupPermissions.permissionsTitle')"
+          :description="permissionSummaryText"
+          default-icon="i-carbon-security"
+          active-icon="i-carbon-security"
+          :collapsible="false"
+        >
+          <TuffBlockSlot
+            :title="t('setupPermissions.fileAccess')"
+            :description="t('setupPermissions.fileAccessDesc')"
+            :active="permissions.fileAccess.status === 'granted'"
+            default-icon="i-carbon-folder-open"
+            active-icon="i-carbon-folder-open"
+          >
+            <template #tags>
+              <span class="RequiredBadge">
+                {{ t('setupPermissions.required') }}
+              </span>
+            </template>
             <TuffStatusBadge
-              size="sm"
-              :status-key="getFileAccessRootDisplayStatus(root)"
-              :icon="getStatusIconClass(getFileAccessRootDisplayStatus(root))"
-              :text="getStatusText(getFileAccessRootDisplayStatus(root))"
+              size="md"
+              :status-key="permissions.fileAccess.status"
+              :icon="getStatusIconClass(permissions.fileAccess.status)"
+              :text="getStatusText(permissions.fileAccess.status)"
             />
-            <span v-if="root.required" class="RequiredBadge">
-              {{ t('setupPermissions.required') }}
-            </span>
-          </span>
-        </li>
-      </ul>
-      <p v-else class="FileAccessDialog-Empty">
-        {{ t('setupPermissions.fileAccessNoRoots') }}
-      </p>
+            <TxButton
+              v-if="permissions.fileAccess.status !== 'granted'"
+              variant="flat"
+              type="primary"
+              size="sm"
+              @click="requestFileAccessRoots"
+            >
+              {{ t('setupPermissions.requestFileAccess') }}
+            </TxButton>
+          </TuffBlockSlot>
+
+          <template v-if="fileAccessRoots.length">
+            <TuffBlockSlot
+              v-for="root in fileAccessRoots"
+              :key="root.path"
+              class="PermissionRootSlot"
+              :title="t(`setupPermissions.fileAccessRoots.${root.id}`)"
+              :description="`${getFileAccessPurposeText(root.purpose)} · ${root.path}`"
+              :active="getFileAccessRootDisplayStatus(root) === 'granted'"
+              default-icon="i-carbon-dot-mark"
+              active-icon="i-carbon-dot-mark"
+              :icon-size="16"
+            >
+              <TuffStatusBadge
+                size="sm"
+                :status-key="getFileAccessRootDisplayStatus(root)"
+                :icon="getStatusIconClass(getFileAccessRootDisplayStatus(root))"
+                :text="getStatusText(getFileAccessRootDisplayStatus(root))"
+              />
+              <span v-if="root.required" class="RequiredBadge">
+                {{ t('setupPermissions.required') }}
+              </span>
+            </TuffBlockSlot>
+          </template>
+
+          <TuffBlockSlot
+            v-else
+            class="PermissionRootSlot"
+            :title="t('setupPermissions.fileAccessNoRoots')"
+            description=""
+            default-icon="i-carbon-information"
+            active-icon="i-carbon-information"
+            :icon-size="16"
+          />
+
+          <TuffBlockSlot
+            v-if="isMacOS"
+            :title="t('settings.setup.accessibility')"
+            :description="t('settings.setup.accessibilityDesc')"
+            :active="permissions.accessibility.status === 'granted'"
+            :disabled="
+              permissions.accessibility.status === 'unsupported' &&
+              !permissions.accessibility.canRequest
+            "
+            default-icon="i-carbon-screen"
+            active-icon="i-carbon-screen"
+          >
+            <template #tags>
+              <TuffMacOSTag />
+            </template>
+            <TuffStatusBadge
+              size="md"
+              :status-key="permissions.accessibility.status"
+              :icon="getStatusIconClass(permissions.accessibility.status)"
+              :text="getStatusText(permissions.accessibility.status)"
+            />
+            <TxButton
+              v-if="
+                permissions.accessibility.status !== 'granted' &&
+                permissions.accessibility.canRequest
+              "
+              variant="flat"
+              type="primary"
+              size="sm"
+              @click="requestPermission('accessibility')"
+            >
+              {{ t('setupPermissions.openSettings') }}
+            </TxButton>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            v-if="isMacOS || isWindows"
+            :title="t('setupPermissions.microphone')"
+            :description="t('setupPermissions.microphoneDesc')"
+            :active="permissions.microphone.status === 'granted'"
+            :disabled="
+              permissions.microphone.status === 'unsupported' && !permissions.microphone.canRequest
+            "
+            default-icon="i-carbon-microphone"
+            active-icon="i-carbon-microphone-filled"
+          >
+            <TuffStatusBadge
+              size="md"
+              :status-key="permissions.microphone.status"
+              :icon="getStatusIconClass(permissions.microphone.status)"
+              :text="getStatusText(permissions.microphone.status)"
+            />
+            <TxButton
+              v-if="
+                permissions.microphone.status !== 'granted' && permissions.microphone.canRequest
+              "
+              variant="flat"
+              type="primary"
+              size="sm"
+              @click="requestPermission('microphone')"
+            >
+              {{ t('setupPermissions.openSettings') }}
+            </TxButton>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            v-if="isMacOS"
+            :title="t('settings.setup.notifications')"
+            :description="t('settings.setup.notificationsDesc')"
+            :active="permissions.notifications.status === 'granted'"
+            :disabled="
+              permissions.notifications.status === 'unsupported' &&
+              !permissions.notifications.canRequest
+            "
+            default-icon="i-carbon-notification"
+            active-icon="i-carbon-notification"
+          >
+            <TuffStatusBadge
+              size="md"
+              :status-key="permissions.notifications.status"
+              :icon="getStatusIconClass(permissions.notifications.status)"
+              :text="getStatusText(permissions.notifications.status)"
+            />
+            <TxButton
+              v-if="
+                permissions.notifications.status !== 'granted' &&
+                permissions.notifications.canRequest
+              "
+              variant="flat"
+              type="primary"
+              size="sm"
+              @click="testNotificationPermission"
+            >
+              {{ t('setupPermissions.testNotification') }}
+            </TxButton>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            v-if="isWindows"
+            :title="t('settings.setup.adminPrivileges')"
+            :description="t('settings.setup.adminPrivilegesDesc')"
+            :active="permissions.adminPrivileges.status === 'granted'"
+            default-icon="i-carbon-security"
+            active-icon="i-carbon-security"
+          >
+            <template #tags>
+              <TuffWindowsTag />
+            </template>
+            <TuffStatusBadge
+              size="md"
+              :status-key="permissions.adminPrivileges.status"
+              :icon="getStatusIconClass(permissions.adminPrivileges.status)"
+              :text="getStatusText(permissions.adminPrivileges.status)"
+            />
+          </TuffBlockSlot>
+
+          <TuffBlockSwitch
+            v-if="isWindows"
+            v-model="settings.runAsAdmin"
+            :title="t('settings.setup.runAsAdmin')"
+            :description="t('settings.setup.runAsAdminDesc')"
+            default-icon="i-carbon-user-avatar"
+            active-icon="i-carbon-user-avatar-filled"
+            @update:model-value="updateRunAsAdmin"
+          >
+            <template #tags>
+              <TuffWindowsTag />
+            </template>
+          </TuffBlockSwitch>
+        </TuffGroupBlock>
+      </div>
     </div>
     <template #footer>
-      <TxButton variant="flat" @click="fileAccessDialogVisible = false">
+      <TxButton variant="flat" @click="permissionDialogVisible = false">
         {{ t('common.close') }}
       </TxButton>
     </template>
@@ -977,100 +1040,48 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
   font-weight: 600;
 }
 
-.FileAccessDialog {
+.PermissionDialog {
   display: grid;
   gap: 0.9rem;
 }
 
-.FileAccessDialog-Desc {
+.PermissionDialog-Header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.PermissionDialog-Desc {
+  flex: 1;
   margin: 0;
   color: var(--tx-text-color-secondary);
   font-size: 0.86rem;
   line-height: 1.5;
 }
 
-.FileAccessDialog-Actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.FileAccessDialog-Empty {
-  margin: 0;
-  color: var(--tx-text-color-secondary);
-  font-size: 0.84rem;
-}
-
-.FileAccessRootList {
+.PermissionDialog-Groups {
   display: grid;
-  gap: 0.45rem;
-  width: 100%;
-  max-height: min(420px, 55vh);
-  margin: 0;
-  padding: 0;
+  gap: 0.7rem;
+  max-height: min(620px, 66vh);
   overflow: auto;
-  list-style: none;
+  padding-right: 0.2rem;
 }
 
-.FileAccessRootItem {
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--tx-background-color) 82%, transparent);
-}
-
-.FileAccessRootBadges {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.FileAccessRootStatus {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--tx-text-color-placeholder);
-
-  &[data-status='granted'] {
-    background: var(--tx-color-success);
-  }
-
-  &[data-status='denied'] {
-    background: var(--tx-color-danger);
-  }
-
-  &[data-status='notDetermined'] {
-    background: var(--tx-color-warning);
-  }
-}
-
-.FileAccessRootMeta {
-  min-width: 0;
-
-  strong,
-  small {
-    display: block;
-  }
-
-  strong {
-    color: var(--tx-text-color-primary);
-    font-size: 0.84rem;
-    line-height: 1.35;
-  }
-
-  small {
-    color: var(--tx-text-color-secondary);
-    font-size: 0.76rem;
-    line-height: 1.35;
+.PermissionRootSlot {
+  :deep(.TBlockSlot-Label p) {
     overflow-wrap: anywhere;
+  }
+
+  :deep(.TBlockSlot-Container) {
+    min-height: 52px;
+    height: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .PermissionDialog-Header {
+    display: grid;
   }
 }
 </style>
