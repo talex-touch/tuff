@@ -7,9 +7,9 @@
 1. Open CoreBox.
 2. Type a command such as `timer 25m`, `local ip`, or `hash "/path/to/file"`.
 3. Select the result, copy the output, or open the Action Panel for available actions.
-4. Use Settings → Tools / QuickOps to adjust defaults and local policy switches.
+4. Type `quickops settings` to view the official plugin-owned settings summary, defaults, and local policy state.
 
-QuickOps does not currently require users to install an extra plugin. The official `touch-quickops` plugin now owns the CoreBox root-result entry, read-only panel, and low-risk session-control triggers: capabilities, running sessions, audit summaries, system info, redacted diagnostics, disk space, directory usage, network status, local IP, port status, DNS query, file hash, file Base64, recent download, common directory, path format, format text, battery status, system proxy, plus stop/pause/resume/lap/reset controls for existing sessions. The plugin also accepts Files input: after selecting files, type `file hash`, `file base64`, or `path format` to route the first selected file into the plugin read-only panel. File search results themselves now keep only generic open, reveal, and path-copy actions; CoreApp file search no longer owns QuickOps Hash/Base64 execute actions. High-risk inputs such as `kill port` are shown as blocked and do not produce execution actions; use `port 3000` for read-only status and copy-only release commands. The stateful runtime, Flow targets, confirmation, settings entry points, and platform host capabilities still live in CoreApp local capabilities behind the `quickOpsRuntime` host boundary. Later work should move more QuickOps business runtime, status/diagnostics panels, settings entry points, and extensible orchestration into the official plugin or a plugin-owned runtime boundary. Normal plugins and Flow can still only read or trigger capabilities exposed through controlled SDKs and Flow targets.
+QuickOps does not currently require users to install an extra plugin. The official `touch-quickops` plugin now owns the CoreBox root-result entry, read-only panel, settings summary entry, and low-risk session-control triggers: capabilities, running sessions, audit summaries, system info, redacted diagnostics, disk space, directory usage, network status, local IP, port status, DNS query, file hash, file Base64, recent download, common directory, path format, format text, battery status, system proxy, `quickops settings`, plus stop/pause/resume/lap/reset controls for existing sessions. The plugin also accepts Files input: after selecting files, type `file hash`, `file base64`, or `path format` to route the first selected file into the plugin read-only panel. File search results themselves now keep only generic open, reveal, and path-copy actions; CoreApp file search no longer owns QuickOps Hash/Base64 execute actions. High-risk inputs such as `kill port` are shown as blocked and do not produce execution actions; use `port 3000` for read-only status and copy-only release commands. The stateful runtime, Flow targets, confirmation, AppSetting schema / settings read path, and platform host capabilities still live in CoreApp local capabilities behind the `quickOpsRuntime` host boundary; CoreApp Tools settings no longer owns QuickOps controls. Later work should move writable settings host capabilities, more QuickOps business runtime, status/diagnostics panels, and extensible orchestration into the official plugin or a plugin-owned runtime boundary. Normal plugins and Flow can still only read or trigger capabilities exposed through controlled SDKs and Flow targets.
 
 ## Common Commands
 
@@ -44,7 +44,7 @@ For fixed team workflows, complex batch work, or external systems, build a plugi
 
 ## Settings And Policies
 
-QuickOps settings live under Tools / QuickOps:
+The QuickOps settings surface has moved to the official `touch-quickops` plugin. Type `quickops settings` in CoreBox to view the current policy summary, default durations, and migration boundary. This entry is read-only today and does not mutate CoreApp host policy directly; writable settings require a future official-plugin allowlisted host capability.
 
 | Setting | Default | Description |
 | --- | --- | --- |
@@ -58,7 +58,7 @@ QuickOps settings live under Tools / QuickOps:
 | High-risk tools | Off | Only a high-risk gate today; real port kill still remains copy-only |
 | Public IP lookup | Off | Allows a read-only external public IP lookup only after explicit opt-in |
 
-When a policy is disabled, CoreBox returns a clear disabled reason such as `network-tools-disabled-by-policy`. Flow targets for the same category fail closed.
+When a policy is disabled, CoreBox returns a clear disabled reason such as `network-tools-disabled-by-policy`. Flow targets for the same category fail closed. During migration, CoreApp host runtime still reads existing settings so current user policy is not broken.
 
 ## Safety Boundaries
 
