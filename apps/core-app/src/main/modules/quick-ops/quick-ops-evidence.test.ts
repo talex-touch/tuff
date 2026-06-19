@@ -310,8 +310,8 @@ describe('QuickOps evidence contract', () => {
       ai: {
         hasNaturalLanguageAdapter: true,
         adapterSignals: [
-          'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts:resolver',
-          'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts:contract'
+          'plugins/touch-quickops/index.js:flow-dispatch-adapter',
+          'plugins/touch-quickops/index.test.cjs:contract'
         ],
         linksRequestTargetConfirmationResult: true,
         blocksHighRiskWithoutConfirmation: true,
@@ -980,8 +980,8 @@ describe('QuickOps evidence contract', () => {
             ai: {
               hasNaturalLanguageAdapter: true,
               adapterSignals: [
-                'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts:resolver',
-                'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts:contract'
+                'plugins/touch-quickops/index.js:flow-dispatch-adapter',
+                'plugins/touch-quickops/index.test.cjs:contract'
               ],
               linksRequestTargetConfirmationResult: true,
               blocksHighRiskWithoutConfirmation: true,

@@ -215,26 +215,20 @@ function sourceIncludes(
 function detectAiAdapterSignals(aiSources: Array<{ path: string; source: string }>): string[] {
   const signals: string[] = []
   if (
-    sourceIncludes(
-      aiSources,
-      'quick-ops-natural-language-adapter.ts',
-      'resolveQuickOpsNaturalLanguageRequest'
-    )
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'resolveSafeFlowAction') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'buildFlowActionItem') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'flow.dispatch')
   ) {
-    signals.push(
-      'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts:resolver'
-    )
+    signals.push('plugins/touch-quickops/index.js:flow-dispatch-adapter')
   }
   if (
     sourceIncludes(
       aiSources,
-      'quick-ops-natural-language-adapter.test.ts',
-      'QuickOps natural-language adapter contract'
+      'plugins/touch-quickops/index.test.cjs',
+      'buildFlowAdapterTrace redacts request and payload values'
     )
   ) {
-    signals.push(
-      'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts:contract'
-    )
+    signals.push('plugins/touch-quickops/index.test.cjs:contract')
   }
   return signals
 }
@@ -243,22 +237,19 @@ function hasNaturalLanguageAdapterContract(
   aiSources: Array<{ path: string; source: string }>
 ): boolean {
   return (
-    hasSource(aiSources, 'quick-ops-natural-language-adapter.ts') &&
+    hasSource(aiSources, 'plugins/touch-quickops/index.js') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'resolveSafeFlowAction') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'resolveConfirmationFlowAction') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'resolveHighRiskFlowAction') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'buildFlowActionItem') &&
     sourceIncludes(
       aiSources,
-      'quick-ops-natural-language-adapter.ts',
-      'resolveQuickOpsNaturalLanguageRequest'
+      'plugins/touch-quickops/index.js',
+      'buildConfirmationRequiredItems'
     ) &&
-    sourceIncludes(
-      aiSources,
-      'quick-ops-natural-language-adapter.ts',
-      'preferredTarget: targetId'
-    ) &&
-    sourceIncludes(
-      aiSources,
-      'quick-ops-natural-language-adapter.ts',
-      'runtimeDispatchBridge: false'
-    )
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'buildHighRiskBlockedItems') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'buildFlowAdapterTrace') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'runtimeDispatchBridge: false')
   )
 }
 
@@ -266,16 +257,12 @@ function linksRequestTargetConfirmationResult(
   aiSources: Array<{ path: string; source: string }>
 ): boolean {
   return (
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.ts', 'requestHash') &&
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.ts', 'targetId') &&
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.ts', 'confirmation') &&
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.ts', 'result') &&
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.test.ts', 'payloadKeys') &&
-    sourceIncludes(
-      aiSources,
-      'quick-ops-natural-language-adapter.test.ts',
-      'sensitivePayloadRedacted'
-    )
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'requestHash') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'targetId') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'confirmation') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'result') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.test.cjs', 'payloadKeys') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.test.cjs', 'sensitivePayloadRedacted')
   )
 }
 
@@ -283,23 +270,29 @@ function blocksHighRiskWithoutConfirmation(
   aiSources: Array<{ path: string; source: string }>
 ): boolean {
   return (
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.ts', 'high-risk-blocked') &&
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.ts', "confirmation: 'blocked'") &&
-    sourceIncludes(aiSources, 'quick-ops-natural-language-adapter.test.ts', 'kill port 3000') &&
-    sourceIncludes(
-      aiSources,
-      'quick-ops-natural-language-adapter.test.ts',
-      'dispatchOptions: undefined'
-    )
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'high-risk-blocked') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', "confirmation: 'blocked'") &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.test.cjs', 'kill port 3000') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.test.cjs', 'meta.payload, undefined')
   )
 }
 
 function hasRuntimeDispatchBridge(aiSources: Array<{ path: string; source: string }>): boolean {
-  return aiSources.some(
-    ({ source }) =>
-      source.includes('resolveQuickOpsNaturalLanguageRequest') &&
-      source.includes('flowBus.dispatch') &&
-      source.includes('confirmationToken')
+  return (
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'async onItemAction') &&
+    sourceIncludes(
+      aiSources,
+      'plugins/touch-quickops/index.js',
+      'flow.dispatch(payload.payload, payload.options)'
+    ) &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'confirmationToken') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'runtimeDispatchBridge: true') &&
+    sourceIncludes(aiSources, 'plugins/touch-quickops/index.js', 'runtimeDispatchBridge: false') &&
+    sourceIncludes(
+      aiSources,
+      'plugins/touch-quickops/index.test.cjs',
+      'onItemAction dispatches safe QuickOps Flow action'
+    )
   )
 }
 
@@ -448,12 +441,8 @@ export async function createQuickOpsFlowAiAdapterAuditFromFiles(
   const flowSelectorPath =
     input.flowSelectorPath ?? 'apps/core-app/src/renderer/src/components/flow/FlowSelector.vue'
   const aiPaths = input.aiPaths ?? [
-    'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts',
-    'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts',
-    'apps/core-app/src/main/modules/ai/intelligence-config.ts',
-    'apps/core-app/src/main/modules/ai/intelligence-sdk.ts',
-    'apps/nexus/server/utils/intelligenceAgentGraphRunner.ts',
-    'apps/nexus/server/utils/tuffIntelligenceLabService.ts'
+    'plugins/touch-quickops/index.js',
+    'plugins/touch-quickops/index.test.cjs'
   ]
 
   const [moduleSource, flowBusSource, flowSelectorSource, ...aiSources] = await Promise.all([

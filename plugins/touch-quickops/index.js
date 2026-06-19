@@ -192,6 +192,21 @@ const CONFIRMATION_FLOW_ACTIONS = [
   },
 ]
 
+const HIGH_RISK_FLOW_ACTIONS = [
+  {
+    id: 'kill-port',
+    targetId: 'quickops.port-kill',
+    title: '高风险端口释放已阻断',
+    subtitle: '端口 kill 仍保持 copy-only / policy-gated；插件不会直接执行高风险动作',
+    reason: 'high-risk-blocked',
+    patterns: [
+      /\b(?:kill|terminate|release)\s+port\s+\d+\b/i,
+      /\bport\s+\d+\s+(?:kill|terminate|release)\b/i,
+      /(?:杀掉|终止|释放).*端口\s*\d+/,
+    ],
+  },
+]
+
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
@@ -223,6 +238,27 @@ function truncateText(value, max = 120) {
   if (text.length <= max)
     return text
   return `${text.slice(0, max - 1)}…`
+}
+
+function hashRequestText(value) {
+  const text = normalizeText(value).slice(0, 256)
+  let hash = 2166136261
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function buildFlowAdapterTrace(query, action, confirmation, result, payloadKeys = []) {
+  return {
+    requestHash: hashRequestText(getQueryText(query)),
+    targetId: action.targetId,
+    confirmation,
+    result,
+    payloadKeys: [...payloadKeys].sort(),
+    sensitivePayloadRedacted: true,
+  }
 }
 
 function formatBytes(value) {
@@ -365,6 +401,13 @@ function resolveConfirmationFlowAction(query) {
   return CONFIRMATION_FLOW_ACTIONS.find(action => matchesAnyPattern(text, action.patterns)) || null
 }
 
+function resolveHighRiskFlowAction(query) {
+  const text = normalizeText(getQueryText(query))
+  if (!text)
+    return null
+  return HIGH_RISK_FLOW_ACTIONS.find(action => matchesAnyPattern(text, action.patterns)) || null
+}
+
 function buildFlowPayload(action) {
   return {
     type: 'json',
@@ -386,13 +429,17 @@ function buildFlowDispatchOptions(action) {
   }
 }
 
-function buildFlowActionItem(featureId, action) {
+function buildFlowActionItem(featureId, action, query) {
   const payload = {
     actionId: action.id,
     targetId: action.targetId,
     payload: buildFlowPayload(action),
     options: buildFlowDispatchOptions(action),
   }
+  const flowAdapterTrace = buildFlowAdapterTrace(query, action, 'not-required', 'dispatch-plan', [
+    'action',
+    'targetId',
+  ])
 
   return new TuffItemBuilder(`${featureId}-flow-${action.id}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
@@ -410,12 +457,23 @@ function buildFlowActionItem(featureId, action) {
       actionId: FLOW_ACTION_ID,
       flowTargetId: action.targetId,
       payload,
+      flowAdapterTrace: {
+        ...flowAdapterTrace,
+        runtimeDispatchBridge: true,
+      },
     })
     .createAndAddAction(FLOW_ACTION_ID, 'plugin', '执行', payload)
     .build()
 }
 
-function buildConfirmationRequiredItems(featureId, action) {
+function buildConfirmationRequiredItems(featureId, action, query) {
+  const flowAdapterTrace = buildFlowAdapterTrace(
+    query,
+    action,
+    'confirmation-token-required',
+    'blocked-until-confirmed'
+  )
+
   return [
     buildInfoItem({
       featureId,
@@ -426,6 +484,34 @@ function buildConfirmationRequiredItems(featureId, action) {
         mode: 'confirmation-required',
         flowTargetId: action.targetId,
         requiresConfirmation: true,
+        flowAdapterTrace: {
+          ...flowAdapterTrace,
+          runtimeDispatchBridge: false,
+        },
+      },
+    }),
+  ]
+}
+
+function buildHighRiskBlockedItems(featureId, action, query) {
+  const flowAdapterTrace = buildFlowAdapterTrace(query, action, 'blocked', 'blocked')
+
+  return [
+    buildInfoItem({
+      featureId,
+      id: `high-risk-blocked-${action.id}`,
+      title: action.title,
+      subtitle: action.subtitle,
+      meta: {
+        mode: 'high-risk-blocked',
+        flowTargetId: action.targetId,
+        reason: action.reason,
+        confirmation: 'blocked',
+        result: 'blocked',
+        flowAdapterTrace: {
+          ...flowAdapterTrace,
+          runtimeDispatchBridge: false,
+        },
       },
     }),
   ]
@@ -1166,13 +1252,17 @@ function buildAuditItems(featureId, response) {
 }
 
 async function buildResultItems(featureId, query, api = quickOps) {
+  const highRiskAction = resolveHighRiskFlowAction(query)
+  if (highRiskAction)
+    return buildHighRiskBlockedItems(featureId, highRiskAction, query)
+
   const safeAction = resolveSafeFlowAction(query)
   if (safeAction)
-    return [buildFlowActionItem(featureId, safeAction)]
+    return [buildFlowActionItem(featureId, safeAction, query)]
 
   const confirmationAction = resolveConfirmationFlowAction(query)
   if (confirmationAction)
-    return buildConfirmationRequiredItems(featureId, confirmationAction)
+    return buildConfirmationRequiredItems(featureId, confirmationAction, query)
 
   if (!api) {
     return [
@@ -1279,8 +1369,11 @@ module.exports = {
     buildNetworkStatusItems,
     buildFlowActionItem,
     buildConfirmationRequiredItems,
+    buildHighRiskBlockedItems,
+    buildFlowAdapterTrace,
     resolveSafeFlowAction,
     resolveConfirmationFlowAction,
+    resolveHighRiskFlowAction,
     resolveMode,
   },
 }
