@@ -172,6 +172,19 @@ function getIssueTitle(plugin: ITouchPlugin): string | undefined {
 
 type PluginIndicatorTone = 'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'
 
+function shouldPreservePluginIconColor(plugin: ITouchPlugin): boolean {
+  const icon = plugin.icon
+  if (!icon || icon.type === 'class' || icon.type === 'builtin' || icon.type === 'emoji') {
+    return false
+  }
+
+  const value = icon.value.trim().toLowerCase()
+  if (!value || value.startsWith('data:image/svg+xml')) return false
+
+  const [path] = value.split(/[?#]/)
+  return !path.endsWith('.svg')
+}
+
 function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   if (plugin.status === EPluginStatus.LOADING) return 'loading'
   if (plugin.status === EPluginStatus.LOAD_FAILED || plugin.status === EPluginStatus.CRASHED)
@@ -256,7 +269,7 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
                   :icon="plugin.icon"
                   :alt="plugin.name"
                   :size="18"
-                  colorful
+                  :colorful="shouldPreservePluginIconColor(plugin)"
                   :empty="DefaultIcon"
                   :tone="resolveIndicatorTone(plugin)"
                 />
@@ -406,6 +419,8 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
 
 .PluginNavTree-ItemIcon {
   flex: 0 0 auto;
+  color: currentcolor;
+  --icon-color: currentColor;
 }
 
 .PluginNavTree-ItemName {

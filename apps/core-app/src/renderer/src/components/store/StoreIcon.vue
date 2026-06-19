@@ -63,6 +63,15 @@ const tuffIcon = computed<ITuffIcon>(() => {
     status: 'normal'
   }
 })
+
+const shouldPreserveIconColor = computed(() => {
+  const value = iconUrl.value?.trim().toLowerCase()
+  if (!value) return false
+  if (value.startsWith('data:image/svg+xml')) return false
+
+  const [path] = value.split(/[?#]/)
+  return !path.endsWith('.svg')
+})
 </script>
 
 <template>
@@ -73,7 +82,7 @@ const tuffIcon = computed<ITuffIcon>(() => {
       fontSize: size ? `${size}px` : undefined
     }"
   >
-    <TuffIcon colorful :icon="tuffIcon" />
+    <TuffIcon :colorful="shouldPreserveIconColor" :icon="tuffIcon" />
   </div>
 </template>
 
@@ -94,6 +103,7 @@ const tuffIcon = computed<ITuffIcon>(() => {
   border: 1px solid rgba(var(--tx-color-primary-rgb), 0.18);
   transition: all 0.25s ease;
   font-size: 30px;
-  color: var(--tx-color-primary);
+  color: var(--tx-text-color, currentColor);
+  --icon-color: var(--tx-text-color, currentColor);
 }
 </style>

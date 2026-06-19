@@ -128,6 +128,19 @@ const widgetStatusTone = computed(() => {
   return 'is-neutral'
 })
 
+const shouldPreserveFeatureIconColor = computed(() => {
+  const icon = props.feature?.icon
+  if (!icon || icon.type === 'class' || icon.type === 'builtin' || icon.type === 'emoji') {
+    return false
+  }
+
+  const value = icon.value.trim().toLowerCase()
+  if (!value || value.startsWith('data:image/svg+xml')) return false
+
+  const [path] = value.split(/[?#]/)
+  return !path.endsWith('.svg')
+})
+
 const widgetStatusIcon = computed(() => {
   switch (widgetStatusTone.value) {
     case 'is-dev':
@@ -318,6 +331,7 @@ function handleClose(): void {
                           :icon="feature.icon"
                           :alt="feature.name"
                           :size="24"
+                          :colorful="shouldPreserveFeatureIconColor"
                           class="text-[var(--tx-color-white)]"
                         />
                         <i v-else class="i-ri-function-line text-[var(--tx-color-white)]" />
@@ -959,7 +973,9 @@ pre {
   border-radius: 12px;
   overflow: hidden;
   font-size: 20px;
+  color: var(--tx-color-white);
   background: linear-gradient(135deg, var(--tx-color-primary), var(--tx-color-primary-light-3));
+  --icon-color: currentColor;
 }
 
 .PluginFeature-OverviewName {

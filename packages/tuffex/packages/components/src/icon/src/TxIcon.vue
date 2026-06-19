@@ -302,6 +302,14 @@ watch(
     font-size: 1em;
     line-height: 1;
     display: block;
+    color: currentColor;
+    background-color: currentColor;
+  }
+
+  i::before,
+  i::after {
+    color: currentColor;
+    background-color: currentColor;
   }
 }
 

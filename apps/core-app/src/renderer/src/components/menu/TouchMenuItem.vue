@@ -90,7 +90,7 @@ function handleClick($event) {
     @click="handleClick"
   >
     <slot>
-      <span :class="`${icon}`" class="TouchMenu-Tab-Icon" />
+      <span :class="icon" class="TouchMenu-Tab-Icon" />
       <span class="TouchMenu-Tab-Name">{{ name }}</span>
     </slot>
   </div>
@@ -127,5 +127,17 @@ function handleClick($event) {
 
   --fake-color: transparent;
   --fake-radius: 8px;
+}
+
+.TouchMenu-Tab-Icon {
+  flex: 0 0 auto;
+  color: currentcolor;
+  background-color: currentcolor !important;
+}
+
+.TouchMenu-Tab-Icon::before,
+.TouchMenu-Tab-Icon::after {
+  color: currentcolor;
+  background-color: currentcolor !important;
 }
 </style>
