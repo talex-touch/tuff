@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-06-18
+> 更新时间：2026-06-19
 > 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主入口
@@ -45,6 +45,8 @@
 - `docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md` - 本地开源模型运行时 PRD。
 - `docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md` - ASR Provider Runtime PRD。
 - `docs/plan-prd/03-features/tuff-quickops-prd.md` - Tuff QuickOps 本地系统快捷工具集 PRD。
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc` / `apps/nexus/content/docs/guide/features/quickops.en.mdc` - Nexus QuickOps 用户指南。
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc` / `apps/nexus/content/docs/dev/api/quickops.en.mdc` - Nexus QuickOps 开发者 API。
 - `docs/plan-prd/03-features/i18n-lexicon-catalog-2.6.0-prd.md` - i18n / Domain Lexicon / Cloud Catalog 收敛 PRD。
 - `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md` - Indexing Runtime V1 统一搜索源计划。
 - `docs/plan-prd/03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md` - App Data Plugins 与 Everything 收口 Roadmap。

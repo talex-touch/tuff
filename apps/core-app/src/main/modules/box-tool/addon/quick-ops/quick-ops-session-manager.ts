@@ -164,10 +164,12 @@ export class QuickOpsSessionManager {
     longBreakEveryCycles?: number
   ): QuickOpsSession {
     this.stop('pomodoro', 'replace')
+    const blockerId = powerSaveBlocker.start('prevent-display-sleep')
     const session = this.createSession(
       'pomodoro',
       mode === 'cycle' ? '番茄钟专注' : '番茄钟',
-      durationMs
+      durationMs,
+      blockerId
     )
     session.pomodoro = {
       mode,

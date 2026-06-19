@@ -63,6 +63,9 @@ export * from './platform'
 // Plugin domain types
 export * from './plugin'
 
+// QuickOps domain types
+export * from './quick-ops'
+
 // Sentry domain types
 export * from './sentry'
 

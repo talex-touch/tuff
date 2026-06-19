@@ -740,6 +740,475 @@ describe('QuickOpsProvider', () => {
     expect(status.items).toHaveLength(0)
   })
 
+  it('reports QuickOps capability status with platform and disabled reasons', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({ allowPublicIpLookup: false }))
+
+    const result = await provider.onSearch(
+      { text: 'quickops capability', inputs: [] },
+      new AbortController().signal
+    )
+
+    const item = expectFirstItem(result.items)
+    expect(item.kind).toBe('result')
+    expect(item.render.basic?.title).toBe('QuickOps 能力状态')
+    expect(item.actions?.[0]).toMatchObject({
+      id: 'quick-ops-copy-capabilities',
+      type: 'copy',
+      primary: true
+    })
+    const text = item.actions?.[0]?.payload?.text
+    expect(text).toContain('QuickOps Capabilities')
+    expect(text).toContain(
+      'quickops.network.publicIp | disabled | risk=safe | reason=public-ip-disabled'
+    )
+    expect(text).toContain(
+      'quickops.network.portKill | disabled | risk=danger | reason=high-risk-tools-disabled-by-policy'
+    )
+    expect(item.meta?.extension).toMatchObject({
+      quickOps: {
+        category: 'system',
+        operation: 'capability-status',
+        riskLevel: 'safe',
+        enabled: true,
+        capabilities: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'quickops.state.keepAwake',
+            status: 'supported',
+            riskLevel: 'stateful'
+          }),
+          expect.objectContaining({
+            id: 'quickops.network.publicIp',
+            status: 'disabled',
+            reason: 'public-ip-disabled'
+          }),
+          expect.objectContaining({
+            id: 'quickops.network.portKill',
+            status: 'disabled',
+            riskLevel: 'danger',
+            reason: 'high-risk-tools-disabled-by-policy'
+          })
+        ])
+      }
+    })
+  })
+
+  it('exposes QuickOps capability info for typed transport facades', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({
+      enabled: false,
+      allowPublicIpLookup: false
+    }))
+
+    expect(provider.getCapabilityInfo()).toMatchObject({
+      enabled: false,
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.network.publicIp',
+          status: 'disabled',
+          reason: 'quickops-disabled'
+        }),
+        expect.objectContaining({
+          id: 'quickops.network.portKill',
+          status: 'disabled',
+          reason: 'quickops-disabled'
+        })
+      ])
+    })
+  })
+
+  it('blocks stateful QuickOps tools when local policy disables them', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({ allowStatefulTools: false }))
+
+    const capabilityInfo = provider.getCapabilityInfo()
+    expect(capabilityInfo.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.state.timer',
+          status: 'disabled',
+          riskLevel: 'stateful',
+          reason: 'stateful-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.files.moveRecentDownload',
+          status: 'disabled',
+          riskLevel: 'confirm',
+          reason: 'stateful-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.network.local',
+          status: 'supported',
+          riskLevel: 'safe'
+        })
+      ])
+    )
+
+    const timer = await provider.onSearch(
+      { text: 'timer 5m', inputs: [] },
+      new AbortController().signal
+    )
+    const timerItem = expectFirstItem(timer.items)
+    expect(timerItem.kind).toBe('notification')
+    expect(timerItem.render.basic?.title).toBe('QuickOps 有状态工具已禁用')
+    expect(timerItem.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'stateful-tools-disabled',
+        degradedReason: 'stateful-tools-disabled-by-policy'
+      }
+    })
+
+    const tempText = await provider.onSearch(
+      { text: 'temp text hello', inputs: [] },
+      new AbortController().signal
+    )
+    expect(expectFirstItem(tempText.items).meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'stateful-tools-disabled'
+      }
+    })
+
+    const enabledProvider = new QuickOpsProvider(undefined, () => ({ allowStatefulTools: true }))
+    const start = await enabledProvider.onSearch(
+      { text: 'timer 5m', inputs: [] },
+      new AbortController().signal
+    )
+    const legacyStatefulItem = expectFirstItem(start.items)
+    await provider.onExecute({ item: legacyStatefulItem } satisfies IExecuteArgs)
+    expect(provider.listSessions()).toHaveLength(0)
+  })
+
+  it('blocks network QuickOps tools when local policy disables them', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({ allowNetworkTools: false }))
+
+    const capabilityInfo = provider.getCapabilityInfo()
+    expect(capabilityInfo.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.network.local',
+          status: 'disabled',
+          reason: 'network-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.network.publicIp',
+          status: 'disabled',
+          reason: 'network-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.network.systemProxy',
+          status: 'disabled',
+          reason: 'network-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.files.readOnly',
+          status: 'supported',
+          riskLevel: 'safe'
+        })
+      ])
+    )
+
+    const dns = await provider.onSearch(
+      { text: 'dns example.com', inputs: [] },
+      new AbortController().signal
+    )
+    const dnsItem = expectFirstItem(dns.items)
+    expect(dnsItem.kind).toBe('notification')
+    expect(dnsItem.render.basic?.title).toBe('QuickOps 网络工具已禁用')
+    expect(dnsItem.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'network-tools-disabled',
+        degradedReason: 'network-tools-disabled-by-policy'
+      }
+    })
+
+    const system = await provider.onSearch(
+      { text: 'system info', inputs: [] },
+      new AbortController().signal
+    )
+    expect(expectFirstItem(system.items).meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'system-info',
+        riskLevel: 'safe'
+      }
+    })
+  })
+
+  it('blocks file QuickOps tools when local policy disables them', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({ allowFileTools: false }))
+
+    const capabilityInfo = provider.getCapabilityInfo()
+    expect(capabilityInfo.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.files.readOnly',
+          status: 'disabled',
+          reason: 'file-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.files.writeTemp',
+          status: 'disabled',
+          reason: 'file-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.files.moveRecentDownload',
+          status: 'disabled',
+          reason: 'file-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.network.local',
+          status: 'supported',
+          riskLevel: 'safe'
+        })
+      ])
+    )
+
+    const fileHash = await provider.onSearch(
+      { text: 'hash "/tmp/example.txt"', inputs: [] },
+      new AbortController().signal
+    )
+    const fileHashItem = expectFirstItem(fileHash.items)
+    expect(fileHashItem.kind).toBe('notification')
+    expect(fileHashItem.render.basic?.title).toBe('QuickOps 文件工具已禁用')
+    expect(fileHashItem.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'file-tools-disabled',
+        degradedReason: 'file-tools-disabled-by-policy'
+      }
+    })
+
+    const system = await provider.onSearch(
+      { text: 'system info', inputs: [] },
+      new AbortController().signal
+    )
+    expect(expectFirstItem(system.items).meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'system-info',
+        riskLevel: 'safe'
+      }
+    })
+  })
+
+  it('blocks system QuickOps tools when local policy disables them', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({ allowSystemTools: false }))
+
+    const capabilityInfo = provider.getCapabilityInfo()
+    expect(capabilityInfo.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.system.diagnostics',
+          status: 'disabled',
+          reason: 'system-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.system.battery',
+          status: 'disabled',
+          reason: 'system-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.network.local',
+          status: 'supported',
+          riskLevel: 'safe'
+        })
+      ])
+    )
+
+    const systemInfo = await provider.onSearch(
+      { text: 'system info', inputs: [] },
+      new AbortController().signal
+    )
+    const systemInfoItem = expectFirstItem(systemInfo.items)
+    expect(systemInfoItem.kind).toBe('notification')
+    expect(systemInfoItem.render.basic?.title).toBe('QuickOps 系统工具已禁用')
+    expect(systemInfoItem.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'system-tools-disabled',
+        degradedReason: 'system-tools-disabled-by-policy'
+      }
+    })
+
+    const dns = await provider.onSearch(
+      { text: 'dns example.com', inputs: [] },
+      new AbortController().signal
+    )
+    expect(expectFirstItem(dns.items).meta?.extension).toMatchObject({
+      quickOps: {
+        category: 'network'
+      }
+    })
+  })
+
+  it('marks developer QuickOps tools disabled when local policy disables them', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({ allowDeveloperTools: false }))
+
+    const capabilityInfo = provider.getCapabilityInfo()
+    expect(capabilityInfo.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.developer.preview',
+          status: 'disabled',
+          riskLevel: 'safe',
+          reason: 'developer-tools-disabled-by-policy'
+        }),
+        expect.objectContaining({
+          id: 'quickops.system.diagnostics',
+          status: 'supported',
+          riskLevel: 'safe'
+        })
+      ])
+    )
+  })
+
+  it('keeps high-risk QuickOps tools disabled by default behind local policy', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({}))
+
+    expect(provider.getCapabilityInfo().entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.network.portKill',
+          status: 'disabled',
+          riskLevel: 'danger',
+          reason: 'high-risk-tools-disabled-by-policy'
+        })
+      ])
+    )
+
+    const policyEnabledProvider = new QuickOpsProvider(undefined, () => ({
+      allowHighRiskTools: true
+    }))
+    expect(policyEnabledProvider.getCapabilityInfo().entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'quickops.network.portKill',
+          status: 'disabled',
+          riskLevel: 'danger',
+          reason: 'copy-only-command'
+        })
+      ])
+    )
+  })
+
+  it('exposes redacted Tuff diagnostics for Flow and typed facades', async () => {
+    electronMocks.getPath.mockImplementation((name: string) =>
+      name === 'logs'
+        ? '/Users/tester/Library/Logs/Tuff'
+        : '/Users/tester/Library/Application Support/Tuff'
+    )
+    osMocks.homedir.mockReturnValue('/Users/tester')
+    const { QuickOpsProvider, formatDiagnosticsInfo } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({
+      enabled: false,
+      showRunningSessionsInCoreBox: false,
+      defaultKeepAwakeDurationMinutes: 45,
+      defaultTimerDurationMinutes: 20,
+      defaultPomodoroFocusMinutes: 35,
+      defaultPomodoroBreakMinutes: 7,
+      defaultScreenCleanDurationSeconds: 90
+    }))
+
+    const info = provider.getDiagnosticsInfo()
+    const text = formatDiagnosticsInfo(info)
+
+    expect(info).toMatchObject({
+      quickOpsEnabled: false,
+      showRunningSessionsInCoreBox: false,
+      defaultKeepAwakeDurationMs: 45 * 60 * 1000,
+      defaultTimerDurationMs: 20 * 60 * 1000,
+      defaultPomodoroFocusMs: 35 * 60 * 1000,
+      defaultPomodoroBreakMs: 7 * 60 * 1000,
+      defaultScreenCleanDurationMs: 90 * 1000,
+      userDataDir: '~/Library/Application Support/Tuff',
+      logsDir: '~/Library/Logs/Tuff'
+    })
+    expect(text).toContain('QuickOps: enabled=false, showRunning=false')
+    expect(text).not.toContain('/Users/tester')
+  })
+
+  it('keeps capability diagnostics available when QuickOps is disabled', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider(undefined, () => ({ enabled: false }))
+
+    const capability = await provider.onSearch(
+      { text: 'quickops 能力', inputs: [] },
+      new AbortController().signal
+    )
+    const item = expectFirstItem(capability.items)
+    expect(item.kind).toBe('notification')
+    expect(item.render.basic?.title).toBe('QuickOps 已禁用')
+    expect(item.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'capability-status',
+        enabled: false,
+        capabilities: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'quickops.state.keepAwake',
+            status: 'disabled',
+            reason: 'quickops-disabled'
+          })
+        ])
+      }
+    })
+
+    const timer = await provider.onSearch(
+      { text: 'timer 5m', inputs: [] },
+      new AbortController().signal
+    )
+    expect(timer.items).toHaveLength(0)
+  })
+
+  it('normalizes QuickOps capability platform reasons without probing external state', async () => {
+    const { createQuickOpsCapabilityInfo } = await import('./quick-ops-provider')
+    const settings = {
+      enabled: true,
+      showRunningSessionsInCoreBox: true,
+      allowStatefulTools: true,
+      allowNetworkTools: true,
+      allowFileTools: true,
+      allowSystemTools: true,
+      allowDeveloperTools: true,
+      allowHighRiskTools: false,
+      defaultKeepAwakeDurationMs: 60 * 60 * 1000,
+      defaultSystemAwakeDurationMs: 60 * 60 * 1000,
+      defaultTimerDurationMs: 25 * 60 * 1000,
+      defaultTimerExtendMs: 5 * 60 * 1000,
+      defaultPomodoroFocusMs: 25 * 60 * 1000,
+      defaultPomodoroBreakMs: 5 * 60 * 1000,
+      pomodoroTemplates: {
+        classic: true,
+        long: true,
+        custom: []
+      },
+      defaultScreenCleanDurationMs: 60 * 1000,
+      defaultScreenCleanMode: 'black' as const,
+      allowPublicIpLookup: false
+    }
+
+    expect(
+      createQuickOpsCapabilityInfo(settings, 'darwin').entries.find(
+        (entry) => entry.id === 'quickops.system.battery'
+      )
+    ).toMatchObject({ status: 'supported', reason: 'macos-pmset' })
+    expect(
+      createQuickOpsCapabilityInfo(settings, 'win32').entries.find(
+        (entry) => entry.id === 'quickops.network.systemProxy'
+      )
+    ).toMatchObject({ status: 'supported', reason: 'windows-internet-settings' })
+    expect(
+      createQuickOpsCapabilityInfo(settings, 'linux').entries.find(
+        (entry) => entry.id === 'quickops.system.battery'
+      )
+    ).toMatchObject({ status: 'supported', reason: 'linux-sysfs' })
+    expect(
+      createQuickOpsCapabilityInfo(settings, 'freebsd').entries.find(
+        (entry) => entry.id === 'quickops.system.battery'
+      )
+    ).toMatchObject({ status: 'degraded', reason: 'unsupported-platform' })
+  })
+
   it('shows local IP addresses as a safe informational result', async () => {
     const { QuickOpsProvider } = await import('./quick-ops-provider')
     const provider = new QuickOpsProvider()
@@ -3040,6 +3509,96 @@ describe('QuickOpsProvider', () => {
     expect(electronMocks.started.has(1)).toBe(false)
   })
 
+  it('stops keep-awake through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+    const result = await provider.onSearch(
+      { text: 'keep awake 10m', inputs: [] },
+      new AbortController().signal
+    )
+
+    await provider.onExecute({ item: expectFirstItem(result.items) } satisfies IExecuteArgs)
+
+    expect(provider.stopKeepAwake()).toBe(true)
+    expect(electronMocks.stop).toHaveBeenCalledWith(1)
+    expect(electronMocks.started.has(1)).toBe(false)
+    expect(provider.stopKeepAwake()).toBe(false)
+  })
+
+  it('starts keep-awake sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const session = provider.startKeepAwake(300_000)
+
+    expect(session.kind).toBe('keep-awake')
+    expect(session.durationMs).toBe(300_000)
+    expect(electronMocks.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(electronMocks.started.has(1)).toBe(true)
+    const status = await provider.onSearch(
+      { text: 'quick ops status', inputs: [] },
+      new AbortController().signal
+    )
+    expect(getQuickOpsMeta(expectFirstItem(status.items))?.action).toBe('keep-awake-stop')
+  })
+
+  it('stops all running sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    provider.startKeepAwake(300_000)
+    provider.startTimer(120_000)
+
+    expect(provider.listSessions()).toHaveLength(2)
+    expect(provider.stopAllSessions()).toBe(2)
+    expect(provider.listSessions()).toHaveLength(0)
+    expect(provider.stopAllSessions()).toBe(0)
+  })
+
+  it('exposes stop or reset actions for every stateful running session', async () => {
+    const { QuickOpsProvider, QuickOpsSessionManager } = await import('./quick-ops-provider')
+    const { factory } = createWindowHarness()
+    const provider = new QuickOpsProvider(new QuickOpsSessionManager(vi.fn(), factory as never))
+
+    provider.startKeepAwake(300_000)
+    provider.startSystemAwake(300_000)
+    provider.startTimer(120_000)
+    provider.startPomodoro(150_000)
+    provider.startScreenClean(60_000, 'black')
+    provider.startStopwatch()
+
+    const status = await provider.onSearch(
+      { text: 'quick ops status', inputs: [] },
+      new AbortController().signal
+    )
+    const actions = status.items.map((item) => getQuickOpsMeta(item)?.action).filter(Boolean)
+
+    expect(actions).toEqual([
+      'keep-awake-stop',
+      'system-awake-stop',
+      'timer-stop',
+      'pomodoro-stop',
+      'screen-clean-stop',
+      'stopwatch-reset'
+    ])
+    expect(status.items.map((item) => item.actions?.[0]?.type)).toEqual([
+      'execute',
+      'execute',
+      'execute',
+      'execute',
+      'execute',
+      'execute'
+    ])
+    expect(status.items.map((item) => item.actions?.[0]?.primary)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ])
+  })
+
   it('expires keep-awake sessions automatically', async () => {
     const { QuickOpsProvider } = await import('./quick-ops-provider')
     const provider = new QuickOpsProvider()
@@ -3123,6 +3682,35 @@ describe('QuickOpsProvider', () => {
     expect(electronMocks.started.has(1)).toBe(false)
   })
 
+  it('starts system-awake sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const session = provider.startSystemAwake(900_000)
+
+    expect(session.kind).toBe('system-awake')
+    expect(session.durationMs).toBe(900_000)
+    expect(electronMocks.start).toHaveBeenCalledWith('prevent-app-suspension')
+    expect(electronMocks.started.has(1)).toBe(true)
+    const status = await provider.onSearch(
+      { text: 'quick ops status', inputs: [] },
+      new AbortController().signal
+    )
+    expect(getQuickOpsMeta(expectFirstItem(status.items))?.action).toBe('system-awake-stop')
+  })
+
+  it('stops system-awake through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    provider.startSystemAwake(900_000)
+
+    expect(provider.stopSystemAwake()).toBe(true)
+    expect(electronMocks.stop).toHaveBeenCalledWith(1)
+    expect(electronMocks.started.has(1)).toBe(false)
+    expect(provider.stopSystemAwake()).toBe(false)
+  })
+
   it('keeps display and system awake sessions independent', async () => {
     const { QuickOpsProvider } = await import('./quick-ops-provider')
     const provider = new QuickOpsProvider()
@@ -3177,6 +3765,118 @@ describe('QuickOpsProvider', () => {
     const stopItem = expectFirstItem(status.items)
     expect(stopItem.render.basic?.title).toBe('计时器运行中')
     expect(getQuickOpsMeta(stopItem)?.action).toBe('timer-stop')
+  })
+
+  it('starts timer sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const session = provider.startTimer(90_000)
+
+    expect(session.kind).toBe('timer')
+    expect(session.durationMs).toBe(90_000)
+    const status = await provider.onSearch(
+      { text: 'quick ops status', inputs: [] },
+      new AbortController().signal
+    )
+    expect(getQuickOpsMeta(expectFirstItem(status.items))?.action).toBe('timer-stop')
+  })
+
+  it('controls timer sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    provider.startTimer(90_000)
+    vi.advanceTimersByTime(30_000)
+
+    const paused = provider.pauseTimer()
+    expect(paused?.kind).toBe('timer')
+    expect(paused?.remainingMs).toBe(60_000)
+
+    const resumed = provider.resumeTimer()
+    expect(resumed?.kind).toBe('timer')
+    expect(resumed?.expiresAt).toBeDefined()
+
+    expect(provider.stopTimer()).toBe(true)
+    expect(provider.stopTimer()).toBe(false)
+  })
+
+  it('starts pomodoro sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const session = provider.startPomodoro(300_000, 'cycle', 120_000, 2, 600_000, 2)
+
+    expect(session.kind).toBe('pomodoro')
+    expect(session.durationMs).toBe(300_000)
+    expect(session.pomodoro).toMatchObject({
+      mode: 'cycle',
+      phase: 'focus',
+      cycle: 1,
+      totalCycles: 2,
+      breakDurationMs: 120_000,
+      longBreakDurationMs: 600_000,
+      longBreakEveryCycles: 2
+    })
+    expect(electronMocks.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(electronMocks.started.has(1)).toBe(true)
+    const status = await provider.onSearch(
+      { text: 'quick ops status', inputs: [] },
+      new AbortController().signal
+    )
+    expect(getQuickOpsMeta(expectFirstItem(status.items))?.action).toBe('pomodoro-stop')
+  })
+
+  it('controls pomodoro sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    provider.startPomodoro(90_000, 'cycle', 30_000, 2)
+    vi.advanceTimersByTime(30_000)
+
+    const paused = provider.pausePomodoro()
+    expect(paused?.kind).toBe('pomodoro')
+    expect(paused?.remainingMs).toBe(60_000)
+    expect(paused?.pomodoro?.phase).toBe('focus')
+
+    const resumed = provider.resumePomodoro()
+    expect(resumed?.kind).toBe('pomodoro')
+    expect(resumed?.expiresAt).toBeDefined()
+
+    expect(provider.stopPomodoro()).toBe(true)
+    expect(provider.stopPomodoro()).toBe(false)
+  })
+
+  it('starts screen-clean overlays through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider, QuickOpsSessionManager } = await import('./quick-ops-provider')
+    const { factory, windows } = createWindowHarness()
+    const provider = new QuickOpsProvider(new QuickOpsSessionManager(vi.fn(), factory as never))
+
+    const session = provider.startScreenClean(45_000, 'blue')
+
+    expect(session.kind).toBe('screen-clean')
+    expect(session.durationMs).toBe(45_000)
+    expect(session.screenMode).toBe('blue')
+    expect(factory).toHaveBeenCalledTimes(2)
+    expect(windows).toHaveLength(2)
+    expect(windows.every((window) => window.screenMode === 'blue')).toBe(true)
+    const status = await provider.onSearch(
+      { text: 'quick ops status', inputs: [] },
+      new AbortController().signal
+    )
+    expect(getQuickOpsMeta(expectFirstItem(status.items))?.action).toBe('screen-clean-stop')
+  })
+
+  it('stops screen-clean overlays through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider, QuickOpsSessionManager } = await import('./quick-ops-provider')
+    const { factory, windows } = createWindowHarness()
+    const provider = new QuickOpsProvider(new QuickOpsSessionManager(vi.fn(), factory as never))
+
+    provider.startScreenClean(45_000, 'blue')
+
+    expect(provider.stopScreenClean()).toBe(true)
+    expect(windows.every((window) => window.close.mock.calls.length === 1)).toBe(true)
+    expect(provider.stopScreenClean()).toBe(false)
   })
 
   it('extends an active timer session and delays the finish notification', async () => {
@@ -3348,6 +4048,9 @@ describe('QuickOpsProvider', () => {
     })
 
     await provider.onExecute({ item } satisfies IExecuteArgs)
+    expect(electronMocks.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(electronMocks.started.has(1)).toBe(true)
+
     const status = await provider.onSearch(
       { text: 'quickops', inputs: [] },
       new AbortController().signal
@@ -3422,12 +4125,16 @@ describe('QuickOpsProvider', () => {
     )
 
     await provider.onExecute({ item: expectFirstItem(start.items) } satisfies IExecuteArgs)
+    expect(electronMocks.started.has(1)).toBe(true)
 
     const stop = await provider.onSearch(
       { text: 'stop pomodoro', inputs: [] },
       new AbortController().signal
     )
     await provider.onExecute({ item: expectFirstItem(stop.items) } satisfies IExecuteArgs)
+
+    expect(electronMocks.stop).toHaveBeenCalledWith(1)
+    expect(electronMocks.started.has(1)).toBe(false)
 
     vi.advanceTimersByTime(5_000)
     expect(notify).not.toHaveBeenCalled()
@@ -3515,9 +4222,12 @@ describe('QuickOpsProvider', () => {
     expect(item.render.basic?.subtitle).toBe('QuickOps Pomodoro · 5秒 专注与 2秒 休息循环 2 轮')
 
     await provider.onExecute({ item } satisfies IExecuteArgs)
+    expect(electronMocks.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(electronMocks.started.has(1)).toBe(true)
 
     vi.advanceTimersByTime(5_000)
     vi.advanceTimersByTime(2_000)
+    expect(electronMocks.started.has(1)).toBe(true)
 
     const secondFocusStatus = await provider.onSearch(
       { text: 'quickops', inputs: [] },
@@ -3535,6 +4245,9 @@ describe('QuickOpsProvider', () => {
         message: '已完成2轮5秒专注'
       })
     )
+    expect(electronMocks.stop).toHaveBeenCalledWith(1)
+    expect(electronMocks.started.has(1)).toBe(false)
+
     const completedStatus = await provider.onSearch(
       { text: 'quickops', inputs: [] },
       new AbortController().signal
@@ -4007,6 +4720,30 @@ describe('QuickOpsProvider', () => {
       new AbortController().signal
     )
     expect(empty.items).toHaveLength(0)
+  })
+
+  it('controls stopwatch sessions through the provider facade for Flow actions', async () => {
+    const { QuickOpsProvider } = await import('./quick-ops-provider')
+    const provider = new QuickOpsProvider()
+
+    const started = provider.startStopwatch()
+    expect(started.kind).toBe('stopwatch')
+
+    vi.advanceTimersByTime(3_000)
+    const lap = provider.lapStopwatch()
+    expect(lap?.laps).toEqual([3_000])
+
+    const paused = provider.pauseStopwatch()
+    expect(paused?.kind).toBe('stopwatch')
+    expect(paused?.elapsedMs).toBe(3_000)
+
+    vi.advanceTimersByTime(10_000)
+    const resumed = provider.resumeStopwatch()
+    expect(resumed?.kind).toBe('stopwatch')
+    expect(resumed?.pausedAt).toBeUndefined()
+
+    expect(provider.resetStopwatch()).toBe(true)
+    expect(provider.resetStopwatch()).toBe(false)
   })
 
   it('notifies when timer sessions expire', async () => {

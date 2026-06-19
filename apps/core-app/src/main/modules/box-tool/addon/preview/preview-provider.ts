@@ -8,16 +8,23 @@ import type {
   TuffItem
 } from '@talex-touch/utils'
 import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-engine/types'
+import type { AppSetting } from '@talex-touch/utils'
 import crypto from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { deflateSync } from 'node:zlib'
-import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
+import {
+  StorageList,
+  TuffInputType,
+  TuffItemBuilder,
+  TuffSearchResultBuilder
+} from '@talex-touch/utils'
 import { hasQuickOpsDeveloperCommand } from '@talex-touch/utils/core-box/preview'
 import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { app, clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
+import { getMainConfig } from '../../../storage'
 import { createLogger } from '../../../../utils/logger'
 
 const PREVIEW_COMPONENT_NAME = DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD
@@ -25,6 +32,7 @@ const SOURCE_ID = 'preview-provider'
 const PREVIEW_COPY_PRIMARY_ACTION_ID = 'preview-copy-primary'
 const PREVIEW_SAVE_QR_SVG_ACTION_ID = 'preview-save-qr-svg'
 const PREVIEW_SAVE_QR_PNG_ACTION_ID = 'preview-save-qr-png'
+const QUICK_OPS_DEVELOPER_POLICY_REASON = 'developer-tools-disabled-by-policy'
 const previewLog = createLogger('PreviewProvider')
 
 interface PreparedPreviewQuery {
@@ -68,6 +76,10 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const startedAt = performance.now()
     const preparedQuery = extractExplicitCalculatorQuery(query)
+    if (isQuickOpsDeveloperToolsBlocked(preparedQuery.sdkQuery)) {
+      return this.createDeveloperToolsDisabledResult(query, startedAt)
+    }
+
     const sdkQuery = this.withQuickOpsClipboardInput(preparedQuery.sdkQuery)
     const normalized = preparedQuery.sdkQuery.text?.trim() ?? ''
     if (!normalized) {
@@ -137,6 +149,44 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
           providerName: this.name ?? this.id,
           duration,
           resultCount: 0,
+          status: 'success'
+        }
+      ])
+      .build()
+  }
+
+  private createDeveloperToolsDisabledResult(
+    query: TuffQuery,
+    startedAt: number
+  ): TuffSearchResult {
+    const duration = performance.now() - startedAt
+    const item = new TuffItemBuilder('preview-provider:quickops-developer-tools:disabled')
+      .setSource(this.type, this.id)
+      .setKind('notification')
+      .setTitle('QuickOps 开发者工具已禁用')
+      .setSubtitle('QuickOps Policy · 当前策略不允许 PreviewSDK 开发者工具')
+      .setIcon({ type: 'class', value: 'i-carbon-code' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'policy',
+            operation: 'developer-tools-disabled',
+            riskLevel: 'safe',
+            degradedReason: QUICK_OPS_DEVELOPER_POLICY_REASON
+          }
+        }
+      })
+      .build()
+
+    return new TuffSearchResultBuilder(query)
+      .setItems([item])
+      .setDuration(duration)
+      .setSources([
+        {
+          providerId: this.id,
+          providerName: this.name ?? this.id,
+          duration,
+          resultCount: 1,
           status: 'success'
         }
       ])
@@ -377,6 +427,12 @@ function renderQrSvgToPng(svg: string, scale = 8): Buffer | null {
   }
 
   return encodeGrayscalePng(outputSize, outputSize, pixels)
+}
+
+function isQuickOpsDeveloperToolsBlocked(query: TuffQuery): boolean {
+  if (!hasQuickOpsDeveloperCommand(query)) return false
+  const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
+  return appSetting?.quickOps?.allowDeveloperTools === false
 }
 
 function extractQrSvgSize(svg: string): number | null {

@@ -243,10 +243,16 @@ export class FlowBusIPC {
         }
         const target = flowTargetRegistry.getTarget(targetId)
         if (!requiresFlowConsent(senderId, target)) {
-          return { success: true, data: { allowed: true } }
+          return {
+            success: true,
+            data: { allowed: true, requiresConfirmation: target?.requireConfirm === true }
+          }
         }
         const allowed = flowConsentStore.hasConsent(senderId, targetId)
-        return { success: true, data: { allowed } }
+        return {
+          success: true,
+          data: { allowed, requiresConfirmation: target?.requireConfirm === true }
+        }
       })
     )
 
@@ -264,14 +270,35 @@ export class FlowBusIPC {
         }
         const target = flowTargetRegistry.getTarget(targetId)
         if (!requiresFlowConsent(senderId, target)) {
-          return { success: true, data: {} }
+          return {
+            success: true,
+            data:
+              target?.requireConfirm === true
+                ? { confirmationToken: flowConsentStore.grantConfirmationOnce(senderId, targetId) }
+                : {}
+          }
         }
         if (mode === 'always') {
           flowConsentStore.grantConsent(senderId, targetId)
-          return { success: true, data: {} }
+          return {
+            success: true,
+            data:
+              target?.requireConfirm === true
+                ? { confirmationToken: flowConsentStore.grantConfirmationOnce(senderId, targetId) }
+                : {}
+          }
         }
         const token = flowConsentStore.grantOnce(senderId, targetId)
-        return { success: true, data: { token } }
+        return {
+          success: true,
+          data: {
+            token,
+            confirmationToken:
+              target?.requireConfirm === true
+                ? flowConsentStore.grantConfirmationOnce(senderId, targetId)
+                : undefined
+          }
+        }
       })
     )
   }

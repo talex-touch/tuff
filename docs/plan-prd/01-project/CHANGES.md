@@ -5,6 +5,504 @@
 
 ## 2026-06-19
 
+### refactor(quickops): keep runtime host while expanding plugin surface
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+- `apps/core-app/src/main/modules/tray/tray-menu-builder.ts`
+- `plugins/touch-quickops/manifest.json`
+- `plugins/touch-quickops/index.js`
+- `plugins/touch-quickops/index.test.cjs`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Renamed the production QuickOps singleton path from `quickOpsProvider` to `quickOpsRuntime` and exposed `QuickOpsRuntimeHost` as the CoreApp runtime host boundary. The legacy `QuickOpsProvider` class remains only as a compatibility shell around `renderLegacyCoreBoxItems()` / `executeLegacyCoreBoxItem()` for existing regression coverage and migration safety.
+  - Updated QuickOpsModule and tray integration to use `quickOpsRuntime`, keeping CoreApp responsible for host capabilities, session cleanup, typed transport, Flow targets, confirmation, policy, and evidence gates while the default CoreBox entry stays plugin-owned.
+  - Expanded `plugins/touch-quickops` root-result rendering to cover additional read-only Ops entries through the public `globalThis.quickOps` facade: port status, DNS query, file hash, file Base64, recent download metadata, common directory, path format, and text format.
+  - Extended the official plugin manifest trigger words for the newly migrated read-only entries without adding high-risk execution, private IPC fallback, raw provider registration, or confirmation-token bypass.
+  - Validation: `pnpm -C "plugins/touch-quickops" test` passed with 15 tests; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts" "src/main/modules/plugin/plugin.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/modules/tray/tray-manager.test.ts"` passed with 148 tests.
+
+### refactor(quickops): move CoreBox entry into official plugin
+
+- `plugins/touch-quickops/manifest.json`
+- `plugins/touch-quickops/index.js`
+- `plugins/touch-quickops/index.test.cjs`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Moved the QuickOps CoreBox root-results entry out of the default `SearchEngineCore` provider list and into the official `plugins/touch-quickops` plugin.
+  - Injected the Flow SDK into TouchPlugin runtime utilities as `flow` / `plugin.flow`, including `onMain` support on the runtime channel for Flow session and delivery subscriptions.
+  - Added plugin-side low-risk session-control entries for `stop-all-sessions`, timer / Pomodoro / clean-screen / awake / stopwatch stop/pause/resume/lap/reset controls. These dispatch through Flow to existing QuickOps targets.
+  - Confirmation-required actions such as keep-awake, system-awake, start timer, start Pomodoro, clean screen, start stopwatch, clipboard write, notification, open folder, temp text file, and temp directory only render an App UI `confirmationToken` requirement and do not dispatch from the plugin.
+  - CoreApp still owns the QuickOps runtime, host capabilities, typed bridge, Flow confirmation, policy, and evidence gates during migration; it no longer owns the default CoreBox search entry.
+  - Validation: `pnpm -C "plugins/touch-quickops" test` passed with 13 tests; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin.test.ts"` passed with 16 tests; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts"` passed with 10 tests; scoped ESLint for the QuickOps plugin passed with only the existing `.eslintignore` deprecation warning.
+
+### feat(plugins): add QuickOps official migration plugin
+
+- `plugins/touch-quickops/manifest.json`
+- `plugins/touch-quickops/index.js`
+- `plugins/touch-quickops/index.test.cjs`
+- `plugins/touch-quickops/package.json`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `plugins/touch-quickops` as the official QuickOps migration plugin with an explicit root-results provider.
+  - The plugin now owns the first read-only Ops root-result entries and rendering path for capability, sessions, auditRecent, system info, Tuff diagnostics, disk space, directory usage / deep directory usage, network status, local IP, battery status, and system proxy through the existing `globalThis.quickOps` transition facade.
+  - It does not generate mutation actions, execute stateful operations, expose high-risk operations, bypass Flow confirmation, or fallback to private IPC.
+  - Tightened the manifest trigger commands from a broad catch-all entry to explicit QuickOps / system / network / disk / diagnostics commands so the migration plugin does not pollute ordinary CoreBox search results.
+  - Updated the QuickOps PRD, TODO, and Nexus user/developer docs to state the extraction target shape: QuickOps business runtime, CoreBox entry, session surface, settings/tray entry points, and extensible orchestration move into the official plugin or plugin-owned runtime boundary, while CoreApp only keeps required host capabilities, Flow confirmation, policy/evidence gates, and migration typed bridges.
+  - Split the remaining QuickOps closure work into separate P0 TODO rows for packaged quit evidence, visual screen evidence, three-platform artifacts, real confirmation UI, high-risk governance, enterprise policy/audit/org locking, and AI UI orchestration.
+  - This is still a migration boundary slice; CoreApp owns the stateful provider/session/module runtime during the transition, but the first read-only entry surface is now outside CoreApp in the official plugin. The remaining target is to extract the business runtime into the official plugin or plugin-owned runtime boundary without weakening confirmation, redaction, policy, or evidence gates.
+
+### test(core-app): add QuickOps evidence collection plan
+
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `apps/core-app/scripts/quickops-evidence-template.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `renderQuickOpsEvidenceCollectionPlan()` and `quickops:evidence:template --writePlan` so QuickOps evidence generation can emit a manifest, checklist, and `QUICKOPS_EVIDENCE_COLLECTION_PLAN.md`.
+  - `quickops:evidence:template` now writes the default manifest when either `--writeChecklist` or `--writePlan` is requested, so generated checklist/plan files always have a matching `quickops-evidence-manifest.json` unless `--output` points somewhere else.
+  - Added `quickops-packaged-session-cleanup/v1` artifact validation to the strict verifier, covering packaged build mode, manifest version match, isolated userData, normal quit, session coverage, released power blockers, closed overlays, cleared timers/stopwatch runtime, and redaction of runtime objects/raw userData paths.
+  - Added `quickops-platform-readonly/v1` artifact validation to the strict verifier, requiring separate macOS/Windows/Linux artifacts, current-platform collection, local-only network probes, zero external HTTP requests, no port kill execution, local resolver DNS without system DNS mutation, redacted proxy credentials, and degraded reasons for battery/disk/directory probes.
+  - Added `quickops-files-and-temp/v1` artifact validation to the strict verifier, covering file hash/base64 normal and degraded boundaries, recent download found/empty/permission/duplicate/explicit absolute move target cases, common directory allowlists, path format copy-only outputs, temp workspace containment, and redaction of Home/userData paths and file contents.
+  - Added `quickops-confirmation-policy/v1` artifact validation to the strict verifier, covering real confirmation surface references, complete `requireConfirm` target coverage, state/file confirm and cancel paths, confirmation tokens, high-risk default blocking, policy disabled reasons, diagnostics visibility, and payload/clipboard/file/path redaction.
+  - The plan separates source-level `quickops:surface:audit` / `quickops:flow-ai:audit` artifacts from real packaged quit, visual, platform, file/temp, confirmation UI, high-risk boundary, and enterprise policy evidence.
+  - Focused coverage verifies the plan keeps source-level artifacts from replacing real packaged/platform/visual/confirmation evidence.
+  - This improves evidence collection workflow only; it does not close the real packaged app quit, screen-clean visual, cross-platform, confirmation UI, high-risk governance, or enterprise policy evidence gaps.
+
+### fix(core-app): clean QuickOps sessions on app quit events
+
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - QuickOpsModule now subscribes to `BEFORE_APP_QUIT` and `WILL_QUIT`, calling the shared provider cleanup path before the module manager stop/destroy fallback.
+  - The app quit handlers are disposed during module stop/destroy so repeated lifecycle transitions do not leave stale event subscriptions.
+  - Focused coverage triggers both app quit events and verifies cleanup reasons plus handler disposal after module stop.
+  - This strengthens source-level packaged-quit readiness only; real packaged app quit artifacts are still required by the QuickOps evidence gate before the PRD item can be closed.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts"` passed with 1 file / 110 tests.
+
+### feat(core-app): add QuickOps natural-language runtime bridge contract
+
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a bounded QuickOps natural-language resolver that maps user text to Flow dispatch plans for read-only diagnostics, confirmation-required local actions, degraded incomplete requests, unsupported text, and high-risk blocked requests.
+  - Added `dispatchQuickOpsNaturalLanguageRequest()` as the source-level runtime bridge: read-only plans can dispatch through FlowBus, confirmation-required plans must carry a one-time `confirmationToken`, and blocked/degraded/unsupported plans do not dispatch.
+  - Resolver and dispatch traces record request hash/length, selected target, confirmation state, result state, payload keys, and runtime bridge state without logging sensitive payload values.
+  - Updated `quickops:flow-ai:audit` so the source-level resolver and runtime dispatch bridge contracts are detected, and strict mode passes for the source-level Flow/AI adapter gate.
+  - Updated strict evidence validation to require `hasRuntimeDispatchBridge=true` in the Flow/AI artifact before the evidence case can pass.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts" "src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.test.ts" "src/main/modules/quick-ops/quick-ops-evidence.test.ts"` passed with 3 files / 18 tests; `pnpm -C "apps/core-app" run quickops:flow-ai:audit -- --compact --strict` passed for the source-level gate. This still does not replace real AI UI, confirmation screenshots/recordings, packaged runtime, platform, high-risk governance, or enterprise policy evidence.
+
+### docs(nexus): organize QuickOps Ops and extension guidance
+
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a user-facing Ops scenario cheatsheet for network troubleshooting, diagnostics collection, file-path handling, temporary focus/demo sessions, and screen maintenance.
+  - Clarified when users should build plugin-owned Ops instead of changing the built-in QuickOps namespace.
+  - Added developer guidance for choosing between read-only QuickOps composition, Flow dispatch, plugin-owned Ops, built-in QuickOps changes, and high-risk execution design.
+  - Added a plugin-owned Ops checklist covering Manifest permissions, plugin namespaces, capability checks, Permission / Flow confirmation reuse, stable blocked/degraded reasons, and payload-safe logging.
+  - This is a documentation organization slice only; real platform evidence, packaged quit evidence, real AI UI orchestration, high-risk governance, and enterprise centralized policy/audit/org locking remain open.
+
+### test(core-app): add QuickOps Flow/AI adapter audit gate
+
+- `apps/core-app/package.json`
+- `apps/core-app/scripts/quickops-flow-ai-adapter-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `quickops:flow-ai:audit`, producing `quickops-flow-ai-adapter-audit/v1` JSON for the Flow/AI adapter evidence case.
+  - The audit verifies the QuickOps Flow target catalog, expected `requireConfirm` set, structured dispatch coverage, local policy blocked ACKs, audit redaction, clipboard ACK redaction, degraded ACKs, and Flow confirmation token path.
+  - At this earlier audit-gate slice, the same audit intentionally failed closed because no complete QuickOps AI natural-language adapter evidence existed; strict evidence verification parsed this artifact and rejected checked boxes without `gate.passed=true`, adapter signals, request-target-confirmation-result trace, and high-risk blocking evidence.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.test.ts" "src/main/modules/quick-ops/quick-ops-evidence.test.ts"` passed with 2 files / 10 tests; `pnpm -C "apps/core-app" run quickops:flow-ai:audit -- --compact --strict` failed closed with the expected missing-AI-adapter failures.
+
+### docs(nexus): clarify QuickOps extension and contribution paths
+
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Expanded the Nexus QuickOps user docs with a plugin/extension boundary section that separates read-only capability checks, Flow composition, and plugin-owned custom Ops.
+  - Expanded the developer API docs with a `quickops.*` Flow target catalog, third-party extension patterns, and a maintainer checklist for changing built-in QuickOps across provider/runtime, Flow, typed transport, plugin SDK facade, runtime injection, evidence scripts, and docs.
+  - This is a documentation clarification only; real packaged evidence, cross-platform platform evidence, real AI UI orchestration, high-risk governance, and enterprise centralized policy/audit/org locking remain open.
+
+### test(core-app): validate QuickOps surface evidence artifact
+
+- `apps/core-app/scripts/quickops-evidence-verify.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added content validation for `quickops-sdk-transport-surface` artifacts so strict evidence verification parses `quickops-surface-audit/v1` JSON instead of trusting a checked checklist item alone.
+  - The verifier now rejects surface artifacts where `gate.passed` is false, transport events drift, Flow registry evidence is incomplete, SDK/runtime facade methods drift, typed-event flags are false, forbidden execution methods are exposed, or forbidden raw surface hits are present.
+  - This strengthens source-level evidence validation only; real packaged plugin SDK runtime probes, full legacy-channel audit artifacts, and packaged runtime evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-evidence.test.ts"` passed with 1 file / 6 tests; a temporary strict verifier manifest with a good `quickops:surface:audit` artifact passed; the same manifest with `gate.passed=false` and missing `auditRecent` in `pluginRuntimeMethods` failed closed.
+
+### test(core-app): require QuickOps runtime facade evidence check
+
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Updated the `quickops-sdk-transport-surface` manifest case so checked evidence must explicitly prove the TouchPlugin runtime `quickOps` facade exposes the same read-only method set and invokes only `QuickOpsEvents.*` typed transport.
+  - Aligned the collection steps and blocked criteria with the newer `quickops:surface:audit` output that includes `pluginRuntimeMethods`.
+  - This strengthens the evidence contract only; real packaged plugin SDK runtime probes, full legacy-channel audit artifacts, and packaged runtime evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-evidence.test.ts"` passed with 1 file / 5 tests.
+
+### test(core-app): include QuickOps plugin runtime in surface audit
+
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-surface-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-surface-audit.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Extended `quickops:surface:audit` so the SDK/transport surface artifact now reads `apps/core-app/src/main/modules/plugin/plugin.ts` and audits the injected TouchPlugin `quickOps` runtime facade.
+  - The gate now checks `pluginRuntimeMethods` against the read-only facade contract and verifies every runtime method invokes canonical `QuickOpsEvents.*` typed transport events.
+  - This still remains source-level evidence; real packaged plugin SDK runtime probes, full legacy-channel audit artifacts, and packaged runtime evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-surface-audit.test.ts"` passed with 1 file / 2 tests; `pnpm -C "apps/core-app" run quickops:surface:audit -- --compact --strict` passed and emitted `pluginRuntimeMethods`.
+
+### test(core-app): lock QuickOps plugin runtime facade
+
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added the missing TouchPlugin runtime `quickOps.auditRecent()` / `plugin.quickOps.auditRecent()` facade so injected plugin utilities match the public QuickOps plugin SDK contract.
+  - Expanded the focused plugin runtime test from a single `capabilities()` probe to the complete read-only QuickOps facade method list, with every method asserted against its `QuickOpsEvents.*` typed transport invoke path.
+  - This is a focused runtime contract regression only; real packaged plugin SDK probes, full legacy-channel audit artifacts, and packaged runtime evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin.test.ts"` passed with 1 file / 15 tests.
+
+### test(core-app): add QuickOps SDK transport evidence gate
+
+- `apps/core-app/package.json`
+- `apps/core-app/scripts/quickops-surface-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-surface-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-surface-audit.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added required QuickOps evidence case `quickops-sdk-transport-surface`, covering canonical `QuickOpsEvents.*` typed transport registration, `flowTargetRegistry('quickops')`, the single built-in QuickOps delivery handler, read-only plugin SDK facade boundaries, and absence of public legacy raw channel paths.
+  - Added `quickops:surface:audit`, producing `quickops-surface-audit/v1` JSON for the SDK/transport surface artifact and failing in `--strict` mode if typed event registration, Flow registry, SDK facade shape, TouchPlugin runtime facade shape, or forbidden raw-channel patterns drift.
+  - Updated the QuickOps PRD/TODO evidence-gate wording from six evidence cases to six evidence groups / seven required cases so SDK bypass evidence cannot be skipped during strict verification.
+  - This only extends the strict evidence contract; it does not collect or claim real plugin SDK runtime probes, full legacy-channel audit artifacts, or packaged runtime evidence.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-surface-audit.test.ts" "src/main/modules/quick-ops/quick-ops-evidence.test.ts"` passed with 2 files / 7 tests; `pnpm -C "apps/core-app" run quickops:surface:audit -- --compact --strict` passed.
+
+### test(core-app): lock QuickOps typed transport surface
+
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a focused registration-surface regression that locks QuickOpsModule to canonical `QuickOpsEvents.*` typed transport handlers, `flowTargetRegistry.registerTarget('quickops', ...)` Flow target registration, and a single `flowBus.registerDeliveryHandler('quickops', ...)` delivery handler.
+  - Updated the QuickOps PRD safety checklist to mark the current QuickOps module surface as partially covered for no legacy raw channel / SDK bypass, while keeping full legacy alias/raw channel audit, plugin SDK runtime evidence, and packaged runtime evidence open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts" "src/main/modules/flow-bus/flow-bus.test.ts"` passed with 2 files / 114 tests.
+
+### test(core-app): lock QuickOps Flow confirmation targets
+
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a focused registration regression that classifies QuickOps Flow targets requiring one-time execution confirmation, covering state-changing, external lookup, clipboard write, temp file/directory write, notification, and restricted folder-open targets.
+  - Kept read-only, stop, pause, resume, lap, reset, and local format targets outside the forced confirmation set so the safety model remains explicit instead of blanket-confirming every local action.
+  - Updated the QuickOps PRD safety checklist to mark the Flow side of the shared confirmation model as partially covered, while keeping AI natural-language adapter reuse, real confirmation UI evidence, high-risk governance, and enterprise policy evidence open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts"` passed with 1 file / 108 tests.
+
+### test(core-app): redact QuickOps clipboard Flow ack and audit
+
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a focused regression for QuickOps Flow `copy-to-clipboard` with sensitive text, verifying the clipboard write still happens locally while the ACK only returns length/truncation metadata and the QuickOps local audit entry only stores target/decision/confirmation/payload keys.
+  - Updated the QuickOps PRD safety checklist to mark sensitive clipboard logging as partially covered by QuickOps Flow ack/audit redaction, while keeping full log/persistent audit path review and real evidence open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts"` passed with 1 file / 108 tests.
+
+### test(core-app): cover QuickOps stateful stop entries
+
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added a focused regression that starts keep-awake, system-awake, timer, pomodoro, screen-clean, and stopwatch sessions, then verifies `quick ops status` exposes a primary stop or reset action for every stateful running session.
+  - Marked the QuickOps PRD safety acceptance item for stateful stop entries as complete while keeping packaged quit cleanup, real runtime evidence, real confirmation UI evidence, real AI UI orchestration, and enterprise governance open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed with 1 file / 117 tests.
+
+### docs(nexus): add QuickOps user and developer docs
+
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/guide/index.zh.mdc`
+- `apps/nexus/content/docs/guide/index.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/index.zh.mdc`
+- `apps/nexus/content/docs/dev/api/index.en.mdc`
+- `apps/nexus/content/docs/dev/api/plugin-context.zh.mdc`
+- `apps/nexus/content/docs/dev/api/plugin-context.en.mdc`
+- `apps/nexus/content/docs/dev/index.zh.mdc`
+- `apps/nexus/content/docs/dev/index.en.mdc`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added Nexus user-facing QuickOps docs covering CoreBox entry points, common commands, Tools / QuickOps settings, local policy gates, safety boundaries, and unfinished capabilities.
+  - Added Nexus developer QuickOps SDK docs covering plugin `quickOps` read-only facade, transport domain SDK usage, recent audit summaries, Flow composition guidance, and extension rules.
+  - Wired Guide, Dev, API, Plugin Context, `docs/INDEX.md`, and `docs/plan-prd/README.md` references so users and plugin authors can discover QuickOps from existing documentation entry points.
+  - This is a documentation slice only; real platform evidence, packaged quit evidence, real AI UI orchestration, high-risk governance, and enterprise centralized policy/audit/organization locking remain open.
+  - Validation: `pnpm -C "apps/nexus" exec vitest run "build/docs-prerender-routes.test.ts" "test/api/docs/navigation.get.test.ts"` passed with 2 files / 11 tests; scoped `.mdc` ESLint returned 0 errors and 6 ignored-file warnings because no matching ESLint configuration is supplied for `.mdc` content files.
+
+### feat(core-app): add QuickOps local audit baseline
+
+- `packages/utils/transport/events/types/quick-ops.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/sdk/domains/quick-ops.ts`
+- `packages/utils/plugin/sdk/quick-ops.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added typed `QuickOpsEvents.audit.get` / `quick-ops:audit:get` and `auditRecent()` SDK facades for app and plugin callers.
+  - `QuickOpsModule` now records a bounded in-memory audit ring for Flow delivery acks, including target id, decision, degraded or blocked reason, confirmation requirement, and payload key names.
+  - Audit entries intentionally do not persist to SQLite or JSON and do not store payload contents, clipboard contents, file contents, or external evidence artifacts.
+  - This is a local observability baseline only; enterprise centralized audit, organization locking, durable job history, real evidence, and complete Flow/AI adapter coverage remain open.
+  - Validation: `pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts"` passed with 33 tests; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts" "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed with 222 tests.
+
+### feat(core-app): add QuickOps high-risk policy baseline
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added default-disabled `quickOps.allowHighRiskTools` as a local policy baseline, with Settings advanced UI, legacy preference normalization, and i18n copy.
+  - QuickOps capability summaries now mark `danger` entries such as `quickops.network.portKill` as `disabled` with `high-risk-tools-disabled-by-policy` by default.
+  - Enabling the local high-risk switch does not expose real kill, bulk file operations, persistent system setting mutation, or new Flow execution APIs; the existing port release remains `copy-only-command`.
+  - This is a local high-risk default-off baseline only; complete enterprise policy distribution, audit, organization lock, real high-risk confirmation UI evidence, and real platform evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed with 2 files / 120 tests; scoped QuickOps/Settings ESLint passed with JSON locale files ignored by config warning only; `pnpm -C "apps/core-app" run typecheck:web` passed; `git diff --check` passed.
+
+### feat(core-app): add QuickOps developer-tools policy baseline
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added default-enabled `quickOps.allowDeveloperTools` as a local policy baseline, with Settings advanced UI, legacy preference normalization, and i18n copy.
+  - CoreApp PreviewProvider now blocks QuickOps Developer commands before calling PreviewSDK or reading clipboard fallback when the local developer-tools policy is disabled.
+  - QuickOps capability summaries now mark `quickops.developer.preview` as `disabled` with `developer-tools-disabled-by-policy`, and Flow `format-text` now fail-closes with `quickops.policyBlocked` under the same local policy.
+  - This is a local CoreBox PreviewProvider / PreviewSDK and existing `format-text` Flow target policy baseline only; complete enterprise policy distribution, audit, organization lock, real evidence, and Flow/AI adapter evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/main/modules/quick-ops/index.test.ts" "src/main/modules/box-tool/addon/preview/preview-provider.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed with 4 files / 231 tests; scoped QuickOps/Preview/Settings ESLint passed; `pnpm -C "apps/core-app" run typecheck:web` passed; `git diff --check` passed.
+
+### feat(core-app): add QuickOps system-tools policy baseline
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added default-enabled `quickOps.allowSystemTools` as a local policy baseline, with Settings advanced UI, legacy preference normalization, and i18n copy.
+  - QuickOps CoreBox now blocks system info, Tuff diagnostics, disk space, directory usage, and battery status commands when the local system policy is disabled.
+  - QuickOps Flow now fail-closes matching system targets with `quickops.policyBlocked`, and capability summaries mark affected system entries as `disabled` with `system-tools-disabled-by-policy`.
+  - This is a local policy baseline only; complete enterprise policy distribution, audit, organization lock, real system/platform evidence, high-risk governance, and Flow/AI adapter evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/main/modules/quick-ops/index.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed; scoped QuickOps ESLint passed; `pnpm -C "apps/core-app" run typecheck:web` passed; `git diff --check` passed.
+
+### feat(core-app): add QuickOps file-tools policy baseline
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added default-enabled `quickOps.allowFileTools` as a local policy baseline, with Settings advanced UI, legacy preference normalization, and i18n copy.
+  - QuickOps CoreBox now blocks file hash, file Base64, Base64 decode-to-temp, path format, common-directory, recent-download, temp file/directory, and recent-download move commands when the local file policy is disabled.
+  - QuickOps Flow now fail-closes matching file targets with `quickops.policyBlocked`, and capability summaries mark affected file entries as `disabled` with `file-tools-disabled-by-policy`.
+  - This is a local policy baseline only; complete enterprise policy distribution, audit, organization lock, real file/platform evidence, high-risk governance, and Flow/AI adapter evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/main/modules/quick-ops/index.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed; scoped QuickOps ESLint passed; `pnpm -C "apps/core-app" run typecheck:web` passed; `git diff --check` passed.
+
+### feat(core-app): add QuickOps network-tools policy baseline
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added default-enabled `quickOps.allowNetworkTools` as a local policy baseline, with Settings advanced UI, legacy preference normalization, and i18n copy.
+  - QuickOps CoreBox now blocks local IP, port status, DNS, network status, system proxy, and public IP commands when the local network policy is disabled; public IP opt-in no longer overrides the network policy.
+  - QuickOps Flow now fail-closes matching network targets with `quickops.policyBlocked`, and capability summaries mark affected network entries as `disabled` with `network-tools-disabled-by-policy`.
+  - This is a local policy baseline only; complete enterprise policy distribution, audit, organization lock, real network/platform evidence, high-risk governance, and Flow/AI adapter evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/main/modules/quick-ops/index.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed; scoped QuickOps ESLint passed; `pnpm -C "apps/core-app" run typecheck:web` passed; `pnpm -C "apps/core-app" run typecheck:node` still fails only on existing `intelligence-shared-resolver-contract.test.ts` `id` fixture errors.
+
+### feat(core-app): add QuickOps stateful-tools policy baseline
+
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `quickOps.allowStatefulTools` as a default-enabled local policy baseline, with Settings advanced UI and legacy preference normalization.
+  - QuickOps CoreBox search now blocks stateful/confirm operations when the local policy is disabled, including runtime sessions, temp writes, and recent-download move; read-only capability and diagnostics remain available.
+  - QuickOps capability summary marks policy-blocked `stateful` / `confirm` entries as `disabled` with `stateful-tools-disabled-by-policy`.
+  - QuickOps Flow now fail-closes matching stateful targets with `quickops.policyBlocked` instead of executing provider/session mutations.
+  - This is a local policy baseline only; complete enterprise policy distribution, audit, organization lock, real confirmation screenshot/recording evidence, high-risk execution governance, and platform evidence remain open.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/main/modules/quick-ops/index.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed; `pnpm -C "apps/core-app" exec eslint "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts" "src/main/modules/quick-ops/index.ts" "src/renderer/src/views/base/settings/SettingTools.vue" "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts" "src/main/modules/quick-ops/index.test.ts" "src/renderer/src/views/base/settings/SettingTools.quickops.test.ts"` passed; `pnpm -C "apps/core-app" run typecheck:web` passed; `pnpm -C "apps/core-app" run typecheck:node` still fails only on existing `intelligence-shared-resolver-contract.test.ts` `id` fixture errors.
+
+### feat(core-app): split Flow confirmation copy from consent copy
+
+- `apps/core-app/src/renderer/src/components/flow/FlowSelector.vue`
+- `apps/core-app/src/renderer/src/components/flow/FlowSelector.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Split the Flow selector modal into authorization, execution confirmation, and combined authorization-plus-confirmation copy paths based on `requiresConfirmation` and sender consent state.
+  - Kept cancel as a close-only path that does not grant consent, issue a confirmation token, or dispatch the Flow payload.
+  - Added separate once/always button labels for `requireConfirm` targets, including "allow once and send" versus "authorize and send" for combined authorization and confirmation.
+  - Added focused renderer coverage for requireConfirm targets not being selected directly, cancel not granting a token or dispatching, confirmation emitting `confirmationToken`, and missing consent showing combined authorization/confirmation actions.
+  - This improves the real confirmation UI surface but does not replace screenshot/recording evidence, enterprise policy, high-risk governance, true kill support, or packaged app evidence.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/components/flow/FlowSelector.test.ts"` passed; `pnpm -C "apps/core-app" exec eslint "src/renderer/src/components/flow/FlowSelector.vue" "src/renderer/src/components/flow/FlowSelector.test.ts"` passed; `pnpm -C "apps/core-app" run typecheck:web` passed.
+
+### ref(intelligence): converge CoreApp and Nexus on shared boundaries
+
+- `packages/tuff-intelligence/src/resolvers/*`
+- `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- `apps/nexus/server/utils/tuffIntelligenceCapabilityMessages.ts`
+- `apps/nexus/server/utils/tuffIntelligenceProviderAdapters.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLangChainProviderAdapters.ts`
+- `apps/nexus/server/utils/intelligenceAgentRuntimeBridge.ts`
+- `apps/nexus/server/utils/intelligenceAgentGraphRunner.ts`
+- `scripts/intelligence/verify-intelligence.mjs`
+- `.github/workflows/intelligence.yml`
+- `mise.toml`
+- `docs/plan-prd/TODO.md`
+  - Added shared intelligence resolver tests and exports, then reused the resolver path in CoreApp config/sdk for capability alias normalization, prompt binding lookup and provider route compatibility.
+  - Split Nexus capability message construction into a dedicated helper; `keywords.extract` and `intent.detect` now build direct-invoke model messages, while image/audio/embedding capabilities stay fail-closed unless a concrete adapter exists.
+  - Moved Nexus direct provider calls behind a swappable provider adapter boundary, keeping LangChain client construction in concrete adapters and preserving fallback, audit, credits, quota and usage-ledger behavior.
+  - Added a shared-runtime-compatible Nexus Agent bridge that can consume AEP assistant envelopes through an explicit runtime port and map them into the existing Lab stream/session contract; legacy LangGraph remains the default path.
+  - Added local intelligence gates (`intelligence:dev`, `intelligence:changed`, `intelligence:release`, `intelligence:parity`, `intelligence:verify`) and a read-only GitHub workflow that runs the same verify command.
+  - Validation: `mise run intelligence:dev` passed. This is focused/local architecture evidence and does not replace packaged Electron AI Stable or live GitHub Actions evidence.
+
+### feat(core-app): expose QuickOps read-only capability facade
+
+- `packages/utils/transport/events/types/quick-ops.ts`
+- `packages/utils/transport/events/types/flow.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/sdk/domains/quick-ops.ts`
+- `packages/utils/types/flow.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `packages/utils/plugin/sdk/quick-ops.ts`
+- `packages/utils/plugin/sdk/types.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/main/modules/flow-bus/flow-bus.ts`
+- `apps/core-app/src/main/modules/flow-bus/flow-consent.ts`
+- `apps/core-app/src/main/modules/flow-bus/flow-bus.test.ts`
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/renderer/src/components/flow/FlowSelector.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/quick-ops/quick-ops-session-manager.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `apps/core-app/scripts/quickops-evidence-template.ts`
+- `apps/core-app/scripts/quickops-evidence-verify.ts`
+- `apps/core-app/package.json`
+- `apps/core-app/tsconfig.node.json`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added typed `QuickOpsEvents.capabilities.get`, `QuickOpsEvents.sessions.get`, `QuickOpsEvents.systemInfo.get`, `QuickOpsEvents.tuffDiagnostics.get`, `QuickOpsEvents.diskSpace.get`, `QuickOpsEvents.directoryUsage.get`, `QuickOpsEvents.queryLocalIp.get`, `QuickOpsEvents.portStatus.get`, `QuickOpsEvents.dnsQuery.get`, `QuickOpsEvents.fileHash.get`, `QuickOpsEvents.fileBase64.get`, `QuickOpsEvents.recentDownload.get`, `QuickOpsEvents.commonDirectory.get`, `QuickOpsEvents.pathFormat.get`, `QuickOpsEvents.formatText.get`, `QuickOpsEvents.networkStatus.get`, `QuickOpsEvents.batteryStatus.get`, and `QuickOpsEvents.systemProxy.get` read-only transport events plus `createQuickOpsSdk()` domain facades returning the same capability summary used by CoreBox `quickops capability`, the same sanitized running-session snapshot used by Flow, the same local-only system summary used by CoreBox/Flow, the same redacted Tuff diagnostics summary used by CoreBox/Flow, the same local disk-space summary/degraded details used by CoreBox/Flow, the same bounded directory-usage summary/degraded details used by CoreBox/Flow, the same local IP address list used by CoreBox/Flow, the same local TCP port probe/copy-only release command used by Flow, the same local DNS resolver records/degraded details used by Flow, the same single-file MD5/SHA1/SHA256 hash result used by Flow, the same bounded single-file Base64 encoding result used by Flow, the same latest regular Downloads file metadata used by Flow, the same restricted common-directory metadata used by Flow, the same copy-only path format variants used by Flow, the same bounded local text transform used by Flow, the same local network summary used by CoreBox/Flow, the same local battery summary/degraded details used by CoreBox/Flow, and the same redacted local system-proxy summary/degraded details used by CoreBox/Flow.
+  - Registered all eighteen handlers in `QuickOpsModule`, reusing the shared provider capability matrix, sanitized session snapshot builder, local system-info formatter, redacted diagnostics formatter, local disk-space formatter, bounded directory-usage formatter, local IP formatter, local TCP port probe, local DNS resolver/formatter, single-file hash helper, bounded single-file Base64 encoder, recent-download lookup helper, common-directory resolver, path-format helper, bounded text-format helper, local network-status formatter, local battery-status formatter, and local system-proxy formatter while disposing transport handlers on module stop/destroy.
+  - Exposed plugin-facing read-only facades as `quickOps.capabilities()` / `plugin.quickOps.capabilities()`, `quickOps.sessions()` / `plugin.quickOps.sessions()`, `quickOps.systemInfo()` / `plugin.quickOps.systemInfo()`, `quickOps.tuffDiagnostics()` / `plugin.quickOps.tuffDiagnostics()`, `quickOps.diskSpace()` / `plugin.quickOps.diskSpace()`, `quickOps.directoryUsage()` / `plugin.quickOps.directoryUsage()`, `quickOps.queryLocalIp()` / `plugin.quickOps.queryLocalIp()`, `quickOps.portStatus()` / `plugin.quickOps.portStatus()`, `quickOps.dnsQuery()` / `plugin.quickOps.dnsQuery()`, `quickOps.fileHash()` / `plugin.quickOps.fileHash()`, `quickOps.fileBase64()` / `plugin.quickOps.fileBase64()`, `quickOps.recentDownload()` / `plugin.quickOps.recentDownload()`, `quickOps.commonDirectory()` / `plugin.quickOps.commonDirectory()`, `quickOps.pathFormat()` / `plugin.quickOps.pathFormat()`, `quickOps.formatText()` / `plugin.quickOps.formatText()`, `quickOps.networkStatus()` / `plugin.quickOps.networkStatus()`, `quickOps.batteryStatus()` / `plugin.quickOps.batteryStatus()`, and `quickOps.systemProxy()` / `plugin.quickOps.systemProxy()` without adding execution APIs or high-risk actions.
+  - Registered the built-in Flow targets `quickops.capabilities`, `quickops.sessions`, `quickops.stop-all-sessions`, `quickops.system-info`, `quickops.tuff-diagnostics`, `quickops.disk-space`, `quickops.directory-usage`, `quickops.network-status`, `quickops.battery-status`, `quickops.system-proxy`, `quickops.public-ip`, `quickops.query-local-ip`, `quickops.port-status`, `quickops.dns-query`, `quickops.file-hash`, `quickops.file-base64`, `quickops.recent-download`, `quickops.common-directory`, `quickops.path-format`, `quickops.temp-text-file`, `quickops.temp-directory`, `quickops.keep-awake`, `quickops.stop-keep-awake`, `quickops.system-awake`, `quickops.stop-system-awake`, `quickops.start-timer`, `quickops.pause-timer`, `quickops.resume-timer`, `quickops.stop-timer`, `quickops.start-pomodoro`, `quickops.pause-pomodoro`, `quickops.resume-pomodoro`, `quickops.stop-pomodoro`, `quickops.clean-screen`, `quickops.stop-clean-screen`, `quickops.start-stopwatch`, `quickops.pause-stopwatch`, `quickops.resume-stopwatch`, `quickops.lap-stopwatch`, `quickops.reset-stopwatch`, `quickops.show-notification`, `quickops.copy-to-clipboard`, `quickops.format-text`, and `quickops.open-folder`, returning capability data, a read-only sanitized running-session snapshot, a confirmation-gated stop-all-sessions result with the sanitized pre-stop snapshot, a read-only local system summary, a redacted read-only Tuff diagnostics summary, a read-only local disk-space summary, a bounded read-only directory usage summary, a read-only local network status summary, a read-only local battery status summary, a redacted read-only local proxy summary, an explicit opt-in public IP lookup result, local non-internal IP data, a read-only local TCP port status result with copy-only release command text, a read-only DNS query result through the local resolver, a read-only single-file MD5/SHA1/SHA256 hash result, a bounded read-only single-file Base64 encoding result, read-only latest Downloads file metadata, read-only restricted common-folder metadata, copy-only path format variants, bounded temp-workspace text file or directory creation results, a display keep-awake start/stop result, a system-awake start/stop result, a bounded timer start/pause/resume/stop result, a structured Pomodoro start/pause/resume/stop result, a local screen-clean overlay start/stop result, a local stopwatch start/pause/resume/lap/reset result, a bounded local system notification result, a bounded local clipboard write result, a bounded text case/naming transform result, or a restricted common-folder open result through existing Flow dispatch.
+  - Reused the CoreBox system info, diagnostics, disk-space, directory-usage, network-status, battery-status and system-proxy collectors/formatters for the Flow `systemInfo`, `tuffDiagnostics`, `diskSpace`, `directoryUsage`, `networkStatus`, `batteryStatus` and `systemProxy` actions, keeping all seven operations local-only, read-only, bounded and free of sensitive path reads, log reads or external requests; disk-space, directory-usage, battery-status and system-proxy read/probe failures return degraded acks instead of fake success.
+  - Reused the CoreBox public IP lookup helper for the Flow `publicIp` action, but kept Flow stricter than CoreBox: `quickops.public-ip` is `requireConfirm=true` and returns `public-ip-disabled` unless the payload explicitly opts in with `allowLookup: true`.
+  - Reused the CoreBox local IP formatter for the typed transport, SDK, plugin facade, and Flow `queryLocalIp` action, keeping the operation local-only and free of external network requests.
+  - Reused the CoreBox local TCP port probe for the typed transport, SDK, plugin facade, and Flow `portStatus` action, returning available/occupied/degraded state and copy-only release command text without executing `kill` or `Stop-Process`.
+  - Reused the CoreBox DNS query parser, resolver wrapper and formatter for the typed transport, SDK, plugin facade, and Flow `dnsQuery` action, returning basic or deep DNS records through Node DNS promises and degraded details for invalid hostnames or no supported records.
+  - Reused the CoreBox file hash helper for the typed transport, SDK, plugin facade, and Flow `fileHash` action, returning one local file's MD5/SHA1/SHA256 hashes or degraded details without writing files or adding Base64 decode behavior.
+  - Reused the CoreBox file Base64 encoder and path resolver for the typed transport, SDK, plugin facade, and Flow `fileBase64` action, returning one local file's Base64 content within the existing 1MB limit or degraded details without adding decode-to-temp-file writes.
+  - Reused the CoreBox recent-download lookup for the typed transport, SDK, plugin facade, and Flow `recentDownload` action, returning the latest regular Downloads file metadata or degraded details without opening, copying, or moving files.
+  - Reused the CoreBox common-directory resolver for the typed transport, SDK, plugin facade, and Flow `commonDirectory` action, returning restricted Desktop/Downloads/Documents/App Data/Logs metadata and path text without opening folders or writing clipboard data.
+  - Reused the CoreBox path formatting helper for the typed transport, SDK, plugin facade, and Flow `pathFormat` action, returning raw path, shell-escaped path, file URL and optional Windows/WSL conversions without checking file existence or touching the filesystem.
+  - Reused the Flow bounded text transform helper for the typed transport, SDK, plugin facade, and Flow `formatText` action, returning upper/lower/camel/snake/kebab pure string transforms or `missing-text` skipped details without reading clipboard, writing files, or making network requests.
+  - Reused the CoreBox temp workspace helpers for the Flow `tempTextFile` and `tempDirectory` actions, creating only under `app.getPath('temp')/tuff-quickops`, returning paths through ack payloads without opening folders or writing clipboard data, and surfacing write/create failures as degraded acks.
+  - Reused `QuickOpsSessionManager.list()` for the Flow `sessions` action, returning only stable session metadata such as kind, title, state, display duration, laps, Pomodoro state, screen mode and window count without exposing BrowserWindow or timer runtime objects.
+  - Added a narrow `QuickOpsProvider.stopAllSessions()` facade and Flow `stopAllSessions` action that captures the sanitized pre-stop session snapshot, releases all existing QuickOps runtime sessions, returns the stopped count, and remains `requireConfirm=true`; this does not add kill, file mutation, system policy mutation or true confirmation UI evidence.
+  - Added narrow QuickOps provider facades for `startKeepAwake`, `stopKeepAwake`, `startSystemAwake`, `stopSystemAwake`, `startTimer`, `pauseTimer`, `resumeTimer`, `stopTimer`, `startPomodoro`, `pausePomodoro`, `resumePomodoro`, `stopPomodoro`, `startScreenClean`, `stopScreenClean`, `startStopwatch`, `pauseStopwatch`, `resumeStopwatch`, `lapStopwatch`, and `resetStopwatch`, so Flow can start/release an existing display keep-awake session, start/release an existing system-awake session, start/control a local timer, start/control a local Pomodoro session, start/release a local screen-clean overlay, or start/control/reset a local stopwatch session without reaching into provider internals or adding high-risk actions.
+  - Marked `quickops.public-ip`, `quickops.temp-text-file`, `quickops.temp-directory`, `quickops.stop-all-sessions`, `quickops.keep-awake`, `quickops.system-awake`, `quickops.start-timer`, `quickops.start-pomodoro`, `quickops.clean-screen`, `quickops.start-stopwatch`, `quickops.show-notification`, `quickops.copy-to-clipboard`, and `quickops.open-folder` with `requireConfirm=true`, and promoted that marker from metadata to a dispatcher gate: app UI can issue a one-time `confirmationToken`, `FlowBus.dispatch()` must consume it before delivery, persistent sender consent does not bypass this execution confirmation, and token reuse fails closed with `flow-confirmation-required`.
+  - Extended Flow consent transport responses with `requiresConfirmation` / `confirmationToken`, forwarded the token through `FlowSelector` and CoreBox detach dispatch, and kept plugin contexts blocked from granting consent or confirmation tokens.
+  - Added `quickops-evidence/v1` manifest/template/strict verifier plus `quickops:evidence:template` and `quickops:evidence:verify` scripts, covering packaged session cleanup, screen-clean visual artifacts, macOS/Windows/Linux read-only network/system artifacts, files/temp evidence, real confirmation/high-risk/policy evidence, and Flow/AI adapter evidence without generating or claiming real artifacts.
+  - Preserved synchronous Flow acknowledgments from local delivery handlers so read-only built-in targets can return ack payloads reliably.
+  - Kept the remaining Flow / AI action adapter, high-risk actions, enterprise policy, true kill / confirmation UI copy/cancel path, real platform evidence and packaged app quit evidence as separate follow-ups.
+  - Validation: `pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/plugin-sdk-lifecycle.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/index.test.ts" "src/main/modules/flow-bus/flow-bus.test.ts" "src/main/modules/box-tool/addon/quick-ops/quick-ops-provider.test.ts"` passed; scoped QuickOps/Flow ESLint passed.
+
 ### fix(core-app): keep intelligence widget visible during activation
 
 - `plugins/touch-intelligence/index.js`
@@ -30,7 +528,7 @@
   - Added `qr code` / `二维码` handling to `QuickOpsDeveloperAbility`, generating local SVG QR Code data URLs for short text and URL input without network access or new package dependencies.
   - Extended the bounded local QR generator to Byte mode, ECC-L, QR versions 1-6, and a 134-byte input cap; oversized input returns a preview error instead of fake success.
   - Updated CoreApp `PreviewResultCard` to render QR SVG payloads as an inline image while keeping the SVG data URL as the primary copy value.
-  - Added `preview-save-qr-svg` and `preview-save-qr-png` execute actions that write QR files to `app.getPath('temp')/tuff-quickops` with opaque filenames and copy the saved path; v7+ higher-capacity QR remains later work.
+  - Added `preview-save-qr-svg` and `preview-save-qr-png` execute actions that write QR files to `app.getPath('temp')/tuff-quickops` with opaque filenames and copy the saved path.
   - Validation: `pnpm exec vitest run "packages/utils/__tests__/core-box/preview-sdk.test.ts"` passed with 1 file / 13 tests; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/preview/preview-provider.test.ts"` passed with 1 file / 8 tests.
 
 ### feat(core-app): add QuickOps recent download file lookup
@@ -451,9 +949,10 @@
   - Keep-awake now supports `extend keep awake 15m` / `延长保持唤醒 15分钟`; extension reuses the active blocker and reschedules expiry, while an inactive session falls back to starting a keep-awake session for the requested duration.
   - System-awake now supports `prevent system sleep 30m` / `禁止系统睡眠 30分钟` via Electron `powerSaveBlocker.start('prevent-app-suspension')`, with an independent session and stop action from display keep-awake.
   - Quick timer sessions support parsed durations, running status, `pause timer` / `暂停计时`, `resume timer` / `继续计时`, `extend timer 5m` / `延长计时 5分钟`, stop actions, expiry cleanup, tray status, and a system notification when the timer finishes; Flow/AI adapters and packaged app quit evidence remain tracked in the QuickOps PRD.
-  - Pomodoro sessions now support the first focus segment from `pomodoro` / `番茄钟`, `pomodoro cycle` / `循环番茄钟` focus-break auto-cycling, finite 1-12 round cycles from commands such as `pomodoro cycle 4 rounds 25m 5m` / `循环番茄钟 4轮 25分钟 5分钟`, built-in 25/5 and 50/10 templates from `pomodoro 25/5`, `番茄钟 25分钟 5分钟`, and `长番茄钟`, built-in template enablement switches in Settings / Tools, command-driven custom templates from `pomodoro custom 40/8` / `自定义番茄钟 45/10`, settings-driven custom template list schema with name/alias matching, pause/resume, running status, stop cleanup, paused wall-clock exclusion, and system notifications when focus, break, or finite-cycle sessions end; long-break and every-N-cycle policies remain tracked in the QuickOps PRD.
+  - Pomodoro sessions now support the first focus segment from `pomodoro` / `番茄钟`, `pomodoro cycle` / `循环番茄钟` focus-break auto-cycling, finite 1-12 round cycles from commands such as `pomodoro cycle 4 rounds 25m 5m` / `循环番茄钟 4轮 25分钟 5分钟`, built-in 25/5 and 50/10 templates from `pomodoro 25/5`, `番茄钟 25分钟 5分钟`, and `长番茄钟`, built-in template enablement switches in Settings / Tools, command-driven custom templates from `pomodoro custom 40/8` / `自定义番茄钟 45/10`, settings-driven custom template list schema with name/alias matching, pause/resume, running status, stop cleanup, paused wall-clock exclusion, every-N-cycle long breaks, session-owned display keep-awake via `powerSaveBlocker.start('prevent-display-sleep')`, and system notifications when focus, break, or finite-cycle sessions end; manual stop, replacement, or natural completion releases the Pomodoro-owned blocker.
   - Screen cleaning now supports `clean screen` / `清洁屏幕` / `白底清洁屏幕` from CoreBox, creating local sandboxed data-URL fullscreen overlay windows for each display with black/white background choices, hold-Esc exit, status, stop action, timeout cleanup, provider destroy cleanup, and tray status; the overlay data URL contract is covered for black/white backgrounds, countdown hint, hidden cursor, hold-Esc exit, and no external resources, while real screenshot/recording evidence and advanced settings remain tracked in the QuickOps PRD.
   - `AppSetting.quickOps` now carries the first default preference contract and `QuickOpsProvider` reads it for global enablement, CoreBox running-session visibility, default durations, pomodoro focus/break defaults, built-in pomodoro template enablement, custom pomodoro template aliases, and screen-clean default mode; Settings / Tools exposes the same defaults, built-in template switches, and an advanced custom-template summary through the existing Tuff settings controls, with renderer coverage for control visibility, legacy invalid-value normalization, template switch preservation, custom template normalization, and advanced-only options.
+  - `quickops capability` / `quickops 能力` now returns a host-side CoreBox capability summary with platform, enabled state, supported/degraded/disabled status, risk level and reason fields; disabled QuickOps still exposes this diagnostic item, while ordinary commands remain unavailable.
   - Stopwatch sessions now support `stopwatch` / `秒表`, pause/resume, lap recording, running status, and reset from CoreBox without adding a separate UI surface.
   - QuickOps Network now supports the first local read-only informational result for `local ip` / `本机 IP`, using Node `networkInterfaces()` to list non-internal IPv4/IPv6 addresses with interface names and a host copy action; no-address cases return a degraded notification, while public IP lookup and port inspection remain tracked as later work.
   - QuickOps Network also supports local TCP port availability probing for `port 3000` / `端口 3000` via a Node bind check, returning available, occupied, and invalid-port informational/degraded results. Occupied ports now add best-effort read-only PID/process attribution through macOS/Linux `lsof` or Windows PowerShell `Get-NetTCPConnection`; when PID attribution is available the result exposes a copy-only release command (`kill <pid>` or `Stop-Process -Id <pid>`) without executing it, while attribution failure keeps the occupied result without release actions.

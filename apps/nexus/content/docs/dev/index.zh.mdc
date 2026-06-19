@@ -11,6 +11,7 @@
 
 ## 深入学习
 - **[API 参考](./api/)** — 存储、通道和 UI 的类型化接口。
+- **[QuickOps SDK](./api/quickops.zh.md)** — 读取内置本地快捷工具能力、会话和最近审计摘要，并通过 Flow 组合扩展。
 - **[扩展开发](./extensions/)** — 复杂集成的高级模式。
 - **[插件包与内容包边界](./getting-started/plugin-workflow.zh.md#插件包与内容包边界)** — 区分 `.tpex`、CloudShare 内容包与 CloudSync 私有同步。
 - **[Core App 启动链路与运行时变量](./reference/runtime-startup-env.zh.md)** — 启动 gate、dev.source 降级、环境变量与清理候选。

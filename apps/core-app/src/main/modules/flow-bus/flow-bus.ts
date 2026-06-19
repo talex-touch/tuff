@@ -251,11 +251,48 @@ export class FlowBus {
       }
     }
 
+    if (targetInfo.requireConfirm) {
+      const confirmed = options.confirmationToken
+        ? flowConsentStore.consumeConfirmationOnce(
+            senderId,
+            targetInfo.fullId,
+            options.confirmationToken
+          )
+        : false
+      if (!confirmed) {
+        flowSessionManager.setError(session.sessionId, {
+          code: FlowErrorCode.PERMISSION_DENIED,
+          message: 'Flow target confirmation required',
+          details: {
+            senderId,
+            targetId: targetInfo.fullId,
+            reason: 'flow-confirmation-required'
+          }
+        })
+        return {
+          sessionId: session.sessionId,
+          state: 'FAILED',
+          error: flowSessionManager.getSession(session.sessionId)?.error
+        }
+      }
+    }
+
     // Deliver payload
     flowSessionManager.updateState(session.sessionId, 'DELIVERING')
 
     try {
       await this.deliverPayload(updatedSession, targetInfo)
+      const deliveredSession = flowSessionManager.getSession(session.sessionId)
+      if (deliveredSession?.state === 'ACKED') {
+        flowTargetRegistry.recordUsage(targetInfo.fullId)
+        void flowAuditLogger.logSessionComplete(deliveredSession)
+        return {
+          sessionId: session.sessionId,
+          state: 'ACKED',
+          ackPayload: deliveredSession.ackPayload
+        }
+      }
+
       flowSessionManager.updateState(session.sessionId, 'DELIVERED')
 
       // Record usage

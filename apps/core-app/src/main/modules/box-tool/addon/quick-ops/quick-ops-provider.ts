@@ -15,6 +15,26 @@ import type {
   QuickOpsSessionChangeListener,
   QuickOpsSessionKind
 } from './quick-ops-session-manager'
+import type {
+  QuickOpsCapabilityEntry,
+  QuickOpsCapabilityInfo,
+  QuickOpsBatteryStatusInfo,
+  QuickOpsDiagnosticsInfo,
+  QuickOpsDirectoryUsageEntry,
+  QuickOpsDirectoryUsageInfo,
+  QuickOpsDiskSpaceInfo,
+  QuickOpsDnsQueryInfo,
+  QuickOpsDnsRecord,
+  QuickOpsDnsRecordType,
+  QuickOpsLocalIpInfo,
+  QuickOpsNetworkStatusInfo,
+  QuickOpsPortProbeInfo,
+  QuickOpsPortProcessInfo,
+  QuickOpsProxyInfo,
+  QuickOpsSystemProxyEntry,
+  QuickOpsSystemProxyInfo,
+  QuickOpsSystemInfo
+} from '@talex-touch/utils/transport/events/types'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { getServers } from 'node:dns'
@@ -111,28 +131,6 @@ interface QuickOpsFileExecuteMeta {
   targetPath?: string
 }
 
-interface QuickOpsLocalIpInfo {
-  name: string
-  family: string
-  address: string
-}
-
-interface QuickOpsPortProbeInfo {
-  port: number
-  host: string
-  available: boolean
-  process?: QuickOpsPortProcessInfo
-  degradedReason?: string
-  errorCode?: string
-}
-
-interface QuickOpsPortProcessInfo {
-  pid: number
-  name?: string
-  command?: string
-  source: 'lsof' | 'windows-nettcpconnection'
-}
-
 interface QuickOpsPublicIpInfo {
   address: string
   source: string
@@ -216,132 +214,9 @@ interface QuickOpsCommonDirectoryInfo {
   path: string
 }
 
-interface QuickOpsDiagnosticsInfo {
-  schemaVersion: number
-  appVersion: string
-  platform: NodeJS.Platform
-  arch: string
-  osType: string
-  osRelease: string
-  nodeVersion: string
-  electronVersion: string
-  userDataDir: string
-  logsDir: string
-  homeDir: string
-  cpuCount: number
-  totalMemoryBytes: number
-  freeMemoryBytes: number
-  uptimeSeconds: number
-  localAddressCount: number
-  dnsServerCount: number
-  proxyStatus: QuickOpsNetworkStatusInfo['proxyStatus']
-  proxySources: string[]
-  quickOpsEnabled: boolean
-  showRunningSessionsInCoreBox: boolean
-  defaultKeepAwakeDurationMs: number
-  defaultTimerDurationMs: number
-  defaultPomodoroFocusMs: number
-  defaultPomodoroBreakMs: number
-  defaultScreenCleanDurationMs: number
-}
-
-interface QuickOpsSystemInfo {
-  osType: string
-  osRelease: string
-  platform: NodeJS.Platform
-  arch: string
-  cpuModel: string
-  cpuCount: number
-  totalMemoryBytes: number
-  freeMemoryBytes: number
-  uptimeSeconds: number
-  loadAverage: number[]
-}
-
-interface QuickOpsDiskSpaceEntry {
-  label: string
-  path: string
-  totalBytes: number
-  freeBytes: number
-  usedBytes: number
-  usedPercent: number
-}
-
-interface QuickOpsDiskSpaceInfo {
-  entries: QuickOpsDiskSpaceEntry[]
-}
-
 interface QuickOpsDirectoryUsageTarget {
   label: string
   path: string
-}
-
-interface QuickOpsDirectoryUsageEntry {
-  label: string
-  path: string
-  directFileBytes: number
-  totalFileBytes?: number
-  fileCount: number
-  directoryCount: number
-  otherCount: number
-  scannedEntryCount: number
-  truncated: boolean
-}
-
-interface QuickOpsDirectoryUsageInfo {
-  entries: QuickOpsDirectoryUsageEntry[]
-  maxEntriesPerDirectory: number
-  maxTotalEntries?: number
-  scanDepth: number
-}
-
-interface QuickOpsBatteryStatusInfo {
-  levelPercent: number | null
-  charging: boolean | null
-  status: string
-  source: 'macos-pmset' | 'windows-cim' | 'linux-sysfs'
-}
-
-interface QuickOpsProxyInfo {
-  source: string
-  value: string
-}
-
-interface QuickOpsSystemProxyEntry {
-  source: 'environment' | 'macos-system' | 'windows-system' | 'linux-gsettings'
-  name: string
-  value: string
-}
-
-interface QuickOpsSystemProxyInfo {
-  platform: NodeJS.Platform
-  status: 'detected' | 'not-detected' | 'degraded'
-  environment: QuickOpsProxyInfo[]
-  system: QuickOpsSystemProxyEntry[]
-  degradedReason?: string
-  degradedMessage?: string
-}
-
-interface QuickOpsNetworkStatusInfo {
-  addresses: QuickOpsLocalIpInfo[]
-  dnsServers: string[]
-  proxyStatus: 'detected' | 'not-detected'
-  proxies: QuickOpsProxyInfo[]
-}
-
-type QuickOpsDnsRecordType = 'A' | 'AAAA' | 'CNAME' | 'MX' | 'NS' | 'TXT' | 'SOA'
-
-interface QuickOpsDnsRecord {
-  type: QuickOpsDnsRecordType
-  value: string
-  priority?: number
-}
-
-interface QuickOpsDnsQueryInfo {
-  hostname: string
-  records: QuickOpsDnsRecord[]
-  failedTypes: QuickOpsDnsRecordType[]
-  deep: boolean
 }
 
 interface ParsedQuickOpsQuery {
@@ -368,6 +243,12 @@ type ParsedPomodoroCycle = Pick<
 interface QuickOpsResolvedSettings {
   enabled: boolean
   showRunningSessionsInCoreBox: boolean
+  allowStatefulTools: boolean
+  allowNetworkTools: boolean
+  allowFileTools: boolean
+  allowSystemTools: boolean
+  allowDeveloperTools: boolean
+  allowHighRiskTools: boolean
   defaultKeepAwakeDurationMs: number
   defaultSystemAwakeDurationMs: number
   defaultTimerDurationMs: number
@@ -383,6 +264,13 @@ interface QuickOpsResolvedSettings {
   defaultScreenCleanMode: QuickOpsScreenCleanMode
   allowPublicIpLookup: boolean
 }
+
+const QUICK_OPS_STATEFUL_POLICY_REASON = 'stateful-tools-disabled-by-policy'
+const QUICK_OPS_NETWORK_POLICY_REASON = 'network-tools-disabled-by-policy'
+const QUICK_OPS_FILE_POLICY_REASON = 'file-tools-disabled-by-policy'
+const QUICK_OPS_SYSTEM_POLICY_REASON = 'system-tools-disabled-by-policy'
+const QUICK_OPS_DEVELOPER_POLICY_REASON = 'developer-tools-disabled-by-policy'
+const QUICK_OPS_HIGH_RISK_POLICY_REASON = 'high-risk-tools-disabled-by-policy'
 
 type QuickOpsSettingsInput = Partial<Omit<AppSetting['quickOps'], 'pomodoroTemplates'>> & {
   pomodoroTemplates?: Partial<AppSetting['quickOps']['pomodoroTemplates']>
@@ -814,6 +702,19 @@ const SYSTEM_PROXY_STATUS_KEYWORDS = [
   '代理设置',
   '系统代理状态'
 ]
+const QUICKOPS_CAPABILITY_KEYWORDS = [
+  'quickops capability',
+  'quickops capabilities',
+  'quickops status capability',
+  'quickops 能力',
+  'quickops能力',
+  'quickops 能力检测',
+  'quickops capability status',
+  'quick ops capability',
+  'quick ops capabilities',
+  'quick ops 能力',
+  'quick ops 能力检测'
+]
 const PROXY_ENV_NAMES = [
   'HTTPS_PROXY',
   'HTTP_PROXY',
@@ -869,47 +770,57 @@ const COMMON_DIRECTORY_DEFINITIONS: Array<{
   }
 ]
 
-export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
-  readonly id = 'quick-ops-provider'
-  readonly type = 'system' as const
-  readonly name = 'QuickOps'
-  readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
-  readonly priority = 'fast' as const
-  readonly expectedDuration = 30
+const LEGACY_QUICK_OPS_PROVIDER_ID = 'quick-ops-provider'
+const LEGACY_QUICK_OPS_PROVIDER_TYPE = 'system' as const
+const LEGACY_QUICK_OPS_PROVIDER_NAME = 'QuickOps'
 
+export class QuickOpsRuntimeHost {
   constructor(
     private readonly sessions = new QuickOpsSessionManager(),
     private readonly resolveSettings: QuickOpsSettingsResolver = readQuickOpsSettings,
     private readonly notifyLowBattery: QuickOpsBatteryNotifier = showLowBatteryNotification
   ) {}
 
-  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+  async renderLegacyCoreBoxItems(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const startedAt = performance.now()
     if (signal.aborted) {
       return this.createResult(query, startedAt, [])
     }
 
     const settings = getQuickOpsResolvedSettings(this.resolveSettings())
+    const text = query.text ?? ''
+    if (matchesKeyword(text.trim().toLowerCase(), QUICKOPS_CAPABILITY_KEYWORDS)) {
+      return this.createResult(query, startedAt, [
+        this.buildCapabilityStatusItem(createQuickOpsCapabilityInfo(settings))
+      ])
+    }
+
     if (!settings.enabled) {
       return this.createResult(query, startedAt, [])
     }
 
-    const text = query.text ?? ''
     const parsed = parseQuickOpsQuery(text, settings)
     const informationalItems = parsed ? null : await this.buildInformationalItems(query, settings)
     const items = parsed
-      ? [this.buildActionItem(parsed)]
+      ? settings.allowStatefulTools
+        ? [this.buildActionItem(parsed)]
+        : [this.buildStatefulToolsDisabledItem()]
       : informationalItems || this.buildRunningSessionItems(query)
     return this.createResult(query, startedAt, items)
   }
 
-  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
+  async executeLegacyCoreBoxItem(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const meta = (
       args.item.meta?.extension as
         | { quickOps?: QuickOpsActionMeta & QuickOpsFileExecuteMeta }
         | undefined
     )?.quickOps
     if (!meta) return null
+
+    const settings = getQuickOpsResolvedSettings(this.resolveSettings())
+    if (!isQuickOpsStatefulOperationAllowed(settings, meta)) {
+      return null
+    }
 
     if (meta.operation === 'recent-download-move') {
       await executeRecentDownloadMove(meta)
@@ -1010,6 +921,116 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
     this.sessions.stopAll(reason)
   }
 
+  getCapabilityInfo(): QuickOpsCapabilityInfo {
+    return createQuickOpsCapabilityInfo(getQuickOpsResolvedSettings(this.resolveSettings()))
+  }
+
+  getDiagnosticsInfo(): QuickOpsDiagnosticsInfo {
+    return createDiagnosticsInfo(getQuickOpsResolvedSettings(this.resolveSettings()))
+  }
+
+  startKeepAwake(durationMs?: number) {
+    return this.sessions.startKeepAwake(durationMs)
+  }
+
+  startSystemAwake(durationMs?: number) {
+    return this.sessions.startSystemAwake(durationMs)
+  }
+
+  startTimer(durationMs?: number) {
+    return this.sessions.startTimer(durationMs)
+  }
+
+  pauseTimer() {
+    return this.sessions.pauseTimer()
+  }
+
+  resumeTimer() {
+    return this.sessions.resumeTimer()
+  }
+
+  startPomodoro(
+    durationMs?: number,
+    mode?: QuickOpsPomodoroMode,
+    breakDurationMs?: number,
+    totalCycles?: number,
+    longBreakDurationMs?: number,
+    longBreakEveryCycles?: number
+  ) {
+    return this.sessions.startPomodoro(
+      durationMs,
+      mode,
+      breakDurationMs,
+      totalCycles,
+      longBreakDurationMs,
+      longBreakEveryCycles
+    )
+  }
+
+  pausePomodoro() {
+    return this.sessions.pausePomodoro()
+  }
+
+  resumePomodoro() {
+    return this.sessions.resumePomodoro()
+  }
+
+  startScreenClean(durationMs?: number, screenMode?: QuickOpsScreenCleanMode) {
+    return this.sessions.startScreenClean(durationMs, screenMode)
+  }
+
+  startStopwatch() {
+    return this.sessions.startStopwatch()
+  }
+
+  pauseStopwatch() {
+    return this.sessions.pauseStopwatch()
+  }
+
+  resumeStopwatch() {
+    return this.sessions.resumeStopwatch()
+  }
+
+  lapStopwatch() {
+    return this.sessions.lapStopwatch()
+  }
+
+  stopKeepAwake(reason = 'flow-action'): boolean {
+    return this.sessions.stop('keep-awake', reason)
+  }
+
+  stopSystemAwake(reason = 'flow-action'): boolean {
+    return this.sessions.stop('system-awake', reason)
+  }
+
+  stopTimer(reason = 'flow-action'): boolean {
+    return this.sessions.stop('timer', reason)
+  }
+
+  stopPomodoro(reason = 'flow-action'): boolean {
+    return this.sessions.stop('pomodoro', reason)
+  }
+
+  stopScreenClean(reason = 'flow-action'): boolean {
+    return this.sessions.stop('screen-clean', reason)
+  }
+
+  resetStopwatch(reason = 'flow-action'): boolean {
+    return this.sessions.stop('stopwatch', reason)
+  }
+
+  stopAllSessions(reason = 'flow-action'): number {
+    const count = this.sessions.list().length
+    if (count > 0) {
+      this.sessions.stopAll(reason)
+    }
+    return count
+  }
+
+  listSessions(): QuickOpsSession[] {
+    return this.sessions.list()
+  }
+
   subscribeSessions(listener: QuickOpsSessionChangeListener): () => void {
     return this.sessions.subscribe(listener)
   }
@@ -1017,6 +1038,7 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildRunningSessionItems(query: TuffQuery): TuffItem[] {
     const settings = getQuickOpsResolvedSettings(this.resolveSettings())
     if (!settings.showRunningSessionsInCoreBox) return []
+    if (!settings.allowStatefulTools) return []
 
     const text = query.text?.trim() ?? ''
     if (text && !matchesKeyword(text.toLowerCase(), STATUS_KEYWORDS)) {
@@ -1042,8 +1064,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
         parsed.pomodoroLongBreakMs ?? 'default',
         parsed.pomodoroLongBreakEvery ?? 'default'
       ].join(':'),
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('action')
       .setTitle(title)
@@ -1082,82 +1104,128 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
     const rawText = query.text ?? ''
     const text = rawText.trim().toLowerCase()
     if (!text) return null
+    const networkBlockedItem = settings.allowNetworkTools
+      ? null
+      : this.buildNetworkToolsDisabledItem()
+    const fileBlockedItem = settings.allowFileTools ? null : this.buildFileToolsDisabledItem()
+    const systemBlockedItem = settings.allowSystemTools ? null : this.buildSystemToolsDisabledItem()
 
     if (matchesKeyword(text, FILE_HASH_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+
       return [await this.buildFileHashResultItem(rawText, query)]
     }
 
     if (matchesKeyword(text, FILE_BASE64_DECODE_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+
       return [await this.buildFileBase64DecodeResultItem(rawText)]
     }
 
     if (matchesKeyword(text, FILE_BASE64_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+
       return [await this.buildFileBase64ResultItem(rawText, query)]
     }
 
     if (matchesKeyword(text, FILE_PATH_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+
       return [this.buildFilePathResultItem(rawText, query)]
     }
 
     if (matchesKeyword(text, TEMP_TEXT_FILE_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+      if (!settings.allowStatefulTools) return [this.buildStatefulToolsDisabledItem()]
+
       return [await this.buildTempTextFileResultItem(rawText)]
     }
 
     if (matchesKeyword(text, TEMP_DIRECTORY_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+      if (!settings.allowStatefulTools) return [this.buildStatefulToolsDisabledItem()]
+
       return [await this.buildTempDirectoryResultItem(rawText)]
     }
 
     if (matchesKeyword(text, MOVE_RECENT_DOWNLOAD_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+      if (!settings.allowStatefulTools) return [this.buildStatefulToolsDisabledItem()]
+
       return [await this.buildRecentDownloadMoveResultItem(rawText)]
     }
 
     if (matchesKeyword(text, RECENT_DOWNLOAD_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+
       return [await this.buildRecentDownloadResultItem()]
     }
 
     if (matchesKeyword(text, COMMON_DIRECTORY_KEYWORDS)) {
+      if (fileBlockedItem) return [fileBlockedItem]
+
       return [this.buildCommonDirectoryItem(resolveCommonDirectory(text))]
     }
 
     if (matchesKeyword(text, TUFF_DIAGNOSTICS_KEYWORDS)) {
+      if (systemBlockedItem) return [systemBlockedItem]
+
       return [this.buildDiagnosticsItem(createDiagnosticsInfo(settings))]
     }
 
     if (matchesKeyword(text, SYSTEM_INFO_KEYWORDS)) {
+      if (systemBlockedItem) return [systemBlockedItem]
+
       return [this.buildSystemInfoItem(createSystemInfo())]
     }
 
     if (matchesKeyword(text, DISK_SPACE_KEYWORDS)) {
+      if (systemBlockedItem) return [systemBlockedItem]
+
       return [await this.buildDiskSpaceResultItem()]
     }
 
     if (matchesKeyword(text, DEEP_DIRECTORY_USAGE_KEYWORDS)) {
+      if (systemBlockedItem) return [systemBlockedItem]
+
       return [await this.buildDirectoryUsageResultItem({ deep: true })]
     }
 
     if (matchesKeyword(text, DIRECTORY_USAGE_KEYWORDS)) {
+      if (systemBlockedItem) return [systemBlockedItem]
+
       return [await this.buildDirectoryUsageResultItem({ deep: false })]
     }
 
     if (matchesKeyword(text, BATTERY_STATUS_KEYWORDS)) {
+      if (systemBlockedItem) return [systemBlockedItem]
+
       return [await this.buildBatteryStatusResultItem()]
     }
 
     if (matchesKeyword(text, SYSTEM_PROXY_STATUS_KEYWORDS)) {
+      if (networkBlockedItem) return [networkBlockedItem]
+
       return [this.buildSystemProxyStatusItem(await createSystemProxyInfo())]
     }
 
     if (matchesKeyword(text, NETWORK_STATUS_KEYWORDS)) {
+      if (networkBlockedItem) return [networkBlockedItem]
+
       return [this.buildNetworkStatusItem(createNetworkStatusInfo())]
     }
 
     const dnsQuery = parseDnsQuery(rawText)
     if (dnsQuery) {
+      if (networkBlockedItem) return [networkBlockedItem]
+
       return [await this.buildDnsQueryResultItem(dnsQuery.hostname, dnsQuery.deep)]
     }
 
     const port = parsePortQuery(text)
     if (port !== null) {
+      if (networkBlockedItem) return [networkBlockedItem]
+
       if (!isValidTcpPort(port)) {
         return [this.buildInvalidPortItem(port)]
       }
@@ -1166,6 +1234,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (matchesKeyword(text, PUBLIC_IP_KEYWORDS)) {
+      if (networkBlockedItem) return [networkBlockedItem]
+
       if (!settings.allowPublicIpLookup) {
         return [this.buildPublicIpDisabledItem()]
       }
@@ -1174,6 +1244,7 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (!matchesKeyword(text, LOCAL_IP_KEYWORDS)) return null
+    if (networkBlockedItem) return [networkBlockedItem]
 
     const addresses = getLocalIpAddresses()
     if (addresses.length === 0) {
@@ -1185,7 +1256,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
 
   private buildPublicIpLookupItem(result: QuickOpsPublicIpInfo | QuickOpsDegradedResult): TuffItem {
     if ('degradedReason' in result) {
-      return new TuffItemBuilder('quick-ops:public-ip:unavailable', this.type, this.id)
+      return new TuffItemBuilder(
+        'quick-ops:public-ip:unavailable',
+        LEGACY_QUICK_OPS_PROVIDER_TYPE,
+        LEGACY_QUICK_OPS_PROVIDER_ID
+      )
         .setKind('notification')
         .setTitle('公网 IP 查询失败')
         .setSubtitle(`QuickOps Network · ${result.message}`)
@@ -1204,7 +1279,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
         .build()
     }
 
-    return new TuffItemBuilder('quick-ops:public-ip', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:public-ip',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`公网 IP ${result.address}`)
       .setSubtitle(`QuickOps Network · Source ${result.source}`)
@@ -1234,8 +1313,104 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
       .build()
   }
 
+  private buildStatefulToolsDisabledItem(): TuffItem {
+    return new TuffItemBuilder(
+      'quick-ops:stateful-tools:disabled',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
+      .setKind('notification')
+      .setTitle('QuickOps 有状态工具已禁用')
+      .setSubtitle('QuickOps Policy · 当前策略仅允许只读工具')
+      .setIcon({ type: 'class', value: 'i-carbon-security' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'policy',
+            operation: 'stateful-tools-disabled',
+            riskLevel: 'safe',
+            degradedReason: QUICK_OPS_STATEFUL_POLICY_REASON
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildNetworkToolsDisabledItem(): TuffItem {
+    return new TuffItemBuilder(
+      'quick-ops:network-tools:disabled',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
+      .setKind('notification')
+      .setTitle('QuickOps 网络工具已禁用')
+      .setSubtitle('QuickOps Policy · 当前策略不允许网络类工具')
+      .setIcon({ type: 'class', value: 'i-carbon-network-3' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'policy',
+            operation: 'network-tools-disabled',
+            riskLevel: 'safe',
+            degradedReason: QUICK_OPS_NETWORK_POLICY_REASON
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildFileToolsDisabledItem(): TuffItem {
+    return new TuffItemBuilder(
+      'quick-ops:file-tools:disabled',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
+      .setKind('notification')
+      .setTitle('QuickOps 文件工具已禁用')
+      .setSubtitle('QuickOps Policy · 当前策略不允许文件类工具')
+      .setIcon({ type: 'class', value: 'i-carbon-folder' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'policy',
+            operation: 'file-tools-disabled',
+            riskLevel: 'safe',
+            degradedReason: QUICK_OPS_FILE_POLICY_REASON
+          }
+        }
+      })
+      .build()
+  }
+
+  private buildSystemToolsDisabledItem(): TuffItem {
+    return new TuffItemBuilder(
+      'quick-ops:system-tools:disabled',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
+      .setKind('notification')
+      .setTitle('QuickOps 系统工具已禁用')
+      .setSubtitle('QuickOps Policy · 当前策略不允许系统类工具')
+      .setIcon({ type: 'class', value: 'i-carbon-information' })
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'policy',
+            operation: 'system-tools-disabled',
+            riskLevel: 'safe',
+            degradedReason: QUICK_OPS_SYSTEM_POLICY_REASON
+          }
+        }
+      })
+      .build()
+  }
+
   private buildPublicIpDisabledItem(): TuffItem {
-    return new TuffItemBuilder('quick-ops:public-ip:disabled', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:public-ip:disabled',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('notification')
       .setTitle('公网 IP 查询未启用')
       .setSubtitle('QuickOps Network · 该命令需要外部只读请求，请先在高级设置中启用')
@@ -1285,11 +1460,13 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildLocalIpItem(addresses: QuickOpsLocalIpInfo[]): TuffItem {
     const primary = addresses[0]
     const summary = addresses.map((item) => `${item.name}: ${item.address}`).join(' · ')
-    const copyText = addresses
-      .map((item) => `${item.name} ${item.family} ${item.address}`)
-      .join('\n')
+    const copyText = formatLocalIpInfo(addresses)
 
-    return new TuffItemBuilder('quick-ops:local-ip', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:local-ip',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`本机 IP ${primary?.address ?? ''}`.trim())
       .setSubtitle(`QuickOps Network · ${summary}`)
@@ -1319,7 +1496,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   }
 
   private buildLocalIpUnavailableItem(): TuffItem {
-    return new TuffItemBuilder('quick-ops:local-ip:unavailable', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:local-ip:unavailable',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('notification')
       .setTitle('未找到本机 IP')
       .setSubtitle('QuickOps Network · 当前没有可展示的非 internal 网卡地址')
@@ -1377,7 +1558,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
-    return new TuffItemBuilder(`quick-ops:port:${probe.port}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:port:${probe.port}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind(probe.available ? 'result' : 'notification')
       .setTitle(`端口 ${probe.port} ${state}`)
       .setSubtitle(subtitle)
@@ -1402,7 +1587,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   }
 
   private buildInvalidPortItem(port: number): TuffItem {
-    return new TuffItemBuilder(`quick-ops:port:invalid:${port}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:port:invalid:${port}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('notification')
       .setTitle('端口号无效')
       .setSubtitle('QuickOps Network · 请输入 1 到 65535 之间的 TCP 端口')
@@ -1424,7 +1613,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildFileHashItem(info: QuickOpsFileHashInfo): TuffItem {
     const copyText = [`MD5 ${info.md5}`, `SHA1 ${info.sha1}`, `SHA256 ${info.sha256}`].join('\n')
 
-    return new TuffItemBuilder(`quick-ops:file-hash:${info.path}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:file-hash:${info.path}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`文件 Hash ${info.fileName}`)
       .setSubtitle(
@@ -1462,7 +1655,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildFileHashBatchItem(info: QuickOpsFileHashBatchInfo): TuffItem {
     const copyText = formatFileHashBatchInfo(info)
 
-    return new TuffItemBuilder('quick-ops:file-hash:batch', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:file-hash:batch',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`文件 Hash ${info.files.length} 个文件`)
       .setSubtitle(`QuickOps Files · ${formatFileSize(info.totalSize)} · SHA256 summaries copied`)
@@ -1506,8 +1703,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   ): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:file-hash:unavailable:${filePath ?? degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法计算文件 Hash')
@@ -1573,7 +1770,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   }
 
   private buildFileBase64DecodeItem(info: QuickOpsFileBase64DecodeInfo): TuffItem {
-    return new TuffItemBuilder(`quick-ops:file-base64-decode:${info.path}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:file-base64-decode:${info.path}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`Base64 已解码为 ${info.fileName}`)
       .setSubtitle(`QuickOps Files · ${formatFileSize(info.size)} · temporary file`)
@@ -1615,8 +1816,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildFileBase64DecodeUnavailableItem(degradedReason: string, message: string): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:file-base64-decode:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法解码 Base64 文件')
@@ -1637,7 +1838,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   }
 
   private buildFileBase64Item(info: QuickOpsFileBase64Info): TuffItem {
-    return new TuffItemBuilder(`quick-ops:file-base64:${info.path}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:file-base64:${info.path}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`文件 Base64 ${info.fileName}`)
       .setSubtitle(`QuickOps Files · ${formatFileSize(info.size)} · copy-only`)
@@ -1670,7 +1875,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
 
   private buildFileBase64BatchItem(info: QuickOpsFileBase64BatchInfo): TuffItem {
     const text = formatFileBase64BatchInfo(info)
-    return new TuffItemBuilder('quick-ops:file-base64:batch', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:file-base64:batch',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`文件 Base64 ${info.files.length} 个文件`)
       .setSubtitle(`QuickOps Files · ${formatFileSize(info.totalSize)} · copy-only batch`)
@@ -1708,8 +1917,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   ): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:file-base64:unavailable:${filePath ?? degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法编码文件 Base64')
@@ -1803,7 +2012,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
       }
     })
 
-    return new TuffItemBuilder(`quick-ops:file-path:${info.path}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:file-path:${info.path}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`复制路径 ${info.fileName}`)
       .setSubtitle(
@@ -1839,8 +2052,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildFilePathUnavailableItem(degradedReason: string, message: string): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:file-path:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法复制文件路径')
@@ -1870,7 +2083,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
       )
     }
 
-    return new TuffItemBuilder(`quick-ops:temp-text-file:${result.path}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:temp-text-file:${result.path}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`临时文本 ${result.fileName}`)
       .setSubtitle(`QuickOps Files · ${formatFileSize(result.size)} · temporary file`)
@@ -1920,7 +2137,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
       )
     }
 
-    return new TuffItemBuilder(`quick-ops:temp-directory:${result.path}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:temp-directory:${result.path}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`临时目录 ${result.directoryName}`)
       .setSubtitle('QuickOps Files · temporary directory')
@@ -1965,8 +2186,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   ): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:${operation}:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle(title)
@@ -1986,7 +2207,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   }
 
   private buildCommonDirectoryItem(info: QuickOpsCommonDirectoryInfo): TuffItem {
-    return new TuffItemBuilder(`quick-ops:common-directory:${info.id}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:common-directory:${info.id}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`打开${info.title}目录`)
       .setSubtitle(`QuickOps Files · ${info.subtitle} · ${info.path}`)
@@ -2052,7 +2277,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
 
   private buildRecentDownloadItem(info: QuickOpsRecentDownloadInfo): TuffItem {
     const folderPath = path.dirname(info.path)
-    return new TuffItemBuilder(`quick-ops:recent-download:${info.path}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:recent-download:${info.path}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`最近下载 ${info.fileName}`)
       .setSubtitle(
@@ -2104,8 +2333,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildRecentDownloadMoveItem(info: QuickOpsRecentDownloadMoveInfo): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:recent-download:move:${info.path}:${info.targetPath}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('action')
       .setTitle(`移动最近下载 ${info.fileName}`)
@@ -2155,8 +2384,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   ): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:recent-download:move:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法移动最近下载文件')
@@ -2178,8 +2407,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildRecentDownloadUnavailableItem(degradedReason: string, message: string): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:recent-download:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('未找到最近下载文件')
@@ -2201,7 +2430,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildDiagnosticsItem(info: QuickOpsDiagnosticsInfo): TuffItem {
     const text = formatDiagnosticsInfo(info)
 
-    return new TuffItemBuilder('quick-ops:tuff-diagnostics', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:tuff-diagnostics',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle('复制 Tuff 诊断信息')
       .setSubtitle(`QuickOps System · ${info.appVersion} · ${info.platform}/${info.arch}`)
@@ -2239,10 +2472,57 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
       .build()
   }
 
+  private buildCapabilityStatusItem(info: QuickOpsCapabilityInfo): TuffItem {
+    const text = formatQuickOpsCapabilityInfo(info)
+    const supported = info.entries.filter((entry) => entry.status === 'supported').length
+    const degraded = info.entries.filter((entry) => entry.status === 'degraded').length
+    const disabled = info.entries.filter((entry) => entry.status === 'disabled').length
+
+    return new TuffItemBuilder(
+      'quick-ops:capabilities',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
+      .setKind(info.enabled ? 'result' : 'notification')
+      .setTitle(info.enabled ? 'QuickOps 能力状态' : 'QuickOps 已禁用')
+      .setSubtitle(
+        `QuickOps System · ${info.platform} · supported=${supported}, degraded=${degraded}, disabled=${disabled}`
+      )
+      .setIcon({ type: 'class', value: 'i-carbon-checkmark-outline' })
+      .setActions([
+        {
+          id: 'quick-ops-copy-capabilities',
+          type: 'copy',
+          label: '复制能力状态',
+          primary: true,
+          payload: {
+            text
+          }
+        }
+      ])
+      .setMeta({
+        extension: {
+          quickOps: {
+            category: 'system',
+            operation: 'capability-status',
+            riskLevel: 'safe',
+            platform: info.platform,
+            enabled: info.enabled,
+            capabilities: info.entries
+          }
+        }
+      })
+      .build()
+  }
+
   private buildSystemInfoItem(info: QuickOpsSystemInfo): TuffItem {
     const text = formatSystemInfo(info)
 
-    return new TuffItemBuilder('quick-ops:system-info', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:system-info',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle('复制系统信息')
       .setSubtitle(
@@ -2291,7 +2571,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
     const text = formatDiskSpaceInfo(info)
     const primary = info.entries[0]
 
-    return new TuffItemBuilder('quick-ops:disk-space', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:disk-space',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle('复制磁盘空间')
       .setSubtitle(
@@ -2325,8 +2609,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildDiskSpaceUnavailableItem(degradedReason: string, message: string): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:disk-space:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法读取磁盘空间')
@@ -2363,7 +2647,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
     const text = formatDirectoryUsageInfo(info)
     const primary = info.entries[0]
 
-    return new TuffItemBuilder('quick-ops:directory-usage', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:directory-usage',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle('复制关键目录占用')
       .setSubtitle(
@@ -2406,8 +2694,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   ): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:directory-usage:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法读取关键目录占用')
@@ -2447,7 +2735,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
     const charging =
       info.charging === null ? 'unknown' : info.charging ? 'charging' : 'not charging'
 
-    return new TuffItemBuilder('quick-ops:battery-status', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:battery-status',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`电池状态 ${level}`)
       .setSubtitle(`QuickOps System · ${charging} · ${info.status}`)
@@ -2482,8 +2774,8 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private buildBatteryStatusUnavailableItem(degradedReason: string, message: string): TuffItem {
     return new TuffItemBuilder(
       `quick-ops:battery-status:unavailable:${degradedReason}`,
-      this.type,
-      this.id
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
     )
       .setKind('notification')
       .setTitle('无法读取电池状态')
@@ -2515,7 +2807,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
         ? `${info.proxies.length} proxy env${info.proxies.length === 1 ? '' : 's'}`
         : 'no proxy env'
 
-    return new TuffItemBuilder('quick-ops:network-status', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:network-status',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle('复制网络状态')
       .setSubtitle(`QuickOps Network · ${addressSummary} · ${dnsSummary} · ${proxySummary}`)
@@ -2558,7 +2854,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
           ? `${count} proxy source${count === 1 ? '' : 's'}`
           : 'no proxy source'
 
-    return new TuffItemBuilder('quick-ops:system-proxy-status', this.type, this.id)
+    return new TuffItemBuilder(
+      'quick-ops:system-proxy-status',
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle('复制系统代理状态')
       .setSubtitle(`QuickOps Network · ${info.platform} · ${statusSummary}`)
@@ -2596,7 +2896,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
   private async buildDnsQueryResultItem(hostname: string, deep = false): Promise<TuffItem> {
     const info = await createDnsQueryInfo(hostname, deep)
     if ('degradedReason' in info) {
-      return new TuffItemBuilder(`quick-ops:dns-query:unavailable:${hostname}`, this.type, this.id)
+      return new TuffItemBuilder(
+        `quick-ops:dns-query:unavailable:${hostname}`,
+        LEGACY_QUICK_OPS_PROVIDER_TYPE,
+        LEGACY_QUICK_OPS_PROVIDER_ID
+      )
         .setKind('notification')
         .setTitle('DNS 查询失败')
         .setSubtitle(`QuickOps Network · ${hostname} · ${info.message}`)
@@ -2616,7 +2920,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
         .build()
     }
 
-    return new TuffItemBuilder(`quick-ops:dns-query:${hostname}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:dns-query:${hostname}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('result')
       .setTitle(`DNS 查询 ${hostname}`)
       .setSubtitle(
@@ -2660,7 +2968,11 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
         ? `QuickOps · 已用时 ${formatDuration(remainingMs)}${formatLapSummary(session)}`
         : `QuickOps · 剩余 ${formatDuration(remainingMs)}${formatPomodoroCycleSummary(session)}`
 
-    return new TuffItemBuilder(`quick-ops:session:${session.kind}`, this.type, this.id)
+    return new TuffItemBuilder(
+      `quick-ops:session:${session.kind}`,
+      LEGACY_QUICK_OPS_PROVIDER_TYPE,
+      LEGACY_QUICK_OPS_PROVIDER_ID
+    )
       .setKind('action')
       .setTitle(`${session.title}${session.pausedAt ? '暂停中' : '运行中'}`)
       .setSubtitle(subtitle)
@@ -2696,14 +3008,34 @@ export class QuickOpsProvider implements ISearchProvider<ProviderContext> {
       .setDuration(duration)
       .setSources([
         {
-          providerId: this.id,
-          providerName: this.name,
+          providerId: LEGACY_QUICK_OPS_PROVIDER_ID,
+          providerName: LEGACY_QUICK_OPS_PROVIDER_NAME,
           duration,
           resultCount: items.length,
           status: 'success'
         }
       ])
       .build()
+  }
+}
+
+export class QuickOpsProvider
+  extends QuickOpsRuntimeHost
+  implements ISearchProvider<ProviderContext>
+{
+  readonly id = 'quick-ops-provider'
+  readonly type = 'system' as const
+  readonly name = 'QuickOps'
+  readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
+  readonly priority = 'fast' as const
+  readonly expectedDuration = 30
+
+  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+    return this.renderLegacyCoreBoxItems(query, signal)
+  }
+
+  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
+    return this.executeLegacyCoreBoxItem(args)
   }
 }
 
@@ -2723,6 +3055,12 @@ export function getLocalIpAddresses(): QuickOpsLocalIpInfo[] {
       return left.name.localeCompare(right.name)
     })
     .map(({ name, family, address }) => ({ name, family, address }))
+}
+
+export function formatLocalIpInfo(addresses: QuickOpsLocalIpInfo[]): string {
+  return addresses.length > 0
+    ? addresses.map((item) => `${item.name} ${item.family} ${item.address}`).join('\n')
+    : 'No non-internal local address'
 }
 
 export async function lookupPublicIp(
@@ -2789,6 +3127,234 @@ export function createNetworkStatusInfo(): QuickOpsNetworkStatusInfo {
     proxyStatus: proxies.length > 0 ? 'detected' : 'not-detected',
     proxies
   }
+}
+
+export function createQuickOpsCapabilityInfo(
+  settings: QuickOpsResolvedSettings,
+  platform: NodeJS.Platform = process.platform
+): QuickOpsCapabilityInfo {
+  const disabledReason = 'quickops-disabled'
+  const statusForRisk = (
+    riskLevel: QuickOpsCapabilityEntry['riskLevel'],
+    reason?: string
+  ): Pick<QuickOpsCapabilityEntry, 'status' | 'reason'> => {
+    if (!settings.enabled) return { status: 'disabled', reason }
+    if (!settings.allowStatefulTools && (riskLevel === 'stateful' || riskLevel === 'confirm')) {
+      return { status: 'disabled', reason: QUICK_OPS_STATEFUL_POLICY_REASON }
+    }
+    return { status: 'supported' }
+  }
+  const statusForNetwork = (): Pick<QuickOpsCapabilityEntry, 'status' | 'reason'> => {
+    if (!settings.enabled) return { status: 'disabled', reason: disabledReason }
+    if (!settings.allowNetworkTools) {
+      return { status: 'disabled', reason: QUICK_OPS_NETWORK_POLICY_REASON }
+    }
+    return { status: 'supported' }
+  }
+  const statusForFile = (
+    riskLevel: QuickOpsCapabilityEntry['riskLevel'],
+    reason?: string
+  ): Pick<QuickOpsCapabilityEntry, 'status' | 'reason'> => {
+    if (!settings.enabled) return { status: 'disabled', reason }
+    if (!settings.allowFileTools) {
+      return { status: 'disabled', reason: QUICK_OPS_FILE_POLICY_REASON }
+    }
+    return statusForRisk(riskLevel, reason)
+  }
+  const statusForSystem = (): Pick<QuickOpsCapabilityEntry, 'status' | 'reason'> => {
+    if (!settings.enabled) return { status: 'disabled', reason: disabledReason }
+    if (!settings.allowSystemTools) {
+      return { status: 'disabled', reason: QUICK_OPS_SYSTEM_POLICY_REASON }
+    }
+    return { status: 'supported' }
+  }
+  const statusForDeveloper = (): Pick<QuickOpsCapabilityEntry, 'status' | 'reason'> => {
+    if (!settings.enabled) return { status: 'disabled', reason: disabledReason }
+    if (!settings.allowDeveloperTools) {
+      return { status: 'disabled', reason: QUICK_OPS_DEVELOPER_POLICY_REASON }
+    }
+    return { status: 'supported' }
+  }
+  const statusForHighRisk = (
+    fallbackReason: string
+  ): Pick<QuickOpsCapabilityEntry, 'status' | 'reason'> => {
+    if (!settings.enabled) return { status: 'disabled', reason: disabledReason }
+    if (!settings.allowHighRiskTools) {
+      return { status: 'disabled', reason: QUICK_OPS_HIGH_RISK_POLICY_REASON }
+    }
+    return { status: 'disabled', reason: fallbackReason }
+  }
+  const platformLabel = platform
+  const systemProxyReason =
+    platform === 'darwin'
+      ? 'macos-scutil'
+      : platform === 'win32'
+        ? 'windows-internet-settings'
+        : platform === 'linux'
+          ? 'linux-gsettings-fallback'
+          : 'unsupported-platform'
+  const batteryReason =
+    platform === 'darwin'
+      ? 'macos-pmset'
+      : platform === 'win32'
+        ? 'windows-cim'
+        : platform === 'linux'
+          ? 'linux-sysfs'
+          : 'unsupported-platform'
+
+  const entries: QuickOpsCapabilityEntry[] = [
+    {
+      id: 'quickops.state.keepAwake',
+      label: '显示器保持唤醒',
+      riskLevel: 'stateful',
+      ...statusForRisk('stateful', disabledReason)
+    },
+    {
+      id: 'quickops.state.systemAwake',
+      label: '系统睡眠阻止',
+      riskLevel: 'stateful',
+      ...statusForRisk('stateful', disabledReason)
+    },
+    {
+      id: 'quickops.state.timer',
+      label: '快速计时器 / 秒表 / 番茄钟',
+      riskLevel: 'stateful',
+      ...statusForRisk('stateful', disabledReason)
+    },
+    {
+      id: 'quickops.screen.overlay',
+      label: '清洁屏幕 / 纯色屏幕',
+      riskLevel: 'stateful',
+      ...statusForRisk('stateful', disabledReason)
+    },
+    {
+      id: 'quickops.network.local',
+      label: '本机网络只读查询',
+      riskLevel: 'safe',
+      ...statusForNetwork()
+    },
+    {
+      id: 'quickops.network.publicIp',
+      label: '公网 IP opt-in 查询',
+      riskLevel: 'safe',
+      status: !settings.enabled
+        ? 'disabled'
+        : !settings.allowNetworkTools
+          ? 'disabled'
+          : settings.allowPublicIpLookup
+            ? 'supported'
+            : 'disabled',
+      reason: !settings.enabled
+        ? disabledReason
+        : !settings.allowNetworkTools
+          ? QUICK_OPS_NETWORK_POLICY_REASON
+          : settings.allowPublicIpLookup
+            ? undefined
+            : 'public-ip-disabled'
+    },
+    {
+      id: 'quickops.network.systemProxy',
+      label: '系统代理只读摘要',
+      riskLevel: 'safe',
+      status: !settings.enabled
+        ? 'disabled'
+        : !settings.allowNetworkTools
+          ? 'disabled'
+          : systemProxyReason === 'unsupported-platform'
+            ? 'degraded'
+            : 'supported',
+      reason: !settings.enabled
+        ? disabledReason
+        : !settings.allowNetworkTools
+          ? QUICK_OPS_NETWORK_POLICY_REASON
+          : systemProxyReason
+    },
+    {
+      id: 'quickops.files.readOnly',
+      label: '文件 Hash / Base64 / 路径复制',
+      riskLevel: 'safe',
+      ...statusForFile('safe', disabledReason)
+    },
+    {
+      id: 'quickops.files.writeTemp',
+      label: 'Tuff 临时文件写入',
+      riskLevel: 'confirm',
+      ...statusForFile('confirm', disabledReason)
+    },
+    {
+      id: 'quickops.files.moveRecentDownload',
+      label: '最近下载文件移动',
+      riskLevel: 'confirm',
+      ...statusForFile('confirm', disabledReason)
+    },
+    {
+      id: 'quickops.system.diagnostics',
+      label: '脱敏诊断 / 系统信息',
+      riskLevel: 'safe',
+      ...statusForSystem()
+    },
+    {
+      id: 'quickops.system.storage',
+      label: '磁盘空间 / 目录占用',
+      riskLevel: 'safe',
+      ...statusForSystem()
+    },
+    {
+      id: 'quickops.system.battery',
+      label: '电池状态',
+      riskLevel: 'safe',
+      status: !settings.enabled
+        ? 'disabled'
+        : !settings.allowSystemTools
+          ? 'disabled'
+          : batteryReason === 'unsupported-platform'
+            ? 'degraded'
+            : 'supported',
+      reason: !settings.enabled
+        ? disabledReason
+        : !settings.allowSystemTools
+          ? QUICK_OPS_SYSTEM_POLICY_REASON
+          : batteryReason
+    },
+    {
+      id: 'quickops.developer.preview',
+      label: 'PreviewSDK 开发者工具',
+      riskLevel: 'safe',
+      ...statusForDeveloper()
+    },
+    {
+      id: 'quickops.network.portKill',
+      label: '真实端口进程终止',
+      riskLevel: 'danger',
+      ...(!settings.allowNetworkTools
+        ? { status: 'disabled' as const, reason: QUICK_OPS_NETWORK_POLICY_REASON }
+        : statusForHighRisk('copy-only-command'))
+    }
+  ]
+
+  return {
+    platform: platformLabel,
+    enabled: settings.enabled,
+    entries
+  }
+}
+
+export function formatQuickOpsCapabilityInfo(info: QuickOpsCapabilityInfo): string {
+  return [
+    `QuickOps Capabilities (${info.platform})`,
+    `Enabled: ${info.enabled ? 'yes' : 'no'}`,
+    ...info.entries.map((entry) =>
+      [
+        entry.id,
+        entry.status,
+        `risk=${entry.riskLevel}`,
+        entry.reason ? `reason=${entry.reason}` : null,
+        entry.label
+      ]
+        .filter((part): part is string => Boolean(part))
+        .join(' | ')
+    )
+  ].join('\n')
 }
 
 export function formatNetworkStatusInfo(info: QuickOpsNetworkStatusInfo): string {
@@ -4932,6 +5498,12 @@ function getQuickOpsResolvedSettings(settings?: QuickOpsSettingsInput): QuickOps
   return {
     enabled: settings?.enabled !== false,
     showRunningSessionsInCoreBox: settings?.showRunningSessionsInCoreBox !== false,
+    allowStatefulTools: settings?.allowStatefulTools !== false,
+    allowNetworkTools: settings?.allowNetworkTools !== false,
+    allowFileTools: settings?.allowFileTools !== false,
+    allowSystemTools: settings?.allowSystemTools !== false,
+    allowDeveloperTools: settings?.allowDeveloperTools !== false,
+    allowHighRiskTools: settings?.allowHighRiskTools === true,
     defaultKeepAwakeDurationMs: minutesToMs(
       settings?.defaultKeepAwakeDurationMinutes,
       DEFAULT_KEEP_AWAKE_DURATION_MS
@@ -4968,6 +5540,18 @@ function getQuickOpsResolvedSettings(settings?: QuickOpsSettingsInput): QuickOps
     defaultScreenCleanMode: settings?.defaultScreenCleanMode === 'white' ? 'white' : 'black',
     allowPublicIpLookup: settings?.allowPublicIpLookup === true
   }
+}
+
+function isQuickOpsStatefulOperationAllowed(
+  settings: QuickOpsResolvedSettings,
+  meta: QuickOpsActionMeta & QuickOpsFileExecuteMeta
+): boolean {
+  if (settings.allowStatefulTools) return true
+  if (meta.operation === 'recent-download-move') return false
+  const action = (meta as { action?: QuickOpsAction }).action
+  if (!action) return true
+
+  return false
 }
 
 function minutesToMs(value: unknown, fallbackMs: number): number {
@@ -5378,4 +5962,4 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-export const quickOpsProvider = new QuickOpsProvider()
+export const quickOpsRuntime = new QuickOpsRuntimeHost()

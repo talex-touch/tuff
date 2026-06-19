@@ -127,7 +127,7 @@ export interface FlowConsentCheckRequest {
 
 export interface FlowConsentCheckResponse {
   success: boolean
-  data?: { allowed: boolean }
+  data?: { allowed: boolean; requiresConfirmation?: boolean }
   error?: { message: string }
 }
 
@@ -140,7 +140,7 @@ export interface FlowConsentGrantRequest {
 
 export interface FlowConsentGrantResponse {
   success: boolean
-  data?: { token?: string }
+  data?: { token?: string; confirmationToken?: string }
   error?: { message: string }
 }
 

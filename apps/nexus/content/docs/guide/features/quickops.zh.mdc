@@ -1,0 +1,107 @@
+# Tuff QuickOps
+
+> QuickOps 是由官方 `touch-quickops` 插件承接 CoreBox 入口、由 CoreApp 保留本地 runtime / host capability / Flow confirmation 的本地系统快捷工具集，用来处理保持唤醒、计时、文件路径、网络诊断、开发者转换等高频小操作。
+
+## 使用入口
+
+1. 打开 CoreBox。
+2. 直接输入命令，例如 `timer 25m`、`本机 IP`、`hash "/path/to/file"`。
+3. 选择结果执行、复制结果，或进入 Action Panel 查看可用动作。
+4. 在设置页的 Tools / QuickOps 区域调整默认时长和本地策略开关。
+
+当前 QuickOps 不需要用户额外安装插件；官方 `touch-quickops` 已承接 CoreBox root-result 入口、只读面板和低风险状态控制触发：能力摘要、运行会话、审计摘要、系统信息、脱敏诊断、磁盘空间、目录占用、网络状态、本机 IP、端口状态、DNS 查询、文件 Hash、文件 Base64、最近下载、常用目录、路径格式、文本格式化、电池状态、系统代理，以及 stop/pause/resume/lap/reset 这类当前会话控制。现有状态型 runtime、Flow target、confirmation、settings/tray 和 platform host capability 仍在 CoreApp 本地能力里，并以 `quickOpsRuntime` host boundary 保留。后续会把更多 QuickOps 业务 runtime、状态/诊断面板、settings/tray 入口和可扩展编排迁到官方插件或插件专属 runtime boundary。普通插件和 Flow 仍只能通过受控 SDK / Flow target 读取或触发已开放能力。
+
+## 常用命令
+
+| 类别 | 输入示例 | 当前行为 |
+| --- | --- | --- |
+| 保持唤醒 | `keep awake 30m`、`禁止息屏 1小时` | 防止显示器休眠，到期或停止时自动释放 |
+| 系统睡眠阻止 | `prevent system sleep 30m`、`禁止系统睡眠 30分钟` | 阻止应用挂起，不修改系统电源计划 |
+| 计时器 | `timer 10m`、`pause timer`、`resume timer` | 启动、暂停、恢复、停止本地倒计时 |
+| 番茄钟 | `pomodoro`、`pomodoro 25/5`、`循环番茄钟 4轮` | 支持内置模板、自定义模板、循环和长休息 |
+| 秒表 | `stopwatch`、`秒表分段` | 开始、暂停、恢复、分段、重置 |
+| 屏幕清洁 | `clean screen`、`白底清洁屏幕` | 多显示器全屏遮罩，支持倒计时和长按 Esc 退出 |
+| 屏幕测试 | `red screen test`、`蓝色屏幕测试` | 复用清洁屏幕 overlay 显示纯色 |
+| 网络只读 | `local ip`、`port 3000`、`dns example.com`、`network status` | 本机地址、端口状态、DNS 和代理摘要 |
+| 文件只读 | `hash "/path"`、`file base64 "/path"`、`copy path "/path"` | Hash、Base64、路径格式复制 |
+| 常用目录 | `open downloads`、`open logs` | 打开受限常用目录或复制路径 |
+| 诊断信息 | `system info`、`tuff diagnostics`、`disk space` | 本地系统摘要、脱敏诊断、磁盘/目录占用 |
+| 开发者转换 | `json`、`url encode`、`base64 decode`、`case snake`、`qr code ...` | 通过 PreviewSDK 做本地纯转换 |
+
+## Ops 场景速查
+
+QuickOps 更适合处理“当前这台设备上的小型排障和临时操作”，而不是替代终端脚本或长期自动化。
+
+| 场景 | 推荐输入 | 适合输出 |
+| --- | --- | --- |
+| 排查网络连通性 | `network status`、`local ip`、`dns example.com`、`port 3000` | 本机地址、DNS、端口占用和代理摘要 |
+| 整理排障信息 | `tuff diagnostics`、`system info`、`disk space`、`directory usage` | 可复制给同事或 issue 的脱敏摘要 |
+| 处理文件路径 | `hash "/path"`、`file base64 "/path"`、`copy path "/path"`、`recent download` | 文件摘要、路径格式和最近下载元数据 |
+| 临时专注/演示 | `keep awake 30m`、`timer 25m`、`pomodoro`、`stopwatch` | 有到期或停止入口的本地状态会话 |
+| 屏幕维护 | `clean screen`、`red screen test`、`blue screen test` | 全屏遮罩、倒计时和长按 Esc 退出 |
+
+如果需要固定团队流程、复杂批处理或连接外部系统，建议用插件基于 QuickOps 能力做扩展，而不是把命令塞进 QuickOps 内置命名空间。
+
+## 设置与策略
+
+QuickOps 的设置集中在 Tools / QuickOps 区域：
+
+| 设置 | 默认 | 说明 |
+| --- | --- | --- |
+| QuickOps 总开关 | 开启 | 关闭后普通工具命令不可用，但能力摘要仍可查询 |
+| 运行中状态展示 | 开启 | 在 CoreBox / 托盘展示运行中的计时、番茄钟、清洁屏幕等会话 |
+| 有状态工具 | 开启 | 控制保持唤醒、计时器、番茄钟、秒表、清洁屏幕、临时写入等 |
+| 网络工具 | 开启 | 控制本机 IP、端口、DNS、代理、公网 IP 查询 |
+| 文件工具 | 开启 | 控制 Hash、Base64、路径、常用目录、最近下载、临时文件/目录 |
+| 系统工具 | 开启 | 控制系统信息、诊断、磁盘空间、目录占用、电池状态 |
+| 开发者工具 | 开启 | 控制 JSON / URL / Base64 / JWT / Regex / QR / 大小写等 PreviewSDK 命令 |
+| 高风险工具 | 关闭 | 当前仅作为高风险总闸；真实端口 kill 仍只提供复制命令，不会直接执行 |
+| 公网 IP 查询 | 关闭 | 只有显式开启后才会向外部服务查询公网 IP |
+
+当策略关闭时，CoreBox 会返回明确的 disabled reason，例如 `network-tools-disabled-by-policy`。Flow 调用同类能力也会 fail-closed。
+
+## 安全边界
+
+- QuickOps 默认本地执行，不把剪贴板、文件内容或网络响应写入日志。
+- 端口释放当前只生成 copy-only 命令，不执行 kill / Stop-Process。
+- 文件 Base64 有大小限制；临时文件和临时目录只写入 Tuff 临时工作区。
+- 公网 IP 查询默认关闭，开启后才会发起一次只读外部请求。
+- Flow 中标记为 `requireConfirm` 的目标必须经过一次性确认 token。
+- 本地审计摘要只记录 Flow delivery 的 target、decision、reason、是否需要确认和 payload key 列表，不保存 payload 内容。
+
+## 插件与扩展
+
+QuickOps 当前状态型 runtime 仍由 CoreApp 承载，但官方 `touch-quickops` 插件已经承接 CoreBox 前台入口、只读面板和低风险状态控制触发；目标形态是该插件继续承载状态/诊断面板和可迁移业务逻辑。普通插件可以基于 QuickOps 做三类扩展：
+
+| 扩展方式 | 适合场景 | 边界 |
+| --- | --- | --- |
+| 读取能力摘要 | 根据平台、策略和 degraded reason 决定是否展示入口 | 只能读 `capabilities()`，不能绕过本地策略 |
+| 组合已有工具 | 在插件工作流里调用系统信息、Hash、DNS、计时等已有 Flow target | 需要复用 Flow 确认模型，`requireConfirm` 目标必须由 App UI 发放一次性 token |
+| 提供自定义工具 | 插件自己注册 CoreBox 结果、Preview 能力或 Flow target，并把 QuickOps 结果作为上下文 | 插件能力需要走 Manifest permissions，不要直接调用私有 IPC 或写入 QuickOps runtime |
+
+如果你只是安装或编写普通插件，应该把 QuickOps 当成只读系统能力来组合。只有参与仓库开发时，才需要修改官方 `touch-quickops` 插件、QuickOps host capability、Flow target、typed transport 和 SDK facade。
+
+开发者可查看 [QuickOps 开发者 API](../../dev/api/quickops.zh.md) 了解可用 SDK、Flow target 目录和内置能力修改 checklist。
+
+### 什么时候写插件
+
+- 团队想把 `network status`、`disk space`、`tuff diagnostics` 汇总成自己的健康检查面板。
+- 插件已有发布、部署、测试或日志分析流程，只需要把 QuickOps 的本地诊断结果作为上下文。
+- 需要连接公司内部服务、工单系统或自定义脚本，并且能明确声明 Manifest 权限。
+
+这些场景应该在插件里实现自己的入口和权限提示。QuickOps 只提供受策略约束的本地能力、Flow target 和只读 SDK，不负责托管插件私有逻辑。
+
+## 当前未完成项
+
+这些能力仍在后续阶段，不应按已完成能力使用：
+
+- 真实端口 kill / 批量文件操作 / 长期系统设置修改。
+- 企业集中策略下发、集中审计和组织级锁定。
+- 真实 AI UI 自然语言编排、确认界面证据和高风险执行治理。
+- packaged app quit、清洁屏幕视觉、三平台真实网络/系统/文件 evidence。
+
+## 相关文档
+
+- [快速预览](./preview.zh.md)
+- [CoreBox 工作流现状](./corebox-workflow.zh.md)
+- [QuickOps 开发者 API](../../dev/api/quickops.zh.md)

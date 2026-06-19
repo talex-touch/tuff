@@ -9,7 +9,7 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { coreBoxManager } from '../box-tool/core-box/manager'
-import { quickOpsProvider } from '../box-tool/addon/quick-ops/quick-ops-provider'
+import { quickOpsRuntime } from '../box-tool/addon/quick-ops/quick-ops-provider'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -172,7 +172,7 @@ export class TrayMenuBuilder {
           {
             label: t('tray.quickOpsStopAll'),
             click: () => {
-              quickOpsProvider.cleanup('tray-stop-all')
+              quickOpsRuntime.cleanup('tray-stop-all')
             }
           }
         ]

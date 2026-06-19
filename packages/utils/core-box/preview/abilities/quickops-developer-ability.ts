@@ -86,15 +86,81 @@ const MAX_REGEX_TARGET_LENGTH = 2000;
 const MAX_REGEX_MATCHES = 20;
 const MAX_TABLE_ROWS = 100;
 const MAX_TABLE_COLUMNS = 20;
-const MAX_QR_CODE_BYTE_LENGTH = 134;
+const MAX_QR_CODE_BYTE_LENGTH = 230;
 const QR_ECC_LEVEL = "L";
 const QR_VERSIONS = [
-  { version: 1, size: 21, blockCount: 1, dataCodewordsPerBlock: 19, eccCodewordsPerBlock: 7 },
-  { version: 2, size: 25, blockCount: 1, dataCodewordsPerBlock: 34, eccCodewordsPerBlock: 10 },
-  { version: 3, size: 29, blockCount: 1, dataCodewordsPerBlock: 55, eccCodewordsPerBlock: 15 },
-  { version: 4, size: 33, blockCount: 1, dataCodewordsPerBlock: 80, eccCodewordsPerBlock: 20 },
-  { version: 5, size: 37, blockCount: 1, dataCodewordsPerBlock: 108, eccCodewordsPerBlock: 26 },
-  { version: 6, size: 41, blockCount: 2, dataCodewordsPerBlock: 68, eccCodewordsPerBlock: 18 },
+  {
+    version: 1,
+    size: 21,
+    blockCount: 1,
+    dataCodewordsPerBlock: 19,
+    eccCodewordsPerBlock: 7,
+    alignmentCenters: [],
+  },
+  {
+    version: 2,
+    size: 25,
+    blockCount: 1,
+    dataCodewordsPerBlock: 34,
+    eccCodewordsPerBlock: 10,
+    alignmentCenters: [6, 18],
+  },
+  {
+    version: 3,
+    size: 29,
+    blockCount: 1,
+    dataCodewordsPerBlock: 55,
+    eccCodewordsPerBlock: 15,
+    alignmentCenters: [6, 22],
+  },
+  {
+    version: 4,
+    size: 33,
+    blockCount: 1,
+    dataCodewordsPerBlock: 80,
+    eccCodewordsPerBlock: 20,
+    alignmentCenters: [6, 26],
+  },
+  {
+    version: 5,
+    size: 37,
+    blockCount: 1,
+    dataCodewordsPerBlock: 108,
+    eccCodewordsPerBlock: 26,
+    alignmentCenters: [6, 30],
+  },
+  {
+    version: 6,
+    size: 41,
+    blockCount: 2,
+    dataCodewordsPerBlock: 68,
+    eccCodewordsPerBlock: 18,
+    alignmentCenters: [6, 34],
+  },
+  {
+    version: 7,
+    size: 45,
+    blockCount: 2,
+    dataCodewordsPerBlock: 78,
+    eccCodewordsPerBlock: 20,
+    alignmentCenters: [6, 22, 38],
+  },
+  {
+    version: 8,
+    size: 49,
+    blockCount: 2,
+    dataCodewordsPerBlock: 97,
+    eccCodewordsPerBlock: 24,
+    alignmentCenters: [6, 24, 42],
+  },
+  {
+    version: 9,
+    size: 53,
+    blockCount: 2,
+    dataCodewordsPerBlock: 116,
+    eccCodewordsPerBlock: 30,
+    alignmentCenters: [6, 26, 46],
+  },
 ] as const;
 const UTC_OFFSET_PATTERN = /\b(?:UTC|GMT)\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?\b/i;
 
@@ -1228,7 +1294,7 @@ function createQrCodeSvg(data: Uint8Array): {
   if (!version) return null;
 
   const modules = createEmptyQrModules(version.size);
-  drawQrFunctionPatterns(modules);
+  drawQrFunctionPatterns(modules, version);
   const dataCodewords = buildQrDataCodewords(data, getQrDataCodewordCount(version));
   const codewords = buildQrFinalCodewords(dataCodewords, version);
   drawQrDataCodewords(modules, codewords);
@@ -1257,12 +1323,15 @@ function createEmptyQrModules(size: number): Array<Array<{ dark: boolean; reserv
   );
 }
 
-function drawQrFunctionPatterns(modules: Array<Array<{ dark: boolean; reserved: boolean }>>): void {
+function drawQrFunctionPatterns(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  version: (typeof QR_VERSIONS)[number],
+): void {
   const size = modules.length;
   drawFinderPattern(modules, 0, 0);
   drawFinderPattern(modules, size - 7, 0);
   drawFinderPattern(modules, 0, size - 7);
-  drawAlignmentPatterns(modules);
+  drawAlignmentPatterns(modules, version.alignmentCenters);
 
   for (let index = 8; index < size - 8; index += 1) {
     setQrModule(modules, 6, index, index % 2 === 0, true);
@@ -1271,6 +1340,7 @@ function drawQrFunctionPatterns(modules: Array<Array<{ dark: boolean; reserved: 
 
   setQrModule(modules, 8, size - 8, true, true);
   reserveQrFormatAreas(modules);
+  reserveQrVersionAreas(modules, version.version);
 }
 
 function drawFinderPattern(
@@ -1293,11 +1363,24 @@ function drawFinderPattern(
   }
 }
 
-function drawAlignmentPatterns(modules: Array<Array<{ dark: boolean; reserved: boolean }>>): void {
-  const center = modules.length - 7;
-  if (center <= 14) return;
+function drawAlignmentPatterns(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  centers: readonly number[],
+): void {
+  for (const centerColumn of centers) {
+    for (const centerRow of centers) {
+      if (isQrAlignmentOverFinder(modules.length, centerColumn, centerRow)) continue;
+      drawAlignmentPattern(modules, centerColumn, centerRow);
+    }
+  }
+}
 
-  drawAlignmentPattern(modules, center, center);
+function isQrAlignmentOverFinder(size: number, centerColumn: number, centerRow: number): boolean {
+  return (
+    (centerColumn === 6 && centerRow === 6) ||
+    (centerColumn === 6 && centerRow === size - 7) ||
+    (centerColumn === size - 7 && centerRow === 6)
+  );
 }
 
 function drawAlignmentPattern(
@@ -1324,6 +1407,21 @@ function reserveQrFormatAreas(modules: Array<Array<{ dark: boolean; reserved: bo
   for (let index = 0; index < 8; index += 1) {
     reserveQrModule(modules, size - 1 - index, 8);
     reserveQrModule(modules, 8, size - 1 - index);
+  }
+}
+
+function reserveQrVersionAreas(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  version: number,
+): void {
+  if (version < 7) return;
+
+  const size = modules.length;
+  for (let y = 0; y < 6; y += 1) {
+    for (let x = 0; x < 3; x += 1) {
+      reserveQrModule(modules, size - 11 + x, y);
+      reserveQrModule(modules, y, size - 11 + x);
+    }
   }
 }
 
@@ -1468,6 +1566,7 @@ function drawQrDataCodewords(
   }
 
   drawQrFormatBits(modules);
+  drawQrVersionBits(modules);
 }
 
 function shouldApplyQrMask(column: number, row: number): boolean {
@@ -1503,6 +1602,31 @@ function getQrFormatBits(): number[] {
   }
   const masked = ((format << 10) | value) ^ 0b101010000010010;
   return Array.from({ length: 15 }, (_, index) => (masked >>> index) & 1);
+}
+
+function drawQrVersionBits(modules: Array<Array<{ dark: boolean; reserved: boolean }>>): void {
+  const version = (modules.length - 17) / 4;
+  if (version < 7) return;
+
+  const bits = getQrVersionBits(version);
+  const size = modules.length;
+  for (let index = 0; index < bits.length; index += 1) {
+    const x = index % 3;
+    const y = Math.floor(index / 3);
+    const dark = bits[index] === 1;
+    setQrModule(modules, size - 11 + x, y, dark, true);
+    setQrModule(modules, y, size - 11 + x, dark, true);
+  }
+}
+
+function getQrVersionBits(version: number): number[] {
+  let value = version << 12;
+  const generator = 0b1111100100101;
+  for (let bit = 17; bit >= 12; bit -= 1) {
+    if (((value >>> bit) & 1) === 1) value ^= generator << (bit - 12);
+  }
+  const encoded = (version << 12) | value;
+  return Array.from({ length: 18 }, (_, index) => (encoded >>> index) & 1);
 }
 
 function renderQrSvg(modules: boolean[][], quietZone: number): string {

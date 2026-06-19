@@ -297,6 +297,37 @@ import type {
   PlatformCapabilityListResponse,
 } from "./types/platform";
 
+import type {
+  QuickOpsBatteryStatusGetResponse,
+  QuickOpsAuditGetRequest,
+  QuickOpsAuditGetResponse,
+  QuickOpsCapabilityGetResponse,
+  QuickOpsCommonDirectoryGetRequest,
+  QuickOpsCommonDirectoryGetResponse,
+  QuickOpsDiagnosticsGetResponse,
+  QuickOpsDirectoryUsageGetRequest,
+  QuickOpsDirectoryUsageGetResponse,
+  QuickOpsDiskSpaceGetResponse,
+  QuickOpsDnsQueryGetRequest,
+  QuickOpsDnsQueryGetResponse,
+  QuickOpsFileBase64GetRequest,
+  QuickOpsFileBase64GetResponse,
+  QuickOpsFileHashGetRequest,
+  QuickOpsFileHashGetResponse,
+  QuickOpsFormatTextGetRequest,
+  QuickOpsFormatTextGetResponse,
+  QuickOpsNetworkStatusGetResponse,
+  QuickOpsPathFormatGetRequest,
+  QuickOpsPathFormatGetResponse,
+  QuickOpsPortStatusGetRequest,
+  QuickOpsPortStatusGetResponse,
+  QuickOpsQueryLocalIpGetResponse,
+  QuickOpsRecentDownloadGetResponse,
+  QuickOpsSessionsGetResponse,
+  QuickOpsSystemProxyGetResponse,
+  QuickOpsSystemInfoGetResponse,
+} from "./types/quick-ops";
+
 // ============================================================================
 // Platform Events
 // ============================================================================
@@ -2288,6 +2319,123 @@ export const PlatformEvents = {
   },
 } as const;
 
+export const QuickOpsEvents = {
+  capabilities: {
+    get: defineEvent("quick-ops")
+      .module("capabilities")
+      .event("get")
+      .define<void, QuickOpsCapabilityGetResponse>(),
+  },
+  sessions: {
+    get: defineEvent("quick-ops")
+      .module("sessions")
+      .event("get")
+      .define<void, QuickOpsSessionsGetResponse>(),
+  },
+  audit: {
+    get: defineEvent("quick-ops")
+      .module("audit")
+      .event("get")
+      .define<QuickOpsAuditGetRequest | void, QuickOpsAuditGetResponse>(),
+  },
+  systemInfo: {
+    get: defineEvent("quick-ops")
+      .module("system-info")
+      .event("get")
+      .define<void, QuickOpsSystemInfoGetResponse>(),
+  },
+  tuffDiagnostics: {
+    get: defineEvent("quick-ops")
+      .module("tuff-diagnostics")
+      .event("get")
+      .define<void, QuickOpsDiagnosticsGetResponse>(),
+  },
+  diskSpace: {
+    get: defineEvent("quick-ops")
+      .module("disk-space")
+      .event("get")
+      .define<void, QuickOpsDiskSpaceGetResponse>(),
+  },
+  directoryUsage: {
+    get: defineEvent("quick-ops")
+      .module("directory-usage")
+      .event("get")
+      .define<QuickOpsDirectoryUsageGetRequest | void, QuickOpsDirectoryUsageGetResponse>(),
+  },
+  queryLocalIp: {
+    get: defineEvent("quick-ops")
+      .module("query-local-ip")
+      .event("get")
+      .define<void, QuickOpsQueryLocalIpGetResponse>(),
+  },
+  portStatus: {
+    get: defineEvent("quick-ops")
+      .module("port-status")
+      .event("get")
+      .define<QuickOpsPortStatusGetRequest, QuickOpsPortStatusGetResponse>(),
+  },
+  dnsQuery: {
+    get: defineEvent("quick-ops")
+      .module("dns-query")
+      .event("get")
+      .define<QuickOpsDnsQueryGetRequest, QuickOpsDnsQueryGetResponse>(),
+  },
+  fileHash: {
+    get: defineEvent("quick-ops")
+      .module("file-hash")
+      .event("get")
+      .define<QuickOpsFileHashGetRequest, QuickOpsFileHashGetResponse>(),
+  },
+  fileBase64: {
+    get: defineEvent("quick-ops")
+      .module("file-base64")
+      .event("get")
+      .define<QuickOpsFileBase64GetRequest, QuickOpsFileBase64GetResponse>(),
+  },
+  recentDownload: {
+    get: defineEvent("quick-ops")
+      .module("recent-download")
+      .event("get")
+      .define<void, QuickOpsRecentDownloadGetResponse>(),
+  },
+  commonDirectory: {
+    get: defineEvent("quick-ops")
+      .module("common-directory")
+      .event("get")
+      .define<QuickOpsCommonDirectoryGetRequest | void, QuickOpsCommonDirectoryGetResponse>(),
+  },
+  pathFormat: {
+    get: defineEvent("quick-ops")
+      .module("path-format")
+      .event("get")
+      .define<QuickOpsPathFormatGetRequest, QuickOpsPathFormatGetResponse>(),
+  },
+  formatText: {
+    get: defineEvent("quick-ops")
+      .module("format-text")
+      .event("get")
+      .define<QuickOpsFormatTextGetRequest, QuickOpsFormatTextGetResponse>(),
+  },
+  networkStatus: {
+    get: defineEvent("quick-ops")
+      .module("network-status")
+      .event("get")
+      .define<void, QuickOpsNetworkStatusGetResponse>(),
+  },
+  batteryStatus: {
+    get: defineEvent("quick-ops")
+      .module("battery-status")
+      .event("get")
+      .define<void, QuickOpsBatteryStatusGetResponse>(),
+  },
+  systemProxy: {
+    get: defineEvent("quick-ops")
+      .module("system-proxy")
+      .event("get")
+      .define<void, QuickOpsSystemProxyGetResponse>(),
+  },
+} as const;
+
 export const AgentsEvents = {
   api: {
     list: defineEvent("agents")
@@ -2748,6 +2896,7 @@ export const TuffEvents = {
   notification: NotificationEvents,
   permission: PermissionEvents,
   platform: PlatformEvents,
+  quickOps: QuickOpsEvents,
   agents: AgentsEvents,
   auth: AuthEvents,
   account: AccountEvents,

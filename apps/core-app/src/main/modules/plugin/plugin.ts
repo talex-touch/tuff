@@ -25,7 +25,37 @@ import type {
   PluginStandardChannelData
 } from '@talex-touch/utils/plugin/sdk/channel-client'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
+import type {
+  QuickOpsBatteryStatusGetResponse,
+  QuickOpsAuditGetRequest,
+  QuickOpsAuditGetResponse,
+  QuickOpsCapabilityGetResponse,
+  QuickOpsCommonDirectoryGetRequest,
+  QuickOpsCommonDirectoryGetResponse,
+  QuickOpsDiagnosticsGetResponse,
+  QuickOpsDirectoryUsageGetRequest,
+  QuickOpsDirectoryUsageGetResponse,
+  QuickOpsDiskSpaceGetResponse,
+  QuickOpsDnsQueryGetRequest,
+  QuickOpsDnsQueryGetResponse,
+  QuickOpsFileBase64GetRequest,
+  QuickOpsFileBase64GetResponse,
+  QuickOpsFileHashGetRequest,
+  QuickOpsFileHashGetResponse,
+  QuickOpsFormatTextGetRequest,
+  QuickOpsFormatTextGetResponse,
+  QuickOpsNetworkStatusGetResponse,
+  QuickOpsPathFormatGetRequest,
+  QuickOpsPathFormatGetResponse,
+  QuickOpsPortStatusGetRequest,
+  QuickOpsPortStatusGetResponse,
+  QuickOpsQueryLocalIpGetResponse,
+  QuickOpsRecentDownloadGetResponse,
+  QuickOpsSessionsGetResponse,
+  QuickOpsSystemProxyGetResponse,
+  QuickOpsSystemInfoGetResponse,
+  SecureStoreHealthResponse
+} from '@talex-touch/utils/transport/events/types'
 import type { TouchWindow } from '../../core/touch-window'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -40,12 +70,18 @@ import {
   createClipboardManager,
   createDivisionBoxSDK,
   createFeatureSDK,
+  createFlowSDK,
   createQuickActionsSDK
 } from '@talex-touch/utils/plugin/sdk'
 
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { AppEvents, NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import {
+  AppEvents,
+  NotificationEvents,
+  PluginEvents,
+  QuickOpsEvents
+} from '@talex-touch/utils/transport/events'
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import {
@@ -1734,7 +1770,9 @@ export class TouchPlugin implements ITouchPlugin {
             verified: Boolean(this._uniqueChannelKey)
           }
         })
-      }
+      },
+      onMain: (eventName: string, handler: (data: unknown) => unknown) =>
+        channelBridge.onMain(eventName, handler)
     }
     const hasPluginPermission = (permissionId: string): boolean => {
       const permissionModule = getPermissionModule()
@@ -1801,6 +1839,164 @@ export class TouchPlugin implements ITouchPlugin {
           throw normalized
         }
       }
+    }
+    const quickOps = {
+      capabilities: (): Promise<QuickOpsCapabilityGetResponse> =>
+        transport.invoke(QuickOpsEvents.capabilities.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsCapabilityGetResponse>,
+      sessions: (): Promise<QuickOpsSessionsGetResponse> =>
+        transport.invoke(QuickOpsEvents.sessions.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsSessionsGetResponse>,
+      auditRecent: (request?: QuickOpsAuditGetRequest): Promise<QuickOpsAuditGetResponse> =>
+        transport.invoke(QuickOpsEvents.audit.get, request ?? {}, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsAuditGetResponse>,
+      systemInfo: (): Promise<QuickOpsSystemInfoGetResponse> =>
+        transport.invoke(QuickOpsEvents.systemInfo.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsSystemInfoGetResponse>,
+      tuffDiagnostics: (): Promise<QuickOpsDiagnosticsGetResponse> =>
+        transport.invoke(QuickOpsEvents.tuffDiagnostics.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsDiagnosticsGetResponse>,
+      diskSpace: (): Promise<QuickOpsDiskSpaceGetResponse> =>
+        transport.invoke(QuickOpsEvents.diskSpace.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsDiskSpaceGetResponse>,
+      directoryUsage: (
+        request?: QuickOpsDirectoryUsageGetRequest
+      ): Promise<QuickOpsDirectoryUsageGetResponse> =>
+        transport.invoke(QuickOpsEvents.directoryUsage.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsDirectoryUsageGetResponse>,
+      queryLocalIp: (): Promise<QuickOpsQueryLocalIpGetResponse> =>
+        transport.invoke(QuickOpsEvents.queryLocalIp.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsQueryLocalIpGetResponse>,
+      portStatus: (request: QuickOpsPortStatusGetRequest): Promise<QuickOpsPortStatusGetResponse> =>
+        transport.invoke(QuickOpsEvents.portStatus.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsPortStatusGetResponse>,
+      dnsQuery: (request: QuickOpsDnsQueryGetRequest): Promise<QuickOpsDnsQueryGetResponse> =>
+        transport.invoke(QuickOpsEvents.dnsQuery.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsDnsQueryGetResponse>,
+      fileHash: (request: QuickOpsFileHashGetRequest): Promise<QuickOpsFileHashGetResponse> =>
+        transport.invoke(QuickOpsEvents.fileHash.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsFileHashGetResponse>,
+      fileBase64: (request: QuickOpsFileBase64GetRequest): Promise<QuickOpsFileBase64GetResponse> =>
+        transport.invoke(QuickOpsEvents.fileBase64.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsFileBase64GetResponse>,
+      recentDownload: (): Promise<QuickOpsRecentDownloadGetResponse> =>
+        transport.invoke(QuickOpsEvents.recentDownload.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsRecentDownloadGetResponse>,
+      commonDirectory: (
+        request?: QuickOpsCommonDirectoryGetRequest
+      ): Promise<QuickOpsCommonDirectoryGetResponse> =>
+        transport.invoke(QuickOpsEvents.commonDirectory.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsCommonDirectoryGetResponse>,
+      pathFormat: (request: QuickOpsPathFormatGetRequest): Promise<QuickOpsPathFormatGetResponse> =>
+        transport.invoke(QuickOpsEvents.pathFormat.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsPathFormatGetResponse>,
+      formatText: (request: QuickOpsFormatTextGetRequest): Promise<QuickOpsFormatTextGetResponse> =>
+        transport.invoke(QuickOpsEvents.formatText.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsFormatTextGetResponse>,
+      networkStatus: (): Promise<QuickOpsNetworkStatusGetResponse> =>
+        transport.invoke(QuickOpsEvents.networkStatus.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsNetworkStatusGetResponse>,
+      batteryStatus: (): Promise<QuickOpsBatteryStatusGetResponse> =>
+        transport.invoke(QuickOpsEvents.batteryStatus.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsBatteryStatusGetResponse>,
+      systemProxy: (): Promise<QuickOpsSystemProxyGetResponse> =>
+        transport.invoke(QuickOpsEvents.systemProxy.get, undefined, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsSystemProxyGetResponse>
     }
 
     type BoxChannelHandler = (data: PluginStandardChannelData) => unknown
@@ -2161,6 +2357,7 @@ export class TouchPlugin implements ITouchPlugin {
     const quickActionsSDK = createQuickActionsSDK(channelBridge, this.name, {
       sdkapi: this.sdkapi
     })
+    const flow = createFlowSDK(touchChannel, pluginName)
 
     // 新版 API: 统一使用 plugin.* 前缀
     const pluginAPI = {
@@ -2172,6 +2369,8 @@ export class TouchPlugin implements ITouchPlugin {
       divisionBox: divisionBoxSDK,
       meta: quickActionsSDK,
       quickActions: quickActionsSDK,
+      quickOps,
+      flow,
       intelligence,
       power: powerSDK,
       recommend: recommendSDK
@@ -2193,6 +2392,8 @@ export class TouchPlugin implements ITouchPlugin {
       divisionBox: divisionBoxSDK,
       meta: quickActionsSDK,
       quickActions: quickActionsSDK,
+      flow,
+      quickOps,
       power: powerSDK,
       recommend: recommendSDK,
       // 新的 BoxItemSDK API

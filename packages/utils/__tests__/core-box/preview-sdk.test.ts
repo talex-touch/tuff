@@ -451,11 +451,11 @@ describe("PreviewSDK", () => {
       signal: signal(),
     });
     const maxQr = await sdk.resolve({
-      query: { text: `qr ${"x".repeat(134)}`, inputs: [] },
+      query: { text: `qr ${"x".repeat(230)}`, inputs: [] },
       signal: signal(),
     });
     const overlongQr = await sdk.resolve({
-      query: { text: `qr ${"x".repeat(135)}`, inputs: [] },
+      query: { text: `qr ${"x".repeat(231)}`, inputs: [] },
       signal: signal(),
     });
 
@@ -532,17 +532,20 @@ describe("PreviewSDK", () => {
         qrVersion: 1,
       }),
     );
-    expect(maxQr?.payload.secondaryValue).toBe("v6-L");
-    expect(decodeSvgDataUrl(maxQr?.payload.primaryValue ?? "")).toContain('viewBox="0 0 49 49"');
+    expect(maxQr?.payload.secondaryValue).toBe("v9-L");
+    const maxQrSvg = decodeSvgDataUrl(maxQr?.payload.primaryValue ?? "");
+    expect(maxQrSvg).toContain('viewBox="0 0 61 61"');
+    expect(maxQrSvg).toContain('<rect x="30" y="30" width="1" height="1"/>');
+    expect(maxQrSvg).toContain('<rect x="50" y="50" width="1" height="1"/>');
     expect(maxQr?.payload.meta?.quickOps).toEqual(
       expect.objectContaining({
         operation: "qr-code",
-        byteLength: 134,
-        qrVersion: 6,
+        byteLength: 230,
+        qrVersion: 9,
       }),
     );
     expect(overlongQr?.payload.primaryLabel).toBe("错误");
-    expect(overlongQr?.payload.warnings?.[0]).toContain("134 bytes");
+    expect(overlongQr?.payload.warnings?.[0]).toContain("230 bytes");
   });
 
   it("keeps QuickOps clipboard fallback detection command-specific", () => {

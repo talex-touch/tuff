@@ -11,9 +11,11 @@ import {
   OpenerEvents,
   PermissionEvents,
   PluginEvents,
+  QuickOpsEvents,
   StorageEvents,
   SyncEvents,
   TerminalEvents,
+  TuffEvents,
   UpdateEvents,
 } from '../transport/events'
 import { AssistantEvents } from '../transport/events/assistant'
@@ -23,6 +25,7 @@ import { createAppSdk } from '../transport/sdk/domains/app'
 import { createIntelligenceSdk } from '../transport/sdk/domains/intelligence'
 import { createNativeSdk } from '../transport/sdk/domains/native'
 import { createPermissionSdk } from '../transport/sdk/domains/permission'
+import { createQuickOpsSdk } from '../transport/sdk/domains/quick-ops'
 import { createSettingsSdk } from '../transport/sdk/domains/settings'
 import { createStorageSdk } from '../transport/sdk/domains/storage'
 import { createUpdateSdk } from '../transport/sdk/domains/update'
@@ -761,6 +764,178 @@ describe('transport domain sdk mappings', () => {
       undefined,
       expect.objectContaining({ onData: expect.any(Function) }),
     )
+  })
+
+  it('quickops capability sdk maps to read-only typed transport event', async () => {
+    const transport = createTransportMock()
+    const sdk = createQuickOpsSdk(transport as any)
+
+    expect(QuickOpsEvents.capabilities.get.toEventName()).toBe(
+      'quick-ops:capabilities:get',
+    )
+    expect(TuffEvents.quickOps.capabilities.get).toBe(
+      QuickOpsEvents.capabilities.get,
+    )
+    expect(QuickOpsEvents.sessions.get.toEventName()).toBe(
+      'quick-ops:sessions:get',
+    )
+    expect(TuffEvents.quickOps.sessions.get).toBe(QuickOpsEvents.sessions.get)
+    expect(QuickOpsEvents.audit.get.toEventName()).toBe(
+      'quick-ops:audit:get',
+    )
+    expect(TuffEvents.quickOps.audit.get).toBe(QuickOpsEvents.audit.get)
+    expect(QuickOpsEvents.systemInfo.get.toEventName()).toBe(
+      'quick-ops:system-info:get',
+    )
+    expect(TuffEvents.quickOps.systemInfo.get).toBe(
+      QuickOpsEvents.systemInfo.get,
+    )
+    expect(QuickOpsEvents.tuffDiagnostics.get.toEventName()).toBe(
+      'quick-ops:tuff-diagnostics:get',
+    )
+    expect(TuffEvents.quickOps.tuffDiagnostics.get).toBe(
+      QuickOpsEvents.tuffDiagnostics.get,
+    )
+    expect(QuickOpsEvents.diskSpace.get.toEventName()).toBe(
+      'quick-ops:disk-space:get',
+    )
+    expect(TuffEvents.quickOps.diskSpace.get).toBe(QuickOpsEvents.diskSpace.get)
+    expect(QuickOpsEvents.directoryUsage.get.toEventName()).toBe(
+      'quick-ops:directory-usage:get',
+    )
+    expect(TuffEvents.quickOps.directoryUsage.get).toBe(
+      QuickOpsEvents.directoryUsage.get,
+    )
+    expect(QuickOpsEvents.queryLocalIp.get.toEventName()).toBe(
+      'quick-ops:query-local-ip:get',
+    )
+    expect(TuffEvents.quickOps.queryLocalIp.get).toBe(
+      QuickOpsEvents.queryLocalIp.get,
+    )
+    expect(QuickOpsEvents.portStatus.get.toEventName()).toBe(
+      'quick-ops:port-status:get',
+    )
+    expect(TuffEvents.quickOps.portStatus.get).toBe(
+      QuickOpsEvents.portStatus.get,
+    )
+    expect(QuickOpsEvents.dnsQuery.get.toEventName()).toBe(
+      'quick-ops:dns-query:get',
+    )
+    expect(TuffEvents.quickOps.dnsQuery.get).toBe(QuickOpsEvents.dnsQuery.get)
+    expect(QuickOpsEvents.fileHash.get.toEventName()).toBe(
+      'quick-ops:file-hash:get',
+    )
+    expect(TuffEvents.quickOps.fileHash.get).toBe(QuickOpsEvents.fileHash.get)
+    expect(QuickOpsEvents.fileBase64.get.toEventName()).toBe(
+      'quick-ops:file-base64:get',
+    )
+    expect(TuffEvents.quickOps.fileBase64.get).toBe(
+      QuickOpsEvents.fileBase64.get,
+    )
+    expect(QuickOpsEvents.recentDownload.get.toEventName()).toBe(
+      'quick-ops:recent-download:get',
+    )
+    expect(TuffEvents.quickOps.recentDownload.get).toBe(
+      QuickOpsEvents.recentDownload.get,
+    )
+    expect(QuickOpsEvents.commonDirectory.get.toEventName()).toBe(
+      'quick-ops:common-directory:get',
+    )
+    expect(TuffEvents.quickOps.commonDirectory.get).toBe(
+      QuickOpsEvents.commonDirectory.get,
+    )
+    expect(QuickOpsEvents.pathFormat.get.toEventName()).toBe(
+      'quick-ops:path-format:get',
+    )
+    expect(TuffEvents.quickOps.pathFormat.get).toBe(
+      QuickOpsEvents.pathFormat.get,
+    )
+    expect(QuickOpsEvents.formatText.get.toEventName()).toBe(
+      'quick-ops:format-text:get',
+    )
+    expect(TuffEvents.quickOps.formatText.get).toBe(
+      QuickOpsEvents.formatText.get,
+    )
+    expect(QuickOpsEvents.networkStatus.get.toEventName()).toBe(
+      'quick-ops:network-status:get',
+    )
+    expect(TuffEvents.quickOps.networkStatus.get).toBe(
+      QuickOpsEvents.networkStatus.get,
+    )
+    expect(QuickOpsEvents.batteryStatus.get.toEventName()).toBe(
+      'quick-ops:battery-status:get',
+    )
+    expect(TuffEvents.quickOps.batteryStatus.get).toBe(
+      QuickOpsEvents.batteryStatus.get,
+    )
+    expect(QuickOpsEvents.systemProxy.get.toEventName()).toBe(
+      'quick-ops:system-proxy:get',
+    )
+    expect(TuffEvents.quickOps.systemProxy.get).toBe(
+      QuickOpsEvents.systemProxy.get,
+    )
+
+    await sdk.capabilities()
+    await sdk.sessions()
+    await sdk.auditRecent()
+    await sdk.auditRecent({ limit: 5 })
+    await sdk.systemInfo()
+    await sdk.tuffDiagnostics()
+    await sdk.diskSpace()
+    await sdk.directoryUsage({ deep: true })
+    await sdk.queryLocalIp()
+    await sdk.portStatus({ port: 5173 })
+    await sdk.dnsQuery({ hostname: 'example.com', deep: true })
+    await sdk.fileHash({ path: '/tmp/demo.txt' })
+    await sdk.fileBase64({ path: '/tmp/demo.txt' })
+    await sdk.recentDownload()
+    await sdk.commonDirectory({ query: 'logs' })
+    await sdk.pathFormat({ path: '/tmp/demo.txt' })
+    await sdk.formatText({ text: 'Hello QuickOps', mode: 'snake' })
+    await sdk.networkStatus()
+    await sdk.batteryStatus()
+    await sdk.systemProxy()
+
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.capabilities.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.sessions.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.audit.get, {})
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.audit.get, {
+      limit: 5,
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.systemInfo.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.tuffDiagnostics.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.diskSpace.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.directoryUsage.get, {
+      deep: true,
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.queryLocalIp.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.portStatus.get, {
+      port: 5173,
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.dnsQuery.get, {
+      hostname: 'example.com',
+      deep: true,
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.fileHash.get, {
+      path: '/tmp/demo.txt',
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.fileBase64.get, {
+      path: '/tmp/demo.txt',
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.recentDownload.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.commonDirectory.get, {
+      query: 'logs',
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.pathFormat.get, {
+      path: '/tmp/demo.txt',
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.formatText.get, {
+      text: 'Hello QuickOps',
+      mode: 'snake',
+    })
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.networkStatus.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.batteryStatus.get)
+    expect(transport.send).toHaveBeenCalledWith(QuickOpsEvents.systemProxy.get)
   })
 
   it('settings sdk maps device idle diagnostic event', async () => {

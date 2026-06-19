@@ -22,7 +22,7 @@ import {
   formatDuration,
   getSessionDisplayDurationMs
 } from '../box-tool/addon/quick-ops/quick-ops-session-manager'
-import { quickOpsProvider } from '../box-tool/addon/quick-ops/quick-ops-provider'
+import { quickOpsRuntime } from '../box-tool/addon/quick-ops/quick-ops-provider'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
@@ -417,7 +417,7 @@ export class TrayManager extends BaseModule {
   }
 
   private registerQuickOpsSessionListener(): void {
-    this.quickOpsDisposer = quickOpsProvider.subscribeSessions((sessions) => {
+    this.quickOpsDisposer = quickOpsRuntime.subscribeSessions((sessions) => {
       this.updateMenu({
         quickOpsSessions: sessions.map((session) => {
           const durationMs = getSessionDisplayDurationMs(session)
