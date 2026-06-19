@@ -15,6 +15,10 @@ import type {
   QuickOpsCommonDirectoryGetRequest,
   QuickOpsCommonDirectoryGetResponse,
   QuickOpsDiagnosticsGetResponse,
+  QuickOpsDeveloperPreviewRequest,
+  QuickOpsDeveloperPreviewResponse,
+  QuickOpsDeveloperPreviewSaveRequest,
+  QuickOpsDeveloperPreviewSaveResponse,
   QuickOpsDirectoryUsageGetRequest,
   QuickOpsDirectoryUsageGetResponse,
   QuickOpsDiskSpaceGetResponse,
@@ -40,8 +44,18 @@ import type {
   QuickOpsSystemInfoGetResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import { clipboard, shell } from 'electron'
+import type { PreviewAbilityContext, PreviewCardPayload } from '@talex-touch/utils/core-box/preview'
+import crypto from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { deflateSync } from 'node:zlib'
+import { app, clipboard, shell } from 'electron'
+import {
+  QuickOpsDeveloperAbility,
+  hasQuickOpsDeveloperCommand
+} from '@talex-touch/utils/core-box/preview'
 import { QuickOpsEvents } from '@talex-touch/utils/transport/events'
+import { StorageList, TuffInputType, type AppSetting } from '@talex-touch/utils'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
@@ -88,6 +102,7 @@ import { formatDuration, getSessionDisplayDurationMs } from './quick-ops-session
 import { flowBus } from '../flow-bus/flow-bus'
 import { flowTargetRegistry } from '../flow-bus/target-registry'
 import { notificationModule } from '../notification'
+import { getMainConfig } from '../storage'
 
 const QUICK_OPS_FLOW_PLUGIN_ID = 'quickops'
 const QUICK_OPS_CAPABILITIES_FLOW_TARGET_ID = 'capabilities'
@@ -937,7 +952,13 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
       ),
       transport.on(QuickOpsEvents.networkStatus.get, () => createQuickOpsNetworkStatusResponse()),
       transport.on(QuickOpsEvents.batteryStatus.get, () => createQuickOpsBatteryStatusResponse()),
-      transport.on(QuickOpsEvents.systemProxy.get, () => createQuickOpsSystemProxyResponse())
+      transport.on(QuickOpsEvents.systemProxy.get, () => createQuickOpsSystemProxyResponse()),
+      transport.on(QuickOpsEvents.developerPreview.get, (request) =>
+        createQuickOpsDeveloperPreviewResponse(request)
+      ),
+      transport.on(QuickOpsEvents.developerPreview.save, (request) =>
+        saveQuickOpsDeveloperPreview(request)
+      )
     )
   }
 
@@ -1711,6 +1732,258 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
 }
 
 export const quickOpsModule = new QuickOpsModule()
+
+async function createQuickOpsDeveloperPreviewResponse(
+  request: QuickOpsDeveloperPreviewRequest
+): Promise<QuickOpsDeveloperPreviewResponse> {
+  const query = request.query
+  if (!hasQuickOpsDeveloperCommand(query)) {
+    return {
+      state: 'empty',
+      reason: 'not-developer-command'
+    }
+  }
+
+  if (isQuickOpsDeveloperToolsDisabled()) {
+    return {
+      state: 'blocked',
+      reason: QUICK_OPS_DEVELOPER_POLICY_REASON
+    }
+  }
+
+  const ability = new QuickOpsDeveloperAbility()
+  const sdkQuery = withQuickOpsDeveloperClipboardInput(query)
+  const canHandle = await ability.canHandle(sdkQuery)
+  if (!canHandle) {
+    return {
+      state: 'empty',
+      reason: 'no-preview-result'
+    }
+  }
+
+  const controller = new AbortController()
+  const context: PreviewAbilityContext = {
+    query: sdkQuery,
+    signal: controller.signal
+  }
+  const result = await ability.execute(context)
+  if (!result) {
+    return {
+      state: 'empty',
+      reason: 'no-preview-result'
+    }
+  }
+
+  return {
+    state: 'ready',
+    abilityId: result.abilityId,
+    confidence: result.confidence,
+    payload: result.payload
+  }
+}
+
+async function saveQuickOpsDeveloperPreview(
+  request: QuickOpsDeveloperPreviewSaveRequest
+): Promise<QuickOpsDeveloperPreviewSaveResponse> {
+  if (!isQrSvgPayload(request.payload)) {
+    return {
+      state: 'skipped',
+      reason: 'not-qr-svg-payload'
+    }
+  }
+
+  const svg = extractQrSvg(request.payload)
+  if (!svg) {
+    return {
+      state: 'skipped',
+      reason: 'invalid-qr-svg-payload'
+    }
+  }
+
+  const data = request.format === 'png' ? renderQrSvgToPng(svg) : Buffer.from(svg, 'utf8')
+  if (!data) {
+    return {
+      state: 'degraded',
+      reason: 'qr-png-render-failed',
+      message: '无法生成 QR PNG'
+    }
+  }
+
+  try {
+    const outputDir = path.join(app.getPath('temp'), 'tuff-quickops')
+    await mkdir(outputDir, { recursive: true })
+    const filePath = path.join(outputDir, `qr-code-${crypto.randomUUID()}.${request.format}`)
+    await writeFile(filePath, request.format === 'svg' ? svg : data, { flag: 'wx' })
+    clipboard.writeText(filePath)
+    return {
+      state: 'saved',
+      format: request.format,
+      path: filePath,
+      bytes: data.length
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      state: 'degraded',
+      reason:
+        code === 'EACCES' || code === 'EPERM'
+          ? 'developer-preview-save-permission-denied'
+          : 'developer-preview-save-failed',
+      message: code === 'EACCES' || code === 'EPERM' ? '没有权限写入临时文件' : '保存预览文件失败'
+    }
+  }
+}
+
+function isQuickOpsDeveloperToolsDisabled(): boolean {
+  const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
+  return appSetting?.quickOps?.allowDeveloperTools === false
+}
+
+function withQuickOpsDeveloperClipboardInput(
+  query: QuickOpsDeveloperPreviewRequest['query']
+): QuickOpsDeveloperPreviewRequest['query'] {
+  if (query.inputs?.some((input) => input.content?.trim() || input.rawContent?.trim())) {
+    return query
+  }
+
+  const text = clipboard.readText().trim()
+  if (!text) return query
+
+  return {
+    ...query,
+    inputs: [
+      ...(query.inputs ?? []),
+      {
+        type: TuffInputType.Text,
+        content: text
+      }
+    ]
+  }
+}
+
+function isQrSvgPayload(payload: PreviewCardPayload): boolean {
+  return payload.meta?.quickOps?.render?.kind === 'qr-code-svg'
+}
+
+function extractQrSvg(payload: PreviewCardPayload): string | null {
+  const render = payload.meta?.quickOps?.render
+  const dataUrl = typeof render?.dataUrl === 'string' ? render.dataUrl : payload.primaryValue
+  const prefix = 'data:image/svg+xml;charset=utf-8,'
+  if (!dataUrl.startsWith(prefix)) return null
+
+  try {
+    const svg = decodeURIComponent(dataUrl.slice(prefix.length))
+    return svg.startsWith('<svg ') ? svg : null
+  } catch {
+    return null
+  }
+}
+
+function renderQrSvgToPng(svg: string, scale = 8): Buffer | null {
+  const size = extractQrSvgSize(svg)
+  if (!size || scale < 1) return null
+
+  const outputSize = size * scale
+  const pixels = Buffer.alloc(outputSize * outputSize, 0xff)
+  for (const module of extractQrSvgDarkModules(svg)) {
+    if (module.x < 0 || module.y < 0 || module.x >= size || module.y >= size) continue
+
+    const startX = module.x * scale
+    const startY = module.y * scale
+    const width = Math.max(1, module.width) * scale
+    const height = Math.max(1, module.height) * scale
+    for (let y = startY; y < Math.min(outputSize, startY + height); y += 1) {
+      for (let x = startX; x < Math.min(outputSize, startX + width); x += 1) {
+        pixels[y * outputSize + x] = 0x00
+      }
+    }
+  }
+
+  return encodeGrayscalePng(outputSize, outputSize, pixels)
+}
+
+function extractQrSvgSize(svg: string): number | null {
+  const match = /\bviewBox="0 0 (?<width>\d+) (?<height>\d+)"/.exec(svg)
+  const width = Number(match?.groups?.width)
+  const height = Number(match?.groups?.height)
+  if (!Number.isInteger(width) || width <= 0 || width !== height || width > 256) return null
+  return width
+}
+
+function extractQrSvgDarkModules(svg: string): Array<{
+  x: number
+  y: number
+  width: number
+  height: number
+}> {
+  const groupMatch = /<g fill="#000">(?<body>.*?)<\/g>/.exec(svg)
+  const body = groupMatch?.groups?.body
+  if (!body) return []
+
+  const rects: Array<{ x: number; y: number; width: number; height: number }> = []
+  const rectPattern =
+    /<rect x="(?<x>\d+)" y="(?<y>\d+)" width="(?<width>\d+)" height="(?<height>\d+)"\/>/g
+  for (const match of body.matchAll(rectPattern)) {
+    const x = Number(match.groups?.x)
+    const y = Number(match.groups?.y)
+    const width = Number(match.groups?.width)
+    const height = Number(match.groups?.height)
+    if (
+      Number.isInteger(x) &&
+      Number.isInteger(y) &&
+      Number.isInteger(width) &&
+      Number.isInteger(height)
+    ) {
+      rects.push({ x, y, width, height })
+    }
+  }
+  return rects
+}
+
+function encodeGrayscalePng(width: number, height: number, pixels: Buffer): Buffer {
+  const scanlines = Buffer.alloc((width + 1) * height)
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (width + 1)
+    scanlines[rowStart] = 0
+    pixels.copy(scanlines, rowStart + 1, y * width, (y + 1) * width)
+  }
+
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(width, 0)
+  header.writeUInt32BE(height, 4)
+  header[8] = 8
+  header[9] = 0
+  header[10] = 0
+  header[11] = 0
+  header[12] = 0
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    createPngChunk('IHDR', header),
+    createPngChunk('IDAT', deflateSync(scanlines)),
+    createPngChunk('IEND', Buffer.alloc(0))
+  ])
+}
+
+function createPngChunk(type: string, data: Buffer): Buffer {
+  const typeBuffer = Buffer.from(type, 'ascii')
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length, 0)
+  const crc = Buffer.alloc(4)
+  crc.writeUInt32BE(calculateCrc32(Buffer.concat([typeBuffer, data])), 0)
+  return Buffer.concat([length, typeBuffer, data, crc])
+}
+
+function calculateCrc32(input: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of input) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
 
 function createQuickOpsSystemInfoResponse(): QuickOpsSystemInfoGetResponse {
   const systemInfo = createSystemInfo()

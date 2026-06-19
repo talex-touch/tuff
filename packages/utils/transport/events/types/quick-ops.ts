@@ -1,3 +1,6 @@
+import type { PreviewCardPayload } from '../../../core-box/preview'
+import type { TuffQuery } from '../../../core-box/tuff/tuff-dsl'
+
 export type QuickOpsCapabilityStatus = 'supported' | 'disabled' | 'degraded'
 
 export type QuickOpsCapabilityRiskLevel = 'safe' | 'stateful' | 'confirm' | 'danger'
@@ -550,3 +553,37 @@ export interface QuickOpsSystemProxyGetResponse {
   degradedReason?: string
   message?: string
 }
+
+export interface QuickOpsDeveloperPreviewRequest {
+  query: TuffQuery
+}
+
+export type QuickOpsDeveloperPreviewResponse =
+  | {
+      state: 'ready'
+      abilityId: string
+      confidence: number
+      payload: PreviewCardPayload
+    }
+  | {
+      state: 'empty' | 'blocked'
+      reason: string
+    }
+
+export interface QuickOpsDeveloperPreviewSaveRequest {
+  payload: PreviewCardPayload
+  format: 'svg' | 'png'
+}
+
+export type QuickOpsDeveloperPreviewSaveResponse =
+  | {
+      state: 'saved'
+      format: 'svg' | 'png'
+      path: string
+      bytes: number
+    }
+  | {
+      state: 'skipped' | 'degraded'
+      reason: string
+      message?: string
+    }

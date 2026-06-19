@@ -400,9 +400,10 @@ export interface IFeatureLifeCycle {
    * This is used for handling actions on the items themselves,
    * rather than triggering a new feature.
    * @param item The TuffItem that was executed.
+   * @param context Optional execution context, including the selected action id.
    * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?: (item: any) => Promise<{
+  onItemAction?: (item: any, context?: { actionId?: string }) => Promise<{
     /** Whether the action executed an external operation (e.g., opened browser) */
     externalAction?: boolean
     /** Whether the feature should be activated after this action */
@@ -468,9 +469,10 @@ export interface ITargetFeatureLifeCycle {
    * This is used for handling actions on the items themselves,
    * rather than triggering a new feature.
    * @param item The TuffItem that was executed.
+   * @param context Optional execution context, including the selected action id.
    * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?: (item: any) => Promise<{
+  onItemAction?: (item: any, context?: { actionId?: string }) => Promise<{
     /** Whether the action executed an external operation (e.g., opened browser) */
     externalAction?: boolean
     /** Whether the feature should be activated after this action */

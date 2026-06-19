@@ -41,6 +41,34 @@ globalThis.TuffItemBuilder = class {
     return this
   }
 
+  setKind(kind) {
+    this.item.kind = kind
+    return this
+  }
+
+  setCustomRender(type, content, data) {
+    this.item.render = {
+      mode: 'custom',
+      custom: { type, content, data },
+    }
+    return this
+  }
+
+  setClassName(className) {
+    this.item.className = className
+    return this
+  }
+
+  setFinalScore(score) {
+    this.item.finalScore = score
+    return this
+  }
+
+  setActions(actions) {
+    this.item.actions = actions
+    return this
+  }
+
   setMeta(meta) {
     this.item.meta = { ...this.item.meta, ...meta }
     return this
@@ -338,6 +366,111 @@ test('buildResultItems renders plugin-owned QuickOps settings summary read-only'
   assert.match(items[2].subtitle, /keepAwake 1h 0m/)
   assert.equal(items[3].meta.privateIpcFallback, false)
   assert.equal(items.every(item => item.actions.length === 0), true)
+})
+
+test('buildResultItems renders developer preview through QuickOps facade', async () => {
+  const calls = []
+  const items = await buildResultItems('quickops', 'json {"ok":true}', {
+    async developerPreview(request) {
+      calls.push(request)
+      return {
+        state: 'ready',
+        abilityId: 'preview.quickops.developer',
+        confidence: 0.78,
+        payload: {
+          abilityId: 'preview.quickops.developer',
+          title: 'JSON 格式化',
+          primaryValue: '{\n  "ok": true\n}',
+          badges: ['QuickOps'],
+        },
+      }
+    },
+  })
+
+  assert.deepEqual(calls, [{ query: { text: 'json {"ok":true}', inputs: [] } }])
+  assert.equal(items[0].kind, 'preview')
+  assert.equal(items[0].render.custom.content, 'core-preview-card')
+  assert.equal(items[0].render.custom.data.title, 'JSON 格式化')
+  assert.equal(items[0].meta.mode, 'developer-preview')
+  assert.equal(items[0].meta.preview.abilityId, 'preview.quickops.developer')
+  assert.equal(items[0].actions[0].id, 'preview-copy-primary')
+})
+
+test('buildResultItems exposes QR developer preview save actions', async () => {
+  const items = await buildResultItems('quickops', 'qr code https://tuff.talex.app', {
+    async developerPreview() {
+      return {
+        state: 'ready',
+        abilityId: 'preview.quickops.developer',
+        confidence: 0.78,
+        payload: {
+          abilityId: 'preview.quickops.developer',
+          title: 'QR Code 生成',
+          primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E',
+          meta: {
+            quickOps: {
+              render: {
+                kind: 'qr-code-svg',
+                dataUrl: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E',
+              },
+            },
+          },
+        },
+      }
+    },
+  })
+
+  assert.equal(items[0].meta.defaultAction, 'quickops-developer-preview-save-svg')
+  assert.equal(items[0].actions[1].id, 'quickops-developer-preview-save-svg')
+  assert.equal(items[0].actions[2].id, 'quickops-developer-preview-save-png')
+})
+
+test('onItemAction saves developer QR preview through QuickOps facade', async () => {
+  const calls = []
+  const originalQuickOps = globalThis.quickOps
+  globalThis.quickOps = {
+    async saveDeveloperPreview(request) {
+      calls.push(request)
+      return {
+        state: 'saved',
+        format: request.format,
+        path: `/tmp/tuff-quickops/qr-code.${request.format}`,
+        bytes: 42,
+      }
+    },
+  }
+
+  try {
+    const freshPlugin = loadFreshPluginModule()
+    const item = {
+      meta: {
+        defaultAction: 'quickops-developer-preview-save-svg',
+        developerPreviewPayload: {
+          abilityId: 'preview.quickops.developer',
+          title: 'QR Code 生成',
+          primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E',
+        },
+      },
+    }
+
+    const result = await freshPlugin.onItemAction(item, {
+      actionId: 'quickops-developer-preview-save-png',
+    })
+
+    assert.deepEqual(calls, [
+      {
+        format: 'png',
+        payload: item.meta.developerPreviewPayload,
+      },
+    ])
+    assert.equal(result.externalAction, true)
+    assert.equal(result.success, true)
+    assert.equal(result.status, 'saved')
+    assert.match(result.message, /qr-code\.png/)
+  }
+  finally {
+    globalThis.quickOps = originalQuickOps
+  }
 })
 
 test('onItemAction dispatches safe QuickOps Flow action', async () => {

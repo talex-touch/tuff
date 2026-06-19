@@ -6,6 +6,10 @@ import type {
   QuickOpsCommonDirectoryGetRequest,
   QuickOpsCommonDirectoryGetResponse,
   QuickOpsDiagnosticsGetResponse,
+  QuickOpsDeveloperPreviewRequest,
+  QuickOpsDeveloperPreviewResponse,
+  QuickOpsDeveloperPreviewSaveRequest,
+  QuickOpsDeveloperPreviewSaveResponse,
   QuickOpsDirectoryUsageGetRequest,
   QuickOpsDirectoryUsageGetResponse,
   QuickOpsDiskSpaceGetResponse,
@@ -61,6 +65,12 @@ export interface QuickOpsSDK {
   networkStatus: () => Promise<QuickOpsNetworkStatusGetResponse>
   batteryStatus: () => Promise<QuickOpsBatteryStatusGetResponse>
   systemProxy: () => Promise<QuickOpsSystemProxyGetResponse>
+  developerPreview: (
+    request: QuickOpsDeveloperPreviewRequest,
+  ) => Promise<QuickOpsDeveloperPreviewResponse>
+  saveDeveloperPreview: (
+    request: QuickOpsDeveloperPreviewSaveRequest,
+  ) => Promise<QuickOpsDeveloperPreviewSaveResponse>
 }
 
 export function createQuickOpsSDK(channel: PluginChannelClient): QuickOpsSDK {
@@ -92,6 +102,10 @@ export function createQuickOpsSDK(channel: PluginChannelClient): QuickOpsSDK {
     networkStatus: () => transport.send(QuickOpsEvents.networkStatus.get),
     batteryStatus: () => transport.send(QuickOpsEvents.batteryStatus.get),
     systemProxy: () => transport.send(QuickOpsEvents.systemProxy.get),
+    developerPreview: (request) =>
+      transport.send(QuickOpsEvents.developerPreview.get, request),
+    saveDeveloperPreview: (request) =>
+      transport.send(QuickOpsEvents.developerPreview.save, request),
   }
 }
 

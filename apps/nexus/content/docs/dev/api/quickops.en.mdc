@@ -66,6 +66,48 @@ code: |
 | `commonDirectory({ query? })` | Read-only | Restricted Desktop / Downloads / Documents / App Data / Logs metadata |
 | `pathFormat({ path, filePath?, text? })` | Read-only | Raw path, shell path, file URL, and Windows/WSL path variants |
 | `formatText({ text, mode })` | Read-only | Casing / naming-style conversion |
+| `developerPreview({ query })` | Host capability | Resolves Developer preview through the CoreApp QuickOps host facade and returns `PreviewCardPayload` |
+| `saveDeveloperPreview({ payload, format })` | Host capability | Saves QR Developer preview as SVG / PNG under the Tuff QuickOps temp directory and copies the path |
+
+## Developer Preview
+
+The QuickOps Developer CoreBox surface is owned by the official `plugins/touch-quickops` plugin. When the plugin recognizes commands such as `json`, `url encode`, `base64 decode`, `jwt decode`, `regex test`, `markdown table`, `csv to markdown`, `markdown to csv`, `timestamp`, `date`, `timezone`, `uuid`, `short id`, `qr code`, and `case snake`, it calls `quickOps.developerPreview({ query })`.
+
+When `developerPreview()` returns `ready`, it includes a `PreviewCardPayload`, and the official plugin renders `core-preview-card`. Normal previews expose `preview-copy-primary`; QR previews add plugin-owned execute actions and call `saveDeveloperPreview()` for saving.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await quickOps.developerPreview({
+    query: {
+      text: 'json {"ok":true}',
+      inputs: []
+    }
+  })
+
+  if (result.state === 'ready') {
+    renderCorePreviewCard(result.payload)
+  }
+---
+:::
+
+`saveDeveloperPreview()` supports PreviewSDK QR SVG payloads only. The output directory is fixed to CoreApp `app.getPath('temp')/tuff-quickops`, and a successful save writes the file path to the clipboard. It is not a general file-write API.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const saved = await quickOps.saveDeveloperPreview({
+    format: 'png',
+    payload: result.payload
+  })
+
+  if (saved.state === 'saved') {
+    console.info(saved.path)
+  }
+---
+:::
+
+The generic CoreApp `PreviewProvider` no longer registers the QuickOps Developer ability, reads clipboard fallback for Developer commands, or exposes QR save actions. Plugins must not fall back to private PreviewProvider APIs, raw IPC, or direct clipboard reads to bypass the `allowDeveloperTools` policy.
 
 ## Files Input Routing
 
@@ -243,7 +285,7 @@ code: |
 
 Only repository maintainers should change official QuickOps capabilities. When adding or changing a common capability, prefer moving it into `plugins/touch-quickops`; Electron / OS-bound parts must remain behind CoreApp host capabilities.
 
-The official plugin already owns the CoreBox root-result entry, expanded read-only panels, settings summary entry, and low-risk session-control triggers: capabilities, sessions, auditRecent, system info, Tuff diagnostics, disk space, directory usage, network status, local IP, port status, DNS query, file hash, file Base64, recent download, common directory, path format, format text, battery status, system proxy, `quickops settings`, plus `stop-all-sessions` and timer / Pomodoro / clean-screen / awake / stopwatch stop/pause/resume/lap/reset controls. Read-only panels fetch through the `globalThis.quickOps` transition facade; the settings summary reads current policy/defaults through capabilities and diagnostics without mutating CoreApp host policy; low-risk session controls dispatch through the injected Flow SDK to existing QuickOps Flow targets; file hash/Base64/path format support both `text` and `files` input routing. The plugin also owns the QuickOps Flow/AI source-level adapter contract: command routing emits redacted `flowAdapterTrace`, confirmation-required actions only show the App UI `confirmationToken` requirement, and high-risk requests such as `kill port` fail closed without a dispatch payload. The plugin must not execute high-risk actions or fall back to private IPC. Confirmation-required actions need a `confirmationToken` issued by App UI, so the plugin may only render the confirmation-required notice. CoreApp currently keeps the `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary, platform capabilities, Flow confirmation, policy/evidence gates, AppSetting schema / settings read path, and typed bridge. CoreApp no longer keeps a QuickOps natural-language resolver implementation, and file search providers plus CoreApp Tools settings no longer own QuickOps product surfaces. For the next migratable entries, extend this plugin's command routing and rendering path; writable settings require an official-plugin allowlisted host capability, and must not use private IPC to mutate settings. Do not reintroduce a CoreApp QuickOps CoreBox provider, Tools settings controls, or file-search-specific QuickOps execute branch.
+The official plugin already owns the CoreBox root-result entry, expanded read-only panels, Developer preview, settings summary entry, and low-risk session-control triggers: capabilities, sessions, auditRecent, system info, Tuff diagnostics, disk space, directory usage, network status, local IP, port status, DNS query, file hash, file Base64, recent download, common directory, path format, format text, Developer preview, battery status, system proxy, `quickops settings`, plus `stop-all-sessions` and timer / Pomodoro / clean-screen / awake / stopwatch stop/pause/resume/lap/reset controls. Read-only panels fetch through the `globalThis.quickOps` transition facade; Developer preview calls `developerPreview()` through the CoreApp host facade and renders `core-preview-card`, while QR saves call `saveDeveloperPreview()` to write under the Tuff QuickOps temp directory; the settings summary reads current policy/defaults through capabilities and diagnostics without mutating CoreApp host policy; low-risk session controls dispatch through the injected Flow SDK to existing QuickOps Flow targets; file hash/Base64/path format support both `text` and `files` input routing. The plugin also owns the QuickOps Flow/AI source-level adapter contract: command routing emits redacted `flowAdapterTrace`, confirmation-required actions only show the App UI `confirmationToken` requirement, and high-risk requests such as `kill port` fail closed without a dispatch payload. The plugin must not execute high-risk actions or fall back to private IPC. Confirmation-required actions need a `confirmationToken` issued by App UI, so the plugin may only render the confirmation-required notice. CoreApp currently keeps the `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary, platform capabilities, Flow confirmation, policy/evidence gates, AppSetting schema / settings read path, and typed bridge. CoreApp no longer keeps a QuickOps natural-language resolver implementation, and the generic PreviewProvider, file search providers, plus CoreApp Tools settings no longer own QuickOps product surfaces. For the next migratable entries, extend this plugin's command routing and rendering path; writable settings require an official-plugin allowlisted host capability, and must not use private IPC to mutate settings. Do not reintroduce a CoreApp QuickOps CoreBox provider, Tools settings controls, generic PreviewProvider Developer surface, or file-search-specific QuickOps execute branch.
 
 Keep these layers in sync:
 
@@ -253,7 +295,7 @@ Keep these layers in sync:
 | Official plugin | `plugins/touch-quickops` | Own the CoreBox root-result entry, plugin-side read-only panel, settings summary entry, low-risk session-control triggers, future migratable business logic, and plugin-owned UI; new migratable entries should land here first |
 | QuickOps module / Flow | `apps/core-app/src/main/modules/quick-ops/index.ts` | During migration, keep host capabilities / Flow targets and declare risk / category / `requireConfirm`; confirmation-required targets can only be delivered with an App UI token |
 | Typed transport | `packages/utils/transport/events/types/quick-ops.ts`, `packages/utils/transport/sdk/domains/quick-ops.ts` | Expose only allowed public SDK methods through typed events and the domain SDK |
-| Plugin SDK facade | `packages/utils/plugin/sdk/quick-ops.ts`, `packages/utils/plugin/sdk/index.ts` | Keep the plugin facade read-only and do not expose high-risk execution methods |
+| Plugin SDK facade | `packages/utils/plugin/sdk/quick-ops.ts`, `packages/utils/plugin/sdk/index.ts` | Keep the plugin facade bounded and policy-aware; read-only / low-risk host capabilities can be public, but high-risk execution methods must not be exposed |
 | Runtime injection | `apps/core-app/src/main/modules/plugin/plugin.ts` | Keep `globalThis.quickOps` / `plugin.quickOps` aligned with the public SDK method set |
 | Evidence | `apps/core-app/scripts/quickops-surface-audit.ts`, `apps/core-app/scripts/quickops-flow-ai-adapter-audit.ts`, `apps/core-app/scripts/quickops-evidence-verify.ts` | Update surface audit, Flow/AI adapter audit, evidence templates, and strict verification |
 | Documentation | This page, user guide, QuickOps PRD, TODO, CHANGES | Sync behavior, API, policy, or safety-boundary changes |

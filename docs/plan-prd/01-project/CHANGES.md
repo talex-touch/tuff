@@ -5,6 +5,32 @@
 
 ## 2026-06-19
 
+### ref(quickops): move developer preview surface into plugin
+
+- `plugins/touch-quickops/index.js`
+- `plugins/touch-quickops/index.test.cjs`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/abilities/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.ts`
+- `apps/core-app/src/main/modules/quick-ops/index.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/utils/plugin/sdk/quick-ops.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/quick-ops.ts`
+- `packages/utils/transport/sdk/domains/quick-ops.ts`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Moved the QuickOps Developer CoreBox preview surface out of the generic CoreApp PreviewProvider and into the official `plugins/touch-quickops` plugin. CoreApp no longer registers `QuickOpsDeveloperAbility` in the default preview registry, no longer reads clipboard fallback for QuickOps Developer commands from PreviewProvider, and no longer exposes generic `preview-save-qr-*` actions.
+  - Added typed host capability events and SDK facade methods for `developerPreview()` and `saveDeveloperPreview()`. CoreApp keeps the PreviewSDK ability, policy gate, clipboard fallback, and QR SVG/PNG temp-save implementation behind `QuickOpsModule`; the plugin renders `core-preview-card` and owns the SVG/PNG save actions.
+  - Extended plugin item-action context with optional `actionId`, so the official plugin can distinguish SVG vs PNG save actions without adding private IPC or raw channel fallback.
+  - Updated TODO, PRD, and Nexus developer docs to lock the boundary: QuickOps product surfaces go to the official plugin, while CoreApp keeps runtime host, typed transport, Flow confirmation, policy/evidence gates, and bounded host capabilities.
+
 ### ref(quickops): remove file provider action naming leak
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`

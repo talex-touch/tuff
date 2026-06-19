@@ -5,8 +5,11 @@ const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'emoji', value: '⚡' }
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 const FLOW_ACTION_ID = 'quickops-flow-action'
+const DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID = 'quickops-developer-preview-save-svg'
+const DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID = 'quickops-developer-preview-save-png'
 const QUICKOPS_FLOW_SENDER_ID = PLUGIN_NAME
 const QUICKOPS_PREFIXES = ['quickops', 'quick ops', 'ops', '快捷工具', '本地快捷工具']
+const PREVIEW_COMPONENT_NAME = 'core-preview-card'
 
 const SAFE_FLOW_ACTIONS = [
   {
@@ -217,6 +220,15 @@ function getQueryText(query) {
   return query?.text ?? ''
 }
 
+function toTuffQuery(query) {
+  if (query && typeof query === 'object')
+    return query
+  return {
+    text: getQueryText(query),
+    inputs: [],
+  }
+}
+
 function extractFilesFromQuery(query) {
   if (!query || typeof query !== 'object')
     return []
@@ -399,6 +411,14 @@ function extractFormatTextRequest(text) {
   }
 }
 
+function isDeveloperPreviewQuery(query) {
+  const text = normalizeText(getQueryText(query))
+  if (!text)
+    return false
+
+  return /^(?:json|url\s+(?:encode|decode)|base64\s+(?:encode|decode)|jwt\s+decode|regex\s+test|markdown\s+table|csv\s+to\s+markdown|markdown\s+to\s+csv|timestamp|date|timezone|uuid|short\s+id|qr\s+code|case\s+(?:upper|lower|camel|snake|kebab)|upper|lower|camel|snake|kebab)(?:\b|$)/i.test(text)
+}
+
 function buildInfoItem({ featureId, id, title, subtitle, meta = {} }) {
   return new TuffItemBuilder(`${featureId}-${id}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
@@ -414,6 +434,109 @@ function buildInfoItem({ featureId, id, title, subtitle, meta = {} }) {
       ...meta,
     })
     .build()
+}
+
+function isQrDeveloperPreviewPayload(payload) {
+  return payload?.meta?.quickOps?.render?.kind === 'qr-code-svg'
+}
+
+function buildDeveloperPreviewItem(featureId, query, response) {
+  if (!response || response.state !== 'ready' || !response.payload) {
+    return buildInfoItem({
+      featureId,
+      id: `developer-preview-${response?.state || 'empty'}`,
+      title: response?.state === 'blocked' ? 'QuickOps 开发者工具已禁用' : 'QuickOps 开发者预览不可用',
+      subtitle: response?.reason || 'no-preview-result',
+      meta: {
+        mode: 'developer-preview',
+        state: response?.state || 'empty',
+        reason: response?.reason,
+      },
+    })
+  }
+
+  const payload = {
+    ...response.payload,
+    confidence: response.confidence,
+  }
+  const id = `${featureId}-developer-preview-${hashRequestText(getQueryText(query))}`
+  const builder = new TuffItemBuilder(id)
+    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      readOnly: true,
+      runtimeBoundary: 'coreapp-host-capability',
+      quickOpsMigrationShell: false,
+      mode: 'developer-preview',
+      preview: {
+        abilityId: response.abilityId,
+        confidence: response.confidence,
+      },
+    })
+  if (typeof builder.setKind === 'function')
+    builder.setKind('preview')
+  if (typeof builder.setCustomRender === 'function')
+    builder.setCustomRender('vue', PREVIEW_COMPONENT_NAME, payload)
+  if (typeof builder.setClassName === 'function')
+    builder.setClassName('core-preview-card')
+  if (typeof builder.setFinalScore === 'function')
+    builder.setFinalScore(1)
+  if (payload.title && typeof builder.setTitle === 'function')
+    builder.setTitle(payload.title)
+
+  const actions = [
+    {
+      id: 'preview-copy-primary',
+      type: 'copy',
+      label: '复制结果',
+      icon: { type: 'class', value: 'i-ri-file-copy-line' },
+      payload: { text: payload.primaryValue },
+    },
+  ]
+
+  if (isQrDeveloperPreviewPayload(payload)) {
+    builder.setMeta({
+      defaultAction: DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID,
+      actionId: DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID,
+      developerPreviewPayload: payload,
+    })
+    actions.push({
+      id: DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID,
+      type: 'execute',
+      label: '保存 SVG 到临时目录',
+      icon: { type: 'class', value: 'i-ri-save-line' },
+    })
+    actions.push({
+      id: DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID,
+      type: 'execute',
+      label: '保存 PNG 到临时目录',
+      icon: { type: 'class', value: 'i-ri-image-line' },
+    })
+  }
+
+  if (typeof builder.setActions === 'function')
+    builder.setActions(actions)
+  else
+    actions.forEach(action => builder.createAndAddAction(action.id, action.type, action.label, action.payload))
+
+  return builder.build()
+}
+
+async function buildDeveloperPreviewItems(featureId, query, api) {
+  if (typeof api?.developerPreview !== 'function') {
+    return [
+      buildInfoItem({
+        featureId,
+        id: 'developer-preview-unsupported',
+        title: 'QuickOps 开发者预览暂不可用',
+        subtitle: 'host facade 未暴露 developerPreview；插件不会 fallback 到私有 PreviewProvider',
+        meta: { mode: 'developer-preview', state: 'unsupported' },
+      }),
+    ]
+  }
+
+  return [buildDeveloperPreviewItem(featureId, query, await api.developerPreview({ query: toTuffQuery(query) }))]
 }
 
 function matchesAnyPattern(text, patterns) {
@@ -1389,6 +1512,9 @@ async function buildResultItems(featureId, query, api = quickOps) {
   if (confirmationAction)
     return buildConfirmationRequiredItems(featureId, confirmationAction, query)
 
+  if (isDeveloperPreviewQuery(query))
+    return buildDeveloperPreviewItems(featureId, query, api)
+
   if (!api) {
     return [
       buildInfoItem({
@@ -1437,7 +1563,35 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
+    const selectedActionId = context.actionId || item?.meta?.defaultAction
+    if (
+      selectedActionId === DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID ||
+      selectedActionId === DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID
+    ) {
+      if (typeof quickOps?.saveDeveloperPreview !== 'function') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'developer-preview-save-unavailable',
+        }
+      }
+
+      const format = selectedActionId === DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID ? 'png' : 'svg'
+      const result = await quickOps.saveDeveloperPreview({
+        format,
+        payload: item.meta.developerPreviewPayload,
+      })
+      return {
+        externalAction: true,
+        success: result?.state === 'saved',
+        status: result?.state || 'unknown',
+        reason: result?.reason,
+        message: result?.path || result?.message,
+      }
+    }
+
     if (item?.meta?.defaultAction !== FLOW_ACTION_ID)
       return
 
