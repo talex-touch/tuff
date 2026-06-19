@@ -5,6 +5,27 @@
 
 ## 2026-06-19
 
+### ref(quickops): move Flow/AI adapter contract into plugin
+
+- `plugins/touch-quickops/index.js`
+- `plugins/touch-quickops/index.test.cjs`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Removed the CoreApp QuickOps natural-language adapter implementation and its focused test. CoreApp keeps `QuickOpsRuntimeHost`, `QuickOpsSessionManager`, `QuickOpsModule`, Flow targets, confirmation, policy, and evidence gates as the host/runtime boundary.
+  - Moved the source-level Flow/AI adapter contract into the official `plugins/touch-quickops` plugin: low-risk state controls produce bounded Flow dispatch items and redacted `flowAdapterTrace`, confirmation-required actions only render the App UI `confirmationToken` requirement, and high-risk `kill port` style requests fail closed without a dispatch payload.
+  - Updated `quickops:flow-ai:audit` to read plugin source/tests by default and emit plugin adapter signals (`plugins/touch-quickops/index.js:flow-dispatch-adapter`, `plugins/touch-quickops/index.test.cjs:contract`) instead of CoreApp natural-language resolver signals.
+  - Updated TODO, PRD, and Nexus user/developer docs to state that plugin-side command routing owns the source-level adapter/trace contract, while CoreApp no longer carries QuickOps business natural-language resolver code.
+  - Validation passed: `pnpm -C "plugins/touch-quickops" test` (17 tests), `pnpm -C "apps/core-app" exec vitest run "src/main/modules/quick-ops/quick-ops-flow-ai-adapter-audit.test.ts" "src/main/modules/quick-ops/quick-ops-evidence.test.ts"` (16 tests), and `pnpm -C "apps/core-app" run quickops:flow-ai:audit -- --compact --strict`.
+
 ### ref(core-app): remove QuickOps tray surface
 
 - `apps/core-app/src/main/modules/tray/tray-state-manager.ts`

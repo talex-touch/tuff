@@ -45,8 +45,8 @@ describe('QuickOps Flow and AI adapter audit', () => {
     expect(audit.ai).toEqual({
       hasNaturalLanguageAdapter: true,
       adapterSignals: [
-        'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts:resolver',
-        'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts:contract'
+        'plugins/touch-quickops/index.js:flow-dispatch-adapter',
+        'plugins/touch-quickops/index.test.cjs:contract'
       ],
       linksRequestTargetConfirmationResult: true,
       blocksHighRiskWithoutConfirmation: true,
@@ -71,27 +71,28 @@ describe('QuickOps Flow and AI adapter audit', () => {
       flowSelectorSource,
       aiSources: [
         {
-          path: 'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts',
+          path: 'plugins/touch-quickops/index.js',
           source: [
-            'export function resolveQuickOpsNaturalLanguageRequest() {}',
-            'const plan = { preferredTarget: targetId, runtimeDispatchBridge: false }',
+            'function resolveSafeFlowAction() {}',
+            'function resolveConfirmationFlowAction() {}',
+            'function resolveHighRiskFlowAction() {}',
+            'function buildFlowActionItem() { return { runtimeDispatchBridge: true } }',
+            'function buildConfirmationRequiredItems() { return { runtimeDispatchBridge: false, confirmationToken: true } }',
+            'function buildHighRiskBlockedItems() {}',
+            'function buildFlowAdapterTrace() {}',
             'const trace = { requestHash: "", targetId, confirmation: "required", result: "dispatch-plan" }',
-            "const blocked = { reason: 'high-risk-blocked', confirmation: 'blocked' }"
+            "const blocked = { reason: 'high-risk-blocked', confirmation: 'blocked' }",
+            'async onItemAction() { await flow.dispatch(payload.payload, payload.options) }'
           ].join('\n')
         },
         {
-          path: 'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts',
+          path: 'plugins/touch-quickops/index.test.cjs',
           source: [
-            'describe("QuickOps natural-language adapter contract", () => {})',
+            'test("buildFlowAdapterTrace redacts request and payload values", () => {})',
             'expect(trace).toMatchObject({ payloadKeys: [], sensitivePayloadRedacted: true })',
-            'expect(resolveQuickOpsNaturalLanguageRequest({ text: "kill port 3000" })).toEqual({ dispatchOptions: undefined })'
-          ].join('\n')
-        },
-        {
-          path: 'apps/core-app/src/main/modules/ai/intelligence-sdk.ts',
-          source: [
-            'import { resolveQuickOpsNaturalLanguageRequest } from "../quick-ops/quick-ops-natural-language-adapter"',
-            'async function run() { await flowBus.dispatch(payload, { confirmationToken }) }'
+            'test("onItemAction dispatches safe QuickOps Flow action", () => {})',
+            'assert.equal(items[0].meta.payload, undefined)',
+            'assert.equal(resolveHighRiskFlowAction("kill port 3000").targetId, "quickops.port-kill")'
           ].join('\n')
         }
       ],
@@ -101,8 +102,8 @@ describe('QuickOps Flow and AI adapter audit', () => {
     expect(audit.ai).toEqual({
       hasNaturalLanguageAdapter: true,
       adapterSignals: [
-        'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.ts:resolver',
-        'apps/core-app/src/main/modules/quick-ops/quick-ops-natural-language-adapter.test.ts:contract'
+        'plugins/touch-quickops/index.js:flow-dispatch-adapter',
+        'plugins/touch-quickops/index.test.cjs:contract'
       ],
       linksRequestTargetConfirmationResult: true,
       blocksHighRiskWithoutConfirmation: true,

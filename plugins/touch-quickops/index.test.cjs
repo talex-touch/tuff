@@ -58,8 +58,10 @@ globalThis.TuffItemBuilder = class {
 
 const quickopsPlugin = loadFreshPluginModule()
 const {
+  buildFlowAdapterTrace,
   buildResultItems,
   resolveConfirmationFlowAction,
+  resolveHighRiskFlowAction,
   resolveMode,
   resolveSafeFlowAction,
 } = quickopsPlugin.__test
@@ -156,6 +158,15 @@ test('buildResultItems renders safe state actions as plugin Flow dispatch items'
   assert.equal(items[0].meta.mode, 'flow-action')
   assert.equal(items[0].meta.defaultAction, 'quickops-flow-action')
   assert.equal(items[0].meta.flowTargetId, 'quickops.stop-timer')
+  assert.deepEqual(items[0].meta.flowAdapterTrace, {
+    requestHash: buildFlowAdapterTrace('stop timer', { targetId: 'quickops.stop-timer' }, 'not-required', 'dispatch-plan').requestHash,
+    targetId: 'quickops.stop-timer',
+    confirmation: 'not-required',
+    result: 'dispatch-plan',
+    payloadKeys: ['action', 'targetId'],
+    sensitivePayloadRedacted: true,
+    runtimeDispatchBridge: true,
+  })
   assert.deepEqual(items[0].meta.payload.options, {
     preferredTarget: 'quickops.stop-timer',
     skipSelector: true,
@@ -177,14 +188,52 @@ test('buildResultItems renders safe state actions as plugin Flow dispatch items'
 test('buildResultItems blocks confirmation-only actions in plugin shell', async () => {
   assert.equal(resolveConfirmationFlowAction('start timer').targetId, 'quickops.start-timer')
 
-  const items = await buildResultItems('quickops', 'start timer 10m', {})
+  const items = await buildResultItems('quickops', 'start timer 10m secret payload', {})
 
   assert.equal(items.length, 1)
   assert.equal(items[0].meta.mode, 'confirmation-required')
   assert.equal(items[0].meta.requiresConfirmation, true)
   assert.equal(items[0].meta.flowTargetId, 'quickops.start-timer')
+  assert.equal(items[0].meta.flowAdapterTrace.confirmation, 'confirmation-token-required')
+  assert.equal(items[0].meta.flowAdapterTrace.result, 'blocked-until-confirmed')
+  assert.equal(items[0].meta.flowAdapterTrace.runtimeDispatchBridge, false)
+  assert.equal(items[0].meta.flowAdapterTrace.sensitivePayloadRedacted, true)
+  assert.doesNotMatch(JSON.stringify(items[0].meta.flowAdapterTrace), /secret payload/)
   assert.match(items[0].subtitle, /confirmationToken/)
   assert.equal(items[0].actions.length, 0)
+})
+
+test('buildResultItems blocks high-risk actions without dispatch payload', async () => {
+  assert.equal(resolveHighRiskFlowAction('kill port 3000 now').targetId, 'quickops.port-kill')
+
+  const items = await buildResultItems('quickops', 'kill port 3000 now', {})
+
+  assert.equal(items.length, 1)
+  assert.equal(items[0].meta.mode, 'high-risk-blocked')
+  assert.equal(items[0].meta.reason, 'high-risk-blocked')
+  assert.equal(items[0].meta.confirmation, 'blocked')
+  assert.equal(items[0].meta.result, 'blocked')
+  assert.equal(items[0].meta.flowTargetId, 'quickops.port-kill')
+  assert.equal(items[0].meta.flowAdapterTrace.runtimeDispatchBridge, false)
+  assert.equal(items[0].meta.flowAdapterTrace.sensitivePayloadRedacted, true)
+  assert.equal(items[0].meta.payload, undefined)
+  assert.equal(items[0].actions.length, 0)
+})
+
+test('buildFlowAdapterTrace redacts request and payload values', () => {
+  const trace = buildFlowAdapterTrace(
+    'copy secret-token to clipboard',
+    { targetId: 'quickops.copy-to-clipboard' },
+    'confirmation-token-required',
+    'blocked-until-confirmed',
+    ['text']
+  )
+
+  assert.equal(trace.targetId, 'quickops.copy-to-clipboard')
+  assert.equal(trace.confirmation, 'confirmation-token-required')
+  assert.deepEqual(trace.payloadKeys, ['text'])
+  assert.equal(trace.sensitivePayloadRedacted, true)
+  assert.doesNotMatch(JSON.stringify(trace), /secret-token/)
 })
 
 test('buildResultItems renders audit view without payload values', async () => {

@@ -237,7 +237,7 @@ code: |
 
 只有维护仓库时才应该修改官方 QuickOps。新增或调整通用能力时，优先迁入 `plugins/touch-quickops`；仍依赖 Electron / OS 的部分必须通过 CoreApp host capability 暴露。
 
-当前官方插件已承接 CoreBox root-result 入口、更多只读面板和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate 与 typed bridge；后续新增可迁移入口时，优先扩展该插件的命令路由和渲染，不得重新引入 CoreApp QuickOps CoreBox provider。
+当前官方插件已承接 CoreBox root-result 入口、更多只读面板和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target。插件也承接 QuickOps Flow/AI source-level adapter contract：命令路由输出脱敏 `flowAdapterTrace`，确认型动作只提示 App UI `confirmationToken`，高风险 `kill port` 类请求 fail-closed 且没有 dispatch payload。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate 与 typed bridge；CoreApp 不再保留 QuickOps natural-language resolver 实现。后续新增可迁移入口时，优先扩展该插件的命令路由和渲染，不得重新引入 CoreApp QuickOps CoreBox provider。
 
 请同步以下落点：
 
@@ -259,7 +259,7 @@ code: |
 3. 高风险能力默认不能进入插件 SDK；如需落地，必须先补策略、权限、确认 UI、审计和真实 evidence。
 4. 更新 focused tests：插件命令路由、runtime helper、Flow delivery、策略 fail-closed、脱敏 ACK / audit、typed transport surface。
 5. 运行 `quickops:surface:audit --strict`，确保没有 raw channel、SDK bypass 或 runtime facade 漂移。
-6. 运行 `quickops:flow-ai:audit --strict`。它应证明 Flow target 目录、确认集合、策略阻断、脱敏 ACK / audit、自然语言 resolver 和 runtime dispatch bridge 合同；如果新增能力没有补齐这些源级合同，应 fail-closed。
+6. 运行 `quickops:flow-ai:audit --strict`。它应证明 Flow target 目录、确认集合、策略阻断、脱敏 ACK / audit、插件侧 Flow dispatch adapter / trace 和 runtime dispatch bridge 合同；如果新增能力没有补齐这些源级合同，应 fail-closed。
 7. 文档中只声明已有 evidence 支撑的能力；packaged、三平台、视觉、真实 AI UI 编排或确认 UI 证据缺失时必须明确写成未完成，不能把 Flow metadata、resolver/bridge focused test 或 mock artifact 当作完整 evidence。
 
 ## 扩展建议
