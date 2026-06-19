@@ -1,8 +1,6 @@
 <script setup name="IntelligenceHeader" lang="ts">
-import { useI18n } from 'vue-i18n'
 // import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 
-const { t } = useI18n()
 // const { providers } = useIntelligenceManager()
 
 // const providerCount = computed(() => (providers.value ? providers.value.length : 0))
@@ -16,10 +14,6 @@ const { t } = useI18n()
 
     <div class="IntelligenceHeader-Main">
       <h1>Tuff Intelligence&nbsp;<tuff-beta-tag /></h1>
-
-      <div class="header-text">
-        <p>{{ t('settings.intelligence.pageDesc') }}</p>
-      </div>
     </div>
   </div>
 </template>
@@ -37,7 +31,9 @@ const { t } = useI18n()
     justify-content: center;
 
     h1 {
-      display: inline;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
       background: #1d1d1f;
       background-clip: text;
       -webkit-text-fill-color: rgba(0, 0, 0, 0);
@@ -47,9 +43,9 @@ const { t } = useI18n()
       font-size: 32px;
     }
 
-    p {
-      color: #e0e0e0ea;
-      text-shadow: 1px 1px 2px rgba(200, 200, 200, 0.5);
+    h1 :deep(.TuffBlockTag) {
+      background-clip: initial;
+      -webkit-text-fill-color: initial;
     }
   }
 
