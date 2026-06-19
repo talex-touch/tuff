@@ -22,7 +22,9 @@ export const QUICK_OPS_SURFACE_AUDIT_EXPECTED_TRANSPORT_EVENTS = [
   'QuickOpsEvents.formatText.get',
   'QuickOpsEvents.networkStatus.get',
   'QuickOpsEvents.batteryStatus.get',
-  'QuickOpsEvents.systemProxy.get'
+  'QuickOpsEvents.systemProxy.get',
+  'QuickOpsEvents.developerPreview.get',
+  'QuickOpsEvents.developerPreview.save'
 ] as const
 
 export const QUICK_OPS_SURFACE_AUDIT_EXPECTED_SDK_METHODS = [
@@ -44,7 +46,9 @@ export const QUICK_OPS_SURFACE_AUDIT_EXPECTED_SDK_METHODS = [
   'formatText',
   'networkStatus',
   'batteryStatus',
-  'systemProxy'
+  'systemProxy',
+  'developerPreview',
+  'saveDeveloperPreview'
 ] as const
 
 const RAW_IPC_PREFIX = '@'
@@ -67,7 +71,9 @@ const QUICK_OPS_EVENT_PARTS = [
   ['quick-ops', 'format-text', 'get'],
   ['quick-ops', 'network-status', 'get'],
   ['quick-ops', 'battery-status', 'get'],
-  ['quick-ops', 'system-proxy', 'get']
+  ['quick-ops', 'system-proxy', 'get'],
+  ['quick-ops', 'developer-preview', 'get'],
+  ['quick-ops', 'developer-preview', 'save']
 ] as const
 
 const FORBIDDEN_PUBLIC_SURFACE_PATTERNS = [
@@ -329,12 +335,12 @@ export function createQuickOpsSurfaceAudit(
       QUICK_OPS_SURFACE_AUDIT_EXPECTED_SDK_METHODS
     )
   ) {
-    failures.push('Transport QuickOps SDK methods do not match the read-only facade contract')
+    failures.push('Transport QuickOps SDK methods do not match the bounded host facade contract')
   }
   if (
     !hasOnlyExpectedItems(result.sdk.pluginSdkMethods, QUICK_OPS_SURFACE_AUDIT_EXPECTED_SDK_METHODS)
   ) {
-    failures.push('Plugin QuickOps SDK methods do not match the read-only facade contract')
+    failures.push('Plugin QuickOps SDK methods do not match the bounded host facade contract')
   }
   if (
     !hasOnlyExpectedItems(
@@ -342,7 +348,9 @@ export function createQuickOpsSurfaceAudit(
       QUICK_OPS_SURFACE_AUDIT_EXPECTED_SDK_METHODS
     )
   ) {
-    failures.push('Plugin runtime QuickOps facade methods do not match the read-only contract')
+    failures.push(
+      'Plugin runtime QuickOps facade methods do not match the bounded host facade contract'
+    )
   }
   if (
     !result.sdk.transportSdkUsesTypedEvents ||

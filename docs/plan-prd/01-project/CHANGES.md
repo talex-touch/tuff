@@ -5,6 +5,25 @@
 
 ## 2026-06-19
 
+### ref(quickops): align bounded SDK surface audit
+
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-surface-audit.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-surface-audit.test.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.ts`
+- `apps/core-app/src/main/modules/quick-ops/quick-ops-evidence.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `packages/utils/plugin/sdk/types.ts`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/index.zh.mdc`
+- `apps/nexus/content/docs/dev/api/index.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Updated `quickops:surface:audit` to include canonical `QuickOpsEvents.developerPreview.get/save` events and `developerPreview()` / `saveDeveloperPreview()` facade methods, matching the plugin-owned Developer preview migration.
+  - Renamed the SDK/evidence contract wording from "read-only facade" to a bounded, policy-aware host facade, because QR save is a controlled temp-directory host capability rather than a general read-only diagnostic call.
+  - Removed the stale `quick-ops-provider` fixture id from the SearchEngine destroy regression test, keeping the CoreApp provider fixture generic.
+
 ### ref(quickops): move developer preview surface into plugin
 
 - `plugins/touch-quickops/index.js`

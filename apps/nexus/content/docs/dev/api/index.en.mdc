@@ -32,7 +32,7 @@ code: |
 | [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
 | [Feature SDK](./feature.en.md) | `useFeature()` | Search result management |
 | [QuickActions SDK](./quick-actions.en.md) | `quickActions` / `plugin.quickActions` | MetaK global actions and native share |
-| [QuickOps SDK](./quickops.en.md) | `quickOps` / `plugin.quickOps` | Read-only capabilities, sessions, and audit summaries for built-in local tools |
+| [QuickOps SDK](./quickops.en.md) | `quickOps` / `plugin.quickOps` | Bounded, policy-aware host facade for built-in local tools |
 | [DivisionBox SDK](./division-box.en.md) | `useDivisionBox()` | Independent window management |
 | [Flow SDK](./flow-transfer.en.md) | `createFlowSDK()` | Inter-plugin data transfer |
 | [Intelligence SDK](./intelligence.en.md) | `useIntelligence()` | AI capabilities |
