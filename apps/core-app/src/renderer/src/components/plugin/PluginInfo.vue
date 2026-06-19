@@ -82,6 +82,19 @@ watch(hasIssues, (value) => {
 
 type PluginIndicatorTone = 'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'
 
+const shouldPreservePluginIconColor = computed(() => {
+  const icon = props.plugin.icon
+  if (!icon || icon.type === 'class' || icon.type === 'builtin' || icon.type === 'emoji') {
+    return false
+  }
+
+  const value = icon.value.trim().toLowerCase()
+  if (!value || value.startsWith('data:image/svg+xml')) return false
+
+  const [path] = value.split(/[?#]/)
+  return !path.endsWith('.svg')
+})
+
 const indicatorTone = computed<PluginIndicatorTone>(() => {
   const status = props.plugin.status
 
@@ -282,7 +295,8 @@ async function handlePrimaryAction(): Promise<void> {
         <div class="flex items-center gap-2 min-w-0">
           <div class="relative">
             <StatusIcon
-              colorful
+              class="PluginInfo-HeaderIcon"
+              :colorful="shouldPreservePluginIconColor"
               :empty="DefaultIcon"
               :alt="plugin.name"
               :icon="plugin.icon"
@@ -525,6 +539,11 @@ async function handlePrimaryAction(): Promise<void> {
   span {
     flex: 1;
   }
+}
+
+.PluginInfo-HeaderIcon {
+  color: currentcolor;
+  --icon-color: currentColor;
 }
 
 .PluginInfo-RunningBadge {
