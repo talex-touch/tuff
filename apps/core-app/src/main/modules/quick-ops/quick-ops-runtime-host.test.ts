@@ -140,13 +140,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../notification', () => ({
+vi.mock('../notification', () => ({
   notificationModule: {
     showInternalSystemNotification: notificationMocks.showInternalSystemNotification
   }
 }))
 
-vi.mock('../../../storage', () => ({
+vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => undefined)
 }))
 
@@ -262,7 +262,7 @@ function mockExecFileFailure(error: Error): void {
 }
 
 function expectDnsQueryInfo(
-  value: Awaited<ReturnType<typeof import('./quick-ops-provider').createDnsQueryInfo>>
+  value: Awaited<ReturnType<typeof import('./quick-ops-runtime-host').createDnsQueryInfo>>
 ): import('@talex-touch/utils/transport/events/types').QuickOpsDnsQueryInfo {
   if ('degradedReason' in value) {
     throw new Error(`Expected DNS query info, received ${value.degradedReason}`)
@@ -361,7 +361,7 @@ describe('QuickOpsRuntimeHost', () => {
   }
 
   it('keeps CoreApp host runtime sessions without exposing a CoreBox provider class', async () => {
-    const mod = await import('./quick-ops-provider')
+    const mod = await import('./quick-ops-runtime-host')
     const host = new mod.QuickOpsRuntimeHost()
     const seenKinds: string[][] = []
     const dispose = host.subscribeSessions((sessions) => {
@@ -390,7 +390,7 @@ describe('QuickOpsRuntimeHost', () => {
   })
 
   it('cleans runtime sessions on deactivate and destroy lifecycle hooks', async () => {
-    const { QuickOpsRuntimeHost } = await import('./quick-ops-provider')
+    const { QuickOpsRuntimeHost } = await import('./quick-ops-runtime-host')
     const host = new QuickOpsRuntimeHost()
 
     host.startSystemAwake(30_000)
@@ -406,7 +406,7 @@ describe('QuickOpsRuntimeHost', () => {
   })
 
   it('reads QuickOps settings only for capability and diagnostics summaries', async () => {
-    const { QuickOpsRuntimeHost, formatDiagnosticsInfo } = await import('./quick-ops-provider')
+    const { QuickOpsRuntimeHost, formatDiagnosticsInfo } = await import('./quick-ops-runtime-host')
     const host = new QuickOpsRuntimeHost(undefined, () => ({
       enabled: true,
       allowStatefulTools: false,
@@ -438,7 +438,7 @@ describe('QuickOpsRuntimeHost', () => {
   })
 
   it('parses QuickOps natural language commands without CoreBox item builders', async () => {
-    const { parseQuickOpsQuery, parseDurationMs } = await import('./quick-ops-provider')
+    const { parseQuickOpsQuery, parseDurationMs } = await import('./quick-ops-runtime-host')
 
     expect(parseDurationMs('1小时30分钟')).toBe(90 * 60 * 1000)
     expect(parseQuickOpsQuery('keep awake 30m')).toMatchObject({
@@ -472,7 +472,7 @@ describe('QuickOpsRuntimeHost', () => {
       parseDnsQuery,
       parsePortQuery,
       probeLocalTcpPort
-    } = await import('./quick-ops-provider')
+    } = await import('./quick-ops-runtime-host')
 
     const addresses = getLocalIpAddresses()
     expect(addresses.map((item) => item.address)).toEqual(['192.168.2.10', 'fe80::1'])
@@ -511,7 +511,7 @@ describe('QuickOpsRuntimeHost', () => {
       resolveFileBase64Path,
       resolveFileHashPath,
       resolveFilePathTarget
-    } = await import('./quick-ops-provider')
+    } = await import('./quick-ops-runtime-host')
     const filePath = await createTempFile('hello.txt', 'hello')
     const tempRoot = await mkdtemp(path.join(tmpdir(), 'quick-ops-temp-'))
     tempDirs.push(tempRoot)
@@ -563,7 +563,7 @@ describe('QuickOpsRuntimeHost', () => {
 
   it('bounds recent-download moves to Downloads and explicit target directories', async () => {
     const { findRecentDownloadFile, moveRecentDownloadFile, prepareRecentDownloadMove } =
-      await import('./quick-ops-provider')
+      await import('./quick-ops-runtime-host')
     const downloadsDir = await mkdtemp(path.join(tmpdir(), 'quick-ops-downloads-'))
     const targetDir = await mkdtemp(path.join(tmpdir(), 'quick-ops-target-'))
     tempDirs.push(downloadsDir, targetDir)
@@ -609,7 +609,7 @@ describe('QuickOpsRuntimeHost', () => {
       parseLinuxSystemProxyEntries,
       parseMacSystemProxyEntries,
       parseWindowsSystemProxyEntries
-    } = await import('./quick-ops-provider')
+    } = await import('./quick-ops-runtime-host')
     process.env.HTTP_PROXY = 'http://alice:secret@proxy.local:8080'
 
     expect(getProxyEnvironmentInfo()).toEqual([
@@ -647,7 +647,7 @@ describe('QuickOpsRuntimeHost', () => {
       parseMacBatteryStatus,
       parseWindowsBatteryStatus,
       shouldNotifyLowBattery
-    } = await import('./quick-ops-provider')
+    } = await import('./quick-ops-runtime-host')
 
     const mac = parseMacBatteryStatus(
       'Now drawing from battery power\n -InternalBattery-0; 15%; discharging;'
@@ -673,7 +673,7 @@ describe('QuickOpsRuntimeHost', () => {
       formatDirectoryUsageInfo,
       formatDiskSpaceInfo,
       formatSystemInfo
-    } = await import('./quick-ops-provider')
+    } = await import('./quick-ops-runtime-host')
     const dir = await mkdtemp(path.join(tmpdir(), 'quick-ops-dir-'))
     tempDirs.push(dir)
     await mkdir(path.join(dir, 'nested'))

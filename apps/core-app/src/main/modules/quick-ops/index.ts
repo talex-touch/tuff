@@ -82,15 +82,9 @@ import {
   resolveFileBase64Path,
   resolveFileHashPath,
   resolveFilePathTarget
-} from '../box-tool/addon/quick-ops/quick-ops-provider'
-import type {
-  QuickOpsScreenCleanMode,
-  QuickOpsSession
-} from '../box-tool/addon/quick-ops/quick-ops-session-manager'
-import {
-  formatDuration,
-  getSessionDisplayDurationMs
-} from '../box-tool/addon/quick-ops/quick-ops-session-manager'
+} from './quick-ops-runtime-host'
+import type { QuickOpsScreenCleanMode, QuickOpsSession } from './quick-ops-session-manager'
+import { formatDuration, getSessionDisplayDurationMs } from './quick-ops-session-manager'
 import { flowBus } from '../flow-bus/flow-bus'
 import { flowTargetRegistry } from '../flow-bus/target-registry'
 import { notificationModule } from '../notification'

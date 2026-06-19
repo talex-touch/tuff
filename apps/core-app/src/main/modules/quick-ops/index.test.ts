@@ -566,7 +566,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../box-tool/addon/quick-ops/quick-ops-provider', () => ({
+vi.mock('./quick-ops-runtime-host', () => ({
   computeFileHashes: quickOpsFileHashResultMock,
   encodeFileBase64: quickOpsFileBase64ResultMock,
   findRecentDownloadFile: quickOpsRecentDownloadResultMock,
@@ -639,7 +639,7 @@ vi.mock('../box-tool/addon/quick-ops/quick-ops-provider', () => ({
   })
 }))
 
-vi.mock('../box-tool/addon/quick-ops/quick-ops-session-manager', () => ({
+vi.mock('./quick-ops-session-manager', () => ({
   formatDuration: formatDurationMock,
   getSessionDisplayDurationMs: vi.fn((session: { elapsedMs?: number }) => session.elapsedMs ?? 0)
 }))
@@ -725,7 +725,7 @@ import {
   formatSystemInfo,
   getLocalIpAddresses,
   probeLocalTcpPort
-} from '../box-tool/addon/quick-ops/quick-ops-provider'
+} from './quick-ops-runtime-host'
 import {
   QUICK_OPS_BATTERY_STATUS_FLOW_TARGET_FULL_ID,
   QUICK_OPS_CAPABILITIES_FLOW_TARGET_FULL_ID,

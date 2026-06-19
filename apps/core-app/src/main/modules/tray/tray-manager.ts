@@ -20,9 +20,9 @@ import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import {
   formatDuration,
-  getSessionDisplayDurationMs
-} from '../box-tool/addon/quick-ops/quick-ops-session-manager'
-import { quickOpsRuntime } from '../box-tool/addon/quick-ops/quick-ops-provider'
+  getSessionDisplayDurationMs,
+  quickOpsRuntime
+} from '../quick-ops/quick-ops-runtime-host'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'

@@ -9,7 +9,7 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { coreBoxManager } from '../box-tool/core-box/manager'
-import { quickOpsRuntime } from '../box-tool/addon/quick-ops/quick-ops-provider'
+import { quickOpsRuntime } from '../quick-ops/quick-ops-runtime-host'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
