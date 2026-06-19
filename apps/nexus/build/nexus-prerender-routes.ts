@@ -3,6 +3,7 @@ import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
 
 export const publicPrerenderRoutes = [
   '/',
+  '/new',
   '/next',
   '/pricing',
   '/license',

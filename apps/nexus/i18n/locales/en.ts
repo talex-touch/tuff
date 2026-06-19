@@ -2446,6 +2446,76 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     },
   },
   landing: {
+    new: {
+      hero: {
+        eyebrow: 'Desktop command center',
+        title: 'A local-first Agent entry for desktop work.',
+        copy: 'Tuff gathers search, context, plugins, and AI execution into one calm desktop entry. Less window switching, more work finished.',
+        primaryCta: 'Download Tuff',
+        secondaryCta: 'Read docs',
+        previewAlt: 'Preview of Tuff CoreBox file search',
+        previewCaption: 'CoreBox keeps local files, apps, and actions on the same input surface.',
+      },
+      proof: {
+        eyebrow: 'Core capability',
+        title: 'Built around the local desktop, not another cloud dashboard.',
+        items: {
+          local: {
+            title: 'Local context first',
+            copy: 'Clipboard, files, apps, and desktop state become Agent-readable input while sensitive data stays inside clear boundaries.',
+          },
+          command: {
+            title: 'One summon, real actions',
+            copy: 'From CoreBox search to plugin execution, daily operations stay in a keyboard-first loop.',
+          },
+          plugin: {
+            title: 'Auditable extension power',
+            copy: 'Manifest, permissions, and SDK contracts give every capability a clear entry and a clear limit.',
+          },
+        },
+      },
+      workflow: {
+        eyebrow: 'Workflow',
+        title: 'Keep one line from intent to action.',
+        items: {
+          summon: {
+            title: 'Summon',
+            copy: 'Open CoreBox with a global shortcut before deciding which tool should answer.',
+          },
+          understand: {
+            title: 'Understand',
+            copy: 'Tuff shapes current context, input, and available capabilities into an Agent-ready request.',
+          },
+          act: {
+            title: 'Act',
+            copy: 'Built-in tools, MCP, and plugins move the request into real desktop actions.',
+          },
+        },
+      },
+      principles: {
+        eyebrow: 'Design principles',
+        title: 'The next landing page starts with restraint, clarity, and trust.',
+        items: {
+          quiet: {
+            title: 'Less motion, stronger hierarchy',
+            copy: 'Keep necessary entrance and hover feedback, remove scroll takeover and decorative GPU loops.',
+          },
+          typed: {
+            title: 'Less promise, stronger proof',
+            copy: 'Use product visuals, capability boundaries, and real workflows instead of abstract claims.',
+          },
+          sync: {
+            title: 'Less divergence, stronger consistency',
+            copy: 'Stay inside Nexus routing, i18n, and prerender rules so the experiment can replace production cleanly.',
+          },
+        },
+      },
+      final: {
+        eyebrow: 'Pioneer entry',
+        title: 'Clean up the desktop workflow first, then let Agents take over more repeated actions.',
+        cta: 'Get the current build',
+      },
+    },
     hero: {
       description:
         'Tuff is a local-first desktop Agent command center that brings search, execution, plugins, and intelligence into one summon.',

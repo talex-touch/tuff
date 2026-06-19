@@ -2445,6 +2445,76 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
     },
   },
   landing: {
+    new: {
+      hero: {
+        eyebrow: '桌面指令中心',
+        title: '本地优先的 Agent 工作入口。',
+        copy: 'Tuff 把搜索、上下文、插件和 AI 执行收束到一个安静的桌面入口里。少切换窗口，多完成任务。',
+        primaryCta: '下载 Tuff',
+        secondaryCta: '阅读文档',
+        previewAlt: 'Tuff CoreBox 文件搜索界面预览',
+        previewCaption: 'CoreBox 在本地文件、应用和动作之间保持同一个输入面。',
+      },
+      proof: {
+        eyebrow: '核心能力',
+        title: '围绕本地桌面，而不是又一个云端面板。',
+        items: {
+          local: {
+            title: '本地上下文优先',
+            copy: '剪贴板、文件、应用和桌面状态成为 Agent 能理解的输入，敏感信息保留在明确边界内。',
+          },
+          command: {
+            title: '一次唤起完成动作',
+            copy: '从 CoreBox 搜索到插件执行，日常操作尽量保持键盘闭环。',
+          },
+          plugin: {
+            title: '插件能力可审计',
+            copy: 'Manifest、权限和 SDK 让扩展能力有清晰入口，也有清晰限制。',
+          },
+        },
+      },
+      workflow: {
+        eyebrow: '工作流',
+        title: '从意图到动作，保持一条线。',
+        items: {
+          summon: {
+            title: '唤起',
+            copy: '用全局快捷键打开 CoreBox，不需要先决定去哪个工具里找答案。',
+          },
+          understand: {
+            title: '理解',
+            copy: 'Tuff 将当前上下文、输入和可用能力整理成 Agent 能处理的请求。',
+          },
+          act: {
+            title: '执行',
+            copy: '通过内置工具、MCP 和插件把请求推进到真实桌面动作。',
+          },
+        },
+      },
+      principles: {
+        eyebrow: '设计原则',
+        title: '下一版 landing 先回到克制、清晰和可信。',
+        items: {
+          quiet: {
+            title: '少动画，强层级',
+            copy: '保留必要的入场和 hover 反馈，去掉抢滚动和持续占用 GPU 的装饰。',
+          },
+          typed: {
+            title: '少承诺，强证据',
+            copy: '用产品画面、能力边界和真实工作流解释价值，不堆抽象口号。',
+          },
+          sync: {
+            title: '少分叉，强一致',
+            copy: '沿用 Nexus 的路由、i18n 和预渲染体系，让试验页能平滑替换生产首页。',
+          },
+        },
+      },
+      final: {
+        eyebrow: '先锋入口',
+        title: '先把桌面工作流清理干净，再让 Agent 接管更多重复动作。',
+        cta: '获取当前版本',
+      },
+    },
     hero: {
       description: 'Tuff 是本地优先的桌面 Agent 指令中心，把搜索、执行、插件和智能能力收束到一次唤起里。',
       heading: '一触即达的本地桌面 Agent 中心。',
