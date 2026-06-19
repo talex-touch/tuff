@@ -49,8 +49,8 @@ watch(
 </script>
 
 <template>
-  <div class="h-full">
-    <div v-if="displayedPlugin" class="h-full">
+  <div class="h-full min-h-0 overflow-hidden">
+    <div v-if="displayedPlugin" class="h-full min-h-0 overflow-hidden">
       <PluginInfo :plugin="displayedPlugin" />
     </div>
     <PluginEmptyState v-else />

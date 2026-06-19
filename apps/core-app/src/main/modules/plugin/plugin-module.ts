@@ -13,6 +13,7 @@ import type {
 } from '@talex-touch/utils/plugin/providers'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
+  PluginApiGetFileTreeResponse,
   PluginInstallSourceResponse,
   PluginPerformanceGetPathsResponse
 } from '@talex-touch/utils/transport/events/types'
@@ -98,6 +99,9 @@ const pluginIpcLog = pluginModuleLog.child('IPC')
 const devWatcherLog = pluginLog.child('DevWatcher')
 const WIDGET_ROOT_DIR = 'widgets'
 const WIDGET_ALLOWED_EXTENSIONS = new Set(['.vue', '.tsx', '.jsx', '.ts', '.js'])
+const PLUGIN_FILE_TREE_MAX_DEPTH = 5
+const PLUGIN_FILE_TREE_MAX_ENTRIES = 500
+const PLUGIN_FILE_TREE_IGNORED_DIRS = new Set(['.git', '.vite', 'dist', 'logs', 'node_modules'])
 const PERMISSION_MISSING_ISSUE_CODE = 'PERMISSION_MISSING'
 const ISSUE_FULL_RESYNC_INTERVAL_MS = 45 * 60 * 1000
 type PluginLifecycleChannel = {
@@ -109,6 +113,62 @@ const toErrorMessage = (error: unknown): string =>
 
 function getPluginRuntimeLogsPath(plugin: TouchPlugin): string {
   return path.join(plugin.pluginPath, 'logs')
+}
+
+async function buildPluginFileTree(rootPath: string): Promise<PluginApiGetFileTreeResponse> {
+  let entryCount = 0
+
+  async function readDirectory(
+    currentPath: string,
+    depth: number
+  ): Promise<PluginApiGetFileTreeResponse> {
+    if (depth > PLUGIN_FILE_TREE_MAX_DEPTH || entryCount >= PLUGIN_FILE_TREE_MAX_ENTRIES) {
+      return []
+    }
+
+    const dirents = await fse.readdir(currentPath, { withFileTypes: true })
+    const nodes: PluginApiGetFileTreeResponse = []
+
+    for (const dirent of dirents) {
+      if (entryCount >= PLUGIN_FILE_TREE_MAX_ENTRIES) break
+      if (dirent.name.startsWith('.') && dirent.name !== '.env.example') continue
+      if (dirent.isDirectory() && PLUGIN_FILE_TREE_IGNORED_DIRS.has(dirent.name)) continue
+
+      const absolutePath = path.join(currentPath, dirent.name)
+      const relativePath = path.relative(rootPath, absolutePath).replace(/\\/g, '/')
+      const stats = await fse.lstat(absolutePath)
+      entryCount += 1
+
+      if (dirent.isDirectory()) {
+        nodes.push({
+          name: dirent.name,
+          path: relativePath,
+          type: 'directory',
+          size: 0,
+          modified: stats.mtimeMs,
+          children: await readDirectory(absolutePath, depth + 1)
+        })
+        continue
+      }
+
+      if (dirent.isFile()) {
+        nodes.push({
+          name: dirent.name,
+          path: relativePath,
+          type: 'file',
+          size: stats.size,
+          modified: stats.mtimeMs
+        })
+      }
+    }
+
+    return nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  }
+
+  return readDirectory(rootPath, 1)
 }
 
 const logIpcHandlerError = (handler: string, error: unknown): void => {
@@ -3507,6 +3567,23 @@ export class PluginModule extends BaseModule {
         } catch (error) {
           logIpcHandlerError('plugin:api:get-paths', error)
           throw error
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.api.getFileTree, async (payload) => {
+        try {
+          const name = payload?.name
+          if (!name) return []
+
+          const plugin = manager.getPluginByName(name) as TouchPlugin
+          if (!plugin) return []
+
+          return await buildPluginFileTree(plugin.pluginPath)
+        } catch (error) {
+          logIpcHandlerError('plugin:api:get-file-tree', error)
+          return []
         }
       })
     )
