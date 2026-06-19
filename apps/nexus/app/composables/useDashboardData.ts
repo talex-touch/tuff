@@ -187,10 +187,12 @@ interface SubscriptionStatus {
   }
 }
 
-export function useSubscriptionData() {
+export function useSubscriptionData(options: { immediate?: boolean } = {}) {
   const request = resolveRequest()
   const state = useAsyncData('subscription-status', () =>
-    request<SubscriptionStatus>('/api/subscription/status'))
+    request<SubscriptionStatus>('/api/subscription/status'), {
+    immediate: options.immediate ?? true,
+  })
 
   const subscription = computed(() => state.data.value)
   const plan = computed(() => state.data.value?.plan ?? 'FREE')

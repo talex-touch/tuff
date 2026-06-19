@@ -12,7 +12,7 @@ interface DocsFeedbackResponse {
 }
 
 const { t, locale } = useI18n()
-const { user, isAuthenticated } = useAuthUser()
+const { user, isAuthenticated } = useAuthUser({ fetchOnAuth: false, server: false })
 
 const helpful = ref(0)
 const unhelpful = ref(0)

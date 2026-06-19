@@ -1,16 +1,22 @@
-import { computed, watch } from 'vue'
+import { computed, toValue, watch, type MaybeRefOrGetter } from 'vue'
 
 import { fetchCurrentUserProfile, type CurrentUserProfile } from '~/composables/useCurrentUserApi'
 
 export interface AuthUserProfile extends CurrentUserProfile {}
 
-export function useAuthUser() {
+interface AuthUserOptions {
+  fetchOnAuth?: MaybeRefOrGetter<boolean>
+  server?: boolean
+}
+
+export function useAuthUser(options: AuthUserOptions = {}) {
   const { status } = useAuth()
   const userState = useState<AuthUserProfile | null>('auth-user', () => null)
   const pendingState = useState<boolean>('auth-user-pending', () => false)
   const errorState = useState<string | null>('auth-user-error', () => null)
 
   const isAuthenticated = computed(() => status.value === 'authenticated')
+  const shouldFetchOnAuth = computed(() => options.fetchOnAuth === undefined || toValue(options.fetchOnAuth))
 
   const fetchUser = async () => {
     if (!isAuthenticated.value) {
@@ -39,13 +45,17 @@ export function useAuthUser() {
   }
 
   watch(
-    () => status.value,
-    (value) => {
-      if (value === 'authenticated') {
+    () => [status.value, shouldFetchOnAuth.value] as const,
+    ([value, shouldFetch]) => {
+      if (import.meta.server && options.server === false)
+        return
+
+      if (value === 'authenticated' && shouldFetch) {
         void fetchUser()
       }
       else {
-        userState.value = null
+        if (value !== 'authenticated')
+          userState.value = null
         pendingState.value = false
       }
     },

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import DocsAssistantDialog from './DocsAssistantDialog.vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
+
+const LazyDocsAssistantDialog = defineAsyncComponent(() => import('./DocsAssistantDialog.vue'))
 
 const runtimeConfig = useRuntimeConfig()
 const { locale } = useI18n()
@@ -59,8 +60,9 @@ const docPath = computed(() => {
   const path = docMetaState.value?.path
   return typeof path === 'string' ? path.trim() : ''
 })
+const assistantContextState = useState<string>('docs-assistant-context', () => '')
 const assistantContext = computed(() => {
-  const value = docMetaState.value?.assistantContext
+  const value = assistantContextState.value
   return typeof value === 'string' ? value : ''
 })
 const assistantOpen = ref(false)
@@ -124,7 +126,8 @@ const assistantAriaLabel = computed(() => (locale.value === 'zh' ? '打开 Tuff 
     </div>
   </section>
 
-  <DocsAssistantDialog
+  <LazyDocsAssistantDialog
+    v-if="assistantOpen"
     v-model="assistantOpen"
     :source="assistantTriggerEl"
     :doc-title="docTitle"
