@@ -5,6 +5,19 @@
 
 ## 2026-06-19
 
+### ref(quickops): remove file provider action naming leak
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.test.ts`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Renamed the CoreApp file-search path-copy helper from `buildQuickOpsFilePathActions()` to `buildFilePathCopyActions()`.
+  - Renamed file search path-copy action ids from `quick-ops-copy-*` to generic `file-copy-*`, keeping the existing open/reveal/path-copy behavior while removing the remaining QuickOps product naming from the file provider surface.
+  - Updated QuickOps PRD, TODO, and Nexus developer docs to document the generic file-copy action ids and to keep QuickOps Hash/Base64/path-format business routing in the official plugin.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/utils.test.ts"`.
+
 ### ref(quickops): move settings surface into plugin summary
 
 - `plugins/touch-quickops/manifest.json`

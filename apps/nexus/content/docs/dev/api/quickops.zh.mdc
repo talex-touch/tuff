@@ -71,7 +71,7 @@ code: |
 
 官方 `plugins/touch-quickops` manifest 已声明 `acceptedInputTypes: ["text", "files"]`。当 CoreBox 查询带 Files input 时，插件会解析 `query.inputs[].type === "files"` 的 JSON 字符串数组，并把首个有效文件路径作为 `fileHash()`、`fileBase64()` 或 `pathFormat()` 的默认 `path`；显式命令里的路径仍优先于 Files input。
 
-当前 CoreApp 文件搜索 provider 只负责索引、打开文件、打开所在目录和路径复制类通用动作。QuickOps Hash/Base64 的结果渲染和命令路由必须放在官方插件里，不要把新的 QuickOps execute action 加回文件搜索结果或 provider `onExecute()` 分支。
+当前 CoreApp 文件搜索 provider 只负责索引、打开文件、打开所在目录和路径复制类通用动作。路径复制动作使用通用 action id：`file-copy-path`、`file-copy-shell-path`、`file-copy-url`，以及按平台路径可用性追加的 `file-copy-windows-path` / `file-copy-wsl-path`；不要再新增 `quick-ops-*` 文件搜索 action id。QuickOps Hash/Base64 的结果渲染和命令路由必须放在官方插件里，不要把新的 QuickOps execute action 加回文件搜索结果或 provider `onExecute()` 分支。
 
 ## 选择扩展路径
 
