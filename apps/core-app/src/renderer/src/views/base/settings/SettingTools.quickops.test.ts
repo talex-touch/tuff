@@ -4,14 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import SettingTools from './SettingTools.vue'
 
-interface QuickOpsCustomPomodoroTemplate {
-  name: string
-  aliases: string[]
-  focusMinutes: number
-  breakMinutes: number
-  enabled: boolean
-}
-
 const settingState = vi.hoisted(() => {
   const { reactive } = require('vue') as typeof import('vue')
   return {
@@ -87,7 +79,7 @@ const settingState = vi.hoisted(() => {
         pomodoroTemplates: {
           classic: true,
           long: true,
-          custom: [] as QuickOpsCustomPomodoroTemplate[]
+          custom: []
         },
         defaultScreenCleanDurationSeconds: 60,
         defaultScreenCleanMode: 'black',
@@ -212,29 +204,51 @@ function mountSettingTools() {
   })
 }
 
-describe('SettingTools QuickOps settings', () => {
+describe('SettingTools QuickOps settings boundary', () => {
   beforeEach(() => {
     resetAppSetting()
   })
 
-  it('renders QuickOps default preference controls', async () => {
+  it('does not render QuickOps preference controls in CoreApp Tools settings', async () => {
+    appSettingMock.dev.advancedSettings = true
+    appSettingMock.quickOps.pomodoroTemplates.custom = [
+      {
+        name: 'writing sprint',
+        aliases: ['写作'],
+        focusMinutes: 45,
+        breakMinutes: 12,
+        enabled: true
+      }
+    ]
     const wrapper = mountSettingTools()
     await nextTick()
+    const text = wrapper.text()
 
-    expect(wrapper.text()).toContain('settingTools.quickOpsEnabled')
-    expect(wrapper.text()).toContain('settingTools.quickOpsShowRunningSessions')
-    expect(wrapper.text()).toContain('settingTools.quickOpsDefaultKeepAwakeDuration')
-    expect(wrapper.text()).toContain('settingTools.quickOpsDefaultTimerDuration')
-    expect(wrapper.text()).toContain('settingTools.quickOpsDefaultTimerExtendDuration')
-    expect(wrapper.text()).toContain('settingTools.quickOpsDefaultPomodoroFocus')
-    expect(wrapper.text()).toContain('settingTools.quickOpsDefaultPomodoroBreak')
-    expect(wrapper.text()).toContain('settingTools.quickOpsPomodoroClassicTemplate')
-    expect(wrapper.text()).toContain('settingTools.quickOpsPomodoroLongTemplate')
-    expect(wrapper.text()).toContain('settingTools.quickOpsDefaultScreenCleanDuration')
-    expect(wrapper.text()).toContain('settingTools.quickOpsDefaultScreenCleanMode')
+    expect(text).toContain('settingTools.autoPaste')
+    expect(text).not.toContain('settingTools.quickOpsEnabled')
+    expect(text).not.toContain('settingTools.quickOpsShowRunningSessions')
+    expect(text).not.toContain('settingTools.quickOpsDefaultKeepAwakeDuration')
+    expect(text).not.toContain('settingTools.quickOpsDefaultSystemAwakeDuration')
+    expect(text).not.toContain('settingTools.quickOpsDefaultTimerDuration')
+    expect(text).not.toContain('settingTools.quickOpsDefaultTimerExtendDuration')
+    expect(text).not.toContain('settingTools.quickOpsDefaultPomodoroFocus')
+    expect(text).not.toContain('settingTools.quickOpsDefaultPomodoroBreak')
+    expect(text).not.toContain('settingTools.quickOpsPomodoroClassicTemplate')
+    expect(text).not.toContain('settingTools.quickOpsPomodoroLongTemplate')
+    expect(text).not.toContain('settingTools.quickOpsAllowStatefulTools')
+    expect(text).not.toContain('settingTools.quickOpsAllowNetworkTools')
+    expect(text).not.toContain('settingTools.quickOpsAllowFileTools')
+    expect(text).not.toContain('settingTools.quickOpsAllowSystemTools')
+    expect(text).not.toContain('settingTools.quickOpsAllowDeveloperTools')
+    expect(text).not.toContain('settingTools.quickOpsAllowHighRiskTools')
+    expect(text).not.toContain('settingTools.quickOpsAllowPublicIpLookup')
+    expect(text).not.toContain('settingTools.quickOpsPomodoroCustomTemplates')
+    expect(text).not.toContain('settingTools.quickOpsDefaultScreenCleanDuration')
+    expect(text).not.toContain('settingTools.quickOpsDefaultScreenCleanMode')
+    expect(text).not.toContain('writing sprint 45/12')
   })
 
-  it('normalizes invalid QuickOps stored preferences to supported defaults', async () => {
+  it('leaves stored QuickOps preferences untouched while plugin owns the settings surface', async () => {
     appSettingMock.quickOps = {
       enabled: 'yes' as never,
       showRunningSessionsInCoreBox: 'no' as never,
@@ -274,95 +288,11 @@ describe('SettingTools QuickOps settings', () => {
       defaultScreenCleanMode: 'blue' as never,
       allowPublicIpLookup: 'yes' as never
     }
+    const snapshot = JSON.parse(JSON.stringify(appSettingMock.quickOps))
 
     mountSettingTools()
     await nextTick()
 
-    expect(appSettingMock.quickOps).toEqual({
-      enabled: true,
-      showRunningSessionsInCoreBox: true,
-      allowStatefulTools: true,
-      allowNetworkTools: true,
-      allowFileTools: true,
-      allowSystemTools: true,
-      allowDeveloperTools: true,
-      allowHighRiskTools: false,
-      defaultKeepAwakeDurationMinutes: 60,
-      defaultSystemAwakeDurationMinutes: 90,
-      defaultTimerDurationMinutes: 25,
-      defaultTimerExtendMinutes: 5,
-      defaultPomodoroFocusMinutes: 40,
-      defaultPomodoroBreakMinutes: 8,
-      pomodoroTemplates: {
-        classic: true,
-        long: true,
-        custom: [
-          {
-            name: 'writing sprint',
-            aliases: ['写作'],
-            focusMinutes: 45,
-            breakMinutes: 12,
-            enabled: true
-          }
-        ]
-      },
-      defaultScreenCleanDurationSeconds: 60,
-      defaultScreenCleanMode: 'black',
-      allowPublicIpLookup: false
-    })
-  })
-
-  it('preserves valid QuickOps pomodoro template switches', async () => {
-    appSettingMock.quickOps.pomodoroTemplates = {
-      classic: false,
-      long: true,
-      custom: []
-    }
-
-    mountSettingTools()
-    await nextTick()
-
-    expect(appSettingMock.quickOps.pomodoroTemplates).toEqual({
-      classic: false,
-      long: true,
-      custom: []
-    })
-  })
-
-  it('shows system-awake duration only in advanced settings', async () => {
-    const basicWrapper = mountSettingTools()
-    await nextTick()
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsDefaultSystemAwakeDuration')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowStatefulTools')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowNetworkTools')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowFileTools')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowSystemTools')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowDeveloperTools')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowHighRiskTools')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowPublicIpLookup')
-    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsPomodoroCustomTemplates')
-
-    appSettingMock.dev.advancedSettings = true
-    appSettingMock.quickOps.pomodoroTemplates.custom = [
-      {
-        name: 'writing sprint',
-        aliases: ['写作'],
-        focusMinutes: 45,
-        breakMinutes: 12,
-        enabled: true
-      }
-    ] as QuickOpsCustomPomodoroTemplate[]
-    const advancedWrapper = mountSettingTools()
-    await nextTick()
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsDefaultSystemAwakeDuration')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowStatefulTools')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowNetworkTools')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowFileTools')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowSystemTools')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowDeveloperTools')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowHighRiskTools')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowPublicIpLookup')
-    expect(advancedWrapper.text()).toContain('settingTools.quickOpsPomodoroCustomTemplates')
-    expect(advancedWrapper.text()).toContain('writing sprint 45/12')
+    expect(JSON.parse(JSON.stringify(appSettingMock.quickOps))).toEqual(snapshot)
   })
 })

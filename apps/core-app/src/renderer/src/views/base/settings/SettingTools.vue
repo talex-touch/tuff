@@ -53,44 +53,7 @@ const AUTO_CLEAR_TIME_OPTIONS = [-1, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as 
 const CLIPBOARD_POLLING_INTERVAL_OPTIONS = [1, 3, 5, 10, 15, -1] as const
 const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
 const OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS = [300, 450, 600, 800, 1000, 1200, 1500] as const
-const QUICK_OPS_KEEP_AWAKE_DURATION_OPTIONS = [15, 30, 45, 60, 90, 120] as const
-const QUICK_OPS_SYSTEM_AWAKE_DURATION_OPTIONS = [15, 30, 60, 90, 120] as const
-const QUICK_OPS_TIMER_DURATION_OPTIONS = [5, 10, 15, 25, 30, 45, 60] as const
-const QUICK_OPS_TIMER_EXTEND_OPTIONS = [3, 5, 10, 15] as const
-const QUICK_OPS_POMODORO_FOCUS_OPTIONS = [25, 40, 50] as const
-const QUICK_OPS_POMODORO_BREAK_OPTIONS = [5, 8, 10, 15] as const
-const QUICK_OPS_SCREEN_CLEAN_DURATION_OPTIONS = [30, 60, 120, 180, 300] as const
 const DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS = 600
-const DEFAULT_QUICK_OPS_SETTINGS = {
-  enabled: true,
-  showRunningSessionsInCoreBox: true,
-  allowStatefulTools: true,
-  allowNetworkTools: true,
-  allowFileTools: true,
-  allowSystemTools: true,
-  allowDeveloperTools: true,
-  allowHighRiskTools: false,
-  defaultKeepAwakeDurationMinutes: 60,
-  defaultSystemAwakeDurationMinutes: 60,
-  defaultTimerDurationMinutes: 25,
-  defaultTimerExtendMinutes: 5,
-  defaultPomodoroFocusMinutes: 25,
-  defaultPomodoroBreakMinutes: 5,
-  pomodoroTemplates: {
-    classic: true,
-    long: true,
-    custom: [] as Array<{
-      name: string
-      aliases: string[]
-      focusMinutes: number
-      breakMinutes: number
-      enabled: boolean
-    }>
-  },
-  defaultScreenCleanDurationSeconds: 60,
-  defaultScreenCleanMode: 'black' as 'black' | 'white',
-  allowPublicIpLookup: false
-} as const
 const DEFAULT_RECOMMENDATION_CONTEXT_SOURCES = {
   time: true,
   foregroundApp: true,
@@ -108,8 +71,6 @@ const DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS = {
 } as const
 type RecommendationContextSourceKey = keyof typeof DEFAULT_RECOMMENDATION_CONTEXT_SOURCES
 type RecommendationSemanticSettingKey = keyof typeof DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS
-type QuickOpsCustomPomodoroTemplate =
-  (typeof DEFAULT_QUICK_OPS_SETTINGS.pomodoroTemplates.custom)[number]
 const recommendationContextSourceItems: Array<{
   key: RecommendationContextSourceKey
   titleKey: string
@@ -203,31 +164,6 @@ const recommendationSemanticItems: Array<{
     activeIcon: 'i-carbon-vector'
   }
 ]
-const quickOpsCustomPomodoroSummary = computed(() => {
-  const templates = appSetting.quickOps?.pomodoroTemplates?.custom
-  if (!Array.isArray(templates) || templates.length === 0) {
-    return t('settingTools.quickOpsPomodoroCustomTemplateEmpty')
-  }
-
-  return templates
-    .filter((template): template is QuickOpsCustomPomodoroTemplate => {
-      return (
-        Boolean(template) &&
-        typeof template.name === 'string' &&
-        typeof template.focusMinutes === 'number' &&
-        typeof template.breakMinutes === 'number'
-      )
-    })
-    .map((template) => {
-      const status =
-        template.enabled === false
-          ? t('settingTools.quickOpsPomodoroCustomTemplateDisabled')
-          : t('settingTools.quickOpsPomodoroCustomTemplateEnabled')
-      return `${template.name} ${template.focusMinutes}/${template.breakMinutes} (${status})`
-    })
-    .join(' · ')
-})
-
 type SystemPermissionStatus =
   | 'granted'
   | 'denied'
@@ -444,144 +380,6 @@ function ensureRecommendationContextSettings(): void {
   }
 }
 
-function ensureQuickOpsSettings(): void {
-  if (!appSetting.quickOps || typeof appSetting.quickOps !== 'object') {
-    appSetting.quickOps = { ...DEFAULT_QUICK_OPS_SETTINGS }
-  }
-
-  const quickOps = appSetting.quickOps as typeof appSetting.quickOps & {
-    defaultScreenCleanMode?: unknown
-    pomodoroTemplates?: {
-      classic?: unknown
-      long?: unknown
-      custom?: unknown
-    }
-  }
-
-  if (typeof quickOps.enabled !== 'boolean') {
-    quickOps.enabled = DEFAULT_QUICK_OPS_SETTINGS.enabled
-  }
-  if (typeof quickOps.showRunningSessionsInCoreBox !== 'boolean') {
-    quickOps.showRunningSessionsInCoreBox = DEFAULT_QUICK_OPS_SETTINGS.showRunningSessionsInCoreBox
-  }
-  if (typeof quickOps.allowStatefulTools !== 'boolean') {
-    quickOps.allowStatefulTools = DEFAULT_QUICK_OPS_SETTINGS.allowStatefulTools
-  }
-  if (typeof quickOps.allowNetworkTools !== 'boolean') {
-    quickOps.allowNetworkTools = DEFAULT_QUICK_OPS_SETTINGS.allowNetworkTools
-  }
-  if (typeof quickOps.allowFileTools !== 'boolean') {
-    quickOps.allowFileTools = DEFAULT_QUICK_OPS_SETTINGS.allowFileTools
-  }
-  if (typeof quickOps.allowSystemTools !== 'boolean') {
-    quickOps.allowSystemTools = DEFAULT_QUICK_OPS_SETTINGS.allowSystemTools
-  }
-  if (typeof quickOps.allowDeveloperTools !== 'boolean') {
-    quickOps.allowDeveloperTools = DEFAULT_QUICK_OPS_SETTINGS.allowDeveloperTools
-  }
-  if (typeof quickOps.allowHighRiskTools !== 'boolean') {
-    quickOps.allowHighRiskTools = DEFAULT_QUICK_OPS_SETTINGS.allowHighRiskTools
-  }
-  quickOps.defaultKeepAwakeDurationMinutes = normalizeSelectNumber(
-    quickOps.defaultKeepAwakeDurationMinutes,
-    QUICK_OPS_KEEP_AWAKE_DURATION_OPTIONS,
-    DEFAULT_QUICK_OPS_SETTINGS.defaultKeepAwakeDurationMinutes
-  )
-  quickOps.defaultSystemAwakeDurationMinutes = normalizeSelectNumber(
-    quickOps.defaultSystemAwakeDurationMinutes,
-    QUICK_OPS_SYSTEM_AWAKE_DURATION_OPTIONS,
-    DEFAULT_QUICK_OPS_SETTINGS.defaultSystemAwakeDurationMinutes
-  )
-  quickOps.defaultTimerDurationMinutes = normalizeSelectNumber(
-    quickOps.defaultTimerDurationMinutes,
-    QUICK_OPS_TIMER_DURATION_OPTIONS,
-    DEFAULT_QUICK_OPS_SETTINGS.defaultTimerDurationMinutes
-  )
-  quickOps.defaultTimerExtendMinutes = normalizeSelectNumber(
-    quickOps.defaultTimerExtendMinutes,
-    QUICK_OPS_TIMER_EXTEND_OPTIONS,
-    DEFAULT_QUICK_OPS_SETTINGS.defaultTimerExtendMinutes
-  )
-  quickOps.defaultPomodoroFocusMinutes = normalizeSelectNumber(
-    quickOps.defaultPomodoroFocusMinutes,
-    QUICK_OPS_POMODORO_FOCUS_OPTIONS,
-    DEFAULT_QUICK_OPS_SETTINGS.defaultPomodoroFocusMinutes
-  )
-  quickOps.defaultPomodoroBreakMinutes = normalizeSelectNumber(
-    quickOps.defaultPomodoroBreakMinutes,
-    QUICK_OPS_POMODORO_BREAK_OPTIONS,
-    DEFAULT_QUICK_OPS_SETTINGS.defaultPomodoroBreakMinutes
-  )
-  if (!quickOps.pomodoroTemplates || typeof quickOps.pomodoroTemplates !== 'object') {
-    quickOps.pomodoroTemplates = { ...DEFAULT_QUICK_OPS_SETTINGS.pomodoroTemplates }
-  } else {
-    if (typeof quickOps.pomodoroTemplates.classic !== 'boolean') {
-      quickOps.pomodoroTemplates.classic = DEFAULT_QUICK_OPS_SETTINGS.pomodoroTemplates.classic
-    }
-    if (typeof quickOps.pomodoroTemplates.long !== 'boolean') {
-      quickOps.pomodoroTemplates.long = DEFAULT_QUICK_OPS_SETTINGS.pomodoroTemplates.long
-    }
-    quickOps.pomodoroTemplates.custom = normalizeCustomPomodoroTemplates(
-      quickOps.pomodoroTemplates.custom
-    )
-  }
-  quickOps.defaultScreenCleanDurationSeconds = normalizeSelectNumber(
-    quickOps.defaultScreenCleanDurationSeconds,
-    QUICK_OPS_SCREEN_CLEAN_DURATION_OPTIONS,
-    DEFAULT_QUICK_OPS_SETTINGS.defaultScreenCleanDurationSeconds
-  )
-  if (quickOps.defaultScreenCleanMode !== 'black' && quickOps.defaultScreenCleanMode !== 'white') {
-    quickOps.defaultScreenCleanMode = DEFAULT_QUICK_OPS_SETTINGS.defaultScreenCleanMode
-  }
-  if (typeof quickOps.allowPublicIpLookup !== 'boolean') {
-    quickOps.allowPublicIpLookup = DEFAULT_QUICK_OPS_SETTINGS.allowPublicIpLookup
-  }
-}
-
-function normalizeCustomPomodoroTemplates(value: unknown): QuickOpsCustomPomodoroTemplate[] {
-  if (!Array.isArray(value)) return []
-
-  const templates: QuickOpsCustomPomodoroTemplate[] = []
-  for (const item of value) {
-    if (!item || typeof item !== 'object') continue
-    const record = item as Record<string, unknown>
-    const name = typeof record.name === 'string' ? record.name.trim() : ''
-    const aliases = Array.isArray(record.aliases)
-      ? record.aliases
-          .filter((alias): alias is string => typeof alias === 'string')
-          .map((alias) => alias.trim())
-          .filter(Boolean)
-      : []
-    const focusMinutes = parseSelectNumber(record.focusMinutes)
-    const breakMinutes = parseSelectNumber(record.breakMinutes)
-    if (!name || !isValidPomodoroTemplate(focusMinutes, breakMinutes)) continue
-
-    templates.push({
-      name,
-      aliases: aliases.slice(0, 6),
-      focusMinutes: focusMinutes as number,
-      breakMinutes: breakMinutes as number,
-      enabled: record.enabled !== false
-    })
-    if (templates.length >= 8) break
-  }
-  return templates
-}
-
-function isValidPomodoroTemplate(
-  focusMinutes: number | null,
-  breakMinutes: number | null
-): boolean {
-  return (
-    Number.isInteger(focusMinutes) &&
-    Number.isInteger(breakMinutes) &&
-    (focusMinutes as number) >= 1 &&
-    (focusMinutes as number) <= 180 &&
-    (breakMinutes as number) >= 1 &&
-    (breakMinutes as number) <= 60
-  )
-}
-
 async function refreshOmniPanelAccessibilityStatus(): Promise<void> {
   if (!isMac.value) {
     omniPanelAccessibilityGranted.value = true
@@ -616,7 +414,6 @@ onMounted(async () => {
   ensureClipboardPollingSettings()
   ensureOmniPanelSettings()
   ensureRecommendationContextSettings()
-  ensureQuickOpsSettings()
   await Promise.all([refreshShortcuts(), refreshOmniPanelAccessibilityStatus()])
 })
 
@@ -640,14 +437,6 @@ watch(
   () => appSetting.recommendation,
   () => {
     ensureRecommendationContextSettings()
-  },
-  { deep: false, immediate: true }
-)
-
-watch(
-  () => appSetting.quickOps,
-  () => {
-    ensureQuickOpsSettings()
   },
   { deep: false, immediate: true }
 )
@@ -1025,242 +814,6 @@ watch(shortcutsDialogVisible, (visible) => {
         :value="duration"
       >
         {{ duration }} ms
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <!-- QuickOps defaults -->
-    <TuffBlockSwitch
-      v-model="appSetting.quickOps.enabled"
-      :title="t('settingTools.quickOpsEnabled')"
-      :description="t('settingTools.quickOpsEnabledDesc')"
-      default-icon="i-carbon-flash"
-      active-icon="i-carbon-flash-filled"
-    />
-
-    <TuffBlockSwitch
-      v-model="appSetting.quickOps.showRunningSessionsInCoreBox"
-      :title="t('settingTools.quickOpsShowRunningSessions')"
-      :description="t('settingTools.quickOpsShowRunningSessionsDesc')"
-      default-icon="i-carbon-list-boxes"
-      active-icon="i-carbon-list-boxes"
-    />
-
-    <TuffBlockSelect
-      v-model="appSetting.quickOps.defaultKeepAwakeDurationMinutes"
-      :title="t('settingTools.quickOpsDefaultKeepAwakeDuration')"
-      :description="t('settingTools.quickOpsDefaultKeepAwakeDurationDesc')"
-      default-icon="i-carbon-screen"
-      active-icon="i-carbon-screen"
-    >
-      <TxSelectItem
-        v-for="duration in QUICK_OPS_KEEP_AWAKE_DURATION_OPTIONS"
-        :key="duration"
-        :value="duration"
-      >
-        {{ duration }} {{ t('settingTools.min') }}
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.defaultSystemAwakeDurationMinutes"
-      :title="t('settingTools.quickOpsDefaultSystemAwakeDuration')"
-      :description="t('settingTools.quickOpsDefaultSystemAwakeDurationDesc')"
-      default-icon="i-carbon-power"
-      active-icon="i-carbon-power"
-    >
-      <TxSelectItem
-        v-for="duration in QUICK_OPS_SYSTEM_AWAKE_DURATION_OPTIONS"
-        :key="duration"
-        :value="duration"
-      >
-        {{ duration }} {{ t('settingTools.min') }}
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-model="appSetting.quickOps.defaultTimerDurationMinutes"
-      :title="t('settingTools.quickOpsDefaultTimerDuration')"
-      :description="t('settingTools.quickOpsDefaultTimerDurationDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
-    >
-      <TxSelectItem
-        v-for="duration in QUICK_OPS_TIMER_DURATION_OPTIONS"
-        :key="duration"
-        :value="duration"
-      >
-        {{ duration }} {{ t('settingTools.min') }}
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-model="appSetting.quickOps.defaultTimerExtendMinutes"
-      :title="t('settingTools.quickOpsDefaultTimerExtendDuration')"
-      :description="t('settingTools.quickOpsDefaultTimerExtendDurationDesc')"
-      default-icon="i-carbon-time-plot"
-      active-icon="i-carbon-time-plot"
-    >
-      <TxSelectItem
-        v-for="duration in QUICK_OPS_TIMER_EXTEND_OPTIONS"
-        :key="duration"
-        :value="duration"
-      >
-        {{ duration }} {{ t('settingTools.min') }}
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-model="appSetting.quickOps.defaultPomodoroFocusMinutes"
-      :title="t('settingTools.quickOpsDefaultPomodoroFocus')"
-      :description="t('settingTools.quickOpsDefaultPomodoroFocusDesc')"
-      default-icon="i-carbon-target"
-      active-icon="i-carbon-target"
-    >
-      <TxSelectItem
-        v-for="duration in QUICK_OPS_POMODORO_FOCUS_OPTIONS"
-        :key="duration"
-        :value="duration"
-      >
-        {{ duration }} {{ t('settingTools.min') }}
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-model="appSetting.quickOps.defaultPomodoroBreakMinutes"
-      :title="t('settingTools.quickOpsDefaultPomodoroBreak')"
-      :description="t('settingTools.quickOpsDefaultPomodoroBreakDesc')"
-      default-icon="i-carbon-cafe"
-      active-icon="i-carbon-cafe"
-    >
-      <TxSelectItem
-        v-for="duration in QUICK_OPS_POMODORO_BREAK_OPTIONS"
-        :key="duration"
-        :value="duration"
-      >
-        {{ duration }} {{ t('settingTools.min') }}
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSwitch
-      v-model="appSetting.quickOps.pomodoroTemplates.classic"
-      :title="t('settingTools.quickOpsPomodoroClassicTemplate')"
-      :description="t('settingTools.quickOpsPomodoroClassicTemplateDesc')"
-      default-icon="i-carbon-timer"
-      active-icon="i-carbon-timer"
-    />
-
-    <TuffBlockSwitch
-      v-model="appSetting.quickOps.pomodoroTemplates.long"
-      :title="t('settingTools.quickOpsPomodoroLongTemplate')"
-      :description="t('settingTools.quickOpsPomodoroLongTemplateDesc')"
-      default-icon="i-carbon-idea"
-      active-icon="i-carbon-idea"
-    />
-
-    <TuffBlockSwitch
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.allowStatefulTools"
-      :title="t('settingTools.quickOpsAllowStatefulTools')"
-      :description="t('settingTools.quickOpsAllowStatefulToolsDesc')"
-      default-icon="i-carbon-security"
-      active-icon="i-carbon-security"
-    />
-
-    <TuffBlockSwitch
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.allowNetworkTools"
-      :title="t('settingTools.quickOpsAllowNetworkTools')"
-      :description="t('settingTools.quickOpsAllowNetworkToolsDesc')"
-      default-icon="i-carbon-network-3"
-      active-icon="i-carbon-network-3"
-    />
-
-    <TuffBlockSwitch
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.allowFileTools"
-      :title="t('settingTools.quickOpsAllowFileTools')"
-      :description="t('settingTools.quickOpsAllowFileToolsDesc')"
-      default-icon="i-carbon-folder"
-      active-icon="i-carbon-folder"
-    />
-
-    <TuffBlockSwitch
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.allowSystemTools"
-      :title="t('settingTools.quickOpsAllowSystemTools')"
-      :description="t('settingTools.quickOpsAllowSystemToolsDesc')"
-      default-icon="i-carbon-information"
-      active-icon="i-carbon-information"
-    />
-
-    <TuffBlockSwitch
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.allowDeveloperTools"
-      :title="t('settingTools.quickOpsAllowDeveloperTools')"
-      :description="t('settingTools.quickOpsAllowDeveloperToolsDesc')"
-      default-icon="i-carbon-code"
-      active-icon="i-carbon-code"
-    />
-
-    <TuffBlockSwitch
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.allowHighRiskTools"
-      :title="t('settingTools.quickOpsAllowHighRiskTools')"
-      :description="t('settingTools.quickOpsAllowHighRiskToolsDesc')"
-      default-icon="i-carbon-warning"
-      active-icon="i-carbon-warning"
-    />
-
-    <TuffBlockSwitch
-      v-if="showAdvancedSettings"
-      v-model="appSetting.quickOps.allowPublicIpLookup"
-      :title="t('settingTools.quickOpsAllowPublicIpLookup')"
-      :description="t('settingTools.quickOpsAllowPublicIpLookupDesc')"
-      default-icon="i-carbon-network-public"
-      active-icon="i-carbon-network-public"
-    />
-
-    <TuffBlockSlot
-      v-if="showAdvancedSettings"
-      :title="t('settingTools.quickOpsPomodoroCustomTemplates')"
-      :description="t('settingTools.quickOpsPomodoroCustomTemplatesDesc')"
-      default-icon="i-carbon-list"
-      active-icon="i-carbon-list"
-    >
-      <span class="text-xs text-gray-500 leading-relaxed">
-        {{ quickOpsCustomPomodoroSummary }}
-      </span>
-    </TuffBlockSlot>
-
-    <TuffBlockSelect
-      v-model="appSetting.quickOps.defaultScreenCleanDurationSeconds"
-      :title="t('settingTools.quickOpsDefaultScreenCleanDuration')"
-      :description="t('settingTools.quickOpsDefaultScreenCleanDurationDesc')"
-      default-icon="i-carbon-screen-off"
-      active-icon="i-carbon-screen-off"
-    >
-      <TxSelectItem
-        v-for="duration in QUICK_OPS_SCREEN_CLEAN_DURATION_OPTIONS"
-        :key="duration"
-        :value="duration"
-      >
-        {{ duration }} {{ t('settingTools.sec') }}
-      </TxSelectItem>
-    </TuffBlockSelect>
-
-    <TuffBlockSelect
-      v-model="appSetting.quickOps.defaultScreenCleanMode"
-      :title="t('settingTools.quickOpsDefaultScreenCleanMode')"
-      :description="t('settingTools.quickOpsDefaultScreenCleanModeDesc')"
-      default-icon="i-carbon-color-palette"
-      active-icon="i-carbon-color-palette"
-    >
-      <TxSelectItem value="black">
-        {{ t('settingTools.quickOpsScreenCleanBlack') }}
-      </TxSelectItem>
-      <TxSelectItem value="white">
-        {{ t('settingTools.quickOpsScreenCleanWhite') }}
       </TxSelectItem>
     </TuffBlockSelect>
 

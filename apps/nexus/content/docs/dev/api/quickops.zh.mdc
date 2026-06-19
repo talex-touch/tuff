@@ -243,14 +243,14 @@ code: |
 
 只有维护仓库时才应该修改官方 QuickOps。新增或调整通用能力时，优先迁入 `plugins/touch-quickops`；仍依赖 Electron / OS 的部分必须通过 CoreApp host capability 暴露。
 
-当前官方插件已承接 CoreBox root-result 入口、更多只读面板和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target；文件 Hash/Base64/path format 支持 `text` 与 `files` 输入路由。插件也承接 QuickOps Flow/AI source-level adapter contract：命令路由输出脱敏 `flowAdapterTrace`，确认型动作只提示 App UI `confirmationToken`，高风险 `kill port` 类请求 fail-closed 且没有 dispatch payload。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate 与 typed bridge；CoreApp 不再保留 QuickOps natural-language resolver 实现，也不再在文件搜索 provider 中承载 QuickOps Hash/Base64 execute action。后续新增可迁移入口时，优先扩展该插件的命令路由和渲染，不得重新引入 CoreApp QuickOps CoreBox provider 或文件搜索专用 QuickOps execute 分支。
+当前官方插件已承接 CoreBox root-result 入口、更多只读面板、设置摘要入口和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy、`quickops settings`，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；设置摘要通过 capability / diagnostics 只读读取当前策略和默认值，不写入 CoreApp host policy；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target；文件 Hash/Base64/path format 支持 `text` 与 `files` 输入路由。插件也承接 QuickOps Flow/AI source-level adapter contract：命令路由输出脱敏 `flowAdapterTrace`，确认型动作只提示 App UI `confirmationToken`，高风险 `kill port` 类请求 fail-closed 且没有 dispatch payload。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate、AppSetting schema / settings read path 与 typed bridge；CoreApp 不再保留 QuickOps natural-language resolver 实现，也不再在文件搜索 provider 或 Tools 设置页中承载 QuickOps 产品表面。后续新增可迁移入口时，优先扩展该插件的命令路由和渲染；可写设置必须设计官方插件白名单 host capability，不得用私有 IPC 直写配置，也不得重新引入 CoreApp QuickOps CoreBox provider、Tools 设置控件或文件搜索专用 QuickOps execute 分支。
 
 请同步以下落点：
 
 | 层 | 典型文件 | 要求 |
 | --- | --- | --- |
 | CoreApp runtime / host capability | `apps/core-app/src/main/modules/quick-ops/quick-ops-runtime-host.ts`、`apps/core-app/src/main/modules/quick-ops/quick-ops-session-manager.ts`、`apps/core-app/src/main/modules/quick-ops/index.ts` | 迁移期保留 QuickOpsSessionManager、platform helper、typed transport、Flow target、policy/evidence gate 和 confirmation；不得继续把新增 CoreBox 入口塞回默认 SearchEngine provider |
-| Official plugin | `plugins/touch-quickops` | 承载 CoreBox root-result 入口、插件侧只读面板、低风险状态控制触发、后续可迁移业务逻辑和插件自有 UI；新增可迁移入口优先落这里 |
+| Official plugin | `plugins/touch-quickops` | 承载 CoreBox root-result 入口、插件侧只读面板、设置摘要入口、低风险状态控制触发、后续可迁移业务逻辑和插件自有 UI；新增可迁移入口优先落这里 |
 | QuickOps module / Flow | `apps/core-app/src/main/modules/quick-ops/index.ts` | 迁移期保留 host capability / Flow target，声明 risk / category / `requireConfirm`，确认型 target 只能由 App UI token 交付 |
 | Typed transport | `packages/utils/transport/events/types/quick-ops.ts`、`packages/utils/transport/sdk/domains/quick-ops.ts` | 只把允许公开的 SDK 方法放进 typed event 和 domain SDK |
 | Plugin SDK facade | `packages/utils/plugin/sdk/quick-ops.ts`、`packages/utils/plugin/sdk/index.ts` | 保持插件 facade 只读，禁止暴露高风险执行方法 |
@@ -263,10 +263,11 @@ code: |
 1. 先确认能力属于只读、低风险状态控制、确认型动作还是高风险动作。
 2. 只读能力可以进入 SDK facade；会改变状态、写文件、写剪贴板、打开本地目录或外联的能力必须优先走 Flow target 和确认模型。
 3. 高风险能力默认不能进入插件 SDK；如需落地，必须先补策略、权限、确认 UI、审计和真实 evidence。
-4. 更新 focused tests：插件命令路由、runtime helper、Flow delivery、策略 fail-closed、脱敏 ACK / audit、typed transport surface。
-5. 运行 `quickops:surface:audit --strict`，确保没有 raw channel、SDK bypass 或 runtime facade 漂移。
-6. 运行 `quickops:flow-ai:audit --strict`。它应证明 Flow target 目录、确认集合、策略阻断、脱敏 ACK / audit、插件侧 Flow dispatch adapter / trace 和 runtime dispatch bridge 合同；如果新增能力没有补齐这些源级合同，应 fail-closed。
-7. 文档中只声明已有 evidence 支撑的能力；packaged、三平台、视觉、真实 AI UI 编排或确认 UI 证据缺失时必须明确写成未完成，不能把 Flow metadata、resolver/bridge focused test 或 mock artifact 当作完整 evidence。
+4. 如果涉及设置表面，优先在 `plugins/touch-quickops` 增加只读摘要；需要写入时先设计官方插件白名单 host capability、权限理由和 evidence，不得直接写 `AppSetting.quickOps` 或调用私有 IPC。
+5. 更新 focused tests：插件命令路由、runtime helper、Flow delivery、策略 fail-closed、脱敏 ACK / audit、typed transport surface。
+6. 运行 `quickops:surface:audit --strict`，确保没有 raw channel、SDK bypass 或 runtime facade 漂移。
+7. 运行 `quickops:flow-ai:audit --strict`。它应证明 Flow target 目录、确认集合、策略阻断、脱敏 ACK / audit、插件侧 Flow dispatch adapter / trace 和 runtime dispatch bridge 合同；如果新增能力没有补齐这些源级合同，应 fail-closed。
+8. 文档中只声明已有 evidence 支撑的能力；packaged、三平台、视觉、真实 AI UI 编排或确认 UI 证据缺失时必须明确写成未完成，不能把 Flow metadata、resolver/bridge focused test 或 mock artifact 当作完整 evidence。
 
 ## 扩展建议
 

@@ -310,6 +310,10 @@ function formatDuration(seconds) {
   return `${minutes}m`
 }
 
+function formatDurationMs(ms) {
+  return formatDuration((Number(ms) || 0) / 1000)
+}
+
 function formatCountMap(counts) {
   return Object.entries(counts)
     .map(([key, count]) => `${key}:${count}`)
@@ -570,6 +574,8 @@ function resolveMode(query) {
   const hasFilesInput = extractFilesFromQuery(query).length > 0
   if (/audit|审计|flow log|delivery log/i.test(text))
     return 'audit'
+  if (/settings?|preferences?|配置|偏好|设置/i.test(text))
+    return 'settings'
   if (/diagnostics?|诊断|排障/i.test(text))
     return 'diagnostics'
   if (/system\s+info|sysinfo|系统信息|系统摘要/i.test(text))
@@ -648,6 +654,80 @@ function buildCapabilityItems(featureId, response) {
       },
     }))
   }
+
+  return items
+}
+
+function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) {
+  const diagnostics = diagnosticsResponse?.diagnostics
+  const entries = Array.isArray(capabilityResponse?.entries) ? capabilityResponse.entries : []
+  const disabledEntries = entries.filter(entry => entry?.status === 'disabled')
+  const disabledReasons = countBy(disabledEntries, 'reason')
+  const platform = capabilityResponse?.platform || diagnostics?.platform || 'unknown'
+  const enabledText = capabilityResponse?.enabled === false ? 'disabled' : 'enabled'
+  const items = [
+    buildInfoItem({
+      featureId,
+      id: 'settings-summary',
+      title: 'QuickOps 设置入口',
+      subtitle: `${platform} · ${enabledText} · official plugin surface`,
+      meta: {
+        mode: 'settings',
+        writable: false,
+        settingsOwner: 'official-plugin',
+        runtimeOwner: 'coreapp-host-capability',
+      },
+    }),
+    buildInfoItem({
+      featureId,
+      id: 'settings-policy',
+      title: 'QuickOps 本地策略摘要',
+      subtitle: disabledEntries.length
+        ? `${disabledEntries.length} disabled · ${formatCountMap(disabledReasons)}`
+        : '当前 capability 摘要未报告禁用策略',
+      meta: {
+        mode: 'settings',
+        disabledCount: disabledEntries.length,
+        disabledReasons,
+      },
+    }),
+  ]
+
+  if (diagnostics) {
+    items.push(buildInfoItem({
+      featureId,
+      id: 'settings-defaults',
+      title: 'QuickOps 默认参数摘要',
+      subtitle: [
+        `keepAwake ${formatDurationMs(diagnostics.defaultKeepAwakeDurationMs)}`,
+        `timer ${formatDurationMs(diagnostics.defaultTimerDurationMs)}`,
+        `pomodoro ${formatDurationMs(diagnostics.defaultPomodoroFocusMs)}/${formatDurationMs(diagnostics.defaultPomodoroBreakMs)}`,
+        `screenClean ${formatDurationMs(diagnostics.defaultScreenCleanDurationMs)}`,
+      ].join(' · '),
+      meta: {
+        mode: 'settings',
+        defaults: {
+          keepAwakeMs: diagnostics.defaultKeepAwakeDurationMs,
+          timerMs: diagnostics.defaultTimerDurationMs,
+          pomodoroFocusMs: diagnostics.defaultPomodoroFocusMs,
+          pomodoroBreakMs: diagnostics.defaultPomodoroBreakMs,
+          screenCleanMs: diagnostics.defaultScreenCleanDurationMs,
+        },
+      },
+    }))
+  }
+
+  items.push(buildInfoItem({
+    featureId,
+    id: 'settings-boundary',
+    title: 'QuickOps 设置写入仍受 host policy 控制',
+    subtitle: '插件当前只展示策略/默认值摘要；可写设置需要官方插件白名单 host capability，不能走私有 IPC',
+    meta: {
+      mode: 'settings',
+      state: 'read-only',
+      privateIpcFallback: false,
+    },
+  }))
 
   return items
 }
@@ -1326,6 +1406,8 @@ async function buildResultItems(featureId, query, api = quickOps) {
     return buildSessionItems(featureId, await api.sessions())
   if (mode === 'audit')
     return buildAuditItems(featureId, await api.auditRecent({ limit: 8 }))
+  if (mode === 'settings')
+    return buildSettingsItems(featureId, await api.capabilities(), await api.tuffDiagnostics())
   if (mode !== 'capabilities')
     return buildReadOnlyToolItems(featureId, mode, api, query)
   return buildCapabilityItems(featureId, await api.capabilities())
@@ -1412,6 +1494,7 @@ module.exports = {
     buildSessionItems,
     buildSystemInfoItems,
     buildNetworkStatusItems,
+    buildSettingsItems,
     extractFilesFromQuery,
     buildFlowActionItem,
     buildConfirmationRequiredItems,

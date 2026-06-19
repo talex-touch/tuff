@@ -71,6 +71,8 @@ test('resolveMode maps quickops queries to read-only views', () => {
   assert.equal(resolveMode('quickops'), 'capabilities')
   assert.equal(resolveMode('quickops status'), 'sessions')
   assert.equal(resolveMode('quickops audit'), 'audit')
+  assert.equal(resolveMode('quickops settings'), 'settings')
+  assert.equal(resolveMode('QuickOps 设置'), 'settings')
   assert.equal(resolveMode('system info'), 'system-info')
   assert.equal(resolveMode('disk space'), 'disk-space')
   assert.equal(resolveMode('deep directory usage'), 'directory-usage-deep')
@@ -281,6 +283,61 @@ test('buildResultItems renders audit view without payload values', async () => {
   assert.match(items[1].subtitle, /keys:text/)
   assert.doesNotMatch(items[1].subtitle, /secret-value/)
   assert.equal(items[1].actions.length, 0)
+})
+
+test('buildResultItems renders plugin-owned QuickOps settings summary read-only', async () => {
+  const calls = []
+  const items = await buildResultItems('quickops', 'quickops settings', {
+    async capabilities() {
+      calls.push('capabilities')
+      return {
+        platform: 'darwin',
+        enabled: true,
+        entries: [
+          {
+            id: 'quickops.state.keepAwake',
+            label: '保持唤醒',
+            status: 'disabled',
+            riskLevel: 'confirm',
+            reason: 'stateful-tools-disabled-by-policy',
+          },
+          {
+            id: 'quickops.network.publicIp',
+            label: '公网 IP',
+            status: 'disabled',
+            riskLevel: 'confirm',
+            reason: 'network-tools-disabled-by-policy',
+          },
+        ],
+      }
+    },
+    async tuffDiagnostics() {
+      calls.push('tuffDiagnostics')
+      return {
+        text: 'redacted diagnostics',
+        diagnostics: {
+          platform: 'darwin',
+          defaultKeepAwakeDurationMs: 60 * 60 * 1000,
+          defaultTimerDurationMs: 25 * 60 * 1000,
+          defaultPomodoroFocusMs: 25 * 60 * 1000,
+          defaultPomodoroBreakMs: 5 * 60 * 1000,
+          defaultScreenCleanDurationMs: 60 * 1000,
+        },
+      }
+    },
+  })
+
+  assert.deepEqual(calls, ['capabilities', 'tuffDiagnostics'])
+  assert.equal(items[0].title, 'QuickOps 设置入口')
+  assert.equal(items[0].meta.mode, 'settings')
+  assert.equal(items[0].meta.writable, false)
+  assert.equal(items[0].meta.settingsOwner, 'official-plugin')
+  assert.equal(items[1].meta.disabledCount, 2)
+  assert.match(items[1].subtitle, /stateful-tools-disabled-by-policy/)
+  assert.equal(items[2].title, 'QuickOps 默认参数摘要')
+  assert.match(items[2].subtitle, /keepAwake 1h 0m/)
+  assert.equal(items[3].meta.privateIpcFallback, false)
+  assert.equal(items.every(item => item.actions.length === 0), true)
 })
 
 test('onItemAction dispatches safe QuickOps Flow action', async () => {

@@ -5,6 +5,26 @@
 
 ## 2026-06-19
 
+### ref(quickops): move settings surface into plugin summary
+
+- `plugins/touch-quickops/manifest.json`
+- `plugins/touch-quickops/index.js`
+- `plugins/touch-quickops/index.test.cjs`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.quickops.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Removed the QuickOps configuration controls and related i18n keys from CoreApp Tools settings. CoreApp no longer owns the QuickOps user settings surface, and the renderer boundary test now verifies the settings page does not render or mutate `appSetting.quickOps`.
+  - Added `quickops settings` / `QuickOps 设置` routing to the official `plugins/touch-quickops` plugin. The plugin renders a read-only settings summary from capability and diagnostics data, including disabled policy reasons, default durations, and an explicit boundary that writable settings need an official-plugin allowlisted host capability.
+  - Kept `AppSetting.quickOps`, `QuickOpsRuntimeHost`, `QuickOpsSessionManager`, `QuickOpsModule`, typed transport, Flow confirmation, policy/evidence gates, and host capability reads in CoreApp so existing runtime policy and defaults continue to work during migration.
+  - Updated TODO, PRD, and Nexus user/developer docs to point users and maintainers at the plugin-owned settings summary and to block private-IPC settings writes or reintroducing CoreApp Tools QuickOps controls.
+
 ### ref(quickops): move file actions into plugin
 
 - `plugins/touch-quickops/manifest.json`
