@@ -137,7 +137,7 @@ export function mapFileToTuffItem(
           path: path.dirname(file.path)
         }
       },
-      ...buildQuickOpsFilePathActions(file.path)
+      ...buildFilePathCopyActions(file.path)
     ],
     meta: {
       file: {
@@ -153,12 +153,12 @@ export function mapFileToTuffItem(
   }
 }
 
-function buildQuickOpsFilePathActions(filePath: string): NonNullable<TuffItem['actions']> {
+function buildFilePathCopyActions(filePath: string): NonNullable<TuffItem['actions']> {
   const windowsPath = convertWslPathToWindowsPath(filePath)
   const wslPath = convertWindowsPathToWslPath(filePath)
   const actions: NonNullable<TuffItem['actions']> = [
     {
-      id: 'quick-ops-copy-file-path',
+      id: 'file-copy-path',
       type: 'copy',
       label: 'Copy Path',
       payload: {
@@ -166,7 +166,7 @@ function buildQuickOpsFilePathActions(filePath: string): NonNullable<TuffItem['a
       }
     },
     {
-      id: 'quick-ops-copy-shell-path',
+      id: 'file-copy-shell-path',
       type: 'copy',
       label: 'Copy Shell Path',
       payload: {
@@ -174,7 +174,7 @@ function buildQuickOpsFilePathActions(filePath: string): NonNullable<TuffItem['a
       }
     },
     {
-      id: 'quick-ops-copy-file-url',
+      id: 'file-copy-url',
       type: 'copy',
       label: 'Copy File URL',
       payload: {
@@ -185,7 +185,7 @@ function buildQuickOpsFilePathActions(filePath: string): NonNullable<TuffItem['a
 
   if (windowsPath) {
     actions.push({
-      id: 'quick-ops-copy-windows-path',
+      id: 'file-copy-windows-path',
       type: 'copy',
       label: 'Copy Windows Path',
       payload: {
@@ -196,7 +196,7 @@ function buildQuickOpsFilePathActions(filePath: string): NonNullable<TuffItem['a
 
   if (wslPath) {
     actions.push({
-      id: 'quick-ops-copy-wsl-path',
+      id: 'file-copy-wsl-path',
       type: 'copy',
       label: 'Copy WSL Path',
       payload: {

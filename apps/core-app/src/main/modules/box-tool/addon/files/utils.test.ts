@@ -27,9 +27,9 @@ describe('file provider utils', () => {
     expect(item.actions?.map((action) => action.id)).toEqual([
       'open-file',
       'open-folder',
-      'quick-ops-copy-file-path',
-      'quick-ops-copy-shell-path',
-      'quick-ops-copy-file-url'
+      'file-copy-path',
+      'file-copy-shell-path',
+      'file-copy-url'
     ])
     expect(item.actions?.[0]).toMatchObject({
       id: 'open-file',
@@ -38,21 +38,19 @@ describe('file provider utils', () => {
         path: '/Users/demo/Documents/report final.txt'
       }
     })
-    expect(item.actions?.find((action) => action.id === 'quick-ops-copy-file-path')).toMatchObject({
+    expect(item.actions?.find((action) => action.id === 'file-copy-path')).toMatchObject({
       type: 'copy',
       payload: {
         text: '/Users/demo/Documents/report final.txt'
       }
     })
-    expect(item.actions?.find((action) => action.id === 'quick-ops-copy-shell-path')).toMatchObject(
-      {
-        type: 'copy',
-        payload: {
-          text: "'/Users/demo/Documents/report final.txt'"
-        }
+    expect(item.actions?.find((action) => action.id === 'file-copy-shell-path')).toMatchObject({
+      type: 'copy',
+      payload: {
+        text: "'/Users/demo/Documents/report final.txt'"
       }
-    )
-    expect(item.actions?.find((action) => action.id === 'quick-ops-copy-file-url')).toMatchObject({
+    })
+    expect(item.actions?.find((action) => action.id === 'file-copy-url')).toMatchObject({
       type: 'copy',
       payload: {
         text: 'file:///Users/demo/Documents/report%20final.txt'
@@ -80,21 +78,21 @@ describe('file provider utils', () => {
       'File Provider'
     )
 
-    expect(
-      windowsItem.actions?.find((action) => action.id === 'quick-ops-copy-wsl-path')
-    ).toMatchObject({
-      type: 'copy',
-      payload: {
-        text: '/mnt/c/Users/demo/Documents/report.txt'
+    expect(windowsItem.actions?.find((action) => action.id === 'file-copy-wsl-path')).toMatchObject(
+      {
+        type: 'copy',
+        payload: {
+          text: '/mnt/c/Users/demo/Documents/report.txt'
+        }
       }
-    })
-    expect(
-      wslItem.actions?.find((action) => action.id === 'quick-ops-copy-windows-path')
-    ).toMatchObject({
-      type: 'copy',
-      payload: {
-        text: 'C:\\Users\\demo\\Documents\\report.txt'
+    )
+    expect(wslItem.actions?.find((action) => action.id === 'file-copy-windows-path')).toMatchObject(
+      {
+        type: 'copy',
+        payload: {
+          text: 'C:\\Users\\demo\\Documents\\report.txt'
+        }
       }
-    })
+    )
   })
 })

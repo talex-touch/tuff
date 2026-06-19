@@ -71,7 +71,7 @@ code: |
 
 The official `plugins/touch-quickops` manifest declares `acceptedInputTypes: ["text", "files"]`. When a CoreBox query includes Files input, the plugin parses the JSON string array from `query.inputs[].type === "files"` and uses the first valid path as the default `path` for `fileHash()`, `fileBase64()`, or `pathFormat()`; an explicit path in the command text still wins.
 
-CoreApp file search providers now only own indexing, file open, reveal, and generic path-copy actions. QuickOps Hash/Base64 result rendering and command routing must stay in the official plugin; do not add new QuickOps execute actions back to file search results or provider `onExecute()` branches.
+CoreApp file search providers now only own indexing, file open, reveal, and generic path-copy actions. Path-copy actions use generic action ids: `file-copy-path`, `file-copy-shell-path`, `file-copy-url`, plus `file-copy-windows-path` / `file-copy-wsl-path` when platform path conversion is available; do not add new `quick-ops-*` file-search action ids. QuickOps Hash/Base64 result rendering and command routing must stay in the official plugin; do not add new QuickOps execute actions back to file search results or provider `onExecute()` branches.
 
 ## Choose An Extension Path
 
