@@ -245,6 +245,12 @@ export interface IPluginUtils {
   quickActions: import('./quick-actions-sdk').QuickActionsSDK
 
   /**
+   * QuickOps read-only diagnostics facade.
+   * @see {@link QuickOpsSDK}
+   */
+  quickOps: import('./quick-ops').QuickOpsSDK
+
+  /**
    * Power SDK for low power status
    * @see {@link PowerSDK}
    */
@@ -290,7 +296,13 @@ export interface IPluginUtils {
    * Plugin information manager
    * @see {@link IPluginInfoManager}
    */
-  plugin: IPluginInfoManager
+  plugin: IPluginInfoManager & {
+    /**
+     * QuickOps read-only diagnostics facade.
+     * @see {@link QuickOpsSDK}
+     */
+    quickOps: import('./quick-ops').QuickOpsSDK
+  }
 }
 
 /**

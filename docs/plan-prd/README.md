@@ -1,6 +1,6 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-06-18
+> 更新时间：2026-06-19
 > 定位：PRD / 规划主入口。这里只保留当前 SoT、下一动作和高价值导航；历史细节进入 `CHANGES`、`TODO`、专题文档或 archive。
 
 ## 快速入口
@@ -51,6 +51,7 @@
 - [Tuff 2.5.8 ASR Provider Runtime PRD](./03-features/ai-2.5.8-asr-provider-runtime-prd.md)
 - [Tuff 2.6.0 i18n / Domain Lexicon / Cloud Catalog 收敛 PRD](./03-features/i18n-lexicon-catalog-2.6.0-prd.md)
 - [Tuff QuickOps 本地系统快捷工具集 PRD](./03-features/tuff-quickops-prd.md)
+- Nexus QuickOps 配套文档：[用户指南](../../apps/nexus/content/docs/guide/features/quickops.zh.mdc) / [Developer API](../../apps/nexus/content/docs/dev/api/quickops.zh.mdc)
 - [Indexing Runtime V1 统一搜索源计划](./03-features/search/INDEXING-RUNTIME-V1-PLAN.md)
 - [App Data Plugins 与 Everything 收口 Roadmap](./03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md)
 - [Raycast / uTools 常用能力差距矩阵](./03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md)

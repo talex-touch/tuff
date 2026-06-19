@@ -7,13 +7,13 @@ const {
   fileHasSearchFiltersMock,
   fileStartupNoticeMock,
   appSettingsMock,
-  quickOpsDestroyMock
+  providerDestroyMock
 } = vi.hoisted(() => ({
   everythingReadyMock: vi.fn(() => false),
   fileHasSearchFiltersMock: vi.fn(() => false),
   fileStartupNoticeMock: vi.fn<() => TuffItem | null>(() => null),
   appSettingsMock: { value: { beginner: { init: true } } as Record<string, unknown> },
-  quickOpsDestroyMock: vi.fn()
+  providerDestroyMock: vi.fn()
 }))
 
 vi.mock('../../../utils/perf-context', () => ({
@@ -115,16 +115,6 @@ vi.mock('../addon/preview', () => ({
     type: 'preview',
     supportedInputTypes: [TuffInputType.Text],
     onSearch: vi.fn()
-  }
-}))
-
-vi.mock('../addon/quick-ops/quick-ops-provider', () => ({
-  quickOpsProvider: {
-    id: 'quick-ops-provider',
-    type: 'system',
-    supportedInputTypes: [TuffInputType.Text],
-    onSearch: vi.fn(),
-    onDestroy: quickOpsDestroyMock
   }
 }))
 
@@ -345,7 +335,7 @@ afterEach(() => {
   everythingReadyMock.mockReset().mockReturnValue(false)
   fileHasSearchFiltersMock.mockReset().mockReturnValue(false)
   fileStartupNoticeMock.mockReset().mockReturnValue(null)
-  quickOpsDestroyMock.mockReset()
+  providerDestroyMock.mockReset()
   appSettingsMock.value = { beginner: { init: true } }
 })
 
@@ -673,11 +663,11 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
       type: 'system',
       supportedInputTypes: [TuffInputType.Text],
       onSearch: vi.fn(),
-      onDestroy: quickOpsDestroyMock
+      onDestroy: providerDestroyMock
     } as unknown as (typeof MOCK_PROVIDERS)[number])
 
     core.destroy()
 
-    expect(quickOpsDestroyMock).toHaveBeenCalledTimes(1)
+    expect(providerDestroyMock).toHaveBeenCalledTimes(1)
   })
 })

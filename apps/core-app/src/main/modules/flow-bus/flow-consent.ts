@@ -10,6 +10,7 @@ class FlowConsentStore {
   private loaded = false
   private data = new Map<string, Set<string>>()
   private onceTokens = new Map<string, { token: string; expiresAt: number }>()
+  private confirmationTokens = new Map<string, { token: string; expiresAt: number }>()
 
   load(): void {
     if (this.loaded) {
@@ -63,6 +64,37 @@ class FlowConsentStore {
       return false
     }
     this.onceTokens.delete(key)
+    return true
+  }
+
+  grantConfirmationOnce(senderId: string, targetId: string): string {
+    this.ensureLoaded()
+    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const key = this.buildKey(senderId, targetId)
+    this.confirmationTokens.set(key, {
+      token,
+      expiresAt: Date.now() + FLOW_ONCE_TOKEN_TTL_MS
+    })
+    return token
+  }
+
+  consumeConfirmationOnce(senderId: string, targetId: string, token: string): boolean {
+    if (!token) {
+      return false
+    }
+    const key = this.buildKey(senderId, targetId)
+    const entry = this.confirmationTokens.get(key)
+    if (!entry) {
+      return false
+    }
+    if (entry.expiresAt < Date.now()) {
+      this.confirmationTokens.delete(key)
+      return false
+    }
+    if (entry.token !== token) {
+      return false
+    }
+    this.confirmationTokens.delete(key)
     return true
   }
 

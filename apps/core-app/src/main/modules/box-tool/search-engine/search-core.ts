@@ -51,7 +51,6 @@ import {
   macSpotlightFileProvider
 } from '../addon/files/native-file-search-provider'
 import { previewProvider } from '../addon/preview'
-import { quickOpsProvider } from '../addon/quick-ops/quick-ops-provider'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
@@ -439,7 +438,6 @@ export class SearchEngineCore
     this.registerProvider(fileProvider)
 
     this.registerProvider(PluginFeaturesAdapter)
-    this.registerProvider(quickOpsProvider)
     this.registerProvider(previewProvider)
   }
 

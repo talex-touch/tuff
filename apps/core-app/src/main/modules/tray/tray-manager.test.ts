@@ -147,7 +147,7 @@ vi.mock('../box-tool/addon/quick-ops/quick-ops-provider', () => ({
   formatDuration: (durationMs: number) => `${Math.round(durationMs / 1000)}秒`,
   getSessionDisplayDurationMs: (session: { elapsedMs?: number; remainingMs?: number }) =>
     session.elapsedMs ?? session.remainingMs ?? 0,
-  quickOpsProvider: {
+  quickOpsRuntime: {
     cleanup: quickOpsMock.cleanup,
     subscribeSessions: quickOpsMock.subscribeSessions
   }

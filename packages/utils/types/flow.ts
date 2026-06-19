@@ -231,6 +231,9 @@ export interface FlowDispatchOptions {
 
   /** Consent token for one-time authorization */
   consentToken?: string
+
+  /** Confirmation token for one-time execution of requireConfirm targets */
+  confirmationToken?: string
 }
 
 /**

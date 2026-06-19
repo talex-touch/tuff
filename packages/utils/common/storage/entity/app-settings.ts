@@ -240,6 +240,12 @@ const _appSettingOriginData = {
   quickOps: {
     enabled: true,
     showRunningSessionsInCoreBox: true,
+    allowStatefulTools: true,
+    allowNetworkTools: true,
+    allowFileTools: true,
+    allowSystemTools: true,
+    allowDeveloperTools: true,
+    allowHighRiskTools: false,
     defaultKeepAwakeDurationMinutes: 60,
     defaultSystemAwakeDurationMinutes: 60,
     defaultTimerDurationMinutes: 25,

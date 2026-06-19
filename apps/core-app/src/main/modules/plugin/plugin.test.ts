@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TuffItem } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import {
+  FlowEvents,
+  NotificationEvents,
+  PluginEvents,
+  QuickOpsEvents
+} from '@talex-touch/utils/transport/events'
 import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import fse from 'fs-extra'
 
@@ -898,6 +903,234 @@ describe('TouchPlugin.triggerFeature', () => {
         name: 'test-plugin',
         uniqueKey: expect.any(String),
         verified: expect.any(Boolean)
+      }
+    })
+  })
+
+  it('exposes QuickOps read-only facade through typed transport events', async () => {
+    const response = { ok: true }
+    const transport = {
+      invoke: vi.fn().mockResolvedValue(response),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+
+    const featureUtil = plugin.getFeatureUtil()
+    const quickOps = featureUtil.quickOps as Record<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >
+    const pluginContext = {
+      plugin: {
+        name: 'test-plugin',
+        uniqueKey: '',
+        verified: false
+      }
+    }
+    const readOnlyCases = [
+      {
+        method: 'capabilities',
+        event: QuickOpsEvents.capabilities.get,
+        payload: undefined,
+        args: []
+      },
+      { method: 'sessions', event: QuickOpsEvents.sessions.get, payload: undefined, args: [] },
+      { method: 'auditRecent', event: QuickOpsEvents.audit.get, payload: {}, args: [] },
+      {
+        method: 'auditRecent',
+        event: QuickOpsEvents.audit.get,
+        payload: { limit: 5 },
+        args: [{ limit: 5 }]
+      },
+      { method: 'systemInfo', event: QuickOpsEvents.systemInfo.get, payload: undefined, args: [] },
+      {
+        method: 'tuffDiagnostics',
+        event: QuickOpsEvents.tuffDiagnostics.get,
+        payload: undefined,
+        args: []
+      },
+      { method: 'diskSpace', event: QuickOpsEvents.diskSpace.get, payload: undefined, args: [] },
+      {
+        method: 'directoryUsage',
+        event: QuickOpsEvents.directoryUsage.get,
+        payload: { deep: true },
+        args: [{ deep: true }]
+      },
+      {
+        method: 'queryLocalIp',
+        event: QuickOpsEvents.queryLocalIp.get,
+        payload: undefined,
+        args: []
+      },
+      {
+        method: 'portStatus',
+        event: QuickOpsEvents.portStatus.get,
+        payload: { port: 5173 },
+        args: [{ port: 5173 }]
+      },
+      {
+        method: 'dnsQuery',
+        event: QuickOpsEvents.dnsQuery.get,
+        payload: { hostname: 'example.com', deep: true },
+        args: [{ hostname: 'example.com', deep: true }]
+      },
+      {
+        method: 'fileHash',
+        event: QuickOpsEvents.fileHash.get,
+        payload: { path: '/tmp/demo.txt' },
+        args: [{ path: '/tmp/demo.txt' }]
+      },
+      {
+        method: 'fileBase64',
+        event: QuickOpsEvents.fileBase64.get,
+        payload: { path: '/tmp/demo.txt' },
+        args: [{ path: '/tmp/demo.txt' }]
+      },
+      {
+        method: 'recentDownload',
+        event: QuickOpsEvents.recentDownload.get,
+        payload: undefined,
+        args: []
+      },
+      {
+        method: 'commonDirectory',
+        event: QuickOpsEvents.commonDirectory.get,
+        payload: { query: 'logs' },
+        args: [{ query: 'logs' }]
+      },
+      {
+        method: 'pathFormat',
+        event: QuickOpsEvents.pathFormat.get,
+        payload: { path: '/tmp/demo.txt' },
+        args: [{ path: '/tmp/demo.txt' }]
+      },
+      {
+        method: 'formatText',
+        event: QuickOpsEvents.formatText.get,
+        payload: { text: 'Hello QuickOps', mode: 'snake' },
+        args: [{ text: 'Hello QuickOps', mode: 'snake' }]
+      },
+      {
+        method: 'networkStatus',
+        event: QuickOpsEvents.networkStatus.get,
+        payload: undefined,
+        args: []
+      },
+      {
+        method: 'batteryStatus',
+        event: QuickOpsEvents.batteryStatus.get,
+        payload: undefined,
+        args: []
+      },
+      {
+        method: 'systemProxy',
+        event: QuickOpsEvents.systemProxy.get,
+        payload: undefined,
+        args: []
+      }
+    ] as const
+    const expectedMethods = Array.from(new Set(readOnlyCases.map((item) => item.method)))
+
+    expect(Object.keys(quickOps)).toEqual(expectedMethods)
+    expect(featureUtil.plugin.quickOps).toBe(featureUtil.quickOps)
+
+    for (const quickOpsCase of readOnlyCases) {
+      await expect(quickOps[quickOpsCase.method](...quickOpsCase.args)).resolves.toEqual(response)
+      expect(transport.invoke).toHaveBeenLastCalledWith(
+        quickOpsCase.event,
+        quickOpsCase.payload,
+        pluginContext
+      )
+    }
+  })
+
+  it('exposes Flow SDK through typed transport events', async () => {
+    const response = {
+      success: true,
+      data: {
+        sessionId: 'flow-session-1',
+        state: 'COMPLETED',
+        ackPayload: { state: 'stopped' }
+      }
+    }
+    const transport = {
+      invoke: vi.fn().mockResolvedValue(response),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+
+    const featureUtil = plugin.getFeatureUtil()
+
+    await expect(
+      featureUtil.flow.dispatch(
+        {
+          type: 'json',
+          data: { action: 'stop' },
+          context: { sourcePluginId: 'test-plugin' }
+        },
+        {
+          preferredTarget: 'quickops.stop-timer',
+          skipSelector: true,
+          requireAck: true
+        }
+      )
+    ).resolves.toEqual(response.data)
+    expect(featureUtil.plugin.flow).toBe(featureUtil.flow)
+    const [event, payload, context] = vi.mocked(transport.invoke).mock.calls.at(-1)!
+    expect(event.toEventName()).toBe(FlowEvents.dispatch.toEventName())
+    expect(payload).toEqual({
+      senderId: 'test-plugin',
+      payload: {
+        type: 'json',
+        data: { action: 'stop' },
+        context: { sourcePluginId: 'test-plugin' }
+      },
+      options: {
+        preferredTarget: 'quickops.stop-timer',
+        skipSelector: true,
+        requireAck: true
+      },
+      _sdkapi: undefined
+    })
+    expect(context).toEqual({
+      plugin: {
+        name: 'test-plugin',
+        uniqueKey: '',
+        verified: false
       }
     })
   })

@@ -17,6 +17,8 @@ const clipboardModuleMock = vi.hoisted(() => ({
   saveCustomEntry: vi.fn()
 }))
 
+const getMainConfigMock = vi.hoisted(() => vi.fn())
+
 vi.mock('electron', () => ({
   app: {
     getPath: electronMocks.getPath
@@ -31,6 +33,10 @@ vi.mock('node:fs/promises', () => fsMocks)
 
 vi.mock('../../../clipboard', () => ({
   clipboardModule: clipboardModuleMock
+}))
+
+vi.mock('../../../storage', () => ({
+  getMainConfig: getMainConfigMock
 }))
 
 import { PreviewProvider } from './preview-provider'
@@ -83,6 +89,7 @@ describe('PreviewProvider', () => {
     vi.clearAllMocks()
     electronMocks.getPath.mockReturnValue('/tmp')
     electronMocks.readText.mockReturnValue('')
+    getMainConfigMock.mockReturnValue(undefined)
     fsMocks.mkdir.mockResolvedValue(undefined)
     fsMocks.writeFile.mockResolvedValue(undefined)
     clipboardModuleMock.saveCustomEntry.mockResolvedValue({ id: 1 })
@@ -190,6 +197,33 @@ describe('PreviewProvider', () => {
         inputs: [{ type: TuffInputType.Text, content: '{"ok":true}' }]
       },
       signal: expect.any(AbortSignal)
+    })
+  })
+
+  it('blocks QuickOps developer commands before reading clipboard when local policy disables them', async () => {
+    getMainConfigMock.mockReturnValue({
+      quickOps: {
+        allowDeveloperTools: false
+      }
+    })
+    electronMocks.readText.mockReturnValue('{"ok":true}')
+    const sdk = createSdk()
+    const provider = new PreviewProvider(sdk)
+
+    const result = await provider.onSearch(
+      { text: 'json', inputs: [] },
+      new AbortController().signal
+    )
+
+    expect(electronMocks.readText).not.toHaveBeenCalled()
+    expect(sdk.resolve).not.toHaveBeenCalled()
+    expect(result.items[0]?.kind).toBe('notification')
+    expect(result.items[0]?.render.basic?.title).toBe('QuickOps 开发者工具已禁用')
+    expect(result.items[0]?.meta?.extension).toMatchObject({
+      quickOps: {
+        operation: 'developer-tools-disabled',
+        degradedReason: 'developer-tools-disabled-by-policy'
+      }
     })
   })
 

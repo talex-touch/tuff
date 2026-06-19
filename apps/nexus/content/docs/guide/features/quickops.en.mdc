@@ -1,0 +1,107 @@
+# Tuff QuickOps
+
+> QuickOps is the local system toolkit whose CoreBox entry is now owned by the official `touch-quickops` plugin while CoreApp keeps the local runtime, host capabilities, and Flow confirmation boundary. It covers wake locks, timers, file paths, network diagnostics, developer conversions, and other frequent small operations.
+
+## Entry Points
+
+1. Open CoreBox.
+2. Type a command such as `timer 25m`, `local ip`, or `hash "/path/to/file"`.
+3. Select the result, copy the output, or open the Action Panel for available actions.
+4. Use Settings → Tools / QuickOps to adjust defaults and local policy switches.
+
+QuickOps does not currently require users to install an extra plugin. The official `touch-quickops` plugin now owns the CoreBox root-result entry, read-only panel, and low-risk session-control triggers: capabilities, running sessions, audit summaries, system info, redacted diagnostics, disk space, directory usage, network status, local IP, port status, DNS query, file hash, file Base64, recent download, common directory, path format, format text, battery status, system proxy, plus stop/pause/resume/lap/reset controls for existing sessions. The stateful runtime, Flow targets, confirmation, settings/tray entry points, and platform host capabilities still live in CoreApp local capabilities behind the `quickOpsRuntime` host boundary. Later work should move more QuickOps business runtime, status/diagnostics panels, settings/tray entry points, and extensible orchestration into the official plugin or a plugin-owned runtime boundary. Normal plugins and Flow can still only read or trigger capabilities exposed through controlled SDKs and Flow targets.
+
+## Common Commands
+
+| Category | Input examples | Current behavior |
+| --- | --- | --- |
+| Keep awake | `keep awake 30m` | Prevents display sleep and releases automatically |
+| System awake | `prevent system sleep 30m` | Prevents app suspension without changing system power plans |
+| Timer | `timer 10m`, `pause timer`, `resume timer` | Starts, pauses, resumes, and stops local countdowns |
+| Pomodoro | `pomodoro`, `pomodoro 25/5`, `pomodoro cycle 4 rounds` | Supports templates, custom presets, cycles, and long breaks |
+| Stopwatch | `stopwatch`, `lap stopwatch` | Starts, pauses, resumes, laps, and resets |
+| Screen clean | `clean screen`, `white clean screen` | Full-screen overlays across displays with countdown and long-press Esc exit |
+| Screen test | `red screen test`, `blue screen test` | Shows solid-color overlays through the screen-clean runtime |
+| Read-only network | `local ip`, `port 3000`, `dns example.com`, `network status` | Local addresses, port state, DNS, and proxy summaries |
+| Read-only files | `hash "/path"`, `file base64 "/path"`, `copy path "/path"` | Hash, Base64, and path-format copy results |
+| Common folders | `open downloads`, `open logs` | Opens restricted common folders or copies their paths |
+| Diagnostics | `system info`, `tuff diagnostics`, `disk space` | Local system summary, redacted diagnostics, disk/directory usage |
+| Developer conversions | `json`, `url encode`, `base64 decode`, `case snake`, `qr code ...` | Local pure conversions through PreviewSDK |
+
+## Ops Scenario Cheatsheet
+
+QuickOps is best for small local troubleshooting and temporary operations on the current device. It is not a replacement for terminal scripts or durable automation.
+
+| Scenario | Suggested input | Useful output |
+| --- | --- | --- |
+| Network troubleshooting | `network status`, `local ip`, `dns example.com`, `port 3000` | Local addresses, DNS, port occupancy, and proxy summaries |
+| Collect troubleshooting context | `tuff diagnostics`, `system info`, `disk space`, `directory usage` | Redacted summaries that can be copied into an issue or shared with teammates |
+| Work with file paths | `hash "/path"`, `file base64 "/path"`, `copy path "/path"`, `recent download` | File digests, path formats, and recent download metadata |
+| Temporary focus or demos | `keep awake 30m`, `timer 25m`, `pomodoro`, `stopwatch` | Local stateful sessions with expiry or stop entries |
+| Screen maintenance | `clean screen`, `red screen test`, `blue screen test` | Full-screen overlays, countdown, and long-press Esc exit |
+
+For fixed team workflows, complex batch work, or external systems, build a plugin that composes QuickOps instead of adding commands to the built-in QuickOps namespace.
+
+## Settings And Policies
+
+QuickOps settings live under Tools / QuickOps:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| QuickOps enabled | On | Disables ordinary tool commands when off, while capability summaries remain available |
+| Running sessions in CoreBox | On | Shows active timers, Pomodoro sessions, screen-clean overlays, and similar sessions |
+| Stateful tools | On | Controls wake locks, timers, Pomodoro, stopwatch, screen clean, and temp writes |
+| Network tools | On | Controls local IP, ports, DNS, proxy, and public IP lookup |
+| File tools | On | Controls hash, Base64, path formats, common folders, recent download, temp files/directories |
+| System tools | On | Controls system info, diagnostics, disk space, directory usage, and battery status |
+| Developer tools | On | Controls JSON / URL / Base64 / JWT / Regex / QR / casing PreviewSDK commands |
+| High-risk tools | Off | Only a high-risk gate today; real port kill still remains copy-only |
+| Public IP lookup | Off | Allows a read-only external public IP lookup only after explicit opt-in |
+
+When a policy is disabled, CoreBox returns a clear disabled reason such as `network-tools-disabled-by-policy`. Flow targets for the same category fail closed.
+
+## Safety Boundaries
+
+- QuickOps runs locally by default and does not log clipboard text, file contents, or network response bodies.
+- Port release currently generates copy-only commands and does not execute kill / Stop-Process.
+- File Base64 is size-bounded; temp files and directories are written only under the Tuff temp workspace.
+- Public IP lookup is off by default and performs a single read-only external request only after opt-in.
+- Flow targets marked `requireConfirm` must pass a one-time confirmation token.
+- The local audit summary records only Flow delivery target, decision, reason, confirmation requirement, and payload key names. It does not store payload content.
+
+## Plugins And Extensions
+
+QuickOps stateful runtime is still backed by CoreApp today, but the official `touch-quickops` plugin already owns the CoreBox front-end entry, read-only panel, and low-risk session-control triggers. The target shape is for that plugin to keep taking over the status/diagnostics panel and migratable business logic. Plugins can extend workflows around QuickOps in three ways:
+
+| Extension mode | Best for | Boundary |
+| --- | --- | --- |
+| Read capability summaries | Decide whether to show an entry based on platform, policy, and degraded reasons | Read `capabilities()` only; do not bypass local policy |
+| Compose built-in tools | Call existing Flow targets for system info, hashes, DNS, timers, and similar tools | Reuse Flow confirmation; `requireConfirm` targets need a one-time token from App UI |
+| Provide custom tools | Register plugin CoreBox results, Preview abilities, or Flow targets and use QuickOps output as context | Plugin features need Manifest permissions; do not call private IPC or mutate the QuickOps runtime |
+
+For normal plugins, treat QuickOps as a read-only system capability to compose with. Only repository contributors should change the official `touch-quickops` plugin, QuickOps host capabilities, Flow targets, typed transport events, and SDK facade.
+
+See [QuickOps Developer API](../../dev/api/quickops.en.md) for the SDKs, Flow target catalog, and built-in contribution checklist.
+
+### When To Build A Plugin
+
+- Your team wants to combine `network status`, `disk space`, and `tuff diagnostics` into its own health-check panel.
+- Your plugin already owns release, deploy, test, or log-analysis workflows and only needs QuickOps diagnostics as context.
+- You need to connect internal services, ticketing systems, or custom scripts with explicit Manifest permissions.
+
+These cases should live in plugin-owned entries and permission prompts. QuickOps only exposes policy-aware local capabilities, Flow targets, and read-only SDKs; it does not host plugin-private logic.
+
+## Not Yet Complete
+
+Do not treat these as finished capabilities:
+
+- Real port kill, bulk file operations, or persistent system setting mutation.
+- Enterprise centralized policy distribution, centralized audit, and organization-level locking.
+- Real AI UI natural-language orchestration, confirmation UI evidence, and high-risk execution governance.
+- Packaged app quit, screen-clean visual, and real macOS/Windows/Linux network/system/file evidence.
+
+## Related Documentation
+
+- [Quick Preview](./preview.en.md)
+- [CoreBox Capability Status](./corebox-workflow.en.md)
+- [QuickOps Developer API](../../dev/api/quickops.en.md)

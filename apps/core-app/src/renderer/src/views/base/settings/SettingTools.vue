@@ -64,6 +64,12 @@ const DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS = 600
 const DEFAULT_QUICK_OPS_SETTINGS = {
   enabled: true,
   showRunningSessionsInCoreBox: true,
+  allowStatefulTools: true,
+  allowNetworkTools: true,
+  allowFileTools: true,
+  allowSystemTools: true,
+  allowDeveloperTools: true,
+  allowHighRiskTools: false,
   defaultKeepAwakeDurationMinutes: 60,
   defaultSystemAwakeDurationMinutes: 60,
   defaultTimerDurationMinutes: 25,
@@ -457,6 +463,24 @@ function ensureQuickOpsSettings(): void {
   }
   if (typeof quickOps.showRunningSessionsInCoreBox !== 'boolean') {
     quickOps.showRunningSessionsInCoreBox = DEFAULT_QUICK_OPS_SETTINGS.showRunningSessionsInCoreBox
+  }
+  if (typeof quickOps.allowStatefulTools !== 'boolean') {
+    quickOps.allowStatefulTools = DEFAULT_QUICK_OPS_SETTINGS.allowStatefulTools
+  }
+  if (typeof quickOps.allowNetworkTools !== 'boolean') {
+    quickOps.allowNetworkTools = DEFAULT_QUICK_OPS_SETTINGS.allowNetworkTools
+  }
+  if (typeof quickOps.allowFileTools !== 'boolean') {
+    quickOps.allowFileTools = DEFAULT_QUICK_OPS_SETTINGS.allowFileTools
+  }
+  if (typeof quickOps.allowSystemTools !== 'boolean') {
+    quickOps.allowSystemTools = DEFAULT_QUICK_OPS_SETTINGS.allowSystemTools
+  }
+  if (typeof quickOps.allowDeveloperTools !== 'boolean') {
+    quickOps.allowDeveloperTools = DEFAULT_QUICK_OPS_SETTINGS.allowDeveloperTools
+  }
+  if (typeof quickOps.allowHighRiskTools !== 'boolean') {
+    quickOps.allowHighRiskTools = DEFAULT_QUICK_OPS_SETTINGS.allowHighRiskTools
   }
   quickOps.defaultKeepAwakeDurationMinutes = normalizeSelectNumber(
     quickOps.defaultKeepAwakeDurationMinutes,
@@ -1132,6 +1156,60 @@ watch(shortcutsDialogVisible, (visible) => {
       :description="t('settingTools.quickOpsPomodoroLongTemplateDesc')"
       default-icon="i-carbon-idea"
       active-icon="i-carbon-idea"
+    />
+
+    <TuffBlockSwitch
+      v-if="showAdvancedSettings"
+      v-model="appSetting.quickOps.allowStatefulTools"
+      :title="t('settingTools.quickOpsAllowStatefulTools')"
+      :description="t('settingTools.quickOpsAllowStatefulToolsDesc')"
+      default-icon="i-carbon-security"
+      active-icon="i-carbon-security"
+    />
+
+    <TuffBlockSwitch
+      v-if="showAdvancedSettings"
+      v-model="appSetting.quickOps.allowNetworkTools"
+      :title="t('settingTools.quickOpsAllowNetworkTools')"
+      :description="t('settingTools.quickOpsAllowNetworkToolsDesc')"
+      default-icon="i-carbon-network-3"
+      active-icon="i-carbon-network-3"
+    />
+
+    <TuffBlockSwitch
+      v-if="showAdvancedSettings"
+      v-model="appSetting.quickOps.allowFileTools"
+      :title="t('settingTools.quickOpsAllowFileTools')"
+      :description="t('settingTools.quickOpsAllowFileToolsDesc')"
+      default-icon="i-carbon-folder"
+      active-icon="i-carbon-folder"
+    />
+
+    <TuffBlockSwitch
+      v-if="showAdvancedSettings"
+      v-model="appSetting.quickOps.allowSystemTools"
+      :title="t('settingTools.quickOpsAllowSystemTools')"
+      :description="t('settingTools.quickOpsAllowSystemToolsDesc')"
+      default-icon="i-carbon-information"
+      active-icon="i-carbon-information"
+    />
+
+    <TuffBlockSwitch
+      v-if="showAdvancedSettings"
+      v-model="appSetting.quickOps.allowDeveloperTools"
+      :title="t('settingTools.quickOpsAllowDeveloperTools')"
+      :description="t('settingTools.quickOpsAllowDeveloperToolsDesc')"
+      default-icon="i-carbon-code"
+      active-icon="i-carbon-code"
+    />
+
+    <TuffBlockSwitch
+      v-if="showAdvancedSettings"
+      v-model="appSetting.quickOps.allowHighRiskTools"
+      :title="t('settingTools.quickOpsAllowHighRiskTools')"
+      :description="t('settingTools.quickOpsAllowHighRiskToolsDesc')"
+      default-icon="i-carbon-warning"
+      active-icon="i-carbon-warning"
     />
 
     <TuffBlockSwitch

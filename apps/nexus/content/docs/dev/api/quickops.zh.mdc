@@ -1,0 +1,278 @@
+# QuickOps SDK
+
+## 概述
+
+QuickOps SDK 让插件以只读、受策略约束的方式访问当前由 CoreApp host runtime 承载、由官方 `touch-quickops` 插件承接 CoreBox 入口的 QuickOps 能力，例如能力摘要、运行中会话、本地系统信息、网络/文件诊断和最近 Flow 审计摘要。QuickOps 的目标形态是继续把可迁移业务逻辑抽离到官方 `touch-quickops` 插件与 host capability 边界。
+
+::alert{type="warning"}
+QuickOps SDK 不是高风险执行接口。插件不能通过它 kill 端口、批量修改文件、修改长期系统设置或绕过 Flow 确认模型。
+::
+
+## 导入
+
+插件先导脚本可以直接使用全局 `quickOps` / `plugin.quickOps`。插件渲染上下文可以使用 `useQuickOps()`，已有 `channel` 时也可以显式创建 SDK。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createQuickOpsSDK, useQuickOps } from '@talex-touch/utils/plugin/sdk'
+
+  // index.js / Prelude 全局上下文
+  const capabilitiesFromPrelude = await quickOps.capabilities()
+
+  // 插件渲染上下文
+  const quickOps = useQuickOps()
+  const capabilities = await quickOps.capabilities()
+
+  // 已持有插件 channel 时
+  const quickOpsFromChannel = createQuickOpsSDK(channel)
+  const sessions = await quickOpsFromChannel.sessions()
+---
+:::
+
+在普通 renderer / app 侧可使用 transport domain SDK：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createQuickOpsSdk } from '@talex-touch/utils/transport/sdk/domains/quick-ops'
+  import { useTuffTransport } from '@talex-touch/utils/transport'
+
+  const quickOps = createQuickOpsSdk(useTuffTransport())
+  const sessions = await quickOps.sessions()
+---
+:::
+
+## API 速览
+
+| 方法 | 类型 | 说明 |
+| --- | --- | --- |
+| `capabilities()` | 只读 | 当前平台 QuickOps 能力矩阵，含 `supported` / `disabled` / `degraded`、`riskLevel` 和 reason |
+| `sessions()` | 只读 | 运行中 QuickOps 会话快照，不暴露 BrowserWindow、timeout 等 runtime 对象 |
+| `auditRecent({ limit? })` | 只读 | 最近 Flow delivery 本地审计摘要，内存态，不保存 payload 内容 |
+| `systemInfo()` | 只读 | OS、platform、CPU、内存、uptime、load average |
+| `tuffDiagnostics()` | 只读 | 脱敏 Tuff 诊断摘要，不读取日志正文或完整配置 |
+| `diskSpace()` | 只读 | Home / Tuff Data 所在文件系统容量摘要 |
+| `directoryUsage({ deep? })` | 只读 | 关键目录 bounded shallow / deep 占用摘要 |
+| `queryLocalIp()` | 只读 | 非 internal 本机地址 |
+| `portStatus({ port, text? })` | 只读 | 本地 TCP 端口 available / occupied / degraded 和 copy-only release command |
+| `dnsQuery({ hostname, text?, deep? })` | 只读 | 本地 resolver DNS 记录 |
+| `networkStatus()` | 只读 | 本机地址、DNS server、环境变量代理摘要 |
+| `systemProxy()` | 只读 | 系统代理摘要，凭据脱敏 |
+| `batteryStatus()` | 只读 | 平台电池状态或 degraded reason |
+| `fileHash({ path, filePath?, text? })` | 只读 | 单文件 MD5 / SHA1 / SHA256 |
+| `fileBase64({ path, filePath?, text? })` | 只读 | 1MB 上限内单文件 Base64 编码 |
+| `recentDownload()` | 只读 | Downloads 首层最近普通文件元数据 |
+| `commonDirectory({ query? })` | 只读 | Desktop / Downloads / Documents / App Data / Logs 受限目录元数据 |
+| `pathFormat({ path, filePath?, text? })` | 只读 | 原始路径、Shell 路径、file URL、Windows/WSL 互转格式 |
+| `formatText({ text, mode })` | 只读 | 大小写 / 命名风格转换 |
+
+## 选择扩展路径
+
+先判断你是在“组合 QuickOps”还是“修改官方 QuickOps 能力”。普通插件默认只组合，不改 `quickops.*` 命名空间。
+
+| 目标 | 推荐路径 | 是否修改内置 QuickOps |
+| --- | --- | --- |
+| 展示系统健康面板 | 调用 `quickOps.systemInfo()`、`quickOps.networkStatus()`、`quickOps.diskSpace()`、`quickOps.auditRecent()` | 否 |
+| 给插件工作流增加本地诊断步骤 | 通过 Flow SDK dispatch 到已有 `quickops.*` target | 否 |
+| 增加团队/项目专属 Ops | 在插件里注册自己的 CoreBox item、Preview ability 或 Flow target，并声明 Manifest permissions | 否 |
+| 新增所有用户通用的本地工具 | 优先迁入官方 `plugins/touch-quickops`，并同步 host capability、typed transport、SDK facade、runtime injection、evidence 和 Nexus 文档 | 是，仅仓库维护者 |
+| 高风险执行能力 | 先补策略、权限、确认 UI、审计、真实 evidence 和组织级治理设计 | 不应直接暴露 |
+
+插件不要注册新的 `quickops.*` target，也不要调用 QuickOps 私有 IPC。插件自有能力应使用自己的 feature id / target id，并把 QuickOps 结果当作上下文输入。
+
+## 读取能力矩阵
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const info = await quickOps.capabilities()
+
+  for (const entry of info.entries) {
+    if (entry.status === 'disabled') {
+      console.info(`${entry.id} disabled: ${entry.reason}`)
+    }
+  }
+---
+:::
+
+常见 disabled reason：
+
+| reason | 说明 |
+| --- | --- |
+| `quickops-disabled` | QuickOps 全局关闭 |
+| `stateful-tools-disabled-by-policy` | 本地策略关闭有状态/确认型工具 |
+| `network-tools-disabled-by-policy` | 本地策略关闭网络工具 |
+| `file-tools-disabled-by-policy` | 本地策略关闭文件工具 |
+| `system-tools-disabled-by-policy` | 本地策略关闭系统工具 |
+| `developer-tools-disabled-by-policy` | 本地策略关闭开发者转换工具 |
+| `high-risk-tools-disabled-by-policy` | 高风险工具默认关闭 |
+
+## 最近审计摘要
+
+`auditRecent()` 返回 QuickOps Flow delivery 的本地最近摘要。它只保存可观测决策，不保存 payload 内容。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const audit = await quickOps.auditRecent({ limit: 10 })
+
+  for (const entry of audit.entries) {
+    console.log(entry.targetId, entry.decision, entry.reason, entry.payloadKeys)
+  }
+---
+:::
+
+返回字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `state` | `empty` 或 `ready` |
+| `count` | 本次返回条数 |
+| `limit` | 归一化后的 limit |
+| `maxEntries` | 当前内存 ring buffer 上限 |
+| `entries[].decision` | `delivered` / `blocked` / `degraded` |
+| `entries[].payloadKeys` | payload 顶层 key 名称列表，不包含值 |
+
+该审计摘要会在模块销毁后清空，不作为企业集中审计或合规留存。
+
+## Flow 扩展模式
+
+QuickOps 内建 Flow target 已由 CoreApp 注册。插件如果要把自己的功能与 QuickOps 串起来，应通过 Flow SDK 分发到已有 target，而不是直接调用私有 IPC。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
+
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+
+  const result = await flow.dispatch({
+    type: 'json',
+    data: {},
+    context: {
+      sourcePluginId: 'my-plugin-id'
+    }
+  }, {
+    preferredTarget: 'quickops.system-info',
+    skipSelector: true,
+    requireAck: true
+  })
+
+  if (result.state === 'blocked') {
+    console.warn(result.reason)
+  }
+---
+:::
+
+带 `requireConfirm=true` 的 QuickOps target 必须由 app UI 发放一次性 `confirmationToken` 后才能交付，并在 `dispatch` options 中携带，例如 `quickops.keep-awake`、`quickops.copy-to-clipboard`、`quickops.open-folder`、`quickops.temp-text-file`。
+
+### Flow target 目录
+
+公开 QuickOps target 使用 `quickops.<target>` 命名。目标分为只读、低风险状态控制和需要确认的动作：
+
+| target | 类型 | 用途 |
+| --- | --- | --- |
+| `quickops.capabilities` | 只读 | 能力矩阵和策略状态 |
+| `quickops.sessions` | 只读 | 当前运行中的 QuickOps 会话快照 |
+| `quickops.system-info` / `quickops.tuff-diagnostics` / `quickops.disk-space` / `quickops.directory-usage` | 只读 | 本地系统、诊断、磁盘和目录占用摘要 |
+| `quickops.network-status` / `quickops.system-proxy` / `quickops.query-local-ip` / `quickops.port-status` / `quickops.dns-query` | 只读 | 本地网络、代理、端口和 DNS 诊断 |
+| `quickops.file-hash` / `quickops.file-base64` / `quickops.recent-download` / `quickops.common-directory` / `quickops.path-format` | 只读 | 文件摘要、常用目录和路径格式化 |
+| `quickops.format-text` | 只读 | 大小写和命名风格转换 |
+| `quickops.stop-keep-awake` / `quickops.stop-system-awake` / `quickops.pause-timer` / `quickops.resume-timer` / `quickops.stop-timer` / `quickops.pause-pomodoro` / `quickops.resume-pomodoro` / `quickops.stop-pomodoro` / `quickops.stop-clean-screen` / `quickops.pause-stopwatch` / `quickops.resume-stopwatch` / `quickops.lap-stopwatch` / `quickops.reset-stopwatch` | 低风险状态控制 | 控制当前会话，不创建新系统状态 |
+| `quickops.stop-all-sessions` / `quickops.public-ip` / `quickops.temp-text-file` / `quickops.temp-directory` / `quickops.keep-awake` / `quickops.system-awake` / `quickops.start-timer` / `quickops.start-pomodoro` / `quickops.clean-screen` / `quickops.start-stopwatch` / `quickops.show-notification` / `quickops.copy-to-clipboard` / `quickops.open-folder` | 需要确认 | 改变本地状态、写入本地资源、打开本地目录或发起外部查询 |
+
+插件可以把只读 target 的结果作为上下文继续处理。需要确认的 target 不应该在后台静默触发，也不应该缓存旧的 `confirmationToken`。
+
+## 第三方扩展模式
+
+普通插件不应该修改内置 QuickOps runtime。推荐扩展方式如下：
+
+| 场景 | 推荐做法 | 不推荐做法 |
+| --- | --- | --- |
+| 想展示系统诊断面板 | 调用 `quickOps.systemInfo()`、`quickOps.diskSpace()`、`quickOps.auditRecent()` 后渲染自己的 UI | 读取 CoreApp 私有文件或直接调用 main IPC |
+| 想给工作流加一步本地诊断 | 通过 Flow SDK dispatch 到已有 `quickops.*` target | 复制 QuickOps 内部实现或跳过 `requireConfirm` |
+| 想新增插件自己的 Ops | 在插件 Manifest 声明权限，注册 CoreBox item / Preview ability / 自己的 Flow target | 把插件逻辑塞进 QuickOps 内置命名空间 |
+| 想处理高风险动作 | 使用 Permission SDK 和 Flow 确认模型，返回明确 blocked / degraded reason | 默认执行 kill、批量文件修改或系统设置写入 |
+
+插件自定义 Ops 可以先读取能力矩阵，再在自己的 UI、CoreBox 结果或命令处理函数里调用 Flow：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createFlowSDK, useQuickOps } from '@talex-touch/utils/plugin/sdk'
+
+  const quickOps = useQuickOps()
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+
+  async function runNetworkSummary() {
+    const capabilities = await quickOps.capabilities()
+    const hasNetwork = capabilities.entries.some((entry) =>
+      entry.id.startsWith('quickops.network.') && entry.status !== 'disabled'
+    )
+
+    if (!hasNetwork) {
+      return { state: 'blocked', reason: 'quickops-network-disabled' }
+    }
+
+    return flow.dispatch({ type: 'json', data: {} }, {
+      preferredTarget: 'quickops.network-status',
+      skipSelector: true,
+      requireAck: true
+    })
+  }
+---
+:::
+
+### 插件自有 Ops Checklist
+
+1. 在 Manifest 中声明真实需要的权限和 reason，不借用 QuickOps 权限。
+2. 入口使用插件自己的命名空间，例如插件 feature id 或自有 Flow target。
+3. 执行前读取 `capabilities()`，把本地策略关闭、平台不支持和 degraded reason 反映到 UI。
+4. 需要写剪贴板、写文件、打开目录、外联或改变本机状态时，复用 Permission / Flow 确认模型。
+5. 返回 `blocked` / `degraded` 时给出稳定 reason，不做 fake success。
+6. 日志和审计只记录 target、decision、reason、payload key 或长度，不记录敏感 payload 值。
+
+## 修改官方 QuickOps
+
+只有维护仓库时才应该修改官方 QuickOps。新增或调整通用能力时，优先迁入 `plugins/touch-quickops`；仍依赖 Electron / OS 的部分必须通过 CoreApp host capability 暴露。
+
+当前官方插件已承接 CoreBox root-result 入口、更多只读面板和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate 与 typed bridge；后续新增可迁移入口时，优先扩展该插件的命令路由和渲染，而不是继续扩 CoreApp provider。
+
+请同步以下落点：
+
+| 层 | 典型文件 | 要求 |
+| --- | --- | --- |
+| CoreApp runtime / host capability | `apps/core-app/src/main/modules/box-tool/addon/quick-ops/`、`apps/core-app/src/main/modules/quick-ops/index.ts` | 迁移期保留 QuickOpsSessionManager、platform helper、typed transport、Flow target、policy/evidence gate 和 confirmation；不得继续把新增 CoreBox 入口塞回默认 SearchEngine provider |
+| Official plugin | `plugins/touch-quickops` | 承载 CoreBox root-result 入口、插件侧只读面板、低风险状态控制触发、后续可迁移业务逻辑和插件自有 UI；新增可迁移入口优先落这里 |
+| QuickOps module / Flow | `apps/core-app/src/main/modules/quick-ops/index.ts` | 迁移期保留 host capability / Flow target，声明 risk / category / `requireConfirm`，确认型 target 只能由 App UI token 交付 |
+| Typed transport | `packages/utils/transport/events/types/quick-ops.ts`、`packages/utils/transport/sdk/domains/quick-ops.ts` | 只把允许公开的 SDK 方法放进 typed event 和 domain SDK |
+| Plugin SDK facade | `packages/utils/plugin/sdk/quick-ops.ts`、`packages/utils/plugin/sdk/index.ts` | 保持插件 facade 只读，禁止暴露高风险执行方法 |
+| Runtime injection | `apps/core-app/src/main/modules/plugin/plugin.ts` | `globalThis.quickOps` / `plugin.quickOps` 与 public SDK 方法集一致 |
+| Evidence | `apps/core-app/scripts/quickops-surface-audit.ts`、`apps/core-app/scripts/quickops-flow-ai-adapter-audit.ts`、`apps/core-app/scripts/quickops-evidence-verify.ts` | 更新 surface audit、Flow/AI adapter audit、evidence template 和 strict verifier |
+| 文档 | 本页、用户指南、QuickOps PRD、TODO、CHANGES | 行为、接口、策略或安全边界变化必须同步 |
+
+内置能力变更 checklist：
+
+1. 先确认能力属于只读、低风险状态控制、确认型动作还是高风险动作。
+2. 只读能力可以进入 SDK facade；会改变状态、写文件、写剪贴板、打开本地目录或外联的能力必须优先走 Flow target 和确认模型。
+3. 高风险能力默认不能进入插件 SDK；如需落地，必须先补策略、权限、确认 UI、审计和真实 evidence。
+4. 更新 focused tests：provider 解析、Flow delivery、策略 fail-closed、脱敏 ACK / audit、typed transport surface。
+5. 运行 `quickops:surface:audit --strict`，确保没有 raw channel、SDK bypass 或 runtime facade 漂移。
+6. 运行 `quickops:flow-ai:audit --strict`。它应证明 Flow target 目录、确认集合、策略阻断、脱敏 ACK / audit、自然语言 resolver 和 runtime dispatch bridge 合同；如果新增能力没有补齐这些源级合同，应 fail-closed。
+7. 文档中只声明已有 evidence 支撑的能力；packaged、三平台、视觉、真实 AI UI 编排或确认 UI 证据缺失时必须明确写成未完成，不能把 Flow metadata、resolver/bridge focused test 或 mock artifact 当作完整 evidence。
+
+## 扩展建议
+
+1. 插件可以基于 `capabilities()` 决定是否展示某个入口。
+2. 插件可以用 `sessions()` 展示运行状态，但不要缓存 session id 作为长期状态。
+3. 插件可以用 `auditRecent()` 做本地最近执行状态面板，但不要把它上传为企业审计。
+4. 自定义执行能力应优先声明 Manifest permissions，并使用 Permission / Flow 确认模型。
+5. 涉及文件、网络、剪贴板或系统状态的扩展必须返回明确 degraded / blocked reason，不做 fake success。
+
+## 相关文档
+
+- [TuffTransport](./transport.zh.md)
+- [Flow SDK](./flow-transfer.zh.md)
+- [Permission SDK](./permission.zh.md)
+- [Tuff QuickOps 用户指南](../../guide/features/quickops.zh.md)

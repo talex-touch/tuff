@@ -1,0 +1,278 @@
+# QuickOps SDK
+
+## Overview
+
+QuickOps SDK lets plugins access the current QuickOps capabilities that are hosted by the CoreApp runtime while the CoreBox entry is owned by the official `touch-quickops` plugin: capability summaries, running sessions, local system info, network/file diagnostics, and recent local Flow audit summaries. The target shape is to keep moving migratable business logic into the official `touch-quickops` plugin plus host capability boundaries.
+
+::alert{type="warning"}
+QuickOps SDK is not a high-risk execution API. Plugins cannot use it to kill ports, bulk-edit files, mutate persistent system settings, or bypass Flow confirmation.
+::
+
+## Imports
+
+Plugin Prelude scripts can use global `quickOps` / `plugin.quickOps` directly. Plugin renderer contexts can use `useQuickOps()`, or create the SDK explicitly when a `channel` is already available.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createQuickOpsSDK, useQuickOps } from '@talex-touch/utils/plugin/sdk'
+
+  // index.js / Prelude global context
+  const capabilitiesFromPrelude = await quickOps.capabilities()
+
+  // Plugin renderer context
+  const quickOps = useQuickOps()
+  const capabilities = await quickOps.capabilities()
+
+  // When a plugin channel is already available
+  const quickOpsFromChannel = createQuickOpsSDK(channel)
+  const sessions = await quickOpsFromChannel.sessions()
+---
+:::
+
+Renderer / app code can use the transport domain SDK:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createQuickOpsSdk } from '@talex-touch/utils/transport/sdk/domains/quick-ops'
+  import { useTuffTransport } from '@talex-touch/utils/transport'
+
+  const quickOps = createQuickOpsSdk(useTuffTransport())
+  const sessions = await quickOps.sessions()
+---
+:::
+
+## API Overview
+
+| Method | Type | Description |
+| --- | --- | --- |
+| `capabilities()` | Read-only | Current platform capability matrix with `supported` / `disabled` / `degraded`, `riskLevel`, and reason |
+| `sessions()` | Read-only | Running QuickOps session snapshots without BrowserWindow, timeout, or runtime objects |
+| `auditRecent({ limit? })` | Read-only | Recent local Flow delivery audit summary, in memory only, without payload values |
+| `systemInfo()` | Read-only | OS, platform, CPU, memory, uptime, and load average |
+| `tuffDiagnostics()` | Read-only | Redacted Tuff diagnostics, without log bodies or full config |
+| `diskSpace()` | Read-only | Home / Tuff Data filesystem capacity summary |
+| `directoryUsage({ deep? })` | Read-only | Bounded shallow / deep usage for key directories |
+| `queryLocalIp()` | Read-only | Non-internal local addresses |
+| `portStatus({ port, text? })` | Read-only | Local TCP port available / occupied / degraded state and copy-only release command |
+| `dnsQuery({ hostname, text?, deep? })` | Read-only | DNS records through the local resolver |
+| `networkStatus()` | Read-only | Local addresses, DNS servers, and environment proxy summary |
+| `systemProxy()` | Read-only | Redacted system proxy summary |
+| `batteryStatus()` | Read-only | Platform battery status or degraded reason |
+| `fileHash({ path, filePath?, text? })` | Read-only | Single-file MD5 / SHA1 / SHA256 |
+| `fileBase64({ path, filePath?, text? })` | Read-only | Single-file Base64 encoding with a 1MB limit |
+| `recentDownload()` | Read-only | Latest regular file metadata from top-level Downloads |
+| `commonDirectory({ query? })` | Read-only | Restricted Desktop / Downloads / Documents / App Data / Logs metadata |
+| `pathFormat({ path, filePath?, text? })` | Read-only | Raw path, shell path, file URL, and Windows/WSL path variants |
+| `formatText({ text, mode })` | Read-only | Casing / naming-style conversion |
+
+## Choose An Extension Path
+
+First decide whether you are composing QuickOps or changing official QuickOps capabilities. Normal plugins should compose by default and leave the `quickops.*` namespace untouched.
+
+| Goal | Recommended path | Change built-in QuickOps? |
+| --- | --- | --- |
+| Show a system health panel | Call `quickOps.systemInfo()`, `quickOps.networkStatus()`, `quickOps.diskSpace()`, and `quickOps.auditRecent()` | No |
+| Add local diagnostics to a plugin workflow | Dispatch to existing `quickops.*` targets through the Flow SDK | No |
+| Add team- or project-specific Ops | Register plugin-owned CoreBox items, Preview abilities, or Flow targets with Manifest permissions | No |
+| Add a local tool for every user | Prefer migrating it into the official `plugins/touch-quickops` plugin, then sync host capabilities, typed transport, SDK facade, runtime injection, evidence, and Nexus docs | Yes, repository maintainers only |
+| Add high-risk execution | Add policy, permissions, confirmation UI, audit, real evidence, and organization-level governance first | Do not expose directly |
+
+Plugins must not register new `quickops.*` targets or call private QuickOps IPC. Plugin-owned capabilities should use their own feature ids / target ids and treat QuickOps results as context input.
+
+## Capability Matrix
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const info = await quickOps.capabilities()
+
+  for (const entry of info.entries) {
+    if (entry.status === 'disabled') {
+      console.info(`${entry.id} disabled: ${entry.reason}`)
+    }
+  }
+---
+:::
+
+Common disabled reasons:
+
+| reason | Meaning |
+| --- | --- |
+| `quickops-disabled` | QuickOps is globally disabled |
+| `stateful-tools-disabled-by-policy` | Local policy disabled stateful / confirmation tools |
+| `network-tools-disabled-by-policy` | Local policy disabled network tools |
+| `file-tools-disabled-by-policy` | Local policy disabled file tools |
+| `system-tools-disabled-by-policy` | Local policy disabled system tools |
+| `developer-tools-disabled-by-policy` | Local policy disabled developer conversion tools |
+| `high-risk-tools-disabled-by-policy` | High-risk tools are disabled by default |
+
+## Recent Audit Summary
+
+`auditRecent()` returns recent local summaries for QuickOps Flow deliveries. It stores observable decisions only, not payload values.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const audit = await quickOps.auditRecent({ limit: 10 })
+
+  for (const entry of audit.entries) {
+    console.log(entry.targetId, entry.decision, entry.reason, entry.payloadKeys)
+  }
+---
+:::
+
+Response fields:
+
+| Field | Description |
+| --- | --- |
+| `state` | `empty` or `ready` |
+| `count` | Number of returned entries |
+| `limit` | Normalized limit |
+| `maxEntries` | Current in-memory ring buffer cap |
+| `entries[].decision` | `delivered` / `blocked` / `degraded` |
+| `entries[].payloadKeys` | Top-level payload key names only |
+
+The audit summary is cleared when the module is destroyed. It is not enterprise centralized audit or compliance retention.
+
+## Flow Extension Pattern
+
+QuickOps built-in Flow targets are registered by CoreApp. If a plugin needs to compose with QuickOps, dispatch to existing targets through the Flow SDK instead of private IPC.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
+
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+
+  const result = await flow.dispatch({
+    type: 'json',
+    data: {},
+    context: {
+      sourcePluginId: 'my-plugin-id'
+    }
+  }, {
+    preferredTarget: 'quickops.system-info',
+    skipSelector: true,
+    requireAck: true
+  })
+
+  if (result.state === 'blocked') {
+    console.warn(result.reason)
+  }
+---
+:::
+
+QuickOps targets marked `requireConfirm=true` must receive a one-time `confirmationToken` from app UI before delivery and pass it in `dispatch` options, for example `quickops.keep-awake`, `quickops.copy-to-clipboard`, `quickops.open-folder`, and `quickops.temp-text-file`.
+
+### Flow Target Catalog
+
+Public QuickOps targets use the `quickops.<target>` naming pattern. Targets are grouped into read-only, low-risk session control, and confirmation-required actions:
+
+| target | Type | Purpose |
+| --- | --- | --- |
+| `quickops.capabilities` | Read-only | Capability matrix and policy state |
+| `quickops.sessions` | Read-only | Current running QuickOps session snapshots |
+| `quickops.system-info` / `quickops.tuff-diagnostics` / `quickops.disk-space` / `quickops.directory-usage` | Read-only | Local system, diagnostics, disk, and directory summaries |
+| `quickops.network-status` / `quickops.system-proxy` / `quickops.query-local-ip` / `quickops.port-status` / `quickops.dns-query` | Read-only | Local network, proxy, port, and DNS diagnostics |
+| `quickops.file-hash` / `quickops.file-base64` / `quickops.recent-download` / `quickops.common-directory` / `quickops.path-format` | Read-only | File summaries, common folders, and path formatting |
+| `quickops.format-text` | Read-only | Casing and naming-style conversion |
+| `quickops.stop-keep-awake` / `quickops.stop-system-awake` / `quickops.pause-timer` / `quickops.resume-timer` / `quickops.stop-timer` / `quickops.pause-pomodoro` / `quickops.resume-pomodoro` / `quickops.stop-pomodoro` / `quickops.stop-clean-screen` / `quickops.pause-stopwatch` / `quickops.resume-stopwatch` / `quickops.lap-stopwatch` / `quickops.reset-stopwatch` | Low-risk session control | Controls an existing session without creating new system state |
+| `quickops.stop-all-sessions` / `quickops.public-ip` / `quickops.temp-text-file` / `quickops.temp-directory` / `quickops.keep-awake` / `quickops.system-awake` / `quickops.start-timer` / `quickops.start-pomodoro` / `quickops.clean-screen` / `quickops.start-stopwatch` / `quickops.show-notification` / `quickops.copy-to-clipboard` / `quickops.open-folder` | Confirmation required | Changes local state, writes local resources, opens a local folder, or performs an external lookup |
+
+Plugins can use read-only target results as context for their own workflows. Confirmation-required targets must not run silently in the background, and old `confirmationToken` values must not be cached.
+
+## Third-Party Extension Patterns
+
+Normal plugins should not mutate the built-in QuickOps runtime. Use these extension patterns instead:
+
+| Scenario | Recommended | Avoid |
+| --- | --- | --- |
+| Show a system diagnostics panel | Call `quickOps.systemInfo()`, `quickOps.diskSpace()`, and `quickOps.auditRecent()`, then render your own UI | Reading CoreApp private files or calling main-process private IPC |
+| Add local diagnostics to a workflow | Dispatch to existing `quickops.*` targets through the Flow SDK | Copying QuickOps internals or bypassing `requireConfirm` |
+| Add your own plugin Ops | Declare Manifest permissions and register plugin CoreBox items, Preview abilities, or your own Flow targets | Putting plugin logic into the built-in QuickOps namespace |
+| Handle high-risk actions | Use Permission SDK and Flow confirmation, then return explicit blocked / degraded reasons | Executing kill, bulk file edits, or system setting writes by default |
+
+Plugin-defined Ops can read the capability matrix first, then call Flow from their own UI, CoreBox result, or command handler:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createFlowSDK, useQuickOps } from '@talex-touch/utils/plugin/sdk'
+
+  const quickOps = useQuickOps()
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+
+  async function runNetworkSummary() {
+    const capabilities = await quickOps.capabilities()
+    const hasNetwork = capabilities.entries.some((entry) =>
+      entry.id.startsWith('quickops.network.') && entry.status !== 'disabled'
+    )
+
+    if (!hasNetwork) {
+      return { state: 'blocked', reason: 'quickops-network-disabled' }
+    }
+
+    return flow.dispatch({ type: 'json', data: {} }, {
+      preferredTarget: 'quickops.network-status',
+      skipSelector: true,
+      requireAck: true
+    })
+  }
+---
+:::
+
+### Plugin-Owned Ops Checklist
+
+1. Declare the actual required permissions and reasons in the Manifest. Do not borrow QuickOps permissions.
+2. Use the plugin's own namespace, such as a plugin feature id or custom Flow target.
+3. Read `capabilities()` before execution and surface disabled policy, unsupported platform, and degraded reasons in your UI.
+4. Reuse Permission / Flow confirmation when writing clipboard, writing files, opening folders, calling external services, or changing local state.
+5. Return stable `blocked` / `degraded` reasons instead of fake success.
+6. Log and audit target, decision, reason, payload keys, or lengths only; do not record sensitive payload values.
+
+## Changing Official QuickOps
+
+Only repository maintainers should change official QuickOps capabilities. When adding or changing a common capability, prefer moving it into `plugins/touch-quickops`; Electron / OS-bound parts must remain behind CoreApp host capabilities.
+
+The official plugin already owns the CoreBox root-result entry, expanded read-only panels, and low-risk session-control triggers: capabilities, sessions, auditRecent, system info, Tuff diagnostics, disk space, directory usage, network status, local IP, port status, DNS query, file hash, file Base64, recent download, common directory, path format, format text, battery status, system proxy, plus `stop-all-sessions` and timer / Pomodoro / clean-screen / awake / stopwatch stop/pause/resume/lap/reset controls. Read-only panels fetch through the `globalThis.quickOps` transition facade; low-risk session controls dispatch through the injected Flow SDK to existing QuickOps Flow targets. The plugin must not execute high-risk actions or fall back to private IPC. Confirmation-required actions need a `confirmationToken` issued by App UI, so the plugin may only render the confirmation-required notice. CoreApp currently keeps the `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary, platform capabilities, Flow confirmation, policy/evidence gates, and typed bridge. For the next migratable entries, extend this plugin's command routing and rendering path before expanding the CoreApp provider.
+
+Keep these layers in sync:
+
+| Layer | Typical files | Requirement |
+| --- | --- | --- |
+| CoreApp runtime / host capability | `apps/core-app/src/main/modules/box-tool/addon/quick-ops/`, `apps/core-app/src/main/modules/quick-ops/index.ts` | During migration, keep QuickOpsSessionManager, platform helpers, typed transport, Flow targets, policy/evidence gates, and confirmation; do not put new CoreBox entries back into the default SearchEngine provider |
+| Official plugin | `plugins/touch-quickops` | Own the CoreBox root-result entry, plugin-side read-only panel, low-risk session-control triggers, future migratable business logic, and plugin-owned UI; new migratable entries should land here first |
+| QuickOps module / Flow | `apps/core-app/src/main/modules/quick-ops/index.ts` | During migration, keep host capabilities / Flow targets and declare risk / category / `requireConfirm`; confirmation-required targets can only be delivered with an App UI token |
+| Typed transport | `packages/utils/transport/events/types/quick-ops.ts`, `packages/utils/transport/sdk/domains/quick-ops.ts` | Expose only allowed public SDK methods through typed events and the domain SDK |
+| Plugin SDK facade | `packages/utils/plugin/sdk/quick-ops.ts`, `packages/utils/plugin/sdk/index.ts` | Keep the plugin facade read-only and do not expose high-risk execution methods |
+| Runtime injection | `apps/core-app/src/main/modules/plugin/plugin.ts` | Keep `globalThis.quickOps` / `plugin.quickOps` aligned with the public SDK method set |
+| Evidence | `apps/core-app/scripts/quickops-surface-audit.ts`, `apps/core-app/scripts/quickops-flow-ai-adapter-audit.ts`, `apps/core-app/scripts/quickops-evidence-verify.ts` | Update surface audit, Flow/AI adapter audit, evidence templates, and strict verification |
+| Documentation | This page, user guide, QuickOps PRD, TODO, CHANGES | Sync behavior, API, policy, or safety-boundary changes |
+
+Built-in capability checklist:
+
+1. Classify the capability as read-only, low-risk session control, confirmation-required action, or high-risk action.
+2. Read-only capabilities may enter the SDK facade; state-changing, file-writing, clipboard-writing, folder-opening, or external-network capabilities must prefer Flow targets and confirmation.
+3. High-risk capabilities must not enter the plugin SDK by default. Add policy, permission, confirmation UI, audit, and real evidence first.
+4. Update focused tests for provider parsing, Flow delivery, policy fail-closed behavior, redacted ACK / audit, and typed transport surface.
+5. Run `quickops:surface:audit --strict` to catch raw channels, SDK bypasses, or runtime facade drift.
+6. Run `quickops:flow-ai:audit --strict`. It should prove the Flow target catalog, confirmation set, policy blocking, redacted ACK / audit, natural-language resolver, and runtime dispatch bridge contracts; if a new capability does not update those source-level contracts, it should fail closed.
+7. Document only capabilities backed by evidence. Missing packaged, cross-platform, visual, real AI UI orchestration, or confirmation UI evidence must stay marked as incomplete; do not treat Flow metadata, resolver/bridge focused tests, or mock artifacts as complete evidence.
+
+## Extension Guidance
+
+1. Use `capabilities()` before showing an entry point.
+2. Use `sessions()` for live status, but do not persist session ids as durable state.
+3. Use `auditRecent()` for a local recent status panel, but do not upload it as enterprise audit.
+4. Custom execution paths should declare Manifest permissions and reuse Permission / Flow confirmation.
+5. File, network, clipboard, and system-state extensions must return explicit degraded / blocked reasons instead of fake success.
+
+## Related Documentation
+
+- [TuffTransport](./transport.en.md)
+- [Flow SDK](./flow-transfer.en.md)
+- [Permission SDK](./permission.en.md)
+- [Tuff QuickOps User Guide](../../guide/features/quickops.en.md)

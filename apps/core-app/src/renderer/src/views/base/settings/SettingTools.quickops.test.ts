@@ -72,6 +72,12 @@ const settingState = vi.hoisted(() => {
       quickOps: {
         enabled: true,
         showRunningSessionsInCoreBox: true,
+        allowStatefulTools: true,
+        allowNetworkTools: true,
+        allowFileTools: true,
+        allowSystemTools: true,
+        allowDeveloperTools: true,
+        allowHighRiskTools: false,
         defaultKeepAwakeDurationMinutes: 60,
         defaultSystemAwakeDurationMinutes: 60,
         defaultTimerDurationMinutes: 25,
@@ -148,6 +154,12 @@ function resetAppSetting(): void {
   appSettingMock.quickOps = {
     enabled: true,
     showRunningSessionsInCoreBox: true,
+    allowStatefulTools: true,
+    allowNetworkTools: true,
+    allowFileTools: true,
+    allowSystemTools: true,
+    allowDeveloperTools: true,
+    allowHighRiskTools: false,
     defaultKeepAwakeDurationMinutes: 60,
     defaultSystemAwakeDurationMinutes: 60,
     defaultTimerDurationMinutes: 25,
@@ -226,6 +238,12 @@ describe('SettingTools QuickOps settings', () => {
     appSettingMock.quickOps = {
       enabled: 'yes' as never,
       showRunningSessionsInCoreBox: 'no' as never,
+      allowStatefulTools: 'no' as never,
+      allowNetworkTools: 'no' as never,
+      allowFileTools: 'no' as never,
+      allowSystemTools: 'no' as never,
+      allowDeveloperTools: 'no' as never,
+      allowHighRiskTools: 'yes' as never,
       defaultKeepAwakeDurationMinutes: 61,
       defaultSystemAwakeDurationMinutes: 77,
       defaultTimerDurationMinutes: 26,
@@ -263,6 +281,12 @@ describe('SettingTools QuickOps settings', () => {
     expect(appSettingMock.quickOps).toEqual({
       enabled: true,
       showRunningSessionsInCoreBox: true,
+      allowStatefulTools: true,
+      allowNetworkTools: true,
+      allowFileTools: true,
+      allowSystemTools: true,
+      allowDeveloperTools: true,
+      allowHighRiskTools: false,
       defaultKeepAwakeDurationMinutes: 60,
       defaultSystemAwakeDurationMinutes: 90,
       defaultTimerDurationMinutes: 25,
@@ -309,6 +333,12 @@ describe('SettingTools QuickOps settings', () => {
     const basicWrapper = mountSettingTools()
     await nextTick()
     expect(basicWrapper.text()).not.toContain('settingTools.quickOpsDefaultSystemAwakeDuration')
+    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowStatefulTools')
+    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowNetworkTools')
+    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowFileTools')
+    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowSystemTools')
+    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowDeveloperTools')
+    expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowHighRiskTools')
     expect(basicWrapper.text()).not.toContain('settingTools.quickOpsAllowPublicIpLookup')
     expect(basicWrapper.text()).not.toContain('settingTools.quickOpsPomodoroCustomTemplates')
 
@@ -325,6 +355,12 @@ describe('SettingTools QuickOps settings', () => {
     const advancedWrapper = mountSettingTools()
     await nextTick()
     expect(advancedWrapper.text()).toContain('settingTools.quickOpsDefaultSystemAwakeDuration')
+    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowStatefulTools')
+    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowNetworkTools')
+    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowFileTools')
+    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowSystemTools')
+    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowDeveloperTools')
+    expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowHighRiskTools')
     expect(advancedWrapper.text()).toContain('settingTools.quickOpsAllowPublicIpLookup')
     expect(advancedWrapper.text()).toContain('settingTools.quickOpsPomodoroCustomTemplates')
     expect(advancedWrapper.text()).toContain('writing sprint 45/12')

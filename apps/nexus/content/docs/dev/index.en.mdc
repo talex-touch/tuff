@@ -11,6 +11,7 @@
 
 ## Deep Dive
 - **[API Reference](./api/)** — typed interfaces for storage, channels, and UI.
+- **[QuickOps SDK](./api/quickops.en.md)** — read built-in local tool capabilities, sessions, and recent audit summaries, then compose through Flow.
 - **[Extensions](./extensions/)** — advanced patterns for complex integrations.
 - **[Plugin Packages vs Content Packages](./getting-started/plugin-workflow.en.md#plugin-packages-vs-content-packages)** — separate `.tpex`, CloudShare content packages, and CloudSync private sync.
 - **[Core App startup and runtime env](./reference/runtime-startup-env.en.md)** — startup gates, dev.source fallback, env inventory, cleanup candidates.
