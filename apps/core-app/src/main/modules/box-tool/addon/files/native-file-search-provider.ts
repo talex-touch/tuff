@@ -16,7 +16,6 @@ import { getMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import type { FileIndexSettings } from './types'
 import { EverythingIconCache } from './everything-icon-cache'
-import { executeQuickOpsFileAction, isQuickOpsFileExecuteAction } from './quick-ops-file-actions'
 import { mapFileToTuffItem } from './utils'
 
 export interface NativeFileSearchCapabilities {
@@ -321,21 +320,6 @@ abstract class BaseNativeFileSearchProvider implements NativeFileSearchProvider 
   async onExecute(args: IExecuteArgs): Promise<null> {
     const filePath = args.item.meta?.file?.path
     if (!filePath) return null
-    if (isQuickOpsFileExecuteAction(args.actionId)) {
-      try {
-        await executeQuickOpsFileAction(args.actionId, filePath, {
-          warn: (message, meta) => nativeFileSearchLog.warn(message, meta),
-          error: (message, error, meta) => nativeFileSearchLog.error(message, { error, meta })
-        })
-      } catch (error) {
-        nativeFileSearchLog.error('QuickOps native file action failed', {
-          error,
-          path: filePath,
-          actionId: args.actionId
-        })
-      }
-      return null
-    }
     await shell.openPath(filePath)
     return null
   }

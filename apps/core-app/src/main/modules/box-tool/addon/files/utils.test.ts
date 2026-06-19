@@ -21,14 +21,12 @@ function createFile(overrides: Partial<Parameters<typeof mapFileToTuffItem>[0]> 
 }
 
 describe('file provider utils', () => {
-  it('adds QuickOps copy-only path actions to file search results', () => {
+  it('adds copy-only path actions to file search results', () => {
     const item = mapFileToTuffItem(createFile(), {}, 'file-provider', 'File Provider')
 
     expect(item.actions?.map((action) => action.id)).toEqual([
       'open-file',
       'open-folder',
-      'quick-ops-copy-file-hash',
-      'quick-ops-copy-file-base64',
       'quick-ops-copy-file-path',
       'quick-ops-copy-shell-path',
       'quick-ops-copy-file-url'
@@ -39,16 +37,6 @@ describe('file provider utils', () => {
       payload: {
         path: '/Users/demo/Documents/report final.txt'
       }
-    })
-    expect(item.actions?.find((action) => action.id === 'quick-ops-copy-file-hash')).toMatchObject({
-      type: 'execute',
-      label: 'Copy Hashes'
-    })
-    expect(
-      item.actions?.find((action) => action.id === 'quick-ops-copy-file-base64')
-    ).toMatchObject({
-      type: 'execute',
-      label: 'Copy Base64'
     })
     expect(item.actions?.find((action) => action.id === 'quick-ops-copy-file-path')).toMatchObject({
       type: 'copy',
