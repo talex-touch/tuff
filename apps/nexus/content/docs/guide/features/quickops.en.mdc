@@ -89,7 +89,7 @@ See [QuickOps Developer API](../../dev/api/quickops.en.md) for the SDKs, Flow ta
 - Your plugin already owns release, deploy, test, or log-analysis workflows and only needs QuickOps diagnostics as context.
 - You need to connect internal services, ticketing systems, or custom scripts with explicit Manifest permissions.
 
-These cases should live in plugin-owned entries and permission prompts. QuickOps only exposes policy-aware local capabilities, Flow targets, and read-only SDKs; it does not host plugin-private logic.
+These cases should live in plugin-owned entries and permission prompts. QuickOps exposes policy-aware local capabilities, Flow targets, and a bounded SDK facade; it does not host plugin-private logic or general file-write APIs.
 
 ## Not Yet Complete
 

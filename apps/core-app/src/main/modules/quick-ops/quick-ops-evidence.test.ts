@@ -454,8 +454,8 @@ describe('QuickOps evidence contract', () => {
     expect(sdkTransport?.requiredEvidence).toEqual(
       expect.arrayContaining([
         'QuickOpsModule registers only canonical QuickOpsEvents typed transport handlers',
-        'Plugin SDK QuickOps facade is read-only and does not expose stateful or destructive execution helpers',
-        'TouchPlugin runtime quickOps facade exposes the same read-only method set and invokes only QuickOpsEvents typed transport'
+        'Plugin SDK QuickOps facade is bounded, policy-aware, and does not expose stateful or destructive execution helpers',
+        'TouchPlugin runtime quickOps facade exposes the same bounded method set and invokes only QuickOpsEvents typed transport'
       ])
     )
     expect(sdkTransport?.requiredEvidence.some((item) => item.includes('raw quick-ops'))).toBe(true)
@@ -949,7 +949,7 @@ describe('QuickOps evidence contract', () => {
     ).toEqual(
       expect.arrayContaining([
         'QuickOps SDK/transport surface artifact is invalid: evidence/quickops/sdk-transport-surface.json -> gate.passed is not true',
-        'QuickOps SDK/transport surface artifact is invalid: evidence/quickops/sdk-transport-surface.json -> pluginRuntimeMethods does not match the read-only facade contract',
+        'QuickOps SDK/transport surface artifact is invalid: evidence/quickops/sdk-transport-surface.json -> pluginRuntimeMethods does not match the bounded host facade contract',
         'QuickOps SDK/transport surface artifact is invalid: evidence/quickops/sdk-transport-surface.json -> pluginRuntimeUsesTypedEvents is not true'
       ])
     )
@@ -1027,7 +1027,7 @@ describe('QuickOps evidence contract', () => {
       '- [ ] QuickOpsModule registers only canonical QuickOpsEvents typed transport handlers'
     )
     expect(template).toContain(
-      '- [ ] TouchPlugin runtime quickOps facade exposes the same read-only method set and invokes only QuickOpsEvents typed transport'
+      '- [ ] TouchPlugin runtime quickOps facade exposes the same bounded method set and invokes only QuickOpsEvents typed transport'
     )
     expect(template).toContain(
       '- [ ] True port kill remains disabled or separately gated by high-risk policy'

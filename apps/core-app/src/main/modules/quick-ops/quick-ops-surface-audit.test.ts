@@ -19,7 +19,7 @@ async function readRepoFile(relativePath: string): Promise<string> {
 describe('QuickOps SDK and transport surface audit', () => {
   const rawPortStatusEventName = ['quick-ops', 'port-status', 'get'].join(':')
 
-  it('passes against the current QuickOps typed transport and read-only SDK facade', async () => {
+  it('passes against the current QuickOps typed transport and bounded host SDK facade', async () => {
     const audit = await createQuickOpsSurfaceAuditFromFiles({ repoRoot })
 
     expect(audit.schema).toBe(QUICK_OPS_SURFACE_AUDIT_SCHEMA)
@@ -79,8 +79,8 @@ describe('QuickOps SDK and transport surface audit', () => {
     ])
     expect(audit.gate.failures).toEqual(
       expect.arrayContaining([
-        'Transport QuickOps SDK methods do not match the read-only facade contract',
-        'Plugin runtime QuickOps facade methods do not match the read-only contract',
+        'Transport QuickOps SDK methods do not match the bounded host facade contract',
+        'Plugin runtime QuickOps facade methods do not match the bounded host facade contract',
         'QuickOps SDK facade exposes forbidden execution methods: keepAwake',
         'QuickOps public surface contains forbidden raw channel patterns'
       ])

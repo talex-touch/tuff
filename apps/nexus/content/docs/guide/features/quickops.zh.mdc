@@ -89,7 +89,7 @@ QuickOps 当前状态型 runtime 仍由 CoreApp 承载，但官方 `touch-quicko
 - 插件已有发布、部署、测试或日志分析流程，只需要把 QuickOps 的本地诊断结果作为上下文。
 - 需要连接公司内部服务、工单系统或自定义脚本，并且能明确声明 Manifest 权限。
 
-这些场景应该在插件里实现自己的入口和权限提示。QuickOps 只提供受策略约束的本地能力、Flow target 和只读 SDK，不负责托管插件私有逻辑。
+这些场景应该在插件里实现自己的入口和权限提示。QuickOps 只提供受策略约束的本地能力、Flow target 和 bounded SDK facade，不负责托管插件私有逻辑，也不提供通用文件写入 API。
 
 ## 当前未完成项
 

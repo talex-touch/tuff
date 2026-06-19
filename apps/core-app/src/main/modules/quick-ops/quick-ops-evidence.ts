@@ -301,8 +301,8 @@ export const QUICK_OPS_EVIDENCE_CASES: readonly QuickOpsEvidenceCase[] = [
       'QuickOpsModule registers only canonical QuickOpsEvents typed transport handlers',
       'QuickOps Flow targets are registered through flowTargetRegistry under the quickops plugin id',
       'Exactly one quickops Flow delivery handler is registered for built-in QuickOps targets',
-      'Plugin SDK QuickOps facade is read-only and does not expose stateful or destructive execution helpers',
-      'TouchPlugin runtime quickOps facade exposes the same read-only method set and invokes only QuickOpsEvents typed transport',
+      'Plugin SDK QuickOps facade is bounded, policy-aware, and does not expose stateful or destructive execution helpers',
+      'TouchPlugin runtime quickOps facade exposes the same bounded method set and invokes only QuickOpsEvents typed transport',
       QUICK_OPS_NO_RAW_CHANNEL_EVIDENCE,
       'Artifacts include the command output or probe trace used to establish the channel audit'
     ],
@@ -1139,7 +1139,7 @@ function validateSurfaceAuditArtifact(path: string, audit: Record<string, unknow
     ] as const
     for (const field of methodFields) {
       if (!hasExactStringArray(sdk[field], QUICK_OPS_SURFACE_AUDIT_EXPECTED_SDK_METHODS)) {
-        failures.push(`${prefix} -> ${field} does not match the read-only facade contract`)
+        failures.push(`${prefix} -> ${field} does not match the bounded host facade contract`)
       }
     }
     const typedEventFields = [

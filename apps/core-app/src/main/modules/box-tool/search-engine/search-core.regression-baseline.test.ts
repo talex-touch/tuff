@@ -659,7 +659,7 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
     }
 
     core.registerProvider({
-      id: 'quick-ops-provider',
+      id: 'destroyable-system-provider',
       type: 'system',
       supportedInputTypes: [TuffInputType.Text],
       onSearch: vi.fn(),

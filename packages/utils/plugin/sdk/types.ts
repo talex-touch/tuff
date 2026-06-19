@@ -245,7 +245,7 @@ export interface IPluginUtils {
   quickActions: import('./quick-actions-sdk').QuickActionsSDK
 
   /**
-   * QuickOps read-only diagnostics facade.
+   * QuickOps bounded policy-aware host facade.
    * @see {@link QuickOpsSDK}
    */
   quickOps: import('./quick-ops').QuickOpsSDK
@@ -298,7 +298,7 @@ export interface IPluginUtils {
    */
   plugin: IPluginInfoManager & {
     /**
-     * QuickOps read-only diagnostics facade.
+     * QuickOps bounded policy-aware host facade.
      * @see {@link QuickOpsSDK}
      */
     quickOps: import('./quick-ops').QuickOpsSDK

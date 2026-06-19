@@ -907,7 +907,7 @@ describe('TouchPlugin.triggerFeature', () => {
     })
   })
 
-  it('exposes QuickOps read-only facade through typed transport events', async () => {
+  it('exposes QuickOps bounded host facade through typed transport events', async () => {
     const response = { ok: true }
     const transport = {
       invoke: vi.fn().mockResolvedValue(response),
@@ -944,7 +944,7 @@ describe('TouchPlugin.triggerFeature', () => {
         verified: false
       }
     }
-    const readOnlyCases = [
+    const quickOpsCases = [
       {
         method: 'capabilities',
         event: QuickOpsEvents.capabilities.get,
@@ -1074,12 +1074,12 @@ describe('TouchPlugin.triggerFeature', () => {
         ]
       }
     ] as const
-    const expectedMethods = Array.from(new Set(readOnlyCases.map((item) => item.method)))
+    const expectedMethods = Array.from(new Set(quickOpsCases.map((item) => item.method)))
 
     expect(Object.keys(quickOps)).toEqual(expectedMethods)
     expect(featureUtil.plugin.quickOps).toBe(featureUtil.quickOps)
 
-    for (const quickOpsCase of readOnlyCases) {
+    for (const quickOpsCase of quickOpsCases) {
       await expect(quickOps[quickOpsCase.method](...quickOpsCase.args)).resolves.toEqual(response)
       expect(transport.invoke).toHaveBeenLastCalledWith(
         quickOpsCase.event,
