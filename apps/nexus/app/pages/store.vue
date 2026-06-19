@@ -61,6 +61,15 @@ const searchQuery = computed(() => {
   return ''
 })
 
+const requestedPluginSlug = computed(() => {
+  const value = route.query.plugin
+  if (Array.isArray(value))
+    return value[0]?.trim() ?? ''
+  if (typeof value === 'string')
+    return value.trim()
+  return ''
+})
+
 watch(searchQuery, (value) => {
   if (value !== filters.search)
     filters.search = value
@@ -317,6 +326,21 @@ async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement 
     detailPending.value = false
   }
 }
+
+watch(
+  [requestedPluginSlug, allPlugins],
+  ([slug, plugins]) => {
+    if (!slug || selectedSlug.value === slug)
+      return
+
+    const plugin = plugins.find(item => item.slug === slug || item.id === slug)
+    if (!plugin)
+      return
+
+    void openPluginDetail(plugin)
+  },
+  { immediate: true },
+)
 
 function closePluginDetail() {
   selectedSlug.value = null

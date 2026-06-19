@@ -3,9 +3,10 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { TxSplitButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
@@ -14,6 +15,7 @@ import PluginFab from '~/components/plugin/PluginFab.vue'
 import StatusIcon from '~/components/base/StatusIcon.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
+import { usePluginExternalLinks } from '~/composables/plugin/usePluginExternalLinks'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -34,6 +36,9 @@ const props = defineProps<{
 const transport = useTuffTransport()
 const { startupInfo } = useStartupInfo()
 const { t } = useI18n()
+const appSdk = useAppSdk()
+const pluginRef = toRef(props, 'plugin')
+const { nexusPublishUrl } = usePluginExternalLinks(pluginRef)
 const pluginInfoLog = createRendererLogger('PluginInfo')
 
 // Tabs state
@@ -157,6 +162,11 @@ async function handleOpenDevTools(): Promise<void> {
   } finally {
     loadingStates.value.openDevTools = false
   }
+}
+
+function openNexusPublishPage(): void {
+  if (!nexusPublishUrl.value) return
+  void appSdk.openExternal(nexusPublishUrl.value)
 }
 
 // Uninstall confirmation
@@ -328,6 +338,14 @@ async function handlePrimaryAction(): Promise<void> {
                 <i class="i-ri-loader-4-line animate-spin" />
                 {{ t('plugin.actions.running') }}
               </span>
+              <button
+                v-if="nexusPublishUrl"
+                type="button"
+                class="PluginInfo-LinkText"
+                @click="openNexusPublishPage"
+              >
+                {{ t('plugin.details.openPublishPage') }}
+              </button>
             </div>
           </div>
         </div>
@@ -561,6 +579,24 @@ async function handlePrimaryAction(): Promise<void> {
 
   i {
     font-size: 13px;
+  }
+}
+
+.PluginInfo-LinkText {
+  flex-shrink: 0;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--tx-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 }
 

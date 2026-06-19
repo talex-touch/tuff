@@ -5,6 +5,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCodeEditor } from '@talex-touch/tuffex/code-editor'
 import { TxEmpty } from '@talex-touch/tuffex/empty'
 import { TxTag } from '@talex-touch/tuffex/tag'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { toast } from 'vue-sonner'
 import { onMounted, reactive, toRef, watch } from 'vue'
@@ -17,6 +18,7 @@ import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { usePluginExternalLinks } from '~/composables/plugin/usePluginExternalLinks'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
@@ -29,6 +31,7 @@ const props = defineProps<{
 const plugin = toRef(props, 'plugin')
 const { t } = useI18n()
 const { startupInfo } = useStartupInfo()
+const appSdk = useAppSdk()
 const pluginDetailsLog = createRendererLogger('PluginDetails')
 
 interface DevSettingsForm {
@@ -39,6 +42,7 @@ interface DevSettingsForm {
 }
 
 const manifestData = ref<Record<string, unknown> | null>(null)
+const { githubRepositoryUrl } = usePluginExternalLinks(plugin, { manifest: manifestData })
 const devSettingsLoading = ref(false)
 const isSaving = ref(false)
 const devSettings = reactive<DevSettingsForm>({
@@ -195,6 +199,11 @@ async function loadDetails(): Promise<void> {
   }
 }
 
+function openExternalUrl(url: string): void {
+  if (!url) return
+  void appSdk.openExternal(url)
+}
+
 async function loadShortcuts() {
   shortcutsLoading.value = true
   try {
@@ -331,6 +340,25 @@ function openManifestDialog(event: MouseEvent): void {
       </TuffBlockLine>
 
       <TuffBlockLine :title="t('plugin.details.description')" :description="pluginDescription" />
+
+      <TuffBlockSlot
+        v-if="githubRepositoryUrl"
+        :title="t('plugin.details.resourceLinks')"
+        :description="t('plugin.details.resourceLinksDesc')"
+        default-icon="i-carbon-link"
+        active-icon="i-carbon-link"
+      >
+        <div class="PluginDetails-LinkActions">
+          <TxButton
+            v-if="githubRepositoryUrl"
+            variant="flat"
+            @click="openExternalUrl(githubRepositoryUrl)"
+          >
+            <i class="i-ri-github-line" />
+            <span>{{ t('plugin.details.openRepository') }}</span>
+          </TxButton>
+        </div>
+      </TuffBlockSlot>
 
       <TuffBlockLine v-if="sdkBlocked" :title="t('plugin.details.loadState')">
         <template #description>
@@ -545,6 +573,14 @@ function openManifestDialog(event: MouseEvent): void {
   gap: 8px;
   flex-wrap: wrap;
   color: var(--tx-text-color-primary);
+}
+
+.PluginDetails-LinkActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .PluginShortcuts-Loading {
