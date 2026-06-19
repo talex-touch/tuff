@@ -97,6 +97,54 @@ export interface EverythingTestResponse {
   durationByStage?: Partial<Record<EverythingDiagnosticStage, number>>
 }
 
+export type EverythingInstallPhase =
+  | 'idle'
+  | 'queued'
+  | 'downloading'
+  | 'verifying'
+  | 'extracting'
+  | 'configuring-path'
+  | 'probing'
+  | 'completed'
+  | 'failed'
+  | 'unsupported'
+
+export interface EverythingInstallTaskIds {
+  everything?: string | null
+  cli?: string | null
+}
+
+export interface EverythingInstallAssetDetail {
+  type: 'everything' | 'cli'
+  filename: string
+  url: string
+  sha256: string
+  destination: string
+  taskId?: string | null
+}
+
+export interface EverythingInstallStatusResponse {
+  jobId: string | null
+  phase: EverythingInstallPhase
+  taskIds: EverythingInstallTaskIds
+  progress: number | null
+  message: string | null
+  error: string | null
+  startedAt: number | null
+  updatedAt: number | null
+  completedAt: number | null
+  installDir: string | null
+  cliDir: string | null
+  cliPath: string | null
+  pathConfigured: boolean
+  assets: EverythingInstallAssetDetail[]
+}
+
+export interface EverythingInstallStartResponse {
+  success: boolean
+  status: EverythingInstallStatusResponse
+}
+
 export const everythingStatusEvent = defineRawEvent<
   EverythingStatusRequest | void,
   EverythingStatusResponse
@@ -113,3 +161,11 @@ export const everythingSetCliPathEvent = defineRawEvent<
 >('everything:set-cli-path')
 
 export const everythingTestEvent = defineRawEvent<void, EverythingTestResponse>('everything:test')
+
+export const everythingInstallStartEvent = defineRawEvent<void, EverythingInstallStartResponse>(
+  'everything:install-start'
+)
+
+export const everythingInstallStatusEvent = defineRawEvent<void, EverythingInstallStatusResponse>(
+  'everything:install-status'
+)

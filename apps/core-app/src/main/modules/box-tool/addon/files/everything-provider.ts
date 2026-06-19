@@ -1,4 +1,5 @@
 import type {
+  DownloadTask,
   IExecuteArgs,
   IProviderActivate,
   ISearchProvider,
@@ -10,6 +11,7 @@ import type {
 import type { FileSearchContextCandidate } from '@talex-touch/utils/transport/events/types/core-box'
 import type { ProviderContext } from '../../search-engine/types'
 import { execFile } from 'node:child_process'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -17,6 +19,9 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import {
+  DownloadModule,
+  DownloadPriority,
+  DownloadStatus,
   StorageList,
   TuffInputType,
   TuffItemBuilder,
@@ -26,17 +31,23 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { shell } from 'electron'
 import {
+  everythingInstallStartEvent,
+  everythingInstallStatusEvent,
   everythingSetCliPathEvent,
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent,
+  type EverythingInstallAssetDetail,
+  type EverythingInstallStatusResponse,
   type EverythingStatusResponse,
   type EverythingBackendType,
   type EverythingPathFilteringStatus
 } from '../../../../../shared/events/everything'
+import compressing from 'compressing'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
+import { downloadCenterModule } from '../../../download/download-center'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { indexingRootPolicy } from '../../search-engine/indexing-root-policy'
 import { searchLogger } from '../../search-engine/search-logger'
@@ -61,6 +72,47 @@ const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
 const EVERYTHING_ICON_WARMUP_LIMIT = 12
 const EVERYTHING_STARTUP_READY_WAIT_MS = 3_000
+const EVERYTHING_INSTALL_POLL_MS = 500
+const EVERYTHING_INSTALL_SOURCE = 'everything-install'
+
+type EverythingInstallAssetType = 'everything' | 'cli'
+
+interface EverythingInstallAssetSpec {
+  type: EverythingInstallAssetType
+  filename: string
+  url: string
+  sha256: string
+}
+
+interface EverythingInstallJobState extends EverythingInstallStatusResponse {
+  promise?: Promise<void>
+}
+
+type DownloadCenterRuntime = {
+  addTask: (request: {
+    id?: string
+    url: string
+    destination: string
+    filename?: string
+    priority: DownloadPriority
+    module: DownloadModule
+    metadata?: Record<string, unknown>
+    checksum?: string
+  }) => Promise<string>
+  getTaskStatus: (taskId: string) => DownloadTask | null
+}
+
+const EVERYTHING_INSTALL_HASHES: Record<string, string> = {
+  'Everything-1.4.1.1032.x64.zip':
+    '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c',
+  'Everything-1.4.1.1032.x86.zip':
+    '156db5beb747d69470518a7b9b55af11efc4d3285ddb7cc013c0cc13ced5f237',
+  'Everything-1.4.1.1032.ARM64.zip':
+    '23dca1a64574bf30c9988bbaf5f1d201a0ec7ee9a15e12270ae92a52183cccc8',
+  'ES-1.1.0.30.x64.zip': '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268',
+  'ES-1.1.0.30.x86.zip': '7e9f04cb92e9eb0440655a395537b204e98e3accd5335e610649d323b15f5117',
+  'ES-1.1.0.30.ARM64.zip': 'af5f02b29d6e91b7e70d3b6809bbfe931af671d981e060ecb4f015c30f9697b9'
+}
 
 function usesWindowsSeparators(filePath: string): boolean {
   return filePath.includes('\\')
@@ -76,6 +128,44 @@ function extnameForResult(filePath: string): string {
 
 function joinForResult(dirPath: string, name: string): string {
   return usesWindowsSeparators(dirPath) ? path.win32.join(dirPath, name) : path.join(dirPath, name)
+}
+
+function resolveWindowsNativeArch(): 'x64' | 'x86' | 'ARM64' {
+  const nativeArch = process.env.PROCESSOR_ARCHITEW6432 || process.env.PROCESSOR_ARCHITECTURE
+  if (nativeArch === 'ARM64') return 'ARM64'
+  if (nativeArch === 'x86') return 'x86'
+  return 'x64'
+}
+
+function buildEverythingInstallAssets(): EverythingInstallAssetSpec[] {
+  const arch = resolveWindowsNativeArch()
+  const everythingFilename =
+    arch === 'ARM64'
+      ? 'Everything-1.4.1.1032.ARM64.zip'
+      : arch === 'x86'
+        ? 'Everything-1.4.1.1032.x86.zip'
+        : 'Everything-1.4.1.1032.x64.zip'
+  const cliFilename =
+    arch === 'ARM64'
+      ? 'ES-1.1.0.30.ARM64.zip'
+      : arch === 'x86'
+        ? 'ES-1.1.0.30.x86.zip'
+        : 'ES-1.1.0.30.x64.zip'
+
+  return [
+    {
+      type: 'everything',
+      filename: everythingFilename,
+      url: `https://www.voidtools.com/${everythingFilename}`,
+      sha256: EVERYTHING_INSTALL_HASHES[everythingFilename]
+    },
+    {
+      type: 'cli',
+      filename: cliFilename,
+      url: `https://www.voidtools.com/${cliFilename}`,
+      sha256: EVERYTHING_INSTALL_HASHES[cliFilename]
+    }
+  ]
 }
 
 interface EverythingSearchResult {
@@ -152,6 +242,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private startupRefreshPromise: Promise<void> | null = null
   private readonly diagnosticsTracker = new EverythingDiagnosticsTracker()
   private readonly iconCache = new EverythingIconCache()
+  private installJob: EverythingInstallJobState | null = null
   readonly iconExtractions = { clear: () => this.iconCache.clear() }
 
   get diagnostics() {
@@ -263,6 +354,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   async onLoad(context: ProviderContext): Promise<void> {
     if (process.platform !== 'win32') {
+      this.registerChannels(context)
       this.logInfo('Everything provider is Windows-only, skipping initialization')
       return
     }
@@ -329,6 +421,424 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     if (typeof value !== 'string') return null
     const trimmed = value.trim()
     return trimmed || null
+  }
+
+  private resolveInstallPaths(): {
+    downloadDir: string
+    installDir: string
+    cliDir: string
+    cliPath: string
+    everythingExe: string
+  } {
+    const localAppData =
+      process.env.LOCALAPPDATA ||
+      (process.env.USERPROFILE
+        ? path.join(process.env.USERPROFILE, 'AppData', 'Local')
+        : process.cwd())
+    const root = path.join(localAppData, 'Tuff')
+    const cliDir = path.join(root, 'EverythingCLI')
+    const installDir = path.join(root, 'Everything')
+
+    return {
+      downloadDir: path.join(root, 'Downloads', 'dependencies', 'everything'),
+      installDir,
+      cliDir,
+      cliPath: path.join(cliDir, 'es.exe'),
+      everythingExe: path.join(installDir, 'Everything.exe')
+    }
+  }
+
+  private getDownloadCenter(): DownloadCenterRuntime {
+    return downloadCenterModule
+  }
+
+  private createInstallAssetDetails(
+    assets: EverythingInstallAssetSpec[],
+    paths = this.resolveInstallPaths()
+  ): EverythingInstallAssetDetail[] {
+    return assets.map((asset) => ({
+      type: asset.type,
+      filename: asset.filename,
+      url: asset.url,
+      sha256: asset.sha256,
+      destination: paths.downloadDir,
+      taskId: null
+    }))
+  }
+
+  private createInstallJob(): EverythingInstallJobState {
+    const now = Date.now()
+    const paths = this.resolveInstallPaths()
+    const assets = this.createInstallAssetDetails(buildEverythingInstallAssets(), paths)
+
+    return {
+      jobId: randomUUID(),
+      phase: 'queued',
+      taskIds: {
+        everything: null,
+        cli: null
+      },
+      progress: 0,
+      message: 'Queued Everything installer downloads.',
+      error: null,
+      startedAt: now,
+      updatedAt: now,
+      completedAt: null,
+      installDir: paths.installDir,
+      cliDir: paths.cliDir,
+      cliPath: paths.cliPath,
+      pathConfigured: false,
+      assets
+    }
+  }
+
+  private createIdleInstallStatus(): EverythingInstallStatusResponse {
+    const paths = this.resolveInstallPaths()
+    return {
+      jobId: null,
+      phase: process.platform === 'win32' ? 'idle' : 'unsupported',
+      taskIds: {
+        everything: null,
+        cli: null
+      },
+      progress: null,
+      message:
+        process.platform === 'win32'
+          ? null
+          : 'Everything automatic install is only supported on Windows.',
+      error: process.platform === 'win32' ? null : 'Everything install is Windows-only.',
+      startedAt: null,
+      updatedAt: null,
+      completedAt: null,
+      installDir: process.platform === 'win32' ? paths.installDir : null,
+      cliDir: process.platform === 'win32' ? paths.cliDir : null,
+      cliPath: process.platform === 'win32' ? paths.cliPath : null,
+      pathConfigured: false,
+      assets:
+        process.platform === 'win32'
+          ? this.createInstallAssetDetails(buildEverythingInstallAssets(), paths)
+          : []
+    }
+  }
+
+  private toInstallStatusResponse(job: EverythingInstallJobState): EverythingInstallStatusResponse {
+    return {
+      jobId: job.jobId,
+      phase: job.phase,
+      taskIds: {
+        everything: job.taskIds.everything ?? null,
+        cli: job.taskIds.cli ?? null
+      },
+      progress: job.progress,
+      message: job.message,
+      error: job.error,
+      startedAt: job.startedAt,
+      updatedAt: job.updatedAt,
+      completedAt: job.completedAt,
+      installDir: job.installDir,
+      cliDir: job.cliDir,
+      cliPath: job.cliPath,
+      pathConfigured: job.pathConfigured,
+      assets: job.assets.map((asset) => ({ ...asset }))
+    }
+  }
+
+  private updateInstallJob(
+    job: EverythingInstallJobState,
+    updates: Partial<Omit<EverythingInstallJobState, 'jobId' | 'startedAt' | 'assets'>>
+  ): void {
+    Object.assign(job, updates, {
+      updatedAt: Date.now()
+    })
+  }
+
+  private isInstallJobActive(
+    job: EverythingInstallJobState | null
+  ): job is EverythingInstallJobState {
+    if (!job) return false
+    return !['completed', 'failed', 'unsupported'].includes(job.phase)
+  }
+
+  private async startEverythingInstall(): Promise<{
+    success: boolean
+    status: EverythingInstallStatusResponse
+  }> {
+    if (process.platform !== 'win32') {
+      const job: EverythingInstallJobState = {
+        ...this.createIdleInstallStatus(),
+        jobId: randomUUID(),
+        phase: 'unsupported',
+        startedAt: Date.now(),
+        updatedAt: Date.now()
+      }
+      this.installJob = job
+      return {
+        success: false,
+        status: this.toInstallStatusResponse(job)
+      }
+    }
+
+    const activeInstallJob = this.installJob
+    if (this.isInstallJobActive(activeInstallJob)) {
+      return {
+        success: true,
+        status: this.toInstallStatusResponse(activeInstallJob)
+      }
+    }
+
+    const job = this.createInstallJob()
+    this.installJob = job
+    job.promise = this.runEverythingInstallJob(job).catch((error) => {
+      const message = getErrorMessage(error)
+      this.updateInstallJob(job, {
+        phase: 'failed',
+        progress: null,
+        message,
+        error: message,
+        completedAt: Date.now()
+      })
+      this.logError('Everything automatic install failed', error)
+    })
+
+    return {
+      success: true,
+      status: this.toInstallStatusResponse(job)
+    }
+  }
+
+  private getInstallStatusSnapshot(): EverythingInstallStatusResponse {
+    return this.installJob
+      ? this.toInstallStatusResponse(this.installJob)
+      : this.createIdleInstallStatus()
+  }
+
+  private async runEverythingInstallJob(job: EverythingInstallJobState): Promise<void> {
+    const paths = this.resolveInstallPaths()
+    const downloadCenter = this.getDownloadCenter()
+
+    await fs.mkdir(paths.downloadDir, { recursive: true })
+
+    const taskIds: Record<EverythingInstallAssetType, string> = {
+      everything: '',
+      cli: ''
+    }
+
+    for (const asset of job.assets) {
+      const taskId = await downloadCenter.addTask({
+        url: asset.url,
+        destination: asset.destination,
+        filename: asset.filename,
+        priority: DownloadPriority.CRITICAL,
+        module: DownloadModule.RESOURCE_DOWNLOAD,
+        checksum: asset.sha256,
+        metadata: {
+          source: EVERYTHING_INSTALL_SOURCE,
+          assetType: asset.type,
+          sha256: asset.sha256,
+          allowUnknownSize: true
+        }
+      })
+      asset.taskId = taskId
+      taskIds[asset.type] = taskId
+    }
+
+    this.updateInstallJob(job, {
+      phase: 'downloading',
+      taskIds: {
+        everything: taskIds.everything,
+        cli: taskIds.cli
+      },
+      progress: 0,
+      message: 'Downloading Everything portable packages.'
+    })
+
+    await this.waitForInstallDownloads(job, downloadCenter)
+
+    this.updateInstallJob(job, {
+      phase: 'verifying',
+      progress: 70,
+      message: 'Verifying Everything package checksums.'
+    })
+    await this.verifyInstallAssets(job)
+
+    this.updateInstallJob(job, {
+      phase: 'extracting',
+      progress: 80,
+      message: 'Extracting Everything and es.exe.'
+    })
+    await fs.mkdir(paths.installDir, { recursive: true })
+    await fs.mkdir(paths.cliDir, { recursive: true })
+    for (const asset of job.assets) {
+      const targetDir = asset.type === 'everything' ? paths.installDir : paths.cliDir
+      await compressing.zip.uncompress(path.join(asset.destination, asset.filename), targetDir)
+    }
+
+    this.updateInstallJob(job, {
+      phase: 'probing',
+      progress: 86,
+      message: 'Verifying es.exe.'
+    })
+    await this.probeEverythingCli(paths.cliPath)
+
+    this.updateInstallJob(job, {
+      phase: 'configuring-path',
+      progress: 88,
+      message: 'Configuring Everything CLI path.'
+    })
+    await this.ensureUserPathContains(paths.cliDir)
+    job.pathConfigured = true
+
+    this.updateInstallJob(job, {
+      phase: 'probing',
+      progress: 94,
+      message: 'Saving Everything CLI path and refreshing backend.'
+    })
+    this.configuredCliPath = paths.cliPath
+    this.saveSettings()
+    this.startEverythingPortable(paths.everythingExe)
+
+    if (this.isEnabled) {
+      await this.refreshBackendState('manual-check')
+    }
+
+    this.updateInstallJob(job, {
+      phase: 'completed',
+      progress: 100,
+      message: 'Everything is installed and ready.',
+      error: null,
+      completedAt: Date.now(),
+      cliPath: paths.cliPath
+    })
+  }
+
+  private async waitForInstallDownloads(
+    job: EverythingInstallJobState,
+    downloadCenter: DownloadCenterRuntime
+  ): Promise<void> {
+    const taskIds = job.assets
+      .map((asset) => asset.taskId)
+      .filter((taskId): taskId is string => Boolean(taskId))
+
+    if (taskIds.length !== job.assets.length) {
+      throw new Error('Everything install download tasks were not created')
+    }
+
+    while (true) {
+      const tasks = taskIds.map((taskId) => {
+        const task = downloadCenter.getTaskStatus(taskId)
+        if (!task) {
+          throw new Error(`Everything install download task not found: ${taskId}`)
+        }
+        return task
+      })
+
+      const failedTask = tasks.find((task) => task.status === DownloadStatus.FAILED)
+      if (failedTask) {
+        throw new Error(
+          failedTask.error || `Everything install download failed: ${failedTask.filename}`
+        )
+      }
+
+      const cancelledTask = tasks.find((task) => task.status === DownloadStatus.CANCELLED)
+      if (cancelledTask) {
+        throw new Error(`Everything install download was cancelled: ${cancelledTask.filename}`)
+      }
+
+      const averageProgress =
+        tasks.reduce((sum, task) => sum + Math.max(0, task.progress?.percentage ?? 0), 0) /
+        Math.max(1, tasks.length)
+      this.updateInstallJob(job, {
+        phase: 'downloading',
+        progress: Math.min(69, Math.round(averageProgress * 0.69)),
+        message: 'Downloading Everything portable packages.'
+      })
+
+      if (tasks.every((task) => task.status === DownloadStatus.COMPLETED)) {
+        return
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, EVERYTHING_INSTALL_POLL_MS))
+    }
+  }
+
+  private async verifyInstallAssets(job: EverythingInstallJobState): Promise<void> {
+    for (const asset of job.assets) {
+      const filePath = path.join(asset.destination, asset.filename)
+      const actualHash = await this.calculateFileSha256(filePath)
+      if (actualHash.toLowerCase() !== asset.sha256.toLowerCase()) {
+        throw new Error(
+          `Checksum mismatch for ${asset.filename}: expected ${asset.sha256}, got ${actualHash}`
+        )
+      }
+    }
+  }
+
+  private async calculateFileSha256(filePath: string): Promise<string> {
+    const buffer = await fs.readFile(filePath)
+    return createHash('sha256').update(buffer).digest('hex')
+  }
+
+  private async ensureUserPathContains(cliDir: string): Promise<void> {
+    const script = [
+      "$ErrorActionPreference='Stop'",
+      '$cliDir=$env:TUFF_EVERYTHING_CLI_DIR',
+      "if(-not $cliDir){throw 'Missing Everything CLI directory'}",
+      "$userPath=[Environment]::GetEnvironmentVariable('Path','User')",
+      '$parts=@()',
+      "if($userPath){$parts=$userPath -split ';' | Where-Object { $_ -and $_.Trim() }}",
+      '$normalizedCli=$cliDir.Trim().TrimEnd("\\")',
+      '$already=$false',
+      'foreach($part in $parts){',
+      '  if([string]::Equals($part.Trim().TrimEnd("\\"), $normalizedCli, [System.StringComparison]::OrdinalIgnoreCase)){',
+      '    $already=$true',
+      '    break',
+      '  }',
+      '}',
+      'if(-not $already){',
+      "  [Environment]::SetEnvironmentVariable('Path', (($parts + $cliDir) -join ';'), 'User')",
+      '}',
+      "if($already){'already'}else{'added'}"
+    ].join('\n')
+
+    await execFileAsync(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      {
+        timeout: 5000,
+        windowsHide: true,
+        env: {
+          ...process.env,
+          TUFF_EVERYTHING_CLI_DIR: cliDir
+        }
+      }
+    )
+
+    const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'Path'
+    const currentPath = process.env[pathKey] || ''
+    const currentParts = currentPath.split(';').filter(Boolean)
+    const hasCliDir = currentParts.some((part) => {
+      return (
+        part
+          .trim()
+          .replace(/[\\/]+$/, '')
+          .toLowerCase() ===
+        cliDir
+          .trim()
+          .replace(/[\\/]+$/, '')
+          .toLowerCase()
+      )
+    })
+    if (!hasCliDir) {
+      process.env[pathKey] = [...currentParts, cliDir].join(';')
+    }
+  }
+
+  private startEverythingPortable(everythingExe: string): void {
+    execFile(everythingExe, ['-startup'], { windowsHide: true }, (error) => {
+      if (error) {
+        this.logWarn('Failed to start Everything portable after install', error)
+      }
+    })
   }
 
   private getHealthStatus(): {
@@ -433,11 +943,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const transport = getTuffTransportMain(channel, keyManager)
 
     transport.on(everythingStatusEvent, async (payload) => {
-      if (payload?.refresh) {
+      if (payload?.refresh && process.platform === 'win32') {
         await this.refreshBackendState('manual-check')
       }
 
       return this.getStatusSnapshot()
+    })
+
+    transport.on(everythingInstallStartEvent, async () => {
+      return this.startEverythingInstall()
+    })
+
+    transport.on(everythingInstallStatusEvent, async () => {
+      return this.getInstallStatusSnapshot()
     })
 
     transport.on(everythingToggleEvent, async (payload) => {
@@ -470,7 +988,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       this.configuredCliPath = nextCliPath
       this.saveSettings()
 
-      if (this.isEnabled) {
+      if (this.isEnabled && process.platform === 'win32') {
         await this.refreshBackendState('manual-check')
       }
 
