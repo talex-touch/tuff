@@ -506,7 +506,7 @@ describe('everything-provider fallback chain', () => {
     )
   })
 
-  it('returns slim Everything results and warms icons without inline icon payloads', async () => {
+  it('returns slim Everything results and reuses warmed icons after initial placeholder', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
     provider.isAvailable = true
@@ -534,8 +534,8 @@ describe('everything-provider fallback chain', () => {
     )
 
     expect(second.items?.[0]?.render?.basic?.icon).toEqual({
-      type: 'class',
-      value: 'i-ri-file-line'
+      type: 'url',
+      value: 'data:image/png;base64,aWNvbi1ieXRlcw=='
     })
     expect(iconWorkerExtract).toHaveBeenCalledTimes(1)
     expect(appTaskWaitForIdle).toHaveBeenCalledTimes(1)

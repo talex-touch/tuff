@@ -15,10 +15,6 @@ import {
   VIDEO_THUMBNAIL_EXTENSIONS,
   normalizeExtension
 } from './thumbnail-config'
-import {
-  QUICK_OPS_FILE_BASE64_ACTION_ID,
-  QUICK_OPS_FILE_HASH_ACTION_ID
-} from './quick-ops-file-actions'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
@@ -140,16 +136,6 @@ export function mapFileToTuffItem(
         payload: {
           path: path.dirname(file.path)
         }
-      },
-      {
-        id: QUICK_OPS_FILE_HASH_ACTION_ID,
-        type: 'execute',
-        label: 'Copy Hashes'
-      },
-      {
-        id: QUICK_OPS_FILE_BASE64_ACTION_ID,
-        type: 'execute',
-        label: 'Copy Base64'
       },
       ...buildQuickOpsFilePathActions(file.path)
     ],

@@ -99,7 +99,6 @@ import {
   WHITELISTED_EXTENSIONS
 } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
-import { executeQuickOpsFileAction, isQuickOpsFileExecuteAction } from './quick-ops-file-actions'
 import {
   THUMBNAIL_EXTENSIONS,
   getThumbnailUnsupportedReason,
@@ -3818,21 +3817,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!filePath) {
       const err = new Error('File path not found in TuffItem')
       this.logError('File path missing for execution request', err)
-      return null
-    }
-
-    if (isQuickOpsFileExecuteAction(args.actionId)) {
-      try {
-        await executeQuickOpsFileAction(args.actionId, filePath, {
-          warn: (message, meta) => this.logWarn(message, undefined, meta),
-          error: (message, error, meta) => this.logError(message, error, meta)
-        })
-      } catch (err) {
-        this.logError('QuickOps file action failed', err, {
-          path: filePath,
-          actionId: args.actionId
-        })
-      }
       return null
     }
 

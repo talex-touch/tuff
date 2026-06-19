@@ -67,6 +67,12 @@ code: |
 | `pathFormat({ path, filePath?, text? })` | 只读 | 原始路径、Shell 路径、file URL、Windows/WSL 互转格式 |
 | `formatText({ text, mode })` | 只读 | 大小写 / 命名风格转换 |
 
+## Files Input 路由
+
+官方 `plugins/touch-quickops` manifest 已声明 `acceptedInputTypes: ["text", "files"]`。当 CoreBox 查询带 Files input 时，插件会解析 `query.inputs[].type === "files"` 的 JSON 字符串数组，并把首个有效文件路径作为 `fileHash()`、`fileBase64()` 或 `pathFormat()` 的默认 `path`；显式命令里的路径仍优先于 Files input。
+
+当前 CoreApp 文件搜索 provider 只负责索引、打开文件、打开所在目录和路径复制类通用动作。QuickOps Hash/Base64 的结果渲染和命令路由必须放在官方插件里，不要把新的 QuickOps execute action 加回文件搜索结果或 provider `onExecute()` 分支。
+
 ## 选择扩展路径
 
 先判断你是在“组合 QuickOps”还是“修改官方 QuickOps 能力”。普通插件默认只组合，不改 `quickops.*` 命名空间。
@@ -237,7 +243,7 @@ code: |
 
 只有维护仓库时才应该修改官方 QuickOps。新增或调整通用能力时，优先迁入 `plugins/touch-quickops`；仍依赖 Electron / OS 的部分必须通过 CoreApp host capability 暴露。
 
-当前官方插件已承接 CoreBox root-result 入口、更多只读面板和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target。插件也承接 QuickOps Flow/AI source-level adapter contract：命令路由输出脱敏 `flowAdapterTrace`，确认型动作只提示 App UI `confirmationToken`，高风险 `kill port` 类请求 fail-closed 且没有 dispatch payload。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate 与 typed bridge；CoreApp 不再保留 QuickOps natural-language resolver 实现。后续新增可迁移入口时，优先扩展该插件的命令路由和渲染，不得重新引入 CoreApp QuickOps CoreBox provider。
+当前官方插件已承接 CoreBox root-result 入口、更多只读面板和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target；文件 Hash/Base64/path format 支持 `text` 与 `files` 输入路由。插件也承接 QuickOps Flow/AI source-level adapter contract：命令路由输出脱敏 `flowAdapterTrace`，确认型动作只提示 App UI `confirmationToken`，高风险 `kill port` 类请求 fail-closed 且没有 dispatch payload。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate 与 typed bridge；CoreApp 不再保留 QuickOps natural-language resolver 实现，也不再在文件搜索 provider 中承载 QuickOps Hash/Base64 execute action。后续新增可迁移入口时，优先扩展该插件的命令路由和渲染，不得重新引入 CoreApp QuickOps CoreBox provider 或文件搜索专用 QuickOps execute 分支。
 
 请同步以下落点：
 

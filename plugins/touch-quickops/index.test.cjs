@@ -60,6 +60,7 @@ const quickopsPlugin = loadFreshPluginModule()
 const {
   buildFlowAdapterTrace,
   buildResultItems,
+  extractFilesFromQuery,
   resolveConfirmationFlowAction,
   resolveHighRiskFlowAction,
   resolveMode,
@@ -82,6 +83,22 @@ test('resolveMode maps quickops queries to read-only views', () => {
   assert.equal(resolveMode('系统信息'), 'system-info')
   assert.equal(resolveMode('磁盘空间'), 'disk-space')
   assert.equal(resolveMode('网络状态'), 'network-status')
+  assert.equal(resolveMode({
+    text: '',
+    inputs: [{ type: 'files', content: JSON.stringify(['/tmp/demo.txt']) }],
+  }), 'path-format')
+})
+
+test('extractFilesFromQuery parses files input payloads', () => {
+  assert.deepEqual(extractFilesFromQuery('file hash'), [])
+  assert.deepEqual(extractFilesFromQuery({
+    text: 'file hash',
+    inputs: [{ type: 'files', content: JSON.stringify(['/tmp/a.txt', '', 42, '/tmp/b.txt']) }],
+  }), ['/tmp/a.txt', '/tmp/b.txt'])
+  assert.deepEqual(extractFilesFromQuery({
+    text: 'file hash',
+    inputs: [{ type: 'files', content: 'not-json' }],
+  }), [])
 })
 
 test('buildResultItems renders capability summary without mutation actions', async () => {
@@ -635,6 +652,69 @@ test('buildResultItems renders file and text read-only tools through quickOps fa
   assert.equal(textItems[0].subtitle, 'hello_world')
   assert.equal(hashItems[0].actions.length, 0)
   assert.equal(textItems[0].actions.length, 0)
+})
+
+test('buildResultItems routes files input to plugin QuickOps file tools', async () => {
+  const calls = []
+  const filesQuery = (text, files = ['/tmp/selected.txt', '/tmp/ignored.txt']) => ({
+    text,
+    inputs: [{ type: 'files', content: JSON.stringify(files) }],
+  })
+  const api = {
+    async fileHash(request) {
+      calls.push(['fileHash', request])
+      return {
+        state: 'hashed',
+        path: request.path,
+        fileName: 'selected.txt',
+        size: 5,
+        hashes: {
+          md5: 'md5-value',
+          sha1: 'sha1-value',
+          sha256: 'sha256-value',
+        },
+      }
+    },
+    async fileBase64(request) {
+      calls.push(['fileBase64', request])
+      return {
+        state: 'encoded',
+        path: request.path,
+        fileName: 'selected.txt',
+        size: 5,
+        base64: 'aGVsbG8=',
+      }
+    },
+    async pathFormat(request) {
+      calls.push(['pathFormat', request])
+      return {
+        state: 'formatted',
+        path: request.path,
+        fileName: 'selected.txt',
+        formats: {
+          raw: request.path,
+          shell: `'${request.path}'`,
+          fileUrl: 'file:///tmp/selected.txt',
+        },
+      }
+    },
+  }
+
+  const hashItems = await buildResultItems('quickops', filesQuery('file hash'), api)
+  const base64Items = await buildResultItems('quickops', filesQuery('file base64'), api)
+  const defaultItems = await buildResultItems('quickops', filesQuery(''), api)
+
+  assert.deepEqual(calls, [
+    ['fileHash', { path: '/tmp/selected.txt', text: 'file hash' }],
+    ['fileBase64', { path: '/tmp/selected.txt', text: 'file base64' }],
+    ['pathFormat', { path: '/tmp/selected.txt', text: '' }],
+  ])
+  assert.equal(hashItems[0].meta.mode, 'file-hash')
+  assert.equal(base64Items[0].meta.mode, 'file-base64')
+  assert.equal(defaultItems[0].meta.mode, 'path-format')
+  assert.equal(hashItems[0].actions.length, 0)
+  assert.equal(base64Items[0].actions.length, 0)
+  assert.equal(defaultItems[0].actions.length, 0)
 })
 
 test('buildResultItems renders degraded and unsupported read-only tools safely', async () => {

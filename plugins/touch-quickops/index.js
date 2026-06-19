@@ -217,6 +217,26 @@ function getQueryText(query) {
   return query?.text ?? ''
 }
 
+function extractFilesFromQuery(query) {
+  if (!query || typeof query !== 'object')
+    return []
+
+  const inputs = Array.isArray(query.inputs) ? query.inputs : []
+  const filesInput = inputs.find(input => input?.type === 'files')
+  if (!filesInput || typeof filesInput.content !== 'string')
+    return []
+
+  try {
+    const parsed = JSON.parse(filesInput.content)
+    if (!Array.isArray(parsed))
+      return []
+    return parsed.filter(item => typeof item === 'string' && item.trim()).map(item => item.trim())
+  }
+  catch {
+    return []
+  }
+}
+
 function stripQuickOpsPrefix(value) {
   const text = normalizeText(value)
   const lower = text.toLowerCase()
@@ -336,6 +356,13 @@ function extractFilePath(text, keywords) {
   return extractQuotedOrTrailingText(text, [
     ...keywords,
   ])
+}
+
+function resolveFileToolPath(query, text, keywords) {
+  const explicitPath = extractFilePath(text, keywords)
+  if (explicitPath)
+    return explicitPath
+  return extractFilesFromQuery(query)[0] || ''
 }
 
 function extractCommonDirectoryQuery(text) {
@@ -540,6 +567,7 @@ function formatFlowAck(ackPayload) {
 
 function resolveMode(query) {
   const text = normalizeText(getQueryText(query)).toLowerCase()
+  const hasFilesInput = extractFilesFromQuery(query).length > 0
   if (/audit|审计|flow log|delivery log/i.test(text))
     return 'audit'
   if (/diagnostics?|诊断|排障/i.test(text))
@@ -550,9 +578,9 @@ function resolveMode(query) {
     return 'port-status'
   if (/(?:deep\s+)?dns\s+(?:query\s+)?[a-z0-9.-]+\.[a-z]{2,}|(?:域名解析|解析)\s+[a-z0-9.-]+\.[a-z]{2,}/i.test(text))
     return 'dns-query'
-  if (/(?:file\s+hash|hash\s+file|hash)\s+|文件\s*hash|文件校验/i.test(text))
+  if (/(?:^|\b)(?:file\s+hash|hash\s+file|hash)(?:\b|$)|文件\s*hash|文件校验/i.test(text))
     return 'file-hash'
-  if (/(?:file\s+base64|base64\s+file)\s+|文件\s*base64/i.test(text))
+  if (/(?:^|\b)(?:file\s+base64|base64\s+file)(?:\b|$)|文件\s*base64/i.test(text))
     return 'file-base64'
   if (/recent\s+download|latest\s+download|最近下载|最新下载/i.test(text))
     return 'recent-download'
@@ -578,6 +606,8 @@ function resolveMode(query) {
     return 'system-proxy'
   if (/session|quick\s*ops?\s+status|running|会话|运行|快捷工具.*状态|本地快捷工具.*状态/i.test(text))
     return 'sessions'
+  if (hasFilesInput)
+    return 'path-format'
   return 'capabilities'
 }
 
@@ -1148,7 +1178,13 @@ async function buildReadOnlyToolItems(featureId, mode, api, query) {
       'fileHash',
       response => buildFileHashItems(featureId, response),
       {
-        path: extractFilePath(queryText, ['file hash', 'hash file', 'hash', '文件 hash', '文件校验']),
+        path: resolveFileToolPath(query, queryText, [
+          'file hash',
+          'hash file',
+          'hash',
+          '文件 hash',
+          '文件校验',
+        ]),
         text: queryText,
       },
     ],
@@ -1156,7 +1192,11 @@ async function buildReadOnlyToolItems(featureId, mode, api, query) {
       'fileBase64',
       response => buildFileBase64Items(featureId, response),
       {
-        path: extractFilePath(queryText, ['file base64', 'base64 file', '文件 base64']),
+        path: resolveFileToolPath(query, queryText, [
+          'file base64',
+          'base64 file',
+          '文件 base64',
+        ]),
         text: queryText,
       },
     ],
@@ -1170,7 +1210,12 @@ async function buildReadOnlyToolItems(featureId, mode, api, query) {
       'pathFormat',
       response => buildPathFormatItems(featureId, response),
       {
-        path: extractFilePath(queryText, ['path format', 'copy path', '路径格式', '复制路径']),
+        path: resolveFileToolPath(query, queryText, [
+          'path format',
+          'copy path',
+          '路径格式',
+          '复制路径',
+        ]),
         text: queryText,
       },
     ],
@@ -1367,6 +1412,7 @@ module.exports = {
     buildSessionItems,
     buildSystemInfoItems,
     buildNetworkStatusItems,
+    extractFilesFromQuery,
     buildFlowActionItem,
     buildConfirmationRequiredItems,
     buildHighRiskBlockedItems,

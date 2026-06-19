@@ -9,7 +9,7 @@
 3. 选择结果执行、复制结果，或进入 Action Panel 查看可用动作。
 4. 在设置页的 Tools / QuickOps 区域调整默认时长和本地策略开关。
 
-当前 QuickOps 不需要用户额外安装插件；官方 `touch-quickops` 已承接 CoreBox root-result 入口、只读面板和低风险状态控制触发：能力摘要、运行会话、审计摘要、系统信息、脱敏诊断、磁盘空间、目录占用、网络状态、本机 IP、端口状态、DNS 查询、文件 Hash、文件 Base64、最近下载、常用目录、路径格式、文本格式化、电池状态、系统代理，以及 stop/pause/resume/lap/reset 这类当前会话控制。插件会把 `kill port` 这类高风险输入直接显示为 blocked，不会生成执行动作；需要排查端口时请使用 `port 3000` 查看只读状态和 copy-only 命令。现有状态型 runtime、Flow target、confirmation、settings 和 platform host capability 仍在 CoreApp 本地能力里，并以 `quickOpsRuntime` host boundary 保留。后续会把更多 QuickOps 业务 runtime、状态/诊断面板、settings 入口和可扩展编排迁到官方插件或插件专属 runtime boundary。普通插件和 Flow 仍只能通过受控 SDK / Flow target 读取或触发已开放能力。
+当前 QuickOps 不需要用户额外安装插件；官方 `touch-quickops` 已承接 CoreBox root-result 入口、只读面板和低风险状态控制触发：能力摘要、运行会话、审计摘要、系统信息、脱敏诊断、磁盘空间、目录占用、网络状态、本机 IP、端口状态、DNS 查询、文件 Hash、文件 Base64、最近下载、常用目录、路径格式、文本格式化、电池状态、系统代理，以及 stop/pause/resume/lap/reset 这类当前会话控制。插件也接受 Files input：选中文件后输入 `file hash`、`file base64` 或 `path format` 会通过插件路由到对应只读面板，当前默认处理首个选中文件。文件搜索结果本身只保留打开文件、打开所在目录和路径复制类通用动作，不再由 CoreApp 文件搜索结果直接承载 QuickOps Hash/Base64 execute 动作。插件会把 `kill port` 这类高风险输入直接显示为 blocked，不会生成执行动作；需要排查端口时请使用 `port 3000` 查看只读状态和 copy-only 命令。现有状态型 runtime、Flow target、confirmation、settings 和 platform host capability 仍在 CoreApp 本地能力里，并以 `quickOpsRuntime` host boundary 保留。后续会把更多 QuickOps 业务 runtime、状态/诊断面板、settings 入口和可扩展编排迁到官方插件或插件专属 runtime boundary。普通插件和 Flow 仍只能通过受控 SDK / Flow target 读取或触发已开放能力。
 
 ## 常用命令
 
@@ -23,7 +23,7 @@
 | 屏幕清洁 | `clean screen`、`白底清洁屏幕` | 多显示器全屏遮罩，支持倒计时和长按 Esc 退出 |
 | 屏幕测试 | `red screen test`、`蓝色屏幕测试` | 复用清洁屏幕 overlay 显示纯色 |
 | 网络只读 | `local ip`、`port 3000`、`dns example.com`、`network status` | 本机地址、端口状态、DNS 和代理摘要 |
-| 文件只读 | `hash "/path"`、`file base64 "/path"`、`copy path "/path"` | Hash、Base64、路径格式复制 |
+| 文件只读 | `hash "/path"`、`file base64 "/path"`、`copy path "/path"`、选中文件后输入 `file hash` | Hash、Base64、路径格式只读面板；文件搜索结果仅保留路径复制动作 |
 | 常用目录 | `open downloads`、`open logs` | 打开受限常用目录或复制路径 |
 | 诊断信息 | `system info`、`tuff diagnostics`、`disk space` | 本地系统摘要、脱敏诊断、磁盘/目录占用 |
 | 开发者转换 | `json`、`url encode`、`base64 decode`、`case snake`、`qr code ...` | 通过 PreviewSDK 做本地纯转换 |

@@ -69,7 +69,7 @@
       ],
       "push": true,
       "priority": 8,
-      "acceptedInputTypes": ["text"],
+      "acceptedInputTypes": ["text", "files"],
       "platform": {
         "win32": true,
         "darwin": true,

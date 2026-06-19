@@ -5,6 +5,28 @@
 
 ## 2026-06-19
 
+### ref(quickops): move file actions into plugin
+
+- `plugins/touch-quickops/manifest.json`
+- `plugins/touch-quickops/index.js`
+- `plugins/touch-quickops/index.test.cjs`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.test.ts`
+- `apps/nexus/content/docs/guide/features/quickops.zh.mdc`
+- `apps/nexus/content/docs/guide/features/quickops.en.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.zh.mdc`
+- `apps/nexus/content/docs/dev/api/quickops.en.mdc`
+- `docs/plan-prd/03-features/tuff-quickops-prd.md`
+- `docs/plan-prd/TODO.md`
+  - Added `files` to the official `plugins/touch-quickops` accepted input types and routed `file hash`, `file base64`, and `path format` queries with Files input to the plugin read-only facade, using the first valid selected file as a bounded default path.
+  - Removed the CoreApp file-search-owned QuickOps Hash/Base64 execute module and provider `onExecute()` branches. File search results now keep only generic open/reveal and path copy-only actions; QuickOps file business rendering lives in the official plugin.
+  - Updated renderer action-panel coverage to keep execute action routing generic instead of using a QuickOps file-action fixture.
+  - Updated TODO, PRD, and Nexus user/developer docs to document the new plugin Files input boundary and warn against reintroducing QuickOps execute actions into CoreApp file search providers.
+
 ### ref(quickops): move Flow/AI adapter contract into plugin
 
 - `plugins/touch-quickops/index.js`

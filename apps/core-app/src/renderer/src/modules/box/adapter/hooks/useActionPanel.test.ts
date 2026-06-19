@@ -195,22 +195,22 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     const item = createItem({
       actions: [
         {
-          id: 'quick-ops-copy-file-hash',
+          id: 'run-custom-action',
           type: 'execute',
-          label: 'Copy Hashes'
+          label: 'Run Action'
         }
       ]
     })
 
     getListener(CoreBoxEvents.metaOverlay.itemAction)({
-      actionId: 'quick-ops-copy-file-hash',
+      actionId: 'run-custom-action',
       item
     })
     await flushAsyncAction()
 
     expect(state.send).toHaveBeenCalledWith(CoreBoxEvents.item.execute, {
       item: JSON.parse(JSON.stringify(item)),
-      actionId: 'quick-ops-copy-file-hash'
+      actionId: 'run-custom-action'
     })
   })
 })
