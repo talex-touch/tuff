@@ -26,7 +26,10 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'select', payload: { targetId: string; consentToken?: string }): void
+  (
+    e: 'select',
+    payload: { targetId: string; consentToken?: string; confirmationToken?: string }
+  ): void
 }>()
 
 const { t } = useI18n()
@@ -42,6 +45,8 @@ const inputRef = ref<HTMLInputElement>()
 const consentVisible = ref(false)
 const consentLoading = ref(false)
 const consentTarget = ref<FlowTargetInfo | null>(null)
+const consentRequiresAuthorization = ref(false)
+const consentRequiresExecutionConfirmation = ref(false)
 const selectorZIndex = ref(nextZIndex())
 const consentZIndex = ref(nextZIndex())
 
@@ -60,6 +65,49 @@ const filteredTargets = computed(() => {
 })
 
 const senderId = computed(() => props.payload?.context?.sourcePluginId || 'corebox')
+const consentTargetName = computed(
+  () => consentTarget.value?.pluginName || consentTarget.value?.name || t('flow.defaultTarget')
+)
+const consentDialogTitle = computed(() => {
+  if (consentRequiresAuthorization.value && consentRequiresExecutionConfirmation.value) {
+    return t('flow.authorizationAndConfirmationTitle')
+  }
+  if (consentRequiresExecutionConfirmation.value) {
+    return t('flow.executionConfirmationTitle')
+  }
+  return t('flow.consentTitle')
+})
+const consentDialogDescription = computed(() => {
+  const params = {
+    sender: senderId.value,
+    target: consentTargetName.value
+  }
+  if (consentRequiresAuthorization.value && consentRequiresExecutionConfirmation.value) {
+    return t('flow.authorizationAndConfirmationDesc', params)
+  }
+  if (consentRequiresExecutionConfirmation.value) {
+    return t('flow.executionConfirmationDesc', params)
+  }
+  return t('flow.consentDesc', params)
+})
+const onceConsentLabel = computed(() =>
+  consentRequiresExecutionConfirmation.value && consentRequiresAuthorization.value
+    ? t('flow.allowAndConfirmOnce')
+    : consentRequiresExecutionConfirmation.value
+      ? t('flow.confirmOnce')
+      : t('flow.consentOnce')
+)
+const showAlwaysConsentAction = computed(() => consentRequiresAuthorization.value)
+const primaryConsentLabel = computed(() =>
+  consentRequiresExecutionConfirmation.value && consentRequiresAuthorization.value
+    ? t('flow.confirmAndSend')
+    : consentRequiresExecutionConfirmation.value
+      ? t('flow.confirmOnce')
+      : t('flow.consentAlways')
+)
+const primaryConsentMode = computed<'once' | 'always'>(() =>
+  showAlwaysConsentAction.value ? 'always' : 'once'
+)
 
 async function loadTargets(): Promise<void> {
   loading.value = true
@@ -87,11 +135,13 @@ async function handleSelect(target: FlowTargetInfo): Promise<void> {
     senderId: senderId.value,
     targetId: target.fullId
   })
-  if (response?.success && response.data?.allowed) {
+  if (response?.success && response.data?.allowed && !response.data?.requiresConfirmation) {
     emit('select', { targetId: target.fullId })
     return
   }
   consentTarget.value = target
+  consentRequiresAuthorization.value = !(response?.success && response.data?.allowed)
+  consentRequiresExecutionConfirmation.value = response?.data?.requiresConfirmation === true
   consentVisible.value = true
 }
 
@@ -109,9 +159,15 @@ async function handleConsent(mode: 'once' | 'always'): Promise<void> {
       mode
     })
     if (response?.success) {
-      emit('select', { targetId: consentTarget.value.fullId, consentToken: response.data?.token })
+      emit('select', {
+        targetId: consentTarget.value.fullId,
+        consentToken: response.data?.token,
+        confirmationToken: response.data?.confirmationToken
+      })
       consentVisible.value = false
       consentTarget.value = null
+      consentRequiresAuthorization.value = false
+      consentRequiresExecutionConfirmation.value = false
     }
   } finally {
     consentLoading.value = false
@@ -121,6 +177,8 @@ async function handleConsent(mode: 'once' | 'always'): Promise<void> {
 function handleConsentDeny(): void {
   consentVisible.value = false
   consentTarget.value = null
+  consentRequiresAuthorization.value = false
+  consentRequiresExecutionConfirmation.value = false
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -164,6 +222,8 @@ watch(
       searchQuery.value = ''
       consentVisible.value = false
       consentTarget.value = null
+      consentRequiresAuthorization.value = false
+      consentRequiresExecutionConfirmation.value = false
       requestAnimationFrame(() => {
         inputRef.value?.focus()
       })
@@ -367,15 +427,10 @@ function getPayloadPreview(): string {
           class="relative w-[420px] bg-[var(--tx-bg-color)] rounded-xl shadow-2xl overflow-hidden p-5"
         >
           <h3 class="text-base font-semibold text-[var(--tx-text-color-primary)]">
-            {{ t('flow.consentTitle') }}
+            {{ consentDialogTitle }}
           </h3>
           <p class="mt-2 text-sm text-[var(--tx-text-color-secondary)] leading-relaxed">
-            {{
-              t('flow.consentDesc', {
-                sender: senderId,
-                target: consentTarget?.pluginName || consentTarget?.name || t('flow.defaultTarget')
-              })
-            }}
+            {{ consentDialogDescription }}
           </p>
           <div class="mt-4 flex items-center justify-end gap-2">
             <TxButton
@@ -387,20 +442,21 @@ function getPayloadPreview(): string {
               {{ t('flow.consentDeny') }}
             </TxButton>
             <TxButton
+              v-if="showAlwaysConsentAction"
               variant="bare"
               class="px-3 py-1.5 text-sm rounded-md border border-[var(--tx-border-color)] text-[var(--tx-text-color-regular)] hover:bg-[var(--tx-fill-color-light)]"
               :disabled="consentLoading"
               @click="handleConsent('once')"
             >
-              {{ t('flow.consentOnce') }}
+              {{ onceConsentLabel }}
             </TxButton>
             <TxButton
               variant="bare"
               class="px-3 py-1.5 text-sm rounded-md bg-[var(--tx-color-primary)] text-white hover:opacity-90"
               :disabled="consentLoading"
-              @click="handleConsent('always')"
+              @click="handleConsent(primaryConsentMode)"
             >
-              {{ t('flow.consentAlways') }}
+              {{ primaryConsentLabel }}
             </TxButton>
           </div>
         </div>

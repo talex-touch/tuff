@@ -238,16 +238,20 @@ export function useDetach(options: UseDetachOptions) {
     flowSessionId.value = ''
   }
 
-  async function dispatchFlow(payload: { targetId: string; consentToken?: string }): Promise<void> {
+  async function dispatchFlow(payload: {
+    targetId: string
+    consentToken?: string
+    confirmationToken?: string
+  }): Promise<void> {
     if (!flowPayload.value) return
     try {
-      const { targetId, consentToken } = payload
+      const { targetId, consentToken, confirmationToken } = payload
       const actorPluginId = resolveActorPluginId(flowPayload.value)
       const response = await transport.send(FlowEvents.dispatch, {
         senderId: 'corebox',
         actorPluginId,
         payload: flowPayload.value,
-        options: { preferredTarget: targetId, skipSelector: true, consentToken }
+        options: { preferredTarget: targetId, skipSelector: true, consentToken, confirmationToken }
       })
       if (response?.success) {
         toast.success(t('corebox.flowSent', '已发送到目标插件'))
