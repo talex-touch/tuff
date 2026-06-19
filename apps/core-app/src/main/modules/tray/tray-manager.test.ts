@@ -3,62 +3,48 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocale } from '../../utils/i18n-helper'
 
-const {
-  appMock,
-  touchEventBusMock,
-  getMainConfigMock,
-  getDockIconMock,
-  quickOpsMock,
-  trayInstances
-} = vi.hoisted(() => ({
-  trayInstances: [] as Array<{
-    setToolTip: ReturnType<typeof vi.fn>
-    on: ReturnType<typeof vi.fn>
-    setContextMenu: ReturnType<typeof vi.fn>
-    getBounds: ReturnType<typeof vi.fn>
-    destroy: ReturnType<typeof vi.fn>
-  }>,
-  appMock: {
-    on: vi.fn(),
-    off: vi.fn(),
-    removeListener: vi.fn(),
-    setActivationPolicy: vi.fn(),
-    getLocale: vi.fn(() => 'en-US'),
-    getVersion: vi.fn(() => '0.0.0-test'),
-    isPackaged: false,
-    dock: {
-      show: vi.fn(),
-      hide: vi.fn(),
-      setIcon: vi.fn(),
-      setBadge: vi.fn()
-    }
-  },
-  touchEventBusMock: {
-    on: vi.fn(),
-    off: vi.fn(),
-    emit: vi.fn()
-  },
-  getMainConfigMock: vi.fn(() => ({
-    setup: {
-      showTray: true,
-      hideDock: false
+const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock, trayInstances } =
+  vi.hoisted(() => ({
+    trayInstances: [] as Array<{
+      setToolTip: ReturnType<typeof vi.fn>
+      on: ReturnType<typeof vi.fn>
+      setContextMenu: ReturnType<typeof vi.fn>
+      getBounds: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+    }>,
+    appMock: {
+      on: vi.fn(),
+      off: vi.fn(),
+      removeListener: vi.fn(),
+      setActivationPolicy: vi.fn(),
+      getLocale: vi.fn(() => 'en-US'),
+      getVersion: vi.fn(() => '0.0.0-test'),
+      isPackaged: false,
+      dock: {
+        show: vi.fn(),
+        hide: vi.fn(),
+        setIcon: vi.fn(),
+        setBadge: vi.fn()
+      }
     },
-    window: {
-      startSilent: false
-    }
-  })),
-  getDockIconMock: vi.fn(() => ({
-    isEmpty: vi.fn(() => false)
-  })),
-  quickOpsMock: {
-    cleanup: vi.fn(),
-    subscribeSessions: vi.fn((listener: (sessions: Array<Record<string, unknown>>) => void) => {
-      listener([])
-      return vi.fn()
-    }),
-    subscribers: [] as Array<(sessions: Array<Record<string, unknown>>) => void>
-  }
-}))
+    touchEventBusMock: {
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn()
+    },
+    getMainConfigMock: vi.fn(() => ({
+      setup: {
+        showTray: true,
+        hideDock: false
+      },
+      window: {
+        startSilent: false
+      }
+    })),
+    getDockIconMock: vi.fn(() => ({
+      isEmpty: vi.fn(() => false)
+    }))
+  }))
 
 vi.mock('electron', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
@@ -143,29 +129,6 @@ vi.mock('../box-tool/core-box/manager', () => ({
   }
 }))
 
-vi.mock('../quick-ops/quick-ops-runtime-host', () => ({
-  formatDuration: (durationMs: number) => {
-    if (durationMs % 60_000 === 0) return `${Math.round(durationMs / 60_000)}分钟`
-    return `${Math.round(durationMs / 1000)}秒`
-  },
-  getSessionDisplayDurationMs: (session: {
-    durationMs?: number
-    elapsedMs?: number
-    remainingMs?: number
-    timing?: { elapsedMs?: number; remainingMs?: number }
-  }) =>
-    session.timing?.elapsedMs ??
-    session.timing?.remainingMs ??
-    session.elapsedMs ??
-    session.remainingMs ??
-    session.durationMs ??
-    0,
-  quickOpsRuntime: {
-    cleanup: quickOpsMock.cleanup,
-    subscribeSessions: quickOpsMock.subscribeSessions
-  }
-}))
-
 vi.mock('./tray-icon-provider', () => ({
   TrayIconProvider: {
     getIcon: vi.fn(() => ({
@@ -220,15 +183,6 @@ describe('TrayManager', () => {
     getDockIconMock.mockReturnValue({
       isEmpty: vi.fn(() => false)
     })
-    quickOpsMock.cleanup.mockReset()
-    quickOpsMock.subscribers.length = 0
-    quickOpsMock.subscribeSessions.mockImplementation(
-      (listener: (sessions: Array<Record<string, unknown>>) => void) => {
-        quickOpsMock.subscribers.push(listener)
-        listener([])
-        return vi.fn()
-      }
-    )
   })
 
   it('initializes tray runtime even without experimental flag', async () => {
@@ -444,96 +398,6 @@ describe('TrayManager', () => {
     trayManager.initializeTray()
 
     expect(trayInstances[0]?.setToolTip).toHaveBeenCalledWith('Tuff')
-  })
-
-  it('shows QuickOps idle state in tray menu', () => {
-    const mainWindow = {
-      on: vi.fn(),
-      removeListener: vi.fn(),
-      isVisible: vi.fn(() => true),
-      isDestroyed: vi.fn(() => false),
-      show: vi.fn(),
-      hide: vi.fn(),
-      focus: vi.fn(),
-      isFocused: vi.fn(() => false),
-      webContents: {}
-    }
-    const trayManager = new TrayManager() as unknown as {
-      touchApp: {
-        window: { window: typeof mainWindow }
-        channel: unknown
-        config: { data: Record<string, unknown> }
-        isQuitting: boolean
-        version: string
-      }
-      menuBuilder: { setTouchApp: (touchApp: unknown) => void }
-      initializeTray: () => void
-    }
-
-    setLocale('zh-CN')
-    trayManager.touchApp = {
-      window: { window: mainWindow },
-      channel: {},
-      config: { data: {} },
-      isQuitting: false,
-      version: 'dev'
-    }
-    trayManager.menuBuilder.setTouchApp(trayManager.touchApp)
-
-    trayManager.initializeTray()
-
-    const menuLabels = trayInstances[0]?.setContextMenu.mock.calls[0]?.[0].map(
-      (item: { label?: string }) => item.label
-    )
-    expect(menuLabels).toContain('QuickOps 无运行会话')
-  })
-
-  it('updates tray menu with running QuickOps sessions and stop-all action', async () => {
-    const mainWindow = {
-      on: vi.fn(),
-      removeListener: vi.fn(),
-      isVisible: vi.fn(() => true),
-      isDestroyed: vi.fn(() => false),
-      show: vi.fn(),
-      hide: vi.fn(),
-      focus: vi.fn(),
-      isFocused: vi.fn(() => false),
-      webContents: {}
-    }
-    const trayManager = new TrayManager()
-    const touchApp = {
-      window: { window: mainWindow },
-      channel: {},
-      config: { data: {} },
-      isQuitting: false,
-      version: 'dev'
-    }
-
-    setLocale('zh-CN')
-    await trayManager.onInit(createInitContext(touchApp))
-    quickOpsMock.subscribers[0]?.([
-      {
-        id: 'quick-ops:timer:test',
-        kind: 'timer',
-        title: '计时器',
-        startedAt: Date.now(),
-        durationMs: 60_000,
-        expiresAt: Date.now() + 60_000
-      }
-    ])
-
-    const latestMenu = trayInstances[0]?.setContextMenu.mock.calls.at(-1)?.[0]
-    const quickOpsMenu = latestMenu?.find(
-      (item: { label?: string }) => item.label === 'QuickOps (1 个运行中)'
-    ) as { submenu?: Array<{ label?: string; sublabel?: string; click?: () => void }> } | undefined
-
-    expect(quickOpsMenu?.submenu?.[0]).toMatchObject({
-      label: '计时器运行中',
-      sublabel: '剩余 1分钟'
-    })
-
-    quickOpsMenu?.submenu?.at(-1)?.click?.()
-    expect(quickOpsMock.cleanup).toHaveBeenCalledWith('tray-stop-all')
   })
 
   it('returns real runtime tray snapshot values', () => {

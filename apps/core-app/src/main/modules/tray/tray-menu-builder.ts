@@ -9,7 +9,6 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { coreBoxManager } from '../box-tool/core-box/manager'
-import { quickOpsRuntime } from '../quick-ops/quick-ops-runtime-host'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -79,9 +78,6 @@ export class TrayMenuBuilder {
       ...this.buildQuickActionsGroup(state),
       { type: 'separator' },
 
-      ...this.buildQuickOpsGroup(state),
-      { type: 'separator' },
-
       ...this.buildToolsGroup(),
       { type: 'separator' },
 
@@ -145,37 +141,6 @@ export class TrayMenuBuilder {
             () => {}
           )
         }
-      }
-    ]
-  }
-
-  private buildQuickOpsGroup(state: TrayState): MenuItemConstructorOptions[] {
-    if (state.quickOpsSessions.length === 0) {
-      return [
-        {
-          label: t('tray.quickOpsIdle'),
-          enabled: false
-        }
-      ]
-    }
-
-    return [
-      {
-        label: t('tray.quickOpsRunning', { count: state.quickOpsSessions.length }),
-        submenu: [
-          ...state.quickOpsSessions.map((session) => ({
-            label: session.title,
-            sublabel: session.detail,
-            enabled: false
-          })),
-          { type: 'separator' as const },
-          {
-            label: t('tray.quickOpsStopAll'),
-            click: () => {
-              quickOpsRuntime.cleanup('tray-stop-all')
-            }
-          }
-        ]
       }
     ]
   }

@@ -243,7 +243,7 @@ Keep these layers in sync:
 
 | Layer | Typical files | Requirement |
 | --- | --- | --- |
-| CoreApp runtime / host capability | `apps/core-app/src/main/modules/box-tool/addon/quick-ops/`, `apps/core-app/src/main/modules/quick-ops/index.ts` | During migration, keep QuickOpsSessionManager, platform helpers, typed transport, Flow targets, policy/evidence gates, and confirmation; do not put new CoreBox entries back into the default SearchEngine provider |
+| CoreApp runtime / host capability | `apps/core-app/src/main/modules/quick-ops/quick-ops-runtime-host.ts`, `apps/core-app/src/main/modules/quick-ops/quick-ops-session-manager.ts`, `apps/core-app/src/main/modules/quick-ops/index.ts` | During migration, keep QuickOpsSessionManager, platform helpers, typed transport, Flow targets, policy/evidence gates, and confirmation; do not put new CoreBox entries back into the default SearchEngine provider |
 | Official plugin | `plugins/touch-quickops` | Own the CoreBox root-result entry, plugin-side read-only panel, low-risk session-control triggers, future migratable business logic, and plugin-owned UI; new migratable entries should land here first |
 | QuickOps module / Flow | `apps/core-app/src/main/modules/quick-ops/index.ts` | During migration, keep host capabilities / Flow targets and declare risk / category / `requireConfirm`; confirmation-required targets can only be delivered with an App UI token |
 | Typed transport | `packages/utils/transport/events/types/quick-ops.ts`, `packages/utils/transport/sdk/domains/quick-ops.ts` | Expose only allowed public SDK methods through typed events and the domain SDK |
