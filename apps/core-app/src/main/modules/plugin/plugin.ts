@@ -33,6 +33,10 @@ import type {
   QuickOpsCommonDirectoryGetRequest,
   QuickOpsCommonDirectoryGetResponse,
   QuickOpsDiagnosticsGetResponse,
+  QuickOpsDeveloperPreviewRequest,
+  QuickOpsDeveloperPreviewResponse,
+  QuickOpsDeveloperPreviewSaveRequest,
+  QuickOpsDeveloperPreviewSaveResponse,
   QuickOpsDirectoryUsageGetRequest,
   QuickOpsDirectoryUsageGetResponse,
   QuickOpsDiskSpaceGetResponse,
@@ -1996,7 +2000,27 @@ export class TouchPlugin implements ITouchPlugin {
             uniqueKey: this._uniqueChannelKey ?? '',
             verified: Boolean(this._uniqueChannelKey)
           }
-        }) as Promise<QuickOpsSystemProxyGetResponse>
+        }) as Promise<QuickOpsSystemProxyGetResponse>,
+      developerPreview: (
+        request: QuickOpsDeveloperPreviewRequest
+      ): Promise<QuickOpsDeveloperPreviewResponse> =>
+        transport.invoke(QuickOpsEvents.developerPreview.get, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsDeveloperPreviewResponse>,
+      saveDeveloperPreview: (
+        request: QuickOpsDeveloperPreviewSaveRequest
+      ): Promise<QuickOpsDeveloperPreviewSaveResponse> =>
+        transport.invoke(QuickOpsEvents.developerPreview.save, request, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsDeveloperPreviewSaveResponse>
     }
 
     type BoxChannelHandler = (data: PluginStandardChannelData) => unknown

@@ -4,7 +4,6 @@ import { BasicExpressionAbility } from './basic-expression-ability'
 import { ColorPreviewAbility } from './color-ability'
 import { CurrencyPreviewAbility } from './currency-ability'
 import { PercentageAbility } from './percentage-ability'
-import { QuickOpsDeveloperAbility } from '@talex-touch/utils/core-box/preview'
 import { ScientificConstantsAbility } from './scientific-constants-ability'
 import { TextStatsAbility } from './text-stats-ability'
 import { TimeDeltaAbility } from './time-delta-ability'
@@ -19,7 +18,6 @@ export function registerDefaultPreviewAbilities(registry: {
   registry.register(new ScientificConstantsAbility())
   registry.register(new ColorPreviewAbility())
   registry.register(new TimeDeltaAbility())
-  registry.register(new QuickOpsDeveloperAbility())
   registry.register(new CurrencyPreviewAbility())
   registry.register(new PercentageAbility())
   registry.register(new TextStatsAbility())

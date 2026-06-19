@@ -1044,6 +1044,34 @@ describe('TouchPlugin.triggerFeature', () => {
         event: QuickOpsEvents.systemProxy.get,
         payload: undefined,
         args: []
+      },
+      {
+        method: 'developerPreview',
+        event: QuickOpsEvents.developerPreview.get,
+        payload: { query: { text: 'json', inputs: [] } },
+        args: [{ query: { text: 'json', inputs: [] } }]
+      },
+      {
+        method: 'saveDeveloperPreview',
+        event: QuickOpsEvents.developerPreview.save,
+        payload: {
+          format: 'svg',
+          payload: {
+            abilityId: 'preview.quickops.developer',
+            title: 'QR Code 生成',
+            primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E'
+          }
+        },
+        args: [
+          {
+            format: 'svg',
+            payload: {
+              abilityId: 'preview.quickops.developer',
+              title: 'QR Code 生成',
+              primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E'
+            }
+          }
+        ]
       }
     ] as const
     const expectedMethods = Array.from(new Set(readOnlyCases.map((item) => item.method)))

@@ -190,7 +190,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         const actionStartTime = Date.now()
 
         try {
-          const result = await plugin.pluginLifecycle.onItemAction(item)
+          const result = await plugin.pluginLifecycle.onItemAction(item, {
+            actionId: args.actionId
+          })
           const executionTime = Date.now() - actionStartTime
           const isExternalAction = executionTime > 100 || result?.externalAction === true
 

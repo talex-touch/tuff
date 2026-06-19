@@ -305,6 +305,10 @@ import type {
   QuickOpsCommonDirectoryGetRequest,
   QuickOpsCommonDirectoryGetResponse,
   QuickOpsDiagnosticsGetResponse,
+  QuickOpsDeveloperPreviewRequest,
+  QuickOpsDeveloperPreviewResponse,
+  QuickOpsDeveloperPreviewSaveRequest,
+  QuickOpsDeveloperPreviewSaveResponse,
   QuickOpsDirectoryUsageGetRequest,
   QuickOpsDirectoryUsageGetResponse,
   QuickOpsDiskSpaceGetResponse,
@@ -2433,6 +2437,16 @@ export const QuickOpsEvents = {
       .module("system-proxy")
       .event("get")
       .define<void, QuickOpsSystemProxyGetResponse>(),
+  },
+  developerPreview: {
+    get: defineEvent("quick-ops")
+      .module("developer-preview")
+      .event("get")
+      .define<QuickOpsDeveloperPreviewRequest, QuickOpsDeveloperPreviewResponse>(),
+    save: defineEvent("quick-ops")
+      .module("developer-preview")
+      .event("save")
+      .define<QuickOpsDeveloperPreviewSaveRequest, QuickOpsDeveloperPreviewSaveResponse>(),
   },
 } as const;
 

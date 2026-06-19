@@ -66,6 +66,48 @@ code: |
 | `commonDirectory({ query? })` | 只读 | Desktop / Downloads / Documents / App Data / Logs 受限目录元数据 |
 | `pathFormat({ path, filePath?, text? })` | 只读 | 原始路径、Shell 路径、file URL、Windows/WSL 互转格式 |
 | `formatText({ text, mode })` | 只读 | 大小写 / 命名风格转换 |
+| `developerPreview({ query })` | Host capability | 使用 CoreApp QuickOps host facade 解析 Developer preview，并返回 `PreviewCardPayload` |
+| `saveDeveloperPreview({ payload, format })` | Host capability | 将 QR Developer preview 保存为 SVG / PNG 到 Tuff QuickOps 临时目录并复制路径 |
+
+## Developer Preview
+
+QuickOps Developer CoreBox 表面由官方 `plugins/touch-quickops` 插件承接。插件识别 `json`、`url encode`、`base64 decode`、`jwt decode`、`regex test`、`markdown table`、`csv to markdown`、`markdown to csv`、`timestamp`、`date`、`timezone`、`uuid`、`short id`、`qr code`、`case snake` 等命令后，调用 `quickOps.developerPreview({ query })`。
+
+`developerPreview()` 返回 `ready` 时包含 `PreviewCardPayload`，官方插件会渲染 `core-preview-card`。普通 preview 暴露 `preview-copy-primary`；QR preview 额外暴露插件自有 execute action，并通过 `saveDeveloperPreview()` 保存。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await quickOps.developerPreview({
+    query: {
+      text: 'json {"ok":true}',
+      inputs: []
+    }
+  })
+
+  if (result.state === 'ready') {
+    renderCorePreviewCard(result.payload)
+  }
+---
+:::
+
+`saveDeveloperPreview()` 只支持 PreviewSDK QR SVG payload，输出目录固定为 CoreApp `app.getPath('temp')/tuff-quickops`，成功后会把文件路径写入剪贴板。它不是通用文件写入 API。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const saved = await quickOps.saveDeveloperPreview({
+    format: 'png',
+    payload: result.payload
+  })
+
+  if (saved.state === 'saved') {
+    console.info(saved.path)
+  }
+---
+:::
+
+CoreApp 通用 `PreviewProvider` 不再注册 QuickOps Developer ability，也不会为 Developer 命令读取剪贴板或暴露 QR 保存 action。不要从插件 fallback 到私有 PreviewProvider、raw IPC 或自行读取剪贴板来绕过 `allowDeveloperTools` 策略。
 
 ## Files Input 路由
 
@@ -243,7 +285,7 @@ code: |
 
 只有维护仓库时才应该修改官方 QuickOps。新增或调整通用能力时，优先迁入 `plugins/touch-quickops`；仍依赖 Electron / OS 的部分必须通过 CoreApp host capability 暴露。
 
-当前官方插件已承接 CoreBox root-result 入口、更多只读面板、设置摘要入口和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、battery status、system proxy、`quickops settings`，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；设置摘要通过 capability / diagnostics 只读读取当前策略和默认值，不写入 CoreApp host policy；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target；文件 Hash/Base64/path format 支持 `text` 与 `files` 输入路由。插件也承接 QuickOps Flow/AI source-level adapter contract：命令路由输出脱敏 `flowAdapterTrace`，确认型动作只提示 App UI `confirmationToken`，高风险 `kill port` 类请求 fail-closed 且没有 dispatch payload。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate、AppSetting schema / settings read path 与 typed bridge；CoreApp 不再保留 QuickOps natural-language resolver 实现，也不再在文件搜索 provider 或 Tools 设置页中承载 QuickOps 产品表面。后续新增可迁移入口时，优先扩展该插件的命令路由和渲染；可写设置必须设计官方插件白名单 host capability，不得用私有 IPC 直写配置，也不得重新引入 CoreApp QuickOps CoreBox provider、Tools 设置控件或文件搜索专用 QuickOps execute 分支。
+当前官方插件已承接 CoreBox root-result 入口、更多只读面板、Developer preview、设置摘要入口和低风险状态控制触发：capability、sessions、auditRecent、system info、tuff diagnostics、disk space、directory usage、network status、local ip、port status、DNS query、file hash、file Base64、recent download、common directory、path format、format text、Developer preview、battery status、system proxy、`quickops settings`，以及 `stop-all-sessions`、timer / pomodoro / clean-screen / awake / stopwatch 的 stop/pause/resume/lap/reset 控制。只读面板通过 `globalThis.quickOps` 过渡 facade 取数和渲染；Developer preview 通过 `developerPreview()` 调 CoreApp host facade 渲染 `core-preview-card`，QR 保存通过 `saveDeveloperPreview()` 写入 Tuff QuickOps 临时目录；设置摘要通过 capability / diagnostics 只读读取当前策略和默认值，不写入 CoreApp host policy；低风险状态控制通过注入的 Flow SDK dispatch 到已有 QuickOps Flow target；文件 Hash/Base64/path format 支持 `text` 与 `files` 输入路由。插件也承接 QuickOps Flow/AI source-level adapter contract：命令路由输出脱敏 `flowAdapterTrace`，确认型动作只提示 App UI `confirmationToken`，高风险 `kill port` 类请求 fail-closed 且没有 dispatch payload。插件不执行高风险 action、不 fallback 到私有 IPC；确认型动作必须由 App UI 发放 `confirmationToken`，插件只能展示需要确认的提示。CoreApp 当前保留 `QuickOpsRuntimeHost` / `quickOpsRuntime` host boundary、platform capability、Flow confirmation、policy/evidence gate、AppSetting schema / settings read path 与 typed bridge；CoreApp 不再保留 QuickOps natural-language resolver 实现，也不再在通用 PreviewProvider、文件搜索 provider 或 Tools 设置页中承载 QuickOps 产品表面。后续新增可迁移入口时，优先扩展该插件的命令路由和渲染；可写设置必须设计官方插件白名单 host capability，不得用私有 IPC 直写配置，也不得重新引入 CoreApp QuickOps CoreBox provider、Tools 设置控件、通用 PreviewProvider Developer surface 或文件搜索专用 QuickOps execute 分支。
 
 请同步以下落点：
 
@@ -253,7 +295,7 @@ code: |
 | Official plugin | `plugins/touch-quickops` | 承载 CoreBox root-result 入口、插件侧只读面板、设置摘要入口、低风险状态控制触发、后续可迁移业务逻辑和插件自有 UI；新增可迁移入口优先落这里 |
 | QuickOps module / Flow | `apps/core-app/src/main/modules/quick-ops/index.ts` | 迁移期保留 host capability / Flow target，声明 risk / category / `requireConfirm`，确认型 target 只能由 App UI token 交付 |
 | Typed transport | `packages/utils/transport/events/types/quick-ops.ts`、`packages/utils/transport/sdk/domains/quick-ops.ts` | 只把允许公开的 SDK 方法放进 typed event 和 domain SDK |
-| Plugin SDK facade | `packages/utils/plugin/sdk/quick-ops.ts`、`packages/utils/plugin/sdk/index.ts` | 保持插件 facade 只读，禁止暴露高风险执行方法 |
+| Plugin SDK facade | `packages/utils/plugin/sdk/quick-ops.ts`、`packages/utils/plugin/sdk/index.ts` | 保持插件 facade 有界且受策略约束；只读/低风险 host capability 可公开，高风险执行方法禁止暴露 |
 | Runtime injection | `apps/core-app/src/main/modules/plugin/plugin.ts` | `globalThis.quickOps` / `plugin.quickOps` 与 public SDK 方法集一致 |
 | Evidence | `apps/core-app/scripts/quickops-surface-audit.ts`、`apps/core-app/scripts/quickops-flow-ai-adapter-audit.ts`、`apps/core-app/scripts/quickops-evidence-verify.ts` | 更新 surface audit、Flow/AI adapter audit、evidence template 和 strict verifier |
 | 文档 | 本页、用户指南、QuickOps PRD、TODO、CHANGES | 行为、接口、策略或安全边界变化必须同步 |

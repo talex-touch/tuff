@@ -554,16 +554,36 @@ const flowRegisterDeliveryHandlerMock = vi.hoisted(() => vi.fn())
 const flowDeliveryDisposeMock = vi.hoisted(() => vi.fn())
 const flowAcknowledgeMock = vi.hoisted(() => vi.fn())
 const showInternalSystemNotificationMock = vi.hoisted(() => vi.fn(() => ({ id: 'notification-1' })))
+const appGetPathMock = vi.hoisted(() => vi.fn(() => '/tmp'))
+const clipboardReadTextMock = vi.hoisted(() => vi.fn(() => ''))
 const clipboardWriteTextMock = vi.hoisted(() => vi.fn())
 const shellOpenPathMock = vi.hoisted(() => vi.fn(async () => ''))
+const fsMkdirMock = vi.hoisted(() => vi.fn(async () => undefined))
+const fsWriteFileMock = vi.hoisted(() =>
+  vi.fn(async (_path: string, _data: string | Buffer, _options?: { flag?: string }) => undefined)
+)
+const getMainConfigMock = vi.hoisted(() => vi.fn((): unknown => undefined))
 
 vi.mock('electron', () => ({
+  app: {
+    getPath: appGetPathMock
+  },
   clipboard: {
+    readText: clipboardReadTextMock,
     writeText: clipboardWriteTextMock
   },
   shell: {
     openPath: shellOpenPathMock
   }
+}))
+
+vi.mock('node:fs/promises', () => ({
+  mkdir: fsMkdirMock,
+  writeFile: fsWriteFileMock
+}))
+
+vi.mock('../storage', () => ({
+  getMainConfig: getMainConfigMock
 }))
 
 vi.mock('./quick-ops-runtime-host', () => ({
@@ -698,7 +718,9 @@ const expectedQuickOpsTransportEvents = [
   QuickOpsEvents.formatText.get,
   QuickOpsEvents.networkStatus.get,
   QuickOpsEvents.batteryStatus.get,
-  QuickOpsEvents.systemProxy.get
+  QuickOpsEvents.systemProxy.get,
+  QuickOpsEvents.developerPreview.get,
+  QuickOpsEvents.developerPreview.save
 ] as const
 
 import {
@@ -1098,6 +1120,11 @@ describe('QuickOpsModule', () => {
     flowRegisterTargetMock.mockReturnValue(true)
     flowRegisterDeliveryHandlerMock.mockReturnValue(flowDeliveryDisposeMock)
     shellOpenPathMock.mockResolvedValue('')
+    appGetPathMock.mockReturnValue('/tmp')
+    clipboardReadTextMock.mockReturnValue('')
+    getMainConfigMock.mockReturnValue(undefined)
+    fsMkdirMock.mockResolvedValue(undefined)
+    fsWriteFileMock.mockResolvedValue(undefined)
   })
 
   it('exposes the shared QuickOps runtime without cleaning sessions on init', () => {
@@ -1164,6 +1191,14 @@ describe('QuickOpsModule', () => {
     )
     expect(transportOnMock).toHaveBeenCalledWith(
       QuickOpsEvents.systemProxy.get,
+      expect.any(Function)
+    )
+    expect(transportOnMock).toHaveBeenCalledWith(
+      QuickOpsEvents.developerPreview.get,
+      expect.any(Function)
+    )
+    expect(transportOnMock).toHaveBeenCalledWith(
+      QuickOpsEvents.developerPreview.save,
       expect.any(Function)
     )
     expect(transportOnMock).toHaveBeenCalledWith(QuickOpsEvents.audit.get, expect.any(Function))
@@ -2592,6 +2627,106 @@ describe('QuickOpsModule', () => {
       message: undefined
     })
     expect(formatSystemProxyInfo).toHaveBeenCalledWith(info)
+  })
+
+  it('exposes QuickOps developer preview through the typed transport handler', async () => {
+    clipboardReadTextMock.mockReturnValue('{"ok":true}')
+    const module = new QuickOpsModule()
+
+    module.onInit({} as ModuleInitContext<TalexEvents>)
+
+    const handler = transportOnMock.mock.calls.find(
+      ([event]) => event === QuickOpsEvents.developerPreview.get
+    )?.[1] as
+      | ((request: { query: { text: string; inputs: unknown[] } }) => Promise<unknown>)
+      | undefined
+
+    const response = await handler?.({ query: { text: 'json', inputs: [] } })
+    expect(response).toMatchObject({
+      state: 'ready',
+      abilityId: 'preview.quickops.developer',
+      payload: {
+        abilityId: 'preview.quickops.developer',
+        title: expect.any(String),
+        primaryValue: expect.stringContaining('"ok"')
+      }
+    })
+    expect(clipboardReadTextMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks QuickOps developer preview when local policy disables developer tools', async () => {
+    getMainConfigMock.mockReturnValue({
+      quickOps: {
+        allowDeveloperTools: false
+      }
+    })
+    clipboardReadTextMock.mockReturnValue('{"ok":true}')
+    const module = new QuickOpsModule()
+
+    module.onInit({} as ModuleInitContext<TalexEvents>)
+
+    const handler = transportOnMock.mock.calls.find(
+      ([event]) => event === QuickOpsEvents.developerPreview.get
+    )?.[1] as
+      | ((request: { query: { text: string; inputs: unknown[] } }) => Promise<unknown>)
+      | undefined
+
+    await expect(handler?.({ query: { text: 'json', inputs: [] } })).resolves.toEqual({
+      state: 'blocked',
+      reason: 'developer-tools-disabled-by-policy'
+    })
+    expect(clipboardReadTextMock).not.toHaveBeenCalled()
+  })
+
+  it('saves QuickOps developer QR preview through the typed host capability', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" shape-rendering="crispEdges"><rect width="8" height="8" fill="#fff"/><g fill="#000"><rect x="1" y="1" width="1" height="1"/><rect x="6" y="6" width="1" height="1"/></g></svg>'
+    const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    const module = new QuickOpsModule()
+
+    module.onInit({} as ModuleInitContext<TalexEvents>)
+
+    const handler = transportOnMock.mock.calls.find(
+      ([event]) => event === QuickOpsEvents.developerPreview.save
+    )?.[1] as
+      | ((request: {
+          format: 'svg' | 'png'
+          payload: { abilityId: string; title: string; primaryValue: string; meta: unknown }
+        }) => Promise<unknown>)
+      | undefined
+
+    const response = await handler?.({
+      format: 'png',
+      payload: {
+        abilityId: 'preview.quickops.developer',
+        title: 'QR Code 生成',
+        primaryValue: dataUrl,
+        meta: {
+          quickOps: {
+            render: {
+              kind: 'qr-code-svg',
+              dataUrl
+            }
+          }
+        }
+      }
+    })
+
+    expect(response).toMatchObject({
+      state: 'saved',
+      format: 'png',
+      path: expect.stringMatching(/^\/tmp\/tuff-quickops\/qr-code-[\w-]+\.png$/)
+    })
+    expect(fsMkdirMock).toHaveBeenCalledWith('/tmp/tuff-quickops', { recursive: true })
+    const written = fsWriteFileMock.mock.calls[0]?.[1]
+    expect(Buffer.isBuffer(written)).toBe(true)
+    const png = written as Buffer
+    expect(png.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    )
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/tuff-quickops\/qr-code-[\w-]+\.png$/)
+    )
   })
 
   it('acks Flow publicIp delivery as disabled without explicit opt-in', async () => {
@@ -4146,7 +4281,7 @@ describe('QuickOpsModule', () => {
     module.stop({ reason: 'app-quit' } as ModuleStopContext<TalexEvents>)
     module.onDestroy({} as ModuleDestroyContext<TalexEvents>)
 
-    expect(transportDisposeMock).toHaveBeenCalledTimes(19)
+    expect(transportDisposeMock).toHaveBeenCalledTimes(21)
     expect(flowDeliveryDisposeMock).toHaveBeenCalledTimes(1)
     for (const expectedTarget of expectedQuickOpsFlowTargets) {
       expect(flowUnregisterTargetMock).toHaveBeenCalledWith(expectedTarget.actionId)
