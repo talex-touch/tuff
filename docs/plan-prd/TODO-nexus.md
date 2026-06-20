@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus docs 第 15 批已收尾；本批禁用 docs 主正文 `ContentRenderer` 的默认 MDC Prose 全量映射，并用轻量 `DocsProseHeading` 保留 heading anchor，减少组件文档首屏 MDC/Prose dev 模块请求。后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
+> 当前状态：Nexus docs 第 16 批已收尾；本批过滤 Nuxt Content 生成的默认 MDC Prose global components，并把 policy 页面显式设为 native prose，组件文档和 policy 页面首屏 `mdcProse` dev 请求归零。后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
 
 ## Goal 原句
 
@@ -24,21 +24,21 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 96%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、部分 MDC Prose wrapper 请求从首屏重型路径拆出。
-- 整体 goal 估算：约 74%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors。
+- 本轮 tabs/card 文档链路：约 97%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry 从首屏重型路径拆出。
+- 整体 goal 估算：约 76%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose。
 - 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
-| 当前第 15 批 docs prose native mapping | 100% | 已提交 `2026db6d8`；代码、focused tests、scoped ESLint、Playwright baseline / clean after、生产 build sanity 均已完成。 |
-| `/en/docs/dev/components/tabs` 触发链路 | 96% | 页面 200；tabs clean after requests 443、scripts 423、failed 0、heading anchors 21；剩余是 Nuxt/runtime、Nuxt Content global Prose registry 与 docs demo 模块碎片继续拆。 |
-| docs 内容加载拆分 | 75% | `body=0` / idle `body=1` 已落地；右侧 outline、assistant shell、AI notice、无代码文档 code block renderer/CSS、docs 主正文 Prose wrapper 映射已从重型首屏路径拆出一部分；demo registry、模板静态 shell、Nuxt Content global Prose registry 仍待做。 |
-| AI review / aireview 未审批组件 | 26% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复、pending 长文档 MDC Prose wrapper 部分削减；逐页 demo/模板优化待做。 |
+| 当前第 16 批 MDC Prose global registry filter | 100% | 已提交 `9e2d0145c`；代码、focused tests、scoped ESLint、`prepare` 生成物检查、Playwright clean after / route switch、生产 build sanity 均已完成。 |
+| `/en/docs/dev/components/tabs` 触发链路 | 97% | 页面 200；tabs clean after requests 424、scripts 405、failed 0、`mdcProse 0`、heading anchors 21；剩余是 Nuxt/runtime、`node_modules` 与 docs demo 模块碎片继续拆。 |
+| docs 内容加载拆分 | 78% | `body=0` / idle `body=1` 已落地；右侧 outline、assistant shell、AI notice、无代码文档 code block renderer/CSS、docs 主正文 Prose wrapper 映射、Nuxt Content global Prose registry 已从重型首屏路径拆出；demo registry、模板静态 shell、DocApiTable 仍待做。 |
+| AI review / aireview 未审批组件 | 28% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复、pending 长文档 MDC Prose wrapper 与 global Prose registry 削减；逐页 demo/模板优化待做。 |
 | 全站页面切换矩阵 | 10% | tabs/card 有基线；`/`、`/store`、dashboard、Provider Registry、Data Governance 待覆盖。 |
-| 生产构建 chunk 复核 | 15% | 第 10/11/12 批均已通过 `NUXT_DISABLE_PRERENDER=true` compile sanity；完整 prerender 和 chunk/payload/CSS 深查待做。 |
+| 生产构建 chunk 复核 | 15% | 第 10/11/12/13/14/15/16 批均已通过 `NUXT_DISABLE_PRERENDER=true` compile sanity；完整 prerender 和 chunk/payload/CSS 深查待做。 |
 | TODO 与交接文档 | 100% | 当前 goal 原句、批次、证据路径、后续子任务已沉淀在本文。 |
 
 ## 已完成批次
@@ -60,6 +60,7 @@
 | 13 | `ff2c69610` | `perf(nexus): keep docs ai notice static` | 已完成 |
 | 14 | `7a5e8be14` | `perf(nexus): lazy load docs code block renderer` | 已完成 |
 | 15 | `2026db6d8` | `perf(nexus): use native docs prose tags` | 已完成 |
+| 16 | `9e2d0145c` | `perf(nexus): filter mdc prose globals` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -72,10 +73,55 @@
 - 第 13 批已提交：`ff2c69610 perf(nexus): keep docs ai notice static`；migrated / 未 verified 组件文档的 AI notice 改由 docs layout 静态渲染，不再为了 notice 提前挂载 `DocsAsideCards` / `DocsAsideCardsShell`。
 - 第 14 批已提交：`7a5e8be14 perf(nexus): lazy load docs code block renderer`；`TuffCodeBlock` 改为无样式 async shell，真实 renderer/highlight/mermaid/CSS 只在真实 code block 或 demo code 展开时加载。
 - 第 15 批已提交：`2026db6d8 perf(nexus): use native docs prose tags`；docs 主正文 `ContentRenderer` 禁用默认 Prose 全量映射，用轻量 heading wrapper 保留锚点，减少一批 MDC prose dev requests。
+- 第 16 批已提交：`9e2d0145c perf(nexus): filter mdc prose globals`；Nuxt Content 生成的默认 MDC Prose global components 已从 component registry 过滤，`tabs` / `fusion` / `card` / policy 页面 clean first visit 均为 `mdcProse 0`。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
-- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，但 Nuxt runtime、`node_modules`、i18n 与 docs demo 模块碎片仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，第 16 批将 MDC Prose registry 请求归零，但 Nuxt runtime、`node_modules`、i18n 与 docs demo 模块碎片仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+
+## 第 16 批收口记录
+
+目标：收口第 15 批遗留的 Nuxt Content generated `#content/components` 默认 Prose registry。第 15 批已经把 docs 主正文 runtime prose 映射改成 native tags，但 clean after 仍有 `mdcProse: 23`，来源是 `@nuxt/content` 生成的 global Prose components；第 16 批单独验证并过滤这一路径。
+
+改动范围：
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/pages/license.vue`
+- `apps/nexus/app/pages/privacy.vue`
+- `apps/nexus/app/pages/protocol.vue`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+
+实现口径：
+
+- 在 `components:extend` ignored patterns 中过滤 `@nuxtjs/mdc/dist/runtime/components/prose/`，避免 Nuxt Content 生成 `#content/components` 时重新注入默认 `Prose*` globals。
+- `license.vue`、`privacy.vue`、`protocol.vue` 的 `ContentRenderer` 显式加 `:prose="false"`，确保 policy 页面不依赖被过滤的默认 MDC Prose wrapper。
+- 扩展 docs page performance focused test，钉住 registry filter 与所有 `ContentRenderer` 页面 native prose 约束。
+- 顶层 `mdc.components.prose=false` 实验无效：`@nuxt/content` module dependency 会覆盖 MDC prose 设置；有效边界是 `components:extend` 过滤 Nuxt component registry。
+
+验证证据：
+
+- Prepare：`pnpm -C "apps/nexus" run prepare` 通过；生成的 `apps/nexus/.nuxt/content/components.ts` 中 `export const globalComponents: string[] = []`。
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/pages/docs/docs-page-performance.test.ts"`，1 file / 26 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "nuxt.config.ts" "app/pages/license.vue" "app/pages/privacy.vue" "app/pages/protocol.vue" "app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/nuxt.config.ts" "apps/nexus/app/pages/license.vue" "apps/nexus/app/pages/privacy.vue" "apps/nexus/app/pages/protocol.vue" "apps/nexus/app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Production build：`NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build` 通过，确认 client/server/Nitro/PWA/content asset trim 均可完成。
+- Playwright clean after：
+  - 报告：`output/playwright/nexus-docs-b16-mdc-prose-filter-3206-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-b16-mdc-prose-filter-3206-2026-06-21.json`
+  - HAR/截图：同前缀 `tabs`、`fusion`、`card`、`license`、`privacy`、`switch-tabs-to-card` 的 `.har` / `.png`。
+  - tabs：status 200, requests 424, scripts 405, stylesheets 17, `mdcProse 0`, failed 0, heading anchors 21。
+  - fusion：status 200, requests 421, scripts 402, stylesheets 17, `mdcProse 0`, failed 0, heading anchors 25。
+  - card：status 200, requests 428, scripts 408, stylesheets 18, `mdcProse 0`, failed 0, heading anchors 35, codeBlock 5。
+  - license：status 200, requests 430, scripts 406, stylesheets 23, `mdcProse 0`, failed 0。
+  - privacy：status 200, requests 427, scripts 402, stylesheets 24, `mdcProse 0`, failed 0。
+- Playwright client-side route switch：
+  - 报告：`output/playwright/nexus-docs-b16-mdc-prose-filter-3206-2026-06-21-client-switch.md`
+  - JSON/HAR/截图：同名 `.json` / `.har` / `.png`。
+  - tabs -> card：URL / network idle 60ms, requests 19, scripts 17, stylesheets 0, `mdcProse 0`, failed 0, heading `Card`, heading anchors 35。
+- 第 15 批 after 对比：
+  - tabs：443 requests / 423 scripts / `mdcProse 23` -> 424 / 405 / `mdcProse 0`。
+  - fusion：442 / 423 / `mdcProse 23` -> 421 / 402 / `mdcProse 0`。
+  - card：447 / 427 / `mdcProse 23` -> 428 / 408 / `mdcProse 0`。
 
 ## 第 15 批收口记录
 
@@ -478,7 +524,7 @@
 
 ### 收尾边界
 
-- [x] 当前批次只收尾第 15 批 docs prose native mapping，不继续混入 Nuxt Content registry 改造或更多 aireview 未审批组件逐页优化。
+- [x] 当前批次只收尾第 16 批 MDC Prose global registry filter，不继续混入 docs demo、DocApiTable 或更多 aireview 未审批组件逐页优化。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，优先从 `fusion` / `card` / `avatar-variants` 中选，跑 Playwright / HAR baseline 后再落代码。
@@ -493,7 +539,8 @@
 - [ ] 拆 pending 文档的大正文：优先让首屏 headline / summary / props overview 静态化，长 demo、FAQ、usage sections 后置到 idle 或可见区。
 - [x] 检查并修复无代码文档页的 code block renderer eager import：`tabs` / `fusion` / `avatar-variants` clean first visit 均为 codeBlock requests 0。
 - [x] 检查并部分修复 Markdown renderer / MDC Prose wrapper 首屏请求：docs 主正文改用 native prose tags + lightweight heading anchors，`fusion` requests 453 -> 442。
-- [ ] 继续检查 `DocApiTable`、demo wrapper、Nuxt Content global Prose registry 是否在 pending 文档首屏重复 eager import。
+- [x] 检查并修复 Nuxt Content global Prose registry eager import：第 16 批后 `tabs` / `fusion` / `card` / policy 页面 clean first visit 均为 `mdcProse 0`。
+- [ ] 继续检查 `DocApiTable`、demo wrapper 是否在 pending 文档首屏重复 eager import。
 - [x] 对 tabs/card 等组件页建立最小 Playwright 性能基线：首屏截图、HAR、request count、failed count、DOMContentLoaded/load、client-side route switch timing。
 - [x] 为 docs 内容加载新增 focused tests，钉住不会回退到全量 MDC parse、同步 full-body prefetch 或全局 demo registry eager load。
 
@@ -521,7 +568,8 @@
 - [ ] 下一批候选 A：`fusion` demo lazy boundary。原因：正文约 52KB、10 个 demo，after report 仍需要 4.5s 后确认 aside idle mount，适合继续拆 demo / content renderer。
 - [ ] 下一批候选 B：`card` demo / API table 首屏拆分。原因：正文约 49KB、12 个 demo，第 14 批后真实 code block 行为已守住，但仍适合继续测 demo registry 与 API table eager import。
 - [ ] 下一批候选 C：`avatar-variants` 长正文静态模板化。原因：正文约 36KB、demo 少但体量高，适合验证模板固定和长内容后置是否有效。
-- [ ] 下一批候选 D：Nuxt Content `#content/components` global Prose registry 排除 / 显式 native prose map。原因：第 15 批 after 仍有 `mdcProse: 23`，需单独验证是否能安全从 generated registry 中移除默认 Prose wrappers。
+- [x] 已完成候选 D：Nuxt Content `#content/components` global Prose registry 排除 / 显式 native prose map。第 16 批已验证 generated registry 中默认 Prose wrappers 可安全移除，`mdcProse 23 -> 0`。
+- [ ] 下一批候选 D：route matrix 首轮扩展。原因：当前证据集中在 docs/components，仍需把 `/`、`/store`、dashboard、Provider Registry、Data Governance 纳入同一性能口径。
 
 ### P0：当前 goal 后续验收清单
 
@@ -531,6 +579,7 @@
 - [x] 第 13 批结束已更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 - [x] 第 14 批结束已更新本文：提交 hash、改动范围、测试命令、Playwright 核心数字、下一批候选。
 - [x] 第 15 批结束已更新本文：提交 hash、改动范围、测试命令、Playwright 核心数字、下一批候选。
+- [x] 第 16 批结束已更新本文：提交 hash、改动范围、测试命令、Playwright 核心数字、下一批候选。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -548,6 +597,7 @@
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 13 批 AI notice 静态化不影响生产 client/server/Nitro 打包。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 14 批 code block renderer lazy split 不影响生产 client/server/Nitro 打包。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 15 批 docs native prose heading mapping 不影响生产 client/server/Nitro 打包。
+- [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 16 批 MDC Prose global registry filter 不影响生产 client/server/Nitro/PWA 打包。
 - [ ] 检查 Nuxt route chunks、payload chunks、CSS chunks 是否存在 docs/store/dashboard/landing 互相污染。
 - [ ] 若生产存在同类问题，优先从 import boundary / layout boundary / component registration 修复，而不是沿用 dev-only HTML filter。
 
@@ -557,7 +607,7 @@
 - [x] 先做临时实验验证是否能安全减少 Vue Router / Pinia devtools 相关 dev-only import；A/B 证明 tabs/card 各减少 18 个请求，failed 0。
 - [x] 若要落地 alias / noop 模块，必须有 focused Vitest、scoped ESLint、Playwright tabs/card/switch 报告和 failed request = 0 证据。
 - [x] 不直接 alias 不稳定的 Nuxt / Vue Router 内部路径，除非确认版本边界、fallback 和运行时兼容性。
-- [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、Nuxt Content global Prose registry、demo wrapper 可见区加载、真实 code block 页 renderer chunk 体量。
+- [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、demo wrapper 可见区加载、真实 code block 页 renderer chunk 体量。
 
 ### P1：i18n 与 route-local message 深化
 
@@ -584,4 +634,4 @@
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 15 批已经收尾，后续不要继续往本批塞 Nuxt Content registry 改造、docs demo 或 aireview 逐页优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 16 批已经收尾，后续不要继续往本批塞 docs demo、DocApiTable 或 aireview 逐页优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
