@@ -12,7 +12,6 @@ import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath 
 
 const DOCS_FULL_BODY_CACHE_LIMIT = 24
 const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
-const DOCS_CURRENT_FULL_BODY_FETCH_KEY = 'docs-current-full-body'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
 
 function resolveFullDocCacheKey(value: Record<string, any> | null) {
@@ -37,6 +36,10 @@ function readCachedFullDoc(key: string) {
   if (!import.meta.client)
     return undefined
   return docsFullBodyCache.get(key)
+}
+
+function hasCachedFullDoc(key: string) {
+  return import.meta.client && docsFullBodyCache.has(key)
 }
 
 function cacheFullDoc(value: Record<string, any> | null) {
@@ -182,28 +185,8 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
   },
 )
 const fullDocCacheKey = computed(() => `doc-full:${docPath.value}:${docsLocale.value}`)
-const {
-  data: fullDoc,
-} = await useTypedFetch<Record<string, any> | null>(
-  '/api/docs/page',
-  {
-    key: DOCS_CURRENT_FULL_BODY_FETCH_KEY,
-    query: computed(() => ({
-      path: docPath.value,
-      locale: docsLocale.value,
-      body: '1',
-    })),
-    default: () => null,
-    immediate: computed(() => import.meta.client && shouldSplitDocBody.value),
-    lazy: true,
-    server: false,
-    deep: false,
-    dedupe: 'defer',
-    watch: false,
-    getCachedData: () => readCachedFullDoc(fullDocCacheKey.value),
-    transform: (value: Record<string, any> | null) => cacheFullDoc(value),
-  },
-)
+const fullDoc = shallowRef<Record<string, any> | null>(null)
+const fullDocLoading = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value : doc.value))
@@ -211,6 +194,42 @@ const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value : doc
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
 let activeDocFetchId = 0
+
+async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' | 'zh') {
+  if (import.meta.server || !shouldSplitDocBody.value)
+    return
+
+  const cacheKey = `doc-full:${path}:${locale}`
+  if (hasCachedFullDoc(cacheKey)) {
+    fullDoc.value = readCachedFullDoc(cacheKey) ?? null
+    return
+  }
+
+  fullDocLoading.value = true
+
+  try {
+    const nextFullDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
+      query: {
+        path,
+        locale,
+        body: '1',
+      },
+    })
+
+    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
+      return
+
+    fullDoc.value = cacheFullDoc(nextFullDoc)
+  }
+  catch {
+    if (fetchId === activeDocFetchId && path === docPath.value && locale === docsLocale.value)
+      fullDoc.value = null
+  }
+  finally {
+    if (fetchId === activeDocFetchId && path === docPath.value && locale === docsLocale.value)
+      fullDocLoading.value = false
+  }
+}
 
 async function loadActiveDocForRoute() {
   if (import.meta.server)
@@ -225,6 +244,7 @@ async function loadActiveDocForRoute() {
   doc.value = null
   fullDoc.value = splitBody && cachedFullDoc !== undefined ? cachedFullDoc : null
   isLoading.value = true
+  fullDocLoading.value = splitBody && cachedFullDoc === undefined
 
   try {
     const nextDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
@@ -247,22 +267,13 @@ async function loadActiveDocForRoute() {
     if (cachedFullDoc !== undefined)
       return
 
-    const nextFullDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
-      query: {
-        path,
-        locale,
-        body: '1',
-      },
-    })
-
-    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
-      return
-
-    fullDoc.value = cacheFullDoc(nextFullDoc)
+    await loadFullDocForRoute(fetchId, path, locale)
   }
   catch {
-    if (fetchId === activeDocFetchId)
+    if (fetchId === activeDocFetchId) {
       isLoading.value = false
+      fullDocLoading.value = false
+    }
   }
 }
 
@@ -805,7 +816,7 @@ const pagerNextTitle = computed(() => {
 const currentDocRenderKey = computed(() => {
   const source = renderDoc.value ?? doc.value
   const path = typeof source?.path === 'string' ? source.path : docPath.value
-  return `${path}:${docsLocale.value}`
+  return `${path}:${docsLocale.value}:${source?.body ? 'body' : 'meta'}`
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
 const shouldClientRenderDocBody = computed(() => docScope.value.isComponent)
@@ -1253,6 +1264,11 @@ onMounted(() => {
   docsClientPanelsMounted.value = true
   document.addEventListener('click', handleDocsInlineCodeClick)
   document.addEventListener('keydown', handleDocsInlineCodeKeydown)
+
+  if (shouldSplitDocBody.value && !fullDoc.value && !fullDocLoading.value) {
+    const fetchId = ++activeDocFetchId
+    void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
+  }
 })
 
 watch(

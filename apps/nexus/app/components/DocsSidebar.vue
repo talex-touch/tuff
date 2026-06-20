@@ -51,7 +51,10 @@ const {
 } = await useTypedFetch<unknown>(
   '/api/docs/sidebar-components',
   {
-    key: 'docs-components-meta',
+    key: computed(() => `docs-components-meta:${docsLocale.value}`),
+    query: computed(() => ({
+      locale: docsLocale.value,
+    })),
     server: false,
     lazy: true,
     immediate: false,
@@ -385,7 +388,7 @@ function sortTree(items: any[], parentPath: string | null): any[] {
 }
 
 const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value))
-const componentItems = computed(() => filterByLocale(coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[]))
+const componentItems = computed(() => coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[])
 const lastComponentSections = shallowRef<any[]>([])
 const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
 
