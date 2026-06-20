@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 22 批已完成代码提交；本批把 docs sidebar 组件链接的 full-body 预取从短 hover 即拉整篇正文，改为 metadata / route 立即预热、`body=1` 只在持续意图后请求并可在 blur / mouseleave 取消，避免鼠标扫过 pending 组件列表时把多篇 30-80KB 正文挤进网络队列。后续 AI review / aireview 未审批组件逐页 section split、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning 和生产 chunk 复核继续按本文 TODO 队列推进。
+> 当前状态：Nexus 第 23 批为 docs-only 收尾批，不继续扩大代码改动；第 22 批已完成 docs sidebar full-body 预取取消化代码提交。本批按用户追加要求，把后续 docs 文档内容加载、AI review / aireview 未审批组件、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning、生产 chunk 复核与验收口径全部沉淀到本文 TODO 队列。
 
 ## Goal 原句
 
@@ -31,12 +31,13 @@
 - 本轮 tabs/card 文档链路：约 98%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry 从首屏重型路径拆出。
 - 整体 goal 估算：约 85%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访，以及 sidebar full-body prefetch 可取消化；后续仍需系统性覆盖 AI review / aireview 未审批组件逐页 section split、dev SSR TTFB 深化、生产构建 chunk 复核与文档模板静态化。
 - 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `vue-sonner` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first。
-- 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
+- 当前批次已停止扩大范围；第 23 批只做 TODO-nexus 收尾，不新增代码路径、不新增 Playwright evidence、不混入 CoreApp / AI 其它工作。后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
+| 当前第 23 批 TODO 收尾 | 100% | 本批只更新 `docs/plan-prd/TODO-nexus.md`，把当前 goal 原句、用户追加收尾要求、已完成批次、后续 docs / aireview / 矩阵 / chunk / TTFB 子任务和验收口径集中到本文，作为下一轮唯一入口。 |
 | 当前第 22 批 sidebar full-body prefetch cancel | 100% | 已完成代码、focused test、scoped ESLint、`git diff --check`、production build sanity、Playwright CLI baseline/after screenshot/HAR/Markdown 报告；`scroll` 1.8s 首访窗口内 `body=1` 从 1 -> 0，demo registry/client renderer 仍为 0。 |
 | `/en/docs/dev/components/tabs` 触发链路 | 98% | 页面 200；第 17 批 clean tabs：requests 415、scripts 395、failed 0、`pwaClient 0`、console warning 0、H1 `Tabs`；剩余是 Nuxt/runtime、`node_modules` 与 docs demo 模块碎片继续拆。 |
 | docs 内容加载拆分 | 84% | `body=0` / idle `body=1` 已落地；第 21 批把 dev SSR 组件文档首访也切到 metadata-first，production SSR 保持 full body；第 22 批把 sidebar full-body hover 预取改为持续意图 + 可取消；右侧 outline、assistant shell、AI notice、无代码文档 code block renderer/CSS、docs 主正文 Prose wrapper 映射、Nuxt Content global Prose registry、普通 dev PWA client plugin 已从重型首屏路径拆出；模板静态 shell、逐页 section split 仍待做。 |
@@ -71,6 +72,7 @@
 | 20 | `a5285a4bd` | `perf(nexus): preload route locale chunks on locale switch` | 已完成 |
 | 21 | `3c6975c35` | `perf(nexus): split dev ssr component docs body` | 已完成 |
 | 22 | `60e5d952a` | `perf(nexus): cancel sidebar full body prefetch` | 已完成 |
+| 23 | docs-only | `docs(nexus): record current goal handoff` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -94,6 +96,34 @@
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵二轮都按下方 TODO 分批处理。
 - 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，第 16 批将 MDC Prose registry 请求归零，第 17 批将普通 dev 的 PWA client plugin 请求归零，第 18 批将首页 Vue attrs / aurora hydration warning 清理并预打包 `@vueuse/core`，第 19 批清理 `marked` / `echarts/*` / `vue-sonner` runtime discovery，第 20 批清理 zh landing route-local warning，第 21 批降低 dev SSR 组件文档首访正文体量，第 22 批收紧 sidebar full-body 预取；但 Nuxt runtime、`node_modules`、docs demo 模块碎片、移动端/production preview 和首页剩余 warning 仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+
+## 第 23 批收口记录
+
+目标：按用户追加要求快速完成当前任务收尾，把后续 docs 文档内容加载、AI review / aireview 未审批组件优化、全站 route matrix、dev SSR TTFB、生产 chunk 复核等全部沉淀到本文，不在当前批继续扩大代码改动。
+
+改动范围：
+
+- `docs/plan-prd/TODO-nexus.md`
+
+收口口径：
+
+- 当前 goal 原句与用户追加要求保留在本文 `Goal 原句` 区块，后续接手时不需要翻聊天记录确认范围。
+- 当前总进度继续按约 85% 估算；第 23 批本身为文档收口 100%，不改变代码性能数字。
+- 后续 docs / aireview 相关工作统一从 `后续任务树` 领取，按小批次执行：先跑 Playwright / HAR baseline，再落代码，再跑 focused test / scoped ESLint / `git diff --check` / Playwright 报告，最后回填本文并提交。
+- 本批不新增业务代码、不新增测试文件、不新增 Playwright artifact；第 21 / 22 批已有截图、HAR、Markdown、JSON 报告继续作为最近性能证据。
+- `output/playwright/` 继续保持 ignored evidence，只引用路径，不纳入 git。
+- 当前工作树的 CoreApp / AI 改动属于其它任务线，本批不得 stage 或提交。
+
+下一批入口建议：
+
+1. P0 首选：建立 pending 组件工作表，按 `syncStatus`、`verified`、正文体量、demo 数、API table、首屏请求数排序，先拿 `fusion` / `card` / `avatar-variants` 中 1 个页面做 section-level split 或 demo lazy boundary。
+2. P0 并行候选：dev SSR TTFB 基线，覆盖 `/`、`/store`、`/en/docs/dev/components/tabs`、`/sign-in`、未登录 dashboard redirect，区分 Nuxt transform、content query、i18n、store memory init 和 middleware。
+3. P0 验收候选：route matrix 二轮，补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache 与 `/new` Playwright screenshot/HAR。
+4. P1 候选：生产 chunk / payload / CSS 复核，确认 docs、store、dashboard、landing 是否仍有互相污染；若存在，优先修 import boundary / layout boundary / component registration。
+
+验证证据：
+
+- Markdown whitespace：`git diff --check -- "docs/plan-prd/TODO-nexus.md"`。
 
 ## 第 22 批收口记录
 
