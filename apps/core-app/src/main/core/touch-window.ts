@@ -14,6 +14,7 @@ import { shouldApplyMicaFallback } from './window-effects'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 
 const touchWindowLog = createLogger('TouchWindow')
+const degradedRenderProcessGoneWindows = new WeakSet<BrowserWindow>()
 
 // Determine if we should use MicaBrowserWindow (Windows only)
 const isWindows = process.platform === 'win32'
@@ -173,6 +174,16 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     this.window.webContents.addListener(
       'render-process-gone',
       (_event: ElectronEvent, details: RenderProcessGoneDetails) => {
+        if (degradedRenderProcessGoneWindows.has(this.window)) {
+          touchWindowLog.warn('Renderer process gone for degraded window', {
+            meta: {
+              reason: details.reason,
+              exitCode: details.exitCode
+            }
+          })
+          return
+        }
+
         touchWindowLog.error('Render process gone', {
           meta: {
             reason: details.reason,
@@ -232,4 +243,12 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
     return this.window.webContents
   }
+}
+
+export function markTouchWindowRenderFailureDegraded(window: BrowserWindow): void {
+  degradedRenderProcessGoneWindows.add(window)
+}
+
+export function unmarkTouchWindowRenderFailureDegraded(window: BrowserWindow): void {
+  degradedRenderProcessGoneWindows.delete(window)
 }

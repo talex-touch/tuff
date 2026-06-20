@@ -8,7 +8,11 @@
 import type { BrowserWindow } from 'electron'
 import process from 'node:process'
 import { DivisionBoxWindowOption } from '../../config/default'
-import { TouchWindow } from '../../core/touch-window'
+import {
+  markTouchWindowRenderFailureDegraded,
+  TouchWindow,
+  unmarkTouchWindowRenderFailureDegraded
+} from '../../core/touch-window'
 import { devProcessManager } from '../../utils/dev-process-manager'
 import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
@@ -131,7 +135,9 @@ export class DivisionBoxWindowPool {
           this.pool.push(pooledWindow)
           divisionBoxWindowPoolLog.debug(`Window added to pool (pool: ${this.pool.length})`)
         } catch (error) {
-          divisionBoxWindowPoolLog.error('Failed to create pooled window', { error })
+          divisionBoxWindowPoolLog.warn('Skipped DivisionBox pooled window pre-warm', {
+            meta: { reason: error instanceof Error ? error.message : String(error) }
+          })
         }
       }
     } finally {
@@ -154,6 +160,7 @@ export class DivisionBoxWindowPool {
       show: false, // Don't show until acquired
       title: 'Tuff Division (Pool)'
     })
+    markTouchWindowRenderFailureDegraded(touchWindow.window)
     divisionBoxWindowPoolLog.debug('TouchWindow created')
 
     // Load the CoreBox renderer
@@ -171,7 +178,9 @@ export class DivisionBoxWindowPool {
       // loadURL/loadFile already waits for the page to load
       // No need for additional dom-ready wait
     } catch (error) {
-      divisionBoxWindowPoolLog.error('Failed to load DivisionBox renderer', { error })
+      if (!touchWindow.window.isDestroyed()) {
+        touchWindow.window.destroy()
+      }
       throw error
     }
 
@@ -226,6 +235,7 @@ export class DivisionBoxWindowPool {
 
     if (pooledWindow) {
       touchWindow = pooledWindow.touchWindow
+      unmarkTouchWindowRenderFailureDegraded(touchWindow.window)
       divisionBoxWindowPoolLog.debug(`Acquired from pool (remaining: ${this.pool.length})`)
     } else {
       // Create new window on-demand

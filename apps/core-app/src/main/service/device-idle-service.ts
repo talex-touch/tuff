@@ -21,6 +21,15 @@ import {
 const execFileAsync = promisify(execFile)
 const deviceIdleLog = getLogger('device-idle-service')
 const BATTERY_STATUS_CACHE_TTL_MS = 30_000
+const BATTERY_COMMAND_EBADF_BACKOFF_MS = 10_000
+
+function isEbadfError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const node = error as { code?: unknown; message?: unknown }
+  return (
+    node.code === 'EBADF' || (typeof node.message === 'string' && node.message.includes('EBADF'))
+  )
+}
 
 export interface DeviceIdleSettings extends BatteryPolicy {
   idleThresholdMs: number
@@ -71,6 +80,7 @@ export class DeviceIdleService {
     onBattery: boolean
   } | null = null
   private batteryStatusPending: Promise<DeviceBatteryStatus | null> | null = null
+  private batteryCommandBackoffUntil = 0
 
   private constructor() {
     this.ensureSettingsLoaded()
@@ -226,6 +236,10 @@ export class DeviceIdleService {
   }
 
   private async readBatteryPercent(): Promise<number | null> {
+    if (Date.now() < this.batteryCommandBackoffUntil) {
+      return null
+    }
+
     try {
       if (process.platform === 'darwin') {
         const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
@@ -264,6 +278,13 @@ export class DeviceIdleService {
         }
       }
     } catch (error) {
+      if (isEbadfError(error)) {
+        this.batteryCommandBackoffUntil = Date.now() + BATTERY_COMMAND_EBADF_BACKOFF_MS
+        deviceIdleLog.warn('Battery percent lookup temporarily unavailable after EBADF', {
+          meta: { backoffMs: BATTERY_COMMAND_EBADF_BACKOFF_MS }
+        })
+        return null
+      }
       deviceIdleLog.warn('Failed to read battery percent', { error })
     }
     return null

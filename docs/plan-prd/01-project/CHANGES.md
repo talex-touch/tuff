@@ -5,6 +5,16 @@
 
 ## 2026-06-21
 
+### fix(core-app): degrade transient macOS startup probes
+
+- `apps/core-app/src/main/modules/system/active-app.ts`
+- `apps/core-app/src/main/service/device-idle-service.ts`
+- `apps/core-app/src/main/modules/division-box/window-pool.ts`
+- `apps/core-app/src/main/core/touch-window.ts`
+  - Added short EBADF backoff for macOS active-app and battery probes so transient Electron child-process failures degrade to warn-level unavailable state instead of repeated error stack logs.
+  - Treated DivisionBox pool pre-warm as an optional startup optimization: failed pre-warm windows are destroyed, logged as warn, and real acquired windows remain strict.
+  - Validation passed: focused ActiveApp/DeviceIdle tests, CoreApp main-process typecheck, `git diff --check`, and controlled CoreApp dev startup to `Renderer ready` / `TouchApp runtime initialized`.
+
 ### chore(runtime): align project Node runtime to 24
 
 - `.node-version`

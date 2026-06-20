@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
 const MACOS_RESOLVE_RETRY_DELAY_MS = 80
 const MACOS_PERMISSION_BACKOFF_MS = 60_000
+const MACOS_EBADF_BACKOFF_MS = 10_000
 const ACTIVE_APP_COMMAND_TIMEOUT_MS = 1500
 
 function isEbadfError(error: unknown): boolean {
@@ -138,6 +139,7 @@ class ActiveAppService {
   private currentPlatform: Platform
   private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
   private macosPermissionBackoffUntil = 0
+  private macosEbadfBackoffUntil = 0
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
@@ -149,6 +151,17 @@ class ActiveAppService {
       error
     })
     this.macosPermissionBackoffUntil = Date.now() + MACOS_PERMISSION_BACKOFF_MS
+    return null
+  }
+
+  private handleMacOSEbadf(error: unknown): null {
+    activeAppLog.warn('macOS active-app lookup temporarily unavailable after EBADF', {
+      meta: {
+        backoffMs: MACOS_EBADF_BACKOFF_MS,
+        message: getCompactCommandErrorMessage(error)
+      }
+    })
+    this.macosEbadfBackoffUntil = Date.now() + MACOS_EBADF_BACKOFF_MS
     return null
   }
 
@@ -213,6 +226,9 @@ end tell`
     if (Date.now() < this.macosPermissionBackoffUntil) {
       return null
     }
+    if (Date.now() < this.macosEbadfBackoffUntil) {
+      return null
+    }
 
     if (this.macosResolveInFlight) {
       return this.macosResolveInFlight
@@ -222,6 +238,7 @@ end tell`
       try {
         const result = await this.resolveActiveWindowMacOSOnce()
         this.macosPermissionBackoffUntil = 0
+        this.macosEbadfBackoffUntil = 0
         return result
       } catch (firstError) {
         if (isMacOSAutomationPermissionError(firstError)) {
@@ -243,10 +260,14 @@ end tell`
         try {
           const result = await this.resolveActiveWindowMacOSOnce()
           this.macosPermissionBackoffUntil = 0
+          this.macosEbadfBackoffUntil = 0
           return result
         } catch (retryError) {
           if (isMacOSAutomationPermissionError(retryError)) {
             return this.handleMacOSPermissionDenied(retryError)
+          }
+          if (isEbadfError(retryError)) {
+            return this.handleMacOSEbadf(retryError)
           }
 
           activeAppLog.error('macOS resolution failed after EBADF retry', { error: retryError })
