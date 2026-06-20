@@ -408,6 +408,8 @@ watch(
     docLocaleState.value = docsLocale.value
     docMetaState.value = {}
     docAssistantContextState.value = ''
+    clearDocClientPanelIntentListeners()
+    clearDocClientPanelSchedule()
     shouldMountDocClientPanels.value = false
     shouldMountDocEngagementPanels.value = false
   },
@@ -891,6 +893,8 @@ let lastEnhancedDocKey = ''
 const DOC_ENGAGEMENT_PANEL_DELAY_MS = 3200
 const DOC_ENGAGEMENT_PANEL_IDLE_TIMEOUT_MS = 5000
 const DOC_ENGAGEMENT_PANEL_ROOT_MARGIN = '360px 0px'
+const DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 2500
+const DOC_CLIENT_PANEL_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
 
 watch(
   () => [doc.value, renderDoc.value, docsLocale.value] as const,
@@ -926,6 +930,8 @@ onBeforeUnmount(() => {
   docAssistantContextState.value = ''
   clearCodeEnhanceSchedule()
   clearAssistantContextSchedule()
+  clearDocClientPanelIntentListeners()
+  clearDocClientPanelSchedule()
   clearEngagementPanelSchedule()
   clearRenderedCodeHeaders()
   if (import.meta.client) {
@@ -1151,6 +1157,9 @@ let assistantContextIdleId: number | null = null
 let engagementPanelTimer: ReturnType<typeof setTimeout> | null = null
 let engagementPanelIdleId: number | null = null
 let engagementPanelObserver: IntersectionObserver | null = null
+let docClientPanelIdleId: number | null = null
+let docClientPanelFrameId: number | null = null
+let docClientPanelIntentDisposers: Array<() => void> = []
 
 function clearCodeEnhanceSchedule() {
   if (import.meta.server)
@@ -1211,6 +1220,75 @@ function clearEngagementPanelSchedule() {
   if (engagementPanelObserver) {
     engagementPanelObserver.disconnect()
     engagementPanelObserver = null
+  }
+}
+
+function clearDocClientPanelSchedule() {
+  if (import.meta.server)
+    return
+
+  if (docClientPanelIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(docClientPanelIdleId)
+    docClientPanelIdleId = null
+  }
+  if (docClientPanelFrameId !== null) {
+    cancelAnimationFrame(docClientPanelFrameId)
+    docClientPanelFrameId = null
+  }
+}
+
+function clearDocClientPanelIntentListeners() {
+  if (import.meta.server)
+    return
+
+  for (const dispose of docClientPanelIntentDisposers)
+    dispose()
+  docClientPanelIntentDisposers = []
+}
+
+function mountDocClientPanels() {
+  if (!isDocsContentReady.value)
+    return
+
+  shouldMountDocClientPanels.value = true
+  clearDocClientPanelIntentListeners()
+  clearDocClientPanelSchedule()
+}
+
+function scheduleDocClientPanels() {
+  if (import.meta.server || shouldMountDocClientPanels.value || !isDocsContentReady.value)
+    return
+
+  clearDocClientPanelSchedule()
+
+  const mount = () => {
+    docClientPanelIdleId = null
+    docClientPanelFrameId = null
+    mountDocClientPanels()
+  }
+
+  if ('requestIdleCallback' in window) {
+    docClientPanelIdleId = window.requestIdleCallback(mount, { timeout: DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS })
+    return
+  }
+
+  docClientPanelFrameId = requestAnimationFrame(mount)
+}
+
+function handleDocClientPanelIntent() {
+  clearDocClientPanelIntentListeners()
+  scheduleDocClientPanels()
+}
+
+function bindDocClientPanelIntentListeners() {
+  if (import.meta.server || shouldMountDocClientPanels.value || docClientPanelIntentDisposers.length || !isDocsContentReady.value)
+    return
+
+  for (const eventName of DOC_CLIENT_PANEL_INTENT_EVENTS) {
+    window.addEventListener(eventName, handleDocClientPanelIntent, { passive: true })
+    docClientPanelIntentDisposers.push(() => {
+      window.removeEventListener(eventName, handleDocClientPanelIntent)
+    })
   }
 }
 
@@ -1344,7 +1422,7 @@ watch(
     if (!isReady || !docsClientPanelsMounted.value)
       return
 
-    shouldMountDocClientPanels.value = true
+    bindDocClientPanelIntentListeners()
     if (lastEnhancedDocKey !== renderKey) {
       lastEnhancedDocKey = renderKey
       void scheduleCodeEnhance(260)
@@ -1362,7 +1440,7 @@ watch(
     if (!isMounted || !isDocsContentReady.value)
       return
 
-    shouldMountDocClientPanels.value = true
+    bindDocClientPanelIntentListeners()
     void scheduleCodeEnhance(260)
     void scheduleOutlineSync(280)
     scheduleAssistantContextBuild(renderDoc.value?.body, 700)
