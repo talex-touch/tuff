@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus docs 第 17 批已收尾；本批把普通 dev 模式下的 `@vite-pwa/nuxt` 模块和 PWA client plugin 从 docs 首屏移出，同时用本地 wrapper 保留 production / `dev:pwa` 的 manifest 行为，修复禁用模块后的 `VitePwaManifest` 组件 warning。后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
+> 当前状态：Nexus 第 18 批已进入收尾；本批建立全站 route matrix 基线，修复首页 `TuffStickyBar` attrs warning 与 waitlist aurora SSR hydration mismatch，并把 `@vueuse/core` 加入 Vite dev 预打包以避免首页视觉路由首次访问 runtime reload。后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵、dev runtime dependency reload 和生产 chunk 复核继续按本文 TODO 队列推进。
 
 ## Goal 原句
 
@@ -20,25 +20,25 @@
 补充触发页：
 
 - `http://localhost:3200/en/docs/dev/components/tabs`
-- 当前本地验证 dev server：`http://localhost:3200`
+- 当前本地验证 dev server：第 18 批使用 `http://localhost:3210`，历史触发页原端口为 `http://localhost:3200`。
 
 ## 当前进度
 
 - 本轮 tabs/card 文档链路：约 98%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry 从首屏重型路径拆出。
-- 整体 goal 估算：约 77%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper。
-- 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
+- 整体 goal 估算：约 80%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血和全站 route matrix 首轮基线；后续仍需系统性覆盖 AI review / aireview 未审批组件、dev runtime dependency reload、生产构建 chunk 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` dev 预打包。
+- 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、`marked` / `echarts/*` / `vue-sonner` dev runtime dependency reload、首页 WebGL / lifecycle warning、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
-| 当前第 17 批 PWA dev module gate | 100% | 已提交 `6ee64dc98`；普通 dev 不再加载 `@vite-pwa/nuxt` / `pwa.client`，production 与 `dev:pwa` 保持 PWA manifest/SW 行为；focused tests、scoped ESLint、`git diff --check`、Playwright clean after、生产 build sanity 均已完成。 |
+| 当前第 18 批 landing route matrix cleanup | 100% | 已完成代码、focused tests、scoped ESLint、`git diff --check`、Playwright route matrix after、production build sanity；首页请求从 1017 降到 579，warning 从 52 降到 17，Vue attrs 与 aurora hydration mismatch 归零。 |
 | `/en/docs/dev/components/tabs` 触发链路 | 98% | 页面 200；第 17 批 clean tabs：requests 415、scripts 395、failed 0、`pwaClient 0`、console warning 0、H1 `Tabs`；剩余是 Nuxt/runtime、`node_modules` 与 docs demo 模块碎片继续拆。 |
-| docs 内容加载拆分 | 79% | `body=0` / idle `body=1` 已落地；右侧 outline、assistant shell、AI notice、无代码文档 code block renderer/CSS、docs 主正文 Prose wrapper 映射、Nuxt Content global Prose registry、普通 dev PWA client plugin 已从重型首屏路径拆出；demo registry、模板静态 shell、DocApiTable 仍待做。 |
-| AI review / aireview 未审批组件 | 29% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复、pending 长文档 MDC Prose wrapper / global Prose registry / PWA dev client 削减；逐页 demo/模板优化待做。 |
-| 全站页面切换矩阵 | 10% | tabs/card 有基线；`/`、`/store`、dashboard、Provider Registry、Data Governance 待覆盖。 |
-| 生产构建 chunk 复核 | 16% | 第 10/11/12/13/14/15/16/17 批均已通过 `NUXT_DISABLE_PRERENDER=true` compile sanity；第 17 批确认 production 仍生成 PWA SW；完整 prerender 和 chunk/payload/CSS 深查待做。 |
+| docs 内容加载拆分 | 80% | `body=0` / idle `body=1` 已落地；右侧 outline、assistant shell、AI notice、无代码文档 code block renderer/CSS、docs 主正文 Prose wrapper 映射、Nuxt Content global Prose registry、普通 dev PWA client plugin 已从重型首屏路径拆出；demo registry、模板静态 shell、DocApiTable 仍待做。 |
+| AI review / aireview 未审批组件 | 31% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复、pending 长文档 MDC Prose wrapper / global Prose registry / PWA dev client 削减；逐页 demo/模板优化待做。 |
+| 全站页面切换矩阵 | 26% | 第 18 批已覆盖 `/`、`/en/docs`、tabs、card、`/store`、dashboard redirect、Provider Registry redirect、Data Governance redirect、home -> store；下一步要做 authenticated dashboard、移动端和 production preview 口径。 |
+| 生产构建 chunk 复核 | 20% | 第 10/11/12/13/14/15/16/17/18 批均已通过 production build sanity；第 17/18 批确认 production 仍生成 PWA SW；完整 chunk/payload/CSS 深查待做。 |
 | TODO 与交接文档 | 100% | 当前 goal 原句、批次、证据路径、后续子任务已沉淀在本文。 |
 
 ## 已完成批次
@@ -62,6 +62,7 @@
 | 15 | `2026db6d8` | `perf(nexus): use native docs prose tags` | 已完成 |
 | 16 | `9e2d0145c` | `perf(nexus): filter mdc prose globals` | 已完成 |
 | 17 | `6ee64dc98` | `perf(nexus): gate pwa module in dev` | 已完成 |
+| 18 | `ec2202497` | `perf(nexus): stabilize landing route matrix` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -76,10 +77,67 @@
 - 第 15 批已提交：`2026db6d8 perf(nexus): use native docs prose tags`；docs 主正文 `ContentRenderer` 禁用默认 Prose 全量映射，用轻量 heading wrapper 保留锚点，减少一批 MDC prose dev requests。
 - 第 16 批已提交：`9e2d0145c perf(nexus): filter mdc prose globals`；Nuxt Content 生成的默认 MDC Prose global components 已从 component registry 过滤，`tabs` / `fusion` / `card` / policy 页面 clean first visit 均为 `mdcProse 0`。
 - 第 17 批已提交：`6ee64dc98 perf(nexus): gate pwa module in dev`；普通 dev 不再加载 `@vite-pwa/nuxt` 与 `pwa.client`，根组件改用 `NexusPwaManifest` wrapper，production / `dev:pwa` 保持 PWA manifest 行为，并修复禁用模块后的 `VitePwaManifest` warning。
+- 第 18 批已提交：`ec2202497 perf(nexus): stabilize landing route matrix`；首页 sticky bar attrs warning 和 waitlist aurora hydration mismatch 已清理，`@vueuse/core` 不再触发 Vite runtime dependency discovery，route matrix after 显示 docs tabs/card 仍 0 warning / 0 failed。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
-- 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
-- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，第 16 批将 MDC Prose registry 请求归零，第 17 批将普通 dev 的 PWA client plugin 请求归零，但 Nuxt runtime、`node_modules`、i18n 与 docs demo 模块碎片仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+- 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵二轮都按下方 TODO 分批处理。
+- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，第 16 批将 MDC Prose registry 请求归零，第 17 批将普通 dev 的 PWA client plugin 请求归零，第 18 批将首页 Vue attrs / aurora hydration warning 清理并预打包 `@vueuse/core`，但 Nuxt runtime、`node_modules`、i18n、docs demo 模块碎片、`marked` / `echarts/*` / `vue-sonner` dev runtime discovery 仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+
+## 第 18 批收口记录
+
+目标：把第 18 批 route matrix baseline 中暴露的首页 warning / hydration mismatch 和 Vite runtime dependency reload 做小范围止血，并把 docs / aireview 后续工作留在 TODO 队列，不继续扩大当前批。
+
+改动范围：
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/components/tuff/TuffStickyBar.vue`
+- `apps/nexus/app/components/tuff/landing/TuffLandingAuroraBar.vue`
+- `apps/nexus/app/components/tuff/landing/TuffLandingWaitlist.vue`
+- `apps/nexus/app/components/tuff/landing/landing-performance-boundary.test.ts`
+- `apps/nexus/app/components/content/demo-client-boundary.test.ts`
+
+实现口径：
+
+- `TuffStickyBar` 显式 `inheritAttrs: false`，并把父级 `class` / `data-reveal` 转发到真实 `.TuffStickyBar` DOM，修复 fragment root attrs warning，同时保留 `useGsapReveal` 的目标选择语义。
+- `TuffLandingAuroraBar` 不再在组件 setup/computed 中调用 `Math.random()`；`TuffLandingWaitlist` 使用 index seed 生成稳定条带配置，保留视觉分布但保证 SSR/client 首屏样式一致。
+- `@vueuse/core` 加入 `vite.optimizeDeps.include`，修复首页视觉路由首次加载时 Vite 运行中发现 `@vueuse/core` 并触发 reload 的问题。
+- 新增 focused 文本测试，钉住 landing SSR deterministic boundary 与 sticky attrs forwarding；扩展 demo boundary 测试，钉住 `@vueuse/core` dev pre-bundle。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/components/tuff/landing/landing-performance-boundary.test.ts" "app/components/content/demo-client-boundary.test.ts"`，2 files / 17 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "nuxt.config.ts" "app/components/tuff/TuffStickyBar.vue" "app/components/tuff/landing/TuffLandingAuroraBar.vue" "app/components/tuff/landing/TuffLandingWaitlist.vue" "app/components/tuff/landing/landing-performance-boundary.test.ts" "app/components/content/demo-client-boundary.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/nuxt.config.ts" "apps/nexus/app/components/tuff/TuffStickyBar.vue" "apps/nexus/app/components/tuff/landing/TuffLandingAuroraBar.vue" "apps/nexus/app/components/tuff/landing/TuffLandingWaitlist.vue" "apps/nexus/app/components/tuff/landing/landing-performance-boundary.test.ts" "apps/nexus/app/components/content/demo-client-boundary.test.ts"` 通过。
+- Production build：`NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build` 通过；生产 PWA 仍生成 `sw.js` / `workbox-*.js`；构建中仍有既有 browserslist、Sourcemap、node fs externalized、chunk size 与 OpenAI ESM top-level `this` warning，不归因于本批。
+- Playwright baseline：
+  - 报告：`output/playwright/nexus-route-matrix-b18-baseline-3209-2026-06-21.md`
+  - JSON：`output/playwright/nexus-route-matrix-b18-baseline-3209-2026-06-21.json`
+  - home：status 200, requests 1017, scripts 890, styles 186, failed 4, warnings 52, nodeModules 466, routeLocale 6。
+  - store：status 200, requests 1002, scripts 898, styles 162, failed 9, warnings 0。
+  - docs-tabs：status 200, requests 426, scripts 395, failed 0, warnings 0。
+  - docs-card：status 200, requests 431, scripts 399, failed 0, warnings 0。
+  - dashboard / provider-registry / governance：未登录场景按预期 redirect 到 `/sign-in`。
+- Playwright after：
+  - 报告：`output/playwright/nexus-route-matrix-b18-after-3210-2026-06-21.md`
+  - JSON：`output/playwright/nexus-route-matrix-b18-after-3210-2026-06-21.json`
+  - HAR/截图：同前缀 `home`、`docs-index`、`docs-tabs`、`docs-card`、`store`、`dashboard`、`provider-registry`、`governance`、`switch-home-to-store` 的 `.har` / `.png`。
+  - home：status 200, requests 579, scripts 515, styles 57, failed 2, warnings 17, nodeModules 234, routeLocale 1；`TuffStickyBar` attrs warning 0，aurora hydration mismatch 0。
+  - docs-index：status 200, requests 430, scripts 402, failed 0, warnings 0。
+  - docs-tabs：status 200, requests 425, scripts 395, failed 0, warnings 0, H1 `Tabs`。
+  - docs-card：status 200, requests 430, scripts 399, failed 0, warnings 0, H1 `Card`。
+  - store：status 200, requests 991, scripts 889, failed 1, warnings 0。
+  - dashboard：status 200 -> final `/sign-in`, requests 951, scripts 850, failed 1, warnings 0。
+  - provider-registry：status 200 -> final `/sign-in`, requests 470, scripts 419, failed 0, warnings 0。
+  - governance：status 200 -> final `/sign-in`, requests 489, scripts 434, failed 0, warnings 0。
+  - home -> store：status 200, final `/store`, requests 75, scripts 72, failed 0, warnings 0。
+- Dev server after 日志：
+  - `@vueuse/core` 不再出现在 Vite runtime dependency discovery 中。
+  - 剩余 runtime discovery：`marked`、`echarts/core`、`echarts/charts`、`echarts/components`、`echarts/renderers`、`vue-sonner`；已作为后续第 19 批候选，不纳入第 18 批继续扩大。
+- 第 18 批 baseline 对比：
+  - home：1017 requests / 890 scripts / 186 styles / 52 warnings / 466 nodeModules -> 579 / 515 / 57 / 17 / 234。
+  - docs-tabs：426 requests / 395 scripts / warning 0 -> 425 / 395 / warning 0。
+  - docs-card：431 requests / 399 scripts / warning 0 -> 430 / 399 / warning 0。
+  - switch-home-to-store：681 requests / 586 scripts / 52 warnings -> 75 / 72 / 0 warnings。
 
 ## 第 17 批收口记录
 
@@ -583,10 +641,10 @@
 
 ### 收尾边界
 
-- [x] 当前批次只收尾第 17 批 PWA dev module gate，不继续混入 docs demo、DocApiTable 或更多 aireview 未审批组件逐页优化。
+- [x] 当前批次只收尾第 18 批 landing route matrix cleanup，不继续混入 docs demo、DocApiTable 或更多 aireview 未审批组件逐页优化。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
-- [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，优先从 `fusion` / `card` / `avatar-variants` 中选，跑 Playwright / HAR baseline 后再落代码。
+- [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，优先从 `marked` / `echarts/*` / `vue-sonner` dev runtime discovery、`fusion` / `card` / `avatar-variants` docs pending 优化、首页 WebGL/lifecycle warning 中选，跑 Playwright / HAR baseline 后再落代码。
 
 ### P0：docs 文档内容加载继续拆分
 
@@ -639,6 +697,9 @@
 - [x] 已完成候选 D：Nuxt Content `#content/components` global Prose registry 排除 / 显式 native prose map。第 16 批已验证 generated registry 中默认 Prose wrappers 可安全移除，`mdcProse 23 -> 0`。
 - [x] 已完成候选 E：普通 dev PWA module gate。第 17 批已验证 docs 首屏 `pwaClient 0`、warning 0，production PWA SW 仍生成。
 - [ ] 下一批候选 F：route matrix 首轮扩展。原因：当前证据集中在 docs/components，仍需把 `/`、`/store`、dashboard、Provider Registry、Data Governance 纳入同一性能口径。
+- [x] 已完成候选 F 首轮：第 18 批已覆盖 `/`、`/en/docs`、tabs、card、`/store`、dashboard redirect、Provider Registry redirect、Data Governance redirect、home -> store，并输出 screenshot / HAR / JSON / Markdown。
+- [ ] 下一批候选 G：dev runtime dependency reload。原因：第 18 批 after 日志仍提示 `marked`、`echarts/*`、`vue-sonner` 运行中发现依赖；需要先确认对应路由和收益，再决定是否加入 `optimizeDeps` 或拆 route-local import。
+- [ ] 下一批候选 H：首页剩余 warning。原因：第 18 批已清理 Vue attrs / hydration mismatch，剩余 warning 主要是 WebGL ReadPixels、async lifecycle `onBeforeUnmount`、`Invalid scope`，需要单独定位源头，避免把视觉 canvas 问题混入 docs 批次。
 
 ### P0：当前 goal 后续验收清单
 
@@ -650,15 +711,17 @@
 - [x] 第 15 批结束已更新本文：提交 hash、改动范围、测试命令、Playwright 核心数字、下一批候选。
 - [x] 第 16 批结束已更新本文：提交 hash、改动范围、测试命令、Playwright 核心数字、下一批候选。
 - [x] 第 17 批结束已更新本文：提交 hash、改动范围、测试命令、Playwright 核心数字、下一批候选。
+- [x] 第 18 批结束已更新本文：改动范围、测试命令、Playwright 核心数字、下一批候选。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
 
-- [ ] 建立 Nexus route matrix：`/`、`/en/docs`、`/en/docs/dev/components/tabs`、`/en/docs/dev/components/card`、`/store`、`/dashboard`、Provider Registry、Data Governance。
-- [ ] 用 Playwright 跑首次加载、同域 client-side route switch、返回上一页、刷新后的视觉稳定性。
-- [ ] 每个 route 输出 screenshot、HAR、JSON timing、Markdown summary。
+- [x] 建立 Nexus route matrix 首轮：`/`、`/en/docs`、`/en/docs/dev/components/tabs`、`/en/docs/dev/components/card`、`/store`、`/dashboard`、Provider Registry、Data Governance、home -> store。
+- [x] 用 Playwright 跑首次加载和同域 client-side route switch 首轮；返回上一页、移动端、authenticated dashboard 和 production preview 待后续二轮。
+- [x] 每个 route 输出 screenshot、HAR、JSON timing、Markdown summary。
 - [ ] 对比每批提交前后 request count、stylesheet/script count、failed count、elapsed。
 - [ ] 将结果归档到 `output/playwright/`，只引用报告路径，不把 artifact 纳入 git。
+- [ ] route matrix 二轮补：authenticated `/dashboard`、Provider Registry、Data Governance；移动端 viewport；production preview；back/forward cache；首屏 media failed request 分类。
 
 ### P1：生产构建同类风险复核
 
@@ -669,6 +732,7 @@
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 15 批 docs native prose heading mapping 不影响生产 client/server/Nitro 打包。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 16 批 MDC Prose global registry filter 不影响生产 client/server/Nitro/PWA 打包。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 17 批 PWA dev module gate 不影响生产 client/server/Nitro/PWA 打包，生产仍生成 `sw.js`。
+- [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 18 批 landing route matrix cleanup 不影响生产 client/server/Nitro/PWA 打包，生产仍生成 `sw.js`。
 - [ ] 检查 Nuxt route chunks、payload chunks、CSS chunks 是否存在 docs/store/dashboard/landing 互相污染。
 - [ ] 若生产存在同类问题，优先从 import boundary / layout boundary / component registration 修复，而不是沿用 dev-only HTML filter。
 
@@ -679,7 +743,9 @@
 - [x] 若要落地 alias / noop 模块，必须有 focused Vitest、scoped ESLint、Playwright tabs/card/switch 报告和 failed request = 0 证据。
 - [x] 不直接 alias 不稳定的 Nuxt / Vue Router 内部路径，除非确认版本边界、fallback 和运行时兼容性。
 - [x] 普通 docs dev 不默认启用 PWA dev client plugin；需要 PWA 调试时显式使用 `pnpm -C "apps/nexus" run dev:pwa`。
+- [x] 将 `@vueuse/core` 加入 Vite dev pre-bundle，避免首页视觉路由首次访问 runtime dependency discovery。
 - [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、demo wrapper 可见区加载、真实 code block 页 renderer chunk 体量。
+- [ ] 继续处理 Vite runtime discovery：先定位 `marked`、`echarts/*`、`vue-sonner` 分别来自 docs renderer、dashboard charts、sign-in toast/style，确认是否应 pre-bundle 或拆成 route-local/lazy import。
 
 ### P1：i18n 与 route-local message 深化
 
@@ -706,4 +772,4 @@
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 17 批已经收尾，后续不要继续往本批塞 docs demo、DocApiTable 或 aireview 逐页优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 18 批已经收尾，后续不要继续往本批塞 docs demo、DocApiTable、aireview 逐页优化、`marked`/`echarts`/`vue-sonner` runtime discovery 或首页 WebGL/lifecycle warning；新改动按上方 TODO 独立切批、独立验证、独立提交。
