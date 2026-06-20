@@ -24,6 +24,7 @@ useHead({
   <div class="privacy-surface px-8 py-10 space-y-10">
     <ContentRenderer
       :value="resolvedDoc"
+      :prose="false"
       class="prose prose-neutral dark:prose-invert max-w-none"
     />
   </div>

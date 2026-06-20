@@ -20,6 +20,7 @@ useHead({
   <div class="protocol-surface px-8 py-10 space-y-10">
     <ContentRenderer
       :value="protocolDoc ?? {}"
+      :prose="false"
       class="prose prose-neutral dark:prose-invert max-w-none"
     />
   </div>
