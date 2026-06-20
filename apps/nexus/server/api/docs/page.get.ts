@@ -1,5 +1,24 @@
+import type { H3Event } from 'h3'
 import { queryCollection } from '@nuxt/content/server'
+import { isMissingDocsContentTableError } from '../../utils/docsContentError'
 import { normalizeDocsPagePath } from '../../utils/docsPath'
+
+const DOCS_PAGE_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
+const DEV_DOCS_CONTENT_FALLBACK_WINDOW_MS = 10_000
+
+type DocsPageRecord = Record<string, unknown> & {
+  body?: unknown
+  path?: string
+  _path?: string
+}
+
+interface DevDocsPageCacheEntry {
+  mtimeMs: number
+  doc: DocsPageRecord
+}
+
+const devDocsPageFileCache = new Map<string, DevDocsPageCacheEntry>()
+let devDocsContentFallbackUntil = 0
 
 function normalizeLocale(value: unknown): 'en' | 'zh' {
   if (typeof value !== 'string')
@@ -27,43 +46,185 @@ function serializeDoc<T extends { body?: unknown } | null>(doc: T, includeBody: 
   return toPlainJson(metadata)
 }
 
-export default defineEventHandler(async (event) => {
-  const query = getQuery(event)
-  const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
-  const locale = normalizeLocale(query.locale)
-  const includeBody = shouldIncludeBody(query.body)
-
+function buildDocsPageLookupPaths(docPath: string, locale: 'en' | 'zh') {
   const localizedPath = `${docPath}.${locale}`
   const baseDocPath = docPath.replace(/\/index$/, '')
   const localizedIndexPath = `${baseDocPath}/index.${locale}`
   const indexPath = `${baseDocPath}/index`
   const shouldTryIndex = !docPath.endsWith('/index')
 
-  const localizedDoc = await queryCollection(event, 'docs').path(localizedPath).first()
-  if (localizedDoc) {
-    setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-    return serializeDoc(localizedDoc, includeBody)
+  return [
+    localizedPath,
+    ...(shouldTryIndex ? [localizedIndexPath] : []),
+    docPath,
+    ...(shouldTryIndex ? [indexPath] : []),
+  ]
+}
+
+async function queryDocsPage(event: H3Event, lookupPaths: string[]) {
+  for (const path of lookupPaths) {
+    const doc = await queryCollection(event, 'docs').path(path).first()
+    if (doc)
+      return doc
   }
 
-  if (shouldTryIndex) {
-    const localizedIndexDoc = await queryCollection(event, 'docs').path(localizedIndexPath).first()
-    if (localizedIndexDoc) {
-      setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-      return serializeDoc(localizedIndexDoc, includeBody)
+  return null
+}
+
+function isProduction() {
+  return process.env.NODE_ENV === 'production'
+}
+
+function shouldPreferDevDocsFallback() {
+  return !isProduction() && Date.now() < devDocsContentFallbackUntil
+}
+
+function markDevDocsContentUnavailable() {
+  devDocsContentFallbackUntil = Date.now() + DEV_DOCS_CONTENT_FALLBACK_WINDOW_MS
+}
+
+function normalizeDocsContentStem(contentPath: string) {
+  if (contentPath === '/docs')
+    return 'index'
+
+  if (contentPath.startsWith('/docs/'))
+    return contentPath.slice('/docs/'.length) || 'index'
+
+  if (contentPath.startsWith('/docs.'))
+    return `index${contentPath.slice('/docs'.length)}`
+
+  return null
+}
+
+function isSafeContentStem(stem: string) {
+  if (!stem || stem.includes('\0'))
+    return false
+
+  return stem
+    .split('/')
+    .every(segment => segment && segment !== '.' && segment !== '..')
+}
+
+function buildDevDocsContentCandidates(contentPath: string) {
+  const stem = normalizeDocsContentStem(contentPath)
+  if (!stem || !isSafeContentStem(stem))
+    return []
+
+  return [`${stem}.mdc`, `${stem}.md`]
+}
+
+function isFileNotFound(error: unknown) {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && (error as { code?: unknown }).code === 'ENOENT',
+  )
+}
+
+async function readDevDocsPageFromFile(contentPath: string): Promise<DocsPageRecord | null> {
+  if (isProduction())
+    return null
+
+  const candidates = buildDevDocsContentCandidates(contentPath)
+  if (!candidates.length)
+    return null
+
+  const [{ readFile, stat }, { resolve, sep }, { parseMarkdown }] = await Promise.all([
+    import('node:fs/promises'),
+    import('node:path'),
+    import('@nuxtjs/mdc/runtime'),
+  ])
+  const docsRoot = resolve(process.cwd(), 'content/docs')
+  const docsRootPrefix = `${docsRoot}${sep}`
+
+  for (const relativeFile of candidates) {
+    const filePath = resolve(docsRoot, relativeFile)
+    if (filePath !== docsRoot && !filePath.startsWith(docsRootPrefix))
+      continue
+
+    let fileStat: { mtimeMs: number }
+    try {
+      fileStat = await stat(filePath)
+    }
+    catch (error) {
+      if (isFileNotFound(error))
+        continue
+      throw error
+    }
+
+    const cached = devDocsPageFileCache.get(filePath)
+    if (cached && cached.mtimeMs === fileStat.mtimeMs)
+      return cached.doc
+
+    const raw = await readFile(filePath, 'utf8')
+    const parsed = await parseMarkdown(raw, {
+      highlight: false,
+      toc: { depth: 4, searchDepth: 4 },
+    })
+    const data = parsed.data && typeof parsed.data === 'object'
+      ? parsed.data as Record<string, unknown>
+      : {}
+    const body = parsed.body && typeof parsed.body === 'object'
+      ? { ...parsed.body, toc: parsed.toc }
+      : parsed.body
+    const doc: DocsPageRecord = {
+      ...data,
+      path: contentPath,
+      _path: contentPath,
+      meta: data,
+      body,
+      toc: parsed.toc,
+    }
+    devDocsPageFileCache.set(filePath, { mtimeMs: fileStat.mtimeMs, doc })
+    return doc
+  }
+
+  return null
+}
+
+async function readDevDocsPageFallback(lookupPaths: string[]) {
+  for (const path of lookupPaths) {
+    const doc = await readDevDocsPageFromFile(path)
+    if (doc)
+      return doc
+  }
+
+  return null
+}
+
+export default defineEventHandler(async (event) => {
+  const query = getQuery(event)
+  const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
+  const locale = normalizeLocale(query.locale)
+  const includeBody = shouldIncludeBody(query.body)
+  const lookupPaths = buildDocsPageLookupPaths(docPath, locale)
+
+  if (shouldPreferDevDocsFallback()) {
+    const fallbackDoc = await readDevDocsPageFallback(lookupPaths)
+    if (fallbackDoc) {
+      setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
+      return serializeDoc(fallbackDoc, includeBody)
     }
   }
 
-  const baseDoc = await queryCollection(event, 'docs').path(docPath).first()
-  if (baseDoc) {
-    setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-    return serializeDoc(baseDoc, includeBody)
+  try {
+    const doc = await queryDocsPage(event, lookupPaths)
+    setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
+    return doc ? serializeDoc(doc, includeBody) : null
   }
+  catch (error) {
+    if (isProduction() || !isMissingDocsContentTableError(error))
+      throw error
 
-  const fallbackDoc = shouldTryIndex
-    ? await queryCollection(event, 'docs').path(indexPath).first()
-    : null
+    markDevDocsContentUnavailable()
+    const fallbackDoc = await readDevDocsPageFallback(lookupPaths)
+    setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
 
-  setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
+    if (fallbackDoc) {
+      console.warn('[api/docs/page] Nuxt Content docs table is not ready; rendering the local Markdown file in development.', error)
+      return serializeDoc(fallbackDoc, includeBody)
+    }
 
-  return fallbackDoc ? serializeDoc(fallbackDoc, includeBody) : null
+    return null
+  }
 })
