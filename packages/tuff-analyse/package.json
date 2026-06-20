@@ -1,0 +1,27 @@
+{
+  "name": "@talex-touch/tuff-analyse",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Reusable Tuff upgrade, cleanup, size and vulnerability analysis dashboard.",
+  "author": "TalexDreamSoul",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3416",
+    "build": "vue-tsc --noEmit -p tsconfig.json && vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "preview": "vite preview --host 127.0.0.1 --port 3417"
+  },
+  "dependencies": {
+    "@talex-touch/tuffex": "workspace:*",
+    "@vueuse/core": "catalog:frontend",
+    "vue": "catalog:frontend"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "catalog:dev",
+    "unocss": "catalog:build",
+    "vite": "catalog:build",
+    "vue-tsc": "catalog:dev"
+  }
+}
