@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 性能优化进行中；已完成 6 个提交，当前第 7 批为 docs component page full-body / prefetch idle scheduling，待提交。
+> 当前状态：本轮 Nexus docs 性能批次已收尾；已完成 7 个提交。后续 docs 文档内容、AI review / aireview 未审批组件、全站 route matrix 与生产构建复核全部进入本文 TODO 队列。
 
 ## Goal 原句
 
@@ -18,10 +18,10 @@
 
 ## 当前进度
 
-- 整体估算：约 48%。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤。
-- 当前批次：docs component page full-body 请求与 sidebar/pager full-body 预取改为短延迟 + idle 调度，避免组件文档页面切换时 `body=1` 全量 Markdown 解析抢首屏。
-- 未开始或只做前置铺垫：aireview 未审批组件优化、生产构建 chunk 污染复核、全站页面切换矩阵。
+- 本轮收尾：100%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险和明显慢切换路径，并保留 Playwright / HAR / screenshot / focused tests 证据。
+- 整体 goal 估算：约 52%。已完成 docs 路由关键路径止血；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix 与生产构建 chunk 复核。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度。
+- 后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 已完成批次
 
@@ -33,7 +33,15 @@
 | 4 | `fe129d49e` | `perf(nexus): remove global docs highlight plugin` | 已完成 |
 | 5 | `3213bcba0` | `perf(nexus): split route-local locale messages` | 已完成 |
 | 6 | `ec0d41e29` | `perf(nexus): filter route-local dev stylesheets` | 已完成 |
-| 7 | 待提交 | `perf(nexus): defer docs full-body prefetch` | 收尾中 |
+| 7 | `e46541119` | `perf(nexus): defer docs full body prefetch` | 已完成 |
+
+## 本轮收尾结论
+
+- `/en/docs/dev/components/tabs` 当前页切换已从“切换时立即竞争 full-body Markdown parse / sidebar full-body prefetch”改为“先轻 metadata，后 idle full body”。
+- 第 7 批已提交：`e46541119 perf(nexus): defer docs full body prefetch`。
+- 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
+- `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
+- 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
 
 ## 第 6 批收口记录
 
@@ -127,12 +135,28 @@
 
 ### P0：aireview 未审批组件优化
 
-- [ ] 定位 `aireview` 相关组件、页面、content/demo 引用和审批状态，列出未审批清单。
+- [x] 建立当前可执行口径：仓库内暂无稳定字面量 `aireview` 标记，先按组件文档 frontmatter 的 `syncStatus != reviewed` 或 `verified != true` 视为 AI review / aireview 未审批或未完全审批。
+- [x] 初步审计 `apps/nexus/content/docs/dev/components/*.mdc`：共 216 个组件文档，`reviewed` 64 个，`migrated` 152 个，`verified: true` 92 个，未 verified 124 个；按上述口径 pending 152 个。
+- [ ] 将审计脚本固化为可复跑工具或 focused test，输出 pending 组件、正文体量、demo 数、重型 client demo 引用数。
 - [ ] 对未审批组件逐个分组：可静态化、可懒加载、应移出 docs 首屏、应合并模板、应删除或后置。
-- [ ] 对 aireview 文档页做 Playwright 截图和 HAR 基线，记录首屏请求量、慢资源、样式/脚本污染。
-- [ ] 优化 aireview 组件的 client-only 边界，避免 SSR 阶段加载浏览器态或重型交互依赖。
-- [ ] 将 aireview demo / preview / report 类重型组件改为显式 lazy boundary。
+- [ ] 优先处理高风险 pending 页面：
+  - `fusion.en.mdc` / `fusion.zh.mdc`：约 52KB / 52KB，10 个 demo。
+  - `card.en.mdc` / `card.zh.mdc`：约 49KB / 48KB，12 个 demo。
+  - `avatar-variants.en.mdc` / `avatar-variants.zh.mdc`：约 36KB / 36KB，正文体量高。
+  - `gradual-blur.en.mdc` / `gradual-blur.zh.mdc`：约 16KB / 15KB，7 个 demo。
+  - `auto-sizer.en.mdc` / `auto-sizer.zh.mdc`：约 14KB / 13KB，7 个 demo。
+  - `scroll.en.mdc` / `scroll.zh.mdc`：约 12KB / 11KB，6 个 demo。
+- [ ] 对上述 aireview / pending 文档页做 Playwright 截图和 HAR 基线，记录首屏请求量、慢资源、样式/脚本污染、route switch timing。
+- [ ] 优化 aireview / pending 组件的 client-only 边界，避免 SSR 阶段加载浏览器态或重型交互依赖。
+- [ ] 将 aireview demo / preview / report 类重型组件改为显式 lazy boundary，并复用现有 `TuffDemoWrapper` / `TuffDemoClientRenderer.client.vue` 懒激活机制。
 - [ ] 为 aireview 未审批组件新增加载回归测试，确保文档页切换不 eager import 全部重型组件。
+
+### P0：当前 goal 后续验收清单
+
+- [ ] 每一批至少包含：代码改动、focused test、scoped ESLint 或等价静态检查、`git diff --check`、Playwright Markdown 报告。
+- [ ] 每一批 Playwright 报告至少包含：截图路径、HAR 路径、failed request count、request count、DOMContentLoaded/load/network idle、client-side route switch timing。
+- [ ] 每一批只提交当前相关文件；不得混入 CoreApp AI evidence、其它产品线或无关格式化。
+- [ ] 每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
 
