@@ -116,6 +116,10 @@ export interface EverythingSetCliPathResponse {
   status: EverythingStatusResponse
 }
 
+export interface EverythingTestRequest {
+  query?: string | null
+}
+
 export interface EverythingTestResponse {
   success: boolean
   backend?: EverythingBackendType
@@ -126,6 +130,7 @@ export interface EverythingTestResponse {
   resultCount?: number
   duration?: number
   sample?: EverythingResultSample | null
+  pathFiltering?: EverythingPathFilteringStatus
   backendAttempts?: EverythingDiagnostics
   durationByStage?: Partial<Record<EverythingDiagnosticStage, number>>
 }
@@ -193,7 +198,10 @@ export const everythingSetCliPathEvent = defineRawEvent<
   EverythingSetCliPathResponse
 >('everything:set-cli-path')
 
-export const everythingTestEvent = defineRawEvent<void, EverythingTestResponse>('everything:test')
+export const everythingTestEvent = defineRawEvent<
+  EverythingTestRequest | void,
+  EverythingTestResponse
+>('everything:test')
 
 export const everythingInstallStartEvent = defineRawEvent<void, EverythingInstallStartResponse>(
   'everything:install-start'
