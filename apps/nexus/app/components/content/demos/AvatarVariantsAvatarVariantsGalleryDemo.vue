@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import AvatarVariantCard from './AvatarVariantCard.vue'
+
 const { locale } = useI18n()
 const tabs = ref(['Status', 'Activity', 'Platform', 'System', 'Social', 'Context'])
 const activeTab = ref('Status')
