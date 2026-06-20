@@ -3,7 +3,6 @@ import { hasNavigator } from '@talex-touch/utils/env'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import DarkVeil from './background/DarkVeil.vue'
 import TuffLandingIntegrations from './landing/TuffLandingIntegrations.vue'
-import NexusPlatformIcon from './NexusPlatformIcon.vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 
 type CapabilityKey = 'local' | 'intelligence' | 'plugins'
@@ -147,7 +146,7 @@ useHead({
         </h1>
         <div class="NexusHero-Actions" :class="{ 'is-ready': interactiveReady }">
           <NuxtLink class="NexusButton is-primary" to="/updates">
-            <NexusPlatformIcon :platform="heroPlatform" />
+            <TxOsIcon :platform="heroPlatform" />
             <span>{{ primaryCtaLabel }}</span>
           </NuxtLink>
           <NuxtLink class="NexusButton" to="/docs">

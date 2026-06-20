@@ -1,13 +1,42 @@
 <script setup lang="ts">
-defineProps<{
-  platform: 'darwin' | 'win32' | 'linux'
-}>()
+import { computed } from 'vue'
+
+defineOptions({
+  name: 'TxOsIcon',
+})
+
+const props = withDefaults(defineProps<{
+  platform?: string
+  os?: string
+}>(), {
+  platform: '',
+  os: '',
+})
+
+const normalizedPlatform = computed(() => {
+  const source = `${props.platform} ${props.os}`.trim().toLowerCase()
+
+  if (source.includes('win'))
+    return 'windows'
+
+  if (
+    source.includes('linux')
+    || source.includes('ubuntu')
+    || source.includes('debian')
+    || source.includes('fedora')
+    || source.includes('arch')
+  ) {
+    return 'linux'
+  }
+
+  return 'macos'
+})
 </script>
 
 <template>
   <svg
-    v-if="platform === 'darwin'"
-    class="NexusPlatformIcon"
+    v-if="normalizedPlatform === 'macos'"
+    class="tx-os-icon"
     viewBox="0 0 24 24"
     aria-hidden="true"
   >
@@ -18,8 +47,8 @@ defineProps<{
   </svg>
 
   <svg
-    v-else-if="platform === 'win32'"
-    class="NexusPlatformIcon"
+    v-else-if="normalizedPlatform === 'windows'"
+    class="tx-os-icon"
     viewBox="0 0 256 256"
     aria-hidden="true"
   >
@@ -31,7 +60,7 @@ defineProps<{
 
   <svg
     v-else
-    class="NexusPlatformIcon"
+    class="tx-os-icon"
     viewBox="0 0 24 24"
     aria-hidden="true"
   >
@@ -43,10 +72,10 @@ defineProps<{
 </template>
 
 <style scoped>
-.NexusPlatformIcon {
+.tx-os-icon {
   display: block;
-  width: 1rem;
-  height: 1rem;
+  width: 1em;
+  height: 1em;
   flex: 0 0 auto;
 }
 </style>
