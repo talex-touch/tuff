@@ -56,6 +56,7 @@ function isNexusAutoImportScannable(file: string) {
   const normalized = file.replace(/\\/g, '/')
   return !normalized.endsWith('/server/utils/billing/index.ts')
     && !normalized.endsWith('/shared/utils/docs-path.ts')
+    && !normalized.endsWith('/server/utils/telemetryRetentionCore.ts')
 }
 
 function isEnvFlagEnabled(value?: string) {
