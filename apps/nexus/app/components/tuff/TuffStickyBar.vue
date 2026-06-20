@@ -3,6 +3,8 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { gsap } from 'gsap'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+defineOptions({ inheritAttrs: false })
+
 type StickyState = 'idle' | 'active' | 'leaving'
 
 const sentinelRef = ref<HTMLElement | null>(null)
@@ -253,6 +255,7 @@ onBeforeUnmount(() => {
   <div
     v-if="shouldRender"
     ref="barRef"
+    v-bind="$attrs"
     class="TuffStickyBar"
     :class="{
       'is-active': isActive,

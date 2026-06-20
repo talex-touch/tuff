@@ -101,6 +101,7 @@ describe('Tuff demo client boundary', () => {
   it('pre-bundles WebGL background dependencies used by Nexus visual routes', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
+    expect(config).toContain("'@vueuse/core'")
     expect(config).toContain("'ogl'")
   })
 

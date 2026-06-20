@@ -32,17 +32,20 @@ const pioneer = computed(() => ({
   })),
 }))
 
-// Aurora bar configs — randomized but deterministic per render
 const auroraBarCount = 28
-const auroraBars = computed(() =>
-  Array.from({ length: auroraBarCount }, (_, i) => ({
+const auroraBars = Array.from({ length: auroraBarCount }, (_, i) => {
+  const seed = i + 1
+
+  return {
     id: i,
-    x: `${Math.random() * 100}%`,
-    width: `${Math.random() * 3 + 0.5}%`,
-    delay: Math.random() * 8,
-    duration: Math.random() * 6 + 4,
-  })),
-)
+    x: `${((seed * 37) % 101).toFixed(2)}%`,
+    width: `${(0.5 + ((seed * 17) % 30) / 10).toFixed(2)}%`,
+    delay: Number((((seed * 23) % 80) / 10).toFixed(2)),
+    duration: Number((4 + ((seed * 19) % 60) / 10).toFixed(2)),
+    hue: (seed * 47) % 360,
+    aspectRatio: (seed * 7) % 10 + 1,
+  }
+})
 
 function goToSignIn() {
   router.push(signInRoute.value)
@@ -72,6 +75,8 @@ function goToSignIn() {
           :width="bar.width"
           :delay="bar.delay"
           :duration="bar.duration"
+          :hue="bar.hue"
+          :aspect-ratio="bar.aspectRatio"
         />
       </div>
       <!-- Blur overlay to soften aurora -->

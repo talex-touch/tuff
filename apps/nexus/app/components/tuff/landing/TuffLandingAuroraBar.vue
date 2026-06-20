@@ -1,17 +1,14 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
-
 interface Props {
   width: string | number
   x: string | number
   delay: number
   duration: number
+  hue: number
+  aspectRatio: number
 }
 
 const props = defineProps<Props>()
-
-const hue = computed(() => Math.floor(Math.random() * 360))
-const ar = computed(() => Math.floor(Math.random() * 10) + 1)
 </script>
 
 <template>
@@ -19,8 +16,8 @@ const ar = computed(() => Math.floor(Math.random() * 10) + 1)
     :style="{
       '--x': `${props.x}`,
       '--width': `${props.width}`,
-      '--aspect-ratio': `${ar}`,
-      '--background': `linear-gradient(hsl(${hue} 80% 60%), transparent)`,
+      '--aspect-ratio': `${props.aspectRatio}`,
+      '--background': `linear-gradient(hsl(${props.hue} 80% 60%), transparent)`,
       '--duration': `${props.duration}s`,
       '--delay': `${props.delay}s`,
     }"
