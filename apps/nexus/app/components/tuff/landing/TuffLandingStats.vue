@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import TuffVortexBackground from '../VortexBackground.vue'
-import TuffShowcaseContainer from './showcase/TuffShowcaseContainer.vue'
 import TuffShowcase from './showcase/TuffShowcase.vue'
+import TuffShowcaseContainer from './showcase/TuffShowcaseContainer.vue'
+import TuffLandingSection from './TuffLandingSection.vue'
 
 const { t } = useI18n()
 

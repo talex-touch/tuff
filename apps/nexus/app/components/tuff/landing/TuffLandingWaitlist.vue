@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import TuffLandingAuroraBar from './TuffLandingAuroraBar.vue'
+import TuffLandingSection from './TuffLandingSection.vue'
 
 const { t } = useI18n()
 const router = useRouter()

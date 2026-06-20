@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, useSlots } from 'vue'
+import TuffStickyBar from '../TuffStickyBar.vue'
 import { useGsapReveal } from '~/composables/useGsapReveal'
 
 const props = withDefaults(defineProps<{

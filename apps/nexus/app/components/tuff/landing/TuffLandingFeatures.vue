@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import TuffLandingSection from './TuffLandingSection.vue'
 import { tuffSdkItems, type TuffSdkItem } from '~/data/tuffSdkItems'
 
 interface ExtensibilityContent {

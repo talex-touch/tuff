@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   loading?: boolean
@@ -8,6 +8,8 @@ const props = withDefaults(defineProps<{
   loading: false,
   blockText: '',
 })
+
+const LazyTouchAurora = defineAsyncComponent(() => import('../tuff/background/TouchAurora.vue'))
 
 const blockMessage = computed(() => props.blockText?.trim() || '')
 const shouldMountAurora = ref(false)
@@ -28,7 +30,7 @@ onMounted(() => {
       <div class="auth-glow auth-glow--left absolute -left-40 top-[18%] h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(255,120,155,0.18),_transparent_70%)] blur-3xl" />
       <div class="auth-glow auth-glow--right absolute -right-48 bottom-[8%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(88,190,255,0.2),_transparent_70%)] blur-3xl" />
       <ClientOnly>
-        <LazyTuffBackgroundTouchAurora
+        <LazyTouchAurora
           v-if="shouldMountAurora"
           :color-stops="['#574BDD', '#8727CE', '#057CCF']"
           :amplitude="1.0"

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import TuffLandingSection from './TuffLandingSection.vue'
+import TuffLandingTetrisBackground from './TuffLandingTetrisBackground.vue'
 
 const { t } = useI18n()
 

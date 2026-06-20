@@ -1,5 +1,7 @@
 <script lang="ts" setup>
-import TouchRay from '~/components/tuff/background/TouchRay.vue'
+import { defineAsyncComponent } from 'vue'
+
+const TouchRay = defineAsyncComponent(() => import('~/components/tuff/background/TouchRay.vue'))
 
 const { t } = useI18n()
 </script>

@@ -5,6 +5,7 @@ import TuffAiFeatureCard from "./ai/TuffAiFeatureCard.vue";
 import TuffLandingIntelligenceTitle from "./TuffLandingIntelligenceTitle.vue";
 import TuffLandingIntelligenceHeader from "./TuffLandingIntelligenceHeader.vue";
 import TuffLandingIntelligenceBackground from "./TuffLandingIntelligenceBackground.vue";
+import TuffLandingSection from "./TuffLandingSection.vue";
 
 const { t } = useI18n();
 

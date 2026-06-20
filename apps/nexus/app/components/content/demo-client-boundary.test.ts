@@ -44,6 +44,14 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('/app/components/content/demo-lazy.ts')
   })
 
+  it('keeps route-local marketing and store components out of auto-registration', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain('/app/components/store/')
+    expect(config).toContain('/app/components/tuff/')
+    expect(config).toContain('/app/components/theme/components/')
+  })
+
   it('keeps docs demos and demo helpers out of generated Nuxt components', () => {
     const generatedComponents = [
       readNuxtFile('components.d.ts'),
@@ -54,5 +62,16 @@ describe('Tuff demo client boundary', () => {
     expect(generatedComponents).not.toContain('demo-registry')
     expect(generatedComponents).not.toContain('demo-loader')
     expect(generatedComponents).not.toContain('demo-lazy')
+  })
+
+  it('keeps route-local marketing and store components out of generated Nuxt components', () => {
+    const generatedComponents = [
+      readNuxtFile('components.d.ts'),
+      readNuxtFile('types/components.d.ts'),
+    ].join('\n')
+
+    expect(generatedComponents).not.toContain('components/store/')
+    expect(generatedComponents).not.toContain('components/tuff/')
+    expect(generatedComponents).not.toContain('components/theme/components/')
   })
 })

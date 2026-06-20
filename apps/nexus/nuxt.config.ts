@@ -386,6 +386,9 @@ export default defineNuxtConfig({
         '/app/components/content/demo-registry.ts',
         '/app/components/content/demo-loader.ts',
         '/app/components/content/demo-lazy.ts',
+        '/app/components/store/',
+        '/app/components/tuff/',
+        '/app/components/theme/components/',
       ]
 
       for (let index = components.length - 1; index >= 0; index -= 1) {

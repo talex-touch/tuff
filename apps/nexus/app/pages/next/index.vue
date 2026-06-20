@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import TuffHomeV2 from '~/components/tuff/TuffHomeV2.vue'
+import { defineAsyncComponent } from 'vue'
+
+const TuffHomeV2 = defineAsyncComponent(() => import('~/components/tuff/TuffHomeV2.vue'))
 
 definePageMeta({
   layout: 'home',

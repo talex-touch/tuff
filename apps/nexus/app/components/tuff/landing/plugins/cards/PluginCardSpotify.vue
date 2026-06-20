@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import TuffCarouselAppleBlurImage from '../../../carousel/apple/AppleBlurImage.vue'
 import SpotifyBackground from '~/images/assets/plugin-cards/spotify.jpg'
 </script>
 
