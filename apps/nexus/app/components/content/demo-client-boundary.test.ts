@@ -18,7 +18,8 @@ describe('Tuff demo client boundary', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
 
     expect(wrapper).not.toContain('./demo-registry')
-    expect(wrapper).toContain('<TuffDemoClientRenderer')
+    expect(wrapper).toContain('<LazyTuffDemoClientRenderer')
+    expect(wrapper).not.toContain('<TuffDemoClientRenderer')
   })
 
   it('loads the generated demo registry only from the client renderer', () => {
@@ -32,10 +33,19 @@ describe('Tuff demo client boundary', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
 
     expect(wrapper).toContain('v-if="isDemoActive"')
+    expect(wrapper).toContain('<LazyTuffDemoClientRenderer')
     expect(wrapper).toContain('reason: \'manual\'')
     expect(wrapper).toContain('class="tuff-demo__run-btn"')
     expect(wrapper).not.toContain('IntersectionObserver')
     expect(wrapper).not.toContain('scheduleDemoActivation')
+  })
+
+  it('keeps embedded code blocks behind the code toggle', () => {
+    const wrapper = readComponent('./TuffDemoWrapper.vue')
+
+    expect(wrapper).toContain('<LazyTuffCodeBlock')
+    expect(wrapper).toContain('v-if="showCode"')
+    expect(wrapper).not.toContain('<TuffCodeBlock')
   })
 
   it('removes generated demos from Nuxt component auto-registration', () => {
