@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { type ComponentPublicInstance, computed, nextTick, ref } from 'vue'
-import { shouldActivateDemo } from './demo-lazy'
 
 interface DemoWrapperProps {
   demo: string
@@ -112,7 +111,7 @@ function handleDemoInstanceChange(instance: DemoResetController | null) {
 }
 
 function activateDemo() {
-  if (!shouldActivateDemo({ demo: props.demo, isActive: isDemoActive.value, reason: 'manual' }))
+  if (!props.demo || isDemoActive.value)
     return
 
   isDemoActive.value = true
