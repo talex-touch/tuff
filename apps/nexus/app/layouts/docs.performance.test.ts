@@ -18,4 +18,11 @@ describe('docs layout performance boundaries', () => {
     expect(layout).toContain('<TuffexDocsHeroBackground v-if="shouldMountTuffexBackground"')
     expect(layout).not.toContain("import TuffexDocsHeroBackground from '~/components/docs/TuffexDocsHeroBackground.vue'")
   })
+
+  it('uses static edge blur chrome instead of SSR-rendering TuffEx blur components', () => {
+    expect(layout).not.toContain('@talex-touch/tuffex/gradual-blur')
+    expect(layout).not.toContain('<TxGradualBlur')
+    expect(layout).toContain('class="docs-edge-blur docs-edge-blur--top"')
+    expect(layout).toContain('class="docs-edge-blur docs-edge-blur--bottom"')
+  })
 })

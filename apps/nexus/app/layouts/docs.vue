@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import BackToTop from '~/components/ui/BackToTop.vue'
 import Drawer from '~/components/ui/Drawer.vue'
@@ -111,8 +110,8 @@ onBeforeUnmount(() => {
           <div v-else class="docs-background absolute left-1/2 h-[420px] w-[820px] rounded-[200px] from-primary/6 via-primary/3 to-transparent bg-gradient-to-br blur-3xl -top-32 -translate-x-1/2 dark:from-light/10 dark:via-light/5 dark:to-transparent" />
         </Transition>
       </div>
-      <TxGradualBlur exponential :div-count="10" position="top" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
-      <TxGradualBlur exponential :div-count="10" position="bottom" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
+      <div class="docs-edge-blur docs-edge-blur--top" aria-hidden="true" />
+      <div class="docs-edge-blur docs-edge-blur--bottom" aria-hidden="true" />
       <TheHeader title="Tuff Docs" class="z-30" />
       <div class="docs-layout-foreground relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
         <div class="min-w-0 max-w-[88rem] w-full flex gap-6 lg:gap-8">
@@ -210,6 +209,29 @@ onBeforeUnmount(() => {
 
 .docs-layout-footer {
   z-index: 3;
+}
+
+.docs-edge-blur {
+  position: fixed;
+  left: 0;
+  z-index: 20;
+  width: 100vw;
+  height: 72px;
+  pointer-events: none;
+  backdrop-filter: blur(1.05rem);
+  opacity: 0.85;
+  mask-image: linear-gradient(to bottom, black 0%, black 48%, transparent 100%);
+  -webkit-backdrop-filter: blur(1.05rem);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 48%, transparent 100%);
+}
+
+.docs-edge-blur--top {
+  top: 0;
+}
+
+.docs-edge-blur--bottom {
+  bottom: 0;
+  transform: rotate(180deg);
 }
 
 .docs-tuffex-hero-bg-frame {
