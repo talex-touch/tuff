@@ -43,10 +43,17 @@ describe('Tuff demo client boundary', () => {
 
   it('keeps embedded code blocks behind the code toggle', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
+    const codeBlock = readComponent('./TuffCodeBlock.vue')
+    const codeBlockRenderer = readComponent('./TuffCodeBlockRenderer.vue')
 
-    expect(wrapper).toContain('<LazyTuffCodeBlock')
-    expect(wrapper).toContain('v-if="showCode"')
+    expect(wrapper).toContain("const LazyEmbeddedCodeBlock = defineAsyncComponent(() => import('./TuffCodeBlock.vue'))")
+    expect(wrapper).toContain('<LazyEmbeddedCodeBlock')
+    expect(wrapper).toContain('v-if="hasCode && showCode"')
+    expect(wrapper).not.toContain('<LazyTuffCodeBlock')
     expect(wrapper).not.toContain('<TuffCodeBlock')
+    expect(codeBlock).toContain("const LazyTuffCodeBlockRenderer = defineAsyncComponent(() => import('./TuffCodeBlockRenderer.vue'))")
+    expect(codeBlock).not.toContain('<style')
+    expect(codeBlockRenderer).toContain('<style scoped>')
   })
 
   it('removes generated demos from Nuxt component auto-registration', () => {
@@ -57,6 +64,7 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('/app/components/content/demo-registry.ts')
     expect(config).toContain('/app/components/content/demo-loader.ts')
     expect(config).toContain('/app/components/content/demo-lazy.ts')
+    expect(config).toContain('/app/components/content/TuffCodeBlockRenderer.vue')
   })
 
   it('keeps internal server helpers with duplicate type names out of auto-imports', () => {
