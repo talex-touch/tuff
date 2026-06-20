@@ -42,6 +42,7 @@ const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index
 const vueDevtoolsApiNoopEntry = resolve(currentDir, 'app/utils/vue-devtools-api-noop.ts')
 const isProd = process.env.NODE_ENV === 'production'
 const useVueDevtoolsApiNoop = isDev && process.env.NUXT_DISABLE_VUE_DEVTOOLS_API_NOOP !== 'true'
+const enablePwaModule = isProd || process.env.VITE_PLUGIN_PWA === 'true'
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const enableSentry = isProd || isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY)
 const disableSentry = !enableSentry || process.env.NUXT_DISABLE_SENTRY === 'true'
@@ -92,7 +93,7 @@ export default defineNuxtConfig({
     '@unocss/nuxt',
     '@pinia/nuxt',
     '@nuxtjs/color-mode',
-    '@vite-pwa/nuxt',
+    ...(enablePwaModule ? ['@vite-pwa/nuxt'] : []),
     '@nuxt/eslint',
     '@nuxt/content',
     '@nuxtjs/i18n',
