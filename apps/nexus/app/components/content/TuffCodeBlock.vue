@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<{
 const { locale } = useI18n()
 const copied = ref(false)
 const codeRef = ref<HTMLElement | null>(null)
+const mermaidRef = ref<HTMLElement | null>(null)
 const highlightKey = ref('')
 
 const canCopy = computed(() => Boolean(props.code?.trim()))
@@ -66,14 +67,34 @@ async function highlightCode() {
   }
 }
 
+async function renderMermaidCode() {
+  if (!import.meta.client || !isMermaid.value)
+    return
+
+  const source = props.code?.trim() ?? ''
+  if (!source)
+    return
+
+  await nextTick()
+  const node = mermaidRef.value
+  if (!node)
+    return
+
+  node.removeAttribute('data-processed')
+  const { renderMermaidInDocument } = await import('~/utils/mermaid-renderer')
+  await renderMermaidInDocument(node.parentElement ?? node)
+}
+
 onMounted(() => {
   void highlightCode()
+  void renderMermaidCode()
 })
 
 watch(
   () => [props.code, props.lang, isMermaid.value],
   () => {
     void highlightCode()
+    void renderMermaidCode()
   },
 )
 
@@ -119,6 +140,7 @@ async function handleCopy() {
       </button>
       <div
         v-if="isMermaid"
+        ref="mermaidRef"
         class="tuff-code-block__mermaid mermaid"
         v-text="props.code"
       />

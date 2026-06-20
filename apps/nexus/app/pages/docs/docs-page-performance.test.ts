@@ -31,6 +31,7 @@ const useToast = readFileSync(new URL('../../composables/useToast.ts', import.me
 const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoWrapper.vue', import.meta.url), 'utf8')
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
+const mermaidRenderer = readFileSync(new URL('../../utils/mermaid-renderer.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
 
@@ -223,6 +224,7 @@ describe('docs page performance boundaries', () => {
 
     expect(tuffCodeBlock).not.toContain("from '~/utils/highlight'")
     expect(tuffCodeBlock).toContain("await import('~/utils/highlight')")
+    expect(tuffCodeBlock).toContain("await import('~/utils/mermaid-renderer')")
     expect(tuffCodeBlock).not.toContain('<TxButton')
     expect(tuffCodeBlock).toContain('class="tuff-code-block__copy"')
 
@@ -232,6 +234,16 @@ describe('docs page performance boundaries', () => {
     expect(tuffPropsTable).toContain('class="tuff-props-table__copy-status"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__tag"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__mono"')
+  })
+
+  it('keeps Mermaid rendering out of the global first-paint plugin list', () => {
+    expect(nuxtConfig).toContain("'app/plugins/mermaid.client.ts'")
+    expect(page).toContain('function renderMermaidBlocks()')
+    expect(page).toContain("await import('~/utils/mermaid-renderer')")
+
+    expect(mermaidRenderer).toContain("await import('mermaid')")
+    expect(mermaidRenderer).toContain('renderMermaidInDocument')
+    expect(mermaidRenderer).not.toContain("from 'mermaid'")
   })
 
   it('keeps global search indexes behind explicit search intent', () => {
