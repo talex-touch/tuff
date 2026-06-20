@@ -594,6 +594,9 @@ describe('docs page performance boundaries', () => {
   it('keeps dev fallback metadata requests off full Markdown body parsing', () => {
     expect(docsPageApi).toContain('function parseFrontmatterMetadata(raw: string)')
     expect(docsPageApi).toContain('async function readDevDocsPageFromFile(contentPath: string, includeBody: boolean)')
+    expect(docsPageApi).toContain('function shouldPreferDevDocsMetadataFileLookup(docPath: string, includeBody: boolean)')
+    expect(docsPageApi).toMatch(/function shouldPreferDevDocsMetadataFileLookup\(docPath: string, includeBody: boolean\) \{[\s\S]*return process\.env\.NODE_ENV === 'development' && !includeBody && docPath\.includes\('\/docs\/dev\/components'\)[\s\S]*\}/)
+    expect(docsPageApi).toMatch(/if \(shouldPreferDevDocsMetadataFileLookup\(docPath, includeBody\)\) \{[\s\S]*readDevDocsPageFallback\(lookupPaths, includeBody\)[\s\S]*return serializeDoc\(fallbackDoc, includeBody\)[\s\S]*\}/)
     expect(docsPageApi).toMatch(/if \(!includeBody\) \{[\s\S]*parseFrontmatterMetadata\(raw\)[\s\S]*metaDoc = doc[\s\S]*return doc[\s\S]*\}/)
     expect(docsPageApi).toMatch(/const \{ parseMarkdown \} = await import\('@nuxtjs\/mdc\/runtime'\)/)
     expect(docsPageApi).not.toContain("import('@nuxtjs/mdc/runtime'),")
