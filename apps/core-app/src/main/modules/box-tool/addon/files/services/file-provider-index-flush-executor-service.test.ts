@@ -1,5 +1,8 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
+import type {
+  PersistAndIndexSummary,
+  PersistEntry
+} from '../../../search-engine/workers/search-index-worker-client'
 import { describe, expect, it, vi } from 'vitest'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
 import { FileProviderIndexFlushExecutorService } from './file-provider-index-flush-executor-service'
@@ -45,19 +48,33 @@ function toPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
   }))
 }
 
+function createPersistSummary(entries: PersistEntry[]): PersistAndIndexSummary {
+  return {
+    entries: entries.length,
+    chunks: entries.length > 0 ? 1 : 0,
+    persistedRows: entries.length,
+    indexedItems: entries.length,
+    fileUpdates: 0,
+    progressRows: entries.length,
+    embeddings: 0
+  }
+}
+
 function createExecutor(options: {
   pending: Map<number, IndexWorkerFileResult>
   inflight?: Map<number, IndexWorkerFileResult>
   dbUtils?: unknown | null
   searchIndex?: unknown | null
   ensureSearchIndexWorkerReady?: (reason: string) => Promise<boolean>
-  persistAndIndex?: (entries: PersistEntry[]) => Promise<void>
+  persistAndIndex?: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
 }) {
   const inflight = options.inflight ?? new Map<number, IndexWorkerFileResult>()
   const buffer = new FileProviderIndexFlushBufferService(options.pending, inflight)
   const recordDuration = vi.fn()
   const waitForCapacity = vi.fn(async () => undefined)
-  const persistAndIndex = vi.fn(options.persistAndIndex ?? (async () => undefined))
+  const persistAndIndex = vi.fn(
+    options.persistAndIndex ?? (async (entries) => createPersistSummary(entries))
+  )
   const ensureSearchIndexWorkerReady = vi.fn(
     options.ensureSearchIndexWorkerReady ?? (async () => true)
   )
@@ -115,6 +132,12 @@ describe('file-provider-index-flush-executor-service', () => {
       reason: 'persisted',
       metadata: { storeBoundary: 'indexed-write-flush', withContent: 2 },
       durationMs: 45
+    })
+    expect(result.metadata).toMatchObject({
+      persistedRows: 2,
+      indexedItems: 2,
+      progressRows: 2,
+      chunks: 1
     })
     expect(waitForCapacity).toHaveBeenCalledWith(3)
     expect(persistAndIndex).toHaveBeenCalledTimes(1)

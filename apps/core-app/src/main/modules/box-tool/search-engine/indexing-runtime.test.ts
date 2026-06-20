@@ -4,7 +4,8 @@ import type {
   IndexedSourceDescriptor,
   IndexedSourceHealth,
   IndexedSourceRecordBatch,
-  IndexedSourceRoot
+  IndexedSourceRoot,
+  IndexedSourceRuntimeTaskState
 } from '@talex-touch/utils/search'
 import type { IndexStoreAdapter } from './indexing-store-adapter'
 import {
@@ -101,7 +102,7 @@ describe('indexingRuntime', () => {
     store = {
       applyBatch: vi.fn(async () => {}),
       applyDelta: vi.fn(async () => {}),
-      clearSource: vi.fn(async () => {})
+      clearSource: vi.fn(async () => ({ sourceId: 'test-source', removedIndexedItems: 0 }))
     }
     runtime = new IndexingRuntime({ store: store as IndexStoreAdapter })
   })
@@ -649,6 +650,71 @@ describe('indexingRuntime', () => {
     expect(result.deltas).toEqual([firstDelta, secondDelta])
   })
 
+  it('tracks watch store no-op deltas as skipped instead of applied', async () => {
+    const delta: IndexedSourceDelta = {
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/unindexable.txt'
+    }
+    store.applyDelta.mockResolvedValueOnce({
+      sourceId: 'test-source',
+      action: 'change',
+      indexedItemCount: 0,
+      removedItemCount: 0,
+      applied: false,
+      reason: 'unindexable-record'
+    })
+    runtime.registerSource(
+      buildSource({
+        handleWatchEvent: vi.fn(async () => [delta])
+      })
+    )
+
+    const result = await runtime.routeWatchEventWithResult({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/unindexable.txt',
+      occurredAt: 1700000000000
+    })
+
+    expect(result).toMatchObject({
+      appliedDeltas: 0,
+      failedDeltas: 0,
+      skippedDeltas: 1,
+      deltaSummaries: [
+        {
+          sourceId: 'test-source',
+          deltas: 1,
+          appliedDeltas: 0,
+          failedDeltas: 0,
+          skippedDeltas: 1
+        }
+      ]
+    })
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0]).toMatchObject({
+      lastWatch: {
+        deltas: 1,
+        appliedDeltas: 0,
+        failedDeltas: 0,
+        skippedDeltas: 1
+      },
+      recentTasks: [
+        {
+          kind: 'watch',
+          status: 'succeeded',
+          summary: {
+            deltas: 1,
+            appliedDeltas: 0,
+            failedDeltas: 0,
+            skippedDeltas: 1
+          }
+        }
+      ]
+    })
+  })
+
   it('runs source scans through the scan scheduler and stores batches', async () => {
     const batch: IndexedSourceRecordBatch = {
       sourceId: 'test-source',
@@ -684,7 +750,8 @@ describe('indexingRuntime', () => {
       jobId: 'test-source:scan:1',
       queuedAt: expect.any(Number),
       batches: 1,
-      records: 1
+      records: 1,
+      indexedRecords: 1
     })
   })
 
@@ -716,7 +783,60 @@ describe('indexingRuntime', () => {
       lastScan: {
         batches: 0,
         records: 0,
+        indexedRecords: 0,
         error: 'skipped:health:disabled'
+      }
+    })
+  })
+
+  it('records store-applied indexed item counts in scan diagnostics', async () => {
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'record-without-id',
+          stableKey: '',
+          kind: 'file',
+          title: 'Unindexable'
+        }
+      ],
+      done: true
+    }
+    store.applyBatch.mockResolvedValueOnce({
+      sourceId: 'test-source',
+      recordCount: 1,
+      indexedItemCount: 0,
+      done: true
+    })
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          yield batch
+        }
+      })
+    )
+
+    const result = await runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+
+    expect(result).toMatchObject({
+      sourceId: 'test-source',
+      batches: 1,
+      records: 1,
+      indexedRecords: 0
+    })
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastScan).toMatchObject({
+      batches: 1,
+      records: 1,
+      indexedRecords: 0
+    })
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'scan',
+      summary: {
+        batches: 1,
+        records: 1,
+        indexedRecords: 0
       }
     })
   })
@@ -770,6 +890,175 @@ describe('indexingRuntime', () => {
     expect(result.results).toHaveLength(1)
     expect(result.results[0]).toMatchObject({ sourceId: 'healthy', batches: 1, records: 1 })
     expect(store.applyBatch).toHaveBeenCalledWith(batch)
+  })
+
+  it('records store-phase scan failures in runtime diagnostics', async () => {
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'record-1',
+          stableKey: 'record-1',
+          kind: 'file',
+          title: 'Record 1'
+        }
+      ],
+      done: true
+    }
+    store.applyBatch.mockRejectedValueOnce(new Error('sqlite busy'))
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          yield batch
+        }
+      })
+    )
+
+    const result = await runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+
+    expect(result).toMatchObject({
+      failedSources: 1,
+      errors: [
+        {
+          sourceId: 'test-source',
+          message: 'sqlite busy',
+          phase: 'store',
+          batches: 0,
+          records: 0,
+          indexedRecords: 0
+        }
+      ]
+    })
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0]).toMatchObject({
+      lastScan: {
+        jobId: 'test-source:scan:1',
+        batches: 0,
+        records: 0,
+        indexedRecords: 0,
+        phase: 'store',
+        error: 'sqlite busy'
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'failed',
+          error: 'sqlite busy',
+          summary: {
+            phase: 'store',
+            batches: 0,
+            records: 0,
+            indexedRecords: 0
+          }
+        }
+      ]
+    })
+  })
+
+  it('records partial source-phase scan failures in runtime diagnostics', async () => {
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'record-1',
+          stableKey: 'record-1',
+          kind: 'file',
+          title: 'Record 1'
+        },
+        {
+          sourceId: 'test-source',
+          recordId: 'record-2',
+          stableKey: 'record-2',
+          kind: 'file',
+          title: 'Record 2'
+        }
+      ]
+    }
+    store.applyBatch.mockResolvedValueOnce({
+      sourceId: 'test-source',
+      recordCount: 2,
+      indexedItemCount: 1,
+      done: false
+    })
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          yield batch
+          throw new Error('scanner crashed')
+        }
+      })
+    )
+
+    const result = await runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+
+    expect(result).toMatchObject({
+      failedSources: 1,
+      errors: [
+        {
+          sourceId: 'test-source',
+          message: 'scanner crashed',
+          phase: 'source',
+          batches: 1,
+          records: 2,
+          indexedRecords: 1
+        }
+      ]
+    })
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0]).toMatchObject({
+      lastScan: {
+        jobId: 'test-source:scan:1',
+        batches: 1,
+        records: 2,
+        indexedRecords: 1,
+        phase: 'source',
+        error: 'scanner crashed'
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'failed',
+          error: 'scanner crashed',
+          summary: {
+            phase: 'source',
+            batches: 1,
+            records: 2,
+            indexedRecords: 1
+          }
+        }
+      ]
+    })
+  })
+
+  it('skips automatic batch scans while the retry window is open', async () => {
+    const scan = vi.fn(async function* () {
+      throw new Error('scanner crashed')
+    })
+    runtime.registerSource(buildSource({ scan }))
+    await runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+
+    const result = await runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+
+    expect(scan).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({
+      totalSources: 1,
+      scannedSources: 0,
+      skippedSources: 1,
+      skipped: [
+        {
+          sourceId: 'test-source',
+          reason: expect.stringMatching(/^retry-window:scan:/)
+        }
+      ]
+    })
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'scan',
+      status: 'skipped',
+      error: expect.stringMatching(/^skipped:retry-window:scan:/)
+    })
   })
 
   it('skips disabled or admission-invalid sources during batch scans', async () => {
@@ -1057,6 +1346,69 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('tracks reconcile store no-op deltas as skipped instead of applied', async () => {
+    store.applyDelta.mockResolvedValueOnce({
+      sourceId: 'test-source',
+      action: 'change',
+      indexedItemCount: 0,
+      removedItemCount: 0,
+      applied: false,
+      reason: 'missing-record'
+    })
+    runtime.registerSource(
+      buildSource({
+        reconcile: vi.fn(async () => ({
+          sourceId: 'test-source',
+          added: 0,
+          changed: 1,
+          deleted: 0,
+          skipped: 0,
+          errors: 0,
+          deltas: [
+            {
+              sourceId: 'test-source',
+              action: 'change',
+              path: '/tmp/tuff-source/missing.txt'
+            } satisfies IndexedSourceDelta
+          ],
+          startedAt: 1700000000000,
+          completedAt: 1700000000100
+        }))
+      })
+    )
+
+    const result = await runtime.reconcileSource('test-source')
+
+    expect(result).toMatchObject({
+      appliedDeltas: 0,
+      failedDeltas: 0,
+      skippedDeltas: 1
+    })
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0]).toMatchObject({
+      lastReconcile: {
+        changed: 1,
+        deltas: 1,
+        appliedDeltas: 0,
+        failedDeltas: 0,
+        skippedDeltas: 1
+      },
+      recentTasks: [
+        {
+          kind: 'reconcile',
+          status: 'succeeded',
+          summary: {
+            deltas: 1,
+            appliedDeltas: 0,
+            failedDeltas: 0,
+            skippedDeltas: 1
+          }
+        }
+      ]
+    })
+  })
+
   it('isolates failing source reconciles in batch reconcile results', async () => {
     runtime.registerSource(
       buildSource({
@@ -1102,6 +1454,35 @@ describe('indexingRuntime', () => {
     })
     expect(result.results).toHaveLength(1)
     expect(result.results[0]).toMatchObject({ sourceId: 'healthy', changed: 2 })
+  })
+
+  it('skips automatic batch reconcile while the retry window is open', async () => {
+    const reconcile = vi.fn(async () => {
+      throw new Error('reconcile failed')
+    })
+    runtime.registerSource(buildSource({ reconcile }))
+    await runtime.reconcileSourcesWithResult()
+
+    const result = await runtime.reconcileSourcesWithResult()
+
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({
+      totalSources: 1,
+      reconciledSources: 0,
+      skippedSources: 1,
+      skippedDetails: [
+        {
+          sourceId: 'test-source',
+          reason: expect.stringMatching(/^retry-window:reconcile:/)
+        }
+      ]
+    })
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'reconcile',
+      status: 'skipped',
+      error: expect.stringMatching(/^skipped:retry-window:reconcile:/)
+    })
   })
 
   it('skips disabled or admission-invalid sources during batch reconcile', async () => {
@@ -1253,7 +1634,187 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('records integrity-triggered reset in durable task history', async () => {
+    const save = vi.fn(async () => {})
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => undefined),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    const resetIndex = vi.fn(async () => ({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.IntegrityRepair,
+      clearedSearchIndex: true,
+      clearedSearchIndexRows: 7,
+      clearedScanProgress: true,
+      scanProgressRows: 3,
+      startedAt: 1700000000000,
+      completedAt: 1700000000100
+    }))
+    runtime.registerSource(buildSource({ resetIndex }))
+
+    const result = await runtime.resetSourceRuntimeState('test-source', {
+      reason: IndexedSourceResetReasons.IntegrityRepair,
+      clearSearchIndex: true,
+      clearScanProgress: true
+    })
+
+    expect(resetIndex).toHaveBeenCalledWith({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.IntegrityRepair,
+      clearSearchIndex: false,
+      clearScanProgress: true
+    })
+    expect(result).toMatchObject({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.IntegrityRepair,
+      clearedSearchIndex: true,
+      clearedScanProgress: true,
+      scanProgressRows: 3
+    })
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastReset: expect.objectContaining({
+          reason: IndexedSourceResetReasons.IntegrityRepair,
+          jobId: 'test-source:reset:1',
+          clearedSearchIndex: true,
+          clearedSearchIndexRows: 7,
+          clearedScanProgress: true,
+          scanProgressRows: 3
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'reset',
+            status: 'succeeded',
+            jobId: 'test-source:reset:1',
+            summary: expect.objectContaining({
+              reason: IndexedSourceResetReasons.IntegrityRepair,
+              clearedSearchIndex: true,
+              clearedSearchIndexRows: 7,
+              clearedScanProgress: true,
+              scanProgressRows: 3
+            })
+          })
+        ]
+      })
+    )
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastReset).toMatchObject({
+      reason: IndexedSourceResetReasons.IntegrityRepair,
+      jobId: 'test-source:reset:1',
+      clearedSearchIndexRows: 7,
+      scanProgressRows: 3
+    })
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'reset',
+      status: 'succeeded',
+      summary: {
+        reason: IndexedSourceResetReasons.IntegrityRepair,
+        clearedSearchIndex: true,
+        clearedSearchIndexRows: 7,
+        clearedScanProgress: true,
+        scanProgressRows: 3
+      }
+    })
+  })
+
+  it('preserves persisted task history when reset is the first runtime action after hydrate', async () => {
+    const save = vi.fn(async () => {})
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastScan: {
+        startedAt: 1700000000000,
+        completedAt: 1700000000100,
+        jobId: 'test-source:scan:persisted',
+        batches: 1,
+        records: 2,
+        indexedRecords: 2
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          startedAt: 1700000000000,
+          completedAt: 1700000000100,
+          jobId: 'test-source:scan:persisted'
+        }
+      ]
+    }
+    const resetIndex = vi.fn(async () => ({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.HealthRepair,
+      clearedSearchIndex: false,
+      clearedScanProgress: true,
+      scanProgressRows: 3,
+      startedAt: 1700000000200,
+      completedAt: 1700000000300
+    }))
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ resetIndex }))
+
+    await runtime.resetSourceRuntimeState('test-source', {
+      reason: IndexedSourceResetReasons.HealthRepair,
+      clearScanProgress: true
+    })
+
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastScan: expect.objectContaining({
+          jobId: 'test-source:scan:persisted'
+        }),
+        lastReset: expect.objectContaining({
+          scanProgressRows: 3
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'reset',
+            status: 'succeeded'
+          }),
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'succeeded',
+            jobId: 'test-source:scan:persisted'
+          })
+        ]
+      })
+    )
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastScan).toMatchObject({
+      jobId: 'test-source:scan:persisted'
+    })
+    expect(diagnostics.sources[0].lastReset).toMatchObject({
+      scanProgressRows: 3
+    })
+    expect(diagnostics.sources[0].recentTasks).toMatchObject([
+      {
+        kind: 'reset',
+        status: 'succeeded'
+      },
+      {
+        kind: 'scan',
+        status: 'succeeded',
+        jobId: 'test-source:scan:persisted'
+      }
+    ])
+  })
+
   it('clears source search index at runtime reset boundary', async () => {
+    store.clearSource.mockResolvedValueOnce({ sourceId: 'test-source', removedIndexedItems: 4 })
     const resetIndex = vi.fn(async () => ({
       sourceId: 'test-source',
       reason: IndexedSourceResetReasons.UserClear,
@@ -1279,17 +1840,26 @@ describe('indexingRuntime', () => {
       sourceId: 'test-source',
       reason: IndexedSourceResetReasons.UserClear,
       clearedSearchIndex: true,
+      clearedSearchIndexRows: 4,
       clearedScanProgress: false
     })
 
     const diagnostics = await runtime.getDiagnostics()
     expect(diagnostics.sources[0].lastReset).toMatchObject({
       jobId: 'test-source:reset:1',
-      queuedAt: expect.any(Number)
+      queuedAt: expect.any(Number),
+      clearedSearchIndexRows: 4
+    })
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'reset',
+      summary: {
+        clearedSearchIndexRows: 4
+      }
     })
   })
 
   it('supports search-index-only reset for sources without local reset hook', async () => {
+    store.clearSource.mockResolvedValueOnce({ sourceId: 'test-source', removedIndexedItems: 2 })
     runtime.registerSource(buildSource())
 
     const result = await runtime.resetSourceRuntimeState('test-source', {
@@ -1302,6 +1872,7 @@ describe('indexingRuntime', () => {
       sourceId: 'test-source',
       reason: IndexedSourceResetReasons.UserClear,
       clearedSearchIndex: true,
+      clearedSearchIndexRows: 2,
       clearedScanProgress: false,
       error: undefined
     })
@@ -1320,6 +1891,16 @@ describe('indexingRuntime', () => {
       clearedSearchIndex: false,
       clearedScanProgress: false,
       error: 'reset-not-supported'
+    })
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastReset).toMatchObject({
+      error: 'skipped:not-supported'
+    })
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'reset',
+      status: 'skipped',
+      error: 'skipped:not-supported'
     })
   })
 
@@ -1357,6 +1938,38 @@ describe('indexingRuntime', () => {
       clearedSearchIndex: false,
       clearedScanProgress: false,
       error: 'reset-already-running'
+    })
+
+    const diagnosticsAfterSkipped = await runtime.getDiagnostics()
+    expect(diagnosticsAfterSkipped.taskRunGate).toMatchObject({
+      totalEntries: 1,
+      runningEntries: 1,
+      blockedEntries: 1,
+      entries: [
+        {
+          sourceId: 'test-source',
+          kind: 'reset',
+          blockedCount: 1,
+          lastBlockedReason: 'already-running'
+        }
+      ]
+    })
+    expect(diagnosticsAfterSkipped.sources[0].taskRunGate).toMatchObject([
+      {
+        sourceId: 'test-source',
+        kind: 'reset',
+        blockedCount: 1,
+        lastBlockedReason: 'already-running'
+      }
+    ])
+    expect(diagnosticsAfterSkipped.sources[0].lastReset).toMatchObject({
+      reason: IndexedSourceResetReasons.UserClear,
+      error: 'skipped:already-running'
+    })
+    expect(diagnosticsAfterSkipped.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'reset',
+      status: 'skipped',
+      error: 'skipped:already-running'
     })
 
     releaseReset()
@@ -1444,15 +2057,6 @@ describe('indexingRuntime', () => {
     })
     expect(diagnostics.sources[0].recentTasks).toMatchObject([
       {
-        kind: 'reconcile',
-        status: 'succeeded',
-        summary: {
-          added: 1,
-          changed: 2,
-          deleted: 3
-        }
-      },
-      {
         kind: 'watch',
         status: 'succeeded',
         jobId: 'test-source:watch:1',
@@ -1469,6 +2073,15 @@ describe('indexingRuntime', () => {
         summary: {
           batches: 1,
           records: 1
+        }
+      },
+      {
+        kind: 'reconcile',
+        status: 'succeeded',
+        summary: {
+          added: 1,
+          changed: 2,
+          deleted: 3
         }
       }
     ])
@@ -1491,6 +2104,268 @@ describe('indexingRuntime', () => {
       kind: 'scan',
       jobId: 'test-source:scan:3'
     })
+  })
+
+  it('hydrates runtime task history from the injected task state store', async () => {
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastScan: {
+        startedAt: 1700000000000,
+        completedAt: 1700000000100,
+        jobId: 'test-source:scan:persisted',
+        batches: 1,
+        records: 2,
+        indexedRecords: 2
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          startedAt: 1700000000000,
+          completedAt: 1700000000100,
+          jobId: 'test-source:scan:persisted'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource())
+
+    const diagnostics = await runtime.getDiagnostics()
+
+    expect(diagnostics.sources[0].lastScan).toMatchObject({
+      jobId: 'test-source:scan:persisted',
+      records: 2
+    })
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'scan',
+      status: 'succeeded',
+      jobId: 'test-source:scan:persisted'
+    })
+  })
+
+  it('isolates diagnostics task-state snapshots from runtime cache mutation', async () => {
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastScan: {
+        startedAt: 1700000000000,
+        completedAt: 1700000000100,
+        jobId: 'test-source:scan:persisted',
+        batches: 1,
+        records: 2,
+        indexedRecords: 2
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          startedAt: 1700000000000,
+          completedAt: 1700000000100,
+          jobId: 'test-source:scan:persisted',
+          summary: {
+            records: 2,
+            phase: 'source'
+          }
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource())
+
+    const firstDiagnostics = await runtime.getDiagnostics()
+    if (!firstDiagnostics.sources[0].lastScan || !firstDiagnostics.sources[0].recentTasks?.[0])
+      throw new Error('Expected hydrated task state')
+
+    firstDiagnostics.sources[0].lastScan.records = 999
+    firstDiagnostics.sources[0].recentTasks[0].jobId = 'mutated'
+    firstDiagnostics.sources[0].recentTasks[0].summary = {
+      records: 999,
+      phase: 'mutated'
+    }
+
+    const secondDiagnostics = await runtime.getDiagnostics()
+
+    expect(secondDiagnostics.sources[0].lastScan).toMatchObject({
+      jobId: 'test-source:scan:persisted',
+      records: 2
+    })
+    expect(secondDiagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'scan',
+      status: 'succeeded',
+      jobId: 'test-source:scan:persisted',
+      summary: {
+        records: 2,
+        phase: 'source'
+      }
+    })
+  })
+
+  it('uses persisted scan failures to gate automatic scans after hydrate', async () => {
+    const failedAt = Date.now() - 1_000
+    const save = vi.fn(async () => {})
+    const scan = vi.fn(async function* () {})
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastScan: {
+        startedAt: failedAt - 100,
+        completedAt: failedAt,
+        jobId: 'test-source:scan:persisted-failure',
+        batches: 0,
+        records: 0,
+        indexedRecords: 0,
+        error: 'scanner crashed'
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'failed',
+          startedAt: failedAt - 100,
+          completedAt: failedAt,
+          jobId: 'test-source:scan:persisted-failure',
+          error: 'scanner crashed'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ scan }))
+
+    const result = await runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+
+    expect(scan).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      totalSources: 1,
+      scannedSources: 0,
+      skippedSources: 1,
+      skipped: [
+        {
+          sourceId: 'test-source',
+          reason: expect.stringMatching(/^retry-window:scan:/)
+        }
+      ]
+    })
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastScan: expect.objectContaining({
+          error: expect.stringMatching(/^skipped:retry-window:scan:/)
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'skipped',
+            error: expect.stringMatching(/^skipped:retry-window:scan:/)
+          }),
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'failed',
+            jobId: 'test-source:scan:persisted-failure'
+          })
+        ]
+      })
+    )
+  })
+
+  it('uses persisted reconcile failures to gate automatic reconciles after hydrate', async () => {
+    const failedAt = Date.now() - 1_000
+    const save = vi.fn(async () => {})
+    const reconcile = vi.fn(async () => ({
+      sourceId: 'test-source',
+      added: 0,
+      changed: 1,
+      deleted: 0,
+      skipped: 0,
+      errors: 0,
+      startedAt: failedAt + 100,
+      completedAt: failedAt + 200
+    }))
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastReconcile: {
+        startedAt: failedAt - 100,
+        completedAt: failedAt,
+        jobId: 'test-source:reconcile:persisted-failure',
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 1,
+        error: 'reconcile failed'
+      },
+      recentTasks: [
+        {
+          kind: 'reconcile',
+          status: 'failed',
+          startedAt: failedAt - 100,
+          completedAt: failedAt,
+          jobId: 'test-source:reconcile:persisted-failure',
+          error: 'reconcile failed'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ reconcile }))
+
+    const result = await runtime.reconcileSourcesWithResult()
+
+    expect(reconcile).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      totalSources: 1,
+      reconciledSources: 0,
+      skippedSources: 1,
+      skippedDetails: [
+        {
+          sourceId: 'test-source',
+          reason: expect.stringMatching(/^retry-window:reconcile:/)
+        }
+      ]
+    })
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastReconcile: expect.objectContaining({
+          error: expect.stringMatching(/^skipped:retry-window:reconcile:/)
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'reconcile',
+            status: 'skipped',
+            error: expect.stringMatching(/^skipped:retry-window:reconcile:/)
+          }),
+          expect.objectContaining({
+            kind: 'reconcile',
+            status: 'failed',
+            jobId: 'test-source:reconcile:persisted-failure'
+          })
+        ]
+      })
+    )
   })
 
   it('records reconcile request reason and root count in diagnostics', async () => {

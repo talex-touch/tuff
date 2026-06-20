@@ -143,6 +143,48 @@ describe('fileIndexedSource', () => {
     ])
   })
 
+  it('exposes FileProvider index flush evidence through indexed source diagnostics', async () => {
+    fileProviderMock.getIndexedSourceEvidence.mockResolvedValueOnce([
+      {
+        id: 'file-provider:index-flush',
+        label: 'File index flush',
+        status: 'degraded',
+        itemCount: 3,
+        lastCheckedAt: 1700000000000,
+        reason: 'worker-not-ready',
+        metadata: {
+          status: 'worker-not-ready',
+          entries: 1,
+          pending: 3,
+          inflight: 0,
+          durationMs: 12,
+          error: 'worker unavailable'
+        }
+      }
+    ])
+
+    const source = buildFileIndexedSource()
+
+    await expect(source.getEvidence?.()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'file-provider:index-flush',
+        label: 'File index flush',
+        status: 'degraded',
+        itemCount: 3,
+        lastCheckedAt: 1700000000000,
+        reason: 'worker-not-ready',
+        metadata: expect.objectContaining({
+          status: 'worker-not-ready',
+          entries: 1,
+          pending: 3,
+          inflight: 0,
+          durationMs: 12,
+          error: 'worker unavailable'
+        })
+      })
+    ])
+  })
+
   it('exposes FileProvider progress through indexed source diagnostics progress', async () => {
     fileProviderMock.getIndexingStatus.mockReturnValue({
       isInitializing: true,
@@ -334,18 +376,31 @@ describe('fileIndexedSource', () => {
     expect(fileProviderMock.resetIndexedSourceRuntimeState).toHaveBeenCalledWith(request)
   })
 
-  it('uses FileProvider rebuild for clearIndex and reports failures', async () => {
+  it('uses FileProvider runtime reset for clearIndex and reports scan progress cleanup', async () => {
     const source = buildFileIndexedSource()
-
-    await source.clearIndex?.()
-    expect(fileProviderMock.rebuildIndex).toHaveBeenCalledWith({ force: true })
-
-    fileProviderMock.rebuildIndex.mockResolvedValueOnce({
-      success: false,
-      reason: 'missing-context',
-      error: 'Cannot rebuild'
+    fileProviderMock.resetIndexedSourceRuntimeState.mockResolvedValueOnce({
+      sourceId: 'file-provider',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearedSearchIndex: true,
+      clearedScanProgress: true,
+      scanProgressRows: 4,
+      startedAt: 3,
+      completedAt: 4
     })
 
-    await expect(source.clearIndex?.()).rejects.toThrow('Cannot rebuild')
+    await expect(source.clearIndex?.()).resolves.toMatchObject({
+      sourceId: 'file-provider',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearedSearchIndex: true,
+      clearedScanProgress: true,
+      scanProgressRows: 4
+    })
+    expect(fileProviderMock.resetIndexedSourceRuntimeState).toHaveBeenCalledWith({
+      sourceId: 'file-provider',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: true,
+      clearScanProgress: true
+    })
+    expect(fileProviderMock.rebuildIndex).not.toHaveBeenCalled()
   })
 })

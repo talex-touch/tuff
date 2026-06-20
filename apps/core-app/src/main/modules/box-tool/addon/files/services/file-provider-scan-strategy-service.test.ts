@@ -59,4 +59,22 @@ describe('file-provider-scan-strategy-service', () => {
       reconciliationPaths: []
     })
   })
+
+  it('uses the injected normalizer when matching completed scan progress', async () => {
+    const service = new FileProviderScanStrategyService({
+      getCompletedPaths: async () => new Set(['/users/me/documents']),
+      normalizePath: (path) => path.toLowerCase(),
+      yieldAfterRead: async () => {},
+      now: () => 100,
+      formatDuration: (durationMs) => `${durationMs}ms`,
+      logDebug: vi.fn(),
+      logInfo: vi.fn()
+    })
+
+    await expect(service.resolve(['/Users/me/Documents', '/Users/me/Downloads'])).resolves.toEqual({
+      completedScanPaths: new Set(['/users/me/documents']),
+      newPathsToScan: ['/Users/me/Downloads'],
+      reconciliationPaths: ['/Users/me/Documents']
+    })
+  })
 })

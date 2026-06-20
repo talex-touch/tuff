@@ -17,6 +17,7 @@ export interface FileProviderIntegritySnapshot {
   filesRows: number
   needsRebuild: boolean
   clearedSearchIndex: boolean
+  resetSearchIndexRows?: number
   clearedScanProgress: boolean
   orphanedKeywordsRemoved: number
   resetReason?: string | null

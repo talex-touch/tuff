@@ -30,6 +30,7 @@ import type {
   ScanSchedulerSkippedSource
 } from './indexing-scan-scheduler'
 import type { IndexStoreAdapter } from './indexing-store-adapter'
+import type { IndexingTaskStateStore } from './indexing-task-state-store'
 import type { WatchEventRouteResult } from './indexing-watch-router'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
@@ -42,6 +43,7 @@ import {
   IndexedSourceResetReasons,
   IndexedSourceTaskRunGate,
   resolveIndexedSourceTaskEligibility,
+  resolveIndexedSourceTaskRetryDecision,
   updateIndexedSourceTaskState
 } from '@talex-touch/utils/search'
 import { SourceDiagnosticsService } from './indexing-diagnostics-service'
@@ -51,6 +53,7 @@ import { indexingRootPolicy } from './indexing-root-policy'
 import { IndexedSourceRuntimeTaskJobFactory } from './indexing-runtime-task-job'
 import { ScanScheduler } from './indexing-scan-scheduler'
 import { NoopIndexStoreAdapter } from './indexing-store-adapter'
+import { MemoryIndexingTaskStateStore } from './indexing-task-state-store'
 import { WatchEventRouter } from './indexing-watch-router'
 
 const indexingRuntimeLog = getLogger('indexing-runtime')
@@ -64,6 +67,7 @@ export interface IndexingRuntimeOptions {
   jobFactory?: IndexedSourceRuntimeTaskJobFactory
   runGate?: IndexedSourceTaskRunGate
   rootPolicy?: IndexingRootPolicy
+  taskStateStore?: IndexingTaskStateStore
 }
 
 export type { IndexingRuntimeDiagnostics, IndexingRuntimeSourceDiagnostics }
@@ -75,6 +79,8 @@ interface RuntimeEligibleSources {
     reason: string
   }>
 }
+
+type RuntimeTaskRetryKind = 'scan' | 'reconcile'
 
 export class IndexingRuntime {
   private readonly sources = new Map<string, IndexedSource>()
@@ -88,6 +94,7 @@ export class IndexingRuntime {
   private readonly jobFactory: IndexedSourceRuntimeTaskJobFactory
   private readonly runGate: IndexedSourceTaskRunGate
   private readonly rootPolicy: IndexingRootPolicy
+  private taskStateStore: IndexingTaskStateStore
 
   constructor(options: IndexingRuntimeOptions = {}) {
     this.jobFactory = options.jobFactory ?? new IndexedSourceRuntimeTaskJobFactory()
@@ -101,6 +108,7 @@ export class IndexingRuntime {
       options.reconcileScheduler ??
       new DefaultReconcileScheduler(this.reconcileEngine, this.jobFactory, this.runGate)
     this.rootPolicy = options.rootPolicy ?? indexingRootPolicy
+    this.taskStateStore = options.taskStateStore ?? new MemoryIndexingTaskStateStore()
   }
 
   registerSource(source: IndexedSource): boolean {
@@ -142,6 +150,11 @@ export class IndexingRuntime {
     const deleted = this.sources.delete(sourceId)
     if (deleted) {
       this.taskState.delete(sourceId)
+      void this.taskStateStore.delete(sourceId).catch((error) => {
+        indexingRuntimeLog.warn(`Failed to delete indexed source task state '${sourceId}'`, {
+          error
+        })
+      })
       this.rootPolicy.clearSource(sourceId)
       indexingRuntimeLog.info(`Indexed source '${sourceId}' unregistered`)
     }
@@ -172,9 +185,15 @@ export class IndexingRuntime {
     )
   }
 
+  setTaskStateStore(taskStateStore: IndexingTaskStateStore): void {
+    this.taskStateStore = taskStateStore
+    this.taskState.clear()
+  }
+
   async getDiagnostics(): Promise<IndexingRuntimeDiagnostics> {
     const diagnostics = await this.diagnosticsService.getDiagnostics(this.listSources())
-    this.applyTaskState(diagnostics)
+    await this.applyTaskState(diagnostics)
+    this.applyTaskRunGateState(diagnostics)
     this.updateRootPolicy(diagnostics)
     return diagnostics
   }
@@ -218,6 +237,7 @@ export class IndexingRuntime {
         sourceId,
         batches: 0,
         records: 0,
+        indexedRecords: 0,
         startedAt: job.queuedAt,
         completedAt: timestamp
       }
@@ -247,7 +267,11 @@ export class IndexingRuntime {
   async scanSourcesWithResult(reason: IndexedSourceScanReason): Promise<ScanSchedulerBatchResult> {
     const allSources = this.listSources()
     const diagnostics = await this.getDiagnostics()
-    const eligible = this.getEligibleSources(allSources, diagnostics, 'scan')
+    const eligible = this.filterRetryEligibleSources(
+      this.getEligibleSources(allSources, diagnostics, 'scan'),
+      diagnostics,
+      'scan'
+    )
     const jobs = new Map<string, IndexedSourceRuntimeTaskJob>()
     for (const source of eligible.sources) {
       jobs.set(source.descriptor.id, this.createScanJob(source.descriptor.id))
@@ -263,7 +287,13 @@ export class IndexingRuntime {
         result.startedAt,
         result.completedAt,
         failure.message,
-        jobs.get(failure.sourceId)
+        jobs.get(failure.sourceId),
+        {
+          phase: failure.phase,
+          batches: failure.batches,
+          records: failure.records,
+          indexedRecords: failure.indexedRecords
+        }
       )
     }
     for (const skipped of eligible.skipped) {
@@ -319,7 +349,11 @@ export class IndexingRuntime {
   async reconcileSourcesWithResult(): Promise<ReconcileEngineBatchResult> {
     const allSources = this.listSources()
     const diagnostics = await this.getDiagnostics()
-    const eligible = this.getEligibleSources(allSources, diagnostics, 'reconcile')
+    const eligible = this.filterRetryEligibleSources(
+      this.getEligibleSources(allSources, diagnostics, 'reconcile'),
+      diagnostics,
+      'reconcile'
+    )
     const result = await this.reconcileScheduler.reconcileSourcesWithResult(eligible.sources)
     const enrichedResult = this.withReconcileSkippedSources(
       result,
@@ -356,6 +390,7 @@ export class IndexingRuntime {
     const startedAt = Date.now()
     const reason = request.reason ?? IndexedSourceResetReasons.HealthRepair
     const job = this.createTaskJob(sourceId, 'reset')
+    await this.loadTaskState(sourceId)
     const decision = this.runGate.canStart(sourceId, 'reset')
     if (!decision.allowed) {
       const completedAt = Date.now()
@@ -368,19 +403,21 @@ export class IndexingRuntime {
         completedAt,
         error: `reset-${decision.reason}`
       }
-      this.recordResetResult(result, job)
+      this.recordResetResult(result, job, 'skipped', decision.reason)
       return result
     }
 
     const shouldClearSearchIndex = request.clearSearchIndex === true
     let clearedSearchIndex = false
+    let clearedSearchIndexRows = 0
     this.runGate.start(sourceId, 'reset', startedAt)
 
     try {
       const clearSearchIndex = async (): Promise<void> => {
         if (shouldClearSearchIndex) {
-          await this.store.clearSource(sourceId)
+          const summary = await this.store.clearSource(sourceId)
           clearedSearchIndex = true
+          clearedSearchIndexRows = summary?.removedIndexedItems ?? 0
         }
       }
 
@@ -391,12 +428,18 @@ export class IndexingRuntime {
           sourceId,
           reason,
           clearedSearchIndex,
+          clearedSearchIndexRows,
           clearedScanProgress: false,
           startedAt,
           completedAt: Date.now(),
           error: shouldClearSearchIndex ? undefined : 'reset-not-supported'
         }
-        this.recordResetResult(result, job)
+        this.recordResetResult(
+          result,
+          job,
+          shouldClearSearchIndex ? undefined : 'skipped',
+          shouldClearSearchIndex ? undefined : 'not-supported'
+        )
         return result
       }
 
@@ -409,7 +452,8 @@ export class IndexingRuntime {
       })
       const mergedResult = {
         ...result,
-        clearedSearchIndex: clearedSearchIndex || result.clearedSearchIndex
+        clearedSearchIndex: clearedSearchIndex || result.clearedSearchIndex,
+        clearedSearchIndexRows: clearedSearchIndexRows + (result.clearedSearchIndexRows ?? 0)
       }
       this.recordResetResult(mergedResult, job)
       return mergedResult
@@ -418,6 +462,7 @@ export class IndexingRuntime {
         sourceId,
         reason,
         clearedSearchIndex,
+        clearedSearchIndexRows,
         clearedScanProgress: false,
         startedAt,
         completedAt: Date.now(),
@@ -504,6 +549,39 @@ export class IndexingRuntime {
     return eligibility.reason ?? null
   }
 
+  private filterRetryEligibleSources(
+    eligible: RuntimeEligibleSources,
+    diagnostics: IndexingRuntimeDiagnostics,
+    kind: RuntimeTaskRetryKind
+  ): RuntimeEligibleSources {
+    const diagnosticsBySource = new Map(
+      diagnostics.sources.map((source) => [source.descriptor.id, source])
+    )
+    const sources: IndexedSource[] = []
+    const skipped = [...eligible.skipped]
+
+    for (const source of eligible.sources) {
+      const sourceId = source.descriptor.id
+      const retry = resolveIndexedSourceTaskRetryDecision(
+        diagnosticsBySource.get(sourceId)?.recentTasks,
+        kind
+      )
+      if (!retry.allowed) {
+        skipped.push({
+          sourceId,
+          reason: `retry-window:${kind}:${retry.nextRetryAt ?? 'unknown'}`
+        })
+        continue
+      }
+      sources.push(source)
+    }
+
+    return {
+      sources,
+      skipped
+    }
+  }
+
   private withScanSkippedSources(
     result: ScanSchedulerBatchResult,
     totalSources: number,
@@ -535,6 +613,9 @@ export class IndexingRuntime {
     this.taskState.clear()
     this.runGate.clear()
     this.rootPolicy.clear()
+    void this.taskStateStore.clear().catch((error) => {
+      indexingRuntimeLog.warn('Failed to clear indexed source task state store', { error })
+    })
   }
 
   private updateRootPolicy(diagnostics: IndexingRuntimeDiagnostics): void {
@@ -543,21 +624,41 @@ export class IndexingRuntime {
     }
   }
 
-  private applyTaskState(diagnostics: IndexingRuntimeDiagnostics): void {
+  private async applyTaskState(diagnostics: IndexingRuntimeDiagnostics): Promise<void> {
     for (const source of diagnostics.sources) {
-      const state = this.taskState.get(source.descriptor.id)
+      const state = await this.loadTaskState(source.descriptor.id)
       if (!state) continue
-      source.lastScan = state.lastScan
-      source.lastWatch = state.lastWatch
-      source.lastReconcile = state.lastReconcile
-      source.lastReset = state.lastReset
-      source.recentTasks = state.recentTasks
+      const snapshot = cloneRuntimeTaskState(state)
+      source.lastScan = snapshot.lastScan
+      source.lastWatch = snapshot.lastWatch
+      source.lastReconcile = snapshot.lastReconcile
+      source.lastReset = snapshot.lastReset
+      source.recentTasks = snapshot.recentTasks
+    }
+  }
+
+  private applyTaskRunGateState(diagnostics: IndexingRuntimeDiagnostics): void {
+    const snapshot = this.runGate.getSnapshot(diagnostics.generatedAt)
+    diagnostics.taskRunGate = snapshot
+
+    const entriesBySource = new Map<string, typeof snapshot.entries>()
+    for (const entry of snapshot.entries) {
+      const entries = entriesBySource.get(entry.sourceId) ?? []
+      entries.push(entry)
+      entriesBySource.set(entry.sourceId, entries)
+    }
+
+    for (const source of diagnostics.sources) {
+      const entries = entriesBySource.get(source.descriptor.id)
+      if (entries && entries.length > 0) {
+        source.taskRunGate = entries
+      }
     }
   }
 
   private ensureTaskState(sourceId: string): IndexedSourceRuntimeTaskState {
     const existing = this.taskState.get(sourceId)
-    if (existing) return existing
+    if (existing) return cloneRuntimeTaskState(existing)
     const next: IndexedSourceRuntimeTaskState = {}
     this.taskState.set(sourceId, next)
     return next
@@ -577,6 +678,29 @@ export class IndexingRuntime {
       historyLimit: DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT
     })
     this.taskState.set(sourceId, next)
+    void this.taskStateStore.save(sourceId, next).catch((error) => {
+      indexingRuntimeLog.warn(`Failed to persist indexed source task state '${sourceId}'`, {
+        error
+      })
+    })
+  }
+
+  private async loadTaskState(
+    sourceId: string
+  ): Promise<IndexedSourceRuntimeTaskState | undefined> {
+    const existing = this.taskState.get(sourceId)
+    if (existing) return cloneRuntimeTaskState(existing)
+
+    try {
+      const persisted = await this.taskStateStore.load(sourceId)
+      if (persisted) {
+        this.taskState.set(sourceId, cloneRuntimeTaskState(persisted))
+      }
+      return persisted ? cloneRuntimeTaskState(persisted) : undefined
+    } catch (error) {
+      indexingRuntimeLog.warn(`Failed to load indexed source task state '${sourceId}'`, { error })
+      return undefined
+    }
   }
 
   private recordScanResult(result: ScanSchedulerResult, job?: IndexedSourceRuntimeTaskJob): void {
@@ -586,6 +710,7 @@ export class IndexingRuntime {
       completedAt: result.completedAt,
       batches: result.batches,
       records: result.records,
+      indexedRecords: result.indexedRecords,
       job
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
@@ -596,7 +721,13 @@ export class IndexingRuntime {
     startedAt: number,
     completedAt: number,
     error: string,
-    job?: IndexedSourceRuntimeTaskJob
+    job?: IndexedSourceRuntimeTaskJob,
+    summary?: {
+      phase?: string
+      batches?: number
+      records?: number
+      indexedRecords?: number
+    }
   ): void {
     const taskState = buildIndexedSourceScanTaskState({
       sourceId,
@@ -604,6 +735,10 @@ export class IndexingRuntime {
       completedAt,
       status: 'failed',
       error,
+      phase: summary?.phase,
+      batches: summary?.batches,
+      records: summary?.records,
+      indexedRecords: summary?.indexedRecords,
       job
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
@@ -633,7 +768,6 @@ export class IndexingRuntime {
     queuedAt: number
   ): void {
     const completedAt = Date.now()
-    const deltasBySource = new Map<string, number>()
     const jobs = new Map<string, IndexedSourceRuntimeTaskJob>()
     const getWatchJob = (sourceId: string): IndexedSourceRuntimeTaskJob => {
       const existing = jobs.get(sourceId)
@@ -643,30 +777,27 @@ export class IndexingRuntime {
       return job
     }
 
-    for (const delta of result.deltas) {
-      deltasBySource.set(delta.sourceId, (deltasBySource.get(delta.sourceId) ?? 0) + 1)
-    }
-
-    for (const [sourceId, deltas] of deltasBySource) {
-      const job = getWatchJob(sourceId)
-      const appliedDeltas = result.failedDeltas > 0 ? 0 : deltas
-      const failedDeltas = result.failedDeltas > 0 ? deltas : 0
+    for (const summary of result.deltaSummaries) {
+      const job = getWatchJob(summary.sourceId)
+      const status = summary.failedDeltas > 0 ? 'failed' : 'succeeded'
       const taskState = buildIndexedSourceWatchTaskState({
-        sourceId,
+        sourceId: summary.sourceId,
         occurredAt: event.occurredAt,
         completedAt,
         action: event.action,
         path: event.path,
-        deltas,
-        appliedDeltas,
-        failedDeltas,
-        status: result.failedDeltas > 0 ? 'failed' : 'succeeded',
+        deltas: summary.deltas,
+        appliedDeltas: summary.appliedDeltas,
+        failedDeltas: summary.failedDeltas,
+        skippedDeltas: summary.skippedDeltas,
+        status,
         job,
         summary: {
           action: event.action,
-          deltas,
-          appliedDeltas,
-          failedDeltas
+          deltas: summary.deltas,
+          appliedDeltas: summary.appliedDeltas,
+          failedDeltas: summary.failedDeltas,
+          skippedDeltas: summary.skippedDeltas
         }
       })
       this.updateTaskState(
@@ -690,13 +821,15 @@ export class IndexingRuntime {
         deltas: 0,
         appliedDeltas: 0,
         failedDeltas,
+        skippedDeltas: 0,
         status: 'failed',
         error: error.message,
         job,
         summary: {
           phase: error.phase,
           action: event.action,
-          failedDeltas
+          failedDeltas,
+          skippedDeltas: 0
         }
       })
       this.updateTaskState(
@@ -718,6 +851,7 @@ export class IndexingRuntime {
         deltas: 0,
         appliedDeltas: 0,
         failedDeltas: 0,
+        skippedDeltas: 0,
         status: 'skipped',
         skipReason: skipped.reason,
         job,
@@ -756,6 +890,7 @@ export class IndexingRuntime {
       deltas: result.deltas?.length,
       appliedDeltas: result.appliedDeltas,
       failedDeltas: result.failedDeltas,
+      skippedDeltas: result.skippedDeltas,
       status,
       error,
       summary: {
@@ -765,7 +900,11 @@ export class IndexingRuntime {
         skipped: result.skipped,
         errors: result.errors,
         reason: result.reason ?? request.reason,
-        rootCount: request.roots?.length
+        rootCount: request.roots?.length,
+        deltas: result.deltas?.length,
+        appliedDeltas: result.appliedDeltas,
+        failedDeltas: result.failedDeltas,
+        skippedDeltas: result.skippedDeltas
       }
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
@@ -807,7 +946,9 @@ export class IndexingRuntime {
 
   private recordResetResult(
     result: IndexedSourceResetResult,
-    job?: IndexedSourceRuntimeTaskJob
+    job?: IndexedSourceRuntimeTaskJob,
+    status?: Extract<IndexedSourceTaskHistoryEntry['status'], 'succeeded' | 'failed' | 'skipped'>,
+    skipReason?: string
   ): void {
     const taskState = buildIndexedSourceResetTaskState({
       sourceId: result.sourceId,
@@ -815,13 +956,41 @@ export class IndexingRuntime {
       completedAt: result.completedAt,
       reason: result.reason,
       clearedSearchIndex: result.clearedSearchIndex,
+      clearedSearchIndexRows: result.clearedSearchIndexRows,
       clearedScanProgress: result.clearedScanProgress,
       scanProgressRows: result.scanProgressRows,
+      status,
       error: result.error,
+      skipReason,
       job
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
+}
+
+function cloneRuntimeTaskState(
+  state: IndexedSourceRuntimeTaskState
+): IndexedSourceRuntimeTaskState {
+  const snapshot: IndexedSourceRuntimeTaskState = {}
+  if (state.lastScan) {
+    snapshot.lastScan = { ...state.lastScan }
+  }
+  if (state.lastWatch) {
+    snapshot.lastWatch = { ...state.lastWatch }
+  }
+  if (state.lastReconcile) {
+    snapshot.lastReconcile = { ...state.lastReconcile }
+  }
+  if (state.lastReset) {
+    snapshot.lastReset = { ...state.lastReset }
+  }
+  if (state.recentTasks) {
+    snapshot.recentTasks = state.recentTasks.map((task) => ({
+      ...task,
+      ...(task.summary ? { summary: { ...task.summary } } : {})
+    }))
+  }
+  return snapshot
 }
 
 export const indexingRuntime = new IndexingRuntime()

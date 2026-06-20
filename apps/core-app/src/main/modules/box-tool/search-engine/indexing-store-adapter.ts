@@ -9,9 +9,41 @@ import type { SearchIndexItem, SearchIndexKeyword } from './search-index-service
 import { SearchIndexService } from './search-index-service'
 
 export interface IndexStoreAdapter {
-  applyBatch(batch: IndexedSourceRecordBatch): Promise<void>
-  applyDelta(delta: IndexedSourceDelta): Promise<void>
-  clearSource(sourceId: string): Promise<void>
+  applyBatch(batch: IndexedSourceRecordBatch): Promise<IndexStoreBatchApplySummary | void>
+  applyDelta(delta: IndexedSourceDelta): Promise<IndexStoreDeltaApplySummary | void>
+  clearSource(sourceId: string): Promise<IndexStoreClearSourceSummary | void>
+}
+
+export interface IndexStoreBatchApplySummary {
+  sourceId: string
+  recordCount: number
+  indexedItemCount: number
+  done: boolean
+  cursor?: string
+}
+
+export interface SearchIndexStoreAdapterOptions {
+  onBatchApplied?: (summary: IndexStoreBatchApplySummary) => void | Promise<void>
+  onDeltaApplied?: (summary: IndexStoreDeltaApplySummary) => void | Promise<void>
+  onClearSource?: (summary: IndexStoreClearSourceSummary) => void | Promise<void>
+}
+
+export interface IndexStoreClearSourceSummary {
+  sourceId: string
+  removedIndexedItems: number
+}
+
+export interface IndexStoreDeltaApplySummary {
+  sourceId: string
+  action: IndexedSourceDelta['action']
+  indexedItemCount: number
+  removedItemCount: number
+  applied: boolean
+  reason?:
+    | 'missing-delete-identity'
+    | 'missing-indexed-item'
+    | 'missing-record'
+    | 'unindexable-record'
 }
 
 export class NoopIndexStoreAdapter implements IndexStoreAdapter {
@@ -109,36 +141,118 @@ export function mapIndexedSourceRecordToSearchIndexItem(
 }
 
 export class SearchIndexStoreAdapter implements IndexStoreAdapter {
-  constructor(private readonly searchIndex: SearchIndexService) {}
+  constructor(
+    private readonly searchIndex: SearchIndexService,
+    private readonly options: SearchIndexStoreAdapterOptions = {}
+  ) {}
 
-  async applyBatch(batch: IndexedSourceRecordBatch): Promise<void> {
+  async applyBatch(batch: IndexedSourceRecordBatch): Promise<IndexStoreBatchApplySummary> {
     const items = batch.records
       .map((record) => mapIndexedSourceRecordToSearchIndexItem(record))
       .filter((item): item is SearchIndexItem => Boolean(item))
 
-    await this.searchIndex.indexItems(items)
+    if (items.length > 0) {
+      await this.searchIndex.indexItems(items)
+    }
+
+    const summary: IndexStoreBatchApplySummary = {
+      sourceId: batch.sourceId,
+      recordCount: batch.records.length,
+      indexedItemCount: items.length,
+      done: batch.done === true,
+      cursor: batch.cursor
+    }
+
+    await this.options.onBatchApplied?.(summary)
+    return summary
   }
 
-  async applyDelta(delta: IndexedSourceDelta): Promise<void> {
+  async applyDelta(delta: IndexedSourceDelta): Promise<IndexStoreDeltaApplySummary> {
     if (delta.action === 'delete') {
       const itemId = resolveDeltaItemId(delta)
       if (itemId) {
-        await this.searchIndex.removeItems([itemId])
+        const removedItemCount = await this.searchIndex.removeProviderItems(delta.sourceId, [
+          itemId
+        ])
+        if (removedItemCount <= 0) {
+          const summary: IndexStoreDeltaApplySummary = {
+            sourceId: delta.sourceId,
+            action: delta.action,
+            indexedItemCount: 0,
+            removedItemCount: 0,
+            applied: false,
+            reason: 'missing-indexed-item'
+          }
+          await this.options.onDeltaApplied?.(summary)
+          return summary
+        }
+        const summary: IndexStoreDeltaApplySummary = {
+          sourceId: delta.sourceId,
+          action: delta.action,
+          indexedItemCount: 0,
+          removedItemCount,
+          applied: true
+        }
+        await this.options.onDeltaApplied?.(summary)
+        return summary
       }
-      return
+      const summary: IndexStoreDeltaApplySummary = {
+        sourceId: delta.sourceId,
+        action: delta.action,
+        indexedItemCount: 0,
+        removedItemCount: 0,
+        applied: false,
+        reason: 'missing-delete-identity'
+      }
+      await this.options.onDeltaApplied?.(summary)
+      return summary
     }
 
     if (!delta.record) {
-      return
+      const summary: IndexStoreDeltaApplySummary = {
+        sourceId: delta.sourceId,
+        action: delta.action,
+        indexedItemCount: 0,
+        removedItemCount: 0,
+        applied: false,
+        reason: 'missing-record'
+      }
+      await this.options.onDeltaApplied?.(summary)
+      return summary
     }
 
     const item = mapIndexedSourceRecordToSearchIndexItem(delta.record)
     if (item) {
       await this.searchIndex.indexItems([item])
+      const summary: IndexStoreDeltaApplySummary = {
+        sourceId: delta.sourceId,
+        action: delta.action,
+        indexedItemCount: 1,
+        removedItemCount: 0,
+        applied: true
+      }
+      await this.options.onDeltaApplied?.(summary)
+      return summary
     }
+    const summary: IndexStoreDeltaApplySummary = {
+      sourceId: delta.sourceId,
+      action: delta.action,
+      indexedItemCount: 0,
+      removedItemCount: 0,
+      applied: false,
+      reason: 'unindexable-record'
+    }
+    await this.options.onDeltaApplied?.(summary)
+    return summary
   }
 
-  async clearSource(sourceId: string): Promise<void> {
-    await this.searchIndex.removeByProvider(sourceId)
+  async clearSource(sourceId: string): Promise<IndexStoreClearSourceSummary> {
+    const removedIndexedItems = await this.searchIndex.removeByProvider(sourceId)
+    const summary: IndexStoreClearSourceSummary = {
+      sourceId,
+      removedIndexedItems
+    }
+    await this.options.onClearSource?.(summary)
+    return summary
   }
 }

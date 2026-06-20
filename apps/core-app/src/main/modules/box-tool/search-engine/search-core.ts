@@ -59,6 +59,7 @@ import { windowManager } from '../core-box/window'
 import { indexingRuntime, type IndexingRuntime } from './indexing-runtime'
 import { registerCoreIndexedSources } from './indexing-runtime-sources'
 import { SearchIndexStoreAdapter } from './indexing-store-adapter'
+import { SqliteIndexingTaskStateStore } from './indexing-task-state-store'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { gatherAggregator } from './search-gather'
@@ -2537,6 +2538,7 @@ export class SearchEngineCore
     })
     instance.searchIndexService.preloadPinyin()
     indexingRuntime.setStore(new SearchIndexStoreAdapter(instance.searchIndexService))
+    indexingRuntime.setTaskStateStore(new SqliteIndexingTaskStateStore(db))
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
     instance.usageStatsQueue = new UsageStatsQueue(db, {

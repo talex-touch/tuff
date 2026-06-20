@@ -4,7 +4,8 @@ import type * as schema from '../../../../../db/schema'
 import type { DbUtils } from '../../../../../db/utils'
 import {
   IndexedSourceProgressEvidenceService,
-  IndexedSourceProgressStoreService
+  IndexedSourceProgressStoreService,
+  resolveIndexedScanEligibility
 } from '@talex-touch/utils/search'
 import { inArray } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
@@ -21,6 +22,8 @@ export interface FileProviderIndexStatsForEvidence {
 export interface FileProviderScanProgressSummary {
   totalRoots: number
   pendingRoots: number
+  completedRoots: number
+  lastScannedAt: number | null
 }
 
 export interface FileProviderScanProgressEvidenceInput {
@@ -34,6 +37,7 @@ export interface FileProviderScanProgressEvidenceInput {
 
 export interface FileProviderScanProgressServiceDeps {
   getDbUtils: () => DbUtils | null
+  normalizePath?: (path: string) => string
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   getSearchIndexWorker: () => {
     upsertScanProgress: (paths: string[], lastScanned: string) => Promise<void>
@@ -42,6 +46,7 @@ export interface FileProviderScanProgressServiceDeps {
 
 export class FileProviderScanProgressService {
   private readonly getDbUtils: FileProviderScanProgressServiceDeps['getDbUtils']
+  private readonly normalizePath: NonNullable<FileProviderScanProgressServiceDeps['normalizePath']>
   private readonly ensureSearchIndexWorkerReady: FileProviderScanProgressServiceDeps['ensureSearchIndexWorkerReady']
   private readonly getSearchIndexWorker: FileProviderScanProgressServiceDeps['getSearchIndexWorker']
   private readonly evidenceService = new IndexedSourceProgressEvidenceService()
@@ -49,6 +54,7 @@ export class FileProviderScanProgressService {
 
   constructor(deps: FileProviderScanProgressServiceDeps) {
     this.getDbUtils = deps.getDbUtils
+    this.normalizePath = deps.normalizePath ?? ((path) => path)
     this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
     this.getSearchIndexWorker = deps.getSearchIndexWorker
     this.progressStore = new IndexedSourceProgressStoreService({
@@ -62,13 +68,44 @@ export class FileProviderScanProgressService {
 
   async getSummary(watchPaths: string[]): Promise<FileProviderScanProgressSummary> {
     const completedPaths = await this.progressStore.getCompletedPaths()
-    return this.progressStore.summarizeRoots(watchPaths, completedPaths, {
-      isStoreAvailable: Boolean(this.getDbUtils())
-    })
+    const scopedCompletedPaths = this.filterCompletedPathsForRoots(completedPaths, watchPaths)
+    const normalizedWatchPaths = watchPaths.map((entryPath) => this.normalizePath(entryPath))
+    const normalizedCompletedPaths = new Set(
+      [...scopedCompletedPaths].map((entryPath) => this.normalizePath(entryPath))
+    )
+    const summary = await this.progressStore.summarizeRoots(
+      normalizedWatchPaths,
+      normalizedCompletedPaths,
+      {
+        isStoreAvailable: Boolean(this.getDbUtils())
+      }
+    )
+    const lastScannedAt = await this.getLastScannedAt(watchPaths)
+    const configuredRootCount = new Set(normalizedWatchPaths).size
+
+    return {
+      ...summary,
+      completedRoots: Math.max(0, configuredRootCount - summary.pendingRoots),
+      lastScannedAt
+    }
   }
 
   async getCompletedPaths(): Promise<Set<string>> {
     return this.progressStore.getCompletedPaths()
+  }
+
+  private filterCompletedPathsForRoots(
+    completedPaths: Set<string>,
+    watchPaths: string[]
+  ): Set<string> {
+    if (watchPaths.length === 0 || completedPaths.size === 0) {
+      return new Set()
+    }
+
+    const watchPathSet = new Set(watchPaths.map((entryPath) => this.normalizePath(entryPath)))
+    return new Set(
+      [...completedPaths].filter((entryPath) => watchPathSet.has(this.normalizePath(entryPath)))
+    )
   }
 
   private async loadCompletedPaths(): Promise<Set<string>> {
@@ -80,6 +117,28 @@ export class FileProviderScanProgressService {
     const db = dbUtils.getDb()
     const completedScans = await db.select({ path: scanProgress.path }).from(scanProgress)
     return new Set(completedScans.map((row) => row.path))
+  }
+
+  private async getLastScannedAt(watchPaths: string[]): Promise<number | null> {
+    const dbUtils = this.getDbUtils()
+    if (!dbUtils) {
+      return null
+    }
+
+    const db = dbUtils.getDb()
+    const completedScans = await db
+      .select({ path: scanProgress.path, lastScanned: scanProgress.lastScanned })
+      .from(scanProgress)
+    const watchPathSet = new Set(watchPaths.map((entryPath) => this.normalizePath(entryPath)))
+
+    return resolveIndexedScanEligibility({
+      watchPaths,
+      completedScans: completedScans.filter((scan) =>
+        watchPathSet.has(this.normalizePath(scan.path))
+      ),
+      intervalMs: Number.POSITIVE_INFINITY,
+      normalizePath: this.normalizePath
+    }).lastScannedAt
   }
 
   async deletePaths(db: LibSQLDatabase<typeof schema>, paths: string[]): Promise<void> {
@@ -97,6 +156,7 @@ export class FileProviderScanProgressService {
   ): Promise<IndexedSourceEvidence> {
     const summary = await this.getSummary(input.watchPaths)
     const pendingPermissionPaths = input.pendingPermissionPaths ?? []
+    const configuredRoots = input.watchPaths.length
 
     return this.evidenceService.build({
       id: `${input.sourceId}:scan-progress`,
@@ -122,7 +182,11 @@ export class FileProviderScanProgressService {
         failedFiles: input.stats.failedFiles,
         skippedFiles: input.stats.skippedFiles,
         embeddingCompletedFiles: input.stats.embeddingCompletedFiles,
-        embeddingRows: input.stats.embeddingRows
+        embeddingRows: input.stats.embeddingRows,
+        configuredRoots,
+        completedRoots: summary.completedRoots,
+        scanProgressRows: summary.totalRoots,
+        lastScannedAt: summary.lastScannedAt
       }
     })
   }

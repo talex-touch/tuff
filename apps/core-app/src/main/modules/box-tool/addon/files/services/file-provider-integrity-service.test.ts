@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
+import type { SearchIndexWorkerClient } from '../../../search-engine/workers/search-index-worker-client'
 import { FileProviderIntegrityService } from './file-provider-integrity-service'
 
 function createDb(options: { filesRows: number; orphanedKeywords?: number }) {
@@ -35,6 +36,7 @@ function createService(options: {
         sourceId: 'file-provider',
         reason: IndexedSourceResetReasons.IntegrityRepair,
         clearedSearchIndex: true,
+        clearedSearchIndexRows: 4,
         clearedScanProgress: true,
         scanProgressRows: 2,
         startedAt: 100,
@@ -45,7 +47,7 @@ function createService(options: {
   const cleanupOrphanKeywordsSpy = vi.fn().mockResolvedValue(options.orphanedKeywords ?? 0)
   const searchIndexWorker = {
     cleanupOrphanKeywords: cleanupOrphanKeywordsSpy
-  } as any
+  } as unknown as SearchIndexWorkerClient
 
   return {
     countSearchIndexByProvider,
@@ -83,6 +85,7 @@ describe('file-provider-integrity-service', () => {
       filesRows: 10,
       needsRebuild: true,
       clearedSearchIndex: true,
+      resetSearchIndexRows: 4,
       clearedScanProgress: true,
       resetReason: IndexedSourceResetReasons.IntegrityRepair,
       resetScanProgressRows: 2
@@ -135,6 +138,7 @@ describe('file-provider-integrity-service', () => {
       filesRows: 10,
       needsRebuild: false,
       clearedSearchIndex: false,
+      resetSearchIndexRows: 0,
       clearedScanProgress: false,
       orphanedKeywordsRemoved: 0,
       resetReason: null,

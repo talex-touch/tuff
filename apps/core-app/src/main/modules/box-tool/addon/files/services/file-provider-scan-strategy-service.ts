@@ -8,6 +8,7 @@ export interface FileProviderScanStrategyResult {
 
 export interface FileProviderScanStrategyDeps {
   getCompletedPaths: () => Promise<Set<string>>
+  normalizePath?: (path: string) => string
   yieldAfterRead: () => Promise<void>
   now: () => number
   formatDuration: (durationMs: number) => string
@@ -17,6 +18,7 @@ export interface FileProviderScanStrategyDeps {
 
 export class FileProviderScanStrategyService {
   private readonly getCompletedPaths: FileProviderScanStrategyDeps['getCompletedPaths']
+  private readonly normalizePath: NonNullable<FileProviderScanStrategyDeps['normalizePath']>
   private readonly yieldAfterRead: FileProviderScanStrategyDeps['yieldAfterRead']
   private readonly now: FileProviderScanStrategyDeps['now']
   private readonly formatDuration: FileProviderScanStrategyDeps['formatDuration']
@@ -25,6 +27,7 @@ export class FileProviderScanStrategyService {
 
   constructor(deps: FileProviderScanStrategyDeps) {
     this.getCompletedPaths = deps.getCompletedPaths
+    this.normalizePath = deps.normalizePath ?? ((path) => path)
     this.yieldAfterRead = deps.yieldAfterRead
     this.now = deps.now
     this.formatDuration = deps.formatDuration
@@ -38,7 +41,8 @@ export class FileProviderScanStrategyService {
     await this.yieldAfterRead()
     const { newPathsToScan, reconciliationPaths } = resolveIndexedScanStrategy({
       watchPaths,
-      completedScanPaths
+      completedScanPaths,
+      normalizePath: this.normalizePath
     })
 
     this.logDebug('File indexing scan strategy', {

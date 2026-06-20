@@ -1,17 +1,18 @@
-import type {
-  IndexedSource,
-  IndexedSourceDescriptor,
-  IndexedSourceHealth,
-  IndexedSourcePermissionState,
-  IndexedSourceProgress,
-  IndexedSourceProgressStatus,
-  IndexedSourceReconcileRequest,
-  IndexedSourceReconcileResult,
-  IndexedSourceRecordBatch,
-  IndexedSourceResetRequest,
-  IndexedSourceResetResult,
-  IndexedSourceRoot,
-  IndexedSourceScanRequest
+import {
+  IndexedSourceResetReasons,
+  type IndexedSource,
+  type IndexedSourceDescriptor,
+  type IndexedSourceHealth,
+  type IndexedSourcePermissionState,
+  type IndexedSourceProgress,
+  type IndexedSourceProgressStatus,
+  type IndexedSourceReconcileRequest,
+  type IndexedSourceReconcileResult,
+  type IndexedSourceRecordBatch,
+  type IndexedSourceResetRequest,
+  type IndexedSourceResetResult,
+  type IndexedSourceRoot,
+  type IndexedSourceScanRequest
 } from '@talex-touch/utils/search'
 import { fileProvider } from '../addon/files/file-provider'
 
@@ -162,11 +163,13 @@ export function buildFileIndexedSource(): IndexedSource {
     resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => {
       return await fileProvider.resetIndexedSourceRuntimeState(request)
     },
-    clearIndex: async () => {
-      const result = await fileProvider.rebuildIndex({ force: true })
-      if (!result.success) {
-        throw new Error(result.error || result.reason || 'file-index-clear-failed')
-      }
+    clearIndex: async (): Promise<IndexedSourceResetResult> => {
+      return await fileProvider.resetIndexedSourceRuntimeState({
+        sourceId: descriptor.id,
+        reason: IndexedSourceResetReasons.UserClear,
+        clearSearchIndex: true,
+        clearScanProgress: true
+      })
     }
   }
 }

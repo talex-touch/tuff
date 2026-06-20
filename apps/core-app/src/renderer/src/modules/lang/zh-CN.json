@@ -2370,9 +2370,9 @@
         "reset": "重置"
       },
       "sourceActionUnavailable": "{action}不可用：{reason}",
-      "sourceActionScanSuccess": "扫描完成：{records} 条",
+      "sourceActionScanSuccess": "扫描完成：写入 {indexedRecords}/{records}",
       "sourceActionReconcileSuccess": "补漏完成：变更 {changed}，删除 {deleted}",
-      "sourceActionResetSuccess": "索引源运行时状态已重置",
+      "sourceActionResetSuccess": "索引源运行时状态已重置：索引 {clearedSearchIndexRows}，进度 {scanProgressRows}",
       "sourceActionFailed": "{action}失败：{error}",
       "providerConfigTitle": "搜索源启用与排序",
       "providerConfigDesc": "控制可进入根搜索结果的索引源；浏览器数据仍需插件权限与用户授权后才会启用",
@@ -2407,12 +2407,14 @@
       "sourceWatch": "监听：{state}",
       "sourceReconcile": "补漏：{state}",
       "sourceTask": {
-        "scanDone": "扫描 {records} 条 · {jobId}",
-        "scanFailed": "扫描失败：{error} · {jobId}",
+        "scanDone": "扫描写入 {indexedRecords}/{records} · {jobId}",
+        "scanFailed": "扫描失败：{error} · 阶段 {phase} · {jobId}",
         "watchDone": "监听 {action} {applied}/{deltas} · {jobId}",
         "watchFailed": "监听失败 {failed}/{deltas} · {jobId}",
         "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · roots {rootCount} · {jobId}",
-        "reconcileFailed": "补漏错误：{errors} · {reason} · {jobId}"
+        "reconcileFailed": "补漏错误：{errors} · {reason} · {jobId}",
+        "resetDone": "重置索引 {clearedSearchIndexRows} · 进度 {scanProgressRows} · {reason} · {jobId}",
+        "resetFailed": "重置失败：{error} · {reason} · {jobId}"
       },
       "sourceRecentTasks": "最近",
       "sourceRecentTask": {
@@ -2436,6 +2438,13 @@
           "failed": "重置失败 · {summary} · {jobId}",
           "skipped": "重置跳过 · {summary} · {jobId}"
         }
+      },
+      "sourceRunGateTitle": "调度",
+      "sourceRunGate": {
+        "running": "{kind} 运行中，自 {runningSince} · 阻挡 {blockedCount} 次",
+        "already-running": "{kind} 被运行中任务阻挡 · {blockedCount} 次 · {lastBlockedAt}",
+        "debounced": "{kind} 防抖至 {nextAllowedAt} · {blockedCount} 次",
+        "idle": "{kind} 空闲 · 上次完成 {lastCompletedAt}"
       },
       "sourceAdmissionIssues": "准入",
       "sourceAdmissionIssue": {
@@ -2462,9 +2471,9 @@
       "sourceEvidence": "证据",
       "sourceEvidenceChip": {
         "generic": "{label} · {status} · {count} · {reason}",
-        "scanProgress": "{label} · {status} · {completed}/{total} · 失败 {failed} · 待授权 {pendingPermissionRoots}",
+        "scanProgress": "{label} · {status} · 根 {completed}/{total} · 失败 {failed} · 待授权 {pendingPermissionRoots} · 最近 {lastScannedAt}",
         "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
-        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · orphan {orphanedKeywordsRemoved}"
+        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · reset {resetSearchIndexRows}/{resetScanProgressRows} · orphan {orphanedKeywordsRemoved}"
       },
       "sourceProgress": "进度",
       "sourceProgressChip": {
@@ -2479,7 +2488,7 @@
       },
       "sourceRecovery": "恢复",
       "sourceRecoveryChip": {
-        "wait": "等待运行时恢复 · {reason}",
+        "wait": "等待运行时恢复 · {taskKind} · 下次重试 {nextRetryAtText} · {reason}",
         "grant-permission": "需要授权 · {reason}",
         "enable-provider": "需要启用 Provider · {reason}",
         "scan": "建议扫描 · {reason}",

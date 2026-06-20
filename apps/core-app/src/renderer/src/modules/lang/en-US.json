@@ -2374,9 +2374,9 @@
         "reset": "Reset"
       },
       "sourceActionUnavailable": "{action} unavailable: {reason}",
-      "sourceActionScanSuccess": "Scan completed: {records} records",
+      "sourceActionScanSuccess": "Scan completed: indexed {indexedRecords}/{records}",
       "sourceActionReconcileSuccess": "Repair completed: {changed} changed, {deleted} deleted",
-      "sourceActionResetSuccess": "Source runtime state reset",
+      "sourceActionResetSuccess": "Source runtime state reset: index {clearedSearchIndexRows}, progress {scanProgressRows}",
       "sourceActionFailed": "{action} failed: {error}",
       "providerConfigTitle": "Search Source Enablement and Order",
       "providerConfigDesc": "Control indexed sources that can enter root search results; browser data still requires plugin permissions and user consent",
@@ -2411,12 +2411,14 @@
       "sourceWatch": "Watch: {state}",
       "sourceReconcile": "Reconcile: {state}",
       "sourceTask": {
-        "scanDone": "Scan {records} records · {jobId}",
-        "scanFailed": "Scan failed: {error} · {jobId}",
+        "scanDone": "Scan indexed {indexedRecords}/{records} · {jobId}",
+        "scanFailed": "Scan failed: {error} · phase {phase} · {jobId}",
         "watchDone": "Watch {action} {applied}/{deltas} · {jobId}",
         "watchFailed": "Watch failed {failed}/{deltas} · {jobId}",
         "reconcileDone": "Reconcile +{added} ~{changed} -{deleted} · {reason} · roots {rootCount} · {jobId}",
-        "reconcileFailed": "Reconcile errors: {errors} · {reason} · {jobId}"
+        "reconcileFailed": "Reconcile errors: {errors} · {reason} · {jobId}",
+        "resetDone": "Reset index {clearedSearchIndexRows} · progress {scanProgressRows} · {reason} · {jobId}",
+        "resetFailed": "Reset failed: {error} · {reason} · {jobId}"
       },
       "sourceRecentTasks": "Recent",
       "sourceRecentTask": {
@@ -2440,6 +2442,13 @@
           "failed": "Reset failed · {summary} · {jobId}",
           "skipped": "Reset skipped · {summary} · {jobId}"
         }
+      },
+      "sourceRunGateTitle": "Scheduler",
+      "sourceRunGate": {
+        "running": "{kind} running since {runningSince} · blocked {blockedCount}",
+        "already-running": "{kind} blocked by running task · count {blockedCount} · {lastBlockedAt}",
+        "debounced": "{kind} debounced until {nextAllowedAt} · count {blockedCount}",
+        "idle": "{kind} idle · last done {lastCompletedAt}"
       },
       "sourceAdmissionIssues": "Admission",
       "sourceAdmissionIssue": {
@@ -2466,9 +2475,9 @@
       "sourceEvidence": "Evidence",
       "sourceEvidenceChip": {
         "generic": "{label} · {status} · {count} · {reason}",
-        "scanProgress": "{label} · {status} · {completed}/{total} · failed {failed} · permission {pendingPermissionRoots}",
+        "scanProgress": "{label} · {status} · roots {completed}/{total} · failed {failed} · permission {pendingPermissionRoots} · last {lastScannedAt}",
         "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
-        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · orphan {orphanedKeywordsRemoved}"
+        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · reset {resetSearchIndexRows}/{resetScanProgressRows} · orphan {orphanedKeywordsRemoved}"
       },
       "sourceProgress": "Progress",
       "sourceProgressChip": {
@@ -2483,7 +2492,7 @@
       },
       "sourceRecovery": "Recovery",
       "sourceRecoveryChip": {
-        "wait": "Wait for runtime recovery · {reason}",
+        "wait": "Wait for runtime recovery · {taskKind} · retry after {nextRetryAtText} · {reason}",
         "grant-permission": "Grant permission · {reason}",
         "enable-provider": "Enable provider · {reason}",
         "scan": "Run scan · {reason}",

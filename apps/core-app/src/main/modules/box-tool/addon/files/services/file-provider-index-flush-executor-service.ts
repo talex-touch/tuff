@@ -1,5 +1,8 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
+import type {
+  PersistAndIndexSummary,
+  PersistEntry
+} from '../../../search-engine/workers/search-index-worker-client'
 import { performance } from 'node:perf_hooks'
 import { dbWriteScheduler } from '../../../../../db/db-write-scheduler'
 import {
@@ -30,7 +33,7 @@ export interface FileProviderIndexFlushExecutorServiceDeps {
   buffer: FileProviderIndexFlushBufferService
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   getSearchIndexWorker: () => {
-    persistAndIndex: (entries: PersistEntry[]) => Promise<void>
+    persistAndIndex: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
   }
   buildPersistEntries: (entries: IndexWorkerFileResult[]) => PersistEntry[]
   logDebug: (message: string, meta?: Record<string, unknown>) => void
@@ -58,7 +61,8 @@ export class FileProviderIndexFlushExecutorService {
   private readonly executor: IndexedWriteFlushExecutorService<
     number,
     IndexWorkerFileResult,
-    PersistEntry
+    PersistEntry,
+    PersistAndIndexSummary
   >
 
   constructor(deps: FileProviderIndexFlushExecutorServiceDeps) {
@@ -85,7 +89,8 @@ export class FileProviderIndexFlushExecutorService {
       recordDuration: (durationMs) => this.flushBatchScheduler.recordDuration(durationMs),
       now: this.now,
       onBatchTaken: (entries) => this.logBatchTaken(entries),
-      resolveBatchMetadata: (entries) => this.resolveBatchMetadata(entries)
+      resolveBatchMetadata: (entries) => this.resolveBatchMetadata(entries),
+      resolvePersistMetadata: (result) => this.resolvePersistMetadata(result)
     })
   }
 
@@ -120,6 +125,24 @@ export class FileProviderIndexFlushExecutorService {
           count: (entry) => Boolean(entry.indexItem.content && entry.indexItem.content.length > 0)
         }
       ])
+    }
+  }
+
+  private resolvePersistMetadata(summary: PersistAndIndexSummary): {
+    persistedRows: number
+    indexedItems: number
+    fileUpdates: number
+    progressRows: number
+    embeddings: number
+    chunks: number
+  } {
+    return {
+      persistedRows: summary.persistedRows,
+      indexedItems: summary.indexedItems,
+      fileUpdates: summary.fileUpdates,
+      progressRows: summary.progressRows,
+      embeddings: summary.embeddings,
+      chunks: summary.chunks
     }
   }
 }

@@ -4,7 +4,7 @@ import type {
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult
 } from '@talex-touch/utils/search'
-import type { IndexStoreAdapter } from './indexing-store-adapter'
+import type { IndexStoreAdapter, IndexStoreDeltaApplySummary } from './indexing-store-adapter'
 import { IndexedSourceReconcileReasons } from '@talex-touch/utils/search'
 
 function buildUnsupportedResult(
@@ -113,14 +113,19 @@ export class ReconcileEngine {
     const settled = await Promise.all(
       result.deltas.map(async (delta) => {
         try {
-          await this.store?.applyDelta(delta)
-          return { status: 'fulfilled' as const, delta }
+          const summary = await this.store?.applyDelta(delta)
+          return { status: 'fulfilled' as const, delta, summary }
         } catch (error) {
           return { status: 'rejected' as const, delta, error }
         }
       })
     )
-    const appliedDeltas = settled.filter(isFulfilledDelta).length
+    const appliedDeltas = settled.filter(
+      (item) => isFulfilledDelta(item) && !isSkippedDeltaSummary(item.summary)
+    ).length
+    const skippedDeltas = settled.filter(
+      (item) => isFulfilledDelta(item) && isSkippedDeltaSummary(item.summary)
+    ).length
     const deltaErrors = settled
       .filter(isRejectedDelta)
       .map((item) => `${item.delta.sourceId}:${this.stringifyError(item.error)}`)
@@ -129,6 +134,7 @@ export class ReconcileEngine {
       ...result,
       appliedDeltas,
       failedDeltas: deltaErrors.length,
+      skippedDeltas,
       deltaErrors: deltaErrors.length > 0 ? deltaErrors : result.deltaErrors
     }
   }
@@ -150,6 +156,7 @@ type ReconcileDeltaApplyResult =
   | {
       status: 'fulfilled'
       delta: IndexedSourceDelta
+      summary: IndexStoreDeltaApplySummary | void
     }
   | {
       status: 'rejected'
@@ -182,4 +189,10 @@ export interface ReconcileEngineBatchResult {
   skippedDetails: ReconcileEngineSkippedSource[]
   startedAt: number
   completedAt: number
+}
+
+function isSkippedDeltaSummary(
+  summary: IndexStoreDeltaApplySummary | void
+): summary is IndexStoreDeltaApplySummary {
+  return Boolean(summary && summary.applied === false)
 }
