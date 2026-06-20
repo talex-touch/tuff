@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useEventListener, useResizeObserver, useThrottleFn } from '@vueuse/core'
-import { nextTick, watch } from 'vue'
+import { nextTick, onBeforeUnmount, watch } from 'vue'
 
 interface TocLink {
   id: string
@@ -54,6 +53,59 @@ const SKELETON_ROW_HEIGHT = 24
 
 const navRef = ref<HTMLElement | null>(null)
 const contentRef = ref<HTMLElement | null>(null)
+let navResizeObserver: ResizeObserver | null = null
+
+function createThrottleFn<Args extends unknown[]>(fn: (...args: Args) => void, delayMs: number) {
+  let lastRun = 0
+  let pendingArgs: Args | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  const run = (args: Args) => {
+    lastRun = Date.now()
+    pendingArgs = null
+    fn(...args)
+  }
+
+  const throttled = (...args: Args) => {
+    const elapsed = Date.now() - lastRun
+    pendingArgs = args
+
+    if (lastRun === 0 || elapsed >= delayMs) {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      run(args)
+      return
+    }
+
+    if (timer)
+      return
+
+    timer = setTimeout(() => {
+      timer = null
+      if (pendingArgs)
+        run(pendingArgs)
+    }, delayMs - elapsed)
+  }
+
+  throttled.cancel = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    pendingArgs = null
+  }
+
+  return throttled
+}
+
+function disconnectNavResizeObserver() {
+  if (!navResizeObserver)
+    return
+  navResizeObserver.disconnect()
+  navResizeObserver = null
+}
 
 // Entry positions for SVG tree lines
 const entryPositions = ref<Map<string, { top: number, centerY: number, height: number }>>(new Map())
@@ -93,7 +145,7 @@ function syncUrlHash(id: string) {
     history.replaceState(history.state, '', `${window.location.pathname}${window.location.search}${next}`)
 }
 
-const updateEntryPositions = useThrottleFn(() => {
+const updateEntryPositions = createThrottleFn(() => {
   if (!contentRef.value)
     return
   const map = new Map<string, { top: number, centerY: number, height: number }>()
@@ -137,7 +189,7 @@ function refreshHeadingElements() {
   headingElements.value = nextMap
 }
 
-const updateActiveFromScroll = useThrottleFn((fromScroll = false) => {
+const updateActiveFromScroll = createThrottleFn((fromScroll = false) => {
   if (!import.meta.client)
     return
   if (!flatLinks.value.length)
@@ -171,6 +223,21 @@ const updateActiveFromScroll = useThrottleFn((fromScroll = false) => {
 }, 100)
 
 if (import.meta.client) {
+  const onHashChange = () => {
+    setActiveHash(window.location.hash)
+    const hash = normalizeHash(window.location.hash)
+    if (hash)
+      scrollToHeading(hash, 'smooth')
+  }
+  const onScroll = () => {
+    updateActiveFromScroll(true)
+  }
+  const onResize = () => {
+    refreshHeadingElements()
+    updateActiveFromScroll()
+    updateEntryPositions()
+  }
+
   onMounted(() => {
     setActiveHash(window.location.hash)
     nextTick(() => {
@@ -182,28 +249,33 @@ if (import.meta.client) {
         updateActiveFromScroll()
       updateEntryPositions()
     })
+    window.addEventListener('hashchange', onHashChange)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onResize)
   })
-  useEventListener(window, 'hashchange', () => {
-    setActiveHash(window.location.hash)
-    const hash = normalizeHash(window.location.hash)
-    if (hash)
-      scrollToHeading(hash, 'smooth')
-  })
-  useEventListener(
-    window,
-    'scroll',
-    () => {
-      updateActiveFromScroll(true)
+
+  watch(
+    navRef,
+    (element) => {
+      disconnectNavResizeObserver()
+      if (!element || !('ResizeObserver' in window))
+        return
+
+      navResizeObserver = new ResizeObserver(() => {
+        updateEntryPositions()
+      })
+      navResizeObserver.observe(element)
     },
-    { passive: true },
+    { flush: 'post' },
   )
-  useEventListener(window, 'resize', () => {
-    refreshHeadingElements()
-    updateActiveFromScroll()
-    updateEntryPositions()
-  })
-  useResizeObserver(navRef, () => {
-    updateEntryPositions()
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('hashchange', onHashChange)
+    window.removeEventListener('scroll', onScroll)
+    window.removeEventListener('resize', onResize)
+    disconnectNavResizeObserver()
+    updateEntryPositions.cancel()
+    updateActiveFromScroll.cancel()
   })
 }
 
