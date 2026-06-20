@@ -68,6 +68,13 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("'@tuffex-components/*': [tuffexComponentSourceEntry]")
   })
 
+  it('pre-bundles TuffEx runtime dependencies used by docs chrome', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain("'@floating-ui/vue'")
+    expect(config).toContain("'v-wave'")
+  })
+
   it('keeps route-local marketing and store components out of auto-registration', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 

@@ -337,6 +337,8 @@ export default defineNuxtConfig({
         'theme-colors',
         'simplex-noise',
         'path-browserify',
+        '@floating-ui/vue',
+        'v-wave',
       ],
     },
     resolve: {
