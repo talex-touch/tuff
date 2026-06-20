@@ -305,7 +305,7 @@ function resolveIndexBundleConfig(
     return {
       entry: entryPath,
       format: manifestIndexConfig.format ?? 'cjs',
-      target: manifestIndexConfig.target ?? 'node18',
+      target: manifestIndexConfig.target ?? 'node24',
       external: manifestIndexConfig.external ?? opts.external,
       minify: manifestIndexConfig.minify ?? opts.minify,
       sourcemap: manifestIndexConfig.sourcemap ?? opts.sourcemap,
@@ -324,7 +324,7 @@ function resolveIndexBundleConfig(
   return {
     entry: entryPath,
     format: 'cjs',
-    target: 'node18',
+    target: 'node24',
     external: opts.external,
     minify: opts.minify,
     sourcemap: opts.sourcemap,
@@ -636,7 +636,7 @@ module.exports = __component
     write: false,
     format: 'cjs',
     platform: 'browser',
-    target: 'node18',
+    target: 'node24',
     external: Array.from(WIDGET_ALLOWED_PACKAGES),
     plugins: [
       createWidgetBundlePlugin(
@@ -792,7 +792,7 @@ async function bundleIndexFolder(
       entryPoints: [config.entry],
       bundle: true,
       format: config.format || 'cjs',
-      target: config.target || 'node18',
+      target: config.target || 'node24',
       platform: 'node',
       outfile: path.join(buildDir, 'index.js'),
       external: config.external || ['electron'],

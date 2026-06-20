@@ -3,6 +3,21 @@
 > 更新时间：2026-06-20
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-21
+
+### chore(runtime): align project Node runtime to 24
+
+- `.node-version`
+- `mise.toml`
+- `package.json`
+- `.github/workflows/*.yml`
+- `packages/*/package.json`
+- `packages/*/tsup.config.ts`
+- `apps/core-app/**/*`
+- `plugins/*/manifest.json`
+  - Raised the project runtime baseline, package `engines.node`, Volta pin, CI setup-node versions, package build targets, plugin bundle targets, and CoreApp plugin compiler targets to Node 24.
+  - Kept historical archive/report references to prior Node 22 validation evidence unchanged.
+
 ## 2026-06-20
 
 ### test(ai): capture Local Ollama routing evidence

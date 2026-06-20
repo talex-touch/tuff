@@ -149,7 +149,7 @@ export function resolvePreludeBundleConfig(
     return {
       entry: entryPath,
       format: config.format ?? 'cjs',
-      target: config.target ?? 'node18',
+      target: config.target ?? 'node24',
       external: config.external ?? opts.external ?? DEFAULT_PRELUDE_EXTERNAL,
       minify: config.minify ?? opts.minify,
       sourcemap: config.sourcemap ?? opts.sourcemap,
@@ -165,7 +165,7 @@ export function resolvePreludeBundleConfig(
     return {
       entry: preludeEntry,
       format: 'cjs',
-      target: 'node18',
+      target: 'node24',
       external: opts.external ?? DEFAULT_PRELUDE_EXTERNAL,
       minify: opts.minify,
       sourcemap: opts.sourcemap,
@@ -178,7 +178,7 @@ export function resolvePreludeBundleConfig(
     return {
       entry: legacyEntry,
       format: 'cjs',
-      target: 'node18',
+      target: 'node24',
       external: opts.external ?? DEFAULT_PRELUDE_EXTERNAL,
       minify: opts.minify,
       sourcemap: opts.sourcemap,

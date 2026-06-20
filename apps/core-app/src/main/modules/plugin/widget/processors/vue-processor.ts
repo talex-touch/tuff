@@ -184,7 +184,7 @@ module.exports = __component
       const transformed = await transformWidgetSource(finalBundle, {
         loader,
         format: 'cjs',
-        target: 'node18'
+        target: 'node24'
       })
 
       // Step 8: Extract styles

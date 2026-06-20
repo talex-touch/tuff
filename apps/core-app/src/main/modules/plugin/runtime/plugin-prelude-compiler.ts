@@ -13,7 +13,7 @@ const BASE_BUILD_OPTIONS = {
   bundle: true,
   platform: 'node' as const,
   format: 'cjs' as const,
-  target: 'node18',
+  target: 'node24',
   logLevel: 'silent' as const,
   write: false,
   external: ['electron']

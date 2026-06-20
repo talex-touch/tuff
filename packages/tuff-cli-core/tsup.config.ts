@@ -6,7 +6,7 @@ export default defineConfig({
   dts: true,
   splitting: true,
   clean: true,
-  target: 'node18',
+  target: 'node24',
   platform: 'node',
   noExternal: ['@talex-touch/utils'],
   external: [

@@ -193,7 +193,7 @@ async function bundlePrelude(
       entryPoints: [config.entry],
       bundle: true,
       format: config.format || 'cjs',
-      target: config.target || 'node18',
+      target: config.target || 'node24',
       platform: 'node',
       outfile: path.join(buildDir, PRELUDE_OUTPUT_FILE),
       external: config.external || DEFAULT_PRELUDE_EXTERNAL,

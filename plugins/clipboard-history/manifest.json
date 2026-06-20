@@ -20,7 +20,7 @@
     "index": {
       "entry": "index/main.ts",
       "format": "cjs",
-      "target": "node18",
+      "target": "node24",
       "external": ["electron"],
       "minify": true,
       "sourcemap": false

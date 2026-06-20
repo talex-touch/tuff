@@ -53,7 +53,7 @@ This is a reusable workflow that can be called by other workflows to standardize
 **Inputs:**
 - `package-name` (required) - Package name for identification
 - `package-path` (required) - Path to package relative to repo root
-- `node-version` (optional, default: `22.16.0`) - Node.js version
+- `node-version` (optional, default: `24.0.0`) - Node.js version
 - `pnpm-version` (optional, default: `10.32.1`) - PNPM version
 - `run-lint` (optional, default: `false`) - Enable linting
 - `run-test` (optional, default: `false`) - Enable tests
@@ -164,8 +164,8 @@ jobs:
 2. **Reusable Workflow**: Include `package-ci.yml` in path filters so changes to the reusable workflow trigger all package CIs
 3. **Conditional Steps**: Only enable steps (lint, test, build) that your package actually supports
 4. **Custom Commands**: Override default commands if your package uses different script names
-5. **Node Version**: Keep Node.js version consistent with the main app (currently 22.16.0)
-6. **Action Runtime**: Keep JavaScript actions on Node 24-compatible major versions; this is separate from the project `node-version` and must not be handled by changing the app runtime away from 22.16.0
+5. **Node Version**: Keep Node.js version consistent with the main app (currently 24.0.0)
+6. **Action Runtime**: Keep JavaScript actions on Node 24-compatible major versions; this is separate from the project `node-version` and must not be handled by changing the app runtime away from 24.0.0
 
 ## Workflow Execution Order
 

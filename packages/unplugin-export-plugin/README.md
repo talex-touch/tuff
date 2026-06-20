@@ -143,7 +143,7 @@ my-plugin/
   "build": {
     "prelude": {
       "entry": "src/prelude/main.ts",
-      "target": "node18",
+      "target": "node24",
       "external": ["electron", "node:*"],
       "minify": true,
       "sourcemap": false
@@ -172,7 +172,7 @@ my-plugin/
 
 - 根目录 `index.js` 仍是传统模式；存在根 `index.js` 且没有显式配置时，不会自动使用 `src/prelude/`
 - 编译后的 `index.js` 为 CommonJS 格式（`format: 'cjs'`）
-- 目标环境：Node.js 18+（`target: 'node18'`）
+- 目标环境：Node.js 24+（`target: 'node24'`）
 
 ## Intelligence Integration
 
