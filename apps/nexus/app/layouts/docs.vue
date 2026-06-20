@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import BackToTop from '~/components/ui/BackToTop.vue'
-import Drawer from '~/components/ui/Drawer.vue'
 
+const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
 const TUFFEX_DOCS_BACKGROUND_DELAY_MS = 2500
 const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 1800
@@ -11,6 +11,8 @@ const { t } = useI18n()
 const route = useRoute()
 const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
+const sidebarDrawerMounted = ref(false)
+const outlineDrawerMounted = ref(false)
 const shouldMountTuffexBackground = ref(false)
 let tuffexBackgroundTimer: ReturnType<typeof setTimeout> | null = null
 let tuffexBackgroundIdleId: number | null = null
@@ -38,6 +40,16 @@ const isTutorialDocs = computed(() => {
 
 function mountTuffexBackground() {
   shouldMountTuffexBackground.value = true
+}
+
+function openSidebarDrawer() {
+  sidebarDrawerMounted.value = true
+  sidebarVisible.value = true
+}
+
+function openOutlineDrawer() {
+  outlineDrawerMounted.value = true
+  outlineVisible.value = true
 }
 
 function clearTuffexBackgroundSchedule() {
@@ -123,14 +135,14 @@ onBeforeUnmount(() => {
           <main class="min-w-0 flex-1">
             <div class="mx-auto min-w-0 max-w-[53rem] w-full space-y-10">
               <div class="flex items-center gap-2 xl:hidden">
-                <TxButton variant="bare" size="small" native-type="button" class="inline-flex items-center gap-2 bg-white/80 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40" @click="sidebarVisible = true">
+                <button type="button" class="docs-mobile-action" @click="openSidebarDrawer">
                   <span class="i-carbon-menu text-base" />
                   {{ t('docs.sidebarLabel') }}
-                </TxButton>
-                <TxButton variant="bare" size="small" native-type="button" class="inline-flex items-center gap-2 bg-white/80 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40 lg:hidden" @click="outlineVisible = true">
+                </button>
+                <button type="button" class="docs-mobile-action lg:hidden" @click="openOutlineDrawer">
                   <span class="i-carbon-list text-base" />
                   {{ t('docs.outlineLabel') }}
-                </TxButton>
+                </button>
               </div>
               <slot />
             </div>
@@ -152,7 +164,8 @@ onBeforeUnmount(() => {
     <TuffFooter class="docs-layout-footer" />
     <BackToTop />
     <ClientOnly>
-      <Drawer
+      <DocsDrawer
+        v-if="sidebarDrawerMounted"
         :visible="sidebarVisible"
         :title="t('docs.sidebarLabel')"
         width="82%"
@@ -162,8 +175,9 @@ onBeforeUnmount(() => {
         <div class="p-4">
           <DocsSidebar v-if="sidebarVisible" />
         </div>
-      </Drawer>
-      <Drawer
+      </DocsDrawer>
+      <DocsDrawer
+        v-if="outlineDrawerMounted"
         :visible="outlineVisible"
         :title="t('docs.outlineLabel')"
         width="82%"
@@ -173,7 +187,7 @@ onBeforeUnmount(() => {
         <div class="p-4">
           <DocsOutline v-if="outlineVisible" />
         </div>
-      </Drawer>
+      </DocsDrawer>
     </ClientOnly>
   </div>
 </template>
@@ -209,6 +223,42 @@ onBeforeUnmount(() => {
 
 .docs-layout-footer {
   z-index: 3;
+}
+
+.docs-mobile-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color, #dcdfe6) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 84%, transparent);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.45rem 0.75rem;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.docs-mobile-action:hover {
+  background: #fff;
+  border-color: color-mix(in srgb, var(--tx-border-color, #dcdfe6) 90%, transparent);
+  color: rgba(0, 0, 0, 0.78);
+}
+
+.dark .docs-mobile-action,
+[data-theme='dark'] .docs-mobile-action {
+  background: color-mix(in srgb, var(--tx-bg-color, #141414) 82%, transparent);
+  border-color: color-mix(in srgb, var(--tx-border-color, rgba(255, 255, 255, 0.14)) 72%, transparent);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.dark .docs-mobile-action:hover,
+[data-theme='dark'] .docs-mobile-action:hover {
+  background: color-mix(in srgb, var(--tx-bg-color, #141414) 94%, transparent);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .docs-edge-blur {

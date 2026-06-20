@@ -6,6 +6,9 @@ const docsOutline = readFileSync(new URL('../../components/DocsOutline.vue', imp
 const docsSidebar = readFileSync(new URL('../../components/DocsSidebar.vue', import.meta.url), 'utf8')
 const touchAurora = readFileSync(new URL('../../components/tuff/background/TouchAurora.vue', import.meta.url), 'utf8')
 const avatarVariantsDemo = readFileSync(new URL('../../components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue', import.meta.url), 'utf8')
+const docsLayout = readFileSync(new URL('../../layouts/docs.vue', import.meta.url), 'utf8')
+const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoWrapper.vue', import.meta.url), 'utf8')
+const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 
 describe('docs page performance boundaries', () => {
   it('keys catch-all docs pages by route path to avoid stale content on client navigation', () => {
@@ -35,6 +38,35 @@ describe('docs page performance boundaries', () => {
     expect(page).toContain('v-if="shouldMountDocClientPanels"')
     expect(page).toContain('<LazyDocsFeedback v-if="shouldMountDocEngagementPanels"')
     expect(page).toContain('<LazyDocsComments v-if="shouldMountDocEngagementPanels"')
+  })
+
+  it('keeps docs chrome controls off first-paint TuffEx button imports', () => {
+    expect(page).not.toContain("from '@talex-touch/tuffex/button'")
+    expect(page).not.toContain("from '@talex-touch/tuffex/loading-state'")
+    expect(page).not.toContain('h(TxButton')
+    expect(page).not.toContain('<TxLoadingState')
+    expect(page).toContain("h(\n        'button'")
+    expect(page).toContain('class="docs-loading-state"')
+
+    expect(docsLayout).not.toContain("import Drawer from '~/components/ui/Drawer.vue'")
+    expect(docsLayout).toContain("const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))")
+    expect(docsLayout).toContain('class="docs-mobile-action"')
+    expect(docsLayout).not.toContain('<TxButton')
+    expect(docsLayout).toContain('const sidebarDrawerMounted = ref(false)')
+    expect(docsLayout).toContain('const outlineDrawerMounted = ref(false)')
+    expect(docsLayout).toContain('function openSidebarDrawer()')
+    expect(docsLayout).toContain('function openOutlineDrawer()')
+    expect(docsLayout).toContain('@click="openSidebarDrawer"')
+    expect(docsLayout).toContain('@click="openOutlineDrawer"')
+    expect(docsLayout).toContain('<DocsDrawer\n        v-if="sidebarDrawerMounted"')
+    expect(docsLayout).toContain('<DocsDrawer\n        v-if="outlineDrawerMounted"')
+
+    expect(tuffDemoWrapper).not.toContain('<TxButton')
+    expect(tuffDemoWrapper).toContain('class="tuff-demo__reset-btn"')
+    expect(tuffDemoWrapper).toContain('class="tuff-demo__toggle-btn"')
+
+    expect(tuffCodeBlock).not.toContain('<TxButton')
+    expect(tuffCodeBlock).toContain('class="tuff-code-block__copy"')
   })
 
   it('keeps the browser title reactive when a reused docs route changes', () => {
