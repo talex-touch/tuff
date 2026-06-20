@@ -81,6 +81,7 @@ const fromNavBar = () => import('@tuffex-components/nav-bar')
 const fromNoData = () => import('@tuffex-components/no-data')
 const fromNoSelection = () => import('@tuffex-components/no-selection')
 const fromOfflineState = () => import('@tuffex-components/offline-state')
+const fromOsIcon = () => import('@tuffex-components/os-icon')
 const fromOutlineBorder = () => import('@tuffex-components/outline-border')
 const fromPagination = () => import('@tuffex-components/pagination')
 const fromPermissionState = () => import('@tuffex-components/permission-state')
@@ -209,6 +210,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxNoData: asyncTuffexComponent(fromNoData, 'TxNoData'),
   TxNoSelection: asyncTuffexComponent(fromNoSelection, 'TxNoSelection'),
   TxOfflineState: asyncTuffexComponent(fromOfflineState, 'TxOfflineState'),
+  TxOsIcon: asyncTuffexComponent(fromOsIcon, 'TxOsIcon'),
   TxOutlineBorder: asyncTuffexComponent(fromOutlineBorder, 'TxOutlineBorder'),
   TxPagination: asyncTuffexComponent(fromPagination, 'TxPagination'),
   TxPermissionState: asyncTuffexComponent(fromPermissionState, 'TxPermissionState'),
