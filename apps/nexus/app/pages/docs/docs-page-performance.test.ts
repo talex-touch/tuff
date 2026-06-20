@@ -238,8 +238,10 @@ describe('docs page performance boundaries', () => {
     expect(tuffPropsTable).toContain('class="tuff-props-table__mono"')
   })
 
-  it('keeps Mermaid rendering out of the global first-paint plugin list', () => {
+  it('keeps syntax and diagram rendering out of the global first-paint plugin list', () => {
+    expect(nuxtConfig).toContain("'app/plugins/highlight.client.ts'")
     expect(nuxtConfig).toContain("'app/plugins/mermaid.client.ts'")
+    expect(tuffCodeBlock).toContain("await import('~/utils/highlight')")
     expect(page).toContain('function renderMermaidBlocks()')
     expect(page).toContain("await import('~/utils/mermaid-renderer')")
 
