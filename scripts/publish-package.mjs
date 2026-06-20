@@ -50,6 +50,10 @@ function runOutput(command, options = {}) {
   }).trim()
 }
 
+function execPnpmSync(args, options) {
+  return execFileSync('corepack', ['pnpm', ...args], options)
+}
+
 function sleep(ms) {
   Atomics.wait(sleepArray, 0, 0, ms)
 }
@@ -118,7 +122,7 @@ function waitForPackage(packageName, timeoutAttempts = 12) {
 function packPackage(packageInfo, tempRoot) {
   const destination = path.join(tempRoot, packageInfo.name.replace(/[@/]/g, '_'))
   fs.mkdirSync(destination, { recursive: true })
-  const output = execFileSync('pnpm', ['pack', '--pack-destination', destination], {
+  const output = execPnpmSync(['pack', '--pack-destination', destination], {
     cwd: path.join(repoRoot, packageInfo.path),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],

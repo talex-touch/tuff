@@ -6,6 +6,7 @@ const NULL_BYTE_PATTERN = /\0/
 const NEWLINE_PATTERN = /[\r\n]/
 
 const resolveCommand = (command: string): string => {
+  if (command.toLowerCase() === "pnpm") return "corepack"
   if (process.platform !== "win32") return command
   if (command.toLowerCase() === "pnpm") return "pnpm.cmd"
   return command
@@ -30,7 +31,8 @@ const spawnSafe = (
   options: SpawnOptions = {}
 ) => {
   const safeCommand = assertShellValue(resolveCommand(command), "COMMAND")
-  const safeArgs = args.map(assertShellArg)
+  const resolvedArgs = command.toLowerCase() === "pnpm" ? ["pnpm", ...args] : args
+  const safeArgs = resolvedArgs.map(assertShellArg)
   if (process.platform === "win32") {
     const commandLine = [safeCommand, ...safeArgs]
       .map((value) => {
