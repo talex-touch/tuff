@@ -1,4 +1,6 @@
 import { fetchCurrentUserProfile, patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
+import { ensureRouteLocaleChunk } from '~/composables/useRouteLocaleChunks'
+import { resolveRouteLocaleChunks } from '~/utils/route-locale-chunks'
 
 export type SupportedLocale = 'en' | 'zh'
 type LocaleSource = 'profile' | 'cookie' | 'browser' | 'manual'
@@ -44,7 +46,9 @@ function resolveBrowserLocale(): SupportedLocale {
 }
 
 export function useLocaleOrchestrator() {
-  const { locale, setLocale } = useI18n()
+  const composer = useI18n()
+  const { locale, setLocale } = composer
+  const route = useRoute()
   const { status } = useAuth()
   const { getPreferredLocale, hasManualPreferredLocale, markManualPreferredLocale, markProfilePreferredLocale, persistPreferredLocale } = useLocalePreference()
   const initDone = useState<boolean>('nexus-locale-init-done', () => false)
@@ -138,6 +142,8 @@ export function useLocaleOrchestrator() {
     if (!normalized)
       return normalizeLocale(locale.value)
 
+    await ensureCurrentRouteLocaleChunks(normalized)
+
     localeSetQueue = localeSetQueue
       .catch(() => {})
       .then(async () => {
@@ -158,6 +164,14 @@ export function useLocaleOrchestrator() {
 
     await localeSetQueue
     return normalizeLocale(locale.value) || normalized
+  }
+
+  const ensureCurrentRouteLocaleChunks = async (targetLocale: SupportedLocale) => {
+    const chunks = resolveRouteLocaleChunks(route.path || '/')
+    if (chunks.length === 0)
+      return
+
+    await Promise.all(chunks.map(chunk => ensureRouteLocaleChunk(composer, targetLocale, chunk)))
   }
 
   const reconcileClientLocale = async (input?: { isAuthenticated?: boolean, profileLocale?: string | null }) => {
