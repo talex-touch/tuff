@@ -1,6 +1,7 @@
 import type { DbUtils } from '../../../../../db/utils'
 import type { IndexedSourceResetRequest, IndexedSourceResetResult } from '@talex-touch/utils/search'
 import {
+  expandIndexedSourceProgressPaths,
   IndexedSourceResetExecutorService,
   resolveIndexedSourceProgressStoreClearDecision
 } from '@talex-touch/utils/search'
@@ -17,6 +18,7 @@ export interface FileProviderRuntimeResetRequest {
 export interface FileProviderRuntimeResetServiceDeps {
   sourceId: string
   getDbUtils: () => DbUtils | null
+  normalizePath?: (path: string) => string
   removeSearchIndexByProvider: (
     providerId: string,
     reason: string
@@ -29,6 +31,7 @@ export interface FileProviderRuntimeResetServiceDeps {
 export class FileProviderRuntimeResetService {
   private readonly sourceId: string
   private readonly getDbUtils: FileProviderRuntimeResetServiceDeps['getDbUtils']
+  private readonly normalizePath: NonNullable<FileProviderRuntimeResetServiceDeps['normalizePath']>
   private readonly removeSearchIndexByProvider: FileProviderRuntimeResetServiceDeps['removeSearchIndexByProvider']
   private readonly getScanProgressPaths: FileProviderRuntimeResetServiceDeps['getScanProgressPaths']
   private readonly withDbWrite: FileProviderRuntimeResetServiceDeps['withDbWrite']
@@ -38,6 +41,7 @@ export class FileProviderRuntimeResetService {
   constructor(deps: FileProviderRuntimeResetServiceDeps) {
     this.sourceId = deps.sourceId
     this.getDbUtils = deps.getDbUtils
+    this.normalizePath = deps.normalizePath ?? ((path) => path)
     this.removeSearchIndexByProvider = deps.removeSearchIndexByProvider
     this.getScanProgressPaths = deps.getScanProgressPaths
     this.withDbWrite = deps.withDbWrite
@@ -70,7 +74,7 @@ export class FileProviderRuntimeResetService {
     }
 
     const db = dbUtils.getDb()
-    const paths = this.getScanProgressPaths()
+    const paths = this.getScanProgressResetPaths()
     if (paths.length === 0) {
       return { cleared: false, rows: 0 }
     }
@@ -88,5 +92,11 @@ export class FileProviderRuntimeResetService {
       db.delete(scanProgress).where(inArray(scanProgress.path, paths))
     )
     return clearDecision.result
+  }
+
+  private getScanProgressResetPaths(): string[] {
+    return expandIndexedSourceProgressPaths(this.getScanProgressPaths(), this.normalizePath, {
+      dropWhenNormalizedEmpty: true
+    })
   }
 }

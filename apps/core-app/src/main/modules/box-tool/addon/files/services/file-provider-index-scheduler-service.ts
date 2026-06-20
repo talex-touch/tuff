@@ -3,7 +3,8 @@ import path from 'node:path'
 import {
   IndexedWorkerSchedulerService,
   isIndexedWatchPathOwned,
-  mapIndexedWriteWorkerFilePayload
+  mapIndexedWriteWorkerFilePayload,
+  resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
 
 export interface FileProviderIndexSchedulerFile {
@@ -139,19 +140,27 @@ export class FileProviderIndexSchedulerService {
 
   private getRelativeWatchDepth(filePath: string): number {
     const normalizedFilePath = this.normalizePath(filePath)
+    if (!normalizedFilePath) {
+      return 0
+    }
+
+    const rootSet = resolveIndexedWatchRootSet({
+      basePaths: this.getWatchPaths(),
+      normalizePath: this.normalizePath
+    })
     let bestRoot: string | null = null
 
-    for (const watchPath of this.getWatchPaths()) {
+    for (const normalizedWatchPath of rootSet.normalizedPaths) {
       if (
         isIndexedWatchPathOwned({
           rawPath: filePath,
-          normalizedWatchPaths: [this.normalizePath(watchPath)],
+          normalizedWatchPaths: [normalizedWatchPath],
           normalizePath: this.normalizePath,
           pathSeparator: path.sep
         }) &&
-        (!bestRoot || this.normalizePath(watchPath).length > this.normalizePath(bestRoot).length)
+        (!bestRoot || normalizedWatchPath.length > bestRoot.length)
       ) {
-        bestRoot = watchPath
+        bestRoot = normalizedWatchPath
       }
     }
 
@@ -159,7 +168,7 @@ export class FileProviderIndexSchedulerService {
       return 0
     }
 
-    const relativePath = path.relative(this.normalizePath(bestRoot), normalizedFilePath)
+    const relativePath = path.relative(bestRoot, normalizedFilePath)
     if (!relativePath || relativePath.startsWith('..')) {
       return 0
     }

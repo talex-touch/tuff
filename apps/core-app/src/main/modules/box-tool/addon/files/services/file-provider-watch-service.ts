@@ -20,12 +20,14 @@ import FileSystemWatcher from '../../../file-system-watcher'
 import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
 import type { FileIndexSettings } from '../types'
 import {
+  expandIndexedSourceProgressPaths,
   filterIndexedWatchPendingPermissionPaths,
   isIndexedWatchPathOwned,
   resolveIndexedAutoScanPreflight,
   resolveIndexedScanEligibility,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
+import { inArray } from 'drizzle-orm'
 
 const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanEnabled: true,
@@ -296,7 +298,11 @@ export class FileProviderWatchService {
     }
 
     const db = dbUtils.getDb()
-    const completedScans = await db.select().from(scanProgress)
+    const scopedPaths = expandIndexedSourceProgressPaths(this.watchPaths, this.normalizePath)
+    const completedScans =
+      scopedPaths.length > 0
+        ? await db.select().from(scanProgress).where(inArray(scanProgress.path, scopedPaths))
+        : []
     return resolveIndexedScanEligibility({
       watchPaths: this.watchPaths,
       completedScans,

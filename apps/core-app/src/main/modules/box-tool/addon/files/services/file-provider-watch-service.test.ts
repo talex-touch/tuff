@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { inArray } from 'drizzle-orm'
 import { FileProviderWatchService } from './file-provider-watch-service'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { scanProgress } from '../../../../../db/schema'
@@ -69,7 +70,19 @@ vi.mock('../../../search-engine/search-activity', () => ({
 }))
 
 function createDbUtils(rows: Array<{ path: string; lastScanned: unknown }>) {
-  const from = vi.fn(async () => rows)
+  const where = vi.fn(async (condition: unknown) => {
+    const scopedPaths = extractInArrayValues(condition)
+    if (scopedPaths.size === 0) {
+      return rows
+    }
+    return rows.filter((row) => scopedPaths.has(row.path))
+  })
+  const query = {
+    where,
+    then: (resolve: (rows: Array<{ path: string; lastScanned: unknown }>) => unknown) =>
+      Promise.resolve(rows).then(resolve)
+  }
+  const from = vi.fn(() => query)
   const select = vi.fn(() => ({ from }))
 
   return {
@@ -77,16 +90,35 @@ function createDbUtils(rows: Array<{ path: string; lastScanned: unknown }>) {
       getDb: vi.fn(() => ({ select }))
     },
     from,
-    select
+    select,
+    where
   }
 }
 
-function createService(input: { dbUtils?: unknown } = {}) {
+function extractInArrayValues(condition: unknown): Set<string> {
+  const queryChunks =
+    (condition as { queryChunks?: unknown[] } | null | undefined)?.queryChunks ?? []
+  const valueChunks = queryChunks.find(Array.isArray) as Array<{ value?: unknown }> | undefined
+
+  return new Set(
+    (valueChunks ?? [])
+      .map((chunk) => chunk.value)
+      .filter((value): value is string => typeof value === 'string')
+  )
+}
+
+function createService(
+  input: {
+    baseWatchPaths?: string[]
+    dbUtils?: unknown
+    normalizePath?: (rawPath: string) => string
+  } = {}
+) {
   return new FileProviderWatchService({
-    baseWatchPaths: ['/tmp/tuff-index-a', '/tmp/tuff-index-b'],
+    baseWatchPaths: input.baseWatchPaths ?? ['/tmp/tuff-index-a', '/tmp/tuff-index-b'],
     getDbUtils: () => (input.dbUtils ?? null) as never,
     getWatchDepthForPath: () => 1,
-    normalizePath: (rawPath) => rawPath,
+    normalizePath: input.normalizePath ?? ((rawPath) => rawPath),
     enqueueIncrementalUpdate: vi.fn(),
     runAutoIndexing: vi.fn(async () => undefined),
     logDebug: vi.fn(),
@@ -110,15 +142,56 @@ describe('file-provider-watch-service', () => {
     })
   })
 
-  it('reads scan progress through the drizzle schema table', async () => {
+  it('reads scan progress through the current watch root scope', async () => {
     const scannedAt = new Date()
-    const { dbUtils, from } = createDbUtils([{ path: '/tmp/tuff-index-a', lastScanned: scannedAt }])
+    const { dbUtils, from, where } = createDbUtils([
+      { path: '/tmp/tuff-index-a', lastScanned: scannedAt }
+    ])
     const service = createService({ dbUtils })
 
     const eligibility = await service.getScanEligibility()
 
     expect(from).toHaveBeenCalledWith(scanProgress)
+    expect(where).toHaveBeenCalledWith(
+      inArray(scanProgress.path, ['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
+    )
     expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-b'])
+    expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
+  })
+
+  it('includes raw and normalized watch roots in the scan progress query', async () => {
+    const scannedAt = new Date('2026-06-20T10:00:00.000Z')
+    const { dbUtils, where } = createDbUtils([
+      { path: '/users/me/documents', lastScanned: scannedAt }
+    ])
+    const service = createService({
+      baseWatchPaths: ['/Users/me/Documents'],
+      dbUtils,
+      normalizePath: (rawPath) => rawPath.toLowerCase()
+    })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(where).toHaveBeenCalledWith(
+      inArray(scanProgress.path, ['/Users/me/Documents', '/users/me/documents'])
+    )
+    expect(eligibility.newPaths).toEqual([])
+    expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
+  })
+
+  it('skips watch roots rejected by the normalizer before reading scan progress', async () => {
+    const scannedAt = new Date('2026-06-20T10:00:00.000Z')
+    const { dbUtils, where } = createDbUtils([{ path: '/tmp/accepted', lastScanned: scannedAt }])
+    const service = createService({
+      baseWatchPaths: ['/tmp/rejected', '/tmp/accepted'],
+      dbUtils,
+      normalizePath: (rawPath) => (rawPath.includes('rejected') ? '' : rawPath)
+    })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(where).toHaveBeenCalledWith(inArray(scanProgress.path, ['/tmp/accepted']))
+    expect(eligibility.newPaths).toEqual([])
     expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
   })
 
@@ -136,6 +209,21 @@ describe('file-provider-watch-service', () => {
     expect(eligibility.newPaths).toEqual([])
     expect(eligibility.stalePaths).toEqual(['/tmp/tuff-index-a'])
     expect(eligibility.lastScannedAt).toBe(freshTimestamp)
+  })
+
+  it('does not let scan progress outside watched roots affect last scanned time', async () => {
+    const scopedTimestamp = Date.now() - 2 * 60 * 60 * 1000
+    const externalTimestamp = Date.now()
+    const { dbUtils } = createDbUtils([
+      { path: '/tmp/tuff-index-a', lastScanned: scopedTimestamp },
+      { path: '/external-index-root', lastScanned: externalTimestamp }
+    ])
+    const service = createService({ dbUtils })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-b'])
+    expect(eligibility.lastScannedAt).toBe(scopedTimestamp)
   })
 
   it('does not read scan progress when auto indexing is initializing', async () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inArray } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 import {
@@ -16,16 +16,41 @@ const READY_STATS: FileProviderIndexStatsForEvidence = {
 }
 
 function createDbUtils(rows: Array<{ path: string; lastScanned?: unknown }>) {
-  const from = vi.fn(async () => rows)
-  const select = vi.fn(() => ({ from }))
+  const where = vi.fn(async (condition: unknown) => {
+    const scopedPaths = extractInArrayValues(condition)
+    if (scopedPaths.size === 0) {
+      return rows
+    }
+    return rows.filter((row) => scopedPaths.has(row.path))
+  })
+  const query = {
+    where,
+    then: (resolve: (rows: Array<{ path: string; lastScanned?: unknown }>) => unknown) =>
+      Promise.resolve(rows).then(resolve)
+  }
+  const from = vi.fn(() => query)
+  const select = vi.fn(() => ({ from, where }))
 
   return {
     dbUtils: {
       getDb: vi.fn(() => ({ select }))
     },
     from,
-    select
+    select,
+    where
   }
+}
+
+function extractInArrayValues(condition: unknown): Set<string> {
+  const queryChunks =
+    (condition as { queryChunks?: unknown[] } | null | undefined)?.queryChunks ?? []
+  const valueChunks = queryChunks.find(Array.isArray) as Array<{ value?: unknown }> | undefined
+
+  return new Set(
+    (valueChunks ?? [])
+      .map((chunk) => chunk.value)
+      .filter((value): value is string => typeof value === 'string')
+  )
 }
 
 function createDb() {
@@ -50,7 +75,7 @@ function createService(
   const ensureSearchIndexWorkerReady = vi.fn(
     input.ensureSearchIndexWorkerReady ?? (async () => true)
   )
-  const upsertScanProgress = vi.fn(async () => undefined)
+  const upsertScanProgress = vi.fn(async (paths: string[]) => paths.length)
 
   return {
     ensureSearchIndexWorkerReady,
@@ -65,6 +90,10 @@ function createService(
 }
 
 describe('file-provider-scan-progress-service', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('marks all roots pending when database utils are unavailable', async () => {
     const { service } = createService()
 
@@ -117,6 +146,29 @@ describe('file-provider-scan-progress-service', () => {
         scanProgressRows: 1,
         lastScannedAt: scopedTimestamp
       }
+    })
+  })
+
+  it('scopes scan progress reads to current raw and normalized watch roots', async () => {
+    const scopedTimestamp = Date.parse('2026-05-30T00:00:00.000Z')
+    const { dbUtils, where } = createDbUtils([
+      { path: '/users/me/documents', lastScanned: new Date(scopedTimestamp) }
+    ])
+    const { service } = createService({
+      dbUtils,
+      normalizePath: (path) => path.toLowerCase()
+    })
+
+    const summary = await service.getSummary(['/Users/me/Documents'])
+
+    expect(where).toHaveBeenCalledWith(
+      inArray(scanProgress.path, ['/Users/me/Documents', '/users/me/documents'])
+    )
+    expect(summary).toEqual({
+      totalRoots: 1,
+      pendingRoots: 0,
+      completedRoots: 1,
+      lastScannedAt: scopedTimestamp
     })
   })
 
@@ -177,6 +229,43 @@ describe('file-provider-scan-progress-service', () => {
         pendingRoots: 0,
         completedRoots: 1,
         configuredRoots: 2,
+        scanProgressRows: 1,
+        lastScannedAt: scopedTimestamp
+      }
+    })
+  })
+
+  it('ignores empty normalized watch roots before reporting progress evidence', async () => {
+    const scopedTimestamp = Date.parse('2026-05-30T00:00:00.000Z')
+    const { dbUtils } = createDbUtils([
+      { path: '/users/me/documents', lastScanned: new Date(scopedTimestamp) },
+      { path: '', lastScanned: new Date('2026-05-31T00:00:00.000Z') }
+    ])
+    const { service } = createService({
+      dbUtils,
+      normalizePath: (path) => path.trim().toLowerCase()
+    })
+
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/Users/me/Documents', '   '],
+      pendingPermissionPaths: ['   '],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence).toMatchObject({
+      status: 'ready',
+      reason: 'file-index-progress-ready',
+      rootCount: 1,
+      roots: ['/Users/me/Documents'],
+      metadata: {
+        totalRoots: 1,
+        pendingRoots: 0,
+        pendingPermissionRoots: 0,
+        pendingPermissionPaths: [],
+        configuredRoots: 1,
+        completedRoots: 1,
         scanProgressRows: 1,
         lastScannedAt: scopedTimestamp
       }
@@ -341,13 +430,119 @@ describe('file-provider-scan-progress-service', () => {
     expect(deleteFrom).not.toHaveBeenCalled()
   })
 
+  it('deletes both raw and normalized scan progress paths', async () => {
+    const { db, where } = createDb()
+    const { service } = createService({
+      normalizePath: (path) => path.toLowerCase()
+    })
+
+    await service.deletePaths(db as never, ['/Users/me/Documents'])
+
+    expect(where).toHaveBeenCalledWith(
+      inArray(scanProgress.path, ['/Users/me/Documents', '/users/me/documents'])
+    )
+  })
+
+  it('skips empty raw and normalized scan progress paths during delete', async () => {
+    const { db, where } = createDb()
+    const { service } = createService({
+      normalizePath: (path) => path.trim().toLowerCase()
+    })
+
+    await service.deletePaths(db as never, ['   ', '/Users/me/Documents'])
+
+    expect(where).toHaveBeenCalledWith(
+      inArray(scanProgress.path, ['/Users/me/Documents', '/users/me/documents'])
+    )
+  })
+
   it('upserts completed paths through the search index worker when ready', async () => {
     const { service, ensureSearchIndexWorkerReady, upsertScanProgress } = createService()
 
-    await service.upsertCompletedPaths(['/a'], '2026-05-30T00:00:00.000Z', 'scan-progress.upsert')
+    await expect(
+      service.upsertCompletedPaths(['/a'], '2026-05-30T00:00:00.000Z', 'scan-progress.upsert')
+    ).resolves.toEqual({
+      attempted: true,
+      ready: true,
+      upserted: 1
+    })
 
     expect(ensureSearchIndexWorkerReady).toHaveBeenCalledWith('scan-progress.upsert')
     expect(upsertScanProgress).toHaveBeenCalledWith(['/a'], '2026-05-30T00:00:00.000Z')
+  })
+
+  it('exposes the latest scan progress upsert summary in evidence metadata', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+    const { dbUtils } = createDbUtils([
+      { path: '/users/me/documents', lastScanned: new Date('2026-05-30T00:00:00.000Z') }
+    ])
+    const { service } = createService({
+      dbUtils,
+      normalizePath: (path) => path.toLowerCase()
+    })
+
+    await service.upsertCompletedPaths(
+      ['/Users/me/Documents', '/users/me/documents'],
+      '2026-05-30T00:00:00.000Z',
+      'scan-progress.upsert'
+    )
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/Users/me/Documents'],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence.metadata).toMatchObject({
+      lastUpsertAttempted: true,
+      lastUpsertReady: true,
+      lastUpsertedRows: 1,
+      lastUpsertReason: 'scan-progress.upsert',
+      lastUpsertCheckedAt: 1_700_000_000_000
+    })
+    expect(evidence.metadata).not.toHaveProperty('lastUpsertPaths')
+  })
+
+  it('upserts normalized scan progress paths through the search index worker', async () => {
+    const { service, upsertScanProgress } = createService({
+      normalizePath: (path) => path.toLowerCase()
+    })
+
+    await expect(
+      service.upsertCompletedPaths(
+        ['/Users/me/Documents', '/users/me/documents'],
+        '2026-05-30T00:00:00.000Z',
+        'scan-progress.upsert'
+      )
+    ).resolves.toMatchObject({
+      upserted: 1
+    })
+
+    expect(upsertScanProgress).toHaveBeenCalledWith(
+      ['/users/me/documents'],
+      '2026-05-30T00:00:00.000Z'
+    )
+  })
+
+  it('skips empty normalized scan progress paths during upsert', async () => {
+    const { service, upsertScanProgress } = createService({
+      normalizePath: (path) => path.trim().toLowerCase()
+    })
+
+    await expect(
+      service.upsertCompletedPaths(
+        ['   ', '/Users/me/Documents'],
+        '2026-05-30T00:00:00.000Z',
+        'scan-progress.upsert'
+      )
+    ).resolves.toMatchObject({
+      upserted: 1
+    })
+
+    expect(upsertScanProgress).toHaveBeenCalledWith(
+      ['/users/me/documents'],
+      '2026-05-30T00:00:00.000Z'
+    )
   })
 
   it('skips completed path upsert when the worker is not ready', async () => {
@@ -355,8 +550,37 @@ describe('file-provider-scan-progress-service', () => {
       ensureSearchIndexWorkerReady: async () => false
     })
 
-    await service.upsertCompletedPaths(['/a'], '2026-05-30T00:00:00.000Z', 'scan-progress.upsert')
+    await expect(
+      service.upsertCompletedPaths(['/a'], '2026-05-30T00:00:00.000Z', 'scan-progress.upsert')
+    ).resolves.toEqual({
+      attempted: true,
+      ready: false,
+      upserted: 0
+    })
 
     expect(upsertScanProgress).not.toHaveBeenCalled()
+  })
+
+  it('keeps skipped scan progress upsert attempts visible in evidence metadata', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_001)
+    const { service } = createService({
+      ensureSearchIndexWorkerReady: async () => false
+    })
+
+    await service.upsertCompletedPaths(['/a'], '2026-05-30T00:00:00.000Z', 'scan-progress.upsert')
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/a'],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence.metadata).toMatchObject({
+      lastUpsertAttempted: true,
+      lastUpsertReady: false,
+      lastUpsertedRows: 0,
+      lastUpsertReason: 'scan-progress.upsert',
+      lastUpsertCheckedAt: 1_700_000_000_001
+    })
   })
 })

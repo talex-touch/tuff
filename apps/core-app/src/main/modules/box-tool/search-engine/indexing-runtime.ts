@@ -9,6 +9,7 @@ import type {
   IndexedSourceScanReason,
   IndexedSourceScanRequest,
   IndexedSourceTaskHistoryEntry,
+  IndexedSourceTaskHistoryKind,
   IndexedSourceTaskKind,
   IndexedSourceRuntimeTaskState,
   IndexedSourceWatchEvent
@@ -267,7 +268,7 @@ export class IndexingRuntime {
   async scanSourcesWithResult(reason: IndexedSourceScanReason): Promise<ScanSchedulerBatchResult> {
     const allSources = this.listSources()
     const diagnostics = await this.getDiagnostics()
-    const eligible = this.filterRetryEligibleSources(
+    const eligible = this.filterAutomaticEligibleSources(
       this.getEligibleSources(allSources, diagnostics, 'scan'),
       diagnostics,
       'scan'
@@ -349,7 +350,7 @@ export class IndexingRuntime {
   async reconcileSourcesWithResult(): Promise<ReconcileEngineBatchResult> {
     const allSources = this.listSources()
     const diagnostics = await this.getDiagnostics()
-    const eligible = this.filterRetryEligibleSources(
+    const eligible = this.filterAutomaticEligibleSources(
       this.getEligibleSources(allSources, diagnostics, 'reconcile'),
       diagnostics,
       'reconcile'
@@ -549,7 +550,7 @@ export class IndexingRuntime {
     return eligibility.reason ?? null
   }
 
-  private filterRetryEligibleSources(
+  private filterAutomaticEligibleSources(
     eligible: RuntimeEligibleSources,
     diagnostics: IndexingRuntimeDiagnostics,
     kind: RuntimeTaskRetryKind
@@ -570,6 +571,14 @@ export class IndexingRuntime {
         skipped.push({
           sourceId,
           reason: `retry-window:${kind}:${retry.nextRetryAt ?? 'unknown'}`
+        })
+        continue
+      }
+      const runGate = this.runGate.canStart(sourceId, kind)
+      if (!runGate.allowed) {
+        skipped.push({
+          sourceId,
+          reason: `${kind}-${runGate.reason}`
         })
         continue
       }
@@ -694,13 +703,32 @@ export class IndexingRuntime {
     try {
       const persisted = await this.taskStateStore.load(sourceId)
       if (persisted) {
-        this.taskState.set(sourceId, cloneRuntimeTaskState(persisted))
+        const snapshot = cloneRuntimeTaskState(persisted)
+        this.taskState.set(sourceId, snapshot)
+        this.hydrateRunGateFromTaskState(sourceId, snapshot)
       }
       return persisted ? cloneRuntimeTaskState(persisted) : undefined
     } catch (error) {
       indexingRuntimeLog.warn(`Failed to load indexed source task state '${sourceId}'`, { error })
       return undefined
     }
+  }
+
+  private hydrateRunGateFromTaskState(
+    sourceId: string,
+    state: IndexedSourceRuntimeTaskState
+  ): void {
+    this.hydrateRunGateCompletion(sourceId, state, 'scan')
+    this.hydrateRunGateCompletion(sourceId, state, 'reconcile')
+  }
+
+  private hydrateRunGateCompletion(
+    sourceId: string,
+    state: IndexedSourceRuntimeTaskState,
+    kind: Extract<IndexedSourceTaskHistoryKind, 'scan' | 'reconcile'>
+  ): void {
+    const completedAt = getLatestTaskCompletionAt(state.recentTasks, kind)
+    this.runGate.hydrateCompletion(sourceId, kind, completedAt)
   }
 
   private recordScanResult(result: ScanSchedulerResult, job?: IndexedSourceRuntimeTaskJob): void {
@@ -991,6 +1019,24 @@ function cloneRuntimeTaskState(
     }))
   }
   return snapshot
+}
+
+function getLatestTaskCompletionAt(
+  recentTasks: IndexedSourceTaskHistoryEntry[] | undefined,
+  kind: IndexedSourceTaskHistoryKind
+): number | undefined {
+  if (!recentTasks?.length) return undefined
+
+  let latestCompletedAt: number | undefined
+  for (const task of recentTasks) {
+    if (task.kind !== kind) continue
+    if (!Number.isFinite(task.completedAt)) continue
+    latestCompletedAt =
+      latestCompletedAt === undefined
+        ? task.completedAt
+        : Math.max(latestCompletedAt, task.completedAt)
+  }
+  return latestCompletedAt
 }
 
 export const indexingRuntime = new IndexingRuntime()

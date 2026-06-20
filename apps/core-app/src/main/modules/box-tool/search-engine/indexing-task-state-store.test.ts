@@ -581,6 +581,62 @@ describe('IndexingTaskStateStore', () => {
     })
   })
 
+  it('drops persisted sqlite last watch snapshots with empty paths', async () => {
+    const selectLimit = vi.fn(async () => [
+      {
+        stateJson: JSON.stringify({
+          lastWatch: {
+            occurredAt: 3,
+            completedAt: 4,
+            action: 'change',
+            path: '   ',
+            deltas: 1,
+            appliedDeltas: 1,
+            failedDeltas: 0
+          },
+          recentTasks: [
+            {
+              kind: 'watch',
+              status: 'succeeded',
+              completedAt: 4,
+              summary: {
+                action: 'change',
+                path: '   '
+              }
+            }
+          ]
+        })
+      }
+    ])
+    const db = {
+      run: vi.fn(async () => {}),
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: selectLimit
+          }))
+        }))
+      })),
+      insert: vi.fn(),
+      delete: vi.fn()
+    }
+    const store = new SqliteIndexingTaskStateStore(db as never)
+
+    await expect(store.load('file-provider')).resolves.toEqual({
+      recentTasks: [
+        {
+          kind: 'watch',
+          status: 'succeeded',
+          completedAt: 4,
+          summary: {
+            action: 'change',
+            path: '   '
+          }
+        }
+      ]
+    })
+  })
+
   it('bounds persisted sqlite recent task history to the newest runtime history entries', async () => {
     const selectLimit = vi.fn(async () => [
       {
