@@ -68,6 +68,7 @@ afterEach(() => {
       cacheWithoutIcon: unknown
       macosResolveInFlight: unknown
       macosPermissionBackoffUntil: number
+      macosEbadfBackoffUntil: number
     }
   ).cacheWithIcon = null
   ;(
@@ -76,6 +77,7 @@ afterEach(() => {
       cacheWithoutIcon: unknown
       macosResolveInFlight: unknown
       macosPermissionBackoffUntil: number
+      macosEbadfBackoffUntil: number
     }
   ).cacheWithoutIcon = null
   ;(
@@ -84,6 +86,7 @@ afterEach(() => {
       cacheWithoutIcon: unknown
       macosResolveInFlight: unknown
       macosPermissionBackoffUntil: number
+      macosEbadfBackoffUntil: number
     }
   ).macosResolveInFlight = null
   ;(
@@ -92,8 +95,18 @@ afterEach(() => {
       cacheWithoutIcon: unknown
       macosResolveInFlight: unknown
       macosPermissionBackoffUntil: number
+      macosEbadfBackoffUntil: number
     }
   ).macosPermissionBackoffUntil = 0
+  ;(
+    activeAppService as unknown as {
+      cacheWithIcon: unknown
+      cacheWithoutIcon: unknown
+      macosResolveInFlight: unknown
+      macosPermissionBackoffUntil: number
+      macosEbadfBackoffUntil: number
+    }
+  ).macosEbadfBackoffUntil = 0
 })
 
 describe('active-app resolution', () => {
@@ -317,6 +330,48 @@ ConvertTo-Json -Compress`),
       'macOS automation permission missing, active-app lookup suspended briefly',
       expect.objectContaining({
         meta: expect.objectContaining({ backoffMs: 60_000 })
+      })
+    )
+    expect(activeAppLoggerMock.error).not.toHaveBeenCalled()
+
+    execFilePromiseMock.mockClear()
+    activeAppLoggerMock.warn.mockClear()
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(execFilePromiseMock).not.toHaveBeenCalled()
+    expect(activeAppLoggerMock.warn).not.toHaveBeenCalled()
+  })
+
+  it('backs off after repeated macOS EBADF spawn failures', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+    const ebadfError = Object.assign(new Error('spawn EBADF'), { code: 'EBADF' })
+    execFilePromiseMock.mockRejectedValueOnce(ebadfError)
+    execFilePromiseMock.mockRejectedValueOnce(ebadfError)
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(activeAppLoggerMock.warn).toHaveBeenCalledWith(
+      'macOS resolution hit EBADF, retrying once',
+      expect.objectContaining({
+        meta: expect.objectContaining({ delayMs: 80 })
+      })
+    )
+    expect(activeAppLoggerMock.warn).toHaveBeenCalledWith(
+      'macOS active-app lookup temporarily unavailable after EBADF',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          backoffMs: 10_000,
+          message: 'spawn EBADF'
+        })
       })
     )
     expect(activeAppLoggerMock.error).not.toHaveBeenCalled()

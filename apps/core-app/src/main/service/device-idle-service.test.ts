@@ -1,26 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, getMainConfigMock, saveMainConfigMock, powerMonitorMock } = vi.hoisted(
-  () => ({
+const { execFileMock, getMainConfigMock, saveMainConfigMock, powerMonitorMock, loggerMock } =
+  vi.hoisted(() => ({
     execFileMock: vi.fn(),
     getMainConfigMock: vi.fn(() => undefined),
     saveMainConfigMock: vi.fn(),
     powerMonitorMock: {
       getSystemIdleTime: vi.fn(() => 0),
       isOnBatteryPower: vi.fn(() => false)
+    },
+    loggerMock: {
+      warn: vi.fn(),
+      error: vi.fn()
     }
-  })
-)
+  }))
 
 vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
 vi.mock('@talex-touch/utils/common/logger', () => ({
-  getLogger: vi.fn(() => ({
-    warn: vi.fn(),
-    error: vi.fn()
-  }))
+  getLogger: vi.fn(() => loggerMock)
 }))
 
 vi.mock('electron', () => ({
@@ -157,5 +157,30 @@ describe('DeviceIdleService canRun', () => {
 
     await expect(Promise.all([first, second])).resolves.toHaveLength(2)
     expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('backs off after battery command EBADF failures', async () => {
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true
+    })
+    const { DeviceIdleService } = await import('./device-idle-service')
+    const service = DeviceIdleService.getInstance()
+
+    powerMonitorMock.getSystemIdleTime.mockReturnValue(120)
+    execFileMock.mockImplementation((_file, _args, callback) => {
+      callback(Object.assign(new Error('spawn EBADF'), { code: 'EBADF' }))
+    })
+
+    await service.canRun({ idleThresholdMs: 60_000 })
+    await service.canRun({ idleThresholdMs: 60_000 })
+
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      'Battery percent lookup temporarily unavailable after EBADF',
+      expect.objectContaining({
+        meta: expect.objectContaining({ backoffMs: 10_000 })
+      })
+    )
   })
 })
