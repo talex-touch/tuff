@@ -33,6 +33,11 @@ const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlo
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
 const mermaidRenderer = readFileSync(new URL('../../utils/mermaid-renderer.ts', import.meta.url), 'utf8')
 const i18nConfig = readFileSync(new URL('../../i18n.config.ts', import.meta.url), 'utf8')
+const i18nEn = readFileSync(new URL('../../../i18n/locales/en.ts', import.meta.url), 'utf8')
+const i18nZh = readFileSync(new URL('../../../i18n/locales/zh.ts', import.meta.url), 'utf8')
+const routeLocaleChunks = readFileSync(new URL('../../utils/route-locale-chunks.ts', import.meta.url), 'utf8')
+const routeLocaleMiddleware = readFileSync(new URL('../../middleware/i18n-route-chunks.global.ts', import.meta.url), 'utf8')
+const routeLocaleComposable = readFileSync(new URL('../../composables/useRouteLocaleChunks.ts', import.meta.url), 'utf8')
 const docsPageApi = readFileSync(new URL('../../../server/api/docs/page.get.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
@@ -236,6 +241,32 @@ describe('docs page performance boundaries', () => {
     expect(tuffPropsTable).toContain('class="tuff-props-table__copy-status"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__tag"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__mono"')
+  })
+
+  it('keeps route-local locale payloads out of the docs base i18n chunk', () => {
+    expect(i18nEn).not.toContain('\n  dashboard: {')
+    expect(i18nEn).not.toContain('\n  landing: {')
+    expect(i18nZh).not.toContain('\n  dashboard: {')
+    expect(i18nZh).not.toContain('\n  landing: {')
+
+    expect(routeLocaleChunks).toContain("dashboard: () => import('../../i18n/locales/route/en/dashboard')")
+    expect(routeLocaleChunks).toContain("landing: () => import('../../i18n/locales/route/en/landing')")
+    expect(routeLocaleChunks).toContain("dashboard: () => import('../../i18n/locales/route/zh/dashboard')")
+    expect(routeLocaleChunks).toContain("landing: () => import('../../i18n/locales/route/zh/landing')")
+    expect(routeLocaleChunks).toContain('loadingChunks')
+    expect(routeLocaleChunks).not.toContain('loadedChunks')
+
+    expect(routeLocaleComposable).toContain('mergeLocaleMessage')
+    expect(routeLocaleComposable).toContain('[chunk]: messages')
+
+    expect(routeLocaleMiddleware).toContain("normalized === '/' || normalized === '/new' || normalized.startsWith('/new/')")
+    expect(routeLocaleMiddleware).toContain("normalized === '/dashboard'")
+    expect(routeLocaleMiddleware).toContain("normalized.startsWith('/dashboard/')")
+    expect(routeLocaleMiddleware).toContain("normalized === '/store'")
+    expect(routeLocaleMiddleware).toContain("normalized === '/team/join'")
+    expect(routeLocaleMiddleware).not.toMatch(/docs[^\\n]*push\\('(dashboard|landing)'\\)/)
+
+    expect(tuffFooter).toContain("await ensureRouteLocaleChunk(normalizeLocale(locale.value) || 'en', 'landing')")
   })
 
   it('keeps syntax and diagram rendering out of the global first-paint plugin list', () => {
