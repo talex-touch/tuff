@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { defineComponent, h, render } from 'vue'
+import { defineComponent, h, render, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
+import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { primeDocsPageRequestCache, requestDocsPage } from '~/utils/docs-page-client-cache'
@@ -778,6 +779,25 @@ const heroUpdatedLabel = computed(() => {
 })
 const isDocVerified = computed(() => toBoolean(docMeta.value?.verified))
 const heroVerifiedLabel = computed(() => (isDocVerified.value ? 'Verified' : ''))
+interface DocsProseHeadingProps {
+  id?: string
+}
+
+function createDocsProseHeading(tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'): FunctionalComponent<DocsProseHeadingProps> {
+  const heading: FunctionalComponent<DocsProseHeadingProps> = (props, { attrs, slots }) =>
+    h(DocsProseHeading, { ...attrs, id: props.id, tag }, slots)
+  heading.props = ['id']
+  return heading
+}
+
+const docsProseComponents = {
+  h1: createDocsProseHeading('h1'),
+  h2: createDocsProseHeading('h2'),
+  h3: createDocsProseHeading('h3'),
+  h4: createDocsProseHeading('h4'),
+  h5: createDocsProseHeading('h5'),
+  h6: createDocsProseHeading('h6'),
+}
 
 type DocSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -1583,6 +1603,8 @@ watch(
             v-if="renderDoc?.body"
             :key="currentDocRenderKey"
             :value="renderDoc ?? {}"
+            :prose="false"
+            :components="docsProseComponents"
             :class="[
               'docs-prose',
               'markdown-body',
