@@ -17,7 +17,7 @@ function normalizeStyle(style: string | undefined): string {
   return (style ?? '').replace(/\s+/g, '')
 }
 
-function createProvider(icon: ITuffIcon | string): IProviderActivate {
+function createProvider(icon: ITuffIcon): IProviderActivate {
   return {
     id: 'plugin-features',
     name: 'AI',

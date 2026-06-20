@@ -1600,6 +1600,7 @@ export class CommonChannelModule extends BaseModule {
               sourceId: '',
               batches: 0,
               records: 0,
+              indexedRecords: 0,
               startedAt: now,
               completedAt: now,
               error: 'source-id-empty'
@@ -1611,6 +1612,7 @@ export class CommonChannelModule extends BaseModule {
               sourceId,
               batches: 0,
               records: 0,
+              indexedRecords: 0,
               startedAt: now,
               completedAt: now,
               error: 'reason-empty'

@@ -7,7 +7,7 @@ import type {
 } from '@talex-touch/utils'
 import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
