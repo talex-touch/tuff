@@ -62,6 +62,21 @@ describe('docs page performance boundaries', () => {
     expect(docsSidebar).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)/)
   })
 
+  it('warms component docs links on sidebar intent without enabling bulk NuxtLink prefetch', () => {
+    expect(docsSidebar).toContain("import { requestJson, useTypedFetch } from '~/utils/request'")
+    expect(docsSidebar).toContain('const prefetchedDocsTargets = new Set<string>()')
+    expect(docsSidebar).toMatch(/function shouldPrefetchDocsTarget\(path: string \| null \| undefined\) \{[\s\S]*normalized\?\.startsWith\('\/docs\/dev\/components\/'\)/)
+    expect(docsSidebar).toMatch(/function prefetchDocsTarget\(path: string \| null \| undefined\) \{[\s\S]*if \(import\.meta\.server \|\| !shouldPrefetchDocsTarget\(path\)\)[\s\S]*return/)
+    expect(docsSidebar).toMatch(/const cacheKey = `\$\{normalized\}:\$\{locale\}`[\s\S]*if \(prefetchedDocsTargets\.has\(cacheKey\)\)[\s\S]*prefetchedDocsTargets\.add\(cacheKey\)/)
+    expect(docsSidebar).toMatch(/void preloadRouteComponents\(routeTarget\)/)
+    expect(docsSidebar).toMatch(/requestJson\('\/api\/docs\/page', \{[\s\S]*body: '0'/)
+    expect(docsSidebar).toMatch(/requestJson\('\/api\/docs\/page', \{[\s\S]*body: '1'/)
+    expect(docsSidebar).toContain('@mouseenter="prefetchDocsTarget(linkTarget(child))"')
+    expect(docsSidebar).toContain('@focus="prefetchDocsTarget(linkTarget(child))"')
+    expect(docsSidebar).toContain('@touchstart.passive="prefetchDocsTarget(linkTarget(child))"')
+    expect(docsSidebar).toContain(':prefetch="false"')
+  })
+
   it('keeps decorative footer aurora from throwing when WebGL2 is unavailable', () => {
     expect(touchAurora).toContain('let auroraDisabled = false')
     expect(touchAurora).toContain("const gl = canvas.getContext('webgl2')")
