@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
-import { useLandingRevealState } from '~/composables/useLandingRevealState'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import HeaderUserMenu from './HeaderUserMenu.vue'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
@@ -19,7 +18,7 @@ const { locale, t } = useI18n()
 const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 
 function handleScroll() {
-  scrolled.value = window.scrollY > 0
+  scrolled.value = window.scrollY > 8
 }
 
 const links = computed(() => [
@@ -79,37 +78,12 @@ function isActiveLink(link: { to: string }) {
 }
 
 onMounted(() => {
-  window.addEventListener('scroll', handleScroll)
+  handleScroll()
+  window.addEventListener('scroll', handleScroll, { passive: true })
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
-})
-
-const { headerVisible, sequenceStarted, setHeaderVisibility } = useLandingRevealState()
-
-if (!isHome.value) {
-  setHeaderVisibility(true)
-}
-else if (!sequenceStarted.value) {
-  setHeaderVisibility(false)
-}
-
-watchEffect(() => {
-  if (!isHome.value) {
-    setHeaderVisibility(true)
-  }
-})
-
-const landingHeaderClass = computed(() => ({
-  'landing-header': true,
-  'landing-header--visible': headerVisible.value,
-}))
-
-const headerRevealStyle = computed(() => {
-  if (!isHome.value)
-    return { '--header-delay': '0s' }
-  return undefined
 })
 </script>
 
@@ -117,29 +91,27 @@ const headerRevealStyle = computed(() => {
   <header
     class="TuffHeader"
     data-role="main-header"
-    :class="landingHeaderClass"
-    :style="headerRevealStyle"
   >
     <div
       class="TuffHeader-Main mx-auto flex flex-wrap items-center justify-between gap-4 border-1 border-transparent border-solid px-4 py-2 sm:flex-nowrap"
       :class="{
-        'border-primary/10 bg-white/50 shadow-sm dark:border-light/10 dark:bg-dark/50': scrolled,
+        'TuffHeader-Main--scrolled': scrolled,
       }"
     >
       <NuxtLink
         to="/"
-        class="flex items-center gap-1 text-black font-semibold tracking-tight no-underline dark:text-light"
+        class="TuffHeader-Brand flex items-center gap-1 text-black font-semibold tracking-tight no-underline dark:text-light"
       >
         <IconComposer />
       </NuxtLink>
 
-      <nav class="flex flex-1 items-center justify-between gap-2 overflow-hidden text-sm">
-        <div class="ml-auto flex items-center gap-2 sm:gap-3">
+      <nav class="TuffHeader-Nav flex flex-1 items-center justify-between gap-2 overflow-hidden text-sm">
+        <div class="TuffHeader-NavLinks ml-auto flex items-center gap-1 sm:gap-2">
           <NuxtLink
             v-for="link in links"
             :key="link.to"
             :to="link.to"
-            class="rounded-full px-3 py-1 text-black/65 font-medium no-underline transition-colors duration-200 hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
+            class="rounded-full px-2.5 py-1 text-black/65 font-medium no-underline transition-colors duration-200 hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
             :class="isActiveLink(link) ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
           >
             {{ link.label }}
@@ -155,7 +127,7 @@ const headerRevealStyle = computed(() => {
 
         <div v-if="isHome" class="header-auth-divider" />
 
-        <div class="flex items-center gap-2 sm:gap-3">
+        <div class="TuffHeader-Auth flex items-center gap-2 sm:gap-3">
           <template v-if="!isAuthenticated">
             <NuxtLink
               :to="signInRoute"
@@ -186,25 +158,63 @@ const headerRevealStyle = computed(() => {
 }
 
 .TuffHeader-Main {
+  --header-border-color: transparent;
+  --header-bg-color: transparent;
+  --header-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  --header-backdrop-filter: blur(18px) saturate(180%);
+
   position: absolute;
 
   top: 1rem;
   left: 50%;
 
-  width: 100%;
-  max-width: 1320px;
+  width: min(1056px, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
 
   border-radius: 24px;
-  transform: translateX(-50%);
+  border-color: var(--header-border-color);
+  background-color: var(--header-bg-color);
+  box-shadow: var(--header-shadow);
+  transition:
+    width 720ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 620ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 620ms cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 620ms cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 620ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 720ms cubic-bezier(0.4, 0, 0.2, 1);
 
   isolation: isolate;
   overflow: hidden;
-  backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%)) !important;
-  -webkit-backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  animation: tuff-header-quick-reveal 350ms cubic-bezier(0.7, 0, 1, 1) backwards;
 }
 
 .TuffHeader-Main {
   transform: translate3d(calc(-50% + var(--wm-jitter-x1, 0px)), var(--wm-jitter-y1, 0px), 0);
+}
+
+.TuffHeader-Main--scrolled {
+  width: min(840px, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  border-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%)) !important;
+  -webkit-backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%)) !important;
+}
+
+.dark .TuffHeader-Main--scrolled {
+  border-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(8, 10, 12, 0.58);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+}
+
+.TuffHeader-Brand,
+.TuffHeader-Nav,
+.TuffHeader-NavLinks,
+.TuffHeader-Auth {
+  min-width: 0;
 }
 
 nav :deep(a) {
@@ -221,23 +231,46 @@ nav :deep(a) {
   background: rgba(255, 255, 255, 0.12);
 }
 
+@keyframes tuff-header-quick-reveal {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(-6px);
+  }
 
-.landing-header {
-  opacity: 0;
-  filter: blur(18px);
-  transform: translate3d(0, -48px, 0);
-  pointer-events: none;
-  transition:
-    opacity 1.15s cubic-bezier(0.22, 0.61, 0.36, 1),
-    filter 1.25s cubic-bezier(0.22, 0.61, 0.36, 1),
-    transform 1.15s cubic-bezier(0.22, 0.61, 0.36, 1);
-  transition-delay: var(--header-delay, 0.2s);
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
 }
 
-.landing-header--visible {
-  opacity: 1;
-  filter: none;
-  transform: translate3d(0, 0, 0);
-  pointer-events: auto;
+@media (prefers-reduced-motion: reduce) {
+  .TuffHeader-Main {
+    animation: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .TuffHeader-Main {
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-width: none;
+    transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
+  }
+
+  .TuffHeader-Main--scrolled {
+    width: auto;
+    max-width: none;
+  }
+
+  nav {
+    justify-content: flex-end;
+  }
+
+  nav > div:first-child {
+    display: none;
+  }
 }
 </style>

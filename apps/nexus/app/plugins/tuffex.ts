@@ -67,6 +67,7 @@ const fromGridLayout = () => import('@tuffex-components/grid-layout')
 const fromGroupBlock = () => import('@tuffex-components/group-block')
 const fromGuideState = () => import('@tuffex-components/guide-state')
 const fromIcon = () => import('@tuffex-components/icon')
+const fromIconButton = () => import('@tuffex-components/icon-button')
 const fromImageGallery = () => import('@tuffex-components/image-gallery')
 const fromImageUploader = () => import('@tuffex-components/image-uploader')
 const fromInput = () => import('@tuffex-components/input')
@@ -195,6 +196,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxGroupBlock: asyncTuffexComponent(fromGroupBlock, 'TxGroupBlock'),
   TxGuideState: asyncTuffexComponent(fromGuideState, 'TxGuideState'),
   TxIcon: asyncTuffexComponent(fromIcon, 'TxIcon'),
+  TxIconButton: asyncTuffexComponent(fromIconButton, 'TxIconButton'),
   TxImageGallery: asyncTuffexComponent(fromImageGallery, 'TxImageGallery'),
   TxImageUploader: asyncTuffexComponent(fromImageUploader, 'TxImageUploader'),
   TxKeyframeStrokeText: asyncTuffexComponent(fromKeyframeStrokeText, 'TxKeyframeStrokeText'),

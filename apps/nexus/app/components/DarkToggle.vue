@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 
 const { color, toggleDark } = useTheme()
+const { t } = useI18n()
 const isMounted = ref(false)
 
 useHead({
@@ -14,9 +15,14 @@ useHead({
 })
 
 const isDark = computed(() => color.value === 'dark')
+const toggleLabel = computed(() => t(isDark.value ? 'ui.themeToggle.switchToLight' : 'ui.themeToggle.switchToDark'))
 
 function handleToggle(value: boolean) {
   toggleDark(value ? 'dark' : 'light')
+}
+
+function toggleTheme() {
+  handleToggle(!isDark.value)
 }
 
 onMounted(() => {
@@ -25,12 +31,69 @@ onMounted(() => {
 </script>
 
 <template>
-  <TuffSwitch v-if="isMounted" :model-value="isDark" @change="handleToggle" />
-  <div
-    v-else
-    class="tuff-switch DarkToggle-Placeholder"
-    aria-hidden="true"
+  <TxIconButton
+    v-if="isMounted"
+    size="sm"
+    shape="pill"
+    class="DarkToggle"
+    :class="{ 'is-dark': isDark }"
+    :label="toggleLabel"
+    :pressed="isDark"
+    @click="toggleTheme"
   >
-    <span class="tuff-switch__thumb" />
+    <span class="DarkToggle-Thumb" aria-hidden="true" />
+  </TxIconButton>
+  <div v-else class="DarkToggle" aria-hidden="true">
+    <span class="DarkToggle-Thumb" />
   </div>
 </template>
+
+<style scoped>
+.DarkToggle {
+  width: 44px;
+  justify-content: flex-start;
+  padding: 0 6px;
+  background: rgba(242, 244, 247, 0.94);
+  --tx-icon-button-size: 34px;
+  --tx-icon-button-bg-hover: rgba(236, 239, 244, 1);
+  --tx-icon-button-bg-pressed: rgba(242, 244, 247, 0.94);
+}
+
+.DarkToggle:hover,
+.DarkToggle:focus-visible {
+  background: rgba(236, 239, 244, 1);
+  box-shadow: 0 0 0 3px rgba(20, 22, 24, 0.06);
+}
+
+.DarkToggle-Thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #8c929d;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 1px 2px rgba(15, 23, 42, 0.08);
+  transition:
+    transform 180ms ease,
+    background 180ms ease;
+}
+
+.DarkToggle.is-dark {
+  justify-content: flex-start;
+  background: rgba(33, 35, 37, 0.82);
+}
+
+.DarkToggle.is-dark .DarkToggle-Thumb {
+  background: #d7dbdf;
+}
+
+.dark .DarkToggle {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark .DarkToggle:hover,
+.dark .DarkToggle:focus-visible {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+</style>
