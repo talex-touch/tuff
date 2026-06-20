@@ -70,12 +70,15 @@ const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 const COMPONENT_DOCS_METADATA_DELAY_MS = 360
 const COMPONENT_DOCS_METADATA_INTENT_DELAY_MS = 180
 const COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS = 3600
-const COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS = 240
-const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 1400
+const COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS = 900
+const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 let activeScrollFrame: number | null = null
 let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null
 let componentDocsMetadataIdleId: number | null = null
-const prefetchedDocsTargets = new Set<string>()
+const prefetchedDocsMetadataTargets = new Set<string>()
+const prefetchedDocsFullBodyTargets = new Set<string>()
+const pendingDocsFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingDocsFullBodyPrefetchIdleIds = new Map<string, number>()
 
 function stripCjk(value: string) {
   return value.replace(CJK_PATTERN, '').replace(/\s{2,}/g, ' ').trim()
@@ -349,6 +352,47 @@ function shouldPrefetchDocsTarget(path: string | null | undefined) {
   return Boolean(normalized?.startsWith('/docs/dev/components/'))
 }
 
+function prefetchDocsMetadataTarget(normalized: string, locale: 'en' | 'zh') {
+  const cacheKey = `${normalized}:${locale}`
+  if (prefetchedDocsMetadataTargets.has(cacheKey))
+    return
+  prefetchedDocsMetadataTargets.add(cacheKey)
+
+  const routeTarget = toLocalizedDocsPath(normalized, locale)
+  void preloadRouteComponents(routeTarget)
+  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
+}
+
+function scheduleDocsFullBodyPrefetch(normalized: string, locale: 'en' | 'zh') {
+  const cacheKey = `${normalized}:${locale}`
+  if (prefetchedDocsFullBodyTargets.has(cacheKey) || pendingDocsFullBodyPrefetchTimers.has(cacheKey))
+    return
+
+  const clearPending = () => {
+    pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
+    pendingDocsFullBodyPrefetchIdleIds.delete(cacheKey)
+  }
+  const prefetchFullDoc = () => {
+    clearPending()
+    if (prefetchedDocsFullBodyTargets.has(cacheKey))
+      return
+    prefetchedDocsFullBodyTargets.add(cacheKey)
+    void requestDocsPage({ path: normalized, locale, body: '1' }).catch(() => {})
+  }
+
+  const timer = setTimeout(() => {
+    pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
+    if (hasWindow() && 'requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(prefetchFullDoc, { timeout: COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS })
+      pendingDocsFullBodyPrefetchIdleIds.set(cacheKey, idleId)
+      return
+    }
+
+    prefetchFullDoc()
+  }, COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS)
+  pendingDocsFullBodyPrefetchTimers.set(cacheKey, timer)
+}
+
 function prefetchDocsTarget(path: string | null | undefined) {
   if (import.meta.server || !shouldPrefetchDocsTarget(path))
     return
@@ -358,27 +402,30 @@ function prefetchDocsTarget(path: string | null | undefined) {
     return
 
   const locale = docsLocale.value
-  const cacheKey = `${normalized}:${locale}`
-  if (prefetchedDocsTargets.has(cacheKey))
+  prefetchDocsMetadataTarget(normalized, locale)
+  scheduleDocsFullBodyPrefetch(normalized, locale)
+}
+
+function cancelDocsFullBodyPrefetch(path: string | null | undefined) {
+  if (import.meta.server || !path)
     return
-  prefetchedDocsTargets.add(cacheKey)
 
-  const routeTarget = localizedDocsPath(normalized)
-  void preloadRouteComponents(routeTarget)
-  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
+  const normalized = normalizeContentPath(path)
+  if (!normalized)
+    return
 
-  const prefetchFullDoc = () => {
-    void requestDocsPage({ path: normalized, locale, body: '1' }).catch(() => {})
+  const cacheKey = `${normalized}:${docsLocale.value}`
+  const timer = pendingDocsFullBodyPrefetchTimers.get(cacheKey)
+  if (timer) {
+    clearTimeout(timer)
+    pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
   }
 
-  setTimeout(() => {
-    if (hasWindow() && 'requestIdleCallback' in window) {
-      window.requestIdleCallback(prefetchFullDoc, { timeout: COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS })
-      return
-    }
-
-    prefetchFullDoc()
-  }, COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS)
+  const idleId = pendingDocsFullBodyPrefetchIdleIds.get(cacheKey)
+  if (idleId !== undefined && hasWindow() && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(idleId)
+    pendingDocsFullBodyPrefetchIdleIds.delete(cacheKey)
+  }
 }
 
 function filterByLocale(items: any[]): any[] {
@@ -892,7 +939,9 @@ onBeforeUnmount(() => {
               :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
               @focus="prefetchDocsTarget(linkTarget(currentSectionData))"
+              @blur="cancelDocsFullBodyPrefetch(linkTarget(currentSectionData))"
               @mouseenter="prefetchDocsTarget(linkTarget(currentSectionData))"
+              @mouseleave="cancelDocsFullBodyPrefetch(linkTarget(currentSectionData))"
               @touchstart.passive="prefetchDocsTarget(linkTarget(currentSectionData))"
             >
               <span
@@ -943,7 +992,9 @@ onBeforeUnmount(() => {
               :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"
               @focus="prefetchDocsTarget(linkTarget(child))"
+              @blur="cancelDocsFullBodyPrefetch(linkTarget(child))"
               @mouseenter="prefetchDocsTarget(linkTarget(child))"
+              @mouseleave="cancelDocsFullBodyPrefetch(linkTarget(child))"
               @touchstart.passive="prefetchDocsTarget(linkTarget(child))"
             >
               <span
