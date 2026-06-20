@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type ComponentPublicInstance, computed, nextTick, ref } from 'vue'
+import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, ref } from 'vue'
 
 interface DemoWrapperProps {
   demo: string
@@ -24,6 +24,8 @@ const props = withDefaults(defineProps<DemoWrapperProps>(), {
   title: '',
   description: '',
 })
+
+const LazyEmbeddedCodeBlock = defineAsyncComponent(() => import('./TuffCodeBlock.vue'))
 
 const { t } = useI18n()
 
@@ -180,8 +182,8 @@ function activateDemo() {
         <div v-if="hasCode" class="tuff-demo__code" :class="{ 'is-open': showCode }">
           <div class="tuff-demo__code-body">
             <div class="tuff-demo__code-body-inner">
-              <LazyTuffCodeBlock
-                v-if="showCode"
+              <LazyEmbeddedCodeBlock
+                v-if="hasCode && showCode"
                 embedded
                 :lang="props.codeLang"
                 :code="resolvedCode"
