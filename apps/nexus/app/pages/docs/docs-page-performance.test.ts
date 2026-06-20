@@ -9,6 +9,7 @@ const avatarVariantsDemo = readFileSync(new URL('../../components/content/demos/
 const docsLayout = readFileSync(new URL('../../layouts/docs.vue', import.meta.url), 'utf8')
 const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoWrapper.vue', import.meta.url), 'utf8')
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
+const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
 
 describe('docs page performance boundaries', () => {
   it('keys catch-all docs pages by route path to avoid stale content on client navigation', () => {
@@ -67,6 +68,13 @@ describe('docs page performance boundaries', () => {
 
     expect(tuffCodeBlock).not.toContain('<TxButton')
     expect(tuffCodeBlock).toContain('class="tuff-code-block__copy"')
+
+    expect(tuffPropsTable).not.toContain("from 'vue-sonner'")
+    expect(tuffPropsTable).not.toContain('<TxButton')
+    expect(tuffPropsTable).not.toContain('<TxTag')
+    expect(tuffPropsTable).toContain('class="tuff-props-table__copy-status"')
+    expect(tuffPropsTable).toContain('class="tuff-props-table__tag"')
+    expect(tuffPropsTable).toContain('class="tuff-props-table__mono"')
   })
 
   it('keeps the browser title reactive when a reused docs route changes', () => {

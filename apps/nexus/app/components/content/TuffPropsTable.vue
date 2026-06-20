@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
-import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
 
 interface PropRow {
@@ -120,7 +119,6 @@ async function copyText(text?: unknown, key?: string) {
   }
   if (key) {
     copiedKey.value = key
-    toast.success(labels.value.copied)
     if (copiedTimer)
       window.clearTimeout(copiedTimer)
     copiedTimer = window.setTimeout(() => {
@@ -134,6 +132,9 @@ async function copyText(text?: unknown, key?: string) {
 
 <template>
   <div class="tuff-props-table">
+    <span class="tuff-props-table__copy-status" aria-live="polite">
+      {{ copiedKey ? labels.copied : '' }}
+    </span>
     <table v-if="normalizedRows.length" class="tuff-props-table__table">
       <thead>
         <tr>
@@ -158,28 +159,30 @@ async function copyText(text?: unknown, key?: string) {
           </td>
           <td class="tuff-props-table__type">
             <template v-if="row.values.length">
-              <TxTag
+              <button
                 v-for="value in row.values"
                 :key="value"
+                type="button"
                 class="tuff-props-table__tag"
                 :class="{ 'is-copied': copiedKey === copyKey('value', row.name, value) }"
-                :label="value"
-                size="sm"
                 :title="labels.copy"
                 @click="copyText(value, copyKey('value', row.name, value))"
-              />
+              >
+                <span v-if="copiedKey === copyKey('value', row.name, value)" class="i-carbon-checkmark" aria-hidden="true" />
+                {{ value }}
+              </button>
             </template>
-            <TxButton v-else-if="isCopyable(row.displayType)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" :class="{ 'is-copied': copiedKey === copyKey('type', row.name) }" :title="labels.copy" @click="copyText(row.displayType, copyKey('type', row.name))">
+            <button v-else-if="isCopyable(row.displayType)" type="button" class="tuff-props-table__mono" :class="{ 'is-copied': copiedKey === copyKey('type', row.name) }" :title="labels.copy" @click="copyText(row.displayType, copyKey('type', row.name))">
               <span v-if="copiedKey === copyKey('type', row.name)" class="i-carbon-checkmark" aria-hidden="true" />
               {{ row.displayType }}
-            </TxButton>
+            </button>
             <span v-else class="tuff-props-table__placeholder">-</span>
           </td>
           <td class="tuff-props-table__default">
-            <TxButton v-if="isCopyable(row.displayDefault)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" :class="{ 'is-copied': copiedKey === copyKey('default', row.name) }" :title="labels.copy" @click="copyText(row.displayDefault, copyKey('default', row.name))">
+            <button v-if="isCopyable(row.displayDefault)" type="button" class="tuff-props-table__mono" :class="{ 'is-copied': copiedKey === copyKey('default', row.name) }" :title="labels.copy" @click="copyText(row.displayDefault, copyKey('default', row.name))">
               <span v-if="copiedKey === copyKey('default', row.name)" class="i-carbon-checkmark" aria-hidden="true" />
               {{ row.displayDefault }}
-            </TxButton>
+            </button>
             <span v-else class="tuff-props-table__placeholder">-</span>
           </td>
           <td class="tuff-props-table__desc">
@@ -202,6 +205,18 @@ async function copyText(text?: unknown, key?: string) {
   border: none;
   border-radius: 0;
   box-shadow: none;
+}
+
+.tuff-props-table__copy-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .tuff-props-table__table {
@@ -297,8 +312,25 @@ async function copyText(text?: unknown, key?: string) {
 }
 
 .tuff-props-table__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin: 0 8px 6px 0;
+  border: 1px solid color-mix(in srgb, var(--docs-border) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--docs-inline-code-bg) 72%, transparent);
+  color: var(--docs-ink);
   cursor: copy;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 4px 8px;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.tuff-props-table__tag:hover {
+  background: color-mix(in srgb, var(--docs-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--docs-accent) 32%, transparent);
 }
 
 .tuff-props-table__tag.is-copied {
@@ -312,10 +344,27 @@ async function copyText(text?: unknown, key?: string) {
 }
 
 .tuff-props-table__mono {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
+  line-height: 1.35;
+  padding: 2px 4px;
   cursor: copy;
+  text-align: left;
+  word-break: break-word;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.tuff-props-table__mono:hover {
+  background: color-mix(in srgb, var(--docs-accent) 12%, transparent);
+  color: var(--docs-accent);
 }
 
 .tuff-props-table__mono.is-copied {
