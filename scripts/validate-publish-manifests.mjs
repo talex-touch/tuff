@@ -171,12 +171,16 @@ function getSourceIssues(packages) {
   })
 }
 
+function execPnpmSync(args, options) {
+  return execFileSync('corepack', ['pnpm', ...args], options)
+}
+
 function runPack(packageInfo, tempRoot) {
   const packageDir = path.join(repoRoot, packageInfo.path)
   const destination = path.join(tempRoot, packageInfo.name.replace(/[@/]/g, '_'))
   fs.mkdirSync(destination, { recursive: true })
 
-  const output = execFileSync('pnpm', ['pack', '--pack-destination', destination], {
+  const output = execPnpmSync(['pack', '--pack-destination', destination], {
     cwd: packageDir,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],

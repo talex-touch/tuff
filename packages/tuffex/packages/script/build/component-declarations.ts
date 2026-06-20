@@ -20,12 +20,12 @@ function quoteWindowsShellArg(value: string) {
 function runPnpm(args: string[]) {
   return new Promise<void>((resolve, reject) => {
     const child = process.platform === 'win32'
-      ? spawn('cmd.exe', ['/d', '/s', '/c', ['pnpm', ...args].map(quoteWindowsShellArg).join(' ')], {
+      ? spawn('cmd.exe', ['/d', '/s', '/c', ['corepack', 'pnpm', ...args].map(quoteWindowsShellArg).join(' ')], {
         cwd: rootPath,
         shell: false,
         stdio: 'inherit',
       })
-      : spawn('pnpm', args, {
+      : spawn('corepack', ['pnpm', ...args], {
         cwd: rootPath,
         shell: false,
         stdio: 'inherit',

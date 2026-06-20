@@ -45,7 +45,7 @@ function buildManifest(overrides = {}) {
   }
 }
 
-function buildRemoteRelease({ assets }) {
+function buildRemoteRelease({ assets, release = {} }) {
   return {
     release: {
       tag,
@@ -61,6 +61,7 @@ function buildRemoteRelease({ assets }) {
         en: '<p>Release notes</p>',
       },
       assets,
+      ...release,
     },
   }
 }
@@ -88,11 +89,46 @@ function buildAssets(overrides = {}) {
   ]
 }
 
+function buildGithubAssets(overrides = []) {
+  return [
+    {
+      name: 'tuff-release-manifest.json',
+      browser_download_url: `https://github.example.test/${tag}/tuff-release-manifest.json`,
+      state: 'uploaded',
+    },
+    {
+      name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+      browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-win32-x64-setup.exe`,
+      state: 'uploaded',
+    },
+    {
+      name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
+      browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig`,
+      state: 'uploaded',
+    },
+    {
+      name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+      browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-darwin-arm64.dmg`,
+      state: 'uploaded',
+    },
+    {
+      name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+      browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig`,
+      state: 'uploaded',
+    },
+    ...overrides,
+  ]
+}
+
 function installReleaseFetchMock({
   assets = buildAssets(),
   manifest = buildManifest(),
   signatureResponses = {},
   downloadResponses = {},
+  latestResponse,
+  remoteRelease = {},
+  githubRelease = {},
+  githubAssets = buildGithubAssets(),
 } = {}) {
   const githubReleaseUrl = `https://api.github.com/repos/talex-touch/tuff/releases/tags/${tag}`
   const manifestUrl = `https://github.example.test/${tag}/tuff-release-manifest.json`
@@ -102,15 +138,14 @@ function installReleaseFetchMock({
   vi.stubGlobal('fetch', vi.fn(async (url) => {
     const textUrl = String(url)
     if (textUrl === releaseUrl)
-      return createJsonResponse(buildRemoteRelease({ assets }))
+      return createJsonResponse(buildRemoteRelease({ assets, release: remoteRelease }))
     if (textUrl === githubReleaseUrl) {
       return createJsonResponse({
-        assets: [
-          {
-            name: 'tuff-release-manifest.json',
-            browser_download_url: manifestUrl,
-          },
-        ],
+        tag_name: tag,
+        draft: false,
+        prerelease: true,
+        assets: githubAssets,
+        ...githubRelease,
       })
     }
     if (textUrl === manifestUrl)
@@ -157,8 +192,22 @@ function installReleaseFetchMock({
         },
       })
     }
-    if (textUrl === latestUrl)
-      return createJsonResponse({ release: { tag } })
+    if (textUrl === latestUrl) {
+      if (latestResponse instanceof Response)
+        return latestResponse
+      if (latestResponse === 'throw')
+        throw new Error('latest query failed')
+      if (latestResponse)
+        return createJsonResponse(latestResponse.body, latestResponse.status ?? 200)
+      return createJsonResponse({
+        release: {
+          tag,
+          version: '2.4.12-beta.8',
+          channel: 'BETA',
+          status: 'published',
+        },
+      })
+    }
     return createJsonResponse({ error: 'not found', url: textUrl }, 404)
   }))
 }
@@ -187,17 +236,107 @@ describe('check-release-gates remote checks', () => {
 
     const checks = await runCheck()
 
+    assert.equal(checks.find(item => item.name === 'remote-github-release-metadata')?.status, 'pass')
+    assert.equal(checks.find(item => item.name === 'remote-release-metadata')?.status, 'pass')
     assert.equal(checks.find(item => item.name === 'remote-manifest-asset')?.status, 'pass')
     assert.equal(checks.find(item => item.name === 'remote-manifest-integrity')?.status, 'pass')
     assert.equal(checks.find(item => item.name === 'remote-manifest-nexus-matrix')?.status, 'pass')
+    assert.equal(checks.find(item => item.name === 'remote-github-asset-inventory')?.status, 'pass')
     assert.equal(checks.find(item => item.name === 'remote-asset-integrity')?.status, 'pass')
     assert.equal(checks.find(item => item.name === 'remote-download-endpoint')?.status, 'pass')
     assert.equal(
       checks
         .find(item => item.name === 'remote-download-endpoint')
-        ?.results.every(item => item.hasExp && item.hasValidSig),
+        ?.results.every(item =>
+          item.hasExp &&
+          item.hasValidExp &&
+          item.hasValidSig &&
+          item.hasUnexpectedQuery === false
+        ),
       true
     )
+  })
+
+  it('fails gate-e when the GitHub release manifest asset is not uploaded', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-release-manifest.json'
+          ? { ...asset, state: 'starter' }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck()
+    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+
+    assert.equal(manifestCheck?.status, 'fail')
+    assert.equal(manifestCheck?.githubManifestStatus, 200)
+    assert.equal(manifestCheck?.error, 'manifest asset is not uploaded (starter)')
+  })
+
+  it('keeps a non-uploaded GitHub release manifest asset as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-release-manifest.json'
+          ? { ...asset, state: 'starter' }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+
+    assert.equal(manifestCheck?.status, 'warn')
+    assert.equal(manifestCheck?.githubManifestStatus, 200)
+    assert.equal(manifestCheck?.error, 'manifest asset is not uploaded (starter)')
+  })
+
+  it('fails gate-e when the GitHub release manifest asset download URL points at another tag', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-release-manifest.json'
+          ? { ...asset, browser_download_url: 'https://github.example.test/v2.4.12-beta.7/tuff-release-manifest.json' }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck()
+    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+
+    assert.equal(manifestCheck?.status, 'fail')
+    assert.equal(manifestCheck?.error, 'github-asset-download-url-mismatch')
+    assert.deepEqual(manifestCheck?.manifestDownloadUrlInfo, {
+      url: 'https://github.example.test/v2.4.12-beta.7/tuff-release-manifest.json',
+      path: '/v2.4.12-beta.7/tuff-release-manifest.json',
+      hasExpectedTag: false,
+      hasExpectedName: true,
+      valid: false,
+      reason: 'github-asset-download-url-mismatch',
+    })
+  })
+
+  it('keeps GitHub release manifest asset download URL filename drift as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-release-manifest.json'
+          ? { ...asset, browser_download_url: `https://github.example.test/${tag}/release-manifest-old.json` }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+
+    assert.equal(manifestCheck?.status, 'warn')
+    assert.equal(manifestCheck?.error, 'github-asset-download-url-mismatch')
+    assert.deepEqual(manifestCheck?.manifestDownloadUrlInfo, {
+      url: `https://github.example.test/${tag}/release-manifest-old.json`,
+      path: `/${tag}/release-manifest-old.json`,
+      hasExpectedTag: true,
+      hasExpectedName: false,
+      valid: false,
+      reason: 'github-asset-download-url-mismatch',
+    })
   })
 
   it('fails gate-e when Nexus asset filename or sha256 drifts from the GitHub manifest', async () => {
@@ -270,6 +409,33 @@ describe('check-release-gates remote checks', () => {
     assert.equal(matrixCheck?.mismatches[0]?.key, 'win32/x64')
   })
 
+  it('fails gate-e when Nexus exposes assets without platform arch or filename identity', async () => {
+    installReleaseFetchMock({
+      assets: [
+        ...buildAssets(),
+        {
+          arch: 'x64',
+          downloadUrl: `${baseUrl}/api/releases/${tag}/download/win32/x64?exp=1700000000&sig=${signedDownloadSig}`,
+          sha256: 'c'.repeat(64),
+          signatureUrl: `${baseUrl}/api/releases/${tag}/signature/win32/x64`,
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+
+    assert.equal(matrixCheck?.status, 'fail')
+    assert.deepEqual(matrixCheck?.mismatches.find(item => item.reason === 'invalid-nexus-asset-identity'), {
+      key: null,
+      index: 2,
+      platform: null,
+      arch: 'x64',
+      filename: null,
+      reason: 'invalid-nexus-asset-identity',
+    })
+  })
+
   it('fails gate-e when Nexus asset signatureUrl does not point at the release signature endpoint', async () => {
     installReleaseFetchMock({
       assets: buildAssets({
@@ -291,6 +457,33 @@ describe('check-release-gates remote checks', () => {
       matrixCheck?.mismatches[0]?.expected,
       `/api/releases/${tag}/signature/win32/x64`
     )
+  })
+
+  it('fails gate-e when Nexus asset signatureUrl includes signed download query parameters', async () => {
+    installReleaseFetchMock({
+      assets: buildAssets({
+        win32: {
+          signatureUrl: `${baseUrl}/api/releases/${tag}/signature/win32/x64?exp=1700000000&sig=${signedDownloadSig}`,
+        },
+      }),
+    })
+
+    const checks = await runCheck()
+    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+
+    assert.equal(matrixCheck?.status, 'fail')
+    assert.deepEqual(
+      matrixCheck?.mismatches.map(item => item.reason),
+      ['signature-url-not-canonical']
+    )
+    assert.deepEqual(matrixCheck?.mismatches[0], {
+      key: 'win32/x64',
+      reason: 'signature-url-not-canonical',
+      actual: `${baseUrl}/api/releases/${tag}/signature/win32/x64?exp=1700000000&sig=${signedDownloadSig}`,
+      expected: `/api/releases/${tag}/signature/win32/x64`,
+      hasQuery: true,
+      hasHash: false,
+    })
   })
 
   it('fails gate-e when the signature endpoint returns an empty payload', async () => {
@@ -389,13 +582,94 @@ describe('check-release-gates remote checks', () => {
         url: `${baseUrl}/api/releases/${tag}/download/win32/x64`,
         sameOrigin: true,
         path: `/api/releases/${tag}/download/win32/x64`,
+        hasHash: false,
         hasExp: false,
+        hasValidExp: false,
         hasSig: false,
         hasValidSig: false,
+        hasDuplicateSignedQuery: false,
+        duplicateQueryKeys: [],
+        hasUnexpectedQuery: false,
+        unexpectedQueryKeys: [],
         validResponse: true,
         responseKind: 'redirect',
         location: 'https://github.example.test/releases/download/artifact',
       }
+    )
+  })
+
+  it('fails gate-e when a Nexus asset downloadUrl includes a fragment', async () => {
+    installReleaseFetchMock({
+      assets: buildAssets({
+        win32: {
+          downloadUrl: `${baseUrl}/api/releases/${tag}/download/win32/x64?exp=1700000000&sig=${signedDownloadSig}#download`,
+        },
+      }),
+    })
+
+    const checks = await runCheck()
+    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const result = downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')
+
+    assert.equal(downloadCheck?.status, 'fail')
+    assert.equal(result?.hasHash, true)
+    assert.equal(result?.reason, 'download-url-has-fragment')
+  })
+
+  it('fails gate-e when a Nexus asset downloadUrl includes unexpected query parameters', async () => {
+    installReleaseFetchMock({
+      assets: buildAssets({
+        win32: {
+          downloadUrl: `${baseUrl}/api/releases/${tag}/download/win32/x64?exp=1700000000&sig=${signedDownloadSig}&utm_source=release`,
+        },
+      }),
+    })
+
+    const checks = await runCheck()
+    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const result = downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')
+
+    assert.equal(downloadCheck?.status, 'fail')
+    assert.equal(result?.hasUnexpectedQuery, true)
+    assert.deepEqual(result?.unexpectedQueryKeys, ['utm_source'])
+    assert.equal(result?.reason, 'download-url-has-unexpected-query')
+  })
+
+  it('fails gate-e when a Nexus asset downloadUrl repeats signed query parameters', async () => {
+    installReleaseFetchMock({
+      assets: buildAssets({
+        win32: {
+          downloadUrl: `${baseUrl}/api/releases/${tag}/download/win32/x64?exp=1700000000&sig=${signedDownloadSig}&sig=${'e'.repeat(64)}`,
+        },
+      }),
+    })
+
+    const checks = await runCheck()
+    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const result = downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')
+
+    assert.equal(downloadCheck?.status, 'fail')
+    assert.equal(result?.hasDuplicateSignedQuery, true)
+    assert.deepEqual(result?.duplicateQueryKeys, ['sig'])
+    assert.equal(result?.reason, 'download-url-has-duplicate-signed-query')
+  })
+
+  it('fails gate-e when a Nexus asset downloadUrl uses a malformed exp query', async () => {
+    installReleaseFetchMock({
+      assets: buildAssets({
+        win32: {
+          downloadUrl: `${baseUrl}/api/releases/${tag}/download/win32/x64?exp=soon&sig=${signedDownloadSig}`,
+        },
+      }),
+    })
+
+    const checks = await runCheck()
+    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+
+    assert.equal(downloadCheck?.status, 'fail')
+    assert.equal(
+      downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')?.hasValidExp,
+      false
     )
   })
 
@@ -438,9 +712,15 @@ describe('check-release-gates remote checks', () => {
         url: `${baseUrl}/api/releases/${tag}/download/win32/x64?exp=1700000000&sig=${signedDownloadSig}`,
         sameOrigin: true,
         path: `/api/releases/${tag}/download/win32/x64`,
+        hasHash: false,
         hasExp: true,
+        hasValidExp: true,
         hasSig: true,
         hasValidSig: true,
+        hasDuplicateSignedQuery: false,
+        duplicateQueryKeys: [],
+        hasUnexpectedQuery: false,
+        unexpectedQueryKeys: [],
         exp: '1700000000',
         validResponse: false,
         responseKind: 'redirect',
@@ -503,6 +783,119 @@ describe('check-release-gates remote checks', () => {
     assert.equal(integrityCheck?.status, 'fail')
     assert.deepEqual(integrityCheck?.issues, [
       'artifacts[0].signature must point to the artifact .sig/.asc sidecar',
+    ])
+  })
+
+  it('fails gate-e when a GitHub manifest core artifact name disagrees with platform or arch', async () => {
+    installReleaseFetchMock({
+      manifest: buildManifest({
+        artifacts: [
+          {
+            component: 'core',
+            name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+            platform: 'darwin',
+            arch: 'arm64',
+            sha256: 'a'.repeat(64),
+            signature: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
+          },
+          {
+            component: 'core',
+            name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+            platform: 'darwin',
+            arch: 'arm64',
+            sha256: 'b'.repeat(64),
+            signature: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+          },
+        ],
+      }),
+    })
+
+    const checks = await runCheck()
+    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+
+    assert.equal(integrityCheck?.status, 'fail')
+    assert.deepEqual(integrityCheck?.issues, [
+      'artifacts[0].platform does not match artifact name',
+      'artifacts[0].arch does not match artifact name',
+      'artifacts[1] duplicates platform/arch darwin/arm64',
+    ])
+  })
+
+  it('fails gate-e when a GitHub manifest core artifact name has no recognizable platform', async () => {
+    installReleaseFetchMock({
+      manifest: buildManifest({
+        artifacts: [
+          {
+            component: 'core',
+            name: 'tuff-core-2.4.12-beta.8-portable.bin',
+            platform: 'linux',
+            arch: 'x64',
+            sha256: 'a'.repeat(64),
+            signature: 'tuff-core-2.4.12-beta.8-portable.bin.sig',
+          },
+          {
+            component: 'core',
+            name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+            platform: 'darwin',
+            arch: 'arm64',
+            sha256: 'b'.repeat(64),
+            signature: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+          },
+        ],
+      }),
+    })
+
+    const checks = await runCheck()
+    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+
+    assert.equal(integrityCheck?.status, 'fail')
+    assert.deepEqual(integrityCheck?.issues, [
+      'artifacts[0].name must include a recognizable core platform',
+    ])
+  })
+
+  it('fails gate-e when a GitHub manifest core artifact name omits the release version', async () => {
+    installReleaseFetchMock({
+      manifest: buildManifest({
+        artifacts: [
+          {
+            component: 'core',
+            name: 'tuff-core-win32-x64-setup.exe',
+            platform: 'win32',
+            arch: 'x64',
+            sha256: 'a'.repeat(64),
+            signature: 'tuff-core-win32-x64-setup.exe.sig',
+          },
+          {
+            component: 'core',
+            name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+            platform: 'darwin',
+            arch: 'arm64',
+            sha256: 'b'.repeat(64),
+            signature: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+          },
+        ],
+      }),
+    })
+
+    const checks = await runCheck()
+    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+
+    assert.equal(integrityCheck?.status, 'fail')
+    assert.deepEqual(integrityCheck?.issues, [
+      'artifacts[0].name must include release.version',
+    ])
+    assert.deepEqual(integrityCheck?.manifestIssueDetails, [
+      {
+        scope: 'artifact',
+        index: 0,
+        field: 'name',
+        component: 'core',
+        name: 'tuff-core-win32-x64-setup.exe',
+        platform: 'win32',
+        arch: 'x64',
+        reason: 'name must include release.version',
+      },
     ])
   })
 
@@ -594,8 +987,377 @@ describe('check-release-gates remote checks', () => {
     assert.deepEqual(integrityCheck?.issues, [
       'release.tag must match release.version',
       'release.channel must match release.version suffix',
+      'artifacts[0].name must include release.version',
+      'artifacts[1].name must include release.version',
       'manifest release.version 2.4.12-beta.7 does not match remote 2.4.12-beta.8',
       'manifest release.channel RELEASE does not match remote BETA',
+    ])
+  })
+
+  it('fails gate-e when GitHub release assets are missing manifest core artifacts', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().filter(
+        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg'
+      ),
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'darwin',
+        arch: 'arm64',
+        name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+        kind: 'artifact',
+        reason: 'missing-github-asset',
+      },
+    ])
+  })
+
+  it('fails gate-e when GitHub release core assets have no download URL', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
+          ? { name: asset.name }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'win32',
+        arch: 'x64',
+        name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        kind: 'artifact',
+        reason: 'missing-browser-download-url',
+      },
+    ])
+  })
+
+  it('fails gate-e when GitHub release core asset download URLs point at another tag', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
+          ? { ...asset, browser_download_url: 'https://github.example.test/v2.4.12-beta.7/tuff-core-2.4.12-beta.8-win32-x64-setup.exe' }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'win32',
+        arch: 'x64',
+        name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        kind: 'artifact',
+        url: 'https://github.example.test/v2.4.12-beta.7/tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        path: '/v2.4.12-beta.7/tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        expectedTag: tag,
+        expectedName: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        hasExpectedTag: false,
+        hasExpectedName: true,
+        reason: 'github-asset-download-url-mismatch',
+      },
+    ])
+  })
+
+  it('fails gate-e when GitHub release core assets are not uploaded', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
+          ? { ...asset, state: 'starter' }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'win32',
+        arch: 'x64',
+        name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        kind: 'artifact',
+        state: 'starter',
+        reason: 'github-asset-not-uploaded',
+      },
+    ])
+  })
+
+  it('fails gate-e when GitHub release assets duplicate declared core artifact names', async () => {
+    const githubAssets = buildGithubAssets()
+    installReleaseFetchMock({
+      githubAssets: [
+        ...githubAssets,
+        {
+          ...githubAssets.find((asset) => asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'),
+          browser_download_url: `https://github.example.test/${tag}/duplicate-win32.exe`,
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.issues, [
+      'github release asset name tuff-core-2.4.12-beta.8-win32-x64-setup.exe must be unique',
+    ])
+    assert.deepEqual(inventoryCheck?.duplicateAssets, [
+      {
+        name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        firstIndex: 1,
+        duplicateIndex: 5,
+        reason: 'duplicate-github-asset-name',
+      },
+    ])
+    assert.deepEqual(inventoryCheck?.missing, [])
+  })
+
+  it('fails gate-e when GitHub release contains undeclared core assets', async () => {
+    installReleaseFetchMock({
+      githubAssets: [
+        ...buildGithubAssets(),
+        {
+          name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage',
+          browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-x64.AppImage`,
+          state: 'uploaded',
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.issues, [
+      'github release asset name tuff-core-2.4.12-beta.8-linux-x64.AppImage is not declared by manifest',
+    ])
+    assert.deepEqual(inventoryCheck?.extraAssets, [
+      {
+        name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage',
+        index: 5,
+        reason: 'extra-github-release-asset',
+      },
+    ])
+    assert.deepEqual(inventoryCheck?.missing, [])
+  })
+
+  it('keeps undeclared core GitHub release assets as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubAssets: [
+        ...buildGithubAssets(),
+        {
+          name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig',
+          browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig`,
+          state: 'uploaded',
+        },
+      ],
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'warn')
+    assert.deepEqual(inventoryCheck?.extraAssets, [
+      {
+        name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig',
+        index: 5,
+        reason: 'extra-github-release-asset',
+      },
+    ])
+  })
+
+  it('allows extra non-core GitHub release metadata assets', async () => {
+    installReleaseFetchMock({
+      githubAssets: [
+        ...buildGithubAssets(),
+        {
+          name: 'release-evidence.json',
+          browser_download_url: `https://github.example.test/${tag}/release-evidence.json`,
+          state: 'uploaded',
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'pass')
+    assert.deepEqual(inventoryCheck?.issues, [])
+    assert.deepEqual(inventoryCheck?.extraAssets, [])
+  })
+
+  it('fails gate-e when GitHub release assets are missing manifest signature sidecars', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().filter(
+        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig'
+      ),
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'win32',
+        arch: 'x64',
+        name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
+        artifact: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        kind: 'signature',
+        reason: 'missing-github-asset',
+      },
+    ])
+  })
+
+  it('fails gate-e when GitHub release signature sidecars have no download URL', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
+          ? { name: asset.name }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'darwin',
+        arch: 'arm64',
+        name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+        artifact: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+        kind: 'signature',
+        reason: 'missing-browser-download-url',
+      },
+    ])
+  })
+
+  it('keeps GitHub release signature download URL drift as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
+          ? { ...asset, browser_download_url: `https://github.example.test/${tag}/wrong-sidecar.sig` }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'warn')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'darwin',
+        arch: 'arm64',
+        name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+        artifact: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+        kind: 'signature',
+        url: `https://github.example.test/${tag}/wrong-sidecar.sig`,
+        path: `/${tag}/wrong-sidecar.sig`,
+        expectedTag: tag,
+        expectedName: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+        hasExpectedTag: true,
+        hasExpectedName: false,
+        reason: 'github-asset-download-url-mismatch',
+      },
+    ])
+  })
+
+  it('keeps non-uploaded GitHub release signature sidecars as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map((asset) =>
+        asset.name === 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
+          ? { ...asset, state: 'starter' }
+          : asset
+      ),
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'warn')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'darwin',
+        arch: 'arm64',
+        name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+        artifact: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+        kind: 'signature',
+        state: 'starter',
+        reason: 'github-asset-not-uploaded',
+      },
+    ])
+  })
+
+  it('allows GitHub release assets without an optional upload state', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().map(({ state: _state, ...asset }) => asset),
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'pass')
+    assert.deepEqual(inventoryCheck?.missing, [])
+  })
+
+  it('keeps missing GitHub release assets as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().filter(
+        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
+      ),
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'warn')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'win32',
+        arch: 'x64',
+        name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+        kind: 'artifact',
+        reason: 'missing-github-asset',
+      },
+    ])
+  })
+
+  it('keeps missing GitHub release signature sidecars as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubAssets: buildGithubAssets().filter(
+        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
+      ),
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+
+    assert.equal(inventoryCheck?.status, 'warn')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'darwin',
+        arch: 'arm64',
+        name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+        artifact: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
+        kind: 'signature',
+        reason: 'missing-github-asset',
+      },
     ])
   })
 
@@ -618,6 +1380,19 @@ describe('check-release-gates remote checks', () => {
     assert.deepEqual(matrixCheck?.manifestIssues, [
       'release.channel must match release.version suffix',
       'manifest release.channel RELEASE does not match remote BETA',
+    ])
+    assert.deepEqual(matrixCheck?.manifestIssueDetails, [
+      {
+        scope: 'manifest',
+        reason: 'release.channel must match release.version suffix',
+      },
+      {
+        scope: 'manifest',
+        field: 'release.channel',
+        actual: 'RELEASE',
+        expected: 'BETA',
+        reason: 'release.channel does not match remote release',
+      },
     ])
   })
 
@@ -659,5 +1434,215 @@ describe('check-release-gates remote checks', () => {
       matrixCheck?.mismatches.map(item => item.reason).sort(),
       ['missing-manifest-artifact', 'missing-manifest-artifact']
     )
+  })
+
+  it('fails gate-e when remote release metadata does not match the checked release', async () => {
+    installReleaseFetchMock({
+      remoteRelease: {
+        tag: 'v2.4.12-beta.7',
+        version: '2.4.12-beta.7',
+        channel: 'RELEASE',
+        status: 'draft',
+      },
+    })
+
+    const checks = await runCheck()
+    const metadataCheck = checks.find(item => item.name === 'remote-release-metadata')
+
+    assert.equal(metadataCheck?.status, 'fail')
+    assert.deepEqual(metadataCheck?.issues, [
+      'release.tag v2.4.12-beta.7 does not match v2.4.12-beta.8',
+      'release.version 2.4.12-beta.7 does not match 2.4.12-beta.8',
+      'release.channel must match release.version suffix',
+      'release.status must be published',
+    ])
+  })
+
+  it('keeps remote release metadata drift as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      remoteRelease: {
+        status: 'draft',
+      },
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const metadataCheck = checks.find(item => item.name === 'remote-release-metadata')
+
+    assert.equal(metadataCheck?.status, 'warn')
+    assert.deepEqual(metadataCheck?.issues, ['release.status must be published'])
+  })
+
+  it('fails gate-e when GitHub release metadata drifts from the checked release', async () => {
+    installReleaseFetchMock({
+      githubRelease: {
+        tag_name: 'v2.4.12-beta.7',
+        draft: true,
+        prerelease: false,
+      },
+    })
+
+    const checks = await runCheck()
+    const metadataCheck = checks.find(item => item.name === 'remote-github-release-metadata')
+
+    assert.equal(metadataCheck?.status, 'fail')
+    assert.deepEqual(metadataCheck?.issues, [
+      'github.tag_name v2.4.12-beta.7 does not match v2.4.12-beta.8',
+      'github.draft must be false',
+      'github.prerelease must be true for BETA',
+    ])
+  })
+
+  it('keeps GitHub release metadata drift as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      githubRelease: {
+        draft: true,
+      },
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const metadataCheck = checks.find(item => item.name === 'remote-github-release-metadata')
+
+    assert.equal(metadataCheck?.status, 'warn')
+    assert.deepEqual(metadataCheck?.issues, ['github.draft must be false'])
+  })
+
+  it('fails gate-e when the channel latest pointer does not match the checked release tag', async () => {
+    installReleaseFetchMock({
+      latestResponse: {
+        body: {
+          release: {
+            tag: 'v2.4.12-beta.7',
+            version: '2.4.12-beta.8',
+            channel: 'BETA',
+            status: 'published',
+          },
+        },
+      },
+    })
+
+    const checks = await runCheck()
+    const latestCheck = checks.find(item => item.name === 'remote-latest')
+
+    assert.equal(latestCheck?.status, 'fail')
+    assert.equal(latestCheck?.latestTag, 'v2.4.12-beta.7')
+    assert.equal(latestCheck?.expectedTag, tag)
+    assert.deepEqual(latestCheck?.issues, [
+      'latest release.tag v2.4.12-beta.7 does not match v2.4.12-beta.8',
+    ])
+  })
+
+  it('keeps channel latest mismatch as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      latestResponse: {
+        body: {
+          release: {
+            tag: 'v2.4.12-beta.7',
+            version: '2.4.12-beta.8',
+            channel: 'BETA',
+            status: 'published',
+          },
+        },
+      },
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const latestCheck = checks.find(item => item.name === 'remote-latest')
+
+    assert.equal(latestCheck?.status, 'warn')
+    assert.equal(latestCheck?.latestTag, 'v2.4.12-beta.7')
+    assert.equal(latestCheck?.expectedTag, tag)
+    assert.deepEqual(latestCheck?.issues, [
+      'latest release.tag v2.4.12-beta.7 does not match v2.4.12-beta.8',
+    ])
+  })
+
+  it('fails gate-e when the channel latest metadata drifts while the tag matches', async () => {
+    installReleaseFetchMock({
+      latestResponse: {
+        body: {
+          release: {
+            tag,
+            version: '2.4.12-beta.7',
+            channel: 'RELEASE',
+            status: 'draft',
+          },
+        },
+      },
+    })
+
+    const checks = await runCheck()
+    const latestCheck = checks.find(item => item.name === 'remote-latest')
+
+    assert.equal(latestCheck?.status, 'fail')
+    assert.equal(latestCheck?.latestTag, tag)
+    assert.equal(latestCheck?.latestVersion, '2.4.12-beta.7')
+    assert.equal(latestCheck?.latestChannel, 'RELEASE')
+    assert.equal(latestCheck?.latestStatus, 'draft')
+    assert.equal(latestCheck?.expectedVersion, '2.4.12-beta.8')
+    assert.equal(latestCheck?.expectedChannel, 'BETA')
+    assert.deepEqual(latestCheck?.issues, [
+      'latest release.version 2.4.12-beta.7 does not match 2.4.12-beta.8',
+      'latest release.channel RELEASE does not match BETA',
+      'latest release.status must be published',
+    ])
+  })
+
+  it('keeps channel latest metadata drift as a warning before gate-e', async () => {
+    installReleaseFetchMock({
+      latestResponse: {
+        body: {
+          release: {
+            tag,
+            version: '2.4.12-beta.8',
+            channel: 'BETA',
+            status: 'draft',
+          },
+        },
+      },
+    })
+
+    const checks = await runCheck({ stage: 'gate-d' })
+    const latestCheck = checks.find(item => item.name === 'remote-latest')
+
+    assert.equal(latestCheck?.status, 'warn')
+    assert.equal(latestCheck?.latestTag, tag)
+    assert.equal(latestCheck?.latestVersion, '2.4.12-beta.8')
+    assert.equal(latestCheck?.latestChannel, 'BETA')
+    assert.equal(latestCheck?.latestStatus, 'draft')
+    assert.deepEqual(latestCheck?.issues, ['latest release.status must be published'])
+  })
+
+  it('fails gate-e when the channel latest endpoint omits required metadata', async () => {
+    installReleaseFetchMock({
+      latestResponse: {
+        body: {
+          release: {
+            tag,
+          },
+        },
+      },
+    })
+
+    const checks = await runCheck()
+    const latestCheck = checks.find(item => item.name === 'remote-latest')
+
+    assert.equal(latestCheck?.status, 'fail')
+    assert.deepEqual(latestCheck?.issues, [
+      'latest release.version <missing> does not match 2.4.12-beta.8',
+      'latest release.channel <missing> does not match BETA',
+      'latest release.status must be published',
+    ])
+  })
+
+  it('fails gate-e when the channel latest endpoint cannot be queried', async () => {
+    installReleaseFetchMock({
+      latestResponse: 'throw',
+    })
+
+    const checks = await runCheck()
+    const latestCheck = checks.find(item => item.name === 'remote-latest')
+
+    assert.equal(latestCheck?.status, 'fail')
+    assert.equal(latestCheck?.error, 'latest query failed')
   })
 })

@@ -128,6 +128,7 @@ function groupByWorkspace(files) {
 
 function lintWorkspace(workspace, files) {
   const args = [
+    'pnpm',
     '-C',
     workspace,
     'exec',
@@ -137,13 +138,13 @@ function lintWorkspace(workspace, files) {
     ...files,
   ]
   console.log(`[lint:changed] ${workspace}: ${files.length} file(s)`)
-  return run('pnpm', args)
+  return run('corepack', args)
 }
 
 function lintRoot(files) {
-  const args = ['exec', 'eslint', '--cache', '--no-warn-ignored', ...files]
+  const args = ['pnpm', 'exec', 'eslint', '--cache', '--no-warn-ignored', ...files]
   console.log(`[lint:changed] root: ${files.length} file(s)`)
-  return run('pnpm', args)
+  return run('corepack', args)
 }
 
 function main() {

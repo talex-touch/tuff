@@ -3,6 +3,28 @@ import { fetchWithTimeout, normalizeBaseUrl } from '../lib/http-utils.mjs'
 const sha256Pattern = /^[a-f0-9]{64}$/i
 const releaseChannels = new Set(['RELEASE', 'BETA', 'SNAPSHOT'])
 
+function inferCoreArtifactPlatform(filename) {
+  const lower = normalizeText(filename).toLowerCase()
+  if (lower.includes('windows') || lower.endsWith('.exe'))
+    return 'win32'
+  if (lower.includes('macos') || lower.endsWith('.dmg') || lower.endsWith('.zip'))
+    return 'darwin'
+  if (lower.includes('ubuntu') || lower.endsWith('.appimage') || lower.endsWith('.deb') || lower.endsWith('.snap'))
+    return 'linux'
+  return null
+}
+
+function inferCoreArtifactArch(filename) {
+  const lower = normalizeText(filename).toLowerCase()
+  if (lower.includes('universal'))
+    return 'universal'
+  if (lower.includes('arm64') || lower.includes('aarch64'))
+    return 'arm64'
+  if (lower.includes('x64') || lower.includes('amd64'))
+    return 'x64'
+  return 'x64'
+}
+
 function createHttpErrorPayload(error) {
   return error instanceof Error ? error.message : String(error)
 }
@@ -146,6 +168,90 @@ function inferReleaseChannel(versionText) {
   return 'RELEASE'
 }
 
+function validateRemoteReleaseMetadata(release, tag) {
+  const issues = []
+  const releaseTag = normalizeText(release?.tag)
+  const releaseVersion = normalizeText(release?.version)
+  const releaseChannel = normalizeText(release?.channel)
+  const releaseStatus = normalizeText(release?.status).toLowerCase()
+  const expectedVersion = normalizeText(tag).replace(/^v/, '')
+  const expectedChannel = inferReleaseChannel(releaseVersion || expectedVersion)
+
+  if (!releaseTag) {
+    issues.push('release.tag is required')
+  } else if (releaseTag !== tag) {
+    issues.push(`release.tag ${releaseTag} does not match ${tag}`)
+  }
+
+  if (!releaseVersion) {
+    issues.push('release.version is required')
+  } else if (expectedVersion && releaseVersion !== expectedVersion) {
+    issues.push(`release.version ${releaseVersion} does not match ${expectedVersion}`)
+  }
+
+  if (!releaseChannel) {
+    issues.push('release.channel is required')
+  } else if (!releaseChannels.has(releaseChannel)) {
+    issues.push('release.channel must be RELEASE|BETA|SNAPSHOT')
+  } else if (releaseChannel !== expectedChannel) {
+    issues.push('release.channel must match release.version suffix')
+  }
+
+  if (releaseStatus !== 'published')
+    issues.push('release.status must be published')
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    releaseTag: releaseTag || null,
+    releaseVersion: releaseVersion || null,
+    releaseChannel: releaseChannel || null,
+    expectedTag: tag,
+    expectedVersion: expectedVersion || null,
+    expectedChannel,
+    releaseStatus: releaseStatus || null,
+  }
+}
+
+function validateGithubReleaseMetadata(githubRelease, { remoteRelease, tag }) {
+  const issues = []
+  const githubTag = normalizeText(githubRelease?.tag_name)
+  const githubDraft = githubRelease?.draft === true
+  const githubPrerelease = githubRelease?.prerelease === true
+  const remoteVersion = normalizeText(remoteRelease?.version)
+  const remoteChannel = normalizeText(remoteRelease?.channel)
+  const expectedChannel = releaseChannels.has(remoteChannel)
+    ? remoteChannel
+    : inferReleaseChannel(remoteVersion || normalizeText(tag).replace(/^v/, ''))
+  const expectedPrerelease = expectedChannel !== 'RELEASE'
+
+  if (!githubTag) {
+    issues.push('github.tag_name is required')
+  } else if (githubTag !== tag) {
+    issues.push(`github.tag_name ${githubTag} does not match ${tag}`)
+  }
+
+  if (githubDraft)
+    issues.push('github.draft must be false')
+
+  if (githubPrerelease !== expectedPrerelease)
+    issues.push(`github.prerelease must be ${expectedPrerelease} for ${expectedChannel}`)
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    githubTag: githubTag || null,
+    githubDraft,
+    githubPrerelease,
+    expectedTag: tag,
+    expectedChannel,
+    expectedPrerelease,
+    remoteTag: normalizeText(remoteRelease?.tag) || null,
+    remoteVersion: remoteVersion || null,
+    remoteChannel: remoteChannel || null,
+  }
+}
+
 function normalizePathname(value) {
   return String(value || '').replace(/\/+$/, '')
 }
@@ -163,6 +269,33 @@ function resolveSameOriginUrlPath(value, baseUrl) {
     return normalizePathname(parsed.pathname)
   } catch {
     return ''
+  }
+}
+
+function inspectCanonicalSameOriginEndpoint(value, baseUrl) {
+  const parsed = resolveSameOriginUrl(value, baseUrl)
+  if (!parsed) {
+    return {
+      url: normalizeText(value) || null,
+      sameOrigin: false,
+      path: null,
+      hasQuery: false,
+      hasHash: false,
+      canonical: false,
+      reason: 'not-same-origin'
+    }
+  }
+
+  const hasQuery = parsed.search.length > 0
+  const hasHash = parsed.hash.length > 0
+  return {
+    url: parsed.href,
+    sameOrigin: true,
+    path: normalizePathname(parsed.pathname),
+    hasQuery,
+    hasHash,
+    canonical: !hasQuery && !hasHash,
+    ...(!hasQuery && !hasHash ? {} : { reason: 'non-canonical-endpoint-url' })
   }
 }
 
@@ -187,7 +320,9 @@ function inspectSignedDownloadUrl(value, baseUrl) {
       url: normalizeText(value) || null,
       sameOrigin: false,
       path: null,
+      hasHash: false,
       hasExp: false,
+      hasValidExp: false,
       hasSig: false,
       hasValidSig: false,
       reason: 'not-same-origin'
@@ -196,13 +331,32 @@ function inspectSignedDownloadUrl(value, baseUrl) {
 
   const sig = normalizeText(parsed.searchParams.get('sig'))
   const exp = normalizeText(parsed.searchParams.get('exp'))
+  const hasHash = parsed.hash.length > 0
+  const queryKeys = Array.from(parsed.searchParams.keys())
+  const duplicateQueryKeys = queryKeys.filter((key, index) => queryKeys.indexOf(key) !== index)
+  const hasDuplicateSignedQuery = duplicateQueryKeys.includes('exp') || duplicateQueryKeys.includes('sig')
+  const unexpectedQueryKeys = queryKeys.filter((key) => key !== 'exp' && key !== 'sig')
+  const reason = hasHash
+    ? 'download-url-has-fragment'
+    : hasDuplicateSignedQuery
+      ? 'download-url-has-duplicate-signed-query'
+    : unexpectedQueryKeys.length > 0
+      ? 'download-url-has-unexpected-query'
+      : null
   return {
     url: parsed.href,
     sameOrigin: true,
     path: normalizePathname(parsed.pathname),
+    hasHash,
     hasExp: Boolean(exp),
+    hasValidExp: /^[1-9]\d*$/.test(exp),
     hasSig: Boolean(sig),
     hasValidSig: /^[a-f0-9]{64}$/i.test(sig),
+    hasDuplicateSignedQuery,
+    duplicateQueryKeys,
+    hasUnexpectedQuery: unexpectedQueryKeys.length > 0,
+    unexpectedQueryKeys,
+    ...(reason ? { reason } : {}),
     ...(exp ? { exp } : {}),
   }
 }
@@ -221,6 +375,37 @@ function buildExpectedDownloadPath(tag, platform, arch) {
 
 function getReleaseAssetFilename(asset) {
   return normalizeText(asset?.filename || asset?.name)
+}
+
+function createManifestIssueDetails(artifacts, issues) {
+  const normalizedArtifacts = Array.isArray(artifacts) ? artifacts : []
+  return issues.map((message) => {
+    const match = /^artifacts\[(\d+)](?:\.([A-Za-z0-9_-]+))?\s*(.*)$/.exec(message)
+    if (!match) {
+      return {
+        scope: 'manifest',
+        reason: message,
+      }
+    }
+
+    const index = Number(match[1])
+    const field = match[2] || null
+    const reason = [field ? `${field}` : '', match[3] || 'is invalid']
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    const artifact = normalizedArtifacts[index] ?? null
+    return {
+      scope: 'artifact',
+      index,
+      field,
+      component: normalizeText(artifact?.component) || null,
+      name: normalizeText(artifact?.name) || null,
+      platform: normalizeText(artifact?.platform) || null,
+      arch: normalizeText(artifact?.arch) || null,
+      reason,
+    }
+  })
 }
 
 function buildGithubCoreManifestMatrix(manifestPayload) {
@@ -299,6 +484,18 @@ function buildGithubCoreManifestMatrix(manifestPayload) {
       issues.push(`${label}.signature must point to the artifact .sig/.asc sidecar`)
     if (signature && artifactNames.has(signature))
       issues.push(`${label}.signature sidecar must not be listed as a downloadable artifact`)
+    if (name) {
+      if (manifestVersion && !name.includes(manifestVersion))
+        issues.push(`${label}.name must include release.version`)
+      const inferredPlatform = inferCoreArtifactPlatform(name)
+      const inferredArch = inferCoreArtifactArch(name)
+      if (!inferredPlatform)
+        issues.push(`${label}.name must include a recognizable core platform`)
+      if (inferredPlatform && platform && platform !== inferredPlatform)
+        issues.push(`${label}.platform does not match artifact name`)
+      if (arch && arch !== inferredArch)
+        issues.push(`${label}.arch does not match artifact name`)
+    }
 
     if (!platform || !arch)
       continue
@@ -326,28 +523,45 @@ function buildGithubCoreManifestMatrix(manifestPayload) {
     release,
     matrix,
     issues,
+    issueDetails: createManifestIssueDetails(artifacts, issues),
   }
 }
 
-async function fetchGithubManifestPayload(githubAssets, timeoutMs) {
+async function fetchGithubManifestPayload(githubAssets, { tag, timeoutMs }) {
   const manifestAsset = githubAssets.find(item => item?.name === 'tuff-release-manifest.json') ?? null
-  if (!manifestAsset?.browser_download_url) {
+  const manifestAssetState = normalizeText(manifestAsset?.state)
+  if (manifestAssetState && manifestAssetState !== 'uploaded') {
+    return {
+      hasManifest: true,
+      manifestAsset,
+      manifestPayload: null,
+      error: `manifest asset is not uploaded (${manifestAssetState})`,
+    }
+  }
+
+  const downloadUrlInfo = inspectGithubAssetDownloadUrl(manifestAsset?.browser_download_url, {
+    tag,
+    name: 'tuff-release-manifest.json',
+  })
+  if (!downloadUrlInfo.url || !downloadUrlInfo.valid) {
     return {
       hasManifest: Boolean(manifestAsset),
       manifestAsset,
       manifestPayload: null,
-      error: manifestAsset ? 'manifest asset is missing browser_download_url' : null,
+      error: manifestAsset ? downloadUrlInfo.reason : null,
+      downloadUrlInfo: manifestAsset ? downloadUrlInfo : null,
     }
   }
 
   try {
-    const response = await fetchWithTimeout(manifestAsset.browser_download_url, {}, timeoutMs)
+    const response = await fetchWithTimeout(downloadUrlInfo.url, {}, timeoutMs)
     if (!response.ok) {
       return {
         hasManifest: true,
         manifestAsset,
         manifestPayload: null,
         error: `manifest download failed (${response.status})`,
+        downloadUrlInfo,
       }
     }
 
@@ -357,6 +571,7 @@ async function fetchGithubManifestPayload(githubAssets, timeoutMs) {
       manifestAsset,
       manifestPayload: JSON.parse(text),
       error: null,
+      downloadUrlInfo,
     }
   } catch (error) {
     return {
@@ -364,6 +579,7 @@ async function fetchGithubManifestPayload(githubAssets, timeoutMs) {
       manifestAsset,
       manifestPayload: null,
       error: createHttpErrorPayload(error),
+      downloadUrlInfo,
     }
   }
 }
@@ -372,38 +588,74 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
   const {
     release: manifestRelease,
     matrix,
-    issues
+    issues,
+    issueDetails
   } = buildGithubCoreManifestMatrix(manifestPayload)
   const mismatches = []
   const nexusMatrix = []
   const seenNexusKeys = new Map()
 
   const manifestTag = normalizeText(manifestRelease?.tag)
-  if (manifestTag && manifestTag !== tag)
+  if (manifestTag && manifestTag !== tag) {
     issues.push(`manifest release.tag ${manifestTag} does not match ${tag}`)
+    issueDetails.push({
+      scope: 'manifest',
+      field: 'release.tag',
+      actual: manifestTag,
+      expected: tag,
+      reason: 'release.tag does not match checked tag',
+    })
+  }
   const manifestVersion = normalizeText(manifestRelease?.version)
   const remoteVersion = normalizeText(remoteRelease?.version)
-  if (manifestVersion && remoteVersion && manifestVersion !== remoteVersion)
+  if (manifestVersion && remoteVersion && manifestVersion !== remoteVersion) {
     issues.push(`manifest release.version ${manifestVersion} does not match remote ${remoteVersion}`)
+    issueDetails.push({
+      scope: 'manifest',
+      field: 'release.version',
+      actual: manifestVersion,
+      expected: remoteVersion,
+      reason: 'release.version does not match remote release',
+    })
+  }
   const manifestChannel = normalizeText(manifestRelease?.channel)
   const remoteChannel = normalizeText(remoteRelease?.channel)
-  if (manifestChannel && remoteChannel && manifestChannel !== remoteChannel)
+  if (manifestChannel && remoteChannel && manifestChannel !== remoteChannel) {
     issues.push(`manifest release.channel ${manifestChannel} does not match remote ${remoteChannel}`)
+    issueDetails.push({
+      scope: 'manifest',
+      field: 'release.channel',
+      actual: manifestChannel,
+      expected: remoteChannel,
+      reason: 'release.channel does not match remote release',
+    })
+  }
 
-  for (const asset of assets) {
+  for (const [index, asset] of assets.entries()) {
     const platform = normalizeText(asset?.platform)
     const arch = normalizeText(asset?.arch)
+    const actualFilename = getReleaseAssetFilename(asset)
+    if (!platform || !arch || !actualFilename) {
+      mismatches.push({
+        key: platform && arch ? normalizePairKey(platform, arch) : null,
+        index,
+        platform: platform || null,
+        arch: arch || null,
+        filename: actualFilename || null,
+        reason: 'invalid-nexus-asset-identity',
+      })
+    }
     if (!platform || !arch)
       continue
 
     const key = normalizePairKey(platform, arch)
     const expected = matrix.get(key)
-    const actualFilename = getReleaseAssetFilename(asset)
     const actualSha256 = normalizeSha(asset?.sha256)
     const actualDownloadUrl = normalizeText(asset?.downloadUrl)
     const actualDownloadPath = resolveSameOriginUrlPath(actualDownloadUrl, baseUrl)
     const actualSignatureUrl = normalizeText(asset?.signatureUrl)
-    const actualSignaturePath = resolveSameOriginUrlPath(actualSignatureUrl, baseUrl)
+    const actualSignatureInfo = inspectCanonicalSameOriginEndpoint(actualSignatureUrl, baseUrl)
+    const actualSignaturePath = actualSignatureInfo.path
     const expectedDownloadPath = buildExpectedDownloadPath(tag, platform, arch)
     const expectedSignaturePath = buildExpectedSignaturePath(tag, platform, arch)
 
@@ -417,6 +669,7 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
       downloadUrlPath: actualDownloadPath || null,
       hasSignatureUrl: Boolean(actualSignatureUrl),
       signatureUrlPath: actualSignaturePath || null,
+      signatureUrlCanonical: actualSignatureInfo.canonical,
     })
 
     if (seenNexusKeys.has(key)) {
@@ -473,6 +726,15 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
         actual: actualSignatureUrl || null,
         expected: expectedSignaturePath,
       })
+    } else if (!actualSignatureInfo.canonical) {
+      mismatches.push({
+        key,
+        reason: 'signature-url-not-canonical',
+        actual: actualSignatureUrl || null,
+        expected: expectedSignaturePath,
+        hasQuery: actualSignatureInfo.hasQuery,
+        hasHash: actualSignatureInfo.hasHash,
+      })
     }
   }
 
@@ -489,6 +751,7 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
 
   return {
     issues,
+    issueDetails,
     mismatches,
     manifestMatrix: Array.from(matrix.values()).map(item => ({
       platform: item.platform,
@@ -499,6 +762,174 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
     })),
     nexusMatrix,
   }
+}
+
+function inspectGithubAssetDownloadUrl(value, { tag, name }) {
+  const text = normalizeText(value)
+  if (!text) {
+    return {
+      url: null,
+      path: null,
+      hasExpectedTag: false,
+      hasExpectedName: false,
+      valid: false,
+      reason: 'missing-browser-download-url',
+    }
+  }
+
+  try {
+    const parsed = new URL(text)
+    const path = decodeURIComponent(parsed.pathname)
+    const hasExpectedTag = path.split('/').includes(tag)
+    const hasExpectedName = path.endsWith(`/${name}`)
+    return {
+      url: parsed.href,
+      path,
+      hasExpectedTag,
+      hasExpectedName,
+      valid: hasExpectedTag && hasExpectedName,
+      ...(hasExpectedTag && hasExpectedName ? {} : { reason: 'github-asset-download-url-mismatch' }),
+    }
+  } catch {
+    return {
+      url: text,
+      path: null,
+      hasExpectedTag: false,
+      hasExpectedName: false,
+      valid: false,
+      reason: 'github-asset-download-url-invalid',
+    }
+  }
+}
+
+function compareGithubAssetsWithManifest({ githubAssets, manifestPayload, tag }) {
+  const {
+    matrix,
+    issues,
+    issueDetails
+  } = buildGithubCoreManifestMatrix(manifestPayload)
+  const assetsByName = new Map()
+  const assetNameIndexes = new Map()
+  const duplicateAssets = []
+  for (const [index, asset] of githubAssets.entries()) {
+    const name = normalizeText(asset?.name)
+    if (!name)
+      continue
+
+    if (assetsByName.has(name)) {
+      const firstIndex = assetNameIndexes.get(name) ?? null
+      duplicateAssets.push({
+        name,
+        firstIndex,
+        duplicateIndex: index,
+        reason: 'duplicate-github-asset-name',
+      })
+      issues.push(`github release asset name ${name} must be unique`)
+    } else {
+      assetsByName.set(name, asset)
+      assetNameIndexes.set(name, index)
+    }
+  }
+  const missing = []
+  const expectedNames = new Set()
+
+  const addMissingAsset = ({ artifact, name, kind }) => {
+    expectedNames.add(name)
+    const githubAsset = assetsByName.get(name)
+    if (!githubAsset) {
+      missing.push({
+        platform: artifact.platform,
+        arch: artifact.arch,
+        name,
+        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        kind,
+        reason: 'missing-github-asset',
+      })
+      return
+    }
+
+    const downloadUrlInfo = inspectGithubAssetDownloadUrl(githubAsset?.browser_download_url, { tag, name })
+    if (!downloadUrlInfo.url) {
+      missing.push({
+        platform: artifact.platform,
+        arch: artifact.arch,
+        name,
+        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        kind,
+        reason: 'missing-browser-download-url',
+      })
+    } else if (!downloadUrlInfo.valid) {
+      missing.push({
+        platform: artifact.platform,
+        arch: artifact.arch,
+        name,
+        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        kind,
+        url: downloadUrlInfo.url,
+        path: downloadUrlInfo.path,
+        expectedTag: tag,
+        expectedName: name,
+        hasExpectedTag: downloadUrlInfo.hasExpectedTag,
+        hasExpectedName: downloadUrlInfo.hasExpectedName,
+        reason: downloadUrlInfo.reason,
+      })
+    }
+
+    const state = normalizeText(githubAsset?.state)
+    if (state && state !== 'uploaded') {
+      missing.push({
+        platform: artifact.platform,
+        arch: artifact.arch,
+        name,
+        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        kind,
+        state,
+        reason: 'github-asset-not-uploaded',
+      })
+    }
+  }
+
+  for (const artifact of matrix.values()) {
+    addMissingAsset({ artifact, name: artifact.name, kind: 'artifact' })
+    if (artifact.signature) {
+      addMissingAsset({ artifact, name: artifact.signature, kind: 'signature' })
+    }
+  }
+
+  const extraAssets = []
+  for (const [index, asset] of githubAssets.entries()) {
+    const name = normalizeText(asset?.name)
+    if (!name || name === 'tuff-release-manifest.json' || expectedNames.has(name))
+      continue
+    if (!isGateERelevantGithubAssetName(name))
+      continue
+
+    extraAssets.push({
+      name,
+      index,
+      reason: 'extra-github-release-asset',
+    })
+    issues.push(`github release asset name ${name} is not declared by manifest`)
+  }
+
+  return {
+    issues,
+    issueDetails,
+    missing,
+    duplicateAssets,
+    extraAssets,
+    assetCount: githubAssets.length,
+    manifestMatrix: Array.from(matrix.values()).map((item) => ({
+      platform: item.platform,
+      arch: item.arch,
+      name: item.name,
+    })),
+  }
+}
+
+function isGateERelevantGithubAssetName(name) {
+  const lower = name.toLowerCase()
+  return lower.startsWith('tuff-core-') || lower.endsWith('.sig') || lower.endsWith('.asc')
 }
 
 export async function checkRemoteRelease({
@@ -549,6 +980,17 @@ export async function checkRemoteRelease({
     releaseStatus: release.status
   })
 
+  const releaseMetadata = validateRemoteReleaseMetadata(release, tag)
+  const releaseMetadataStatus = stage === 'gate-e' ? 'fail' : 'warn'
+  pushCheck(
+    'remote-release-metadata',
+    releaseMetadata.ok ? 'pass' : releaseMetadataStatus,
+    releaseMetadata.ok
+      ? 'Remote release tag/version/channel/status match the checked release.'
+      : 'Remote release tag/version/channel/status do not match the checked release.',
+    releaseMetadata
+  )
+
   const notes = release.notes ?? {}
   const notesHtml = release.notesHtml ?? {}
   const notesValid =
@@ -596,33 +1038,76 @@ export async function checkRemoteRelease({
   const githubReleaseUrl = `https://api.github.com/repos/talex-touch/tuff/releases/tags/${encodeURIComponent(tag)}`
   let hasManifest = false
   let githubManifestStatus = null
+  let githubReleasePayload = null
+  let githubAssets = []
   let githubManifestPayload = null
   let githubManifestError = null
+  let githubManifestDownloadUrlInfo = null
   try {
     const githubReleaseResp = await fetchWithTimeout(githubReleaseUrl, {}, timeoutMs)
     githubManifestStatus = githubReleaseResp.status
     if (githubReleaseResp.ok) {
-      const githubRelease = await githubReleaseResp.json()
-      const githubAssets = Array.isArray(githubRelease?.assets) ? githubRelease.assets : []
+      githubReleasePayload = await githubReleaseResp.json()
+      githubAssets = Array.isArray(githubReleasePayload?.assets) ? githubReleasePayload.assets : []
       hasManifest = githubAssets.some((item) => item?.name === 'tuff-release-manifest.json')
-      const manifestResult = await fetchGithubManifestPayload(githubAssets, timeoutMs)
+      const manifestResult = await fetchGithubManifestPayload(githubAssets, { tag, timeoutMs })
       hasManifest = manifestResult.hasManifest
       githubManifestPayload = manifestResult.manifestPayload
       githubManifestError = manifestResult.error
+      githubManifestDownloadUrlInfo = manifestResult.downloadUrlInfo ?? null
+    } else {
+      githubManifestError = `github release fetch failed (${githubReleaseResp.status})`
     }
   } catch (error) {
     githubManifestStatus = 'error'
     githubManifestError = createHttpErrorPayload(error)
   }
 
+  const githubMetadataStatus = stage === 'gate-e' ? 'fail' : 'warn'
+  if (!githubReleasePayload) {
+    pushCheck(
+      'remote-github-release-metadata',
+      githubMetadataStatus,
+      'GitHub release metadata could not be fetched.',
+      {
+        githubReleaseUrl,
+        githubReleaseStatus: githubManifestStatus,
+        error: githubManifestError,
+      }
+    )
+  } else {
+    const githubMetadata = validateGithubReleaseMetadata(githubReleasePayload, {
+      remoteRelease: release,
+      tag,
+    })
+    pushCheck(
+      'remote-github-release-metadata',
+      githubMetadata.ok ? 'pass' : githubMetadataStatus,
+      githubMetadata.ok
+        ? 'GitHub release tag/draft/prerelease match Nexus release metadata.'
+        : 'GitHub release tag/draft/prerelease do not match Nexus release metadata.',
+      githubMetadata
+    )
+  }
+
   const manifestMissingStatus = stage === 'gate-e' ? 'fail' : 'warn'
+  const manifestAssetOk = hasManifest && !githubManifestError
   pushCheck(
     'remote-manifest-asset',
-    hasManifest ? 'pass' : manifestMissingStatus,
-    hasManifest
-      ? 'GitHub release manifest asset exists.'
-      : 'GitHub release manifest asset is missing (`tuff-release-manifest.json`).',
-    { hasManifest, githubReleaseUrl, githubManifestStatus, nexusAssetCount: assets.length }
+    manifestAssetOk ? 'pass' : manifestMissingStatus,
+    manifestAssetOk
+      ? 'GitHub release manifest asset exists and is downloadable.'
+      : hasManifest
+        ? 'GitHub release manifest asset exists but is not downloadable or uploaded.'
+        : 'GitHub release manifest asset is missing (`tuff-release-manifest.json`).',
+    {
+      hasManifest,
+      githubReleaseUrl,
+      githubManifestStatus,
+      manifestDownloadUrlInfo: githubManifestDownloadUrlInfo,
+      nexusAssetCount: assets.length,
+      error: githubManifestError,
+    }
   )
 
   const manifestIntegrityStatus = stage === 'gate-e' ? 'fail' : 'warn'
@@ -654,6 +1139,7 @@ export async function checkRemoteRelease({
         : 'GitHub release manifest core artifacts are incomplete or inconsistent.',
       {
         issues: comparison.issues,
+        manifestIssueDetails: comparison.issueDetails,
         manifestMatrix: comparison.manifestMatrix,
       }
     )
@@ -668,9 +1154,26 @@ export async function checkRemoteRelease({
       {
         mismatches: comparison.mismatches,
         manifestIssues: comparison.issues,
+        manifestIssueDetails: comparison.issueDetails,
         nexusMatrix: comparison.nexusMatrix,
         manifestMatrix: comparison.manifestMatrix,
       }
+    )
+
+    const githubAssetComparison = compareGithubAssetsWithManifest({
+      githubAssets,
+      manifestPayload: githubManifestPayload,
+      tag,
+    })
+    const githubAssetInventoryOk =
+      githubAssetComparison.issues.length === 0 && githubAssetComparison.missing.length === 0
+    pushCheck(
+      'remote-github-asset-inventory',
+      githubAssetInventoryOk ? 'pass' : manifestIntegrityStatus,
+      githubAssetInventoryOk
+        ? 'GitHub release assets include every core artifact and signature sidecar declared by the release manifest.'
+        : 'GitHub release assets are missing core artifacts or signature sidecars declared by the release manifest.',
+      githubAssetComparison
     )
   }
 
@@ -777,7 +1280,11 @@ export async function checkRemoteRelease({
   const allDownloadOk = downloadResults.every((item) =>
     [200, 302, 307, 308].includes(item.status) &&
     item.sameOrigin &&
+    !item.hasHash &&
+    !item.hasDuplicateSignedQuery &&
+    !item.hasUnexpectedQuery &&
     item.hasExp &&
+    item.hasValidExp &&
     item.hasValidSig &&
     item.validResponse
   )
@@ -792,21 +1299,50 @@ export async function checkRemoteRelease({
 
   const channel = typeof release.channel === 'string' && release.channel ? release.channel : 'RELEASE'
   const latestUrl = `${baseUrl}/api/releases/latest?channel=${encodeURIComponent(channel)}`
+  const latestStatus = stage === 'gate-e' ? 'fail' : 'warn'
   try {
     const latestResp = await fetchWithTimeout(latestUrl, {}, timeoutMs)
     const latestPayload = await latestResp.json()
-    const latestTag = latestPayload?.release?.tag
-    const latestOk = latestResp.ok && latestTag === tag
+    const latestRelease = latestPayload?.release
+    const latestTag = normalizeText(latestRelease?.tag)
+    const latestVersion = normalizeText(latestRelease?.version)
+    const latestChannel = normalizeText(latestRelease?.channel)
+    const latestReleaseStatus = normalizeText(latestRelease?.status).toLowerCase()
+    const expectedVersion = normalizeText(release.version)
+    const expectedChannel = normalizeText(release.channel || channel)
+    const latestIssues = []
+    if (!latestResp.ok)
+      latestIssues.push(`latest endpoint returned HTTP ${latestResp.status}`)
+    if (latestTag !== tag)
+      latestIssues.push(`latest release.tag ${latestTag || '<missing>'} does not match ${tag}`)
+    if (expectedVersion && latestVersion !== expectedVersion)
+      latestIssues.push(`latest release.version ${latestVersion || '<missing>'} does not match ${expectedVersion}`)
+    if (expectedChannel && latestChannel !== expectedChannel)
+      latestIssues.push(`latest release.channel ${latestChannel || '<missing>'} does not match ${expectedChannel}`)
+    if (latestReleaseStatus !== 'published')
+      latestIssues.push('latest release.status must be published')
+    const latestOk = latestIssues.length === 0
     pushCheck(
       'remote-latest',
-      latestOk ? 'pass' : 'warn',
+      latestOk ? 'pass' : latestStatus,
       latestOk
         ? `Latest release for channel ${channel} matches ${tag}.`
         : `Latest release for channel ${channel} does not match ${tag}.`,
-      { url: latestUrl, httpStatus: latestResp.status, latestTag, expectedTag: tag }
+      {
+        url: latestUrl,
+        httpStatus: latestResp.status,
+        latestTag,
+        latestVersion,
+        latestChannel,
+        latestStatus: latestReleaseStatus || null,
+        expectedTag: tag,
+        expectedVersion,
+        expectedChannel,
+        issues: latestIssues
+      }
     )
   } catch (error) {
-    pushCheck('remote-latest', 'warn', 'Failed to query remote latest release.', {
+    pushCheck('remote-latest', latestStatus, 'Failed to query remote latest release.', {
       url: latestUrl,
       error: createHttpErrorPayload(error)
     })
