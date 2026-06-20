@@ -15,7 +15,7 @@ const READY_STATS: FileProviderIndexStatsForEvidence = {
   embeddingRows: 2
 }
 
-function createDbUtils(rows: Array<{ path: string }>) {
+function createDbUtils(rows: Array<{ path: string; lastScanned?: unknown }>) {
   const from = vi.fn(async () => rows)
   const select = vi.fn(() => ({ from }))
 
@@ -43,6 +43,7 @@ function createDb() {
 function createService(
   input: {
     dbUtils?: unknown
+    normalizePath?: (path: string) => string
     ensureSearchIndexWorkerReady?: (reason: string) => Promise<boolean>
   } = {}
 ) {
@@ -55,6 +56,7 @@ function createService(
     ensureSearchIndexWorkerReady,
     service: new FileProviderScanProgressService({
       getDbUtils: () => (input.dbUtils ?? null) as never,
+      normalizePath: input.normalizePath,
       ensureSearchIndexWorkerReady,
       getSearchIndexWorker: () => ({ upsertScanProgress })
     }),
@@ -68,12 +70,15 @@ describe('file-provider-scan-progress-service', () => {
 
     await expect(service.getSummary(['/a', '/b'])).resolves.toEqual({
       totalRoots: 0,
-      pendingRoots: 2
+      pendingRoots: 2,
+      completedRoots: 0,
+      lastScannedAt: null
     })
   })
 
   it('reads completed scan roots from the scan progress table', async () => {
-    const { dbUtils, from } = createDbUtils([{ path: '/a' }])
+    const scannedAt = new Date('2026-05-30T00:00:00.000Z')
+    const { dbUtils, from } = createDbUtils([{ path: '/a', lastScanned: scannedAt }])
     const { service } = createService({ dbUtils })
 
     const summary = await service.getSummary(['/a', '/b'])
@@ -81,7 +86,127 @@ describe('file-provider-scan-progress-service', () => {
     expect(from).toHaveBeenCalledWith(scanProgress)
     expect(summary).toEqual({
       totalRoots: 1,
-      pendingRoots: 1
+      pendingRoots: 1,
+      completedRoots: 1,
+      lastScannedAt: scannedAt.getTime()
+    })
+  })
+
+  it('ignores scan progress rows outside current watch roots', async () => {
+    const ignoredTimestamp = Date.parse('2026-05-31T00:00:00.000Z')
+    const scopedTimestamp = Date.parse('2026-05-30T00:00:00.000Z')
+    const { dbUtils } = createDbUtils([
+      { path: '/a', lastScanned: new Date(scopedTimestamp) },
+      { path: '/other-source', lastScanned: new Date(ignoredTimestamp) }
+    ])
+    const { service } = createService({ dbUtils })
+
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/a', '/b'],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence).toMatchObject({
+      status: 'warming',
+      metadata: {
+        totalRoots: 1,
+        pendingRoots: 1,
+        completedRoots: 1,
+        scanProgressRows: 1,
+        lastScannedAt: scopedTimestamp
+      }
+    })
+  })
+
+  it('matches scan progress rows through the injected normalizer', async () => {
+    const scopedTimestamp = Date.parse('2026-05-30T00:00:00.000Z')
+    const ignoredTimestamp = Date.parse('2026-05-31T00:00:00.000Z')
+    const { dbUtils } = createDbUtils([
+      { path: '/users/me/documents', lastScanned: new Date(scopedTimestamp) },
+      { path: '/other-source', lastScanned: new Date(ignoredTimestamp) }
+    ])
+    const { service } = createService({
+      dbUtils,
+      normalizePath: (path) => path.toLowerCase()
+    })
+
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/Users/me/Documents'],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence).toMatchObject({
+      status: 'ready',
+      reason: 'file-index-progress-ready',
+      metadata: {
+        totalRoots: 1,
+        pendingRoots: 0,
+        completedRoots: 1,
+        scanProgressRows: 1,
+        lastScannedAt: scopedTimestamp
+      }
+    })
+  })
+
+  it('deduplicates normalized watch roots before reporting progress summary', async () => {
+    const scopedTimestamp = Date.parse('2026-05-30T00:00:00.000Z')
+    const { dbUtils } = createDbUtils([
+      { path: '/users/me/documents', lastScanned: new Date(scopedTimestamp) }
+    ])
+    const { service } = createService({
+      dbUtils,
+      normalizePath: (path) => path.toLowerCase()
+    })
+
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/Users/me/Documents', '/users/me/documents'],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence).toMatchObject({
+      status: 'ready',
+      reason: 'file-index-progress-ready',
+      metadata: {
+        totalRoots: 1,
+        pendingRoots: 0,
+        completedRoots: 1,
+        configuredRoots: 2,
+        scanProgressRows: 1,
+        lastScannedAt: scopedTimestamp
+      }
+    })
+  })
+
+  it('uses the latest completed root timestamp for progress evidence', async () => {
+    const staleTimestamp = Date.parse('2026-05-29T00:00:00.000Z')
+    const freshTimestamp = Date.parse('2026-05-30T00:00:00.000Z')
+    const { dbUtils } = createDbUtils([
+      { path: '/a', lastScanned: staleTimestamp },
+      { path: '/b', lastScanned: new Date(freshTimestamp) }
+    ])
+    const { service } = createService({ dbUtils })
+
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/a', '/b'],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence).toMatchObject({
+      status: 'ready',
+      reason: 'file-index-progress-ready',
+      metadata: {
+        completedRoots: 2,
+        scanProgressRows: 2,
+        lastScannedAt: freshTimestamp
+      }
     })
   })
 
@@ -108,6 +233,10 @@ describe('file-provider-scan-progress-service', () => {
       metadata: {
         totalRoots: 1,
         pendingRoots: 1,
+        configuredRoots: 2,
+        completedRoots: 1,
+        scanProgressRows: 1,
+        lastScannedAt: null,
         totalFiles: 4,
         completedFiles: 3
       }
@@ -167,6 +296,30 @@ describe('file-provider-scan-progress-service', () => {
 
     expect(evidence.status).toBe('warming')
     expect(evidence.reason).toBe('file-index-progress-running')
+  })
+
+  it('keeps configured root evidence explicit when the progress store is unavailable', async () => {
+    const { service } = createService()
+
+    const evidence = await service.buildEvidence({
+      sourceId: 'file-provider',
+      watchPaths: ['/a', '/b'],
+      stats: READY_STATS,
+      isIndexingActive: false
+    })
+
+    expect(evidence).toMatchObject({
+      status: 'warming',
+      reason: 'file-index-progress-has-pending-roots',
+      metadata: {
+        totalRoots: 0,
+        pendingRoots: 2,
+        configuredRoots: 2,
+        completedRoots: 0,
+        scanProgressRows: 0,
+        lastScannedAt: null
+      }
+    })
   })
 
   it('deletes scan progress paths through the injected db transaction', async () => {

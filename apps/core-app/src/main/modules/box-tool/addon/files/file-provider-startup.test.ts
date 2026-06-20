@@ -1,19 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
-import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
+import type { FileProviderIndexFlushSnapshot } from './services/file-provider-index-runtime-service'
+import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
 
 const {
   transportOn,
   appTaskWaitForIdle,
   searchIndexWorkerInit,
   watchServiceInitialize,
-  watchServiceEnsure
+  watchServiceEnsure,
+  indexRuntimeGetFlushSnapshot
 } = vi.hoisted(() => ({
   transportOn: vi.fn(),
   appTaskWaitForIdle: vi.fn(async () => true),
   searchIndexWorkerInit: vi.fn(async () => undefined),
   watchServiceInitialize: vi.fn(),
-  watchServiceEnsure: vi.fn(async () => undefined)
+  watchServiceEnsure: vi.fn(async () => undefined),
+  indexRuntimeGetFlushSnapshot: vi.fn<() => FileProviderIndexFlushSnapshot | null>(() => null)
 }))
 
 vi.mock('electron', () => ({
@@ -87,6 +90,7 @@ vi.mock('./services/file-provider-watch-service', () => ({
     })),
     getWatchPaths: vi.fn(() => deps.baseWatchPaths),
     getNormalizedWatchPaths: vi.fn(() => deps.baseWatchPaths),
+    getPendingPermissionPaths: vi.fn(() => []),
     isWatchPathRegistered: vi.fn(() => false),
     isFileSystemSubscribed: vi.fn(() => false),
     initializeBackgroundTaskService: watchServiceInitialize,
@@ -109,7 +113,8 @@ vi.mock('./services/file-provider-index-runtime-service', () => ({
   FileProviderIndexRuntimeService: vi.fn(() => ({
     handleIndexWorkerFile: vi.fn(),
     initWorker: vi.fn(async () => undefined),
-    flushPendingIndexResults: vi.fn(async () => undefined)
+    flushPendingIndexResults: vi.fn(async () => undefined),
+    getFlushSnapshot: indexRuntimeGetFlushSnapshot
   }))
 }))
 
@@ -194,13 +199,30 @@ interface MutableFileProvider {
 
 interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
   ensureFileSystemWatchers: () => Promise<void>
-  startIndexing: (source: 'auto' | 'manual') => Promise<{
+  startIndexing: (
+    source: 'auto' | 'manual',
+    options?: {
+      onRecordBatch?: (batch: {
+        sourceId: string
+        records: unknown[]
+        done?: boolean
+      }) => void | Promise<void>
+      onDelta?: (delta: unknown) => void | Promise<void>
+    }
+  ) => Promise<{
     added: number
     changed: number
     deleted: number
     skipped: number
     errors: number
   }>
+  scanIndexedSource: (request: { sourceId: string; reason: string }) => Promise<{
+    batches: Array<{
+      sourceId: string
+      records: unknown[]
+      done?: boolean
+    }>
+  } | null>
   reconcileIndexedSource: (request: { sourceId: string }) => Promise<{
     sourceId: string
     added: number
@@ -225,6 +247,17 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
   } | null
   dbUtils: unknown | null
   getBatteryLevel: () => Promise<null>
+  getIndexedSourceEvidence: () => Promise<
+    Array<{
+      id: string
+      label: string
+      status: string
+      itemCount?: number
+      lastCheckedAt?: number
+      reason?: string
+      metadata?: Record<string, unknown>
+    }>
+  >
   setIndexedSourceRuntimeResetDelegate: (
     delegate:
       | null
@@ -350,6 +383,7 @@ afterEach(() => {
   vi.clearAllMocks()
   appTaskWaitForIdle.mockResolvedValue(true)
   searchIndexWorkerInit.mockResolvedValue(undefined)
+  indexRuntimeGetFlushSnapshot.mockReturnValue(null)
 })
 
 describe('file-provider startup readiness', () => {
@@ -431,6 +465,98 @@ describe('file-provider startup readiness', () => {
         reason: 'file-index-reconciliation'
       })
       expect(result.completedAt).toBeGreaterThanOrEqual(result.startedAt)
+    } finally {
+      provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
+      provider.startIndexing = originalStartIndexing
+    }
+  })
+
+  it('returns a terminal done batch after file indexed source scan', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalEnsureFileSystemWatchers = provider.ensureFileSystemWatchers
+    const originalStartIndexing = provider.startIndexing
+    const runtimeBatch = {
+      sourceId: 'file-provider',
+      records: [
+        {
+          sourceId: 'file-provider',
+          recordId: '/tmp/a.txt',
+          stableKey: '/tmp/a.txt',
+          kind: 'file',
+          title: 'a.txt'
+        }
+      ]
+    }
+
+    provider.ensureFileSystemWatchers = vi.fn(async () => undefined)
+    provider.startIndexing = vi.fn(async (_source, options) => {
+      await options?.onRecordBatch?.(runtimeBatch)
+      return {
+        added: 1,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 0
+      }
+    })
+
+    try {
+      await expect(
+        provider.scanIndexedSource({
+          sourceId: 'file-provider',
+          reason: IndexedSourceScanReasons.Scheduled
+        })
+      ).resolves.toEqual({
+        batches: [
+          runtimeBatch,
+          {
+            sourceId: 'file-provider',
+            records: [],
+            done: true
+          }
+        ]
+      })
+      expect(provider.startIndexing).toHaveBeenCalledWith(
+        'auto',
+        expect.objectContaining({
+          onRecordBatch: expect.any(Function)
+        })
+      )
+    } finally {
+      provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
+      provider.startIndexing = originalStartIndexing
+    }
+  })
+
+  it('returns a terminal done batch even when file indexed source scan emits no records', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalEnsureFileSystemWatchers = provider.ensureFileSystemWatchers
+    const originalStartIndexing = provider.startIndexing
+
+    provider.ensureFileSystemWatchers = vi.fn(async () => undefined)
+    provider.startIndexing = vi.fn(async () => ({
+      added: 0,
+      changed: 0,
+      deleted: 0,
+      skipped: 0,
+      errors: 0
+    }))
+
+    try {
+      await expect(
+        provider.scanIndexedSource({
+          sourceId: 'file-provider',
+          reason: IndexedSourceScanReasons.Scheduled
+        })
+      ).resolves.toEqual({
+        batches: [
+          {
+            sourceId: 'file-provider',
+            records: [],
+            done: true
+          }
+        ]
+      })
     } finally {
       provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
       provider.startIndexing = originalStartIndexing
@@ -525,7 +651,8 @@ describe('file-provider startup readiness', () => {
       expect(resetDelegate).toHaveBeenCalledWith({
         sourceId: 'file-provider',
         reason: IndexedSourceResetReasons.ManualRebuild,
-        clearScanProgress: true
+        clearScanProgress: true,
+        clearSearchIndex: true
       })
       expect(provider.startIndexing).toHaveBeenCalledWith('manual')
     } finally {
@@ -536,6 +663,54 @@ describe('file-provider startup readiness', () => {
       provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
       provider.startIndexing = originalStartIndexing
       provider.setIndexedSourceRuntimeResetDelegate(null)
+    }
+  })
+
+  it('adds index worker flush snapshots to indexed source evidence', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalDbUtils = provider.dbUtils
+
+    provider.dbUtils = null
+    indexRuntimeGetFlushSnapshot.mockReturnValueOnce({
+      status: 'worker-not-ready',
+      entries: 2,
+      pending: 4,
+      inflight: 1,
+      reason: 'not-ready',
+      error: 'worker unavailable',
+      durationMs: 16,
+      checkedAt: 1700000000000,
+      metadata: {
+        withContent: 2
+      }
+    })
+
+    try {
+      const evidence = await provider.getIndexedSourceEvidence()
+
+      expect(evidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'file-provider:index-flush',
+            label: 'File index flush',
+            status: 'degraded',
+            itemCount: 2,
+            lastCheckedAt: 1700000000000,
+            reason: 'not-ready',
+            metadata: expect.objectContaining({
+              status: 'worker-not-ready',
+              entries: 2,
+              pending: 4,
+              inflight: 1,
+              durationMs: 16,
+              error: 'worker unavailable',
+              withContent: 2
+            })
+          })
+        ])
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
     }
   })
 

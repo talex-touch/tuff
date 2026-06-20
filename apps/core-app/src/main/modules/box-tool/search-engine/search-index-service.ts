@@ -357,6 +357,53 @@ export class SearchIndexService {
     this.recordOperationLog('remove', itemIds.length, performance.now() - start)
   }
 
+  async removeProviderItems(providerId: string, itemIds: string[]): Promise<number> {
+    if (itemIds.length === 0) return 0
+    const start = performance.now()
+    let removedItems = 0
+
+    const BATCH_SIZE = 10
+    for (let i = 0; i < itemIds.length; i += BATCH_SIZE) {
+      const batch = itemIds.slice(i, i + BATCH_SIZE)
+      await this.scheduleWrite('search-index.removeProviderBatch', async () => {
+        await this.ensureInitialized()
+        await this.db.transaction(async (tx) => {
+          for (const itemId of batch) {
+            const result = await tx.run(
+              sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
+            )
+            const rowsAffected = Number(result.rowsAffected ?? 0)
+            if (rowsAffected <= 0) continue
+            await tx
+              .delete(schema.keywordMappings)
+              .where(
+                and(
+                  eq(schema.keywordMappings.providerId, providerId),
+                  eq(schema.keywordMappings.itemId, itemId)
+                )
+              )
+            await tx
+              .delete(schema.searchIndexMeta)
+              .where(
+                and(
+                  eq(schema.searchIndexMeta.providerId, providerId),
+                  eq(schema.searchIndexMeta.itemId, itemId)
+                )
+              )
+            removedItems += rowsAffected
+          }
+        })
+      })
+    }
+    this.recordOperationLog(
+      'remove',
+      removedItems,
+      performance.now() - start,
+      `provider=${providerId}`
+    )
+    return removedItems
+  }
+
   /**
    * Returns the number of rows in the FTS5 index for a given provider.
    * Useful for detecting an empty index after a failed migration.
@@ -369,21 +416,22 @@ export class SearchIndexService {
     return rows[0]?.cnt ?? 0
   }
 
-  async removeByProvider(providerId: string): Promise<void> {
+  async removeByProvider(providerId: string): Promise<number> {
     await this.ensureInitialized()
     const rows = await this.db.all<{ item_id: string }>(
       sql`SELECT item_id FROM search_index WHERE provider = ${providerId}`
     )
     const itemIds = rows.map((row) => row.item_id)
-    if (itemIds.length === 0) return
+    if (itemIds.length === 0) return 0
     const start = performance.now()
-    await this.removeItems(itemIds)
+    const removedItems = await this.removeProviderItems(providerId, itemIds)
     this.recordOperationLog(
       'removeByProvider',
-      itemIds.length,
+      removedItems,
       performance.now() - start,
       `provider=${providerId}`
     )
+    return removedItems
   }
 
   async search(
@@ -807,7 +855,9 @@ export class SearchIndexService {
   private async applyDocument(tx: SearchIndexWriteTx, doc: PreparedIndexDocument): Promise<void> {
     const shouldUpdateKeywords = await this.shouldUpdateKeywordMappings(tx, doc)
 
-    await tx.run(sql`DELETE FROM search_index WHERE item_id = ${doc.itemId}`)
+    await tx.run(
+      sql`DELETE FROM search_index WHERE provider = ${doc.providerId} AND item_id = ${doc.itemId}`
+    )
 
     await tx.run(sql`
       INSERT INTO search_index (

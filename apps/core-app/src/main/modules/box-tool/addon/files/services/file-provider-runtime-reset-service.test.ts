@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { inArray } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 import { FileProviderRuntimeResetService } from './file-provider-runtime-reset-service'
 
 function createDbUtils(rowCount: number) {
   const deleteResult = Promise.resolve()
-  const deleteTable = vi.fn(() => deleteResult)
-  const from = vi.fn(async () => [{ cnt: rowCount }])
+  const deleteWhere = vi.fn(() => deleteResult)
+  const deleteTable = vi.fn(() => ({ where: deleteWhere }))
+  const where = vi.fn(async () => [{ cnt: rowCount }])
+  const from = vi.fn(() => ({ where }))
   const select = vi.fn(() => ({ from }))
 
   return {
@@ -17,18 +20,24 @@ function createDbUtils(rowCount: number) {
     },
     deleteResult,
     deleteTable,
+    deleteWhere,
     from,
-    select
+    select,
+    where
   }
 }
 
 function createService(input: {
   dbUtils?: unknown
-  removeSearchIndexByProvider?: (providerId: string, reason: string) => Promise<void>
+  removeSearchIndexByProvider?: (
+    providerId: string,
+    reason: string
+  ) => Promise<{ removedIndexedItems: number }>
+  scanProgressPaths?: string[]
   withDbWrite?: <T>(label: string, operation: () => Promise<T>) => Promise<T>
 }) {
   const removeSearchIndexByProvider = vi.fn(
-    input.removeSearchIndexByProvider ?? (async () => undefined)
+    input.removeSearchIndexByProvider ?? (async () => ({ removedIndexedItems: 0 }))
   )
   const withDbWriteSpy = vi.fn()
   const withDbWrite = async <T>(label: string, operation: () => Promise<T>): Promise<T> => {
@@ -44,6 +53,7 @@ function createService(input: {
       sourceId: 'file-provider',
       getDbUtils: () => (input.dbUtils ?? null) as never,
       removeSearchIndexByProvider,
+      getScanProgressPaths: () => input.scanProgressPaths ?? ['/a', '/b'],
       withDbWrite,
       logInfo
     }),
@@ -69,6 +79,7 @@ describe('file-provider-runtime-reset-service', () => {
       'file-index.manual-rebuild.remove-by-provider'
     )
     expect(result.clearedSearchIndex).toBe(true)
+    expect(result.clearedSearchIndexRows).toBe(0)
     expect(result.clearedScanProgress).toBe(false)
     expect(result.scanProgressRows).toBe(0)
     expect(result).toMatchObject({
@@ -77,8 +88,31 @@ describe('file-provider-runtime-reset-service', () => {
     })
   })
 
-  it('deletes scan progress rows when reset finds pending progress', async () => {
-    const { dbUtils, from, deleteTable } = createDbUtils(3)
+  it('records removed search index rows from the provider worker boundary', async () => {
+    const { service } = createService({
+      removeSearchIndexByProvider: async () => ({ removedIndexedItems: 5 })
+    })
+
+    const result = await service.reset({
+      request: {
+        sourceId: 'file-provider',
+        reason: 'user-clear',
+        clearSearchIndex: true,
+        clearScanProgress: false
+      },
+      operationReasonPrefix: 'file-index.user-clear'
+    })
+
+    expect(result).toMatchObject({
+      clearedSearchIndex: true,
+      clearedSearchIndexRows: 5,
+      clearedScanProgress: false,
+      scanProgressRows: 0
+    })
+  })
+
+  it('deletes only current scan progress paths when reset finds pending progress', async () => {
+    const { dbUtils, from, where, deleteTable, deleteWhere } = createDbUtils(3)
     const { service, withDbWrite } = createService({ dbUtils })
 
     const result = await service.reset({
@@ -90,11 +124,13 @@ describe('file-provider-runtime-reset-service', () => {
     })
 
     expect(from).toHaveBeenCalledWith(scanProgress)
+    expect(where).toHaveBeenCalledWith(inArray(scanProgress.path, ['/a', '/b']))
     expect(withDbWrite).toHaveBeenCalledWith(
       'file-index.integrity-repair.scan-progress-reset',
       expect.any(Function)
     )
     expect(deleteTable).toHaveBeenCalledWith(scanProgress)
+    expect(deleteWhere).toHaveBeenCalledWith(inArray(scanProgress.path, ['/a', '/b']))
     expect(result.clearedScanProgress).toBe(true)
     expect(result.scanProgressRows).toBe(3)
   })
@@ -110,6 +146,25 @@ describe('file-provider-runtime-reset-service', () => {
         clearScanProgress: false
       },
       operationReasonPrefix: 'file-index.schema-migration'
+    })
+
+    expect(from).not.toHaveBeenCalled()
+    expect(deleteTable).not.toHaveBeenCalled()
+    expect(withDbWrite).not.toHaveBeenCalled()
+    expect(result.clearedScanProgress).toBe(false)
+    expect(result.scanProgressRows).toBe(0)
+  })
+
+  it('does not read or delete scan progress when no reset paths are available', async () => {
+    const { dbUtils, from, deleteTable } = createDbUtils(3)
+    const { service, withDbWrite } = createService({ dbUtils, scanProgressPaths: [] })
+
+    const result = await service.reset({
+      request: {
+        sourceId: 'file-provider',
+        reason: 'integrity-repair'
+      },
+      operationReasonPrefix: 'file-index.integrity-repair'
     })
 
     expect(from).not.toHaveBeenCalled()

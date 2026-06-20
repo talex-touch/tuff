@@ -1,7 +1,7 @@
 /**
  * Main-thread proxy for SearchIndexService write operations.
  *
- * Delegates indexItems / removeItems / removeByProvider / persistAndIndex
+ * Delegates indexItems / removeItems / removeProviderItems / removeByProvider / persistAndIndex
  * to a dedicated Worker thread so FTS5 + keyword_mappings writes AND
  * file/embeddings/progress persists never block the Electron main-thread
  * event loop.
@@ -16,6 +16,11 @@ import type {
   WorkerStatusSnapshot,
   WorkerTaskSnapshot
 } from '../../addon/files/workers/worker-status'
+import type {
+  PersistAndIndexSummary,
+  WorkerErrorMessage as SearchIndexWorkerErrorMessage,
+  WorkerResultMessage
+} from './search-index-worker-types'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -26,6 +31,8 @@ import {
 
 const log = getLogger('search-index-worker')
 
+export type { PersistAndIndexSummary } from './search-index-worker-types'
+
 // ---------- Message Types (mirrors worker) ----------
 
 interface DoneMessage {
@@ -34,13 +41,18 @@ interface DoneMessage {
   result?: unknown
 }
 
-interface ErrorMessage {
+interface LegacyErrorMessage {
   type: 'error'
   taskId: string
   error: string
 }
 
-type WorkerMessage = DoneMessage | ErrorMessage | WorkerMetricsResponse
+type WorkerMessage =
+  | DoneMessage
+  | WorkerResultMessage
+  | LegacyErrorMessage
+  | SearchIndexWorkerErrorMessage
+  | WorkerMetricsResponse
 
 interface PendingTask {
   resolve: (value: unknown) => void
@@ -157,13 +169,31 @@ export class SearchIndexWorkerClient {
     return this.sendAndWait(taskId, { type: 'removeItems', taskId, itemIds })
   }
 
+  async removeProviderItems(providerId: string, itemIds: string[]): Promise<number> {
+    if (itemIds.length === 0) return 0
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('removeProviderItems')
+    const result = await this.sendAndWaitWithResult<number>(taskId, {
+      type: 'removeProviderItems',
+      taskId,
+      providerId,
+      itemIds
+    })
+    return result ?? 0
+  }
+
   /**
    * Remove all items for a provider from FTS5 + keyword_mappings (runs in worker thread).
    */
-  async removeByProvider(providerId: string): Promise<void> {
+  async removeByProvider(providerId: string): Promise<number> {
     await this.ensureInitialized()
     const taskId = this.generateTaskId('removeByProvider')
-    return this.sendAndWait(taskId, { type: 'removeByProvider', taskId, providerId })
+    const result = await this.sendAndWaitWithResult<number>(taskId, {
+      type: 'removeByProvider',
+      taskId,
+      providerId
+    })
+    return result ?? 0
   }
 
   /**
@@ -186,11 +216,36 @@ export class SearchIndexWorkerClient {
    * SQLITE_BUSY_SNAPSHOT errors caused by concurrent main-thread +
    * worker-thread writes.
    */
-  async persistAndIndex(entries: PersistEntry[]): Promise<void> {
-    if (entries.length === 0) return
+  async persistAndIndex(entries: PersistEntry[]): Promise<PersistAndIndexSummary> {
+    if (entries.length === 0) {
+      return {
+        entries: 0,
+        chunks: 0,
+        persistedRows: 0,
+        indexedItems: 0,
+        fileUpdates: 0,
+        progressRows: 0,
+        embeddings: 0
+      }
+    }
     await this.ensureInitialized()
     const taskId = this.generateTaskId('persistAndIndex')
-    return this.sendAndWait(taskId, { type: 'persistAndIndex', taskId, entries })
+    const result = await this.sendAndWaitWithResult<PersistAndIndexSummary>(taskId, {
+      type: 'persistAndIndex',
+      taskId,
+      entries
+    })
+    return (
+      result ?? {
+        entries: entries.length,
+        chunks: 0,
+        persistedRows: 0,
+        indexedItems: 0,
+        fileUpdates: 0,
+        progressRows: 0,
+        embeddings: 0
+      }
+    )
   }
 
   async upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>> {
@@ -357,7 +412,7 @@ export class SearchIndexWorkerClient {
     const pending = this.pending.get(message.taskId)
     if (!pending) return
 
-    if (message.type === 'done') {
+    if (message.type === 'done' || message.type === 'result') {
       this.pending.delete(message.taskId)
       this.lastTask = {
         id: message.taskId,
@@ -373,15 +428,16 @@ export class SearchIndexWorkerClient {
 
     if (message.type === 'error') {
       this.pending.delete(message.taskId)
-      this.lastError = message.error
+      const errorMessage = typeof message.error === 'string' ? message.error : message.error.message
+      this.lastError = errorMessage
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: message.error
+        error: errorMessage
       }
-      pending.reject(new Error(message.error))
+      pending.reject(new Error(errorMessage))
       this.scheduleIdleShutdown()
     }
   }

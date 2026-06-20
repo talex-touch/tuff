@@ -4,7 +4,7 @@ import {
   IndexedSourceResetExecutorService,
   resolveIndexedSourceProgressStoreClearDecision
 } from '@talex-touch/utils/search'
-import { sql } from 'drizzle-orm'
+import { inArray, sql } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 
 export interface FileProviderRuntimeResetRequest {
@@ -17,7 +17,11 @@ export interface FileProviderRuntimeResetRequest {
 export interface FileProviderRuntimeResetServiceDeps {
   sourceId: string
   getDbUtils: () => DbUtils | null
-  removeSearchIndexByProvider: (providerId: string, reason: string) => Promise<void>
+  removeSearchIndexByProvider: (
+    providerId: string,
+    reason: string
+  ) => Promise<{ removedIndexedItems: number }>
+  getScanProgressPaths: () => string[]
   withDbWrite: <T>(label: string, operation: () => Promise<T>) => Promise<T>
   logInfo: (message: string, meta?: Record<string, unknown>) => void
 }
@@ -26,6 +30,7 @@ export class FileProviderRuntimeResetService {
   private readonly sourceId: string
   private readonly getDbUtils: FileProviderRuntimeResetServiceDeps['getDbUtils']
   private readonly removeSearchIndexByProvider: FileProviderRuntimeResetServiceDeps['removeSearchIndexByProvider']
+  private readonly getScanProgressPaths: FileProviderRuntimeResetServiceDeps['getScanProgressPaths']
   private readonly withDbWrite: FileProviderRuntimeResetServiceDeps['withDbWrite']
   private readonly logInfo: FileProviderRuntimeResetServiceDeps['logInfo']
   private readonly executor: IndexedSourceResetExecutorService
@@ -34,12 +39,19 @@ export class FileProviderRuntimeResetService {
     this.sourceId = deps.sourceId
     this.getDbUtils = deps.getDbUtils
     this.removeSearchIndexByProvider = deps.removeSearchIndexByProvider
+    this.getScanProgressPaths = deps.getScanProgressPaths
     this.withDbWrite = deps.withDbWrite
     this.logInfo = deps.logInfo
     this.executor = new IndexedSourceResetExecutorService({
       sourceId: this.sourceId,
       operationReasonNamespace: 'file-index',
-      clearSearchIndex: (reason) => this.removeSearchIndexByProvider(this.sourceId, reason),
+      clearSearchIndex: async (reason) => {
+        const result = await this.removeSearchIndexByProvider(this.sourceId, reason)
+        return {
+          cleared: true,
+          rows: result.removedIndexedItems
+        }
+      },
       clearScanProgress: (reason) => this.clearScanProgress(reason)
     })
   }
@@ -58,13 +70,23 @@ export class FileProviderRuntimeResetService {
     }
 
     const db = dbUtils.getDb()
-    const scanProgressCount = await db.select({ cnt: sql<number>`count(*)` }).from(scanProgress)
+    const paths = this.getScanProgressPaths()
+    if (paths.length === 0) {
+      return { cleared: false, rows: 0 }
+    }
+
+    const scanProgressCount = await db
+      .select({ cnt: sql<number>`count(*)` })
+      .from(scanProgress)
+      .where(inArray(scanProgress.path, paths))
     const clearDecision = resolveIndexedSourceProgressStoreClearDecision(scanProgressCount[0]?.cnt)
     if (!clearDecision.shouldClear) {
       return clearDecision.result
     }
 
-    await this.withDbWrite(reason, () => db.delete(scanProgress))
+    await this.withDbWrite(reason, () =>
+      db.delete(scanProgress).where(inArray(scanProgress.path, paths))
+    )
     return clearDecision.result
   }
 }

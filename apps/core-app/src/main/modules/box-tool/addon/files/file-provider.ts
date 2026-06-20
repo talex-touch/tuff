@@ -567,6 +567,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDbUtils: () => this.dbUtils,
       removeSearchIndexByProvider: (providerId, reason) =>
         this.removeSearchIndexByProvider(providerId, reason),
+      getScanProgressPaths: () => [...new Set([...this.watchPaths, ...this.normalizedWatchPaths])],
       withDbWrite: (label, operation) => this.withDbWrite(label, operation),
       logInfo: (message, meta) => this.logInfo(message, meta)
     })
@@ -587,11 +588,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
     this.scanProgressService = new FileProviderScanProgressService({
       getDbUtils: () => this.dbUtils,
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
       ensureSearchIndexWorkerReady: (reason) => this.ensureSearchIndexWorkerReady(reason),
       getSearchIndexWorker: () => this.searchIndexWorker
     })
     this.scanStrategyService = new FileProviderScanStrategyService({
       getCompletedPaths: () => this.scanProgressService.getCompletedPaths(),
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
       yieldAfterRead: async () => {
         await new Promise<void>((resolve) => setImmediate(resolve))
       },
@@ -918,7 +921,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async removeSearchIndexItems(itemIds: string[], reason: string): Promise<void> {
     if (itemIds.length === 0) return
     if (!(await this.ensureSearchIndexWorkerReady(reason))) return
-    await this.searchIndexWorker.removeItems(itemIds)
+    await this.searchIndexWorker.removeProviderItems(this.id, itemIds)
   }
 
   private cleanupStaleFileResult(file: typeof filesSchema.$inferSelect, reason: string): void {
@@ -1053,9 +1056,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return normalized.item
   }
 
-  private async removeSearchIndexByProvider(providerId: string, reason: string): Promise<void> {
-    if (!(await this.ensureSearchIndexWorkerReady(reason))) return
+  private async removeSearchIndexByProvider(
+    providerId: string,
+    reason: string
+  ): Promise<{ removedIndexedItems: number }> {
+    if (!(await this.ensureSearchIndexWorkerReady(reason))) {
+      return { removedIndexedItems: 0 }
+    }
+
+    const removedIndexedItems = await this.searchIndexWorker.countByProvider(providerId)
     await this.searchIndexWorker.removeByProvider(providerId)
+    return { removedIndexedItems }
   }
 
   public setIndexedSourceRuntimeResetDelegate(
@@ -1082,6 +1093,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return {
       ...result,
       clearedSearchIndex: result.clearedSearchIndex,
+      clearedSearchIndexRows: result.clearedSearchIndexRows ?? 0,
       clearedScanProgress: result.clearedScanProgress,
       scanProgressRows: result.scanProgressRows ?? 0
     }
@@ -1358,6 +1370,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       onRecordBatch: async (batch) => {
         batches.push(batch)
       }
+    })
+    batches.push({
+      sourceId: this.id,
+      records: [],
+      done: true
     })
 
     return { batches }

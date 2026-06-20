@@ -213,4 +213,134 @@ describe('SearchIndexWorkerClient init gate', () => {
 
     expect(client.hasPendingWork()).toBe(false)
   })
+
+  it('dispatches provider-scoped item removal and returns removed count', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const removePromise = client.removeProviderItems('file-provider', ['file:/tmp/demo.txt'])
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    expect(worker.messages[1]).toMatchObject({
+      type: 'removeProviderItems',
+      providerId: 'file-provider',
+      itemIds: ['file:/tmp/demo.txt']
+    })
+
+    worker.emit('message', {
+      type: 'done',
+      taskId: taskIdOf(worker.messages[1]),
+      result: 1
+    })
+
+    await expect(removePromise).resolves.toBe(1)
+  })
+
+  it('dispatches provider clear and returns removed count', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const removePromise = client.removeByProvider('file-provider')
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    expect(worker.messages[1]).toMatchObject({
+      type: 'removeByProvider',
+      providerId: 'file-provider'
+    })
+
+    worker.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(worker.messages[1]),
+      result: 4
+    })
+
+    await expect(removePromise).resolves.toBe(4)
+  })
+
+  it('accepts worker result messages and returns persist summary', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const persistPromise = client.persistAndIndex([
+      {
+        fileId: 1,
+        fileUpdate: null,
+        progress: {
+          status: 'completed',
+          progress: 100,
+          processedBytes: 1,
+          totalBytes: 1,
+          lastError: null,
+          startedAt: null,
+          updatedAt: null
+        },
+        indexItem: {
+          itemId: '1',
+          providerId: 'file-provider',
+          type: 'file',
+          name: 'demo.txt',
+          content: 'demo'
+        }
+      }
+    ])
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    expect(worker.messages[1]).toMatchObject({
+      type: 'persistAndIndex',
+      entries: [expect.objectContaining({ fileId: 1 })]
+    })
+
+    worker.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(worker.messages[1]),
+      result: {
+        entries: 1,
+        chunks: 1,
+        persistedRows: 1,
+        indexedItems: 1,
+        fileUpdates: 0,
+        progressRows: 1,
+        embeddings: 0
+      }
+    })
+
+    await expect(persistPromise).resolves.toMatchObject({
+      entries: 1,
+      chunks: 1,
+      indexedItems: 1,
+      progressRows: 1
+    })
+  })
+
+  it('unwraps structured worker error messages', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const removePromise = client.removeItems(['file:/tmp/demo.txt'])
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    worker.emit('message', {
+      type: 'error',
+      taskId: taskIdOf(worker.messages[1]),
+      error: { message: 'structured failure' }
+    })
+
+    await expect(removePromise).rejects.toThrow('structured failure')
+  })
 })

@@ -11,6 +11,7 @@ export interface ScanSchedulerResult {
   sourceId: string
   batches: number
   records: number
+  indexedRecords: number
   startedAt: number
   completedAt: number
 }
@@ -18,6 +19,10 @@ export interface ScanSchedulerResult {
 export interface ScanSchedulerError {
   sourceId: string
   message: string
+  phase: 'source' | 'store'
+  batches?: number
+  records?: number
+  indexedRecords?: number
 }
 
 export interface ScanSchedulerSkippedSource {
@@ -33,6 +38,7 @@ export interface ScanSchedulerBatchResult {
   skippedSources: number
   batches: number
   records: number
+  indexedRecords: number
   errors: ScanSchedulerError[]
   skipped: ScanSchedulerSkippedSource[]
   startedAt: number
@@ -67,6 +73,7 @@ export class ScanScheduler {
     const startedAt = Date.now()
     let batches = 0
     let records = 0
+    let indexedRecords = 0
 
     this.runGate.start(sourceId, 'scan', startedAt)
     try {
@@ -75,10 +82,33 @@ export class ScanScheduler {
         sourceId,
         reason
       })) {
-        await this.store.applyBatch(batch)
+        let summary: Awaited<ReturnType<IndexStoreAdapter['applyBatch']>>
+        try {
+          summary = await this.store.applyBatch(batch)
+        } catch (error) {
+          throw new ScanSchedulerPhaseError(
+            'store',
+            this.stringifyError(error),
+            batches,
+            records,
+            indexedRecords
+          )
+        }
         batches += 1
         records += batch.records.length
+        indexedRecords += summary?.indexedItemCount ?? batch.records.length
       }
+    } catch (error) {
+      if (error instanceof ScanSchedulerPhaseError) {
+        throw error
+      }
+      throw new ScanSchedulerPhaseError(
+        'source',
+        this.stringifyError(error),
+        batches,
+        records,
+        indexedRecords
+      )
     } finally {
       this.runGate.complete(sourceId, 'scan')
     }
@@ -87,6 +117,7 @@ export class ScanScheduler {
       sourceId,
       batches,
       records,
+      indexedRecords,
       startedAt,
       completedAt: Date.now()
     }
@@ -131,7 +162,12 @@ export class ScanScheduler {
       }
       errors.push({
         sourceId: item.sourceId,
-        message: this.stringifyError(item.error)
+        message: this.stringifyError(item.error),
+        phase: item.error instanceof ScanSchedulerPhaseError ? item.error.phase : 'source',
+        batches: item.error instanceof ScanSchedulerPhaseError ? item.error.batches : undefined,
+        records: item.error instanceof ScanSchedulerPhaseError ? item.error.records : undefined,
+        indexedRecords:
+          item.error instanceof ScanSchedulerPhaseError ? item.error.indexedRecords : undefined
       })
     }
 
@@ -143,6 +179,7 @@ export class ScanScheduler {
       skippedSources: 0,
       batches: results.reduce((sum, result) => sum + result.batches, 0),
       records: results.reduce((sum, result) => sum + result.records, 0),
+      indexedRecords: results.reduce((sum, result) => sum + result.indexedRecords, 0),
       errors,
       skipped: [],
       startedAt,
@@ -156,3 +193,16 @@ export class ScanScheduler {
 }
 
 export type { IndexedSourceRecordBatch }
+
+class ScanSchedulerPhaseError extends Error {
+  constructor(
+    readonly phase: 'source' | 'store',
+    message: string,
+    readonly batches: number,
+    readonly records: number,
+    readonly indexedRecords: number
+  ) {
+    super(message)
+    this.name = phase === 'store' ? 'ScanSchedulerStoreError' : 'ScanSchedulerSourceError'
+  }
+}

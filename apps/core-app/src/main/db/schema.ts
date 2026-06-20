@@ -328,6 +328,22 @@ export const scanProgress = sqliteTable('scan_progress', {
 })
 
 /**
+ * Indexed Source 运行时任务状态。
+ * 用于保留 scan/watch/reconcile/reset 最近结果，避免应用重启后诊断面板丢失任务历史。
+ */
+export const indexedSourceTaskState = sqliteTable(
+  'indexed_source_task_state',
+  {
+    sourceId: text('source_id').primaryKey(),
+    stateJson: text('state_json').notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
+  },
+  (table) => ({
+    updatedIdx: index('idx_indexed_source_task_state_updated_at').on(table.updatedAt)
+  })
+)
+
+/**
  * 存储剪贴板历史记录。
  * 这是剪贴板增强功能（如历史搜索、自动粘贴）的核心数据来源。
  */

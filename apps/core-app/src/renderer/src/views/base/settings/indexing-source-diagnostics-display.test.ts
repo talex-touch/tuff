@@ -12,6 +12,8 @@ import {
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceRecoveryChip,
+  resolveIndexingSourceResetSuccessMessage,
+  resolveIndexingSourceRunGateChips,
   resolveIndexingSourceStatusKey,
   resolveIndexingSourceTaskChips,
   resolveIndexingSourceTone,
@@ -153,7 +155,8 @@ describe('indexing source diagnostics display helpers', () => {
           completedAt: 1700000000100,
           jobId: 'file-provider:scan:1',
           batches: 2,
-          records: 20
+          records: 20,
+          indexedRecords: 20
         },
         lastWatch: {
           occurredAt: 1700000000200,
@@ -176,20 +179,41 @@ describe('indexing source diagnostics display helpers', () => {
           errors: 0,
           reason: 'file-watch-root-recovered',
           rootCount: 1
+        },
+        lastReset: {
+          startedAt: 1700000000600,
+          completedAt: 1700000000700,
+          jobId: 'file-provider:reset:1',
+          reason: 'user-clear',
+          clearedSearchIndex: true,
+          clearedSearchIndexRows: 4,
+          clearedScanProgress: true,
+          scanProgressRows: 2
         }
       })
     )
 
-    expect(chips.map((chip) => chip.id)).toEqual(['scan', 'watch', 'reconcile'])
+    expect(chips.map((chip) => chip.id)).toEqual(['scan', 'watch', 'reconcile', 'reset'])
     expect(chips.map((chip) => chip.labelKey)).toEqual([
       'settings.settingFileIndex.sourceTask.scanDone',
       'settings.settingFileIndex.sourceTask.watchDone',
-      'settings.settingFileIndex.sourceTask.reconcileDone'
+      'settings.settingFileIndex.sourceTask.reconcileDone',
+      'settings.settingFileIndex.sourceTask.resetDone'
     ])
+    expect(chips[0].values).toMatchObject({
+      records: 20,
+      indexedRecords: 20
+    })
     expect(chips[2].values).toMatchObject({
       jobId: 'file-provider:reconcile:1',
       reason: 'file-watch-root-recovered',
       rootCount: 1
+    })
+    expect(chips[3].values).toMatchObject({
+      jobId: 'file-provider:reset:1',
+      reason: 'user-clear',
+      clearedSearchIndexRows: 4,
+      scanProgressRows: 2
     })
   })
 
@@ -214,6 +238,55 @@ describe('indexing source diagnostics display helpers', () => {
     expect(chips[0]?.labelKey).toBe('settings.settingFileIndex.sourceTask.watchFailed')
   })
 
+  it('includes scan failure phase in runtime task chips', () => {
+    const chips = resolveIndexingSourceTaskChips(
+      buildSource({
+        lastScan: {
+          startedAt: 1700000000000,
+          completedAt: 1700000000100,
+          batches: 0,
+          records: 0,
+          indexedRecords: 0,
+          phase: 'store',
+          error: 'sqlite busy'
+        }
+      })
+    )
+
+    expect(chips).toHaveLength(1)
+    expect(chips[0]?.tone).toBe('danger')
+    expect(chips[0]?.labelKey).toBe('settings.settingFileIndex.sourceTask.scanFailed')
+    expect(chips[0]?.values).toMatchObject({
+      phase: 'store',
+      error: 'sqlite busy'
+    })
+  })
+
+  it('marks failed reset task chips as danger', () => {
+    const chips = resolveIndexingSourceTaskChips(
+      buildSource({
+        lastReset: {
+          startedAt: 1700000000600,
+          completedAt: 1700000000700,
+          reason: 'manual-rebuild',
+          clearedSearchIndex: false,
+          clearedSearchIndexRows: 0,
+          clearedScanProgress: false,
+          scanProgressRows: 0,
+          error: 'reset failed'
+        }
+      })
+    )
+
+    expect(chips).toHaveLength(1)
+    expect(chips[0]?.tone).toBe('danger')
+    expect(chips[0]?.labelKey).toBe('settings.settingFileIndex.sourceTask.resetFailed')
+    expect(chips[0]?.values).toMatchObject({
+      reason: 'manual-rebuild',
+      error: 'reset failed'
+    })
+  })
+
   it('builds bounded recent task chips from runtime task history', () => {
     const chips = resolveIndexingSourceRecentTaskChips(
       buildSource({
@@ -225,6 +298,7 @@ describe('indexing source diagnostics display helpers', () => {
             jobId: 'file-provider:reset:1',
             summary: {
               clearedSearchIndex: true,
+              clearedSearchIndexRows: 4,
               clearedScanProgress: false
             }
           },
@@ -248,7 +322,9 @@ describe('indexing source diagnostics display helpers', () => {
             error: 'scan failed',
             summary: {
               batches: 2,
-              records: 18
+              records: 18,
+              indexedRecords: 8,
+              phase: 'store'
             }
           },
           {
@@ -273,11 +349,100 @@ describe('indexing source diagnostics display helpers', () => {
       summary: 'delta 0/0 / action change',
       error: 'skipped:health:disabled'
     })
-    expect(chips[0].values.summary).toBe('clear index yes / progress no')
-    expect(chips[2].values.summary).toBe('records 18 / batches 2')
+    expect(chips[0].values.summary).toBe('clear index yes / index rows 4 / progress no')
+    expect(chips[2].values.summary).toBe('indexed 8/18 / batches 2 / phase store')
+  })
+
+  it('falls back to scanned record count for legacy scan task summaries', () => {
+    const chips = resolveIndexingSourceRecentTaskChips(
+      buildSource({
+        recentTasks: [
+          {
+            kind: 'scan',
+            status: 'succeeded',
+            completedAt: 1700000000400,
+            jobId: 'file-provider:scan:1',
+            summary: {
+              batches: 2,
+              records: 18
+            }
+          }
+        ]
+      })
+    )
+
+    expect(chips[0].values.summary).toBe('indexed 18/18 / batches 2')
+  })
+
+  it('builds prioritized run gate chips from scheduler diagnostics', () => {
+    const chips = resolveIndexingSourceRunGateChips(
+      buildSource({
+        taskRunGate: [
+          {
+            sourceId: 'file-provider',
+            kind: 'scan',
+            blockedCount: 0,
+            lastCompletedAt: 1700000000100
+          },
+          {
+            sourceId: 'file-provider',
+            kind: 'reset',
+            blockedCount: 2,
+            lastBlockedReason: 'debounced',
+            lastBlockedAt: 1700000000200,
+            nextAllowedAt: 1700000000600
+          },
+          {
+            sourceId: 'file-provider',
+            kind: 'reconcile',
+            blockedCount: 1,
+            runningSince: 1700000000300,
+            lastBlockedReason: 'already-running',
+            lastBlockedAt: 1700000000400
+          }
+        ]
+      })
+    )
+
+    expect(chips.map((chip) => chip.id)).toEqual([
+      'file-provider:reconcile',
+      'file-provider:reset',
+      'file-provider:scan'
+    ])
+    expect(chips.map((chip) => chip.tone)).toEqual(['info', 'warning', 'muted'])
+    expect(chips.map((chip) => chip.labelKey)).toEqual([
+      'settings.settingFileIndex.sourceRunGate.running',
+      'settings.settingFileIndex.sourceRunGate.debounced',
+      'settings.settingFileIndex.sourceRunGate.idle'
+    ])
+    expect(chips[1].values).toMatchObject({
+      kind: 'reset',
+      blockedCount: 2,
+      reason: 'debounced'
+    })
+  })
+
+  it('builds reset success message values from runtime reset evidence', () => {
+    expect(
+      resolveIndexingSourceResetSuccessMessage({
+        clearedSearchIndex: true,
+        clearedSearchIndexRows: 5,
+        clearedScanProgress: true,
+        scanProgressRows: 3
+      })
+    ).toEqual({
+      labelKey: 'settings.settingFileIndex.sourceActionResetSuccess',
+      values: {
+        clearedSearchIndex: 'yes',
+        clearedSearchIndexRows: 5,
+        clearedScanProgress: 'yes',
+        scanProgressRows: 3
+      }
+    })
   })
 
   it('builds prioritized evidence chips from source evidence', () => {
+    const lastScannedAt = Date.parse('2026-05-30T00:00:00.000Z')
     const chips = resolveIndexingSourceEvidenceChips(
       buildSource({
         evidence: [
@@ -291,6 +456,9 @@ describe('indexing source diagnostics display helpers', () => {
               totalFiles: 12,
               completedFiles: 12,
               failedFiles: 0,
+              configuredRoots: 3,
+              completedRoots: 2,
+              lastScannedAt,
               pendingPermissionRoots: 0
             }
           },
@@ -319,11 +487,66 @@ describe('indexing source diagnostics display helpers', () => {
               ftsRows: 12,
               filesRows: 12,
               needsRebuild: false,
+              resetSearchIndexRows: 0,
+              resetScanProgressRows: 0,
               orphanedKeywordsRemoved: 0
             }
           }
         ]
       })
+    )
+    const allChips = resolveIndexingSourceEvidenceChips(
+      buildSource({
+        evidence: [
+          {
+            id: 'file-provider:scan-progress',
+            label: 'File scan progress',
+            status: 'ready',
+            itemCount: 12,
+            reason: 'scan-progress-ready',
+            metadata: {
+              totalFiles: 12,
+              completedFiles: 12,
+              failedFiles: 0,
+              configuredRoots: 3,
+              completedRoots: 2,
+              lastScannedAt,
+              pendingPermissionRoots: 0
+            }
+          },
+          {
+            id: 'file-provider:index-flush',
+            label: 'File index flush',
+            status: 'degraded',
+            itemCount: 3,
+            reason: 'worker-not-ready',
+            metadata: {
+              status: 'worker-not-ready',
+              entries: 3,
+              pending: 6,
+              inflight: 3,
+              withContent: 2,
+              durationMs: 1350
+            }
+          },
+          {
+            id: 'file-provider:integrity',
+            label: 'File index integrity',
+            status: 'ready',
+            itemCount: 12,
+            reason: 'fts-files-count-aligned',
+            metadata: {
+              ftsRows: 12,
+              filesRows: 12,
+              needsRebuild: false,
+              resetSearchIndexRows: 0,
+              resetScanProgressRows: 0,
+              orphanedKeywordsRemoved: 0
+            }
+          }
+        ]
+      }),
+      3
     )
 
     expect(chips).toHaveLength(2)
@@ -352,7 +575,21 @@ describe('indexing source diagnostics display helpers', () => {
         ftsRows: 12,
         filesRows: 12,
         needsRebuild: 'no',
+        resetSearchIndexRows: 0,
+        resetScanProgressRows: 0,
         orphanedKeywordsRemoved: 0
+      }
+    })
+    expect(allChips[2]).toMatchObject({
+      labelKey: 'settings.settingFileIndex.sourceEvidenceChip.scanProgress',
+      values: {
+        label: 'File scan progress',
+        status: 'ready',
+        total: 3,
+        completed: 2,
+        failed: 0,
+        pendingPermissionRoots: 0,
+        lastScannedAt: formatIndexingSourceTimestamp(lastScannedAt)
       }
     })
   })
@@ -583,5 +820,33 @@ describe('indexing source diagnostics display helpers', () => {
     })
 
     expect(resolveIndexingSourceRecoveryChip(buildSource())).toBeNull()
+  })
+
+  it('expands retry-window recovery chips with structured retry metadata', () => {
+    const nextRetryAt = 1700000030000
+    const chip = resolveIndexingSourceRecoveryChip(
+      buildSource({
+        recentTasks: [
+          {
+            kind: 'scan',
+            status: 'skipped',
+            completedAt: 1700000000000,
+            error: `skipped:retry-window:scan:${nextRetryAt}`
+          }
+        ]
+      })
+    )
+
+    expect(chip).toMatchObject({
+      id: 'file-provider:recovery:wait',
+      tone: 'info',
+      labelKey: 'settings.settingFileIndex.sourceRecoveryChip.wait',
+      values: {
+        reason: `retry-window:scan:${nextRetryAt}`,
+        taskKind: 'scan',
+        nextRetryAt,
+        nextRetryAtText: formatIndexingSourceTimestamp(nextRetryAt)
+      }
+    })
   })
 })

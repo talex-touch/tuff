@@ -9,6 +9,8 @@ import type {
   IndexedSourceProgressStatus,
   IndexedSourceRecoveryRecommendation,
   IndexedSourceReconcileState,
+  IndexedSourceResetResult,
+  IndexedSourceTaskRunGateSnapshotEntry,
   IndexedSourceTaskHistoryEntry,
   IndexedSourceTaskHistoryKind,
   IndexedSourceTaskHistoryStatus,
@@ -22,13 +24,20 @@ import {
 export type IndexingSourceTone = 'success' | 'info' | 'warning' | 'danger' | 'muted'
 
 export interface IndexingSourceTaskChip {
-  id: 'scan' | 'watch' | 'reconcile'
+  id: 'scan' | 'watch' | 'reconcile' | 'reset'
   tone: IndexingSourceTone
   labelKey: string
   values: Record<string, string | number>
 }
 
 export interface IndexingSourceRecentTaskChip {
+  id: string
+  tone: IndexingSourceTone
+  labelKey: string
+  values: Record<string, string | number>
+}
+
+export interface IndexingSourceRunGateChip {
   id: string
   tone: IndexingSourceTone
   labelKey: string
@@ -70,6 +79,28 @@ export interface IndexingSourceAdmissionIssueChip {
   values: Record<string, string | number>
 }
 
+export interface IndexingSourceResetSuccessMessage {
+  labelKey: string
+  values: Record<string, string | number>
+}
+
+export function resolveIndexingSourceResetSuccessMessage(
+  result: Pick<
+    IndexedSourceResetResult,
+    'clearedSearchIndex' | 'clearedSearchIndexRows' | 'clearedScanProgress' | 'scanProgressRows'
+  >
+): IndexingSourceResetSuccessMessage {
+  return {
+    labelKey: 'settings.settingFileIndex.sourceActionResetSuccess',
+    values: {
+      clearedSearchIndex: result.clearedSearchIndex ? 'yes' : 'no',
+      clearedSearchIndexRows: result.clearedSearchIndexRows ?? 0,
+      clearedScanProgress: result.clearedScanProgress ? 'yes' : 'no',
+      scanProgressRows: result.scanProgressRows ?? 0
+    }
+  }
+}
+
 export function resolveIndexingSourceMaintenanceActions(
   source: IndexedSourceDiagnostics
 ): IndexedSourceMaintenanceActionState[] {
@@ -88,6 +119,7 @@ export function resolveIndexingSourceRecoveryChip(
     labelKey: `settings.settingFileIndex.sourceRecoveryChip.${recommendation.action}`,
     values: {
       reason: recommendation.reason ?? '',
+      ...resolveRecoveryReasonValues(recommendation.reason),
       maintenanceAction: recommendation.maintenanceAction ?? '',
       blockedReason: recommendation.blockedReason ?? ''
     }
@@ -193,6 +225,38 @@ function resolveRecoveryTone(
   return 'muted'
 }
 
+function resolveRecoveryReasonValues(reason: string | undefined): Record<string, string | number> {
+  const retry = parseRetryWindowReason(reason)
+  if (!retry) {
+    return {
+      taskKind: '',
+      nextRetryAt: '',
+      nextRetryAtText: ''
+    }
+  }
+
+  return {
+    taskKind: retry.taskKind,
+    nextRetryAt: retry.nextRetryAt,
+    nextRetryAtText: formatIndexingSourceTimestamp(retry.nextRetryAt)
+  }
+}
+
+function parseRetryWindowReason(
+  reason: string | undefined
+): { taskKind: IndexedSourceTaskHistoryKind; nextRetryAt: number } | null {
+  const match = reason?.match(/^retry-window:(scan|watch|reconcile|reset):(\d+)$/)
+  if (!match) return null
+
+  const nextRetryAt = Number(match[2])
+  if (!Number.isFinite(nextRetryAt) || nextRetryAt <= 0) return null
+
+  return {
+    taskKind: match[1] as IndexedSourceTaskHistoryKind,
+    nextRetryAt
+  }
+}
+
 function clampProgressPercent(progress: IndexedSourceProgress): number {
   const raw =
     typeof progress.progress === 'number' && Number.isFinite(progress.progress)
@@ -247,6 +311,10 @@ function toEvidenceNumber(value: unknown): number | string {
   return typeof value === 'number' && Number.isFinite(value) ? value : '-'
 }
 
+function toOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 function toEvidenceBoolean(value: unknown): string {
   if (typeof value !== 'boolean') return '-'
   return value ? 'yes' : 'no'
@@ -284,12 +352,17 @@ function resolveEvidenceChipValues(
     status: evidence.status,
     count: resolveEvidenceCount(evidence),
     reason: evidence.reason ?? '',
-    total: toEvidenceNumber(metadata.totalFiles),
-    completed: toEvidenceNumber(metadata.completedFiles ?? evidence.itemCount),
+    total: evidence.id.endsWith(':scan-progress')
+      ? toEvidenceNumber(metadata.configuredRoots ?? metadata.totalRoots)
+      : toEvidenceNumber(metadata.totalFiles),
+    completed: evidence.id.endsWith(':scan-progress')
+      ? toEvidenceNumber(metadata.completedRoots)
+      : toEvidenceNumber(metadata.completedFiles ?? evidence.itemCount),
     failed: toEvidenceNumber(metadata.failedFiles),
     skipped: toEvidenceNumber(metadata.skippedFiles),
     pendingRoots: toEvidenceNumber(metadata.pendingRoots),
     pendingPermissionRoots: toEvidenceNumber(metadata.pendingPermissionRoots),
+    lastScannedAt: formatIndexingSourceTimestamp(toOptionalNumber(metadata.lastScannedAt)),
     entries: toEvidenceNumber(metadata.entries),
     pending: toEvidenceNumber(metadata.pending),
     inflight: toEvidenceNumber(metadata.inflight),
@@ -299,7 +372,9 @@ function resolveEvidenceChipValues(
     ftsRows: toEvidenceNumber(metadata.ftsRows),
     filesRows: toEvidenceNumber(metadata.filesRows),
     needsRebuild: toEvidenceBoolean(metadata.needsRebuild),
-    orphanedKeywordsRemoved: toEvidenceNumber(metadata.orphanedKeywordsRemoved)
+    orphanedKeywordsRemoved: toEvidenceNumber(metadata.orphanedKeywordsRemoved),
+    resetSearchIndexRows: toEvidenceNumber(metadata.resetSearchIndexRows),
+    resetScanProgressRows: toEvidenceNumber(metadata.resetScanProgressRows)
   }
 }
 
@@ -316,6 +391,48 @@ function resolveRecentTaskLabelKey(
   return `settings.settingFileIndex.sourceRecentTask.${kind}.${status}`
 }
 
+function resolveRunGateTone(entry: IndexedSourceTaskRunGateSnapshotEntry): IndexingSourceTone {
+  if (entry.runningSince !== undefined) return 'info'
+  if (entry.blockedCount > 0) return 'warning'
+  return 'muted'
+}
+
+function resolveRunGateLabelKey(entry: IndexedSourceTaskRunGateSnapshotEntry): string {
+  if (entry.runningSince !== undefined) {
+    return 'settings.settingFileIndex.sourceRunGate.running'
+  }
+
+  if (entry.lastBlockedReason === 'debounced') {
+    return 'settings.settingFileIndex.sourceRunGate.debounced'
+  }
+
+  if (entry.lastBlockedReason === 'already-running') {
+    return 'settings.settingFileIndex.sourceRunGate.already-running'
+  }
+
+  return 'settings.settingFileIndex.sourceRunGate.idle'
+}
+
+function resolveRunGateSortPriority(entry: IndexedSourceTaskRunGateSnapshotEntry): number {
+  if (entry.runningSince !== undefined) return 0
+  if (entry.blockedCount > 0) return 1
+  return 2
+}
+
+function resolveRunGateValues(
+  entry: IndexedSourceTaskRunGateSnapshotEntry
+): Record<string, string | number> {
+  return {
+    kind: entry.kind,
+    blockedCount: entry.blockedCount,
+    runningSince: formatIndexingSourceTimestamp(entry.runningSince),
+    lastCompletedAt: formatIndexingSourceTimestamp(entry.lastCompletedAt),
+    lastBlockedAt: formatIndexingSourceTimestamp(entry.lastBlockedAt),
+    nextAllowedAt: formatIndexingSourceTimestamp(entry.nextAllowedAt),
+    reason: entry.lastBlockedReason ?? ''
+  }
+}
+
 function toSummaryValue(value: unknown): string | number {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) return value
@@ -327,7 +444,17 @@ function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
   const summary = task.summary ?? {}
 
   if (task.kind === 'scan') {
-    return `records ${toSummaryValue(summary.records)} / batches ${toSummaryValue(summary.batches)}`
+    const indexedRecords = summary.indexedRecords ?? summary.records
+    const parts = [
+      `indexed ${toSummaryValue(indexedRecords)}/${toSummaryValue(summary.records)}`,
+      `batches ${toSummaryValue(summary.batches)}`
+    ]
+
+    if (typeof summary.phase === 'string' && summary.phase.trim()) {
+      parts.push(`phase ${summary.phase.trim()}`)
+    }
+
+    return parts.join(' / ')
   }
 
   if (task.kind === 'watch') {
@@ -338,7 +465,17 @@ function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
     return `+${toSummaryValue(summary.added)} ~${toSummaryValue(summary.changed)} -${toSummaryValue(summary.deleted)} / skipped ${toSummaryValue(summary.skipped)}`
   }
 
-  return `clear index ${toSummaryValue(summary.clearedSearchIndex)} / progress ${toSummaryValue(summary.clearedScanProgress)}`
+  const parts = [`clear index ${toSummaryValue(summary.clearedSearchIndex)}`]
+  if (typeof summary.clearedSearchIndexRows !== 'undefined') {
+    parts.push(`index rows ${toSummaryValue(summary.clearedSearchIndexRows)}`)
+  }
+
+  parts.push(`progress ${toSummaryValue(summary.clearedScanProgress)}`)
+  if (typeof summary.scanProgressRows !== 'undefined') {
+    parts.push(`progress rows ${toSummaryValue(summary.scanProgressRows)}`)
+  }
+
+  return parts.join(' / ')
 }
 
 export function resolveIndexingSourceTaskChips(
@@ -358,6 +495,8 @@ export function resolveIndexingSourceTaskChips(
         jobId: source.lastScan.jobId ?? '-',
         batches: source.lastScan.batches,
         records: source.lastScan.records,
+        indexedRecords: source.lastScan.indexedRecords,
+        phase: source.lastScan.phase ?? '-',
         error: source.lastScan.error ?? ''
       }
     })
@@ -407,6 +546,26 @@ export function resolveIndexingSourceTaskChips(
     })
   }
 
+  if (source.lastReset) {
+    chips.push({
+      id: 'reset',
+      tone: resolveTaskTone(source.lastReset.error),
+      labelKey: source.lastReset.error
+        ? 'settings.settingFileIndex.sourceTask.resetFailed'
+        : 'settings.settingFileIndex.sourceTask.resetDone',
+      values: {
+        time: formatIndexingSourceTimestamp(source.lastReset.completedAt),
+        jobId: source.lastReset.jobId ?? '-',
+        reason: source.lastReset.reason,
+        clearedSearchIndex: source.lastReset.clearedSearchIndex ? 'yes' : 'no',
+        clearedSearchIndexRows: source.lastReset.clearedSearchIndexRows ?? 0,
+        clearedScanProgress: source.lastReset.clearedScanProgress ? 'yes' : 'no',
+        scanProgressRows: source.lastReset.scanProgressRows ?? 0,
+        error: source.lastReset.error ?? ''
+      }
+    })
+  }
+
   return chips
 }
 
@@ -425,6 +584,25 @@ export function resolveIndexingSourceRecentTaskChips(
       error: task.error ?? ''
     }
   }))
+}
+
+export function resolveIndexingSourceRunGateChips(
+  source: IndexedSourceDiagnostics,
+  limit = 3
+): IndexingSourceRunGateChip[] {
+  return [...(source.taskRunGate ?? [])]
+    .sort(
+      (left, right) =>
+        resolveRunGateSortPriority(left) - resolveRunGateSortPriority(right) ||
+        left.kind.localeCompare(right.kind)
+    )
+    .slice(0, limit)
+    .map((entry) => ({
+      id: `${entry.sourceId}:${entry.kind}`,
+      tone: resolveRunGateTone(entry),
+      labelKey: resolveRunGateLabelKey(entry),
+      values: resolveRunGateValues(entry)
+    }))
 }
 
 export function resolveIndexingSourceLifecycleIssueChips(

@@ -64,6 +64,8 @@ import {
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceRecoveryChip,
+  resolveIndexingSourceResetSuccessMessage,
+  resolveIndexingSourceRunGateChips,
   resolveIndexingSourceStatusKey,
   resolveIndexingSourceTaskChips,
   resolveIndexingSourceTone,
@@ -491,6 +493,7 @@ async function runSourceMaintenance(
       if (result.error) throw new Error(result.error)
       toast.success(
         t('settings.settingFileIndex.sourceActionScanSuccess', {
+          indexedRecords: result.indexedRecords,
           records: result.records
         })
       )
@@ -519,7 +522,8 @@ async function runSourceMaintenance(
       if (!result.clearedSearchIndex && !result.clearedScanProgress) {
         throw new Error('reset-cleared-nothing')
       }
-      toast.success(t('settings.settingFileIndex.sourceActionResetSuccess'))
+      const message = resolveIndexingSourceResetSuccessMessage(result)
+      toast.success(t(message.labelKey, message.values))
     }
 
     await loadSourceDiagnostics()
@@ -1598,6 +1602,25 @@ async function triggerRebuild() {
               :class="`source-status-pill--${evidence.tone}`"
             >
               {{ t(evidence.labelKey, evidence.values) }}
+            </span>
+          </div>
+        </div>
+
+        <div
+          v-if="resolveIndexingSourceRunGateChips(selectedSourceDiagnostic).length > 0"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceRunGateTitle') }}
+          </div>
+          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+            <span
+              v-for="gate in resolveIndexingSourceRunGateChips(selectedSourceDiagnostic)"
+              :key="gate.id"
+              class="source-diagnostic-chip source-history-chip"
+              :class="`source-diagnostic-task-chip--${gate.tone}`"
+            >
+              {{ t(gate.labelKey, gate.values) }}
             </span>
           </div>
         </div>

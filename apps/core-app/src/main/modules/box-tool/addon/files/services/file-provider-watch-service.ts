@@ -300,7 +300,8 @@ export class FileProviderWatchService {
     return resolveIndexedScanEligibility({
       watchPaths: this.watchPaths,
       completedScans,
-      intervalMs: this.fileIndexSettings.autoScanIntervalMs
+      intervalMs: this.fileIndexSettings.autoScanIntervalMs,
+      normalizePath: this.normalizePath
     })
   }
 

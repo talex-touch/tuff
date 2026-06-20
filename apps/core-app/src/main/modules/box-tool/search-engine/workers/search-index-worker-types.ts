@@ -28,6 +28,13 @@ export interface RemoveItemsMessage {
   taskId: string
 }
 
+export interface RemoveProviderItemsMessage {
+  type: 'removeProviderItems'
+  providerId: string
+  itemIds: string[]
+  taskId: string
+}
+
 export interface RemoveByProviderMessage {
   type: 'removeByProvider'
   providerId: string
@@ -38,6 +45,16 @@ export interface CountByProviderMessage {
   type: 'countByProvider'
   providerId: string
   taskId: string
+}
+
+export interface PersistAndIndexSummary {
+  entries: number
+  chunks: number
+  persistedRows: number
+  indexedItems: number
+  fileUpdates: number
+  progressRows: number
+  embeddings: number
 }
 
 // ============================================================================
@@ -82,6 +99,7 @@ export type SearchIndexWorkerMessage =
   | InitMessage
   | IndexItemsMessage
   | RemoveItemsMessage
+  | RemoveProviderItemsMessage
   | RemoveByProviderMessage
   | CountByProviderMessage
   | RemoveFileMessage

@@ -1,5 +1,8 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
+import type {
+  PersistAndIndexSummary,
+  PersistEntry
+} from '../../../search-engine/workers/search-index-worker-client'
 import {
   buildIndexedWriteFlushFailureSnapshot,
   buildIndexedWriteFlushFailureRetryMetadata,
@@ -32,7 +35,7 @@ export interface FileProviderIndexRuntimeServiceDeps {
   getInflightResults: () => Map<number, IndexWorkerFileResult>
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   getSearchIndexWorker: () => {
-    persistAndIndex: (entries: PersistEntry[]) => Promise<void>
+    persistAndIndex: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
   }
   buildPersistEntries: (entries: IndexWorkerFileResult[]) => PersistEntry[]
   logDebug: (message: string, meta?: Record<string, unknown>) => void

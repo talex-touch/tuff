@@ -5,7 +5,7 @@
  * SearchIndexService instance in directMode (bypasses DbWriteScheduler
  * and pacing delays since there is no event loop contention here).
  *
- * Handles: indexItems, removeItems, removeByProvider
+ * Handles: indexItems, removeItems, removeProviderItems, removeByProvider
  * Read operations (search, lookupByKeywords, etc.) stay on the main thread.
  */
 import type { SearchIndexItem } from '../search-index-service'
@@ -19,10 +19,12 @@ import type {
   CountByProviderMessage,
   IndexItemsMessage,
   InitMessage,
+  PersistAndIndexSummary,
   RemoveByProviderMessage,
   RemoveFileExtensionsMessage,
   RemoveFileMessage,
   RemoveItemsMessage,
+  RemoveProviderItemsMessage,
   WorkerErrorMessage,
   WorkerResultMessage
 } from './search-index-worker-types'
@@ -106,6 +108,7 @@ type WorkerRequest =
   | InitMessage
   | IndexItemsMessage
   | RemoveItemsMessage
+  | RemoveProviderItemsMessage
   | RemoveByProviderMessage
   | CountByProviderMessage
   | PersistAndIndexMessage
@@ -167,10 +170,23 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         respond({ type: 'result', taskId })
         break
 
+      case 'removeProviderItems': {
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        const removedItems = await searchIndex.removeProviderItems(
+          message.providerId,
+          message.itemIds
+        )
+        respond({ type: 'result', taskId, result: removedItems })
+        break
+      }
+
       case 'removeByProvider':
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
-        await searchIndex.removeByProvider(message.providerId)
-        respond({ type: 'result', taskId })
+        respond({
+          type: 'result',
+          taskId,
+          result: await searchIndex.removeByProvider(message.providerId)
+        })
         break
 
       case 'countByProvider': {
@@ -188,16 +204,31 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         // The yield between chunks releases the write lock briefly so
         // main-thread services can acquire it (prevents SQLITE_BUSY).
         const PERSIST_CHUNK = 3
+        const summary: PersistAndIndexSummary = {
+          entries: message.entries.length,
+          chunks: 0,
+          persistedRows: 0,
+          indexedItems: 0,
+          fileUpdates: 0,
+          progressRows: 0,
+          embeddings: 0
+        }
         for (let ci = 0; ci < message.entries.length; ci += PERSIST_CHUNK) {
           const chunk = message.entries.slice(ci, ci + PERSIST_CHUNK)
-          await handlePersistAndIndex(chunk)
+          const chunkSummary = await handlePersistAndIndex(chunk)
           await searchIndex.indexItems(chunk.map((e) => e.indexItem))
+          summary.chunks += 1
+          summary.persistedRows += chunkSummary.persistedRows
+          summary.indexedItems += chunk.length
+          summary.fileUpdates += chunkSummary.fileUpdates
+          summary.progressRows += chunkSummary.progressRows
+          summary.embeddings += chunkSummary.embeddings
           // Yield between chunks to release the write lock
           if (ci + PERSIST_CHUNK < message.entries.length) {
             await new Promise<void>((resolve) => setTimeout(resolve, 30))
           }
         }
-        respond({ type: 'result', taskId })
+        respond({ type: 'result', taskId, result: summary })
         break
       }
 
@@ -284,9 +315,17 @@ async function handleInit(message: InitMessage): Promise<void> {
  * then hand off to SearchIndexService.indexItems() for FTS5 writes.
  * All operations run on the same LibSQL connection — zero contention.
  */
-async function handlePersistAndIndex(entries: PersistAndIndexEntry[]): Promise<void> {
+async function handlePersistAndIndex(
+  entries: PersistAndIndexEntry[]
+): Promise<Omit<PersistAndIndexSummary, 'entries' | 'chunks' | 'indexedItems'>> {
   if (!db) throw new Error('Worker not initialized')
-  if (entries.length === 0) return
+  const summary = {
+    persistedRows: 0,
+    fileUpdates: 0,
+    progressRows: 0,
+    embeddings: 0
+  }
+  if (entries.length === 0) return summary
   const workerDb = db
 
   await withWorkerWriteRetry(
@@ -304,6 +343,8 @@ async function handlePersistAndIndex(entries: PersistAndIndexEntry[]): Promise<v
                 embeddingStatus: fileUpdate.embeddingStatus as 'none' | 'pending' | 'completed'
               })
               .where(eq(schema.files.id, fileId))
+            summary.fileUpdates += 1
+            summary.persistedRows += 1
 
             // 2. Persist embeddings (delete old → insert new)
             if (fileUpdate.embeddings && fileUpdate.embeddings.length > 0) {
@@ -325,6 +366,8 @@ async function handlePersistAndIndex(entries: PersistAndIndexEntry[]): Promise<v
                   contentHash: fileUpdate.contentHash
                 }))
               )
+              summary.embeddings += fileUpdate.embeddings.length
+              summary.persistedRows += fileUpdate.embeddings.length
             }
           }
 
@@ -366,10 +409,13 @@ async function handlePersistAndIndex(entries: PersistAndIndexEntry[]): Promise<v
                 updatedAt
               }
             })
+          summary.progressRows += 1
+          summary.persistedRows += 1
         }
       }),
     WORKER_RETRY_LABELS.persistChunk
   )
+  return summary
 }
 
 function toDate(value: Date | number | string): Date {

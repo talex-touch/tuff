@@ -5,7 +5,7 @@ import type {
   IndexedSourceWatchEvent
 } from '@talex-touch/utils/search'
 import type { IndexingRuntimeDiagnostics } from './indexing-diagnostics-service'
-import type { IndexStoreAdapter } from './indexing-store-adapter'
+import type { IndexStoreAdapter, IndexStoreDeltaApplySummary } from './indexing-store-adapter'
 import process from 'node:process'
 import {
   resolveIndexedSourceTaskEligibility,
@@ -23,6 +23,14 @@ export interface WatchEventRouteSkippedSource {
   reason: IndexedSourceTaskSkipReason
 }
 
+export interface WatchEventRouteDeltaSummary {
+  sourceId: string
+  deltas: number
+  appliedDeltas: number
+  failedDeltas: number
+  skippedDeltas: number
+}
+
 export interface WatchEventRouteResult {
   deltas: IndexedSourceDelta[]
   matchedSources: number
@@ -31,8 +39,10 @@ export interface WatchEventRouteResult {
   skippedSources: number
   appliedDeltas: number
   failedDeltas: number
+  skippedDeltas: number
   errors: WatchEventRouteError[]
   skipped: WatchEventRouteSkippedSource[]
+  deltaSummaries: WatchEventRouteDeltaSummary[]
 }
 
 export class WatchEventRouter {
@@ -114,10 +124,11 @@ export class WatchEventRouter {
     const storeResults = await Promise.all(
       deltas.map(async (delta) => {
         try {
-          await this.store.applyDelta(delta)
+          const summary = await this.store.applyDelta(delta)
           return {
             status: 'fulfilled' as const,
-            delta
+            delta,
+            summary
           }
         } catch (error) {
           return {
@@ -130,13 +141,37 @@ export class WatchEventRouter {
     )
     let appliedDeltas = 0
     let failedDeltas = 0
+    let skippedDeltas = 0
+    const deltaSummariesBySource = new Map<string, WatchEventRouteDeltaSummary>()
+    const getDeltaSummary = (sourceId: string): WatchEventRouteDeltaSummary => {
+      const existing = deltaSummariesBySource.get(sourceId)
+      if (existing) return existing
+      const next: WatchEventRouteDeltaSummary = {
+        sourceId,
+        deltas: 0,
+        appliedDeltas: 0,
+        failedDeltas: 0,
+        skippedDeltas: 0
+      }
+      deltaSummariesBySource.set(sourceId, next)
+      return next
+    }
 
     for (const result of storeResults) {
+      const summary = getDeltaSummary(result.delta.sourceId)
+      summary.deltas += 1
       if (result.status === 'fulfilled') {
-        appliedDeltas += 1
+        if (isSkippedDeltaSummary(result.summary)) {
+          skippedDeltas += 1
+          summary.skippedDeltas += 1
+        } else {
+          appliedDeltas += 1
+          summary.appliedDeltas += 1
+        }
         continue
       }
       failedDeltas += 1
+      summary.failedDeltas += 1
       errors.push({
         sourceId: result.delta.sourceId,
         phase: 'store',
@@ -152,8 +187,10 @@ export class WatchEventRouter {
       skippedSources: skipped.length,
       appliedDeltas,
       failedDeltas,
+      skippedDeltas,
       errors,
-      skipped
+      skipped,
+      deltaSummaries: Array.from(deltaSummariesBySource.values())
     }
   }
 
@@ -243,4 +280,10 @@ export class WatchEventRouter {
   private stringifyError(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
   }
+}
+
+function isSkippedDeltaSummary(
+  summary: IndexStoreDeltaApplySummary | void
+): summary is IndexStoreDeltaApplySummary {
+  return Boolean(summary && summary.applied === false)
 }

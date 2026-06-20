@@ -1,5 +1,8 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
+import type {
+  PersistAndIndexSummary,
+  PersistEntry
+} from '../../../search-engine/workers/search-index-worker-client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   FileProviderIndexRuntimeService,
@@ -47,15 +50,29 @@ function toPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
   }))
 }
 
+function createPersistSummary(entries: PersistEntry[]): PersistAndIndexSummary {
+  return {
+    entries: entries.length,
+    chunks: entries.length > 0 ? 1 : 0,
+    persistedRows: entries.length,
+    indexedItems: entries.length,
+    fileUpdates: 0,
+    progressRows: entries.length,
+    embeddings: 0
+  }
+}
+
 function createService(options: {
   pending: Map<number, IndexWorkerFileResult>
   inflight: Map<number, IndexWorkerFileResult>
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
-  persistAndIndex?: (entries: PersistEntry[]) => Promise<void>
+  persistAndIndex?: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
   logWarn?: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   config?: FileProviderIndexRuntimeServiceDeps['config']
 }) {
-  const persistAndIndex = vi.fn(options.persistAndIndex ?? (async () => undefined))
+  const persistAndIndex = vi.fn(
+    options.persistAndIndex ?? (async (entries) => createPersistSummary(entries))
+  )
   const logWarn = vi.fn(options.logWarn ?? (() => undefined))
 
   return {
@@ -123,7 +140,11 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
       inflight: 0,
       reason: 'persisted',
       metadata: {
-        withContent: 1
+        withContent: 1,
+        persistedRows: 1,
+        indexedItems: 1,
+        progressRows: 1,
+        chunks: 1
       }
     })
   })
