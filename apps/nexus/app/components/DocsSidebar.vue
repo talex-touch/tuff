@@ -2,7 +2,8 @@
 import DocSection from './docs/DocSection.vue'
 import { hasWindow } from '@talex-touch/utils/env'
 import { coerceJsonArray } from '~/utils/docs-api'
-import { requestJson, useTypedFetch } from '~/utils/request'
+import { requestDocsPage } from '~/utils/docs-page-client-cache'
+import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
@@ -357,20 +358,8 @@ function prefetchDocsTarget(path: string | null | undefined) {
 
   const routeTarget = localizedDocsPath(normalized)
   void preloadRouteComponents(routeTarget)
-  void requestJson('/api/docs/page', {
-    query: {
-      path: normalized,
-      locale,
-      body: '0',
-    },
-  }).catch(() => {})
-  void requestJson('/api/docs/page', {
-    query: {
-      path: normalized,
-      locale,
-      body: '1',
-    },
-  }).catch(() => {})
+  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
+  void requestDocsPage({ path: normalized, locale, body: '1' }).catch(() => {})
 }
 
 function filterByLocale(items: any[]): any[] {

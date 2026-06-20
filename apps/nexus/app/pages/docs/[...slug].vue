@@ -3,9 +3,10 @@ import { defineComponent, h, render } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
+import { primeDocsPageRequestCache, requestDocsPage } from '~/utils/docs-page-client-cache'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
-import { requestJson, useTypedFetch } from '~/utils/request'
+import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 const DOCS_FULL_BODY_CACHE_LIMIT = 24
@@ -61,6 +62,11 @@ function cacheFullDoc(value: Record<string, any> | null) {
   if (docsFullBodyCache.has(key))
     docsFullBodyCache.delete(key)
   docsFullBodyCache.set(key, value)
+  primeDocsPageRequestCache({
+    path: key.slice('doc-full:'.length).replace(/:(en|zh)$/, ''),
+    locale: key.endsWith(':zh') ? 'zh' : 'en',
+    body: '1',
+  }, value)
 
   while (docsFullBodyCache.size > DOCS_FULL_BODY_CACHE_LIMIT) {
     const oldestKey = docsFullBodyCache.keys().next().value
@@ -203,6 +209,7 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
       body: shouldSplitDocBody.value && import.meta.client ? '0' : '1',
     })),
     default: () => null,
+    immediate: import.meta.server || !shouldSplitDocBody.value,
     watch: false,
   },
 )
@@ -230,13 +237,7 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   fullDocLoading.value = true
 
   try {
-    const nextFullDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
-      query: {
-        path,
-        locale,
-        body: '1',
-      },
-    })
+    const nextFullDoc = await requestDocsPage({ path, locale, body: '1' })
 
     if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
       return
@@ -290,24 +291,12 @@ function prefetchDocForPath(path: string | null | undefined) {
   prefetchedDocTargets.add(prefetchKey)
 
   void preloadRouteComponents(toLocalizedDocsPath(normalized, locale))
-  void requestJson<Record<string, any> | null>('/api/docs/page', {
-    query: {
-      path: normalized,
-      locale,
-      body: '0',
-    },
-  }).catch(() => {})
+  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
 
   if (hasCachedFullDoc(cacheKey))
     return
 
-  void requestJson<Record<string, any> | null>('/api/docs/page', {
-    query: {
-      path: normalized,
-      locale,
-      body: '1',
-    },
-  }).then((nextFullDoc) => {
+  void requestDocsPage({ path: normalized, locale, body: '1' }).then((nextFullDoc) => {
     cacheFullDoc(nextFullDoc)
   }).catch(() => {})
 }
@@ -332,13 +321,7 @@ async function loadActiveDocForRoute() {
     : null
 
   try {
-    const nextDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
-      query: {
-        path,
-        locale,
-        body: splitBody ? '0' : '1',
-      },
-    })
+    const nextDoc = await requestDocsPage({ path, locale, body: splitBody ? '0' : '1' })
 
     if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
       return
