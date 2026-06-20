@@ -37,6 +37,7 @@
   },
   "include": [
     "electron.vite.config.*",
+    "scripts/coreapp-packaged-ai-ask-probe*.ts",
     "scripts/quickops-evidence-*.ts",
     "scripts/windows-acceptance-*.ts",
     "src/main/**/*",

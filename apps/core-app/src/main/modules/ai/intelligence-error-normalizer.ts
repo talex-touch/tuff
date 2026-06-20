@@ -3,6 +3,7 @@ export type IntelligenceErrorCode =
   | 'PROVIDER_UNAVAILABLE'
   | 'QUOTA_EXHAUSTED'
   | 'MODEL_UNSUPPORTED'
+  | 'PERMISSION_DENIED'
   | 'NETWORK_FAILURE'
   | 'CAPABILITY_UNSUPPORTED'
   | 'INVALID_REQUEST'
@@ -44,6 +45,8 @@ export function normalizeIntelligenceError(
 
   if (
     explicitCode === 'INTELLIGENCE_CAPABILITY_UNSUPPORTED' ||
+    explicitCode === 'NEXUS_STREAM_UNSUPPORTED' ||
+    lower.includes('nexus_stream_unsupported') ||
     lower.includes('capability unsupported') ||
     lower.includes('capability is unsupported') ||
     lower.includes('capability not supported') ||
@@ -100,6 +103,23 @@ export function normalizeIntelligenceError(
       message,
       reason: 'No usable provider is available for this capability.',
       recovery: 'Enable a provider, verify provider configuration, or choose another capability.',
+      capabilityId: options.capabilityId
+    }
+  }
+
+  if (
+    explicitCode === 'PERMISSION_DENIED' ||
+    explicitCode === 'INTELLIGENCE_PERMISSION_DENIED' ||
+    lower.includes('permission denied') ||
+    lower.includes('permission_denied') ||
+    lower.includes('not allowed') ||
+    lower.includes('forbidden')
+  ) {
+    return {
+      code: 'PERMISSION_DENIED',
+      message,
+      reason: 'The caller is not allowed to use this intelligence capability or provider.',
+      recovery: 'Grant the required permission or choose an allowed provider/capability.',
       capabilityId: options.capabilityId
     }
   }

@@ -133,7 +133,7 @@ describe('CoreApp shared intelligence resolver contract', () => {
       enableAudit: false,
       enableQuota: false,
       capabilities: {
-        'text.chat': { id: 'text.chat', label: 'Chat', providers: [{ providerId: 'local-chat' }] }
+        'text.chat': { label: 'Chat', providers: [{ providerId: 'local-chat' }] }
       }
     })
 
@@ -178,7 +178,7 @@ describe('CoreApp shared intelligence resolver contract', () => {
       enableAudit: false,
       enableQuota: false,
       capabilities: {
-        'text.chat': { id: 'text.chat', label: 'Chat', providers: [{ providerId: 'local-chat' }] }
+        'text.chat': { label: 'Chat', providers: [{ providerId: 'local-chat' }] }
       },
       promptRegistry: [
         {
