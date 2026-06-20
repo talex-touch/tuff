@@ -47,6 +47,15 @@ describe('docs page performance boundaries', () => {
   })
 
   it('keeps lightweight docs tracking separate from bottom engagement widgets', () => {
+    expect(page).toContain('DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 2500')
+    expect(page).toContain('DOC_CLIENT_PANEL_INTENT_EVENTS')
+    expect(page).toContain('bindDocClientPanelIntentListeners')
+    expect(page).toContain('handleDocClientPanelIntent')
+    expect(page).toContain('scheduleDocClientPanels')
+    expect(page).toMatch(/window\.addEventListener\(eventName, handleDocClientPanelIntent, \{ passive: true \}\)/)
+    expect(page).toMatch(/if \('requestIdleCallback' in window\) \{[\s\S]*DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS/)
+    expect(page).toMatch(/if \(!isReady \|\| !docsClientPanelsMounted\.value\)[\s\S]*bindDocClientPanelIntentListeners\(\)/)
+    expect(page).toMatch(/if \(!isMounted \|\| !isDocsContentReady\.value\)[\s\S]*bindDocClientPanelIntentListeners\(\)/)
     expect(page).toContain('<LazyDocsEngagementClient')
     expect(page).toContain('v-if="shouldMountDocClientPanels"')
     expect(page).toContain('<LazyDocsFeedback v-if="shouldMountDocEngagementPanels"')
