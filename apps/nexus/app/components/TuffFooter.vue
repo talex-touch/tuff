@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import BetaIcon from './BetaIcon.vue'
 import Logo from './icon/Logo.vue'
-import TouchAurora from './tuff/background/TouchAurora.vue'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
+
+const LazyTouchAurora = defineAsyncComponent(() => import('./tuff/background/TouchAurora.vue'))
 
 const { locale, t } = useI18n()
 const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
+const shouldMountAurora = ref(false)
 
 const year = new Date().getFullYear()
 
@@ -37,6 +39,14 @@ const socialLinks = computed(() => [
     icon: 'i-carbon-logo-github',
   },
 ])
+
+onMounted(() => {
+  window.requestIdleCallback?.(() => {
+    shouldMountAurora.value = true
+  }, { timeout: 1200 }) ?? window.setTimeout(() => {
+    shouldMountAurora.value = true
+  }, 600)
+})
 </script>
 
 <template>
@@ -44,14 +54,17 @@ const socialLinks = computed(() => [
     <div class="TuffFooter-Background z-1">
       <Logo />
 
-      <TouchAurora
-        :color-stops="['#574BDD', '#8727CE', '#057CCF']"
-        :amplitude="1.0"
-        :blend="0.5"
-        :speed="1.0"
-        :intensity="1.0"
-        class="op-50 -scale-100"
-      />
+      <ClientOnly>
+        <LazyTouchAurora
+          v-if="shouldMountAurora"
+          :color-stops="['#574BDD', '#8727CE', '#057CCF']"
+          :amplitude="1.0"
+          :blend="0.5"
+          :speed="1.0"
+          :intensity="1.0"
+          class="op-50 -scale-100"
+        />
+      </ClientOnly>
     </div>
 
     <div class="TuffFooter-Main relative left-0 top-0 z-10 h-full w-full bg-white/80 dark:bg-black/80">

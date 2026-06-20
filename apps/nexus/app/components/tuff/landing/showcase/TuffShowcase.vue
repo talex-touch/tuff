@@ -1,7 +1,12 @@
+<script setup lang="ts">
+import TuffShowcaseDisplayer from './TuffShowcaseDisplayer.vue'
+import TuffShowcaseMockHeader from './TuffShowcaseMockHeader.vue'
+</script>
+
 <template>
   <div class="tuff-showcase flex flex-col gap-12" aria-hidden="true">
-    <TuffLandingShowcaseTuffShowcaseMockHeader />
-    <TuffLandingShowcaseTuffShowcaseDisplayer />
+    <TuffShowcaseMockHeader />
+    <TuffShowcaseDisplayer />
   </div>
 </template>
 

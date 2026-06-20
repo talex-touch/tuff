@@ -10,6 +10,7 @@ import PluginCardNotion from './plugins/cards/PluginCardNotion.vue'
 import PluginCardSpotify from './plugins/cards/PluginCardSpotify.vue'
 import PluginCardTranslate from './plugins/cards/PluginCardTranslate.vue'
 import PluginCardVSCode from './plugins/cards/PluginCardVSCode.vue'
+import TuffLandingSection from './TuffLandingSection.vue'
 
 const { t } = useI18n()
 const router = useRouter()

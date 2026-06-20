@@ -1,7 +1,20 @@
 <script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import TuffLandingHero from './landing/TuffLandingHero.vue'
 import TuffLandingStats from './landing/TuffLandingStats.vue'
 import TuffLandingInstantPreview from './landing/TuffLandingInstantPreview.vue'
+
+const LazyTuffLandingAiOverview = defineAsyncComponent(() => import('./landing/TuffLandingAiOverview.vue'))
+const LazyTuffLandingBuiltForYou = defineAsyncComponent(() => import('./landing/TuffLandingBuiltForYou.vue'))
+const LazyTuffLandingStarSnippets = defineAsyncComponent(() => import('./landing/TuffLandingStarSnippets.vue'))
+const LazyTuffLandingAggregation = defineAsyncComponent(() => import('./landing/TuffLandingAggregation.vue'))
+const LazyTuffLandingFeatures = defineAsyncComponent(() => import('./landing/TuffLandingFeatures.vue'))
+const LazyTuffLandingEcosystem = defineAsyncComponent(() => import('./landing/TuffLandingEcosystem.vue'))
+const LazyTuffLandingIntegrations = defineAsyncComponent(() => import('./landing/TuffLandingIntegrations.vue'))
+const LazyTuffLandingCommunity = defineAsyncComponent(() => import('./landing/TuffLandingCommunity.vue'))
+const LazyTuffLandingPricing = defineAsyncComponent(() => import('./landing/TuffLandingPricing.vue'))
+const LazyTuffLandingFaq = defineAsyncComponent(() => import('./landing/TuffLandingFaq.vue'))
+const LazyTuffLandingWaitlist = defineAsyncComponent(() => import('./landing/TuffLandingWaitlist.vue'))
 
 const showStarSnippets = false
 const showAggregation = false

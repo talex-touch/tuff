@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue'
-import TuffLandingAiOverview from './landing/TuffLandingAiOverview.vue'
-import TuffLandingBuiltForYou from './landing/TuffLandingBuiltForYou.vue'
-import TuffLandingCommunity from './landing/TuffLandingCommunity.vue'
-import TuffLandingEcosystem from './landing/TuffLandingEcosystem.vue'
-import TuffLandingFaq from './landing/TuffLandingFaq.vue'
-import TuffLandingFeatures from './landing/TuffLandingFeatures.vue'
-import TuffLandingIntegrations from './landing/TuffLandingIntegrations.vue'
-import TuffLandingInstantPreview from './landing/TuffLandingInstantPreview.vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
 import TuffLandingNexusHero from './landing/TuffLandingNexusHero.vue'
-import TuffLandingPlugins from './landing/TuffLandingPlugins.vue'
-import TuffLandingStats from './landing/TuffLandingStats.vue'
-import TuffLandingWaitlist from './landing/TuffLandingWaitlist.vue'
 import { useTuffHomeAdaptation } from '~/composables/useTuffHomeAdaptation'
 import { useTuffHomeSections } from '~/composables/useTuffHomeSections'
+
+const TuffLandingStats = defineAsyncComponent(() => import('./landing/TuffLandingStats.vue'))
+const TuffLandingPlugins = defineAsyncComponent(() => import('./landing/TuffLandingPlugins.vue'))
+const TuffLandingAiOverview = defineAsyncComponent(() => import('./landing/TuffLandingAiOverview.vue'))
+const TuffLandingInstantPreview = defineAsyncComponent(() => import('./landing/TuffLandingInstantPreview.vue'))
+const TuffLandingBuiltForYou = defineAsyncComponent(() => import('./landing/TuffLandingBuiltForYou.vue'))
+const TuffLandingFeatures = defineAsyncComponent(() => import('./landing/TuffLandingFeatures.vue'))
+const TuffLandingEcosystem = defineAsyncComponent(() => import('./landing/TuffLandingEcosystem.vue'))
+const TuffLandingIntegrations = defineAsyncComponent(() => import('./landing/TuffLandingIntegrations.vue'))
+const TuffLandingCommunity = defineAsyncComponent(() => import('./landing/TuffLandingCommunity.vue'))
+const TuffLandingFaq = defineAsyncComponent(() => import('./landing/TuffLandingFaq.vue'))
+const TuffLandingWaitlist = defineAsyncComponent(() => import('./landing/TuffLandingWaitlist.vue'))
 
 const { enableSmoothScroll } = useTuffHomeAdaptation()
 

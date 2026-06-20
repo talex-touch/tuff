@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import TuffLandingWebglBackground from './landing/TuffLandingWebglBackground.vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 
 const vertSource = `

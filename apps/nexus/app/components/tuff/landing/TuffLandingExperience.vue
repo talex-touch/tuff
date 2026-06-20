@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import TuffLandingSection from './TuffLandingSection.vue'
 
 const { t } = useI18n()
 

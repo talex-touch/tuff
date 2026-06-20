@@ -4,6 +4,7 @@ import { gsap } from 'gsap'
 import { useGsapReveal } from '~/composables/useGsapReveal'
 import CoreBoxMock from './ai/CoreBoxMock.vue'
 import TuffLandingLineShadowText from './TuffLandingLineShadowText.vue'
+import TuffLandingSection from './TuffLandingSection.vue'
 import type { CoreBoxCommand } from './ai/CoreBoxMock.vue'
 
 const { t } = useI18n()
