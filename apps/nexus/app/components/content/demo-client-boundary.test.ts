@@ -105,6 +105,17 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("'ogl'")
   })
 
+  it('pre-bundles route-local dev runtime dependencies discovered by Vite', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain("'marked'")
+    expect(config).toContain("'echarts/core'")
+    expect(config).toContain("'echarts/charts'")
+    expect(config).toContain("'echarts/components'")
+    expect(config).toContain("'echarts/renderers'")
+    expect(config).toContain("'vue-sonner'")
+  })
+
   it('keeps Sentry out of local dev startup unless explicitly enabled', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
