@@ -1,8 +1,8 @@
 # Nexus Performance TODO
 
-> 更新时间：2026-06-20
+> 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 性能优化进行中；已完成 5 个提交，当前第 6 批为 dev SSR route-local stylesheet 过滤，待最终提交。
+> 当前状态：Nexus 性能优化进行中；已完成 6 个提交，当前第 7 批为 docs component page full-body / prefetch idle scheduling，待提交。
 
 ## Goal 原句
 
@@ -14,14 +14,14 @@
 补充触发页：
 
 - `http://localhost:3200/en/docs/dev/components/tabs`
-- 当前本地验证改用可用 dev server：`http://localhost:3214`
+- 当前本地验证 dev server：`http://localhost:3200`
 
 ## 当前进度
 
-- 整体估算：约 40%。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分。
-- 当前批次：dev SSR HTML stylesheet 跨页面污染过滤，已完成代码、单测、lint、Playwright 截图/HAR/Markdown/JSON 报告，待提交。
-- 未开始或只做前置铺垫：docs 内容 payload / demo registry 拆分、aireview 未审批组件优化、全站页面切换矩阵。
+- 整体估算：约 48%。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤。
+- 当前批次：docs component page full-body 请求与 sidebar/pager full-body 预取改为短延迟 + idle 调度，避免组件文档页面切换时 `body=1` 全量 Markdown 解析抢首屏。
+- 未开始或只做前置铺垫：aireview 未审批组件优化、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 已完成批次
 
@@ -32,7 +32,8 @@
 | 3 | `791d408dc` | `perf(nexus): lazy load i18n locale messages` | 已完成 |
 | 4 | `fe129d49e` | `perf(nexus): remove global docs highlight plugin` | 已完成 |
 | 5 | `3213bcba0` | `perf(nexus): split route-local locale messages` | 已完成 |
-| 6 | 待提交 | `perf(nexus): filter route-local dev stylesheets` | 收尾中 |
+| 6 | `ec0d41e29` | `perf(nexus): filter route-local dev stylesheets` | 已完成 |
+| 7 | 待提交 | `perf(nexus): defer docs full-body prefetch` | 收尾中 |
 
 ## 第 6 批收口记录
 
@@ -76,16 +77,53 @@
   - tabs stylesheet HAR：`{ total: 63, tuff: 0, dashboard: 0, store: 0, docs: 13, tuffex: 22, other: 28 }`
   - card stylesheet HAR：`{ total: 65, tuff: 0, dashboard: 0, store: 0, docs: 14, tuffex: 22, other: 29 }`
 
+## 第 7 批收口记录
+
+目标：继续压缩 `/en/docs/dev/components/tabs` 等组件文档页切换的关键路径，避免 `body=1` full-body Markdown 解析和 sidebar/pager full-body 预取在 route switch 初期抢占网络与 dev content parse。
+
+改动范围：
+
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+
+实现口径：
+
+- 组件文档 client 切页仍先请求 `body=0` 轻 metadata，让标题、hero、模板壳优先稳定。
+- 当前页 `body=1` full body 改为 metadata settled 后短延迟 + `requestIdleCallback` 调度；如果浏览器不支持 idle callback，则走短延迟 fallback。
+- pager 预取仍立即 warm route component 和 `body=0` metadata，但 `body=1` full body 预热延后到 idle。
+- sidebar 组件链接预取同样改为 `body=0` 立即、`body=1` 延后；component sidebar metadata 的 pointer/focus intent 也改为短延迟调度，避免点击导航时产生被 abort 的 fetch。
+- 保持 docs API 合同不变，不改变 `body=0` / `body=1` 的响应格式。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/pages/docs/docs-page-performance.test.ts" "app/components/content/demo-client-boundary.test.ts" "app/components/content/demo-lazy.test.ts"`，3 files / 42 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "app/pages/docs/[...slug].vue" "app/components/DocsSidebar.vue" "app/pages/docs/docs-page-performance.test.ts"` 通过。
+- curl smoke：`/en/docs/dev/components/tabs` status 200，stylesheet summary `{ total: 57, tuff: 0, dashboard: 0, store: 0, docs: 4 }`。
+- Playwright：
+  - 报告：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21.json`
+  - 截图：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21-tabs.png`
+  - 截图：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21-card.png`
+  - 截图：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21-switch-card-to-tabs.png`
+  - HAR：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21-tabs.har`
+  - HAR：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21-card.har`
+  - HAR：`output/playwright/nexus-docs-idle-full-body-delay-3200-2026-06-21-switch-card-to-tabs.har`
+  - tabs first load：status 200, DOMContentLoaded 685ms, network idle 1618ms, requests 526, failed 0。
+  - card first load：status 200, DOMContentLoaded 136ms, network idle 1078ms, requests 533, failed 0。
+  - card -> tabs client switch：URL settled 79ms, network idle 731ms, requests 19, failed 0。
+  - card -> tabs docs requests：tabs `body=0` at +22ms, tabs `body=1` at +417ms, neighboring tab-bar `body=1` prefetch at +1203ms。
+
 ## 后续任务树
 
 ### P0：docs 文档内容加载继续拆分
 
-- [ ] 盘点 docs route 首屏 payload：区分 SSR 必须数据、首屏可见内容、折叠区内容、demo registry、code block/highlight、metadata。
-- [ ] 将 docs 文档正文加载拆成 route-local 静态清单和按需内容，避免页面切换时重复拉大 payload。
+- [x] 盘点 docs route 首屏 payload：区分 SSR 必须数据、首屏可见内容、折叠区内容、demo registry、code block/highlight、metadata。
+- [x] 将组件 docs 文档正文加载拆成 `body=0` metadata 与 idle `body=1` full body，避免页面切换初期重复拉大 payload。
 - [ ] 固化 docs template：同类文档页共享稳定布局壳，正文与 demo 独立懒加载。
 - [ ] 将 demo registry 从 docs 首屏路径移出，组件 demo 只在可见区域或交互展开时加载。
-- [ ] 对 tabs/card 等组件页建立最小 Playwright 性能基线：首屏截图、HAR、request count、failed count、DOMContentLoaded/load、client-side route switch timing。
-- [ ] 为 docs 内容加载新增 focused tests，钉住不会回退到全量 MDC parse 或全局 demo registry eager load。
+- [x] 对 tabs/card 等组件页建立最小 Playwright 性能基线：首屏截图、HAR、request count、failed count、DOMContentLoaded/load、client-side route switch timing。
+- [x] 为 docs 内容加载新增 focused tests，钉住不会回退到全量 MDC parse、同步 full-body prefetch 或全局 demo registry eager load。
 
 ### P0：aireview 未审批组件优化
 
