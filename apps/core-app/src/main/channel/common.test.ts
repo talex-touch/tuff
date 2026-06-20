@@ -1492,6 +1492,7 @@ describe('CommonChannelModule private helpers', () => {
       sourceId: 'browser-bookmarks',
       batches: 1,
       records: 8,
+      indexedRecords: 6,
       startedAt: 5,
       completedAt: 6
     })
@@ -1543,14 +1544,23 @@ describe('CommonChannelModule private helpers', () => {
       scanHandler?.({ sourceId: 'browser-bookmarks', reason: 'manual-rebuild' }, {})
     ).resolves.toMatchObject({
       sourceId: 'browser-bookmarks',
-      records: 8
+      records: 8,
+      indexedRecords: 6
     })
     await expect(resetHandler?.({ sourceId: '' }, {})).resolves.toMatchObject({
       sourceId: '',
       error: 'source-id-empty'
     })
+    await expect(
+      scanHandler?.({ sourceId: '', reason: 'manual-rebuild' }, {})
+    ).resolves.toMatchObject({
+      sourceId: '',
+      indexedRecords: 0,
+      error: 'source-id-empty'
+    })
     await expect(scanHandler?.({ sourceId: 'browser-bookmarks' }, {})).resolves.toMatchObject({
       sourceId: 'browser-bookmarks',
+      indexedRecords: 0,
       error: 'reason-empty'
     })
 

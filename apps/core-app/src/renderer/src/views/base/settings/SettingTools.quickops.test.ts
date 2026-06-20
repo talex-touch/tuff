@@ -4,9 +4,66 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import SettingTools from './SettingTools.vue'
 
+interface QuickOpsSettingMock {
+  enabled: boolean
+  showRunningSessionsInCoreBox: boolean
+  allowStatefulTools: boolean
+  allowNetworkTools: boolean
+  allowFileTools: boolean
+  allowSystemTools: boolean
+  allowDeveloperTools: boolean
+  allowHighRiskTools: boolean
+  defaultKeepAwakeDurationMinutes: number
+  defaultSystemAwakeDurationMinutes: number
+  defaultTimerDurationMinutes: number
+  defaultTimerExtendMinutes: number
+  defaultPomodoroFocusMinutes: number
+  defaultPomodoroBreakMinutes: number
+  pomodoroTemplates: {
+    classic: boolean
+    long: boolean
+    custom: Array<{
+      name: string
+      aliases: string[]
+      focusMinutes: number
+      breakMinutes: number
+      enabled: boolean
+    }>
+  }
+  defaultScreenCleanDurationSeconds: number
+  defaultScreenCleanMode: string
+  allowPublicIpLookup: boolean
+}
+
 const settingState = vi.hoisted(() => {
   const { reactive } = require('vue') as typeof import('vue')
+  const createQuickOpsSetting = (): QuickOpsSettingMock => ({
+    enabled: true,
+    showRunningSessionsInCoreBox: true,
+    allowStatefulTools: true,
+    allowNetworkTools: true,
+    allowFileTools: true,
+    allowSystemTools: true,
+    allowDeveloperTools: true,
+    allowHighRiskTools: false,
+    defaultKeepAwakeDurationMinutes: 60,
+    defaultSystemAwakeDurationMinutes: 60,
+    defaultTimerDurationMinutes: 25,
+    defaultTimerExtendMinutes: 5,
+    defaultPomodoroFocusMinutes: 25,
+    defaultPomodoroBreakMinutes: 5,
+    pomodoroTemplates: {
+      classic: true,
+      long: true,
+      custom: []
+    },
+    defaultScreenCleanDurationSeconds: 60,
+    defaultScreenCleanMode: 'black',
+    allowPublicIpLookup: false
+  })
+
   return {
+    createQuickOpsSetting,
     appSettingMock: reactive({
       coreBox: {
         customPlaceholder: ''
@@ -61,35 +118,12 @@ const settingState = vi.hoisted(() => {
           location: true
         }
       },
-      quickOps: {
-        enabled: true,
-        showRunningSessionsInCoreBox: true,
-        allowStatefulTools: true,
-        allowNetworkTools: true,
-        allowFileTools: true,
-        allowSystemTools: true,
-        allowDeveloperTools: true,
-        allowHighRiskTools: false,
-        defaultKeepAwakeDurationMinutes: 60,
-        defaultSystemAwakeDurationMinutes: 60,
-        defaultTimerDurationMinutes: 25,
-        defaultTimerExtendMinutes: 5,
-        defaultPomodoroFocusMinutes: 25,
-        defaultPomodoroBreakMinutes: 5,
-        pomodoroTemplates: {
-          classic: true,
-          long: true,
-          custom: []
-        },
-        defaultScreenCleanDurationSeconds: 60,
-        defaultScreenCleanMode: 'black',
-        allowPublicIpLookup: false
-      }
+      quickOps: createQuickOpsSetting()
     })
   }
 })
 
-const { appSettingMock } = settingState
+const { appSettingMock, createQuickOpsSetting } = settingState
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -143,30 +177,7 @@ vi.mock('~/modules/storage/app-storage', () => ({
 
 function resetAppSetting(): void {
   appSettingMock.dev.advancedSettings = false
-  appSettingMock.quickOps = {
-    enabled: true,
-    showRunningSessionsInCoreBox: true,
-    allowStatefulTools: true,
-    allowNetworkTools: true,
-    allowFileTools: true,
-    allowSystemTools: true,
-    allowDeveloperTools: true,
-    allowHighRiskTools: false,
-    defaultKeepAwakeDurationMinutes: 60,
-    defaultSystemAwakeDurationMinutes: 60,
-    defaultTimerDurationMinutes: 25,
-    defaultTimerExtendMinutes: 5,
-    defaultPomodoroFocusMinutes: 25,
-    defaultPomodoroBreakMinutes: 5,
-    pomodoroTemplates: {
-      classic: true,
-      long: true,
-      custom: []
-    },
-    defaultScreenCleanDurationSeconds: 60,
-    defaultScreenCleanMode: 'black',
-    allowPublicIpLookup: false
-  }
+  appSettingMock.quickOps = createQuickOpsSetting()
 }
 
 function mountSettingTools() {

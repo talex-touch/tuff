@@ -1010,14 +1010,17 @@ function normalizeTableRows(rows: string[][]): { rows: string[][] } | null {
 }
 
 function formatMarkdownTable(rows: string[][]): string {
-  const widths = rows[0].map((_, columnIndex) =>
+  const header = rows[0];
+  if (!header) return "";
+
+  const widths = header.map((_, columnIndex) =>
     Math.max(...rows.map((row) => row[columnIndex]?.length ?? 0), 3),
   );
   const formatRow = (row: string[]) =>
-    `| ${row.map((cell, index) => cell.padEnd(widths[index], " ")).join(" | ")} |`;
+    `| ${row.map((cell, index) => cell.padEnd(widths[index] ?? 0, " ")).join(" | ")} |`;
   const separator = `| ${widths.map((width) => "-".repeat(width)).join(" | ")} |`;
 
-  return [formatRow(rows[0]), separator, ...rows.slice(1).map(formatRow)].join("\n");
+  return [formatRow(header), separator, ...rows.slice(1).map(formatRow)].join("\n");
 }
 
 function formatCsvRows(rows: string[][]): string {
@@ -1486,11 +1489,12 @@ function computeReedSolomonRemainder(data: number[], degree: number): number[] {
   const result = [...data, ...Array.from({ length: degree }, () => 0)];
 
   for (let index = 0; index < data.length; index += 1) {
-    const coefficient = result[index];
+    const coefficient = result[index] ?? 0;
     if (coefficient === 0) continue;
 
     for (let generatorIndex = 0; generatorIndex < generator.length; generatorIndex += 1) {
-      result[index + generatorIndex] ^= reedSolomonMultiply(generator[generatorIndex], coefficient);
+      const resultIndex = index + generatorIndex;
+      result[resultIndex] = (result[resultIndex] ?? 0) ^ reedSolomonMultiply(generator[generatorIndex] ?? 0, coefficient);
     }
   }
 
@@ -1509,7 +1513,8 @@ function reedSolomonMultiplyPoly(left: number[], right: number[]): number[] {
   const result = Array.from({ length: left.length + right.length - 1 }, () => 0);
   for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
     for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
-      result[leftIndex + rightIndex] ^= reedSolomonMultiply(left[leftIndex], right[rightIndex]);
+      const resultIndex = leftIndex + rightIndex;
+      result[resultIndex] = (result[resultIndex] ?? 0) ^ reedSolomonMultiply(left[leftIndex] ?? 0, right[rightIndex] ?? 0);
     }
   }
   return result;
@@ -1554,7 +1559,8 @@ function drawQrDataCodewords(
       const row = upwards ? size - 1 - vertical : vertical;
       for (let offset = 0; offset < 2; offset += 1) {
         const column = right - offset;
-        if (modules[row][column].reserved) continue;
+        const module = getQrModule(modules, column, row);
+        if (!module || module.reserved) continue;
 
         const bit = bits[bitIndex] ?? 0;
         const dark = bit === 1;
@@ -1588,8 +1594,12 @@ function drawQrFormatBits(modules: Array<Array<{ dark: boolean; reserved: boolea
   ];
 
   for (let index = 0; index < bits.length; index += 1) {
-    setQrModule(modules, first[index][0], first[index][1], bits[index] === 1, true);
-    setQrModule(modules, second[index][0], second[index][1], bits[index] === 1, true);
+    const firstPoint = first[index];
+    const secondPoint = second[index];
+    if (firstPoint)
+      setQrModule(modules, firstPoint[0] ?? 0, firstPoint[1] ?? 0, bits[index] === 1, true);
+    if (secondPoint)
+      setQrModule(modules, secondPoint[0] ?? 0, secondPoint[1] ?? 0, bits[index] === 1, true);
   }
 }
 
@@ -1635,7 +1645,7 @@ function renderQrSvg(modules: boolean[][], quietZone: number): string {
   const rects: string[] = [];
   for (let row = 0; row < size; row += 1) {
     for (let column = 0; column < size; column += 1) {
-      if (modules[row][column]) {
+      if (modules[row]?.[column]) {
         rects.push(`<rect x="${column + quietZone}" y="${row + quietZone}" width="1" height="1"/>`);
       }
     }
@@ -1649,8 +1659,9 @@ function reserveQrModule(
   column: number,
   row: number,
 ): void {
-  if (!isQrCoordinateInBounds(modules, column, row)) return;
-  modules[row][column].reserved = true;
+  const module = getQrModule(modules, column, row);
+  if (!module) return;
+  module.reserved = true;
 }
 
 function setQrModule(
@@ -1660,9 +1671,19 @@ function setQrModule(
   dark: boolean,
   reserved: boolean,
 ): void {
-  if (!isQrCoordinateInBounds(modules, column, row)) return;
-  modules[row][column].dark = dark;
-  modules[row][column].reserved ||= reserved;
+  const module = getQrModule(modules, column, row);
+  if (!module) return;
+  module.dark = dark;
+  module.reserved ||= reserved;
+}
+
+function getQrModule(
+  modules: Array<Array<{ dark: boolean; reserved: boolean }>>,
+  column: number,
+  row: number,
+): { dark: boolean; reserved: boolean } | null {
+  if (!isQrCoordinateInBounds(modules, column, row)) return null;
+  return modules[row]?.[column] ?? null;
 }
 
 function isQrCoordinateInBounds(

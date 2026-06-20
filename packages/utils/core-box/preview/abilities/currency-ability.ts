@@ -123,13 +123,15 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
     if (!parsed) return null;
 
     this.throwIfAborted(context.signal);
-    const source = STATIC_CURRENCY_RATES[parsed.source];
-    const target = STATIC_CURRENCY_RATES[parsed.target];
+    const source = getCurrencyRate(parsed.source);
+    const target = getCurrencyRate(parsed.target);
     if (!source || !target) return null;
 
     const rate = target.perUsd / source.perUsd;
     const converted = parsed.amount * rate;
     const usdValue = parsed.amount / source.perUsd;
+    const usdRate = getCurrencyRate("USD");
+    if (!usdRate) return null;
     const payload: PreviewCardPayload = {
       abilityId: this.id,
       title: `${parsed.amount} ${source.code} → ${target.code}`,
@@ -137,7 +139,7 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
       primaryLabel: `${source.name} → ${target.name}`,
       primaryValue: formatCurrencyAmount(converted, target),
       secondaryLabel: "折合美元",
-      secondaryValue: formatCurrencyAmount(usdValue, STATIC_CURRENCY_RATES.USD),
+      secondaryValue: formatCurrencyAmount(usdValue, usdRate),
       badges: ["Offline"],
       chips: [
         { label: "汇率", value: `1 ${source.code} = ${rate.toFixed(6)} ${target.code}` },
@@ -182,6 +184,8 @@ export function parseCurrencyQuery(input: string): ParsedCurrencyQuery | null {
   if (!Number.isFinite(amount)) return null;
 
   const source = normalizeCurrency(sourceRaw || symbolOrPrefix || "USD");
+  if (!targetRaw) return null;
+
   const target = normalizeCurrency(targetRaw);
   if (!source || !target || source === target) return null;
 
@@ -204,6 +208,10 @@ export function normalizeCurrency(input: string): string | null {
   if (alias && STATIC_CURRENCY_RATES[alias]) return alias;
 
   return null;
+}
+
+function getCurrencyRate(code: string): CurrencyRate | null {
+  return STATIC_CURRENCY_RATES[code] ?? null;
 }
 
 function formatCurrencyAmount(amount: number, currency: CurrencyRate): string {

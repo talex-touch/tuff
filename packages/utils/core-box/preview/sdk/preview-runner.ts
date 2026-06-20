@@ -86,7 +86,7 @@ export async function runPreviewSdkBenchmark(
       failed: failures.length,
       p50DurationMs: percentile(durations, 0.5),
       p95DurationMs: percentile(durations, 0.95),
-      maxDurationMs: durations.at(-1) ?? 0,
+      maxDurationMs: durations[durations.length - 1] ?? 0,
     },
   };
 }
