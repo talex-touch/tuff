@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import FlickeringGrid from '~/components/docs/FlickeringGrid.vue'
+import { computed } from 'vue'
 
 interface DocHeroProps {
   title?: string
@@ -22,20 +21,6 @@ const props = withDefaults(defineProps<DocHeroProps>(), {
   verifiedLabel: '',
 })
 
-const colorMode = useColorMode()
-const isDark = computed(() => colorMode.value === 'dark')
-const resolvedCssColor = ref('')
-onMounted(() => {
-  resolvedCssColor.value = window.getComputedStyle(document.documentElement)
-    .getPropertyValue('--tx-text-color-primary').trim()
-})
-const gridColor = computed(() => {
-  if (resolvedCssColor.value)
-    return resolvedCssColor.value
-  return isDark.value ? '#e5eaf3' : '#303133'
-})
-const gridMaxOpacity = computed(() => (isDark.value ? 0.22 : 0.28))
-const gridFlickerChance = computed(() => (isDark.value ? 0.26 : 0.32))
 const tagItems = computed(() => ([
   props.verifiedLabel
     ? { label: props.verifiedLabel, icon: 'i-carbon-checkmark-filled', variant: 'badge' }
@@ -50,12 +35,6 @@ const hasTags = computed(() => tagItems.value.length > 0)
 
 <template>
   <section class="docs-hero">
-    <FlickeringGrid
-      class="docs-hero__grid"
-      :color="gridColor"
-      :max-opacity="gridMaxOpacity"
-      :flicker-chance="gridFlickerChance"
-    />
     <div class="docs-hero__content">
       <div v-if="hasTags" class="docs-hero__tags">
         <span
@@ -92,18 +71,34 @@ const hasTags = computed(() => tagItems.value.length > 0)
   --docs-hero-tag-border: color-mix(in srgb, var(--tx-border-color) 62%, transparent);
   --docs-hero-tag-bg: color-mix(in srgb, var(--tx-fill-color-light) 72%, transparent);
   --docs-hero-tag-text: color-mix(in srgb, var(--tx-text-color-secondary) 90%, var(--tx-text-color-primary));
-  background: transparent;
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--tx-text-color-primary) 18%, transparent) 0 1px, transparent 1.4px) 0 0 / 16px 16px,
+    linear-gradient(135deg, color-mix(in srgb, var(--tx-color-primary) 4%, transparent), transparent 58%);
   box-shadow: none;
   overflow: hidden;
 }
 
-.docs-hero__grid {
+.docs-hero::before {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: var(--docs-hero-grid-opacity, 0.35);
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--tx-text-color-primary) 22%, transparent) 0 1px, transparent 1.4px) 8px 8px / 24px 24px;
+  content: '';
   mix-blend-mode: multiply;
+  opacity: var(--docs-hero-grid-opacity, 0.35);
+}
+
+.docs-hero::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--tx-bg-color) 42%, transparent), transparent 28%, transparent 72%, color-mix(in srgb, var(--tx-bg-color) 48%, transparent)),
+    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--tx-bg-color) 28%, transparent) 100%);
+  content: '';
 }
 
 .docs-hero__content {
@@ -184,8 +179,8 @@ const hasTags = computed(() => tagItems.value.length > 0)
   --docs-hero-grid-opacity: 0.5;
 }
 
-::global(.dark .docs-hero__grid),
-::global([data-theme='dark'] .docs-hero__grid) {
+::global(.dark .docs-hero::before),
+::global([data-theme='dark'] .docs-hero::before) {
   mix-blend-mode: screen;
 }
 

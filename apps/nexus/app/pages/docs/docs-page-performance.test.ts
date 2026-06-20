@@ -8,6 +8,7 @@ const touchAurora = readFileSync(new URL('../../components/tuff/background/Touch
 const avatarVariantsDemo = readFileSync(new URL('../../components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue', import.meta.url), 'utf8')
 const docsLayout = readFileSync(new URL('../../layouts/docs.vue', import.meta.url), 'utf8')
 const tuffFooter = readFileSync(new URL('../../components/TuffFooter.vue', import.meta.url), 'utf8')
+const docHero = readFileSync(new URL('../../components/docs/DocHero.vue', import.meta.url), 'utf8')
 const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoWrapper.vue', import.meta.url), 'utf8')
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
@@ -44,6 +45,17 @@ describe('docs page performance boundaries', () => {
     expect(tuffFooter).toContain('<footer ref="footerRef"')
     expect(tuffFooter).toContain('<LazyTouchAurora')
     expect(tuffFooter).toContain('v-if="shouldMountAurora"')
+  })
+
+  it('keeps docs hero decoration static instead of mounting a canvas animation', () => {
+    expect(docHero).not.toContain('FlickeringGrid')
+    expect(docHero).not.toContain('<canvas')
+    expect(docHero).not.toContain('ResizeObserver')
+    expect(docHero).not.toContain('IntersectionObserver')
+    expect(docHero).not.toContain('requestAnimationFrame')
+    expect(docHero).toContain('.docs-hero::before')
+    expect(docHero).toContain('.docs-hero::after')
+    expect(docHero).toContain('radial-gradient(circle at center')
   })
 
   it('keeps lightweight docs tracking separate from bottom engagement widgets', () => {
