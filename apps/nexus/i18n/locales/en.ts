@@ -393,6 +393,9 @@ export default {
     redirectingGuide: 'Redirecting to User Guide…',
     outlineLabel: 'Outline',
     sidebarLabel: 'Navigation',
+    assistant: {
+      open: 'Open Tuff Assistant',
+    },
     noOutline: 'Headings will appear here once added to this document.',
     lastUpdatedLabel: 'Last edited on',
     previousChapter: 'Previous chapter',

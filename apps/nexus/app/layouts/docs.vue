@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import DocsAsideCardsShell from '~/components/docs/DocsAsideCardsShell.vue'
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 const LazyDocsAsideCards = defineAsyncComponent(() => import('~/components/docs/DocsAsideCards.vue'))
+const LazyDocsAsideCardsShell = defineAsyncComponent(() => import('~/components/docs/DocsAsideCardsShell.vue'))
 const LazyDocsOutline = defineAsyncComponent(() => import('~/components/DocsOutline.vue'))
 const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
 const LazyTuffFooter = defineAsyncComponent(() => import('~/components/TuffFooter.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
 const BACK_TO_TOP_MOUNT_SCROLL_Y = 240
 const DOCS_FOOTER_ROOT_MARGIN = '1200px 0px'
+const DOCS_ASIDE_SHELL_MOUNT_DELAY_MS = 2400
+const DOCS_ASIDE_SHELL_IDLE_TIMEOUT_MS = 3600
 const DOCS_OUTLINE_MOUNT_DELAY_MS = 2000
 const DOCS_OUTLINE_IDLE_TIMEOUT_MS = 3200
 const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200
@@ -23,7 +25,9 @@ const outlineVisible = ref(false)
 const sidebarDrawerMounted = ref(false)
 const outlineDrawerMounted = ref(false)
 const shouldMountDocsAsideCards = ref(false)
+const shouldMountDocsAsideShell = ref(false)
 const shouldMountDocsOutline = ref(false)
+const docsAssistantShellTriggerRef = ref<HTMLElement | null>(null)
 const docsAssistantOpenRequest = ref(0)
 const docsAssistantSource = shallowRef<HTMLElement | null>(null)
 const shouldMountDocsFooter = ref(false)
@@ -31,6 +35,9 @@ const shouldMountBackToTop = ref(false)
 const shouldMountTuffexBackground = ref(false)
 let docsFooterObserver: IntersectionObserver | null = null
 let backToTopFrameId: number | null = null
+let docsAsideShellTimer: ReturnType<typeof setTimeout> | null = null
+let docsAsideShellIdleId: number | null = null
+let docsAsideShellFrameId: number | null = null
 let docsOutlineTimer: ReturnType<typeof setTimeout> | null = null
 let docsOutlineIdleId: number | null = null
 let docsOutlineFrameId: number | null = null
@@ -44,6 +51,7 @@ const outlinePublicState = useState<{ hasOutline: boolean, loading: boolean }>('
 const outlineTocState = useState<any[]>('docs-toc', () => [])
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => false)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
+const assistantAriaLabel = computed(() => t('docs.assistant.open'))
 const shouldShowAsideOutline = computed(() =>
   outlinePublicState.value.hasOutline
   || outlinePublicState.value.loading
@@ -115,7 +123,12 @@ function openOutlineDrawer() {
 function openDocsAssistantFromShell(source: HTMLElement | null) {
   docsAssistantSource.value = source
   shouldMountDocsAsideCards.value = true
+  mountDocsAsideShell()
   docsAssistantOpenRequest.value += 1
+}
+
+function openDocsAssistantFromPlaceholder() {
+  openDocsAssistantFromShell(docsAssistantShellTriggerRef.value)
 }
 
 function clearDocsFooterObserver() {
@@ -174,6 +187,55 @@ function scheduleBackToTopMountCheck() {
     backToTopFrameId = null
     maybeMountBackToTop()
   })
+}
+
+function clearDocsAsideShellSchedule() {
+  if (import.meta.server)
+    return
+
+  if (docsAsideShellTimer) {
+    clearTimeout(docsAsideShellTimer)
+    docsAsideShellTimer = null
+  }
+  if (docsAsideShellIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(docsAsideShellIdleId)
+    docsAsideShellIdleId = null
+  }
+  if (docsAsideShellFrameId !== null) {
+    window.cancelAnimationFrame(docsAsideShellFrameId)
+    docsAsideShellFrameId = null
+  }
+}
+
+function mountDocsAsideShell() {
+  if (shouldMountDocsAsideShell.value)
+    return
+  shouldMountDocsAsideShell.value = true
+  clearDocsAsideShellSchedule()
+}
+
+function scheduleDocsAsideShellMount() {
+  if (import.meta.server || shouldMountDocsAsideShell.value)
+    return
+
+  clearDocsAsideShellSchedule()
+
+  const mount = () => {
+    docsAsideShellTimer = null
+    docsAsideShellIdleId = null
+    docsAsideShellFrameId = null
+    mountDocsAsideShell()
+  }
+
+  docsAsideShellTimer = setTimeout(() => {
+    docsAsideShellTimer = null
+    if ('requestIdleCallback' in window) {
+      docsAsideShellIdleId = window.requestIdleCallback(mount, { timeout: DOCS_ASIDE_SHELL_IDLE_TIMEOUT_MS })
+      return
+    }
+
+    docsAsideShellFrameId = window.requestAnimationFrame(mount)
+  }, DOCS_ASIDE_SHELL_MOUNT_DELAY_MS)
 }
 
 function clearDocsOutlineSchedule() {
@@ -302,8 +364,10 @@ watch(isTuffexDocs, (active) => {
 }, { immediate: true })
 
 watch(shouldShowDocsAsideAiNotice, (shouldShow) => {
-  if (shouldShow)
+  if (shouldShow) {
+    mountDocsAsideShell()
     shouldMountDocsAsideCards.value = true
+  }
 }, { immediate: true })
 
 watch(shouldShowAsideOutline, (shouldShow) => {
@@ -317,6 +381,7 @@ watch(shouldShowAsideOutline, (shouldShow) => {
 onMounted(() => {
   bindDocsFooterObserver()
   scheduleBackToTopMountCheck()
+  scheduleDocsAsideShellMount()
   scheduleDocsOutlineMount()
   window.addEventListener('scroll', scheduleBackToTopMountCheck, { passive: true })
 })
@@ -325,6 +390,7 @@ onBeforeUnmount(() => {
   clearDocsFooterObserver()
   window.removeEventListener('scroll', scheduleBackToTopMountCheck)
   clearBackToTopFrame()
+  clearDocsAsideShellSchedule()
   clearDocsOutlineSchedule()
   clearTuffexBackgroundIntentListeners()
   clearTuffexBackgroundSchedule()
@@ -394,7 +460,22 @@ onBeforeUnmount(() => {
                   :assistant-open-request="docsAssistantOpenRequest"
                   :assistant-source="docsAssistantSource"
                 />
-                <DocsAsideCardsShell @open-assistant="openDocsAssistantFromShell" />
+                <LazyDocsAsideCardsShell
+                  v-if="shouldMountDocsAsideShell"
+                  @open-assistant="openDocsAssistantFromShell"
+                />
+                <button
+                  v-else
+                  ref="docsAssistantShellTriggerRef"
+                  type="button"
+                  class="docs-aside-assistant-shell"
+                  :aria-label="assistantAriaLabel"
+                  @click="openDocsAssistantFromPlaceholder"
+                >
+                  <span class="docs-aside-assistant-shell__spark" aria-hidden="true">✦</span>
+                  <span class="docs-aside-assistant-shell__label">Tuff Assistant</span>
+                  <span class="docs-aside-assistant-shell__arrow i-carbon-chevron-right" aria-hidden="true" />
+                </button>
               </ClientOnly>
             </div>
           </aside>
@@ -597,6 +678,49 @@ onBeforeUnmount(() => {
 }
 .docs-outline-panel:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 18%, transparent);
+}
+
+.docs-aside-assistant-shell {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #ffffff) 86%, transparent);
+  color: var(--tx-text-color-primary, #303133);
+  cursor: pointer;
+  font: inherit;
+  padding: 12px;
+  transition:
+    background var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out),
+    border-color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
+}
+
+.docs-aside-assistant-shell:hover,
+.docs-aside-assistant-shell:focus-visible {
+  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 35%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  outline: none;
+}
+
+.docs-aside-assistant-shell__spark {
+  color: var(--tx-color-primary, #409eff);
+  font-size: 14px;
+}
+
+.docs-aside-assistant-shell__label {
+  flex: 1;
+  padding-left: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.docs-aside-assistant-shell__arrow {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 14px;
 }
 
 .docs-outline-shell {
