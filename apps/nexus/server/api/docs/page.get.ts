@@ -16,7 +16,8 @@ type DocsPageRecord = Record<string, unknown> & {
 
 interface DevDocsPageCacheEntry {
   mtimeMs: number
-  doc: DocsPageRecord
+  fullDoc?: DocsPageRecord
+  metaDoc?: DocsPageRecord
 }
 
 const devDocsPageFileCache = new Map<string, DevDocsPageCacheEntry>()
@@ -31,6 +32,56 @@ function normalizeLocale(value: unknown): 'en' | 'zh' {
 
 function toPlainJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function parseFrontmatterScalar(value: string): unknown {
+  const trimmed = value.trim()
+  if (!trimmed)
+    return ''
+  if (trimmed === 'true')
+    return true
+  if (trimmed === 'false')
+    return false
+  if (trimmed === 'null')
+    return null
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed))
+    return Number(trimmed)
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+    || (trimmed.startsWith('\'') && trimmed.endsWith('\''))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
+}
+
+function parseFrontmatterMetadata(raw: string) {
+  if (!raw.startsWith('---'))
+    return {}
+
+  const frontmatterEnd = raw.indexOf('\n---', 3)
+  if (frontmatterEnd === -1)
+    return {}
+
+  const metadata: Record<string, unknown> = {}
+  const frontmatter = raw.slice(3, frontmatterEnd).trim()
+  for (const line of frontmatter.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#'))
+      continue
+
+    const separatorIndex = trimmed.indexOf(':')
+    if (separatorIndex <= 0)
+      continue
+
+    const key = trimmed.slice(0, separatorIndex).trim()
+    if (!key)
+      continue
+
+    metadata[key] = parseFrontmatterScalar(trimmed.slice(separatorIndex + 1))
+  }
+
+  return metadata
 }
 
 function shouldIncludeBody(value: unknown) {
@@ -123,7 +174,7 @@ function isFileNotFound(error: unknown) {
   )
 }
 
-async function readDevDocsPageFromFile(contentPath: string): Promise<DocsPageRecord | null> {
+async function readDevDocsPageFromFile(contentPath: string, includeBody: boolean): Promise<DocsPageRecord | null> {
   if (isProduction())
     return null
 
@@ -131,10 +182,9 @@ async function readDevDocsPageFromFile(contentPath: string): Promise<DocsPageRec
   if (!candidates.length)
     return null
 
-  const [{ readFile, stat }, { resolve, sep }, { parseMarkdown }] = await Promise.all([
+  const [{ readFile, stat }, { resolve, sep }] = await Promise.all([
     import('node:fs/promises'),
     import('node:path'),
-    import('@nuxtjs/mdc/runtime'),
   ])
   const docsRoot = resolve(process.cwd(), 'content/docs')
   const docsRootPrefix = `${docsRoot}${sep}`
@@ -155,10 +205,30 @@ async function readDevDocsPageFromFile(contentPath: string): Promise<DocsPageRec
     }
 
     const cached = devDocsPageFileCache.get(filePath)
-    if (cached && cached.mtimeMs === fileStat.mtimeMs)
-      return cached.doc
+    if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+      const cachedDoc = includeBody ? cached.fullDoc : cached.metaDoc
+      if (cachedDoc)
+        return cachedDoc
+    }
 
     const raw = await readFile(filePath, 'utf8')
+    if (!includeBody) {
+      const data = parseFrontmatterMetadata(raw)
+      const doc: DocsPageRecord = {
+        ...data,
+        path: contentPath,
+        _path: contentPath,
+        meta: data,
+      }
+      const nextCache = cached && cached.mtimeMs === fileStat.mtimeMs
+        ? cached
+        : { mtimeMs: fileStat.mtimeMs }
+      nextCache.metaDoc = doc
+      devDocsPageFileCache.set(filePath, nextCache)
+      return doc
+    }
+
+    const { parseMarkdown } = await import('@nuxtjs/mdc/runtime')
     const parsed = await parseMarkdown(raw, {
       highlight: false,
       toc: { depth: 4, searchDepth: 4 },
@@ -177,16 +247,20 @@ async function readDevDocsPageFromFile(contentPath: string): Promise<DocsPageRec
       body,
       toc: parsed.toc,
     }
-    devDocsPageFileCache.set(filePath, { mtimeMs: fileStat.mtimeMs, doc })
+    const nextCache = cached && cached.mtimeMs === fileStat.mtimeMs
+      ? cached
+      : { mtimeMs: fileStat.mtimeMs }
+    nextCache.fullDoc = doc
+    devDocsPageFileCache.set(filePath, nextCache)
     return doc
   }
 
   return null
 }
 
-async function readDevDocsPageFallback(lookupPaths: string[]) {
+async function readDevDocsPageFallback(lookupPaths: string[], includeBody: boolean) {
   for (const path of lookupPaths) {
-    const doc = await readDevDocsPageFromFile(path)
+    const doc = await readDevDocsPageFromFile(path, includeBody)
     if (doc)
       return doc
   }
@@ -210,7 +284,7 @@ export default defineCachedEventHandler(async (event) => {
   const lookupPaths = buildDocsPageLookupPaths(docPath, locale)
 
   if (shouldPreferDevDocsFallback()) {
-    const fallbackDoc = await readDevDocsPageFallback(lookupPaths)
+    const fallbackDoc = await readDevDocsPageFallback(lookupPaths, includeBody)
     if (fallbackDoc) {
       setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
       return serializeDoc(fallbackDoc, includeBody)
@@ -227,7 +301,7 @@ export default defineCachedEventHandler(async (event) => {
       throw error
 
     markDevDocsContentUnavailable()
-    const fallbackDoc = await readDevDocsPageFallback(lookupPaths)
+    const fallbackDoc = await readDevDocsPageFallback(lookupPaths, includeBody)
     setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
 
     if (fallbackDoc) {

@@ -32,6 +32,7 @@ const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoW
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
 const mermaidRenderer = readFileSync(new URL('../../utils/mermaid-renderer.ts', import.meta.url), 'utf8')
+const docsPageApi = readFileSync(new URL('../../../server/api/docs/page.get.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
 
@@ -410,6 +411,16 @@ describe('docs page performance boundaries', () => {
     expect(page).not.toContain('shouldClientRenderDocBody')
     expect(page).not.toContain('<ClientOnly v-if="shouldClientRenderDocBody">')
     expect(page).toMatch(/<ContentRenderer[\s\S]*v-if="renderDoc\?\.body"[\s\S]*:value="renderDoc \?\? \{\}"/)
+  })
+
+  it('keeps dev fallback metadata requests off full Markdown body parsing', () => {
+    expect(docsPageApi).toContain('function parseFrontmatterMetadata(raw: string)')
+    expect(docsPageApi).toContain('async function readDevDocsPageFromFile(contentPath: string, includeBody: boolean)')
+    expect(docsPageApi).toMatch(/if \(!includeBody\) \{[\s\S]*parseFrontmatterMetadata\(raw\)[\s\S]*metaDoc = doc[\s\S]*return doc[\s\S]*\}/)
+    expect(docsPageApi).toMatch(/const \{ parseMarkdown \} = await import\('@nuxtjs\/mdc\/runtime'\)/)
+    expect(docsPageApi).not.toContain("import('@nuxtjs/mdc/runtime'),")
+    expect(docsPageApi).toContain('fullDoc?: DocsPageRecord')
+    expect(docsPageApi).toContain('metaDoc?: DocsPageRecord')
   })
 
   it('warms pager docs targets into the split-body cache on user intent', () => {

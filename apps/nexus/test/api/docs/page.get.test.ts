@@ -143,6 +143,48 @@ describe('/api/docs/page', () => {
     )
   })
 
+  it('returns local Markdown metadata without parsing the full body in development fallback', async () => {
+    process.env.NODE_ENV = 'development'
+    const error = new Error('no such table: _content_docs')
+    getQueryMock.mockReturnValue({ path: '/docs/dev/components/card', locale: 'en', body: '0' })
+    mockDocsCollection(new Map([['/docs/dev/components/card.en', error]]))
+    fsMocks.stat.mockResolvedValue({ mtimeMs: 125 })
+    fsMocks.readFile.mockResolvedValue([
+      '---',
+      'title: "Card"',
+      'description: "Surface container with slots: material backgrounds and loading modes."',
+      'category: Layout',
+      'syncStatus: migrated',
+      'verified: true',
+      '---',
+      '# Card',
+      '::TuffDemoWrapper{demo="CardBasicDemo"}',
+      '::',
+    ].join('\n'))
+
+    await expect(handler({})).resolves.toEqual({
+      title: 'Card',
+      description: 'Surface container with slots: material backgrounds and loading modes.',
+      category: 'Layout',
+      syncStatus: 'migrated',
+      verified: true,
+      path: '/docs/dev/components/card.en',
+      _path: '/docs/dev/components/card.en',
+      meta: {
+        title: 'Card',
+        description: 'Surface container with slots: material backgrounds and loading modes.',
+        category: 'Layout',
+        syncStatus: 'migrated',
+        verified: true,
+      },
+    })
+    expect(fsMocks.readFile).toHaveBeenCalledWith(
+      expect.stringContaining('content/docs/dev/components/card.en.mdc'),
+      'utf8',
+    )
+    expect(mdcMocks.parseMarkdown).not.toHaveBeenCalled()
+  })
+
   it('renders local Markdown in development when the Nuxt Content docs query endpoint returns 500', async () => {
     process.env.NODE_ENV = 'development'
     const error = Object.assign(new Error('[POST] "/__nuxt_content/docs/query?t=1781920528845": 500 Server Error'), {
