@@ -13,6 +13,7 @@ import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath 
 const DOCS_FULL_BODY_CACHE_LIMIT = 24
 const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
+const prefetchedDocTargets = new Set<string>()
 
 function resolveFullDocCacheKey(value: Record<string, any> | null) {
   const rawPath = typeof value?.path === 'string'
@@ -242,6 +243,41 @@ function startFullDocFetchForRoute() {
 
   const fetchId = ++activeDocFetchId
   void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
+}
+
+function prefetchDocForPath(path: string | null | undefined) {
+  if (import.meta.server || !path)
+    return
+
+  const normalized = normalizeDocsPagePath(path)
+  const locale = docsLocale.value
+  const cacheKey = `doc-full:${normalized}:${locale}`
+  const prefetchKey = `${normalized}:${locale}`
+  if (prefetchedDocTargets.has(prefetchKey))
+    return
+  prefetchedDocTargets.add(prefetchKey)
+
+  void preloadRouteComponents(toLocalizedDocsPath(normalized, locale))
+  void requestJson<Record<string, any> | null>('/api/docs/page', {
+    query: {
+      path: normalized,
+      locale,
+      body: '0',
+    },
+  }).catch(() => {})
+
+  if (hasCachedFullDoc(cacheKey))
+    return
+
+  void requestJson<Record<string, any> | null>('/api/docs/page', {
+    query: {
+      path: normalized,
+      locale,
+      body: '1',
+    },
+  }).then((nextFullDoc) => {
+    cacheFullDoc(nextFullDoc)
+  }).catch(() => {})
 }
 
 async function loadActiveDocForRoute() {
@@ -1502,6 +1538,9 @@ watch(
                 :to="localizedDocsPath(pagerPrevPath)"
                 :prefetch="false"
                 class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
+                @focus="prefetchDocForPath(pagerPrevPath)"
+                @mouseenter="prefetchDocForPath(pagerPrevPath)"
+                @touchstart.passive="prefetchDocForPath(pagerPrevPath)"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
                   <span class="i-carbon-arrow-left text-base" />
@@ -1516,6 +1555,9 @@ watch(
                 :to="localizedDocsPath(pagerNextPath)"
                 :prefetch="false"
                 class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
+                @focus="prefetchDocForPath(pagerNextPath)"
+                @mouseenter="prefetchDocForPath(pagerNextPath)"
+                @touchstart.passive="prefetchDocForPath(pagerNextPath)"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center justify-end gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
                   {{ t('docs.nextChapter') }}
