@@ -315,7 +315,10 @@ if (import.meta.server && viewState.value === 'not-found')
 const { data: navigationTreePayload } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
-    key: 'docs-navigation',
+    key: computed(() => `docs-navigation:${docsLocale.value}`),
+    query: computed(() => ({
+      locale: docsLocale.value,
+    })),
     responseType: 'json',
     default: () => [],
   },

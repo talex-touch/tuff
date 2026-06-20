@@ -7,12 +7,15 @@ const contentMocks = vi.hoisted(() => ({
 vi.mock('@nuxt/content/server', () => contentMocks)
 
 let handler: (event: any) => Promise<any>
+let getQueryMock: ReturnType<typeof vi.fn>
 let setHeaderMock: ReturnType<typeof vi.fn>
 let warnSpy: ReturnType<typeof vi.spyOn>
 
 beforeAll(async () => {
   ;(globalThis as any).defineEventHandler = (fn: any) => fn
+  getQueryMock = vi.fn()
   setHeaderMock = vi.fn()
+  ;(globalThis as any).getQuery = getQueryMock
   ;(globalThis as any).setHeader = setHeaderMock
   handler = (await import('../../../server/api/docs/navigation.get')).default as (event: any) => Promise<any>
 })
@@ -22,6 +25,7 @@ describe('/api/docs/navigation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    getQueryMock.mockReturnValue({})
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     process.env.NODE_ENV = previousNodeEnv
   })
@@ -38,6 +42,53 @@ describe('/api/docs/navigation', () => {
     await expect(handler({})).resolves.toEqual(navigation)
     expect(contentMocks.queryCollectionNavigation).toHaveBeenCalledTimes(1)
     expect(setHeaderMock).toHaveBeenCalledWith({}, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
+  })
+
+  it('keeps only requested locale leaf docs while preserving directory nodes', async () => {
+    getQueryMock.mockReturnValue({ locale: 'en' })
+    contentMocks.queryCollectionNavigation.mockResolvedValue([
+      {
+        title: 'Docs',
+        path: '/docs',
+        children: [
+          {
+            title: 'Dev',
+            path: '/docs/dev',
+            children: [
+              { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
+              { title: 'Tabs 标签页', path: '/docs/dev/components/tabs.zh' },
+            ],
+          },
+        ],
+      },
+    ])
+
+    await expect(handler({})).resolves.toEqual([
+      {
+        title: 'Docs',
+        path: '/docs',
+        children: [
+          {
+            title: 'Dev',
+            path: '/docs/dev',
+            children: [
+              { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
+            ],
+          },
+        ],
+      },
+    ])
+  })
+
+  it('keeps invalid locale requests backwards-compatible', async () => {
+    getQueryMock.mockReturnValue({ locale: 'fr' })
+    const navigation = [
+      { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
+      { title: 'Tabs 标签页', path: '/docs/dev/components/tabs.zh' },
+    ]
+    contentMocks.queryCollectionNavigation.mockResolvedValue(navigation)
+
+    await expect(handler({})).resolves.toEqual(navigation)
   })
 
   it('retries missing docs content table in development before returning empty navigation', async () => {
