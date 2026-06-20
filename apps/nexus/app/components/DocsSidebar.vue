@@ -2,7 +2,7 @@
 import DocSection from './docs/DocSection.vue'
 import { hasWindow } from '@talex-touch/utils/env'
 import { coerceJsonArray } from '~/utils/docs-api'
-import { useTypedFetch } from '~/utils/request'
+import { requestJson, useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
@@ -67,6 +67,7 @@ const {
 )
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 let activeScrollFrame: number | null = null
+const prefetchedDocsTargets = new Set<string>()
 
 function stripCjk(value: string) {
   return value.replace(CJK_PATTERN, '').replace(/\s{2,}/g, ' ').trim()
@@ -331,6 +332,45 @@ function normalizeContentPath(path: string | null | undefined) {
 
 function localizedDocsPath(path: string | null | undefined) {
   return toLocalizedDocsPath(path, docsLocale.value)
+}
+
+function shouldPrefetchDocsTarget(path: string | null | undefined) {
+  if (!path)
+    return false
+  const normalized = normalizeContentPath(path)
+  return Boolean(normalized?.startsWith('/docs/dev/components/'))
+}
+
+function prefetchDocsTarget(path: string | null | undefined) {
+  if (import.meta.server || !shouldPrefetchDocsTarget(path))
+    return
+
+  const normalized = normalizeContentPath(path)
+  if (!normalized)
+    return
+
+  const locale = docsLocale.value
+  const cacheKey = `${normalized}:${locale}`
+  if (prefetchedDocsTargets.has(cacheKey))
+    return
+  prefetchedDocsTargets.add(cacheKey)
+
+  const routeTarget = localizedDocsPath(normalized)
+  void preloadRouteComponents(routeTarget)
+  void requestJson('/api/docs/page', {
+    query: {
+      path: normalized,
+      locale,
+      body: '0',
+    },
+  }).catch(() => {})
+  void requestJson('/api/docs/page', {
+    query: {
+      path: normalized,
+      locale,
+      body: '1',
+    },
+  }).catch(() => {})
 }
 
 function filterByLocale(items: any[]): any[] {
@@ -781,6 +821,9 @@ onBeforeUnmount(() => {
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
+              @focus="prefetchDocsTarget(linkTarget(currentSectionData))"
+              @mouseenter="prefetchDocsTarget(linkTarget(currentSectionData))"
+              @touchstart.passive="prefetchDocsTarget(linkTarget(currentSectionData))"
             >
               <span
                 class="truncate"
@@ -829,6 +872,9 @@ onBeforeUnmount(() => {
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"
+              @focus="prefetchDocsTarget(linkTarget(child))"
+              @mouseenter="prefetchDocsTarget(linkTarget(child))"
+              @touchstart.passive="prefetchDocsTarget(linkTarget(child))"
             >
               <span
                 class="truncate"
