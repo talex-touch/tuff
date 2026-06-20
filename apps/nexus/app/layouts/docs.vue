@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import DocsAsideCardsShell from '~/components/docs/DocsAsideCardsShell.vue'
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
+const LazyDocsAsideCards = defineAsyncComponent(() => import('~/components/docs/DocsAsideCards.vue'))
 const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
 const LazyTuffFooter = defineAsyncComponent(() => import('~/components/TuffFooter.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
@@ -17,6 +19,9 @@ const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
 const sidebarDrawerMounted = ref(false)
 const outlineDrawerMounted = ref(false)
+const shouldMountDocsAsideCards = ref(false)
+const docsAssistantOpenRequest = ref(0)
+const docsAssistantSource = shallowRef<HTMLElement | null>(null)
 const shouldMountDocsFooter = ref(false)
 const shouldMountBackToTop = ref(false)
 const shouldMountTuffexBackground = ref(false)
@@ -29,7 +34,21 @@ const outlinePublicState = useState<{ hasOutline: boolean, loading: boolean }>('
   hasOutline: false,
   loading: false,
 }))
+const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
 const shouldShowAsideOutline = computed(() => outlinePublicState.value.hasOutline || outlinePublicState.value.loading)
+
+type DocsAsideSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
+
+const DOCS_ASIDE_SYNC_STATUS_ALIASES: Record<string, DocsAsideSyncStatusKey> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
 
 const normalizedDocsPath = computed(() => {
   const path = route.path || '/'
@@ -47,6 +66,21 @@ const isTutorialDocs = computed(() => {
   return path === '/docs/guide' || path.startsWith('/docs/guide/')
 })
 
+const docsAsideSyncStatus = computed<DocsAsideSyncStatusKey>(() => {
+  if (docMetaState.value?.verified === true)
+    return 'verified'
+  const raw = typeof docMetaState.value?.syncStatus === 'string'
+    ? docMetaState.value.syncStatus.trim()
+    : ''
+  return DOCS_ASIDE_SYNC_STATUS_ALIASES[raw] ?? 'not_started'
+})
+
+const shouldShowDocsAsideAiNotice = computed(() => {
+  const path = typeof docMetaState.value?.path === 'string' ? docMetaState.value.path : ''
+  return path.includes('/docs/dev/components/')
+    && docsAsideSyncStatus.value === 'migrated'
+})
+
 function mountTuffexBackground() {
   if (!isTuffexDocs.value)
     return
@@ -61,6 +95,12 @@ function openSidebarDrawer() {
 function openOutlineDrawer() {
   outlineDrawerMounted.value = true
   outlineVisible.value = true
+}
+
+function openDocsAssistantFromShell(source: HTMLElement | null) {
+  docsAssistantSource.value = source
+  shouldMountDocsAsideCards.value = true
+  docsAssistantOpenRequest.value += 1
 }
 
 function clearDocsFooterObserver() {
@@ -149,8 +189,9 @@ function scheduleTuffexBackground() {
     mountTuffexBackground()
   }
 
-  if ('requestIdleCallback' in window) {
-    tuffexBackgroundIdleId = window.requestIdleCallback(schedule, { timeout: TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS })
+  const requestIdleCallback = window.requestIdleCallback as typeof window.requestIdleCallback | undefined
+  if (typeof requestIdleCallback === 'function') {
+    tuffexBackgroundIdleId = requestIdleCallback(schedule, { timeout: TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS })
     return
   }
 
@@ -191,6 +232,11 @@ watch(isTuffexDocs, (active) => {
   clearTuffexBackgroundIntentListeners()
   clearTuffexBackgroundSchedule()
   shouldMountTuffexBackground.value = false
+}, { immediate: true })
+
+watch(shouldShowDocsAsideAiNotice, (shouldShow) => {
+  if (shouldShow)
+    shouldMountDocsAsideCards.value = true
 }, { immediate: true })
 
 onMounted(() => {
@@ -259,7 +305,12 @@ onBeforeUnmount(() => {
                 <div v-show="shouldShowAsideOutline" class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">
                   <DocsOutline />
                 </div>
-                <DocsAsideCards />
+                <LazyDocsAsideCards
+                  v-if="shouldMountDocsAsideCards"
+                  :assistant-open-request="docsAssistantOpenRequest"
+                  :assistant-source="docsAssistantSource"
+                />
+                <DocsAsideCardsShell @open-assistant="openDocsAssistantFromShell" />
               </ClientOnly>
             </div>
           </aside>
