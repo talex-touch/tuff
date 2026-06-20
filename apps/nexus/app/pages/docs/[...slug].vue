@@ -13,10 +13,14 @@ import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath 
 const DOCS_FULL_BODY_CACHE_LIMIT = 24
 const DOCS_FULL_BODY_IDLE_DELAY_MS = 180
 const DOCS_FULL_BODY_IDLE_TIMEOUT_MS = 1200
-const DOCS_FULL_BODY_FALLBACK_DELAY_MS = 220
+const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 900
+const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
-const prefetchedDocTargets = new Set<string>()
+const prefetchedDocMetadataTargets = new Set<string>()
+const prefetchedDocFullBodyTargets = new Set<string>()
+const pendingPagerFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingPagerFullBodyPrefetchIdleIds = new Map<string, number>()
 const RELATIVE_TIME_UNITS = [
   { unit: 'year', ms: 365 * 24 * 60 * 60 * 1000 },
   { unit: 'month', ms: 30 * 24 * 60 * 60 * 1000 },
@@ -327,41 +331,95 @@ function startFullDocFetchForRoute() {
   scheduleFullDocFetchForRoute(fetchId, docPath.value, docsLocale.value)
 }
 
+function prefetchDocMetadataForTarget(normalized: string, locale: 'en' | 'zh') {
+  const prefetchKey = `${normalized}:${locale}`
+  if (prefetchedDocMetadataTargets.has(prefetchKey))
+    return
+
+  prefetchedDocMetadataTargets.add(prefetchKey)
+  void preloadRouteComponents(toLocalizedDocsPath(normalized, locale))
+  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
+}
+
+function clearPagerFullBodyPrefetchSchedule(prefetchKey: string) {
+  const timer = pendingPagerFullBodyPrefetchTimers.get(prefetchKey)
+  if (timer) {
+    clearTimeout(timer)
+    pendingPagerFullBodyPrefetchTimers.delete(prefetchKey)
+  }
+
+  const idleId = pendingPagerFullBodyPrefetchIdleIds.get(prefetchKey)
+  if (idleId !== undefined && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(idleId)
+    pendingPagerFullBodyPrefetchIdleIds.delete(prefetchKey)
+  }
+}
+
+function clearPagerFullBodyPrefetchSchedules() {
+  if (import.meta.server)
+    return
+
+  for (const prefetchKey of pendingPagerFullBodyPrefetchTimers.keys())
+    clearPagerFullBodyPrefetchSchedule(prefetchKey)
+  for (const prefetchKey of pendingPagerFullBodyPrefetchIdleIds.keys())
+    clearPagerFullBodyPrefetchSchedule(prefetchKey)
+}
+
+function schedulePagerFullDocPrefetch(normalized: string, locale: 'en' | 'zh') {
+  if (import.meta.server)
+    return
+
+  const cacheKey = `doc-full:${normalized}:${locale}`
+  const prefetchKey = `${normalized}:${locale}`
+  if (
+    hasCachedFullDoc(cacheKey)
+    || prefetchedDocFullBodyTargets.has(prefetchKey)
+    || pendingPagerFullBodyPrefetchTimers.has(prefetchKey)
+  ) {
+    return
+  }
+
+  const prefetchFullDoc = () => {
+    clearPagerFullBodyPrefetchSchedule(prefetchKey)
+    if (hasCachedFullDoc(cacheKey) || prefetchedDocFullBodyTargets.has(prefetchKey))
+      return
+
+    prefetchedDocFullBodyTargets.add(prefetchKey)
+    void requestDocsPage({ path: normalized, locale, body: '1' }).then((nextFullDoc) => {
+      cacheFullDoc(nextFullDoc)
+    }).catch(() => {})
+  }
+
+  const timer = setTimeout(() => {
+    pendingPagerFullBodyPrefetchTimers.delete(prefetchKey)
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(prefetchFullDoc, { timeout: DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS })
+      pendingPagerFullBodyPrefetchIdleIds.set(prefetchKey, idleId)
+      return
+    }
+
+    prefetchFullDoc()
+  }, DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS)
+  pendingPagerFullBodyPrefetchTimers.set(prefetchKey, timer)
+}
+
 function prefetchDocForPath(path: string | null | undefined) {
   if (import.meta.server || !path)
     return
 
   const normalized = normalizeDocsPagePath(path)
   const locale = docsLocale.value
-  const cacheKey = `doc-full:${normalized}:${locale}`
-  const prefetchKey = `${normalized}:${locale}`
-  if (prefetchedDocTargets.has(prefetchKey))
-    return
-  prefetchedDocTargets.add(prefetchKey)
 
-  void preloadRouteComponents(toLocalizedDocsPath(normalized, locale))
-  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
+  prefetchDocMetadataForTarget(normalized, locale)
+  schedulePagerFullDocPrefetch(normalized, locale)
+}
 
-  if (hasCachedFullDoc(cacheKey))
+function cancelPrefetchDocForPath(path: string | null | undefined) {
+  if (import.meta.server || !path)
     return
 
-  const prefetchFullDoc = () => {
-    if (hasCachedFullDoc(cacheKey))
-      return
-
-    void requestDocsPage({ path: normalized, locale, body: '1' }).then((nextFullDoc) => {
-      cacheFullDoc(nextFullDoc)
-    }).catch(() => {})
-  }
-
-  setTimeout(() => {
-    if ('requestIdleCallback' in window) {
-      window.requestIdleCallback(prefetchFullDoc, { timeout: DOCS_FULL_BODY_IDLE_TIMEOUT_MS })
-      return
-    }
-
-    prefetchFullDoc()
-  }, DOCS_FULL_BODY_FALLBACK_DELAY_MS)
+  const normalized = normalizeDocsPagePath(path)
+  clearPagerFullBodyPrefetchSchedule(`${normalized}:${docsLocale.value}`)
 }
 
 async function loadActiveDocForRoute() {
@@ -412,6 +470,7 @@ if (import.meta.client)
 
 watch(requestKey, () => {
   clearCodeEnhanceSchedule()
+  clearPagerFullBodyPrefetchSchedules()
   clearRenderedCodeHeaders()
   isLoading.value = true
   void loadActiveDocForRoute()
@@ -1010,6 +1069,7 @@ onBeforeUnmount(() => {
   docAssistantContextState.value = ''
   clearCodeEnhanceSchedule()
   clearFullDocFetchSchedule()
+  clearPagerFullBodyPrefetchSchedules()
   clearAssistantContextSchedule()
   clearDocClientPanelIntentListeners()
   clearDocClientPanelSchedule()
@@ -1698,7 +1758,9 @@ watch(
                 :prefetch="false"
                 class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
                 @focus="prefetchDocForPath(pagerPrevPath)"
+                @blur="cancelPrefetchDocForPath(pagerPrevPath)"
                 @mouseenter="prefetchDocForPath(pagerPrevPath)"
+                @mouseleave="cancelPrefetchDocForPath(pagerPrevPath)"
                 @touchstart.passive="prefetchDocForPath(pagerPrevPath)"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
@@ -1715,7 +1777,9 @@ watch(
                 :prefetch="false"
                 class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
                 @focus="prefetchDocForPath(pagerNextPath)"
+                @blur="cancelPrefetchDocForPath(pagerNextPath)"
                 @mouseenter="prefetchDocForPath(pagerNextPath)"
+                @mouseleave="cancelPrefetchDocForPath(pagerNextPath)"
                 @touchstart.passive="prefetchDocForPath(pagerNextPath)"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center justify-end gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
