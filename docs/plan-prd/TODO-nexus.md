@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：本轮 Nexus docs 性能批次已收尾；已完成 7 个提交。后续 docs 文档内容、AI review / aireview 未审批组件、全站 route matrix 与生产构建复核全部进入本文 TODO 队列。
+> 当前状态：Nexus docs 性能优化继续按小批次推进；已完成 7 个提交，当前第 8 批聚焦组件页侧栏 metadata 加载时机，避免组件导航链接晚 8 秒出现。
 
 ## Goal 原句
 
@@ -18,9 +18,9 @@
 
 ## 当前进度
 
-- 本轮收尾：100%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险和明显慢切换路径，并保留 Playwright / HAR / screenshot / focused tests 证据。
-- 整体 goal 估算：约 52%。已完成 docs 路由关键路径止血；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix 与生产构建 chunk 复核。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度。
+- 本轮 tabs/card 文档链路：约 78%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏和组件侧栏链接晚出现问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
+- 整体 goal 估算：约 56%。已完成 docs 路由关键路径止血；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix 与生产构建 chunk 复核。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟。
 - 后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 已完成批次
@@ -34,6 +34,7 @@
 | 5 | `3213bcba0` | `perf(nexus): split route-local locale messages` | 已完成 |
 | 6 | `ec0d41e29` | `perf(nexus): filter route-local dev stylesheets` | 已完成 |
 | 7 | `e46541119` | `perf(nexus): defer docs full body prefetch` | 已完成 |
+| 8 | 待提交 | `perf(nexus): load component sidebar metadata sooner` | 收尾中 |
 
 ## 本轮收尾结论
 
@@ -122,12 +123,53 @@
   - card -> tabs client switch：URL settled 79ms, network idle 731ms, requests 19, failed 0。
   - card -> tabs docs requests：tabs `body=0` at +22ms, tabs `body=1` at +417ms, neighboring tab-bar `body=1` prefetch at +1203ms。
 
+## 第 8 批收口记录
+
+目标：修复组件文档页内侧栏组件列表加载过晚的问题。第 7 批后 full-body 正文已延后，但组件侧栏 metadata 仍固定 8s 后才请求，导致从 `card` 页直接切到 `tabs` 时，目标链接本身晚出现，交互感知仍慢。
+
+改动范围：
+
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+
+实现口径：
+
+- 不新增审计脚手架或无意义测试设施。
+- `/api/docs/sidebar-components?locale=en` 实测约 25KB，冷请求约 30-60ms、热请求约 3ms；相比让组件导航缺失 8 秒，水合后短延迟加载更符合页面切换体验目标。
+- 将组件侧栏 metadata 自动调度从 8000ms 改为 360ms，保留 `immediate: false`、locale-only API、intent 触发和 idle 调度。
+- 不改变 `body=1` full-body Markdown 预取策略，组件正文仍由 `body=0` metadata 先行、full body 后置。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/pages/docs/docs-page-performance.test.ts" "app/components/content/demo-client-boundary.test.ts" "app/components/content/demo-lazy.test.ts"`，3 files / 42 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "app/components/DocsSidebar.vue" "app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/app/components/DocsSidebar.vue" "apps/nexus/app/pages/docs/docs-page-performance.test.ts"` 通过。
+- curl smoke：
+  - `/en/docs/dev/components/tabs` status 200。
+  - `/api/docs/page?path=/docs/dev/components/tabs&locale=en&body=0` status 200，约 455 bytes。
+  - `/api/docs/page?path=/docs/dev/components/tabs&locale=en&body=1` status 200，约 48.5KB。
+  - `/api/docs/sidebar-components?locale=en` status 200，约 25.8KB，108 rows，含 `/docs/dev/components/tabs`。
+- Playwright：
+  - 报告：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21.json`
+  - 截图：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21-tabs.png`
+  - 截图：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21-card.png`
+  - 截图：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21-switch-card-to-tabs.png`
+  - HAR：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21-tabs.har`
+  - HAR：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21-card.har`
+  - HAR：`output/playwright/nexus-docs-sidebar-metadata-delay-3200-2026-06-21-switch-card-to-tabs.har`
+  - tabs first load：status 200, DOMContentLoaded 229ms, network idle 1511ms, requests 533, failed 0。
+  - card first load：status 200, DOMContentLoaded 124ms, network idle 1227ms, `tabs` sidebar link visible 1241ms, requests 540, failed 0。
+  - card -> tabs client switch：URL settled 63ms, network idle 63ms, requests 11, failed 0。
+  - card -> tabs docs requests：tabs `body=0` at +21ms；未在切换关键窗口内请求 tabs `body=1`。
+
 ## 后续任务树
 
 ### P0：docs 文档内容加载继续拆分
 
 - [x] 盘点 docs route 首屏 payload：区分 SSR 必须数据、首屏可见内容、折叠区内容、demo registry、code block/highlight、metadata。
 - [x] 将组件 docs 文档正文加载拆成 `body=0` metadata 与 idle `body=1` full body，避免页面切换初期重复拉大 payload。
+- [x] 将组件侧栏 metadata 从固定 8s 后置改为水合后短延迟加载，避免同组组件导航链接晚出现。
 - [ ] 固化 docs template：同类文档页共享稳定布局壳，正文与 demo 独立懒加载。
 - [ ] 将 demo registry 从 docs 首屏路径移出，组件 demo 只在可见区域或交互展开时加载。
 - [x] 对 tabs/card 等组件页建立最小 Playwright 性能基线：首屏截图、HAR、request count、failed count、DOMContentLoaded/load、client-side route switch timing。
