@@ -362,7 +362,7 @@ const quickOpsDiagnosticsInfo = vi.hoisted(
     arch: 'arm64',
     osType: 'Darwin',
     osRelease: '25.0.0',
-    nodeVersion: '22.16.0',
+    nodeVersion: '24.0.0',
     electronVersion: '37.2.4',
     userDataDir: '~/Library/Application Support/Tuff',
     logsDir: '~/Library/Logs/Tuff',

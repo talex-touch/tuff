@@ -56,7 +56,7 @@ async function buildPreludeBundle(
         entryPoints: [config.entry],
         bundle: true,
         format: config.format ?? 'cjs',
-        target: config.target ?? 'node18',
+        target: config.target ?? 'node24',
         platform: 'node',
         write: false,
         external: config.external ?? DEFAULT_PRELUDE_EXTERNAL,

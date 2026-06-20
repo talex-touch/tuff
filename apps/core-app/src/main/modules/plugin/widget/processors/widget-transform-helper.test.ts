@@ -63,7 +63,7 @@ describe('widget processors transform helper contract', () => {
       expect.objectContaining({
         format: 'cjs',
         loader: 'ts',
-        target: 'node18'
+        target: 'node24'
       })
     )
   })
@@ -111,7 +111,7 @@ describe('widget processors transform helper contract', () => {
         jsxFactory: 'h',
         jsxFragment: 'Fragment',
         loader: 'tsx',
-        target: 'node18'
+        target: 'node24'
       })
     )
   })
@@ -132,7 +132,7 @@ describe('widget processors transform helper contract', () => {
       expect.objectContaining({
         format: 'cjs',
         loader: 'ts',
-        target: 'node18'
+        target: 'node24'
       })
     )
   })

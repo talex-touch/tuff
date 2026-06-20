@@ -17,7 +17,7 @@ export default <Options>{
   format: ['esm'],
   dts: true,
   splitting: true,
-  target: 'node18',
+  target: 'node24',
   platform: 'node',
   external: [
     'unplugin',

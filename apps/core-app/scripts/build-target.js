@@ -391,7 +391,7 @@ function bundleBuiltinPluginPreludes() {
         bundle: true,
         platform: 'node',
         format: 'cjs',
-        target: 'node18',
+        target: 'node24',
         outfile: tempOutputPath,
         external: ['electron'],
         minify: true,

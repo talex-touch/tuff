@@ -30,7 +30,7 @@ plugin/
   "build": {
     "prelude": {
       "entry": "src/prelude/main.ts",
-      "target": "node18",
+      "target": "node24",
       "external": ["electron", "node:*"],
       "minify": true,
       "sourcemap": false

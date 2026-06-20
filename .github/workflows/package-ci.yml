@@ -15,7 +15,7 @@ on:
         description: 'Node.js version to use'
         required: false
         type: string
-        default: '22.16.0'
+        default: '24.0.0'
       pnpm-version:
         description: 'PNPM version to use'
         required: false

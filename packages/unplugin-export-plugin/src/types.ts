@@ -67,7 +67,7 @@ export interface PreludeConfig {
 
   /**
    * esbuild target for the Prelude runtime.
-   * @default 'node18'
+   * @default 'node24'
    */
   target?: string
 

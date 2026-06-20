@@ -88,7 +88,7 @@ export interface TrendNote {
 
 export const baseline = {
   version: '2.4.12-beta.8',
-  node: '22.16.0',
+  node: '24.0.0',
   pnpm: '10.32.1',
   repoSize: '约 11G',
   generatedAt: '2026-06-20',

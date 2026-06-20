@@ -123,7 +123,7 @@ export class WidgetTsxProcessor implements IWidgetProcessor {
       const transformed = await transformWidgetSource(source.source, {
         loader,
         format: 'cjs',
-        target: 'node18',
+        target: 'node24',
         jsxFactory: 'h',
         jsxFragment: 'Fragment'
       })

@@ -126,7 +126,7 @@ export class WidgetScriptProcessor implements IWidgetProcessor {
         const transformed = await transformWidgetSource(source.source, {
           loader,
           format: 'cjs',
-          target: 'node18'
+          target: 'node24'
         })
         compiledCode = transformed.code
       }

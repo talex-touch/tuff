@@ -46,9 +46,6 @@ catalogs:
     '@sentry/nuxt':
       specifier: ^10.50.0
       version: 10.50.0
-    ai-elements-vue:
-      specifier: ^1.4.0
-      version: 1.4.0
     fighting-design:
       specifier: 0.25.1
       version: 0.25.1
@@ -110,6 +107,13 @@ catalogs:
     wrangler:
       specifier: ^4.85.0
       version: 4.85.0
+  frontend:
+    '@vueuse/core':
+      specifier: ^14.2.1
+      version: 14.2.1
+    vue:
+      specifier: ^3.5.33
+      version: 3.5.33
   icons:
     '@iconify-json/carbon':
       specifier: ^1.2.20
@@ -806,6 +810,34 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.1.0)(jiti@2.6.1)(jsdom@26.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
 
+  packages/tuff-analyse:
+    dependencies:
+      '@talex-touch/tuffex':
+        specifier: workspace:*
+        version: link:../tuffex
+      '@vueuse/core':
+        specifier: catalog:frontend
+        version: 14.2.1(vue@3.5.33(typescript@5.9.3))
+      vue:
+        specifier: catalog:frontend
+        version: 3.5.33(typescript@5.9.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.6(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
+      typescript:
+        specifier: catalog:dev
+        version: 5.9.3
+      unocss:
+        specifier: catalog:build
+        version: 66.6.8(@unocss/webpack@66.6.8(webpack@5.106.2))(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+      vite:
+        specifier: 7.3.2
+        version: 7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
+      vue-tsc:
+        specifier: catalog:dev
+        version: 3.2.7(typescript@5.9.3)
+
   packages/tuff-business:
     dependencies:
       '@talex-touch/tuffex':
@@ -1044,7 +1076,7 @@ importers:
         specifier: ^14.2.1
         version: 14.2.1(vue@3.5.33(typescript@5.9.3))
       ai-elements-vue:
-        specifier: 'catalog:'
+        specifier: ^1.4.0
         version: 1.4.0
       dompurify:
         specifier: ^3.4.1
@@ -1356,6 +1388,8 @@ importers:
       vite:
         specifier: 7.3.2
         version: 7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
+
+  plugins/touch-quickops: {}
 
   plugins/touch-snippets: {}
 
