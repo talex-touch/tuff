@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex/button'
-import { TxLoadingState } from '@talex-touch/tuffex/loading-state'
 import { defineComponent, h, render } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
 import { appDescription, appName } from '~/constants'
@@ -1121,15 +1119,17 @@ const CodeHeader = defineComponent({
     return () => [
       h('span', { class: 'docs-code-language' }, label.value),
       h(
-        TxButton,
+        'button',
         {
-          'size': 'sm',
-          'variant': 'ghost',
+          'type': 'button',
           'class': 'docs-code-copy',
           'aria-label': copyLabels.value.copy,
           'onClick': handleCopy,
         },
-        () => copyLabels.value.copy,
+        [
+          h('span', { class: 'i-carbon-copy docs-code-copy__icon', 'aria-hidden': 'true' }),
+          h('span', copyLabels.value.copy),
+        ],
       ),
     ]
   },
@@ -1375,7 +1375,10 @@ watch(
   <div class="docs-root relative">
     <div :key="viewState" class="docs-state">
         <div v-if="viewState === 'loading'" class="docs-state__body px-6 py-20">
-          <TxLoadingState title="" :description="t('docs.loading')" />
+          <div class="docs-loading-state" role="status" aria-live="polite">
+            <span class="docs-loading-state__spinner i-carbon-circle-dash" aria-hidden="true" />
+            <span class="docs-loading-state__text">{{ t('docs.loading') }}</span>
+          </div>
         </div>
 
         <div
@@ -1603,6 +1606,32 @@ watch(
 
 .docs-state__body {
   border-radius: 20px;
+}
+
+.docs-loading-state {
+  display: flex;
+  min-height: 140px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--tx-text-color-secondary);
+}
+
+.docs-loading-state__spinner {
+  font-size: 28px;
+  color: var(--docs-accent);
+  animation: docs-loading-spin 1s linear infinite;
+}
+
+.docs-loading-state__text {
+  font-size: 14px;
+}
+
+@keyframes docs-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .docs-state-enter-active,
@@ -1949,8 +1978,29 @@ a.docs-hero-crumb:hover {
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
   font-size: 0.7rem;
+  font-weight: 600;
   letter-spacing: 0.05em;
+  padding: 0.18rem 0.5rem;
+  text-transform: uppercase;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy:hover) {
+  background: color-mix(in srgb, var(--docs-accent) 12%, transparent);
+  color: var(--docs-accent);
+}
+
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy__icon) {
+  font-size: 0.82rem;
 }
 
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy:disabled) {

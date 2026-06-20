@@ -178,10 +178,8 @@ onBeforeUnmount(() => {
           <span class="tuff-demo__dot is-green" />
         </div>
         <div class="tuff-demo__window-actions">
-          <TxButton
-            variant="ghost"
-            size="small"
-            native-type="button"
+          <button
+            type="button"
             class="tuff-demo__reset-btn"
             :aria-label="resetLabel"
             :disabled="isResetting || !isDemoActive"
@@ -189,7 +187,7 @@ onBeforeUnmount(() => {
           >
             <span class="tuff-demo__reset-icon i-carbon-renew" aria-hidden="true" />
             {{ resetLabel }}
-          </TxButton>
+          </button>
         </div>
       </div>
       <div class="tuff-demo__window-body">
@@ -226,10 +224,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div v-if="hasCode" class="tuff-demo__toggle-row">
-        <TxButton variant="ghost" size="small" native-type="button" :aria-expanded="showCode" @click="toggleCode">
+        <button type="button" class="tuff-demo__toggle-btn" :aria-expanded="showCode" @click="toggleCode">
           <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
           {{ toggleLabel }}
-        </TxButton>
+        </button>
       </div>
     </div>
   </section>
@@ -299,7 +297,29 @@ onBeforeUnmount(() => {
 }
 
 .tuff-demo__reset-btn {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tx-text-color-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 7px 10px;
+  transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+}
+
+.tuff-demo__reset-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
+  color: var(--tx-color-primary);
+}
+
+.tuff-demo__reset-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .tuff-demo__reset-icon {
@@ -364,6 +384,27 @@ onBeforeUnmount(() => {
   padding: 16px 18px 20px;
   border-top: 1px solid var(--tuff-demo-divider);
   background: var(--tuff-demo-row-bg);
+}
+
+.tuff-demo__toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tx-text-color-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 8px 12px;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.tuff-demo__toggle-btn:hover {
+  background: color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
+  color: var(--tx-color-primary);
 }
 
 .tuff-demo__toggle-icon {
