@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：当前 Nexus docs 性能批次已收尾；已完成 9 个性能提交，后续 docs 内容拆分、AI review / aireview 未审批组件与全站矩阵全部进入本文 TODO 队列。
+> 当前状态：Nexus docs 性能继续按小批次收口；已完成 9 个性能提交，当前第 10 批聚焦 dev-only Vue Devtools bridge 请求削减。
 
 ## Goal 原句
 
@@ -24,17 +24,17 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 86%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现和一批 dev route-local CSS 污染问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
-- 整体 goal 估算：约 60%。已完成 docs 路由关键路径止血；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet。
+- 本轮 tabs/card 文档链路：约 88%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染和 dev-only Vue Devtools bridge 请求问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
+- 整体 goal 估算：约 62%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge。
 - 当前批次不继续扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
-| 当前第 9 批 dev stylesheet follow-up | 100% | 代码、focused tests、scoped ESLint、curl smoke、Playwright 报告已完成并提交。 |
-| `/en/docs/dev/components/tabs` 触发链路 | 86% | 页面 200、切换约 62ms、关键窗口不再请求 `body=1`；剩余是 scripts/devtools 类请求继续拆。 |
+| 当前第 10 批 devtools bridge follow-up | 90% | 代码、focused tests、scoped ESLint、A/B Playwright 报告已完成；待提交。 |
+| `/en/docs/dev/components/tabs` 触发链路 | 88% | 页面 200、切换约 62ms、关键窗口不再请求 `body=1`；devtools bridge 请求已削减，剩余是 Nuxt/runtime 与 docs demo 模块碎片继续拆。 |
 | docs 内容加载拆分 | 65% | `body=0` / idle `body=1` 已落地；demo registry、模板静态 shell、折叠区 lazy 仍待做。 |
 | AI review / aireview 未审批组件 | 18% | 已完成 pending 口径和高风险文档清单；逐页 Playwright 基线与重型 demo 优化待做。 |
 | 全站页面切换矩阵 | 10% | tabs/card 有基线；`/`、`/store`、dashboard、Provider Registry、Data Governance 待覆盖。 |
@@ -54,6 +54,7 @@
 | 7 | `e46541119` | `perf(nexus): defer docs full body prefetch` | 已完成 |
 | 8 | `15f2d288c` | `perf(nexus): load component sidebar metadata sooner` | 已完成 |
 | 9 | `926ae0818` | `perf(nexus): filter more docs dev stylesheets` | 已完成 |
+| 10 | 待提交 | `perf(nexus): noop vue devtools api in dev` | 收尾中 |
 
 ## 本轮收尾结论
 
@@ -63,7 +64,7 @@
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
-- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高，最新 Playwright 约 457 个 script request；初步归类包含 Nuxt runtime、`node_modules`、i18n 与 Vue Router / Pinia devtools 相关 dev-only 模块。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，但 Nuxt runtime、`node_modules`、i18n 与 docs demo 模块碎片仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
 
 ## 第 6 批收口记录
 
@@ -219,6 +220,47 @@
   - card -> tabs client switch：URL settled 62ms, network idle 62ms, requests 11, failed 0。
   - card -> tabs docs requests：tabs `body=0` at +20ms；未在切换关键窗口内请求 tabs `body=1`。
 
+## 第 10 批收口记录
+
+目标：削减 `/en/docs/dev/components/tabs` dev 首屏中由 Pinia / Vue Router 引入的 Vue Devtools bridge 模块请求。Nuxt devtools 已关闭，但 `@vue/devtools-api` 仍会通过公开包入口拉起 `@vue/devtools-kit` / shared 相关模块，拖慢本地文档调试反馈。
+
+改动范围：
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/utils/vue-devtools-api-noop.ts`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+
+实现口径：
+
+- 仅在 dev 模式默认启用，不影响 production 构建。
+- 通过公开包级 alias 将 `@vue/devtools-api` 指到 Nexus 本地 noop module，不 alias Vue Router 私有 chunk。
+- 提供 `NUXT_DISABLE_VUE_DEVTOOLS_API_NOOP=true` 作为本地 A/B 或排障开关。
+- noop module 只导出 Pinia / Vue Router 当前需要的 devtools API surface，不引入 `@vue/devtools-kit`。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/pages/docs/docs-page-performance.test.ts"`，1 file / 25 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "nuxt.config.ts" "app/utils/vue-devtools-api-noop.ts" "app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/nuxt.config.ts" "apps/nexus/app/utils/vue-devtools-api-noop.ts" "apps/nexus/app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Production build：
+  - `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build` 通过，确认 dev-only alias 不影响生产 client/server/Nitro 打包。
+  - `pnpm -C "apps/nexus" run build` 已通过 TuffEx build、Nuxt client build、Nuxt server build，但完整 prerender 阶段以既有 prerender errors 退出 1；不归因于本批 dev-only alias，后续单独查全量 prerender 失败清单。
+- Playwright baseline（3200 原服务，用于确认原始瓶颈）：
+  - 报告：`output/playwright/nexus-docs-devtools-baseline-3200-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-devtools-baseline-3200-2026-06-21.json`
+  - tabs first load：status 200, requests 521, scripts 457, devtools 18, failed 0。
+  - card first load：status 200, requests 528, scripts 464, devtools 18, failed 0。
+  - card -> tabs：URL settled 76ms, requests 11, failed 0。
+- Playwright A/B（3202 `dev:pure`，同端口顺序冷启动）：
+  - disabled 报告：`output/playwright/nexus-docs-devtools-disabled-3202-2026-06-21.md`
+  - enabled 报告：`output/playwright/nexus-docs-devtools-noop-3202-ab-2026-06-21.md`
+  - disabled tabs：status 200, requests 477, scripts 458, devtools 18, failed 0。
+  - enabled tabs：status 200, requests 459, scripts 440, devtools 3, failed 0。
+  - disabled card：status 200, requests 485, scripts 465, devtools 18, failed 0。
+  - enabled card：status 200, requests 467, scripts 447, devtools 3, failed 0。
+  - enabled card -> tabs：URL settled 62ms, network idle 62ms, requests 10, failed 0。
+  - 结论：tabs/card 首屏各减少 18 个请求；devtools bridge 从 18 个请求降到 3 个，切换时序未回退。
+
 ## 后续任务树
 
 ### P0：docs 文档内容加载继续拆分
@@ -266,16 +308,18 @@
 
 ### P1：生产构建同类风险复核
 
-- [ ] 跑 `pnpm -C "apps/nexus" run build` 或 `pnpm nexus:build`，确认生产 CSS chunk 不存在同类跨页面污染。
+- [ ] 跑 `pnpm -C "apps/nexus" run build` 或 `pnpm nexus:build`，确认生产 CSS chunk 不存在同类跨页面污染；2026-06-21 复核时 client/server build 通过，但完整 prerender 阶段仍有既有错误需单独收敛。
+- [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 10 批 dev-only `@vue/devtools-api` noop alias 不影响生产 client/server/Nitro 打包。
 - [ ] 检查 Nuxt route chunks、payload chunks、CSS chunks 是否存在 docs/store/dashboard/landing 互相污染。
 - [ ] 若生产存在同类问题，优先从 import boundary / layout boundary / component registration 修复，而不是沿用 dev-only HTML filter。
 
 ### P1：dev scripts / devtools 请求复核
 
-- [ ] 复核 tabs HAR 中剩余 scripts：`devtools` 约 18 个请求、`nuxt-runtime` 约 127 个请求、`node_modules` 约 140 个请求、`i18n` 约 33 个请求。
-- [ ] 先做临时实验验证是否能安全减少 Vue Router / Pinia devtools 相关 dev-only import；无明确 request reduction 或出现 runtime 风险则不落代码。
-- [ ] 若要落地 alias / noop 模块，必须有 focused Vitest、scoped ESLint、Playwright tabs/card/switch 报告和 failed request = 0 证据。
-- [ ] 不直接 alias 不稳定的 Nuxt / Vue Router 内部路径，除非确认版本边界、fallback 和运行时兼容性。
+- [x] 复核 tabs HAR 中剩余 scripts：3200 baseline tabs 521 requests / 457 scripts，其中 devtools 18、node_modules 287、nuxt-runtime 148、i18n 4。
+- [x] 先做临时实验验证是否能安全减少 Vue Router / Pinia devtools 相关 dev-only import；A/B 证明 tabs/card 各减少 18 个请求，failed 0。
+- [x] 若要落地 alias / noop 模块，必须有 focused Vitest、scoped ESLint、Playwright tabs/card/switch 报告和 failed request = 0 证据。
+- [x] 不直接 alias 不稳定的 Nuxt / Vue Router 内部路径，除非确认版本边界、fallback 和运行时兼容性。
+- [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、docs content renderer、demo wrapper / code block 相关模块碎片。
 
 ### P1：i18n 与 route-local message 深化
 
