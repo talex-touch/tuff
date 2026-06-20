@@ -195,6 +195,8 @@ const docAssistantContextState = useState<string>('docs-assistant-context', () =
 const viewCount = ref<number | null>(null)
 const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
+const shouldMountDocEngagementPanels = ref(false)
+const docEngagementAnchorRef = ref<HTMLElement | null>(null)
 
 watch(
   () => requestKey.value,
@@ -205,6 +207,7 @@ watch(
     docMetaState.value = {}
     docAssistantContextState.value = ''
     shouldMountDocClientPanels.value = false
+    shouldMountDocEngagementPanels.value = false
   },
 )
 
@@ -683,6 +686,9 @@ const currentDocRenderKey = computed(() => {
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
 const shouldClientRenderDocBody = computed(() => docScope.value.isComponent)
 let lastEnhancedDocKey = ''
+const DOC_ENGAGEMENT_PANEL_DELAY_MS = 3200
+const DOC_ENGAGEMENT_PANEL_IDLE_TIMEOUT_MS = 5000
+const DOC_ENGAGEMENT_PANEL_ROOT_MARGIN = '360px 0px'
 
 watch(
   () => [doc.value, renderDoc.value, docsLocale.value] as const,
@@ -718,6 +724,7 @@ onBeforeUnmount(() => {
   docAssistantContextState.value = ''
   clearCodeEnhanceSchedule()
   clearAssistantContextSchedule()
+  clearEngagementPanelSchedule()
   clearRenderedCodeHeaders()
   if (import.meta.client) {
     document.removeEventListener('click', handleDocsInlineCodeClick)
@@ -937,6 +944,9 @@ let codeEnhanceRunId = 0
 const codeHeaderTargets = new Set<HTMLElement>()
 let assistantContextTimer: ReturnType<typeof setTimeout> | null = null
 let assistantContextIdleId: number | null = null
+let engagementPanelTimer: ReturnType<typeof setTimeout> | null = null
+let engagementPanelIdleId: number | null = null
+let engagementPanelObserver: IntersectionObserver | null = null
 
 function clearCodeEnhanceSchedule() {
   if (import.meta.server)
@@ -975,6 +985,60 @@ function clearAssistantContextSchedule() {
     window.cancelIdleCallback(assistantContextIdleId)
     assistantContextIdleId = null
   }
+}
+
+function mountDocEngagementPanels() {
+  shouldMountDocEngagementPanels.value = true
+  clearEngagementPanelSchedule()
+}
+
+function clearEngagementPanelSchedule() {
+  if (import.meta.server)
+    return
+
+  if (engagementPanelTimer) {
+    clearTimeout(engagementPanelTimer)
+    engagementPanelTimer = null
+  }
+  if (engagementPanelIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(engagementPanelIdleId)
+    engagementPanelIdleId = null
+  }
+  if (engagementPanelObserver) {
+    engagementPanelObserver.disconnect()
+    engagementPanelObserver = null
+  }
+}
+
+function scheduleDocEngagementPanels() {
+  if (import.meta.server || shouldMountDocEngagementPanels.value)
+    return
+
+  clearEngagementPanelSchedule()
+
+  const schedule = () => {
+    if (shouldMountDocEngagementPanels.value)
+      return
+    mountDocEngagementPanels()
+  }
+
+  engagementPanelTimer = setTimeout(() => {
+    engagementPanelTimer = null
+    const anchor = docEngagementAnchorRef.value
+    if ('IntersectionObserver' in window && anchor) {
+      engagementPanelObserver = new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0))
+          mountDocEngagementPanels()
+      }, { rootMargin: DOC_ENGAGEMENT_PANEL_ROOT_MARGIN })
+      engagementPanelObserver.observe(anchor)
+    }
+
+    if ('requestIdleCallback' in window) {
+      engagementPanelIdleId = window.requestIdleCallback(schedule, { timeout: DOC_ENGAGEMENT_PANEL_IDLE_TIMEOUT_MS })
+      return
+    }
+    schedule()
+  }, DOC_ENGAGEMENT_PANEL_DELAY_MS)
 }
 
 function enhanceCodeBlocks() {
@@ -1079,6 +1143,7 @@ watch(
       void scheduleCodeEnhance(260)
       void scheduleOutlineSync(280)
       scheduleAssistantContextBuild(renderDoc.value?.body, 700)
+      scheduleDocEngagementPanels()
     }
   },
   { immediate: true },
@@ -1094,6 +1159,7 @@ watch(
     void scheduleCodeEnhance(260)
     void scheduleOutlineSync(280)
     scheduleAssistantContextBuild(renderDoc.value?.body, 700)
+    scheduleDocEngagementPanels()
   },
 )
 
@@ -1260,8 +1326,10 @@ watch(
             </div>
           </div>
 
+          <div ref="docEngagementAnchorRef" aria-hidden="true" />
+
           <ClientOnly>
-            <LazyDocsFeedback v-if="shouldMountDocClientPanels" :doc-path="docPath" />
+            <LazyDocsFeedback v-if="shouldMountDocEngagementPanels" :doc-path="docPath" />
           </ClientOnly>
 
           <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
@@ -1301,7 +1369,7 @@ watch(
           </div>
 
           <ClientOnly>
-            <LazyDocsComments v-if="shouldMountDocClientPanels" :doc-path="docPath" />
+            <LazyDocsComments v-if="shouldMountDocEngagementPanels" :doc-path="docPath" />
           </ClientOnly>
         </div>
 
