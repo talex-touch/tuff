@@ -46,7 +46,6 @@ import process from 'node:process'
 import {
   StorageList,
   timingLogger,
-  TuffItemBuilder,
   TuffInputType,
   TuffSearchResultBuilder
 } from '@talex-touch/utils'
@@ -1287,40 +1286,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   public buildStartupDegradedNotice(query: TuffQuery): TuffItem | null {
-    const searchText = query.text?.trim() ?? ''
-    if (!searchText || this.backgroundStartupReady) {
-      return null
-    }
-
-    const detail = this.backgroundStartupError?.message
-      ? `File index startup is degraded: ${this.backgroundStartupError.message}`
-      : 'File index startup is still warming up; results may be partial until the index worker and filesystem watcher are ready.'
-
-    return new TuffItemBuilder(
-      `file-provider:startup-degraded:${encodeURIComponent(searchText).slice(0, 64)}`,
-      this.type,
-      this.id
-    )
-      .setKind('notification')
-      .setTitle('File search is warming up')
-      .setSubtitle('Partial file results')
-      .setDescription(detail)
-      .setAccessory('File Index')
-      .setActions([
-        {
-          id: 'open-file-index-settings',
-          type: 'navigate',
-          label: 'Open File Index settings',
-          description: 'Review file index status, failed files, and rebuild controls.',
-          icon: { type: 'class', value: 'i-ri-settings-3-line' },
-          payload: {
-            path: '/setting?section=file-index',
-            section: 'file-index'
-          }
-        }
-      ])
-      .setFinalScore(0.05)
-      .build()
+    void query
+    return null
   }
 
   public getWatchedPaths(): string[] {

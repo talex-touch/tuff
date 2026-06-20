@@ -7,7 +7,8 @@ import type {
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
-import extractFileIcon from 'extract-file-icon'
+
+type ExtractFileIcon = (filePath: string) => Buffer | null
 
 interface IconRequest {
   type: 'extract'
@@ -55,6 +56,22 @@ function buildMetricsPayload(): WorkerMetricsPayload {
 
 const queue: IconRequest[] = []
 let running = false
+let extractFileIcon: ExtractFileIcon | null | undefined
+
+async function loadExtractFileIcon(): Promise<ExtractFileIcon | null> {
+  if (extractFileIcon !== undefined) {
+    return extractFileIcon
+  }
+
+  try {
+    const loaded = await import('extract-file-icon')
+    extractFileIcon = (loaded.default || loaded) as ExtractFileIcon
+  } catch {
+    extractFileIcon = null
+  }
+
+  return extractFileIcon
+}
 
 async function processQueue(): Promise<void> {
   if (running) {
@@ -67,7 +84,8 @@ async function processQueue(): Promise<void> {
   running = true
 
   try {
-    const buffer = extractFileIcon(next.filePath)
+    const extractor = await loadExtractFileIcon()
+    const buffer = extractor ? extractor(next.filePath) : null
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,
