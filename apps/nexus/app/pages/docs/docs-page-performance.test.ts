@@ -459,13 +459,17 @@ describe('docs page performance boundaries', () => {
     expect(docsSidebar).toContain('const componentItems = computed(() => coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[])')
   })
 
-  it('requests docs navigation by locale instead of hydrating both language trees', () => {
+  it('requests scoped docs navigation for component pages instead of hydrating the full docs tree', () => {
     expect(page).toContain("'/api/docs/navigation'")
     expect(docsSidebar).toContain("'/api/docs/navigation'")
-    expect(page).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}`\)/)
-    expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}`\)/)
+    expect(page).toContain("const docsNavigationScope = computed(() => (shouldSplitDocBody.value ? 'components' : undefined))")
+    expect(docsSidebar).toContain("const docsNavigationScope = computed(() => (isComponentDocsRoute.value ? 'components' : undefined))")
+    expect(page).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}:\$\{docsNavigationScope\.value \?\? 'all'\}`\)/)
+    expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}:\$\{docsNavigationScope\.value \?\? 'all'\}`\)/)
     expect(page).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)/)
     expect(docsSidebar).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)/)
+    expect(page).toContain("...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {})")
+    expect(docsSidebar).toContain("...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {})")
   })
 
   it('warms component docs links on sidebar intent without enabling bulk NuxtLink prefetch', () => {

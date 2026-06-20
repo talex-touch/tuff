@@ -37,12 +37,14 @@ const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
 const normalizedRoutePath = computed(() => normalizeDocsPagePath(route.path))
 const isComponentDocsRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/dev/components'))
 const shouldLoadComponentDocs = computed(() => sidebarHydrated.value && isComponentDocsRoute.value)
+const docsNavigationScope = computed(() => (isComponentDocsRoute.value ? 'components' : undefined))
 const { data: navigationTreePayload, pending, error } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
-    key: computed(() => `docs-navigation:${docsLocale.value}`),
+    key: computed(() => `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? 'all'}`),
     query: computed(() => ({
       locale: docsLocale.value,
+      ...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {}),
     })),
     responseType: 'json',
     default: () => [],

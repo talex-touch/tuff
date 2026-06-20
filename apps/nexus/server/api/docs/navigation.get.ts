@@ -1,12 +1,14 @@
 import type { H3Event } from 'h3'
 import { queryCollectionNavigation } from '@nuxt/content/server'
 import { isMissingDocsContentTableError } from '../../utils/docsContentError'
+import { normalizeDocsPagePath } from '../../utils/docsPath'
 
 const DEV_NAVIGATION_RETRY_ATTEMPTS = 3
 const DEV_NAVIGATION_RETRY_DELAY_MS = 80
 const NAVIGATION_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
 const NAVIGATION_CACHE_MAX_AGE_SECONDS = 300
 const NAVIGATION_CACHE_STALE_MAX_AGE_SECONDS = 3600
+const NAVIGATION_COMPONENTS_SCOPE = 'components'
 
 function toPlainJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -57,6 +59,40 @@ function filterNavigationByLocale(items: unknown, locale: 'en' | 'zh' | null): u
     .filter(Boolean)
 }
 
+function normalizeNavigationScope(value: unknown): typeof NAVIGATION_COMPONENTS_SCOPE | null {
+  return value === NAVIGATION_COMPONENTS_SCOPE ? NAVIGATION_COMPONENTS_SCOPE : null
+}
+
+function findNavigationNodeByPath(items: unknown, targetPath: string): Record<string, unknown> | null {
+  if (!Array.isArray(items))
+    return null
+
+  const normalizedTarget = normalizeDocsPagePath(targetPath)
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item))
+      continue
+
+    const record = item as Record<string, unknown>
+    const path = typeof record.path === 'string' ? normalizeDocsPagePath(record.path) : null
+    if (path === normalizedTarget)
+      return record
+
+    const found = findNavigationNodeByPath(record.children, normalizedTarget)
+    if (found)
+      return found
+  }
+
+  return null
+}
+
+function scopeNavigation(items: unknown, scope: typeof NAVIGATION_COMPONENTS_SCOPE | null): unknown {
+  if (scope !== NAVIGATION_COMPONENTS_SCOPE)
+    return items
+
+  const components = findNavigationNodeByPath(items, '/docs/dev/components')
+  return components ? [components] : []
+}
+
 async function queryDocsNavigation(event: H3Event) {
   const isProduction = process.env.NODE_ENV === 'production'
   const maxAttempts = isProduction ? 1 : DEV_NAVIGATION_RETRY_ATTEMPTS
@@ -83,18 +119,23 @@ async function queryDocsNavigation(event: H3Event) {
 }
 
 function resolveNavigationCacheKey(event: H3Event) {
-  const locale = normalizeLocale(getQuery(event).locale)
-  return locale ? `locale:${locale}` : 'locale:all'
+  const query = getQuery(event)
+  const locale = normalizeLocale(query.locale)
+  const scope = normalizeNavigationScope(query.scope)
+  return `${locale ? `locale:${locale}` : 'locale:all'}:${scope ? `scope:${scope}` : 'scope:all'}`
 }
 
 export default defineCachedEventHandler(async (event) => {
-  const locale = normalizeLocale(getQuery(event).locale)
+  const query = getQuery(event)
+  const locale = normalizeLocale(query.locale)
+  const scope = normalizeNavigationScope(query.scope)
   const navigation = await queryDocsNavigation(event)
   const localizedNavigation = filterNavigationByLocale(navigation, locale)
+  const scopedNavigation = scopeNavigation(localizedNavigation, scope)
 
   setHeader(event, 'cache-control', NAVIGATION_CACHE_CONTROL)
 
-  return toPlainJson(Array.isArray(localizedNavigation) ? localizedNavigation : [])
+  return toPlainJson(Array.isArray(scopedNavigation) ? scopedNavigation : [])
 }, {
   maxAge: NAVIGATION_CACHE_MAX_AGE_SECONDS,
   staleMaxAge: NAVIGATION_CACHE_STALE_MAX_AGE_SECONDS,

@@ -126,6 +126,7 @@ const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 const shouldSplitDocBody = computed(() => normalizeDocsPagePath(activeRoutePath.value).includes('/docs/dev/components'))
 const shouldRequestMetadataOnlyDocBody = computed(() => shouldSplitDocBody.value && (import.meta.client || import.meta.dev))
+const docsNavigationScope = computed(() => (shouldSplitDocBody.value ? 'components' : undefined))
 
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
@@ -447,9 +448,10 @@ if (import.meta.server && viewState.value === 'not-found')
 const { data: navigationTreePayload } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
-    key: computed(() => `docs-navigation:${docsLocale.value}`),
+    key: computed(() => `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? 'all'}`),
     query: computed(() => ({
       locale: docsLocale.value,
+      ...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {}),
     })),
     responseType: 'json',
     default: () => [],
