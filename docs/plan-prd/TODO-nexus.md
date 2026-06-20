@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus docs 当前批已收尾；已完成 10 个性能提交，后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核全部转入本文 TODO 队列。
+> 当前状态：Nexus docs 第 11 批已收尾；本批将右侧 DocsOutline 从 docs 首屏脚本窗口移出，后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
 
 ## Goal 原句
 
@@ -24,9 +24,9 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 90%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染和 dev-only Vue Devtools bridge 请求问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
-- 整体 goal 估算：约 64%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge。
+- 本轮 tabs/card 文档链路：约 91%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求问题，并将右侧 DocsOutline 延后到 idle 后挂载。
+- 整体 goal 估算：约 65%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载。
 - 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 子任务百分比快照
@@ -55,6 +55,7 @@
 | 8 | `15f2d288c` | `perf(nexus): load component sidebar metadata sooner` | 已完成 |
 | 9 | `926ae0818` | `perf(nexus): filter more docs dev stylesheets` | 已完成 |
 | 10 | `a8b21aaae` | `perf(nexus): noop vue devtools api in dev` | 已完成 |
+| 11 | `5fb01c7ba` | `perf(nexus): lazy mount docs outline` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -62,10 +63,51 @@
 - 第 7 批已提交：`e46541119 perf(nexus): defer docs full body prefetch`。
 - 第 9 批已提交：`926ae0818 perf(nexus): filter more docs dev stylesheets`。
 - 第 10 批已提交：`a8b21aaae perf(nexus): noop vue devtools api in dev`。
+- 第 11 批已提交：`5fb01c7ba perf(nexus): lazy mount docs outline`；右侧 `DocsOutline` 从首屏同步挂载改为轻量 skeleton 壳 + idle 延迟挂载，移动端目录按钮仍立即挂载真实 outline。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
 - 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，但 Nuxt runtime、`node_modules`、i18n 与 docs demo 模块碎片仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+
+## 第 11 批收口记录
+
+目标：将右侧 `DocsOutline.vue` 从 docs 首屏网络窗口移出。第 11 批 baseline 显示 `DocsOutline.vue` 约 103KB、对应 scoped CSS 约 49KB，在 `/tabs`、`/card`、`/fusion` 三个组件文档页首屏都会加载，但它只服务右侧目录交互，不应和正文首屏争抢 dev scripts。
+
+改动范围：
+
+- `apps/nexus/app/layouts/docs.vue`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+
+实现口径：
+
+- `DocsOutline` 改为 `defineAsyncComponent` 的 `LazyDocsOutline`。
+- 右侧目录区域先显示轻量 `docs-outline-shell` skeleton，不同步加载真实 outline 逻辑和样式。
+- 页面 TOC / loading 状态出现后，延迟 `2000ms` 再走 `requestIdleCallback`，`3200ms` timeout 后挂载真实 outline。
+- 移动端点击目录按钮时立即调用 `mountDocsOutline()`，保证显式用户意图不被延迟。
+- 不改变 `DocsOutline.vue` 内部滚动、hash 同步、ResizeObserver 和 active heading 逻辑。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/pages/docs/docs-page-performance.test.ts"`，1 file / 25 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "app/layouts/docs.vue" "app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/app/layouts/docs.vue" "apps/nexus/app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Production build：`NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build` 通过，确认 `LazyDocsOutline` 不影响生产 client/server/Nitro 打包。
+- curl smoke：`/en/docs/dev/components/tabs` status 200。
+- Playwright baseline：
+  - 报告：`output/playwright/nexus-docs-2026-06-21-next-baseline-3200.md`
+  - JSON：`output/playwright/nexus-docs-2026-06-21-next-baseline-3200.json`
+  - tabs：status 200, DCL 878ms, network idle 4417ms, requests 459, scripts 440, stylesheets 17, failed 0。
+  - card：status 200, DCL 166ms, network idle 1430ms, requests 467, scripts 447, stylesheets 18, failed 0。
+  - fusion：status 200, DCL 111ms, network idle 1343ms, requests 459, scripts 439, stylesheets 18, failed 0。
+  - card -> tabs：URL settled 71ms, network idle 71ms, requests 9, failed 0。
+- Playwright after：
+  - 报告：`output/playwright/nexus-docs-2026-06-21-outline-lazy-3200.md`
+  - JSON：`output/playwright/nexus-docs-2026-06-21-outline-lazy-3200.json`
+  - tabs：status 200, DCL 291ms, network idle 1593ms, requests 457, scripts 437, stylesheets 18, failed 0，`DocsOutline` 首屏 class count 0。
+  - card：status 200, DCL 139ms, network idle 1361ms, requests 464, scripts 444, stylesheets 18, failed 0，`DocsOutline` 首屏 class count 0。
+  - fusion：status 200, DCL 108ms, network idle 1347ms, requests 457, scripts 437, stylesheets 18, failed 0，`DocsOutline` 首屏 class count 0。
+  - card -> tabs：URL settled 78ms, network idle 78ms, requests 9, failed 0。
+  - 延迟挂载截图：`output/playwright/nexus-docs-2026-06-21-outline-lazy-after-delay-tabs.png`；network idle 时 skeleton 可见、真实 outline 未挂载，5.5s 后 skeleton 隐藏且真实 outline 可见。
 
 ## 第 6 批收口记录
 
