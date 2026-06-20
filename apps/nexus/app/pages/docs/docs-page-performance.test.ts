@@ -38,6 +38,7 @@ const i18nZh = readFileSync(new URL('../../../i18n/locales/zh.ts', import.meta.u
 const routeLocaleChunks = readFileSync(new URL('../../utils/route-locale-chunks.ts', import.meta.url), 'utf8')
 const routeLocaleMiddleware = readFileSync(new URL('../../middleware/i18n-route-chunks.global.ts', import.meta.url), 'utf8')
 const routeLocaleComposable = readFileSync(new URL('../../composables/useRouteLocaleChunks.ts', import.meta.url), 'utf8')
+const vueDevtoolsApiNoop = readFileSync(new URL('../../utils/vue-devtools-api-noop.ts', import.meta.url), 'utf8')
 const docsPageApi = readFileSync(new URL('../../../server/api/docs/page.get.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
@@ -353,6 +354,19 @@ describe('docs page performance boundaries', () => {
     expect(page).toContain('new Intl.RelativeTimeFormat(locale, { numeric: \'auto\' })')
     expect(pageView).toContain("import { useTimeAgo } from '@vueuse/core'")
     expect(vortexBackground).toContain("import { templateRef, useDebounceFn } from '@vueuse/core'")
+  })
+
+  it('keeps Vue devtools API bridge modules out of docs dev first paint by default', () => {
+    expect(nuxtConfig).toContain('NUXT_DISABLE_VUE_DEVTOOLS_API_NOOP')
+    expect(nuxtConfig).toMatch(/const useVueDevtoolsApiNoop = isDev && process\.env\.NUXT_DISABLE_VUE_DEVTOOLS_API_NOOP !== 'true'/)
+    expect(nuxtConfig).toContain("const vueDevtoolsApiNoopEntry = resolve(currentDir, 'app/utils/vue-devtools-api-noop.ts')")
+    expect(nuxtConfig).toMatch(/\.\.\.\(useVueDevtoolsApiNoop \? \[\{ find: \/\^@vue\\\/devtools-api\$\/, replacement: vueDevtoolsApiNoopEntry \}\] : \[\]\)/)
+
+    expect(vueDevtoolsApiNoop).toContain('export function setupDevToolsPlugin()')
+    expect(vueDevtoolsApiNoop).toContain('export const setupDevtoolsPlugin = setupDevToolsPlugin')
+    expect(vueDevtoolsApiNoop).toContain('export function addCustomCommand()')
+    expect(vueDevtoolsApiNoop).toContain('export function addCustomTab()')
+    expect(vueDevtoolsApiNoop).not.toContain('@vue/devtools-kit')
   })
 
   it('requests component sidebar metadata by locale instead of downloading both languages', () => {

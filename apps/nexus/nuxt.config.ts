@@ -39,7 +39,9 @@ const tuffexDistUtilsEntry = useWorkspaceSource
   : resolve(tuffexDistRoot, 'utils/index.js')
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
 const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
+const vueDevtoolsApiNoopEntry = resolve(currentDir, 'app/utils/vue-devtools-api-noop.ts')
 const isProd = process.env.NODE_ENV === 'production'
+const useVueDevtoolsApiNoop = isDev && process.env.NUXT_DISABLE_VUE_DEVTOOLS_API_NOOP !== 'true'
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const enableSentry = isProd || isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY)
 const disableSentry = !enableSentry || process.env.NUXT_DISABLE_SENTRY === 'true'
@@ -359,6 +361,7 @@ export default defineNuxtConfig({
       alias: [
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
         { find: /^next-auth\/core$/, replacement: nextAuthCoreEntry },
+        ...(useVueDevtoolsApiNoop ? [{ find: /^@vue\/devtools-api$/, replacement: vueDevtoolsApiNoopEntry }] : []),
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@tuffex-components\/(.+)$/, replacement: tuffexComponentSourceEntry },
         { find: /^@talex-touch\/tuffex$/, replacement: useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry },
