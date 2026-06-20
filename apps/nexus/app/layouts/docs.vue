@@ -3,19 +3,24 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch 
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
+const LazyTuffFooter = defineAsyncComponent(() => import('~/components/TuffFooter.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
 const BACK_TO_TOP_MOUNT_SCROLL_Y = 240
+const DOCS_FOOTER_ROOT_MARGIN = '1200px 0px'
 const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200
 const TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
 
 const { t } = useI18n()
 const route = useRoute()
+const docsFooterSentinelRef = ref<HTMLElement | null>(null)
 const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
 const sidebarDrawerMounted = ref(false)
 const outlineDrawerMounted = ref(false)
+const shouldMountDocsFooter = ref(false)
 const shouldMountBackToTop = ref(false)
 const shouldMountTuffexBackground = ref(false)
+let docsFooterObserver: IntersectionObserver | null = null
 let backToTopFrameId: number | null = null
 let tuffexBackgroundIdleId: number | null = null
 let tuffexBackgroundFrameId: number | null = null
@@ -56,6 +61,38 @@ function openSidebarDrawer() {
 function openOutlineDrawer() {
   outlineDrawerMounted.value = true
   outlineVisible.value = true
+}
+
+function clearDocsFooterObserver() {
+  if (docsFooterObserver) {
+    docsFooterObserver.disconnect()
+    docsFooterObserver = null
+  }
+}
+
+function mountDocsFooter() {
+  shouldMountDocsFooter.value = true
+  clearDocsFooterObserver()
+}
+
+function bindDocsFooterObserver() {
+  if (import.meta.server || shouldMountDocsFooter.value)
+    return
+
+  const sentinel = docsFooterSentinelRef.value
+  if (!sentinel)
+    return
+
+  if (!('IntersectionObserver' in window)) {
+    mountDocsFooter()
+    return
+  }
+
+  docsFooterObserver = new IntersectionObserver((entries) => {
+    if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0))
+      mountDocsFooter()
+  }, { rootMargin: DOCS_FOOTER_ROOT_MARGIN })
+  docsFooterObserver.observe(sentinel)
 }
 
 function clearBackToTopFrame() {
@@ -157,11 +194,13 @@ watch(isTuffexDocs, (active) => {
 }, { immediate: true })
 
 onMounted(() => {
+  bindDocsFooterObserver()
   scheduleBackToTopMountCheck()
   window.addEventListener('scroll', scheduleBackToTopMountCheck, { passive: true })
 })
 
 onBeforeUnmount(() => {
+  clearDocsFooterObserver()
   window.removeEventListener('scroll', scheduleBackToTopMountCheck)
   clearBackToTopFrame()
   clearTuffexBackgroundIntentListeners()
@@ -227,7 +266,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
-    <TuffFooter class="docs-layout-footer" />
+    <div ref="docsFooterSentinelRef" class="docs-footer-sentinel" aria-hidden="true" />
+    <LazyTuffFooter v-if="shouldMountDocsFooter" class="docs-layout-footer" />
     <LazyBackToTop v-if="shouldMountBackToTop" />
     <ClientOnly>
       <DocsDrawer
