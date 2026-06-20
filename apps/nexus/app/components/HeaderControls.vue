@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useGlobalSearch } from '~/composables/useGlobalSearch'
+import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 
 interface Props {
   githubUrl?: string
@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
-const { openSearch } = useGlobalSearch()
+const { openSearch } = useGlobalSearchState()
 
 const searchButtonLabel = computed(() => t('search.open'))
 const searchButtonAriaLabel = computed(() => t('search.openAria'))

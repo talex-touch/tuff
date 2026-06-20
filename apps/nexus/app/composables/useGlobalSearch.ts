@@ -1,29 +1,6 @@
-import { hasWindow } from '@talex-touch/utils/env'
-import { matchFeature } from '@talex-touch/utils/search'
-import { featureSearchItems } from '~/data/search/featureIndex'
-import { pageSearchItems } from '~/data/search/pageIndex'
+import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
+import type { GlobalSearchResult } from '~/composables/useGlobalSearchState'
 import { isDocsPath, toLocalizedDocsPath } from '#shared/utils/docs-path'
-
-export type SearchSource = 'docs' | 'feature' | 'page'
-
-export interface GlobalSearchResult {
-  id: string
-  source: SearchSource
-  title: string
-  description?: string
-  to: string
-  score: number
-  icon?: string
-  keywords?: string[]
-}
-
-export interface SearchAnchorRect {
-  top: number
-  left: number
-  width: number
-  height: number
-  radius: string
-}
 
 interface SearchContentRecord {
   _path?: string
@@ -49,6 +26,24 @@ interface DocIndexItem {
 
 const componentIndexCache = new Map<string, DocIndexItem[]>()
 const componentIndexPromise = new Map<string, Promise<DocIndexItem[]>>()
+let featureMatcherPromise: Promise<typeof import('@talex-touch/utils/search/feature-matcher')> | null = null
+let featureIndexPromise: Promise<typeof import('~/data/search/featureIndex')> | null = null
+let pageIndexPromise: Promise<typeof import('~/data/search/pageIndex')> | null = null
+
+function loadFeatureMatcher() {
+  featureMatcherPromise ??= import('@talex-touch/utils/search/feature-matcher')
+  return featureMatcherPromise
+}
+
+function loadFeatureIndex() {
+  featureIndexPromise ??= import('~/data/search/featureIndex')
+  return featureIndexPromise
+}
+
+function loadPageIndex() {
+  pageIndexPromise ??= import('~/data/search/pageIndex')
+  return pageIndexPromise
+}
 
 function normalizeDocPath(path: string) {
   return path.replace(/\.(en|zh)$/, '')
@@ -133,107 +128,28 @@ async function loadComponentIndex(locale: string) {
 }
 
 export function useGlobalSearch() {
-  const open = useState<boolean>('global-search-open', () => false)
-  const query = useState<string>('global-search-query', () => '')
-  const results = useState<GlobalSearchResult[]>('global-search-results', () => [])
-  const loading = useState<boolean>('global-search-loading', () => false)
-  const anchorRect = useState<SearchAnchorRect | null>('global-search-anchor-rect', () => null)
+  const {
+    open,
+    query,
+    results,
+    loading,
+    anchorRect,
+    openSearch,
+    summonSearch,
+    prefersReducedMotion,
+    closeSearch,
+    resetSearchState,
+    clearSearchAnchor,
+  } = useGlobalSearchState()
   const { t, locale } = useI18n()
   const docsLocale = computed(() => locale.value === 'zh' ? 'zh' : 'en')
   const resolveSearchPath = (path: string) => {
     return isDocsPath(path) ? toLocalizedDocsPath(path, docsLocale.value) : path
   }
 
-  function prefersReducedMotion() {
-    return hasWindow() && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  }
-
-  function setSearchAnchor(anchor?: HTMLElement | null) {
-    if (!anchor || !hasWindow()) {
-      anchorRect.value = null
-      return
-    }
-    const rect = anchor.getBoundingClientRect()
-    if (!rect.width || !rect.height) {
-      anchorRect.value = null
-      return
-    }
-    const computed = getComputedStyle(anchor)
-    const rawRadius = Number.parseFloat(computed.borderRadius)
-    const clampedRadius = Number.isFinite(rawRadius)
-      ? Math.min(rawRadius, rect.height / 2)
-      : rect.height / 2
-    const radius = `${Math.max(clampedRadius, 0)}px`
-    anchorRect.value = {
-      top: rect.top,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height,
-      radius,
-    }
-  }
-
-  function clearSearchAnchor() {
-    anchorRect.value = null
-  }
-
-  function openSearch(anchor?: HTMLElement | null) {
-    resetSearch()
-    setSearchAnchor(anchor)
-    open.value = true
-  }
-
-  async function summonSearch(anchor?: HTMLElement | null) {
-    if (open.value)
-      return
-    resetSearch()
-    setSearchAnchor(anchor)
-    if (!anchor || !hasWindow() || prefersReducedMotion()) {
-      open.value = true
-      return
-    }
-    const rect = anchor.getBoundingClientRect()
-    if (!rect.width || !rect.height) {
-      open.value = true
-      return
-    }
-    const { gsap } = await import('gsap')
-    gsap.killTweensOf(anchor)
-    gsap.set(anchor, {
-      transformOrigin: 'center',
-      willChange: 'transform,border-color',
-    })
-    gsap.timeline({
-      onComplete: () => {
-        gsap.set(anchor, { clearProps: 'transform,borderColor,willChange' })
-      },
-    })
-      .to(anchor, {
-        scale: 1.01,
-        borderColor: 'rgba(64, 158, 255, 0.35)',
-        duration: 0.1,
-        ease: 'power2.out',
-      })
-      .add(() => {
-        open.value = true
-      }, 0.12)
-      .to(anchor, {
-        scale: 1,
-        borderColor: 'transparent',
-        duration: 0.12,
-        ease: 'power2.inOut',
-      }, 0.12)
-  }
-
-  function closeSearch() {
-    open.value = false
-  }
-
   function resetSearch() {
     searchRunId += 1
-    query.value = ''
-    results.value = []
-    loading.value = false
+    resetSearchState()
   }
 
   async function searchDocs(trimmed: string, runId: number) {
@@ -268,6 +184,7 @@ export function useGlobalSearch() {
   }
 
   async function searchComponents(trimmed: string) {
+    const { matchFeature } = await loadFeatureMatcher()
     const index = await loadComponentIndex(locale.value)
     return index
       .map((item): GlobalSearchResult | null => {
@@ -295,7 +212,11 @@ export function useGlobalSearch() {
       .slice(0, 6)
   }
 
-  function searchPages(trimmed: string) {
+  async function searchPages(trimmed: string) {
+    const [{ matchFeature }, { pageSearchItems }] = await Promise.all([
+      loadFeatureMatcher(),
+      loadPageIndex(),
+    ])
     return pageSearchItems
       .map((item): GlobalSearchResult | null => {
         const title = t(item.titleKey)
@@ -324,7 +245,11 @@ export function useGlobalSearch() {
       .slice(0, 6)
   }
 
-  function searchFeatures(trimmed: string) {
+  async function searchFeatures(trimmed: string) {
+    const [{ matchFeature }, { featureSearchItems }] = await Promise.all([
+      loadFeatureMatcher(),
+      loadFeatureIndex(),
+    ])
     const matched = featureSearchItems
       .map((item): GlobalSearchResult | null => {
         const title = t(item.titleKey)
@@ -377,12 +302,12 @@ export function useGlobalSearch() {
     const runId = ++searchRunId
     loading.value = true
 
-    const docsPromise = searchDocs(trimmed, runId)
-    const componentsPromise = searchComponents(trimmed)
-    const pages = searchPages(trimmed)
-    const features = searchFeatures(trimmed)
-    const docs = await docsPromise
-    const components = await componentsPromise
+    const [docs, components, pages, features] = await Promise.all([
+      searchDocs(trimmed, runId),
+      searchComponents(trimmed),
+      searchPages(trimmed),
+      searchFeatures(trimmed),
+    ])
 
     if (runId !== searchRunId)
       return

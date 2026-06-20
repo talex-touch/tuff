@@ -23,7 +23,7 @@ const isAuthShellRoute = computed(() => {
     || path.startsWith('/reset-password')
     || path.startsWith('/device-auth')
 })
-const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearch()
+const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
 const { user, pending: authUserPending } = useAuthUser({
