@@ -2,6 +2,7 @@
 import { hasNavigator } from '@talex-touch/utils/env'
 import { onBeforeUnmount, onMounted } from 'vue'
 import DarkVeil from '../background/DarkVeil.vue'
+import TuffLandingLineShadowText from './TuffLandingLineShadowText.vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 
 type HeroPlatform = 'darwin' | 'win32' | 'linux'
@@ -104,7 +105,10 @@ onBeforeUnmount(() => {
         {{ t('landing.nexus.hero.eyebrow') }}
       </p>
       <h1 id="nexus-landing-title">
-        <span>{{ t('landing.nexus.hero.titleLead') }}</span>
+        <span>
+          {{ t('landing.nexus.hero.titlePrefix') }}
+          <TuffLandingLineShadowText class="NexusHero-OsText" :text="t('landing.nexus.hero.titleSubject')" />
+        </span>
         <strong>{{ t('landing.nexus.hero.titleAccent') }}</strong>
       </h1>
       <div class="NexusHero-Actions" :class="{ 'is-ready': interactiveReady }">
@@ -227,11 +231,19 @@ onBeforeUnmount(() => {
 }
 
 .NexusHero h1 span {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.18em;
   color: #fff;
   font-size: clamp(3.25rem, 6.8vw, 6.9rem);
   font-weight: 830;
   line-height: 0.92;
   text-shadow: 0 0 28px rgba(255, 255, 255, 0.18);
+}
+
+.NexusHero-OsText {
+  --line-shadow-color: rgba(246, 247, 244, 0.85);
 }
 
 .NexusHero h1 strong {

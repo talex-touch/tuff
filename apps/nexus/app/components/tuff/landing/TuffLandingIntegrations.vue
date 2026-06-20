@@ -3,6 +3,7 @@ import { computed, nextTick, ref } from 'vue'
 import { gsap } from 'gsap'
 import { useGsapReveal } from '~/composables/useGsapReveal'
 import CoreBoxMock from './ai/CoreBoxMock.vue'
+import TuffLandingLineShadowText from './TuffLandingLineShadowText.vue'
 import type { CoreBoxCommand } from './ai/CoreBoxMock.vue'
 
 const { t } = useI18n()
@@ -171,7 +172,7 @@ const coreBoxCommands = computed<CoreBoxCommand[]>(() =>
       </div>
       <div class="landing-integrations__footline">
         ALL IN
-        <span class="landing-integrations__footline-one" data-text="ONE">ONE</span>
+        <TuffLandingLineShadowText class="landing-integrations__footline-one" text="ONE" />
       </div>
     </div>
   </TuffLandingSection>
@@ -381,35 +382,7 @@ const coreBoxCommands = computed<CoreBoxCommand[]>(() =>
 }
 
 .landing-integrations__footline-one {
-  --shadow-color: rgba(226, 232, 240, 0.85);
-  position: relative;
-  display: inline-flex;
-  z-index: 0;
   margin-left: 0.35em;
-  filter: drop-shadow(0 6px 18px rgba(226, 232, 240, 0.2));
-}
-
-.landing-integrations__footline-one::after {
-  content: attr(data-text);
-  position: absolute;
-  top: 0.04em;
-  left: 0.04em;
-  z-index: -1;
-  background: linear-gradient(45deg, transparent 45%, var(--shadow-color) 45%, var(--shadow-color) 55%, transparent 0);
-  background-size: 0.06em 0.06em;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: landing-line-shadow 15s linear infinite;
-}
-
-@keyframes landing-line-shadow {
-  0% {
-    background-position: 0 0;
-  }
-  100% {
-    background-position: 100% -100%;
-  }
 }
 
 @media (max-width: 900px) {

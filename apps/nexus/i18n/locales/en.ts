@@ -2453,6 +2453,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     nexus: {
       hero: {
         eyebrow: 'Local-first. Private by design.',
+        titlePrefix: 'Your',
+        titleSubject: 'OS',
         titleLead: 'Your OS,',
         titleAccent: 'programmable.',
         title: 'Your OS, programmable.',
