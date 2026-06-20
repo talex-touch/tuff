@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { resolveHighlightApi } from '~/utils/highlight'
 
 const props = withDefaults(defineProps<{
   code: string
@@ -52,6 +51,7 @@ async function highlightCode() {
   if (!node)
     return
 
+  const { resolveHighlightApi } = await import('~/utils/highlight')
   const api = await resolveHighlightApi()
   if (!api)
     return

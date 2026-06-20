@@ -221,6 +221,8 @@ describe('docs page performance boundaries', () => {
     expect(tuffDemoWrapper).not.toContain('IntersectionObserver')
     expect(tuffDemoWrapper).not.toContain('scheduleDemoActivation')
 
+    expect(tuffCodeBlock).not.toContain("from '~/utils/highlight'")
+    expect(tuffCodeBlock).toContain("await import('~/utils/highlight')")
     expect(tuffCodeBlock).not.toContain('<TxButton')
     expect(tuffCodeBlock).toContain('class="tuff-code-block__copy"')
 
