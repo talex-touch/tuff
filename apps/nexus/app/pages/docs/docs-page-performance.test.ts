@@ -17,6 +17,7 @@ const vortexBackground = readFileSync(new URL('../../components/tuff/VortexBackg
 const headerControls = readFileSync(new URL('../../components/HeaderControls.vue', import.meta.url), 'utf8')
 const languageToggle = readFileSync(new URL('../../components/LanguageToggle.vue', import.meta.url), 'utf8')
 const darkToggle = readFileSync(new URL('../../components/DarkToggle.vue', import.meta.url), 'utf8')
+const iconComposer = readFileSync(new URL('../../components/icon/IconComposer.vue', import.meta.url), 'utf8')
 const backToTop = readFileSync(new URL('../../components/ui/BackToTop.vue', import.meta.url), 'utf8')
 const appRoot = readFileSync(new URL('../../app.vue', import.meta.url), 'utf8')
 const pageView = readFileSync(new URL('../../components/PageView.vue', import.meta.url), 'utf8')
@@ -182,6 +183,10 @@ describe('docs page performance boundaries', () => {
     expect(darkToggle).not.toContain('@talex-touch/tuffex/icon-button')
     expect(darkToggle).not.toContain('<TxIconButton')
     expect(darkToggle).toContain('class="DarkToggle"')
+
+    expect(iconComposer).not.toContain('fonts.googleapis.com')
+    expect(iconComposer).not.toContain('Space Grotesk')
+    expect(iconComposer).toContain('font-nexus-display')
 
     expect(backToTop).not.toContain('<TxButton')
     expect(backToTop).toContain('<button v-show="visible"')

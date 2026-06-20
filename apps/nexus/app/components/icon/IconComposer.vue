@@ -27,7 +27,7 @@ const title = computed(() => {
     <Logo />
     <div class="IconComposer-Brand flex items-center gap-3">
       <span class="text-lg sm:text-xl font-sans">Tuff</span>
-      <span class="text-lg sm:text-xl op-50 font-space-grotesk">Nexus</span>
+      <span class="text-lg sm:text-xl op-50 font-nexus-display">Nexus</span>
       <transition name="fade">
         <div v-if="title" class="IconComposer-SubType flex gap-3 items-center">
           <span class="block text-xl op-25 scale-y-120">|</span>
@@ -40,9 +40,7 @@ const title = computed(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
-
-.font-space-grotesk {
-  font-family: 'Space Grotesk', sans-serif;
+.font-nexus-display {
+  font-family: 'Avenir Next', 'DM Sans', 'PingFang SC', 'Segoe UI', sans-serif;
 }
 </style>
