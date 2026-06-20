@@ -14,7 +14,7 @@ interface CliOptions {
   expectEvidenceTags: AiStableEvidenceTag[]
 }
 
-interface DevToolsTarget {
+export interface DevToolsTarget {
   id: string
   title: string
   type: string
@@ -48,6 +48,7 @@ interface ProbeResult {
   selectedTargetId?: string
   inputQuery?: string
   screenshotPath?: string
+  submitPreparation?: CoreBoxSubmitPreparation
   dom?: CoreBoxProbeDom
   evidenceChecks?: AiStableEvidenceCheck[]
   targets: Array<Pick<DevToolsTarget, 'id' | 'title' | 'type' | 'url'>>
@@ -69,11 +70,22 @@ export interface AiStableEvidenceCheck {
   matched: boolean
   requirement: string
   signalMatched: boolean
+  blockedByFailureSignal: boolean
   hasVisualArtifact: boolean
   matchedSignals: string[]
   missingSignals: string[]
+  matchedBlockedSignals: string[]
   artifactPaths: string[]
   visualArtifactPaths: string[]
+}
+
+export interface CoreBoxSubmitPreparation {
+  alreadyInSendMode: boolean
+  clickedFeatureEntry: boolean
+  readyForPrompt: boolean
+  clickMethod?: 'cdp-enter' | 'cdp-mouse'
+  submitMethod?: 'cdp-enter' | 'cdp-send-button'
+  activationText?: string
 }
 
 type CdpResponse = {
@@ -85,11 +97,11 @@ type CdpResponse = {
   }
 }
 
-type CdpSend = (method: string, params?: Record<string, unknown>) => Promise<CdpResponse>
+export type CdpSend = (method: string, params?: Record<string, unknown>) => Promise<CdpResponse>
 
 function printUsage(): void {
   console.log(`Usage:
-  pnpm -C "apps/core-app" run visible:experience:ai-ask-probe -- [options]
+  corepack pnpm -C "apps/core-app" run visible:experience:ai-ask-probe -- [options]
 
 Options:
   --remoteDebuggingUrl <url>  Packaged Electron /json/list URL. Default: http://127.0.0.1:9342/json/list.
@@ -279,28 +291,235 @@ async function inspectTarget(target: DevToolsTarget): Promise<CoreBoxProbeDom> {
   })
 }
 
+export async function dispatchCoreBoxSubmitKey(send: CdpSend): Promise<void> {
+  const commonParams = {
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: 13,
+    nativeVirtualKeyCode: 13
+  }
+
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    ...commonParams
+  })
+  await send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    ...commonParams
+  })
+}
+
+async function isCoreBoxPromptSendMode(send: CdpSend): Promise<boolean> {
+  const response = await send('Runtime.evaluate', {
+    expression: `Boolean(document.querySelector('.CoreBox-SendButton'))`,
+    returnByValue: true,
+    awaitPromise: true
+  })
+  return response.result?.result?.value === true
+}
+
+async function waitForCoreBoxPromptSendMode(
+  send: CdpSend,
+  timeoutMs = 8_000,
+  intervalMs = 100
+): Promise<boolean> {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (await isCoreBoxPromptSendMode(send)) return true
+    await sleep(intervalMs)
+  }
+  return false
+}
+
+async function getCoreBoxActivationText(send: CdpSend): Promise<string> {
+  const response = await send('Runtime.evaluate', {
+    expression: `[
+      document.querySelector('.CoreBox-SendButton') ? 'send-button' : '',
+      document.querySelector('.CoreBoxRes--widget') ? 'widget-mode' : '',
+      document.querySelector('.CoreBoxRender-Widget') ? 'widget-render' : '',
+      document.body?.innerText?.slice(0, 500) || ''
+    ].filter(Boolean).join('\\n')`,
+    returnByValue: true,
+    awaitPromise: true
+  })
+  const value = response.result?.result?.value
+  return typeof value === 'string' ? value : ''
+}
+
+async function clickCoreBoxSendButton(send: CdpSend): Promise<boolean> {
+  const response = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const button = document.querySelector('.CoreBox-SendButton')
+      if (!(button instanceof HTMLElement) || button.hasAttribute('disabled')) return false
+      const rect = button.getBoundingClientRect()
+      if (!Number.isFinite(rect.x) || !Number.isFinite(rect.y) || rect.width <= 0 || rect.height <= 0) {
+        return false
+      }
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      }
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  })
+  const clickPoint = response.result?.result?.value as { x?: unknown; y?: unknown } | false
+  if (!clickPoint || typeof clickPoint.x !== 'number' || typeof clickPoint.y !== 'number') {
+    return false
+  }
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: clickPoint.x,
+    y: clickPoint.y,
+    button: 'left',
+    clickCount: 1
+  })
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: clickPoint.x,
+    y: clickPoint.y,
+    button: 'left',
+    clickCount: 1
+  })
+  return true
+}
+
+export async function prepareCoreBoxPromptSendMode(
+  send: CdpSend,
+  options: { keyboardTimeoutMs?: number } = {}
+): Promise<CoreBoxSubmitPreparation> {
+  if (await isCoreBoxPromptSendMode(send)) {
+    return {
+      alreadyInSendMode: true,
+      clickedFeatureEntry: false,
+      readyForPrompt: true,
+      activationText: await getCoreBoxActivationText(send)
+    }
+  }
+
+  await dispatchCoreBoxSubmitKey(send)
+  const enteredSendModeFromKeyboard = await waitForCoreBoxPromptSendMode(
+    send,
+    options.keyboardTimeoutMs ?? 1_500
+  )
+  const keyboardActivationText = await getCoreBoxActivationText(send)
+  if (enteredSendModeFromKeyboard || /widget-mode|widget-render|AI 正在思考|请求失败|配额|quota/i.test(keyboardActivationText)) {
+    return {
+      alreadyInSendMode: false,
+      clickedFeatureEntry: true,
+      readyForPrompt: enteredSendModeFromKeyboard,
+      clickMethod: 'cdp-enter',
+      activationText: keyboardActivationText
+    }
+  }
+
+  const response = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const selectors = ['.item-list .CoreBoxRender', '.CoreBoxRender']
+      const items = selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+      const uniqueItems = Array.from(new Set(items))
+      const feature = uniqueItems.find((item) => /智能问答|touch-intelligence|AI Ask/i.test(item.textContent || '')) || uniqueItems[0]
+      if (!feature) return false
+      const rect = feature.getBoundingClientRect()
+      if (!Number.isFinite(rect.x) || !Number.isFinite(rect.y) || rect.width <= 0 || rect.height <= 0) {
+        return false
+      }
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || rect.right
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || rect.bottom
+      const minX = Math.max(1, rect.left + 1)
+      const maxX = Math.max(minX, Math.min(rect.right - 1, viewportWidth - 1))
+      const minY = Math.max(1, rect.top + 1)
+      const maxY = Math.max(minY, Math.min(rect.bottom - 1, viewportHeight - 1))
+      return {
+        x: Math.min(Math.max(rect.left + rect.width / 2, minX), maxX),
+        y: Math.min(Math.max(rect.top + rect.height / 2, minY), maxY)
+      }
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  })
+  const clickPoint = response.result?.result?.value as { x?: unknown; y?: unknown } | false
+  if (!clickPoint || typeof clickPoint.x !== 'number' || typeof clickPoint.y !== 'number') {
+    return {
+      alreadyInSendMode: false,
+      clickedFeatureEntry: false,
+      readyForPrompt: false
+    }
+  }
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: clickPoint.x,
+    y: clickPoint.y,
+    button: 'left',
+    clickCount: 1
+  })
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: clickPoint.x,
+    y: clickPoint.y,
+    button: 'left',
+    clickCount: 1
+  })
+
+  return {
+    alreadyInSendMode: false,
+    clickedFeatureEntry: true,
+    readyForPrompt: await waitForCoreBoxPromptSendMode(send),
+    clickMethod: 'cdp-mouse',
+    activationText: await getCoreBoxActivationText(send)
+  }
+}
+
 async function setCoreBoxInput(
   target: DevToolsTarget,
   inputQuery: string,
   submit: boolean
-): Promise<void> {
-  const expression = `(async () => {
+): Promise<CoreBoxSubmitPreparation | undefined> {
+  const setInputExpression = `(async () => {
     const input = document.querySelector('#core-box-input input, input#core-box-input, input')
     if (!input) return false
     input.focus()
-    input.value = ${JSON.stringify(inputQuery)}
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    if (valueSetter) {
+      valueSetter.call(input, ${JSON.stringify(inputQuery)})
+    } else {
+      input.value = ${JSON.stringify(inputQuery)}
+    }
     input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(inputQuery)} }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
-    ${submit ? "input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }))" : ''}
     return true
   })()`
 
-  await withTarget(target, async (send) => {
-    await send('Runtime.evaluate', {
-      expression,
+  return await withTarget(target, async (send) => {
+    const response = await send('Runtime.evaluate', {
+      expression: setInputExpression,
       returnByValue: true,
       awaitPromise: true
     })
+    if (response.result?.result?.value !== true) {
+      throw new Error('CoreBox input was not available when setting probe input.')
+    }
+    if (submit) {
+      await sleep(250)
+    }
+    const submitPreparation = submit ? await prepareCoreBoxPromptSendMode(send) : undefined
+    if (submit && submitPreparation?.readyForPrompt) {
+      const sendModeInputResponse = await send('Runtime.evaluate', {
+        expression: setInputExpression,
+        returnByValue: true,
+        awaitPromise: true
+      })
+      if (sendModeInputResponse.result?.result?.value !== true) {
+        throw new Error('CoreBox input was not available after entering prompt send mode.')
+      }
+      if (await clickCoreBoxSendButton(send)) {
+        submitPreparation.submitMethod = 'cdp-send-button'
+      } else {
+        await dispatchCoreBoxSubmitKey(send)
+        submitPreparation.submitMethod = 'cdp-enter'
+      }
+    }
+    return submitPreparation
   })
 }
 
@@ -320,10 +539,14 @@ async function captureScreenshot(target: DevToolsTarget, screenshotPath: string)
   })
 }
 
-function selectCoreBoxTarget(
+export function selectCoreBoxTarget(
   inspected: Array<{ target: DevToolsTarget; dom: CoreBoxProbeDom }>
 ): { target: DevToolsTarget; dom: CoreBoxProbeDom } | undefined {
-  return inspected.find((item) => item.dom.hasCoreBoxClass && item.dom.inputIdExists)
+  const candidates = inspected.filter((item) => item.dom.hasCoreBoxClass && item.dom.inputIdExists)
+  return (
+    candidates.find((item) => !item.dom.bodyClass.split(/\s+/).includes('division-box')) ??
+    candidates[0]
+  )
 }
 
 function includesAny(text: string, signals: string[]): string[] {
@@ -335,17 +558,51 @@ function hasAnySignal(text: string, signals: string[]): boolean {
   return includesAny(text, signals).length > 0
 }
 
+function removeCurrentInputEcho(bodyText: string, inputValue: string): string {
+  const input = inputValue.trim()
+  if (!input) return bodyText
+  return bodyText.split(input).join('')
+}
+
+function getEvidenceBodyText(dom: CoreBoxProbeDom): string {
+  return removeCurrentInputEcho(dom.bodyText || '', dom.inputValue || '')
+}
+
+function getCommonBlockedSignals(): string[] {
+  return [
+    'Widget 加载失败',
+    '插件 widget 初始化失败',
+    'Widget interaction failed',
+    'WIDGET_RUNTIME_COMPILE_DISABLED',
+    'WIDGET_PRECOMPILED_MISSING',
+    'WIDGET_PRECOMPILED_STALE',
+    'WIDGET_PRECOMPILED_INTEGRITY_MISMATCH',
+    'WIDGET_REGISTER_FAILED',
+    'WIDGET_COMPILER_SERVICE_UNAVAILABLE',
+    'Widget compiler binary is unavailable'
+  ]
+}
+
 export function buildEvidenceChecks(
   dom: CoreBoxProbeDom,
   tags: AiStableEvidenceTag[],
   artifactPaths: string[]
 ): AiStableEvidenceCheck[] {
   const uniqueTags = [...new Set(tags)]
-  const bodyText = dom.bodyText || ''
+  const bodyText = getEvidenceBodyText(dom)
 
   return uniqueTags.map((tag) => {
-    const { requirement, signals, requireAll, requiredSignalGroups } = getEvidenceSignals(tag)
+    const {
+      requirement,
+      signals,
+      requireAll,
+      requiredSignalGroups,
+      blockedSignals = []
+    } = getEvidenceSignals(tag)
+    const allBlockedSignals = [...blockedSignals, ...getCommonBlockedSignals()]
     const matchedSignals = includesAny(bodyText, signals)
+    const matchedBlockedSignals = includesAny(bodyText, allBlockedSignals)
+    const blockedByFailureSignal = matchedBlockedSignals.length > 0
     const signalMatched = requiredSignalGroups?.length
       ? requiredSignalGroups.every((group) => hasAnySignal(bodyText, group))
       : requireAll
@@ -359,11 +616,13 @@ export function buildEvidenceChecks(
     return {
       tag,
       requirement,
-      matched: signalMatched && visualArtifactPaths.length > 0,
+      matched: signalMatched && !blockedByFailureSignal && visualArtifactPaths.length > 0,
       signalMatched,
+      blockedByFailureSignal,
       hasVisualArtifact: visualArtifactPaths.length > 0,
       matchedSignals,
       missingSignals,
+      matchedBlockedSignals,
       artifactPaths,
       visualArtifactPaths
     }
@@ -379,6 +638,7 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
   signals: string[]
   requireAll?: boolean
   requiredSignalGroups?: string[][]
+  blockedSignals?: string[]
 } {
   switch (tag) {
     case 'AI-STABLE-01':
@@ -397,6 +657,10 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           'latency',
           'ms',
           '耗时',
+          'input',
+          'input kind',
+          'inputKind',
+          '输入',
           '回答',
           'response',
           'answer'
@@ -407,7 +671,26 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           ['provider', '供应商'],
           ['model', '模型'],
           ['latency', 'ms', '耗时'],
+          ['input kind', 'inputKind', 'input', '输入'],
           ['trace', 'trace id', 'traceId']
+        ],
+        blockedSignals: [
+          'Error',
+          '请求失败',
+          '失败',
+          'NEXUS_STREAM_UNSUPPORTED',
+          '不支持该能力',
+          'unsupported',
+          'permission denied',
+          '权限',
+          'quota exhausted',
+          'provider unavailable',
+          'empty response',
+          'no answer',
+          '空回答',
+          '无回答',
+          '未登录',
+          'logged out'
         ]
       }
     case 'AI-STABLE-02':
@@ -430,6 +713,10 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           'latency',
           'ms',
           '耗时',
+          'input',
+          'input kind',
+          'inputKind',
+          '输入',
           'trace',
           'trace id',
           'traceId'
@@ -441,7 +728,26 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           ['provider', '供应商'],
           ['model', '模型'],
           ['latency', 'ms', '耗时'],
+          ['input kind', 'inputKind', 'input', '输入'],
           ['trace', 'trace id', 'traceId']
+        ],
+        blockedSignals: [
+          'Error',
+          '请求失败',
+          '失败',
+          'NEXUS_STREAM_UNSUPPORTED',
+          '不支持该能力',
+          'unsupported',
+          'permission denied',
+          '权限',
+          'quota exhausted',
+          'provider unavailable',
+          'empty response',
+          'no answer',
+          '空回答',
+          '无回答',
+          '未登录',
+          'logged out'
         ]
       }
     case 'AI-STABLE-03':
@@ -463,6 +769,17 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           ['未登录', '需要登录', 'sign in', 'logged out', 'login'],
           ['登录', 'sign in', 'login'],
           ['恢复', '重试', 'retry', 'recover']
+        ],
+        blockedSignals: [
+          'provider called',
+          'called provider',
+          'invoke provider',
+          '调用 provider',
+          '调用供应商',
+          'text.chat response',
+          'answer provider',
+          'fallback success',
+          'fake success'
         ]
       }
     case 'AI-STABLE-04':
@@ -493,6 +810,16 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
             '供应商不可用'
           ],
           ['provider health', 'settings', '设置', '恢复', '重试', 'retry', 'recover']
+        ],
+        blockedSignals: [
+          'fallback success',
+          'fake success',
+          'text.chat response',
+          'answer provider',
+          'provider call succeeded',
+          'provider returned answer',
+          '调用成功',
+          '已返回回答'
         ]
       }
     case 'AI-STABLE-05':
@@ -516,6 +843,16 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
         requiredSignalGroups: [
           ['quota', 'credits', '积分', '配额', '额度不足', 'quota exhausted'],
           ['upgrade', 'top up', '充值', '恢复', '重试', 'retry', 'recover']
+        ],
+        blockedSignals: [
+          'fallback success',
+          'fake success',
+          'text.chat response',
+          'answer provider',
+          'provider call succeeded',
+          'provider returned answer',
+          '扣费成功',
+          '已返回回答'
         ]
       }
     case 'AI-STABLE-06':
@@ -539,6 +876,15 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           ['NEXUS_STREAM_UNSUPPORTED', '不支持该能力', 'unsupported'],
           ['capability', '能力', 'model', '模型'],
           ['supported model', '可用模型', '恢复', '重试', 'retry']
+        ],
+        blockedSignals: [
+          'fallback success',
+          'fake success',
+          'text.chat response',
+          'answer provider',
+          'provider call succeeded',
+          'provider returned answer',
+          '已返回回答'
         ]
       }
     case 'AI-STABLE-07':
@@ -560,15 +906,71 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           ['permission denied', '权限', 'permission'],
           ['intelligence.basic'],
           ['授权', '允许', 'settings', '设置', '重试', 'retry']
+        ],
+        blockedSignals: [
+          'Intelligence SDK called',
+          'called Intelligence SDK',
+          'provider called',
+          'called provider',
+          'invoke provider',
+          '调用 Intelligence',
+          '调用 provider',
+          'text.chat response',
+          'answer provider',
+          '已返回回答'
         ]
       }
     case 'AI-STABLE-08':
       return {
         requirement: 'Local/Ollama preferred routing does not call disabled Nexus provider',
-        signals: ['Local', 'Ollama', 'routing', 'route', 'provider metadata', '本地', '路由'],
+        signals: [
+          'Local/Ollama',
+          'local-default',
+          'Ollama',
+          'routing',
+          'route',
+          'provider metadata',
+          'Provider',
+          'Model',
+          'qwen',
+          'Latency',
+          'ms',
+          'Trace',
+          'Input kind',
+          'inputKind',
+          'Capability',
+          'text.chat',
+          '本地',
+          '路由',
+          '输入'
+        ],
         requiredSignalGroups: [
-          ['Local', 'Ollama', '本地'],
-          ['routing', 'route', 'provider metadata', '路由']
+          ['Local/Ollama', 'local-default', 'Ollama', '本地'],
+          ['routing', 'route', 'provider metadata', '路由'],
+          ['Provider'],
+          ['Model'],
+          ['Latency', 'ms'],
+          ['Trace'],
+          ['Input kind', 'inputKind', '输入'],
+          ['Capability', 'text.chat']
+        ],
+        blockedSignals: [
+          'disabled Nexus',
+          'Nexus disabled',
+          'fallback to Nexus',
+          'fallback provider Nexus',
+          'called Nexus',
+          'Nexus provider called',
+          'Nexus call succeeded',
+          'Nexus provider returned answer',
+          'Nexus returned answer',
+          'Nexus response',
+          'provider=Nexus',
+          'provider: Nexus',
+          'selected provider Nexus',
+          'route provider Nexus',
+          '访问 Nexus',
+          '调用 Nexus'
         ]
       }
   }
@@ -607,8 +1009,19 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
   }
 
   if (options.inputQuery) {
-    await setCoreBoxInput(selected.target, options.inputQuery, options.submit)
-    if (options.submit) await sleep(1_500)
+    result.submitPreparation = await setCoreBoxInput(
+      selected.target,
+      options.inputQuery,
+      options.submit
+    )
+    if (
+      options.submit &&
+      result.submitPreparation?.clickedFeatureEntry === false &&
+      result.submitPreparation?.readyForPrompt === false
+    ) {
+      result.failures.push('CoreBox AI Ask feature entry did not enter prompt send mode.')
+    }
+    if (options.submit) await sleep(result.submitPreparation?.readyForPrompt ? 1_500 : 3_500)
     selected.dom = await inspectTarget(selected.target)
   }
 
@@ -632,6 +1045,11 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
       if (!check.signalMatched) {
         result.failures.push(
           `Expected evidence tag was not matched: ${check.tag} -> ${check.requirement}`
+        )
+      }
+      if (check.blockedByFailureSignal) {
+        result.failures.push(
+          `Expected evidence tag matched failure-state text: ${check.tag} -> ${check.matchedBlockedSignals.join(', ')}`
         )
       }
       if (!check.hasVisualArtifact) {

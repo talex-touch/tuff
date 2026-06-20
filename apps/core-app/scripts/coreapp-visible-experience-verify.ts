@@ -20,7 +20,7 @@ interface CliOptions extends CoreAppVisibleExperienceGateOptions {
 
 function printUsage(): void {
   console.log(`Usage:
-  pnpm -C "apps/core-app" run visible:experience:verify -- --input <manifest.json> [options]
+  corepack pnpm -C "apps/core-app" run visible:experience:verify -- --input <manifest.json> [options]
 
 Options:
   --input <path>              Read visible experience manifest JSON. Defaults to stdin.

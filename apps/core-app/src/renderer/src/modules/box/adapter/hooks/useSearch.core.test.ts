@@ -395,6 +395,14 @@ describe('useSearch CoreBox reopen behavior', () => {
           content: 'touch-intelligence::intelligence-ask',
           data: { prompt: 'ai hello', status: 'chat-pending' }
         }
+      },
+      meta: {
+        defaultAction: 'intelligence-action',
+        actionId: 'send',
+        payload: {
+          prompt: 'ai hello',
+          inputKinds: ['text']
+        }
       }
     })
   })

@@ -268,6 +268,7 @@ export const COREAPP_VISIBLE_EXPERIENCE_SURFACES: readonly CoreAppVisibleExperie
     requiredEvidence: [
       'CoreBox AI Ask text.chat success preview is visible',
       'CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible',
+      'Text and OCR success previews show a non-empty answer without empty-response copy',
       'Provider, model, latency, trace id, and input kind metadata are visible for text and OCR paths',
       'Copy failure remains visible inside the preview',
       'Logged-out failure shows a sign-in recovery hint',
@@ -300,6 +301,7 @@ export const COREAPP_VISIBLE_EXPERIENCE_SURFACES: readonly CoreAppVisibleExperie
     ],
     blockedWhen: [
       'The preview hides provider/model/trace context.',
+      'Text or OCR success shows empty response, no answer, 空回答, or 无回答 copy.',
       'Text success and OCR success are not captured as separate recent paths.',
       'Logged-out, provider unavailable, quota exhausted, or model unsupported appears as a generic error without a recovery hint.',
       'Permission denied still invokes Intelligence SDK.',
@@ -486,7 +488,7 @@ export function buildCoreAppVisibleExperienceManifest(params: {
     generatedAt: params.generatedAt ?? new Date().toISOString(),
     baselineVersion: params.baselineVersion,
     verification: {
-      recommendedCommand: `pnpm -C "apps/core-app" run visible:experience:verify -- --input "${manifestPath}" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireEvidenceTags --requireExistingArtifacts --requireNonEmptyArtifacts`
+      recommendedCommand: `corepack pnpm -C "apps/core-app" run visible:experience:verify -- --input "${manifestPath}" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireEvidenceTags --requireExistingArtifacts --requireNonEmptyArtifacts`
     },
     surfaces: COREAPP_VISIBLE_EXPERIENCE_SURFACES.map((surface) => ({
       id: surface.id,
@@ -558,7 +560,26 @@ export function verifyCoreAppVisibleExperienceManifest(
       const evidenceTags = new Set(
         (item.evidenceTags ?? []).map((tag) => normalizeEvidenceTag(tag)).filter(Boolean)
       )
+      const requiredEvidenceTags = new Set(
+        surface.requiredEvidenceTags.map((tag) => normalizeEvidenceTag(tag))
+      )
       const artifactPathSet = new Set(artifactPaths)
+      const visualArtifactsByPath = new Map<string, string[]>()
+
+      for (const evidenceTag of evidenceTags) {
+        if (requiredEvidenceTags.has(evidenceTag)) continue
+        failures.push(
+          `Visible experience item has unexpected evidence tag: ${surface.id} -> ${evidenceTag}`
+        )
+      }
+
+      for (const artifactTag of Object.keys(item.evidenceTagArtifacts ?? {})) {
+        const normalizedArtifactTag = normalizeEvidenceTag(artifactTag)
+        if (requiredEvidenceTags.has(normalizedArtifactTag)) continue
+        failures.push(
+          `Visible experience item has artifact for unexpected evidence tag: ${surface.id} -> ${artifactTag}`
+        )
+      }
 
       for (const requiredTag of surface.requiredEvidenceTags) {
         const normalizedTag = normalizeEvidenceTag(requiredTag)
@@ -589,6 +610,19 @@ export function verifyCoreAppVisibleExperienceManifest(
             `Visible experience item evidence tag has no screenshot or recording artifact: ${surface.id} -> ${requiredTag}`
           )
         }
+
+        for (const tagArtifact of tagArtifacts.filter(isVisualArtifactPath)) {
+          const tags = visualArtifactsByPath.get(tagArtifact) ?? []
+          tags.push(requiredTag)
+          visualArtifactsByPath.set(tagArtifact, tags)
+        }
+      }
+
+      for (const [artifactPath, tags] of visualArtifactsByPath.entries()) {
+        if (tags.length <= 1) continue
+        failures.push(
+          `Visible experience item evidence artifact is reused across tags: ${surface.id} -> ${artifactPath} -> ${tags.join(', ')}`
+        )
       }
     }
   }
@@ -644,10 +678,12 @@ export function renderCoreAppVisibleExperienceEvidenceTemplate(
       const evidenceTags = new Set(
         (item?.evidenceTags ?? []).map((tag) => normalizeEvidenceTag(tag)).filter(Boolean)
       )
+      const canMarkEvidenceTagComplete = item?.status === 'passed'
       lines.push('- Required evidence tags:')
       for (const tag of surface.requiredEvidenceTags) {
-        const checked = evidenceTags.has(normalizeEvidenceTag(tag))
-        lines.push(`  - [${checked ? 'x' : ' '}] ${tag}`)
+        const hasEvidence = evidenceTags.has(normalizeEvidenceTag(tag))
+        const checkbox = canMarkEvidenceTagComplete && hasEvidence ? 'x' : hasEvidence ? '-' : ' '
+        lines.push(`  - [${checkbox}] ${tag}`)
         for (const artifactPath of getEvidenceTagArtifacts(item, tag)) {
           lines.push(`    - ${artifactPath}`)
         }

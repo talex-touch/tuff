@@ -45,6 +45,11 @@ interface IntelligenceWidgetPayload {
   imageContext?: IntelligenceImageContext | null
 }
 
+interface RuntimeMetadataItem {
+  label: string
+  value: string
+}
+
 export default defineComponent({
   name: 'ask-panel',
   components: {
@@ -80,6 +85,38 @@ export default defineComponent({
     const errorCode = computed(() => String(widgetPayload.value.errorCode || '').trim())
     const errorMessage = computed(() => String(widgetPayload.value.errorMessage || '').trim())
     const isPermissionDenied = computed(() => errorCode.value === 'PERMISSION_DENIED')
+    const runtimeMetadata = computed<RuntimeMetadataItem[]>(() => {
+      const payload = widgetPayload.value
+      const items: RuntimeMetadataItem[] = []
+      const provider = String(payload.provider || '').trim()
+      const model = String(payload.model || '').trim()
+      const traceId = String(payload.traceId || '').trim()
+      const capabilityId = String(payload.capabilityId || '').trim()
+      const inputKinds = Array.isArray(payload.inputKinds)
+        ? payload.inputKinds.map(kind => String(kind).trim()).filter(Boolean)
+        : []
+      const latency = Number(payload.latency)
+
+      if (provider) {
+        const providerValue = provider.toLowerCase() === 'local'
+          ? 'Local/Ollama (local)'
+          : provider
+        items.push({ label: 'Provider', value: providerValue })
+      }
+      if (model)
+        items.push({ label: 'Model', value: model })
+      if (Number.isFinite(latency) && latency >= 0)
+        items.push({ label: 'Latency', value: `${Math.round(latency)} ms` })
+      if (traceId)
+        items.push({ label: 'Trace', value: traceId })
+      if (inputKinds.length > 0)
+        items.push({ label: 'Input kind', value: inputKinds.join(', ') })
+      if (capabilityId)
+        items.push({ label: 'Capability', value: capabilityId })
+
+      return items
+    })
+    const hasRuntimeMetadata = computed(() => runtimeMetadata.value.length > 0)
 
     function cloneMessage(message: IntelligenceWidgetMessage): IntelligenceWidgetMessage {
       return {
@@ -122,6 +159,8 @@ export default defineComponent({
       errorCode,
       errorMessage,
       isPermissionDenied,
+      runtimeMetadata,
+      hasRuntimeMetadata,
       scrollToBottom,
     }
   },
@@ -149,6 +188,16 @@ export default defineComponent({
           :show-avatar="false"
           empty-text="Start a conversation"
         />
+
+        <div v-if="hasRuntimeMetadata" class="AiChatbot__runtimeMetadata" aria-label="Routing provider metadata">
+          <strong>Routing provider metadata</strong>
+          <dl>
+            <template v-for="item in runtimeMetadata" :key="item.label">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </template>
+          </dl>
+        </div>
 
         <div v-if="imageContext" class="AiImageContext" :class="`is-${imageContext.status || 'attached'}`">
           <img v-if="imageContext.preview" :src="imageContext.preview" alt="图片上下文" />
@@ -406,6 +455,52 @@ export default defineComponent({
 
 .AiImageContext {
   max-width: min(78%, 720px);
+}
+
+.AiChatbot__runtimeMetadata {
+  display: grid;
+  max-width: min(78%, 720px);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ai-chat-assistant-bg) 78%, transparent);
+  color: var(--ai-chat-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.AiChatbot__runtimeMetadata strong {
+  color: var(--ai-chat-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.AiChatbot__runtimeMetadata dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.AiChatbot__runtimeMetadata dt,
+.AiChatbot__runtimeMetadata dd {
+  margin: 0;
+}
+
+.AiChatbot__runtimeMetadata dt {
+  color: var(--ai-chat-text-secondary);
+  font-weight: 650;
+}
+
+.AiChatbot__runtimeMetadata dt::after {
+  content: ':';
+}
+
+.AiChatbot__runtimeMetadata dd {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--ai-chat-text);
 }
 
 .AiImageContext.is-unsupported {

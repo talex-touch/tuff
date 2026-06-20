@@ -19,7 +19,7 @@ const DEFAULT_EVIDENCE_DIR = 'evidence/coreapp-visible'
 
 function printUsage(): void {
   console.log(`Usage:
-  pnpm -C "apps/core-app" run visible:experience:template -- [options]
+  corepack pnpm -C "apps/core-app" run visible:experience:template -- [options]
 
 Options:
   --evidenceDir <dir>   Evidence directory used in manifest paths. Default: evidence/coreapp-visible.

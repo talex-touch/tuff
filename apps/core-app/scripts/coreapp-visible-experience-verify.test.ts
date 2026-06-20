@@ -13,8 +13,9 @@ const scriptPath = path.join(__dirname, 'coreapp-visible-experience-verify.ts')
 
 function runVerifier(manifestPath: string): string {
   return execFileSync(
-    'pnpm',
+    'corepack',
     [
+      'pnpm',
       'exec',
       'tsx',
       scriptPath,
