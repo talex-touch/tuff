@@ -23,6 +23,31 @@ function getRouteLocaleChunkKey(locale: SupportedLocale, chunk: RouteLocaleChunk
   return `${locale}:${chunk}`
 }
 
+export function normalizeRouteLocalePath(path: string) {
+  const trimmed = path.replace(/^\/(en|zh)(?=\/|$)/i, '')
+  return trimmed || '/'
+}
+
+export function resolveRouteLocaleChunks(path: string): RouteLocaleChunkName[] {
+  const normalized = normalizeRouteLocalePath(path)
+  const chunks: RouteLocaleChunkName[] = []
+
+  if (normalized === '/' || normalized === '/new' || normalized.startsWith('/new/'))
+    chunks.push('landing')
+
+  if (
+    normalized === '/dashboard'
+    || normalized.startsWith('/dashboard/')
+    || normalized === '/store'
+    || normalized.startsWith('/store/')
+    || normalized === '/team/join'
+  ) {
+    chunks.push('dashboard')
+  }
+
+  return chunks
+}
+
 export async function loadRouteLocaleChunk(locale: SupportedLocale, chunk: RouteLocaleChunkName) {
   const key = getRouteLocaleChunkKey(locale, chunk)
   const existing = loadingChunks.get(key)
