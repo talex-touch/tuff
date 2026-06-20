@@ -19,6 +19,20 @@ const DEFAULT_PATH_FILTERING: EverythingStatusResponse['pathFiltering'] = {
   reason: null
 }
 
+const DEFAULT_INSTALLATION: EverythingStatusResponse['installation'] = {
+  supported: true,
+  state: 'ready',
+  recommendation: 'ready',
+  everythingInstalled: true,
+  everythingRunning: true,
+  serviceRunning: true,
+  cliFound: true,
+  appPath: 'C:\\Program Files\\Everything\\Everything.exe',
+  cliPath: 'C:\\Program Files\\Everything\\es.exe',
+  checkedAt: Date.now(),
+  reason: null
+}
+
 function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): EverythingStatusResponse {
   return {
     enabled: true,
@@ -36,6 +50,7 @@ function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): Everyth
     fallbackChain: ['sdk-napi', 'cli', 'unavailable'],
     lastChecked: Date.now(),
     pathFiltering: DEFAULT_PATH_FILTERING,
+    installation: DEFAULT_INSTALLATION,
     ...overrides
   }
 }
@@ -63,7 +78,19 @@ describe('setting-everything state helpers', () => {
       enabled: true,
       available: false,
       backend: 'unavailable',
-      health: 'degraded'
+      health: 'degraded',
+      installation: {
+        ...DEFAULT_INSTALLATION,
+        state: 'missing-everything',
+        recommendation: 'install-everything',
+        everythingInstalled: false,
+        everythingRunning: false,
+        serviceRunning: false,
+        cliFound: false,
+        appPath: null,
+        cliPath: null,
+        reason: 'Everything app was not found.'
+      }
     })
 
     expect(resolveEverythingStatusTextKey(enabledUnavailable)).toBe(
@@ -72,6 +99,40 @@ describe('setting-everything state helpers', () => {
     expect(resolveEverythingStatusColor(enabledUnavailable)).toBe('text-red-500')
     expect(shouldShowEverythingToggle(enabledUnavailable)).toBe(true)
     expect(shouldShowEverythingInstallGuide(enabledUnavailable)).toBe(true)
+  })
+
+  it('keeps install guide focused on installable missing dependencies', () => {
+    const notRunning = buildStatus({
+      enabled: true,
+      available: false,
+      backend: 'unavailable',
+      health: 'degraded',
+      installation: {
+        ...DEFAULT_INSTALLATION,
+        state: 'not-running',
+        recommendation: 'start-everything',
+        everythingRunning: false,
+        reason: 'Everything is installed but not running.'
+      }
+    })
+
+    const missingCli = buildStatus({
+      enabled: true,
+      available: false,
+      backend: 'unavailable',
+      health: 'degraded',
+      installation: {
+        ...DEFAULT_INSTALLATION,
+        state: 'missing-cli',
+        recommendation: 'install-cli',
+        cliFound: false,
+        cliPath: null,
+        reason: 'es.exe missing.'
+      }
+    })
+
+    expect(shouldShowEverythingInstallGuide(notRunning)).toBe(false)
+    expect(shouldShowEverythingInstallGuide(missingCli)).toBe(true)
   })
 
   it('shows diagnostics when backend stage summaries are present', () => {

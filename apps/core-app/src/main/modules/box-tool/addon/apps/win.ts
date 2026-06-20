@@ -88,6 +88,26 @@ const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
   'Logo'
 ]
 const windowsAppLog = createLogger('AppScanner').child('Windows')
+type ExtractFileIcon = (filePath: string, size?: number) => Buffer | null
+let extractFileIcon: ExtractFileIcon | null | undefined
+
+async function loadExtractFileIcon(): Promise<ExtractFileIcon | null> {
+  if (extractFileIcon !== undefined) {
+    return extractFileIcon
+  }
+
+  try {
+    const loaded = await import('extract-file-icon')
+    extractFileIcon = loaded.default as ExtractFileIcon
+  } catch (error) {
+    extractFileIcon = null
+    windowsAppLog.warn('Native app icon extractor unavailable', {
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
+
+  return extractFileIcon
+}
 
 function normalizeIdentityPart(value: string): string {
   return value.trim().toLowerCase()
@@ -778,7 +798,7 @@ async function getAppIcon(targetPath: string, cacheKey: string): Promise<string>
     return `data:image/png;base64,${buffer.toString('base64')}`
   } catch {
     try {
-      const fileIcon = (await import('extract-file-icon')).default
+      const fileIcon = await loadExtractFileIcon()
       if (typeof fileIcon === 'function') {
         const buffer = fileIcon(targetPath, 32)
         if (buffer && buffer.length > 0) {
@@ -789,7 +809,7 @@ async function getAppIcon(targetPath: string, cacheKey: string): Promise<string>
       }
     } catch (error) {
       windowsAppLog.warn('Failed to extract app icon', {
-        error,
+        error: error instanceof Error ? error.message : String(error),
         meta: { pathLength: targetPath.length }
       })
     }

@@ -63,9 +63,37 @@ function getCommandErrorCode(error: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
-function getCommandErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  return String(error)
+function getCompactCommandErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return String(error)
+  }
+
+  const record = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+  const stderr = typeof record.stderr === 'string' ? record.stderr.trim() : ''
+  if (stderr) {
+    return stderr.split(/\r?\n/).find(Boolean) || stderr
+  }
+
+  const stdout = typeof record.stdout === 'string' ? record.stdout.trim() : ''
+  if (stdout) {
+    return stdout.split(/\r?\n/).find(Boolean) || stdout
+  }
+
+  const message = typeof record.message === 'string' ? record.message.trim() : ''
+  if (!message) {
+    return String(error)
+  }
+
+  const commandFailedIndex = message.indexOf('Command failed:')
+  if (commandFailedIndex >= 0) {
+    const firstLine = message.split(/\r?\n/).find(Boolean) || message
+    if (/\s+-Command\s*$/i.test(firstLine)) {
+      return firstLine.replace(/\s+-Command\s*$/i, ' -Command <script>')
+    }
+    return firstLine.replace(/\s+-Command\s+.*$/i, ' -Command <script>')
+  }
+
+  return message.split(/\r?\n/).find(Boolean) || message
 }
 
 function extractJsonObjectLine(output: string): string {
@@ -310,7 +338,7 @@ try {
         activeAppLog.warn('Windows active-app resolution failed', {
           meta: {
             code: getCommandErrorCode(error) ?? undefined,
-            message: getCommandErrorMessage(error)
+            message: getCompactCommandErrorMessage(error)
           }
         })
       }

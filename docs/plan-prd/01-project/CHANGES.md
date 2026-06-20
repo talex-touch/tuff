@@ -1191,6 +1191,28 @@
   - Required core release manifest artifacts to declare a matching `.sig` / `.asc` signature sidecar, keeping GitHub manifest integrity aligned with Nexus `signatureUrl` backfill expectations.
   - Added focused script tests for valid sample manifests and invalid release integrity cases.
   - Added Indexing store batch, delta, and clear-source summaries for add/change/delete/skipped/reset paths, giving scan/watch/reconcile/reset evidence a structured store-boundary hook without changing existing runtime callers.
+### feat(core-app): upgrade Everything install to Download Center
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/system/active-app.ts`
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/everything-integration.md`
+  - Replaced the copied PowerShell installer path with typed `everything:install-start` / `everything:install-status` events that create visible Download Center tasks for official portable Everything and ES CLI ZIP assets.
+  - The main process now verifies fixed SHA-256 hashes, extracts into `%LOCALAPPDATA%\Tuff\Everything` and `%LOCALAPPDATA%\Tuff\EverythingCLI`, probes `es.exe -version`, saves the configured CLI path, starts portable Everything, and only appends the CLI directory to the current user's `PATH`.
+  - Reworked the Settings install dialog so the top-level surface has a single one-click install button plus a separate Advanced Settings detail dialog for task IDs, target paths, checksums, manual links, PATH policy, and errors.
+  - Moved Everything test search into a keyword-driven dialog that runs the typed `everything:test` transport event with user input and displays raw Everything result counts and sample files.
+  - Fixed portable Everything search after install by writing an `Everything.ini` folder index for common user folders, launching portable Everything with that config, and repairing an empty managed portable database before retrying the CLI query.
+  - Corrected ES CLI search arguments from path-filtering switches to stable full-path CSV output (`-sort path`, `-full-path-and-name`, `-csv`, `-no-header`), so files like `Desktop\aaa.txt` can be returned and parsed correctly.
+  - Kept Everything independent from File Index root filtering; Everything settings now report backend search results directly instead of mixing them with File Index authorization state.
+  - Tightened the Everything test dialog layout with an internal scroll body, safer bottom padding, and mobile button wrapping.
+  - When `es.exe` reports `Error 8` / missing Everything IPC, Tuff now attempts to start the installed or portable `Everything.exe` and retries the same CLI query once before surfacing a readable failure reason.
+  - Reduced Windows development log noise by caching missing `extract-file-icon` native bindings in AppScanner and compacting ActiveApp PowerShell command failures to a single diagnostic line.
+  - Removed the File Index warming-up result notice from CoreBox search results and made the icon worker tolerate missing `extract-file-icon` native bindings without crashing the worker.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts"`.
 
 ### ref(quickops): align bounded SDK surface audit
 
@@ -4809,7 +4831,7 @@
 - `docs/plan-prd/TODO.md`
 - `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
   - Added public `updateIndexedSourceTaskState()` so runtime task state updates share the same newest-first bounded `recentTasks` rule as `appendIndexedSourceTaskHistory()`.
-  - Rewired `IndexingRuntime` scan/watch/reconcile/reset diagnostics to update last* task state and history through the SDK helper instead of mutating local task state directly.
+  - Rewired `IndexingRuntime` scan/watch/reconcile/reset diagnostics to update last\* task state and history through the SDK helper instead of mutating local task state directly.
   - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-state.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
 
 ### ref(search): lift indexed auto scan preflight policy
@@ -6281,6 +6303,17 @@
   - Rendered the latest daily operations rows inside the governance operations dashboard for compact operator review, including daily risk score, search selection/problem rate, provider tokens, upload failure rate, and storage operations.
   - Kept the Nexus Data Governance status as in-progress rather than production-complete; live browser, live send, live storage, production D1, and real quota fail-closed evidence remain open validation gaps.
 
+### feat(core): refine Windows Everything installation diagnosis
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a Windows installation diagnosis layer to the Everything status payload, covering local app detection, running process/service probes, CLI availability, state, recommendation, and reason.
+  - Updated the Everything settings view to present a clearer local check result and action path: manual Everything install first, optional CLI download/selection when `es.exe` is missing, and explicit recheck without attempting silent installation.
+  - Extended diagnostic evidence payloads and targeted tests so Windows regression records include the new installation summary.
+  - Verification: targeted Everything provider/settings vitest suites, `pnpm -C "apps/core-app" run typecheck:node`, and `pnpm -C "apps/core-app" run typecheck:web` passed.
+
 ### fix(nexus): restore storage smoke policy resolver for Pages build
 
 - `apps/nexus/server/utils/storageObjectStore.ts`
@@ -7451,6 +7484,7 @@
 ### test(ci): restore targeted Nexus sync route test path
 
 - `package.json`
+
 ### refactor(core-app): remove Electron safeStorage and stabilize launch/update overlays
 
 - `apps/core-app/src/main/utils/secure-store.ts`
