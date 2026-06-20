@@ -257,6 +257,7 @@ export default defineNuxtConfig({
   },
 
   ignore: [
+    'app/plugins/highlight.client.ts',
     'app/plugins/mermaid.client.ts',
   ],
 
