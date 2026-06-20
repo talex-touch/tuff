@@ -467,6 +467,89 @@ describe('TuffIntelligenceSDK invoke', () => {
     })
   })
 
+  it('streams through local routing without touching disabled Nexus providers', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    async function* localStreamChunks() {
+      yield { delta: 'local', done: false }
+      yield {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+      }
+    }
+
+    const nexusProvider = createProvider(
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: false,
+        priority: 1,
+        apiKey: 'guest',
+        capabilities: ['text.chat'],
+        metadata: { origin: 'tuff-nexus', tokenMode: 'guest' }
+      },
+      vi.fn()
+    )
+    nexusProvider.chatStream = vi.fn(async function* () {
+      throw new Error('NEXUS_STREAM_UNSUPPORTED')
+    })
+
+    const localProvider = createProvider(
+      {
+        id: 'local-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Ollama',
+        enabled: true,
+        priority: 2,
+        models: ['llama3.1'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    localProvider.chatStream = vi.fn(() => localStreamChunks())
+
+    setIntelligenceProviderManager(new FakeProviderManager([nexusProvider, localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'text.chat': {
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
+            { providerId: 'local-default', priority: 2, enabled: true, models: ['llama3.1'] }
+          ]
+        }
+      }
+    })
+
+    const events: IntelligenceStreamEvent<string>[] = []
+    for await (const event of sdk.stream<string>('text.chat', {
+      messages: [{ role: 'user', content: 'hello' }]
+    })) {
+      events.push(event)
+    }
+
+    expect(nexusProvider.chatStream).not.toHaveBeenCalled()
+    expect(localProvider.chatStream).toHaveBeenCalledOnce()
+    expect(events.map((event) => event.type)).toEqual(['start', 'delta', 'usage', 'end'])
+    expect(events.at(-1)).toMatchObject({
+      type: 'end',
+      result: 'local',
+      content: 'local',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+    })
+  })
+
   it('dispatches audio.tts to provider TTS capability', async () => {
     intelligenceCapabilityRegistry.register({
       id: 'audio.tts',

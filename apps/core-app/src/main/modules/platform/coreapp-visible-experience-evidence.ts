@@ -18,6 +18,7 @@ export interface CoreAppVisibleExperienceSurface {
   requiresVisualArtifact: boolean
   collectionSteps: string[]
   requiredEvidence: string[]
+  requiredEvidenceTags?: string[]
   recommendedArtifacts: string[]
   blockedWhen: string[]
 }
@@ -27,6 +28,8 @@ export interface CoreAppVisibleExperienceEvidenceItem {
   status: CoreAppVisibleExperienceStatus
   artifactPaths: string[]
   checkedEvidence: string[]
+  evidenceTags?: string[]
+  evidenceTagArtifacts?: Record<string, string[]>
   notes?: string
   checkedAt?: string
 }
@@ -46,6 +49,7 @@ export interface CoreAppVisibleExperienceGateOptions {
   requireArtifactPaths?: boolean
   requireVisualArtifacts?: boolean
   requireCheckedEvidence?: boolean
+  requireEvidenceTags?: boolean
 }
 
 export interface CoreAppVisibleExperienceGate {
@@ -273,6 +277,16 @@ export const COREAPP_VISIBLE_EXPERIENCE_SURFACES: readonly CoreAppVisibleExperie
       'Permission denied failure does not call Intelligence SDK and shows a permission recovery hint',
       'Local/Ollama preferred routing does not call disabled Nexus provider and shows routing trace or provider metadata'
     ],
+    requiredEvidenceTags: [
+      'AI-STABLE-01',
+      'AI-STABLE-02',
+      'AI-STABLE-03',
+      'AI-STABLE-04',
+      'AI-STABLE-05',
+      'AI-STABLE-06',
+      'AI-STABLE-07',
+      'AI-STABLE-08'
+    ],
     recommendedArtifacts: [
       'evidence/coreapp-visible/corebox-ai-text-success.png',
       'evidence/coreapp-visible/corebox-ai-ocr-success.png',
@@ -472,13 +486,15 @@ export function buildCoreAppVisibleExperienceManifest(params: {
     generatedAt: params.generatedAt ?? new Date().toISOString(),
     baselineVersion: params.baselineVersion,
     verification: {
-      recommendedCommand: `pnpm -C "apps/core-app" run visible:experience:verify -- --input "${manifestPath}" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireExistingArtifacts --requireNonEmptyArtifacts`
+      recommendedCommand: `pnpm -C "apps/core-app" run visible:experience:verify -- --input "${manifestPath}" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireEvidenceTags --requireExistingArtifacts --requireNonEmptyArtifacts`
     },
     surfaces: COREAPP_VISIBLE_EXPERIENCE_SURFACES.map((surface) => ({
       id: surface.id,
       status: 'pending',
       artifactPaths: [],
       checkedEvidence: [],
+      evidenceTags: [],
+      evidenceTagArtifacts: {},
       notes: ''
     }))
   }
@@ -537,6 +553,44 @@ export function verifyCoreAppVisibleExperienceManifest(
         }
       }
     }
+
+    if (options.requireEvidenceTags && surface.required && surface.requiredEvidenceTags?.length) {
+      const evidenceTags = new Set(
+        (item.evidenceTags ?? []).map((tag) => normalizeEvidenceTag(tag)).filter(Boolean)
+      )
+      const artifactPathSet = new Set(artifactPaths)
+
+      for (const requiredTag of surface.requiredEvidenceTags) {
+        const normalizedTag = normalizeEvidenceTag(requiredTag)
+        if (!evidenceTags.has(normalizedTag)) {
+          failures.push(
+            `Visible experience item is missing required evidence tag: ${surface.id} -> ${requiredTag}`
+          )
+          continue
+        }
+
+        const tagArtifacts = getEvidenceTagArtifacts(item, requiredTag)
+        if (tagArtifacts.length === 0) {
+          failures.push(
+            `Visible experience item has no artifact for evidence tag: ${surface.id} -> ${requiredTag}`
+          )
+          continue
+        }
+
+        for (const tagArtifact of tagArtifacts) {
+          if (!artifactPathSet.has(tagArtifact)) {
+            failures.push(
+              `Visible experience item evidence tag references unknown artifact: ${surface.id} -> ${requiredTag} -> ${tagArtifact}`
+            )
+          }
+        }
+        if (!tagArtifacts.some(isVisualArtifactPath)) {
+          failures.push(
+            `Visible experience item evidence tag has no screenshot or recording artifact: ${surface.id} -> ${requiredTag}`
+          )
+        }
+      }
+    }
   }
 
   return {
@@ -585,6 +639,19 @@ export function renderCoreAppVisibleExperienceEvidenceTemplate(
         .map((evidence) => normalizeEvidenceText(evidence))
         .includes(normalizeEvidenceText(requirement))
       lines.push(`  - [${checked ? 'x' : ' '}] ${requirement}`)
+    }
+    if (surface.requiredEvidenceTags?.length) {
+      const evidenceTags = new Set(
+        (item?.evidenceTags ?? []).map((tag) => normalizeEvidenceTag(tag)).filter(Boolean)
+      )
+      lines.push('- Required evidence tags:')
+      for (const tag of surface.requiredEvidenceTags) {
+        const checked = evidenceTags.has(normalizeEvidenceTag(tag))
+        lines.push(`  - [${checked ? 'x' : ' '}] ${tag}`)
+        for (const artifactPath of getEvidenceTagArtifacts(item, tag)) {
+          lines.push(`    - ${artifactPath}`)
+        }
+      }
     }
     lines.push('- Recommended artifacts:')
     for (const artifact of surface.recommendedArtifacts) {
@@ -727,4 +794,24 @@ function isVisualArtifactPath(value: string): boolean {
 
 function normalizeEvidenceText(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+function normalizeEvidenceTag(value: string): string {
+  return value.replace(/\s+/g, '').trim().toUpperCase()
+}
+
+function getEvidenceTagArtifacts(
+  item: CoreAppVisibleExperienceEvidenceItem | undefined,
+  tag: string
+): string[] {
+  if (!item?.evidenceTagArtifacts) return []
+  const direct = item.evidenceTagArtifacts[tag]
+  if (Array.isArray(direct)) return direct.filter((artifactPath) => artifactPath.trim())
+
+  const normalizedTag = normalizeEvidenceTag(tag)
+  const matchedKey = Object.keys(item.evidenceTagArtifacts).find(
+    (key) => normalizeEvidenceTag(key) === normalizedTag
+  )
+  const matched = matchedKey ? item.evidenceTagArtifacts[matchedKey] : undefined
+  return Array.isArray(matched) ? matched.filter((artifactPath) => artifactPath.trim()) : []
 }

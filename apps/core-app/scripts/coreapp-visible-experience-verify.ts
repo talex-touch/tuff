@@ -28,6 +28,7 @@ Options:
   --requireArtifactPaths      Require artifact paths for every required visible surface.
   --requireVisualArtifacts    Require screenshot/recording artifacts for visual surfaces.
   --requireCheckedEvidence    Require every required evidence checklist item to be checked.
+  --requireEvidenceTags       Require every required evidence tag, such as AI-STABLE ids, to be checked.
   --requireExistingArtifacts  Require every referenced artifact path to exist on disk.
   --requireNonEmptyArtifacts  Require referenced artifact paths to be non-empty files.
   --compact                   Print single-line JSON.
@@ -67,6 +68,10 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireCheckedEvidence') {
       options.requireCheckedEvidence = true
+      continue
+    }
+    if (arg === '--requireEvidenceTags') {
+      options.requireEvidenceTags = true
       continue
     }
     if (arg === '--requireExistingArtifacts') {
@@ -122,15 +127,25 @@ function parseManifest(raw: string): CoreAppVisibleExperienceManifest {
     surfaces: manifest.surfaces.map((item) => ({
       ...item,
       artifactPaths: Array.isArray(item.artifactPaths) ? item.artifactPaths : [],
-      checkedEvidence: Array.isArray(item.checkedEvidence) ? item.checkedEvidence : []
+      checkedEvidence: Array.isArray(item.checkedEvidence) ? item.checkedEvidence : [],
+      evidenceTags: Array.isArray(item.evidenceTags) ? item.evidenceTags : [],
+      evidenceTagArtifacts:
+        item.evidenceTagArtifacts && typeof item.evidenceTagArtifacts === 'object'
+          ? item.evidenceTagArtifacts
+          : {}
     }))
   }
 }
 
 function collectArtifactPaths(manifest: CoreAppVisibleExperienceManifest): string[] {
-  return manifest.surfaces.flatMap((item) =>
-    item.artifactPaths.filter((artifactPath) => artifactPath.trim())
-  )
+  return [
+    ...new Set(
+      manifest.surfaces.flatMap((item) => [
+        ...item.artifactPaths,
+        ...Object.values(item.evidenceTagArtifacts ?? {}).flat()
+      ])
+    )
+  ].filter((artifactPath) => artifactPath.trim())
 }
 
 async function validateArtifactFiles(
