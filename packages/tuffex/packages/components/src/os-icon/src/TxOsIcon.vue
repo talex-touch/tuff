@@ -16,7 +16,10 @@ const props = withDefaults(defineProps<{
 const normalizedPlatform = computed(() => {
   const source = `${props.platform} ${props.os}`.trim().toLowerCase()
 
-  if (source.includes('win'))
+  if (source.includes('darwin') || source.includes('mac') || source.includes('os x'))
+    return 'macos'
+
+  if (source.includes('windows') || source.includes('win32') || source.includes('win64'))
     return 'windows'
 
   if (
