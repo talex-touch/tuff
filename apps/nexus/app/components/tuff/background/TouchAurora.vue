@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
+import { hasDocument } from '@talex-touch/utils/env'
 import { Color, Mesh, Program, Renderer, Triangle } from 'ogl'
 import { onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 
@@ -137,23 +138,61 @@ void main() {
 
 let renderer: Renderer | null = null
 let animateId = 0
+let auroraDisabled = false
+
+function hasAuroraWebglSupport() {
+  if (!hasDocument())
+    return false
+
+  try {
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2')
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    return Boolean(gl)
+  }
+  catch {
+    return false
+  }
+}
 
 function initAurora() {
+  if (auroraDisabled)
+    return
+
   const container = containerRef.value
   if (!container)
     return
 
-  renderer = new Renderer({
-    alpha: true,
-    premultipliedAlpha: true,
-    antialias: true,
-  })
+  if (!hasAuroraWebglSupport()) {
+    auroraDisabled = true
+    return
+  }
+
+  try {
+    renderer = new Renderer({
+      alpha: true,
+      premultipliedAlpha: true,
+      antialias: true,
+    })
+  }
+  catch {
+    auroraDisabled = true
+    renderer = null
+    return
+  }
 
   const gl = renderer.gl
-  gl.clearColor(0, 0, 0, 0)
-  gl.enable(gl.BLEND)
-  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
-  gl.canvas.style.backgroundColor = 'transparent'
+  try {
+    gl.clearColor(0, 0, 0, 0)
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+    gl.canvas.style.backgroundColor = 'transparent'
+  }
+  catch {
+    auroraDisabled = true
+    cleanup()
+    return
+  }
 
   let program: Program | undefined
 
@@ -175,36 +214,44 @@ function initAurora() {
 
   window.addEventListener('resize', resize)
 
-  const geometry = new Triangle(gl)
-  if (geometry.attributes.uv) {
-    delete geometry.attributes.uv
-  }
+  let geometry: Triangle
+  let mesh: Mesh
+  try {
+    geometry = new Triangle(gl)
+    if (geometry.attributes.uv)
+      delete geometry.attributes.uv
 
-  const colorStopsArray = props.colorStops.map((hex) => {
-    const c = new Color(hex)
-    return [c.r, c.g, c.b]
-  })
+    const colorStopsArray = props.colorStops.map((hex) => {
+      const c = new Color(hex)
+      return [c.r, c.g, c.b]
+    })
 
-  program = new Program(gl, {
-    vertex: VERT,
-    fragment: FRAG,
-    uniforms: {
-      uTime: { value: 0 },
-      uAmplitude: { value: props.amplitude },
-      uColorStops: { value: colorStopsArray },
-      uResolution: {
-        value: [
-          Math.max(container.parentElement?.offsetWidth || container.offsetWidth || window.innerWidth, 300),
-          Math.max(container.parentElement?.offsetHeight || container.offsetHeight || window.innerHeight, 300),
-        ],
+    program = new Program(gl, {
+      vertex: VERT,
+      fragment: FRAG,
+      uniforms: {
+        uTime: { value: 0 },
+        uAmplitude: { value: props.amplitude },
+        uColorStops: { value: colorStopsArray },
+        uResolution: {
+          value: [
+            Math.max(container.parentElement?.offsetWidth || container.offsetWidth || window.innerWidth, 300),
+            Math.max(container.parentElement?.offsetHeight || container.offsetHeight || window.innerHeight, 300),
+          ],
+        },
+        uBlend: { value: props.blend },
+        uIntensity: { value: props.intensity },
       },
-      uBlend: { value: props.blend },
-      uIntensity: { value: props.intensity },
-    },
-  })
+    })
 
-  const mesh = new Mesh(gl, { geometry, program })
-  container.appendChild(gl.canvas)
+    mesh = new Mesh(gl, { geometry, program })
+    container.appendChild(gl.canvas)
+  }
+  catch {
+    auroraDisabled = true
+    cleanup()
+    return
+  }
 
   gl.canvas.style.width = '100%'
   gl.canvas.style.height = '100%'
@@ -270,6 +317,8 @@ onUnmounted(() => {
 watch(
   () => [props.amplitude, props.intensity],
   () => {
+    if (auroraDisabled)
+      return
     cleanup()
     initAurora()
   },

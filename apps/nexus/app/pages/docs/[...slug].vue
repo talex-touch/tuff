@@ -7,10 +7,12 @@ import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
-import { useTypedFetch } from '~/utils/request'
+import { requestJson, useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 const DOCS_FULL_BODY_CACHE_LIMIT = 24
+const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
+const DOCS_CURRENT_FULL_BODY_FETCH_KEY = 'docs-current-full-body'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
 
 function resolveFullDocCacheKey(value: Record<string, any> | null) {
@@ -66,11 +68,20 @@ definePageMeta({
 })
 
 const route = useRoute()
+const router = useRouter()
 const requestUrl = useRequestURL()
 const nuxtApp = useNuxtApp()
 const { t, setLocale } = useI18n()
 const toast = useToast()
-const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
+const activeRoutePath = ref(route.path)
+if (import.meta.client) {
+  activeRoutePath.value = router.currentRoute.value.path || route.path
+  const removeRouteSync = router.afterEach((to) => {
+    activeRoutePath.value = to.path
+  })
+  onBeforeUnmount(removeRouteSync)
+}
+const docsLocale = computed(() => resolveDocsLocaleFromRoute(activeRoutePath.value))
 const isZhDocs = computed(() => docsLocale.value === 'zh')
 const localizedDocsPath = (path: string | null | undefined) => toLocalizedDocsPath(path, docsLocale.value)
 
@@ -89,10 +100,10 @@ const { user } = useAuthUser({ fetchOnAuth: false, server: false })
 const isAdmin = computed(() => user.value?.role === 'admin')
 
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
-const docPath = computed(() => normalizeDocsPagePath(route.path))
+const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))
 
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
-const shouldSplitDocBody = computed(() => normalizeDocsPagePath(route.path).includes('/docs/dev/components'))
+const shouldSplitDocBody = computed(() => normalizeDocsPagePath(activeRoutePath.value).includes('/docs/dev/components'))
 
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
@@ -160,23 +171,23 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
 const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
   '/api/docs/page',
   {
-    key: requestKey,
+    key: DOCS_CURRENT_PAGE_FETCH_KEY,
     query: computed(() => ({
       path: docPath.value,
       locale: docsLocale.value,
       body: shouldSplitDocBody.value ? '0' : '1',
     })),
     default: () => null,
-    watch: [docPath, docsLocale, shouldSplitDocBody],
+    watch: false,
   },
 )
-const fullDocRequestKey = computed(() => `doc-full:${docPath.value}:${docsLocale.value}`)
+const fullDocCacheKey = computed(() => `doc-full:${docPath.value}:${docsLocale.value}`)
 const {
   data: fullDoc,
 } = await useTypedFetch<Record<string, any> | null>(
   '/api/docs/page',
   {
-    key: fullDocRequestKey,
+    key: DOCS_CURRENT_FULL_BODY_FETCH_KEY,
     query: computed(() => ({
       path: docPath.value,
       locale: docsLocale.value,
@@ -188,8 +199,8 @@ const {
     server: false,
     deep: false,
     dedupe: 'defer',
-    watch: [docPath, docsLocale, shouldSplitDocBody],
-    getCachedData: (key: string) => readCachedFullDoc(key),
+    watch: false,
+    getCachedData: () => readCachedFullDoc(fullDocCacheKey.value),
     transform: (value: Record<string, any> | null) => cacheFullDoc(value),
   },
 )
@@ -199,11 +210,67 @@ const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value : doc
 
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
+let activeDocFetchId = 0
+
+async function loadActiveDocForRoute() {
+  if (import.meta.server)
+    return
+
+  const fetchId = ++activeDocFetchId
+  const path = docPath.value
+  const locale = docsLocale.value
+  const splitBody = shouldSplitDocBody.value
+  const cachedFullDoc = splitBody ? readCachedFullDoc(fullDocCacheKey.value) : null
+
+  doc.value = null
+  fullDoc.value = splitBody && cachedFullDoc !== undefined ? cachedFullDoc : null
+  isLoading.value = true
+
+  try {
+    const nextDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
+      query: {
+        path,
+        locale,
+        body: splitBody ? '0' : '1',
+      },
+    })
+
+    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
+      return
+
+    doc.value = nextDoc
+    isLoading.value = false
+
+    if (!splitBody)
+      return
+
+    if (cachedFullDoc !== undefined)
+      return
+
+    const nextFullDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
+      query: {
+        path,
+        locale,
+        body: '1',
+      },
+    })
+
+    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
+      return
+
+    fullDoc.value = cacheFullDoc(nextFullDoc)
+  }
+  catch {
+    if (fetchId === activeDocFetchId)
+      isLoading.value = false
+  }
+}
 
 watch(requestKey, () => {
   clearCodeEnhanceSchedule()
   clearRenderedCodeHeaders()
   isLoading.value = true
+  void loadActiveDocForRoute()
 })
 
 watch(
@@ -683,6 +750,7 @@ useSeoMeta({
 })
 
 useHead(() => ({
+  title: docSeoHead.value.pageTitle,
   meta: [
     {
       name: 'robots',
