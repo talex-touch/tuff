@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { defineComponent, h, render } from 'vue'
-import { useTimeAgoIntl } from '@vueuse/core'
 import DocHero from '~/components/docs/DocHero.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
@@ -13,6 +12,15 @@ const DOCS_FULL_BODY_CACHE_LIMIT = 24
 const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
 const prefetchedDocTargets = new Set<string>()
+const RELATIVE_TIME_UNITS = [
+  { unit: 'year', ms: 365 * 24 * 60 * 60 * 1000 },
+  { unit: 'month', ms: 30 * 24 * 60 * 60 * 1000 },
+  { unit: 'week', ms: 7 * 24 * 60 * 60 * 1000 },
+  { unit: 'day', ms: 24 * 60 * 60 * 1000 },
+  { unit: 'hour', ms: 60 * 60 * 1000 },
+  { unit: 'minute', ms: 60 * 1000 },
+  { unit: 'second', ms: 1000 },
+] as const
 
 function resolveFullDocCacheKey(value: Record<string, any> | null) {
   const rawPath = typeof value?.path === 'string'
@@ -137,6 +145,20 @@ function normalizeTitleForLocale(value: string, path?: string) {
   if (stripped)
     return stripped
   return fallbackTitleFromPath(path)
+}
+
+function formatRelativeTimeFromNow(date: Date, locale: string) {
+  const diffMs = date.getTime() - Date.now()
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+
+  for (const { unit, ms } of RELATIVE_TIME_UNITS) {
+    if (Math.abs(diffMs) >= ms || unit === 'second') {
+      const value = Math.round(diffMs / ms)
+      return formatter.format(value, unit)
+    }
+  }
+
+  return formatter.format(0, 'second')
 }
 
 function normalizeDescriptionForLocale(value?: string | null) {
@@ -704,21 +726,13 @@ const lastUpdatedDate = computed(() => {
   return null
 })
 
-const heroUpdatedLocale = computed(() => (isZhDocs.value ? 'zh-CN' : 'en-US'))
-const heroUpdatedAgo = useTimeAgoIntl(
-  () => lastUpdatedDate.value?.getTime() ?? Date.now(),
-  {
-    get locale() {
-      return heroUpdatedLocale.value
-    },
-  },
-)
 const heroUpdatedLabel = computed(() => {
   if (!lastUpdatedDate.value)
     return ''
+  const heroUpdatedAgo = formatRelativeTimeFromNow(lastUpdatedDate.value, isZhDocs.value ? 'zh-CN' : 'en-US')
   return isZhDocs.value
-    ? `更新于 ${heroUpdatedAgo.value}`
-    : `Updated ${heroUpdatedAgo.value}`
+    ? `更新于 ${heroUpdatedAgo}`
+    : `Updated ${heroUpdatedAgo}`
 })
 const isDocVerified = computed(() => toBoolean(docMeta.value?.verified))
 const heroVerifiedLabel = computed(() => (isDocVerified.value ? 'Verified' : ''))
