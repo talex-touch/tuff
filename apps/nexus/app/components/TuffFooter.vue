@@ -2,11 +2,13 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import BetaIcon from './BetaIcon.vue'
 import Logo from './icon/Logo.vue'
+import { normalizeLocale } from '~/composables/useLocaleOrchestrator'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 const LazyTouchAurora = defineAsyncComponent(() => import('./tuff/background/TouchAurora.vue'))
 
 const { locale, t } = useI18n()
+const { ensureRouteLocaleChunk } = useRouteLocaleChunks()
 const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 const FOOTER_AURORA_ROOT_MARGIN = '480px 0px'
 const shouldMountAurora = ref(false)
@@ -16,6 +18,8 @@ let auroraFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let auroraIdleId: number | null = null
 
 const year = new Date().getFullYear()
+
+await ensureRouteLocaleChunk(normalizeLocale(locale.value) || 'en', 'landing')
 
 const footerSections = computed(() => [
   {
@@ -74,7 +78,7 @@ function scheduleAuroraFallback() {
     return
   }
 
-  auroraFallbackTimer = window.setTimeout(() => {
+  auroraFallbackTimer = setTimeout(() => {
     auroraFallbackTimer = null
     shouldMountAurora.value = true
   }, 600)
