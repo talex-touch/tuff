@@ -393,6 +393,9 @@ export default {
     redirectingGuide: '正在跳转到用户指南…',
     outlineLabel: '大纲',
     sidebarLabel: '导航',
+    assistant: {
+      open: '打开 Tuff Assistant',
+    },
     noOutline: '为文档添加标题后，这里会自动生成导航。',
     lastUpdatedLabel: '最后更新于',
     previousChapter: '上一章',
