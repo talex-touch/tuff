@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 28 批已提交；component docs 的 dev `body=0` metadata 请求现在优先读取本地 Markdown frontmatter，不再为了 hover / route metadata 预热先进入 Nuxt Content query 再剥掉正文。第 29 批按用户最新要求做 docs-only 收尾：后续 docs 文档内容拆分、AI review / aireview 未审批组件逐页 section split、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning、生产 chunk / payload / CSS 复核全部沉淀在本文任务树，后续只从本文分批领取。
+> 当前状态：Nexus 第 30 批已完成代码验证；docs Assistant 上下文不再在每个文档页首访后自动扫描整篇正文，而是用户打开 Assistant 时才按需构建；Assistant markdown viewer 依赖 `dompurify` 已加入 dev pre-bundle，避免打开 Assistant 时触发 Vite runtime dependency discovery / reload。后续 docs 文档内容拆分、AI review / aireview 未审批组件逐页 section split、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning、生产 chunk / payload / CSS 复核继续按本文任务树分批领取。
 
 ## Goal 原句
 
@@ -26,18 +26,20 @@
 - 第 21 批本地验证 dev server：`http://localhost:3213`。
 - 第 22 批本地验证 dev server：`http://localhost:3200`。
 - 第 28 批本地验证 dev server：`http://localhost:3214`。
+- 第 30 批本地验证 dev server：`http://localhost:3200`。
 
 ## 当前进度
 
 - 本轮 tabs/card 文档链路：约 98%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry 从首屏重型路径拆出。
-- 整体 goal 估算：约 86%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化，以及 component docs dev metadata fast path；后续仍需系统性覆盖 AI review / aireview 未审批组件逐页 section split、dev SSR TTFB 深化、生产构建 chunk 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `vue-sonner` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path。
-- 当前第 29 批只做 docs-only 收尾；不继续混入业务代码、Playwright 新采样、docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
+- 整体 goal 估算：约 87%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path，以及 docs Assistant 上下文按需构建；后续仍需系统性覆盖 AI review / aireview 未审批组件逐页 section split、dev SSR TTFB 深化、生产构建 chunk 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `vue-sonner` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建。
+- 当前第 30 批聚焦 docs Assistant context 按需构建与 `dompurify` dev pre-bundle；不继续混入 docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
+| 当前第 30 批 docs assistant context on intent | 100% | docs Assistant context 只在用户打开 Assistant 时通过 shared request state 触发构建；普通 tabs/fusion 首访 `assistantRequests 0`、`dompurifyRequests 0`，点击 Assistant 可打开且不再触发 `dompurify` runtime discovery。 |
 | 当前第 29 批 docs-only 收尾 | 100% | 按用户最新要求，确认后续 docs 文档内容、AI review / aireview、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部落到本文任务树；本批只修正交接状态与领取边界，不扩业务代码。 |
 | 当前第 28 批 component docs metadata fast path | 100% | dev 环境下 `/docs/dev/components/**` 的 `body=0` metadata 请求优先读取本地 Markdown frontmatter；API test 证明不再调用 Nuxt Content query / MDC parse，非组件 docs metadata 仍走 Nuxt Content。 |
 | 当前第 27 批 docs-only 最终交接 | 100% | 按用户最新要求，当前 goal 原句、追加收尾要求、触发页、已完成批次、性能证据路径、后续 docs / aireview / route matrix / TTFB / chunk 复核子任务和领取规则全部沉淀到本文；本批不继续扩代码。 |
@@ -47,10 +49,10 @@
 | 当前第 23 批 TODO 收尾 | 100% | 本批只更新 `docs/plan-prd/TODO-nexus.md`，把当前 goal 原句、用户追加收尾要求、已完成批次、后续 docs / aireview / 矩阵 / chunk / TTFB 子任务和验收口径集中到本文，作为下一轮唯一入口。 |
 | 当前第 22 批 sidebar full-body prefetch cancel | 100% | 已完成代码、focused test、scoped ESLint、`git diff --check`、production build sanity、Playwright CLI baseline/after screenshot/HAR/Markdown 报告；`scroll` 1.8s 首访窗口内 `body=1` 从 1 -> 0，demo registry/client renderer 仍为 0。 |
 | `/en/docs/dev/components/tabs` 触发链路 | 99% | 页面 200；第 24 批后 tabs SSR payload 不再携带 guide/api/architecture 全量导航分支；剩余是 Nuxt/runtime、`node_modules` 与 docs demo 模块碎片继续拆。 |
-| docs 内容加载拆分 | 88% | `body=0` / idle `body=1` 已落地；第 21 批把 dev SSR 组件文档首访切到 metadata-first，production SSR 保持 full body；第 22 / 26 批把 sidebar 与 pager full-body 预取改为可取消；第 24 批把 component docs navigation SSR async-data 缩到 components 分支；第 28 批把 component docs dev `body=0` metadata 请求切到 frontmatter fast path；模板静态 shell、逐页 section split 仍待做。 |
-| AI review / aireview 未审批组件 | 38% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline、gradual-blur/auto-sizer/scroll baseline、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复、pending 长文档 MDC Prose wrapper / global Prose registry / PWA dev client 削减、dev SSR metadata-first、sidebar / pager full-body 预取可取消化、pending 排序复核与 component docs metadata fast path；逐页 demo/模板/section split 待做。 |
+| docs 内容加载拆分 | 89% | `body=0` / idle `body=1` 已落地；第 21 批把 dev SSR 组件文档首访切到 metadata-first，production SSR 保持 full body；第 22 / 26 批把 sidebar 与 pager full-body 预取改为可取消；第 24 批把 component docs navigation SSR async-data 缩到 components 分支；第 28 批把 component docs dev `body=0` metadata 请求切到 frontmatter fast path；第 30 批把 Assistant context 抽文本后置到用户意图；模板静态 shell、逐页 section split 仍待做。 |
+| AI review / aireview 未审批组件 | 39% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline、gradual-blur/auto-sizer/scroll baseline、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复、pending 长文档 MDC Prose wrapper / global Prose registry / PWA dev client 削减、dev SSR metadata-first、sidebar / pager full-body 预取可取消化、pending 排序复核、component docs metadata fast path、Assistant context 按需构建；逐页 demo/模板/section split 待做。 |
 | 全站页面切换矩阵 | 34% | 第 18 批已覆盖 `/`、`/en/docs`、tabs、card、`/store`、dashboard redirect、Provider Registry redirect、Data Governance redirect、home -> store；第 19 批补了 home/store/sign-in/dashboard-overview/docs-tabs；第 20 批补了 zh landing home；第 21 批补了 fusion/card/avatar-variants/tabs baseline/after；第 22 批补了 gradual-blur/auto-sizer/scroll baseline/after screenshot/HAR。下一步要做 authenticated dashboard、移动端和 production preview 口径。 |
-| 生产构建 chunk 复核 | 24% | 第 10/11/12/13/14/15/16/17/18/19/20/21/22/24/26/28 批均已通过 production build sanity；第 17/18/19/20/21/22/24/26/28 批确认 production 仍生成 PWA SW；完整 chunk/payload/CSS 深查待做。 |
+| 生产构建 chunk 复核 | 25% | 第 10/11/12/13/14/15/16/17/18/19/20/21/22/24/26/28/30 批均已通过 production build sanity；第 17/18/19/20/21/22/24/26/28/30 批确认 production 仍生成 PWA SW；完整 chunk/payload/CSS 深查待做。 |
 | TODO 与交接文档 | 100% | 当前 goal 原句、批次、证据路径、后续子任务已沉淀在本文。 |
 
 ## 已完成批次
@@ -86,6 +88,7 @@
 | 27 | docs-only | `docs(nexus): finalize performance handoff` | 已完成 |
 | 28 | `68f8266be` | `perf(nexus): fast path component docs metadata` | 已完成 |
 | 29 | docs-only | `docs(nexus): consolidate performance followups` | 已完成 |
+| 30 | 本批提交 | `perf(nexus): build docs assistant context on intent` | 已完成代码验证，待提交 |
 
 ## 本轮收尾结论
 
@@ -191,6 +194,57 @@ pending 排序快照：
 验证证据：
 
 - Markdown whitespace：`git diff --check -- "docs/plan-prd/TODO-nexus.md"`。
+
+## 第 30 批收口记录
+
+目标：继续收敛 docs 组件文档首访后的后台 CPU / 依赖加载。第 29 批后 TODO 已固定后续入口；本批领取一个小切片，把 docs Assistant 的长正文 context 构建从“每个文档页就绪后自动扫描整篇 `renderDoc.body`”改为“用户打开 Assistant 时才按需构建”，同时修复打开 Assistant 时 TuffEx markdown viewer 触发 `dompurify` runtime dependency discovery / reload 的 dev 慢点。
+
+改动范围：
+
+- `apps/nexus/app/layouts/docs.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+- `apps/nexus/app/components/content/demo-client-boundary.test.ts`
+- `apps/nexus/nuxt.config.ts`
+- `docs/plan-prd/TODO-nexus.md`
+
+实现口径：
+
+- docs layout 新增 `docs-assistant-context-request` shared state；只有 `openDocsAssistantFromShell()` 被触发时递增，作为 Assistant context 构建意图信号。
+- docs page 移除页面就绪后自动 `scheduleAssistantContextBuild(renderDoc.value?.body, 700)` 的路径；普通阅读、route switch、pending 长文档首访不再自动抽取整篇正文。
+- 当 Assistant 意图发生但 full body 尚未就绪时，复用既有 `startFullDocFetchForRoute()`；正文到达后再构建 context。
+- `dompurify` 加入 `vite.optimizeDeps.include`，避免点击 Assistant 加载 `TxMarkdownView` 时触发 Vite runtime dependency discovery / reload。
+- 不改变 Assistant 显式点击路径，不改变生产 SSR 正文，不改变 docs full-body API 合同。
+
+验证证据：
+
+- Baseline Playwright：
+  - 报告：`output/playwright/nexus-docs-assistant-context-b30-baseline-3200-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-assistant-context-b30-baseline-3200-2026-06-21.json`
+  - 截图/HAR：同前缀 `tabs`、`fusion` 的 `.png` / `.har`。
+  - tabs：status 200，requests 427，failed 0，warnings/errors 0，demo renderer 0。
+  - fusion：status 200，requests 427，failed 0，warnings/errors 0，demo renderer 0。
+- After Playwright：
+  - 报告：`output/playwright/nexus-docs-assistant-context-b30-after-3200-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-assistant-context-b30-after-3200-2026-06-21.json`
+  - 截图/HAR：同前缀 `tabs`、`fusion`、`tabs-assistant` 的 `.png` / `.har`。
+  - tabs：status 200，requests 434，failed 0，warnings/errors 0，`assistantRequests 0`，`dompurifyRequests 0`，demo renderer 0。
+  - fusion：status 200，requests 427，failed 0，warnings/errors 0，`assistantRequests 0`，`dompurifyRequests 0`，demo renderer 0。
+  - tabs-assistant：status 200，failed 0，warnings/errors 0，Assistant dialog visible，open 约 1316ms，`assistantRequests 4`，`dompurifyRequests 0`。
+  - dev server after 日志：页面访问和 Assistant 打开后未再出现 `Vite discovered new dependencies ... dompurify`。
+- HTTP smoke：
+  - baseline `tabs`：status 200，TTFB 2.804s，HTML 85345 bytes。
+  - baseline `fusion`：status 200，TTFB 33.7ms，HTML 86025 bytes。
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/pages/docs/docs-page-performance.test.ts" "app/components/content/demo-client-boundary.test.ts"`，2 files / 44 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "nuxt.config.ts" "app/layouts/docs.vue" "app/pages/docs/[...slug].vue" "app/pages/docs/docs-page-performance.test.ts" "app/components/content/demo-client-boundary.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/nuxt.config.ts" "apps/nexus/app/layouts/docs.vue" "apps/nexus/app/pages/docs/[...slug].vue" "apps/nexus/app/pages/docs/docs-page-performance.test.ts" "apps/nexus/app/components/content/demo-client-boundary.test.ts"` 通过。
+- Production build：`NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build` 完整通过；生产仍输出 Cloudflare Pages / Nitro 构建，并保留 PWA 生成。构建中仍有既有 browserslist、Sass legacy API、Nuxt module preload sourcemap、node externalized、chunk size 等 warning，不归因于本批。
+
+下一批建议：
+
+1. P0：正式 pending 工作表文件或 TODO 表格，使用 `:::TuffDemoWrapper` 计数，列 Top 30 的 sync/verified/体量/demo/API/首屏请求/动作。
+2. P0：针对 `fusion` 或 `card` 做 section-level split / API table visible-only 试验。
+3. P0：dev SSR TTFB 二轮，区分 Nuxt transform、Content query、frontmatter fast path、i18n 和 store init。
 
 ## 第 27 批收口记录
 
@@ -1078,6 +1132,7 @@ pending 排序快照：
 - [x] 检查并修复 Nuxt Content global Prose registry eager import：第 16 批后 `tabs` / `fusion` / `card` / policy 页面 clean first visit 均为 `mdcProse 0`。
 - [ ] 继续检查 `DocApiTable`、demo wrapper 是否在 pending 文档首屏重复 eager import。
 - [x] 检查并修复普通 dev PWA client plugin eager import：第 17 批后 `tabs` / `fusion` / `card` / `avatar-variants` / `switch-tabs-to-card` 均为 `pwaClient 0`，console warning/error 0。
+- [x] 将 docs Assistant context 构建后置到用户意图：第 30 批后普通 tabs/fusion 首访 `assistantRequests 0` / `dompurifyRequests 0`，点击 Assistant 才加载 dialog 并构建 context。
 - [x] 对 tabs/card 等组件页建立最小 Playwright 性能基线：首屏截图、HAR、request count、failed count、DOMContentLoaded/load、client-side route switch timing。
 - [x] 为 docs 内容加载新增 focused tests，钉住不会回退到全量 MDC parse、同步 full-body prefetch 或全局 demo registry eager load。
 
@@ -1089,6 +1144,7 @@ pending 排序快照：
 - [x] 修复 pending AI notice eager mount：notice 已静态化，`card` / `avatar-variants` 首屏 `DocsAside` class count 从 4 降到 0。
 - [x] 修复 pending / 无代码文档 code block renderer eager load：`fusion` / `avatar-variants` 首屏 codeBlock requests 从 1 降到 0，stylesheets 从 18 降到 17。
 - [x] 修复 pending 长正文的部分 MDC Prose wrapper 请求：`fusion` scripts 433 -> 423，`card` scripts 441 -> 427，同时 heading anchors / tables 保持。
+- [x] 修复 docs Assistant context 在 pending 长文档首访后自动抽取整篇正文：第 30 批改为 Assistant 打开意图后再构建 context，避免普通阅读路径后台扫描大 body。
 - [x] 不新增宽泛审计脚手架；每批只为待修页面输出一次性 Playwright / HAR evidence 或 focused regression，记录 pending 组件、正文体量、demo 数、重型 client demo 引用数。第 28 批用一次性 Node 只读统计和 Playwright/HAR 证据完成，不新增仓库脚手架。
 - [ ] 对未审批组件逐个分组：可静态化、可懒加载、应移出 docs 首屏、应合并模板、应删除或后置。
 - [ ] 输出 pending 组件工作表：每个组件记录 `syncStatus`、`verified`、正文大小、demo 数、code block 数、是否有 API table、首屏请求数、下一步动作。第 28 批已完成一次性 Top 30 排序复核；正式工作表仍待落文档。
@@ -1121,6 +1177,7 @@ pending 排序快照：
 - [x] 已完成候选 J 第一刀：dev SSR component docs metadata-first。第 21 批确认 pending 组件文档 dev SSR 首访改请求 `body=0`，fusion HTML 185053 -> 109102 bytes，curl TTFB 2850ms -> 241ms；production SSR 仍请求 `body=1`。
 - [x] 已完成候选 J 第二刀：sidebar full-body prefetch cancel。第 22 批确认 component docs sidebar 只立即预热 route + `body=0` metadata，full `body=1` 预取延迟到持续意图并可取消；`scroll` 1.8s 首访窗口内 `body=1` 1 -> 0。
 - [x] 已完成候选 J 第三刀：component docs dev metadata fast path。第 28 批确认 component docs `body=0` metadata 请求走本地 frontmatter，不触发 Nuxt Content query / MDC parse；hover `fusion body=0` 为 447 bytes，failed 0。
+- [x] 已完成候选 J 第四刀：docs Assistant context on intent。第 30 批确认 ordinary tabs/fusion first visit 不加载 Assistant/dialog/`dompurify`，点击 Assistant 可打开且 `dompurify` 不再触发 Vite runtime discovery。
 - [ ] 下一批候选 J：dev SSR TTFB。原因：第 19 批 curl 采样 docs-tabs/home/store TTFB 约 3-4s，即使 runtime discovery 已清理，冷首访 SSR 仍偏慢；需要区分 Nuxt dev transform、content query、i18n init、store memory init 与 route payload。
 
 ### P0：当前 goal 后续验收清单
@@ -1144,6 +1201,7 @@ pending 排序快照：
 - [x] 第 27 批结束已更新本文：当前 goal 原句、追加收尾要求、后续 docs / aireview / route matrix / TTFB / chunk 任务树、领取规则和当前批不扩代码边界。
 - [x] 第 28 批结束已更新本文：改动范围、测试命令、production build sanity、Playwright first visit / hover screenshot/HAR/Markdown/JSON、metadata fast path 边界和下一批候选。
 - [x] 第 29 批结束已更新本文：第 28 批提交状态、当前 goal 原句、追加收尾要求、后续 docs / aireview / route matrix / TTFB / chunk 任务树和当前批 docs-only 边界。
+- [x] 第 30 批结束已更新本文：改动范围、测试命令、production build sanity、Playwright baseline/after screenshot/HAR/Markdown/JSON、Assistant context 按需构建和 `dompurify` pre-bundle 边界。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -1158,6 +1216,7 @@ pending 排序快照：
 - [x] 第 24 批补充 tabs scoped navigation 验证：`/en/docs/dev/components/tabs` 的 Playwright CLI screenshot / HAR / Markdown / JSON，并记录 SSR payload 缩小结果。
 - [x] 第 26 批补充 tabs pager prefetch 验证：`/en/docs/dev/components/tabs` 的 Playwright screenshot / HAR / Markdown / JSON，并记录短 hover 目标页 `body=1` 请求从 1 降为 0。
 - [x] 第 28 批补充 component docs metadata fast path 验证：`fusion` / `card` / `tabs` first visit 与 tabs hover `Fusion` 的 Playwright screenshot / HAR / Markdown / JSON，并记录 hover `body=0` 447 bytes、failed 0。
+- [x] 第 30 批补充 docs Assistant context 验证：`tabs` / `fusion` first visit 与 tabs Assistant click 的 Playwright screenshot / HAR / Markdown / JSON，并记录 first visit `assistantRequests 0`、`dompurifyRequests 0`、Assistant open 约 1316ms。
 - [ ] 对比每批提交前后 request count、stylesheet/script count、failed count、elapsed。
 - [ ] 将结果归档到 `output/playwright/`，只引用报告路径，不把 artifact 纳入 git。
 - [ ] route matrix 二轮补：authenticated `/dashboard`、Provider Registry、Data Governance；移动端 viewport；production preview；back/forward cache；首屏 media failed request 分类；补 `/new` Playwright screenshot/HAR。
@@ -1179,6 +1238,7 @@ pending 排序快照：
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 24 批 component docs scoped navigation 不影响生产 client/server/Nitro/PWA 打包，生产仍生成 `sw.js`。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 26 批 docs pager full-body prefetch cancel 不影响生产 client/server/Nitro/PWA 打包，生产仍生成 `sw.js`。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 28 批 component docs dev metadata fast path 不影响生产 client/server/Nitro/PWA 打包，生产仍生成 `sw.js`。
+- [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 30 批 docs Assistant context 按需构建与 `dompurify` dev pre-bundle 不影响生产 client/server/Nitro/PWA 打包。
 - [ ] 检查 Nuxt route chunks、payload chunks、CSS chunks 是否存在 docs/store/dashboard/landing 互相污染。
 - [ ] 若生产存在同类问题，优先从 import boundary / layout boundary / component registration 修复，而不是沿用 dev-only HTML filter。
 
@@ -1191,6 +1251,7 @@ pending 排序快照：
 - [x] 普通 docs dev 不默认启用 PWA dev client plugin；需要 PWA 调试时显式使用 `pnpm -C "apps/nexus" run dev:pwa`。
 - [x] 将 `@vueuse/core` 加入 Vite dev pre-bundle，避免首页视觉路由首次访问 runtime dependency discovery。
 - [x] 将 `marked`、`echarts/core`、`echarts/charts`、`echarts/components`、`echarts/renderers`、`vue-sonner` 加入 Vite dev pre-bundle，避免 docs renderer / dashboard charts / sign-in toast 在 route visit 时触发 runtime dependency discovery。
+- [x] 将 `dompurify` 加入 Vite dev pre-bundle，避免 docs Assistant 打开后 `TxMarkdownView` 触发 runtime dependency discovery / reload。
 - [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、demo wrapper 可见区加载、真实 code block 页 renderer chunk 体量。
 - [ ] 继续观察 Vite runtime discovery 是否在 route matrix 二轮出现新的依赖；若出现，先定位收益，再决定 pre-bundle 或拆 route-local/lazy import。
 

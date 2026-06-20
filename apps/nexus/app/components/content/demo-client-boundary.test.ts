@@ -114,6 +114,7 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("'echarts/components'")
     expect(config).toContain("'echarts/renderers'")
     expect(config).toContain("'vue-sonner'")
+    expect(config).toContain("'dompurify'")
   })
 
   it('keeps Sentry out of local dev startup unless explicitly enabled', () => {

@@ -361,6 +361,7 @@ export default defineNuxtConfig({
         'echarts/components',
         'echarts/renderers',
         'vue-sonner',
+        'dompurify',
         '@floating-ui/vue',
         'v-wave',
         'ogl',

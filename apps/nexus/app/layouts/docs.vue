@@ -30,6 +30,7 @@ const shouldMountDocsOutline = ref(false)
 const docsAssistantShellTriggerRef = ref<HTMLElement | null>(null)
 const docsAssistantOpenRequest = ref(0)
 const docsAssistantSource = shallowRef<HTMLElement | null>(null)
+const docsAssistantContextRequestState = useState<number>('docs-assistant-context-request', () => 0)
 const shouldMountDocsFooter = ref(false)
 const shouldMountBackToTop = ref(false)
 const shouldMountTuffexBackground = ref(false)
@@ -126,6 +127,7 @@ function openDocsAssistantFromShell(source: HTMLElement | null) {
   docsAssistantSource.value = source
   shouldMountDocsAsideCards.value = true
   mountDocsAsideShell()
+  docsAssistantContextRequestState.value += 1
   docsAssistantOpenRequest.value += 1
 }
 
