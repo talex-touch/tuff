@@ -83,6 +83,15 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('/app/components/theme/components/')
   })
 
+  it('keeps page-local components out of generated routes', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain('function isRouteLocalPageComponent')
+    expect(config).toContain("normalized.includes('/app/pages/')")
+    expect(config).toContain("normalized.includes('/components/')")
+    expect(config).toContain("pages.splice(index, 1)")
+  })
+
   it('keeps docs demos and demo helpers out of generated Nuxt components', () => {
     const generatedComponents = [
       readNuxtFile('components.d.ts'),
