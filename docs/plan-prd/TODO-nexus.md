@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus docs 性能优化继续按小批次推进；已完成 7 个提交，当前第 8 批聚焦组件页侧栏 metadata 加载时机，避免组件导航链接晚 8 秒出现。
+> 当前状态：Nexus docs 性能优化继续按小批次推进；已完成 8 个提交，当前第 9 批聚焦 docs dev HTML 的 route-local stylesheet 污染复核。
 
 ## Goal 原句
 
@@ -18,9 +18,9 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 78%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏和组件侧栏链接晚出现问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
-- 整体 goal 估算：约 56%。已完成 docs 路由关键路径止血；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix 与生产构建 chunk 复核。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟。
+- 本轮 tabs/card 文档链路：约 82%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现和一批 dev route-local CSS 污染问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
+- 整体 goal 估算：约 58%。已完成 docs 路由关键路径止血；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix 与生产构建 chunk 复核。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet。
 - 后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 已完成批次
@@ -34,7 +34,8 @@
 | 5 | `3213bcba0` | `perf(nexus): split route-local locale messages` | 已完成 |
 | 6 | `ec0d41e29` | `perf(nexus): filter route-local dev stylesheets` | 已完成 |
 | 7 | `e46541119` | `perf(nexus): defer docs full body prefetch` | 已完成 |
-| 8 | 待提交 | `perf(nexus): load component sidebar metadata sooner` | 收尾中 |
+| 8 | `15f2d288c` | `perf(nexus): load component sidebar metadata sooner` | 已完成 |
+| 9 | 待提交 | `perf(nexus): filter more docs dev stylesheets` | 收尾中 |
 
 ## 本轮收尾结论
 
@@ -162,6 +163,41 @@
   - card first load：status 200, DOMContentLoaded 124ms, network idle 1227ms, `tabs` sidebar link visible 1241ms, requests 540, failed 0。
   - card -> tabs client switch：URL settled 63ms, network idle 63ms, requests 11, failed 0。
   - card -> tabs docs requests：tabs `body=0` at +21ms；未在切换关键窗口内请求 tabs `body=1`。
+
+## 第 9 批收口记录
+
+目标：继续收敛 `/en/docs/dev/components/tabs` dev HTML 首屏 CSS 请求。第 8 批 Playwright / HAR 显示 docs route 仍注入 `pages/new/*`、`components/assets/create/*`、`VersionDrawer` 等无关 route-local stylesheet，虽然不影响生产，但会拖慢本地页面加载和调试反馈。
+
+改动范围：
+
+- `apps/nexus/server/utils/devStylesheetDedupe.ts`
+- `apps/nexus/server/utils/devStylesheetDedupe.test.ts`
+
+实现口径：
+
+- 不新增测试脚手架；只扩展既有 dev-only stylesheet filter 的 docs route marker。
+- docs route 继续保留 docs/layout/header/TuffEx 相关样式，过滤 landing `/new`、asset create overlay、VersionDrawer 和 footer 这类非当前页面首屏样式。
+- 仅在非 production 的 `render:response` HTML filter 生效，不改变生产构建 chunk。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "server/utils/devStylesheetDedupe.test.ts" "app/pages/docs/docs-page-performance.test.ts"`，2 files / 29 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "server/utils/devStylesheetDedupe.ts" "server/utils/devStylesheetDedupe.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/server/utils/devStylesheetDedupe.ts" "apps/nexus/server/utils/devStylesheetDedupe.test.ts"` 通过。
+- curl smoke：`/en/docs/dev/components/tabs` stylesheet summary `{ total: 62, newPage: 0, assetCreate: 0, versionDrawer: 0, tuffFooter: 0, dashboard: 0, store: 0, tuff: 0, docs: 8, tuffex: 39 }`。
+- Playwright：
+  - 报告：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21.json`
+  - 截图：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21-tabs.png`
+  - 截图：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21-card.png`
+  - 截图：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21-switch-card-to-tabs.png`
+  - HAR：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21-tabs.har`
+  - HAR：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21-card.har`
+  - HAR：`output/playwright/nexus-docs-route-style-filter-followup-3200-2026-06-21-switch-card-to-tabs.har`
+  - tabs first load：status 200, DOMContentLoaded 207ms, network idle 1581ms, requests 521, failed 0, stylesheets 62。
+  - card first load：status 200, DOMContentLoaded 141ms, network idle 1385ms, requests 528, failed 0, stylesheets 62。
+  - card -> tabs client switch：URL settled 62ms, network idle 62ms, requests 11, failed 0。
+  - card -> tabs docs requests：tabs `body=0` at +20ms；未在切换关键窗口内请求 tabs `body=1`。
 
 ## 后续任务树
 
