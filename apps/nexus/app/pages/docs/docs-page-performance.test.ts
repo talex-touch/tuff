@@ -53,6 +53,15 @@ describe('docs page performance boundaries', () => {
     expect(docsSidebar).toContain('const componentItems = computed(() => coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[])')
   })
 
+  it('requests docs navigation by locale instead of hydrating both language trees', () => {
+    expect(page).toContain("'/api/docs/navigation'")
+    expect(docsSidebar).toContain("'/api/docs/navigation'")
+    expect(page).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}`\)/)
+    expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}`\)/)
+    expect(page).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)/)
+    expect(docsSidebar).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)/)
+  })
+
   it('keeps decorative footer aurora from throwing when WebGL2 is unavailable', () => {
     expect(touchAurora).toContain('let auroraDisabled = false')
     expect(touchAurora).toContain("const gl = canvas.getContext('webgl2')")
