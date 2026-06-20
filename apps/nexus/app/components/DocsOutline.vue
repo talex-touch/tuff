@@ -90,7 +90,7 @@ function syncUrlHash(id: string) {
   const encoded = encodeURIComponent(id)
   const next = `#${encoded}`
   if (window.location.hash !== next)
-    history.replaceState(null, '', next)
+    history.replaceState(history.state, '', `${window.location.pathname}${window.location.search}${next}`)
 }
 
 const updateEntryPositions = useThrottleFn(() => {

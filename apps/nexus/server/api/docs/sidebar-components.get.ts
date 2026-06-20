@@ -58,7 +58,17 @@ function resolveLocale(path: string): 'en' | 'zh' {
   return path.endsWith('.zh') ? 'zh' : 'en'
 }
 
+function normalizeLocale(value: unknown): 'en' | 'zh' | null {
+  if (typeof value !== 'string')
+    return null
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'en' || normalized === 'zh')
+    return normalized
+  return null
+}
+
 export default defineCachedEventHandler(async (event) => {
+  const locale = normalizeLocale(getQuery(event).locale)
   const docs = await queryCollection(event, 'docs')
     .where('path', 'LIKE', `${COMPONENT_DOC_PREFIX}%`)
     .all()
@@ -85,6 +95,7 @@ export default defineCachedEventHandler(async (event) => {
         verified,
       }
     })
+    .filter(item => !locale || item.locale === locale)
     .sort((a, b) => a.title.localeCompare(b.title, a.locale === 'zh' ? 'zh-CN' : 'en'))
 
   return rows
