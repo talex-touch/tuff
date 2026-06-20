@@ -52,6 +52,8 @@ const outlineTocState = useState<any[]>('docs-toc', () => [])
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => false)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
 const assistantAriaLabel = computed(() => t('docs.assistant.open'))
+const docsAsideAiNoticeTitle = computed(() => t('docs.aiNotice.title'))
+const docsAsideAiNoticeDescription = computed(() => t('docs.aiNotice.description'))
 const shouldShowAsideOutline = computed(() =>
   outlinePublicState.value.hasOutline
   || outlinePublicState.value.loading
@@ -363,13 +365,6 @@ watch(isTuffexDocs, (active) => {
   shouldMountTuffexBackground.value = false
 }, { immediate: true })
 
-watch(shouldShowDocsAsideAiNotice, (shouldShow) => {
-  if (shouldShow) {
-    mountDocsAsideShell()
-    shouldMountDocsAsideCards.value = true
-  }
-}, { immediate: true })
-
 watch(shouldShowAsideOutline, (shouldShow) => {
   if (shouldShow) {
     scheduleDocsOutlineMount()
@@ -460,6 +455,19 @@ onBeforeUnmount(() => {
                   :assistant-open-request="docsAssistantOpenRequest"
                   :assistant-source="docsAssistantSource"
                 />
+                <section
+                  v-if="shouldShowDocsAsideAiNotice"
+                  class="docs-aside-ai-notice"
+                  aria-live="polite"
+                >
+                  <div class="docs-aside-ai-notice__title">
+                    <span class="docs-aside-ai-notice__sparkle" aria-hidden="true">⚠</span>
+                    {{ docsAsideAiNoticeTitle }}
+                  </div>
+                  <p class="docs-aside-ai-notice__desc">
+                    {{ docsAsideAiNoticeDescription }}
+                  </p>
+                </section>
                 <LazyDocsAsideCardsShell
                   v-if="shouldMountDocsAsideShell"
                   @open-assistant="openDocsAssistantFromShell"
@@ -678,6 +686,33 @@ onBeforeUnmount(() => {
 }
 .docs-outline-panel:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 18%, transparent);
+}
+
+.docs-aside-ai-notice {
+  border: 1px solid color-mix(in srgb, var(--tx-color-warning, #e6a23c) 45%, transparent);
+  border-radius: var(--tx-border-radius-round, 18px);
+  background: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 16%, transparent);
+  padding: 16px;
+}
+
+.docs-aside-ai-notice__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tx-text-color-primary, #303133);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.docs-aside-ai-notice__sparkle {
+  color: var(--tx-color-warning, #e6a23c);
+  font-size: 14px;
+}
+
+.docs-aside-ai-notice__desc {
+  margin: 8px 0 0;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 13px;
 }
 
 .docs-aside-assistant-shell {
