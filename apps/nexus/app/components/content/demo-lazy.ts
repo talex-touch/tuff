@@ -1,6 +1,6 @@
-export const DEMO_LAZY_ROOT_MARGIN = '96px 0px'
-export const DEMO_LAZY_ACTIVATION_DELAY_MS = 160
-export const DEMO_LAZY_IDLE_TIMEOUT_MS = 600
+export const DEMO_LAZY_ROOT_MARGIN = '0px'
+export const DEMO_LAZY_ACTIVATION_DELAY_MS = 2400
+export const DEMO_LAZY_IDLE_TIMEOUT_MS = 1600
 
 export interface DemoIntersectionSnapshot {
   isIntersecting: boolean
@@ -41,12 +41,18 @@ export function scheduleDemoActivation(
     callback()
   }
 
-  if (scheduler.requestIdleCallback && scheduler.cancelIdleCallback) {
-    idleId = scheduler.requestIdleCallback(run, { timeout: DEMO_LAZY_IDLE_TIMEOUT_MS })
-  }
-  else {
-    timeoutId = scheduler.setTimeout(run, DEMO_LAZY_ACTIVATION_DELAY_MS)
-  }
+  timeoutId = scheduler.setTimeout(() => {
+    timeoutId = null
+    if (cancelled)
+      return
+
+    if (scheduler.requestIdleCallback && scheduler.cancelIdleCallback) {
+      idleId = scheduler.requestIdleCallback(run, { timeout: DEMO_LAZY_IDLE_TIMEOUT_MS })
+      return
+    }
+
+    run()
+  }, DEMO_LAZY_ACTIVATION_DELAY_MS)
 
   return {
     cancel() {
