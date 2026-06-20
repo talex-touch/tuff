@@ -11,7 +11,8 @@
       "name": "tuff-core-2.4.7-beta.11-win32-x64-setup.exe",
       "platform": "win32",
       "arch": "x64",
-      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "signature": "tuff-core-2.4.7-beta.11-win32-x64-setup.exe.sig"
     },
     {
       "component": "renderer",

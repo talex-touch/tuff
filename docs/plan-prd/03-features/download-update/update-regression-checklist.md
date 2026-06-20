@@ -74,6 +74,7 @@ node scripts/update-validate-release-manifest.mjs \
 期望结果：
 - 输出 `Validation passed`；
 - 退出码为 0。
+- 同时校验 release version/tag/channel 一致性、artifact name 唯一性、core platform/arch 矩阵唯一性、metadata/sidecar 文件不进入可下载资产列表、core 平台/架构字段与文件名一致，以及 core 资产必须声明匹配的 `.sig` / `.asc` 签名 sidecar。
 
 备注：
 - 发布前可将真实 `tuff-release-manifest.json` 下载到本地并复用该脚本验证。
