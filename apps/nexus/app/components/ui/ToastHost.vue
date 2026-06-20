@@ -35,7 +35,9 @@ function toneClass(type: string) {
               {{ toast.message }}
             </p>
           </div>
-          <TxButton circle size="mini" variant="bare" native-type="button" icon="i-carbon-close" class="opacity-60 transition hover:opacity-100" aria-label="Dismiss" @click="remove(toast.id)" />
+          <button type="button" class="toast-dismiss" aria-label="Dismiss" @click="remove(toast.id)">
+            <span class="i-carbon-close" aria-hidden="true" />
+          </button>
         </div>
       </div>
     </TransitionGroup>
@@ -43,6 +45,38 @@ function toneClass(type: string) {
 </template>
 
 <style scoped>
+.toast-dismiss {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0.6;
+  transition:
+    background-color 160ms ease,
+    opacity 160ms ease;
+}
+
+.toast-dismiss:hover,
+.toast-dismiss:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+  opacity: 1;
+  outline: none;
+}
+
+:global(.dark) .toast-dismiss:hover,
+:global([data-theme='dark']) .toast-dismiss:hover,
+:global(.dark) .toast-dismiss:focus-visible,
+:global([data-theme='dark']) .toast-dismiss:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .toast-fade-enter-active,
 .toast-fade-leave-active {
   transition: all 0.2s ease;

@@ -66,8 +66,8 @@ const assistantContext = computed(() => {
   return typeof value === 'string' ? value : ''
 })
 const assistantOpen = ref(false)
-const assistantTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
-const assistantTriggerEl = computed(() => assistantTriggerRef.value?.$el || null)
+const assistantTriggerRef = ref<HTMLElement | null>(null)
+const assistantTriggerEl = computed(() => assistantTriggerRef.value)
 const assistantAriaLabel = computed(() => (locale.value === 'zh' ? '打开 Tuff Assistant' : 'Open Tuff Assistant'))
 </script>
 
@@ -84,19 +84,17 @@ const assistantAriaLabel = computed(() => (locale.value === 'zh' ? '打开 Tuff 
     </div>
 
     <div class="docs-aside-card docs-aside-card--assistant">
-      <TxButton
+      <button
         ref="assistantTriggerRef"
-        variant="ghost"
-        size="small"
+        type="button"
         class="docs-aside-assistant"
-        native-type="button"
         :aria-label="assistantAriaLabel"
         @click="assistantOpen = true"
       >
         <span class="docs-aside-assistant__spark">✦</span>
         <span class="docs-aside-assistant__label">Tuff Assistant</span>
         <span class="docs-aside-assistant__arrow i-carbon-chevron-right" />
-      </TxButton>
+      </button>
     </div>
 
     <div class="docs-aside-card">
@@ -192,16 +190,28 @@ const assistantAriaLabel = computed(() => (locale.value === 'zh' ? '打开 Tuff 
 }
 
 .docs-aside-assistant {
+  display: flex;
   width: 100%;
   min-height: 38px;
+  align-items: center;
   justify-content: space-between;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
   padding: 12px 12px;
   border-radius: 14px;
   color: var(--tx-text-color-primary, #303133);
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #ffffff) 86%, transparent);
-  --tx-button-radius: 14px;
-  --tx-button-border-color: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
-  --tx-button-bg-color-hover: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    background var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out),
+    border-color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
+}
+
+.docs-aside-assistant:hover,
+.docs-aside-assistant:focus-visible {
+  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 35%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  outline: none;
 }
 
 .docs-aside-assistant__spark {

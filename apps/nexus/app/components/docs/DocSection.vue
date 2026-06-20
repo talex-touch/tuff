@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
-import { TxButton } from '@talex-touch/tuffex/button'
 
 interface Props {
   active: boolean
@@ -40,7 +39,14 @@ function handleToggle() {
         <slot name="header" />
       </span>
     </NuxtLink>
-    <TxButton v-else variant="bare" block native-type="button" style="--fake-opacity: 0" class="DocSection-Header bg-transparent" :class="active ? 'is-active' : ''" :aria-expanded="active" @click="handleToggle">
+    <button
+      v-else
+      type="button"
+      class="DocSection-Header bg-transparent"
+      :class="active ? 'is-active' : ''"
+      :aria-expanded="active"
+      @click="handleToggle"
+    >
       <span class="truncate">
         <slot name="header" />
       </span>
@@ -49,7 +55,7 @@ function handleToggle() {
         :class="active ? 'is-open' : ''"
         aria-hidden="true"
       />
-    </TxButton>
+    </button>
 
     <TxAutoSizer
       v-if="list > 0"
@@ -82,10 +88,21 @@ function handleToggle() {
 }
 
 .DocSection-Header {
+  display: flex;
+  width: 100%;
   min-height: 30px;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-start;
+  border: 0;
   padding: 6px 8px;
   border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   line-height: 1.35;
+  text-align: left;
+  text-decoration: none;
 }
 
 .DocSection-Indicator {

@@ -63,20 +63,19 @@ function toggleMenu() {
 <template>
   <div class="LanguageToggle relative" @mouseenter="openMenu" @mouseleave="closeMenu">
     <span ref="reference" class="LanguageToggle-Reference">
-      <TxIconButton
-        size="sm"
-        shape="pill"
+      <button
+        type="button"
         :title="tooltipLabel"
-        :pressed="isOpen"
+        :aria-pressed="isOpen"
         :aria-expanded="isOpen"
-        :label="ariaLabel"
+        :aria-label="ariaLabel"
         class="LanguageToggle-Trigger"
         @click="toggleMenu"
         @focus="openMenu"
       >
         <Icon name="i-carbon-language" class="LanguageToggle-Icon" />
         <Icon name="i-carbon-chevron-down" :class="{ 'rotate-180': isOpen }" class="LanguageToggle-Chevron" />
-      </TxIconButton>
+      </button>
     </span>
     <teleport to="body">
       <div
@@ -141,33 +140,41 @@ function toggleMenu() {
 }
 
 .LanguageToggle-Trigger {
+  display: inline-flex;
   min-width: 56px;
-  gap: 0;
-  color: rgba(20, 22, 24, 0.92);
-  --tx-icon-button-size: 34px;
-  --tx-icon-button-bg-hover: rgba(20, 22, 24, 0.06);
-  --tx-icon-button-bg-pressed: rgba(20, 22, 24, 0.06);
-}
-
-.LanguageToggle-Trigger :deep(.tx-icon-button__inner) {
+  height: 34px;
+  align-items: center;
+  justify-content: center;
   gap: 0.35rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(20, 22, 24, 0.92);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 0 12px;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .LanguageToggle-Trigger:hover,
 .LanguageToggle-Trigger:focus-visible,
 .LanguageToggle-Trigger[aria-expanded='true'] {
+  background: rgba(20, 22, 24, 0.06);
   outline: none;
 }
 
 .dark .LanguageToggle-Trigger {
   color: rgba(248, 250, 247, 0.92);
-  --tx-icon-button-bg-hover: rgba(248, 250, 247, 0.09);
-  --tx-icon-button-bg-pressed: rgba(248, 250, 247, 0.09);
 }
 
 .dark .LanguageToggle-Trigger:hover,
 .dark .LanguageToggle-Trigger:focus-visible,
 .dark .LanguageToggle-Trigger[aria-expanded='true'] {
+  background: rgba(248, 250, 247, 0.09);
   outline: none;
 }
 
