@@ -77,6 +77,7 @@ Cloudflare Pages runtime (optional unless you force Pages in non-prod):
 
 Observability & feature toggles (optional):
 - `SENTRY_AUTH_TOKEN` (source maps upload; requires `NUXT_ENABLE_SENTRY_SOURCEMAPS=true`)
+- `NUXT_ENABLE_SENTRY` (`true/1/on/yes` to load Sentry in local development; production loads it by default)
 - `NUXT_DISABLE_SENTRY`
 - `NUXT_ENABLE_SENTRY_SOURCEMAPS` (`true/1/on/yes` to enable Sentry source maps upload during build)
 - `NUXT_DISABLE_PWA`

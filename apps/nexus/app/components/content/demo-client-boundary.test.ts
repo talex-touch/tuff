@@ -81,6 +81,13 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("'ogl'")
   })
 
+  it('keeps Sentry out of local dev startup unless explicitly enabled', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain('const enableSentry = isProd || isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY)')
+    expect(config).toContain("...(disableSentry ? [] : ['@sentry/nuxt/module'])")
+  })
+
   it('keeps route-local marketing and store components out of auto-registration', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 

@@ -39,15 +39,16 @@ const tuffexDistUtilsEntry = useWorkspaceSource
   : resolve(tuffexDistRoot, 'utils/index.js')
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
 const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
+const isProd = process.env.NODE_ENV === 'production'
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
-const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
+const enableSentry = isProd || isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY)
+const disableSentry = !enableSentry || process.env.NUXT_DISABLE_SENTRY === 'true'
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
   && !disableSentry
   && isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY_SOURCEMAPS)
 const disableNitroMinify = process.env.NUXT_DISABLE_NITRO_MINIFY === 'true'
 const disableSsr = process.env.NUXT_DISABLE_SSR === 'true'
 const disablePrerender = process.env.NUXT_DISABLE_PRERENDER === 'true'
-const isProd = process.env.NODE_ENV === 'production'
 const ssrEnabled = isProd ? true : !disableSsr
 const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === 'true'
 const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
@@ -95,7 +96,7 @@ export default defineNuxtConfig({
     '@nuxt/content',
     '@nuxtjs/i18n',
     '@sidebase/nuxt-auth',
-    '@sentry/nuxt/module',
+    ...(disableSentry ? [] : ['@sentry/nuxt/module']),
     ...(useCloudflareDev ? ['nitro-cloudflare-dev'] : []),
   ],
   ssr: ssrEnabled,
