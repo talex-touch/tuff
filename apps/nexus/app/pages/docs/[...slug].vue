@@ -10,9 +10,59 @@ import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-se
 import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
+const DOCS_FULL_BODY_CACHE_LIMIT = 24
+const docsFullBodyCache = new Map<string, Record<string, any> | null>()
+
+function resolveFullDocCacheKey(value: Record<string, any> | null) {
+  const rawPath = typeof value?.path === 'string'
+    ? value.path
+    : typeof value?._path === 'string'
+      ? value._path
+      : ''
+  if (!rawPath)
+    return null
+
+  const localeMatch = rawPath.match(/\.(en|zh)$/)
+  const locale = localeMatch?.[1]
+  if (!locale)
+    return null
+
+  const normalizedPath = normalizeDocsPagePath(rawPath.replace(/\.(en|zh)$/, ''))
+  return `doc-full:${normalizedPath}:${locale}`
+}
+
+function readCachedFullDoc(key: string) {
+  if (!import.meta.client)
+    return undefined
+  return docsFullBodyCache.get(key)
+}
+
+function cacheFullDoc(value: Record<string, any> | null) {
+  if (!import.meta.client || value == null)
+    return value
+
+  const key = resolveFullDocCacheKey(value)
+  if (!key)
+    return value
+
+  if (docsFullBodyCache.has(key))
+    docsFullBodyCache.delete(key)
+  docsFullBodyCache.set(key, value)
+
+  while (docsFullBodyCache.size > DOCS_FULL_BODY_CACHE_LIMIT) {
+    const oldestKey = docsFullBodyCache.keys().next().value
+    if (!oldestKey)
+      break
+    docsFullBodyCache.delete(oldestKey)
+  }
+
+  return value
+}
+
 definePageMeta({
   layout: 'docs',
   pageTransition: false,
+  key: route => route.path,
 })
 
 const route = useRoute()
@@ -117,6 +167,7 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
       body: shouldSplitDocBody.value ? '0' : '1',
     })),
     default: () => null,
+    watch: [docPath, docsLocale, shouldSplitDocBody],
   },
 )
 const fullDocRequestKey = computed(() => `doc-full:${docPath.value}:${docsLocale.value}`)
@@ -135,6 +186,11 @@ const {
     immediate: computed(() => import.meta.client && shouldSplitDocBody.value),
     lazy: true,
     server: false,
+    deep: false,
+    dedupe: 'defer',
+    watch: [docPath, docsLocale, shouldSplitDocBody],
+    getCachedData: (key: string) => readCachedFullDoc(key),
+    transform: (value: Record<string, any> | null) => cacheFullDoc(value),
   },
 )
 
