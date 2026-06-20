@@ -18,6 +18,7 @@ vi.mock('node:fs/promises', () => fsMocks)
 vi.mock('@nuxtjs/mdc/runtime', () => mdcMocks)
 
 let handler: (event: any) => Promise<any>
+let cachedOptions: any
 let getQueryMock: ReturnType<typeof vi.fn>
 let setHeaderMock: ReturnType<typeof vi.fn>
 let warnSpy: ReturnType<typeof vi.spyOn>
@@ -45,6 +46,10 @@ function mockDocsCollection(results: Map<string, unknown>) {
 async function importHandler() {
   vi.resetModules()
   ;(globalThis as any).defineEventHandler = (fn: any) => fn
+  ;(globalThis as any).defineCachedEventHandler = (fn: any, options: any) => {
+    cachedOptions = options
+    return fn
+  }
   getQueryMock = vi.fn()
   setHeaderMock = vi.fn()
   ;(globalThis as any).getQuery = getQueryMock
@@ -57,6 +62,7 @@ describe('/api/docs/page', () => {
     process.env.NODE_ENV = previousNodeEnv
     vi.clearAllMocks()
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    cachedOptions = null
     requestedPaths = []
     await importHandler()
   })
@@ -81,6 +87,21 @@ describe('/api/docs/page', () => {
     })
     expect(requestedPaths).toEqual(['/docs/dev/components/tabs.en'])
     expect(setHeaderMock).toHaveBeenCalledWith({}, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
+  })
+
+  it('caches docs page responses by normalized path, locale, and body mode', async () => {
+    getQueryMock.mockReturnValue({ path: '/en/docs/dev/components/tabs.en.mdc', locale: 'en', body: '0' })
+
+    expect(cachedOptions).toMatchObject({
+      maxAge: 300,
+      staleMaxAge: 3600,
+      name: 'docs-page',
+    })
+    expect(cachedOptions.getKey({})).toBe('/docs/dev/components/tabs:en:meta')
+
+    getQueryMock.mockReturnValue({ path: '/docs/dev/components/tabs', locale: 'zh', body: '1' })
+
+    expect(cachedOptions.getKey({})).toBe('/docs/dev/components/tabs:zh:body')
   })
 
   it('renders local Markdown in development when the docs content table is missing', async () => {

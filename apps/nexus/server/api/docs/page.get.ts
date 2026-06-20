@@ -4,6 +4,8 @@ import { isMissingDocsContentTableError } from '../../utils/docsContentError'
 import { normalizeDocsPagePath } from '../../utils/docsPath'
 
 const DOCS_PAGE_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
+const DOCS_PAGE_CACHE_MAX_AGE_SECONDS = 300
+const DOCS_PAGE_CACHE_STALE_MAX_AGE_SECONDS = 3600
 const DEV_DOCS_CONTENT_FALLBACK_WINDOW_MS = 10_000
 
 type DocsPageRecord = Record<string, unknown> & {
@@ -192,7 +194,15 @@ async function readDevDocsPageFallback(lookupPaths: string[]) {
   return null
 }
 
-export default defineEventHandler(async (event) => {
+function resolveDocsPageCacheKey(event: H3Event) {
+  const query = getQuery(event)
+  const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
+  const locale = normalizeLocale(query.locale)
+  const body = shouldIncludeBody(query.body) ? 'body' : 'meta'
+  return `${docPath}:${locale}:${body}`
+}
+
+export default defineCachedEventHandler(async (event) => {
   const query = getQuery(event)
   const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
   const locale = normalizeLocale(query.locale)
@@ -227,4 +237,9 @@ export default defineEventHandler(async (event) => {
 
     return null
   }
+}, {
+  maxAge: DOCS_PAGE_CACHE_MAX_AGE_SECONDS,
+  staleMaxAge: DOCS_PAGE_CACHE_STALE_MAX_AGE_SECONDS,
+  name: 'docs-page',
+  getKey: resolveDocsPageCacheKey,
 })
