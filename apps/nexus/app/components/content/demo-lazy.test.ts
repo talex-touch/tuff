@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_LAZY_ACTIVATION_DELAY_MS, DEMO_LAZY_IDLE_TIMEOUT_MS, scheduleDemoActivation, shouldActivateDemo } from './demo-lazy'
+import { DEMO_LAZY_ACTIVATION_DELAY_MS, DEMO_LAZY_IDLE_TIMEOUT_MS, DEMO_LAZY_ROOT_MARGIN, scheduleDemoActivation, shouldActivateDemo } from './demo-lazy'
 
 describe('demo lazy activation', () => {
   it('keeps demos inactive until the wrapper enters the viewport', () => {
@@ -15,14 +15,25 @@ describe('demo lazy activation', () => {
     expect(shouldActivateDemo(false, { isIntersecting: false, intersectionRatio: 0.1 })).toBe(true)
   })
 
-  it('uses browser idle time before activating demos when available', () => {
+  it('uses viewport-only observation and delayed idle activation', () => {
+    expect(DEMO_LAZY_ROOT_MARGIN).toBe('0px')
+    expect(DEMO_LAZY_ACTIVATION_DELAY_MS).toBe(2400)
+    expect(DEMO_LAZY_IDLE_TIMEOUT_MS).toBe(1600)
+  })
+
+  it('waits for the activation delay before using browser idle time', () => {
     let runIdleCallback: (() => void) | undefined
     let timeout: number | undefined
+    let delay = 0
 
     const task = scheduleDemoActivation(() => {
       runIdleCallback = undefined
     }, {
-      setTimeout,
+      setTimeout: ((handler: TimerHandler, ms?: number) => {
+        delay = Number(ms)
+        ;(handler as () => void)()
+        return 1
+      }) as typeof setTimeout,
       clearTimeout,
       requestIdleCallback: (callback, options) => {
         timeout = options?.timeout
@@ -34,6 +45,7 @@ describe('demo lazy activation', () => {
       },
     })
 
+    expect(delay).toBe(DEMO_LAZY_ACTIVATION_DELAY_MS)
     expect(timeout).toBe(DEMO_LAZY_IDLE_TIMEOUT_MS)
     expect(runIdleCallback).toBeTypeOf('function')
     runIdleCallback?.()
