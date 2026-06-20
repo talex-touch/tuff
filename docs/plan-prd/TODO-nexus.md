@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus docs 第 11 批已收尾；本批将右侧 DocsOutline 从 docs 首屏脚本窗口移出，后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
+> 当前状态：Nexus docs 第 12 批已收尾；本批将右侧 DocsAsideCardsShell 从 tabs 首屏同步路径移到轻量占位按钮 + idle 延迟挂载，后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
 
 ## Goal 原句
 
@@ -24,21 +24,21 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 91%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求问题，并将右侧 DocsOutline 延后到 idle 后挂载。
-- 整体 goal 估算：约 65%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载。
+- 本轮 tabs/card 文档链路：约 93%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求问题，并将右侧 DocsOutline 与 DocsAsideCardsShell 延后到 idle 后挂载。
+- 整体 goal 估算：约 68%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载。
 - 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
-| 当前第 10 批 devtools bridge follow-up | 100% | 已提交 `a8b21aaae`；代码、focused tests、scoped ESLint、A/B Playwright 报告、生产 compile sanity 均已完成。 |
-| `/en/docs/dev/components/tabs` 触发链路 | 90% | 页面 200、切换约 62ms、关键窗口不再请求 `body=1`；devtools bridge 请求已削减，剩余是 Nuxt/runtime 与 docs demo 模块碎片继续拆。 |
-| docs 内容加载拆分 | 65% | `body=0` / idle `body=1` 已落地；demo registry、模板静态 shell、折叠区 lazy 仍待做。 |
+| 当前第 12 批 aside shell follow-up | 100% | 已提交 `468b1ae63`；代码、focused tests、scoped ESLint、Playwright 截图/HAR、生产 compile sanity 均已完成。 |
+| `/en/docs/dev/components/tabs` 触发链路 | 93% | 页面 200；tabs 首屏 DCL 127ms、network idle 1251ms、failed 0；占位按钮点击到 Assistant dialog 210ms；剩余是 Nuxt/runtime 与 docs demo 模块碎片继续拆。 |
+| docs 内容加载拆分 | 68% | `body=0` / idle `body=1` 已落地；右侧 outline 和 assistant shell 已延迟挂载；demo registry、模板静态 shell、折叠区 lazy 仍待做。 |
 | AI review / aireview 未审批组件 | 18% | 已完成 pending 口径和高风险文档清单；逐页 Playwright 基线与重型 demo 优化待做。 |
 | 全站页面切换矩阵 | 10% | tabs/card 有基线；`/`、`/store`、dashboard、Provider Registry、Data Governance 待覆盖。 |
-| 生产构建 chunk 复核 | 10% | 已完成 `NUXT_DISABLE_PRERENDER=true` compile sanity；完整 prerender 仍有既有错误，chunk/payload/CSS 深查待做。 |
+| 生产构建 chunk 复核 | 15% | 第 10/11/12 批均已通过 `NUXT_DISABLE_PRERENDER=true` compile sanity；完整 prerender 和 chunk/payload/CSS 深查待做。 |
 | TODO 与交接文档 | 100% | 当前 goal 原句、批次、证据路径、后续子任务已沉淀在本文。 |
 
 ## 已完成批次
@@ -56,6 +56,7 @@
 | 9 | `926ae0818` | `perf(nexus): filter more docs dev stylesheets` | 已完成 |
 | 10 | `a8b21aaae` | `perf(nexus): noop vue devtools api in dev` | 已完成 |
 | 11 | `5fb01c7ba` | `perf(nexus): lazy mount docs outline` | 已完成 |
+| 12 | `468b1ae63` | `perf(nexus): lazy mount docs aside shell` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -64,10 +65,50 @@
 - 第 9 批已提交：`926ae0818 perf(nexus): filter more docs dev stylesheets`。
 - 第 10 批已提交：`a8b21aaae perf(nexus): noop vue devtools api in dev`。
 - 第 11 批已提交：`5fb01c7ba perf(nexus): lazy mount docs outline`；右侧 `DocsOutline` 从首屏同步挂载改为轻量 skeleton 壳 + idle 延迟挂载，移动端目录按钮仍立即挂载真实 outline。
+- 第 12 批已提交：`468b1ae63 perf(nexus): lazy mount docs aside shell`；右侧 `DocsAsideCardsShell` 从首屏同步 import 改为 `LazyDocsAsideCardsShell` + 轻量占位按钮 + idle 延迟挂载，占位按钮点击仍可立即打开 Assistant。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
 - 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，但 Nuxt runtime、`node_modules`、i18n 与 docs demo 模块碎片仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+
+## 第 12 批收口记录
+
+目标：将右侧 `DocsAsideCardsShell.vue` 从 docs 首屏同步路径移出。第 11 批后 HAR 仍显示 tabs/card/fusion 首屏会加载 `DocsAsideCardsShell.vue` 与 scoped CSS，约 2 个请求、约 29KB dev 资源；它主要服务右侧 Assistant / Help 区域，不应抢占正文首屏脚本窗口。
+
+改动范围：
+
+- `apps/nexus/app/layouts/docs.vue`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+
+实现口径：
+
+- 移除 `DocsAsideCardsShell` 同步 import，改为 `defineAsyncComponent` 的 `LazyDocsAsideCardsShell`。
+- 首屏先显示轻量 `.docs-aside-assistant-shell` 占位按钮，保留 `Tuff Assistant` 主入口，不挂载真实 shell / help links。
+- hydration 后延迟 `2400ms`，再通过 `requestIdleCallback` 挂载真实 shell，idle timeout 为 `3600ms`。
+- 点击占位按钮时立即挂载 `DocsAsideCards` / `DocsAsideCardsShell` 并打开 Assistant dialog，不牺牲显式用户意图。
+- AI review notice 需要显示时仍立即挂载真实 shell 和 aside cards，保证 migrated / 未 verified 文档的提醒不被延迟隐藏。
+- 补齐 `docs.assistant.open` en/zh message catalog，避免新增生产 UI 文案走 fallback。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/pages/docs/docs-page-performance.test.ts"`，1 file / 25 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "app/layouts/docs.vue" "app/pages/docs/docs-page-performance.test.ts" "i18n/locales/en.ts" "i18n/locales/zh.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/app/layouts/docs.vue" "apps/nexus/app/pages/docs/docs-page-performance.test.ts" "apps/nexus/i18n/locales/en.ts" "apps/nexus/i18n/locales/zh.ts"` 通过。
+- Production build：`NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build` 通过，确认 `LazyDocsAsideCardsShell` 不影响 TuffEx build、Nuxt client/server、Nitro 与 content asset trim。
+- curl smoke：`/en/docs/dev/components/tabs` status 200。
+- Playwright after：
+  - 报告：`output/playwright/nexus-docs-2026-06-21-aside-shell-lazy-3200.md`
+  - JSON：`output/playwright/nexus-docs-2026-06-21-aside-shell-lazy-3200.json`
+  - tabs：status 200, DCL 127ms, network idle 1251ms, requests 459, scripts 439, stylesheets 18, failed 0；network idle 时占位按钮可见、真实 shell 未挂载。
+  - card：status 200, DCL 116ms, network idle 1247ms, requests 466, scripts 446, stylesheets 18, failed 0。
+  - fusion：status 200, DCL 97ms, network idle 1251ms, requests 459, scripts 439, stylesheets 18, failed 0。
+  - 延迟挂载截图：`output/playwright/nexus-docs-2026-06-21-aside-shell-lazy-3200-after-delay-tabs.png`；tabs 延迟后占位按钮隐藏、真实 `DocsAsideCardsShell` 可见。
+  - 占位按钮点击：click to dialog 210ms；点击前占位按钮可见且真实 shell/dialog 未挂载，点击后真实 shell、`.assistant-dialog`、`.FlipDialog-Card` 均可见；failed 0。
+  - 占位按钮截图：`output/playwright/nexus-docs-2026-06-21-aside-shell-lazy-3200-placeholder-before-click.png`、`output/playwright/nexus-docs-2026-06-21-aside-shell-lazy-3200-placeholder-after-click.png`。
+  - 占位按钮 HAR：`output/playwright/nexus-docs-2026-06-21-aside-shell-lazy-3200-placeholder-click.har`。
+  - card -> tabs：URL settled 72ms, network idle 883ms, requests 12, failed 0，切换窗口内 `DocsAsideCardsShell` requests 0；docs `body=0` at +40ms、`body=1` at +400ms。
 
 ## 第 11 批收口记录
 
@@ -308,7 +349,7 @@
 
 ### 收尾边界
 
-- [x] 当前批次只收尾第 10 批 devtools bridge follow-up，不继续混入 docs 内容拆分或 aireview 未审批组件优化。
+- [x] 当前批次只收尾第 12 批 docs aside shell follow-up，不继续混入 docs 内容拆分或 aireview 未审批组件优化。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，跑 Playwright / HAR baseline 后再落代码。
@@ -359,7 +400,7 @@
 ### P1：生产构建同类风险复核
 
 - [ ] 跑 `pnpm -C "apps/nexus" run build` 或 `pnpm nexus:build`，确认生产 CSS chunk 不存在同类跨页面污染；2026-06-21 复核时 client/server build 通过，但完整 prerender 阶段仍有既有错误需单独收敛。
-- [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 10 批 dev-only `@vue/devtools-api` noop alias 不影响生产 client/server/Nitro 打包。
+- [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 12 批 docs aside shell lazy boundary 不影响生产 client/server/Nitro 打包。
 - [ ] 检查 Nuxt route chunks、payload chunks、CSS chunks 是否存在 docs/store/dashboard/landing 互相污染。
 - [ ] 若生产存在同类问题，优先从 import boundary / layout boundary / component registration 修复，而不是沿用 dev-only HTML filter。
 
@@ -396,4 +437,4 @@
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 10 批已经收尾，后续不要继续往本批塞 docs 内容或 aireview 优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 12 批已经收尾，后续不要继续往本批塞 docs 内容或 aireview 优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
