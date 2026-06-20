@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus docs 性能继续按小批次收口；已完成 9 个性能提交，当前第 10 批聚焦 dev-only Vue Devtools bridge 请求削减。
+> 当前状态：Nexus docs 当前批已收尾；已完成 10 个性能提交，后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核全部转入本文 TODO 队列。
 
 ## Goal 原句
 
@@ -24,21 +24,21 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 88%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染和 dev-only Vue Devtools bridge 请求问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
-- 整体 goal 估算：约 62%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
+- 本轮 tabs/card 文档链路：约 90%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染和 dev-only Vue Devtools bridge 请求问题，并保留 Playwright / HAR / screenshot / focused tests 证据。
+- 整体 goal 估算：约 64%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
 - 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge。
-- 当前批次不继续扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
+- 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
-| 当前第 10 批 devtools bridge follow-up | 90% | 代码、focused tests、scoped ESLint、A/B Playwright 报告已完成；待提交。 |
-| `/en/docs/dev/components/tabs` 触发链路 | 88% | 页面 200、切换约 62ms、关键窗口不再请求 `body=1`；devtools bridge 请求已削减，剩余是 Nuxt/runtime 与 docs demo 模块碎片继续拆。 |
+| 当前第 10 批 devtools bridge follow-up | 100% | 已提交 `a8b21aaae`；代码、focused tests、scoped ESLint、A/B Playwright 报告、生产 compile sanity 均已完成。 |
+| `/en/docs/dev/components/tabs` 触发链路 | 90% | 页面 200、切换约 62ms、关键窗口不再请求 `body=1`；devtools bridge 请求已削减，剩余是 Nuxt/runtime 与 docs demo 模块碎片继续拆。 |
 | docs 内容加载拆分 | 65% | `body=0` / idle `body=1` 已落地；demo registry、模板静态 shell、折叠区 lazy 仍待做。 |
 | AI review / aireview 未审批组件 | 18% | 已完成 pending 口径和高风险文档清单；逐页 Playwright 基线与重型 demo 优化待做。 |
 | 全站页面切换矩阵 | 10% | tabs/card 有基线；`/`、`/store`、dashboard、Provider Registry、Data Governance 待覆盖。 |
-| 生产构建 chunk 复核 | 0% | 还未跑 `pnpm -C "apps/nexus" run build` 的 chunk/payload/CSS 复核。 |
+| 生产构建 chunk 复核 | 10% | 已完成 `NUXT_DISABLE_PRERENDER=true` compile sanity；完整 prerender 仍有既有错误，chunk/payload/CSS 深查待做。 |
 | TODO 与交接文档 | 100% | 当前 goal 原句、批次、证据路径、后续子任务已沉淀在本文。 |
 
 ## 已完成批次
@@ -54,13 +54,14 @@
 | 7 | `e46541119` | `perf(nexus): defer docs full body prefetch` | 已完成 |
 | 8 | `15f2d288c` | `perf(nexus): load component sidebar metadata sooner` | 已完成 |
 | 9 | `926ae0818` | `perf(nexus): filter more docs dev stylesheets` | 已完成 |
-| 10 | 待提交 | `perf(nexus): noop vue devtools api in dev` | 收尾中 |
+| 10 | `a8b21aaae` | `perf(nexus): noop vue devtools api in dev` | 已完成 |
 
 ## 本轮收尾结论
 
 - `/en/docs/dev/components/tabs` 当前页切换已从“切换时立即竞争 full-body Markdown parse / sidebar full-body prefetch”改为“先轻 metadata，后 idle full body”。
 - 第 7 批已提交：`e46541119 perf(nexus): defer docs full body prefetch`。
 - 第 9 批已提交：`926ae0818 perf(nexus): filter more docs dev stylesheets`。
+- 第 10 批已提交：`a8b21aaae perf(nexus): noop vue devtools api in dev`。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
@@ -263,6 +264,13 @@
 
 ## 后续任务树
 
+### 收尾边界
+
+- [x] 当前批次只收尾第 10 批 devtools bridge follow-up，不继续混入 docs 内容拆分或 aireview 未审批组件优化。
+- [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
+- [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
+- [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，跑 Playwright / HAR baseline 后再落代码。
+
 ### P0：docs 文档内容加载继续拆分
 
 - [x] 盘点 docs route 首屏 payload：区分 SSR 必须数据、首屏可见内容、折叠区内容、demo registry、code block/highlight、metadata。
@@ -346,4 +354,4 @@
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 9 批已经收尾，后续不要继续往本批塞 docs 内容或 aireview 优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 10 批已经收尾，后续不要继续往本批塞 docs 内容或 aireview 优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
