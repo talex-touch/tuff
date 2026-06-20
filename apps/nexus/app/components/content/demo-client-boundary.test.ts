@@ -32,6 +32,10 @@ describe('Tuff demo client boundary', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
 
     expect(wrapper).toContain('v-if="isDemoActive"')
+    expect(wrapper).toContain('reason: \'manual\'')
+    expect(wrapper).toContain('class="tuff-demo__run-btn"')
+    expect(wrapper).not.toContain('IntersectionObserver')
+    expect(wrapper).not.toContain('scheduleDemoActivation')
   })
 
   it('removes generated demos from Nuxt component auto-registration', () => {

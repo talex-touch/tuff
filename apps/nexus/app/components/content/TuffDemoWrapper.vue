@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { type ComponentPublicInstance, computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { DEMO_LAZY_ROOT_MARGIN, scheduleDemoActivation, shouldActivateDemo, type DemoActivationTask } from './demo-lazy'
+import { type ComponentPublicInstance, computed, nextTick, ref } from 'vue'
+import { shouldActivateDemo } from './demo-lazy'
 
 interface DemoWrapperProps {
   demo: string
@@ -26,7 +26,7 @@ const props = withDefaults(defineProps<DemoWrapperProps>(), {
   description: '',
 })
 
-const { locale } = useI18n()
+const { t } = useI18n()
 
 const htmlEntityMap: Record<string, string> = {
   '&lt;': '<',
@@ -53,17 +53,19 @@ const wrapperRef = ref<HTMLElement | null>(null)
 const isDemoActive = ref(false)
 const demoInstanceRef = ref<DemoResetController | null>(null)
 const isResetting = ref(false)
-let observer: IntersectionObserver | null = null
-let activationTask: DemoActivationTask | null = null
 
 const toggleLabel = computed(() => {
   if (showCode.value)
-    return locale.value === 'zh' ? '隐藏代码' : 'Hide code'
-  return locale.value === 'zh' ? '展开代码' : 'Show code'
+    return t('docs.demo.hideCode')
+  return t('docs.demo.showCode')
 })
 
-const resetLabel = computed(() => (locale.value === 'zh' ? '重置' : 'Reset'))
-const inactiveLabel = computed(() => (locale.value === 'zh' ? '示例即将加载...' : 'Demo will load when visible.'))
+const resetLabel = computed(() => t('docs.demo.reset'))
+const runLabel = computed(() => t('docs.demo.run'))
+const inactiveLabel = computed(() => t('docs.demo.paused'))
+const loadingLabel = computed(() => t('docs.demo.loading'))
+const errorLabel = computed(() => t('docs.demo.loadFailed'))
+const notFoundLabel = computed(() => t('docs.demo.notFound'))
 
 function toggleCode() {
   showCode.value = !showCode.value
@@ -109,54 +111,12 @@ function handleDemoInstanceChange(instance: DemoResetController | null) {
   demoInstanceRef.value = instance
 }
 
-function clearPendingActivation() {
-  if (!activationTask)
-    return
-
-  activationTask.cancel()
-  activationTask = null
-}
-
 function activateDemo() {
-  if (isDemoActive.value || activationTask)
+  if (!shouldActivateDemo({ demo: props.demo, isActive: isDemoActive.value, reason: 'manual' }))
     return
 
-  clearPendingActivation()
-  activationTask = scheduleDemoActivation(() => {
-    activationTask = null
-    isDemoActive.value = true
-    observer?.disconnect()
-    observer = null
-  })
+  isDemoActive.value = true
 }
-
-onMounted(() => {
-  if (!props.demo)
-    return
-
-  if (!('IntersectionObserver' in window)) {
-    activateDemo()
-    return
-  }
-
-  observer = new IntersectionObserver((entries) => {
-    if (entries.some(entry => shouldActivateDemo(isDemoActive.value, entry)))
-      activateDemo()
-  }, {
-    rootMargin: DEMO_LAZY_ROOT_MARGIN,
-  })
-
-  if (wrapperRef.value)
-    observer.observe(wrapperRef.value)
-  else
-    activateDemo()
-})
-
-onBeforeUnmount(() => {
-  observer?.disconnect()
-  observer = null
-  clearPendingActivation()
-})
 
 </script>
 
@@ -199,10 +159,17 @@ onBeforeUnmount(() => {
               :is-active="isDemoActive"
               :render-key="demoRenderKey"
               :inactive-label="inactiveLabel"
+              :loading-label="loadingLabel"
+              :error-label="errorLabel"
+              :not-found-label="notFoundLabel"
               @instance-change="handleDemoInstanceChange"
             />
-            <div v-else class="tuff-demo__placeholder">
-              {{ inactiveLabel }}
+            <div v-else class="tuff-demo__placeholder tuff-demo__placeholder--manual">
+              <span class="tuff-demo__placeholder-text">{{ inactiveLabel }}</span>
+              <button type="button" class="tuff-demo__run-btn" @click="activateDemo">
+                <span class="tuff-demo__run-icon i-carbon-play" aria-hidden="true" />
+                {{ runLabel }}
+              </button>
             </div>
             <template #fallback>
               <div class="tuff-demo__placeholder">
@@ -362,10 +329,47 @@ onBeforeUnmount(() => {
 }
 
 .tuff-demo__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 96px;
   font-size: 13px;
   color: var(--tx-text-color-secondary);
   text-align: center;
-  padding: 12px 0;
+  padding: 18px 0;
+}
+
+.tuff-demo__placeholder-text {
+  line-height: 1.5;
+}
+
+.tuff-demo__run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 32%, var(--tx-border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-color-primary) 8%, transparent);
+  color: var(--tx-color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 8px 14px;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.tuff-demo__run-btn:hover {
+  border-color: color-mix(in srgb, var(--tx-color-primary) 56%, var(--tx-border-color));
+  background: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
+  transform: translateY(-1px);
+}
+
+.tuff-demo__run-icon {
+  font-size: 12px;
 }
 
 .tuff-demo__code {

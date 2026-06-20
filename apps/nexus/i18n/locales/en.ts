@@ -3356,6 +3356,16 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     shareCopied: 'Link copied!',
     shareFailed: 'Copy failed',
     editOnGitHub: 'Edit this page',
+    demo: {
+      showCode: 'Show code',
+      hideCode: 'Hide code',
+      reset: 'Reset',
+      run: 'Run demo',
+      paused: 'Interactive preview paused.',
+      loading: 'Loading demo...',
+      loadFailed: 'Failed to load demo.',
+      notFound: 'Demo component not found.',
+    },
   },
   docsNav: {
     start: 'Get started',

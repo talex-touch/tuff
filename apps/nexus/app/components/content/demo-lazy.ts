@@ -1,73 +1,11 @@
-export const DEMO_LAZY_ROOT_MARGIN = '0px'
-export const DEMO_LAZY_ACTIVATION_DELAY_MS = 2400
-export const DEMO_LAZY_IDLE_TIMEOUT_MS = 1600
+export type DemoActivationReason = 'manual' | 'visibility'
 
-export interface DemoIntersectionSnapshot {
-  isIntersecting: boolean
-  intersectionRatio: number
+export interface DemoActivationRequest {
+  demo?: string
+  isActive: boolean
+  reason: DemoActivationReason
 }
 
-export function shouldActivateDemo(
-  isActive: boolean,
-  entry: DemoIntersectionSnapshot,
-) {
-  return isActive || entry.isIntersecting || entry.intersectionRatio > 0
-}
-
-export interface DemoActivationScheduler {
-  setTimeout: typeof setTimeout
-  clearTimeout: typeof clearTimeout
-  requestIdleCallback?: Window['requestIdleCallback']
-  cancelIdleCallback?: Window['cancelIdleCallback']
-}
-
-export interface DemoActivationTask {
-  cancel: () => void
-}
-
-export function scheduleDemoActivation(
-  callback: () => void,
-  scheduler: DemoActivationScheduler = globalThis,
-): DemoActivationTask {
-  let cancelled = false
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
-  let idleId: number | null = null
-
-  const run = () => {
-    if (cancelled)
-      return
-
-    cancelled = true
-    callback()
-  }
-
-  timeoutId = scheduler.setTimeout(() => {
-    timeoutId = null
-    if (cancelled)
-      return
-
-    if (scheduler.requestIdleCallback && scheduler.cancelIdleCallback) {
-      idleId = scheduler.requestIdleCallback(run, { timeout: DEMO_LAZY_IDLE_TIMEOUT_MS })
-      return
-    }
-
-    run()
-  }, DEMO_LAZY_ACTIVATION_DELAY_MS)
-
-  return {
-    cancel() {
-      if (cancelled)
-        return
-
-      cancelled = true
-      if (idleId !== null && scheduler.cancelIdleCallback) {
-        scheduler.cancelIdleCallback(idleId)
-        idleId = null
-      }
-      if (timeoutId !== null) {
-        scheduler.clearTimeout(timeoutId)
-        timeoutId = null
-      }
-    },
-  }
+export function shouldActivateDemo(request: DemoActivationRequest) {
+  return Boolean(request.demo) && !request.isActive && request.reason === 'manual'
 }
