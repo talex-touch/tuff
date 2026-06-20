@@ -50,6 +50,7 @@
     "visible:experience:template": "pnpm exec tsx \"scripts/coreapp-visible-experience-template.ts\"",
     "visible:experience:verify": "pnpm exec tsx \"scripts/coreapp-visible-experience-verify.ts\"",
     "visible:experience:readiness": "pnpm exec tsx \"scripts/coreapp-visible-experience-readiness.ts\"",
+    "visible:experience:ai-ask-probe": "pnpm exec tsx \"scripts/coreapp-packaged-ai-ask-probe.ts\"",
     "smoke:assistant": "pnpm exec tsx \"scripts/assistant-floating-ball-smoke.ts\"",
     "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\"",
     "clipboard:stress:verify": "pnpm exec tsx \"scripts/clipboard-stress-verify.ts\"",
