@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { defineComponent, h, render } from 'vue'
+import { useTimeAgoIntl } from '@vueuse/core'
 import DocHero from '~/components/docs/DocHero.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
