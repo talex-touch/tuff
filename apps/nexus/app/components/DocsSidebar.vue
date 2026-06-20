@@ -68,7 +68,10 @@ const {
 )
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 const COMPONENT_DOCS_METADATA_DELAY_MS = 8000
+const COMPONENT_DOCS_METADATA_INTENT_DELAY_MS = 180
 const COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS = 3600
+const COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS = 240
+const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 1400
 let activeScrollFrame: number | null = null
 let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null
 let componentDocsMetadataIdleId: number | null = null
@@ -363,7 +366,19 @@ function prefetchDocsTarget(path: string | null | undefined) {
   const routeTarget = localizedDocsPath(normalized)
   void preloadRouteComponents(routeTarget)
   void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
-  void requestDocsPage({ path: normalized, locale, body: '1' }).catch(() => {})
+
+  const prefetchFullDoc = () => {
+    void requestDocsPage({ path: normalized, locale, body: '1' }).catch(() => {})
+  }
+
+  setTimeout(() => {
+    if (hasWindow() && 'requestIdleCallback' in window) {
+      window.requestIdleCallback(prefetchFullDoc, { timeout: COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS })
+      return
+    }
+
+    prefetchFullDoc()
+  }, COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS)
 }
 
 function filterByLocale(items: any[]): any[] {
@@ -608,6 +623,17 @@ function requestComponentDocsMetadata() {
   void refreshComponentDocs()
 }
 
+function requestComponentDocsMetadataOnIntent() {
+  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
+    return
+
+  clearComponentDocsMetadataSchedule()
+  componentDocsMetadataTimer = setTimeout(() => {
+    componentDocsMetadataTimer = null
+    requestComponentDocsMetadata()
+  }, COMPONENT_DOCS_METADATA_INTENT_DELAY_MS)
+}
+
 function scheduleComponentDocsMetadata() {
   if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
     return
@@ -824,9 +850,9 @@ onBeforeUnmount(() => {
   <nav
     ref="navRef"
     class="docs-nav relative flex flex-col"
-    @focusin="requestComponentDocsMetadata"
-    @pointerenter="requestComponentDocsMetadata"
-    @touchstart.passive="requestComponentDocsMetadata"
+    @focusin="requestComponentDocsMetadataOnIntent"
+    @pointerenter="requestComponentDocsMetadataOnIntent"
+    @touchstart.passive="requestComponentDocsMetadataOnIntent"
   >
     <!-- Top-level section tabs (sticky within sidebar) -->
     <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pb-1 pt-1 backdrop-blur-sm">

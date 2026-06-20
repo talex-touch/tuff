@@ -10,6 +10,9 @@ import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 const DOCS_FULL_BODY_CACHE_LIMIT = 24
+const DOCS_FULL_BODY_IDLE_DELAY_MS = 180
+const DOCS_FULL_BODY_IDLE_TIMEOUT_MS = 1200
+const DOCS_FULL_BODY_FALLBACK_DELAY_MS = 220
 const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
 const prefetchedDocTargets = new Set<string>()
@@ -223,6 +226,22 @@ const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? do
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
 let activeDocFetchId = 0
+let fullDocIdleId: number | null = null
+let fullDocTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearFullDocFetchSchedule() {
+  if (import.meta.server)
+    return
+
+  if (fullDocIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(fullDocIdleId)
+    fullDocIdleId = null
+  }
+  if (fullDocTimer) {
+    clearTimeout(fullDocTimer)
+    fullDocTimer = null
+  }
+}
 
 async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' | 'zh') {
   if (import.meta.server || !shouldSplitDocBody.value)
@@ -259,6 +278,33 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   }
 }
 
+function scheduleFullDocFetchForRoute(fetchId: number, path: string, locale: 'en' | 'zh') {
+  if (import.meta.server || !shouldSplitDocBody.value || fullDoc.value || fullDocLoading.value)
+    return
+
+  clearFullDocFetchSchedule()
+
+  const load = () => {
+    fullDocIdleId = null
+    fullDocTimer = null
+
+    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
+      return
+
+    void loadFullDocForRoute(fetchId, path, locale)
+  }
+
+  fullDocTimer = setTimeout(() => {
+    fullDocTimer = null
+    if ('requestIdleCallback' in window) {
+      fullDocIdleId = window.requestIdleCallback(load, { timeout: DOCS_FULL_BODY_IDLE_TIMEOUT_MS })
+      return
+    }
+
+    load()
+  }, DOCS_FULL_BODY_IDLE_DELAY_MS)
+}
+
 function seedFullDocFromCurrentDoc() {
   if (!shouldSplitDocBody.value || !doc.value?.body)
     return false
@@ -275,7 +321,7 @@ function startFullDocFetchForRoute() {
     return
 
   const fetchId = ++activeDocFetchId
-  void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
+  scheduleFullDocFetchForRoute(fetchId, docPath.value, docsLocale.value)
 }
 
 function prefetchDocForPath(path: string | null | undefined) {
@@ -296,9 +342,23 @@ function prefetchDocForPath(path: string | null | undefined) {
   if (hasCachedFullDoc(cacheKey))
     return
 
-  void requestDocsPage({ path: normalized, locale, body: '1' }).then((nextFullDoc) => {
-    cacheFullDoc(nextFullDoc)
-  }).catch(() => {})
+  const prefetchFullDoc = () => {
+    if (hasCachedFullDoc(cacheKey))
+      return
+
+    void requestDocsPage({ path: normalized, locale, body: '1' }).then((nextFullDoc) => {
+      cacheFullDoc(nextFullDoc)
+    }).catch(() => {})
+  }
+
+  setTimeout(() => {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(prefetchFullDoc, { timeout: DOCS_FULL_BODY_IDLE_TIMEOUT_MS })
+      return
+    }
+
+    prefetchFullDoc()
+  }, DOCS_FULL_BODY_FALLBACK_DELAY_MS)
 }
 
 async function loadActiveDocForRoute() {
@@ -312,13 +372,11 @@ async function loadActiveDocForRoute() {
   const cachedFullDoc = splitBody ? readCachedFullDoc(fullDocCacheKey.value) : null
   const hasCachedBody = splitBody && cachedFullDoc !== undefined
 
+  clearFullDocFetchSchedule()
   doc.value = hasCachedBody ? cachedFullDoc : null
   fullDoc.value = hasCachedBody ? cachedFullDoc : null
   isLoading.value = !hasCachedBody
-  fullDocLoading.value = splitBody && !hasCachedBody
-  const fullDocRequest = splitBody && !hasCachedBody
-    ? loadFullDocForRoute(fetchId, path, locale)
-    : null
+  fullDocLoading.value = false
 
   try {
     const nextDoc = await requestDocsPage({ path, locale, body: splitBody ? '0' : '1' })
@@ -335,12 +393,13 @@ async function loadActiveDocForRoute() {
     if (hasCachedBody)
       return
 
-    void fullDocRequest
+    scheduleFullDocFetchForRoute(fetchId, path, locale)
   }
   catch {
     if (fetchId === activeDocFetchId) {
       isLoading.value = false
       fullDocLoading.value = false
+      clearFullDocFetchSchedule()
     }
   }
 }
@@ -927,6 +986,7 @@ onBeforeUnmount(() => {
   docMetaState.value = {}
   docAssistantContextState.value = ''
   clearCodeEnhanceSchedule()
+  clearFullDocFetchSchedule()
   clearAssistantContextSchedule()
   clearDocClientPanelIntentListeners()
   clearDocClientPanelSchedule()
