@@ -5,6 +5,8 @@ import { isMissingDocsContentTableError } from '../../utils/docsContentError'
 const DEV_NAVIGATION_RETRY_ATTEMPTS = 3
 const DEV_NAVIGATION_RETRY_DELAY_MS = 80
 const NAVIGATION_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
+const NAVIGATION_CACHE_MAX_AGE_SECONDS = 300
+const NAVIGATION_CACHE_STALE_MAX_AGE_SECONDS = 3600
 
 function toPlainJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -80,7 +82,12 @@ async function queryDocsNavigation(event: H3Event) {
   throw lastError
 }
 
-export default defineEventHandler(async (event) => {
+function resolveNavigationCacheKey(event: H3Event) {
+  const locale = normalizeLocale(getQuery(event).locale)
+  return locale ? `locale:${locale}` : 'locale:all'
+}
+
+export default defineCachedEventHandler(async (event) => {
   const locale = normalizeLocale(getQuery(event).locale)
   const navigation = await queryDocsNavigation(event)
   const localizedNavigation = filterNavigationByLocale(navigation, locale)
@@ -88,4 +95,9 @@ export default defineEventHandler(async (event) => {
   setHeader(event, 'cache-control', NAVIGATION_CACHE_CONTROL)
 
   return toPlainJson(Array.isArray(localizedNavigation) ? localizedNavigation : [])
+}, {
+  maxAge: NAVIGATION_CACHE_MAX_AGE_SECONDS,
+  staleMaxAge: NAVIGATION_CACHE_STALE_MAX_AGE_SECONDS,
+  name: 'docs-navigation',
+  getKey: resolveNavigationCacheKey,
 })

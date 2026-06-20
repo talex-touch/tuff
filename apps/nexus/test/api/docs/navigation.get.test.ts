@@ -7,12 +7,17 @@ const contentMocks = vi.hoisted(() => ({
 vi.mock('@nuxt/content/server', () => contentMocks)
 
 let handler: (event: any) => Promise<any>
+let cachedOptions: any
 let getQueryMock: ReturnType<typeof vi.fn>
 let setHeaderMock: ReturnType<typeof vi.fn>
 let warnSpy: ReturnType<typeof vi.spyOn>
 
 beforeAll(async () => {
   ;(globalThis as any).defineEventHandler = (fn: any) => fn
+  ;(globalThis as any).defineCachedEventHandler = (fn: any, options: any) => {
+    cachedOptions = options
+    return fn
+  }
   getQueryMock = vi.fn()
   setHeaderMock = vi.fn()
   ;(globalThis as any).getQuery = getQueryMock
@@ -42,6 +47,19 @@ describe('/api/docs/navigation', () => {
     await expect(handler({})).resolves.toEqual(navigation)
     expect(contentMocks.queryCollectionNavigation).toHaveBeenCalledTimes(1)
     expect(setHeaderMock).toHaveBeenCalledWith({}, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
+  })
+
+  it('caches docs navigation by locale while preserving all-locale compatibility', async () => {
+    expect(cachedOptions).toMatchObject({
+      maxAge: 300,
+      staleMaxAge: 3600,
+      name: 'docs-navigation',
+    })
+    expect(cachedOptions.getKey({})).toBe('locale:all')
+
+    getQueryMock.mockReturnValue({ locale: 'zh' })
+
+    expect(cachedOptions.getKey({})).toBe('locale:zh')
   })
 
   it('keeps only requested locale leaf docs while preserving directory nodes', async () => {
