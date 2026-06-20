@@ -132,6 +132,10 @@ function shouldPreferDevDocsFallback() {
   return !isProduction() && Date.now() < devDocsContentFallbackUntil
 }
 
+function shouldPreferDevDocsMetadataFileLookup(docPath: string, includeBody: boolean) {
+  return process.env.NODE_ENV === 'development' && !includeBody && docPath.includes('/docs/dev/components')
+}
+
 function markDevDocsContentUnavailable() {
   devDocsContentFallbackUntil = Date.now() + DEV_DOCS_CONTENT_FALLBACK_WINDOW_MS
 }
@@ -282,6 +286,14 @@ export default defineCachedEventHandler(async (event) => {
   const locale = normalizeLocale(query.locale)
   const includeBody = shouldIncludeBody(query.body)
   const lookupPaths = buildDocsPageLookupPaths(docPath, locale)
+
+  if (shouldPreferDevDocsMetadataFileLookup(docPath, includeBody)) {
+    const fallbackDoc = await readDevDocsPageFallback(lookupPaths, includeBody)
+    if (fallbackDoc) {
+      setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
+      return serializeDoc(fallbackDoc, includeBody)
+    }
+  }
 
   if (shouldPreferDevDocsFallback()) {
     const fallbackDoc = await readDevDocsPageFallback(lookupPaths, includeBody)

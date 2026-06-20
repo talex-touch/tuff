@@ -185,6 +185,65 @@ describe('/api/docs/page', () => {
     expect(mdcMocks.parseMarkdown).not.toHaveBeenCalled()
   })
 
+  it('uses local frontmatter for development metadata requests before querying Nuxt Content', async () => {
+    process.env.NODE_ENV = 'development'
+    getQueryMock.mockReturnValue({ path: '/docs/dev/components/fusion', locale: 'en', body: '0' })
+    mockDocsCollection(new Map([['/docs/dev/components/fusion.en', {
+      path: '/docs/dev/components/fusion.en',
+      title: 'Fusion from content',
+      body: { type: 'root', children: [] },
+    }]]))
+    fsMocks.stat.mockResolvedValue({ mtimeMs: 126 })
+    fsMocks.readFile.mockResolvedValue([
+      '---',
+      'title: "Fusion"',
+      'description: "Gooey two-slot fusion effect."',
+      'category: Basic',
+      'syncStatus: migrated',
+      '---',
+      '# Fusion',
+      ':::TuffDemoWrapper{demo="FusionFusionDemo"}',
+      ':::',
+    ].join('\n'))
+
+    await expect(handler({})).resolves.toEqual({
+      title: 'Fusion',
+      description: 'Gooey two-slot fusion effect.',
+      category: 'Basic',
+      syncStatus: 'migrated',
+      path: '/docs/dev/components/fusion.en',
+      _path: '/docs/dev/components/fusion.en',
+      meta: {
+        title: 'Fusion',
+        description: 'Gooey two-slot fusion effect.',
+        category: 'Basic',
+        syncStatus: 'migrated',
+      },
+    })
+    expect(requestedPaths).toEqual([])
+    expect(contentMocks.queryCollection).not.toHaveBeenCalled()
+    expect(mdcMocks.parseMarkdown).not.toHaveBeenCalled()
+  })
+
+  it('keeps non-component development metadata requests on Nuxt Content', async () => {
+    process.env.NODE_ENV = 'development'
+    const doc = {
+      path: '/docs/guide/start.en',
+      title: 'Start',
+      body: { type: 'root', children: [] },
+    }
+    getQueryMock.mockReturnValue({ path: '/docs/guide/start', locale: 'en', body: '0' })
+    mockDocsCollection(new Map([['/docs/guide/start.en', doc]]))
+
+    await expect(handler({})).resolves.toEqual({
+      path: '/docs/guide/start.en',
+      title: 'Start',
+    })
+    expect(requestedPaths).toEqual(['/docs/guide/start.en'])
+    expect(fsMocks.readFile).not.toHaveBeenCalled()
+    expect(mdcMocks.parseMarkdown).not.toHaveBeenCalled()
+  })
+
   it('renders local Markdown in development when the Nuxt Content docs query endpoint returns 500', async () => {
     process.env.NODE_ENV = 'development'
     const error = Object.assign(new Error('[POST] "/__nuxt_content/docs/query?t=1781920528845": 500 Server Error'), {
