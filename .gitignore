@@ -64,6 +64,7 @@ apps/core-app/src/renderer/src/distinformation.json
 # Cache / Tooling
 # ========================
 .cache/
+.tmp/
 .venv/
 .parcel-cache/
 .temp/
