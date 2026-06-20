@@ -256,6 +256,10 @@ export default defineNuxtConfig({
     },
   },
 
+  ignore: [
+    'app/plugins/mermaid.client.ts',
+  ],
+
   build: {
     transpile: [
       '@talex-touch/tuff-business',

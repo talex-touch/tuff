@@ -1350,6 +1350,16 @@ function enhanceCodeBlocks() {
     renderCodeHeader(header, language, code.textContent ?? '')
     pre.dataset.codeEnhanced = 'true'
   })
+
+  void renderMermaidBlocks()
+}
+
+async function renderMermaidBlocks() {
+  if (import.meta.server || !document.querySelector('.docs-prose .mermaid'))
+    return
+
+  const { renderMermaidInDocument } = await import('~/utils/mermaid-renderer')
+  await renderMermaidInDocument(document)
 }
 
 async function scheduleCodeEnhance(delay = 0) {
