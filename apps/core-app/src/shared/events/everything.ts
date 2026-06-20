@@ -4,6 +4,24 @@ export type EverythingBackendType = 'sdk-napi' | 'cli' | 'unavailable'
 export type EverythingHealthState = 'healthy' | 'degraded' | 'unsupported'
 export type EverythingDiagnosticStage = 'sdk-load' | 'sdk-query' | 'cli-detect' | 'cli-query'
 export type EverythingDiagnosticStatus = 'success' | 'failed' | 'skipped'
+export type EverythingInstallationState =
+  | 'ready'
+  | 'disabled'
+  | 'unsupported'
+  | 'missing-everything'
+  | 'not-running'
+  | 'missing-cli'
+  | 'backend-failed'
+  | 'unknown'
+export type EverythingInstallationRecommendation =
+  | 'ready'
+  | 'enable-in-settings'
+  | 'install-everything'
+  | 'start-everything'
+  | 'install-cli'
+  | 'check-diagnostics'
+  | 'check-manually'
+  | 'unsupported'
 
 export interface EverythingDiagnosticStageSummary {
   stage: EverythingDiagnosticStage
@@ -29,6 +47,20 @@ export interface EverythingPathFilteringStatus {
   lastFilteredResultCount: number | null
   lastDroppedResultCount: number | null
   lastChecked: number | null
+  reason: string | null
+}
+
+export interface EverythingInstallationStatus {
+  supported: boolean
+  state: EverythingInstallationState
+  recommendation: EverythingInstallationRecommendation
+  everythingInstalled: boolean | null
+  everythingRunning: boolean | null
+  serviceRunning: boolean | null
+  cliFound: boolean
+  appPath: string | null
+  cliPath: string | null
+  checkedAt: number | null
   reason: string | null
 }
 
@@ -61,6 +93,7 @@ export interface EverythingStatusResponse {
   fallbackChain: EverythingBackendType[]
   lastChecked: number | null
   pathFiltering: EverythingPathFilteringStatus
+  installation?: EverythingInstallationStatus
   diagnostics?: EverythingDiagnostics
 }
 
@@ -83,6 +116,10 @@ export interface EverythingSetCliPathResponse {
   status: EverythingStatusResponse
 }
 
+export interface EverythingTestRequest {
+  query?: string | null
+}
+
 export interface EverythingTestResponse {
   success: boolean
   backend?: EverythingBackendType
@@ -93,8 +130,57 @@ export interface EverythingTestResponse {
   resultCount?: number
   duration?: number
   sample?: EverythingResultSample | null
+  pathFiltering?: EverythingPathFilteringStatus
   backendAttempts?: EverythingDiagnostics
   durationByStage?: Partial<Record<EverythingDiagnosticStage, number>>
+}
+
+export type EverythingInstallPhase =
+  | 'idle'
+  | 'queued'
+  | 'downloading'
+  | 'verifying'
+  | 'extracting'
+  | 'configuring-path'
+  | 'probing'
+  | 'completed'
+  | 'failed'
+  | 'unsupported'
+
+export interface EverythingInstallTaskIds {
+  everything?: string | null
+  cli?: string | null
+}
+
+export interface EverythingInstallAssetDetail {
+  type: 'everything' | 'cli'
+  filename: string
+  url: string
+  sha256: string
+  destination: string
+  taskId?: string | null
+}
+
+export interface EverythingInstallStatusResponse {
+  jobId: string | null
+  phase: EverythingInstallPhase
+  taskIds: EverythingInstallTaskIds
+  progress: number | null
+  message: string | null
+  error: string | null
+  startedAt: number | null
+  updatedAt: number | null
+  completedAt: number | null
+  installDir: string | null
+  cliDir: string | null
+  cliPath: string | null
+  pathConfigured: boolean
+  assets: EverythingInstallAssetDetail[]
+}
+
+export interface EverythingInstallStartResponse {
+  success: boolean
+  status: EverythingInstallStatusResponse
 }
 
 export const everythingStatusEvent = defineRawEvent<
@@ -112,4 +198,15 @@ export const everythingSetCliPathEvent = defineRawEvent<
   EverythingSetCliPathResponse
 >('everything:set-cli-path')
 
-export const everythingTestEvent = defineRawEvent<void, EverythingTestResponse>('everything:test')
+export const everythingTestEvent = defineRawEvent<
+  EverythingTestRequest | void,
+  EverythingTestResponse
+>('everything:test')
+
+export const everythingInstallStartEvent = defineRawEvent<void, EverythingInstallStartResponse>(
+  'everything:install-start'
+)
+
+export const everythingInstallStatusEvent = defineRawEvent<void, EverythingInstallStatusResponse>(
+  'everything:install-status'
+)

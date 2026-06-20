@@ -417,7 +417,9 @@ describe('file-provider startup readiness', () => {
     releaseIdle(true)
     await provider.backgroundStartupPromise
 
-    expect(searchIndexWorkerInit).toHaveBeenCalledWith('/tmp/tuff-file-provider-db/database.db')
+    expect(searchIndexWorkerInit).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]tmp[\\/]tuff-file-provider-db[\\/]database\.db$/)
+    )
     expect(watchServiceInitialize).toHaveBeenCalledTimes(1)
     expect(watchServiceEnsure).toHaveBeenCalledTimes(1)
     expect(transportOn).toHaveBeenCalledTimes(2)
@@ -863,21 +865,13 @@ describe('file-provider startup readiness', () => {
     )
   })
 
-  it('builds a partial result notice while file index startup is pending', () => {
+  it('does not build a File Index warming result notice while startup is pending', () => {
     const provider = fileProvider as unknown as MutableFileProvider
     resetProviderState(provider)
     provider.backgroundStartupPromise = Promise.resolve()
 
     const notice = provider.buildStartupDegradedNotice({ text: 'report', inputs: [] })
 
-    expect(notice?.render?.basic?.title).toBe('File search is warming up')
-    expect(notice?.render?.basic?.description).toContain('partial')
-    expect(notice?.actions).toEqual([
-      expect.objectContaining({
-        id: 'open-file-index-settings',
-        type: 'navigate',
-        payload: expect.objectContaining({ path: '/setting?section=file-index' })
-      })
-    ])
+    expect(notice).toBeNull()
   })
 })

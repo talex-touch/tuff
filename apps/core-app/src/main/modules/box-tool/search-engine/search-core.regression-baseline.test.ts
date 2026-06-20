@@ -526,7 +526,7 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
     })
   })
 
-  it('appends a partial file-search notice while the file provider startup is degraded', async () => {
+  it('does not append a File Index warming notice while the file provider startup is degraded', async () => {
     const core = SearchEngineCore.getInstance() as unknown as {
       appendCompatibilityNotice: (
         items: TuffItem[],
@@ -538,7 +538,7 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
       id: 'file-provider:startup-degraded:report',
       kind: 'notification',
       source: { id: 'file-provider', type: 'file' },
-      render: { basic: { title: 'File search is warming up' } },
+      render: { basic: { title: 'File startup degraded' } },
       scoring: { final: 0.05 }
     } as unknown as TuffItem
     const item = createItems(1)[0]
@@ -551,7 +551,8 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
         'file'
       )
 
-      expect(result.map((entry) => entry.id)).toEqual([item.id, notice.id])
+      expect(result.map((entry) => entry.id)).toEqual([item.id])
+      expect(fileStartupNoticeMock).not.toHaveBeenCalled()
     })
   })
 

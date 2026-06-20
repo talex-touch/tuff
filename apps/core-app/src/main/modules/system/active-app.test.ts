@@ -206,7 +206,41 @@ describe('active-app resolution', () => {
       }
     )
     execFilePromiseMock.mockRejectedValueOnce(
+      Object.assign(
+        new Error(`Command failed: powershell -NoProfile -Command
+$ErrorActionPreference = 'Stop'
+Add-Type "..."
+ConvertTo-Json -Compress`),
+        {
+          code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+        }
+      )
+    )
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(activeAppLoggerMock.warn).toHaveBeenCalledWith(
+      'Windows active-app resolution failed',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
+          message: 'Command failed: powershell -NoProfile -Command <script>'
+        })
+      })
+    )
+  })
+
+  it('prefers stderr for compact Windows command failure diagnostics', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    execFilePromiseMock.mockRejectedValueOnce(
       Object.assign(new Error('Command failed: powershell -Command <script>'), {
+        stderr: 'Access denied\r\nat line:1',
         code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
       })
     )
@@ -220,7 +254,7 @@ describe('active-app resolution', () => {
       expect.objectContaining({
         meta: expect.objectContaining({
           code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER',
-          message: 'Command failed: powershell -Command <script>'
+          message: 'Access denied'
         })
       })
     )
