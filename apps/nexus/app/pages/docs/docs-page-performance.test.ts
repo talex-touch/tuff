@@ -78,6 +78,11 @@ describe('docs page performance boundaries', () => {
     expect(tuffDemoWrapper).toContain('class="tuff-demo__reset-btn"')
     expect(tuffDemoWrapper).toContain('class="tuff-demo__toggle-btn"')
     expect(tuffDemoWrapper).toContain('class="tuff-demo__run-btn"')
+    expect(tuffDemoWrapper).toContain('<LazyTuffDemoClientRenderer')
+    expect(tuffDemoWrapper).not.toContain('<TuffDemoClientRenderer')
+    expect(tuffDemoWrapper).toContain('<LazyTuffCodeBlock')
+    expect(tuffDemoWrapper).toContain('v-if="showCode"')
+    expect(tuffDemoWrapper).not.toContain('<TuffCodeBlock')
     expect(tuffDemoWrapper).not.toContain('IntersectionObserver')
     expect(tuffDemoWrapper).not.toContain('scheduleDemoActivation')
 

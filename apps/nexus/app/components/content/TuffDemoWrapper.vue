@@ -153,7 +153,7 @@ function activateDemo() {
       <div class="tuff-demo__window-body">
         <div class="tuff-demo__preview">
           <ClientOnly>
-            <TuffDemoClientRenderer
+            <LazyTuffDemoClientRenderer
               v-if="isDemoActive"
               :demo="props.demo"
               :is-active="isDemoActive"
@@ -181,7 +181,8 @@ function activateDemo() {
         <div v-if="hasCode" class="tuff-demo__code" :class="{ 'is-open': showCode }">
           <div class="tuff-demo__code-body">
             <div class="tuff-demo__code-body-inner">
-              <TuffCodeBlock
+              <LazyTuffCodeBlock
+                v-if="showCode"
                 embedded
                 :lang="props.codeLang"
                 :code="resolvedCode"
