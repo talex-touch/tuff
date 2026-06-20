@@ -4,11 +4,14 @@ import DocsAsideCardsShell from '~/components/docs/DocsAsideCardsShell.vue'
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 const LazyDocsAsideCards = defineAsyncComponent(() => import('~/components/docs/DocsAsideCards.vue'))
+const LazyDocsOutline = defineAsyncComponent(() => import('~/components/DocsOutline.vue'))
 const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
 const LazyTuffFooter = defineAsyncComponent(() => import('~/components/TuffFooter.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
 const BACK_TO_TOP_MOUNT_SCROLL_Y = 240
 const DOCS_FOOTER_ROOT_MARGIN = '1200px 0px'
+const DOCS_OUTLINE_MOUNT_DELAY_MS = 2000
+const DOCS_OUTLINE_IDLE_TIMEOUT_MS = 3200
 const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200
 const TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
 
@@ -20,6 +23,7 @@ const outlineVisible = ref(false)
 const sidebarDrawerMounted = ref(false)
 const outlineDrawerMounted = ref(false)
 const shouldMountDocsAsideCards = ref(false)
+const shouldMountDocsOutline = ref(false)
 const docsAssistantOpenRequest = ref(0)
 const docsAssistantSource = shallowRef<HTMLElement | null>(null)
 const shouldMountDocsFooter = ref(false)
@@ -27,6 +31,9 @@ const shouldMountBackToTop = ref(false)
 const shouldMountTuffexBackground = ref(false)
 let docsFooterObserver: IntersectionObserver | null = null
 let backToTopFrameId: number | null = null
+let docsOutlineTimer: ReturnType<typeof setTimeout> | null = null
+let docsOutlineIdleId: number | null = null
+let docsOutlineFrameId: number | null = null
 let tuffexBackgroundIdleId: number | null = null
 let tuffexBackgroundFrameId: number | null = null
 let tuffexBackgroundIntentDisposers: Array<() => void> = []
@@ -34,8 +41,15 @@ const outlinePublicState = useState<{ hasOutline: boolean, loading: boolean }>('
   hasOutline: false,
   loading: false,
 }))
+const outlineTocState = useState<any[]>('docs-toc', () => [])
+const outlineLoadingState = useState<boolean>('docs-outline-loading', () => false)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
-const shouldShowAsideOutline = computed(() => outlinePublicState.value.hasOutline || outlinePublicState.value.loading)
+const shouldShowAsideOutline = computed(() =>
+  outlinePublicState.value.hasOutline
+  || outlinePublicState.value.loading
+  || outlineTocState.value.length > 0
+  || outlineLoadingState.value,
+)
 
 type DocsAsideSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -94,6 +108,7 @@ function openSidebarDrawer() {
 
 function openOutlineDrawer() {
   outlineDrawerMounted.value = true
+  mountDocsOutline()
   outlineVisible.value = true
 }
 
@@ -159,6 +174,58 @@ function scheduleBackToTopMountCheck() {
     backToTopFrameId = null
     maybeMountBackToTop()
   })
+}
+
+function clearDocsOutlineSchedule() {
+  if (import.meta.server)
+    return
+
+  if (docsOutlineTimer) {
+    clearTimeout(docsOutlineTimer)
+    docsOutlineTimer = null
+  }
+  if (docsOutlineIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(docsOutlineIdleId)
+    docsOutlineIdleId = null
+  }
+  if (docsOutlineFrameId !== null) {
+    window.cancelAnimationFrame(docsOutlineFrameId)
+    docsOutlineFrameId = null
+  }
+}
+
+function mountDocsOutline() {
+  if (shouldMountDocsOutline.value)
+    return
+  shouldMountDocsOutline.value = true
+  clearDocsOutlineSchedule()
+}
+
+function scheduleDocsOutlineMount() {
+  if (import.meta.server || shouldMountDocsOutline.value || !shouldShowAsideOutline.value)
+    return
+
+  clearDocsOutlineSchedule()
+
+  const mount = () => {
+    docsOutlineTimer = null
+    docsOutlineIdleId = null
+    docsOutlineFrameId = null
+    if (shouldShowAsideOutline.value)
+      mountDocsOutline()
+  }
+
+  docsOutlineTimer = setTimeout(() => {
+    docsOutlineTimer = null
+    if (!shouldShowAsideOutline.value)
+      return
+    if ('requestIdleCallback' in window) {
+      docsOutlineIdleId = window.requestIdleCallback(mount, { timeout: DOCS_OUTLINE_IDLE_TIMEOUT_MS })
+      return
+    }
+
+    docsOutlineFrameId = window.requestAnimationFrame(mount)
+  }, DOCS_OUTLINE_MOUNT_DELAY_MS)
 }
 
 function clearTuffexBackgroundSchedule() {
@@ -239,9 +306,18 @@ watch(shouldShowDocsAsideAiNotice, (shouldShow) => {
     shouldMountDocsAsideCards.value = true
 }, { immediate: true })
 
+watch(shouldShowAsideOutline, (shouldShow) => {
+  if (shouldShow) {
+    scheduleDocsOutlineMount()
+    return
+  }
+  clearDocsOutlineSchedule()
+}, { immediate: true })
+
 onMounted(() => {
   bindDocsFooterObserver()
   scheduleBackToTopMountCheck()
+  scheduleDocsOutlineMount()
   window.addEventListener('scroll', scheduleBackToTopMountCheck, { passive: true })
 })
 
@@ -249,6 +325,7 @@ onBeforeUnmount(() => {
   clearDocsFooterObserver()
   window.removeEventListener('scroll', scheduleBackToTopMountCheck)
   clearBackToTopFrame()
+  clearDocsOutlineSchedule()
   clearTuffexBackgroundIntentListeners()
   clearTuffexBackgroundSchedule()
 })
@@ -303,7 +380,14 @@ onBeforeUnmount(() => {
               <div id="docs-outline-tools" class="docs-outline-tools-anchor relative z-30" />
               <ClientOnly>
                 <div v-show="shouldShowAsideOutline" class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">
-                  <DocsOutline />
+                  <LazyDocsOutline v-if="shouldMountDocsOutline" />
+                  <div v-else class="docs-outline-shell" aria-hidden="true">
+                    <span class="docs-outline-shell__line is-wide" />
+                    <span class="docs-outline-shell__line" />
+                    <span class="docs-outline-shell__line is-short" />
+                    <span class="docs-outline-shell__line is-wide" />
+                    <span class="docs-outline-shell__line" />
+                  </div>
                 </div>
                 <LazyDocsAsideCards
                   v-if="shouldMountDocsAsideCards"
@@ -342,7 +426,7 @@ onBeforeUnmount(() => {
         @update:visible="(v) => (outlineVisible = v)"
       >
         <div class="p-4">
-          <DocsOutline v-if="outlineVisible" />
+          <LazyDocsOutline v-if="outlineVisible && shouldMountDocsOutline" />
         </div>
       </DocsDrawer>
     </ClientOnly>
@@ -513,6 +597,28 @@ onBeforeUnmount(() => {
 }
 .docs-outline-panel:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 18%, transparent);
+}
+
+.docs-outline-shell {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.25rem 0.25rem 0.5rem;
+}
+
+.docs-outline-shell__line {
+  display: block;
+  width: 68%;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 10%, transparent);
+}
+
+.docs-outline-shell__line.is-wide {
+  width: 84%;
+}
+
+.docs-outline-shell__line.is-short {
+  width: 48%;
 }
 </style>
 
