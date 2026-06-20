@@ -125,6 +125,7 @@ const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))
 
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 const shouldSplitDocBody = computed(() => normalizeDocsPagePath(activeRoutePath.value).includes('/docs/dev/components'))
+const shouldRequestMetadataOnlyDocBody = computed(() => shouldSplitDocBody.value && (import.meta.client || import.meta.dev))
 
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
@@ -210,7 +211,7 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
     query: computed(() => ({
       path: docPath.value,
       locale: docsLocale.value,
-      body: shouldSplitDocBody.value && import.meta.client ? '0' : '1',
+      body: shouldRequestMetadataOnlyDocBody.value ? '0' : '1',
     })),
     default: () => null,
     immediate: import.meta.server || !shouldSplitDocBody.value,
