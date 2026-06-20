@@ -6,9 +6,9 @@ import TuffLandingCommunity from './landing/TuffLandingCommunity.vue'
 import TuffLandingEcosystem from './landing/TuffLandingEcosystem.vue'
 import TuffLandingFaq from './landing/TuffLandingFaq.vue'
 import TuffLandingFeatures from './landing/TuffLandingFeatures.vue'
-import TuffLandingHero from './landing/TuffLandingHero.vue'
 import TuffLandingIntegrations from './landing/TuffLandingIntegrations.vue'
 import TuffLandingInstantPreview from './landing/TuffLandingInstantPreview.vue'
+import TuffLandingNexusHero from './landing/TuffLandingNexusHero.vue'
 import TuffLandingPlugins from './landing/TuffLandingPlugins.vue'
 import TuffLandingStats from './landing/TuffLandingStats.vue'
 import TuffLandingWaitlist from './landing/TuffLandingWaitlist.vue'
@@ -60,7 +60,7 @@ useHead({
 
 <template>
   <div class="relative min-h-screen flex flex-col text-light">
-    <TuffLandingHero />
+    <TuffLandingNexusHero />
     <div
       ref="smoothScrollContainerRef"
       class="TuffHome-SmoothSectionGroup"
