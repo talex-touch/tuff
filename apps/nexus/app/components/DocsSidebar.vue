@@ -67,7 +67,11 @@ const {
   },
 )
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
+const COMPONENT_DOCS_METADATA_DELAY_MS = 8000
+const COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS = 3600
 let activeScrollFrame: number | null = null
+let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null
+let componentDocsMetadataIdleId: number | null = null
 const prefetchedDocsTargets = new Set<string>()
 
 function stripCjk(value: string) {
@@ -582,12 +586,56 @@ const activeTopSection = computed(() => {
 
 const sidebarPending = computed(() => pending.value)
 
+function hasComponentDocsMetadata() {
+  return coerceJsonArray(componentDocsPayload.value).length > 0
+}
+
+function clearComponentDocsMetadataSchedule() {
+  if (componentDocsMetadataTimer) {
+    clearTimeout(componentDocsMetadataTimer)
+    componentDocsMetadataTimer = null
+  }
+  if (componentDocsMetadataIdleId !== null && hasWindow() && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(componentDocsMetadataIdleId)
+    componentDocsMetadataIdleId = null
+  }
+}
+
+function requestComponentDocsMetadata() {
+  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
+    return
+  clearComponentDocsMetadataSchedule()
+  void refreshComponentDocs()
+}
+
+function scheduleComponentDocsMetadata() {
+  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
+    return
+
+  clearComponentDocsMetadataSchedule()
+  componentDocsMetadataTimer = setTimeout(() => {
+    componentDocsMetadataTimer = null
+    if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
+      return
+    if (hasWindow() && 'requestIdleCallback' in window) {
+      componentDocsMetadataIdleId = window.requestIdleCallback(() => {
+        componentDocsMetadataIdleId = null
+        requestComponentDocsMetadata()
+      }, { timeout: COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS })
+      return
+    }
+    requestComponentDocsMetadata()
+  }, COMPONENT_DOCS_METADATA_DELAY_MS)
+}
+
 watch(
   shouldLoadComponentDocs,
   (shouldLoad) => {
-    if (!shouldLoad || coerceJsonArray(componentDocsPayload.value).length)
+    if (!shouldLoad) {
+      clearComponentDocsMetadataSchedule()
       return
-    void refreshComponentDocs()
+    }
+    scheduleComponentDocsMetadata()
   },
   { immediate: import.meta.client },
 )
@@ -766,13 +814,20 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  clearComponentDocsMetadataSchedule()
   if (hasWindow() && activeScrollFrame !== null)
     window.cancelAnimationFrame(activeScrollFrame)
 })
 </script>
 
 <template>
-  <nav ref="navRef" class="docs-nav relative flex flex-col">
+  <nav
+    ref="navRef"
+    class="docs-nav relative flex flex-col"
+    @focusin="requestComponentDocsMetadata"
+    @pointerenter="requestComponentDocsMetadata"
+    @touchstart.passive="requestComponentDocsMetadata"
+  >
     <!-- Top-level section tabs (sticky within sidebar) -->
     <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pb-1 pt-1 backdrop-blur-sm">
       <div class="flex gap-1 rounded-xl p-1">

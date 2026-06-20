@@ -317,6 +317,13 @@ describe('docs page performance boundaries', () => {
     expect(docsSidebar).toContain("'/api/docs/sidebar-components'")
     expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-components-meta:\$\{docsLocale\.value\}`\)/)
     expect(docsSidebar).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)\)/)
+    expect(docsSidebar).toContain('immediate: false')
+    expect(docsSidebar).toContain('COMPONENT_DOCS_METADATA_DELAY_MS = 8000')
+    expect(docsSidebar).toContain('function requestComponentDocsMetadata()')
+    expect(docsSidebar).toContain('function scheduleComponentDocsMetadata()')
+    expect(docsSidebar).toContain('@pointerenter="requestComponentDocsMetadata"')
+    expect(docsSidebar).toContain('@focusin="requestComponentDocsMetadata"')
+    expect(docsSidebar).toContain('@touchstart.passive="requestComponentDocsMetadata"')
     expect(docsSidebar).toContain('const componentItems = computed(() => coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[])')
   })
 
