@@ -7,6 +7,8 @@
 
 - `docs/plan-prd/README.md` - PRD / 规划主索引。
 - `docs/plan-prd/TODO.md` - 当前 2 周执行清单。
+- `docs/plan-prd/TODO-AI.md` - R2 AI 2.5.0 Stable packaged evidence 收口清单。
+- `docs/plan-prd/TODO-R3.md` - R3 Search / Indexing Runtime 收口清单。
 - `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md` - R0-R9 阶段化执行路线与当前 SoT。
 - `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
 - `docs/plan-prd/04-implementation/Project-Roadmap-Audit-2026-06-18.md` - Roadmap / release / pricing / docs hygiene 审计记录。
@@ -22,7 +24,7 @@
 
 ## 当前口径
 
-- 版本：当前稳定基线为 `2.4.10`；当前代码版本为 root/CoreApp `2.4.12-beta.8`；本地 `HEAD=6b156fa31 fix(nexus): hide team credit pool for personal accounts`。
+- 版本：当前稳定基线为 `2.4.10`；当前代码版本为 root/CoreApp `2.4.12-beta.8`；本地 `HEAD=9e78e67bc`。
 - 工作区：存在大量未提交改动，后续必须按 related-only 拆分验证，不能混合 QuickOps、Nexus、AI、docs、packages。
 - 发布：最近完整发布链路证据仍是 `2.4.11-beta.6` GitHub prerelease、Nexus BETA latest sync 与发布后 Gate D strict；`2.4.11` checklist 通过不等于 R1 Release Integrity 完成。
 - Roadmap：当前主线按 Roadmap vNext 推进 R0-R9，优先 R0 口径清理、R1 Release Integrity、R2 AI Stable、R3 Indexing Runtime。
