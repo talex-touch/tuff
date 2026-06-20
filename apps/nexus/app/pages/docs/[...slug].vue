@@ -179,7 +179,7 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
     query: computed(() => ({
       path: docPath.value,
       locale: docsLocale.value,
-      body: shouldSplitDocBody.value ? '0' : '1',
+      body: shouldSplitDocBody.value && import.meta.client ? '0' : '1',
     })),
     default: () => null,
     watch: false,
@@ -190,7 +190,7 @@ const fullDoc = shallowRef<Record<string, any> | null>(null)
 const fullDocLoading = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
-const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value : doc.value))
+const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
 
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
@@ -237,8 +237,19 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   }
 }
 
+function seedFullDocFromCurrentDoc() {
+  if (!shouldSplitDocBody.value || !doc.value?.body)
+    return false
+
+  fullDoc.value = cacheFullDoc(doc.value as Record<string, any>)
+  return true
+}
+
 function startFullDocFetchForRoute() {
   if (import.meta.server || !shouldSplitDocBody.value || fullDoc.value || fullDocLoading.value)
+    return
+
+  if (seedFullDocFromCurrentDoc())
     return
 
   const fetchId = ++activeDocFetchId
@@ -878,7 +889,6 @@ const currentDocRenderKey = computed(() => {
   return `${path}:${docsLocale.value}:${source?.body ? 'body' : 'meta'}`
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
-const shouldClientRenderDocBody = computed(() => docScope.value.isComponent)
 let lastEnhancedDocKey = ''
 const DOC_ENGAGEMENT_PANEL_DELAY_MS = 3200
 const DOC_ENGAGEMENT_PANEL_IDLE_TIMEOUT_MS = 5000
@@ -897,7 +907,7 @@ watch(
         assistantTitle: docTitleState.value,
       }
       docAssistantContextState.value = ''
-      if (!outlineState.value.length && !shouldClientRenderDocBody.value)
+      if (!outlineState.value.length)
         void scheduleOutlineSync(120)
       return
     }
@@ -1419,42 +1429,8 @@ watch(
               </p>
             </div>
           </div>
-          <ClientOnly v-if="shouldClientRenderDocBody">
-            <ContentRenderer
-              v-if="renderDoc?.body"
-              :key="currentDocRenderKey"
-              :value="renderDoc ?? {}"
-              :class="[
-                'docs-prose',
-                'markdown-body',
-                'max-w-none',
-                'prose',
-                'prose-neutral',
-                'dark:prose-invert',
-                { 'docs-prose--hero': showDocHero },
-              ]"
-            />
-            <div v-else class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
-              <span class="docs-prose-skeleton__line is-wide" />
-              <span class="docs-prose-skeleton__line" />
-              <span class="docs-prose-skeleton__line is-short" />
-              <span class="docs-prose-skeleton__block" />
-              <span class="docs-prose-skeleton__line" />
-              <span class="docs-prose-skeleton__line is-mid" />
-            </div>
-            <template #fallback>
-              <div class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
-                <span class="docs-prose-skeleton__line is-wide" />
-                <span class="docs-prose-skeleton__line" />
-                <span class="docs-prose-skeleton__line is-short" />
-                <span class="docs-prose-skeleton__block" />
-                <span class="docs-prose-skeleton__line" />
-                <span class="docs-prose-skeleton__line is-mid" />
-              </div>
-            </template>
-          </ClientOnly>
           <ContentRenderer
-            v-else
+            v-if="renderDoc?.body"
             :key="currentDocRenderKey"
             :value="renderDoc ?? {}"
             :class="[
@@ -1467,6 +1443,14 @@ watch(
               { 'docs-prose--hero': showDocHero },
             ]"
           />
+          <div v-else class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
+            <span class="docs-prose-skeleton__line is-wide" />
+            <span class="docs-prose-skeleton__line" />
+            <span class="docs-prose-skeleton__line is-short" />
+            <span class="docs-prose-skeleton__block" />
+            <span class="docs-prose-skeleton__line" />
+            <span class="docs-prose-skeleton__line is-mid" />
+          </div>
           <ClientOnly>
             <LazyDocsEngagementClient
               v-if="shouldMountDocClientPanels"
