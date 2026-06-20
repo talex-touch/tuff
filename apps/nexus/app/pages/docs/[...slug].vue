@@ -122,8 +122,6 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
 const fullDocRequestKey = computed(() => `doc-full:${docPath.value}:${docsLocale.value}`)
 const {
   data: fullDoc,
-  refresh: refreshFullDoc,
-  status: fullDocStatus,
 } = await useTypedFetch<Record<string, any> | null>(
   '/api/docs/page',
   {
@@ -1099,15 +1097,6 @@ watch(
   },
 )
 
-watch(
-  shouldSplitDocBody,
-  (shouldLoad) => {
-    if (!shouldLoad || !import.meta.client)
-      return
-    void refreshFullDoc()
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
