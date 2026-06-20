@@ -1,4 +1,5 @@
 import type { IndexedSourceEvidence } from './indexing-source'
+import { cloneIndexingSnapshotValue } from './indexing-snapshot-clone'
 
 export interface IndexedSourceProgressEvidenceReasons {
   pendingPermission: string
@@ -33,17 +34,15 @@ const DEFAULT_PROGRESS_EVIDENCE_REASONS: IndexedSourceProgressEvidenceReasons = 
 
 export class IndexedSourceProgressEvidenceService {
   build(input: IndexedSourceProgressEvidenceInput): IndexedSourceEvidence {
-    const pendingPermissionPaths = input.pendingPermissionPaths ?? []
+    const roots = uniqueEvidencePaths(input.roots)
+    const pendingPermissionPaths = uniqueEvidencePaths(input.pendingPermissionPaths ?? [])
     const pendingPermissionRoots = pendingPermissionPaths.length
     const itemCount = normalizeEvidenceCount(input.itemCount)
     const pendingRoots = normalizeEvidenceCount(input.pendingRoots)
     const failedItems = normalizeEvidenceCount(input.failedItems)
-    const totalRoots = normalizeEvidenceCount(input.totalRoots ?? input.roots.length)
+    const totalRoots = normalizeEvidenceCount(input.totalRoots ?? roots.length)
     const checkedAt = normalizeEvidenceTimestamp(input.checkedAt)
-    const reasons = {
-      ...DEFAULT_PROGRESS_EVIDENCE_REASONS,
-      ...(input.reasons ?? {})
-    }
+    const reasons = normalizeEvidenceReasons(input.reasons)
 
     return {
       id: input.id,
@@ -55,8 +54,8 @@ export class IndexedSourceProgressEvidenceService {
         pendingPermissionRoots
       ),
       itemCount,
-      rootCount: input.roots.length,
-      roots: input.roots,
+      rootCount: roots.length,
+      roots,
       lastCheckedAt: checkedAt,
       reason: this.resolveReason(
         failedItems,
@@ -66,7 +65,7 @@ export class IndexedSourceProgressEvidenceService {
         reasons
       ),
       metadata: {
-        ...(input.metadata ?? {}),
+        ...cloneEvidenceMetadata(input.metadata),
         totalRoots,
         pendingRoots,
         pendingPermissionRoots,
@@ -122,4 +121,35 @@ function normalizeEvidenceTimestamp(value: unknown): number {
 
 function normalizeEvidenceCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+}
+
+function cloneEvidenceMetadata(metadata?: Record<string, unknown>): Record<string, unknown> {
+  return metadata ? cloneIndexingSnapshotValue(metadata) : {}
+}
+
+function normalizeEvidenceReasons(
+  reasons?: Partial<IndexedSourceProgressEvidenceReasons>
+): IndexedSourceProgressEvidenceReasons {
+  const normalized = { ...DEFAULT_PROGRESS_EVIDENCE_REASONS }
+  if (!reasons) return normalized
+
+  for (const key of Object.keys(normalized) as Array<keyof IndexedSourceProgressEvidenceReasons>) {
+    const reason = reasons[key]
+    if (typeof reason === 'string' && reason.trim().length > 0) {
+      normalized[key] = reason
+    }
+  }
+  return normalized
+}
+
+function uniqueEvidencePaths(paths: string[]): string[] {
+  const uniquePaths: string[] = []
+  const seen = new Set<string>()
+  for (const path of paths) {
+    if (path.trim().length === 0) continue
+    if (seen.has(path)) continue
+    seen.add(path)
+    uniquePaths.push(path)
+  }
+  return uniquePaths
 }

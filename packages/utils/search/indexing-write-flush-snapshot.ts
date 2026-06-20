@@ -1,3 +1,5 @@
+import { cloneIndexingSnapshotValue } from './indexing-snapshot-clone'
+
 export type IndexedWriteFlushSnapshotStatus = 'idle' | 'flushed' | 'not-ready' | 'failed'
 
 export interface IndexedWriteFlushSnapshotBase {
@@ -44,16 +46,41 @@ export class IndexedWriteFlushSnapshotService<
   private lastSnapshot: TSnapshot | null = null
 
   getSnapshot(): TSnapshot | null {
-    return this.lastSnapshot
+    return this.lastSnapshot ? cloneFlushSnapshot(this.lastSnapshot) : null
   }
 
   record(snapshot: Omit<TSnapshot, 'checkedAt'>): TSnapshot {
-    this.lastSnapshot = {
+    this.lastSnapshot = cloneFlushSnapshot({
       ...snapshot,
       checkedAt: Date.now()
-    } as TSnapshot
-    return this.lastSnapshot
+    } as TSnapshot)
+    return cloneFlushSnapshot(this.lastSnapshot)
   }
+}
+
+function cloneFlushSnapshot<TSnapshot extends IndexedWriteFlushSnapshotBase>(
+  snapshot: TSnapshot
+): TSnapshot {
+  return {
+    ...snapshot,
+    metadata: snapshot.metadata ? cloneFlushSnapshotMetadata(snapshot.metadata) : undefined
+  }
+}
+
+function cloneFlushSnapshotMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  return cloneIndexingSnapshotValue(metadata)
+}
+
+function mergeFlushSnapshotMetadata(
+  ...metadataItems: Array<Record<string, unknown> | undefined>
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {}
+  for (const metadata of metadataItems) {
+    if (metadata) {
+      Object.assign(merged, metadata)
+    }
+  }
+  return cloneFlushSnapshotMetadata(merged)
 }
 
 export function buildIndexedWriteFlushResultSnapshot<
@@ -66,7 +93,7 @@ export function buildIndexedWriteFlushResultSnapshot<
     inflight: normalizeSnapshotCount(result.inflight),
     reason: result.reason,
     error: result.error,
-    metadata: result.metadata,
+    metadata: result.metadata ? cloneFlushSnapshotMetadata(result.metadata) : undefined,
     durationMs: normalizeOptionalSnapshotNumber(result.durationMs)
   } as Omit<TSnapshot, 'checkedAt'>
 }
@@ -104,7 +131,7 @@ export function buildIndexedWriteFlushFailureRetryMetadata<TReason extends strin
   input: IndexedWriteFlushFailureRetryMetadataInput<TReason>
 ): Record<string, unknown> & { delayMs: number; retryReason: TReason } {
   return {
-    ...(input.extra ?? {}),
+    ...(input.extra ? cloneFlushSnapshotMetadata(input.extra) : {}),
     delayMs: normalizeSnapshotNumber(input.delayMs),
     retryReason: input.retryReason
   }
@@ -139,10 +166,7 @@ export function buildIndexedWriteFlushFailureSnapshot<
     inflight: normalizeSnapshotCount(flushResult?.inflight ?? input.inflightSize),
     reason: flushResult?.reason ?? 'flush-failed',
     error: flushResult?.error ?? stringifyError(input.error),
-    metadata: {
-      ...(flushResult?.metadata ?? {}),
-      ...(input.metadata ?? {})
-    },
+    metadata: mergeFlushSnapshotMetadata(flushResult?.metadata, input.metadata),
     durationMs: normalizeOptionalSnapshotNumber(flushResult?.durationMs)
   } as Omit<TSnapshot, 'checkedAt'>
 }

@@ -333,6 +333,137 @@ describe('indexed source recovery policy', () => {
     })
   })
 
+  it('waits when the latest automatic task was skipped by run-gate debounce', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'skipped',
+              completedAt: 1700000000000,
+              error: 'skipped:scan-debounced'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'wait',
+      priority: 'low',
+      reason: 'scan-debounced'
+    })
+
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'reconcile',
+              status: 'skipped',
+              completedAt: 1700000000000,
+              error: 'skipped:reconcile-debounced'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'wait',
+      priority: 'low',
+      reason: 'reconcile-debounced'
+    })
+  })
+
+  it('waits when runtime run-gate diagnostics show running or debounced tasks', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          taskRunGate: [
+            {
+              sourceId: 'file-provider',
+              kind: 'scan',
+              blockedCount: 1,
+              runningSince: 1700000000000,
+              lastBlockedAt: 1700000001000,
+              lastBlockedReason: 'already-running'
+            }
+          ],
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'failed',
+              completedAt: 1699999999000,
+              error: 'scanner crashed'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'wait',
+      priority: 'low',
+      reason: 'run-gate:scan:already-running'
+    })
+
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          taskRunGate: [
+            {
+              sourceId: 'file-provider',
+              kind: 'scan',
+              blockedCount: 1,
+              lastBlockedAt: 1700000001000,
+              lastBlockedReason: 'debounced',
+              lastCompletedAt: 1700000000000,
+              nextAllowedAt: 1700000005000
+            },
+            {
+              sourceId: 'file-provider',
+              kind: 'reconcile',
+              blockedCount: 2,
+              lastBlockedAt: 1700000002000,
+              lastBlockedReason: 'debounced',
+              lastCompletedAt: 1700000001000,
+              nextAllowedAt: 1700000006000
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'wait',
+      priority: 'low',
+      reason: 'run-gate:reconcile:debounced'
+    })
+  })
+
+  it('keeps permission recovery ahead of runtime run-gate waits', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          health: {
+            status: 'permission-required',
+            permissionState: 'denied',
+            itemCount: 0,
+            watchState: 'pending-permission',
+            reconcileState: 'idle'
+          },
+          taskRunGate: [
+            {
+              sourceId: 'file-provider',
+              kind: 'scan',
+              blockedCount: 1,
+              lastBlockedAt: 1700000001000,
+              lastBlockedReason: 'debounced'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'grant-permission',
+      priority: 'high',
+      reason: 'permission:denied'
+    })
+  })
+
   it('falls back to inspect-source when all maintenance actions are blocked', () => {
     expect(
       resolveIndexedSourceRecoveryRecommendation(

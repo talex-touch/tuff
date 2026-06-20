@@ -63,4 +63,17 @@ describe('indexing scan strategy', () => {
       reconciliationPaths: ['/Users/me/Documents']
     })
   })
+
+  it('ignores empty normalized watch and completed paths', () => {
+    expect(
+      resolveIndexedScanStrategy({
+        watchPaths: ['/Users/me/Documents', '   ', '/Users/me/Downloads'],
+        completedScanPaths: new Set(['/users/me/documents', '   ']),
+        normalizePath: (value) => value.trim().toLowerCase()
+      })
+    ).toEqual({
+      newPathsToScan: ['/Users/me/Downloads'],
+      reconciliationPaths: ['/Users/me/Documents']
+    })
+  })
 })

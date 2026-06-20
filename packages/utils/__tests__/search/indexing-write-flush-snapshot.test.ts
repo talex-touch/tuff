@@ -30,6 +30,118 @@ describe('IndexedWriteFlushSnapshotService', () => {
     })
   })
 
+  it('isolates recorded flush snapshots from caller mutation', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+    const service = new IndexedWriteFlushSnapshotService()
+    const input = {
+      status: 'failed' as const,
+      entries: 2,
+      pending: 1,
+      inflight: 0,
+      metadata: {
+        retryReason: 'flush-failed',
+        counters: {
+          withContent: 2
+        }
+      }
+    }
+
+    const recorded = service.record(input)
+    input.metadata.retryReason = 'mutated-input'
+    input.metadata.counters.withContent = 99
+    recorded.metadata = {
+      retryReason: 'mutated-return'
+    }
+    recorded.entries = 99
+
+    expect(service.getSnapshot()).toEqual({
+      status: 'failed',
+      entries: 2,
+      pending: 1,
+      inflight: 0,
+      metadata: {
+        retryReason: 'flush-failed',
+        counters: {
+          withContent: 2
+        }
+      },
+      checkedAt: 1700000000000
+    })
+  })
+
+  it('isolates returned flush snapshots from cache mutation', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+    const service = new IndexedWriteFlushSnapshotService()
+
+    service.record({
+      status: 'failed',
+      entries: 2,
+      pending: 1,
+      inflight: 0,
+      metadata: {
+        retryReason: 'flush-failed',
+        counters: {
+          withContent: 2
+        }
+      }
+    })
+
+    const firstSnapshot = service.getSnapshot()
+    expect(firstSnapshot).not.toBeNull()
+    firstSnapshot!.entries = 99
+    const counters = firstSnapshot!.metadata!.counters as { withContent: number }
+    counters.withContent = 99
+
+    expect(service.getSnapshot()).toEqual({
+      status: 'failed',
+      entries: 2,
+      pending: 1,
+      inflight: 0,
+      metadata: {
+        retryReason: 'flush-failed',
+        counters: {
+          withContent: 2
+        }
+      },
+      checkedAt: 1700000000000
+    })
+  })
+
+  it('isolates nested flush metadata when structuredClone is unavailable', () => {
+    vi.stubGlobal('structuredClone', undefined)
+    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+    const service = new IndexedWriteFlushSnapshotService()
+    const input = {
+      status: 'failed' as const,
+      entries: 2,
+      pending: 1,
+      inflight: 0,
+      metadata: {
+        counters: {
+          withContent: 2
+        }
+      }
+    }
+
+    const recorded = service.record(input)
+    input.metadata.counters.withContent = 99
+    const counters = recorded.metadata!.counters as { withContent: number }
+    counters.withContent = 100
+
+    expect(service.getSnapshot()).toEqual({
+      status: 'failed',
+      entries: 2,
+      pending: 1,
+      inflight: 0,
+      metadata: {
+        counters: {
+          withContent: 2
+        }
+      },
+      checkedAt: 1700000000000
+    })
+  })
+
   it('builds an adapter-safe snapshot from a flush result', () => {
     expect(
       buildIndexedWriteFlushResultSnapshot({
@@ -54,6 +166,40 @@ describe('IndexedWriteFlushSnapshotService', () => {
         withContent: 2
       },
       durationMs: 12
+    })
+  })
+
+  it('isolates result snapshot metadata from caller mutation', () => {
+    const metadata = {
+      counters: {
+        withContent: 2
+      }
+    }
+    const snapshot = buildIndexedWriteFlushResultSnapshot({
+      status: 'flushed',
+      entries: 2,
+      pending: 0,
+      inflight: 0,
+      metadata
+    })
+
+    metadata.counters.withContent = 99
+    const counters = snapshot.metadata?.counters as { withContent: number }
+    counters.withContent = 100
+
+    expect(metadata.counters.withContent).toBe(99)
+    expect(
+      buildIndexedWriteFlushResultSnapshot({
+        status: 'flushed',
+        entries: 2,
+        pending: 0,
+        inflight: 0,
+        metadata
+      }).metadata
+    ).toEqual({
+      counters: {
+        withContent: 99
+      }
     })
   })
 
@@ -186,6 +332,38 @@ describe('IndexedWriteFlushSnapshotService', () => {
     })
   })
 
+  it('isolates retry metadata extras from caller mutation', () => {
+    const extra = {
+      retry: {
+        isBusy: true
+      }
+    }
+    const metadata = buildIndexedWriteFlushFailureRetryMetadata({
+      delayMs: 400,
+      retryReason: 'sqlite-busy-retry',
+      extra
+    })
+
+    extra.retry.isBusy = false
+    const retry = metadata.retry as { isBusy: boolean }
+    retry.isBusy = false
+
+    expect(extra.retry.isBusy).toBe(false)
+    expect(
+      buildIndexedWriteFlushFailureRetryMetadata({
+        delayMs: 400,
+        retryReason: 'sqlite-busy-retry',
+        extra: {
+          retry: {
+            isBusy: true
+          }
+        }
+      }).retry
+    ).toEqual({
+      isBusy: true
+    })
+  })
+
   it('normalizes malformed retry delay metadata', () => {
     expect(
       buildIndexedWriteFlushFailureRetryMetadata({
@@ -220,6 +398,42 @@ describe('IndexedWriteFlushSnapshotService', () => {
       },
       durationMs: undefined
     })
+  })
+
+  it('isolates failure snapshot metadata from flush result and caller mutation', () => {
+    const flushMetadata = {
+      counters: {
+        withContent: 2
+      }
+    }
+    const callerMetadata = {
+      retry: {
+        reason: 'flush-failed'
+      }
+    }
+    const snapshot = buildIndexedWriteFlushFailureSnapshot({
+      error: new Error('sqlite busy'),
+      flushResult: {
+        metadata: flushMetadata
+      },
+      pendingSize: 7,
+      inflightSize: 8,
+      metadata: callerMetadata
+    })
+
+    flushMetadata.counters.withContent = 99
+    callerMetadata.retry.reason = 'mutated'
+    const counters = snapshot.metadata?.counters as { withContent: number }
+    const retry = snapshot.metadata?.retry as { reason: string }
+
+    expect(counters.withContent).toBe(2)
+    expect(retry.reason).toBe('flush-failed')
+
+    counters.withContent = 100
+    retry.reason = 'mutated-return'
+
+    expect(flushMetadata.counters.withContent).toBe(99)
+    expect(callerMetadata.retry.reason).toBe('mutated')
   })
 
   it('extracts flush results from error-like objects only', () => {

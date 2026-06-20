@@ -27,7 +27,58 @@ export interface IndexedSourceProgressStoreDeps {
   loadCompletedPaths: () => Promise<Set<string>>
   deleteCompletedPaths: (paths: string[]) => Promise<void>
   ensureReadyForUpsert: (reason: string) => Promise<boolean>
-  upsertCompletedPaths: (paths: string[], completedAt: string) => Promise<void>
+  upsertCompletedPaths: (paths: string[], completedAt: string) => Promise<number | void>
+}
+
+export type IndexedSourceProgressPathNormalizer = (path: string) => string
+export interface IndexedSourceProgressPathExpansionOptions {
+  dropWhenNormalizedEmpty?: boolean
+}
+
+export function normalizeIndexedSourceProgressPaths(
+  paths: Iterable<string>,
+  normalizePath: IndexedSourceProgressPathNormalizer = (path) => path
+): string[] {
+  const normalizedPaths: string[] = []
+  const seen = new Set<string>()
+  for (const path of paths) {
+    const normalizedPath = normalizePath(path)
+    if (normalizedPath.trim().length === 0) continue
+    if (seen.has(normalizedPath)) continue
+    seen.add(normalizedPath)
+    normalizedPaths.push(normalizedPath)
+  }
+  return normalizedPaths
+}
+
+export function expandIndexedSourceProgressPaths(
+  paths: Iterable<string>,
+  normalizePath: IndexedSourceProgressPathNormalizer = (path) => path,
+  options: IndexedSourceProgressPathExpansionOptions = {}
+): string[] {
+  const expandedPaths: string[] = []
+  const seen = new Set<string>()
+  const addPath = (path: string) => {
+    if (path.trim().length === 0) return
+    if (seen.has(path)) return
+    seen.add(path)
+    expandedPaths.push(path)
+  }
+
+  for (const path of paths) {
+    const normalizedPath = normalizePath(path)
+    if (options.dropWhenNormalizedEmpty && normalizedPath.trim().length === 0) continue
+    addPath(path)
+    addPath(normalizedPath)
+  }
+  return expandedPaths
+}
+
+export function filterIndexedSourceProgressPaths(
+  paths: Iterable<string>,
+  normalizePath: IndexedSourceProgressPathNormalizer = (path) => path
+): string[] {
+  return Array.from(paths).filter((path) => normalizePath(path).trim().length > 0)
 }
 
 export function resolveIndexedSourceProgressStoreClearDecision(
@@ -59,7 +110,7 @@ export class IndexedSourceProgressStoreService {
   }
 
   async getCompletedPaths(): Promise<Set<string>> {
-    return this.loadCompletedPaths()
+    return toProgressStorePathSet(await this.loadCompletedPaths())
   }
 
   async summarizeRoots(
@@ -67,7 +118,9 @@ export class IndexedSourceProgressStoreService {
     completedPaths?: Set<string>,
     options: IndexedSourceProgressStoreSummaryOptions = {}
   ): Promise<IndexedSourceProgressStoreSummary> {
-    const resolvedCompletedPaths = completedPaths ?? (await this.getCompletedPaths())
+    const resolvedCompletedPaths = completedPaths
+      ? toProgressStorePathSet(completedPaths)
+      : await this.getCompletedPaths()
     const uniqueWatchPaths = uniqueProgressStorePaths(watchPaths)
     if (options.isStoreAvailable === false && resolvedCompletedPaths.size === 0) {
       return {
@@ -116,15 +169,33 @@ export class IndexedSourceProgressStoreService {
       }
     }
 
-    await this.upsertCompletedPaths(uniquePaths, completedAt)
+    const upserted = await this.upsertCompletedPaths(uniquePaths, completedAt)
     return {
       attempted: true,
       ready: true,
-      upserted: uniquePaths.length
+      upserted: resolveProgressStoreRowCount(upserted, uniquePaths.length)
     }
   }
 }
 
+function resolveProgressStoreRowCount(value: number | void, fallback: number): number {
+  if (typeof value !== 'number') return fallback
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.trunc(value))
+}
+
 function uniqueProgressStorePaths(paths: string[]): string[] {
-  return Array.from(new Set(paths))
+  const uniquePaths: string[] = []
+  const seen = new Set<string>()
+  for (const path of paths) {
+    if (path.trim().length === 0) continue
+    if (seen.has(path)) continue
+    seen.add(path)
+    uniquePaths.push(path)
+  }
+  return uniquePaths
+}
+
+function toProgressStorePathSet(paths: Iterable<string>): Set<string> {
+  return new Set(uniqueProgressStorePaths(Array.from(paths)))
 }

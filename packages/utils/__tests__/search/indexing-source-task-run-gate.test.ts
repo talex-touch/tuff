@@ -160,6 +160,62 @@ describe('indexed source task run gate', () => {
     })
   })
 
+  it('hydrates completion timestamps into debounce state without marking tasks running', () => {
+    let now = 1200
+    const gate = new IndexedSourceTaskRunGate({
+      now: () => now,
+      debounceMs: 500
+    })
+
+    gate.hydrateCompletion('file-provider', 'scan', 1000)
+
+    expect(gate.isRunning('file-provider', 'scan')).toBe(false)
+    expect(gate.getEntry('file-provider', 'scan')).toEqual({
+      sourceId: 'file-provider',
+      kind: 'scan',
+      lastCompletedAt: 1000
+    })
+    expect(gate.canStart('file-provider', 'scan')).toEqual({
+      allowed: false,
+      reason: 'debounced',
+      lastCompletedAt: 1000,
+      nextAllowedAt: 1500
+    })
+
+    now = 1500
+    expect(gate.canStart('file-provider', 'scan')).toEqual({
+      allowed: true,
+      reason: 'allowed',
+      lastCompletedAt: 1000
+    })
+  })
+
+  it('keeps the latest hydrated completion timestamp and clamps future values', () => {
+    let now = 2000
+    const gate = new IndexedSourceTaskRunGate({
+      now: () => now,
+      debounceMs: 500
+    })
+
+    gate.hydrateCompletion('file-provider', 'reconcile', 1800)
+    now = 1700
+    gate.hydrateCompletion('file-provider', 'reconcile', 1600)
+
+    expect(gate.getEntry('file-provider', 'reconcile')).toEqual({
+      sourceId: 'file-provider',
+      kind: 'reconcile',
+      lastCompletedAt: 1800
+    })
+
+    gate.hydrateCompletion('file-provider', 'reconcile', 60_000)
+
+    expect(gate.getEntry('file-provider', 'reconcile')).toEqual({
+      sourceId: 'file-provider',
+      kind: 'reconcile',
+      lastCompletedAt: 1800
+    })
+  })
+
   it('drops malformed gate updates when no finite timestamp is available', () => {
     const gate = new IndexedSourceTaskRunGate({
       now: () => Number.NaN,
@@ -168,6 +224,7 @@ describe('indexed source task run gate', () => {
 
     gate.start('file-provider', 'scan', Number.NaN)
     gate.complete('file-provider', 'scan', Number.POSITIVE_INFINITY)
+    gate.hydrateCompletion('file-provider', 'scan', Number.NaN)
 
     expect(gate.isRunning('file-provider', 'scan')).toBe(false)
     expect(gate.getEntry('file-provider', 'scan')).toBeUndefined()

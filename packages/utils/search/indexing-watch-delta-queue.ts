@@ -113,7 +113,15 @@ export class IndexingWatchDeltaQueueService<TPayload extends IndexingWatchDeltaB
     }
 
     const entries = Array.from(this.pending.entries())
-    this.pending.clear()
     await this.deps.processEntries(entries)
+    this.deleteProcessedEntries(entries)
+  }
+
+  private deleteProcessedEntries(entries: IndexingWatchDeltaEntry<TPayload>[]): void {
+    for (const [key, payload] of entries) {
+      if (this.pending.get(key) === payload) {
+        this.pending.delete(key)
+      }
+    }
   }
 }

@@ -65,6 +65,9 @@ export function resolveIndexedSourceRecoveryRecommendation(
   const permissionRecommendation = resolvePermissionRecoveryRecommendation(source)
   if (permissionRecommendation) return permissionRecommendation
 
+  const runGateRecommendation = resolveRunGateRecoveryRecommendation(source)
+  if (runGateRecommendation) return runGateRecommendation
+
   const latestTaskRecommendation = resolveLatestTaskRecoveryRecommendation(source)
   if (latestTaskRecommendation) return latestTaskRecommendation
 
@@ -155,6 +158,23 @@ function resolvePermissionRecoveryRecommendation(
   return null
 }
 
+function resolveRunGateRecoveryRecommendation(
+  source: IndexedSourceDiagnostics
+): IndexedSourceRecoveryRecommendation | null {
+  const entry = getLatestRunGateEntry(source.taskRunGate)
+  if (!entry?.lastBlockedReason) return null
+
+  if (entry.lastBlockedReason === 'already-running' || entry.lastBlockedReason === 'debounced') {
+    return {
+      action: 'wait',
+      priority: 'low',
+      reason: `run-gate:${entry.kind}:${entry.lastBlockedReason}`
+    }
+  }
+
+  return null
+}
+
 function resolveLatestTaskRecoveryRecommendation(
   source: IndexedSourceDiagnostics
 ): IndexedSourceRecoveryRecommendation | null {
@@ -178,7 +198,7 @@ function resolveLatestTaskRecoveryRecommendation(
     }
   }
 
-  if (isRetryWindowSkippedReason(skippedReason)) {
+  if (isWaitSkippedReason(skippedReason)) {
     return {
       action: 'wait',
       priority: 'low',
@@ -264,8 +284,12 @@ function normalizeSkippedReason(error: string | undefined): string | null {
   return error.slice('skipped:'.length)
 }
 
-function isRetryWindowSkippedReason(reason: string | null): reason is string {
-  return reason?.startsWith('retry-window:') === true
+function isWaitSkippedReason(reason: string | null): reason is string {
+  return reason?.startsWith('retry-window:') === true || isDebounceSkippedReason(reason)
+}
+
+function isDebounceSkippedReason(reason: string | null): reason is string {
+  return reason === 'scan-debounced' || reason === 'reconcile-debounced'
 }
 
 function getLatestTask(
@@ -276,6 +300,19 @@ function getLatestTask(
     .filter((task) => Number.isFinite(task.completedAt))
     .reduce<IndexedSourceTaskHistoryEntry | undefined>(
       (latest, task) => (!latest || task.completedAt > latest.completedAt ? task : latest),
+      undefined
+    )
+}
+
+function getLatestRunGateEntry(
+  entries: IndexedSourceDiagnostics['taskRunGate']
+): NonNullable<IndexedSourceDiagnostics['taskRunGate']>[number] | undefined {
+  if (!entries?.length) return undefined
+  return entries
+    .filter((entry) => Number.isFinite(entry.lastBlockedAt))
+    .reduce<NonNullable<IndexedSourceDiagnostics['taskRunGate']>[number] | undefined>(
+      (latest, entry) =>
+        !latest || (entry.lastBlockedAt ?? 0) > (latest.lastBlockedAt ?? 0) ? entry : latest,
       undefined
     )
 }

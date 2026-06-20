@@ -58,6 +58,31 @@ describe('IndexedSourceProgressEvidenceService', () => {
     })
   })
 
+  it('deduplicates empty roots and pending permission paths before building evidence', () => {
+    expect(
+      service.build({
+        id: 'source:progress',
+        label: 'Source progress',
+        roots: ['/a', '', '  ', '/b', '/a'],
+        itemCount: 1,
+        pendingRoots: 0,
+        failedItems: 0,
+        isActive: false,
+        pendingPermissionPaths: ['/b', '', '/b', '  ', '/c']
+      })
+    ).toMatchObject({
+      status: 'permission-required',
+      reason: 'indexed-source-progress-pending-permission',
+      rootCount: 2,
+      roots: ['/a', '/b'],
+      metadata: {
+        totalRoots: 2,
+        pendingPermissionRoots: 2,
+        pendingPermissionPaths: ['/b', '/c']
+      }
+    })
+  })
+
   it('builds degraded evidence when failed items exist', () => {
     expect(
       service.build({
@@ -132,6 +157,53 @@ describe('IndexedSourceProgressEvidenceService', () => {
         totalRoots: 2,
         pendingRoots: 1
       }
+    })
+  })
+
+  it('isolates nested metadata from returned evidence mutations', () => {
+    const metadata = {
+      nested: {
+        completedFiles: 3
+      }
+    }
+    const evidence = service.build({
+      id: 'file-provider:scan-progress',
+      label: 'File scan progress',
+      roots: ['/a'],
+      itemCount: 3,
+      pendingRoots: 0,
+      failedItems: 0,
+      isActive: false,
+      metadata
+    })
+
+    const evidenceMetadata = evidence.metadata
+    if (!evidenceMetadata) {
+      throw new Error('Expected progress evidence metadata')
+    }
+
+    ;(evidenceMetadata.nested as { completedFiles: number }).completedFiles = 99
+
+    expect(metadata.nested.completedFiles).toBe(3)
+  })
+
+  it('ignores empty source-specific reason overrides', () => {
+    expect(
+      service.build({
+        id: 'file-provider:scan-progress',
+        label: 'File scan progress',
+        roots: ['/a'],
+        itemCount: 3,
+        pendingRoots: 1,
+        failedItems: 0,
+        isActive: false,
+        reasons: {
+          pendingRoots: '   '
+        }
+      })
+    ).toMatchObject({
+      status: 'warming',
+      reason: 'indexed-source-progress-has-pending-roots'
     })
   })
 

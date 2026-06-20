@@ -138,6 +138,34 @@ export class IndexedSourceTaskRunGate {
     })
   }
 
+  hydrateCompletion(
+    sourceId: string,
+    kind: IndexedSourceTaskHistoryKind,
+    completedAt: number | undefined
+  ): void {
+    const normalizedCompletedAt = this.normalizeTimestamp(completedAt)
+    if (normalizedCompletedAt === undefined) return
+
+    const key = this.getKey(sourceId, kind)
+    const existing = this.entries.get(key)
+    const existingLastCompletedAt = normalizeFiniteTimestamp(existing?.lastCompletedAt)
+    const lastCompletedAt =
+      existingLastCompletedAt !== undefined
+        ? Math.max(existingLastCompletedAt, normalizedCompletedAt)
+        : normalizedCompletedAt
+
+    this.entries.set(key, {
+      sourceId,
+      kind,
+      runningSince: normalizeFiniteTimestamp(existing?.runningSince),
+      lastCompletedAt,
+      blockedCount: existing?.blockedCount,
+      lastBlockedAt: normalizeFiniteTimestamp(existing?.lastBlockedAt),
+      lastBlockedReason: existing?.lastBlockedReason,
+      nextAllowedAt: normalizeFiniteTimestamp(existing?.nextAllowedAt)
+    })
+  }
+
   isRunning(sourceId: string, kind: IndexedSourceTaskHistoryKind): boolean {
     return this.entries.get(this.getKey(sourceId, kind))?.runningSince !== undefined
   }

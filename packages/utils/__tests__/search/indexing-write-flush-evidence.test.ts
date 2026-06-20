@@ -121,6 +121,46 @@ describe('IndexedWriteFlushEvidenceService', () => {
     })
   })
 
+  it('isolates flush evidence metadata from caller mutation', () => {
+    const snapshotMetadata = {
+      counters: {
+        withContent: 2
+      }
+    }
+    const callerMetadata = {
+      source: {
+        id: 'source'
+      }
+    }
+    const evidence = service.build({
+      id: 'source:index-flush',
+      label: 'Source index flush',
+      metadata: callerMetadata,
+      snapshot: {
+        status: 'flushed',
+        entries: 2,
+        pending: 0,
+        inflight: 0,
+        metadata: snapshotMetadata,
+        checkedAt: 1000
+      }
+    })
+
+    snapshotMetadata.counters.withContent = 99
+    callerMetadata.source.id = 'mutated'
+    const counters = evidence.metadata?.counters as { withContent: number }
+    const source = evidence.metadata?.source as { id: string }
+
+    expect(counters.withContent).toBe(2)
+    expect(source.id).toBe('source')
+
+    counters.withContent = 100
+    source.id = 'mutated-return'
+
+    expect(snapshotMetadata.counters.withContent).toBe(99)
+    expect(callerMetadata.source.id).toBe('mutated')
+  })
+
   it('normalizes malformed snapshot counters and timestamps before exposing evidence', () => {
     const evidence = service.build({
       id: 'source:index-flush',

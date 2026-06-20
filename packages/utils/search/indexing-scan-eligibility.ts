@@ -26,11 +26,15 @@ export function resolveIndexedScanEligibility(
   const normalizePath = input.normalizePath ?? ((path: string) => path)
   const toTimestamp = input.toTimestamp ?? toIndexedScanTimestamp
   const watchPaths = uniqueIndexedScanPaths(input.watchPaths, normalizePath)
+  const watchPathKeys = new Set(watchPaths.map((watchPath) => normalizePath(watchPath)))
 
   for (const scan of input.completedScans) {
+    const scanPathKey = normalizePath(scan.path)
+    if (scanPathKey.trim().length === 0) continue
+    if (!watchPathKeys.has(scanPathKey)) continue
     const timestamp = toTimestamp(scan?.lastScanned)
     if (timestamp === null) continue
-    completedMap.set(normalizePath(scan.path), timestamp)
+    completedMap.set(scanPathKey, timestamp)
     if (lastScannedAt === null || timestamp > lastScannedAt) {
       lastScannedAt = timestamp
     }
@@ -42,7 +46,7 @@ export function resolveIndexedScanEligibility(
       ? watchPaths.filter((watchPath) => completedMap.has(normalizePath(watchPath)))
       : watchPaths.filter((watchPath) => {
           const last = completedMap.get(normalizePath(watchPath))
-          if (!last) return false
+          if (last === undefined) return false
           return (input.now ?? Date.now()) - last >= input.intervalMs
         })
 
@@ -59,7 +63,7 @@ export function toIndexedScanTimestamp(value: unknown): number | null {
           ? Date.parse(value)
           : null
 
-  return timestamp !== null && Number.isFinite(timestamp) ? timestamp : null
+  return timestamp !== null && Number.isFinite(timestamp) && timestamp >= 0 ? timestamp : null
 }
 
 function uniqueIndexedScanPaths(
@@ -70,6 +74,7 @@ function uniqueIndexedScanPaths(
   const uniquePaths: string[] = []
   for (const path of paths) {
     const key = normalizePath(path)
+    if (key.trim().length === 0) continue
     if (seen.has(key)) continue
     seen.add(key)
     uniquePaths.push(path)

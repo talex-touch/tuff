@@ -127,6 +127,66 @@ describe('indexed source task retry policy', () => {
     })
   })
 
+  it('resets retry backoff after the latest same-kind successful task', () => {
+    expect(
+      resolveIndexedSourceTaskRetryDecision(
+        [
+          {
+            kind: 'scan',
+            status: 'failed',
+            completedAt: 100_000,
+            error: 'scanner crashed'
+          },
+          {
+            kind: 'scan',
+            status: 'succeeded',
+            completedAt: 120_000
+          }
+        ],
+        'scan',
+        {
+          now: 125_000,
+          baseDelayMs: 30_000
+        }
+      )
+    ).toEqual({
+      allowed: true,
+      reason: 'allowed',
+      failedAttempts: 0
+    })
+  })
+
+  it('does not reset retry backoff from successful tasks of another kind', () => {
+    expect(
+      resolveIndexedSourceTaskRetryDecision(
+        [
+          {
+            kind: 'scan',
+            status: 'failed',
+            completedAt: 100_000,
+            error: 'scanner crashed'
+          },
+          {
+            kind: 'reconcile',
+            status: 'succeeded',
+            completedAt: 120_000
+          }
+        ],
+        'scan',
+        {
+          now: 125_000,
+          baseDelayMs: 30_000
+        }
+      )
+    ).toEqual({
+      allowed: false,
+      reason: 'retry-window',
+      failedAttempts: 1,
+      lastFailedAt: 100_000,
+      nextRetryAt: 130_000
+    })
+  })
+
   it('ignores stale failures outside the failure window', () => {
     expect(
       resolveIndexedSourceTaskRetryDecision(

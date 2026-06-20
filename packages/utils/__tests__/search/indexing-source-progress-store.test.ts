@@ -1,17 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  expandIndexedSourceProgressPaths,
+  filterIndexedSourceProgressPaths,
   IndexedSourceProgressStoreService,
+  normalizeIndexedSourceProgressPaths,
   resolveIndexedSourceProgressStoreClearDecision
 } from '../../search'
 
 function createStore(options: {
   completedPaths?: string[]
   ensureReadyForUpsert?: (reason: string) => Promise<boolean>
+  upsertCompletedPaths?: (paths: string[], completedAt: string) => Promise<number | void>
 } = {}) {
   const loadCompletedPaths = vi.fn(async () => new Set(options.completedPaths ?? []))
   const deleteCompletedPaths = vi.fn(async () => undefined)
   const ensureReadyForUpsert = vi.fn(options.ensureReadyForUpsert ?? (async () => true))
-  const upsertCompletedPaths = vi.fn(async () => undefined)
+  const upsertCompletedPaths = vi.fn(options.upsertCompletedPaths ?? (async () => undefined))
 
   return {
     deleteCompletedPaths,
@@ -37,6 +41,27 @@ describe('IndexedSourceProgressStoreService', () => {
     })
   })
 
+  it('sanitizes loaded completed paths before exposing progress state', async () => {
+    const { service } = createStore({ completedPaths: ['/a', '/a', '', '   '] })
+
+    await expect(service.getCompletedPaths()).resolves.toEqual(new Set(['/a']))
+    await expect(service.summarizeRoots(['/a', '/b'])).resolves.toEqual({
+      totalRoots: 1,
+      pendingRoots: 1
+    })
+  })
+
+  it('sanitizes caller-provided completed paths before summarizing progress state', async () => {
+    const { service } = createStore()
+
+    await expect(
+      service.summarizeRoots(['/a', '/b'], new Set(['/a', '/a', '', '   ']))
+    ).resolves.toEqual({
+      totalRoots: 1,
+      pendingRoots: 1
+    })
+  })
+
   it('marks all roots pending when the completed path store is unavailable', async () => {
     const { service } = createStore()
 
@@ -52,6 +77,15 @@ describe('IndexedSourceProgressStoreService', () => {
     const { service } = createStore({ completedPaths: ['/a'] })
 
     await expect(service.summarizeRoots(['/a', '/a', '/b', '/b'])).resolves.toEqual({
+      totalRoots: 1,
+      pendingRoots: 1
+    })
+  })
+
+  it('ignores empty roots before summarizing pending state', async () => {
+    const { service } = createStore({ completedPaths: ['/a'] })
+
+    await expect(service.summarizeRoots(['/a', '', '   ', '/b'])).resolves.toEqual({
       totalRoots: 1,
       pendingRoots: 1
     })
@@ -76,6 +110,13 @@ describe('IndexedSourceProgressStoreService', () => {
 
     await expect(service.deletePaths(['/a', '/a', '/b'])).resolves.toBe(2)
     expect(deleteCompletedPaths).toHaveBeenCalledWith(['/a', '/b'])
+  })
+
+  it('ignores empty completed paths before delete', async () => {
+    const { deleteCompletedPaths, service } = createStore()
+
+    await expect(service.deletePaths(['/a', '', '   '])).resolves.toBe(1)
+    expect(deleteCompletedPaths).toHaveBeenCalledWith(['/a'])
   })
 
   it('skips upsert when no paths are provided', async () => {
@@ -122,6 +163,35 @@ describe('IndexedSourceProgressStoreService', () => {
     expect(upsertCompletedPaths).toHaveBeenCalledWith(['/a'], '2026-05-31T00:00:00.000Z')
   })
 
+  it('uses adapter-provided upsert counts when available', async () => {
+    const { service, upsertCompletedPaths } = createStore({
+      upsertCompletedPaths: async () => 1
+    })
+
+    await expect(
+      service.upsertPaths(['/a', '/b'], '2026-05-31T00:00:00.000Z', 'progress.upsert')
+    ).resolves.toEqual({
+      attempted: true,
+      ready: true,
+      upserted: 1
+    })
+    expect(upsertCompletedPaths).toHaveBeenCalledWith(['/a', '/b'], '2026-05-31T00:00:00.000Z')
+  })
+
+  it('normalizes invalid adapter-provided upsert counts', async () => {
+    const { service } = createStore({
+      upsertCompletedPaths: async () => Number.NaN
+    })
+
+    await expect(
+      service.upsertPaths(['/a'], '2026-05-31T00:00:00.000Z', 'progress.upsert')
+    ).resolves.toEqual({
+      attempted: true,
+      ready: true,
+      upserted: 0
+    })
+  })
+
   it('deduplicates completed paths before upsert', async () => {
     const { service, upsertCompletedPaths } = createStore()
 
@@ -136,6 +206,58 @@ describe('IndexedSourceProgressStoreService', () => {
       ['/a', '/b'],
       '2026-05-31T00:00:00.000Z'
     )
+  })
+
+  it('ignores empty completed paths before upsert', async () => {
+    const { service, upsertCompletedPaths } = createStore()
+
+    await expect(
+      service.upsertPaths(['/a', '', '   '], '2026-05-31T00:00:00.000Z', 'progress.upsert')
+    ).resolves.toEqual({
+      attempted: true,
+      ready: true,
+      upserted: 1
+    })
+    expect(upsertCompletedPaths).toHaveBeenCalledWith(['/a'], '2026-05-31T00:00:00.000Z')
+  })
+})
+
+describe('indexed source progress path helpers', () => {
+  it('normalizes and deduplicates progress paths', () => {
+    expect(
+      normalizeIndexedSourceProgressPaths(
+        ['/Users/me/Documents', '/users/me/documents', '   ', '/Other'],
+        (path) => path.trim().toLowerCase()
+      )
+    ).toEqual(['/users/me/documents', '/other'])
+  })
+
+  it('expands raw and normalized progress paths while preserving first-seen order', () => {
+    expect(
+      expandIndexedSourceProgressPaths(
+        ['/Users/me/Documents', '/users/me/documents', '   '],
+        (path) => path.trim().toLowerCase()
+      )
+    ).toEqual(['/Users/me/Documents', '/users/me/documents'])
+  })
+
+  it('can drop raw progress paths rejected by the normalizer during expansion', () => {
+    expect(
+      expandIndexedSourceProgressPaths(
+        ['/Users/me/Documents', '/ignored'],
+        (path) => (path === '/ignored' ? '' : path.toLowerCase()),
+        { dropWhenNormalizedEmpty: true }
+      )
+    ).toEqual(['/Users/me/Documents', '/users/me/documents'])
+  })
+
+  it('filters progress paths by normalized value', () => {
+    expect(
+      filterIndexedSourceProgressPaths(
+        ['/Users/me/Documents', '   ', '/Other'],
+        (path) => path.trim().toLowerCase()
+      )
+    ).toEqual(['/Users/me/Documents', '/Other'])
   })
 })
 

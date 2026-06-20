@@ -9,6 +9,7 @@ import {
   appendIndexedSourceTaskHistory,
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT
 } from './indexing-source'
+import { cloneIndexingSnapshotValue } from './indexing-snapshot-clone'
 
 export type IndexedSourceRuntimeTaskState = Pick<
   IndexedSourceDiagnostics,
@@ -130,6 +131,8 @@ export interface IndexedSourceResetTaskState {
   historyEntry: IndexedSourceTaskHistoryEntry
 }
 
+const UNKNOWN_INDEXED_SOURCE_WATCH_PATH = '<unknown>'
+
 export function updateIndexedSourceTaskState<
   TKey extends IndexedSourceRuntimeTaskStateKey
 >(
@@ -138,7 +141,7 @@ export function updateIndexedSourceTaskState<
   const historyLimit = input.historyLimit ?? DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT
   return {
     ...input.state,
-    [input.key]: { ...input.value },
+    [input.key]: cloneIndexingSnapshotValue(input.value),
     recentTasks: appendIndexedSourceTaskHistory(
       input.state.recentTasks,
       input.historyEntry,
@@ -192,7 +195,7 @@ export function buildIndexedSourceScanTaskState(
     sourceId: input.sourceId,
     key: 'lastScan',
     value,
-    historyEntry
+    historyEntry: normalizeHistoryEntry(historyEntry)
   }
 }
 
@@ -246,7 +249,7 @@ export function buildIndexedSourceReconcileTaskState(
     sourceId: input.sourceId,
     key: 'lastReconcile',
     value,
-    historyEntry
+    historyEntry: normalizeHistoryEntry(historyEntry)
   }
 }
 
@@ -261,13 +264,14 @@ export function buildIndexedSourceWatchTaskState(
   const appliedDeltas = normalizeTaskCount(input.appliedDeltas)
   const failedDeltas = normalizeTaskCount(input.failedDeltas)
   const skippedDeltas = normalizeTaskCount(input.skippedDeltas)
+  const path = normalizeWatchPath(input.path)
   const value = {
     occurredAt: timestamps.startedAt,
     completedAt: timestamps.completedAt,
     jobId: input.job?.id,
     queuedAt,
     action: input.action,
-    path: input.path,
+    path,
     deltas,
     appliedDeltas,
     failedDeltas,
@@ -297,7 +301,7 @@ export function buildIndexedSourceWatchTaskState(
     sourceId: input.sourceId,
     key: 'lastWatch',
     value,
-    historyEntry
+    historyEntry: normalizeHistoryEntry(historyEntry)
   }
 }
 
@@ -344,8 +348,16 @@ export function buildIndexedSourceResetTaskState(
     sourceId: input.sourceId,
     key: 'lastReset',
     value,
-    historyEntry
+    historyEntry: normalizeHistoryEntry(historyEntry)
   }
+}
+
+function normalizeWatchPath(path: string): string {
+  return path.trim().length > 0 ? path : UNKNOWN_INDEXED_SOURCE_WATCH_PATH
+}
+
+function normalizeHistoryEntry(entry: IndexedSourceTaskHistoryEntry): IndexedSourceTaskHistoryEntry {
+  return appendIndexedSourceTaskHistory([], entry, 1)[0] ?? entry
 }
 
 function normalizeTaskInterval(
