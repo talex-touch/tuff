@@ -54,12 +54,12 @@ onBeforeUnmount(() => {
 })
 
 useHead({
-  bodyAttrs: { class: 'text-light antialiased' },
+  bodyAttrs: { class: 'bg-black text-light antialiased' },
 })
 </script>
 
 <template>
-  <div class="relative min-h-screen flex flex-col text-light">
+  <div class="relative min-h-screen flex flex-col bg-black text-light">
     <TuffLandingNexusHero />
     <div
       ref="smoothScrollContainerRef"

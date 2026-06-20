@@ -2452,9 +2452,11 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
     nexus: {
       hero: {
         eyebrow: '本地优先，隐私内建。',
+        titlePrefix: '你的',
+        titleSubject: 'OS',
         titleLead: '你的 OS，',
-        titleAccent: '可编程。',
-        title: '你的 OS，可编程。',
+        titleAccent: '可 随心创作',
+        title: '你的 OS，可 随心创作',
         copy: 'Nexus 是 Tuff 的公开入口：承载可信发布、插件生态和开发文档，让桌面端保持轻、快、可扩展。',
         primaryCta: '获取当前版本',
         secondaryCta: '查看开发文档',
