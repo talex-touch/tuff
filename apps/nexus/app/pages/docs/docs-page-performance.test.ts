@@ -111,6 +111,19 @@ describe('docs page performance boundaries', () => {
     expect(page).toContain('<LazyDocsComments v-if="shouldMountDocEngagementPanels"')
   })
 
+  it('builds docs assistant context only after assistant intent', () => {
+    expect(docsLayout).toContain("const docsAssistantContextRequestState = useState<number>('docs-assistant-context-request'")
+    expect(docsLayout).toMatch(/function openDocsAssistantFromShell\(source: HTMLElement \| null\) \{[\s\S]*docsAssistantContextRequestState\.value \+= 1[\s\S]*docsAssistantOpenRequest\.value \+= 1/)
+
+    expect(page).toContain("const docAssistantContextRequestState = useState<number>('docs-assistant-context-request'")
+    expect(page).toContain('const pendingAssistantContextRequest = ref(0)')
+    expect(page).toContain('function requestAssistantContextBuild(requestId: number)')
+    expect(page).toMatch(/watch\([\s\S]*docAssistantContextRequestState,[\s\S]*requestAssistantContextBuild\(requestId\)[\s\S]*\)/)
+    expect(page).toMatch(/if \(!body\) \{[\s\S]*startFullDocFetchForRoute\(\)[\s\S]*return[\s\S]*\}/)
+    expect(page).toMatch(/if \(pendingAssistantContextRequest\.value > 0\)[\s\S]*requestAssistantContextBuild\(pendingAssistantContextRequest\.value\)/)
+    expect(page).not.toContain('scheduleAssistantContextBuild(renderDoc.value?.body, 700)')
+  })
+
   it('keeps docs chrome controls off first-paint TuffEx button imports', () => {
     expect(page).not.toContain("from '@talex-touch/tuffex/button'")
     expect(page).not.toContain("from '@talex-touch/tuffex/loading-state'")
