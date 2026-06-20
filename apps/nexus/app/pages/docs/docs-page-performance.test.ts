@@ -15,6 +15,8 @@ const tuffFooter = readFileSync(new URL('../../components/TuffFooter.vue', impor
 const docHero = readFileSync(new URL('../../components/docs/DocHero.vue', import.meta.url), 'utf8')
 const vortexBackground = readFileSync(new URL('../../components/tuff/VortexBackground.vue', import.meta.url), 'utf8')
 const headerControls = readFileSync(new URL('../../components/HeaderControls.vue', import.meta.url), 'utf8')
+const globalSearchState = readFileSync(new URL('../../composables/useGlobalSearchState.ts', import.meta.url), 'utf8')
+const globalSearch = readFileSync(new URL('../../composables/useGlobalSearch.ts', import.meta.url), 'utf8')
 const languageToggle = readFileSync(new URL('../../components/LanguageToggle.vue', import.meta.url), 'utf8')
 const darkToggle = readFileSync(new URL('../../components/DarkToggle.vue', import.meta.url), 'utf8')
 const iconComposer = readFileSync(new URL('../../components/icon/IconComposer.vue', import.meta.url), 'utf8')
@@ -217,6 +219,26 @@ describe('docs page performance boundaries', () => {
     expect(tuffPropsTable).toContain('class="tuff-props-table__copy-status"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__tag"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__mono"')
+  })
+
+  it('keeps global search indexes behind explicit search intent', () => {
+    expect(appRoot).not.toContain('useGlobalSearch()')
+    expect(appRoot).toContain('useGlobalSearchState()')
+    expect(headerControls).not.toContain("import { useGlobalSearch } from '~/composables/useGlobalSearch'")
+    expect(headerControls).toContain('~/composables/useGlobalSearchState')
+
+    expect(globalSearchState).not.toContain('@talex-touch/utils/search')
+    expect(globalSearchState).not.toContain('~/data/search/featureIndex')
+    expect(globalSearchState).not.toContain('~/data/search/pageIndex')
+    expect(globalSearchState).not.toContain('queryCollection')
+
+    expect(globalSearch).not.toContain("from '@talex-touch/utils/search'")
+    expect(globalSearch).not.toContain("import('@talex-touch/utils/search')")
+    expect(globalSearch).not.toContain("from '~/data/search/featureIndex'")
+    expect(globalSearch).not.toContain("from '~/data/search/pageIndex'")
+    expect(globalSearch).toContain("import('@talex-touch/utils/search/feature-matcher')")
+    expect(globalSearch).toContain("import('~/data/search/featureIndex')")
+    expect(globalSearch).toContain("import('~/data/search/pageIndex')")
   })
 
   it('keeps the global toast host out of first-paint docs modules', () => {
