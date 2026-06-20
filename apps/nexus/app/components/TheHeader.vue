@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
-import HeaderUserMenu from './HeaderUserMenu.vue'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 withDefaults(defineProps<{
@@ -9,6 +8,8 @@ withDefaults(defineProps<{
 }>(), {
   title: 'Tuff',
 })
+
+const HeaderUserMenu = defineAsyncComponent(() => import('./HeaderUserMenu.vue'))
 
 const route = useRoute()
 const { status } = useAuth()

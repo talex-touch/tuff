@@ -31,18 +31,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <TxIconButton
+  <button
     v-if="isMounted"
-    size="sm"
-    shape="pill"
+    type="button"
     class="DarkToggle"
     :class="{ 'is-dark': isDark }"
-    :label="toggleLabel"
-    :pressed="isDark"
+    :aria-label="toggleLabel"
+    :aria-pressed="isDark"
     @click="toggleTheme"
   >
     <span class="DarkToggle-Thumb" aria-hidden="true" />
-  </TxIconButton>
+  </button>
   <div v-else class="DarkToggle" aria-hidden="true">
     <span class="DarkToggle-Thumb" />
   </div>
@@ -50,13 +49,22 @@ onMounted(() => {
 
 <style scoped>
 .DarkToggle {
+  display: inline-flex;
   width: 44px;
+  height: 34px;
+  align-items: center;
   justify-content: flex-start;
+  border: 0;
+  border-radius: 999px;
   padding: 0 6px;
   background: rgba(242, 244, 247, 0.94);
-  --tx-icon-button-size: 34px;
-  --tx-icon-button-bg-hover: rgba(236, 239, 244, 1);
-  --tx-icon-button-bg-pressed: rgba(242, 244, 247, 0.94);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .DarkToggle:hover,

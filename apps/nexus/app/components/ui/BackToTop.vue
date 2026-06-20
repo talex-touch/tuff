@@ -46,9 +46,9 @@ onUnmounted(() => {
 
 <template>
   <Transition name="back-to-top">
-    <TxButton v-show="visible" circle size="small" variant="ghost" native-type="button" class="back-to-top" aria-label="Back to top" @click="scrollToTop">
+    <button v-show="visible" type="button" class="back-to-top" aria-label="Back to top" @click="scrollToTop">
       <span class="back-to-top__icon i-carbon-chevron-up" aria-hidden="true" />
-    </TxButton>
+    </button>
   </Transition>
 </template>
 
@@ -58,6 +58,35 @@ onUnmounted(() => {
   right: 24px;
   bottom: 24px;
   z-index: 40;
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: rgba(15, 23, 42, 0.72);
+  cursor: pointer;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.back-to-top:hover,
+.back-to-top:focus-visible {
+  border-color: rgba(96, 165, 250, 0.34);
+  background: rgba(255, 255, 255, 0.94);
+  color: rgba(37, 99, 235, 0.92);
+  outline: none;
+  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.16);
 }
 
 .back-to-top__icon {
