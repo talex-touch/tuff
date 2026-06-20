@@ -30,9 +30,7 @@ async function onSearchClick(event: MouseEvent) {
 </script>
 
 <template>
-  <div
-    class="HeaderControls flex items-center justify-end gap-2 overflow-hidden text-sm"
-  >
+  <div class="HeaderControls flex items-center justify-end gap-2 text-sm">
     <div
       v-if="props.showSearchButton"
       class="relative"
@@ -48,23 +46,16 @@ async function onSearchClick(event: MouseEvent) {
       />
     </div>
 
-    <div class="relative flex items-center gap-[1.5] sm:ml-auto">
+    <div class="relative flex items-center gap-1 sm:ml-auto">
+      <TxDivider
+        v-if="props.showLanguageToggle"
+        direction="vertical"
+        class="HeaderControls-Divider"
+      />
       <template v-if="props.showLanguageToggle">
         <LanguageToggle />
       </template>
-      <div
-        v-if="props.showLanguageToggle && (props.showDarkToggle || props.githubUrl)"
-        class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
-      />
       <DarkToggle v-if="props.showDarkToggle" />
-      <div
-        v-if="props.showDarkToggle && props.githubUrl"
-        class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
-      />
-      <div
-        v-if="props.githubUrl && !props.showDarkToggle && !props.showLanguageToggle"
-        class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
-      />
       <a
         v-if="props.githubUrl"
         :href="props.githubUrl"
@@ -77,3 +68,16 @@ async function onSearchClick(event: MouseEvent) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.HeaderControls-Divider {
+  height: 20px;
+  min-height: 20px;
+  margin: 0 10px 0 8px;
+  --tx-divider-color: rgba(0, 0, 0, 0.1);
+}
+
+.dark .HeaderControls-Divider {
+  --tx-divider-color: rgba(255, 255, 255, 0.12);
+}
+</style>
