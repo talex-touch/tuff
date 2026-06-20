@@ -14,6 +14,7 @@ const docsLayout = readFileSync(new URL('../../layouts/docs.vue', import.meta.ur
 const theHeader = readFileSync(new URL('../../components/TheHeader.vue', import.meta.url), 'utf8')
 const tuffFooter = readFileSync(new URL('../../components/TuffFooter.vue', import.meta.url), 'utf8')
 const docHero = readFileSync(new URL('../../components/docs/DocHero.vue', import.meta.url), 'utf8')
+const docsProseHeading = readFileSync(new URL('../../components/docs/DocsProseHeading.vue', import.meta.url), 'utf8')
 const vortexBackground = readFileSync(new URL('../../components/tuff/VortexBackground.vue', import.meta.url), 'utf8')
 const headerControls = readFileSync(new URL('../../components/HeaderControls.vue', import.meta.url), 'utf8')
 const globalSearchState = readFileSync(new URL('../../composables/useGlobalSearchState.ts', import.meta.url), 'utf8')
@@ -537,6 +538,15 @@ describe('docs page performance boundaries', () => {
     expect(page).not.toContain('shouldClientRenderDocBody')
     expect(page).not.toContain('<ClientOnly v-if="shouldClientRenderDocBody">')
     expect(page).toMatch(/<ContentRenderer[\s\S]*v-if="renderDoc\?\.body"[\s\S]*:value="renderDoc \?\? \{\}"/)
+    expect(page).toContain(':prose="false"')
+    expect(page).toContain(':components="docsProseComponents"')
+    expect(page).toContain("import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'")
+    expect(page).toContain("function createDocsProseHeading(tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6')")
+    expect(page).toContain("h1: createDocsProseHeading('h1')")
+    expect(page).toContain("h6: createDocsProseHeading('h6')")
+    expect(docsProseHeading).toContain('<component :is="props.tag"')
+    expect(docsProseHeading).toContain(':href="`#${props.id')
+    expect(page).not.toContain('proseComponentMap')
   })
 
   it('keeps dev fallback metadata requests off full Markdown body parsing', () => {
