@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import TuffHomeNew from '~/components/tuff/TuffHomeNew.vue'
+import TuffHomeNexus from '~/components/tuff/TuffHomeNexus.vue'
 
 definePageMeta({
   layout: 'home',
@@ -14,5 +14,5 @@ useSeoMeta({
 </script>
 
 <template>
-  <TuffHomeNew />
+  <TuffHomeNexus />
 </template>

@@ -20,6 +20,10 @@ export default {
       switchToZh: '切换语言到中文',
       switchToEn: '切换语言到英文',
     },
+    themeToggle: {
+      switchToLight: '切换到浅色模式',
+      switchToDark: '切换到深色模式',
+    },
   },
   common: {
     save: '保存',
@@ -2445,6 +2449,64 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
     },
   },
   landing: {
+    nexus: {
+      hero: {
+        eyebrow: '本地优先，隐私内建。',
+        titleLead: '你的 OS，',
+        titleAccent: '可编程。',
+        title: '你的 OS，可编程。',
+        copy: 'Nexus 是 Tuff 的公开入口：承载可信发布、插件生态和开发文档，让桌面端保持轻、快、可扩展。',
+        primaryCta: '获取当前版本',
+        secondaryCta: '查看开发文档',
+      },
+      product: {
+        eyebrow: '真实产品画面',
+        title: 'CoreBox 是第一工作面，不是另一个后台。',
+        previewAlt: 'Tuff CoreBox 本地文件搜索界面',
+        caption: '同一个输入面可以搜索文件、唤起应用、调用插件，并把上下文交给 Agent。',
+      },
+      capabilities: {
+        eyebrow: '能力边界',
+        title: '围绕本地桌面建立清晰的执行链路。',
+        items: {
+          local: {
+            title: '本地上下文优先',
+            copy: '剪贴板、文件、应用与桌面状态先在本机被组织，Nexus 只负责生态、文档和可信发布协同。',
+          },
+          intelligence: {
+            title: '模型与工具统一调度',
+            copy: 'Tuff Intelligence 将模型路由、桌面上下文与工具执行收束进 CoreBox，减少来回切换。',
+          },
+          plugins: {
+            title: '插件扩展可审计',
+            copy: 'Manifest、权限和 SDK marker 让每个扩展能力都有入口、有边界，也能被回溯。',
+          },
+        },
+      },
+      workflow: {
+        eyebrow: '工作流',
+        title: '从意图到桌面动作，保持一条线。',
+        items: {
+          capture: {
+            title: '捕获意图',
+            copy: '用全局快捷键唤起 CoreBox，将自然语言、文件名或片段直接放进同一个入口。',
+          },
+          route: {
+            title: '整理上下文',
+            copy: '运行时把输入、当前桌面状态和可用能力组织成可执行请求。',
+          },
+          execute: {
+            title: '推进动作',
+            copy: '通过内置能力、MCP 和插件执行真实操作，并把结果回到当前工作流。',
+          },
+        },
+      },
+      final: {
+        eyebrow: 'Pioneer 入口',
+        title: '先把桌面工作流整理清楚，再把重复动作交给 Agent。',
+        cta: '下载 Tuff',
+      },
+    },
     new: {
       hero: {
         eyebrow: '桌面指令中心',
