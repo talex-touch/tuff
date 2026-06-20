@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
-import { computed, ref } from 'vue'
-import TuffexDocsHeroBackground from '~/components/docs/TuffexDocsHeroBackground.vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import BackToTop from '~/components/ui/BackToTop.vue'
 import Drawer from '~/components/ui/Drawer.vue'
+
+const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
+const TUFFEX_DOCS_BACKGROUND_DELAY_MS = 2500
+const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 1800
 
 const { t } = useI18n()
 const route = useRoute()
 const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
+const shouldMountTuffexBackground = ref(false)
+let tuffexBackgroundTimer: ReturnType<typeof setTimeout> | null = null
+let tuffexBackgroundIdleId: number | null = null
 const outlinePublicState = useState<{ hasOutline: boolean, loading: boolean }>('docs-outline-state', () => ({
   hasOutline: false,
   loading: false,
@@ -30,6 +36,60 @@ const isTutorialDocs = computed(() => {
   const path = normalizedDocsPath.value
   return path === '/docs/guide' || path.startsWith('/docs/guide/')
 })
+
+function mountTuffexBackground() {
+  shouldMountTuffexBackground.value = true
+}
+
+function clearTuffexBackgroundSchedule() {
+  if (import.meta.server)
+    return
+
+  if (tuffexBackgroundTimer) {
+    clearTimeout(tuffexBackgroundTimer)
+    tuffexBackgroundTimer = null
+  }
+  if (tuffexBackgroundIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(tuffexBackgroundIdleId)
+    tuffexBackgroundIdleId = null
+  }
+}
+
+function scheduleTuffexBackground() {
+  if (import.meta.server || shouldMountTuffexBackground.value)
+    return
+
+  clearTuffexBackgroundSchedule()
+
+  const schedule = () => {
+    tuffexBackgroundIdleId = null
+    if (!isTuffexDocs.value)
+      return
+    mountTuffexBackground()
+  }
+
+  tuffexBackgroundTimer = setTimeout(() => {
+    tuffexBackgroundTimer = null
+    if ('requestIdleCallback' in window) {
+      tuffexBackgroundIdleId = window.requestIdleCallback(schedule, { timeout: TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS })
+      return
+    }
+    schedule()
+  }, TUFFEX_DOCS_BACKGROUND_DELAY_MS)
+}
+
+watch(isTuffexDocs, (active) => {
+  if (active) {
+    scheduleTuffexBackground()
+    return
+  }
+  clearTuffexBackgroundSchedule()
+  shouldMountTuffexBackground.value = false
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  clearTuffexBackgroundSchedule()
+})
 </script>
 
 <template>
@@ -41,7 +101,9 @@ const isTutorialDocs = computed(() => {
       <div class="docs-layout-background pointer-events-none absolute inset-0 overflow-hidden">
         <Transition name="tuffex-docs-hero-bg-fade">
           <div v-if="isTuffexDocs" class="docs-tuffex-hero-bg-frame">
-            <TuffexDocsHeroBackground />
+            <ClientOnly>
+              <TuffexDocsHeroBackground v-if="shouldMountTuffexBackground" />
+            </ClientOnly>
           </div>
           <div v-else-if="isTutorialDocs" class="docs-tutorial-background" aria-hidden="true">
             <div class="docs-tutorial-background__beam" />
