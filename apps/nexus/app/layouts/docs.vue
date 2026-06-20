@@ -4,8 +4,8 @@ import BackToTop from '~/components/ui/BackToTop.vue'
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
-const TUFFEX_DOCS_BACKGROUND_DELAY_MS = 2500
-const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 1800
+const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200
+const TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
 
 const { t } = useI18n()
 const route = useRoute()
@@ -14,8 +14,9 @@ const outlineVisible = ref(false)
 const sidebarDrawerMounted = ref(false)
 const outlineDrawerMounted = ref(false)
 const shouldMountTuffexBackground = ref(false)
-let tuffexBackgroundTimer: ReturnType<typeof setTimeout> | null = null
 let tuffexBackgroundIdleId: number | null = null
+let tuffexBackgroundFrameId: number | null = null
+let tuffexBackgroundIntentDisposers: Array<() => void> = []
 const outlinePublicState = useState<{ hasOutline: boolean, loading: boolean }>('docs-outline-state', () => ({
   hasOutline: false,
   loading: false,
@@ -39,6 +40,8 @@ const isTutorialDocs = computed(() => {
 })
 
 function mountTuffexBackground() {
+  if (!isTuffexDocs.value)
+    return
   shouldMountTuffexBackground.value = true
 }
 
@@ -56,49 +59,76 @@ function clearTuffexBackgroundSchedule() {
   if (import.meta.server)
     return
 
-  if (tuffexBackgroundTimer) {
-    clearTimeout(tuffexBackgroundTimer)
-    tuffexBackgroundTimer = null
-  }
   if (tuffexBackgroundIdleId !== null && 'cancelIdleCallback' in window) {
     window.cancelIdleCallback(tuffexBackgroundIdleId)
     tuffexBackgroundIdleId = null
   }
+  if (tuffexBackgroundFrameId !== null) {
+    window.cancelAnimationFrame(tuffexBackgroundFrameId)
+    tuffexBackgroundFrameId = null
+  }
 }
 
 function scheduleTuffexBackground() {
-  if (import.meta.server || shouldMountTuffexBackground.value)
+  if (import.meta.server || shouldMountTuffexBackground.value || !isTuffexDocs.value)
     return
 
   clearTuffexBackgroundSchedule()
 
   const schedule = () => {
     tuffexBackgroundIdleId = null
+    tuffexBackgroundFrameId = null
     if (!isTuffexDocs.value)
       return
     mountTuffexBackground()
   }
 
-  tuffexBackgroundTimer = setTimeout(() => {
-    tuffexBackgroundTimer = null
-    if ('requestIdleCallback' in window) {
-      tuffexBackgroundIdleId = window.requestIdleCallback(schedule, { timeout: TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS })
-      return
-    }
-    schedule()
-  }, TUFFEX_DOCS_BACKGROUND_DELAY_MS)
+  if ('requestIdleCallback' in window) {
+    tuffexBackgroundIdleId = window.requestIdleCallback(schedule, { timeout: TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS })
+    return
+  }
+
+  tuffexBackgroundFrameId = window.requestAnimationFrame(schedule)
+}
+
+function clearTuffexBackgroundIntentListeners() {
+  if (import.meta.server)
+    return
+
+  for (const dispose of tuffexBackgroundIntentDisposers)
+    dispose()
+  tuffexBackgroundIntentDisposers = []
+}
+
+function handleTuffexBackgroundIntent() {
+  clearTuffexBackgroundIntentListeners()
+  scheduleTuffexBackground()
+}
+
+function bindTuffexBackgroundIntentListeners() {
+  if (import.meta.server || shouldMountTuffexBackground.value || tuffexBackgroundIntentDisposers.length || !isTuffexDocs.value)
+    return
+
+  for (const eventName of TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS) {
+    window.addEventListener(eventName, handleTuffexBackgroundIntent, { passive: true })
+    tuffexBackgroundIntentDisposers.push(() => {
+      window.removeEventListener(eventName, handleTuffexBackgroundIntent)
+    })
+  }
 }
 
 watch(isTuffexDocs, (active) => {
   if (active) {
-    scheduleTuffexBackground()
+    bindTuffexBackgroundIntentListeners()
     return
   }
+  clearTuffexBackgroundIntentListeners()
   clearTuffexBackgroundSchedule()
   shouldMountTuffexBackground.value = false
 }, { immediate: true })
 
 onBeforeUnmount(() => {
+  clearTuffexBackgroundIntentListeners()
   clearTuffexBackgroundSchedule()
 })
 </script>
@@ -291,6 +321,9 @@ onBeforeUnmount(() => {
   height: 100vh;
   min-height: 520px;
   overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.045), transparent 42%, rgba(244, 63, 94, 0.045)),
+    linear-gradient(180deg, rgba(6, 182, 212, 0.025), transparent 48%);
   opacity: 0.42;
 }
 
