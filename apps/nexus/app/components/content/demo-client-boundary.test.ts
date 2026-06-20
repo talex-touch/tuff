@@ -44,6 +44,12 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain('/app/components/content/demo-lazy.ts')
   })
 
+  it('keeps internal server helpers with duplicate type names out of auto-imports', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain("!normalized.endsWith('/server/utils/telemetryRetentionCore.ts')")
+  })
+
   it('keeps route-local marketing and store components out of auto-registration', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
