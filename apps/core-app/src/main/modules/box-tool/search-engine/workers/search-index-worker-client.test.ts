@@ -265,6 +265,49 @@ describe('SearchIndexWorkerClient init gate', () => {
     await expect(removePromise).resolves.toBe(4)
   })
 
+  it('normalizes scan progress writes before dispatching worker tasks', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const upsertPromise = client.upsertScanProgress(
+      ['/tmp/root-a', '', '/tmp/root-a', '/tmp/root-b'],
+      '2026-06-20T10:00:00.000Z'
+    )
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    expect(worker.messages[1]).toMatchObject({
+      type: 'upsertScanProgress',
+      paths: ['/tmp/root-a', '/tmp/root-b'],
+      lastScanned: '2026-06-20T10:00:00.000Z'
+    })
+
+    worker.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(worker.messages[1]),
+      result: 2
+    })
+
+    await expect(upsertPromise).resolves.toBe(2)
+  })
+
+  it('does not dispatch unsafe scan progress writes', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    await expect(client.upsertScanProgress(['', '  '], '2026-06-20T10:00:00.000Z')).resolves.toBe(0)
+    await expect(client.upsertScanProgress(['/tmp/root-a'], 'invalid-date')).resolves.toBe(0)
+
+    expect(worker.messages).toHaveLength(1)
+  })
+
   it('accepts worker result messages and returns persist summary', async () => {
     const client = new SearchIndexWorkerClient()
     const initPromise = client.init('/tmp/search-index.db')

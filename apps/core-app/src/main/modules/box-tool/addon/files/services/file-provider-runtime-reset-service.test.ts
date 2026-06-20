@@ -34,6 +34,7 @@ function createService(input: {
     reason: string
   ) => Promise<{ removedIndexedItems: number }>
   scanProgressPaths?: string[]
+  normalizePath?: (path: string) => string
   withDbWrite?: <T>(label: string, operation: () => Promise<T>) => Promise<T>
 }) {
   const removeSearchIndexByProvider = vi.fn(
@@ -52,6 +53,7 @@ function createService(input: {
     service: new FileProviderRuntimeResetService({
       sourceId: 'file-provider',
       getDbUtils: () => (input.dbUtils ?? null) as never,
+      normalizePath: input.normalizePath,
       removeSearchIndexByProvider,
       getScanProgressPaths: () => input.scanProgressPaths ?? ['/a', '/b'],
       withDbWrite,
@@ -133,6 +135,58 @@ describe('file-provider-runtime-reset-service', () => {
     expect(deleteWhere).toHaveBeenCalledWith(inArray(scanProgress.path, ['/a', '/b']))
     expect(result.clearedScanProgress).toBe(true)
     expect(result.scanProgressRows).toBe(3)
+  })
+
+  it('deletes raw and normalized scan progress paths during reset cleanup', async () => {
+    const { dbUtils, where, deleteWhere } = createDbUtils(2)
+    const { service } = createService({
+      dbUtils,
+      scanProgressPaths: ['/Users/me/Documents'],
+      normalizePath: (path) => path.toLowerCase()
+    })
+
+    const result = await service.reset({
+      request: {
+        sourceId: 'file-provider',
+        reason: 'integrity-repair'
+      },
+      operationReasonPrefix: 'file-index.integrity-repair'
+    })
+
+    const expectedPaths = ['/Users/me/Documents', '/users/me/documents']
+    expect(where).toHaveBeenCalledWith(inArray(scanProgress.path, expectedPaths))
+    expect(deleteWhere).toHaveBeenCalledWith(inArray(scanProgress.path, expectedPaths))
+    expect(result).toMatchObject({
+      clearedScanProgress: true,
+      scanProgressRows: 2
+    })
+  })
+
+  it('ignores empty normalized scan progress paths during reset cleanup', async () => {
+    const { dbUtils, from, where, deleteTable, deleteWhere } = createDbUtils(1)
+    const { service } = createService({
+      dbUtils,
+      scanProgressPaths: ['/Users/me/Documents', '   ', '/ignored'],
+      normalizePath: (path) => (path === '/ignored' ? '' : path.trim().toLowerCase())
+    })
+
+    const result = await service.reset({
+      request: {
+        sourceId: 'file-provider',
+        reason: 'integrity-repair'
+      },
+      operationReasonPrefix: 'file-index.integrity-repair'
+    })
+
+    const expectedPaths = ['/Users/me/Documents', '/users/me/documents']
+    expect(from).toHaveBeenCalledWith(scanProgress)
+    expect(where).toHaveBeenCalledWith(inArray(scanProgress.path, expectedPaths))
+    expect(deleteTable).toHaveBeenCalledWith(scanProgress)
+    expect(deleteWhere).toHaveBeenCalledWith(inArray(scanProgress.path, expectedPaths))
+    expect(result).toMatchObject({
+      clearedScanProgress: true,
+      scanProgressRows: 1
+    })
   })
 
   it('does not read or delete scan progress when disabled by request', async () => {

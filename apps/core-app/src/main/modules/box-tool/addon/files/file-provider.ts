@@ -63,7 +63,8 @@ import {
   IndexedSourceScanReasons,
   IndexedWriteRuntimeEmitterService,
   isIndexedWatchPathOwned,
-  mapIndexedFileSourceRecord
+  mapIndexedFileSourceRecord,
+  resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
@@ -531,8 +532,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     })
     this.baseWatchPaths = [...new Set(paths.filter((p): p is string => !!p))]
-    this.watchPaths = [...this.baseWatchPaths]
-    this.normalizedWatchPaths = this.watchPaths.map((p) => this.normalizePath(p))
+    const rootSet = resolveIndexedWatchRootSet({
+      basePaths: this.baseWatchPaths,
+      normalizePath: (rawPath) => this.normalizePath(rawPath)
+    })
+    this.watchPaths = rootSet.paths
+    this.normalizedWatchPaths = rootSet.normalizedPaths
     this.watchService = new FileProviderWatchService({
       baseWatchPaths: this.baseWatchPaths,
       getDbUtils: () => this.dbUtils,
@@ -565,9 +570,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.runtimeResetService = new FileProviderRuntimeResetService({
       sourceId: this.id,
       getDbUtils: () => this.dbUtils,
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
       removeSearchIndexByProvider: (providerId, reason) =>
         this.removeSearchIndexByProvider(providerId, reason),
-      getScanProgressPaths: () => [...new Set([...this.watchPaths, ...this.normalizedWatchPaths])],
+      getScanProgressPaths: () => [...this.watchPaths],
       withDbWrite: (label, operation) => this.withDbWrite(label, operation),
       logInfo: (message, meta) => this.logInfo(message, meta)
     })
@@ -593,7 +599,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getSearchIndexWorker: () => this.searchIndexWorker
     })
     this.scanStrategyService = new FileProviderScanStrategyService({
-      getCompletedPaths: () => this.scanProgressService.getCompletedPaths(),
+      getCompletedPaths: (watchPaths) => this.scanProgressService.getCompletedPaths(watchPaths),
       normalizePath: (rawPath) => this.normalizePath(rawPath),
       yieldAfterRead: async () => {
         await new Promise<void>((resolve) => setImmediate(resolve))
@@ -1940,25 +1946,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           path: resolved,
           watchPath
         })
-        this.enqueueIncrementalUpdate(resolved, 'add', { manual: true })
-      }
-      return { success: true, status: 'exists', path: watchPath }
-    }
-
-    const normalized = this.normalizePath(watchPath)
-    if (this.normalizedWatchPaths.includes(normalized)) {
-      if (isFileTarget) {
-        this.logDebug('addWatchPath exists(normalized), enqueue incremental add', {
-          path: resolved,
-          watchPath
-        })
-        this.logInfo(
-          'File index addPath hit existing normalized watch path; enqueue incremental add',
-          {
-            path: resolved,
-            watchPath
-          }
-        )
         this.enqueueIncrementalUpdate(resolved, 'add', { manual: true })
       }
       return { success: true, status: 'exists', path: watchPath }

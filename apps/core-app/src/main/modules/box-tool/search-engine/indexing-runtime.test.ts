@@ -11,7 +11,8 @@ import type { IndexStoreAdapter } from './indexing-store-adapter'
 import {
   IndexedSourceReconcileReasons,
   IndexedSourceResetReasons,
-  IndexedSourceScanReasons
+  IndexedSourceScanReasons,
+  IndexedSourceTaskRunGate
 } from '@talex-touch/utils/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IndexingRootPolicy } from './indexing-root-policy'
@@ -2213,6 +2214,165 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('hydrates scan debounce state from persisted task history', async () => {
+    const completedAt = Date.now() - 100
+    const save = vi.fn(async () => {})
+    const scan = vi.fn(async function* () {})
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          startedAt: completedAt - 100,
+          completedAt,
+          jobId: 'test-source:scan:persisted-success'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      runGate: new IndexedSourceTaskRunGate({ debounceMs: 60_000 }),
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ scan }))
+
+    const result = await runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+
+    expect(scan).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      totalSources: 1,
+      scannedSources: 0,
+      skippedSources: 1,
+      skipped: [
+        {
+          sourceId: 'test-source',
+          reason: expect.stringMatching(/^scan-debounced$/)
+        }
+      ]
+    })
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastScan: expect.objectContaining({
+          error: 'skipped:scan-debounced'
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'skipped',
+            error: 'skipped:scan-debounced'
+          }),
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'succeeded',
+            jobId: 'test-source:scan:persisted-success'
+          })
+        ]
+      })
+    )
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].taskRunGate).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: 'test-source',
+          kind: 'scan',
+          lastCompletedAt: completedAt,
+          lastBlockedReason: 'debounced'
+        })
+      ])
+    )
+  })
+
+  it('hydrates reconcile debounce state from persisted task history', async () => {
+    const completedAt = Date.now() - 100
+    const save = vi.fn(async () => {})
+    const reconcile = vi.fn(async () => ({
+      sourceId: 'test-source',
+      added: 0,
+      changed: 1,
+      deleted: 0,
+      skipped: 0,
+      errors: 0,
+      startedAt: completedAt + 100,
+      completedAt: completedAt + 200
+    }))
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      recentTasks: [
+        {
+          kind: 'reconcile',
+          status: 'succeeded',
+          startedAt: completedAt - 100,
+          completedAt,
+          jobId: 'test-source:reconcile:persisted-success'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      runGate: new IndexedSourceTaskRunGate({ debounceMs: 60_000 }),
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ reconcile }))
+
+    const result = await runtime.reconcileSourcesWithResult()
+
+    expect(reconcile).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      totalSources: 1,
+      reconciledSources: 0,
+      skippedSources: 1,
+      skippedDetails: [
+        {
+          sourceId: 'test-source',
+          reason: expect.stringMatching(/^reconcile-debounced$/)
+        }
+      ]
+    })
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastReconcile: expect.objectContaining({
+          error: 'skipped:reconcile-debounced'
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'reconcile',
+            status: 'skipped',
+            error: 'skipped:reconcile-debounced'
+          }),
+          expect.objectContaining({
+            kind: 'reconcile',
+            status: 'succeeded',
+            jobId: 'test-source:reconcile:persisted-success'
+          })
+        ]
+      })
+    )
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].taskRunGate).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: 'test-source',
+          kind: 'reconcile',
+          lastCompletedAt: completedAt,
+          lastBlockedReason: 'debounced'
+        })
+      ])
+    )
+  })
+
   it('uses persisted scan failures to gate automatic scans after hydrate', async () => {
     const failedAt = Date.now() - 1_000
     const save = vi.fn(async () => {})
@@ -2274,6 +2434,106 @@ describe('indexingRuntime', () => {
             kind: 'scan',
             status: 'skipped',
             error: expect.stringMatching(/^skipped:retry-window:scan:/)
+          }),
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'failed',
+            jobId: 'test-source:scan:persisted-failure'
+          })
+        ]
+      })
+    )
+  })
+
+  it('allows automatic scans after a newer persisted same-kind success resets retry backoff', async () => {
+    const now = Date.now()
+    const failedAt = now - 1_000
+    const succeededAt = now - 500
+    const save = vi.fn(async () => {})
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'record-1',
+          stableKey: 'record-1',
+          kind: 'file',
+          title: 'Record 1'
+        }
+      ],
+      done: true
+    }
+    const scan = vi.fn(async function* () {
+      yield batch
+    })
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastScan: {
+        startedAt: succeededAt - 100,
+        completedAt: succeededAt,
+        jobId: 'test-source:scan:persisted-success',
+        batches: 1,
+        records: 1,
+        indexedRecords: 1
+      },
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          startedAt: succeededAt - 100,
+          completedAt: succeededAt,
+          jobId: 'test-source:scan:persisted-success'
+        },
+        {
+          kind: 'scan',
+          status: 'failed',
+          startedAt: failedAt - 100,
+          completedAt: failedAt,
+          jobId: 'test-source:scan:persisted-failure',
+          error: 'scanner crashed'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ scan }))
+
+    const result = await runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+
+    expect(scan).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({
+      totalSources: 1,
+      scannedSources: 1,
+      skippedSources: 0,
+      skipped: [],
+      batches: 1,
+      records: 1
+    })
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastScan: expect.objectContaining({
+          jobId: 'test-source:scan:1',
+          batches: 1,
+          records: 1,
+          indexedRecords: 1
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'succeeded',
+            jobId: 'test-source:scan:1'
+          }),
+          expect.objectContaining({
+            kind: 'scan',
+            status: 'succeeded',
+            jobId: 'test-source:scan:persisted-success'
           }),
           expect.objectContaining({
             kind: 'scan',
@@ -2357,6 +2617,101 @@ describe('indexingRuntime', () => {
             kind: 'reconcile',
             status: 'skipped',
             error: expect.stringMatching(/^skipped:retry-window:reconcile:/)
+          }),
+          expect.objectContaining({
+            kind: 'reconcile',
+            status: 'failed',
+            jobId: 'test-source:reconcile:persisted-failure'
+          })
+        ]
+      })
+    )
+  })
+
+  it('allows automatic reconciles after a newer persisted same-kind success resets retry backoff', async () => {
+    const now = Date.now()
+    const failedAt = now - 1_000
+    const succeededAt = now - 500
+    const save = vi.fn(async () => {})
+    const reconcile = vi.fn(async () => ({
+      sourceId: 'test-source',
+      added: 0,
+      changed: 2,
+      deleted: 0,
+      skipped: 0,
+      errors: 0,
+      startedAt: succeededAt + 100,
+      completedAt: succeededAt + 200
+    }))
+    const persistedState: IndexedSourceRuntimeTaskState = {
+      lastReconcile: {
+        startedAt: succeededAt - 100,
+        completedAt: succeededAt,
+        jobId: 'test-source:reconcile:persisted-success',
+        added: 1,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 0
+      },
+      recentTasks: [
+        {
+          kind: 'reconcile',
+          status: 'succeeded',
+          startedAt: succeededAt - 100,
+          completedAt: succeededAt,
+          jobId: 'test-source:reconcile:persisted-success'
+        },
+        {
+          kind: 'reconcile',
+          status: 'failed',
+          startedAt: failedAt - 100,
+          completedAt: failedAt,
+          jobId: 'test-source:reconcile:persisted-failure',
+          error: 'reconcile failed'
+        }
+      ]
+    }
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => persistedState),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ reconcile }))
+
+    const result = await runtime.reconcileSourcesWithResult()
+
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({
+      totalSources: 1,
+      reconciledSources: 1,
+      skippedSources: 0,
+      skippedDetails: [],
+      changed: 2,
+      errors: 0
+    })
+    expect(save).toHaveBeenCalledWith(
+      'test-source',
+      expect.objectContaining({
+        lastReconcile: expect.objectContaining({
+          added: 0,
+          changed: 2,
+          deleted: 0,
+          errors: 0
+        }),
+        recentTasks: [
+          expect.objectContaining({
+            kind: 'reconcile',
+            status: 'succeeded'
+          }),
+          expect.objectContaining({
+            kind: 'reconcile',
+            status: 'succeeded',
+            jobId: 'test-source:reconcile:persisted-success'
           }),
           expect.objectContaining({
             kind: 'reconcile',

@@ -845,7 +845,38 @@ describe('indexing source diagnostics display helpers', () => {
         reason: `retry-window:scan:${nextRetryAt}`,
         taskKind: 'scan',
         nextRetryAt,
-        nextRetryAtText: formatIndexingSourceTimestamp(nextRetryAt)
+        nextRetryAtText: formatIndexingSourceTimestamp(nextRetryAt),
+        waitDetail: `retry after ${formatIndexingSourceTimestamp(nextRetryAt)}`
+      }
+    })
+  })
+
+  it('expands run-gate recovery chips with structured wait metadata', () => {
+    const chip = resolveIndexingSourceRecoveryChip(
+      buildSource({
+        taskRunGate: [
+          {
+            sourceId: 'file-provider',
+            kind: 'reconcile',
+            blockedCount: 1,
+            lastBlockedAt: 1700000002000,
+            lastBlockedReason: 'debounced',
+            lastCompletedAt: 1700000000000,
+            nextAllowedAt: 1700000005000
+          }
+        ]
+      })
+    )
+
+    expect(chip).toMatchObject({
+      id: 'file-provider:recovery:wait',
+      tone: 'info',
+      labelKey: 'settings.settingFileIndex.sourceRecoveryChip.wait',
+      values: {
+        reason: 'run-gate:reconcile:debounced',
+        taskKind: 'reconcile',
+        runGateReason: 'debounced',
+        waitDetail: 'debounced'
       }
     })
   })

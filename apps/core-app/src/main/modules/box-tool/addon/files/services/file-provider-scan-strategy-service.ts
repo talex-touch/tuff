@@ -7,7 +7,7 @@ export interface FileProviderScanStrategyResult {
 }
 
 export interface FileProviderScanStrategyDeps {
-  getCompletedPaths: () => Promise<Set<string>>
+  getCompletedPaths: (watchPaths: string[]) => Promise<Set<string>>
   normalizePath?: (path: string) => string
   yieldAfterRead: () => Promise<void>
   now: () => number
@@ -37,7 +37,7 @@ export class FileProviderScanStrategyService {
 
   async resolve(watchPaths: string[]): Promise<FileProviderScanStrategyResult> {
     const strategyStart = this.now()
-    const completedScanPaths = await this.getCompletedPaths()
+    const completedScanPaths = await this.getCompletedPaths(watchPaths)
     await this.yieldAfterRead()
     const { newPathsToScan, reconciliationPaths } = resolveIndexedScanStrategy({
       watchPaths,

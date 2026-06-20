@@ -2492,7 +2492,7 @@
       },
       "sourceRecovery": "Recovery",
       "sourceRecoveryChip": {
-        "wait": "Wait for runtime recovery · {taskKind} · retry after {nextRetryAtText} · {reason}",
+        "wait": "Wait for runtime recovery · {taskKind} · {waitDetail} · {reason}",
         "grant-permission": "Grant permission · {reason}",
         "enable-provider": "Enable provider · {reason}",
         "scan": "Run scan · {reason}",

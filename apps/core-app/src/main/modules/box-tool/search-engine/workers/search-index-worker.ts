@@ -38,6 +38,7 @@ import * as schema from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createLogger } from '../../../../utils/logger'
 import { noopSearchIndexRuntimeLogger, SearchIndexService } from '../search-index-service'
+import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
 
 const searchIndexWorkerLog = createLogger('SearchIndex').child('Worker')
 
@@ -241,8 +242,8 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
 
       case 'upsertScanProgress': {
         if (!db) throw new Error('Worker not initialized — send init first')
-        await handleUpsertScanProgress(message.paths, message.lastScanned)
-        respond({ type: 'result', taskId })
+        const upserted = await handleUpsertScanProgress(message.paths, message.lastScanned)
+        respond({ type: 'result', taskId, result: upserted })
         break
       }
 
@@ -466,21 +467,28 @@ async function handleUpsertFiles(
   return rows as Array<Record<string, unknown>>
 }
 
-async function handleUpsertScanProgress(paths: string[], lastScanned: string): Promise<void> {
-  if (!db || paths.length === 0) return
+async function handleUpsertScanProgress(paths: string[], lastScanned: string): Promise<number> {
+  const normalizedUpsert = normalizeScanProgressUpsert(paths, lastScanned)
+  if (!db) throw new Error('Worker not initialized')
+  if (!normalizedUpsert) return 0
   const workerDb = db
-  const lastScannedAt = new Date(lastScanned)
   await withWorkerWriteRetry(
     () =>
       workerDb
         .insert(schema.scanProgress)
-        .values(paths.map((entryPath) => ({ path: entryPath, lastScanned: lastScannedAt })))
+        .values(
+          normalizedUpsert.paths.map((entryPath) => ({
+            path: entryPath,
+            lastScanned: normalizedUpsert.lastScanned
+          }))
+        )
         .onConflictDoUpdate({
           target: schema.scanProgress.path,
-          set: { lastScanned: lastScannedAt }
+          set: { lastScanned: normalizedUpsert.lastScanned }
         }),
     WORKER_RETRY_LABELS.upsertScanProgress
   )
+  return normalizedUpsert.paths.length
 }
 
 /**

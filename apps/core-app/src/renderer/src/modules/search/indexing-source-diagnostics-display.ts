@@ -227,18 +227,33 @@ function resolveRecoveryTone(
 
 function resolveRecoveryReasonValues(reason: string | undefined): Record<string, string | number> {
   const retry = parseRetryWindowReason(reason)
-  if (!retry) {
+  if (retry) {
     return {
-      taskKind: '',
+      taskKind: retry.taskKind,
+      nextRetryAt: retry.nextRetryAt,
+      nextRetryAtText: formatIndexingSourceTimestamp(retry.nextRetryAt),
+      runGateReason: '',
+      waitDetail: `retry after ${formatIndexingSourceTimestamp(retry.nextRetryAt)}`
+    }
+  }
+
+  const runGate = parseRunGateReason(reason)
+  if (runGate) {
+    return {
+      taskKind: runGate.taskKind,
       nextRetryAt: '',
-      nextRetryAtText: ''
+      nextRetryAtText: '',
+      runGateReason: runGate.reason,
+      waitDetail: runGate.reason
     }
   }
 
   return {
-    taskKind: retry.taskKind,
-    nextRetryAt: retry.nextRetryAt,
-    nextRetryAtText: formatIndexingSourceTimestamp(retry.nextRetryAt)
+    taskKind: '',
+    nextRetryAt: '',
+    nextRetryAtText: '',
+    runGateReason: '',
+    waitDetail: ''
   }
 }
 
@@ -254,6 +269,18 @@ function parseRetryWindowReason(
   return {
     taskKind: match[1] as IndexedSourceTaskHistoryKind,
     nextRetryAt
+  }
+}
+
+function parseRunGateReason(
+  reason: string | undefined
+): { taskKind: IndexedSourceTaskHistoryKind; reason: string } | null {
+  const match = reason?.match(/^run-gate:(scan|watch|reconcile|reset):(already-running|debounced)$/)
+  if (!match) return null
+
+  return {
+    taskKind: match[1] as IndexedSourceTaskHistoryKind,
+    reason: match[2]
   }
 }
 

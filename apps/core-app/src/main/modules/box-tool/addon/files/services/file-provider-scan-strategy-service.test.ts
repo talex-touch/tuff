@@ -6,9 +6,10 @@ describe('file-provider-scan-strategy-service', () => {
     const yieldAfterRead = vi.fn(async () => {})
     const logDebug = vi.fn()
     const logInfo = vi.fn()
+    const getCompletedPaths = vi.fn(async () => new Set(['/Users/me/Documents']))
     let now = 100
     const service = new FileProviderScanStrategyService({
-      getCompletedPaths: async () => new Set(['/Users/me/Documents']),
+      getCompletedPaths,
       yieldAfterRead,
       now: () => {
         now += 25
@@ -21,6 +22,7 @@ describe('file-provider-scan-strategy-service', () => {
 
     const result = await service.resolve(['/Users/me/Documents', '/Users/me/Downloads'])
 
+    expect(getCompletedPaths).toHaveBeenCalledWith(['/Users/me/Documents', '/Users/me/Downloads'])
     expect(result).toEqual({
       completedScanPaths: new Set(['/Users/me/Documents']),
       newPathsToScan: ['/Users/me/Downloads'],

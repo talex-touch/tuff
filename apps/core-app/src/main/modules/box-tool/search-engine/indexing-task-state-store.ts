@@ -250,7 +250,7 @@ function sanitizeLastWatch(
   const interval = sanitizeTaskInterval(value.occurredAt, value.completedAt, now)
   if (!interval) return undefined
   if (!deltaActions.has(value.action as IndexedSourceDeltaAction)) return undefined
-  if (typeof value.path !== 'string') return undefined
+  if (typeof value.path !== 'string' || value.path.trim().length === 0) return undefined
   return {
     occurredAt: interval.startedAt,
     completedAt: interval.completedAt,

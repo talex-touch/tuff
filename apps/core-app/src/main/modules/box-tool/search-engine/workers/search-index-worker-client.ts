@@ -28,6 +28,7 @@ import {
   FILE_WORKER_IDLE_SHUTDOWN_MS,
   IdleWorkerShutdownController
 } from '../../addon/files/workers/idle-worker-shutdown'
+import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
 
 const log = getLogger('search-index-worker')
 
@@ -260,16 +261,20 @@ export class SearchIndexWorkerClient {
     return result ?? []
   }
 
-  async upsertScanProgress(paths: string[], lastScanned: string): Promise<void> {
-    if (paths.length === 0) return
+  async upsertScanProgress(paths: string[], lastScanned: string): Promise<number> {
+    const normalizedUpsert = normalizeScanProgressUpsert(paths, lastScanned)
+    if (!normalizedUpsert) return 0
     await this.ensureInitialized()
     const taskId = this.generateTaskId('upsertScanProgress')
-    await this.sendAndWait(taskId, {
+    const result = await this.sendAndWaitWithResult<number>(taskId, {
       type: 'upsertScanProgress',
       taskId,
-      paths,
-      lastScanned
+      paths: normalizedUpsert.paths,
+      lastScanned: normalizedUpsert.lastScanned.toISOString()
     })
+    return typeof result === 'number' && Number.isFinite(result)
+      ? Math.max(0, Math.trunc(result))
+      : normalizedUpsert.paths.length
   }
 
   /**

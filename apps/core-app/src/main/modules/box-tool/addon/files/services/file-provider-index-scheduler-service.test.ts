@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileProviderIndexSchedulerService } from './file-provider-index-scheduler-service'
 
 function createService(
-  options: { dbPath?: string | null; watchPaths?: string[]; depthDelayMs?: number } = {}
+  options: {
+    dbPath?: string | null
+    watchPaths?: string[]
+    depthDelayMs?: number
+    normalizePath?: (rawPath: string) => string
+  } = {}
 ) {
   const indexFiles = vi.fn(async () => ({ processed: 0, failed: 0 }))
   const logWarn = vi.fn()
@@ -14,7 +19,7 @@ function createService(
     getProviderId: () => 'file-provider',
     getProviderType: () => 'file',
     getWatchPaths: () => options.watchPaths ?? ['/tmp'],
-    normalizePath: (rawPath) => rawPath.toLowerCase(),
+    normalizePath: options.normalizePath ?? ((rawPath) => rawPath.toLowerCase()),
     indexFiles,
     logWarn,
     config: {
@@ -206,6 +211,47 @@ describe('file-provider-index-scheduler-service', () => {
     expect(indexFiles).toHaveBeenCalledTimes(2)
     expect(indexFiles).toHaveBeenLastCalledWith('/tmp/index.db', 'file-provider', 'file', [
       expect.objectContaining({ id: 2, path: '/tmp/root/one/two/three/deep.txt' })
+    ])
+  })
+
+  it('ignores watch roots rejected by the normalizer when calculating depth', async () => {
+    const { indexFiles, service } = createService({
+      watchPaths: ['/tmp/rejected', '/tmp/root'],
+      depthDelayMs: 20,
+      normalizePath: (rawPath) => (rawPath === '/tmp/rejected' ? '' : rawPath.toLowerCase())
+    })
+
+    service.schedule(
+      [
+        {
+          id: 1,
+          path: '/tmp/rejected/one/two/deep.txt',
+          name: 'deep.txt',
+          size: 1,
+          mtime: 1000,
+          ctime: 1000
+        },
+        {
+          id: 2,
+          path: '/tmp/root/one/two/deep.txt',
+          name: 'root-deep.txt',
+          size: 1,
+          mtime: 1000,
+          ctime: 1000
+        }
+      ],
+      'watch'
+    )
+
+    expect(indexFiles).toHaveBeenCalledTimes(1)
+    expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
+      expect.objectContaining({ id: 1, path: '/tmp/rejected/one/two/deep.txt' })
+    ])
+
+    await vi.advanceTimersByTimeAsync(20)
+    expect(indexFiles).toHaveBeenCalledTimes(2)
+    expect(indexFiles).toHaveBeenLastCalledWith('/tmp/index.db', 'file-provider', 'file', [
+      expect.objectContaining({ id: 2, path: '/tmp/root/one/two/deep.txt' })
     ])
   })
 

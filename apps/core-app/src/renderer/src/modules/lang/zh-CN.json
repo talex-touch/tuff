@@ -2488,7 +2488,7 @@
       },
       "sourceRecovery": "恢复",
       "sourceRecoveryChip": {
-        "wait": "等待运行时恢复 · {taskKind} · 下次重试 {nextRetryAtText} · {reason}",
+        "wait": "等待运行时恢复 · {taskKind} · {waitDetail} · {reason}",
         "grant-permission": "需要授权 · {reason}",
         "enable-provider": "需要启用 Provider · {reason}",
         "scan": "建议扫描 · {reason}",
