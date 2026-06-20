@@ -13,6 +13,9 @@ interface SidebarComponentDoc {
 }
 
 const COMPONENT_DOC_PREFIX = '/docs/dev/components/'
+const SIDEBAR_COMPONENTS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
+const SIDEBAR_COMPONENTS_CACHE_MAX_AGE_SECONDS = 300
+const SIDEBAR_COMPONENTS_CACHE_STALE_MAX_AGE_SECONDS = 3600
 const STATUS_ALIASES: Record<string, SyncStatusKey> = {
   未迁移: 'not_started',
   迁移中: 'in_progress',
@@ -38,6 +41,12 @@ function parseDocMeta(meta: unknown): Record<string, unknown> | null {
   if (typeof meta === 'object' && !Array.isArray(meta))
     return meta as Record<string, unknown>
   return null
+}
+
+function buildComponentDocsPathPattern(locale: 'en' | 'zh' | null) {
+  return locale
+    ? `${COMPONENT_DOC_PREFIX}%.${locale}`
+    : `${COMPONENT_DOC_PREFIX}%`
 }
 
 function normalizeStatus(raw: unknown, verified: boolean): SyncStatusKey {
@@ -67,10 +76,15 @@ function normalizeLocale(value: unknown): 'en' | 'zh' | null {
   return null
 }
 
+function resolveSidebarComponentsCacheKey(event: any) {
+  const locale = normalizeLocale(getQuery(event).locale)
+  return locale ? `locale:${locale}` : 'locale:all'
+}
+
 export default defineCachedEventHandler(async (event) => {
   const locale = normalizeLocale(getQuery(event).locale)
   const docs = await queryCollection(event, 'docs')
-    .where('path', 'LIKE', `${COMPONENT_DOC_PREFIX}%`)
+    .where('path', 'LIKE', buildComponentDocsPathPattern(locale))
     .all()
 
   const rows = docs
@@ -98,9 +112,12 @@ export default defineCachedEventHandler(async (event) => {
     .filter(item => !locale || item.locale === locale)
     .sort((a, b) => a.title.localeCompare(b.title, a.locale === 'zh' ? 'zh-CN' : 'en'))
 
+  setHeader(event, 'cache-control', SIDEBAR_COMPONENTS_CACHE_CONTROL)
+
   return rows
 }, {
-  maxAge: 300,
-  staleMaxAge: 3600,
+  maxAge: SIDEBAR_COMPONENTS_CACHE_MAX_AGE_SECONDS,
+  staleMaxAge: SIDEBAR_COMPONENTS_CACHE_STALE_MAX_AGE_SECONDS,
   name: 'docs-sidebar-components',
+  getKey: resolveSidebarComponentsCacheKey,
 })
