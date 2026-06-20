@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus docs 第 13 批已收尾；本批将 migrated / 未 verified 组件文档的 AI notice 从 `DocsAsideCards` 动态侧栏拆到 docs layout 静态提醒，避免未审批文档首屏为了 notice eager 加载 aside cards / aside shell。后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
+> 当前状态：Nexus docs 第 14 批已收尾；本批将 docs code block 渲染器与样式从 `TuffCodeBlock` shell 中拆出，只有真实 code block 或用户展开 demo code 时才加载 renderer/highlight/mermaid/CSS。后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵和生产 chunk 复核继续按本文 TODO 队列推进。
 
 ## Goal 原句
 
@@ -24,19 +24,19 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 94%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice 从首屏重型路径拆出。
-- 整体 goal 估算：约 70%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell。
+- 本轮 tabs/card 文档链路：约 95%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS 从首屏重型路径拆出。
+- 整体 goal 估算：约 72%。已完成 docs 路由关键路径止血与一批 dev 模式请求削减；后续仍需系统性覆盖 AI review / aireview 未审批组件、全站 route matrix、生产构建 chunk 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出。
 - 当前批次已停止扩大范围；后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、生产构建 chunk 污染复核、全站页面切换矩阵。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
-| 当前第 13 批 AI notice static follow-up | 100% | 已提交 `ff2c69610`；代码、focused tests、scoped ESLint、Playwright pending baseline / after、生产 compile sanity 均已完成。 |
-| `/en/docs/dev/components/tabs` 触发链路 | 94% | 页面 200；tabs 首屏保持 DocsAside eager count 0、failed 0；占位按钮点击到 Assistant dialog 172-210ms；剩余是 Nuxt/runtime 与 docs demo 模块碎片继续拆。 |
-| docs 内容加载拆分 | 70% | `body=0` / idle `body=1` 已落地；右侧 outline、assistant shell、AI notice 已从重型首屏路径拆出；demo registry、模板静态 shell、折叠区 lazy 仍待做。 |
-| AI review / aireview 未审批组件 | 22% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline 与 AI notice eager mount 修复；逐页 demo 优化待做。 |
+| 当前第 14 批 code block renderer lazy split | 100% | 已提交 `7a5e8be14`；代码、focused tests、scoped ESLint、Playwright clean first-visit / card functionality、生产 compile sanity 均已完成。 |
+| `/en/docs/dev/components/tabs` 触发链路 | 95% | 页面 200；tabs clean first visit codeBlock requests 0、failed 0；占位按钮点击到 Assistant dialog 172-210ms；剩余是 Nuxt/runtime 与 docs demo 模块碎片继续拆。 |
+| docs 内容加载拆分 | 73% | `body=0` / idle `body=1` 已落地；右侧 outline、assistant shell、AI notice、无代码文档 code block renderer/CSS 已从重型首屏路径拆出；demo registry、模板静态 shell、折叠区 lazy 仍待做。 |
+| AI review / aireview 未审批组件 | 24% | 已完成 pending 口径、高风险文档清单、fusion/card/avatar-variants/tabs Playwright baseline、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复；逐页 demo 优化待做。 |
 | 全站页面切换矩阵 | 10% | tabs/card 有基线；`/`、`/store`、dashboard、Provider Registry、Data Governance 待覆盖。 |
 | 生产构建 chunk 复核 | 15% | 第 10/11/12 批均已通过 `NUXT_DISABLE_PRERENDER=true` compile sanity；完整 prerender 和 chunk/payload/CSS 深查待做。 |
 | TODO 与交接文档 | 100% | 当前 goal 原句、批次、证据路径、后续子任务已沉淀在本文。 |
@@ -58,6 +58,7 @@
 | 11 | `5fb01c7ba` | `perf(nexus): lazy mount docs outline` | 已完成 |
 | 12 | `468b1ae63` | `perf(nexus): lazy mount docs aside shell` | 已完成 |
 | 13 | `ff2c69610` | `perf(nexus): keep docs ai notice static` | 已完成 |
+| 14 | `7a5e8be14` | `perf(nexus): lazy load docs code block renderer` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -68,10 +69,52 @@
 - 第 11 批已提交：`5fb01c7ba perf(nexus): lazy mount docs outline`；右侧 `DocsOutline` 从首屏同步挂载改为轻量 skeleton 壳 + idle 延迟挂载，移动端目录按钮仍立即挂载真实 outline。
 - 第 12 批已提交：`468b1ae63 perf(nexus): lazy mount docs aside shell`；右侧 `DocsAsideCardsShell` 从首屏同步 import 改为 `LazyDocsAsideCardsShell` + 轻量占位按钮 + idle 延迟挂载，占位按钮点击仍可立即打开 Assistant。
 - 第 13 批已提交：`ff2c69610 perf(nexus): keep docs ai notice static`；migrated / 未 verified 组件文档的 AI notice 改由 docs layout 静态渲染，不再为了 notice 提前挂载 `DocsAsideCards` / `DocsAsideCardsShell`。
+- 第 14 批已提交：`7a5e8be14 perf(nexus): lazy load docs code block renderer`；`TuffCodeBlock` 改为无样式 async shell，真实 renderer/highlight/mermaid/CSS 只在真实 code block 或 demo code 展开时加载。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵都按下方 TODO 分批处理。
 - 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，但 Nuxt runtime、`node_modules`、i18n 与 docs demo 模块碎片仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+
+## 第 14 批收口记录
+
+目标：修复 `tabs`、`fusion`、`avatar-variants` 这类无真实 Markdown code block 的组件文档页仍会在首屏加载 `TuffCodeBlock` renderer / scoped CSS 的问题。第 13 批后 AI notice 已静态化，但 paused demo 的 code panel 路径仍让无代码页面多拉一次 code block shell / renderer 相关资源。
+
+改动范围：
+
+- `apps/nexus/app/components/content/TuffDemoWrapper.vue`
+- `apps/nexus/app/components/content/TuffCodeBlock.vue`
+- `apps/nexus/app/components/content/TuffCodeBlockRenderer.vue`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/components/content/demo-client-boundary.test.ts`
+- `apps/nexus/app/pages/docs/docs-page-performance.test.ts`
+
+实现口径：
+
+- `TuffDemoWrapper.vue` 不再依赖 Nuxt auto component 的 `LazyTuffCodeBlock`，改为本地 `defineAsyncComponent(() => import('./TuffCodeBlock.vue'))`，并且只有 `hasCode && showCode` 时才加载嵌入 code block。
+- `TuffCodeBlock.vue` 变成无样式 async shell，只保留 props 合同与 `LazyTuffCodeBlockRenderer`。
+- 新增 `TuffCodeBlockRenderer.vue` 承载旧 code block UI、copy、highlight、mermaid 渲染与全部 scoped CSS。
+- `nuxt.config.ts` 将 `TuffCodeBlockRenderer.vue` 从组件 auto-registration 中排除，避免 Nuxt 自动注册重新把 renderer 推回首屏组件图。
+- 保持真实 code block 页行为不变：`card` 页面仍能渲染 3 个 code blocks 和 3 个 copy buttons。
+
+验证证据：
+
+- Vitest：`pnpm -C "apps/nexus" exec vitest run "app/components/content/demo-client-boundary.test.ts" "app/pages/docs/docs-page-performance.test.ts"`，2 files / 40 tests passed。
+- ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "nuxt.config.ts" "app/components/content/TuffDemoWrapper.vue" "app/components/content/TuffCodeBlock.vue" "app/components/content/TuffCodeBlockRenderer.vue" "app/components/content/demo-client-boundary.test.ts" "app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/app/components/content/TuffDemoWrapper.vue" "apps/nexus/app/components/content/TuffCodeBlock.vue" "apps/nexus/app/components/content/TuffCodeBlockRenderer.vue" "apps/nexus/nuxt.config.ts" "apps/nexus/app/components/content/demo-client-boundary.test.ts" "apps/nexus/app/pages/docs/docs-page-performance.test.ts"` 通过。
+- Production build：`NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build` 通过，确认 renderer lazy split 不影响 Nuxt client/server/Nitro 打包。
+- Playwright clean first visit：
+  - 报告：`output/playwright/nexus-docs-codeblock-lazy-clean-3204-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-codeblock-lazy-clean-3204-2026-06-21.json`
+  - tabs：requests 455, scripts 435, stylesheets 17, failed 0, codeBlock requests 0, rendered code blocks 0。
+  - avatar-variants：requests 459, scripts 439, stylesheets 17, failed 0, codeBlock requests 0, rendered code blocks 0。
+  - fusion：requests 453, scripts 433, stylesheets 17, failed 0, codeBlock requests 0, rendered code blocks 0。
+  - 对比第 13 批 after：tabs/avatar-variants/fusion 的无代码页面 codeBlock requests `1 -> 0`，stylesheets `18 -> 17`。
+- Playwright real code block guard：
+  - 报告：`output/playwright/nexus-docs-codeblock-lazy-card-3204-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-codeblock-lazy-card-3204-2026-06-21.json`
+  - card：status 200, rendered code blocks 3, copy buttons 3, demo wrappers 12, run buttons 12, failed 0。
+  - card 的 code block shell / renderer requests 4 属预期，因为该页有真实 `TuffCodeBlock` 节点。
+  - 辅助排查报告：`output/playwright/nexus-docs-codeblock-lazy-3203-2026-06-21.md` / `.json`，用于确认访问过 real code page 后 dev CSS 会有序列副作用；最终结论以 3204 clean first visit 为准。
 
 ## 第 13 批收口记录
 
@@ -394,7 +437,7 @@
 
 ### 收尾边界
 
-- [x] 当前批次只收尾第 13 批 AI notice static follow-up，不继续混入 docs demo 拆分或更多 aireview 未审批组件优化。
+- [x] 当前批次只收尾第 14 批 code block renderer lazy split，不继续混入 docs demo 拆分或更多 aireview 未审批组件优化。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，优先从 `fusion` / `card` / `avatar-variants` 中选，跑 Playwright / HAR baseline 后再落代码。
@@ -407,7 +450,8 @@
 - [ ] 固化 docs template：同类文档页共享稳定布局壳，正文与 demo 独立懒加载。
 - [ ] 将 demo registry 从 docs 首屏路径移出，组件 demo 只在可见区域或交互展开时加载。
 - [ ] 拆 pending 文档的大正文：优先让首屏 headline / summary / props overview 静态化，长 demo、FAQ、usage sections 后置到 idle 或可见区。
-- [ ] 检查 `DocApiTable`、code block renderer、demo wrapper、Markdown renderer 是否在 pending 文档首屏重复 eager import。
+- [x] 检查并修复无代码文档页的 code block renderer eager import：`tabs` / `fusion` / `avatar-variants` clean first visit 均为 codeBlock requests 0。
+- [ ] 继续检查 `DocApiTable`、demo wrapper、Markdown renderer 是否在 pending 文档首屏重复 eager import。
 - [x] 对 tabs/card 等组件页建立最小 Playwright 性能基线：首屏截图、HAR、request count、failed count、DOMContentLoaded/load、client-side route switch timing。
 - [x] 为 docs 内容加载新增 focused tests，钉住不会回退到全量 MDC parse、同步 full-body prefetch 或全局 demo registry eager load。
 
@@ -417,6 +461,7 @@
 - [x] 初步审计 `apps/nexus/content/docs/dev/components/*.mdc`：共 216 个组件文档，`reviewed` 64 个，`migrated` 152 个，`verified: true` 92 个，未 verified 124 个；按上述口径 pending 152 个。
 - [x] 建立 pending baseline：`fusion` / `card` / `avatar-variants` / `tabs` 已输出 Playwright baseline；确认第 13 批前 `card`、`avatar-variants` 会因 AI notice eager mount aside cards / shell。
 - [x] 修复 pending AI notice eager mount：notice 已静态化，`card` / `avatar-variants` 首屏 `DocsAside` class count 从 4 降到 0。
+- [x] 修复 pending / 无代码文档 code block renderer eager load：`fusion` / `avatar-variants` 首屏 codeBlock requests 从 1 降到 0，stylesheets 从 18 降到 17。
 - [ ] 不新增宽泛审计脚手架；每批只为待修页面输出一次性 Playwright / HAR evidence 或 focused regression，记录 pending 组件、正文体量、demo 数、重型 client demo 引用数。
 - [ ] 对未审批组件逐个分组：可静态化、可懒加载、应移出 docs 首屏、应合并模板、应删除或后置。
 - [ ] 优先处理高风险 pending 页面：
@@ -431,7 +476,7 @@
 - [ ] 将 aireview demo / preview / report 类重型组件改为显式 lazy boundary，并复用现有 `TuffDemoWrapper` / `TuffDemoClientRenderer.client.vue` 懒激活机制。
 - [ ] 为 aireview 未审批组件新增加载回归测试，确保文档页切换不 eager import 全部重型组件。
 - [ ] 下一批候选 A：`fusion` demo lazy boundary。原因：正文约 52KB、10 个 demo，after report 仍需要 4.5s 后确认 aside idle mount，适合继续拆 demo / content renderer。
-- [ ] 下一批候选 B：`card` demo / API table 首屏拆分。原因：正文约 49KB、12 个 demo，第 13 批后仍有 460 requests / 440 scripts，适合测 demo registry 与 API table eager import。
+- [ ] 下一批候选 B：`card` demo / API table 首屏拆分。原因：正文约 49KB、12 个 demo，第 14 批后真实 code block 行为已守住，但仍适合继续测 demo registry 与 API table eager import。
 - [ ] 下一批候选 C：`avatar-variants` 长正文静态模板化。原因：正文约 36KB、demo 少但体量高，适合验证模板固定和长内容后置是否有效。
 
 ### P0：当前 goal 后续验收清单
@@ -440,6 +485,7 @@
 - [ ] 每一批 Playwright 报告至少包含：截图路径、HAR 路径、failed request count、request count、DOMContentLoaded/load/network idle、client-side route switch timing。
 - [ ] 每一批只提交当前相关文件；不得混入 CoreApp AI evidence、其它产品线或无关格式化。
 - [x] 第 13 批结束已更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
+- [x] 第 14 批结束已更新本文：提交 hash、改动范围、测试命令、Playwright 核心数字、下一批候选。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -455,6 +501,7 @@
 - [ ] 跑 `pnpm -C "apps/nexus" run build` 或 `pnpm nexus:build`，确认生产 CSS chunk 不存在同类跨页面污染；2026-06-21 复核时 client/server build 通过，但完整 prerender 阶段仍有既有错误需单独收敛。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 12 批 docs aside shell lazy boundary 不影响生产 client/server/Nitro 打包。
 - [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 13 批 AI notice 静态化不影响生产 client/server/Nitro 打包。
+- [x] 跑 `NUXT_DISABLE_PRERENDER=true pnpm -C "apps/nexus" run build`，确认第 14 批 code block renderer lazy split 不影响生产 client/server/Nitro 打包。
 - [ ] 检查 Nuxt route chunks、payload chunks、CSS chunks 是否存在 docs/store/dashboard/landing 互相污染。
 - [ ] 若生产存在同类问题，优先从 import boundary / layout boundary / component registration 修复，而不是沿用 dev-only HTML filter。
 
@@ -464,7 +511,7 @@
 - [x] 先做临时实验验证是否能安全减少 Vue Router / Pinia devtools 相关 dev-only import；A/B 证明 tabs/card 各减少 18 个请求，failed 0。
 - [x] 若要落地 alias / noop 模块，必须有 focused Vitest、scoped ESLint、Playwright tabs/card/switch 报告和 failed request = 0 证据。
 - [x] 不直接 alias 不稳定的 Nuxt / Vue Router 内部路径，除非确认版本边界、fallback 和运行时兼容性。
-- [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、docs content renderer、demo wrapper / code block 相关模块碎片。
+- [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、docs content renderer、demo wrapper 可见区加载、真实 code block 页 renderer chunk 体量。
 
 ### P1：i18n 与 route-local message 深化
 
@@ -491,4 +538,4 @@
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 13 批已经收尾，后续不要继续往本批塞 docs demo 或 aireview 逐页优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 14 批已经收尾，后续不要继续往本批塞 docs demo 或 aireview 逐页优化；新改动按上方 TODO 独立切批、独立验证、独立提交。
