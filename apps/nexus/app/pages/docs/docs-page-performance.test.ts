@@ -91,7 +91,12 @@ describe('docs page performance boundaries', () => {
     expect(page).toContain('class="docs-loading-state"')
 
     expect(docsLayout).not.toContain("import Drawer from '~/components/ui/Drawer.vue'")
+    expect(docsLayout).not.toContain("import BackToTop from '~/components/ui/BackToTop.vue'")
     expect(docsLayout).toContain("const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))")
+    expect(docsLayout).toContain("const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))")
+    expect(docsLayout).toContain('BACK_TO_TOP_MOUNT_SCROLL_Y = 240')
+    expect(docsLayout).toContain('const shouldMountBackToTop = ref(false)')
+    expect(docsLayout).toMatch(/window\.addEventListener\('scroll', scheduleBackToTopMountCheck, \{ passive: true \}\)/)
     expect(docsLayout).toContain('class="docs-mobile-action"')
     expect(docsLayout).not.toContain('<TxButton')
     expect(docsLayout).toContain('const sidebarDrawerMounted = ref(false)')
@@ -102,6 +107,7 @@ describe('docs page performance boundaries', () => {
     expect(docsLayout).toContain('@click="openOutlineDrawer"')
     expect(docsLayout).toContain('<DocsDrawer\n        v-if="sidebarDrawerMounted"')
     expect(docsLayout).toContain('<DocsDrawer\n        v-if="outlineDrawerMounted"')
+    expect(docsLayout).toContain('<LazyBackToTop v-if="shouldMountBackToTop"')
 
     expect(docSection).not.toContain('@talex-touch/tuffex/button')
     expect(docSection).not.toContain('@talex-touch/tuffex/auto-sizer')
