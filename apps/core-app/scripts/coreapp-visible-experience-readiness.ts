@@ -26,7 +26,7 @@ const DEFAULT_ELECTRON_DEV_CAPTURE_REPORT =
 
 function printUsage(): void {
   console.log(`Usage:
-  pnpm -C "apps/core-app" run visible:experience:readiness -- [options]
+  corepack pnpm -C "apps/core-app" run visible:experience:readiness -- [options]
 
 Options:
   --appBundle <path>                 Packaged .app bundle path. Default: dist/mac-arm64/tuff.app.

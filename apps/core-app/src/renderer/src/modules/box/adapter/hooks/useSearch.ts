@@ -156,7 +156,17 @@ function createWidgetFallbackItem(feature: PluginFeatureItem, queryText: string)
       ...feature.meta,
       status: prompt ? 'chat-pending' : 'idle',
       keepCoreBoxOpen: true,
-      widgetFallback: true
+      widgetFallback: true,
+      ...(prompt
+        ? {
+            defaultAction: 'intelligence-action',
+            actionId: 'send',
+            payload: {
+              prompt,
+              inputKinds: ['text']
+            }
+          }
+        : {})
     }
   } as TuffItem
 }

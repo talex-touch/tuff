@@ -22,7 +22,7 @@ describe('CoreApp visible experience evidence', () => {
     )
     expect(manifest.surfaces.every((item) => Array.isArray(item.checkedEvidence))).toBe(true)
     expect(manifest.verification?.recommendedCommand).toContain(
-      'visible:experience:verify -- --input "evidence/coreapp-visible/coreapp-visible-experience-manifest.json"'
+      'corepack pnpm -C "apps/core-app" run visible:experience:verify -- --input "evidence/coreapp-visible/coreapp-visible-experience-manifest.json"'
     )
     expect(manifest.verification?.recommendedCommand).toContain('--requireCheckedEvidence')
     expect(manifest.verification?.recommendedCommand).toContain('--requireEvidenceTags')
@@ -90,6 +90,7 @@ describe('CoreApp visible experience evidence', () => {
       expect.arrayContaining([
         'CoreBox AI Ask text.chat success preview is visible',
         'CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible',
+        'Text and OCR success previews show a non-empty answer without empty-response copy',
         'Provider, model, latency, trace id, and input kind metadata are visible for text and OCR paths',
         'Copy failure remains visible inside the preview',
         'Logged-out failure shows a sign-in recovery hint',
@@ -125,6 +126,7 @@ describe('CoreApp visible experience evidence', () => {
     ])
     expect(coreboxAiAsk?.blockedWhen).toEqual(
       expect.arrayContaining([
+        'Text or OCR success shows empty response, no answer, 空回答, or 无回答 copy.',
         'Text success and OCR success are not captured as separate recent paths.',
         'Permission denied still invokes Intelligence SDK.',
         'Local/Ollama preferred routing calls a disabled Nexus provider.'
@@ -230,6 +232,71 @@ describe('CoreApp visible experience evidence', () => {
     )
   })
 
+  it('requires AI Stable evidence tags to use distinct visual artifacts', () => {
+    const manifest = buildCoreAppVisibleExperienceManifest({
+      baselineVersion: '2.4.10-beta.25',
+      generatedAt: '2026-05-17T00:00:00.000Z'
+    })
+    markAllVisibleExperienceItemsPassed(manifest)
+
+    const coreboxAiAsk = manifest.surfaces.find((item) => item.id === 'corebox-ai-ask')
+    expect(coreboxAiAsk).toBeDefined()
+    if (!coreboxAiAsk) return
+
+    coreboxAiAsk.artifactPaths = ['docs/engineering/reports/coreapp-visible/corebox-ai-shared.png']
+    coreboxAiAsk.evidenceTagArtifacts = {
+      ...coreboxAiAsk.evidenceTagArtifacts,
+      'AI-STABLE-01': ['docs/engineering/reports/coreapp-visible/corebox-ai-shared.png'],
+      'AI-STABLE-02': ['docs/engineering/reports/coreapp-visible/corebox-ai-shared.png']
+    }
+
+    expect(
+      verifyCoreAppVisibleExperienceManifest(manifest, {
+        requireAllPassed: true,
+        requireArtifactPaths: true,
+        requireVisualArtifacts: true,
+        requireCheckedEvidence: true,
+        requireEvidenceTags: true
+      }).failures
+    ).toContain(
+      'Visible experience item evidence artifact is reused across tags: corebox-ai-ask -> docs/engineering/reports/coreapp-visible/corebox-ai-shared.png -> AI-STABLE-01, AI-STABLE-02'
+    )
+  })
+
+  it('rejects unexpected AI Stable evidence tags and orphan tag artifacts', () => {
+    const manifest = buildCoreAppVisibleExperienceManifest({
+      baselineVersion: '2.4.10-beta.25',
+      generatedAt: '2026-05-17T00:00:00.000Z'
+    })
+    markAllVisibleExperienceItemsPassed(manifest)
+
+    const coreboxAiAsk = manifest.surfaces.find((item) => item.id === 'corebox-ai-ask')
+    expect(coreboxAiAsk).toBeDefined()
+    if (!coreboxAiAsk) return
+
+    coreboxAiAsk.evidenceTags = [...(coreboxAiAsk.evidenceTags ?? []), 'AI-STABLE-99']
+    coreboxAiAsk.evidenceTagArtifacts = {
+      ...coreboxAiAsk.evidenceTagArtifacts,
+      'AI-STABLE-99': ['docs/engineering/reports/coreapp-visible/corebox-ai-extra.png']
+    }
+    coreboxAiAsk.artifactPaths.push('docs/engineering/reports/coreapp-visible/corebox-ai-extra.png')
+
+    expect(
+      verifyCoreAppVisibleExperienceManifest(manifest, {
+        requireAllPassed: true,
+        requireArtifactPaths: true,
+        requireVisualArtifacts: true,
+        requireCheckedEvidence: true,
+        requireEvidenceTags: true
+      }).failures
+    ).toEqual(
+      expect.arrayContaining([
+        'Visible experience item has unexpected evidence tag: corebox-ai-ask -> AI-STABLE-99',
+        'Visible experience item has artifact for unexpected evidence tag: corebox-ai-ask -> AI-STABLE-99'
+      ])
+    )
+  })
+
   it('renders a checklist without claiming evidence is collected', () => {
     const manifest = buildCoreAppVisibleExperienceManifest({
       baselineVersion: '2.4.10-beta.25',
@@ -311,7 +378,7 @@ describe('CoreApp visible experience evidence', () => {
     )
   })
 
-  it('renders checked evidence tags when the manifest records AI Stable item ids', () => {
+  it('renders partial evidence tags without marking a pending AI Stable item complete', () => {
     const manifest = buildCoreAppVisibleExperienceManifest({
       baselineVersion: '2.4.10-beta.25',
       generatedAt: '2026-05-17T00:00:00.000Z'
@@ -331,12 +398,33 @@ describe('CoreApp visible experience evidence', () => {
     }
 
     const template = renderCoreAppVisibleExperienceEvidenceTemplate(manifest)
-    expect(template).toContain('- [x] AI-STABLE-06')
+    expect(template).toContain('- [-] AI-STABLE-06')
     expect(template).toContain(
       '    - docs/engineering/reports/coreapp-visible/model-unsupported.png'
     )
-    expect(template).toContain('- [x] AI-STABLE-07')
+    expect(template).toContain('- [-] AI-STABLE-07')
     expect(template).toContain('- [ ] AI-STABLE-08')
+  })
+
+  it('renders completed evidence tags only when the AI Stable item is passed', () => {
+    const manifest = buildCoreAppVisibleExperienceManifest({
+      baselineVersion: '2.4.10-beta.25',
+      generatedAt: '2026-05-17T00:00:00.000Z'
+    })
+
+    const coreboxAiAsk = manifest.surfaces.find((item) => item.id === 'corebox-ai-ask')
+    if (coreboxAiAsk) {
+      coreboxAiAsk.status = 'passed'
+      coreboxAiAsk.evidenceTags = ['AI-STABLE-06']
+      coreboxAiAsk.artifactPaths = [
+        'docs/engineering/reports/coreapp-visible/model-unsupported.png'
+      ]
+      coreboxAiAsk.evidenceTagArtifacts = {
+        'AI-STABLE-06': ['docs/engineering/reports/coreapp-visible/model-unsupported.png']
+      }
+    }
+
+    expect(renderCoreAppVisibleExperienceEvidenceTemplate(manifest)).toContain('- [x] AI-STABLE-06')
   })
 
   it('blocks capture readiness when packaged artifact and capture paths are not usable', () => {
@@ -423,16 +511,21 @@ function markAllVisibleExperienceItemsPassed(
     const artifactPath = item.id.startsWith('startup-packaged')
       ? `docs/engineering/reports/${item.id}/summary.md`
       : `docs/engineering/reports/coreapp-visible/${item.id}.png`
+    const tagArtifacts = Object.fromEntries(
+      (surface?.requiredEvidenceTags ?? []).map((tag) => [
+        tag,
+        [`docs/engineering/reports/coreapp-visible/${item.id}-${tag.toLowerCase()}.png`]
+      ])
+    )
+    const artifactPaths = [artifactPath, ...Object.values(tagArtifacts).flat()]
 
     return {
       ...item,
       status: 'passed',
-      artifactPaths: [artifactPath],
+      artifactPaths,
       checkedEvidence: surface?.requiredEvidence ?? [],
       evidenceTags: surface?.requiredEvidenceTags ?? [],
-      evidenceTagArtifacts: Object.fromEntries(
-        (surface?.requiredEvidenceTags ?? []).map((tag) => [tag, [artifactPath]])
-      )
+      evidenceTagArtifacts: tagArtifacts
     }
   })
 }
