@@ -1,9 +1,1181 @@
 # 变更日志
 
-> 更新时间：2026-06-19
+> 更新时间：2026-06-20
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-20
+
+### test(ai): capture Local Ollama routing evidence
+
+- `plugins/touch-intelligence/widgets/ask-panel.vue`
+- `plugins/touch-intelligence/dist/build/manifest.json`
+- `plugins/touch-intelligence/dist/build/widgets/.compiled/touch-intelligence__intelligence-ask.cjs`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.ts`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-ask-local-ollama-routing-probe.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-ask-local-ollama-routing-after-enter.png`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-strict-verify-output.json`
+- `docs/plan-prd/TODO-AI.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+  - Added visible runtime metadata to the packaged `touch-intelligence` Ask widget: provider, model, latency, trace, input kind, and capability.
+  - Rebuilt the plugin package so packaged Electron uses precompiled widget output containing the new routing metadata.
+  - Captured real packaged CoreBox AI Ask Local/Ollama routing evidence with isolated userData, disabled `tuff-nexus-default`, `local-default`, and Ollama `qwen2.5:3b`; the UI shows `local-ok`, `local-default`, `qwen2.5:3b`, latency, trace, input kind `text`, and capability `text.chat`.
+  - Tightened the packaged AI Ask probe to remove current input echo before matching evidence signals, block widget-load failures, and require full runtime metadata for `AI-STABLE-08`.
+  - Validation passed: `corepack pnpm -C "apps/core-app" exec vitest run "scripts/coreapp-packaged-ai-ask-probe.test.ts"` (`1 file / 17 tests passed`).
+  - Strict visible verify still exits `1` as expected, but `failureCount` dropped from `96` to `94`; `corebox-ai-ask` now binds `AI-STABLE-06/07/08` and still lacks `AI-STABLE-01/02/03/04/05`.
+
+### test(release): report manifest issue details
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Added structured `manifestIssueDetails` to R1 remote release gate manifest checks while preserving the existing `issues` string array for compatibility.
+  - The new detail records manifest-level issues separately from artifact-level issues, including artifact index, component, name, platform, arch, and field where available.
+  - Re-ran read-only Gate E strict for `v2.4.12-beta.8`; GitHub release and manifest are reachable, but the gate still fails on local manifest absence, manifest signature/version issues, linux artifact mismatch, missing Nexus `signatureUrl`, and 404 signature endpoints.
+
+### fix(release): parse strict gate flag before following options
+
+- `scripts/lib/argv-utils.mjs`
+- `scripts/check-release-gates.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Fixed `getArgValue()` so standalone boolean flags such as `--strict` are not parsed as the following option token.
+  - Added a CLI regression proving `node scripts/check-release-gates.mjs --strict --timeout-ms 1` reports `strict: true`.
+  - Ran a read-only Gate D check for `v2.4.12-beta.8` against `https://tuff.tagzxia.com`: Nexus release/latest/download checks pass, while GitHub release/manifest fetch, missing Nexus `signatureUrl`, and 404 signature endpoints remain warning debt and keep R1 open.
+
+### docs(ai): record current strict visible evidence gap
+
+- `apps/core-app/scripts/coreapp-visible-experience-verify.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-strict-verify-output.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-strict-verify-exit-code.txt`
+- `docs/plan-prd/TODO-AI.md`
+  - Re-ran the strict visible-experience verifier for the current AI Stable manifest and recorded the expected exit `1` state.
+  - Refreshed the strict verify JSON artifact with direct `corepack pnpm exec tsx` output so the file remains parseable JSON; current `gate.passed=false`, `failureCount=96`, and CoreBox AI Ask still lacks six required AI Stable tags.
+  - Updated the verifier CLI regression to invoke `corepack pnpm exec tsx`, matching current PR gate command hygiene and avoiding the broken local pnpm shim.
+  - Ran a local-only Ollama preflight: `qwen2.5:3b` returned non-empty `local-ok` through `/api/chat`, while `qwen3:0.6b` returned an empty answer; documented `qwen2.5:3b` as the recommended model for the next packaged `AI-STABLE-08` routing capture without treating the preflight as UI evidence.
+  - Confirmed `corebox-ai-ask` still lacks `AI-STABLE-01/02/03/04/05/08` and the required text/OCR success, logged-out, provider unavailable, quota exhausted, and Local/Ollama routing evidence.
+  - Kept `AI-STABLE-06/07` as partial only; this is gap evidence, not a Stable completion claim.
+
+### refactor(search): share scan-progress path helpers
+
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts`
+- `docs/plan-prd/TODO-R3.md`
+  - Added shared indexed-source progress path helpers for normalized path dedupe, raw+normalized path expansion, and normalized-value filtering.
+  - Reused those helpers in FileProvider scan-progress summary, scoped reads, delete cleanup, upsert, evidence building, WatchService auto-scan eligibility scoped `scan_progress` reads, and RuntimeReset scan-progress cleanup so CoreApp no longer hand-rolls those path/progress rules locally.
+  - Simplified the FileProvider RuntimeReset adapter to pass only current owned watch roots; the reset service now owns raw+normalized scan-progress path expansion at the service boundary.
+  - Removed the redundant `addWatchPath()` normalized exact-root branch now covered by the shared watch-root ownership helper, preserving the existing `exists` response and manual file-target enqueue behavior through one path.
+  - Kept this scoped to non-schema R3 hygiene; source-scoped `scan_progress` schema migration and FileProvider SQLite/FTS runtime-store migration remain open.
+
+### test(release): verify GitHub manifest download identity
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E manifest asset checks so the GitHub `tuff-release-manifest.json` asset `browser_download_url` pathname must include the checked release tag and end with `tuff-release-manifest.json` before the manifest is downloaded.
+  - Added Gate E coverage for a manifest asset download URL pointing at another tag and Gate D warning coverage for a manifest asset download URL pointing at the wrong filename.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus assets/endpoints/latest evidence is still required to close R1.
+
+### test(release): verify GitHub asset download identity
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E GitHub release asset inventory checks so each manifest-declared artifact and signature sidecar `browser_download_url` pathname must include the checked release tag and end with the declared filename.
+  - Added Gate E coverage for a core artifact download URL pointing at another tag and Gate D warning coverage for a signature sidecar download URL pointing at the wrong filename.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus assets/endpoints/latest evidence is still required to close R1.
+
+### test(release): reject manifest artifact version drift
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E GitHub manifest checks so each core artifact filename must include the manifest `release.version`.
+  - Added regression coverage for a core artifact filename that keeps platform/arch identity but omits the checked release version, preventing manifest and Nexus assets from jointly pointing at a stale artifact name.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus assets/endpoints/latest evidence is still required to close R1.
+
+### test(release): verify latest release metadata
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E `remote-latest` checks so the channel latest endpoint must match the checked release `tag`, `version`, `channel`, and `status=published`, not only the tag.
+  - Added Gate E regressions for tag-matching latest metadata drift and missing latest metadata, plus Gate D warning coverage for pre-final release stages.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus assets/endpoints/latest evidence is still required to close R1.
+
+### fix(search): wait on automatic debounce recovery
+
+- `packages/utils/search/indexing-source-recovery-policy.ts`
+- `packages/utils/__tests__/search/indexing-source-recovery-policy.test.ts`
+- `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/plan-prd/TODO-R3.md`
+  - Treated `scan-debounced` and `reconcile-debounced` skipped task history the same as retry-window skips in indexed-source recovery policy.
+  - Returned a low-priority `wait` recommendation for automatic debounce skips and active `taskRunGate` already-running/debounced diagnostics, preventing Settings diagnostics from suggesting immediate scan/reconcile/reset actions while the run-gate window is still active.
+  - Expanded Settings recovery chip wait metadata for retry-window and run-gate waits, so retry-window chips keep a next retry timestamp while run-gate chips show the blocked runtime reason instead of an empty retry time.
+  - Kept permission and disabled-source recovery ahead of run-gate waits so product recovery still points to grant/enable actions before runtime scheduling state.
+  - Kept this scoped to R3 recovery-policy evidence; Settings recovery chip UI evidence and complete durable scheduler history remain open.
+
+### fix(search): hydrate automatic debounce from task history
+
+- `packages/utils/search/indexing-source-task-run-gate.ts`
+- `packages/utils/__tests__/search/indexing-source-task-run-gate.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+- `docs/plan-prd/TODO-R3.md`
+  - Added a bounded `IndexedSourceTaskRunGate.hydrateCompletion()` path so durable scan/reconcile task history can restore the latest completion timestamp without restoring stale running state.
+  - Hydrated CoreApp automatic scan/reconcile run-gate debounce from persisted task history before batch scheduling, so app restart does not immediately bypass the automatic debounce window.
+  - Kept retry-window backoff ahead of run-gate debounce for failed task history, while scan/reconcile success history now produces explicit `scan-debounced` / `reconcile-debounced` skipped evidence.
+  - Kept this scoped to R3 durable scheduler hygiene; complete scheduler history, Settings recovery evidence, and FileProvider SQLite/FTS runtime-store migration remain open.
+
+### test(ai): reject noisy AI Stable routing evidence tags
+
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.ts`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.test.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+- `docs/plan-prd/TODO-AI.md`
+  - Tightened `AI-STABLE-08` advisory routing checks so Local/Ollama evidence is blocked when the captured UI exposes Nexus provider fallback, selected provider metadata, call success, or response text.
+  - Tightened visible-experience strict verification to reject unexpected AI Stable tags and orphan `evidenceTagArtifacts` keys, keeping the AI Stable evidence matrix limited to the required `AI-STABLE-01` through `AI-STABLE-08` contract.
+  - Added focused regressions for both checks while preserving the existing `AI-STABLE-06/07` partial evidence status.
+  - Kept this scoped to R2 evidence-contract hardening; real packaged Electron success/failure/routing artifacts are still required before AI Stable can be marked complete.
+
+### fix(search): reset retry backoff after successful task
+
+- `packages/utils/search/indexing-source-task-retry-policy.ts`
+- `packages/utils/__tests__/search/indexing-source-task-retry-policy.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+- `docs/plan-prd/TODO-R3.md`
+  - Reset automatic scan/reconcile retry backoff after the latest same-kind successful task, so hydrated durable history does not keep blocking automatic work after a confirmed recovery.
+  - Kept successful tasks of another kind isolated from the retry decision, preserving scan and reconcile independence.
+  - Added shared retry-policy regressions plus CoreApp runtime hydrate regressions proving newer persisted scan/reconcile successes allow the next scheduled automatic task.
+  - Kept this scoped to R3 durable scheduler hygiene; full durable scheduler history, debounce hydration, Settings recovery evidence, and FileProvider SQLite/FTS runtime-store migration remain open.
+
+### test(release): reject manifest core name drift
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E GitHub manifest checks so each core artifact filename must expose a recognizable platform and match the declared `platform` / `arch`.
+  - Added remote release gate regressions for manifest-declared core artifacts whose filename disagrees with platform/arch or has no recognizable platform, closing a case where GitHub manifest and Nexus assets could both align to the wrong artifact identity.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+
+### fix(search): isolate flush snapshot metadata
+
+- `packages/utils/search/indexing-write-flush-evidence.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-evidence.test.ts`
+- `packages/utils/search/indexing-write-flush-snapshot.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-snapshot.test.ts`
+- `docs/plan-prd/TODO-R3.md`
+  - Deep-cloned File indexed-source flush snapshot/evidence metadata after merging adapter and caller fields, keeping nested runtime diagnostics from being mutated by downstream evidence consumers.
+  - Isolated result, failure, and retry snapshot builder metadata so shared flush APIs are safe even before snapshots are recorded by the runtime snapshot service.
+  - Added focused coverage for snapshot/caller metadata isolation while preserving existing status, counter, retry, and duration normalization semantics.
+  - Kept this scoped to R3 runtime evidence hygiene; FileProvider SQLite/FTS runtime-store migration and source-scoped `scan_progress` schema remain open.
+
+### fix(search): return scan-progress upsert summaries
+
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+- `docs/plan-prd/TODO-R3.md`
+  - Returned normalized `scan_progress` upsert row counts from the SearchIndex worker and surfaced them through FileProvider scan-progress upsert results.
+  - Let the shared progress store prefer adapter-provided row counts while preserving the old count fallback for adapters that still return `void`.
+  - Added latest scan-progress upsert summary metadata to FileProvider evidence, recording only aggregate attempted/ready/upserted/reason/checkedAt values and not raw paths.
+  - Kept this scoped to non-schema runtime evidence hardening; source-scoped `scan_progress` migration and full durable scheduler history remain open.
+  - Validation passed: `corepack pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-store.test.ts"`, `corepack pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts"` and CoreApp `typecheck:node`.
+
+### docs(todo): split AI and R3 closure lists
+
+- `apps/core-app/package.json`
+- `docs/plan-prd/TODO-AI.md`
+- `docs/plan-prd/TODO-R3.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+  - Added dedicated R2 AI Stable and R3 Search / Indexing Runtime closure TODO files so packaged AI evidence gaps and indexing runtime migration gaps can be tracked without expanding the main two-week TODO.
+  - Kept AI Stable open/partial states explicit: `AI-STABLE-01/02/03/04/05/08` remain open, `AI-STABLE-06/07` remain partial, and focused tests or CDP plumbing still cannot close packaged Electron evidence.
+  - Aligned the AI TODO/report wording with the current manifest: `AI-STABLE-06/07` already bind curated probe JSON + PNG artifacts, but remain partial because the `corebox-ai-ask` surface is still `pending`.
+  - Routed CoreApp visible-experience npm scripts through `corepack pnpm exec`, matching the PR gate fix and preventing strict AI evidence verification from hitting the stale local pnpm shim.
+  - Routed the visible-experience manifest generator and AI/R3 TODO verification commands through `corepack pnpm`, keeping generated evidence instructions aligned with the validated PR-gate command path.
+  - Kept R3 open/partial states explicit: FileProvider SQLite/FTS runtime-store migration, source-scoped `scan_progress` schema, durable job history, Quicklinks persistent feed, Browser Bookmarks platform evidence, and Everything productionization remain open/partial.
+
+### fix(search): align index scheduler watch-root filtering
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.test.ts`
+- `docs/plan-prd/TODO-R3.md`
+  - Reused the shared indexed watch-root resolver in FileProvider index worker depth scheduling so roots rejected by the normalizer cannot influence deferred worker dispatch ordering.
+  - Added regression coverage for a normalizer-rejected watch root and kept the change scoped to R3 worker scheduling hygiene.
+  - Source-scoped `scan_progress` schema migration, FileProvider SQLite/FTS runtime-store migration, and full durable scheduler history remain open.
+
+### fix(search): align file provider initial watch roots
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `docs/plan-prd/TODO.md`
+  - Reused the shared indexed watch-root resolver during `FileProvider` construction so the provider's initial `watchPaths` / `normalizedWatchPaths` state follows the same empty-normalized-root filtering as `FileProviderWatchService`.
+  - Kept normal configured roots unchanged while preventing roots rejected by the normalizer from entering runtime reset, scan-progress, ownership, or diagnostics state before the watch service syncs.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts"`, `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-watch-root-policy.test.ts"`, CoreApp `typecheck:node`, and `git diff --check`.
+  - Kept this scoped to R3 adapter hygiene; source-scoped `scan_progress` schema migration, FileProvider SQLite/FTS runtime-store migration, and full durable scheduler history remain open.
+
+### fix(search): ignore empty normalized watch roots
+
+- `packages/utils/search/indexing-watch-root-policy.ts`
+- `packages/utils/__tests__/search/indexing-watch-root-policy.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared watch-root policy so roots rejected by the injected path normalizer cannot enter `paths` / `normalizedPaths`.
+  - Applied the same empty-normalized-path guard to ownership checks and pending-permission filtering, keeping bad root config out of downstream scan scheduling and diagnostics.
+  - Validation passed: packages/utils watch-root/scan/progress focused tests, CoreApp FileProvider watch/scan-progress focused tests, CoreApp `typecheck:node`, and `git diff --check`.
+  - Kept this scoped to R3 watch-root hygiene; source-scoped `scan_progress` schema migration, FileProvider SQLite/FTS runtime-store migration, and full durable scheduler history remain open.
+
+### test(release): reject duplicate signed download queries
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E signed download URL checks so duplicate `exp` or `sig` query parameters fail release integrity instead of being collapsed by `URLSearchParams.get()`.
+  - Added regression coverage for duplicated signed query parameters and kept the existing malformed query, fragment, and unsigned download endpoint checks intact.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs" "scripts/check-release-gates/local-checks.test.mjs"` and `git diff --check`.
+  - Kept this scoped to release gate false-positive prevention; real GitHub Release ↔ Nexus assets/endpoints/latest evidence is still required to close R1.
+
+### fix(search): normalize worker status diagnostics
+
+- `packages/utils/search/indexing-worker-status.ts`
+- `packages/utils/__tests__/search/indexing-worker-status.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Added a shared worker-status normalizer so malformed worker arrays, non-object entries, or unknown worker states cannot pollute FileProvider / indexed-source worker diagnostics.
+  - Unknown worker states now degrade to `offline` and malformed worker loader payloads become an empty snapshot instead of corrupting summary counts.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-worker-status.test.ts"`, CoreApp FileProvider worker status focused test, CoreApp `typecheck:node`, and changed-file ESLint.
+  - Kept this scoped to R3 diagnostics hygiene; full durable scheduler history, source-scoped `scan_progress` schema migration, and FileProvider SQLite/FTS runtime-store migration remain open.
+
+### fix(ci): route local pnpm subcommands through corepack
+
+- `package.json`
+- `apps/core-app/package.json`
+- `scripts/run-eslint-changed.mjs`
+- `scripts/validate-publish-manifests.mjs`
+- `scripts/publish-package.mjs`
+- `packages/tuffex/packages/script/build/run.ts`
+- `packages/tuffex/packages/script/build/component-declarations.ts`
+  - Routed nested PR-gate, changed-file lint, TuffEx build, and publish packing subprocesses through `corepack pnpm`, so a stale local `node_modules/.bin/pnpm` shim cannot block the real lint/typecheck/test/package checks.
+  - Verified the TuffEx source manifest and lockfile importer no longer expose publish-blocking `catalog:` specs for the publish package path.
+  - Validation passed: `pnpm quality:pr`, `pnpm publish:check && pnpm publish:check:pack`, R1 local/remote release gate focused tests, R2 AI evidence-contract focused tests, R3 Search/Indexing focused tests, and `git diff --check`.
+  - Kept this scoped to CI/release hygiene; real Gate E GitHub Release ↔ Nexus evidence, AI Stable packaged success/failure/routing artifacts, and full Search/Indexing durable runtime migration remain open.
+
+### test(release): reject unidentified nexus release assets
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E Nexus release asset matrix checks so every remote asset must expose a recognizable `platform`, `arch`, and filename before it can participate in manifest comparison.
+  - Added regression coverage for a Nexus asset missing identity fields, reporting `invalid-nexus-asset-identity` instead of silently skipping the row and letting the matrix look complete.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+
+### fix(search): scope auto-scan progress eligibility reads
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Scoped FileProvider auto-scan eligibility reads to the current raw + normalized watch roots before consulting `scan_progress`, so stale rows from old roots or future sources cannot enter the auto-indexing decision path.
+  - Added regression coverage for scoped `scan_progress` queries, raw/normalized path matching, and unrelated historical rows not inflating `lastScannedAt`.
+  - Kept this scoped to R3 read-side hygiene; source-scoped `scan_progress` schema migration, FileProvider SQLite/FTS full runtime-store migration, and full durable scheduler history remain open.
+
+### test(ai): render partial ai stable tags distinctly
+
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/plan-prd/TODO.md`
+  - Updated the visible-experience checklist renderer so required AI Stable evidence tags only render as checked when the whole visible surface is `passed`; partial packaged evidence on a `pending` surface now renders as `[-]` while still listing its attached artifacts.
+  - Adjusted the current AI Stable checklist so `AI-STABLE-06` and `AI-STABLE-07` are visibly partial, not completed, matching the manifest status and strict gate output.
+  - Added regression coverage for pending partial tags and completed passed tags, and aligned the TODO strict verify command with the current `--requireEvidenceTags` gate.
+  - Kept this scoped to R2 evidence-contract presentation; packaged Electron text/OCR success artifacts and the remaining AI-STABLE open items are still required before AI Stable can be marked complete.
+
+### fix(search): guard scan progress worker writes
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-scan-progress.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-scan-progress.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Added a shared scan-progress upsert normalizer at the SearchIndex worker boundary so empty paths, duplicate paths, and malformed `lastScanned` timestamps are dropped before they can write `scan_progress`.
+  - Applied the same guard in the main-thread worker client and inside the worker handler, keeping both the normal service path and future direct worker calls from polluting scan-progress evidence.
+  - Kept this scoped to R3 worker write hygiene; source-scoped `scan_progress` schema migration, FileProvider SQLite/FTS full runtime-store migration, and full durable scheduler history remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts" "src/main/modules/box-tool/search-engine/workers/search-index-worker-scan-progress.test.ts" "src/main/modules/box-tool/search-engine/workers/search-index-worker.retry.test.ts"` (`3 files / 18 tests passed`) and scoped ESLint for the touched worker files.
+
+### test(release): reject undeclared core github assets
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E GitHub release asset inventory so undeclared `tuff-core-*` assets or undeclared `.sig` / `.asc` sidecars fail final release integrity instead of silently passing alongside the manifest-declared matrix.
+  - Kept Gate D behavior as a warning and allowed non-core metadata attachments such as release evidence JSON.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+
+### fix(search): sanitize completed progress paths at store boundary
+
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened shared indexed-source progress store loading and summary input so empty or duplicate completed paths from adapters cannot inflate `totalRoots`, hide pending roots, or pollute Settings evidence.
+  - Added regression coverage for both store-loaded completed paths and caller-provided completed path sets.
+  - Kept this scoped to R3 progress-store hygiene; FileProvider SQLite/FTS full write migration, source-scoped `scan_progress` schema migration, and full durable scheduler history remain open.
+
+### test(ai): block ai stable failure evidence with provider success counters
+
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.ts`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+- `docs/plan-prd/TODO.md`
+  - Tightened packaged CoreBox AI Ask advisory checks so fixed failure evidence for `AI-STABLE-03` through `AI-STABLE-07` is rejected when the same capture also shows provider invocation, Intelligence SDK invocation, provider returned answer, `text.chat` response, fallback success, or fake-success counter-signals.
+  - Preserved the existing success/routing guards for `AI-STABLE-01`, `AI-STABLE-02`, and `AI-STABLE-08`, and kept evidence tag checks advisory until real packaged Electron artifacts close the fixed matrix.
+  - Kept this scoped to R2 evidence-contract rigor; packaged Electron text/OCR success artifacts and the remaining AI-STABLE open items are still required before AI Stable can be marked complete.
+
+### docs(release): add 2.4.12-beta.8 bilingual notes
+
+- `notes/update_2.4.12-beta.8.zh.md`
+- `notes/update_2.4.12-beta.8.en.md`
+- `docs/plan-prd/TODO.md`
+  - Added concise zh/en release notes for `2.4.12-beta.8`, covering release gate hardening, source+pack publish manifest validation, AI Stable evidence-contract tightening, and Search / Indexing hygiene without claiming Gate E, AI Stable, or full FileProvider durable runtime completion.
+  - Unblocked the local Gate D strict release check for the current version while leaving the missing release asset manifest as a pre-asset `pending` item.
+  - Validation passed: `node "scripts/check-release-gates.mjs" --tag v2.4.12-beta.8 --stage gate-d --strict`.
+
+### test(release): run packed publish manifest check in local gate
+
+- `scripts/check-release-gates/local-checks.mjs`
+- `scripts/check-release-gates/local-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Added a dedicated `publish-manifests-pack` local release-gate check that runs `validate-publish-manifests.mjs --pack`, so packed npm manifests cannot regress to `catalog:` / `workspace:` / `file:` / `link:` specs after source manifests pass.
+  - Kept the existing `publish-manifests` source check unchanged and reported packed-manifest validation as a separate gate item for clearer Gate D/Gate E diagnostics.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm exec vitest run "scripts/check-release-gates/local-checks.test.mjs" "scripts/check-release-gates/remote-checks.test.mjs"` (`2 files / 42 tests passed`), `pnpm publish:check && pnpm publish:check:pack`, and `git diff --check`.
+
+### test(ai): reject reused ai stable visual evidence
+
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+- `docs/plan-prd/TODO.md`
+  - Tightened the strict visible-experience evidence gate so a screenshot or recording artifact cannot be reused across multiple required `AI-STABLE-*` tags.
+  - Updated the passing test fixture to model distinct visual artifacts per fixed AI Stable evidence item, and added a regression that rejects shared visual evidence for `AI-STABLE-01` / `AI-STABLE-02`.
+  - Kept this scoped to R2 evidence-contract rigor; packaged Electron text/OCR success artifacts and the remaining AI-STABLE open items are still required before AI Stable can be marked complete.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/coreapp-visible-experience-evidence.test.ts"` (`1 file / 13 tests passed`).
+
+### test(release): reject non-canonical signed download urls
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E signed download checks so Nexus release `downloadUrl` must not include a URL fragment or unexpected query parameters beyond canonical `exp` / `sig`, keeping signed download metadata server-verifiable.
+  - Added regression coverage for a signed download URL with `#download`, reporting `download-url-has-fragment`, and another with `utm_source`, reporting `download-url-has-unexpected-query`; both fail `remote-download-endpoint`.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"` (`41 tests passed`).
+
+### fix(search): sanitize source progress evidence roots
+
+- `packages/utils/search/indexing-source-progress-evidence.ts`
+- `packages/utils/search/indexing-scan-eligibility.ts`
+- `packages/utils/search/indexing-source-task-state.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-evidence.test.ts`
+- `packages/utils/__tests__/search/indexing-scan-eligibility.test.ts`
+- `packages/utils/__tests__/search/indexing-source-task-state.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened shared indexed-source progress evidence so empty roots and duplicate roots are removed before `rootCount`, `roots`, and default `totalRoots` are exposed to Settings/diagnostics.
+  - Applied the same ordered dedupe to `pendingPermissionPaths`, so `pendingPermissionRoots` and metadata cannot be inflated by blank or repeated permission paths.
+  - Ignored empty source-specific reason overrides so adapters cannot accidentally erase the default Settings/evidence reason for pending, failed, running, or ready states.
+  - Cloned nested source metadata at the progress evidence boundary, preventing Settings/diagnostics readers from mutating adapter-owned metadata snapshots.
+  - Treated negative scan-progress timestamps as invalid in scan eligibility, preventing malformed `scan_progress.lastScanned` rows from inflating `lastScannedAt` or stale scheduling decisions.
+  - Reused the shared snapshot clone helper when updating `lastScan` / `lastWatch` / `lastReconcile` / `lastReset`, so future nested task snapshots cannot be mutated through caller-owned objects.
+  - Kept this scoped to R3 progress evidence hygiene; FileProvider SQLite/FTS full write migration, source-scoped `scan_progress` schema migration, and full durable scheduler history remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-evidence.test.ts" "__tests__/search/indexing-scan-eligibility.test.ts" "__tests__/search/indexing-source-task-state.test.ts"` (`3 files / 39 tests passed`).
+
+### test(release): reject non-canonical nexus signature urls
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E Nexus asset matrix checks so `signatureUrl` must be the canonical same-origin signature endpoint without query strings or fragments, preventing signed download-style URLs from being accepted as signature endpoints.
+  - Added regression coverage for a Nexus `signatureUrl` that points at the right path but includes `exp` / `sig` query parameters, reporting `signature-url-not-canonical`.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"` (`39 tests passed`).
+
+### test(ai): require input kind metadata in packaged success evidence
+
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.ts`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+- `docs/plan-prd/TODO.md`
+  - Tightened the packaged CoreBox AI Ask advisory evidence checks so `AI-STABLE-01` text success and `AI-STABLE-02` OCR success must include visible input kind metadata in addition to text/OCR handoff, answer text, provider, model, latency, and trace signals.
+  - Added regressions proving otherwise-complete text and OCR success captures still fail when input kind / inputKind / 输入 metadata is missing.
+  - Extended the same success-evidence guard to reject visible empty-answer copy such as `empty response`, `no answer`, `空回答`, or `无回答`, so weak blank completions cannot close text/OCR success items.
+  - Kept this scoped to R2 evidence-contract rigor; packaged Electron text/OCR success artifacts and the remaining `AI-STABLE` open items are still required before AI Stable can be marked complete.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "scripts/coreapp-packaged-ai-ask-probe.test.ts" "src/main/modules/platform/coreapp-visible-experience-evidence.test.ts"` (`2 files / 26 tests passed`).
+
+### fix(search): scope file scan progress reads to current roots
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Scoped FileProvider `scan_progress` completed-path reads to the current raw + normalized watch roots before scan strategy and Settings evidence consume them, preventing unrelated historical rows from inflating scan-progress row counts or scan/reconcile diagnostics.
+  - Passed the active watch roots through `FileProviderScanStrategyService` so scan decisions no longer depend on unscoped completed-path reads.
+  - Kept this scoped to R3 scan-progress read hygiene; FileProvider SQLite/FTS full write migration, source-scoped `scan_progress` schema migration, and full durable scheduler history remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.test.ts"` (`2 files / 24 tests passed`).
+
+### fix(search): ignore empty reset scan progress paths
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened FileProvider runtime reset cleanup so `scan_progress` reset paths are filtered after the injected watch-path normalizer, preventing whitespace-only or normalizer-rejected paths from entering scoped delete queries.
+  - Preserved raw + normalized cleanup for valid paths so integrity-triggered resets can still remove historical casing/path-form rows without deleting unrelated `scan_progress` data.
+  - Kept this scoped to R3 reset cleanup hygiene; FileProvider SQLite/FTS full write migration, source-scoped `scan_progress` schema migration, and full durable scheduler history remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts"` (`1 file / 9 tests passed`) and `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts"` (`2 files / 33 tests passed`).
+
+### test(release): reject duplicate github release asset names
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E GitHub release asset inventory checks so duplicate asset names are reported as `duplicate-github-asset-name` instead of letting the first matching asset silently win manifest comparison.
+  - Added regression coverage for duplicated declared core artifact asset names, preserving existing missing asset, missing download URL, non-uploaded state, and optional missing `state` behavior.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"` (`38 tests passed`).
+
+### test(release): validate signed download expiry query
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened R1 Gate E signed download checks so Nexus release `downloadUrl` must include a positive integer `exp` query in addition to a valid 64-hex `sig`.
+  - Added regression coverage for malformed `exp` values causing `remote-download-endpoint` to fail Gate E, while preserving redirect/binary response validation.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"` (`37 tests passed`).
+
+### fix(search): guard sdk watch task-state paths
+
+- `packages/utils/search/indexing-source-task-state.ts`
+- `packages/utils/__tests__/search/indexing-source-task-state.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexed-source task-state builders so whitespace-only watch paths are replaced with an explicit `<unknown>` placeholder before entering `lastWatch` snapshots, and caller-provided history summaries are sanitized before builder output can enter in-memory runtime diagnostics.
+  - Preserved non-blank paths exactly, including trailing spaces, so the builder does not rewrite potentially valid adapter paths.
+  - Reused existing task-history normalization for builder output, keeping primitive summary fields while dropping nested objects, arrays, and non-finite numbers.
+  - Kept this scoped to R3 task-state hygiene; full durable scheduler/history semantics and source-scoped `scan_progress` schema migration remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-state.test.ts"` (`1 file / 20 tests passed`) and `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` (`2 files / 65 tests passed`).
+
+### fix(search): drop empty watch paths from task state
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened persisted indexed-source task-state hydration so malformed `lastWatch` snapshots with empty or whitespace-only paths are dropped before they can appear in diagnostics or recovery hints.
+  - Kept generic task history summaries primitive-only but otherwise source-owned; this change only guards the structured `lastWatch` snapshot path contract.
+  - Kept this scoped to R3 durable task-state hygiene; full durable job scheduler/history semantics and source-scoped `scan_progress` schema migration remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts"` (`1 file / 12 tests passed`).
+
+### fix(search): ignore empty scan progress roots
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+- `packages/utils/search/indexing-scan-eligibility.ts`
+- `packages/utils/search/indexing-scan-strategy.ts`
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/__tests__/search/indexing-scan-eligibility.test.ts`
+- `packages/utils/__tests__/search/indexing-scan-strategy.test.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened shared scan eligibility, scan strategy, and source progress store helpers so empty normalized roots cannot enter new/stale scheduling, reconciliation, pending-root summaries, delete counts, or upsert calls.
+  - Filtered empty normalized FileProvider scan-progress roots and pending-permission paths before building Settings evidence, deleting `scan_progress` rows, or upserting completed roots through the search index worker.
+  - Preserved the existing source-scoped migration boundary: this only prevents malformed empty paths from polluting R3 diagnostics/evidence and does not claim FileProvider SQLite/FTS full runtime-store migration, source-scoped `scan_progress`, or durable scheduler history are complete.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-store.test.ts" "__tests__/search/indexing-scan-strategy.test.ts" "__tests__/search/indexing-scan-eligibility.test.ts"` (`3 files / 31 tests passed`) and `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts"` (`1 file / 20 tests passed`).
+
+### fix(search): canonicalize file scan progress writes
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts`
+- `packages/utils/search/indexing-scan-eligibility.ts`
+- `packages/utils/__tests__/search/indexing-scan-eligibility.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Reused the FileProvider watch-path normalizer at the `scan_progress` write boundary so completed root upserts persist the canonical normalized path instead of creating duplicate rows for casing/path-form variants.
+  - Expanded `scan_progress` cleanup to cover both raw and normalized path forms, preserving cleanup for historical rows while keeping new writes canonical.
+  - Aligned FileProvider runtime reset cleanup with the same raw+normalized path expansion so integrity-triggered resets can remove historical `scan_progress` rows that predate canonical writes.
+  - Scoped shared scan eligibility `lastScannedAt` to completed rows that match the current normalized watch roots, preventing unrelated historical `scan_progress` rows from inflating auto-scan and Settings evidence timestamps.
+  - Added focused coverage for normalized upserts, raw+normalized deletes, reset cleanup, and scoped scan eligibility timestamps.
+  - Kept this scoped to R3 scan_progress path canonicalization; FileProvider SQLite/FTS full write migration, source-scoped `scan_progress` schema migration, and full durable scheduler history remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.test.ts"` (`3 files / 28 tests passed`), `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts"` (`1 file / 13 tests passed`), and `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-store.test.ts" "__tests__/search/indexing-scan-strategy.test.ts" "__tests__/search/indexing-scan-eligibility.test.ts"` (`3 files / 26 tests passed`).
+
+### test(ai): reject failed ai ask captures as success evidence
+
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.ts`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+  - Hardened the packaged CoreBox AI Ask probe so `AI-STABLE-01` text success and `AI-STABLE-02` OCR success advisory checks reject visible failure-state text such as `Error`, `请求失败`, `NEXUS_STREAM_UNSUPPORTED`, permission denied, quota, provider unavailable, or logged-out copy; `AI-STABLE-08` Local/Ollama routing also rejects disabled Nexus fallback/call evidence.
+  - Added `blockedByFailureSignal` / `matchedBlockedSignals` to probe evidence checks, keeping success signal matching separate from failure-state rejection.
+  - Added focused regressions proving text/OCR success captures with complete provider/model/latency/trace metadata still fail when an error state is visible, and Local/Ollama routing captures fail when disabled Nexus provider calls are visible.
+  - Kept this scoped to R2 evidence-contract rigor; packaged Electron text/OCR success artifacts and the remaining AI-STABLE open items are still required before AI Stable can be marked complete.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "apps/core-app" exec vitest run "scripts/coreapp-packaged-ai-ask-probe.test.ts" "src/main/modules/platform/coreapp-visible-experience-evidence.test.ts"` (`2 files / 23 tests passed`).
+
+### test(release): validate github release asset inventory at gate-e
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Added a dedicated `remote-github-asset-inventory` check for R1 Gate E so the GitHub Release asset list must include every core artifact and signature sidecar declared by `tuff-release-manifest.json`, with `browser_download_url` present and non-empty `state` equal to `uploaded` for each required asset.
+  - Tightened `remote-manifest-asset` so the manifest asset itself must be downloadable and, when GitHub exposes a non-empty upload `state`, uploaded before Gate E can pass.
+  - Kept pre-Gate-E missing, non-downloadable, or non-uploaded manifest/artifact/signature assets as warnings, preserving early diagnostics while preventing a manifest-only, unsigned-asset, non-uploaded, or non-downloadable GitHub release from passing final release integrity.
+  - Added regressions for Gate E missing artifact/signature/download URL/non-uploaded state failure, manifest asset non-uploaded failure, pre-Gate-E warning behavior, optional missing `state` compatibility, and the happy path `remote-github-asset-inventory: pass`.
+  - Kept this scoped to release asset inventory rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"` (`36 tests passed`).
+
+### test(release): validate github release metadata at gate-e
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Added a dedicated `remote-github-release-metadata` check for R1 Gate E so GitHub Release `tag_name`, `draft`, and `prerelease` state must match the checked release and Nexus channel.
+  - Kept pre-Gate-E drift as a warning, preserving preview diagnostics while preventing draft or prerelease-state drift from passing final release integrity.
+  - Added regressions for Gate E failure, pre-Gate-E warning behavior, and the happy path `remote-github-release-metadata: pass`.
+  - Kept this scoped to release metadata rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"`.
+
+### fix(search): isolate snapshot clone fallbacks
+
+- `packages/utils/search/indexing-snapshot-clone.ts`
+- `packages/utils/search/indexing-source-snapshot-cache.ts`
+- `packages/utils/search/indexing-worker-status.ts`
+- `packages/utils/search/indexing-write-flush-snapshot.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-snapshot-clone.test.ts`
+- `packages/utils/__tests__/search/indexing-source-snapshot-cache.test.ts`
+- `packages/utils/__tests__/search/indexing-worker-status.test.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-snapshot.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Added a shared indexing snapshot clone helper so source snapshots, worker-status snapshots, and write-flush metadata stay isolated even when `structuredClone` is unavailable or rejects adapter payloads.
+  - Replaced shallow fallback clones in the shared Search/Indexing diagnostics caches with recursive fallback cloning for plain objects, arrays, `Date`, `Map`, `Set`, `URL`, `RegExp`, `ArrayBuffer`, typed arrays, `DataView`, `Error` / `AggregateError` diagnostics, and circular snapshot references.
+  - Added generation guards so `clear()` prevents stale in-flight source snapshot and worker-status loads from repopulating cache state after reset.
+  - Added focused fallback-mode coverage for nested source snapshots, nested worker metrics, nested flush metadata, stale in-flight cache clears, Error/AggregateError diagnostics, and the shared clone helper.
+  - Kept this scoped to R3 diagnostics/evidence cache hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `TMPDIR="/Users/talexdreamsoul/Workspace/Projects/talex-touch/.tmp/codex-vitest" pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-snapshot-clone.test.ts" "__tests__/search/indexing-source-snapshot-cache.test.ts" "__tests__/search/indexing-worker-status.test.ts" "__tests__/search/indexing-write-flush-snapshot.test.ts" "__tests__/search/indexing-watch-delta-queue.test.ts"` (`5 files / 43 tests passed`).
+
+### test(release): validate remote release metadata at gate-e
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Added a dedicated `remote-release-metadata` check for R1 Gate E so the fetched Nexus release must expose the checked `tag`, matching `version`, inferred `channel`, and `published` status.
+  - Kept pre-Gate-E drift as a warning, preserving early-stage diagnostics while preventing draft/archived or mismatched release metadata from passing final release integrity.
+  - Added regressions for metadata drift and pre-Gate-E warning behavior, while confirming the happy path now reports `remote-release-metadata: pass`.
+  - Kept this scoped to remote release metadata rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"`.
+
+### test(release): fail gate-e on stale latest release pointer
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened the R1 remote Gate E latest-channel check so `/api/releases/latest?channel=...` mismatch or query failure now fails Gate E instead of remaining a warning.
+  - Preserved the earlier warning-only behavior for pre-Gate-E stages, keeping local/preview release checks useful while making final release integrity strict.
+  - Added regressions for stale latest tag, pre-Gate-E warning behavior, and latest endpoint query failure.
+  - Kept this scoped to release gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature/latest endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"`.
+
+### fix(search): isolate indexed source cached snapshots
+
+- `packages/utils/search/indexing-source-snapshot-cache.ts`
+- `packages/utils/search/indexing-worker-status.ts`
+- `packages/utils/__tests__/search/indexing-source-snapshot-cache.test.ts`
+- `packages/utils/__tests__/search/indexing-worker-status.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened shared indexed-source snapshot caches so Browser Bookmarks diagnostics and File worker-status diagnostics cannot be mutated through cached read results.
+  - Added snapshot clone boundaries for source snapshot cache `getSnapshot()` / `prime()` and worker-status cache reads while preserving TTL and concurrent load deduplication behavior.
+  - Extended worker-status cache isolation to nested worker diagnostics such as File worker metrics, preventing Settings reads from mutating cached worker health evidence.
+  - Added focused mutation-isolation coverage for cached source snapshots, primed snapshots, worker status summary, worker arrays, and nested worker metrics.
+  - Kept this scoped to R3 diagnostics cache hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-snapshot-cache.test.ts" "__tests__/search/indexing-worker-status.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts" "src/main/modules/box-tool/addon/files/file-provider-worker-status.test.ts"`, `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-watch-delta-queue.test.ts" "__tests__/search/indexing-write-flush-snapshot.test.ts" "__tests__/search/indexing-source-snapshot-cache.test.ts" "__tests__/search/indexing-worker-status.test.ts"`, and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### fix(search): isolate write flush evidence snapshots
+
+- `packages/utils/search/indexing-write-flush-snapshot.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-snapshot.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared write flush snapshot service so callers cannot mutate cached File/App/Bookmarks/Quicklinks flush evidence through `record()` return values or `getSnapshot()` results.
+  - Cloned recorded snapshots and nested metadata at the service boundary, preserving the existing public shape while preventing Settings/diagnostics readers from corrupting latest flush state.
+  - Added focused coverage for mutation isolation on both recorded and returned snapshots, including nested flush metadata.
+  - Kept this scoped to R3 flush evidence hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-snapshot.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-write-flush-snapshot-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"`.
+
+### fix(search): retain watch deltas after flush failures
+
+- `packages/utils/search/indexing-watch-delta-queue.ts`
+- `packages/utils/__tests__/search/indexing-watch-delta-queue.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared watch delta queue so failed `processEntries()` calls no longer drop pending file/source watch updates.
+  - Removed optimistic pending clears and now deletes processed entries only after a successful flush, guarded by payload identity so same-key updates queued during an in-flight flush remain pending for the next serialized flush.
+  - Added focused coverage for failed flush retry retention and same-key updates arriving while an older payload is still processing.
+  - Kept this scoped to R3 watch delta reliability hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-watch-delta-queue.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-watch-delta-queue-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-incremental-queue-service.test.ts"`.
+
+### fix(search): deduplicate runtime delta emission
+
+- `packages/utils/search/indexing-write-runtime-emitter.ts`
+- `packages/utils/__tests__/search/indexing-write-runtime-emitter.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexed write runtime emitter before duplicate add/change/delete deltas can reach runtime store adapters.
+  - Deduplicated add/change deltas by mapped stable key and delete deltas by path while preserving first-seen event order and existing build helper contracts.
+  - Added focused coverage for duplicate watch/reconcile change records and duplicate cleanup delete paths.
+  - Kept this scoped to R3 runtime delta emission hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts" "__tests__/search/indexing-watch-delta-queue.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-delete-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-cleanup-delete-service.test.ts"`.
+
+### fix(search): deduplicate scan scheduling roots
+
+- `packages/utils/search/indexing-scan-eligibility.ts`
+- `packages/utils/search/indexing-scan-strategy.ts`
+- `packages/utils/__tests__/search/indexing-scan-eligibility.test.ts`
+- `packages/utils/__tests__/search/indexing-scan-strategy.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened shared scan eligibility and scan strategy helpers before duplicate watch roots can schedule duplicate full-scan or reconciliation work.
+  - Deduplicated watch paths by normalized key while preserving the first configured path for downstream diagnostics and user-visible context.
+  - Added focused coverage for duplicate watch roots with platform-style casing/path normalization.
+  - Kept this scoped to R3 scan scheduling hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-scan-eligibility.test.ts" "__tests__/search/indexing-scan-strategy.test.ts" "__tests__/search/indexing-source-progress-store.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.test.ts"`.
+
+### fix(search): deduplicate scan progress roots
+
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexed source progress store before duplicated watch roots or completed paths can inflate Settings progress summaries, delete counts, or upsert counts.
+  - Deduplicated watch roots for pending-root summaries and deduplicated delete/upsert path lists before calling scan progress adapters while preserving input order.
+  - Updated FileProvider scan progress summaries to compute completed roots from normalized unique watch roots, preventing duplicate path casing/forms from producing inconsistent completed/pending metadata.
+  - Added focused coverage for duplicate watch roots, duplicate delete/upsert paths, and FileProvider normalized duplicate roots.
+  - Kept this scoped to R3 progress store hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-store.test.ts" "__tests__/search/indexing-scan-eligibility.test.ts" "__tests__/search/indexing-scan-strategy.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts"`.
+
+### fix(search): normalize write runtime emitter progress
+
+- `packages/utils/search/indexing-write-runtime-emitter.ts`
+- `packages/utils/__tests__/search/indexing-write-runtime-emitter.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexed write runtime emitter before malformed progress counters can reach File/App/Bookmarks/Quicklinks runtime progress sinks.
+  - Normalized emitted `current` / `total` progress counts to non-negative finite integers while preserving existing batch and delta contracts.
+  - Added focused coverage for negative, `NaN`, infinite, and fractional progress counts.
+  - Kept this scoped to R3 progress emission hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` and `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-runtime.test.ts" "__tests__/search/indexing-progress-stream.test.ts" "__tests__/search/indexing-progress-estimator.test.ts"`.
+
+### fix(search): normalize indexing progress stream throttles
+
+- `packages/utils/search/indexing-progress-stream.ts`
+- `packages/utils/__tests__/search/indexing-progress-stream.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexing progress stream throttle before malformed clocks, payload counters, or throttle config values can affect progress emission cadence.
+  - Normalized `now`, `lastEmitAt`, payload `current` / `total` / `progress`, and throttle config intervals/steps while preserving terminal-stage emission semantics.
+  - Added focused coverage for malformed clocks, malformed payload values, and malformed throttle config values.
+  - Kept this scoped to R3 progress diagnostics hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-progress-stream.test.ts"`.
+
+### fix(search): normalize indexing progress estimator inputs
+
+- `packages/utils/search/indexing-progress-estimator.ts`
+- `packages/utils/__tests__/search/indexing-progress-estimator.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexing progress ETA estimator before malformed progress samples can affect Settings progress chips.
+  - Normalized `current`, `total`, and monotonic `now` values at the update boundary, and sanitized estimator options such as sample interval, speed sample threshold, no-progress timeout, smoothing factor, max ETA, and fallback multiplier.
+  - Added focused coverage for malformed samples and malformed estimator options to ensure bad values stay conservative instead of producing fake ETA.
+  - Kept this scoped to R3 progress diagnostics hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-progress-estimator.test.ts"`.
+
+### fix(search): normalize write flush runtime decisions
+
+- `packages/utils/search/indexing-write-flush-runtime.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-runtime.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared write-flush runtime service against malformed adapter values before they reach idle snapshots, retry scheduling, or runtime config consumers.
+  - Normalized pending/inflight sizes, schedule delays, retry delay, retry count, and shared runtime config values while preserving explicit zero overrides.
+  - Added focused coverage for malformed pending/inflight sizes, retry decisions, and runtime config values.
+  - Kept this scoped to R3 flush runtime hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-runtime.test.ts"`.
+
+### fix(search): normalize write flush evidence snapshots
+
+- `packages/utils/search/indexing-write-flush-evidence.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-evidence.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared write-flush evidence builder so malformed adapter snapshots cannot leak negative, `NaN`, or infinite counters/timestamps/durations into Settings evidence metadata.
+  - Normalized `entries`, `pending`, `inflight`, `checkedAt`, and optional `durationMs` at the evidence boundary while preserving the existing public evidence shape.
+  - Added focused coverage for malformed flush snapshot counters and timestamps.
+  - Kept this scoped to R3 flush evidence hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-evidence.test.ts"`.
+
+### fix(search): normalize indexed-source evidence counters
+
+- `packages/utils/search/indexing-source-profile-diagnostics.ts`
+- `packages/utils/search/indexing-source-grouped-evidence.ts`
+- `packages/utils/search/indexing-source-root-evidence.ts`
+- `packages/utils/search/indexing-source-progress-evidence.ts`
+- `packages/utils/__tests__/search/indexing-source-profile-diagnostics.test.ts`
+- `packages/utils/__tests__/search/indexing-source-grouped-evidence.test.ts`
+- `packages/utils/__tests__/search/indexing-source-root-evidence.test.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-evidence.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened shared indexed-source diagnostics/evidence builders so malformed `checkedAt`, item counts, pending counts, failed counts, and total-root counts cannot leak into Settings diagnostics.
+  - Normalized profile diagnostics, grouped source evidence, root evidence, and progress evidence locally without changing their public API shape.
+  - Added focused coverage for malformed evidence timestamps and counters across the four helper surfaces.
+  - Kept this scoped to R3 diagnostics evidence hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-profile-diagnostics.test.ts" "__tests__/search/indexing-source-grouped-evidence.test.ts" "__tests__/search/indexing-source-root-evidence.test.ts" "__tests__/search/indexing-source-progress-evidence.test.ts"` and scoped ESLint.
+
+### fix(search): normalize flush failure snapshots
+
+- `packages/utils/search/indexing-write-flush-snapshot.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-snapshot.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened shared write-flush snapshot helpers so malformed external flush results cannot leak negative, `NaN`, or infinite counts/durations into FileProvider flush diagnostics.
+  - Normalized result snapshots, idle snapshots, failure snapshots, and retry delay metadata before they are exposed as evidence metadata.
+  - Added focused coverage for malformed flush result counts, idle buffer sizes, attached failure `flushResult` values, and retry delay metadata.
+  - Kept this scoped to R3 flush failure evidence hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-snapshot.test.ts" "__tests__/search/indexing-write-flush-evidence.test.ts" "__tests__/search/indexing-write-flush-executor.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"`.
+
+### fix(search): normalize integrity evidence timestamps
+
+- `packages/utils/search/indexing-source-integrity.ts`
+- `packages/utils/__tests__/search/indexing-source-integrity.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexed-source integrity service before integrity snapshots are exposed as diagnostics/evidence.
+  - Normalized malformed or negative `checkedAt` values, prevented clock rollback from producing negative integrity durations, and sanitized reset row counts returned from runtime reset boundaries.
+  - Added focused coverage for malformed explicit `checkedAt`, clock rollback during integrity checks, and invalid reset row counts.
+  - Kept this scoped to R3 integrity evidence hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-integrity.test.ts" "__tests__/search/indexing-source-reset-executor.test.ts" "__tests__/search/indexing-source-task-state.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"`.
+
+### fix(search): normalize reset executor result metrics
+
+- `packages/utils/search/indexing-source-reset-executor.ts`
+- `packages/utils/__tests__/search/indexing-source-reset-executor.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexed-source reset executor before reset results enter runtime task-state or Settings diagnostics.
+  - Normalized malformed/negative search-index and scan-progress row counts to `0`, truncated fractional row counts, and prevented reset completion timestamps from moving before reset start when the injected clock moves backwards.
+  - Added focused coverage for malformed adapter row counts and clock rollback around reset completion.
+  - Kept this scoped to reset result hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open R3 work.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-reset-executor.test.ts" "__tests__/search/indexing-source-task-state.test.ts" "__tests__/search/indexing-source.test.ts"` and `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"`.
+
+### fix(search): normalize write flush metrics
+
+- `packages/utils/search/indexing-write-flush-executor.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-executor.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Hardened the shared indexed write flush executor so flush durations are normalized to non-negative finite values before adaptive batch scheduling and flush evidence see them.
+  - Tightened `mapIndexedWriteFlushExecutorResult()` numeric metadata mapping to drop negative, `NaN`, and infinite values instead of forwarding malformed worker metrics to FileProvider flush summaries.
+  - Added focused coverage for clock rollback during persistence and malformed numeric metadata returned from worker persist summaries.
+  - Kept this scoped to R3 flush evidence hygiene; FileProvider SQLite/FTS full write migration, `scan_progress` schema/source-scoped migration, and full durable scheduler history remain open.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-executor.test.ts"`.
+
+### test(release): validate remote download response shape
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened `remote-download-endpoint` so signed download URLs must produce a valid response shape, not merely an allowed HTTP status.
+  - Required redirect responses to include `Location`, and required HTTP 200 responses to return a non-empty non-JSON/non-HTML body before Gate E can treat the download endpoint as available.
+  - Added Gate E regressions for redirect-without-location and JSON error bodies returned by signed download URLs.
+  - Kept this scoped to local/remote gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"` and `node "scripts/update-validate-release-manifest.mjs" --manifest "docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json"`.
+
+### test(release): probe signed remote download URLs
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened the R1 remote download gate to probe the Nexus asset metadata `downloadUrl` instead of rebuilding an unsigned canonical URL.
+  - Required each remote download URL to stay same-origin and include a signed `exp` + 64-hex `sig` query before `remote-download-endpoint` can pass Gate E.
+  - Added Gate E regressions for missing signed query and malformed download signature query while preserving relative same-origin Nexus download URLs.
+  - Kept this scoped to local/remote gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs"` and `node "scripts/update-validate-release-manifest.mjs" --manifest "docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json"`.
+
+### test(release): require non-empty remote signature payloads
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+- `docs/plan-prd/TODO.md`
+  - Tightened the R1 remote Gate E signature endpoint check so HTTP 200 is no longer enough; each remote signature endpoint must return a non-empty signature payload.
+  - Rejected JSON/HTML response bodies from the signature endpoint so error payloads or fallback pages cannot masquerade as valid `.sig` downloads.
+  - Preserved compatibility with both ASCII-armored signatures and opaque binary signatures instead of binding the gate to one signing format.
+  - Kept this scoped to local/remote gate rigor; real GitHub Release ↔ Nexus release metadata/assets/download/signature endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs" "scripts/update-validate-release-manifest.test.mjs"` and `node "scripts/update-validate-release-manifest.mjs" --manifest "docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json"`.
+
+### ref(release): validate remote asset sha256 format
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+  - Tightened the R1 read-only remote release gate so `remote-asset-integrity` requires every Nexus release asset to expose a valid 64-hex `sha256`, not merely a non-empty `sha256` field.
+  - Added Gate E coverage for malformed Nexus asset checksums while preserving the existing GitHub manifest ↔ Nexus filename/sha256/signature/download matrix comparison.
+  - Kept this scoped to local gate rigor; real GitHub Release ↔ Nexus release metadata/endpoint evidence is still required to close R1.
+  - Validation passed: `pnpm exec vitest run "scripts/check-release-gates/remote-checks.test.mjs" "scripts/update-validate-release-manifest.test.mjs"`, `node "scripts/update-validate-release-manifest.mjs" --manifest "docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json"`, and `pnpm lint:changed`.
+
+### fix(search): isolate indexing runtime task-state diagnostics snapshots
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+  - Cloned runtime task-state snapshots before exposing them through indexing diagnostics, including `lastScan`, `lastWatch`, `lastReconcile`, `lastReset`, recent task entries, and nested primitive summaries.
+  - Prevented diagnostics callers from mutating cached runtime task-state after hydration from the injected task-state store or after in-memory task updates.
+  - Kept this scoped to runtime snapshot isolation; full durable scheduler history and `scan_progress` schema/source-scoped migration remain open R3 work.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### fix(search): sanitize persisted indexing task state boundaries
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts`
+  - Hardened the CoreApp indexing task-state store on both load and save boundaries.
+  - Normalized persisted `lastScan`, `lastWatch`, `lastReconcile`, and `lastReset` timestamps before they reach diagnostics, clamping future queued/completion times to the runtime clock, preventing inverted task intervals, and dropping negative counters from persisted summaries.
+  - Filtered persisted `recentTasks` with negative or future `completedAt` values instead of clamping them into the current retry window, so malformed durable history cannot manufacture automatic retry blocks or mislead Settings recovery chips.
+  - Applied the same sanitization to the memory store and SQLite save path so direct runtime callers cannot persist malformed in-memory task state.
+  - Cloned and sanitized `recentTasks.summary` values to keep only the public primitive summary contract and prevent nested caller mutations from leaking back into stored task history.
+  - Deep-cloned in-memory `lastScan`, `lastWatch`, `lastReconcile`, and `lastReset` snapshots on load so diagnostics callers cannot mutate the stored runtime task-state cache through returned nested objects.
+  - Kept this scoped to task-state store hygiene; full durable scheduler history and `scan_progress` schema/source-scoped migration remain open R3 work.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts"`, `pnpm -C "apps/core-app" run typecheck:node`, `git diff --check`, and `pnpm quality:pr`.
+
+### fix(search): normalize retry policy clocks
+
+- `packages/utils/search/indexing-source-task-retry-policy.ts`
+- `packages/utils/__tests__/search/indexing-source-task-retry-policy.test.ts`
+  - Normalized the automatic scan/reconcile retry policy clock before evaluating recent failed task history.
+  - Treated malformed `now` values as a safe zero clock so bad caller clocks cannot manufacture a long retry-window block or misclassify finite task history.
+  - Kept existing behavior for valid `now: 0`, stale failures, future persisted failures, and retry-window skipped tasks.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-retry-policy.test.ts" "__tests__/search/indexing-source-recovery-policy.test.ts" "__tests__/search/indexing-source-task-state.test.ts" "__tests__/search/indexing-source-task-run-gate.test.ts" "__tests__/search/indexing-source.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts"`, and scoped ESLint.
+
+### fix(search): normalize runtime task job queued timestamps
+
+- `packages/utils/search/indexing-source-runtime-task-job.ts`
+- `packages/utils/__tests__/search/indexing-source-runtime-task-job.test.ts`
+  - Normalized runtime task job `queuedAt` values before scan/watch/reconcile/reset jobs receive stable task identities.
+  - Added an injectable clock to the SDK job factory and clamped malformed or future explicit queued timestamps to the current clock, preserving per-kind sequence generation while preventing bad job times from reaching schedulers, run gates, or task-state builders.
+  - Kept this as task identity hygiene only; full durable scheduler persistence and `scan_progress` schema work remain separate R3 items.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-runtime-task-job.test.ts" "__tests__/search/indexing-source-task-state.test.ts" "__tests__/search/indexing-source-task-run-gate.test.ts" "__tests__/search/indexing-source-task-retry-policy.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" "src/main/modules/box-tool/search-engine/indexing-reconcile-scheduler.test.ts" "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts"`, and scoped ESLint.
+
+### fix(search): normalize runtime task-state builder timestamps
+
+- `packages/utils/search/indexing-source-task-state.ts`
+- `packages/utils/__tests__/search/indexing-source-task-state.test.ts`
+  - Normalized scan/watch/reconcile/reset task-state builder timestamps before they enter in-memory runtime diagnostics or recent task history.
+  - Fell back malformed task start/occurrence times to the paired completion time or current clock, clamped negative timestamps to `0`, clamped future completion and queued timestamps to the current clock, and prevented completed intervals from ending before they start.
+  - Normalized scan/watch/reconcile/reset counters before runtime state creation, dropping negative or non-finite optional counters and using `0` for required counters so malformed task results cannot pollute diagnostics before persistence.
+  - Kept SQLite task-state load sanitization intact while preventing newly recorded runtime task states from carrying `NaN`, `Infinity`, negative/future timestamps, negative counters, or inverted intervals before persistence.
+  - Kept this scoped to task-state hygiene; `scan_progress` schema/source-scoped migration and full durable scheduler history remain open R3 work.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-state.test.ts" "__tests__/search/indexing-source.test.ts" "__tests__/search/indexing-source-task-retry-policy.test.ts" "__tests__/search/indexing-source-recovery-policy.test.ts" "__tests__/search/indexing-source-task-run-gate.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts"`, `pnpm -C "apps/core-app" run typecheck:node`, and `git diff --check`.
+
+### fix(search): sanitize task run gate timestamps
+
+- `packages/utils/search/indexing-source-task-run-gate.ts`
+- `packages/utils/__tests__/search/indexing-source-task-run-gate.test.ts`
+  - Normalized explicit run-gate timestamps before they enter in-memory scan/reconcile/reset debounce state.
+  - Fell back to the current clock for malformed `start()` / `complete()` timestamps, clamped future explicit completions to the current clock, and dropped malformed updates when no finite timestamp is available.
+  - Kept monotonic `lastCompletedAt` behavior for out-of-order completions while preventing `NaN` / `Infinity` from leaking into task-run gate snapshots or debounce decisions.
+  - Prevented malformed future completion times from extending the in-memory debounce window far beyond the runtime clock.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-run-gate.test.ts"` and `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts" "__tests__/search/indexing-source-task-state.test.ts" "__tests__/search/indexing-source-task-retry-policy.test.ts" "__tests__/search/indexing-source-recovery-policy.test.ts"`.
+
+### fix(search): skip invalid task history entries in shared history updates
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `packages/utils/search/indexing-source-task-state.ts`
+- `packages/utils/__tests__/search/indexing-source-task-state.test.ts`
+  - Hardened shared indexed-source task history appends before state is persisted.
+  - Filtered existing and new `recentTasks` entries whose `completedAt`, kind, or status is invalid, so direct helper callers and task-state updates share the same durable history boundary.
+  - Normalized optional `queuedAt`, `startedAt`, and `occurredAt` history timestamps to non-negative values no later than `completedAt`.
+  - Sanitized and cloned task history `summary` values to keep only the public primitive contract, dropping nested objects, arrays, and non-finite numbers before retry/recovery policy or CoreApp persistence sees them.
+  - Cloned updated `lastScan` / `lastWatch` / `lastReconcile` / `lastReset` snapshots in the SDK task-state update helper so caller mutation cannot rewrite the returned runtime state.
+  - Kept `lastScan` / `lastWatch` / `lastReconcile` / `lastReset` update semantics intact while keeping malformed entries out of the bounded recent history window.
+  - Prevented malformed runtime task history entries from entering the bounded durable history window before retry/recovery policies or SQLite hydration see them.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts" "__tests__/search/indexing-source-task-state.test.ts" "__tests__/search/indexing-source-task-retry-policy.test.ts" "__tests__/search/indexing-source-recovery-policy.test.ts" "__tests__/search/indexing-source-task-run-gate.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"`, scoped ESLint, `pnpm -C "apps/core-app" run typecheck:node`, and `git diff --check`.
+
+### fix(search): ignore invalid task timestamps in recovery policy
+
+- `packages/utils/search/indexing-source-recovery-policy.ts`
+- `packages/utils/__tests__/search/indexing-source-recovery-policy.test.ts`
+  - Hardened indexed-source recovery recommendations against malformed durable task history.
+  - Ignored non-finite `completedAt` values when selecting the latest task, preventing Settings recovery chips from being driven by corrupted persisted task timestamps.
+  - Preserved normal unsorted-history behavior for valid task entries and kept retry-window wait recommendations unchanged.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-recovery-policy.test.ts" "__tests__/search/indexing-source-task-retry-policy.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts"`, and scoped ESLint.
+
+### fix(search): ignore future failed tasks in retry policy
+
+- `packages/utils/search/indexing-source-task-retry-policy.ts`
+- `packages/utils/__tests__/search/indexing-source-task-retry-policy.test.ts`
+  - Hardened the indexed-source automatic retry-window policy against malformed durable task history.
+  - Ignored failed task entries whose `completedAt` is non-finite or later than the current policy time, preventing bad persisted timestamps from stretching automatic scan/reconcile backoff far into the future.
+  - Preserved normal backoff behavior for valid past failures and left explicit maintenance actions unaffected.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-retry-policy.test.ts" "__tests__/search/indexing-source-recovery-policy.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"`, and scoped ESLint.
+
+### test(ai): tighten packaged AI Ask evidence tag signals
+
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.ts`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.test.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+  - Tightened advisory packaged AI Ask `--expectEvidenceTag` checks for AI Stable success/routing paths.
+  - Required `AI-STABLE-01` text success and `AI-STABLE-02` OCR handoff probes to show grouped answer, provider, model, latency, and trace signals instead of passing on a single weak keyword.
+  - Required `AI-STABLE-03` through `AI-STABLE-07` fixed failure probes to include both the concrete failure class and a recovery hint, covering logged-out, provider unavailable, quota exhausted, model/capability unsupported, and `intelligence.basic` permission-denied paths.
+  - Required `AI-STABLE-08` Local/Ollama routing probes to show both Local/Ollama and routing/provider metadata signals.
+  - Kept checks advisory and did not mark any packaged Electron evidence item complete; real screenshots/recordings and manifest-bound artifacts remain required.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "scripts/coreapp-packaged-ai-ask-probe.test.ts"`, scoped ESLint, `pnpm -C "apps/core-app" run typecheck:node`, `git diff --check`, `pnpm publish:check`, `pnpm publish:check:pack`, and `pnpm quality:pr`.
+
+### ref(release): validate remote release manifest envelope
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+  - Extended the read-only remote release gate to validate the GitHub `tuff-release-manifest.json` envelope before comparing it with Nexus assets.
+  - Required `schemaVersion: 1`, non-empty `release.version` / `release.tag` / `release.channel`, `release.tag === v${version}`, channel-to-version suffix alignment, non-empty artifact lists, and at least one core artifact.
+  - Kept the existing Nexus filename / sha256 / signed download endpoint / signature endpoint matrix comparison, so Gate E now catches both malformed manifests and Nexus drift.
+  - Tightened `remote-manifest-nexus-matrix` so malformed GitHub manifests cannot report a passing matrix just because Nexus assets align with a structurally invalid manifest; the matrix check now carries `manifestIssues` for diagnosis.
+  - Validation passed: `pnpm exec vitest run "scripts/update-validate-release-manifest.test.mjs" "scripts/check-release-gates/remote-checks.test.mjs"`, `node "scripts/update-validate-release-manifest.mjs" --manifest "docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json"`, `pnpm -C "apps/core-app" run typecheck:node`, and `git diff --check`.
+
+### fix(search): normalize File scan-progress path matching
+
+- `packages/utils/search/indexing-scan-strategy.ts`
+- `packages/utils/search/indexing-scan-eligibility.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - Added optional path normalization to the shared scan strategy and scan eligibility helpers so FileProvider can match existing `scan_progress` rows using its platform-aware watch path policy.
+  - Wired FileProvider scan strategy, auto-scan eligibility, and scan-progress diagnostics to the same normalizer, preventing case or path-form differences from turning completed roots into repeat full scans.
+  - Kept current `scan_progress` table shape unchanged; source-scoped schema migration remains separate R3 work that requires an explicit migration decision.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-scan-strategy.test.ts" "__tests__/search/indexing-scan-eligibility.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts"`, `pnpm -C "apps/core-app" run typecheck:node`, and `git diff --check`.
+
+### fix(search): scope File scan-progress diagnostics to watched roots
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+  - Filtered FileProvider scan-progress summaries to the current watched roots before computing completed roots, pending roots, `scanProgressRows`, and `lastScannedAt`.
+  - Prevented unrelated `scan_progress` rows from other roots or future sources from making File indexed-source diagnostics look ready or fresher than they are.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts" "src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### fix(search): scope File scan-progress reset to owned roots
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts`
+  - Scoped FileProvider `scan_progress` cleanup during runtime reset to the provider's current watched paths instead of deleting the whole table.
+  - Passed both raw and normalized watch paths into the reset service so existing progress rows written in either path form can be cleared without touching unrelated source progress.
+  - Added coverage for path-scoped counting/deletion, disabled scan-progress reset, unavailable DB utilities, and empty reset path no-op behavior.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts" "src/main/modules/box-tool/search-engine/file-indexed-source.test.ts" "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### ref(search): use actual provider-clear row counts in reset summaries
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.delta.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-store-adapter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.ts`
+  - Changed provider-level SearchIndex clears to return the actual number of removed FTS rows from `removeProviderItems()` instead of using a pre-delete provider count as the reset summary.
+  - Propagated the row count through the SearchIndex worker and worker client, so runtime `clearSource()` and reset task history can record actual store mutation counts.
+  - Updated SearchIndexStoreAdapter to use the provider-clear result directly and kept `countByProvider()` available for diagnostics rather than reset accounting.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-index-service.delta.test.ts" "src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts" "src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### ref(search): expose File worker persist summaries through flush evidence
+
+- `packages/utils/search/indexing-write-flush-executor.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-executor.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-types.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts`
+  - Added a structured `PersistAndIndexSummary` return path for the SearchIndex worker `persistAndIndex` operation, including entries, chunks, persisted rows, indexed items, file updates, progress rows, and embedding rows.
+  - Extended the shared flush executor to merge optional persist-result metadata into flushed snapshots without changing idle/not-ready/failure behavior.
+  - Fed FileProvider worker persist summaries into index-flush snapshot metadata so existing File indexed-source evidence can show real worker persist/index counts instead of only batch size.
+  - Kept worker IPC compatible with both legacy `done` messages and the worker's current `result` messages, and normalized structured worker errors back to plain `Error` messages for callers.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-executor.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts" "src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### fix(search): scope indexed-source store mutations by provider
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.delta.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-store-adapter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-types.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - Added provider-scoped `removeProviderItems()` for indexed-source deletes so runtime deltas remove only rows owned by the delta `sourceId`.
+  - Scoped SearchIndex upsert replacement to `provider + itemId`, preventing two indexed sources with the same stable key from overwriting each other's FTS rows.
+  - Added the same scoped removal operation to the SearchIndex worker protocol/client/handler and moved FileProvider single-item search-index cleanup to that worker path.
+  - Kept the legacy global `removeItems()` API intact for existing callers, while moving IndexedSource store adapter delete deltas to the scoped path and reporting delete misses as skipped store deltas.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-index-service.delta.test.ts" "src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts" "src/main/modules/box-tool/search-engine/search-index-service.delta.test.ts" "src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### test(search): gate automatic retries from hydrated task history
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/search/indexing-source-task-run-gate.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `packages/utils/__tests__/search/indexing-source-task-run-gate.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+  - Added focused coverage that persisted failed scan history blocks automatic batch scans after runtime hydration, preserving the retry window across app restarts or injected task-state stores.
+  - Added matching coverage for persisted failed reconcile history, ensuring automatic batch reconcile does not immediately hammer a failing source after hydrate.
+  - Tightened the shared indexed-source task history append helper to sort by `completedAt` before truncating, so unsorted in-memory history keeps the newest task entries instead of the first inserted entries.
+  - Kept task run-gate `lastCompletedAt` monotonic when completion events arrive out of order or the clock moves backwards, preventing debounce windows from being shortened by stale completion timestamps.
+  - Kept this scoped to durable retry evidence only; FileProvider SQLite/FTS write migration, `scan_progress` implementation, worker flush trace, and full durable scheduler history remain open R3 work.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
 ## 2026-06-19
+
+### ref(release): reject duplicate core manifest matrix entries
+
+- `scripts/update-validate-release-manifest.mjs`
+- `scripts/update-validate-release-manifest.test.mjs`
+- `docs/plan-prd/03-features/download-update/update-regression-checklist.md`
+  - Added local release manifest validation for duplicate core `platform/arch` matrix entries, matching the remote Gate E Nexus/GitHub matrix drift check.
+  - Kept artifact filename uniqueness and signature sidecar checks intact, while failing faster when two distinct core artifacts claim the same platform and architecture.
+  - Validation passed: `pnpm exec vitest run "scripts/update-validate-release-manifest.test.mjs" "scripts/check-release-gates/remote-checks.test.mjs"`, `node "scripts/update-validate-release-manifest.mjs" --manifest "docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json"`, scoped ESLint, and `git diff --check`.
+
+### ref(search): sanitize durable indexed task snapshots
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts`
+  - Sanitized persisted `lastScan`, `lastWatch`, `lastReconcile`, and `lastReset` snapshots before they are exposed through Indexing Runtime diagnostics.
+  - Dropped invalid persisted last-task snapshots and normalized missing numeric counters to `0`, keeping old or malformed SQLite task-state JSON from polluting Settings diagnostics.
+  - Reused the SDK `IndexedSourceResetReasons` constants for reset reason validation so durable task history stays aligned with the public source contract.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts"`, scoped CoreApp ESLint, `pnpm -C "apps/core-app" run typecheck:node`, and `git diff --check`.
+
+### test(ai): cover packaged AI Ask evidence tag checks
+
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.ts`
+- `apps/core-app/scripts/coreapp-packaged-ai-ask-probe.test.ts`
+- `apps/core-app/tsconfig.node.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+  - Added focused coverage for packaged AI Ask `--expectEvidenceTag` signal matching, tag de-duplication, artifact binding, and missing-signal reporting.
+  - Kept probe tag checks advisory: they write `evidenceChecks` into probe output but do not close the visible-experience manifest or mark any `AI-STABLE-xx` item passed.
+  - Included the packaged AI Ask probe in CoreApp node typecheck coverage so script drift is caught by the PR gate.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "scripts/coreapp-packaged-ai-ask-probe.test.ts"`, `pnpm -C "apps/core-app" run visible:experience:ai-ask-probe -- --help`, scoped CoreApp ESLint, `pnpm -C "apps/core-app" run typecheck:node`, and `git diff --check`.
+
+### ref(search): expose File scan terminal batches and flush evidence
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider-startup.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/file-indexed-source.test.ts`
+  - Added a terminal empty `done` batch after automatic File indexed-source scans so the runtime store boundary can observe scan completion even when the scan produced no records.
+  - Added FileProvider-level coverage for `file-provider:index-flush` evidence metadata, including status, entries, pending, inflight, duration, error, and source-specific worker metrics.
+  - Added File indexed-source adapter coverage to ensure flush evidence is exposed through unified source diagnostics rather than being hidden inside FileProvider-only state.
+  - Added IndexingRuntime coverage for integrity-triggered reset task history so `integrity-repair` resets persist `lastReset` and `recentTasks` with cleared index / scan-progress row summaries.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/file-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-scan-scheduler.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" "src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts"`, scoped CoreApp ESLint, and `git diff --check`.
+
+### ref(search): expose File scan progress timestamps
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts`
+- `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+  - Extended FileProvider scan progress diagnostics to read the existing SQLite `scan_progress.last_scanned` value and expose `lastScannedAt` alongside configured/completed root counts.
+  - Reused the shared indexed scan eligibility timestamp resolver so FileProvider diagnostics and auto-scan freshness logic interpret persisted scan progress consistently.
+  - Updated Settings indexed-source evidence chips to display configured/completed roots and latest scan-progress timestamp, making the persisted progress store boundary visible without inspecting raw JSON.
+  - Added focused coverage for unavailable progress store fallback, completed root counts, latest completed root timestamp, evidence metadata, and Settings chip formatting.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/file-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts"`, `pnpm -C "apps/core-app" run typecheck:node` and `pnpm -C "apps/core-app" run typecheck:web`.
+
+### test(ai): bind CoreBox AI visible evidence to AI Stable items
+
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+- `apps/core-app/scripts/coreapp-visible-experience-verify.ts`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-strict-verify-output.json`
+- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+  - Added optional visible evidence tags and a strict `--requireEvidenceTags` gate so CoreBox AI Ask packaged evidence must explicitly bind to fixed `AI-STABLE-xx` items.
+  - Added `evidenceTagArtifacts` so every claimed AI Stable tag must point to an attached packaged probe JSON or screenshot, preventing tag-only evidence from closing Stable items.
+  - Bound the current partial packaged CoreBox AI evidence only to `AI-STABLE-06` and `AI-STABLE-07`, keeping `AI-STABLE-01` through `AI-STABLE-05` and `AI-STABLE-08` blocked in strict verification.
+  - Updated the generated checklist and strict output to show tag-level gaps without claiming AI Stable completion.
+  - Validation passed: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/coreapp-visible-experience-evidence.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
+### ref(search): persist indexing runtime task state
+
+- `apps/core-app/src/main/db/schema.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+- `packages/utils/search/indexing-source-recovery-policy.ts`
+- `packages/utils/__tests__/search/indexing-source-recovery-policy.test.ts`
+  - Added an injectable Indexing Runtime task-state store with memory and SQLite-backed implementations.
+  - Wired CoreApp Search initialization to persist source-level `lastScan` / `lastWatch` / `lastReconcile` / `lastReset` and bounded `recentTasks` into local SQLite, while keeping task execution fail-soft if diagnostics persistence is unavailable.
+  - Hydrated persisted task state before runtime reset records a new result, so the first reset action after app restart preserves earlier scan/watch/reconcile history instead of replacing the durable `recentTasks` window.
+  - Added a shared indexed-source retry-window policy for automatic batch scan/reconcile runs, using persisted failed task history to delay noisy retries without blocking explicit single-source repair actions.
+  - Updated indexed-source recovery policy so automatic `retry-window` scan/reconcile skips surface as a low-priority wait recommendation instead of prompting premature scan/reset recovery actions.
+  - Added focused coverage for store isolation, SQLite save/load behavior, diagnostics hydration from persisted task history, and reset-after-hydrate history preservation.
+  - Validation passed: `pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-recovery-policy.test.ts" "__tests__/search/indexing-source-task-retry-policy.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts"`, `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-task-state-store.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` and `pnpm -C "apps/core-app" run typecheck`.
+
+### ref(release): validate remote manifest against Nexus assets
+
+- `scripts/check-release-gates/remote-checks.mjs`
+- `scripts/check-release-gates/remote-checks.test.mjs`
+  - Extended the read-only remote release gate to download and parse GitHub `tuff-release-manifest.json`, validate core artifact integrity fields, and compare the manifest platform/arch matrix with Nexus release assets.
+  - Required GitHub manifest core `signature` values to point to the artifact `.sig` / `.asc` sidecar, aligning the remote gate with local release manifest validation before Nexus matrix comparison.
+  - Added Gate E failures for Nexus filename, sha256, signed `downloadUrl` or `signatureUrl` drift from the GitHub release manifest and canonical Nexus download/signature endpoints, making R1 Release Integrity checks cover manifest/download/signature matrix alignment instead of only checking that fields exist.
+  - Added focused remote-check tests for aligned assets, manifest/Nexus drift, manifest signature sidecar drift, canonical signature endpoint drift, and signed download endpoint drift.
+
+### ref(search): expose indexing task run gate diagnostics
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/search/indexing-source-task-run-gate.ts`
+- `packages/utils/__tests__/search/indexing-source-task-run-gate.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+- `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+  - Added bounded `IndexedSourceTaskRunGate` snapshots with running counts, blocked counts, last blocked reason, and debounce next-allowed time.
+  - Exposed the run-gate snapshot on runtime diagnostics and per-source diagnostics so concurrent/debounced scan/reconcile/reset attempts are visible before durable scheduler storage lands.
+  - Added Settings diagnostics chips and i18n copy for running/debounced/already-running source scheduler entries.
+  - Added focused coverage for debounced/already-running gate snapshots, runtime reset diagnostics, and Settings run-gate chip formatting.
+
+### ref(search): expose release and indexing integrity summaries
+
+- `scripts/update-validate-release-manifest.mjs`
+- `scripts/update-validate-release-manifest.test.mjs`
+- `docs/plan-prd/03-features/download-update/update-regression-checklist.md`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-store-adapter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts`
+  - Tightened release manifest validation for version/tag/channel drift, duplicate artifact names, metadata sidecar leakage, and core platform/arch mismatch with asset filenames.
+  - Required core release manifest artifacts to declare a matching `.sig` / `.asc` signature sidecar, keeping GitHub manifest integrity aligned with Nexus `signatureUrl` backfill expectations.
+  - Added focused script tests for valid sample manifests and invalid release integrity cases.
+  - Added Indexing store batch, delta, and clear-source summaries for add/change/delete/skipped/reset paths, giving scan/watch/reconcile/reset evidence a structured store-boundary hook without changing existing runtime callers.
 
 ### ref(quickops): align bounded SDK surface audit
 

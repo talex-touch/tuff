@@ -6,6 +6,8 @@
 ## 快速入口
 
 - [项目待办（2 周主清单）](./TODO.md)
+- [AI Stable 收口 TODO](./TODO-AI.md)
+- [R3 Search / Indexing Runtime 收口 TODO](./TODO-R3.md)
 - [Roadmap vNext（R0-R9 当前 SoT）](./04-implementation/Roadmap-vNext-2026-06-18.md)
 - [当前项目进程与执行计划](./04-implementation/Current-Execution-Plan-2026-06-17.md)
 - [项目进展严重问题审计与收口口径](./04-implementation/Project-Roadmap-Audit-2026-06-18.md)
@@ -21,7 +23,7 @@
 
 ## 当前单一口径
 
-- 当前基线：`2.4.10` 已有 GitHub Release 与 Nexus release metadata sync；当前代码版本为 root/CoreApp `2.4.12-beta.8`，本地 `HEAD=6b156fa31 fix(nexus): hide team credit pool for personal accounts`，且工作区存在大量未提交改动，必须按 related-only 拆分验证。
+- 当前基线：`2.4.10` 已有 GitHub Release 与 Nexus release metadata sync；当前代码版本为 root/CoreApp `2.4.12-beta.8`，本地 `HEAD=9e78e67bc`，且工作区存在大量未提交改动，必须按 related-only 拆分验证。
 - 最近完整发布链路证据仍是 `2.4.11-beta.6` GitHub prerelease、Nexus BETA latest sync 与发布后 Gate D strict；`2.4.11` checklist 通过不等于 R1 Release Integrity 完成。
 - 当前主线：按 Roadmap vNext 推进 R0-R9，优先 R0 口径清理、R1 Release Integrity、R2 AI 2.5.0 Stable、R3 Indexing Runtime。
 - 公共包发布不再作为独立 Roadmap / blocker / evidence 项；版本变更后以 GitHub 自动发版 workflow 结果为准。
