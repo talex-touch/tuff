@@ -25,6 +25,7 @@ const darkToggle = readFileSync(new URL('../../components/DarkToggle.vue', impor
 const iconComposer = readFileSync(new URL('../../components/icon/IconComposer.vue', import.meta.url), 'utf8')
 const backToTop = readFileSync(new URL('../../components/ui/BackToTop.vue', import.meta.url), 'utf8')
 const appRoot = readFileSync(new URL('../../app.vue', import.meta.url), 'utf8')
+const nexusPwaManifest = readFileSync(new URL('../../components/NexusPwaManifest.vue', import.meta.url), 'utf8')
 const pageView = readFileSync(new URL('../../components/PageView.vue', import.meta.url), 'utf8')
 const constants = readFileSync(new URL('../../constants/index.ts', import.meta.url), 'utf8')
 const toastHost = readFileSync(new URL('../../components/ui/ToastHost.vue', import.meta.url), 'utf8')
@@ -421,6 +422,19 @@ describe('docs page performance boundaries', () => {
     expect(vueDevtoolsApiNoop).toContain('export function addCustomCommand()')
     expect(vueDevtoolsApiNoop).toContain('export function addCustomTab()')
     expect(vueDevtoolsApiNoop).not.toContain('@vue/devtools-kit')
+  })
+
+  it('keeps the PWA client plugin out of normal docs dev first paint', () => {
+    expect(nuxtConfig).toContain("const enablePwaModule = isProd || process.env.VITE_PLUGIN_PWA === 'true'")
+    expect(nuxtConfig).toMatch(/\.\.\.\(enablePwaModule \? \['@vite-pwa\/nuxt'\] : \[\]\)/)
+    expect(nuxtConfig).not.toMatch(/^[\s]*'@vite-pwa\/nuxt',/m)
+    expect(packageJson).toContain('"dev:pwa": "VITE_PLUGIN_PWA=true nuxt dev"')
+    expect(appRoot).toContain("import NexusPwaManifest from '~/components/NexusPwaManifest.vue'")
+    expect(appRoot).toContain('<NexusPwaManifest />')
+    expect(appRoot).not.toContain('<VitePwaManifest />')
+    expect(nexusPwaManifest).toContain("const shouldRenderPwaManifest = import.meta.env.PROD || import.meta.env.VITE_PLUGIN_PWA === 'true'")
+    expect(nexusPwaManifest).toContain("resolveComponent('VitePwaManifest')")
+    expect(nexusPwaManifest).not.toContain("from '@vite-pwa/nuxt")
   })
 
   it('requests component sidebar metadata by locale instead of downloading both languages', () => {

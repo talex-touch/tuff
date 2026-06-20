@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import NexusPwaManifest from '~/components/NexusPwaManifest.vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { appName, toastHostRequestedEvent } from '~/constants'
 import { resolveDocsLocaleFromRoute } from '#shared/utils/docs-path'
@@ -412,7 +413,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <VitePwaManifest />
+  <NexusPwaManifest />
   <NuxtLoadingIndicator color="#ffffff" />
   <LazyToastContainer v-if="toastHostMounted" />
   <ClientOnly>
