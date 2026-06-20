@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 26 批已完成代码验证；本批把 docs 页面底部 Prev / Next pager 的 full-body 预取改为持续意图 + 可取消，短 hover / blur / mouseleave 只保留目标页 `body=0` metadata 预热，不再把下一篇 30-80KB 正文提前排进网络队列。后续 AI review / aireview 未审批组件逐页 section split、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning 和生产 chunk 复核继续按本文 TODO 队列推进。
+> 当前状态：Nexus 第 27 批为 docs-only 收尾交接；第 26 批代码验证已完成，docs 页面底部 Prev / Next pager 的 full-body 预取已改为持续意图 + 可取消，短 hover / blur / mouseleave 只保留目标页 `body=0` metadata 预热，不再把下一篇 30-80KB 正文提前排进网络队列。后续 docs 文档内容拆分、AI review / aireview 未审批组件逐页 section split、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning、生产 chunk / payload / CSS 复核全部从本文 TODO 队列领取，当前批不再继续扩大代码改动。
 
 ## Goal 原句
 
@@ -37,6 +37,7 @@
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
+| 当前第 27 批 docs-only 最终交接 | 100% | 按用户最新要求，当前 goal 原句、追加收尾要求、触发页、已完成批次、性能证据路径、后续 docs / aireview / route matrix / TTFB / chunk 复核子任务和领取规则全部沉淀到本文；本批不继续扩代码。 |
 | 当前第 26 批 docs pager full-body prefetch cancel | 100% | 页面底部 Prev / Next pager 现在立即预热 route + `body=0` metadata，full `body=1` 只有持续 hover/focus/touch 意图后进入 idle，并可由 blur / mouseleave / route change / unmount 取消；短 hover after `hoverBody1` 从 1 -> 0。 |
 | 当前第 25 批 docs-only 收尾归档 | 100% | 按用户追加要求，把当前 goal 原句、追加收尾要求、触发页、已完成批次、子任务百分比、后续 docs / aireview / route matrix / TTFB / chunk 复核任务和验收口径集中到本文；当前批不继续扩大代码改动。 |
 | 当前第 24 批 component docs scoped navigation | 100% | `/en/docs/dev/components/tabs` SSR async-data key 从 `docs-navigation:en` 改为 `docs-navigation:en:components`；navigation API `all -> components` wire bytes 49291 -> 16786，节点 244 -> 110；tabs HTML 107061 -> 86611 bytes；Playwright after failed 0。 |
@@ -79,6 +80,7 @@
 | 24 | `1075acd34` | `perf(nexus): scope component docs navigation` | 已完成 |
 | 25 | `8bd9a9c51` | `docs(nexus): archive performance followups` | 已完成 |
 | 26 | `1c54878ba` | `perf(nexus): cancel docs pager full body prefetch` | 已完成 |
+| 27 | docs-only | `docs(nexus): finalize performance handoff` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -101,10 +103,38 @@
 - 第 24 批已提交：`1075acd34 perf(nexus): scope component docs navigation`；component docs route 现在请求 `/api/docs/navigation?scope=components`，SSR payload 只包含组件导航分支，tabs HTML 107061 -> 86611 bytes，after HTML 不再包含 Architecture / Guide payload。
 - 第 25 批为 docs-only 收尾：后续 docs 文档内容、AI review / aireview 未审批组件、全站 route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部只从本文任务树领取；当前批不再继续扩大代码改动。
 - 第 26 批已提交：`1c54878ba perf(nexus): cancel docs pager full body prefetch`；底部 Prev / Next pager 现在先预热目标 route + `body=0` metadata，full `body=1` 只在持续意图后请求，并可由 blur / mouseleave 取消。
+- 第 27 批为 docs-only 最终交接：按用户要求把后续 docs 文档内容、AI review / aireview 未审批组件、全站 route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部固定到本文任务树；当前批只做文档收尾，不继续混入代码、Playwright 新采样或 unrelated 文件。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵二轮都按下方 TODO 分批处理。
 - 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，第 16 批将 MDC Prose registry 请求归零，第 17 批将普通 dev 的 PWA client plugin 请求归零，第 18 批将首页 Vue attrs / aurora hydration warning 清理并预打包 `@vueuse/core`，第 19 批清理 `marked` / `echarts/*` / `vue-sonner` runtime discovery，第 20 批清理 zh landing route-local warning，第 21 批降低 dev SSR 组件文档首访正文体量，第 22 批收紧 sidebar full-body 预取；但 Nuxt runtime、`node_modules`、docs demo 模块碎片、移动端/production preview 和首页剩余 warning 仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+
+## 第 27 批收口记录
+
+目标：按用户最新要求快速完成当前任务收尾。当前批只更新 `docs/plan-prd/TODO-nexus.md`，把后续 docs 文档内容加载、AI review / aireview 未审批组件、全站页面切换矩阵二轮、dev SSR TTFB、首页剩余 warning、生产 chunk / payload / CSS 复核等全部放进本文，作为后续唯一领取入口。
+
+改动范围：
+
+- `docs/plan-prd/TODO-nexus.md`
+
+收口口径：
+
+- 当前 goal 原句、追加收尾要求、触发页、已完成批次、子任务百分比、近期提交和 Playwright / HAR / Markdown / JSON 证据路径均保留在本文。
+- 后续 docs 文档内容和 aireview 未审批组件不再从聊天上下文临时恢复范围，统一从 `后续任务树` 领取。
+- 下一批只允许选择 1 个 P0 子任务和 1-2 个页面先跑 baseline，再决定是否落代码；禁止一次性混入 docs demo、DocApiTable、section split、首页 warning、TTFB、chunk 复核等多个方向。
+- 每批结束继续回填本文：提交 hash、改动范围、测试命令、核心性能数字、Playwright screenshot / HAR / Markdown / JSON 路径和下一批候选。
+- 本批不新增业务代码、不新增测试文件、不新增 Playwright artifact；沿用第 21 / 22 / 24 / 26 批已有性能证据作为最近基线。
+
+下一批领取优先级：
+
+1. P0：pending / aireview 工作表，先按 `syncStatus`、`verified`、正文大小、demo 数、code block 数、API table、首屏请求数排序，再选 `fusion` / `card` / `avatar-variants` 之一做 demo lazy boundary 或 section-level split。
+2. P0：dev SSR TTFB 基线，覆盖 `/`、`/store`、`/en/docs/dev/components/tabs`、`/sign-in`、未登录 dashboard redirect，区分 Nuxt transform、content query、i18n、store memory init 和 middleware。
+3. P0：route matrix 二轮，补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` screenshot / HAR。
+4. P1：生产 chunk / payload / CSS 复核，确认 docs、store、dashboard、landing 是否仍有互相污染；若存在，优先修 import boundary / layout boundary / component registration。
+
+验证证据：
+
+- Markdown whitespace：`git diff --check -- "docs/plan-prd/TODO-nexus.md"`。
 
 ## 第 26 批收口记录
 
@@ -938,6 +968,7 @@
 ### 收尾边界
 
 - [x] 当前第 25 批只做 TODO 文档收尾归档，不继续混入 docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。
+- [x] 当前第 27 批只做 TODO 文档最终交接，不继续混入代码、Playwright 新采样、docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，优先从 `fusion` / `card` / `avatar-variants` docs pending 优化、首页 WebGL/lifecycle warning、dev SSR TTFB 中选，跑 Playwright / HAR baseline 后再落代码。
@@ -1024,6 +1055,7 @@
 - [x] 第 24 批结束已更新本文：改动范围、测试命令、production build sanity、baseline/after Playwright CLI screenshot/HAR/Markdown/JSON、HTML / navigation payload 核心数字、下一批候选。
 - [x] 第 25 批结束已更新本文：当前 goal 原句、追加收尾要求、后续 docs / aireview / route matrix / TTFB / chunk 任务树和当前批不扩代码边界。
 - [x] 第 26 批结束已更新本文：提交 hash、改动范围、测试命令、production build sanity、baseline/after Playwright screenshot/HAR/Markdown/JSON、pager short hover `body=1` 1 -> 0。
+- [x] 第 27 批结束已更新本文：当前 goal 原句、追加收尾要求、后续 docs / aireview / route matrix / TTFB / chunk 任务树、领取规则和当前批不扩代码边界。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -1105,4 +1137,4 @@
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 25 批 docs-only 收尾已经完成，后续不要继续往本批塞 docs demo、DocApiTable、aireview 逐页 section split、dev SSR 深化或首页 WebGL/lifecycle warning；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 27 批 docs-only 最终交接已经完成，后续不要继续往本批塞 docs demo、DocApiTable、aireview 逐页 section split、dev SSR 深化、首页 WebGL/lifecycle warning 或生产 chunk 复核；新改动按上方 TODO 独立切批、独立验证、独立提交。
