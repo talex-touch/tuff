@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IndexedSourceProfileDiagnosticsService } from '../../search'
 
 const service = new IndexedSourceProfileDiagnosticsService()
 
 describe('IndexedSourceProfileDiagnosticsService', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('builds profile evidence with roots and metadata', () => {
     expect(
       service.buildEvidence({
@@ -75,6 +79,30 @@ describe('IndexedSourceProfileDiagnosticsService', () => {
         permissionState: 'granted',
         watchDepth: 2,
         reason: undefined
+      }
+    ])
+  })
+
+  it('normalizes malformed evidence timestamps and item counts', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+
+    expect(
+      service.buildEvidence({
+        sourceId: 'browser-bookmarks',
+        checkedAt: Number.NaN,
+        diagnostics: [
+          {
+            key: 'chrome',
+            label: 'Chrome Bookmarks',
+            status: 'degraded',
+            itemCount: -2
+          }
+        ]
+      })
+    ).toMatchObject([
+      {
+        itemCount: 0,
+        lastCheckedAt: 1700000000000
       }
     ])
   })

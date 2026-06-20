@@ -92,7 +92,7 @@ function resolveBundleIdSearchText(bundleId: string | null | undefined): string 
     .filter(Boolean)
   if (parts.length <= 1) return normalized
 
-  while (parts.length > 1 && BUNDLE_ID_PREFIX_PARTS.has(parts[0].toLowerCase())) {
+  while (parts.length > 1 && BUNDLE_ID_PREFIX_PARTS.has(parts[0]?.toLowerCase() ?? '')) {
     parts.shift()
   }
 

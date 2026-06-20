@@ -48,6 +48,15 @@ describe('IndexedSourceProgressStoreService', () => {
     })
   })
 
+  it('deduplicates watched roots before summarizing pending state', async () => {
+    const { service } = createStore({ completedPaths: ['/a'] })
+
+    await expect(service.summarizeRoots(['/a', '/a', '/b', '/b'])).resolves.toEqual({
+      totalRoots: 1,
+      pendingRoots: 1
+    })
+  })
+
   it('skips delete when no paths are provided', async () => {
     const { deleteCompletedPaths, service } = createStore()
 
@@ -59,6 +68,13 @@ describe('IndexedSourceProgressStoreService', () => {
     const { deleteCompletedPaths, service } = createStore()
 
     await expect(service.deletePaths(['/a', '/b'])).resolves.toBe(2)
+    expect(deleteCompletedPaths).toHaveBeenCalledWith(['/a', '/b'])
+  })
+
+  it('deduplicates completed paths before delete', async () => {
+    const { deleteCompletedPaths, service } = createStore()
+
+    await expect(service.deletePaths(['/a', '/a', '/b'])).resolves.toBe(2)
     expect(deleteCompletedPaths).toHaveBeenCalledWith(['/a', '/b'])
   })
 
@@ -104,6 +120,22 @@ describe('IndexedSourceProgressStoreService', () => {
     })
     expect(ensureReadyForUpsert).toHaveBeenCalledWith('progress.upsert')
     expect(upsertCompletedPaths).toHaveBeenCalledWith(['/a'], '2026-05-31T00:00:00.000Z')
+  })
+
+  it('deduplicates completed paths before upsert', async () => {
+    const { service, upsertCompletedPaths } = createStore()
+
+    await expect(
+      service.upsertPaths(['/a', '/a', '/b'], '2026-05-31T00:00:00.000Z', 'progress.upsert')
+    ).resolves.toEqual({
+      attempted: true,
+      ready: true,
+      upserted: 2
+    })
+    expect(upsertCompletedPaths).toHaveBeenCalledWith(
+      ['/a', '/b'],
+      '2026-05-31T00:00:00.000Z'
+    )
   })
 })
 

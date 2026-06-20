@@ -32,7 +32,7 @@ export interface IndexedSourceGroupedEvidenceInput<TKey extends string = string>
 
 export class IndexedSourceGroupedEvidenceService {
   build<TKey extends string>(input: IndexedSourceGroupedEvidenceInput<TKey>): IndexedSourceEvidence[] {
-    const checkedAt = input.checkedAt ?? Date.now()
+    const checkedAt = normalizeEvidenceTimestamp(input.checkedAt)
     const bySourceId = new Map<TKey, IndexedSourceGroupedEvidenceResult<TKey>>()
 
     for (const result of input.results) {
@@ -42,7 +42,7 @@ export class IndexedSourceGroupedEvidenceService {
     return input.keys.map((key) => {
       const result = bySourceId.get(key)
       const override = input.overrides?.[key]
-      const itemCount = override?.itemCount ?? result?.itemCount ?? 0
+      const itemCount = normalizeEvidenceCount(override?.itemCount ?? result?.itemCount)
 
       return {
         id: `${input.sourceId}:${key}`,
@@ -65,4 +65,12 @@ export class IndexedSourceGroupedEvidenceService {
   private resolveStatus(error: string | undefined, itemCount: number): IndexedSourceEvidence['status'] {
     return error || itemCount === 0 ? 'degraded' : 'ready'
   }
+}
+
+function normalizeEvidenceTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : Date.now()
+}
+
+function normalizeEvidenceCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
 }

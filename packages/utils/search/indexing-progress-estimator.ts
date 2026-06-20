@@ -82,17 +82,32 @@ export class IndexingProgressEstimatorService<TStage extends string = string> {
   constructor(options: IndexingProgressEstimatorOptions<TStage> = {}) {
     this.terminalStages = new Set(options.terminalStages ?? [])
     this.completedStages = new Set(options.completedStages ?? [])
-    this.minSampleIntervalMs = options.minSampleIntervalMs ?? DEFAULT_MIN_SAMPLE_INTERVAL_MS
+    this.minSampleIntervalMs = normalizeNonNegativeNumber(
+      options.minSampleIntervalMs,
+      DEFAULT_MIN_SAMPLE_INTERVAL_MS
+    )
     this.minProgressRatioForEta =
-      options.minProgressRatioForEta ?? DEFAULT_MIN_PROGRESS_RATIO_FOR_ETA
-    this.minSpeedSamplesForEta = options.minSpeedSamplesForEta ?? DEFAULT_MIN_SPEED_SAMPLES_FOR_ETA
-    this.maxNoProgressMs = options.maxNoProgressMs ?? DEFAULT_MAX_NO_PROGRESS_MS
-    this.smoothingFactor = options.smoothingFactor ?? DEFAULT_SMOOTHING_FACTOR
-    this.maxEtaMs = options.maxEtaMs ?? DEFAULT_MAX_ETA_MS
+      normalizeNonNegativeNumber(options.minProgressRatioForEta, DEFAULT_MIN_PROGRESS_RATIO_FOR_ETA)
+    this.minSpeedSamplesForEta = normalizeNonNegativeInteger(
+      options.minSpeedSamplesForEta,
+      DEFAULT_MIN_SPEED_SAMPLES_FOR_ETA
+    )
+    this.maxNoProgressMs = normalizeNonNegativeNumber(
+      options.maxNoProgressMs,
+      DEFAULT_MAX_NO_PROGRESS_MS
+    )
+    this.smoothingFactor = normalizeSmoothingFactor(options.smoothingFactor)
+    this.maxEtaMs = normalizeNonNegativeNumber(options.maxEtaMs, DEFAULT_MAX_ETA_MS)
     this.minElapsedMsForFallbackEta =
-      options.minElapsedMsForFallbackEta ?? DEFAULT_MIN_ELAPSED_MS_FOR_FALLBACK_ETA
+      normalizeNonNegativeNumber(
+        options.minElapsedMsForFallbackEta,
+        DEFAULT_MIN_ELAPSED_MS_FOR_FALLBACK_ETA
+      )
     this.fallbackEtaSafetyMultiplier =
-      options.fallbackEtaSafetyMultiplier ?? DEFAULT_FALLBACK_ETA_SAFETY_MULTIPLIER
+      normalizeNonNegativeNumber(
+        options.fallbackEtaSafetyMultiplier,
+        DEFAULT_FALLBACK_ETA_SAFETY_MULTIPLIER
+      )
   }
 
   reset(): void {
@@ -115,7 +130,9 @@ export class IndexingProgressEstimatorService<TStage extends string = string> {
     return this.lastEstimate
   }
 
-  update(input: IndexingProgressSample<TStage>): IndexingProgressEstimate {
+  update(rawInput: IndexingProgressSample<TStage>): IndexingProgressEstimate {
+    const input = this.normalizeSample(rawInput)
+
     if (this.terminalStages.has(input.stage)) {
       const estimate = {
         estimatedRemainingMs: this.completedStages.has(input.stage) ? 0 : null,
@@ -278,4 +295,32 @@ export class IndexingProgressEstimatorService<TStage extends string = string> {
     }
     return input.current / (elapsedMs / 1000)
   }
+
+  private normalizeSample(input: IndexingProgressSample<TStage>): IndexingProgressSample<TStage> {
+    const fallbackNow = this.lastSample?.now ?? this.stageStartedAt
+    const now = Math.max(
+      fallbackNow,
+      normalizeNonNegativeNumber(input.now, fallbackNow)
+    )
+
+    return {
+      stage: input.stage,
+      current: normalizeNonNegativeInteger(input.current, 0),
+      total: normalizeNonNegativeInteger(input.total, 0),
+      now
+    }
+  }
+}
+
+function normalizeNonNegativeNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback: number): number {
+  return Math.floor(normalizeNonNegativeNumber(value, fallback))
+}
+
+function normalizeSmoothingFactor(value: unknown): number {
+  const normalized = normalizeNonNegativeNumber(value, DEFAULT_SMOOTHING_FACTOR)
+  return Math.min(1, normalized)
 }

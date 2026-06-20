@@ -854,6 +854,7 @@ export interface IndexedSourceReconcileResult {
   deltas?: IndexedSourceDelta[];
   appliedDeltas?: number;
   failedDeltas?: number;
+  skippedDeltas?: number;
   deltaErrors?: string[];
   startedAt: number;
   completedAt: number;
@@ -872,6 +873,7 @@ export interface IndexedSourceResetResult {
   sourceId: string;
   reason: IndexedSourceResetReason;
   clearedSearchIndex: boolean;
+  clearedSearchIndexRows?: number;
   clearedScanProgress: boolean;
   scanProgressRows?: number;
   startedAt: number;
@@ -908,7 +910,41 @@ export interface IndexedSourceTaskHistoryEntry {
   summary?: Record<string, string | number | boolean | undefined>;
 }
 
+export type IndexedSourceTaskRunGateBlockedReason =
+  | "already-running"
+  | "debounced";
+
+export interface IndexedSourceTaskRunGateSnapshotEntry {
+  sourceId: string;
+  kind: IndexedSourceTaskHistoryKind;
+  blockedCount: number;
+  runningSince?: number;
+  lastCompletedAt?: number;
+  lastBlockedAt?: number;
+  lastBlockedReason?: IndexedSourceTaskRunGateBlockedReason;
+  nextAllowedAt?: number;
+}
+
+export interface IndexedSourceTaskRunGateSnapshot {
+  generatedAt: number;
+  totalEntries: number;
+  runningEntries: number;
+  blockedEntries: number;
+  entries: IndexedSourceTaskRunGateSnapshotEntry[];
+}
+
 export const DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT = 8;
+const indexedSourceTaskHistoryKinds = new Set<IndexedSourceTaskHistoryKind>([
+  "scan",
+  "watch",
+  "reconcile",
+  "reset",
+]);
+const indexedSourceTaskHistoryStatuses = new Set<IndexedSourceTaskHistoryStatus>([
+  "succeeded",
+  "failed",
+  "skipped",
+]);
 
 export function appendIndexedSourceTaskHistory(
   current: IndexedSourceTaskHistoryEntry[] = [],
@@ -922,7 +958,77 @@ export function appendIndexedSourceTaskHistory(
     return [];
   }
 
-  return [entry, ...current].slice(0, normalizedLimit);
+  const entries = [entry, ...current]
+    .map(sanitizeIndexedSourceTaskHistoryEntry)
+    .filter((task): task is IndexedSourceTaskHistoryEntry => task !== undefined);
+
+  return entries
+    .sort((left, right) => right.completedAt - left.completedAt)
+    .slice(0, normalizedLimit);
+}
+
+function sanitizeIndexedSourceTaskHistoryEntry(
+  task: IndexedSourceTaskHistoryEntry,
+): IndexedSourceTaskHistoryEntry | undefined {
+  const completedAt = normalizeNonNegativeFiniteNumber(task.completedAt);
+  if (
+    completedAt === undefined ||
+    !indexedSourceTaskHistoryKinds.has(task.kind) ||
+    !indexedSourceTaskHistoryStatuses.has(task.status)
+  ) {
+    return undefined;
+  }
+
+  return {
+    kind: task.kind,
+    status: task.status,
+    completedAt,
+    ...(typeof task.jobId === "string" ? { jobId: task.jobId } : {}),
+    ...optionalTaskHistoryTimestamp("queuedAt", task.queuedAt, completedAt),
+    ...optionalTaskHistoryTimestamp("startedAt", task.startedAt, completedAt),
+    ...optionalTaskHistoryTimestamp("occurredAt", task.occurredAt, completedAt),
+    ...(typeof task.error === "string" ? { error: task.error } : {}),
+    ...sanitizeIndexedSourceTaskHistorySummary(task.summary),
+  };
+}
+
+function optionalTaskHistoryTimestamp<TKey extends "queuedAt" | "startedAt" | "occurredAt">(
+  key: TKey,
+  value: number | undefined,
+  completedAt: number,
+): Partial<Record<TKey, number>> {
+  const timestamp = normalizeNonNegativeFiniteNumber(value);
+  return timestamp === undefined
+    ? {}
+    : ({ [key]: Math.min(timestamp, completedAt) } as Record<TKey, number>);
+}
+
+function normalizeNonNegativeFiniteNumber(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function sanitizeIndexedSourceTaskHistorySummary(
+  value: IndexedSourceTaskHistoryEntry["summary"],
+): Partial<Pick<IndexedSourceTaskHistoryEntry, "summary">> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const summary: NonNullable<IndexedSourceTaskHistoryEntry["summary"]> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      typeof item === "string" ||
+      typeof item === "boolean" ||
+      item === undefined ||
+      (typeof item === "number" && Number.isFinite(item))
+    ) {
+      summary[key] = item;
+    }
+  }
+
+  return Object.keys(summary).length > 0 ? { summary } : {};
 }
 
 export interface IndexedSourceDiagnostics {
@@ -934,6 +1040,7 @@ export interface IndexedSourceDiagnostics {
   admissionIssues?: IndexedSourceAdmissionReason[];
   lifecycleIssues?: IndexedSourceLifecycleIssue[];
   recentTasks?: IndexedSourceTaskHistoryEntry[];
+  taskRunGate?: IndexedSourceTaskRunGateSnapshotEntry[];
   lastScan?: {
     startedAt: number;
     completedAt: number;
@@ -941,6 +1048,8 @@ export interface IndexedSourceDiagnostics {
     queuedAt?: number;
     batches: number;
     records: number;
+    indexedRecords: number;
+    phase?: string;
     error?: string;
   };
   lastWatch?: {
@@ -953,6 +1062,7 @@ export interface IndexedSourceDiagnostics {
     deltas: number;
     appliedDeltas: number;
     failedDeltas: number;
+    skippedDeltas?: number;
     error?: string;
   };
   lastReconcile?: {
@@ -970,6 +1080,7 @@ export interface IndexedSourceDiagnostics {
     deltas?: number;
     appliedDeltas?: number;
     failedDeltas?: number;
+    skippedDeltas?: number;
     error?: string;
   };
   lastReset?: {
@@ -979,6 +1090,7 @@ export interface IndexedSourceDiagnostics {
     jobId?: string;
     queuedAt?: number;
     clearedSearchIndex: boolean;
+    clearedSearchIndexRows?: number;
     clearedScanProgress: boolean;
     scanProgressRows?: number;
     error?: string;
@@ -987,6 +1099,7 @@ export interface IndexedSourceDiagnostics {
 
 export interface IndexedSourceDiagnosticsSnapshot {
   generatedAt: number;
+  taskRunGate?: IndexedSourceTaskRunGateSnapshot;
   summary: {
     total: number;
     byStatus: Partial<Record<IndexedSourceHealthStatus, number>>;
@@ -1040,7 +1153,7 @@ export interface IndexedSource {
   resetIndex?: (
     request: IndexedSourceResetRequest,
   ) => Promise<IndexedSourceResetResult>;
-  clearIndex?: () => Promise<void>;
+  clearIndex?: () => Promise<void | IndexedSourceResetResult>;
 }
 
 const ALL_INDEXED_SOURCE_PLATFORMS: IndexedSourcePlatform[] = [

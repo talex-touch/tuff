@@ -12,6 +12,7 @@ export interface IndexedSourceRootEvidenceInput {
 export class IndexedSourceRootEvidenceService {
   build(input: IndexedSourceRootEvidenceInput): IndexedSourceEvidence {
     const rootCount = input.roots.length
+    const checkedAt = normalizeEvidenceTimestamp(input.checkedAt)
 
     return {
       id: input.id,
@@ -19,9 +20,13 @@ export class IndexedSourceRootEvidenceService {
       status: rootCount > 0 ? 'ready' : 'degraded',
       rootCount,
       roots: input.roots,
-      lastCheckedAt: input.checkedAt ?? Date.now(),
+      lastCheckedAt: checkedAt,
       reason: rootCount > 0 ? undefined : input.emptyReason,
       metadata: input.metadata
     }
   }
+}
+
+function normalizeEvidenceTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : Date.now()
 }

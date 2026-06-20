@@ -135,4 +135,62 @@ describe('indexing-progress-stream-service', () => {
     expect(getIndexingProgressStreamFlushDelayMs(1_000, 900)).toBe(60)
     expect(getIndexingProgressStreamFlushDelayMs(1_000, 700)).toBe(0)
   })
+
+  it('normalizes malformed clocks before evaluating throttle windows', () => {
+    const previous = createPayload({ current: 10, progress: 0.1, total: 100 })
+    const next = createPayload({ current: 10, progress: 0.1, total: 100 })
+
+    expect(
+      shouldEmitIndexingProgressStreamImmediately({
+        previous,
+        next,
+        now: Number.NaN,
+        lastEmitAt: 900
+      })
+    ).toBe(false)
+    expect(getIndexingProgressStreamFlushDelayMs(Number.NaN, 900)).toBe(160)
+    expect(getIndexingProgressStreamFlushDelayMs(800, 900)).toBe(160)
+  })
+
+  it('normalizes malformed payload counters and progress before comparing changes', () => {
+    const previous = createPayload({
+      current: Number.NaN,
+      total: Number.POSITIVE_INFINITY,
+      progress: Number.NEGATIVE_INFINITY
+    })
+    const next = createPayload({
+      current: -10,
+      total: Number.NaN,
+      progress: Number.NaN
+    })
+
+    expect(
+      shouldEmitIndexingProgressStreamImmediately({
+        previous,
+        next,
+        now: 1_500,
+        lastEmitAt: 1_200
+      })
+    ).toBe(false)
+  })
+
+  it('falls back for malformed throttle config values', () => {
+    const previous = createPayload({ current: 10, progress: 0.1, total: 100 })
+    const next = createPayload({ current: 34, progress: 0.1, total: 100 })
+
+    expect(
+      shouldEmitIndexingProgressStreamImmediately({
+        previous,
+        next,
+        now: 1_500,
+        lastEmitAt: 1_200,
+        config: {
+          minEmitIntervalMs: Number.NaN,
+          maxSilenceMs: Number.POSITIVE_INFINITY,
+          currentStep: Number.NEGATIVE_INFINITY,
+          terminalStages: []
+        }
+      })
+    ).toBe(false)
+  })
 })

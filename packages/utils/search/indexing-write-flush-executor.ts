@@ -61,7 +61,7 @@ export function mapIndexedWriteFlushExecutorResult<
   const numericMetadata = Object.fromEntries(
     (options.numericMetadataKeys ?? []).map((key) => [
       key,
-      typeof result.metadata?.[key] === 'number' ? result.metadata[key] : 0
+      normalizeNonNegativeNumber(result.metadata?.[key])
     ])
   )
 
@@ -84,66 +84,99 @@ export function buildIndexedWriteFlushBatchMetrics<TEntry, TMetric extends strin
   ) as Record<TMetric, number>
 }
 
-export interface IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry> {
+export interface IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry, TPersistResult = void> {
   buffer: IndexedWriteFlushBuffer<TKey, TEntry>
   getBatchSize: () => number
   isAvailable: () => boolean
   ensureReady: () => Promise<boolean>
   buildPersistEntries: (entries: TEntry[]) => TPersistEntry[]
-  persist: (entries: TPersistEntry[]) => Promise<void>
+  persist: (entries: TPersistEntry[]) => Promise<TPersistResult>
   waitForCapacity: () => Promise<void>
   recordDuration: (durationMs: number) => void
   now: () => number
   onBatchTaken?: (entries: TEntry[]) => void
   resolveBatchMetadata?: (entries: TEntry[]) => Record<string, unknown> | undefined
+  resolvePersistMetadata?: (
+    result: TPersistResult,
+    entries: TPersistEntry[]
+  ) => Record<string, unknown> | undefined
 }
 
-export class IndexedWriteFlushExecutorService<TKey, TEntry, TPersistEntry> {
-  private readonly buffer: IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry>['buffer']
+export class IndexedWriteFlushExecutorService<TKey, TEntry, TPersistEntry, TPersistResult = void> {
+  private readonly buffer: IndexedWriteFlushExecutorDeps<
+    TKey,
+    TEntry,
+    TPersistEntry,
+    TPersistResult
+  >['buffer']
   private readonly getBatchSize: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['getBatchSize']
   private readonly isAvailable: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['isAvailable']
   private readonly ensureReady: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['ensureReady']
   private readonly buildPersistEntries: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['buildPersistEntries']
-  private readonly persist: IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry>['persist']
+  private readonly persist: IndexedWriteFlushExecutorDeps<
+    TKey,
+    TEntry,
+    TPersistEntry,
+    TPersistResult
+  >['persist']
   private readonly waitForCapacity: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['waitForCapacity']
   private readonly recordDuration: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['recordDuration']
-  private readonly now: IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry>['now']
+  private readonly now: IndexedWriteFlushExecutorDeps<
+    TKey,
+    TEntry,
+    TPersistEntry,
+    TPersistResult
+  >['now']
   private readonly onBatchTaken: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['onBatchTaken']
   private readonly resolveBatchMetadata: IndexedWriteFlushExecutorDeps<
     TKey,
     TEntry,
-    TPersistEntry
+    TPersistEntry,
+    TPersistResult
   >['resolveBatchMetadata']
+  private readonly resolvePersistMetadata: IndexedWriteFlushExecutorDeps<
+    TKey,
+    TEntry,
+    TPersistEntry,
+    TPersistResult
+  >['resolvePersistMetadata']
 
-  constructor(deps: IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry>) {
+  constructor(deps: IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry, TPersistResult>) {
     this.buffer = deps.buffer
     this.getBatchSize = deps.getBatchSize
     this.isAvailable = deps.isAvailable
@@ -155,6 +188,7 @@ export class IndexedWriteFlushExecutorService<TKey, TEntry, TPersistEntry> {
     this.now = deps.now
     this.onBatchTaken = deps.onBatchTaken
     this.resolveBatchMetadata = deps.resolveBatchMetadata
+    this.resolvePersistMetadata = deps.resolvePersistMetadata
   }
 
   async execute(): Promise<IndexedWriteFlushExecutorResult> {
@@ -180,17 +214,24 @@ export class IndexedWriteFlushExecutorService<TKey, TEntry, TPersistEntry> {
       await this.waitForCapacity()
       const persistEntries = this.buildPersistEntries(entries)
       const flushStart = this.now()
-      await this.persist(persistEntries)
-      const durationMs = this.now() - flushStart
+      const persistResult = await this.persist(persistEntries)
+      const durationMs = calculateDurationMs(flushStart, this.now())
       this.recordDuration(durationMs)
       this.buffer.commit(keys)
+      const persistMetadata = this.resolvePersistMetadata?.(persistResult, persistEntries)
+      const combinedMetadata = persistMetadata
+        ? {
+            ...(metadata ?? {}),
+            ...persistMetadata
+          }
+        : metadata
       return {
         status: 'flushed',
         entries: entries.length,
         pending: this.buffer.pendingSize,
         inflight: this.buffer.inflightSize,
         reason: 'persisted',
-        metadata,
+        metadata: combinedMetadata,
         durationMs
       }
     } catch (error) {
@@ -233,4 +274,12 @@ export class IndexedWriteFlushExecutorService<TKey, TEntry, TPersistEntry> {
       metadata
     }
   }
+}
+
+function calculateDurationMs(startedAt: number, completedAt: number): number {
+  return normalizeNonNegativeNumber(completedAt - startedAt)
+}
+
+function normalizeNonNegativeNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
 }

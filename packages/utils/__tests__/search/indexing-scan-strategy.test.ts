@@ -37,4 +37,30 @@ describe('indexing scan strategy', () => {
       reconciliationPaths: ['/a', '/c']
     })
   })
+
+  it('matches completed scan paths through an optional normalizer', () => {
+    expect(
+      resolveIndexedScanStrategy({
+        watchPaths: ['/Users/me/Documents', '/Users/me/Downloads'],
+        completedScanPaths: new Set(['/users/me/documents']),
+        normalizePath: (value) => value.toLowerCase()
+      })
+    ).toEqual({
+      newPathsToScan: ['/Users/me/Downloads'],
+      reconciliationPaths: ['/Users/me/Documents']
+    })
+  })
+
+  it('deduplicates watch paths through the optional normalizer', () => {
+    expect(
+      resolveIndexedScanStrategy({
+        watchPaths: ['/Users/me/Documents', '/users/me/documents', '/Users/me/Downloads'],
+        completedScanPaths: new Set(['/users/me/documents']),
+        normalizePath: (value) => value.toLowerCase()
+      })
+    ).toEqual({
+      newPathsToScan: ['/Users/me/Downloads'],
+      reconciliationPaths: ['/Users/me/Documents']
+    })
+  })
 })

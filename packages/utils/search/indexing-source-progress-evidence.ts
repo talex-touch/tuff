@@ -35,6 +35,11 @@ export class IndexedSourceProgressEvidenceService {
   build(input: IndexedSourceProgressEvidenceInput): IndexedSourceEvidence {
     const pendingPermissionPaths = input.pendingPermissionPaths ?? []
     const pendingPermissionRoots = pendingPermissionPaths.length
+    const itemCount = normalizeEvidenceCount(input.itemCount)
+    const pendingRoots = normalizeEvidenceCount(input.pendingRoots)
+    const failedItems = normalizeEvidenceCount(input.failedItems)
+    const totalRoots = normalizeEvidenceCount(input.totalRoots ?? input.roots.length)
+    const checkedAt = normalizeEvidenceTimestamp(input.checkedAt)
     const reasons = {
       ...DEFAULT_PROGRESS_EVIDENCE_REASONS,
       ...(input.reasons ?? {})
@@ -44,26 +49,26 @@ export class IndexedSourceProgressEvidenceService {
       id: input.id,
       label: input.label,
       status: this.resolveStatus(
-        input.failedItems,
-        input.pendingRoots,
+        failedItems,
+        pendingRoots,
         input.isActive,
         pendingPermissionRoots
       ),
-      itemCount: input.itemCount,
+      itemCount,
       rootCount: input.roots.length,
       roots: input.roots,
-      lastCheckedAt: input.checkedAt ?? Date.now(),
+      lastCheckedAt: checkedAt,
       reason: this.resolveReason(
-        input.failedItems,
-        input.pendingRoots,
+        failedItems,
+        pendingRoots,
         input.isActive,
         pendingPermissionRoots,
         reasons
       ),
       metadata: {
         ...(input.metadata ?? {}),
-        totalRoots: input.totalRoots ?? input.roots.length,
-        pendingRoots: input.pendingRoots,
+        totalRoots,
+        pendingRoots,
         pendingPermissionRoots,
         pendingPermissionPaths
       }
@@ -109,4 +114,12 @@ export class IndexedSourceProgressEvidenceService {
     }
     return reasons.ready
   }
+}
+
+function normalizeEvidenceTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : Date.now()
+}
+
+function normalizeEvidenceCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
 }

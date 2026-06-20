@@ -8,6 +8,7 @@ export interface IndexedScanEligibilityInput {
   completedScans: IndexedScanProgressRow[]
   intervalMs: number
   now?: number
+  normalizePath?: (path: string) => string
   toTimestamp?: (value: unknown) => number | null
 }
 
@@ -22,24 +23,25 @@ export function resolveIndexedScanEligibility(
 ): IndexedScanEligibility {
   const completedMap = new Map<string, number>()
   let lastScannedAt: number | null = null
+  const normalizePath = input.normalizePath ?? ((path: string) => path)
   const toTimestamp = input.toTimestamp ?? toIndexedScanTimestamp
+  const watchPaths = uniqueIndexedScanPaths(input.watchPaths, normalizePath)
 
   for (const scan of input.completedScans) {
     const timestamp = toTimestamp(scan?.lastScanned)
     if (timestamp === null) continue
-    completedMap.set(scan.path, timestamp)
+    completedMap.set(normalizePath(scan.path), timestamp)
     if (lastScannedAt === null || timestamp > lastScannedAt) {
       lastScannedAt = timestamp
     }
   }
 
-  const watchPathSet = new Set(input.watchPaths)
-  const newPaths = input.watchPaths.filter((watchPath) => !completedMap.has(watchPath))
+  const newPaths = watchPaths.filter((watchPath) => !completedMap.has(normalizePath(watchPath)))
   const stalePaths =
     input.intervalMs <= 0
-      ? Array.from(completedMap.keys()).filter((watchPath) => watchPathSet.has(watchPath))
-      : input.watchPaths.filter((watchPath) => {
-          const last = completedMap.get(watchPath)
+      ? watchPaths.filter((watchPath) => completedMap.has(normalizePath(watchPath)))
+      : watchPaths.filter((watchPath) => {
+          const last = completedMap.get(normalizePath(watchPath))
           if (!last) return false
           return (input.now ?? Date.now()) - last >= input.intervalMs
         })
@@ -58,4 +60,19 @@ export function toIndexedScanTimestamp(value: unknown): number | null {
           : null
 
   return timestamp !== null && Number.isFinite(timestamp) ? timestamp : null
+}
+
+function uniqueIndexedScanPaths(
+  paths: string[],
+  normalizePath: (path: string) => string
+): string[] {
+  const seen = new Set<string>()
+  const uniquePaths: string[] = []
+  for (const path of paths) {
+    const key = normalizePath(path)
+    if (seen.has(key)) continue
+    seen.add(key)
+    uniquePaths.push(path)
+  }
+  return uniquePaths
 }

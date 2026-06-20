@@ -66,12 +66,12 @@ export function resolveIndexedWriteFlushRuntimeConfig(
   config: IndexedWriteFlushRuntimeConfig = {}
 ): ResolvedIndexedWriteFlushRuntimeConfig {
   return {
-    baseDelayMs: config.baseDelayMs ?? 250,
-    backlogDelayMs: config.backlogDelayMs ?? 500,
-    flushDeferMs: config.flushDeferMs ?? 300,
-    backpressureMaxQueued: config.backpressureMaxQueued ?? 10,
-    retryBaseMs: config.retryBaseMs ?? 250,
-    retryMaxMs: config.retryMaxMs ?? 5000
+    baseDelayMs: normalizeRuntimeCount(config.baseDelayMs, 250),
+    backlogDelayMs: normalizeRuntimeCount(config.backlogDelayMs, 500),
+    flushDeferMs: normalizeRuntimeCount(config.flushDeferMs, 300),
+    backpressureMaxQueued: normalizeRuntimeCount(config.backpressureMaxQueued, 10),
+    retryBaseMs: normalizeRuntimeCount(config.retryBaseMs, 250),
+    retryMaxMs: normalizeRuntimeCount(config.retryMaxMs, 5000)
   }
 }
 
@@ -89,7 +89,7 @@ export class IndexedWriteFlushRuntimeService<
   constructor(
     private readonly deps: IndexedWriteFlushRuntimeServiceDeps<TResult, TReason, TDecision>
   ) {
-    this.flushDeferMs = deps.config?.flushDeferMs ?? 300
+    this.flushDeferMs = normalizeRuntimeCount(deps.config?.flushDeferMs, 300)
   }
 
   scheduleFlush(delayMs: number, reason: string): void {
@@ -97,7 +97,7 @@ export class IndexedWriteFlushRuntimeService<
       return
     }
 
-    const safeDelay = Math.max(0, Math.round(delayMs))
+    const safeDelay = normalizeRuntimeCount(delayMs, 0)
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null
       void this.flush().catch((error) => {
@@ -112,7 +112,7 @@ export class IndexedWriteFlushRuntimeService<
       return
     }
 
-    if (this.deps.getPendingSize() === 0) {
+    if (this.getPendingSize() === 0) {
       this.recordIdle('no-pending')
       return
     }
@@ -137,26 +137,50 @@ export class IndexedWriteFlushRuntimeService<
     } catch (error) {
       const decision = this.deps.resolveFailure({
         error,
-        pendingSize: this.deps.getPendingSize(),
+        pendingSize: this.getPendingSize(),
         retryCount: this.retryCount
       })
-      this.retryCount = decision.nextRetryCount
-      this.deps.handleFailure({ error, decision })
-      this.scheduleFlush(decision.delayMs, decision.reason)
+      const safeDecision = this.normalizeRetryDecision(decision)
+      this.retryCount = safeDecision.nextRetryCount
+      this.deps.handleFailure({ error, decision: safeDecision })
+      this.scheduleFlush(safeDecision.delayMs, safeDecision.reason)
     } finally {
       this.flushing = false
     }
 
-    if (flushSucceeded && this.deps.getPendingSize() > 0) {
-      this.scheduleFlush(this.deps.getFlushDelay(this.deps.getPendingSize()), 'drain-remaining')
+    const pendingSize = this.getPendingSize()
+    if (flushSucceeded && pendingSize > 0) {
+      this.scheduleFlush(this.deps.getFlushDelay(pendingSize), 'drain-remaining')
     }
   }
 
   private recordIdle(reason: IndexedWriteFlushRuntimeIdleReason): void {
     this.deps.recordIdle({
       reason,
-      pending: this.deps.getPendingSize(),
-      inflight: this.deps.getInflightSize()
+      pending: this.getPendingSize(),
+      inflight: this.getInflightSize()
     })
   }
+
+  private getPendingSize(): number {
+    return normalizeRuntimeCount(this.deps.getPendingSize(), 0)
+  }
+
+  private getInflightSize(): number {
+    return normalizeRuntimeCount(this.deps.getInflightSize(), 0)
+  }
+
+  private normalizeRetryDecision(decision: TDecision): TDecision {
+    return {
+      ...decision,
+      delayMs: normalizeRuntimeCount(decision.delayMs, 0),
+      nextRetryCount: normalizeRuntimeCount(decision.nextRetryCount, this.retryCount)
+    }
+  }
+}
+
+function normalizeRuntimeCount(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : fallback
 }

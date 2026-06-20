@@ -26,13 +26,36 @@ describe('IndexedSourceRuntimeTaskJobFactory', () => {
   })
 
   it('uses an injected queued timestamp without changing the sequence', () => {
-    const factory = new IndexedSourceRuntimeTaskJobFactory()
+    const factory = new IndexedSourceRuntimeTaskJobFactory({ now: () => 2000 })
 
     expect(factory.create('file-provider', 'scan', 1234)).toEqual({
       id: 'file-provider:scan:1',
       sourceId: 'file-provider',
       kind: 'scan',
       queuedAt: 1234
+    })
+  })
+
+  it('normalizes invalid or future queued timestamps before creating task jobs', () => {
+    const factory = new IndexedSourceRuntimeTaskJobFactory({ now: () => 2000 })
+
+    expect(factory.create('file-provider', 'scan', Number.NaN)).toEqual({
+      id: 'file-provider:scan:1',
+      sourceId: 'file-provider',
+      kind: 'scan',
+      queuedAt: 2000
+    })
+    expect(factory.create('file-provider', 'scan', Number.POSITIVE_INFINITY)).toEqual({
+      id: 'file-provider:scan:2',
+      sourceId: 'file-provider',
+      kind: 'scan',
+      queuedAt: 2000
+    })
+    expect(factory.create('file-provider', 'scan', 3000)).toEqual({
+      id: 'file-provider:scan:3',
+      sourceId: 'file-provider',
+      kind: 'scan',
+      queuedAt: 2000
     })
   })
 })

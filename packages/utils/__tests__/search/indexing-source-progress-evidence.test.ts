@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IndexedSourceProgressEvidenceService } from '../../search'
 
 const service = new IndexedSourceProgressEvidenceService()
 
 describe('IndexedSourceProgressEvidenceService', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('builds ready evidence when all roots are complete', () => {
     expect(
       service.build({
@@ -127,6 +131,32 @@ describe('IndexedSourceProgressEvidenceService', () => {
         completedFiles: 3,
         totalRoots: 2,
         pendingRoots: 1
+      }
+    })
+  })
+
+  it('normalizes malformed checkedAt and progress counters', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+
+    expect(
+      service.build({
+        id: 'source:progress',
+        label: 'Source progress',
+        roots: ['/a'],
+        itemCount: Number.NaN,
+        totalRoots: Number.POSITIVE_INFINITY,
+        pendingRoots: -1,
+        failedItems: Number.NaN,
+        isActive: false,
+        checkedAt: -10
+      })
+    ).toMatchObject({
+      status: 'ready',
+      itemCount: 0,
+      lastCheckedAt: 1700000000000,
+      metadata: {
+        totalRoots: 0,
+        pendingRoots: 0
       }
     })
   })

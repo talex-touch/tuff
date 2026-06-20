@@ -120,4 +120,31 @@ describe('IndexedWriteFlushEvidenceService', () => {
       }
     })
   })
+
+  it('normalizes malformed snapshot counters and timestamps before exposing evidence', () => {
+    const evidence = service.build({
+      id: 'source:index-flush',
+      label: 'Source index flush',
+      snapshot: {
+        status: 'failed',
+        entries: Number.POSITIVE_INFINITY,
+        pending: -7,
+        inflight: Number.NaN,
+        durationMs: Number.NEGATIVE_INFINITY,
+        checkedAt: Number.NaN
+      }
+    })
+
+    expect(evidence).toMatchObject({
+      status: 'degraded',
+      itemCount: 0,
+      metadata: {
+        entries: 0,
+        pending: 0,
+        inflight: 0,
+        durationMs: 0
+      }
+    })
+    expect(evidence.lastCheckedAt).toBeGreaterThan(0)
+  })
 })
