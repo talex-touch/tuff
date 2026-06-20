@@ -20,6 +20,10 @@ export default {
       switchToZh: 'Switch language to Chinese',
       switchToEn: 'Switch language to English',
     },
+    themeToggle: {
+      switchToLight: 'Switch to light mode',
+      switchToDark: 'Switch to dark mode',
+    },
   },
   common: {
     save: 'Save',
@@ -2446,6 +2450,64 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     },
   },
   landing: {
+    nexus: {
+      hero: {
+        eyebrow: 'Local-first. Private by design.',
+        titleLead: 'Your OS,',
+        titleAccent: 'programmable.',
+        title: 'Your OS, programmable.',
+        copy: 'Nexus is the public entry for Tuff: trusted releases, plugin ecosystem, and developer docs while the desktop app stays light, fast, and extensible.',
+        primaryCta: 'Get the current build',
+        secondaryCta: 'View developer docs',
+      },
+      product: {
+        eyebrow: 'Real product surface',
+        title: 'CoreBox is the first workspace, not another admin panel.',
+        previewAlt: 'Tuff CoreBox local file search interface',
+        caption: 'One input surface can search files, open apps, invoke plugins, and hand context to Agents.',
+      },
+      capabilities: {
+        eyebrow: 'Capability boundaries',
+        title: 'A clear execution path built around the local desktop.',
+        items: {
+          local: {
+            title: 'Local context first',
+            copy: 'Clipboard, files, apps, and desktop state are shaped locally first. Nexus coordinates ecosystem, docs, and trusted releases.',
+          },
+          intelligence: {
+            title: 'Models and tools routed together',
+            copy: 'Tuff Intelligence brings model routing, desktop context, and tool execution into CoreBox to reduce app switching.',
+          },
+          plugins: {
+            title: 'Auditable plugin extension',
+            copy: 'Manifest, permissions, and SDK markers give every extension a clear entry, boundary, and audit trail.',
+          },
+        },
+      },
+      workflow: {
+        eyebrow: 'Workflow',
+        title: 'Keep one line from intent to desktop action.',
+        items: {
+          capture: {
+            title: 'Capture intent',
+            copy: 'Summon CoreBox globally and put natural language, filenames, or selected snippets into one entry.',
+          },
+          route: {
+            title: 'Shape context',
+            copy: 'Runtime turns input, current desktop state, and available capabilities into an executable request.',
+          },
+          execute: {
+            title: 'Move the action',
+            copy: 'Built-in capabilities, MCP, and plugins perform real actions and return results to your current flow.',
+          },
+        },
+      },
+      final: {
+        eyebrow: 'Pioneer entry',
+        title: 'Clarify the desktop workflow first, then let Agents take over repeated actions.',
+        cta: 'Download Tuff',
+      },
+    },
     new: {
       hero: {
         eyebrow: 'Desktop command center',
