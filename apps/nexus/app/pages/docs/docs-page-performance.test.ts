@@ -7,6 +7,7 @@ const docsSidebar = readFileSync(new URL('../../components/DocsSidebar.vue', imp
 const touchAurora = readFileSync(new URL('../../components/tuff/background/TouchAurora.vue', import.meta.url), 'utf8')
 const avatarVariantsDemo = readFileSync(new URL('../../components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue', import.meta.url), 'utf8')
 const docsLayout = readFileSync(new URL('../../layouts/docs.vue', import.meta.url), 'utf8')
+const tuffFooter = readFileSync(new URL('../../components/TuffFooter.vue', import.meta.url), 'utf8')
 const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoWrapper.vue', import.meta.url), 'utf8')
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
@@ -22,7 +23,7 @@ describe('docs page performance boundaries', () => {
     expect(page).toContain("const shouldSplitDocBody = computed(() => normalizeDocsPagePath(activeRoutePath.value).includes('/docs/dev/components'))")
   })
 
-  it('keeps bottom engagement panels behind idle or near-viewport activation', () => {
+  it('keeps bottom engagement panels behind near-viewport activation', () => {
     expect(page).toContain('shouldMountDocEngagementPanels')
     expect(page).toContain('docEngagementAnchorRef')
     expect(page).toContain('IntersectionObserver')
@@ -30,8 +31,19 @@ describe('docs page performance boundaries', () => {
     expect(page).toContain('DOC_ENGAGEMENT_PANEL_DELAY_MS = 3200')
     expect(page).toContain('DOC_ENGAGEMENT_PANEL_IDLE_TIMEOUT_MS = 5000')
     expect(page).toMatch(/setTimeout\(\(\) => \{[\s\S]*IntersectionObserver[\s\S]*DOC_ENGAGEMENT_PANEL_DELAY_MS/)
+    expect(page).toMatch(/engagementPanelObserver\.observe\(anchor\)[\s\S]*return[\s\S]*requestIdleCallback/)
     expect(page).toContain('<LazyDocsFeedback v-if="shouldMountDocEngagementPanels"')
     expect(page).toContain('<LazyDocsComments v-if="shouldMountDocEngagementPanels"')
+  })
+
+  it('keeps footer aurora behind near-viewport activation', () => {
+    expect(tuffFooter).toContain("const LazyTouchAurora = defineAsyncComponent(() => import('./tuff/background/TouchAurora.vue'))")
+    expect(tuffFooter).toContain("FOOTER_AURORA_ROOT_MARGIN = '480px 0px'")
+    expect(tuffFooter).toContain('const footerRef = ref<HTMLElement | null>(null)')
+    expect(tuffFooter).toMatch(/new IntersectionObserver\([\s\S]*FOOTER_AURORA_ROOT_MARGIN[\s\S]*auroraObserver\.observe\(footer\)[\s\S]*return[\s\S]*scheduleAuroraFallback\(\)/)
+    expect(tuffFooter).toContain('<footer ref="footerRef"')
+    expect(tuffFooter).toContain('<LazyTouchAurora')
+    expect(tuffFooter).toContain('v-if="shouldMountAurora"')
   })
 
   it('keeps lightweight docs tracking separate from bottom engagement widgets', () => {

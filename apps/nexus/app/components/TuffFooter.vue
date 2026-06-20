@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import BetaIcon from './BetaIcon.vue'
 import Logo from './icon/Logo.vue'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
@@ -8,7 +8,12 @@ const LazyTouchAurora = defineAsyncComponent(() => import('./tuff/background/Tou
 
 const { locale, t } = useI18n()
 const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
+const FOOTER_AURORA_ROOT_MARGIN = '480px 0px'
 const shouldMountAurora = ref(false)
+const footerRef = ref<HTMLElement | null>(null)
+let auroraObserver: IntersectionObserver | null = null
+let auroraFallbackTimer: ReturnType<typeof setTimeout> | null = null
+let auroraIdleId: number | null = null
 
 const year = new Date().getFullYear()
 
@@ -40,17 +45,62 @@ const socialLinks = computed(() => [
   },
 ])
 
-onMounted(() => {
-  window.requestIdleCallback?.(() => {
-    shouldMountAurora.value = true
-  }, { timeout: 1200 }) ?? window.setTimeout(() => {
+function mountAurora() {
+  shouldMountAurora.value = true
+  clearAuroraSchedule()
+}
+
+function clearAuroraSchedule() {
+  if (auroraObserver) {
+    auroraObserver.disconnect()
+    auroraObserver = null
+  }
+  if (auroraFallbackTimer) {
+    window.clearTimeout(auroraFallbackTimer)
+    auroraFallbackTimer = null
+  }
+  if (auroraIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(auroraIdleId)
+    auroraIdleId = null
+  }
+}
+
+function scheduleAuroraFallback() {
+  if ('requestIdleCallback' in window) {
+    auroraIdleId = window.requestIdleCallback(() => {
+      auroraIdleId = null
+      mountAurora()
+    }, { timeout: 1800 })
+    return
+  }
+
+  auroraFallbackTimer = window.setTimeout(() => {
+    auroraFallbackTimer = null
     shouldMountAurora.value = true
   }, 600)
+}
+
+onMounted(() => {
+  const footer = footerRef.value
+  if ('IntersectionObserver' in window && footer) {
+    auroraObserver = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0))
+        mountAurora()
+    }, { rootMargin: FOOTER_AURORA_ROOT_MARGIN })
+    auroraObserver.observe(footer)
+    return
+  }
+
+  scheduleAuroraFallback()
+})
+
+onBeforeUnmount(() => {
+  clearAuroraSchedule()
 })
 </script>
 
 <template>
-  <footer class="TuffFooter relative border-t border-black/5 border-solid text-black dark:border-white/5 dark:text-white">
+  <footer ref="footerRef" class="TuffFooter relative border-t border-black/5 border-solid text-black dark:border-white/5 dark:text-white">
     <div class="TuffFooter-Background z-1">
       <Logo />
 

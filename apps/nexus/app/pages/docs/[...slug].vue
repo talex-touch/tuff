@@ -1235,6 +1235,7 @@ function scheduleDocEngagementPanels() {
           mountDocEngagementPanels()
       }, { rootMargin: DOC_ENGAGEMENT_PANEL_ROOT_MARGIN })
       engagementPanelObserver.observe(anchor)
+      return
     }
 
     if ('requestIdleCallback' in window) {
