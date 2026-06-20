@@ -6,11 +6,14 @@ type DevRouteFamily = 'docs' | 'store' | 'dashboard' | 'landing'
 
 const DOCS_EXCLUDED_STYLESHEET_MARKERS = [
   '/_nuxt/components/TuffFooter.vue?',
+  '/_nuxt/components/VersionDrawer.vue?',
+  '/_nuxt/components/assets/create/',
   '/_nuxt/components/dashboard/',
   '/_nuxt/components/store/',
   '/_nuxt/components/tuff/',
   '/_nuxt/layouts/store.vue?',
   '/_nuxt/pages/dashboard',
+  '/_nuxt/pages/new/',
   '/_nuxt/pages/store.vue?',
 ]
 
