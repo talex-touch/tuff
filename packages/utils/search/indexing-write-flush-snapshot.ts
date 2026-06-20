@@ -61,13 +61,13 @@ export function buildIndexedWriteFlushResultSnapshot<
 >(result: IndexedWriteFlushResultSnapshotInput<TSnapshot['status']>): Omit<TSnapshot, 'checkedAt'> {
   return {
     status: result.status,
-    entries: result.entries,
-    pending: result.pending,
-    inflight: result.inflight,
+    entries: normalizeSnapshotCount(result.entries),
+    pending: normalizeSnapshotCount(result.pending),
+    inflight: normalizeSnapshotCount(result.inflight),
     reason: result.reason,
     error: result.error,
     metadata: result.metadata,
-    durationMs: result.durationMs
+    durationMs: normalizeOptionalSnapshotNumber(result.durationMs)
   } as Omit<TSnapshot, 'checkedAt'>
 }
 
@@ -77,8 +77,8 @@ export function buildIndexedWriteFlushIdleSnapshot<TReason extends string = stri
   return {
     status: 'idle',
     entries: 0,
-    pending: input.pending,
-    inflight: input.inflight,
+    pending: normalizeSnapshotCount(input.pending),
+    inflight: normalizeSnapshotCount(input.inflight),
     reason: input.reason
   }
 }
@@ -105,7 +105,7 @@ export function buildIndexedWriteFlushFailureRetryMetadata<TReason extends strin
 ): Record<string, unknown> & { delayMs: number; retryReason: TReason } {
   return {
     ...(input.extra ?? {}),
-    delayMs: input.delayMs,
+    delayMs: normalizeSnapshotNumber(input.delayMs),
     retryReason: input.retryReason
   }
 }
@@ -134,19 +134,31 @@ export function buildIndexedWriteFlushFailureSnapshot<
 
   return {
     status: 'failed',
-    entries: flushResult?.entries ?? 0,
-    pending: flushResult?.pending ?? input.pendingSize,
-    inflight: flushResult?.inflight ?? input.inflightSize,
+    entries: normalizeSnapshotCount(flushResult?.entries),
+    pending: normalizeSnapshotCount(flushResult?.pending ?? input.pendingSize),
+    inflight: normalizeSnapshotCount(flushResult?.inflight ?? input.inflightSize),
     reason: flushResult?.reason ?? 'flush-failed',
     error: flushResult?.error ?? stringifyError(input.error),
     metadata: {
       ...(flushResult?.metadata ?? {}),
       ...(input.metadata ?? {})
     },
-    durationMs: flushResult?.durationMs
+    durationMs: normalizeOptionalSnapshotNumber(flushResult?.durationMs)
   } as Omit<TSnapshot, 'checkedAt'>
 }
 
 function defaultIndexedWriteFlushErrorStringifier(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function normalizeSnapshotCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+}
+
+function normalizeSnapshotNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+function normalizeOptionalSnapshotNumber(value: unknown): number | undefined {
+  return value === undefined ? undefined : normalizeSnapshotNumber(value)
 }

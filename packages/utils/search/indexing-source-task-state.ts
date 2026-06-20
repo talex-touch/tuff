@@ -34,8 +34,11 @@ export interface IndexedSourceScanTaskStateInput {
   sourceId: string
   startedAt: number
   completedAt: number
+  now?: number
   batches?: number
   records?: number
+  indexedRecords?: number
+  phase?: string
   status?: Extract<IndexedSourceTaskHistoryEntry['status'], 'succeeded' | 'failed' | 'skipped'>
   error?: string
   skipReason?: string
@@ -53,11 +56,13 @@ export interface IndexedSourceWatchTaskStateInput {
   sourceId: string
   occurredAt: number
   completedAt: number
+  now?: number
   action: IndexedSourceDeltaAction
   path: string
   deltas?: number
   appliedDeltas?: number
   failedDeltas?: number
+  skippedDeltas?: number
   status?: Extract<IndexedSourceTaskHistoryEntry['status'], 'succeeded' | 'failed' | 'skipped'>
   error?: string
   skipReason?: string
@@ -76,6 +81,7 @@ export interface IndexedSourceReconcileTaskStateInput {
   sourceId: string
   startedAt: number
   completedAt: number
+  now?: number
   added?: number
   changed?: number
   deleted?: number
@@ -86,6 +92,7 @@ export interface IndexedSourceReconcileTaskStateInput {
   deltas?: number
   appliedDeltas?: number
   failedDeltas?: number
+  skippedDeltas?: number
   status?: Extract<IndexedSourceTaskHistoryEntry['status'], 'succeeded' | 'failed' | 'skipped'>
   error?: string
   skipReason?: string
@@ -104,11 +111,15 @@ export interface IndexedSourceResetTaskStateInput {
   sourceId: string
   startedAt: number
   completedAt: number
+  now?: number
   reason: IndexedSourceResetReason
   clearedSearchIndex: boolean
+  clearedSearchIndexRows?: number
   clearedScanProgress: boolean
   scanProgressRows?: number
+  status?: Extract<IndexedSourceTaskHistoryEntry['status'], 'succeeded' | 'failed' | 'skipped'>
   error?: string
+  skipReason?: string
   job?: IndexedSourceRuntimeTaskJob
 }
 
@@ -127,7 +138,7 @@ export function updateIndexedSourceTaskState<
   const historyLimit = input.historyLimit ?? DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT
   return {
     ...input.state,
-    [input.key]: input.value,
+    [input.key]: { ...input.value },
     recentTasks: appendIndexedSourceTaskHistory(
       input.state.recentTasks,
       input.historyEntry,
@@ -141,32 +152,40 @@ export function buildIndexedSourceScanTaskState(
 ): IndexedSourceScanTaskState {
   const status = input.status ?? 'succeeded'
   const error = status === 'skipped' ? `skipped:${input.skipReason ?? input.error ?? 'unknown'}` : input.error
-  const batches = input.batches ?? 0
-  const records = input.records ?? 0
+  const timestamps = normalizeTaskInterval(input.startedAt, input.completedAt, input.now)
+  const queuedAt = normalizeOptionalTaskTimestamp(input.job?.queuedAt, input.now)
+  const batches = normalizeTaskCount(input.batches)
+  const records = normalizeTaskCount(input.records)
+  const indexedRecords = normalizeTaskCount(input.indexedRecords ?? records)
   const value = {
-    startedAt: input.startedAt,
-    completedAt: input.completedAt,
+    startedAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
+    queuedAt,
     batches,
     records,
+    indexedRecords,
+    ...(typeof input.phase === 'string' ? { phase: input.phase } : {}),
     error
   }
+  const summary =
+    status === 'succeeded' || status === 'failed'
+      ? {
+          batches,
+          records,
+          indexedRecords,
+          phase: input.phase
+        }
+      : undefined
   const historyEntry: IndexedSourceTaskHistoryEntry = {
     kind: 'scan',
     status,
-    startedAt: input.startedAt,
-    completedAt: input.completedAt,
+    startedAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
+    queuedAt,
     error,
-    summary:
-      status === 'succeeded'
-        ? {
-            batches,
-            records
-          }
-        : undefined
+    summary
   }
 
   return {
@@ -182,35 +201,43 @@ export function buildIndexedSourceReconcileTaskState(
 ): IndexedSourceReconcileTaskState {
   const status = input.status ?? 'succeeded'
   const error = status === 'skipped' ? `skipped:${input.skipReason ?? input.error ?? 'unknown'}` : input.error
-  const added = input.added ?? 0
-  const changed = input.changed ?? 0
-  const deleted = input.deleted ?? 0
-  const skipped = input.skipped ?? 0
-  const errors = input.errors ?? 0
+  const timestamps = normalizeTaskInterval(input.startedAt, input.completedAt, input.now)
+  const queuedAt = normalizeOptionalTaskTimestamp(input.job?.queuedAt, input.now)
+  const added = normalizeTaskCount(input.added)
+  const changed = normalizeTaskCount(input.changed)
+  const deleted = normalizeTaskCount(input.deleted)
+  const skipped = normalizeTaskCount(input.skipped)
+  const errors = normalizeTaskCount(input.errors)
+  const rootCount = normalizeOptionalTaskCount(input.rootCount)
+  const deltas = normalizeOptionalTaskCount(input.deltas)
+  const appliedDeltas = normalizeOptionalTaskCount(input.appliedDeltas)
+  const failedDeltas = normalizeOptionalTaskCount(input.failedDeltas)
+  const skippedDeltas = normalizeOptionalTaskCount(input.skippedDeltas)
   const value = {
-    startedAt: input.startedAt,
-    completedAt: input.completedAt,
+    startedAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     added,
     changed,
     deleted,
     skipped,
     errors,
     reason: input.reason,
-    rootCount: input.rootCount,
+    rootCount,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
-    deltas: input.deltas,
-    appliedDeltas: input.appliedDeltas,
-    failedDeltas: input.failedDeltas,
+    queuedAt,
+    deltas,
+    appliedDeltas,
+    failedDeltas,
+    skippedDeltas,
     error
   }
   const historyEntry: IndexedSourceTaskHistoryEntry = {
     kind: 'reconcile',
     status,
-    startedAt: input.startedAt,
-    completedAt: input.completedAt,
+    startedAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
+    queuedAt,
     error,
     summary: input.summary
   }
@@ -228,28 +255,32 @@ export function buildIndexedSourceWatchTaskState(
 ): IndexedSourceWatchTaskState {
   const status = input.status ?? 'succeeded'
   const error = status === 'skipped' ? `skipped:${input.skipReason ?? input.error ?? 'unknown'}` : input.error
-  const deltas = input.deltas ?? 0
-  const appliedDeltas = input.appliedDeltas ?? 0
-  const failedDeltas = input.failedDeltas ?? 0
+  const timestamps = normalizeTaskInterval(input.occurredAt, input.completedAt, input.now)
+  const queuedAt = normalizeOptionalTaskTimestamp(input.job?.queuedAt, input.now)
+  const deltas = normalizeTaskCount(input.deltas)
+  const appliedDeltas = normalizeTaskCount(input.appliedDeltas)
+  const failedDeltas = normalizeTaskCount(input.failedDeltas)
+  const skippedDeltas = normalizeTaskCount(input.skippedDeltas)
   const value = {
-    occurredAt: input.occurredAt,
-    completedAt: input.completedAt,
+    occurredAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
+    queuedAt,
     action: input.action,
     path: input.path,
     deltas,
     appliedDeltas,
     failedDeltas,
+    skippedDeltas,
     error
   }
   const historyEntry: IndexedSourceTaskHistoryEntry = {
     kind: 'watch',
     status,
-    occurredAt: input.occurredAt,
-    completedAt: input.completedAt,
+    occurredAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
+    queuedAt,
     error,
     summary:
       input.summary ??
@@ -257,7 +288,8 @@ export function buildIndexedSourceWatchTaskState(
         action: input.action,
         deltas,
         appliedDeltas,
-        failedDeltas
+        failedDeltas,
+        skippedDeltas
       }
   }
 
@@ -272,30 +304,39 @@ export function buildIndexedSourceWatchTaskState(
 export function buildIndexedSourceResetTaskState(
   input: IndexedSourceResetTaskStateInput
 ): IndexedSourceResetTaskState {
+  const status = input.status ?? (input.error ? 'failed' : 'succeeded')
+  const error =
+    status === 'skipped' ? `skipped:${input.skipReason ?? input.error ?? 'unknown'}` : input.error
+  const timestamps = normalizeTaskInterval(input.startedAt, input.completedAt, input.now)
+  const queuedAt = normalizeOptionalTaskTimestamp(input.job?.queuedAt, input.now)
+  const clearedSearchIndexRows = normalizeOptionalTaskCount(input.clearedSearchIndexRows)
+  const scanProgressRows = normalizeOptionalTaskCount(input.scanProgressRows)
   const value = {
-    startedAt: input.startedAt,
-    completedAt: input.completedAt,
+    startedAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     reason: input.reason,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
+    queuedAt,
     clearedSearchIndex: input.clearedSearchIndex,
+    clearedSearchIndexRows,
     clearedScanProgress: input.clearedScanProgress,
-    scanProgressRows: input.scanProgressRows,
-    error: input.error
+    scanProgressRows,
+    error
   }
   const historyEntry: IndexedSourceTaskHistoryEntry = {
     kind: 'reset',
-    status: input.error ? 'failed' : 'succeeded',
-    startedAt: input.startedAt,
-    completedAt: input.completedAt,
+    status,
+    startedAt: timestamps.startedAt,
+    completedAt: timestamps.completedAt,
     jobId: input.job?.id,
-    queuedAt: input.job?.queuedAt,
-    error: input.error,
+    queuedAt,
+    error,
     summary: {
       reason: input.reason,
       clearedSearchIndex: input.clearedSearchIndex,
+      clearedSearchIndexRows,
       clearedScanProgress: input.clearedScanProgress,
-      scanProgressRows: input.scanProgressRows
+      scanProgressRows
     }
   }
 
@@ -305,4 +346,51 @@ export function buildIndexedSourceResetTaskState(
     value,
     historyEntry
   }
+}
+
+function normalizeTaskInterval(
+  startedAt: number,
+  completedAt: number,
+  now?: number
+): { startedAt: number, completedAt: number } {
+  const clock = normalizeClock(now)
+  const normalizedStartedAt = normalizeTaskTimestamp(startedAt, completedAt, clock)
+  const normalizedCompletedAt = Math.max(
+    normalizedStartedAt,
+    normalizeTaskTimestamp(completedAt, normalizedStartedAt, clock)
+  )
+
+  return {
+    startedAt: normalizedStartedAt,
+    completedAt: normalizedCompletedAt
+  }
+}
+
+function normalizeOptionalTaskTimestamp(value: number | undefined, now?: number): number | undefined {
+  const timestamp = normalizeFiniteTimestamp(value)
+  if (timestamp === undefined) return undefined
+  return Math.min(Math.max(0, timestamp), normalizeClock(now))
+}
+
+function normalizeTaskTimestamp(value: number, fallback: number, now: number): number {
+  return Math.min(
+    Math.max(0, normalizeFiniteTimestamp(value) ?? normalizeFiniteTimestamp(fallback) ?? now),
+    now
+  )
+}
+
+function normalizeTaskCount(value: number | undefined): number {
+  return normalizeOptionalTaskCount(value) ?? 0
+}
+
+function normalizeOptionalTaskCount(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+function normalizeClock(now: number | undefined): number {
+  return normalizeFiniteTimestamp(now) ?? normalizeFiniteTimestamp(Date.now()) ?? 0
+}
+
+function normalizeFiniteTimestamp(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }

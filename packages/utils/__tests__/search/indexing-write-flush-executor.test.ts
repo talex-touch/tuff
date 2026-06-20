@@ -11,7 +11,8 @@ function createExecutor(options: {
   inflight?: Map<number, string>
   isAvailable?: () => boolean
   ensureReady?: () => Promise<boolean>
-  persist?: (entries: string[]) => Promise<void>
+  persist?: (entries: string[]) => Promise<{ persisted: number } | void>
+  nowValues?: number[]
 }) {
   const inflight = options.inflight ?? new Map<number, string>()
   const buffer = new IndexedWriteBufferService(options.pending, inflight)
@@ -20,7 +21,7 @@ function createExecutor(options: {
   const persist = vi.fn(options.persist ?? (async () => undefined))
   const ensureReady = vi.fn(options.ensureReady ?? (async () => true))
   const onBatchTaken = vi.fn()
-  const nowValues = [10, 25]
+  const nowValues = options.nowValues ?? [10, 25]
   const now = vi.fn(() => nowValues.shift() ?? 25)
 
   return {
@@ -41,7 +42,9 @@ function createExecutor(options: {
       recordDuration,
       now,
       onBatchTaken,
-      resolveBatchMetadata: (entries) => ({ firstEntry: entries[0] })
+      resolveBatchMetadata: (entries) => ({ firstEntry: entries[0] }),
+      resolvePersistMetadata: (result) =>
+        result && typeof result === 'object' ? { persisted: result.persisted } : undefined
     })
   }
 }
@@ -75,6 +78,38 @@ describe('IndexedWriteFlushExecutorService', () => {
     expect(pending.has(2)).toBe(false)
     expect(pending.has(3)).toBe(true)
     expect(inflight.size).toBe(0)
+  })
+
+  it('merges persist result metadata into the flush result', async () => {
+    const pending = new Map<number, string>([
+      [1, 'one'],
+      [2, 'two']
+    ])
+    const { executor } = createExecutor({
+      pending,
+      persist: async () => ({ persisted: 2 })
+    })
+
+    await expect(executor.execute()).resolves.toMatchObject({
+      status: 'flushed',
+      metadata: {
+        firstEntry: 'one',
+        persisted: 2
+      }
+    })
+  })
+
+  it('normalizes negative or malformed flush duration before recording evidence', async () => {
+    const pending = new Map<number, string>([[1, 'one']])
+    const { executor, recordDuration } = createExecutor({
+      pending,
+      nowValues: [25, 10]
+    })
+
+    const result = await executor.execute()
+
+    expect(result.durationMs).toBe(0)
+    expect(recordDuration).toHaveBeenCalledWith(0)
   })
 
   it('rolls back the batch when readiness fails', async () => {
@@ -170,6 +205,35 @@ describe('IndexedWriteFlushExecutorService', () => {
         withContent: 1,
         textOnly: 'ignored'
       }
+    })
+  })
+
+  it('drops malformed numeric metadata while mapping executor results', () => {
+    const result = mapIndexedWriteFlushExecutorResult(
+      {
+        status: 'flushed',
+        entries: 2,
+        pending: 0,
+        inflight: 0,
+        metadata: {
+          valid: 2,
+          negative: -1,
+          nan: Number.NaN,
+          infinite: Number.POSITIVE_INFINITY
+        }
+      },
+      {
+        numericMetadataKeys: ['valid', 'negative', 'nan', 'infinite', 'missing']
+      }
+    )
+
+    expect(result).toMatchObject({
+      status: 'flushed',
+      valid: 2,
+      negative: 0,
+      nan: 0,
+      infinite: 0,
+      missing: 0
     })
   })
 

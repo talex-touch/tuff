@@ -16,23 +16,26 @@ const DEFAULT_DEGRADED_FLUSH_STATUSES = ['failed', 'not-ready', 'worker-not-read
 export class IndexedWriteFlushEvidenceService {
   build(input: IndexedWriteFlushEvidenceInput): IndexedSourceEvidence {
     const snapshot = input.snapshot
+    const entries = normalizeEvidenceCount(snapshot.entries)
+    const pending = normalizeEvidenceCount(snapshot.pending)
+    const inflight = normalizeEvidenceCount(snapshot.inflight)
 
     return {
       id: input.id,
       label: input.label,
       status: this.resolveStatus(snapshot.status, input.degradedStatuses),
-      itemCount: snapshot.entries > 0 ? snapshot.entries : snapshot.pending,
-      lastCheckedAt: snapshot.checkedAt,
+      itemCount: entries > 0 ? entries : pending,
+      lastCheckedAt: normalizeEvidenceTimestamp(snapshot.checkedAt),
       reason: snapshot.reason,
       metadata: {
         ...(snapshot.metadata ?? {}),
         ...(input.metadata ?? {}),
         status: snapshot.status,
-        entries: snapshot.entries,
-        pending: snapshot.pending,
-        inflight: snapshot.inflight,
+        entries,
+        pending,
+        inflight,
         error: snapshot.error,
-        durationMs: snapshot.durationMs
+        durationMs: normalizeOptionalEvidenceNumber(snapshot.durationMs)
       }
     }
   }
@@ -43,4 +46,20 @@ export class IndexedWriteFlushEvidenceService {
   ): IndexedSourceEvidence['status'] {
     return degradedStatuses.includes(status) ? 'degraded' : 'ready'
   }
+}
+
+function normalizeEvidenceTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : Date.now()
+}
+
+function normalizeEvidenceCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+}
+
+function normalizeOptionalEvidenceNumber(value: unknown): number | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
 }

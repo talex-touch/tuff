@@ -57,6 +57,23 @@ describe('IndexedWriteFlushSnapshotService', () => {
     })
   })
 
+  it('normalizes malformed numeric fields from flush results', () => {
+    expect(
+      buildIndexedWriteFlushResultSnapshot({
+        status: 'flushed',
+        entries: -1,
+        pending: Number.NaN,
+        inflight: 2.8,
+        durationMs: Number.POSITIVE_INFINITY
+      })
+    ).toMatchObject({
+      entries: 0,
+      pending: 0,
+      inflight: 2,
+      durationMs: 0
+    })
+  })
+
   it('builds an idle snapshot from runtime idle state', () => {
     expect(
       buildIndexedWriteFlushIdleSnapshot({
@@ -70,6 +87,20 @@ describe('IndexedWriteFlushSnapshotService', () => {
       pending: 4,
       inflight: 5,
       reason: 'flush-in-progress'
+    })
+  })
+
+  it('normalizes idle snapshot buffer sizes', () => {
+    expect(
+      buildIndexedWriteFlushIdleSnapshot({
+        pending: -4,
+        inflight: Number.NaN,
+        reason: 'flush-in-progress'
+      })
+    ).toMatchObject({
+      entries: 0,
+      pending: 0,
+      inflight: 0
     })
   })
 
@@ -113,6 +144,32 @@ describe('IndexedWriteFlushSnapshotService', () => {
     })
   })
 
+  it('normalizes malformed numeric fields from attached failure flush results', () => {
+    const error = {
+      flushResult: {
+        status: 'idle',
+        entries: -1,
+        pending: Number.NaN,
+        inflight: Number.POSITIVE_INFINITY,
+        durationMs: -12
+      }
+    }
+
+    expect(
+      buildIndexedWriteFlushFailureSnapshot({
+        error,
+        pendingSize: 10,
+        inflightSize: 11
+      })
+    ).toMatchObject({
+      status: 'failed',
+      entries: 0,
+      pending: 0,
+      inflight: 0,
+      durationMs: 0
+    })
+  })
+
   it('builds retry metadata for failed flush snapshots', () => {
     expect(
       buildIndexedWriteFlushFailureRetryMetadata({
@@ -125,6 +182,18 @@ describe('IndexedWriteFlushSnapshotService', () => {
     ).toEqual({
       isBusy: true,
       delayMs: 400,
+      retryReason: 'sqlite-busy-retry'
+    })
+  })
+
+  it('normalizes malformed retry delay metadata', () => {
+    expect(
+      buildIndexedWriteFlushFailureRetryMetadata({
+        delayMs: Number.NaN,
+        retryReason: 'sqlite-busy-retry'
+      })
+    ).toMatchObject({
+      delayMs: 0,
       retryReason: 'sqlite-busy-retry'
     })
   })

@@ -110,8 +110,13 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
       return
     }
 
+    const seenKeys = new Set<string>()
     for (const record of records) {
-      await this.emitDelta(this.buildDelta(record, options), context)
+      const delta = this.buildDelta(record, options)
+      const key = getRuntimeEmitterDeltaKey(delta)
+      if (key && seenKeys.has(key)) continue
+      if (key) seenKeys.add(key)
+      await this.emitDelta(delta, context)
     }
   }
 
@@ -138,7 +143,10 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
       return
     }
 
+    const seenPaths = new Set<string>()
     for (const removedPath of paths) {
+      if (seenPaths.has(removedPath)) continue
+      seenPaths.add(removedPath)
       await this.emitDelta(this.buildDeleteDelta(removedPath, options), context)
     }
   }
@@ -157,7 +165,10 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
   }
 
   emitProgressSnapshot(options: IndexedWriteRuntimeEmitterProgressOptions): void {
-    this.emitProgress?.(options.current, options.total)
+    this.emitProgress?.(
+      normalizeRuntimeEmitterCount(options.current),
+      normalizeRuntimeEmitterCount(options.total)
+    )
   }
 
   private mapIndexedRecord(record: TRecord): IndexedSourceRecord {
@@ -167,4 +178,14 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
 
     return this.mapRecord(record)
   }
+}
+
+function normalizeRuntimeEmitterCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : 0
+}
+
+function getRuntimeEmitterDeltaKey(delta: IndexedSourceDelta): string | undefined {
+  return delta.record?.stableKey ?? delta.stableKey ?? delta.path
 }

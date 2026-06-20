@@ -55,6 +55,44 @@ describe('indexing scan eligibility', () => {
     })
   })
 
+  it('matches completed scan rows through an optional normalizer', () => {
+    expect(
+      resolveIndexedScanEligibility({
+        watchPaths: ['/Users/me/Documents', '/Users/me/Downloads'],
+        completedScans: [
+          { path: '/users/me/documents', lastScanned: 100 },
+          { path: '/external', lastScanned: 200 }
+        ],
+        intervalMs: 0,
+        now: 1000,
+        normalizePath: (value) => value.toLowerCase()
+      })
+    ).toEqual({
+      newPaths: ['/Users/me/Downloads'],
+      stalePaths: ['/Users/me/Documents'],
+      lastScannedAt: 200
+    })
+  })
+
+  it('deduplicates watched paths through the optional normalizer', () => {
+    expect(
+      resolveIndexedScanEligibility({
+        watchPaths: ['/Users/me/Documents', '/users/me/documents', '/Users/me/Downloads'],
+        completedScans: [
+          { path: '/users/me/documents', lastScanned: 100 },
+          { path: '/users/me/downloads', lastScanned: 100 }
+        ],
+        intervalMs: 50,
+        now: 200,
+        normalizePath: (value) => value.toLowerCase()
+      })
+    ).toEqual({
+      newPaths: [],
+      stalePaths: ['/Users/me/Documents', '/Users/me/Downloads'],
+      lastScannedAt: 100
+    })
+  })
+
   it('ignores rows with invalid timestamps', () => {
     expect(
       resolveIndexedScanEligibility({

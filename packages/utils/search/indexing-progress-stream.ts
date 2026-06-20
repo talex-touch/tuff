@@ -36,34 +36,40 @@ export function shouldEmitIndexingProgressStreamImmediately<
   lastEmitAt,
   config = INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG
 }: EmitImmediatelyInput<TPayload>): boolean {
-  if (!previous) {
+  const normalizedConfig = normalizeStreamConfig(config)
+  const normalizedPrevious = previous ? normalizePayload(previous) : null
+  const normalizedNext = normalizePayload(next)
+  const normalizedLastEmitAt = normalizeTimestamp(lastEmitAt, 0)
+  const normalizedNow = Math.max(normalizedLastEmitAt, normalizeTimestamp(now, normalizedLastEmitAt))
+
+  if (!normalizedPrevious) {
     return true
   }
 
-  if (next.stage !== previous.stage) {
+  if (normalizedNext.stage !== normalizedPrevious.stage) {
     return true
   }
 
-  if (config.terminalStages.includes(next.stage)) {
+  if (normalizedConfig.terminalStages.includes(normalizedNext.stage)) {
     return true
   }
 
-  const elapsed = now - lastEmitAt
-  if (elapsed >= config.maxSilenceMs) {
+  const elapsed = normalizedNow - normalizedLastEmitAt
+  if (elapsed >= normalizedConfig.maxSilenceMs) {
     return true
   }
 
-  if (elapsed < config.minEmitIntervalMs) {
+  if (elapsed < normalizedConfig.minEmitIntervalMs) {
     return false
   }
 
-  if (next.progress !== previous.progress) {
+  if (normalizedNext.progress !== normalizedPrevious.progress) {
     return true
   }
-  if (Math.abs(next.current - previous.current) >= config.currentStep) {
+  if (Math.abs(normalizedNext.current - normalizedPrevious.current) >= normalizedConfig.currentStep) {
     return true
   }
-  if (next.total !== previous.total) {
+  if (normalizedNext.total !== normalizedPrevious.total) {
     return true
   }
   return false
@@ -74,6 +80,52 @@ export function getIndexingProgressStreamFlushDelayMs(
   lastEmitAt: number,
   config: IndexingProgressStreamThrottleConfig = INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG
 ): number {
-  const elapsed = now - lastEmitAt
-  return Math.max(0, config.minEmitIntervalMs - elapsed)
+  const normalizedConfig = normalizeStreamConfig(config)
+  const normalizedLastEmitAt = normalizeTimestamp(lastEmitAt, 0)
+  const normalizedNow = Math.max(normalizedLastEmitAt, normalizeTimestamp(now, normalizedLastEmitAt))
+  const elapsed = normalizedNow - normalizedLastEmitAt
+  return Math.max(0, normalizedConfig.minEmitIntervalMs - elapsed)
+}
+
+function normalizePayload<TPayload extends IndexingProgressStreamPayload>(payload: TPayload): TPayload {
+  return {
+    ...payload,
+    current: normalizeCount(payload.current),
+    total: normalizeCount(payload.total),
+    progress: normalizeProgress(payload.progress)
+  }
+}
+
+function normalizeStreamConfig(
+  config: IndexingProgressStreamThrottleConfig
+): IndexingProgressStreamThrottleConfig {
+  return {
+    minEmitIntervalMs: normalizeCount(
+      config.minEmitIntervalMs,
+      INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG.minEmitIntervalMs
+    ),
+    maxSilenceMs: normalizeCount(
+      config.maxSilenceMs,
+      INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG.maxSilenceMs
+    ),
+    currentStep: normalizeCount(
+      config.currentStep,
+      INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG.currentStep
+    ),
+    terminalStages: config.terminalStages
+  }
+}
+
+function normalizeTimestamp(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+function normalizeCount(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : fallback
+}
+
+function normalizeProgress(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
 }

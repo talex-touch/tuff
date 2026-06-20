@@ -68,14 +68,15 @@ export class IndexedSourceProgressStoreService {
     options: IndexedSourceProgressStoreSummaryOptions = {}
   ): Promise<IndexedSourceProgressStoreSummary> {
     const resolvedCompletedPaths = completedPaths ?? (await this.getCompletedPaths())
+    const uniqueWatchPaths = uniqueProgressStorePaths(watchPaths)
     if (options.isStoreAvailable === false && resolvedCompletedPaths.size === 0) {
       return {
         totalRoots: 0,
-        pendingRoots: watchPaths.length
+        pendingRoots: uniqueWatchPaths.length
       }
     }
 
-    const pendingRoots = watchPaths.filter((path) => !resolvedCompletedPaths.has(path)).length
+    const pendingRoots = uniqueWatchPaths.filter((path) => !resolvedCompletedPaths.has(path)).length
 
     return {
       totalRoots: resolvedCompletedPaths.size,
@@ -87,9 +88,10 @@ export class IndexedSourceProgressStoreService {
     paths: string[],
     deleteCompletedPaths = this.deleteCompletedPaths
   ): Promise<number> {
-    if (paths.length === 0) return 0
-    await deleteCompletedPaths(paths)
-    return paths.length
+    const uniquePaths = uniqueProgressStorePaths(paths)
+    if (uniquePaths.length === 0) return 0
+    await deleteCompletedPaths(uniquePaths)
+    return uniquePaths.length
   }
 
   async upsertPaths(
@@ -97,7 +99,8 @@ export class IndexedSourceProgressStoreService {
     completedAt: string,
     reason: string
   ): Promise<IndexedSourceProgressStoreUpsertResult> {
-    if (paths.length === 0) {
+    const uniquePaths = uniqueProgressStorePaths(paths)
+    if (uniquePaths.length === 0) {
       return {
         attempted: false,
         ready: false,
@@ -113,11 +116,15 @@ export class IndexedSourceProgressStoreService {
       }
     }
 
-    await this.upsertCompletedPaths(paths, completedAt)
+    await this.upsertCompletedPaths(uniquePaths, completedAt)
     return {
       attempted: true,
       ready: true,
-      upserted: paths.length
+      upserted: uniquePaths.length
     }
   }
+}
+
+function uniqueProgressStorePaths(paths: string[]): string[] {
+  return Array.from(new Set(paths))
 }

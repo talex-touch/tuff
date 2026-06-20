@@ -25,13 +25,13 @@ export interface IndexedSourceProfileDiagnosticsInput {
 
 export class IndexedSourceProfileDiagnosticsService {
   buildEvidence(input: IndexedSourceProfileDiagnosticsInput): IndexedSourceEvidence[] {
-    const checkedAt = input.checkedAt ?? Date.now()
+    const checkedAt = normalizeEvidenceTimestamp(input.checkedAt)
 
     return input.diagnostics.map((diagnostic) => ({
       id: `${input.sourceId}:${diagnostic.key}`,
       label: diagnostic.label,
       status: diagnostic.status,
-      itemCount: diagnostic.itemCount ?? 0,
+      itemCount: normalizeEvidenceCount(diagnostic.itemCount),
       rootCount: diagnostic.root ? 1 : 0,
       roots: diagnostic.root ? [diagnostic.root] : [],
       lastCheckedAt: checkedAt,
@@ -54,4 +54,12 @@ export class IndexedSourceProfileDiagnosticsService {
         reason: input.rootReason ?? diagnostic.reason
       }))
   }
+}
+
+function normalizeEvidenceTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : Date.now()
+}
+
+function normalizeEvidenceCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
 }

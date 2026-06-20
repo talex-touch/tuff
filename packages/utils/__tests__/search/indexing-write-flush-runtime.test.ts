@@ -6,13 +6,18 @@ function createRuntime(options: {
   inflightSize?: () => number
   isAvailable?: () => boolean
   executeFlush?: () => Promise<{ status: string }>
+  resolveFailure?: () => {
+    delayMs: number
+    nextRetryCount: number
+    reason: string
+  }
 }) {
   const recordIdle = vi.fn()
-  const resolveFailure = vi.fn(() => ({
+  const resolveFailure = vi.fn(options.resolveFailure ?? (() => ({
     delayMs: 25,
     nextRetryCount: 1,
     reason: 'retry'
-  }))
+  })))
   const handleFailure = vi.fn()
   const service = new IndexedWriteFlushRuntimeService({
     getPendingSize: options.pendingSize ?? (() => 1),
@@ -73,6 +78,24 @@ describe('IndexedWriteFlushRuntimeService', () => {
     })
   })
 
+  it('normalizes malformed pending and inflight sizes before recording idle', async () => {
+    const executeFlush = vi.fn()
+    const { recordIdle, service } = createRuntime({
+      pendingSize: () => Number.NaN,
+      inflightSize: () => Number.NEGATIVE_INFINITY,
+      executeFlush
+    })
+
+    await service.flush()
+
+    expect(executeFlush).not.toHaveBeenCalled()
+    expect(recordIdle).toHaveBeenCalledWith({
+      reason: 'no-pending',
+      pending: 0,
+      inflight: 0
+    })
+  })
+
   it('serializes concurrent flush calls and schedules a deferred flush', async () => {
     vi.useFakeTimers()
     let releaseFlush!: () => void
@@ -121,6 +144,34 @@ describe('IndexedWriteFlushRuntimeService', () => {
       decision: {
         delayMs: 25,
         nextRetryCount: 1,
+        reason: 'retry'
+      }
+    })
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('normalizes malformed retry decisions before scheduling failure retry', async () => {
+    vi.useFakeTimers()
+    const error = new Error('persist failed')
+    const { handleFailure, service } = createRuntime({
+      executeFlush: async () => {
+        throw error
+      },
+      pendingSize: () => 3,
+      resolveFailure: () => ({
+        delayMs: Number.POSITIVE_INFINITY,
+        nextRetryCount: -1,
+        reason: 'retry'
+      })
+    })
+
+    await service.flush()
+
+    expect(handleFailure).toHaveBeenCalledWith({
+      error,
+      decision: {
+        delayMs: 0,
+        nextRetryCount: 0,
         reason: 'retry'
       }
     })
@@ -197,6 +248,26 @@ describe('resolveIndexedWriteFlushRuntimeConfig', () => {
       backpressureMaxQueued: 0,
       retryBaseMs: 0,
       retryMaxMs: 0
+    })
+  })
+
+  it('falls back for malformed shared runtime config values', () => {
+    expect(
+      resolveIndexedWriteFlushRuntimeConfig({
+        baseDelayMs: Number.NaN,
+        backlogDelayMs: Number.POSITIVE_INFINITY,
+        flushDeferMs: -1,
+        backpressureMaxQueued: Number.NEGATIVE_INFINITY,
+        retryBaseMs: Number.NaN,
+        retryMaxMs: -10
+      })
+    ).toEqual({
+      baseDelayMs: 250,
+      backlogDelayMs: 500,
+      flushDeferMs: 300,
+      backpressureMaxQueued: 10,
+      retryBaseMs: 250,
+      retryMaxMs: 5000
     })
   })
 })

@@ -28,7 +28,8 @@ describe('indexing source task state', () => {
           startedAt: 1,
           completedAt: 3,
           batches: 2,
-          records: 5
+          records: 5,
+          indexedRecords: 5
         },
         historyEntry: {
           kind: 'scan',
@@ -37,7 +38,8 @@ describe('indexing source task state', () => {
           completedAt: 3,
           summary: {
             batches: 2,
-            records: 5
+            records: 5,
+            indexedRecords: 5
           }
         }
       })
@@ -46,7 +48,8 @@ describe('indexing source task state', () => {
         startedAt: 1,
         completedAt: 3,
         batches: 2,
-        records: 5
+        records: 5,
+        indexedRecords: 5
       },
       recentTasks: [
         {
@@ -56,7 +59,8 @@ describe('indexing source task state', () => {
           completedAt: 3,
           summary: {
             batches: 2,
-            records: 5
+            records: 5,
+            indexedRecords: 5
           }
         },
         {
@@ -100,6 +104,39 @@ describe('indexing source task state', () => {
     ])
   })
 
+  it('does not append task history entries with invalid completedAt values', () => {
+    const state: IndexedSourceRuntimeTaskState = {
+      recentTasks: [{ kind: 'scan', status: 'succeeded', completedAt: 2 }]
+    }
+
+    const next = updateIndexedSourceTaskState({
+      state,
+      key: 'lastWatch',
+      value: {
+        occurredAt: 3,
+        completedAt: 4,
+        action: 'change',
+        path: '/tmp/a',
+        deltas: 1,
+        appliedDeltas: 1,
+        failedDeltas: 0
+      },
+      historyEntry: {
+        kind: 'watch',
+        status: 'failed',
+        completedAt: Number.POSITIVE_INFINITY,
+        error: 'bad persisted timestamp'
+      }
+    })
+
+    expect(next.lastWatch).toMatchObject({
+      action: 'change',
+      completedAt: 4
+    })
+    expect(next.recentTasks).toEqual([{ kind: 'scan', status: 'succeeded', completedAt: 2 }])
+    expect(next.recentTasks).not.toBe(state.recentTasks)
+  })
+
   it('does not mutate existing state', () => {
     const state: IndexedSourceRuntimeTaskState = {}
 
@@ -124,6 +161,34 @@ describe('indexing source task state', () => {
 
     expect(state).toEqual({})
     expect(next).not.toBe(state)
+  })
+
+  it('isolates updated last task snapshots from caller mutation', () => {
+    const value = {
+      startedAt: 1,
+      completedAt: 2,
+      batches: 1,
+      records: 2,
+      indexedRecords: 2
+    }
+
+    const next = updateIndexedSourceTaskState({
+      state: {},
+      key: 'lastScan',
+      value,
+      historyEntry: {
+        kind: 'scan',
+        status: 'succeeded',
+        completedAt: 2
+      }
+    })
+
+    value.records = 99
+
+    expect(next.lastScan).toMatchObject({
+      records: 2
+    })
+    expect(next.lastScan).not.toBe(value)
   })
 
   it('builds scan task state with job identity and summary', () => {
@@ -151,6 +216,7 @@ describe('indexing source task state', () => {
         queuedAt: 9,
         batches: 2,
         records: 5,
+        indexedRecords: 5,
         error: undefined
       },
       historyEntry: {
@@ -163,7 +229,8 @@ describe('indexing source task state', () => {
         error: undefined,
         summary: {
           batches: 2,
-          records: 5
+          records: 5,
+          indexedRecords: 5
         }
       }
     })
@@ -188,6 +255,7 @@ describe('indexing source task state', () => {
         queuedAt: undefined,
         batches: 0,
         records: 0,
+        indexedRecords: 0,
         error: 'skipped:health:disabled'
       },
       historyEntry: {
@@ -200,6 +268,209 @@ describe('indexing source task state', () => {
         error: 'skipped:health:disabled',
         summary: undefined
       }
+    })
+  })
+
+  it('builds failed scan task state with phase summary', () => {
+    expect(
+      buildIndexedSourceScanTaskState({
+        sourceId: 'file-provider',
+        startedAt: 10,
+        completedAt: 20,
+        status: 'failed',
+        phase: 'store',
+        batches: 1,
+        records: 10,
+        indexedRecords: 8,
+        error: 'sqlite busy'
+      })
+    ).toEqual({
+      sourceId: 'file-provider',
+      key: 'lastScan',
+      value: {
+        startedAt: 10,
+        completedAt: 20,
+        jobId: undefined,
+        queuedAt: undefined,
+        batches: 1,
+        records: 10,
+        indexedRecords: 8,
+        phase: 'store',
+        error: 'sqlite busy'
+      },
+      historyEntry: {
+        kind: 'scan',
+        status: 'failed',
+        startedAt: 10,
+        completedAt: 20,
+        jobId: undefined,
+        queuedAt: undefined,
+        error: 'sqlite busy',
+        summary: {
+          batches: 1,
+          records: 10,
+          indexedRecords: 8,
+          phase: 'store'
+        }
+      }
+    })
+  })
+
+  it('normalizes task builder timestamps before they enter runtime state', () => {
+    const scan = buildIndexedSourceScanTaskState({
+      sourceId: 'file-provider',
+      startedAt: Number.NaN,
+      completedAt: 30,
+      now: 100,
+      job: {
+        id: 'file-provider:scan:bad-time',
+        sourceId: 'file-provider',
+        kind: 'scan',
+        queuedAt: 150
+      }
+    })
+    const watch = buildIndexedSourceWatchTaskState({
+      sourceId: 'file-provider',
+      occurredAt: -50,
+      completedAt: -40,
+      now: 100,
+      action: 'change',
+      path: '/tmp/report.md'
+    })
+    const reconcile = buildIndexedSourceReconcileTaskState({
+      sourceId: 'file-provider',
+      startedAt: 90,
+      completedAt: 200,
+      now: 100
+    })
+    const reset = buildIndexedSourceResetTaskState({
+      sourceId: 'file-provider',
+      startedAt: Number.POSITIVE_INFINITY,
+      completedAt: Number.NaN,
+      now: 100,
+      reason: 'integrity-repair',
+      clearedSearchIndex: false,
+      clearedScanProgress: false
+    })
+
+    expect(scan.value).toMatchObject({
+      startedAt: 30,
+      completedAt: 30,
+      queuedAt: 100
+    })
+    expect(scan.historyEntry).toMatchObject({
+      startedAt: 30,
+      completedAt: 30,
+      queuedAt: 100
+    })
+    expect(watch.value).toMatchObject({
+      occurredAt: 0,
+      completedAt: 0
+    })
+    expect(reconcile.value).toMatchObject({
+      startedAt: 90,
+      completedAt: 100
+    })
+    expect(reset.value).toMatchObject({
+      startedAt: 100,
+      completedAt: 100
+    })
+    expect(reset.historyEntry).toMatchObject({
+      startedAt: 100,
+      completedAt: 100
+    })
+  })
+
+  it('normalizes task builder counters before they enter runtime state', () => {
+    const scan = buildIndexedSourceScanTaskState({
+      sourceId: 'file-provider',
+      startedAt: 10,
+      completedAt: 20,
+      batches: -1,
+      records: Number.NaN,
+      indexedRecords: Number.POSITIVE_INFINITY
+    })
+    const watch = buildIndexedSourceWatchTaskState({
+      sourceId: 'file-provider',
+      occurredAt: 10,
+      completedAt: 20,
+      action: 'change',
+      path: '/tmp/report.md',
+      deltas: -1,
+      appliedDeltas: Number.NaN,
+      failedDeltas: Number.POSITIVE_INFINITY,
+      skippedDeltas: -2
+    })
+    const reconcile = buildIndexedSourceReconcileTaskState({
+      sourceId: 'file-provider',
+      startedAt: 10,
+      completedAt: 20,
+      added: -1,
+      changed: Number.NaN,
+      deleted: Number.POSITIVE_INFINITY,
+      skipped: 2,
+      errors: -3,
+      rootCount: -4,
+      deltas: Number.NaN,
+      appliedDeltas: 3,
+      failedDeltas: -5,
+      skippedDeltas: Number.POSITIVE_INFINITY
+    })
+    const reset = buildIndexedSourceResetTaskState({
+      sourceId: 'file-provider',
+      startedAt: 10,
+      completedAt: 20,
+      reason: 'manual-rebuild',
+      clearedSearchIndex: true,
+      clearedSearchIndexRows: -1,
+      clearedScanProgress: true,
+      scanProgressRows: Number.NaN
+    })
+
+    expect(scan.value).toMatchObject({
+      batches: 0,
+      records: 0,
+      indexedRecords: 0
+    })
+    expect(scan.historyEntry.summary).toEqual({
+      batches: 0,
+      records: 0,
+      indexedRecords: 0,
+      phase: undefined
+    })
+    expect(watch.value).toMatchObject({
+      deltas: 0,
+      appliedDeltas: 0,
+      failedDeltas: 0,
+      skippedDeltas: 0
+    })
+    expect(watch.historyEntry.summary).toEqual({
+      action: 'change',
+      deltas: 0,
+      appliedDeltas: 0,
+      failedDeltas: 0,
+      skippedDeltas: 0
+    })
+    expect(reconcile.value).toMatchObject({
+      added: 0,
+      changed: 0,
+      deleted: 0,
+      skipped: 2,
+      errors: 0,
+      appliedDeltas: 3
+    })
+    expect(reconcile.value.rootCount).toBeUndefined()
+    expect(reconcile.value.deltas).toBeUndefined()
+    expect(reconcile.value.failedDeltas).toBeUndefined()
+    expect(reconcile.value.skippedDeltas).toBeUndefined()
+    expect(reset.value.clearedSearchIndexRows).toBeUndefined()
+    expect(reset.value.scanProgressRows).toBeUndefined()
+    expect(reset.historyEntry.summary).toEqual({
+      reason: 'manual-rebuild',
+      clearedSearchIndex: true,
+      clearedSearchIndexRows: undefined,
+      clearedScanProgress: true,
+      scanProgressRows: undefined
     })
   })
 
@@ -234,6 +505,7 @@ describe('indexing source task state', () => {
         deltas: 2,
         appliedDeltas: 2,
         failedDeltas: 0,
+        skippedDeltas: 0,
         error: undefined
       },
       historyEntry: {
@@ -248,7 +520,8 @@ describe('indexing source task state', () => {
           action: 'change',
           deltas: 2,
           appliedDeltas: 2,
-          failedDeltas: 0
+          failedDeltas: 0,
+          skippedDeltas: 0
         }
       }
     })
@@ -281,6 +554,7 @@ describe('indexing source task state', () => {
         deltas: 0,
         appliedDeltas: 0,
         failedDeltas: 0,
+        skippedDeltas: 0,
         error: 'skipped:health:disabled'
       },
       historyEntry: {
@@ -422,6 +696,7 @@ describe('indexing source task state', () => {
         completedAt: 20,
         reason: 'manual-rebuild',
         clearedSearchIndex: true,
+        clearedSearchIndexRows: 4,
         clearedScanProgress: true,
         scanProgressRows: 3,
         job: {
@@ -441,6 +716,7 @@ describe('indexing source task state', () => {
         jobId: 'file-provider:reset:1',
         queuedAt: 9,
         clearedSearchIndex: true,
+        clearedSearchIndexRows: 4,
         clearedScanProgress: true,
         scanProgressRows: 3,
         error: undefined
@@ -456,6 +732,7 @@ describe('indexing source task state', () => {
         summary: {
           reason: 'manual-rebuild',
           clearedSearchIndex: true,
+          clearedSearchIndexRows: 4,
           clearedScanProgress: true,
           scanProgressRows: 3
         }
@@ -484,6 +761,7 @@ describe('indexing source task state', () => {
         jobId: undefined,
         queuedAt: undefined,
         clearedSearchIndex: false,
+        clearedSearchIndexRows: undefined,
         clearedScanProgress: false,
         scanProgressRows: undefined,
         error: 'reset failed'
@@ -499,6 +777,53 @@ describe('indexing source task state', () => {
         summary: {
           reason: 'integrity-repair',
           clearedSearchIndex: false,
+          clearedSearchIndexRows: undefined,
+          clearedScanProgress: false,
+          scanProgressRows: undefined
+        }
+      }
+    })
+  })
+
+  it('builds skipped reset task state with explicit skip reason', () => {
+    expect(
+      buildIndexedSourceResetTaskState({
+        sourceId: 'file-provider',
+        startedAt: 10,
+        completedAt: 20,
+        reason: 'manual-rebuild',
+        clearedSearchIndex: false,
+        clearedScanProgress: false,
+        status: 'skipped',
+        skipReason: 'already-running'
+      })
+    ).toEqual({
+      sourceId: 'file-provider',
+      key: 'lastReset',
+      value: {
+        startedAt: 10,
+        completedAt: 20,
+        reason: 'manual-rebuild',
+        jobId: undefined,
+        queuedAt: undefined,
+        clearedSearchIndex: false,
+        clearedSearchIndexRows: undefined,
+        clearedScanProgress: false,
+        scanProgressRows: undefined,
+        error: 'skipped:already-running'
+      },
+      historyEntry: {
+        kind: 'reset',
+        status: 'skipped',
+        startedAt: 10,
+        completedAt: 20,
+        jobId: undefined,
+        queuedAt: undefined,
+        error: 'skipped:already-running',
+        summary: {
+          reason: 'manual-rebuild',
+          clearedSearchIndex: false,
+          clearedSearchIndexRows: undefined,
           clearedScanProgress: false,
           scanProgressRows: undefined
         }

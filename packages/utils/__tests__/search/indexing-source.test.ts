@@ -678,8 +678,36 @@ describe("indexedSource admission", () => {
       jobId: "watch:99",
     });
     expect(next.at(-1)).toMatchObject({
-      jobId: `scan:${DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT - 1}`,
+      jobId: "scan:2",
     });
+  });
+
+  it("keeps the latest indexed source task history entries when existing history is unsorted", () => {
+    const next = appendIndexedSourceTaskHistory(
+      [
+        {
+          kind: "scan",
+          status: "succeeded",
+          completedAt: 1,
+          jobId: "scan:old",
+        },
+        {
+          kind: "scan",
+          status: "failed",
+          completedAt: 5,
+          jobId: "scan:newer",
+        },
+      ],
+      {
+        kind: "watch",
+        status: "failed",
+        completedAt: 3,
+        jobId: "watch:middle",
+      },
+      2,
+    );
+
+    expect(next.map((task) => task.jobId)).toEqual(["scan:newer", "watch:middle"]);
   });
 
   it("normalizes invalid indexed source task history limits to empty history", () => {
@@ -701,6 +729,120 @@ describe("indexedSource admission", () => {
         0,
       ),
     ).toEqual([]);
+  });
+
+  it("drops indexed source task history entries with invalid completedAt values", () => {
+    const next = appendIndexedSourceTaskHistory(
+      [
+        {
+          kind: "scan",
+          status: "succeeded",
+          completedAt: Number.NaN,
+          jobId: "bad-existing",
+        },
+        {
+          kind: "scan",
+          status: "succeeded",
+          completedAt: 10,
+          jobId: "valid-existing",
+        },
+      ],
+      {
+        kind: "watch",
+        status: "failed",
+        completedAt: Number.POSITIVE_INFINITY,
+        jobId: "bad-new",
+      },
+    );
+
+    expect(next).toEqual([
+      {
+        kind: "scan",
+        status: "succeeded",
+        completedAt: 10,
+        jobId: "valid-existing",
+      },
+    ]);
+  });
+
+  it("sanitizes indexed source task history entries before exposing bounded history", () => {
+    const currentSummary = {
+      kept: "yes",
+      ok: true,
+      count: 2,
+      missing: undefined,
+      badObject: { nested: true },
+      badArray: ["nested"],
+      badNumber: Number.NaN,
+    };
+    const next = appendIndexedSourceTaskHistory(
+      [
+        {
+          kind: "unknown" as never,
+          status: "succeeded",
+          completedAt: 5,
+          jobId: "bad-kind",
+        },
+        {
+          kind: "scan",
+          status: "unknown" as never,
+          completedAt: 6,
+          jobId: "bad-status",
+        },
+        {
+          kind: "scan",
+          status: "succeeded",
+          completedAt: 10,
+          queuedAt: 12,
+          startedAt: -1,
+          occurredAt: Number.POSITIVE_INFINITY,
+          jobId: "valid-existing",
+          summary: currentSummary as never,
+        },
+      ],
+      {
+        kind: "watch",
+        status: "failed",
+        completedAt: 20,
+        queuedAt: -1,
+        occurredAt: 25,
+        error: 123 as never,
+        summary: {
+          action: "change",
+          failed: true,
+          badNumber: Number.POSITIVE_INFINITY,
+          nested: { bad: true },
+        } as never,
+      },
+    );
+
+    currentSummary.kept = "mutated";
+
+    expect(next).toEqual([
+      {
+        kind: "watch",
+        status: "failed",
+        completedAt: 20,
+        occurredAt: 20,
+        summary: {
+          action: "change",
+          failed: true,
+        },
+      },
+      {
+        kind: "scan",
+        status: "succeeded",
+        completedAt: 10,
+        queuedAt: 10,
+        jobId: "valid-existing",
+        summary: {
+          kept: "yes",
+          ok: true,
+          count: 2,
+          missing: undefined,
+        },
+      },
+    ]);
   });
 
   it("allows diagnostics to carry source-level progress and ETA", () => {

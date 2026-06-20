@@ -138,6 +138,67 @@ describe('indexing-progress-estimator-service', () => {
     expect(estimate.estimatedRemainingMs).toBe(27_000)
   })
 
+  it('normalizes malformed samples without producing fake ETA', () => {
+    const estimator = new IndexingProgressEstimatorService<TestProgressStage>({
+      minElapsedMsForFallbackEta: 1_000
+    })
+
+    const first = estimator.update({
+      stage: 'indexing',
+      current: Number.NaN,
+      total: Number.NEGATIVE_INFINITY,
+      now: Number.NaN
+    })
+
+    expect(first).toEqual({
+      estimatedRemainingMs: null,
+      averageItemsPerSecond: 0,
+      status: 'unknown',
+      speedSampleCount: 0,
+      estimateBasis: 'none'
+    })
+
+    const rollback = estimator.update({
+      stage: 'indexing',
+      current: 10,
+      total: 100,
+      now: -1
+    })
+
+    expect(rollback).toMatchObject({
+      estimatedRemainingMs: null,
+      averageItemsPerSecond: 0,
+      status: 'stabilizing',
+      speedSampleCount: 0,
+      estimateBasis: 'none'
+    })
+  })
+
+  it('falls back for malformed estimator options', () => {
+    const estimator = new IndexingProgressEstimatorService<TestProgressStage>({
+      minSampleIntervalMs: Number.NaN,
+      minProgressRatioForEta: Number.POSITIVE_INFINITY,
+      minSpeedSamplesForEta: Number.NEGATIVE_INFINITY,
+      maxNoProgressMs: -1,
+      smoothingFactor: Number.NaN,
+      maxEtaMs: Number.NaN,
+      minElapsedMsForFallbackEta: Number.NEGATIVE_INFINITY,
+      fallbackEtaSafetyMultiplier: Number.NaN
+    })
+
+    estimator.update({ stage: 'indexing', current: 0, total: 100, now: 1_000 })
+    estimator.update({ stage: 'indexing', current: 10, total: 100, now: 2_000 })
+    const estimate = estimator.update({ stage: 'indexing', current: 20, total: 100, now: 3_000 })
+
+    expect(estimate).toMatchObject({
+      status: 'estimated',
+      speedSampleCount: 2,
+      estimateBasis: 'stage-speed'
+    })
+    expect(estimate.averageItemsPerSecond).toBeGreaterThan(0)
+    expect(estimate.estimatedRemainingMs).toBeGreaterThan(0)
+  })
+
   it('prefers stage speed after enough samples are available', () => {
     const estimator = new IndexingProgressEstimatorService<TestProgressStage>({
       minElapsedMsForFallbackEta: 1_000

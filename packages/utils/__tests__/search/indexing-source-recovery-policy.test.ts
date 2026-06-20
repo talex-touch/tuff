@@ -168,6 +168,171 @@ describe('indexed source recovery policy', () => {
     })
   })
 
+  it('suggests reset first when scan fails while applying runtime store batches', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'failed',
+              completedAt: 1700000000000,
+              error: 'sqlite busy',
+              summary: {
+                phase: 'store',
+                batches: 0,
+                records: 0,
+                indexedRecords: 0
+              }
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'reset',
+      maintenanceAction: 'reset',
+      priority: 'high',
+      reason: 'task:scan:store-failed'
+    })
+  })
+
+  it('keeps scan as the first recovery action for source-phase scan failures', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'failed',
+              completedAt: 1700000000000,
+              error: 'scanner crashed'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'scan',
+      maintenanceAction: 'scan',
+      priority: 'high',
+      reason: 'scanner crashed'
+    })
+  })
+
+  it('uses the task with the latest completedAt when recent task history is not sorted', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'succeeded',
+              completedAt: 1700000000000
+            },
+            {
+              kind: 'watch',
+              status: 'failed',
+              completedAt: 1700000005000,
+              error: 'watch route failed'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'reconcile',
+      maintenanceAction: 'reconcile',
+      priority: 'high',
+      reason: 'watch route failed'
+    })
+  })
+
+  it('ignores invalid completedAt values when selecting the latest task', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'failed',
+              completedAt: Number.POSITIVE_INFINITY,
+              error: 'bad persisted timestamp'
+            },
+            {
+              kind: 'watch',
+              status: 'failed',
+              completedAt: 1700000005000,
+              error: 'watch route failed'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'reconcile',
+      maintenanceAction: 'reconcile',
+      priority: 'high',
+      reason: 'watch route failed'
+    })
+  })
+
+  it('returns no-op when recent task history only contains invalid completedAt values', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'failed',
+              completedAt: Number.NaN,
+              error: 'bad persisted timestamp'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'none',
+      priority: 'none'
+    })
+  })
+
+  it('waits when the latest automatic task was skipped by retry-window backoff', () => {
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'skipped',
+              completedAt: 1700000000000,
+              error: 'skipped:retry-window:scan:1700000030000'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'wait',
+      priority: 'low',
+      reason: 'retry-window:scan:1700000030000'
+    })
+
+    expect(
+      resolveIndexedSourceRecoveryRecommendation(
+        buildSource({
+          recentTasks: [
+            {
+              kind: 'reconcile',
+              status: 'skipped',
+              completedAt: 1700000000000,
+              error: 'skipped:retry-window:reconcile:1700000030000'
+            }
+          ]
+        })
+      )
+    ).toEqual({
+      action: 'wait',
+      priority: 'low',
+      reason: 'retry-window:reconcile:1700000030000'
+    })
+  })
+
   it('falls back to inspect-source when all maintenance actions are blocked', () => {
     expect(
       resolveIndexedSourceRecoveryRecommendation(

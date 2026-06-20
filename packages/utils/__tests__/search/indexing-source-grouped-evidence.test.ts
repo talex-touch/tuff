@@ -115,4 +115,42 @@ describe('IndexedSourceGroupedEvidenceService', () => {
       }
     ])
   })
+
+  it('normalizes malformed checkedAt and item counts', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+
+    expect(
+      service.build({
+        sourceId: 'app-provider',
+        checkedAt: Number.POSITIVE_INFINITY,
+        keys: ['registry', 'manual'],
+        labels: {
+          registry: 'Registry',
+          manual: 'Manual entries'
+        },
+        results: [
+          {
+            sourceId: 'registry',
+            itemCount: -2
+          }
+        ],
+        overrides: {
+          manual: {
+            itemCount: Number.NaN
+          }
+        }
+      })
+    ).toMatchObject([
+      {
+        id: 'app-provider:registry',
+        itemCount: 0,
+        lastCheckedAt: 1700000000000
+      },
+      {
+        id: 'app-provider:manual',
+        itemCount: 0,
+        lastCheckedAt: 1700000000000
+      }
+    ])
+  })
 })

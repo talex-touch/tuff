@@ -158,7 +158,7 @@ function resolvePermissionRecoveryRecommendation(
 function resolveLatestTaskRecoveryRecommendation(
   source: IndexedSourceDiagnostics
 ): IndexedSourceRecoveryRecommendation | null {
-  const task = source.recentTasks?.[0]
+  const task = getLatestTask(source.recentTasks)
   if (!task || task.status === 'succeeded') return null
 
   const skippedReason = normalizeSkippedReason(task.error)
@@ -178,6 +178,14 @@ function resolveLatestTaskRecoveryRecommendation(
     }
   }
 
+  if (isRetryWindowSkippedReason(skippedReason)) {
+    return {
+      action: 'wait',
+      priority: 'low',
+      reason: skippedReason
+    }
+  }
+
   if (task.kind === 'watch') {
     return resolveMaintenanceRecovery(
       source,
@@ -188,6 +196,15 @@ function resolveLatestTaskRecoveryRecommendation(
   }
 
   if (task.kind === 'scan') {
+    if (task.summary?.phase === 'store') {
+      return resolveMaintenanceRecovery(
+        source,
+        ['reset', 'reconcile', 'scan'],
+        task.status === 'failed' ? 'high' : 'medium',
+        'task:scan:store-failed'
+      )
+    }
+
     return resolveMaintenanceRecovery(
       source,
       ['scan', 'reset', 'reconcile'],
@@ -245,6 +262,22 @@ function isRunningProgressStatus(status: IndexedSourceProgressStatus): boolean {
 function normalizeSkippedReason(error: string | undefined): string | null {
   if (!error?.startsWith('skipped:')) return null
   return error.slice('skipped:'.length)
+}
+
+function isRetryWindowSkippedReason(reason: string | null): reason is string {
+  return reason?.startsWith('retry-window:') === true
+}
+
+function getLatestTask(
+  recentTasks: IndexedSourceTaskHistoryEntry[] | undefined
+): IndexedSourceTaskHistoryEntry | undefined {
+  if (!recentTasks?.length) return undefined
+  return recentTasks
+    .filter((task) => Number.isFinite(task.completedAt))
+    .reduce<IndexedSourceTaskHistoryEntry | undefined>(
+      (latest, task) => (!latest || task.completedAt > latest.completedAt ? task : latest),
+      undefined
+    )
 }
 
 function resolveTaskReason(task: IndexedSourceTaskHistoryEntry): string {

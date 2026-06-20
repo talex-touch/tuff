@@ -42,6 +42,7 @@ export interface IndexedSourceScanRuntimeResult {
   sourceId: string
   batches: number
   records: number
+  indexedRecords: number
   startedAt: number
   completedAt: number
   error?: string

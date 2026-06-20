@@ -174,16 +174,20 @@ function mergeRanges(ranges: MatchRange[]): MatchRange[] {
 
   const sorted = [...ranges].sort((left, right) => left.start - right.start)
   const merged: MatchRange[] = []
-  let current = { ...sorted[0] }
+  const first = sorted[0]
+  if (!first) return []
+
+  let current: MatchRange = { start: first.start, end: first.end }
 
   for (let index = 1; index < sorted.length; index += 1) {
     const next = sorted[index]
+    if (!next) continue
     if (next.start <= current.end) {
       current.end = Math.max(current.end, next.end)
       continue
     }
     merged.push(current)
-    current = { ...next }
+    current = { start: next.start, end: next.end }
   }
 
   merged.push(current)
@@ -314,6 +318,7 @@ function formatMatchedAlias(token: FeatureSearchToken, tokenRange?: MatchRange):
   let displayIndex = 0
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index]
+    if (!part) continue
     if (index > 0) displayIndex += 1
 
     for (let offset = 0; offset < part.rawText.length; offset += 1) {

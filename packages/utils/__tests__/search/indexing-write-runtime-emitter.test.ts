@@ -96,6 +96,44 @@ describe('IndexedWriteRuntimeEmitterService', () => {
     )
   })
 
+  it('deduplicates add/change deltas by mapped stable key before emitting', async () => {
+    const emitDelta = vi.fn(async () => {})
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord, { runId: string }>({
+      sourceId: 'test-source',
+      mapRecord,
+      emitDelta
+    })
+    const context = { runId: 'watch' }
+
+    await service.emitDeltas(
+      [
+        { id: '1', path: '/tmp/a.txt', title: 'A' },
+        { id: '1-later', path: '/tmp/a.txt', title: 'A updated' },
+        { id: '2', path: '/tmp/b.txt', title: 'B' }
+      ],
+      context,
+      { action: 'change', reason: 'watch-event' }
+    )
+
+    expect(emitDelta).toHaveBeenCalledTimes(2)
+    expect(emitDelta).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        record: expect.objectContaining({ recordId: '1', stableKey: '/tmp/a.txt' }),
+        path: '/tmp/a.txt'
+      }),
+      context
+    )
+    expect(emitDelta).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        record: expect.objectContaining({ recordId: '2', stableKey: '/tmp/b.txt' }),
+        path: '/tmp/b.txt'
+      }),
+      context
+    )
+  })
+
   it('uses constructor default reasons for add/change deltas', () => {
     const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
       sourceId: 'test-source',
@@ -158,6 +196,21 @@ describe('IndexedWriteRuntimeEmitterService', () => {
     expect(emitProgress).toHaveBeenCalledWith(3, 5)
   })
 
+  it('normalizes malformed progress snapshots before emitting', () => {
+    const emitProgress = vi.fn()
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
+      sourceId: 'test-source',
+      mapRecord,
+      emitProgress
+    })
+
+    service.emitProgressSnapshot({ current: -1, total: Number.NaN })
+    service.emitProgressSnapshot({ current: Number.POSITIVE_INFINITY, total: 2.9 })
+
+    expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 0)
+    expect(emitProgress).toHaveBeenNthCalledWith(2, 0, 2)
+  })
+
   it('builds delete deltas without requiring mapped records or emit sinks', () => {
     const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
       sourceId: 'test-source'
@@ -207,6 +260,43 @@ describe('IndexedWriteRuntimeEmitterService', () => {
         stableKey: '/tmp/a.txt',
         path: '/tmp/a.txt',
         reason: 'test-reconcile-delete'
+      },
+      context
+    )
+  })
+
+  it('deduplicates delete deltas by path before emitting', async () => {
+    const emitDelta = vi.fn(async () => {})
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord, { runId: string }>({
+      sourceId: 'test-source',
+      emitDelta
+    })
+    const context = { runId: 'cleanup' }
+
+    await service.emitDeleteDeltas(['/tmp/a.txt', '/tmp/a.txt', '/tmp/b.txt'], context, {
+      reason: 'cleanup-delete'
+    })
+
+    expect(emitDelta).toHaveBeenCalledTimes(2)
+    expect(emitDelta).toHaveBeenNthCalledWith(
+      1,
+      {
+        sourceId: 'test-source',
+        action: 'delete',
+        stableKey: '/tmp/a.txt',
+        path: '/tmp/a.txt',
+        reason: 'cleanup-delete'
+      },
+      context
+    )
+    expect(emitDelta).toHaveBeenNthCalledWith(
+      2,
+      {
+        sourceId: 'test-source',
+        action: 'delete',
+        stableKey: '/tmp/b.txt',
+        path: '/tmp/b.txt',
+        reason: 'cleanup-delete'
       },
       context
     )

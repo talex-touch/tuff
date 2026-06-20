@@ -150,6 +150,7 @@ export function addSimpleTextSearchTokens(
   const displayWordParts = resolveDisplayWordParts(wordParts, tokenDisplay)
   for (let index = 0; index < wordParts.length; index += 1) {
     const part = wordParts[index]
+    if (!part) continue
     const displayPart = displayWordParts[index]
     addSearchToken(tokens, {
       value: part.value,
@@ -173,6 +174,7 @@ export function addSimpleTextSearchTokens(
     const segments: NonNullable<FeatureSearchToken['segments']> = []
     for (let index = 0; index < wordParts.length; index += 1) {
       const part = wordParts[index]
+      if (!part) continue
       const displayPart = displayWordParts[index]
       const tokenStart = initials.length
       initials += part.value[0] || ''
