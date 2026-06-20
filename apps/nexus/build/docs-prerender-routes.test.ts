@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { createDocsPrerenderRoutes, normalizeDocsContentRoute } from './docs-prerender-routes'
+import { createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes, normalizeDocsContentRoute } from './docs-prerender-routes'
 import { createNexusPrerenderEvidence, createNexusPrerenderRoutes, docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-prerender-routes'
 
 const nexusRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -67,6 +67,26 @@ describe('docs prerender routes', () => {
     ])
   })
 
+  it('creates static docs page API routes for component metadata and full body payloads', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nexus-docs-page-api-routes-'))
+    const docsDir = join(root, 'content/docs/dev/components')
+    mkdirSync(docsDir, { recursive: true })
+    writeFileSync(join(docsDir, 'tabs.en.mdc'), '# Tabs')
+    writeFileSync(join(docsDir, 'tabs.zh.mdc'), '# Tabs 标签页')
+    writeFileSync(join(docsDir, 'button.en.mdc'), '# Button')
+
+    expect(createDocsPageApiPrerenderRoutes(root)).toEqual([
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=en&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=en&body=1',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=zh&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=zh&body=1',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=1',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=1',
+    ])
+  })
+
   it('combines public pages, docs APIs, and scanned docs into Nexus prerender routes', () => {
     const root = mkdtempSync(join(tmpdir(), 'nexus-prerender-routes-'))
     const docsDir = join(root, 'content/docs/guide')
@@ -103,6 +123,12 @@ describe('docs prerender routes', () => {
     const evidence = createNexusPrerenderEvidence(root)
 
     expect(evidence.docsApiRoutes).toEqual([...docsApiPrerenderRoutes])
+    expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=en&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=en&body=1',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=zh&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=zh&body=1',
+    ]))
     expect(evidence.missingRequiredDocsRoutes).toEqual([])
     expect(evidence.requiredDocsRoutes).toEqual(expect.arrayContaining([
       '/en/docs',
@@ -118,6 +144,7 @@ describe('docs prerender routes', () => {
     ]))
     expect(evidence.docsRouteCount).toBeGreaterThanOrEqual(evidence.requiredDocsRoutes.length)
     expect(evidence.routeCount).toBeGreaterThan(evidence.docsRouteCount)
+    expect(evidence.docsPageApiRouteCount).toBe(evidence.docsPageApiRoutes.length)
     expect(evidence.staticWorkerRoutes).toEqual(expect.arrayContaining([
       ...publicPrerenderRoutes,
       ...docsApiPrerenderRoutes,
@@ -137,8 +164,16 @@ describe('docs prerender routes', () => {
       '/zh/docs/dev/getting-started/quickstart',
       '/en/docs/dev/components',
       '/zh/docs/dev/components',
+      '/en/docs/dev/components/tabs',
+      '/zh/docs/dev/components/tabs',
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
+    ]))
+    expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=1',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=0',
+      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=1',
     ]))
     expect(evidence.docsRoutes).not.toEqual(expect.arrayContaining([
       '/docs',
