@@ -354,6 +354,7 @@ export default defineNuxtConfig({
         'theme-colors',
         'simplex-noise',
         'path-browserify',
+        '@vueuse/core',
         '@floating-ui/vue',
         'v-wave',
         'ogl',
