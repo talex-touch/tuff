@@ -412,6 +412,8 @@ export default defineNuxtConfig({
         '/app/components/store/',
         '/app/components/tuff/',
         '/app/components/theme/components/',
+        '/@nuxtjs/mdc/dist/runtime/components/prose/',
+        '/node_modules/@nuxtjs/mdc/dist/runtime/components/prose/',
       ]
 
       for (let index = components.length - 1; index >= 0; index -= 1) {

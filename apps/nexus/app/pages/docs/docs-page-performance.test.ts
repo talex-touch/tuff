@@ -44,6 +44,9 @@ const vueDevtoolsApiNoop = readFileSync(new URL('../../utils/vue-devtools-api-no
 const docsPageApi = readFileSync(new URL('../../../server/api/docs/page.get.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
+const licensePage = readFileSync(new URL('../license.vue', import.meta.url), 'utf8')
+const privacyPage = readFileSync(new URL('../privacy.vue', import.meta.url), 'utf8')
+const protocolPage = readFileSync(new URL('../protocol.vue', import.meta.url), 'utf8')
 
 describe('docs page performance boundaries', () => {
   it('keys catch-all docs pages by route path to avoid stale content on client navigation', () => {
@@ -547,6 +550,16 @@ describe('docs page performance boundaries', () => {
     expect(docsProseHeading).toContain('<component :is="props.tag"')
     expect(docsProseHeading).toContain(':href="`#${props.id')
     expect(page).not.toContain('proseComponentMap')
+  })
+
+  it('keeps default MDC prose wrappers out of content renderer routes', () => {
+    expect(nuxtConfig).toContain("'/@nuxtjs/mdc/dist/runtime/components/prose/'")
+    expect(nuxtConfig).toContain("'/node_modules/@nuxtjs/mdc/dist/runtime/components/prose/'")
+
+    for (const contentPage of [page, licensePage, privacyPage, protocolPage]) {
+      expect(contentPage).toContain('<ContentRenderer')
+      expect(contentPage).toContain(':prose="false"')
+    }
   })
 
   it('keeps dev fallback metadata requests off full Markdown body parsing', () => {
