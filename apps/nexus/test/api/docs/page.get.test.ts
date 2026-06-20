@@ -143,6 +143,47 @@ describe('/api/docs/page', () => {
     )
   })
 
+  it('renders local Markdown in development when the Nuxt Content docs query endpoint returns 500', async () => {
+    process.env.NODE_ENV = 'development'
+    const error = Object.assign(new Error('[POST] "/__nuxt_content/docs/query?t=1781920528845": 500 Server Error'), {
+      response: {
+        _data: {
+          statusCode: 500,
+          statusMessage: 'Server Error',
+        },
+      },
+    })
+    const toc = { links: [{ id: 'basic-usage', depth: 2, text: 'Basic Usage' }] }
+    getQueryMock.mockReturnValue({ path: '/docs/dev/components/tabs', locale: 'en', body: '1' })
+    mockDocsCollection(new Map([['/docs/dev/components/tabs.en', error]]))
+    fsMocks.stat.mockResolvedValue({ mtimeMs: 124 })
+    fsMocks.readFile.mockResolvedValue('---\ntitle: Tabs\n---\n# Tabs')
+    mdcMocks.parseMarkdown.mockResolvedValue({
+      data: { title: 'Tabs', description: 'Windows Tabs', verified: true },
+      body: { type: 'root', children: [] },
+      toc,
+    })
+
+    await expect(handler({})).resolves.toEqual({
+      title: 'Tabs',
+      description: 'Windows Tabs',
+      verified: true,
+      path: '/docs/dev/components/tabs.en',
+      _path: '/docs/dev/components/tabs.en',
+      meta: { title: 'Tabs', description: 'Windows Tabs', verified: true },
+      body: { type: 'root', children: [], toc },
+      toc,
+    })
+    expect(fsMocks.readFile).toHaveBeenCalledWith(
+      expect.stringContaining('content/docs/dev/components/tabs.en.mdc'),
+      'utf8',
+    )
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[api/docs/page] Nuxt Content docs table is not ready; rendering the local Markdown file in development.',
+      error,
+    )
+  })
+
   it('throws missing docs content table errors in production', async () => {
     process.env.NODE_ENV = 'production'
     const error = new Error('no such table: _content_docs')
