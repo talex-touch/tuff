@@ -34,7 +34,8 @@ describe('Tuff demo client boundary', () => {
 
     expect(wrapper).toContain('v-if="isDemoActive"')
     expect(wrapper).toContain('<LazyTuffDemoClientRenderer')
-    expect(wrapper).toContain('reason: \'manual\'')
+    expect(wrapper).toContain('if (!props.demo || isDemoActive.value)')
+    expect(wrapper).not.toContain("from './demo-lazy'")
     expect(wrapper).toContain('class="tuff-demo__run-btn"')
     expect(wrapper).not.toContain('IntersectionObserver')
     expect(wrapper).not.toContain('scheduleDemoActivation')
