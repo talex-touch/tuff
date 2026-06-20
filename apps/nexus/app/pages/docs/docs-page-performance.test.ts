@@ -32,6 +32,7 @@ const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoW
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
 const mermaidRenderer = readFileSync(new URL('../../utils/mermaid-renderer.ts', import.meta.url), 'utf8')
+const i18nConfig = readFileSync(new URL('../../i18n.config.ts', import.meta.url), 'utf8')
 const docsPageApi = readFileSync(new URL('../../../server/api/docs/page.get.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
 const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
@@ -280,6 +281,13 @@ describe('docs page performance boundaries', () => {
     expect(useToast).toContain('function requestToastHost()')
     expect(useToast).toContain('window.dispatchEvent(new CustomEvent(toastHostRequestedEvent))')
     expect(useToast).toMatch(/toastItems\.value = \[\.\.\.toastItems\.value, toast\][\s\S]*requestToastHost\(\)[\s\S]*scheduleDismiss\(id, toast\.duration\)/)
+  })
+
+  it('lets Nuxt i18n lazy load locale messages instead of bundling both languages into first paint', () => {
+    expect(i18nConfig).not.toContain('../i18n/locales/en')
+    expect(i18nConfig).not.toContain('../i18n/locales/zh')
+    expect(i18nConfig).not.toMatch(/\bmessages\s*:/)
+    expect(nuxtConfig).toMatch(/i18n: \{[\s\S]*locales: \[[\s\S]*\{ code: 'en', file: 'en\.ts' \}[\s\S]*\{ code: 'zh', file: 'zh\.ts' \}[\s\S]*langDir: 'locales'[\s\S]*defaultLocale: 'en'/)
   })
 
   it('keeps the browser title reactive when a reused docs route changes', () => {
