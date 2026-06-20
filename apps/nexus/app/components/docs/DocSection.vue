@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
-
 interface Props {
   active: boolean
   link?: string
@@ -17,12 +15,9 @@ const emit = defineEmits<{
 }>()
 
 const linkable = computed(() => props.list <= 0)
-const { sizerRef, runWithAutoSizer } = useAutoSizerAction()
 
 function handleToggle() {
-  void runWithAutoSizer(() => {
-    emit('click')
-  })
+  emit('click')
 }
 </script>
 
@@ -57,21 +52,19 @@ function handleToggle() {
       />
     </button>
 
-    <TxAutoSizer
+    <div
       v-if="list > 0"
-      ref="sizerRef"
-      :width="false"
-      :height="true"
-      :duration-ms="200"
-      outer-class="DocSection-Body overflow-hidden"
-      inner-class="DocSection-BodyInner min-h-0"
+      class="DocSection-Body"
+      :class="active ? 'is-open' : ''"
+      :aria-hidden="!active"
+      :inert="!active"
     >
-      <div v-show="active && list > 0">
+      <div class="DocSection-BodyInner min-h-0">
         <ul class="docs-nav-list">
           <slot />
         </ul>
       </div>
-    </TxAutoSizer>
+    </div>
   </div>
 </template>
 
@@ -120,6 +113,21 @@ function handleToggle() {
 
 .DocSection-Indicator.is-open {
   transform: rotate(0deg);
+}
+
+.DocSection-Body {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.2s ease;
+}
+
+.DocSection-Body.is-open {
+  grid-template-rows: 1fr;
+}
+
+.DocSection-BodyInner {
+  overflow: hidden;
 }
 
 :global(.dark .DocSection-Header.is-active),

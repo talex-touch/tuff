@@ -104,10 +104,14 @@ describe('docs page performance boundaries', () => {
     expect(docsLayout).toContain('<DocsDrawer\n        v-if="outlineDrawerMounted"')
 
     expect(docSection).not.toContain('@talex-touch/tuffex/button')
+    expect(docSection).not.toContain('@talex-touch/tuffex/auto-sizer')
     expect(docSection).not.toContain('<TxButton')
-    expect(docSection).toContain('import { TxAutoSizer }')
+    expect(docSection).not.toContain('<TxAutoSizer')
     expect(docSection).toContain('<button\n      v-else')
     expect(docSection).toContain('class="DocSection-Header bg-transparent"')
+    expect(docSection).toContain('class="DocSection-Body"')
+    expect(docSection).toContain('grid-template-rows: 0fr')
+    expect(docSection).toContain('grid-template-rows: 1fr')
 
     expect(docsAsideCards).not.toContain('@talex-touch/tuffex/button')
     expect(docsAsideCards).not.toContain('<TxButton')
