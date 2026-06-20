@@ -396,6 +396,10 @@ export default {
     assistant: {
       open: 'Open Tuff Assistant',
     },
+    aiNotice: {
+      title: 'AI Generated',
+      description: 'AI generated content for reference only. Please rely on Verified docs.',
+    },
     noOutline: 'Headings will appear here once added to this document.',
     lastUpdatedLabel: 'Last edited on',
     previousChapter: 'Previous chapter',

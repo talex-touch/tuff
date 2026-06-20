@@ -396,6 +396,10 @@ export default {
     assistant: {
       open: '打开 Tuff Assistant',
     },
+    aiNotice: {
+      title: 'AI Generated',
+      description: 'AI 生成内容，仅供参考。最终以 Verified 文档为准。',
+    },
     noOutline: '为文档添加标题后，这里会自动生成导航。',
     lastUpdatedLabel: '最后更新于',
     previousChapter: '上一章',
