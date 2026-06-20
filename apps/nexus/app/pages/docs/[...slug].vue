@@ -219,7 +219,12 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
     if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
       return
 
-    fullDoc.value = cacheFullDoc(nextFullDoc)
+    const cachedFullDoc = cacheFullDoc(nextFullDoc)
+    fullDoc.value = cachedFullDoc
+    if (!doc.value) {
+      doc.value = cachedFullDoc
+      isLoading.value = false
+    }
   }
   catch {
     if (fetchId === activeDocFetchId && path === docPath.value && locale === docsLocale.value)
@@ -231,6 +236,14 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   }
 }
 
+function startFullDocFetchForRoute() {
+  if (import.meta.server || !shouldSplitDocBody.value || fullDoc.value || fullDocLoading.value)
+    return
+
+  const fetchId = ++activeDocFetchId
+  void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
+}
+
 async function loadActiveDocForRoute() {
   if (import.meta.server)
     return
@@ -240,11 +253,15 @@ async function loadActiveDocForRoute() {
   const locale = docsLocale.value
   const splitBody = shouldSplitDocBody.value
   const cachedFullDoc = splitBody ? readCachedFullDoc(fullDocCacheKey.value) : null
+  const hasCachedBody = splitBody && cachedFullDoc !== undefined
 
-  doc.value = null
-  fullDoc.value = splitBody && cachedFullDoc !== undefined ? cachedFullDoc : null
-  isLoading.value = true
-  fullDocLoading.value = splitBody && cachedFullDoc === undefined
+  doc.value = hasCachedBody ? cachedFullDoc : null
+  fullDoc.value = hasCachedBody ? cachedFullDoc : null
+  isLoading.value = !hasCachedBody
+  fullDocLoading.value = splitBody && !hasCachedBody
+  const fullDocRequest = splitBody && !hasCachedBody
+    ? loadFullDocForRoute(fetchId, path, locale)
+    : null
 
   try {
     const nextDoc = await requestJson<Record<string, any> | null>('/api/docs/page', {
@@ -264,10 +281,10 @@ async function loadActiveDocForRoute() {
     if (!splitBody)
       return
 
-    if (cachedFullDoc !== undefined)
+    if (hasCachedBody)
       return
 
-    await loadFullDocForRoute(fetchId, path, locale)
+    void fullDocRequest
   }
   catch {
     if (fetchId === activeDocFetchId) {
@@ -276,6 +293,9 @@ async function loadActiveDocForRoute() {
     }
   }
 }
+
+if (import.meta.client)
+  startFullDocFetchForRoute()
 
 watch(requestKey, () => {
   clearCodeEnhanceSchedule()
@@ -1268,10 +1288,7 @@ onMounted(() => {
   document.addEventListener('click', handleDocsInlineCodeClick)
   document.addEventListener('keydown', handleDocsInlineCodeKeydown)
 
-  if (shouldSplitDocBody.value && !fullDoc.value && !fullDocLoading.value) {
-    const fetchId = ++activeDocFetchId
-    void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
-  }
+  startFullDocFetchForRoute()
 })
 
 watch(
