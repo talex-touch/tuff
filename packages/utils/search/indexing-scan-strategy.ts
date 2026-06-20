@@ -13,6 +13,7 @@ export function resolveIndexedScanStrategy(input: IndexedScanStrategyInput): Ind
   const normalizePath = input.normalizePath ?? ((path: string) => path)
   const completedPathKeys = new Set(
     Array.from(input.completedScanPaths, (completedPath) => normalizePath(completedPath))
+      .filter((completedPath) => completedPath.trim().length > 0)
   )
   const isCompleted = (watchPath: string): boolean => completedPathKeys.has(normalizePath(watchPath))
   const watchPaths = uniqueIndexedScanStrategyPaths(input.watchPaths, normalizePath)
@@ -31,6 +32,7 @@ function uniqueIndexedScanStrategyPaths(
   const uniquePaths: string[] = []
   for (const path of paths) {
     const key = normalizePath(path)
+    if (key.trim().length === 0) continue
     if (seen.has(key)) continue
     seen.add(key)
     uniquePaths.push(path)

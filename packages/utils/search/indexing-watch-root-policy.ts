@@ -40,6 +40,7 @@ export function resolveIndexedWatchRootSet(
   for (const candidate of [...input.basePaths, ...(input.extraPaths ?? [])]) {
     if (!candidate) continue
     const normalized = input.normalizePath(candidate)
+    if (!normalized) continue
     if (seen.has(normalized)) continue
     seen.add(normalized)
     paths.push(candidate)
@@ -53,9 +54,11 @@ export function isIndexedWatchPathOwned(input: IndexedWatchPathOwnershipInput): 
   if (!input.rawPath) return false
 
   const normalizedPath = input.normalizePath(input.rawPath)
+  if (!normalizedPath) return false
   const separator = input.pathSeparator ?? inferIndexedWatchPathSeparator(normalizedPath)
 
   for (const watchRoot of input.normalizedWatchPaths) {
+    if (!watchRoot) continue
     if (normalizedPath === watchRoot) return true
     const rootWithSeparator = watchRoot.endsWith(separator) ? watchRoot : `${watchRoot}${separator}`
     if (normalizedPath.startsWith(rootWithSeparator)) {
@@ -69,10 +72,11 @@ export function isIndexedWatchPathOwned(input: IndexedWatchPathOwnershipInput): 
 export function filterIndexedWatchPendingPermissionPaths(
   input: FilterIndexedWatchPendingPermissionPathsInput
 ): string[] {
-  const normalizedWatchSet = new Set(input.normalizedWatchPaths)
-  return input.pendingPaths.filter((pendingPath) =>
-    normalizedWatchSet.has(input.normalizePath(pendingPath))
-  )
+  const normalizedWatchSet = new Set(input.normalizedWatchPaths.filter(Boolean))
+  return input.pendingPaths.filter((pendingPath) => {
+    const normalized = input.normalizePath(pendingPath)
+    return Boolean(normalized) && normalizedWatchSet.has(normalized)
+  })
 }
 
 export function getIndexedWatchPathBasename(rawPath: string): string {

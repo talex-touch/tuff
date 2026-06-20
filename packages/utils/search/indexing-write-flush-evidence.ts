@@ -1,5 +1,6 @@
 import type { IndexedSourceEvidence } from './indexing-source'
 import type { IndexedWriteFlushSnapshotBase } from './indexing-write-flush-snapshot'
+import { cloneIndexingSnapshotValue } from './indexing-snapshot-clone'
 
 export interface IndexedWriteFlushEvidenceInput<
   TSnapshot extends IndexedWriteFlushSnapshotBase = IndexedWriteFlushSnapshotBase
@@ -27,7 +28,7 @@ export class IndexedWriteFlushEvidenceService {
       itemCount: entries > 0 ? entries : pending,
       lastCheckedAt: normalizeEvidenceTimestamp(snapshot.checkedAt),
       reason: snapshot.reason,
-      metadata: {
+      metadata: cloneEvidenceMetadata({
         ...(snapshot.metadata ?? {}),
         ...(input.metadata ?? {}),
         status: snapshot.status,
@@ -36,7 +37,7 @@ export class IndexedWriteFlushEvidenceService {
         inflight,
         error: snapshot.error,
         durationMs: normalizeOptionalEvidenceNumber(snapshot.durationMs)
-      }
+      })
     }
   }
 
@@ -62,4 +63,8 @@ function normalizeOptionalEvidenceNumber(value: unknown): number | undefined {
   }
 
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+}
+
+function cloneEvidenceMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  return cloneIndexingSnapshotValue(metadata)
 }

@@ -164,12 +164,17 @@ describe('indexing source task state', () => {
   })
 
   it('isolates updated last task snapshots from caller mutation', () => {
-    const value = {
+    const value: NonNullable<IndexedSourceRuntimeTaskState['lastScan']> & {
+      nested: { attempts: number }
+    } = {
       startedAt: 1,
       completedAt: 2,
       batches: 1,
       records: 2,
-      indexedRecords: 2
+      indexedRecords: 2,
+      nested: {
+        attempts: 1
+      }
     }
 
     const next = updateIndexedSourceTaskState({
@@ -184,11 +189,16 @@ describe('indexing source task state', () => {
     })
 
     value.records = 99
+    value.nested.attempts = 99
 
     expect(next.lastScan).toMatchObject({
-      records: 2
+      records: 2,
+      nested: {
+        attempts: 1
+      }
     })
     expect(next.lastScan).not.toBe(value)
+    expect((next.lastScan as typeof value).nested).not.toBe(value.nested)
   })
 
   it('builds scan task state with job identity and summary', () => {
@@ -361,7 +371,7 @@ describe('indexing source task state', () => {
     expect(scan.historyEntry).toMatchObject({
       startedAt: 30,
       completedAt: 30,
-      queuedAt: 100
+      queuedAt: 30
     })
     expect(watch.value).toMatchObject({
       occurredAt: 0,
@@ -527,6 +537,31 @@ describe('indexing source task state', () => {
     })
   })
 
+  it('replaces blank watch paths with an explicit placeholder', () => {
+    const watch = buildIndexedSourceWatchTaskState({
+      sourceId: 'file-provider',
+      occurredAt: 10,
+      completedAt: 20,
+      action: 'change',
+      path: '   '
+    })
+
+    expect(watch.value.path).toBe('<unknown>')
+    expect(watch.value.path.trim().length).toBeGreaterThan(0)
+  })
+
+  it('preserves non-blank watch paths without trimming', () => {
+    const watch = buildIndexedSourceWatchTaskState({
+      sourceId: 'file-provider',
+      occurredAt: 10,
+      completedAt: 20,
+      action: 'change',
+      path: '/tmp/report with trailing space '
+    })
+
+    expect(watch.value.path).toBe('/tmp/report with trailing space ')
+  })
+
   it('builds skipped watch task state with normalized skip error', () => {
     expect(
       buildIndexedSourceWatchTaskState({
@@ -642,6 +677,35 @@ describe('indexing source task state', () => {
           rootCount: 2
         }
       }
+    })
+  })
+
+  it('sanitizes caller-provided task history summaries before returning builder output', () => {
+    const reconcile = buildIndexedSourceReconcileTaskState({
+      sourceId: 'file-provider',
+      startedAt: 10,
+      completedAt: 20,
+      added: 1,
+      changed: 2,
+      deleted: 3,
+      status: 'failed',
+      error: 'store failed',
+      summary: {
+        kept: 'yes',
+        ok: true,
+        count: 2,
+        missing: undefined,
+        badObject: { nested: true } as never,
+        badArray: ['nested'] as never,
+        badNumber: Number.NaN
+      }
+    })
+
+    expect(reconcile.historyEntry.summary).toEqual({
+      kept: 'yes',
+      ok: true,
+      count: 2,
+      missing: undefined
     })
   })
 

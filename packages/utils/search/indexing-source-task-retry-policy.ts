@@ -69,11 +69,15 @@ function collectRecentFailures(
   }
 
   const failures: IndexedSourceTaskHistoryEntry[] = []
+  const latestSuccessAt = getLatestSuccessAt(recentTasks, kind, now)
   for (const task of recentTasks) {
     if (task.kind !== kind || task.status !== 'failed') {
       continue
     }
     if (!Number.isFinite(task.completedAt) || task.completedAt > now) {
+      continue
+    }
+    if (latestSuccessAt !== undefined && task.completedAt <= latestSuccessAt) {
       continue
     }
     if (now - task.completedAt > failureWindowMs) {
@@ -82,6 +86,25 @@ function collectRecentFailures(
     failures.push(task)
   }
   return failures
+}
+
+function getLatestSuccessAt(
+  recentTasks: IndexedSourceTaskHistoryEntry[],
+  kind: IndexedSourceTaskHistoryKind,
+  now: number
+): number | undefined {
+  let latestSuccessAt: number | undefined
+  for (const task of recentTasks) {
+    if (task.kind !== kind || task.status !== 'succeeded') {
+      continue
+    }
+    if (!Number.isFinite(task.completedAt) || task.completedAt > now) {
+      continue
+    }
+    latestSuccessAt =
+      latestSuccessAt === undefined ? task.completedAt : Math.max(latestSuccessAt, task.completedAt)
+  }
+  return latestSuccessAt
 }
 
 function normalizeDelay(value: number | undefined, fallback: number): number {

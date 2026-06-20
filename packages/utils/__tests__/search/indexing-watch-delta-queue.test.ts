@@ -93,6 +93,39 @@ describe('indexing-watch-delta-queue-service', () => {
     expect(processEntries).not.toHaveBeenCalled()
   })
 
+  it('keeps pending entries when flush processing fails', async () => {
+    const processEntries = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('write failed'))
+      .mockResolvedValueOnce(undefined)
+    const logError = vi.fn()
+    const service = new IndexingWatchDeltaQueueService<TestDeltaPayload>({
+      normalizeKey: (rawPath) => rawPath.toLowerCase(),
+      shouldAccept: () => true,
+      prepareFlush: async () => true,
+      processEntries,
+      logError
+    })
+
+    service.enqueue('/tmp/a.txt', 'add')
+    await settleTaskChain()
+
+    expect(service.getPendingSize()).toBe(1)
+    expect(logError).toHaveBeenCalledWith(
+      'Failed to process watch delta updates.',
+      expect.any(Error)
+    )
+
+    service.flushSoon()
+    await settleTaskChain()
+
+    expect(processEntries).toHaveBeenCalledTimes(2)
+    expect(processEntries).toHaveBeenLastCalledWith([
+      ['/tmp/a.txt', { action: 'add', rawPath: '/tmp/a.txt' }]
+    ])
+    expect(service.getPendingSize()).toBe(0)
+  })
+
   it('serializes flush processing', async () => {
     let releaseFirstFlush!: () => void
     const firstFlush = new Promise<void>((resolve) => {
@@ -124,6 +157,40 @@ describe('indexing-watch-delta-queue-service', () => {
     expect(processEntries).toHaveBeenLastCalledWith([
       ['/tmp/b.txt', { action: 'change', rawPath: '/tmp/b.txt' }]
     ])
+  })
+
+  it('keeps same-key updates enqueued while an older payload is processing', async () => {
+    let releaseFirstFlush!: () => void
+    const firstFlush = new Promise<void>((resolve) => {
+      releaseFirstFlush = resolve
+    })
+    const processEntries = vi
+      .fn()
+      .mockImplementationOnce(async () => firstFlush)
+      .mockImplementationOnce(async () => undefined)
+    const service = new IndexingWatchDeltaQueueService<TestDeltaPayload>({
+      normalizeKey: (rawPath) => rawPath.toLowerCase(),
+      shouldAccept: () => true,
+      prepareFlush: async () => true,
+      processEntries,
+      logError: vi.fn()
+    })
+
+    service.enqueue('/tmp/a.txt', 'change')
+    await settleQueue()
+    service.enqueue('/tmp/a.txt', 'change', { manual: true })
+    await settleQueue()
+
+    expect(processEntries).toHaveBeenCalledTimes(1)
+
+    releaseFirstFlush()
+    await settleTaskChain()
+
+    expect(processEntries).toHaveBeenCalledTimes(2)
+    expect(processEntries).toHaveBeenLastCalledWith([
+      ['/tmp/a.txt', { action: 'change', rawPath: '/tmp/a.txt', manual: true }]
+    ])
+    expect(service.getPendingSize()).toBe(0)
   })
 
   it('supports source-specific metadata coalescing', async () => {

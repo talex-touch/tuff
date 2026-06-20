@@ -51,7 +51,25 @@ describe('indexing scan eligibility', () => {
     ).toEqual({
       newPaths: ['/b'],
       stalePaths: ['/a'],
-      lastScannedAt: 200
+      lastScannedAt: 100
+    })
+  })
+
+  it('ignores completed scan rows outside watched paths when resolving latest scan time', () => {
+    expect(
+      resolveIndexedScanEligibility({
+        watchPaths: ['/a'],
+        completedScans: [
+          { path: '/a', lastScanned: 100 },
+          { path: '/external', lastScanned: 900 }
+        ],
+        intervalMs: 500,
+        now: 1000
+      })
+    ).toEqual({
+      newPaths: [],
+      stalePaths: ['/a'],
+      lastScannedAt: 100
     })
   })
 
@@ -70,7 +88,7 @@ describe('indexing scan eligibility', () => {
     ).toEqual({
       newPaths: ['/Users/me/Downloads'],
       stalePaths: ['/Users/me/Documents'],
-      lastScannedAt: 200
+      lastScannedAt: 100
     })
   })
 
@@ -93,11 +111,46 @@ describe('indexing scan eligibility', () => {
     })
   })
 
+  it('ignores empty normalized watch paths and completed rows', () => {
+    expect(
+      resolveIndexedScanEligibility({
+        watchPaths: ['/a', '   ', '/empty'],
+        completedScans: [
+          { path: '/a', lastScanned: 0 },
+          { path: '/empty', lastScanned: 100 },
+          { path: '   ', lastScanned: 900 }
+        ],
+        intervalMs: 50,
+        now: 100,
+        normalizePath: (value) => value.trim()
+      })
+    ).toEqual({
+      newPaths: [],
+      stalePaths: ['/a'],
+      lastScannedAt: 100
+    })
+  })
+
   it('ignores rows with invalid timestamps', () => {
     expect(
       resolveIndexedScanEligibility({
         watchPaths: ['/a'],
         completedScans: [{ path: '/a', lastScanned: 'not-a-date' }],
+        intervalMs: 500,
+        now: 1000
+      })
+    ).toEqual({
+      newPaths: ['/a'],
+      stalePaths: [],
+      lastScannedAt: null
+    })
+  })
+
+  it('ignores rows with negative timestamps', () => {
+    expect(
+      resolveIndexedScanEligibility({
+        watchPaths: ['/a'],
+        completedScans: [{ path: '/a', lastScanned: -1 }],
         intervalMs: 500,
         now: 1000
       })
@@ -117,5 +170,6 @@ describe('indexing scan eligibility', () => {
       Date.parse('2026-05-31T00:00:00.000Z')
     )
     expect(toIndexedScanTimestamp(Number.NaN)).toBeNull()
+    expect(toIndexedScanTimestamp(-1)).toBeNull()
   })
 })
