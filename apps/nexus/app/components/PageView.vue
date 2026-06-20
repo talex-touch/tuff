@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useTimeAgo } from '@vueuse/core'
 import { useTypedFetch } from '~/utils/request'
 
 interface PageViewResponse {

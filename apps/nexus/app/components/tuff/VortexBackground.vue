@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { templateRef } from '@vueuse/core'
+import { templateRef, useDebounceFn } from '@vueuse/core'
 import { createNoise3D } from 'simplex-noise'
 import { onMounted, onUnmounted } from 'vue'
 

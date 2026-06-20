@@ -12,17 +12,21 @@ const docsLayout = readFileSync(new URL('../../layouts/docs.vue', import.meta.ur
 const theHeader = readFileSync(new URL('../../components/TheHeader.vue', import.meta.url), 'utf8')
 const tuffFooter = readFileSync(new URL('../../components/TuffFooter.vue', import.meta.url), 'utf8')
 const docHero = readFileSync(new URL('../../components/docs/DocHero.vue', import.meta.url), 'utf8')
+const vortexBackground = readFileSync(new URL('../../components/tuff/VortexBackground.vue', import.meta.url), 'utf8')
 const headerControls = readFileSync(new URL('../../components/HeaderControls.vue', import.meta.url), 'utf8')
 const languageToggle = readFileSync(new URL('../../components/LanguageToggle.vue', import.meta.url), 'utf8')
 const darkToggle = readFileSync(new URL('../../components/DarkToggle.vue', import.meta.url), 'utf8')
 const backToTop = readFileSync(new URL('../../components/ui/BackToTop.vue', import.meta.url), 'utf8')
 const appRoot = readFileSync(new URL('../../app.vue', import.meta.url), 'utf8')
+const pageView = readFileSync(new URL('../../components/PageView.vue', import.meta.url), 'utf8')
 const constants = readFileSync(new URL('../../constants/index.ts', import.meta.url), 'utf8')
 const toastHost = readFileSync(new URL('../../components/ui/ToastHost.vue', import.meta.url), 'utf8')
 const useToast = readFileSync(new URL('../../composables/useToast.ts', import.meta.url), 'utf8')
 const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoWrapper.vue', import.meta.url), 'utf8')
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
+const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
+const packageJson = readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
 
 describe('docs page performance boundaries', () => {
   it('keys catch-all docs pages by route path to avoid stale content on client navigation', () => {
@@ -220,6 +224,15 @@ describe('docs page performance boundaries', () => {
     expect(docsOutline).toContain("window.addEventListener('scroll', onScroll, { passive: true })")
     expect(docsOutline).toContain('new ResizeObserver')
     expect(docsOutline).toContain("window.removeEventListener('scroll', onScroll)")
+  })
+
+  it('does not register VueUse as a global Nuxt module for docs first paint', () => {
+    expect(nuxtConfig).not.toContain("'@vueuse/nuxt'")
+    expect(packageJson).not.toContain('"@vueuse/nuxt"')
+    expect(packageJson).toContain('"@vueuse/core"')
+    expect(page).toContain("import { useTimeAgoIntl } from '@vueuse/core'")
+    expect(pageView).toContain("import { useTimeAgo } from '@vueuse/core'")
+    expect(vortexBackground).toContain("import { templateRef, useDebounceFn } from '@vueuse/core'")
   })
 
   it('requests component sidebar metadata by locale instead of downloading both languages', () => {
