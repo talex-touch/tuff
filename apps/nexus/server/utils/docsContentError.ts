@@ -3,6 +3,17 @@ function includesMissingDocsTableMessage(value: string) {
   return normalized.includes('no such table') && normalized.includes('_content_docs')
 }
 
+function includesDocsContentQueryFailure(value: string) {
+  const normalized = value.toLowerCase()
+  return normalized.includes('__nuxt_content/docs/query')
+    && normalized.includes('500')
+    && normalized.includes('server error')
+}
+
+function includesRecoverableDocsContentMessage(value: string) {
+  return includesMissingDocsTableMessage(value) || includesDocsContentQueryFailure(value)
+}
+
 function readObjectValue(record: Record<string, unknown>, key: string) {
   try {
     return record[key]
@@ -17,10 +28,10 @@ export function isMissingDocsContentTableError(error: unknown, seen = new Set<un
     return false
 
   if (typeof error === 'string')
-    return includesMissingDocsTableMessage(error)
+    return includesRecoverableDocsContentMessage(error)
 
   if (error instanceof Error) {
-    if (includesMissingDocsTableMessage(`${error.message}\n${error.stack ?? ''}`))
+    if (includesRecoverableDocsContentMessage(`${error.message}\n${error.stack ?? ''}`))
       return true
   }
 
