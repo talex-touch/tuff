@@ -211,6 +211,17 @@ describe('docs page performance boundaries', () => {
     expect(docsOutline).toMatch(/history\.replaceState\(history\.state, '', `\$\{window\.location\.pathname\}\$\{window\.location\.search\}\$\{next\}`\)/)
   })
 
+  it('keeps docs outline scroll behavior off first-paint VueUse imports', () => {
+    expect(docsOutline).not.toContain('@vueuse/core')
+    expect(docsOutline).not.toContain('useEventListener')
+    expect(docsOutline).not.toContain('useResizeObserver')
+    expect(docsOutline).not.toContain('useThrottleFn')
+    expect(docsOutline).toContain('function createThrottleFn')
+    expect(docsOutline).toContain("window.addEventListener('scroll', onScroll, { passive: true })")
+    expect(docsOutline).toContain('new ResizeObserver')
+    expect(docsOutline).toContain("window.removeEventListener('scroll', onScroll)")
+  })
+
   it('requests component sidebar metadata by locale instead of downloading both languages', () => {
     expect(docsSidebar).toContain("'/api/docs/sidebar-components'")
     expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-components-meta:\$\{docsLocale\.value\}`\)/)
