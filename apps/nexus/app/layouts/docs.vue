@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
-import BackToTop from '~/components/ui/BackToTop.vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
+const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
+const BACK_TO_TOP_MOUNT_SCROLL_Y = 240
 const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200
 const TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
 
@@ -13,7 +14,9 @@ const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
 const sidebarDrawerMounted = ref(false)
 const outlineDrawerMounted = ref(false)
+const shouldMountBackToTop = ref(false)
 const shouldMountTuffexBackground = ref(false)
+let backToTopFrameId: number | null = null
 let tuffexBackgroundIdleId: number | null = null
 let tuffexBackgroundFrameId: number | null = null
 let tuffexBackgroundIntentDisposers: Array<() => void> = []
@@ -53,6 +56,32 @@ function openSidebarDrawer() {
 function openOutlineDrawer() {
   outlineDrawerMounted.value = true
   outlineVisible.value = true
+}
+
+function clearBackToTopFrame() {
+  if (import.meta.server || backToTopFrameId === null)
+    return
+
+  window.cancelAnimationFrame(backToTopFrameId)
+  backToTopFrameId = null
+}
+
+function maybeMountBackToTop() {
+  if (import.meta.server || shouldMountBackToTop.value)
+    return
+
+  if (window.scrollY > BACK_TO_TOP_MOUNT_SCROLL_Y)
+    shouldMountBackToTop.value = true
+}
+
+function scheduleBackToTopMountCheck() {
+  if (import.meta.server || shouldMountBackToTop.value || backToTopFrameId !== null)
+    return
+
+  backToTopFrameId = window.requestAnimationFrame(() => {
+    backToTopFrameId = null
+    maybeMountBackToTop()
+  })
 }
 
 function clearTuffexBackgroundSchedule() {
@@ -127,7 +156,14 @@ watch(isTuffexDocs, (active) => {
   shouldMountTuffexBackground.value = false
 }, { immediate: true })
 
+onMounted(() => {
+  scheduleBackToTopMountCheck()
+  window.addEventListener('scroll', scheduleBackToTopMountCheck, { passive: true })
+})
+
 onBeforeUnmount(() => {
+  window.removeEventListener('scroll', scheduleBackToTopMountCheck)
+  clearBackToTopFrame()
   clearTuffexBackgroundIntentListeners()
   clearTuffexBackgroundSchedule()
 })
@@ -192,7 +228,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <TuffFooter class="docs-layout-footer" />
-    <BackToTop />
+    <LazyBackToTop v-if="shouldMountBackToTop" />
     <ClientOnly>
       <DocsDrawer
         v-if="sidebarDrawerMounted"
