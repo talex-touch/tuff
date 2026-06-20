@@ -31,6 +31,7 @@ const tuffexBaseStyleEntry = useWorkspaceSource
 const tuffexComponentEntry = useWorkspaceSource
   ? `${tuffexComponentsSourceRoot}/$1/index.ts`
   : `${tuffexDistRoot}/$1/index.js`
+const tuffexComponentSourceEntry = `${tuffexComponentsSourceRoot}/$1/index.ts`
 const tuffexComponentStyleEntry = resolve(tuffexDistRoot, '$1/style.css')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 const tuffexDistUtilsEntry = useWorkspaceSource
@@ -137,7 +138,7 @@ export default defineNuxtConfig({
     },
   },
 
-  css: [tuffexBaseStyleEntry, 'vue-sonner/style.css'],
+  css: [tuffexBaseStyleEntry],
 
   colorMode: {
     classSuffix: '',
@@ -343,7 +344,7 @@ export default defineNuxtConfig({
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
         { find: /^next-auth\/core$/, replacement: nextAuthCoreEntry },
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
-        { find: /^@tuffex-components\/(.+)$/, replacement: `${tuffexComponentsSourceRoot}/$1` },
+        { find: /^@tuffex-components\/(.+)$/, replacement: tuffexComponentSourceEntry },
         { find: /^@talex-touch\/tuffex$/, replacement: useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexDistUtilsEntry },
         { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexBaseStyleEntry },
@@ -367,7 +368,7 @@ export default defineNuxtConfig({
       compilerOptions: {
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
-          '@tuffex-components/*': [`${tuffexComponentsSourceRoot}/*`],
+          '@tuffex-components/*': [tuffexComponentSourceEntry],
           '@talex-touch/tuffex': [useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry],
           '@talex-touch/tuffex/base.css': [tuffexBaseStyleEntry],
           '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleEntry],

@@ -50,6 +50,24 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("!normalized.endsWith('/server/utils/telemetryRetentionCore.ts')")
   })
 
+  it('keeps legacy sonner styles route-local instead of loading them on every docs page', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+    const signInPage = readProjectFile('../../pages/sign-in/index.vue')
+
+    expect(config).not.toContain("'vue-sonner/style.css'")
+    expect(signInPage).toContain("import 'vue-sonner/style.css'")
+  })
+
+  it('normalizes TuffEx dev component aliases to one source module id', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain('const tuffexComponentSourceEntry = ')
+    expect(config).toContain('tuffexComponentsSourceRoot')
+    expect(config).toContain('/$1/index.ts')
+    expect(config).toContain('{ find: /^@tuffex-components\\/(.+)$/, replacement: tuffexComponentSourceEntry }')
+    expect(config).toContain("'@tuffex-components/*': [tuffexComponentSourceEntry]")
+  })
+
   it('keeps route-local marketing and store components out of auto-registration', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
