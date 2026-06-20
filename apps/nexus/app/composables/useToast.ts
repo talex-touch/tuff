@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { toastHostRequestedEvent } from '~/constants'
 
 export interface Toast {
   id: string
@@ -38,6 +39,11 @@ function createToastId() {
   return `toast_${Date.now()}_${Math.random().toString(16).slice(2)}`
 }
 
+function requestToastHost() {
+  if (import.meta.client)
+    window.dispatchEvent(new CustomEvent(toastHostRequestedEvent))
+}
+
 export function useToast() {
   const toasts = computed(() => toastItems.value)
 
@@ -52,6 +58,7 @@ export function useToast() {
     }
 
     toastItems.value = [...toastItems.value, toast]
+    requestToastHost()
     scheduleDismiss(id, toast.duration)
     return id
   }

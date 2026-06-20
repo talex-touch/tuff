@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
-import { appName } from '~/constants'
+import { appName, toastHostRequestedEvent } from '~/constants'
 import { resolveDocsLocaleFromRoute } from '#shared/utils/docs-path'
+
+const LazyToastContainer = defineAsyncComponent(() => import('~/components/ToastContainer.vue'))
 
 useHead({
   title: appName,
@@ -29,6 +31,7 @@ const { user, pending: authUserPending } = useAuthUser({
   server: false,
 })
 const mounted = ref(false)
+const toastHostMounted = ref(false)
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
 const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
@@ -108,10 +111,15 @@ function handleGlobalSearchShortcut(event: KeyboardEvent) {
   }
 }
 
+function mountToastHost() {
+  toastHostMounted.value = true
+}
+
 onMounted(() => {
   mounted.value = true
   closeSearch()
   window.addEventListener('keydown', handleGlobalSearchShortcut)
+  window.addEventListener(toastHostRequestedEvent, mountToastHost)
   void (async () => {
     if (docsRouteLocale.value) {
       await setLocaleSerial(docsRouteLocale.value, 'browser')
@@ -134,6 +142,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalSearchShortcut)
+  window.removeEventListener(toastHostRequestedEvent, mountToastHost)
 })
 
 watch(
@@ -405,7 +414,7 @@ watchEffect(() => {
 <template>
   <VitePwaManifest />
   <NuxtLoadingIndicator color="#ffffff" />
-  <ToastContainer />
+  <LazyToastContainer v-if="toastHostMounted" />
   <ClientOnly>
     <LazySearchGlobalSearch v-if="!isAuthShellRoute && globalSearchOpen" />
   </ClientOnly>

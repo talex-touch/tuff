@@ -16,7 +16,10 @@ const headerControls = readFileSync(new URL('../../components/HeaderControls.vue
 const languageToggle = readFileSync(new URL('../../components/LanguageToggle.vue', import.meta.url), 'utf8')
 const darkToggle = readFileSync(new URL('../../components/DarkToggle.vue', import.meta.url), 'utf8')
 const backToTop = readFileSync(new URL('../../components/ui/BackToTop.vue', import.meta.url), 'utf8')
+const appRoot = readFileSync(new URL('../../app.vue', import.meta.url), 'utf8')
+const constants = readFileSync(new URL('../../constants/index.ts', import.meta.url), 'utf8')
 const toastHost = readFileSync(new URL('../../components/ui/ToastHost.vue', import.meta.url), 'utf8')
+const useToast = readFileSync(new URL('../../composables/useToast.ts', import.meta.url), 'utf8')
 const tuffDemoWrapper = readFileSync(new URL('../../components/content/TuffDemoWrapper.vue', import.meta.url), 'utf8')
 const tuffCodeBlock = readFileSync(new URL('../../components/content/TuffCodeBlock.vue', import.meta.url), 'utf8')
 const tuffPropsTable = readFileSync(new URL('../../components/content/TuffPropsTable.vue', import.meta.url), 'utf8')
@@ -172,6 +175,21 @@ describe('docs page performance boundaries', () => {
     expect(tuffPropsTable).toContain('class="tuff-props-table__copy-status"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__tag"')
     expect(tuffPropsTable).toContain('class="tuff-props-table__mono"')
+  })
+
+  it('keeps the global toast host out of first-paint docs modules', () => {
+    expect(constants).toContain("toastHostRequestedEvent = 'nexus:toast-host-requested'")
+    expect(appRoot).not.toContain('<ToastContainer />')
+    expect(appRoot).toContain("const LazyToastContainer = defineAsyncComponent(() => import('~/components/ToastContainer.vue'))")
+    expect(appRoot).toContain('const toastHostMounted = ref(false)')
+    expect(appRoot).toContain('function mountToastHost()')
+    expect(appRoot).toMatch(/window\.addEventListener\(toastHostRequestedEvent, mountToastHost\)/)
+    expect(appRoot).toMatch(/window\.removeEventListener\(toastHostRequestedEvent, mountToastHost\)/)
+    expect(appRoot).toContain('<LazyToastContainer v-if="toastHostMounted"')
+    expect(useToast).toContain("import { toastHostRequestedEvent } from '~/constants'")
+    expect(useToast).toContain('function requestToastHost()')
+    expect(useToast).toContain('window.dispatchEvent(new CustomEvent(toastHostRequestedEvent))')
+    expect(useToast).toMatch(/toastItems\.value = \[\.\.\.toastItems\.value, toast\][\s\S]*requestToastHost\(\)[\s\S]*scheduleDismiss\(id, toast\.duration\)/)
   })
 
   it('keeps the browser title reactive when a reused docs route changes', () => {
