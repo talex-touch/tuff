@@ -347,6 +347,7 @@ export default defineNuxtConfig({
         'path-browserify',
         '@floating-ui/vue',
         'v-wave',
+        'ogl',
       ],
     },
     resolve: {

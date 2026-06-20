@@ -75,6 +75,12 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("'v-wave'")
   })
 
+  it('pre-bundles WebGL background dependencies used by Nexus visual routes', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain("'ogl'")
+  })
+
   it('keeps route-local marketing and store components out of auto-registration', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
