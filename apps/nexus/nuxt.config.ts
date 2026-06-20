@@ -60,6 +60,14 @@ function isNexusAutoImportScannable(file: string) {
     && !normalized.endsWith('/server/utils/telemetryRetentionCore.ts')
 }
 
+function isRouteLocalPageComponent(file: string | undefined) {
+  if (!file)
+    return false
+
+  const normalized = file.replace(/\\/g, '/')
+  return normalized.includes('/app/pages/') && normalized.includes('/components/')
+}
+
 function isEnvFlagEnabled(value?: string) {
   if (!value)
     return false
@@ -402,6 +410,11 @@ export default defineNuxtConfig({
       }
     },
     'pages:extend'(pages) {
+      for (let index = pages.length - 1; index >= 0; index -= 1) {
+        if (isRouteLocalPageComponent(pages[index]?.file))
+          pages.splice(index, 1)
+      }
+
       const docsCatchAll = pages.find(page => page.file?.replace(/\\/g, '/').endsWith('/app/pages/docs/[...slug].vue'))
       if (!docsCatchAll?.file)
         return
