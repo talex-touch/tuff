@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 30 批已完成代码验证；docs Assistant 上下文不再在每个文档页首访后自动扫描整篇正文，而是用户打开 Assistant 时才按需构建；Assistant markdown viewer 依赖 `dompurify` 已加入 dev pre-bundle，避免打开 Assistant 时触发 Vite runtime dependency discovery / reload。后续 docs 文档内容拆分、AI review / aireview 未审批组件逐页 section split、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning、生产 chunk / payload / CSS 复核继续按本文任务树分批领取。
+> 当前状态：Nexus 第 31 批 docs-only 收尾已完成；第 30 批 `a067e140f` 已提交，docs Assistant 上下文不再在每个文档页首访后自动扫描整篇正文，而是用户打开 Assistant 时才按需构建。当前批按用户要求把后续 docs 文档内容、AI review / aireview 未审批组件、全站切换矩阵二轮、dev SSR TTFB 深化、首页剩余 warning、生产 chunk / payload / CSS 复核全部固定到本文任务树，后续只从本文领取小批次。
 
 ## Goal 原句
 
@@ -33,13 +33,14 @@
 - 本轮 tabs/card 文档链路：约 98%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry 从首屏重型路径拆出。
 - 整体 goal 估算：约 87%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path，以及 docs Assistant 上下文按需构建；后续仍需系统性覆盖 AI review / aireview 未审批组件逐页 section split、dev SSR TTFB 深化、生产构建 chunk 复核与文档模板静态化。
 - 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `vue-sonner` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建。
-- 当前第 30 批聚焦 docs Assistant context 按需构建与 `dompurify` dev pre-bundle；不继续混入 docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
+- 当前第 31 批只做 TODO 收尾与领取边界固定；不继续混入 docs demo、DocApiTable、section-level split、首页 warning、dev SSR TTFB、生产 chunk 复核或更多 aireview 未审批组件逐页优化。后续全部进入 TODO 队列：docs 文档内容继续拆分、未审批组件逐页审计和优化、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
 | 当前第 30 批 docs assistant context on intent | 100% | docs Assistant context 只在用户打开 Assistant 时通过 shared request state 触发构建；普通 tabs/fusion 首访 `assistantRequests 0`、`dompurifyRequests 0`，点击 Assistant 可打开且不再触发 `dompurify` runtime discovery。 |
+| 当前第 31 批 docs-only TODO 收尾 | 100% | 按用户最新要求，当前 goal 原句、追加要求、后续 docs 文档内容、AI review / aireview、route matrix、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核全部固定到本文；本批不扩业务代码、不新增 Playwright artifact。 |
 | 当前第 29 批 docs-only 收尾 | 100% | 按用户最新要求，确认后续 docs 文档内容、AI review / aireview、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部落到本文任务树；本批只修正交接状态与领取边界，不扩业务代码。 |
 | 当前第 28 批 component docs metadata fast path | 100% | dev 环境下 `/docs/dev/components/**` 的 `body=0` metadata 请求优先读取本地 Markdown frontmatter；API test 证明不再调用 Nuxt Content query / MDC parse，非组件 docs metadata 仍走 Nuxt Content。 |
 | 当前第 27 批 docs-only 最终交接 | 100% | 按用户最新要求，当前 goal 原句、追加收尾要求、触发页、已完成批次、性能证据路径、后续 docs / aireview / route matrix / TTFB / chunk 复核子任务和领取规则全部沉淀到本文；本批不继续扩代码。 |
@@ -88,7 +89,8 @@
 | 27 | docs-only | `docs(nexus): finalize performance handoff` | 已完成 |
 | 28 | `68f8266be` | `perf(nexus): fast path component docs metadata` | 已完成 |
 | 29 | docs-only | `docs(nexus): consolidate performance followups` | 已完成 |
-| 30 | 本批提交 | `perf(nexus): build docs assistant context on intent` | 已完成代码验证，待提交 |
+| 30 | `a067e140f` | `perf(nexus): build docs assistant context on intent` | 已完成 |
+| 31 | docs-only | `docs(nexus): record nexus performance followups` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -114,6 +116,8 @@
 - 第 27 批为 docs-only 最终交接：按用户要求把后续 docs 文档内容、AI review / aireview 未审批组件、全站 route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部固定到本文任务树；当前批只做文档收尾，不继续混入代码、Playwright 新采样或 unrelated 文件。
 - 第 28 批已提交：`68f8266be perf(nexus): fast path component docs metadata`；component docs dev `body=0` metadata 请求优先走本地 frontmatter fast path，不再为了几百字节 metadata 触发 Nuxt Content query；非组件 docs metadata 仍保持 Nuxt Content 路径。
 - 第 29 批为 docs-only 收尾：按用户最新要求，把后续 docs 文档内容、AI review / aireview 未审批组件、全站 route matrix、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核全部固定到本文任务树；当前批不继续扩代码、不新增 Playwright artifact。
+- 第 30 批已提交：`a067e140f perf(nexus): build docs assistant context on intent`；docs Assistant context 只在用户打开 Assistant 时按需构建，`dompurify` 加入 dev pre-bundle，点击 Assistant 不再触发 Vite runtime dependency discovery。
+- 第 31 批为 docs-only 收尾：按用户最新要求，明确当前批不继续扩大代码改动；后续 docs 文档内容加载、AI review / aireview 未审批组件、全站切换矩阵、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核全部从下方任务树领取。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵二轮都按下方 TODO 分批处理。
@@ -245,6 +249,27 @@ pending 排序快照：
 1. P0：正式 pending 工作表文件或 TODO 表格，使用 `:::TuffDemoWrapper` 计数，列 Top 30 的 sync/verified/体量/demo/API/首屏请求/动作。
 2. P0：针对 `fusion` 或 `card` 做 section-level split / API table visible-only 试验。
 3. P0：dev SSR TTFB 二轮，区分 Nuxt transform、Content query、frontmatter fast path、i18n 和 store init。
+
+## 第 31 批收口记录
+
+目标：按用户最新要求快速完成当前任务收尾。当前批只更新 `docs/plan-prd/TODO-nexus.md`，把当前 goal 原句、追加要求、触发页、已完成批次、子任务百分比，以及后续 docs 文档内容加载、AI review / aireview 未审批组件、全站页面切换矩阵二轮、dev SSR TTFB、首页剩余 warning、生产 chunk / payload / CSS 复核全部固定在本文。
+
+改动范围：
+
+- `docs/plan-prd/TODO-nexus.md`
+
+收口口径：
+
+- 第 30 批已修正为 `a067e140f perf(nexus): build docs assistant context on intent`，不再显示待提交或代码验证中。
+- 当前第 31 批为 docs-only 收尾，不新增业务代码、不新增测试文件、不新增 Playwright artifact、不触碰 CoreApp / AI dirty files。
+- 后续 docs 文档内容、AI review / aireview 相关工作统一从 `后续任务树` 领取，不再从聊天上下文临时恢复范围。
+- 下一批只允许选择 1 个 P0 子任务和 1-2 个页面先跑 baseline，再决定是否落代码；优先 pending 工作表正式化、`fusion` / `card` section-level split、dev SSR TTFB 二轮或 route matrix 二轮。
+- 每批结束继续回填本文：提交 hash、改动范围、测试命令、核心性能数字、Playwright screenshot / HAR / Markdown / JSON 路径和下一批候选。
+- `output/playwright/` 继续作为 ignored evidence 目录，只引用路径，不纳入 git。
+
+验证证据：
+
+- Markdown whitespace：`git diff --check -- "docs/plan-prd/TODO-nexus.md"`。
 
 ## 第 27 批收口记录
 
@@ -1107,6 +1132,7 @@ pending 排序快照：
 - [x] 当前第 25 批只做 TODO 文档收尾归档，不继续混入 docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。
 - [x] 当前第 27 批只做 TODO 文档最终交接，不继续混入代码、Playwright 新采样、docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。
 - [x] 当前第 29 批只做 TODO 文档收尾，不继续混入业务代码、Playwright 新采样、docs demo、DocApiTable、section-level split、首页 warning 或更多 aireview 未审批组件逐页优化。
+- [x] 当前第 31 批只做 TODO 文档收尾，不继续混入业务代码、Playwright 新采样、docs demo、DocApiTable、section-level split、首页 warning、dev SSR 深化或生产 chunk 复核。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [ ] 下一批开始前先选定一个 P0 子任务和 1-2 个页面，优先从 `fusion` / `card` / `avatar-variants` docs pending 优化、首页 WebGL/lifecycle warning、dev SSR TTFB 中选，跑 Playwright / HAR baseline 后再落代码。
@@ -1202,6 +1228,7 @@ pending 排序快照：
 - [x] 第 28 批结束已更新本文：改动范围、测试命令、production build sanity、Playwright first visit / hover screenshot/HAR/Markdown/JSON、metadata fast path 边界和下一批候选。
 - [x] 第 29 批结束已更新本文：第 28 批提交状态、当前 goal 原句、追加收尾要求、后续 docs / aireview / route matrix / TTFB / chunk 任务树和当前批 docs-only 边界。
 - [x] 第 30 批结束已更新本文：改动范围、测试命令、production build sanity、Playwright baseline/after screenshot/HAR/Markdown/JSON、Assistant context 按需构建和 `dompurify` pre-bundle 边界。
+- [x] 第 31 批结束已更新本文：第 30 批提交状态、当前 goal 原句、追加收尾要求、后续 docs / aireview / route matrix / TTFB / chunk 任务树和当前批 docs-only 边界。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -1288,4 +1315,4 @@ pending 排序快照：
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 29 批 docs-only 收尾已经完成，后续不要继续往本批塞 docs demo、DocApiTable、aireview 逐页 section split、dev SSR 深化、首页 WebGL/lifecycle warning 或生产 chunk 复核；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 31 批 docs-only 收尾已经完成，后续不要继续往本批塞 docs demo、DocApiTable、aireview 逐页 section split、dev SSR 深化、首页 WebGL/lifecycle warning 或生产 chunk 复核；新改动按上方 TODO 独立切批、独立验证、独立提交。
