@@ -1,0 +1,136 @@
+{
+  "checkedAt": "2026-06-21T04:11:18.677Z",
+  "rows": [
+    {
+      "id": "7410DB1F4D027A9BDC34DEA388E3FEA9",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+        "title": "Tuff",
+        "bodyClass": "MacIntel core-box division-box",
+        "text": "万物尽在塔内\n图像\n最近处理\n共 0 条\n暂无记录",
+        "hasTouchChannel": true,
+        "inputExists": true,
+        "inputValue": "",
+        "inputRect": {
+          "x": 52,
+          "y": 4,
+          "w": 524,
+          "h": 48
+        },
+        "stateText": "",
+        "stateRect": null,
+        "coreClasses": [
+          "CoreBox-Wrapper CoreBoxInputBorder-bottom CoreBoxInputBg-transparent CoreBoxResultHover-background",
+          "CoreBox",
+          "CoreBox-Icon",
+          "CoreBox-Tag",
+          "CoreBox-Configure",
+          "CoreBoxRes flex",
+          "CoreBox-Mask"
+        ],
+        "debug": {
+          "builtAt": "2026-06-21T04:10:00.075Z",
+          "queryTextLength": 0,
+          "clipboardLastType": "image",
+          "pendingTextClipboardType": null,
+          "filePathCount": 0,
+          "useFileMode": false,
+          "inputTypes": [
+            "image"
+          ],
+          "inputCount": 1,
+          "hasImageInput": true,
+          "hasTextInput": false,
+          "hasFileInput": false
+        }
+      }
+    },
+    {
+      "id": "DC1AD004B0D1170A102BB6B43CC4F865",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+        "title": "Tuff",
+        "bodyClass": "MacIntel",
+        "text": "Tuff\n应用设置\n\n主要\n\n设置\n智能\n市场\n样式\n下载中心\n版本\nv2.4.12-beta.8\nTUFF\n\n为创造者们重新构想的命令栏。\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\n账户\n\n管理您的账户信息和登录状态。\n\n无账户\n\n当前无法访问账户。\n\n登录\nAI 积分\n\n查看 Nexus AI credits 的个人剩余、已用和额度。\n\nAI 积分\n\n登录后可查看 credits 剩余和消耗。\n\n需要登录\n\n请先登录 Tuff 账户以读取 Nexus credits summary。\n\n语言设置\n\n选择您喜欢的应用程序语言。\n\n跟随系统语言\n\n自动匹配系统语言设置。\n\n选择语言\n\n手动选择您喜欢的显示语言。\n\n简体中文\nEnglish\n通用配置\n\n配置权限和基础设置\n\n权限\n\n统一管理文件访问、系统辅助、麦克风和平台级权限。\n\n已授权 2/4\n管理权限\n开机自动启动\n\n系统启动时自动运行应用\n\n显示托盘图标\n\n在系统托盘显示应用图标\n\n不在 Dock 栏显示\n仅限 macOS\n\n关闭主窗口后不在显示 Dock 图标（macOS only）\n\n静默启动\n\n应用启动时不显示窗口，仅在后台运行\n\n安装后自动装载 OmniPanel Feature\n\n启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。\n\n实用工具\n\n实用工具为您提供统一的快速桌面启动器。\n\n自定义占位文本\n\n自定义 CoreBox 输入框的占位提示文本，留空使用默认。\n\n使用\n\n进入时引导您使用应用程序。\n\n快捷方式\n\n集中管理系统级快捷键设置。\n\n共 6 项\n管理\n自动粘贴\n\n复制内容后呼出 CoreBox 时，自动带入新鲜剪贴板内容。\n\n自动清除\n\nCoreBox 隐藏超过指定时间后，下次打开时自动退出上次功能并清空输入。短时间重新打开会保留状态。\n\n自动隐藏\n\n触发模糊时隐藏搜索栏。\n\n智能推荐\n\n启用智能推荐功能，根据使用习惯提供个性化建议。\n\n显示推荐理由\n\n在推荐项目旁显示推荐原因。\n\nAssistant 悬浮球\n\n开启桌面悬浮入口，点击后可把文本指令发送到 CoreBox。\n\n启用 Assistant\n\n启用后才会响应悬浮球、语音面板等 Assistant 入口。默认保持关闭。\n\n显示悬浮",
+        "hasTouchChannel": true,
+        "inputExists": true,
+        "inputValue": "",
+        "inputRect": {
+          "x": 870,
+          "y": 1272.1796875,
+          "w": 156,
+          "h": 30
+        },
+        "stateText": "",
+        "stateRect": null,
+        "coreClasses": [],
+        "debug": null
+      }
+    },
+    {
+      "id": "F921AB7BF30BB3D75A350901CFD6EF47",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+        "title": "Tuff",
+        "bodyClass": "meta-overlay MacIntel",
+        "text": "",
+        "hasTouchChannel": true,
+        "inputExists": false,
+        "inputValue": null,
+        "inputRect": null,
+        "stateText": "",
+        "stateRect": null,
+        "coreClasses": [],
+        "debug": null
+      }
+    },
+    {
+      "id": "A060B9022B24306A97AFD89850FE70C4",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+        "title": "Tuff",
+        "bodyClass": "MacIntel core-box",
+        "text": "万物尽在塔内\n图像",
+        "hasTouchChannel": true,
+        "inputExists": true,
+        "inputValue": "",
+        "inputRect": {
+          "x": 60,
+          "y": 4,
+          "w": 508,
+          "h": 48
+        },
+        "stateText": "",
+        "stateRect": null,
+        "coreClasses": [
+          "CoreBox-Wrapper CoreBoxInputBorder-bottom CoreBoxInputBg-transparent CoreBoxResultHover-background",
+          "CoreBox",
+          "CoreBox-Icon",
+          "CoreBox-Tag",
+          "CoreBox-Configure",
+          "CoreBoxRes flex",
+          "CoreBox-Mask"
+        ],
+        "debug": {
+          "builtAt": "2026-06-21T04:10:00.075Z",
+          "queryTextLength": 0,
+          "clipboardLastType": "image",
+          "pendingTextClipboardType": null,
+          "filePathCount": 0,
+          "useFileMode": false,
+          "inputTypes": [
+            "image"
+          ],
+          "inputCount": 1,
+          "hasImageInput": true,
+          "hasTextInput": false,
+          "hasFileInput": false
+        }
+      }
+    }
+  ]
+}

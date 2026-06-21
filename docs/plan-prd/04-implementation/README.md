@@ -1,50 +1,28 @@
-# 04-implementation 状态索引
+# Implementation Docs
 
-> 更新时间: 2026-05-28
-> 状态: 目录清点完成 / 持续维护
-> 用途: 只做实施文档的入口与有效状态判定；当前发布 gate 仍以 `../TODO.md`、`../01-project/CHANGES.md` 与对应专题 PRD 为准。
+> 更新时间：2026-06-21
+> 定位：当前实施文档入口。6 月以前实施记录已从文档树移除，需要时从 Git 历史追溯。
 
-## 判定原则
+## 当前 SoT
 
-- `当前参考`：仍可作为执行或验收入口，但状态变化必须同步 `TODO / CHANGES`。
-- `历史参考`：保留追溯价值，不直接作为当前 gate 或实现方案来源。
-- `待重写`：旧目标、旧架构或旧验收口径已漂移；继续推进前必须先按当前代码与质量门禁重写。
-- `Runbook`：仅在具备目标环境、凭证与变更窗口时使用；不得把历史命令当作当前生产操作许可。
+- `Roadmap-vNext-2026-06-18.md` - R0-R9 当前路线图。
+- `Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
+- `Project-Roadmap-Audit-2026-06-18.md` - Roadmap / release / pricing / docs hygiene 审计记录。
+- `Pricing-SoT-2026-06-18.md` - Pricing 当前单一事实源。
 
-## 文件清点
+## Evidence Matrix
 
-| 文件 | 有效状态 | 当前边界 / 下一动作 |
-| --- | --- | --- |
-| `Roadmap-vNext-2026-06-18.md` | 当前 SoT | R0-R9 阶段化路线：口径清理、Release Integrity、AI Stable、Indexing Runtime、QuickOps、Plugin Trust Boundary、UI/TuffEx、Nexus Governance、i18n/Catalog 与 AI 2.5.x 后续。 |
-| `Pricing-SoT-2026-06-18.md` | 当前 SoT | Pioneer 免费、套餐分层占位、credits/seat 待决策与 pricing UI 禁止伪成功规则。 |
-| `Evidence-Matrix-AI-Stable-2026-06-18.md` | 当前验收矩阵 | AI 2.5.0 Stable 文本/OCR 成功与固定失败路径证据矩阵。 |
-| `Evidence-Matrix-Nexus-Governance-2026-06-18.md` | 当前验收矩阵 | Nexus production / preview governance、live send、object storage、D1 与 quota fail-closed 证据矩阵。 |
-| `Evidence-Matrix-Platform-2026-06-18.md` | 非阻塞回归矩阵 | 平台能力 smoke / degraded / fail-closed 要求；不恢复平台验证 blocker。 |
-| `Current-Execution-Plan-2026-06-17.md` | 当前参考 / 短期计划 | 当前项目进程与短期执行计划；已同步为 Roadmap vNext 口径。 |
-| `ActiveGoalClosure-2026-05-23.md` | 当前参考 | 本轮 2.4.11 稳定化、插件 capability、open PR 与后续 Intelligence 小切片的执行顺序；每个点位仍需按分支/worktree、related-only commit、验证后合并。 |
-| `ActiveGoalBranchCleanup-2026-05-23.md` | 已完成 / 分支收口记录 | 记录 Nexus Data Governance 当前目标进度、已合并/已覆盖分支、污染分支丢弃依据、本地/远程删除清单与 post-cleanup 验证；后续只作为追溯入口。 |
-| `AssistantExperiment-VoiceFloatingBall-260223.md` | 历史参考 / 待重写 | 实验能力默认关闭；继续推进前需重写为当前 Assistant / OmniPanel 能力边界。 |
-| `CoreAppRefactor260111.md` | 历史参考 / 待重写 | 早期 CoreApp/Tuffex/utils 改造草案；当前实现以代码现状与 TODO 分波次债务为准。 |
-| `FileWorkerIdlePlan260111.md` | 历史参考 | Worker + Idle 设计已部分被启动异步化、FileProvider 后台 ready 与搜索性能治理吸收；剩余动作进入 Wave C / 搜索性能验收。 |
-| `LegacyChannelCleanup-2408.md` | 历史参考 / 已漂移 | 2.4.8 P0 计划不再代表当前事实；Transport Wave A 与 typed boundary 清册是现行入口。 |
-| `NexusDeviceAuthRiskControl-260316.md` | 当前参考 / 非当前主线 | Phase 0/1 已落地并保留证据入口；后续只在设备授权风控变化时更新。 |
-| `NexusLocaleBackfillRunbook-260226.md` | Runbook / 历史操作入口 | 生产回填前必须重新确认 DB、环境、备份、凭证与回滚窗口。 |
-| `PerformanceLag260111.md` | 历史参考 | 卡顿归因与 Worker/Idle 方向可追溯；真实 release 验收仍看 search trace 与 clipboard stress evidence。 |
-| `performance/CoreAppPerformanceBaseline-2026-05-28.md` | 当前参考 | CoreApp 启动、CoreBox 搜索、常驻 CPU/内存、构建与包体的第一轮性能基线方案；只定义指标、采集命令、低风险优化排序与高风险重构门槛，不替代真实设备 benchmark 或 release gate。 |
-| `Quality260111.md` | 历史参考 | 质量审查快照；后续治理以当前 lint/typecheck/test、超长文件治理与 TODO 债务池为准。 |
-| `QualityAnalysis260111.md` | 历史参考 / 部分落地 | 环境工具抽离已部分落地；新增治理需先复核当前 `@talex-touch/utils/env` 使用面。 |
-| `SqliteRetryRetrier260222.md` | 实施草案 | 继续推进前需先对照当前 `sqlite-retry` 与 `createRetrier` 实现，避免重复迁移。 |
-| `StorageUnified260111.md` | 历史参考 | Storage 双轨分析保留；当前 SoT 规则以 SQLite 本地权威源与密文 sync payload 约束为准。 |
-| `TaskScheduler260111.md` | 历史参考 | 调度模型保留为设计来源；当前周期任务优先复用 `PollingService` 与已落地的 startup/background gate。 |
-| `TransportRetainedEventWireNamePlan-260514.md` | 当前参考 | Transport retained non-conforming event names 的 wire-name 迁移方案；后续按 alias registry、双监听、发送端切换与 hard-cut evidence 分批实施。 |
-| `TuffTransportMigration260111.md` | 历史参考 / 待重写 | 已补 TL;DR；当前边界以 typed event boundary、retained raw definition 清册与 Wave A 为准。 |
-| `TuffTransportPortPlan260111.md` | 方案参考 | 可作为 MessagePort/Port 抽象后续输入；不得替代当前 Transport Wave A 验收。 |
-| `WidgetSandboxIsolation260221.md` | 历史参考 / 待重写 | 部分能力已落地；当前 widget 验收以 DivisionBox detached widget 运行证据为准。 |
-| `config-storage-unification.md` | 草案 / 库存参考 | 可用于存储盘点；Source of Truth、同步与敏感信息规则以当前 Storage / Sync 约束为准。 |
-| `performance/PERFORMANCE_REFERENCE.md` | 参考资料 | 只保留性能优化历史与指标说明；不得代替真实设备性能证据。 |
+- `Evidence-Matrix-AI-Stable-2026-06-18.md` - AI Stable 固定证据矩阵。
+- `Evidence-Matrix-Nexus-Governance-2026-06-18.md` - Nexus production governance 证据矩阵。
+- `Evidence-Matrix-Platform-2026-06-18.md` - 平台能力非阻塞 smoke 矩阵。
+
+## Performance
+
+- `performance/WindowsStartupOptimization-2026-06-18.md` - Windows 启动优化 PRD。
+- `performance/PERFORMANCE_REFERENCE.md` - 性能参考资料。
 
 ## 维护规则
 
-- 新增实施文档时必须先在本索引登记状态、适用范围与下一动作。
-- 若正文状态变化影响当前行为、接口、质量门禁或发布判断，必须同步 `../TODO.md` 与 `../01-project/CHANGES.md`。
-- 历史文档重新启用前，先把状态从 `历史参考` 改为 `当前参考`，并补齐可复现验证命令或证据入口。
+- 新实施记录优先落到当前 Roadmap / TODO / Evidence Matrix，而不是新增流水账文档。
+- 6 月以前的 runbook、旧计划、pre-compression / full 快照不再进入文档树。
+- 行为或验收边界变化必须同步 `../README.md`、`../TODO.md`、`../01-project/CHANGES.md` 或 `../../INDEX.md`。

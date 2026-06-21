@@ -3,7 +3,7 @@
 > 更新时间：2026-06-18
 > 状态：规划 / 待真实 Windows benchmark 验证
 > 适用范围：`apps/core-app` 在 Windows 上的冷启动、热启动、首窗显示、CoreBox 可交互与后台模块 ready。
-> 关联文档：`./CoreAppPerformanceBaseline-2026-05-28.md`、`../../report/coreapp-startup-async-blocking-analysis-2026-05-13.md`
+> 关联文档：`../Roadmap-vNext-2026-06-18.md`、`../Current-Execution-Plan-2026-06-17.md`
 
 ## 1. 问题定义
 

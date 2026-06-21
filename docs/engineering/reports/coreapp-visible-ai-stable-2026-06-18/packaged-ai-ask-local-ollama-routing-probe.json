@@ -1,0 +1,88 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-20T14:32:50.332Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9362/json/list",
+  "targets": [
+    {
+      "id": "757C88DCA3EE98B9551C41B70A803836",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "15C027F5506AC20DD603029680CA1510",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "9A6E268EE346FB43685390E83EC8B0CB",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "426C1369820739E2E41ACC2CAA10E61A",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay"
+    }
+  ],
+  "failures": [],
+  "screenshotPath": "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-local-ollama-routing-9362-strict.png",
+  "selectedTargetId": "757C88DCA3EE98B9551C41B70A803836",
+  "dom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "readyState": "complete",
+    "bodyText": "touch-intelligence\n智能问答\nai reply with exactly local-ok for AI-STABLE-08 Local Ollama routing\nYOU\n\nreply with exactly local-ok for AI-STABLE-08 Local Ollama routing\n\nAI\n\nlocal-ok\n\nRouting provider metadata\nProvider\nlocal-default\nModel\nqwen2.5:3b\nLatency\n2354 ms\nTrace\ntrace-1781965870100-d9177fcfe3d0d7c3\nInput kind\ntext\nCapability\ntext.chat\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "bodyClass": "MacIntel core-box",
+    "hasCoreBoxClass": true,
+    "inputIdExists": true,
+    "inputValue": "ai reply with exactly local-ok for AI-STABLE-08 Local Ollama routing",
+    "hasAiChatbot": true,
+    "hasErrorNotice": false,
+    "hasPermissionText": false,
+    "hasModelUnsupportedText": false,
+    "hasProviderUnavailableText": false,
+    "hasLoggedOutText": false,
+    "hasQuotaText": false,
+    "buttons": [
+      "↓"
+    ]
+  },
+  "evidenceChecks": [
+    {
+      "tag": "AI-STABLE-08",
+      "requirement": "Local/Ollama preferred routing does not call disabled Nexus provider",
+      "matched": true,
+      "signalMatched": true,
+      "blockedByFailureSignal": false,
+      "hasVisualArtifact": true,
+      "matchedSignals": [
+        "local-default",
+        "Ollama",
+        "routing",
+        "provider metadata",
+        "Provider",
+        "Model",
+        "qwen",
+        "Latency",
+        "ms",
+        "Trace",
+        "Input kind",
+        "Capability",
+        "text.chat"
+      ],
+      "missingSignals": [],
+      "matchedBlockedSignals": [],
+      "artifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-local-ollama-routing-9362-strict-probe.json",
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-local-ollama-routing-9362-strict.png"
+      ],
+      "visualArtifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-local-ollama-routing-9362-strict.png"
+      ]
+    }
+  ]
+}

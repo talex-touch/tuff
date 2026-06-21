@@ -4,12 +4,12 @@
 > 更新时间: 2026-05-14
 > 适用范围: DivisionBox 会话、插件 UI 挂载、Flow 联动与 detached widget 验收
 > 当前执行入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
-> 相关现行文档: `docs/plan-prd/docs/DIVISION_BOX_GUIDE.md`、`docs/plan-prd/docs/DIVISION_BOX_API.md`
+> 相关现行入口: `docs/plan-prd/README.md`
 
 ## TL;DR
 
 - 本文保留 DivisionBox 早期“浮动工作区”完整设想，当前执行主线已经收敛到 detached widget 真实设备证据、权限 actor 归因和 typed SDK/transport 稳定性。
-- `DIVISION_BOX_GUIDE.md` 与 `DIVISION_BOX_API.md` 是当前精简入口；本文只作为历史目标、风险和验收思路追溯。
+- 本文只作为目标、风险和验收思路参考；当前执行优先看 Roadmap / TODO。
 - 后续若继续推进 DivisionBox，应优先补 跨平台运行证据、session `pluginId`/`detachedPayload` 水合、错误搜索回退防护和可复现回归命令。
 
 ## 当前边界

@@ -1,8 +1,7 @@
 # 构建完整性验证系统 PRD
 
 > 状态：当前参考 / 压缩版
-> 更新时间：2026-05-14
-> 完整快照：`./archive/build-integrity-verification-prd.full-2026-05-14.md`
+> 更新时间：2026-06-21
 
 ## TL;DR
 
@@ -19,5 +18,5 @@
 
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
 - `.github/workflows/README.md`
-- `docs/plan-prd/docs/github-automation.zh-CN.md`
+- `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`
 - `docs/plan-prd/TODO.md`

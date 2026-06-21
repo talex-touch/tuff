@@ -55,9 +55,12 @@ out/
 .vuepress/dist/
 .vitepress/cache/
 .vitepress/dist/
+/index-*.js
+/index--*.js
 apps/core-app/tuff
 apps/core-app/.dev-electron/
 apps/core-app/.electron-builder-cache/
+apps/core-app/index-*.js
 apps/core-app/src/renderer/src/distinformation.json
 
 # ========================
@@ -106,6 +109,7 @@ tmp/
 # ========================
 .playwright-mcp/
 .playwright/
+test-results/
 /apps/core-app/.playwright-mcp/
 /apps/.workflow/.debug/
 /apps/nexus/.workflow/
@@ -134,6 +138,19 @@ coreapp-browser-smoke-*.png
 docs/engineering/reports/**/user-data/
 docs/engineering/reports/**/_local/
 docs/engineering/reports/**/raw/
+docs/engineering/reports/**/logs/
+docs/engineering/reports/**/GPUCache/
+docs/engineering/reports/**/DawnGraphiteCache/
+docs/engineering/reports/**/DawnWebGPUCache/
+docs/engineering/reports/**/Cache/
+docs/engineering/reports/**/Code Cache/
+docs/engineering/reports/**/Local Storage/
+docs/engineering/reports/**/Session Storage/
+docs/engineering/reports/**/Cookies
+docs/engineering/reports/**/Cookies-journal
+docs/engineering/reports/**/*.db
+docs/engineering/reports/**/*.db-*
+docs/engineering/reports/**/*.key
 docs/engineering/reports/**/*-pid.txt
 docs/engineering/reports/**/*-probe-output.json
 docs/engineering/reports/**/*-capture-output.json

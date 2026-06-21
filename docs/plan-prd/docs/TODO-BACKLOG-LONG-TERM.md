@@ -1,6 +1,6 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间：2026-05-16
+> 更新时间：2026-06-21
 > 说明：本文承接 `docs/plan-prd/TODO.md` 的非 2 周执行项。主 TODO 只保留当前 release window；本页只保留长尾债务与后续专题。
 
 ## A. 架构与质量债务

@@ -1,6 +1,6 @@
 # PRD: Tuff 2.5.3 本地知识检索与上下文构建
 
-> 更新时间：2026-05-16
+> 更新时间：2026-06-21
 > 状态：Planned / Direction Locked
 > 目标版本：2.5.3
 
@@ -81,5 +81,5 @@ MVP `search` 必须支持 query、limit、sourceType、timeRange、permissionSco
 - 本地模型运行时：`./ai-2.5.5-local-model-runtime-prd.md`
 - ASR Provider Runtime：`./ai-2.5.8-asr-provider-runtime-prd.md`
 - 当前执行清单：`../TODO.md`
-- 产品路线图：`../01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- 产品路线图：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 - 质量基线：`../docs/PRD-QUALITY-BASELINE.md`

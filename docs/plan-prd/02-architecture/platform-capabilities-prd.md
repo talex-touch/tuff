@@ -1,8 +1,7 @@
 # PRD: 通用平台型能力建设
 
 > 状态：当前参考 / 压缩版
-> 更新时间：2026-05-14
-> 完整快照：`./archive/platform-capabilities-prd.full-2026-05-14.md`
+> 更新时间：2026-06-21
 
 ## TL;DR
 
@@ -36,4 +35,4 @@
 
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
-- `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md`
+- `docs/plan-prd/04-implementation/Evidence-Matrix-Platform-2026-06-18.md`
