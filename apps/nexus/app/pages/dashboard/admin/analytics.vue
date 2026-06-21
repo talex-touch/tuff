@@ -247,7 +247,76 @@ const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'int
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const versionPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
+const analyticsSections = [
+  { id: 'overview', label: 'Overview', icon: 'i-carbon-dashboard' },
+  { id: 'performance', label: 'Performance', icon: 'i-carbon-meter' },
+  { id: 'search', label: 'Search', icon: 'i-carbon-search' },
+  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
+  { id: 'intelligence', label: 'Intelligence', icon: 'i-carbon-ai-status' },
+  { id: 'docs', label: 'Docs', icon: 'i-carbon-document' },
+  { id: 'geo', label: 'Geo', icon: 'i-carbon-earth-americas' },
+  { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
+  { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
+] as const
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
+const realtimeStatCards = computed(() => {
+  const realtime = analytics.value?.realtime
+  return [
+    {
+      key: 'active-users',
+      label: 'Active Users (24h)',
+      icon: 'i-carbon-user-multiple',
+      accent: 'text-blue-600 dark:text-blue-400',
+      value: formatNumber(realtime?.activeUsers ?? 0),
+    },
+    {
+      key: 'visits',
+      label: 'Visits (24h)',
+      icon: 'i-carbon-view',
+      accent: 'text-emerald-600 dark:text-emerald-400',
+      value: formatNumber(realtime?.visitsLast24h ?? 0),
+    },
+    {
+      key: 'searches',
+      label: 'Searches (24h)',
+      icon: 'i-carbon-search',
+      accent: 'text-violet-600 dark:text-violet-300',
+      value: formatNumber(realtime?.searchesLast24h ?? 0),
+    },
+    {
+      key: 'avg-latency',
+      label: 'Avg Latency',
+      icon: 'i-carbon-time',
+      accent: 'text-amber-600 dark:text-amber-400',
+      value: `${realtime?.avgLatency ?? 0}ms`,
+    },
+  ]
+})
+const overviewStatCards = computed(() => {
+  const summary = analytics.value?.summary
+  return [
+    {
+      key: 'uploaded-events',
+      label: 'Uploaded Events',
+      value: formatNumber(summary?.totalEvents ?? 0),
+    },
+    {
+      key: 'total-users',
+      label: 'Total Users',
+      value: formatNumber(summary?.totalUsers ?? 0),
+    },
+    {
+      key: 'total-searches',
+      label: 'Total Searches',
+      value: formatNumber(summary?.totalSearches ?? 0),
+    },
+    {
+      key: 'avg-search-duration',
+      label: 'Avg Search Duration',
+      value: `${summary?.avgSearchDuration ?? 0}ms`,
+    },
+  ]
+})
 const regionTotal = computed(() =>
   Object.values(analytics.value?.summary.regionDistribution ?? {}).reduce((sum, count) => sum + count, 0),
 )
@@ -677,9 +746,8 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 </script>
 
 <template>
-  <div class="space-y-8">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
+  <div class="mx-auto max-w-5xl space-y-6">
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h1 class="apple-heading-md">
           {{ t('dashboard.sections.analytics.title', 'Analytics Dashboard') }}
@@ -695,131 +763,66 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <TuffSelectItem :value="90" :label="t('dashboard.sections.analytics.last90Days', 'Last 90 days')" />
         </TuffSelect>
         <template #fallback>
-          <div class="w-44 rounded-xl bg-black/[0.04] px-3 py-2 text-xs text-black/60 dark:bg-white/[0.08] dark:text-white/60">
+          <div class="w-full rounded-xl bg-black/[0.04] px-3 py-2 text-xs text-black/60 dark:bg-white/[0.08] dark:text-white/60 sm:w-44">
             {{ t('dashboard.sections.analytics.last30Days', 'Last 30 days') }}
           </div>
         </template>
       </ClientOnly>
-    </div>
+    </header>
 
-    <!-- Loading -->
-    <div v-if="loading" class="flex items-center justify-center py-12">
+    <div v-if="loading" class="apple-card-lg flex items-center justify-center py-12">
       <TxSpinner :size="22" />
     </div>
 
-    <!-- Error -->
-    <div v-else-if="error" class="rounded-xl bg-red-500/10 p-4 text-center text-red-500">
+    <div v-else-if="error" class="apple-card-lg bg-red-500/10 p-4 text-center text-red-500">
       {{ error }}
     </div>
 
-    <!-- Analytics Content -->
-    <template v-else-if="analytics">
-      <!-- Real-time Stats Cards -->
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div class="rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 p-4">
-          <div class="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-            <span class="i-carbon-user-multiple text-lg" />
-            <span class="text-xs font-medium">Active Users (24h)</span>
+    <section v-else-if="analytics" class="apple-card-lg p-6">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          v-for="card in realtimeStatCards"
+          :key="card.key"
+          class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]"
+        >
+          <div class="flex items-center gap-2" :class="card.accent">
+            <span :class="[card.icon, 'text-lg']" aria-hidden="true" />
+            <span class="text-xs font-medium">{{ card.label }}</span>
           </div>
-          <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-            {{ formatNumber(analytics.realtime.activeUsers) }}
-          </p>
-        </div>
-
-        <div class="rounded-2xl bg-gradient-to-br from-green-500/10 to-green-600/5 p-4">
-          <div class="flex items-center gap-2 text-green-600 dark:text-green-400">
-            <span class="i-carbon-view text-lg" />
-            <span class="text-xs font-medium">Visits (24h)</span>
-          </div>
-          <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-            {{ formatNumber(analytics.realtime.visitsLast24h) }}
-          </p>
-        </div>
-
-        <div class="rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 p-4">
-          <div class="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-            <span class="i-carbon-search text-lg" />
-            <span class="text-xs font-medium">Searches (24h)</span>
-          </div>
-          <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-            {{ formatNumber(analytics.realtime.searchesLast24h) }}
-          </p>
-        </div>
-
-        <div class="rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 p-4">
-          <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-            <span class="i-carbon-time text-lg" />
-            <span class="text-xs font-medium">Avg Latency</span>
-          </div>
-          <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-            {{ analytics.realtime.avgLatency }}ms
+          <p class="mt-3 text-2xl font-semibold text-black dark:text-white">
+            {{ card.value }}
           </p>
         </div>
       </div>
 
-      <!-- Sections -->
-      <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-black/[0.02] p-2 text-sm dark:bg-white/[0.04]">
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'overview' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'overview'">
-          Overview
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'performance' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'performance'">
-          Performance
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'search' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'search'">
-          Search
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'usage' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'usage'">
-          Usage
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'intelligence' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'intelligence'">
-          Intelligence
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'docs' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'docs'">
-          Docs
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'geo' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'geo'">
-          Geo
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'exchange' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'exchange'">
-          Exchange
-        </TxButton>
-        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'messages' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'messages'">
-          Alerts
+      <div class="mt-5 flex flex-wrap items-center gap-2 rounded-2xl bg-black/[0.02] p-2 text-sm dark:bg-white/[0.03]">
+        <TxButton
+          v-for="section in analyticsSections"
+          :key="section.id"
+          variant="bare"
+          native-type="button"
+          class="text-xs transition"
+          :class="activeSection === section.id ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'"
+          @click="activeSection = section.id"
+        >
+          <span :class="[section.icon, 'text-sm']" aria-hidden="true" />
+          {{ section.label }}
         </TxButton>
       </div>
 
+      <div class="mt-5 space-y-5">
       <!-- Summary Stats -->
       <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-4">
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <h3 class="text-sm font-medium text-black/60 dark:text-white/60">
-            Uploaded Events
+        <div
+          v-for="card in overviewStatCards"
+          :key="card.key"
+          class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
+        >
+          <h3 class="text-sm font-medium text-black/55 dark:text-white/55">
+            {{ card.label }}
           </h3>
-          <p class="mt-1 text-3xl font-bold text-black dark:text-white">
-            {{ formatNumber(analytics.summary.totalEvents) }}
-          </p>
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <h3 class="text-sm font-medium text-black/60 dark:text-white/60">
-            Total Users
-          </h3>
-          <p class="mt-1 text-3xl font-bold text-black dark:text-white">
-            {{ formatNumber(analytics.summary.totalUsers) }}
-          </p>
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <h3 class="text-sm font-medium text-black/60 dark:text-white/60">
-            Total Searches
-          </h3>
-          <p class="mt-1 text-3xl font-bold text-black dark:text-white">
-            {{ formatNumber(analytics.summary.totalSearches) }}
-          </p>
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <h3 class="text-sm font-medium text-black/60 dark:text-white/60">
-            Avg Search Duration
-          </h3>
-          <p class="mt-1 text-3xl font-bold text-black dark:text-white">
-            {{ analytics.summary.avgSearchDuration }}ms
+          <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
+            {{ card.value }}
           </p>
         </div>
       </div>
@@ -2167,6 +2170,7 @@ Slow
           </div>
         </div>
       </div>
-    </template>
+      </div>
+    </section>
   </div>
 </template>

@@ -5,6 +5,19 @@
 
 ## 2026-06-21
 
+### nexus: standardize provider registry admin workspace
+
+- 服务渠道页改为 TuffEx 统计卡、标准 `TxDataTable` 列表与 `TxDrawer` 添加/编辑抽屉。
+- Provider、能力与 Scene 统一为 list CRUD 工作台，用量与健康记录改为只读表格。
+- 创建服务渠道改为「服务大类 -> adapter」二级选择，并补齐 AI / Exchange / Screenshot / Translation 分类模板与 OpenAI Responses adapter。
+- 补齐服务渠道相关中英文 i18n，将中文界面的 Provider / Scene / dry-run / adapter 等混排文案收敛为中文术语。
+
+### nexus: merge AI credits into user management
+
+- Dashboard 工作台与 Intelligence 管理页移除独立 AI 积分入口，旧积分路由改为跳转到账号/用户管理。
+- 用户管理编辑抽屉新增所选用户积分摘要、最近流水与管理员增减积分操作。
+- 新增管理员用户积分 GET/PATCH API，积分调整写入 credit ledger 与 admin audit，并限制减少额度不能低于已用积分。
+
 ### nexus: expose account details in settings
 
 - `dashboard/account` 新增「详情信息」Tab，按行展示账号 ID、邮箱、角色、语言偏好、创建时间与最近更新，并支持点击复制 ID / 邮箱。
