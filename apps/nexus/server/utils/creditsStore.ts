@@ -919,6 +919,72 @@ export interface CreditConsumptionResult {
   metadata: Record<string, any>
 }
 
+export interface CreditAdjustmentResult {
+  ledgerId: string
+  userId: string
+  delta: number
+  reason: string
+  createdAt: string
+}
+
+export async function adjustUserCredits(
+  event: H3Event,
+  userId: string,
+  delta: number,
+  reason: string,
+  metadata?: Record<string, any>,
+): Promise<CreditAdjustmentResult> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  await ensureBalance(event, 'user', userId)
+
+  const normalizedDelta = resolveCreditAmount(delta)
+  if (!normalizedDelta)
+    throw new Error('Invalid credit amount.')
+
+  const month = getMonthKey()
+  const balance = await db.prepare(`
+    SELECT quota, used FROM ${CREDIT_BALANCES_TABLE}
+    WHERE scope = 'user' AND scope_id = ? AND month = ?
+  `).bind(userId, month).first<{ quota?: number; used?: number }>()
+
+  const currentQuota = resolveCreditAmount(balance?.quota ?? 0)
+  const currentUsed = resolveCreditAmount(balance?.used ?? 0)
+  const nextQuota = sumCredits(currentQuota, normalizedDelta)
+  if (nextQuota < 0)
+    throw new Error('User credits quota cannot be negative.')
+  if (nextQuota < currentUsed)
+    throw new Error('User credits quota cannot be less than used credits.')
+
+  await db.prepare(`
+    UPDATE ${CREDIT_BALANCES_TABLE}
+    SET quota = ?
+    WHERE scope = 'user' AND scope_id = ? AND month = ?
+  `).bind(nextQuota, userId, month).run()
+
+  const now = new Date().toISOString()
+  const ledgerId = crypto.randomUUID()
+  await db.prepare(`
+    INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
+    VALUES (?, 'user', ?, ?, ?, ?, ?)
+  `).bind(
+    ledgerId,
+    userId,
+    normalizedDelta,
+    reason,
+    now,
+    JSON.stringify({ ...(metadata ?? {}), userId }),
+  ).run()
+
+  return {
+    ledgerId,
+    userId,
+    delta: normalizedDelta,
+    reason,
+    createdAt: now,
+  }
+}
+
 export async function consumeCredits(
   event: H3Event,
   userId: string,
@@ -1128,17 +1194,21 @@ export async function listCreditLedgerByUsers(
     }
   }
 
+  const userIdPlaceholders = uniqueUserIds.map(() => '?').join(', ')
   const teamIds = uniqueUserIds.map(userId => `team_${userId}`)
-  const idPlaceholders = teamIds.map(() => '?').join(', ')
+  const teamIdPlaceholders = teamIds.map(() => '?').join(', ')
   const conditions = [
-    `l.scope = 'team'`,
-    `l.scope_id IN (${idPlaceholders})`,
+    `(
+      (l.scope = 'user' AND l.scope_id IN (${userIdPlaceholders}))
+      OR (l.scope = 'team' AND json_extract(l.metadata, '$.userId') IN (${userIdPlaceholders}))
+      OR (l.scope = 'team' AND l.scope_id IN (${teamIdPlaceholders}))
+    )`,
   ]
-  const params: Array<string | number> = [...teamIds]
+  const params: Array<string | number> = [...uniqueUserIds, ...uniqueUserIds, ...teamIds]
 
   if (search) {
     const term = `%${search}%`
-    conditions.push('(LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(u.id) LIKE ?)')
+    conditions.push('(LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(COALESCE(json_extract(l.metadata, \'$.userId\'), u.id, l.scope_id)) LIKE ?)')
     params.push(term, term, term)
   }
 
@@ -1147,7 +1217,8 @@ export async function listCreditLedgerByUsers(
   const totalRow = await db.prepare(`
     SELECT COUNT(1) as total
     FROM ${CREDIT_LEDGER_TABLE} l
-    LEFT JOIN ${USERS_TABLE} u ON u.id = SUBSTR(l.scope_id, 6)
+    LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id AND l.scope = 'team'
+    LEFT JOIN ${USERS_TABLE} u ON u.id = COALESCE(json_extract(l.metadata, '$.userId'), CASE WHEN l.scope = 'user' THEN l.scope_id ELSE t.owner_user_id END)
     ${whereClause}
   `).bind(...params).first<{ total?: number }>()
 
@@ -1160,28 +1231,35 @@ export async function listCreditLedgerByUsers(
       l.reason,
       l.created_at,
       l.metadata,
+      t.id as team_id,
+      t.type as team_type,
       u.id as user_id,
       u.email,
       u.name
     FROM ${CREDIT_LEDGER_TABLE} l
-    LEFT JOIN ${USERS_TABLE} u ON u.id = SUBSTR(l.scope_id, 6)
+    LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id AND l.scope = 'team'
+    LEFT JOIN ${USERS_TABLE} u ON u.id = COALESCE(json_extract(l.metadata, '$.userId'), CASE WHEN l.scope = 'user' THEN l.scope_id ELSE t.owner_user_id END)
     ${whereClause}
     ORDER BY l.created_at DESC
     LIMIT ? OFFSET ?
   `).bind(...listParams).all<Record<string, any>>()
 
   return {
-    entries: (results ?? []).map(row => ({
-      id: row.id,
-      teamId: row.scope_id,
-      userId: row.user_id ?? null,
-      userEmail: row.email ?? null,
-      userName: row.name ?? null,
-      delta: resolveCreditAmount(row.delta ?? 0),
-      reason: row.reason ?? '',
-      createdAt: row.created_at,
-      metadata: parseLedgerMetadata(row.metadata ?? null),
-    })),
+    entries: (results ?? []).map((row) => {
+      const metadata = parseLedgerMetadata(row.metadata ?? null)
+      return {
+        id: row.id,
+        teamId: row.team_id ?? (row.scope_id?.startsWith?.('team_') ? row.scope_id : ''),
+        teamType: row.team_type ?? null,
+        userId: row.user_id ?? (typeof metadata?.userId === 'string' ? metadata.userId : null),
+        userEmail: row.email ?? null,
+        userName: row.name ?? null,
+        delta: resolveCreditAmount(row.delta ?? 0),
+        reason: row.reason ?? '',
+        createdAt: row.created_at,
+        metadata,
+      }
+    }),
     total: Number(totalRow?.total ?? 0),
     page,
     pageSize: limit,

@@ -11,6 +11,10 @@ describe('DashboardNav Intelligence consolidation', () => {
     expect(nav).toContain('overflow-y-auto')
   })
 
+  it('uses the TuffInte module as the single Intelligence sidebar entry', () => {
+    expect(nav).toContain("label: t('dashboard.sections.menu.intelligence', '塔芙智能')")
+  })
+
   it('keeps provider registry routed through the Intelligence navigation section', () => {
     expect(nav).toContain("'provider-registry': '/dashboard/admin/provider-registry'")
     expect(nav).toContain("if (route.path.startsWith('/dashboard/admin/provider-registry'))\n    return 'intelligence'")
@@ -23,5 +27,18 @@ describe('DashboardNav Intelligence consolidation', () => {
 
     expect(adminItems).not.toContain("id: 'provider-registry'")
     expect(adminItems).not.toContain("dashboard.sections.menu.providerRegistry")
+  })
+
+  it('does not expose standalone credit navigation items', () => {
+    const workspaceItemsStart = nav.indexOf('const workspaceMenuItems = computed')
+    const workspaceItemsEnd = nav.indexOf('const accountMenuItems = computed')
+    const workspaceItems = nav.slice(workspaceItemsStart, workspaceItemsEnd)
+
+    expect(workspaceItems).not.toContain("id: 'credits'")
+    expect(nav).not.toContain('dashboard.sections.menu.credits')
+    expect(nav).not.toContain('dashboard.sections.menu.adminCredits')
+    expect(nav).not.toContain("'adminCredits': '/dashboard/admin/credits'")
+    expect(nav).not.toContain("route.path.startsWith('/dashboard/credits')")
+    expect(nav).not.toContain("route.path.startsWith('/dashboard/admin/credits')")
   })
 })
