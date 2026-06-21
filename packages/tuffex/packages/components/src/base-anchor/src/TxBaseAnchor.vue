@@ -89,6 +89,7 @@ const panelSurfaceMoving = ref(false)
 interface RectSnapshot { x: number, y: number, width: number, height: number }
 let lastReferenceRect: RectSnapshot | null = null
 let panelSurfaceMoveTimer: ReturnType<typeof setTimeout> | null = null
+let resizeUpdateFrame: number | null = null
 
 let runId = 0
 
@@ -223,17 +224,39 @@ function syncOutlineSize() {
   outlineH.value = Math.max(0, el.offsetHeight)
 }
 
+function scheduleResizeUpdate() {
+  if (!hasWindow())
+    return
+  if (resizeUpdateFrame != null)
+    window.cancelAnimationFrame(resizeUpdateFrame)
+  resizeUpdateFrame = window.requestAnimationFrame(() => {
+    resizeUpdateFrame = null
+    syncOutlineSize()
+    void update()
+  })
+}
+
 function setupResizeObserver() {
   cleanupResizeObserver.value?.()
   cleanupResizeObserver.value = null
-  if (!hasWindow() || !contentRef.value || typeof ResizeObserver === 'undefined')
+  if (!hasWindow() || typeof ResizeObserver === 'undefined')
     return
 
   const observer = new ResizeObserver(() => {
-    syncOutlineSize()
+    scheduleResizeUpdate()
   })
-  observer.observe(contentRef.value)
-  cleanupResizeObserver.value = () => observer.disconnect()
+  if (contentRef.value)
+    observer.observe(contentRef.value)
+  if (referenceRef.value)
+    observer.observe(referenceRef.value)
+
+  cleanupResizeObserver.value = () => {
+    observer.disconnect()
+    if (resizeUpdateFrame != null) {
+      window.cancelAnimationFrame(resizeUpdateFrame)
+      resizeUpdateFrame = null
+    }
+  }
 }
 
 const outlinePath = computed(() => {

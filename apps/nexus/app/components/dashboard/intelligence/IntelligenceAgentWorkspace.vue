@@ -5,15 +5,15 @@ import type {
   IntelligencePromptRecord,
   TuffIntelligenceApprovalTicket,
 } from '@talex-touch/tuff-intelligence/light'
+import type { TxAiMessageModel } from '@talex-touch/intelligence-uikit'
+import { TxAiComposer, TxAiMessage } from '@talex-touch/intelligence-uikit'
 import { networkClient } from '@talex-touch/utils/network'
 import { TxBaseSurface } from '@talex-touch/tuffex/base-surface'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxCard } from '@talex-touch/tuffex/card'
 import { TxCollapse, TxCollapseItem } from '@talex-touch/tuffex/collapse'
 import { TxGlowText } from '@talex-touch/tuffex/glow-text'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTimeline, TxTimelineItem } from '@talex-touch/tuffex/timeline'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { requestJson } from '~/utils/request'
@@ -211,7 +211,6 @@ const insightExpanded = ref<string[]>(['runtime'])
 
 let streamAbortController: AbortController | null = null
 
-const canSend = computed(() => draftMessage.value.trim().length > 0 && !running.value && !historyLoading.value)
 const runtimeDigest = computed(() => {
   if (!runtimeMetrics.value) {
     return labText('dashboard.intelligenceLab.runtime.waiting', 'Waiting')
@@ -464,6 +463,34 @@ function resolveConversationText(item: LabConversationItem): string {
     }
   }
   return item.content
+}
+
+function toAiMessage(item: LabConversationItem): TxAiMessageModel {
+  return {
+    id: item.id,
+    role: item.role,
+    content: resolveConversationText(item),
+    createdAt: item.timestamp,
+    status: resolveAiMessageStatus(item),
+  }
+}
+
+function resolveAiMessageStatus(item: LabConversationItem): TxAiMessageModel['status'] {
+  if (item.role === 'assistant' && running.value && item.id === activeAnswerId.value) {
+    return 'streaming'
+  }
+  if (item.role === 'assistant' || item.role === 'user') {
+    return 'done'
+  }
+  return 'idle'
+}
+
+function sendComposerMessage(payload?: { text?: string }) {
+  const text = payload?.text?.trim()
+  if (text) {
+    draftMessage.value = text
+  }
+  void sendMessage()
 }
 
 function resolveStatusI18n(eventItem: LabStreamEvent): {
@@ -1292,7 +1319,7 @@ onBeforeUnmount(() => {
   <section class="ti-lab mx-auto w-full max-w-6xl space-y-6">
     <header class="space-y-2">
       <h1 class="apple-heading-md">
-        {{ labText('dashboard.intelligenceLab.title', 'TuffIntelligence Lab') }}
+        {{ labText('dashboard.intelligenceLab.title', 'Tuff AI Lab') }}
       </h1>
       <p class="ti-lab__subtitle text-sm">
         {{ labText('dashboard.intelligenceLab.subtitle', 'Admin-only workspace: one message triggers full orchestration with streaming trajectory.') }}
@@ -1341,71 +1368,58 @@ onBeforeUnmount(() => {
               <TxSkeleton :loading="true" :lines="1" width="66%" :height="14" />
             </div>
             <div v-else-if="conversation.length <= 0" class="ti-lab__muted text-sm">
-              {{ labText('dashboard.intelligenceLab.empty', 'Send one message and TuffIntelligence will plan and execute automatically.') }}
+              {{ labText('dashboard.intelligenceLab.empty', 'Send one message and Tuff AI will plan and execute automatically.') }}
             </div>
-            <article
-              v-for="item in conversation"
-              :key="item.id"
-              class="ti-lab__chat-item"
-            >
-              <template v-if="item.role === 'system'">
-                <TxButton
-                  variant="bare"
-                  native-type="button"
-                  class="ti-lab__system-line-toggle"
-                  @click="toggleSystemDetail(item.id)"
-                >
-                  <TxGlowText
-                    tag="span"
-                    mode="text-clip"
-                    :active="isSystemMessageGlowing(item)"
-                    :repeat="isSystemMessageGlowing(item)"
-                    :duration-ms="1400"
-                    :band-size="34"
-                    :opacity="0.55"
-                    class="ti-lab__system-line-text"
-                    :title="resolveConversationText(item)"
+            <div v-else class="ti-lab__chat-stack">
+              <template
+                v-for="item in conversation"
+                :key="item.id"
+              >
+                <div v-if="item.role === 'system'" class="ti-lab__system-line">
+                  <TxButton
+                    variant="bare"
+                    native-type="button"
+                    class="ti-lab__system-line-toggle"
+                    @click="toggleSystemDetail(item.id)"
                   >
-                    <span class="ti-lab__system-symbol">{{ item.symbol || SYSTEM_SYMBOL }}</span>
-                    <span class="ti-lab__system-line-content">{{ resolveConversationText(item) }}</span>
-                  </TxGlowText>
-                  <span
-                    class="ti-lab__system-expand-icon"
-                    :class="{ 'ti-lab__system-expand-icon--visible': isSystemDetailExpanded(item.id) }"
-                  >{{ isSystemDetailExpanded(item.id) ? '▾' : '▸' }}</span>
-                </TxButton>
-                <div v-if="isSystemDetailExpanded(item.id)" class="ti-lab__system-detail">
-                  <p class="ti-lab__system-detail-summary">
-                    {{ resolveConversationText(item) }}
-                  </p>
-                  <p class="ti-lab__system-detail-meta">
-                    event={{ item.eventType || '-' }} · phase={{ item.phase || '-' }} · seq={{ item.seq ?? '-' }}
-                  </p>
-                  <pre v-if="resolveSystemDetailRaw(item.detail)" class="ti-lab__system-detail-raw">{{ resolveSystemDetailRaw(item.detail) }}</pre>
-                  <pre v-if="resolveSystemDetailJson(item.detail)" class="ti-lab__system-detail-json">{{ resolveSystemDetailJson(item.detail) }}</pre>
+                    <TxGlowText
+                      tag="span"
+                      mode="text-clip"
+                      :active="isSystemMessageGlowing(item)"
+                      :repeat="isSystemMessageGlowing(item)"
+                      :duration-ms="1400"
+                      :band-size="34"
+                      :opacity="0.55"
+                      class="ti-lab__system-line-text"
+                      :title="resolveConversationText(item)"
+                    >
+                      <span class="ti-lab__system-symbol">{{ item.symbol || SYSTEM_SYMBOL }}</span>
+                      <span class="ti-lab__system-line-content">{{ resolveConversationText(item) }}</span>
+                    </TxGlowText>
+                    <span
+                      class="ti-lab__system-expand-icon"
+                      :class="{ 'ti-lab__system-expand-icon--visible': isSystemDetailExpanded(item.id) }"
+                    >{{ isSystemDetailExpanded(item.id) ? '▾' : '▸' }}</span>
+                  </TxButton>
+                  <div v-if="isSystemDetailExpanded(item.id)" class="ti-lab__system-detail">
+                    <p class="ti-lab__system-detail-summary">
+                      {{ resolveConversationText(item) }}
+                    </p>
+                    <p class="ti-lab__system-detail-meta">
+                      event={{ item.eventType || '-' }} · phase={{ item.phase || '-' }} · seq={{ item.seq ?? '-' }}
+                    </p>
+                    <pre v-if="resolveSystemDetailRaw(item.detail)" class="ti-lab__system-detail-raw">{{ resolveSystemDetailRaw(item.detail) }}</pre>
+                    <pre v-if="resolveSystemDetailJson(item.detail)" class="ti-lab__system-detail-json">{{ resolveSystemDetailJson(item.detail) }}</pre>
+                  </div>
                 </div>
+                <TxAiMessage
+                  v-else
+                  :message="toAiMessage(item)"
+                  :markdown="true"
+                  class="ti-lab__ai-message"
+                />
               </template>
-              <template v-else-if="item.role === 'assistant'">
-                <TxCard background="mask" shadow="soft" size="small" class="ti-lab__assistant-card">
-                  <p class="ti-lab__bubble-role mb-1 text-[11px] uppercase tracking-wide">
-                    {{ item.role }}
-                  </p>
-                  <p class="whitespace-pre-wrap break-words">
-                    {{ resolveConversationText(item) }}
-                  </p>
-                </TxCard>
-              </template>
-              <template v-else>
-                <div class="ti-lab__bubble ti-lab__bubble--user ml-auto max-w-[92%] rounded-2xl px-3 py-2 text-sm">
-                  <p class="ti-lab__bubble-role mb-1 text-[11px] uppercase tracking-wide">
-                    {{ item.role }}
-                  </p>
-                  <p class="whitespace-pre-wrap break-words">
-                    {{ resolveConversationText(item) }}
-                  </p>
-                </div>
-              </template>
-            </article>
+            </div>
           </div>
 
           <div class="ti-lab__quick-prompts flex flex-wrap gap-2">
@@ -1421,21 +1435,16 @@ onBeforeUnmount(() => {
             </TxButton>
           </div>
 
-          <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <TuffInput
-              v-model="draftMessage"
-              type="text"
-              :disabled="running || historyLoading"
-              :placeholder="labText('dashboard.intelligenceLab.inputPlaceholder', 'Example: review this week release risks and produce follow-up actions')"
-              @keyup.enter="() => sendMessage()"
-            />
-            <TxButton variant="primary" :disabled="!canSend" @click="() => sendMessage()">
-              <span class="inline-flex items-center gap-2">
-                <TxSpinner v-if="running" :size="14" />
-                {{ running ? labText('dashboard.intelligenceLab.running', 'Running') : labText('dashboard.intelligenceLab.send', 'Send') }}
-              </span>
-            </TxButton>
-          </div>
+          <TxAiComposer
+            v-model="draftMessage"
+            :disabled="historyLoading"
+            :submitting="running"
+            :allow-empty-send="false"
+            :placeholder="labText('dashboard.intelligenceLab.inputPlaceholder', 'Example: review this week release risks and produce follow-up actions')"
+            :send-button-text="running ? labText('dashboard.intelligenceLab.running', 'Running') : labText('dashboard.intelligenceLab.send', 'Send')"
+            class="ti-lab__composer"
+            @send="sendComposerMessage"
+          />
 
           <p v-if="statusMessage" class="ti-lab__status mt-3 text-xs">
             {{ statusMessage }}
@@ -1878,26 +1887,21 @@ onBeforeUnmount(() => {
 }
 
 .ti-lab__chat-scroll {
+  min-height: 280px;
   background: color-mix(in srgb, var(--tx-fill-color-light) 82%, transparent);
 }
 
-.ti-lab__bubble {
-  border: 1px solid color-mix(in srgb, var(--tx-border-color-lighter) 72%, transparent);
+.ti-lab__chat-stack {
+  display: grid;
+  gap: 12px;
 }
 
-.ti-lab__bubble--user {
-  background: color-mix(in srgb, var(--tx-color-primary) 16%, transparent);
+.ti-lab__ai-message {
+  max-width: 100%;
 }
 
-.ti-lab__bubble--assistant {
-  background: color-mix(in srgb, var(--tx-bg-color-overlay) 88%, transparent);
-  border-color: color-mix(in srgb, var(--tx-color-primary) 28%, transparent);
-  box-shadow: 0 8px 22px color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
-}
-
-.ti-lab__assistant-card {
-  max-width: 92%;
-  margin-right: auto;
+.ti-lab__composer {
+  margin-top: 12px;
 }
 
 .ti-lab__system-line {
@@ -1998,10 +2002,6 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--tx-bg-color-overlay) 90%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light) 70%, transparent);
   color: color-mix(in srgb, var(--tx-text-color-primary) 92%, transparent);
-}
-
-.ti-lab__bubble-role {
-  color: color-mix(in srgb, var(--tx-text-color-secondary) 85%, transparent);
 }
 
 .ti-lab__status {

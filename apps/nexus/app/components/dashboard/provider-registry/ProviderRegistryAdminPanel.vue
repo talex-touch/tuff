@@ -18,7 +18,7 @@ import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const { t } = useI18n()
 const {
@@ -28,6 +28,7 @@ const {
   addCapabilityRow,
   addProviderCapabilityEditRow,
   addSceneBindingEditRow,
+  applyProviderCapabilityTemplate,
   applyProviderServiceCategory,
   applyProviderTemplate,
   authTypeOptions,
@@ -37,10 +38,8 @@ const {
   capabilityCount,
   capabilityRows,
   checkProvider,
-  createCapability,
   createProvider,
   createScene,
-  deleteCapability,
   deleteProvider,
   deleteScene,
   enabledProviders,
@@ -52,7 +51,6 @@ const {
   filteredScenes,
   filteredUsageEntries,
   formatDate,
-  formatJson,
   formatRunJson,
   getHealthCheckReason,
   getProviderEditPanel,
@@ -77,6 +75,8 @@ const {
   providerObservabilityEmptyState,
   providerObservabilityFilter,
   providerOptions,
+  providerCapabilityTemplateOptions,
+  providerMeteringUnitOptions,
   providerQuotaPanels,
   providerStatusOptions,
   providerServiceCategoryId,
@@ -90,7 +90,6 @@ const {
   removeProviderCapabilityEditRow,
   removeSceneBindingEditRow,
   runScene,
-  saveCapabilityEdit,
   saveProviderEdit,
   saveProviderQuota,
   saveSceneEdit,
@@ -104,7 +103,6 @@ const {
   sceneOwnerOptions,
   sceneProviderOptions,
   scenes,
-  savingCapability,
   savingProvider,
   savingScene,
   observabilityTone,
@@ -125,18 +123,6 @@ const providerDrawerOpen = ref(false)
 const providerDrawerMode = ref<'create' | 'edit' | 'quota'>('create')
 const selectedProvider = ref<ProviderRegistryRecord | null>(null)
 const providerSearch = ref('')
-
-const capabilityDrawerOpen = ref(false)
-const capabilityDrawerMode = ref<'create' | 'edit'>('create')
-const selectedCapability = ref<ProviderCapabilityRecord | null>(null)
-const capabilityForm = reactive({
-  providerId: '',
-  capability: '',
-  schemaRef: '',
-  meteringText: '',
-  constraintsText: '',
-  metadataText: '',
-})
 
 const sceneDrawerOpen = ref(false)
 const sceneDrawerMode = ref<'create' | 'edit' | 'run'>('create')
@@ -222,23 +208,17 @@ const providerDrawerPrimaryLabel = computed(() => {
   return t('common.save', 'Save')
 })
 
-const capabilityDrawerTitle = computed(() =>
-  capabilityDrawerMode.value === 'create'
-    ? t('dashboard.providerRegistry.capabilities.createTitle', 'Create capability')
-    : t('dashboard.providerRegistry.capabilities.editTitle', 'Edit capability'),
-)
-
 const sceneDrawerTitle = computed(() => {
   if (sceneDrawerMode.value === 'run')
-    return t('dashboard.providerRegistry.scenes.runTitle', 'Run scene')
+    return t('dashboard.providerRegistry.routes.runTitle', 'Run route')
   return sceneDrawerMode.value === 'create'
-    ? t('dashboard.providerRegistry.scenes.createTitle', 'Create scene')
-    : t('dashboard.providerRegistry.scenes.editTitle', 'Edit scene')
+    ? t('dashboard.providerRegistry.routes.createTitle', 'Create route')
+    : t('dashboard.providerRegistry.routes.editTitle', 'Edit route')
 })
 
 const sceneDrawerPrimaryLabel = computed(() =>
   sceneDrawerMode.value === 'create'
-    ? t('dashboard.providerRegistry.scenes.create', 'Create scene')
+    ? t('dashboard.providerRegistry.routes.create', 'Create route')
     : t('common.save', 'Save'),
 )
 
@@ -253,16 +233,14 @@ const providerColumns = computed<DataTableColumn<ProviderRegistryRecord>[]>(() =
 ])
 
 const capabilityColumns = computed<DataTableColumn<ProviderCapabilityRecord>[]>(() => [
-  { key: 'capability', title: t('dashboard.providerRegistry.fields.capability', 'Capability'), sortable: true, width: '24%' },
-  { key: 'provider', title: t('dashboard.providerRegistry.fields.provider', 'Provider'), width: '20%' },
-  { key: 'schemaRef', title: t('dashboard.providerRegistry.table.schemaRef', 'Schema ref'), width: '24%' },
-  { key: 'metering', title: t('dashboard.providerRegistry.fields.meteringJson', 'Metering JSON'), width: '16%' },
-  { key: 'adapter', title: t('dashboard.providerRegistry.table.adapter', 'Adapter'), width: 120 },
-  { key: 'actions', title: t('dashboard.providerRegistry.table.actions', 'Actions'), align: 'right', width: 170 },
+  { key: 'capability', title: t('dashboard.providerRegistry.fields.capability', 'Capability'), sortable: true, width: '34%' },
+  { key: 'provider', title: t('dashboard.providerRegistry.fields.provider', 'Provider'), width: '26%' },
+  { key: 'metering', title: t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit'), width: '20%' },
+  { key: 'adapter', title: t('dashboard.providerRegistry.table.adapter', 'Adapter'), width: 140 },
 ])
 
 const sceneColumns = computed<DataTableColumn<SceneRegistryRecord>[]>(() => [
-  { key: 'scene', title: t('dashboard.providerRegistry.table.scene', 'Scene'), sortable: true, width: '26%' },
+  { key: 'scene', title: t('dashboard.providerRegistry.table.route', 'Route'), sortable: true, width: '26%' },
   { key: 'status', title: t('dashboard.providerRegistry.fields.status', 'Status'), width: 120 },
   { key: 'strategy', title: t('dashboard.providerRegistry.fields.strategy', 'Strategy'), width: 150 },
   { key: 'requiredCapabilities', title: t('dashboard.providerRegistry.fields.requiredCapabilities', 'Required capabilities'), width: '22%' },
@@ -296,10 +274,6 @@ function valueLabel(value: string | null | undefined) {
 
 function booleanLabel(value: boolean) {
   return value ? t('dashboard.providerRegistry.values.yes', 'Yes') : t('dashboard.providerRegistry.values.no', 'No')
-}
-
-function formatEditableJson(value: Record<string, unknown> | null | undefined) {
-  return value ? JSON.stringify(value, null, 2) : ''
 }
 
 function getProviderName(providerId: string | null | undefined) {
@@ -359,51 +333,6 @@ async function submitProviderDrawer() {
 
   if (!error.value)
     closeProviderDrawer()
-}
-
-function resetCapabilityForm(providerId = providers.value[0]?.id ?? '') {
-  capabilityForm.providerId = providerId
-  capabilityForm.capability = ''
-  capabilityForm.schemaRef = ''
-  capabilityForm.meteringText = '{\n  "unit": "request"\n}'
-  capabilityForm.constraintsText = ''
-  capabilityForm.metadataText = ''
-}
-
-function openCreateCapability(providerId?: string) {
-  selectedCapability.value = null
-  capabilityDrawerMode.value = 'create'
-  resetCapabilityForm(providerId)
-  capabilityDrawerOpen.value = true
-}
-
-function openEditCapability(capability: ProviderCapabilityRecord) {
-  selectedCapability.value = capability
-  capabilityDrawerMode.value = 'edit'
-  capabilityForm.providerId = capability.providerId
-  capabilityForm.capability = capability.capability
-  capabilityForm.schemaRef = capability.schemaRef ?? ''
-  capabilityForm.meteringText = formatEditableJson(capability.metering)
-  capabilityForm.constraintsText = formatEditableJson(capability.constraints)
-  capabilityForm.metadataText = formatEditableJson(capability.metadata)
-  capabilityDrawerOpen.value = true
-}
-
-function closeCapabilityDrawer() {
-  capabilityDrawerOpen.value = false
-  selectedCapability.value = null
-}
-
-async function submitCapabilityDrawer() {
-  if (capabilityDrawerMode.value === 'create') {
-    await createCapability(capabilityForm.providerId, capabilityForm)
-  }
-  else if (selectedCapability.value) {
-    await saveCapabilityEdit(selectedCapability.value, capabilityForm)
-  }
-
-  if (!error.value)
-    closeCapabilityDrawer()
 }
 
 function openCreateScene() {
@@ -695,10 +624,6 @@ function filterLabel(option: { value: string, label: string }) {
                             <p class="max-w-[20rem] break-all font-medium text-black/75 dark:text-white/75">
                               {{ capability.capability }}
                             </p>
-                            <p class="max-w-[20rem] break-all text-black/50 dark:text-white/50">
-                              {{ t('dashboard.providerRegistry.fields.schemaRef', 'Schema ref') }}:
-                              {{ capability.schemaRef ?? '-' }}
-                            </p>
                             <p class="text-black/50 dark:text-white/50">
                               {{ t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit') }}:
                               {{ capabilityMeteringUnit(capability) }}
@@ -791,100 +716,22 @@ function filterLabel(option: { value: string, label: string }) {
           </div>
         </TxTabItem>
 
-        <TxTabItem name="capabilities" icon-class="i-carbon-catalog">
-          <template #name>
-            <span class="inline-flex items-center gap-2">
-              <span class="i-carbon-catalog text-sm" aria-hidden="true" />
-              <span>{{ t('dashboard.providerRegistry.tabs.capabilities', 'Capabilities') }}</span>
-            </span>
-          </template>
-
-          <div class="space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-base font-semibold text-black dark:text-white">
-                  {{ t('dashboard.providerRegistry.capabilities.listTitle', 'Declared capabilities') }}
-                </h2>
-                <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.providerRegistry.capabilities.listHint', 'Capabilities are owned by providers and describe dispatchable runtime skills.') }}
-                </p>
-              </div>
-              <TxButton variant="primary" size="small" :disabled="!providers.length" @click="openCreateCapability()">
-                {{ t('dashboard.providerRegistry.capabilities.create', 'Create capability') }}
-              </TxButton>
-            </div>
-
-            <div class="overflow-x-auto">
-              <TxDataTable
-                :columns="capabilityColumns"
-                :data="capabilities"
-                row-key="id"
-                :loading="loading"
-                :empty-text="t('dashboard.providerRegistry.capabilities.empty', 'No capabilities declared yet.')"
-                bordered
-                class="min-w-[920px]"
-              >
-                <template #cell-capability="{ row: capability }">
-                  <div class="min-w-0 space-y-1">
-                    <p class="truncate font-medium text-black dark:text-white" :title="capability.capability">
-                      {{ capability.capability }}
-                    </p>
-                    <p class="truncate text-xs text-black/45 dark:text-white/45" :title="capability.id">
-                      {{ capability.id }}
-                    </p>
-                  </div>
-                </template>
-                <template #cell-provider="{ row: capability }">
-                  <span class="text-sm text-black/60 dark:text-white/60">{{ getProviderName(capability.providerId) }}</span>
-                </template>
-                <template #cell-schemaRef="{ row: capability }">
-                  <span class="block max-w-[260px] truncate font-mono text-xs text-black/55 dark:text-white/55" :title="capability.schemaRef || '-'">
-                    {{ capability.schemaRef || '-' }}
-                  </span>
-                </template>
-                <template #cell-metering="{ row: capability }">
-                  <span class="block max-w-[180px] truncate font-mono text-xs text-black/55 dark:text-white/55" :title="formatJson(capability.metering)">
-                    {{ formatJson(capability.metering) }}
-                  </span>
-                </template>
-                <template #cell-adapter="{ row: capability }">
-                  <TxStatusBadge
-                    :text="capability.adapter?.ready ? t('dashboard.providerRegistry.adapter.ready', 'adapter ready') : t('dashboard.providerRegistry.adapter.missing', 'adapter missing')"
-                    :status="capability.adapter?.ready ? 'success' : 'warning'"
-                    size="sm"
-                  />
-                </template>
-                <template #cell-actions="{ row: capability }">
-                  <div class="flex flex-wrap justify-end gap-2">
-                    <TxButton variant="secondary" size="mini" @click="openEditCapability(capability)">
-                      {{ t('dashboard.providerRegistry.actions.edit', 'Edit') }}
-                    </TxButton>
-                    <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="deleteCapability(capability)">
-                      {{ t('common.delete', 'Delete') }}
-                    </TxButton>
-                  </div>
-                </template>
-              </TxDataTable>
-            </div>
-          </div>
-        </TxTabItem>
-
-        <TxTabItem name="scenes" icon-class="i-carbon-flow">
+        <TxTabItem name="routes" icon-class="i-carbon-flow">
           <template #name>
             <span class="inline-flex items-center gap-2">
               <span class="i-carbon-flow text-sm" aria-hidden="true" />
-              <span>{{ t('dashboard.providerRegistry.tabs.scenes', 'Scenes') }}</span>
+              <span>{{ t('dashboard.providerRegistry.tabs.routes', 'Capability routes') }}</span>
             </span>
           </template>
 
-          <div class="space-y-4">
+          <div class="space-y-6">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 class="text-base font-semibold text-black dark:text-white">
-                  {{ t('dashboard.providerRegistry.scenes.listTitle', 'Registered scenes') }}
+                  {{ t('dashboard.providerRegistry.routes.listTitle', 'Capability routes') }}
                 </h2>
                 <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.providerRegistry.scenes.listHint', 'Scenes bind capability requirements to provider strategy rows.') }}
+                  {{ t('dashboard.providerRegistry.routes.listHint', 'Routes connect product capabilities to provider strategy rows.') }}
                 </p>
               </div>
               <div class="flex flex-wrap items-center justify-end gap-2">
@@ -902,7 +749,7 @@ function filterLabel(option: { value: string, label: string }) {
                   <span class="ml-1 text-black/35 dark:text-white/35">{{ option.count }}</span>
                 </button>
                 <TxButton variant="primary" size="small" :disabled="!providers.length" @click="openCreateScene">
-                  {{ t('dashboard.providerRegistry.scenes.create', 'Create scene') }}
+                  {{ t('dashboard.providerRegistry.routes.create', 'Create route') }}
                 </TxButton>
               </div>
             </div>
@@ -942,7 +789,7 @@ function filterLabel(option: { value: string, label: string }) {
                 :data="filteredScenes"
                 row-key="id"
                 :loading="loading"
-                :empty-text="t('dashboard.providerRegistry.scenes.empty', 'No scenes configured yet.')"
+                :empty-text="t('dashboard.providerRegistry.routes.empty', 'No capability routes configured yet.')"
                 bordered
                 class="min-w-[1040px]"
               >
@@ -1002,6 +849,52 @@ function filterLabel(option: { value: string, label: string }) {
                 </template>
               </TxDataTable>
             </div>
+
+            <section class="space-y-3 border-t border-black/[0.06] pt-5 dark:border-white/[0.08]">
+              <div>
+                <h3 class="text-sm font-medium text-black dark:text-white">
+                  {{ t('dashboard.providerRegistry.capabilities.indexTitle', 'Provider capability index') }}
+                </h3>
+                <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                  {{ t('dashboard.providerRegistry.capabilities.indexHint', 'Provider capabilities are declared on the provider and selected by routes.') }}
+                </p>
+              </div>
+              <div class="overflow-x-auto">
+                <TxDataTable
+                  :columns="capabilityColumns"
+                  :data="capabilities"
+                  row-key="id"
+                  :loading="loading"
+                  :empty-text="t('dashboard.providerRegistry.capabilities.empty', 'No capabilities declared yet.')"
+                  bordered
+                  class="min-w-[760px]"
+                >
+                  <template #cell-capability="{ row: capability }">
+                    <div class="min-w-0 space-y-1">
+                      <p class="truncate font-medium text-black dark:text-white" :title="capability.capability">
+                        {{ capability.capability }}
+                      </p>
+                      <p class="truncate text-xs text-black/45 dark:text-white/45" :title="capability.id">
+                        {{ capability.id }}
+                      </p>
+                    </div>
+                  </template>
+                  <template #cell-provider="{ row: capability }">
+                    <span class="text-sm text-black/60 dark:text-white/60">{{ getProviderName(capability.providerId) }}</span>
+                  </template>
+                  <template #cell-metering="{ row: capability }">
+                    <span class="text-sm text-black/60 dark:text-white/60">{{ capabilityMeteringUnit(capability) }}</span>
+                  </template>
+                  <template #cell-adapter="{ row: capability }">
+                    <TxStatusBadge
+                      :text="capability.adapter?.ready ? t('dashboard.providerRegistry.adapter.ready', 'adapter ready') : t('dashboard.providerRegistry.adapter.missing', 'adapter missing')"
+                      :status="capability.adapter?.ready ? 'success' : 'warning'"
+                      size="sm"
+                    />
+                  </template>
+                </TxDataTable>
+              </div>
+            </section>
           </div>
         </TxTabItem>
 
@@ -1075,7 +968,7 @@ function filterLabel(option: { value: string, label: string }) {
                 :data="filteredUsageEntries"
                 row-key="id"
                 :loading="loading"
-                :empty-text="t('dashboard.providerRegistry.usage.empty', 'No scene run usage recorded yet.')"
+                :empty-text="t('dashboard.providerRegistry.usage.empty', 'No route run usage recorded yet.')"
                 bordered
                 class="min-w-[940px]"
               >
@@ -1224,19 +1117,19 @@ function filterLabel(option: { value: string, label: string }) {
     <TxDrawer
       v-model:visible="providerDrawerOpen"
       :title="providerDrawerTitle"
-      size="min(780px, 100vw)"
+      size="min(920px, 100vw)"
       direction="right"
     >
       <div class="space-y-6">
         <template v-if="providerDrawerMode === 'create'">
           <section class="space-y-3">
             <p class="text-sm text-black/50 dark:text-white/50">
-              {{ t('dashboard.providerRegistry.providers.createHint', 'Credentials stay in secure storage; this form only saves authRef.') }}
+              {{ t('dashboard.providerRegistry.providers.createHint', 'Credentials are saved in secure storage when this provider needs authentication.') }}
             </p>
             <div class="grid gap-3 md:grid-cols-2">
               <div>
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.serviceCategory', 'Service category') }}</label>
-                <TuffSelect v-model="providerServiceCategoryId" class="w-full" @change="applyProviderServiceCategory">
+                <TuffSelect v-model="providerServiceCategoryId" class="w-full min-w-0" @change="applyProviderServiceCategory">
                   <TuffSelectItem
                     v-for="category in providerServiceCategoryOptions"
                     :key="category.value"
@@ -1247,7 +1140,7 @@ function filterLabel(option: { value: string, label: string }) {
               </div>
               <div>
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.adapter', 'Adapter') }}</label>
-                <TuffSelect v-model="providerTemplateId" class="w-full" @change="applyProviderTemplate">
+                <TuffSelect v-model="providerTemplateId" class="w-full min-w-0" @change="applyProviderTemplate">
                   <TuffSelectItem v-for="template in providerTemplateOptions" :key="template.value" :value="template.value" :label="template.label" />
                 </TuffSelect>
               </div>
@@ -1261,25 +1154,25 @@ function filterLabel(option: { value: string, label: string }) {
               </div>
               <div>
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.vendor', 'Vendor') }}</label>
-                <TuffSelect v-model="providerForm.vendor" class="w-full">
+                <TuffSelect v-model="providerForm.vendor" class="w-full min-w-0">
                   <TuffSelectItem v-for="vendor in providerVendorOptions" :key="vendor" :value="vendor" :label="valueLabel(vendor)" />
                 </TuffSelect>
               </div>
               <div>
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.status', 'Status') }}</label>
-                <TuffSelect v-model="providerForm.status" class="w-full">
+                <TuffSelect v-model="providerForm.status" class="w-full min-w-0">
                   <TuffSelectItem v-for="status in providerStatusOptions" :key="status" :value="status" :label="valueLabel(status)" />
                 </TuffSelect>
               </div>
               <div>
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.authType', 'Auth type') }}</label>
-                <TuffSelect v-model="providerForm.authType" class="w-full">
+                <TuffSelect v-model="providerForm.authType" class="w-full min-w-0">
                   <TuffSelectItem v-for="type in authTypeOptions" :key="type" :value="type" :label="valueLabel(type)" />
                 </TuffSelect>
               </div>
-              <div>
-                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.authRef', 'Auth ref') }}</label>
-                <TuffInput v-model="providerForm.authRef" class="w-full" />
+              <div v-if="providerForm.authType === 'api_key'">
+                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.apiKey', 'API Key') }}</label>
+                <TuffInput v-model="providerForm.apiKey" class="w-full" type="password" autocomplete="new-password" />
               </div>
               <div>
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.endpoint', 'Endpoint') }}</label>
@@ -1309,17 +1202,57 @@ function filterLabel(option: { value: string, label: string }) {
                 {{ t('dashboard.providerRegistry.actions.addCapability', 'Add capability') }}
               </TxButton>
             </div>
-            <div
-              v-for="(row, index) in capabilityRows"
-              :key="index"
-              class="grid gap-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04] md:grid-cols-[1fr_1fr_140px_auto]"
-            >
-              <TuffInput v-model="row.capability" placeholder="text.translate" />
-              <TuffInput v-model="row.schemaRef" placeholder="nexus://schemas/provider/..." />
-              <TuffInput v-model="row.meteringUnit" placeholder="character" />
-              <TxButton variant="secondary" size="mini" :disabled="capabilityRows.length <= 1" @click="removeCapabilityRow(index)">
-                {{ t('common.remove', 'Remove') }}
-              </TxButton>
+            <div class="overflow-x-auto rounded-xl border border-black/[0.08] dark:border-white/[0.1]">
+              <table class="w-full min-w-[620px] border-collapse text-left text-sm">
+                <thead class="bg-black/[0.03] text-xs font-medium text-black/55 dark:bg-white/[0.04] dark:text-white/55">
+                  <tr>
+                    <th class="px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}
+                    </th>
+                    <th class="w-44 px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit') }}
+                    </th>
+                    <th class="w-12 px-3 py-2 text-right">
+                      {{ t('dashboard.providerRegistry.table.actions', 'Actions') }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(row, index) in capabilityRows"
+                    :key="index"
+                    class="border-t border-black/[0.06] dark:border-white/[0.08]"
+                  >
+                    <td class="px-3 py-2">
+                      <TuffSelect v-model="row.capability" class="w-full min-w-0" :placeholder="t('dashboard.providerRegistry.fields.capability', 'Capability')" @change="applyProviderCapabilityTemplate(row, $event)">
+                        <TuffSelectItem
+                          v-for="capability in providerCapabilityTemplateOptions"
+                          :key="capability.capability"
+                          :value="capability.capability"
+                          :label="capability.capability"
+                        />
+                      </TuffSelect>
+                    </td>
+                    <td class="px-3 py-2">
+                      <TuffSelect v-model="row.meteringUnit" class="w-full min-w-0" :placeholder="t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit')">
+                        <TuffSelectItem v-for="unit in providerMeteringUnitOptions" :key="unit" :value="unit" :label="unit" />
+                      </TuffSelect>
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-full text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+                        :disabled="capabilityRows.length <= 1"
+                        :title="t('common.remove', 'Remove')"
+                        :aria-label="t('common.remove', 'Remove')"
+                        @click="removeCapabilityRow(index)"
+                      >
+                        <span class="i-carbon-close text-base" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </section>
         </template>
@@ -1396,32 +1329,59 @@ function filterLabel(option: { value: string, label: string }) {
                 {{ t('dashboard.providerRegistry.actions.addCapability', 'Add capability') }}
               </TxButton>
             </div>
-            <div
-              v-for="(row, index) in activeProviderEditPanel.capabilities"
-              :key="index"
-              class="space-y-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]"
-            >
-              <div class="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                <TuffInput v-model="row.capability" placeholder="text.translate" />
-                <TuffInput v-model="row.schemaRef" placeholder="schema ref" />
-                <TxButton variant="secondary" size="mini" @click="removeProviderCapabilityEditRow(selectedProvider, index)">
-                  {{ t('common.remove', 'Remove') }}
-                </TxButton>
-              </div>
-              <div class="grid gap-2 lg:grid-cols-3">
-                <div>
-                  <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.meteringJson', 'Metering JSON') }}</label>
-                  <TuffInput v-model="row.meteringText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ &quot;unit&quot;: &quot;request&quot; }" />
-                </div>
-                <div>
-                  <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.constraintsJson', 'Constraints JSON') }}</label>
-                  <TuffInput v-model="row.constraintsText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
-                </div>
-                <div>
-                  <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
-                  <TuffInput v-model="row.metadataText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
-                </div>
-              </div>
+            <div class="overflow-x-auto rounded-xl border border-black/[0.08] dark:border-white/[0.1]">
+              <table class="w-full min-w-[980px] border-collapse text-left text-sm">
+                <thead class="bg-black/[0.03] text-xs font-medium text-black/55 dark:bg-white/[0.04] dark:text-white/55">
+                  <tr>
+                    <th class="w-56 px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}
+                    </th>
+                    <th class="px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.meteringJson', 'Metering JSON') }}
+                    </th>
+                    <th class="px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.constraintsJson', 'Constraints JSON') }}
+                    </th>
+                    <th class="px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}
+                    </th>
+                    <th class="w-12 px-3 py-2 text-right">
+                      {{ t('dashboard.providerRegistry.table.actions', 'Actions') }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(row, index) in activeProviderEditPanel.capabilities"
+                    :key="index"
+                    class="align-top border-t border-black/[0.06] dark:border-white/[0.08]"
+                  >
+                    <td class="px-3 py-2">
+                      <TuffInput v-model="row.capability" class="w-full" placeholder="text.translate" />
+                    </td>
+                    <td class="px-3 py-2">
+                      <TuffInput v-model="row.meteringText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ &quot;unit&quot;: &quot;request&quot; }" />
+                    </td>
+                    <td class="px-3 py-2">
+                      <TuffInput v-model="row.constraintsText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
+                    </td>
+                    <td class="px-3 py-2">
+                      <TuffInput v-model="row.metadataText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
+                    </td>
+                    <td class="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-full text-red-500 transition hover:bg-red-500/10"
+                        :title="t('common.remove', 'Remove')"
+                        :aria-label="t('common.remove', 'Remove')"
+                        @click="removeProviderCapabilityEditRow(selectedProvider, index)"
+                      >
+                        <span class="i-carbon-close text-base" aria-hidden="true" />
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </section>
         </template>
@@ -1494,67 +1454,6 @@ function filterLabel(option: { value: string, label: string }) {
     </TxDrawer>
 
     <TxDrawer
-      v-model:visible="capabilityDrawerOpen"
-      :title="capabilityDrawerTitle"
-      size="min(620px, 100vw)"
-      direction="right"
-    >
-      <div class="space-y-5">
-        <p class="text-sm text-black/50 dark:text-white/50">
-          {{ t('dashboard.providerRegistry.capabilities.drawerHint', 'Capability rows belong to a provider and are used by scene strategy bindings.') }}
-        </p>
-        <section class="grid gap-3 md:grid-cols-2">
-          <div class="md:col-span-2">
-            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.provider', 'Provider') }}</label>
-            <TuffSelect v-if="capabilityDrawerMode === 'create'" v-model="capabilityForm.providerId" class="w-full">
-              <TuffSelectItem v-for="provider in providerOptions" :key="provider.value" :value="provider.value" :label="provider.label" />
-            </TuffSelect>
-            <TuffInput v-else :model-value="getProviderName(capabilityForm.providerId)" class="w-full" readonly />
-          </div>
-          <div>
-            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}</label>
-            <TuffInput v-model="capabilityForm.capability" class="w-full" placeholder="text.translate" />
-          </div>
-          <div>
-            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.table.schemaRef', 'Schema ref') }}</label>
-            <TuffInput v-model="capabilityForm.schemaRef" class="w-full" placeholder="nexus://schemas/provider/..." />
-          </div>
-          <div class="md:col-span-2">
-            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.meteringJson', 'Metering JSON') }}</label>
-            <TuffInput v-model="capabilityForm.meteringText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ &quot;unit&quot;: &quot;request&quot; }" />
-          </div>
-          <div>
-            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.constraintsJson', 'Constraints JSON') }}</label>
-            <TuffInput v-model="capabilityForm.constraintsText" type="textarea" :rows="5" class="w-full font-mono text-xs" placeholder="{ }" />
-          </div>
-          <div>
-            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
-            <TuffInput v-model="capabilityForm.metadataText" type="textarea" :rows="5" class="w-full font-mono text-xs" placeholder="{ }" />
-          </div>
-        </section>
-      </div>
-
-      <template #footer>
-        <div class="flex items-center justify-end gap-2">
-          <TxButton variant="secondary" size="small" :disabled="savingCapability" @click="closeCapabilityDrawer">
-            {{ t('common.cancel', 'Cancel') }}
-          </TxButton>
-          <TxButton
-            variant="primary"
-            size="small"
-            :disabled="savingCapability || !capabilityForm.providerId || !capabilityForm.capability.trim()"
-            @click="submitCapabilityDrawer"
-          >
-            <TxSpinner v-if="savingCapability" :size="14" />
-            <span :class="savingCapability ? 'ml-2' : ''">
-              {{ capabilityDrawerMode === 'create' ? t('dashboard.providerRegistry.capabilities.create', 'Create capability') : t('common.save', 'Save') }}
-            </span>
-          </TxButton>
-        </div>
-      </template>
-    </TxDrawer>
-
-    <TxDrawer
       v-model:visible="sceneDrawerOpen"
       :title="sceneDrawerTitle"
       size="min(820px, 100vw)"
@@ -1563,11 +1462,11 @@ function filterLabel(option: { value: string, label: string }) {
       <div class="space-y-6">
         <template v-if="sceneDrawerMode === 'create'">
           <p class="text-sm text-black/50 dark:text-white/50">
-            {{ t('dashboard.providerRegistry.scenes.createHint', 'Bind a scene to provider capabilities. Runtime orchestration is implemented separately.') }}
+            {{ t('dashboard.providerRegistry.routes.createHint', 'Bind a route to provider capabilities and strategy rules.') }}
           </p>
           <section class="grid gap-3 md:grid-cols-2">
             <div>
-              <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.sceneId', 'Scene ID') }}</label>
+              <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.routeId', 'Route ID') }}</label>
               <TuffInput v-model="sceneForm.id" class="w-full" />
             </div>
             <div>
@@ -1608,7 +1507,7 @@ function filterLabel(option: { value: string, label: string }) {
           <section class="space-y-3">
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-sm font-medium text-black dark:text-white">
-                {{ t('dashboard.providerRegistry.scenes.bindingsTitle', 'Strategy bindings') }}
+                {{ t('dashboard.providerRegistry.routes.bindingsTitle', 'Provider bindings') }}
               </h3>
               <TxButton variant="secondary" size="mini" :disabled="!providers.length" @click="addBindingRow">
                 {{ t('dashboard.providerRegistry.actions.addBinding', 'Add binding') }}
@@ -1617,16 +1516,23 @@ function filterLabel(option: { value: string, label: string }) {
             <div
               v-for="(row, index) in bindingRows"
               :key="index"
-              class="grid gap-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04] md:grid-cols-[1fr_1fr_100px_auto]"
+              class="grid items-center gap-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04] md:grid-cols-[1fr_1fr_100px_36px]"
             >
               <TuffSelect v-model="row.providerId" class="w-full">
                 <TuffSelectItem v-for="provider in providerOptions" :key="provider.value" :value="provider.value" :label="provider.label" />
               </TuffSelect>
               <TuffInput v-model="row.capability" placeholder="image.translate.e2e" />
               <TuffInput v-model="row.priority" type="number" placeholder="10" />
-              <TxButton variant="secondary" size="mini" :disabled="bindingRows.length <= 1" @click="removeBindingRow(index)">
-                {{ t('common.remove', 'Remove') }}
-              </TxButton>
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-full text-red-500 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+                :disabled="bindingRows.length <= 1"
+                :title="t('common.remove', 'Remove')"
+                :aria-label="t('common.remove', 'Remove')"
+                @click="removeBindingRow(index)"
+              >
+                <span class="i-carbon-close text-base" aria-hidden="true" />
+              </button>
             </div>
           </section>
         </template>
@@ -1695,7 +1601,7 @@ function filterLabel(option: { value: string, label: string }) {
           <section class="space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <h3 class="text-sm font-medium text-black dark:text-white">
-                {{ t('dashboard.providerRegistry.scenes.bindingsTitle', 'Strategy bindings') }}
+                {{ t('dashboard.providerRegistry.routes.bindingsTitle', 'Provider bindings') }}
               </h3>
               <TxButton variant="secondary" size="mini" :disabled="!providers.length" @click="addSceneBindingEditRow(selectedScene)">
                 {{ t('dashboard.providerRegistry.actions.addBinding', 'Add binding') }}
@@ -1706,7 +1612,7 @@ function filterLabel(option: { value: string, label: string }) {
               :key="index"
               class="space-y-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]"
             >
-              <div class="grid gap-2 md:grid-cols-[1fr_1fr_90px_90px_120px_auto]">
+              <div class="grid items-center gap-2 md:grid-cols-[1fr_1fr_90px_90px_120px_36px]">
                 <TuffSelect v-model="row.providerId" class="w-full">
                   <TuffSelectItem v-for="providerOption in providerOptions" :key="providerOption.value" :value="providerOption.value" :label="providerOption.label" />
                 </TuffSelect>
@@ -1716,9 +1622,15 @@ function filterLabel(option: { value: string, label: string }) {
                 <TuffSelect v-model="row.status" class="w-full">
                   <TuffSelectItem v-for="status in bindingStatusOptions" :key="status" :value="status" :label="valueLabel(status)" />
                 </TuffSelect>
-                <TxButton variant="secondary" size="mini" @click="removeSceneBindingEditRow(selectedScene, index)">
-                  {{ t('common.remove', 'Remove') }}
-                </TxButton>
+                <button
+                  type="button"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-full text-red-500 transition hover:bg-red-500/10"
+                  :title="t('common.remove', 'Remove')"
+                  :aria-label="t('common.remove', 'Remove')"
+                  @click="removeSceneBindingEditRow(selectedScene, index)"
+                >
+                  <span class="i-carbon-close text-base" aria-hidden="true" />
+                </button>
               </div>
               <div class="grid gap-2 lg:grid-cols-2">
                 <div>
@@ -1743,22 +1655,22 @@ function filterLabel(option: { value: string, label: string }) {
                 class="w-full"
                 @update:model-value="selectSceneRunCapability(selectedScene, String($event ?? ''))"
               >
-                <TuffSelectItem value="" :label="t('dashboard.providerRegistry.scenes.defaultCapability', 'Scene default')" />
+                <TuffSelectItem value="" :label="t('dashboard.providerRegistry.routes.defaultCapability', 'Route default')" />
                 <TuffSelectItem v-for="capability in sceneCapabilities(selectedScene)" :key="capability" :value="capability" :label="capability" />
               </TuffSelect>
             </div>
             <div>
               <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.provider', 'Provider') }}</label>
               <TuffSelect v-model="activeSceneRunPanel.providerId" class="w-full">
-                <TuffSelectItem value="" :label="t('dashboard.providerRegistry.scenes.defaultProvider', 'Strategy default')" />
+                <TuffSelectItem value="" :label="t('dashboard.providerRegistry.routes.defaultProvider', 'Strategy default')" />
                 <TuffSelectItem v-for="provider in sceneProviderOptions(selectedScene)" :key="provider.value" :value="provider.value" :label="provider.label" />
               </TuffSelect>
             </div>
             <div class="md:col-span-2">
               <div class="mb-1 flex items-center justify-between gap-2">
-                <label class="apple-section-title block">{{ t('dashboard.providerRegistry.scenes.inputJson', 'Input JSON') }}</label>
+                <label class="apple-section-title block">{{ t('dashboard.providerRegistry.routes.inputJson', 'Input JSON') }}</label>
                 <TxButton variant="secondary" size="mini" @click="selectSceneRunCapability(selectedScene, activeSceneRunPanel.capability)">
-                  {{ t('dashboard.providerRegistry.scenes.resetSample', 'Reset sample') }}
+                  {{ t('dashboard.providerRegistry.routes.resetSample', 'Reset sample') }}
                 </TxButton>
               </div>
               <TuffInput v-model="activeSceneRunPanel.inputText" type="textarea" :rows="7" class="w-full font-mono text-xs" placeholder="{&quot;text&quot;:&quot;Hello&quot;,&quot;targetLang&quot;:&quot;zh&quot;}" />
@@ -1778,25 +1690,25 @@ function filterLabel(option: { value: string, label: string }) {
             <div class="grid gap-3 lg:grid-cols-2">
               <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
                 <p class="apple-section-title mb-2">
-                  {{ t('dashboard.providerRegistry.scenes.trace', 'Trace') }}
+                  {{ t('dashboard.providerRegistry.routes.trace', 'Trace') }}
                 </p>
                 <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(activeSceneRunPanel.result.trace) }}</pre>
               </div>
               <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
                 <p class="apple-section-title mb-2">
-                  {{ t('dashboard.providerRegistry.scenes.output', 'Output') }}
+                  {{ t('dashboard.providerRegistry.routes.output', 'Output') }}
                 </p>
                 <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(activeSceneRunPanel.result.output ?? null) }}</pre>
               </div>
               <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
                 <p class="apple-section-title mb-2">
-                  {{ t('dashboard.providerRegistry.scenes.selection', 'Selection') }}
+                  {{ t('dashboard.providerRegistry.routes.selection', 'Selection') }}
                 </p>
                 <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(activeSceneRunPanel.result.selected ?? []) }}</pre>
               </div>
               <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
                 <p class="apple-section-title mb-2">
-                  {{ t('dashboard.providerRegistry.scenes.fallbackTrail', 'Fallback trail') }}
+                  {{ t('dashboard.providerRegistry.routes.fallbackTrail', 'Fallback trail') }}
                 </p>
                 <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-black/60 dark:text-white/60">{{ formatRunJson(activeSceneRunPanel.result.fallbackTrail ?? []) }}</pre>
               </div>

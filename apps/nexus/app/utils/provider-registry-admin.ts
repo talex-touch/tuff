@@ -1,3 +1,5 @@
+import { pickTuffIntelligenceBuiltinAbilities } from '@talex-touch/tuff-intelligence/light'
+
 export type ProviderVendor = 'tencent-cloud' | 'openai' | 'deepseek' | 'exchange-rate' | 'custom'
 export type ProviderServiceCategory = 'ai' | 'exchange' | 'screenshot' | 'translation'
 export type ProviderStatus = 'enabled' | 'disabled' | 'degraded'
@@ -378,6 +380,15 @@ export const sceneOwnerOptions: SceneOwner[] = ['nexus', 'core-app', 'app', 'plu
 export const strategyOptions: SceneStrategyMode[] = ['priority', 'least_cost', 'lowest_latency', 'balanced', 'manual']
 export const fallbackOptions: SceneFallback[] = ['enabled', 'disabled']
 export const bindingStatusOptions: BindingStatus[] = ['enabled', 'disabled']
+
+function builtinCapabilityRows(ids: readonly string[]): CapabilityFormRow[] {
+  return pickTuffIntelligenceBuiltinAbilities(ids).map(ability => ({
+    capability: ability.id,
+    schemaRef: ability.schemaRef,
+    meteringUnit: ability.meteringUnit,
+  }))
+}
+
 export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
   {
     id: 'tencent-translation',
@@ -389,11 +400,7 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     authRef: 'secure://providers/tencent-cloud-mt-main',
     endpoint: 'https://tmt.tencentcloudapi.com',
     region: 'ap-shanghai',
-    capabilities: [
-      { capability: 'text.translate', schemaRef: 'nexus://schemas/provider/text-translate.v1', meteringUnit: 'character' },
-      { capability: 'image.translate', schemaRef: 'nexus://schemas/provider/image-translate.v1', meteringUnit: 'image' },
-      { capability: 'image.translate.e2e', schemaRef: 'nexus://schemas/provider/image-translate-e2e.v1', meteringUnit: 'image' },
-    ],
+    capabilities: builtinCapabilityRows(['text.translate', 'image.translate', 'image.translate.e2e']),
     metadata: {
       source: 'provider-registry',
       template: 'tencent-translation',
@@ -409,12 +416,7 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     authRef: 'secure://providers/openai-compatible-ai-main',
     endpoint: 'https://api.openai.com/v1',
     region: 'global',
-    capabilities: [
-      { capability: 'chat.completion', schemaRef: 'nexus://schemas/provider/chat-completion.v1', meteringUnit: 'token' },
-      { capability: 'text.summarize', schemaRef: 'nexus://schemas/provider/text-summarize.v1', meteringUnit: 'token' },
-      { capability: 'content.extract', schemaRef: 'nexus://schemas/provider/content-extract.v1', meteringUnit: 'token' },
-      { capability: 'vision.ocr', schemaRef: 'nexus://schemas/provider/vision-ocr.v1', meteringUnit: 'token' },
-    ],
+    capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract', 'vision.ocr']),
     metadata: {
       source: 'intelligence',
       adapter: 'openai-compatible',
@@ -436,12 +438,7 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     authRef: 'secure://providers/openai-responses-ai-main',
     endpoint: 'https://api.openai.com/v1',
     region: 'global',
-    capabilities: [
-      { capability: 'chat.completion', schemaRef: 'nexus://schemas/provider/chat-completion.v1', meteringUnit: 'token' },
-      { capability: 'text.summarize', schemaRef: 'nexus://schemas/provider/text-summarize.v1', meteringUnit: 'token' },
-      { capability: 'content.extract', schemaRef: 'nexus://schemas/provider/content-extract.v1', meteringUnit: 'token' },
-      { capability: 'vision.ocr', schemaRef: 'nexus://schemas/provider/vision-ocr.v1', meteringUnit: 'token' },
-    ],
+    capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract', 'vision.ocr']),
     metadata: {
       source: 'intelligence',
       adapter: 'openai-responses',
@@ -463,11 +460,7 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     authRef: 'secure://providers/deepseek-ai-main',
     endpoint: 'https://api.deepseek.com/v1',
     region: 'global',
-    capabilities: [
-      { capability: 'chat.completion', schemaRef: 'nexus://schemas/provider/chat-completion.v1', meteringUnit: 'token' },
-      { capability: 'text.summarize', schemaRef: 'nexus://schemas/provider/text-summarize.v1', meteringUnit: 'token' },
-      { capability: 'content.extract', schemaRef: 'nexus://schemas/provider/content-extract.v1', meteringUnit: 'token' },
-    ],
+    capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract']),
     metadata: {
       source: 'intelligence',
       adapter: 'openai-compatible',
@@ -489,10 +482,7 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     authRef: 'secure://providers/exchange-rate-official',
     endpoint: 'https://v6.exchangerate-api.com/v6',
     region: 'global',
-    capabilities: [
-      { capability: 'fx.rate.latest', schemaRef: 'nexus://schemas/provider/fx-rate-latest.v1', meteringUnit: 'fx_quote' },
-      { capability: 'fx.convert', schemaRef: 'nexus://schemas/provider/fx-convert.v1', meteringUnit: 'fx_quote' },
-    ],
+    capabilities: builtinCapabilityRows(['fx.rate.latest', 'fx.convert']),
     metadata: {
       source: 'provider-registry',
       adapter: 'exchange-rate',
@@ -509,9 +499,7 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     authRef: '',
     endpoint: 'local://overlay-render',
     region: 'local',
-    capabilities: [
-      { capability: 'overlay.render', schemaRef: 'nexus://schemas/provider/overlay-render.v1', meteringUnit: 'image' },
-    ],
+    capabilities: builtinCapabilityRows(['overlay.render']),
     metadata: {
       source: 'provider-registry',
       adapter: 'local-overlay',
@@ -519,6 +507,25 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     },
   },
 ]
+
+export function resolveFirstProviderTemplateForServiceCategory(
+  category: ProviderServiceCategory | string | number,
+): ProviderRegistryTemplate | null {
+  const normalized = String(category) as ProviderServiceCategory
+  return providerRegistryTemplates.find(template => template.serviceCategory === normalized) ?? null
+}
+
+export function createProviderAuthRef(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[^a-z0-9]+/, '')
+    .slice(0, 80) || 'provider'
+
+  return `secure://providers/${slug}`
+}
+
 export const providerObservabilityFilters: ProviderObservabilityFilter[] = ['all', 'attention', 'healthy', 'degraded', 'unhealthy', 'unknown']
 export const sceneObservabilityFilters: SceneObservabilityFilter[] = ['all', 'attention', 'completed', 'failed', 'planned', 'unknown']
 export const usageLedgerFilters: UsageLedgerFilter[] = ['all', 'attention', 'completed', 'failed', 'planned', 'estimated']

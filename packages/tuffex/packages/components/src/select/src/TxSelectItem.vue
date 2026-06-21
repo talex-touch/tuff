@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Slots } from 'vue'
-import { computed, inject, onMounted, useSlots, watch } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, useSlots, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import { SELECT_KEY } from './types'
 
@@ -21,6 +21,7 @@ const props = withDefaults(
 
 const txSelect = inject(SELECT_KEY)
 const slots: Slots = useSlots()
+const optionId = Symbol('tuff-select-option')
 
 function resolveChildrenText(children: unknown): string {
   if (children == null || typeof children === 'boolean')
@@ -58,7 +59,7 @@ const resolvedLabel = computed(() => {
 })
 
 function registerCurrentOption() {
-  txSelect?.registerOption(props.value, resolvedLabel.value)
+  txSelect?.registerOption(optionId, props.value, resolvedLabel.value)
 }
 
 onMounted(() => {
@@ -66,14 +67,18 @@ onMounted(() => {
 })
 
 watch(
-  () => resolvedLabel.value,
+  () => [props.value, resolvedLabel.value] as const,
   () => {
     registerCurrentOption()
   },
 )
 
+onBeforeUnmount(() => {
+  txSelect?.unregisterOption(optionId)
+})
+
 const isSelected = computed(() => {
-  return txSelect?.currentValue.value === props.value
+  return txSelect?.isValueSelected(props.value) ?? false
 })
 
 const visible = computed(() => {
