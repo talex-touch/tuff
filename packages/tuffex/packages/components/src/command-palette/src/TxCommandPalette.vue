@@ -47,7 +47,7 @@ const filteredCommands = computed(() => {
 
 watch(
   () => props.modelValue,
-  async (v) => {
+  async (v, oldValue) => {
     if (v) {
       zIndex.value = nextZIndex()
       emit('open')
@@ -57,10 +57,12 @@ watch(
         inputRef.value?.focus()
       return
     }
-    emit('close')
+    if (oldValue !== undefined)
+      emit('close')
     query.value = ''
     activeIndex.value = 0
   },
+  { immediate: true },
 )
 
 watch(
@@ -203,12 +205,17 @@ function onKeydown(e: KeyboardEvent) {
       <div
         v-if="visible"
         class="tx-command-palette__overlay"
+        :class="overlayClass"
         :style="{ zIndex }"
         role="dialog"
         aria-modal="true"
         @click.self="close"
       >
-        <div class="tx-command-palette__panel" :style="{ '--tx-command-palette-max': `${maxHeight}px` }">
+        <div
+          class="tx-command-palette__panel"
+          :class="panelClass"
+          :style="{ '--tx-command-palette-max': `${maxHeight}px` }"
+        >
           <div class="tx-command-palette__search">
             <span class="tx-command-palette__search-icon" aria-hidden="true">
               <TxIcon :icon="{ type: 'builtin', value: 'search' }" :size="16" />
@@ -258,9 +265,13 @@ function onKeydown(e: KeyboardEvent) {
             </button>
 
             <div v-if="!filteredCommands.length" class="tx-command-palette__empty">
-              {{ emptyText }}
+              <slot name="empty" :query="query" :empty-text="emptyText">
+                {{ emptyText }}
+              </slot>
             </div>
           </div>
+
+          <slot name="footer" :query="query" :visible-count="filteredCommands.length" />
         </div>
       </div>
     </transition>

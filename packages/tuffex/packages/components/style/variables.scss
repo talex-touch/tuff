@@ -1,6 +1,154 @@
 // TUFF UI CSS Variables
 // These can be customized by the user
 
+@mixin tx-high-contrast-light {
+  --tx-color-primary: #005fcc;
+  --tx-color-primary-light-3: #1d76d3;
+  --tx-color-primary-light-5: #5aa0e6;
+  --tx-color-primary-light-7: #b7d9f8;
+  --tx-color-primary-light-8: #d5e9fb;
+  --tx-color-primary-light-9: #edf6ff;
+  --tx-color-primary-dark-2: #004c9f;
+
+  --tx-color-success: #166534;
+  --tx-color-warning: #9a5b00;
+  --tx-color-danger: #b42318;
+  --tx-color-info: #475569;
+
+  --tx-text-color-primary: #111827;
+  --tx-text-color-regular: #1f2937;
+  --tx-text-color-secondary: #374151;
+  --tx-text-color-placeholder: #4b5563;
+  --tx-text-color-disabled: #6b7280;
+
+  --tx-border-color: #6b7280;
+  --tx-border-color-light: #94a3b8;
+  --tx-border-color-lighter: #cbd5e1;
+  --tx-border-color-extra-light: #e2e8f0;
+
+  --tx-fill-color: #e5e7eb;
+  --tx-fill-color-light: #f3f4f6;
+  --tx-fill-color-lighter: #f8fafc;
+  --tx-fill-color-darker: #cbd5e1;
+  --tx-fill-color-blank: #ffffff;
+
+  --tx-bg-color: #ffffff;
+  --tx-bg-color-page: #eef2f7;
+  --tx-bg-color-overlay: #ffffff;
+
+  --tx-color-primary-rgb: 0 95 204;
+  --tx-color-success-rgb: 22 101 52;
+  --tx-color-warning-rgb: 154 91 0;
+  --tx-color-danger-rgb: 180 35 24;
+  --tx-color-info-rgb: 71 85 105;
+  --tx-border-color-rgb: 107 114 128;
+  --tx-fill-color-rgb: 229 231 235;
+  --tx-fill-color-extra-light-rgb: 248 250 252;
+
+  --tx-color-success-light-5: color-mix(in srgb, var(--tx-color-success) 50%, white);
+  --tx-color-success-light-7: color-mix(in srgb, var(--tx-color-success) 30%, white);
+  --tx-color-success-light-8: color-mix(in srgb, var(--tx-color-success) 20%, white);
+  --tx-color-success-light-9: color-mix(in srgb, var(--tx-color-success) 12%, white);
+  --tx-color-warning-light-3: color-mix(in srgb, var(--tx-color-warning) 70%, white);
+  --tx-color-warning-light-5: color-mix(in srgb, var(--tx-color-warning) 50%, white);
+  --tx-color-warning-light-7: color-mix(in srgb, var(--tx-color-warning) 30%, white);
+  --tx-color-warning-light-8: color-mix(in srgb, var(--tx-color-warning) 20%, white);
+  --tx-color-warning-light-9: color-mix(in srgb, var(--tx-color-warning) 12%, white);
+  --tx-color-danger-light-3: color-mix(in srgb, var(--tx-color-danger) 70%, white);
+  --tx-color-danger-light-5: color-mix(in srgb, var(--tx-color-danger) 50%, white);
+  --tx-color-danger-light-7: color-mix(in srgb, var(--tx-color-danger) 30%, white);
+  --tx-color-danger-light-9: color-mix(in srgb, var(--tx-color-danger) 12%, white);
+  --tx-color-info-light-3: color-mix(in srgb, var(--tx-color-info) 70%, white);
+  --tx-color-info-light-6: color-mix(in srgb, var(--tx-color-info) 40%, white);
+  --tx-color-info-light-7: color-mix(in srgb, var(--tx-color-info) 30%, white);
+  --tx-color-info-light-8: color-mix(in srgb, var(--tx-color-info) 20%, white);
+  --tx-color-info-light-9: color-mix(in srgb, var(--tx-color-info) 12%, white);
+
+  --tx-border-color-dark: color-mix(in srgb, var(--tx-border-color) 78%, black);
+  --tx-focus-ring-color: color-mix(in srgb, var(--tx-color-primary) 72%, white);
+  --tx-focus-ring-shadow: 0 0 0 4px color-mix(in srgb, var(--tx-color-primary) 22%, transparent);
+  --tx-color-primary-soft: color-mix(in srgb, var(--tx-color-primary) 16%, transparent);
+  --tx-coloring-border-color: color-mix(in srgb, var(--tx-color-primary) 34%, var(--tx-border-color));
+  --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 58%, var(--tx-border-color));
+  --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
+  --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
+}
+
+@mixin tx-high-contrast-dark {
+  --tx-color-primary: #7cc4ff;
+  --tx-color-primary-light-3: #5caee9;
+  --tx-color-primary-light-5: #397ca8;
+  --tx-color-primary-light-7: #1d4662;
+  --tx-color-primary-light-8: #18394f;
+  --tx-color-primary-light-9: #102536;
+  --tx-color-primary-dark-2: #b8ddff;
+
+  --tx-color-success: #86efac;
+  --tx-color-warning: #facc15;
+  --tx-color-danger: #fda4af;
+  --tx-color-info: #cbd5e1;
+
+  --tx-text-color-primary: #ffffff;
+  --tx-text-color-regular: #f3f4f6;
+  --tx-text-color-secondary: #d1d5db;
+  --tx-text-color-placeholder: #cbd5e1;
+  --tx-text-color-disabled: #94a3b8;
+
+  --tx-border-color: #94a3b8;
+  --tx-border-color-light: #64748b;
+  --tx-border-color-lighter: #475569;
+  --tx-border-color-extra-light: #334155;
+
+  --tx-fill-color: #1f2937;
+  --tx-fill-color-light: #111827;
+  --tx-fill-color-lighter: #0f172a;
+  --tx-fill-color-darker: #334155;
+  --tx-fill-color-blank: #0b1120;
+
+  --tx-bg-color: #05070d;
+  --tx-bg-color-page: #000000;
+  --tx-bg-color-overlay: #111827;
+  --tx-surface-refraction-mask-color: #000000;
+  --tx-surface-refraction-mask-rgb: 0 0 0;
+
+  --tx-color-primary-rgb: 124 196 255;
+  --tx-color-success-rgb: 134 239 172;
+  --tx-color-warning-rgb: 250 204 21;
+  --tx-color-danger-rgb: 253 164 175;
+  --tx-color-info-rgb: 203 213 225;
+  --tx-border-color-rgb: 148 163 184;
+  --tx-fill-color-rgb: 31 41 55;
+  --tx-fill-color-extra-light-rgb: 15 23 42;
+
+  --tx-color-success-light-5: color-mix(in srgb, var(--tx-color-success) 50%, black);
+  --tx-color-success-light-7: color-mix(in srgb, var(--tx-color-success) 30%, black);
+  --tx-color-success-light-8: color-mix(in srgb, var(--tx-color-success) 20%, black);
+  --tx-color-success-light-9: color-mix(in srgb, var(--tx-color-success) 12%, black);
+  --tx-color-warning-light-3: color-mix(in srgb, var(--tx-color-warning) 70%, black);
+  --tx-color-warning-light-5: color-mix(in srgb, var(--tx-color-warning) 50%, black);
+  --tx-color-warning-light-7: color-mix(in srgb, var(--tx-color-warning) 30%, black);
+  --tx-color-warning-light-8: color-mix(in srgb, var(--tx-color-warning) 20%, black);
+  --tx-color-warning-light-9: color-mix(in srgb, var(--tx-color-warning) 12%, black);
+  --tx-color-danger-light-3: color-mix(in srgb, var(--tx-color-danger) 70%, black);
+  --tx-color-danger-light-5: color-mix(in srgb, var(--tx-color-danger) 50%, black);
+  --tx-color-danger-light-7: color-mix(in srgb, var(--tx-color-danger) 30%, black);
+  --tx-color-danger-light-9: color-mix(in srgb, var(--tx-color-danger) 12%, black);
+  --tx-color-info-light-3: color-mix(in srgb, var(--tx-color-info) 70%, black);
+  --tx-color-info-light-6: color-mix(in srgb, var(--tx-color-info) 40%, black);
+  --tx-color-info-light-7: color-mix(in srgb, var(--tx-color-info) 30%, black);
+  --tx-color-info-light-8: color-mix(in srgb, var(--tx-color-info) 20%, black);
+  --tx-color-info-light-9: color-mix(in srgb, var(--tx-color-info) 12%, black);
+
+  --tx-border-color-dark: #cbd5e1;
+  --tx-focus-ring-color: var(--tx-color-primary);
+  --tx-focus-ring-shadow: 0 0 0 4px color-mix(in srgb, var(--tx-color-primary) 30%, transparent);
+  --tx-color-primary-soft: color-mix(in srgb, var(--tx-color-primary) 24%, transparent);
+  --tx-coloring-border-color: color-mix(in srgb, var(--tx-color-primary) 42%, var(--tx-border-color));
+  --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 68%, var(--tx-border-color));
+  --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
+  --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
+}
+
 :root {
   // Primary Colors
   --tx-color-primary: #409eff;
@@ -133,6 +281,13 @@
   --tx-skeleton-color: var(--tx-fill-color-lighter);
   --tx-text-color: var(--tx-text-color-regular);
   --tx-text-color-tertiary: var(--tx-text-color-secondary);
+  --tx-focus-ring-color: var(--tx-color-primary-light-7);
+  --tx-focus-ring-shadow: 0 0 0 3px var(--tx-color-primary-light-9);
+  --tx-color-primary-soft: color-mix(in srgb, var(--tx-color-primary) 12%, transparent);
+  --tx-coloring-border-color: color-mix(in srgb, var(--tx-color-primary) 24%, var(--tx-border-color));
+  --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 46%, var(--tx-border-color));
+  --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
+  --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
 }
 
 // Dark theme
@@ -230,8 +385,37 @@
   --tx-skeleton-color: var(--tx-fill-color);
   --tx-text-color: var(--tx-text-color-regular);
   --tx-text-color-tertiary: var(--tx-text-color-secondary);
+  --tx-focus-ring-color: var(--tx-color-primary-light-7);
+  --tx-focus-ring-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  --tx-color-primary-soft: color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  --tx-coloring-border-color: color-mix(in srgb, var(--tx-color-primary) 34%, var(--tx-border-color));
+  --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 58%, var(--tx-border-color));
+  --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
+  --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
 }
 
+html[data-tx-contrast='high'],
+html.contrast {
+  @include tx-high-contrast-light;
+}
+
+html[data-theme='dark'][data-tx-contrast='high'],
+html[data-theme='dark'].contrast,
+html.dark[data-tx-contrast='high'],
+html.dark.contrast {
+  @include tx-high-contrast-dark;
+}
+
+@media (prefers-contrast: more) {
+  html:not([data-tx-contrast='normal']) {
+    @include tx-high-contrast-light;
+  }
+
+  html[data-theme='dark']:not([data-tx-contrast='normal']),
+  html.dark:not([data-tx-contrast='normal']) {
+    @include tx-high-contrast-dark;
+  }
+}
 
 html {
   color: var(--tx-text-color-primary);

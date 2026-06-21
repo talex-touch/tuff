@@ -13,8 +13,8 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   currentPage: 1,
   pageSize: 10,
-  prevIcon: 'chevron-left',
-  nextIcon: 'chevron-right',
+  prevIcon: 'i-carbon-chevron-left',
+  nextIcon: 'i-carbon-chevron-right',
   showInfo: false,
   showFirstLast: false,
 })
@@ -165,7 +165,7 @@ function handlePageChange(page: number) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .tx-pagination__list {
@@ -174,7 +174,7 @@ function handlePageChange(page: number) {
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 4px;
+  gap: 6px;
 }
 
 .tx-pagination__item {
@@ -188,28 +188,43 @@ function handlePageChange(page: number) {
   min-width: 32px;
   height: 32px;
   padding: 0 8px;
-  border: 1px solid var(--tx-pagination-border, #d1d5db);
-  border-radius: 6px;
-  background: var(--tx-pagination-bg, #ffffff);
-  color: var(--tx-pagination-text, #374151);
+  border: 1px solid var(--tx-pagination-border, var(--tx-border-color-lighter, #dcdfe6));
+  border-radius: var(--tx-pagination-radius, 8px);
+  background: var(--tx-pagination-bg, var(--tx-fill-color-blank, #ffffff));
+  color: var(--tx-pagination-text, var(--tx-text-color-regular, #606266));
   font-size: 14px;
+  line-height: 1;
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    background-color var(--tx-transition-duration-fast, 0.2s),
+    border-color var(--tx-transition-duration-fast, 0.2s),
+    color var(--tx-transition-duration-fast, 0.2s),
+    box-shadow var(--tx-transition-duration-fast, 0.2s);
 }
 
 .tx-pagination__button:hover:not(.tx-pagination__button--disabled) {
-  background: var(--tx-pagination-hover-bg, #f9fafb);
-  border-color: var(--tx-pagination-hover-border, #9ca3af);
+  background: var(--tx-pagination-hover-bg, color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, var(--tx-fill-color-blank, #ffffff)));
+  border-color: var(--tx-pagination-hover-border, color-mix(in srgb, var(--tx-color-primary, #409eff) 48%, var(--tx-border-color-lighter, #dcdfe6)));
+  color: var(--tx-pagination-hover-text, var(--tx-color-primary, #409eff));
+}
+
+.tx-pagination__button:focus-visible {
+  outline: none;
+  border-color: var(--tx-pagination-focus-border, var(--tx-color-primary, #409eff));
+  box-shadow: var(--tx-focus-ring-shadow, 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent));
 }
 
 .tx-pagination__button--active {
-  background: var(--tx-pagination-active-bg, #3b82f6);
-  border-color: var(--tx-pagination-active-border, #3b82f6);
-  color: var(--tx-pagination-active-text, #ffffff);
+  background: var(--tx-pagination-active-bg, var(--tx-color-primary, #409eff));
+  border-color: var(--tx-pagination-active-border, var(--tx-color-primary, #409eff));
+  color: var(--tx-pagination-active-text, var(--tx-fill-color-blank, #ffffff));
 }
 
 .tx-pagination__button--disabled {
-  opacity: 0.5;
+  color: var(--tx-pagination-disabled-text, var(--tx-text-color-disabled, #c0c4cc));
+  background: var(--tx-pagination-disabled-bg, color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent));
+  border-color: var(--tx-pagination-disabled-border, var(--tx-border-color-extra-light, #f2f6fc));
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -220,12 +235,12 @@ function handlePageChange(page: number) {
   min-width: 32px;
   height: 32px;
   padding: 0 8px;
-  color: var(--tx-pagination-text, #374151);
+  color: var(--tx-pagination-info-text, var(--tx-text-color-secondary, #909399));
   font-size: 14px;
 }
 
 .tx-pagination__info {
-  font-size: 14px;
-  color: var(--tx-pagination-info-text, #6b7280);
+  font-size: 13px;
+  color: var(--tx-pagination-info-text, var(--tx-text-color-secondary, #909399));
 }
 </style>

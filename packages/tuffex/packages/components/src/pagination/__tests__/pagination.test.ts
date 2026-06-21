@@ -12,8 +12,10 @@ describe('txPagination', () => {
       },
     })
 
-    const buttons = wrapper.findAll('.tx-pagination__button')
-    expect(buttons.map(button => button.text())).toEqual(['', '1', '2', '3', '4', '5', '10', ''])
+    const pageButtons = wrapper.findAll('.tx-pagination__button').filter(button => button.text())
+    expect(pageButtons.map(button => button.text())).toEqual(['1', '2', '3', '4', '5', '10'])
+    expect(wrapper.find('.i-carbon-chevron-left').exists()).toBe(true)
+    expect(wrapper.find('.i-carbon-chevron-right').exists()).toBe(true)
     expect(wrapper.find('.tx-pagination__ellipsis').text()).toBe('...')
     expect(wrapper.find('[aria-current="page"]').text()).toBe('2')
   })

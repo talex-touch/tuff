@@ -84,6 +84,7 @@ export default defineComponent({
     const activeName = ref('')
     const slotWrapper = ref<any>()
     const autoSizerRef = ref<any>()
+    const indicatorRevealed = ref(false)
 
     const placement = computed(() => {
       const v = props.placement
@@ -294,7 +295,8 @@ export default defineComponent({
 
     const contentRootElRef = ref<HTMLElement | null>(null)
 
-    let contentResizeObserver: ResizeObserver | null = null
+    let layoutResizeObserver: ResizeObserver | null = null
+    let layoutResizeRaf: number | null = null
     let pointerAnimTimer: number | null = null
     let lastPointerPosition: { x: number, y: number } | null = null
 
@@ -303,24 +305,71 @@ export default defineComponent({
         window.clearTimeout(pointerAnimTimer)
       pointerAnimTimer = null
 
-      if (contentResizeObserver) {
-        contentResizeObserver.disconnect()
-        contentResizeObserver = null
+      if (layoutResizeRaf != null)
+        cancelAnimationFrame(layoutResizeRaf)
+      layoutResizeRaf = null
+
+      if (layoutResizeObserver) {
+        layoutResizeObserver.disconnect()
+        layoutResizeObserver = null
       }
     })
 
-    // Disabled continuous content ResizeObserver to avoid flicker loops
-    // AutoSizer will only refresh on manual tab switches, not content changes
+    function getActiveTabElement(): HTMLElement | null {
+      return navInnerElRef.value?.querySelector('.tx-tab-item.is-active') as HTMLElement | null
+    }
+
+    function syncPointerToActive(options: { reveal?: boolean, animate?: boolean } = {}) {
+      const el = getActiveTabElement()
+      applyPointerFor(el, options)
+    }
+
+    function scheduleLayoutRefresh() {
+      if (!sizeAnimEnabled.value && !props.showIndicator)
+        return
+
+      const run = () => {
+        layoutResizeRaf = null
+        if (sizeAnimEnabled.value)
+          void autoSizerRef.value?.refresh?.()
+        void nextTick(() => syncPointerToActive({ reveal: false, animate: false }))
+      }
+
+      if (layoutResizeRaf != null)
+        return
+
+      if (typeof requestAnimationFrame === 'undefined') {
+        run()
+        return
+      }
+
+      layoutResizeRaf = requestAnimationFrame(run)
+    }
+
     watch(
-      () => [contentRootElRef.value, sizeAnimEnabled.value] as const,
+      () => [contentRootElRef.value, navInnerElRef.value, sizeAnimEnabled.value, props.showIndicator] as const,
       () => {
-        if (contentResizeObserver) {
-          contentResizeObserver.disconnect()
-          contentResizeObserver = null
+        if (layoutResizeObserver) {
+          layoutResizeObserver.disconnect()
+          layoutResizeObserver = null
         }
-        // ResizeObserver disabled - only refresh on tab switch, not content change
+
+        if (!sizeAnimEnabled.value && !props.showIndicator)
+          return
+        if (typeof ResizeObserver === 'undefined')
+          return
+
+        const targets = [contentRootElRef.value, navInnerElRef.value].filter(Boolean) as HTMLElement[]
+        if (!targets.length)
+          return
+
+        layoutResizeObserver = new ResizeObserver(scheduleLayoutRefresh)
+        for (const target of targets)
+          layoutResizeObserver.observe(target)
+
+        scheduleLayoutRefresh()
       },
-      { immediate: true },
+      { immediate: true, flush: 'post' },
     )
 
     function playPointerAnim(direction: 'forward' | 'backward' = 'forward') {
@@ -355,7 +404,7 @@ export default defineComponent({
       }, Math.max(120, animationIndicator.value?.durationMs ?? 350))
     }
 
-    function applyPointerFor(vnodeOrEl: any) {
+    function applyPointerFor(vnodeOrEl: any, options: { reveal?: boolean, animate?: boolean } = {}) {
       const pointerEl = pointerElRef.value
       const nodeEl = (vnodeOrEl?.el ?? vnodeOrEl) as HTMLElement | undefined
       const navInnerEl = navInnerElRef.value
@@ -366,7 +415,10 @@ export default defineComponent({
       const navInnerRect = navInnerEl.getBoundingClientRect()
       const diff = props.offset || 0
 
-      pointerEl.style.opacity = '1'
+      if (options.reveal)
+        indicatorRevealed.value = true
+
+      pointerEl.style.opacity = indicatorRevealed.value ? '1' : '0'
 
       pointerEl.style.width = ''
       pointerEl.style.height = ''
@@ -438,7 +490,8 @@ export default defineComponent({
         : 'forward'
       lastPointerPosition = { x: nextPointerX, y: nextPointerY }
 
-      playPointerAnim(direction)
+      if (options.animate && indicatorRevealed.value)
+        playPointerAnim(direction)
     }
 
     function createTab(vnode: any): any {
@@ -455,7 +508,7 @@ export default defineComponent({
               el.classList.remove('tx-tabs-content-enter')
             void runAutoHeight(() => setActive(vnode)).then(() => {
               nextTick(() => {
-                applyPointerFor(tab)
+                applyPointerFor(tab, { reveal: true, animate: animationIndicator.value.enabled })
                 if (animationContent.value.enabled)
                   el.classList.add('tx-tabs-content-enter')
               })
@@ -562,8 +615,10 @@ export default defineComponent({
             activeName.value = val
           }).then(() => {
             nextTick(() => {
-              const el = navInnerElRef.value?.querySelector('.tx-tab-item.is-active')
-              applyPointerFor(el)
+              syncPointerToActive({
+                reveal: indicatorRevealed.value,
+                animate: indicatorRevealed.value && animationIndicator.value.enabled,
+              })
             })
           })
         }
@@ -580,13 +635,27 @@ export default defineComponent({
         if (node) {
           void runAutoHeight(() => setActive(node)).then(() => {
             nextTick(() => {
-              const el = navInnerElRef.value?.querySelector('.tx-tab-item.is-active')
-              applyPointerFor(el)
+              syncPointerToActive({
+                reveal: indicatorRevealed.value,
+                animate: indicatorRevealed.value && animationIndicator.value.enabled,
+              })
             })
           })
         }
       },
       { immediate: true },
+    )
+
+    watch(
+      () => [activeName.value, navInnerElRef.value, props.showIndicator] as const,
+      () => {
+        void nextTick(() => {
+          if (indicatorRevealed.value)
+            return
+          syncPointerToActive({ reveal: false, animate: false })
+        })
+      },
+      { immediate: true, flush: 'post' },
     )
 
     return () => {
@@ -633,6 +702,7 @@ export default defineComponent({
           height: heightAnimEnabled.value,
           durationMs: animationSize.value.durationMs,
           easing: animationSize.value.easing,
+          observeTarget: 'both',
           outerClass,
         },
         {
@@ -703,6 +773,8 @@ export default defineComponent({
               'tx-tabs--auto-width': !!props.autoWidth,
               'tx-tabs--borderless': props.borderless,
               'tx-tabs--indicator-hidden': !props.showIndicator,
+              'tx-tabs--indicator-pending': props.showIndicator && !indicatorRevealed.value,
+              'tx-tabs--indicator-visible': props.showIndicator && indicatorRevealed.value,
               'tx-tabs--indicator-anim': props.showIndicator && animationIndicator.value.enabled,
               'tx-tabs--nav-anim': animationNav.value.enabled,
               'tx-tabs--content-anim': animationContent.value.enabled,

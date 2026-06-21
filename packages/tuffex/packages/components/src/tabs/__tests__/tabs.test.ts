@@ -14,6 +14,7 @@ const AutoSizerStub = defineComponent({
     durationMs: Number,
     easing: String,
     outerClass: String,
+    observeTarget: String,
   },
   setup(_props, { expose, slots }) {
     expose({
@@ -79,6 +80,8 @@ describe('txTabs', () => {
     expect(wrapper.classes()).toContain('tx-tabs--indicator-pill')
     expect(wrapper.classes()).toContain('tx-tabs--motion-warp')
     expect(wrapper.classes()).toContain('tx-tabs--borderless')
+    expect(wrapper.classes()).toContain('tx-tabs--indicator-pending')
+    expect(wrapper.classes()).not.toContain('tx-tabs--indicator-visible')
     expect(wrapper.attributes('style')).toContain('--tx-tabs-indicator-duration: 350ms')
     expect(wrapper.attributes('style')).toContain('--tx-tabs-indicator-easing: cubic-bezier(0.25, 0.46, 0.45, 0.94)')
     expect(wrapper.attributes('style')).toContain('--tx-tabs-indicator-strength: 0')
@@ -91,6 +94,7 @@ describe('txTabs', () => {
       'Disabled',
     ])
     expect(wrapper.find('.tx-tabs__content-scroll').exists()).toBe(true)
+    expect(wrapper.find('.tx-tabs__pointer').exists()).toBe(true)
     expect(wrapper.text()).toContain('General content')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['General'])
     expect(wrapper.emitted('change')?.[0]).toEqual(['General'])
@@ -104,6 +108,8 @@ describe('txTabs', () => {
 
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['Network'])
     expect(wrapper.emitted('change')?.at(-1)).toEqual(['Network'])
+    expect(wrapper.classes()).toContain('tx-tabs--indicator-visible')
+    expect(wrapper.classes()).not.toContain('tx-tabs--indicator-pending')
     expect(wrapper.text()).toContain('Network content')
 
     await wrapper.findAllComponents(TxTabItem)[2].trigger('click')
@@ -130,6 +136,8 @@ describe('txTabs', () => {
     expect(wrapper.find('.active-header').text()).toBe('General')
     expect(wrapper.text()).toContain('General content')
     expect(wrapper.emitted('change')).toBeUndefined()
+    expect(wrapper.classes()).toContain('tx-tabs--indicator-pending')
+    expect(wrapper.classes()).not.toContain('tx-tabs--indicator-visible')
   })
 
   it('renders tab items generated inside fragments', async () => {
@@ -286,6 +294,7 @@ describe('txTabs', () => {
     expect(autoSizer.props('height')).toBe(true)
     expect(autoSizer.props('durationMs')).toBe(420)
     expect(autoSizer.props('easing')).toBe('linear')
+    expect(autoSizer.props('observeTarget')).toBe('both')
 
     await expect(wrapper.vm.flip(() => undefined)).resolves.toBeUndefined()
     await expect(wrapper.vm.action(() => undefined)).resolves.toEqual({ changedKeys: [] })
