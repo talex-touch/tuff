@@ -138,7 +138,7 @@
 | 39 | `929b850a2` | `docs(nexus): record strict pending verified sample` | 已完成 |
 | 40 | `00123227f` | `docs(nexus): freeze performance followups` | 已完成 |
 | 41 | `3d2a0d549` | `perf(nexus): simplify docs code headers` | 已完成 |
-| 42 | 当前批 | `perf(nexus): load docs toast on intent` | 已验证；提交 hash 以 git log 为准 |
+| 42 | `6475b8e23` | `perf(nexus): load docs toast on intent` | 已完成 |
 
 ## 本轮收尾结论
 
