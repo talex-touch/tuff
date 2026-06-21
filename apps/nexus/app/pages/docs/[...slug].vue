@@ -917,9 +917,28 @@ function isBodyHeadingNode(node: unknown, tag: string) {
   )
 }
 
+function readBodyNodeTag(node: unknown) {
+  if (Array.isArray(node) && typeof node[0] === 'string')
+    return node[0]
+  if (node && typeof node === 'object' && typeof (node as Record<string, unknown>).tag === 'string')
+    return String((node as Record<string, unknown>).tag)
+  return ''
+}
+
+function isDeferredBoundaryNode(node: unknown) {
+  const tag = readBodyNodeTag(node).toLowerCase()
+  return tag === 'tuff-demo-wrapper'
+    || tag === 'tuffpropstable'
+    || tag === 'tuff-props-table'
+    || tag === 'tuffeventstable'
+    || tag === 'tuff-events-table'
+    || tag === 'tuffslotstable'
+    || tag === 'tuff-slots-table'
+}
+
 function resolveDeferredBodySplitIndex(body: unknown) {
   const children = readBodyChildren(body)
-  if (children.length < 12)
+  if (children.length < 5)
     return -1
 
   let h2Count = 0
@@ -930,6 +949,16 @@ function resolveDeferredBodySplitIndex(body: unknown) {
     h2Count += 1
     if (h2Count === 2)
       return index
+  }
+
+  for (let index = 3; index < children.length; index += 1) {
+    if (!isDeferredBoundaryNode(children[index]))
+      continue
+
+    if (index > 3 && isBodyHeadingNode(children[index - 1], 'h3'))
+      return index - 1
+
+    return index
   }
 
   return -1
