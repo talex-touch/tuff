@@ -121,8 +121,6 @@ const sectionPaths: Record<string, string> = {
   team: '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
   oauth: '/dashboard/oauth',
-  credits: '/dashboard/credits',
-  adminCredits: '/dashboard/admin/credits',
   updates: '/dashboard/updates',
   images: '/dashboard/images',
   reviews: '/dashboard/admin/reviews',
@@ -157,11 +155,6 @@ const workspaceMenuItems = computed(() => mapItems([
     id: 'team',
     label: t('dashboard.sections.menu.team'),
     icon: 'i-carbon-user-multiple',
-  },
-  {
-    id: 'credits',
-    label: t('dashboard.sections.menu.credits', 'Intelligence 积分'),
-    icon: 'i-carbon-currency',
   },
 ]))
 
@@ -223,7 +216,7 @@ const adminMenuItems = computed(() => {
     },
     {
       id: 'intelligence',
-      label: t('dashboard.sections.menu.intelligence', 'Intelligence 模块'),
+      label: t('dashboard.sections.menu.intelligence', '塔芙智能'),
       icon: 'i-carbon-machine-learning-model',
     },
     {
@@ -284,8 +277,6 @@ const activeSection = computed(() => {
     return 'reviews'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
-  if (route.path.startsWith('/dashboard/admin/credits'))
-    return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/intelligence-agent'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/provider-registry'))
@@ -296,8 +287,6 @@ const activeSection = computed(() => {
     return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/risk'))
     return 'risk'
-  if (route.path.startsWith('/dashboard/credits'))
-    return 'credits'
   if (route.path.startsWith('/dashboard/account'))
     return 'account'
   if (route.path.startsWith('/dashboard/oauth'))
