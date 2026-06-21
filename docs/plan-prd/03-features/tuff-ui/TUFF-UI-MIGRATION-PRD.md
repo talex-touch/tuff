@@ -199,7 +199,7 @@ packages/tuff-ui/
 - **Docs 示例易报 “missing end tag”**：Markdown 中直接写 `<template #preview/#code>` 被 Vue 解析。改造方案：DemoBlock 支持 `code` prop；示例全部迁移为独立 demo 组件，md 中 `import Demo from './demos/xxx.vue'` + `import demoSource from './demos/xxx.vue?raw'`，DemoBlock 用 `:code="demoSource"`。先迁移 `tabs.md`、`gradual-blur.md`，后续按同策略批量迁移。
 - **Button spinner 行为**：只有 icon-only 按钮（如 circle 或无文本）才使用 overlay 覆盖；带文字的按钮仍左侧固定 spinner，保持宽度稳定且与 FLIP 动画共存。
 - **优先级**：Docs 安全性（demo 迁移、防解析错误）> Button spinner 行为修正 > 其他页面按批次迁移。
-- **Scroll 文档异常**：`docs/components/scroll.md` 的 `<template #code>` + ```vue 仍触发 “Element is missing end tag”。方案：统一抽离所有 Scroll demos 为 `docs/.vitepress/theme/components/demos/Scroll*.vue`，md 中引用 `<ScrollDemoX />` + `import demoSource from './demos/ScrollDemoX.vue?raw'` 并用 `:code="demoSource"`。调整 DemoBlock 如有需要，避免在 md 内嵌真实模板/脚本。
+- **Scroll 文档异常**：Scroll demo 不应在 Markdown 内嵌复杂真实模板/脚本；方案是抽成 Vue demo component，再由文档引用 raw source。
 
 ## 6. 成功指标
 

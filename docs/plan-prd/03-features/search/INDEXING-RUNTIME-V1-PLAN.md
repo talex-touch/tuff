@@ -1,6 +1,6 @@
 # Indexing Runtime V1 Plan
 
-> 更新时间：2026-05-31
+> 更新时间：2026-06-21
 > 状态：架构基线 / Phase 1 skeleton 已开始
 > 范围：CoreBox App/File/Everything/Browser Data/Quicklinks 等本地搜索源的 indexing、watch、reconcile、diagnostics 统一抽象。
 > 非目标：一次性重写 SearchEngineCore、绕过平台权限读取敏感 App 数据、把业务明文 dump 成 JSON 同步。

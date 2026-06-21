@@ -1,7 +1,7 @@
 # PRD 质量基线
 
 > 更新时间：2026-06-18
-> 定位：活跃 PRD 的最小质量约束。压缩前完整规则快照见 `./archive/PRD-QUALITY-BASELINE-pre-compression-2026-05-14.md`。
+> 定位：活跃 PRD 的最小质量约束。
 
 ## 1. 适用范围
 
@@ -160,6 +160,6 @@
 
 - PRD 主入口：`docs/plan-prd/README.md`
 - 当前执行清单：`docs/plan-prd/TODO.md`
-- 产品路线图：`docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- 产品路线图：`docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`
 - 变更日志：`docs/plan-prd/01-project/CHANGES.md`
 - 全局索引：`docs/INDEX.md`

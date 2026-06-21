@@ -1,0 +1,88 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-20T18:20:32.452Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9385/json/list",
+  "inputQuery": "status check sample",
+  "targets": [
+    {
+      "id": "AD89F825A36947607C34C3021267C4AB",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "CCDD3065D1BFD795933DA8B2E1409451",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "46242286DB20A8BAEAC1F721C66CA181",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay"
+    },
+    {
+      "id": "1682324953615B90858692FB48DE1DB7",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    }
+  ],
+  "failures": [],
+  "submitPreparation": {
+    "alreadyInSendMode": false,
+    "clickedFeatureEntry": true,
+    "readyForPrompt": true,
+    "clickMethod": "cdp-enter",
+    "activationText": "send-button\nwidget-mode\nwidget-render\ntouch-intelligence\n智能问答\nstatus check sample\nYOU\nAI\nError\nRouting provider metadata\nLatency\n0 ms\nInput kind\ntext\nCapability\ntext.chat\n请求失败\nProvider 不可用，请在设置中检查默认模型或 BYOK 配置后重试：[Intelligence] No enabled providers for text.chat: capability not supported\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "submitMethod": "cdp-enter"
+  },
+  "screenshotPath": "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-provider-unavailable.png",
+  "selectedTargetId": "1682324953615B90858692FB48DE1DB7",
+  "dom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "readyState": "complete",
+    "bodyText": "touch-intelligence\n智能问答\nstatus check sample\nYOU\n\nstatus check sample\n\nAI\nError\n\nProvider 不可用，请在设置中检查默认模型或 BYOK 配置后重试：[Intelligence] No enabled providers for text.chat: capability not supported\n\nRouting provider metadata\nLatency\n0 ms\nInput kind\ntext\nCapability\ntext.chat\n请求失败\nProvider 不可用，请在设置中检查默认模型或 BYOK 配置后重试：[Intelligence] No enabled providers for text.chat: capability not supported\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "bodyClass": "MacIntel core-box",
+    "hasCoreBoxClass": true,
+    "inputIdExists": true,
+    "inputValue": "status check sample",
+    "hasPromptSendButton": true,
+    "hasAiChatbot": true,
+    "hasErrorNotice": true,
+    "hasPermissionText": false,
+    "hasModelUnsupportedText": false,
+    "hasProviderUnavailableText": true,
+    "hasLoggedOutText": false,
+    "hasQuotaText": false,
+    "buttons": [
+      "↓"
+    ]
+  },
+  "evidenceChecks": [
+    {
+      "tag": "AI-STABLE-04",
+      "requirement": "Provider unavailable failure shows provider health or settings recovery",
+      "matched": true,
+      "signalMatched": true,
+      "blockedByFailureSignal": false,
+      "hasVisualArtifact": true,
+      "matchedSignals": [
+        "Provider 不可用",
+        "设置",
+        "重试"
+      ],
+      "missingSignals": [],
+      "matchedBlockedSignals": [],
+      "artifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-provider-unavailable-probe.json",
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-provider-unavailable.png"
+      ],
+      "visualArtifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-provider-unavailable.png"
+      ]
+    }
+  ]
+}

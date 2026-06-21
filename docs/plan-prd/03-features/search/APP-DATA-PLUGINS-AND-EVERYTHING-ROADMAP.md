@@ -1,7 +1,7 @@
 # App Data Plugins 与 Everything 收口 Roadmap
 
 > 状态：Roadmap / 进行中
-> 更新时间：2026-05-19
+> 更新时间：2026-06-21
 > 范围：官方插件数据源、macOS App Data 搜索、Windows Everything 生产化收口
 > 非目标：更新系统 Nexus Hard-Cut、AI Provider Registry、高级同步能力
 
@@ -136,8 +136,8 @@ Epic 的定义需要先锁定：Epic Games Launcher 项目、Unreal/Epic Marketp
 
 ## 7. 关联入口
 
-- 搜索系统口径：`docs/plan-prd/03-features/SEARCH-REFACTOR-PRD.md`
-- Everything PRD：`docs/plan-prd/03-features/search/EVERYTHING-SDK-INTEGRATION-PRD.md`
+- 搜索系统口径：`docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- R3 收口清单：`docs/plan-prd/TODO-R3.md`
 - Windows 文件搜索 PRD：`docs/plan-prd/03-features/search/WINDOWS-FILE-SEARCH-PRD.md`
 - 当前执行清单：`docs/plan-prd/TODO.md`
 - 质量基线：`docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`

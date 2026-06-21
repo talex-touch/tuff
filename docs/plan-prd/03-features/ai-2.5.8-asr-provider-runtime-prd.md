@@ -1,6 +1,6 @@
 # PRD: Tuff 2.5.8 ASR Provider Runtime
 
-> 更新时间：2026-05-16
+> 更新时间：2026-06-21
 > 状态：Planned / Direction Locked
 > 目标版本：2.5.8
 
@@ -81,5 +81,5 @@ interface ASRProvider {
 - 本地知识检索：`./ai-2.5.3-local-knowledge-retrieval-prd.md`
 - 本地模型运行时：`./ai-2.5.5-local-model-runtime-prd.md`
 - 当前执行清单：`../TODO.md`
-- 产品路线图：`../01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- 产品路线图：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 - 质量基线：`../docs/PRD-QUALITY-BASELINE.md`

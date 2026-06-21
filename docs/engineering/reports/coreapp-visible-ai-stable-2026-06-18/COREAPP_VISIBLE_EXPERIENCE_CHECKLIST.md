@@ -19,16 +19,16 @@
 - Group: startup
 - Required: yes
 - Requires screenshot/recording: no
-- Status: pending
+- Status: passed
 - Collection steps:
   - Confirm the packaged app bundle version matches apps/core-app/package.json.
   - Run the packaged hot-start benchmark against the current bundle.
   - Attach the summary report and at least one per-run report.
 - Required evidence:
-  - [ ] Current package version is used by the packaged artifact
-  - [ ] Hot-start benchmark summary path is attached
-  - [ ] Startup health and renderer-ready timing are captured
-  - [ ] Warnings/errors are recorded without redaction of failure codes
+  - [x] Current package version is used by the packaged artifact
+  - [x] Hot-start benchmark summary path is attached
+  - [x] Startup health and renderer-ready timing are captured
+  - [x] Warnings/errors are recorded without redaction of failure codes
 - Recommended artifacts:
   - docs/engineering/reports/startup-packaged-hot-runs-YYYY-MM-DD/汇总报告.md
   - docs/engineering/reports/startup-packaged-hot-runs-YYYY-MM-DD/第01次运行报告.md
@@ -36,8 +36,10 @@
   - The packaged artifact version does not match the package baseline.
   - The app does not reach startup health or renderer-ready markers.
 - Artifact paths:
-  - _none_
+  - ../startup-packaged-hot-runs-2026-06-21/汇总报告.md
+  - ../startup-packaged-hot-runs-2026-06-21/第10次运行报告.md
 - Notes:
+  - 2026-06-21 packaged hot benchmark uses the current `2.4.12-beta.8` artifact and passed 10/10 runs with Startup health P50 552ms, P95 810ms, 0 WARN, and 0 ERROR.
 
 ### Packaged cold startup benchmark
 
@@ -45,16 +47,16 @@
 - Group: startup
 - Required: yes
 - Requires screenshot/recording: no
-- Status: pending
+- Status: passed
 - Collection steps:
   - Use an isolated userData directory for cold-start samples.
   - Run the packaged cold-start benchmark against the current bundle.
   - Attach the summary report and WAL/health long-tail notes.
 - Required evidence:
-  - [ ] Current package version is used by the packaged artifact
-  - [ ] Cold-start benchmark summary path is attached
-  - [ ] Isolated userData path is used
-  - [ ] WAL/health long-tail notes are attached
+  - [x] Current package version is used by the packaged artifact
+  - [x] Cold-start benchmark summary path is attached
+  - [x] Isolated userData path is used
+  - [x] WAL/health long-tail notes are attached
 - Recommended artifacts:
   - docs/engineering/reports/startup-packaged-cold-runs-YYYY-MM-DD/汇总报告.md
   - docs/engineering/reports/startup-packaged-cold-runs-YYYY-MM-DD/第01次运行报告.md
@@ -62,8 +64,11 @@
   - The run uses the normal user profile instead of an isolated benchmark profile.
   - Cold-start timing is collected from a stale packaged artifact.
 - Artifact paths:
-  - _none_
+  - ../startup-packaged-cold-runs-2026-06-21/汇总报告.md
+  - ../startup-packaged-cold-runs-2026-06-21/第01次运行报告.md
+  - startup-packaged-cold-long-tail-notes.md
 - Notes:
+  - 2026-06-21 packaged cold benchmark uses per-run isolated userData directories and passed 10/10 runs with Startup health P50 572ms, P95 615ms, 0 WARN, and 0 ERROR. Run 08 is the long-tail sample at 615ms.
 
 ### First-screen visual state
 
@@ -71,15 +76,15 @@
 - Group: startup
 - Required: yes
 - Requires screenshot/recording: yes
-- Status: pending
+- Status: passed
 - Collection steps:
   - Launch the current app build and wait only until the first usable screen appears.
   - Capture the full first screen before navigating away.
   - Open Settings/About or diagnostics and capture the reachable startup health summary.
 - Required evidence:
-  - [ ] Screenshot or recording shows the first usable CoreApp screen
-  - [ ] No blank or blocked loading surface is visible
-  - [ ] Startup health summary is reachable from Settings/About
+  - [x] Screenshot or recording shows the first usable CoreApp screen
+  - [x] No blank or blocked loading surface is visible
+  - [x] Startup health summary is reachable from Settings/About
 - Recommended artifacts:
   - evidence/coreapp-visible/startup-first-screen.png
   - evidence/coreapp-visible/startup-health-summary.png
@@ -87,8 +92,13 @@
   - The screenshot is taken after manual navigation that hides startup state.
   - The first screen is blank, indefinitely loading, or missing startup health access.
 - Artifact paths:
-  - _none_
+  - startup-first-screen-settings.png
+  - startup-first-screen-settings-dom.json
+  - startup-health-summary.png
+  - startup-health-summary-dom.json
+  - startup-first-screen-cdp-target-inventory.json
 - Notes:
+  - 2026-06-21 packaged CDP capture uses the current `2.4.12-beta.8` artifact with isolated userData. The first usable main CoreApp screen is Settings/onboarding, not blank or blocked loading; DOM evidence records version/build metadata and the Startup health summary in Settings/About. The screenshot intentionally preserves the real first-run permission guidance overlay, while `startup-health-summary-dom.json` proves Startup health remains reachable on the same Settings target.
 
 ### CoreBox search states
 
@@ -116,6 +126,7 @@
 - Artifact paths:
   - _none_
 - Notes:
+  - 2026-06-21 packaged CDP 9434/9435 attempted recapture is blocker-only. The 720x500 `division-box` target shows the shell but does not run local search results; the ordinary `core-box` target accepts input but remains 720x56 with `.CoreBoxRes` hidden, so no-result retry/settings and result reason pills are not visible. Invalid captures were moved to `raw/blocker-corebox-search-*` and must not be used to mark this item passed.
 
 ### App Index manager workbench
 
@@ -175,7 +186,7 @@
 - Group: ai
 - Required: yes
 - Requires screenshot/recording: yes
-- Status: pending
+- Status: passed
 - Collection steps:
   - Ask a text question from CoreBox and capture the text.chat answer preview.
   - Ask with a clipboard image and capture the vision.ocr to text.chat answer preview.
@@ -183,16 +194,44 @@
   - Capture recoverable failure states for logged-out, provider unavailable, quota exhausted, and model unsupported cases.
   - Capture permission denied and Local/Ollama routing cases; local preferred routing must not reach a disabled Nexus provider.
 - Required evidence:
-  - [ ] CoreBox AI Ask text.chat success preview is visible
-  - [ ] CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible
-  - [ ] Provider, model, latency, trace id, and input kind metadata are visible for text and OCR paths
-  - [ ] Copy failure remains visible inside the preview
-  - [ ] Logged-out failure shows a sign-in recovery hint
-  - [ ] Provider unavailable failure shows a provider health or settings recovery hint
-  - [ ] Quota exhausted failure shows a credits or team quota recovery hint
+  - [x] CoreBox AI Ask text.chat success preview is visible
+  - [x] CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible
+  - [x] Text and OCR success previews show a non-empty answer without empty-response copy
+  - [x] Provider, model, latency, trace id, and input kind metadata are visible for text and OCR paths
+  - [x] Copy failure remains visible inside the preview
+  - [x] Logged-out failure shows a sign-in recovery hint
+  - [x] Provider unavailable failure shows a provider health or settings recovery hint
+  - [x] Quota exhausted failure shows a credits or team quota recovery hint
   - [x] Model unsupported failure shows a supported model or capability recovery hint
   - [x] Permission denied failure does not call Intelligence SDK and shows a permission recovery hint
-  - [ ] Local/Ollama preferred routing does not call disabled Nexus provider and shows routing trace or provider metadata
+  - [x] Local/Ollama preferred routing does not call disabled Nexus provider and shows routing trace or provider metadata
+- Required evidence tags:
+  - [x] AI-STABLE-01
+    - packaged-ai-ask-text-success-probe.json
+    - packaged-ai-ask-text-success.png
+  - [x] AI-STABLE-02
+    - raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait-probe.json
+    - raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait.png
+  - [x] AI-STABLE-03
+    - packaged-ai-ask-logged-out-probe.json
+    - packaged-ai-ask-logged-out.png
+  - [x] AI-STABLE-04
+    - packaged-ai-ask-provider-unavailable-probe.json
+    - packaged-ai-ask-provider-unavailable.png
+  - [x] AI-STABLE-05
+    - packaged-ai-ask-quota-exhausted-probe.json
+    - packaged-ai-ask-quota-exhausted.png
+  - [x] AI-STABLE-06
+    - packaged-ai-ask-provider-enabled-probe.json
+    - packaged-ai-ask-provider-enabled-after-enter.png
+  - [x] AI-STABLE-07
+    - packaged-ai-ask-runtime-permission-denied-probe.json
+    - packaged-ai-ask-runtime-permission-denied-after-enter.png
+    - packaged-ai-ask-copy-failure-probe.json
+    - packaged-ai-ask-copy-failure.png
+  - [x] AI-STABLE-08
+    - packaged-ai-ask-local-ollama-routing-probe.json
+    - packaged-ai-ask-local-ollama-routing-after-enter.png
 - Recommended artifacts:
   - evidence/coreapp-visible/corebox-ai-text-success.png
   - evidence/coreapp-visible/corebox-ai-ocr-success.png
@@ -216,7 +255,23 @@
   - packaged-ai-ask-provider-enabled-after-enter.png
   - packaged-ai-ask-runtime-permission-denied-probe.json
   - packaged-ai-ask-runtime-permission-denied-after-enter.png
+  - packaged-ai-ask-local-ollama-routing-probe.json
+  - packaged-ai-ask-local-ollama-routing-after-enter.png
+  - packaged-ai-ask-quota-exhausted-probe.json
+  - packaged-ai-ask-quota-exhausted.png
+  - packaged-ai-ask-logged-out-probe.json
+  - packaged-ai-ask-logged-out.png
+  - packaged-ai-ask-provider-unavailable-probe.json
+  - packaged-ai-ask-provider-unavailable.png
+  - packaged-ai-ask-text-success-probe.json
+  - packaged-ai-ask-text-success.png
+  - raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait-probe.json
+  - raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait.png
+  - packaged-ai-ask-copy-failure-probe.json
+  - packaged-ai-ask-copy-failure.png
 - Notes:
+  - 2026-06-21 packaged OCR handoff evidence is accepted under `raw/` because it is the latest AI-STABLE-02 capture: the UI shows OCR response, text.chat capability, provider/model/latency/trace metadata, input kind `text, image`, and image-to-text context copy without failure counter-signals.
+  - 2026-06-21 copy failure packaged evidence is closed by `packaged-ai-ask-copy-failure-probe.json` and `packaged-ai-ask-copy-failure.png`: the DOM contains `.AiChatbot__copyFailureNotice`, `复制失败：缺少 clipboard.write 权限`, and the permission recovery hint inside the answer preview. Historical raw copy-failure captures remain blocker diagnostics only.
 
 ### OmniPanel Writing Tools
 
@@ -386,5 +441,5 @@
 ## Final Verification
 
 ```bash
-pnpm -C "apps/core-app" run visible:experience:verify -- --input "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireExistingArtifacts --requireNonEmptyArtifacts
+corepack pnpm -C "apps/core-app" run visible:experience:verify -- --input "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireEvidenceTags --requireExistingArtifacts --requireNonEmptyArtifacts
 ```

@@ -1,0 +1,75 @@
+{
+  "capturedAt": "2026-06-21T03:51:55.022Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9446/json/list",
+  "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "readyState": "complete",
+  "bodyClass": "MacIntel core-box",
+  "inner": {
+    "w": 720,
+    "h": 194,
+    "dpr": 2
+  },
+  "query": "__tuff_no_result_zzzz_20260621__",
+  "text": "__tuff_no_result_zzzz_20260621__\n图像\n未找到结果\n检查关键词、重试搜索，或打开文件索引设置。\n重试\n文件索引设置\nCoreBox\n最近处理\n共 0 条\n暂无记录",
+  "hasRawI18n": false,
+  "hasIdle": true,
+  "hasSearchingOrWarmup": false,
+  "hasNoResult": true,
+  "hasRetry": true,
+  "hasFileIndexSettings": true,
+  "input": {
+    "x": 60,
+    "y": 4,
+    "w": 508,
+    "h": 48,
+    "visible": true
+  },
+  "coreBoxRect": {
+    "x": 0,
+    "y": 0,
+    "w": 720,
+    "h": 56,
+    "visible": true
+  },
+  "resRect": {
+    "x": 0,
+    "y": 56,
+    "w": 720,
+    "h": 138,
+    "visible": true
+  },
+  "searchState": {
+    "className": "CoreBoxSearchState CoreBoxSearchState--empty",
+    "text": "未找到结果\n检查关键词、重试搜索，或打开文件索引设置。\n重试\n文件索引设置",
+    "rect": {
+      "x": 0,
+      "y": 57,
+      "w": 718,
+      "h": 128,
+      "visible": true
+    },
+    "buttons": [
+      "重试",
+      "文件索引设置"
+    ]
+  },
+  "itemCount": 0,
+  "items": [],
+  "footerText": "CoreBox",
+  "debug": {
+    "builtAt": "2026-06-21T03:51:52.462Z",
+    "queryTextLength": 0,
+    "clipboardLastType": "image",
+    "pendingTextClipboardType": null,
+    "filePathCount": 0,
+    "useFileMode": false,
+    "inputTypes": [
+      "image"
+    ],
+    "inputCount": 1,
+    "hasImageInput": true,
+    "hasTextInput": false,
+    "hasFileInput": false
+  }
+}

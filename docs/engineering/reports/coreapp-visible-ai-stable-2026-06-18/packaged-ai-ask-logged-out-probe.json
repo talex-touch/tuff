@@ -1,0 +1,89 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-20T17:57:22.615Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9384/json/list",
+  "inputQuery": "status check sample",
+  "targets": [
+    {
+      "id": "67A7219A4F58B53B8CAF48C565F28DAE",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "755D56B232DD898094030C5A9C31A721",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "C1BCA91738B0AE710F185C262A1563A3",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay"
+    },
+    {
+      "id": "C173FAEDE5EC7180AC1FF6F406E5AC5A",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    }
+  ],
+  "failures": [],
+  "submitPreparation": {
+    "alreadyInSendMode": false,
+    "clickedFeatureEntry": true,
+    "readyForPrompt": true,
+    "clickMethod": "cdp-enter",
+    "activationText": "send-button\nwidget-mode\nwidget-render\ntouch-intelligence\n智能问答\nstatus check sample\nYOU\nAI\nError\nRouting provider metadata\nLatency\n0 ms\nInput kind\ntext\n请求失败\n未登录，请先登录后重试；可在登录恢复后再次发送\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "submitMethod": "cdp-enter"
+  },
+  "screenshotPath": "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-logged-out.png",
+  "selectedTargetId": "C173FAEDE5EC7180AC1FF6F406E5AC5A",
+  "dom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "readyState": "complete",
+    "bodyText": "touch-intelligence\n智能问答\nstatus check sample\nYOU\n\nstatus check sample\n\nAI\nError\n\n未登录，请先登录后重试；可在登录恢复后再次发送\n\nRouting provider metadata\nLatency\n0 ms\nInput kind\ntext\n请求失败\n未登录，请先登录后重试；可在登录恢复后再次发送\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "bodyClass": "MacIntel core-box",
+    "hasCoreBoxClass": true,
+    "inputIdExists": true,
+    "inputValue": "status check sample",
+    "hasPromptSendButton": true,
+    "hasAiChatbot": true,
+    "hasErrorNotice": true,
+    "hasPermissionText": false,
+    "hasModelUnsupportedText": false,
+    "hasProviderUnavailableText": false,
+    "hasLoggedOutText": true,
+    "hasQuotaText": false,
+    "buttons": [
+      "↓"
+    ]
+  },
+  "evidenceChecks": [
+    {
+      "tag": "AI-STABLE-03",
+      "requirement": "Logged-out failure shows a sign-in recovery hint",
+      "matched": true,
+      "signalMatched": true,
+      "blockedByFailureSignal": false,
+      "hasVisualArtifact": true,
+      "matchedSignals": [
+        "未登录",
+        "登录",
+        "恢复",
+        "重试"
+      ],
+      "missingSignals": [],
+      "matchedBlockedSignals": [],
+      "artifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-logged-out-probe.json",
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-logged-out.png"
+      ],
+      "visualArtifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-logged-out.png"
+      ]
+    }
+  ]
+}

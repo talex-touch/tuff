@@ -1,0 +1,94 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-20T18:35:36.670Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9386/json/list",
+  "inputQuery": "Output one short English sentence. It must include the complete word made from r e s p o n s e and the complete word made from a n s w e r. Also include text success.",
+  "targets": [
+    {
+      "id": "CC75D8CD33D31E35AFDFA4D6307D30B7",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "564D27993BD61E507DD9A9BAADB11B0A",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "2F56B76478A2A01F739D711A866EEB0E",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay"
+    },
+    {
+      "id": "628DECAFA97DCBA9F29BE2E9B2C9E629",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    }
+  ],
+  "failures": [],
+  "submitPreparation": {
+    "alreadyInSendMode": true,
+    "clickedFeatureEntry": false,
+    "readyForPrompt": true,
+    "activationText": "send-button\nwidget-mode\nwidget-render\ntouch-intelligence\n智能问答\nOutput one short English sentence. It must include the complete word made from r e s p o n s e and the complete word made from a n s w e r. Also include text success.\nYOU\n\nReturn these two English labels separated by comma: r-e-s-p-o-n-s-e, a-n-s-w-e-r, then text success.\n\nAI\n\na-nswer, text, success\n\nRouting provider metadata\nProvider\nlocal-default\nModel\nqwen2.5:3b\nLatency\n607 ms\nTrace\ntrace-1781980405933-99a79774e5e02109\nInput kind\ntext\nCapability\ntext.chat\n↓\nCoreBox\ntou",
+    "submitMethod": "cdp-send-button"
+  },
+  "screenshotPath": "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-text-success.png",
+  "selectedTargetId": "628DECAFA97DCBA9F29BE2E9B2C9E629",
+  "dom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "readyState": "complete",
+    "bodyText": "touch-intelligence\n智能问答\nOutput one short English sentence. It must include the complete word made from r e s p o n s e and the complete word made from a n s w e r. Also include text success.\nYOU\n\nReturn these two English labels separated by comma: r-e-s-p-o-n-s-e, a-n-s-w-e-r, then text success.\n\nAI\n\na-nswer, text, success\n\nYOU\n\nOutput one short English sentence. It must include the complete word made from r e s p o n s e and the complete word made from a n s w e r. Also include text success.\n\nAI\n\nResponse succeeded with answer.\n\nRouting provider metadata\nProvider\nlocal-default\nModel\nqwen2.5:3b\nLatency\n348 ms\nTrace\ntrace-1781980536972-8348f6b7b986ed75\nInput kind\ntext\nCapability\ntext.chat\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "bodyClass": "MacIntel core-box",
+    "hasCoreBoxClass": true,
+    "inputIdExists": true,
+    "inputValue": "Output one short English sentence. It must include the complete word made from r e s p o n s e and the complete word made from a n s w e r. Also include text success.",
+    "hasPromptSendButton": true,
+    "hasAiChatbot": true,
+    "hasErrorNotice": false,
+    "hasPermissionText": false,
+    "hasModelUnsupportedText": false,
+    "hasProviderUnavailableText": false,
+    "hasLoggedOutText": false,
+    "hasQuotaText": false,
+    "buttons": [
+      "↓"
+    ]
+  },
+  "evidenceChecks": [
+    {
+      "tag": "AI-STABLE-01",
+      "requirement": "CoreBox AI Ask text.chat success preview is visible",
+      "matched": true,
+      "signalMatched": true,
+      "blockedByFailureSignal": false,
+      "hasVisualArtifact": true,
+      "matchedSignals": [
+        "text.chat",
+        "trace",
+        "model",
+        "provider",
+        "latency",
+        "ms",
+        "input",
+        "input kind",
+        "response",
+        "answer"
+      ],
+      "missingSignals": [],
+      "matchedBlockedSignals": [],
+      "artifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-text-success-probe.json",
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-text-success.png"
+      ],
+      "visualArtifactPaths": [
+        "../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/raw/packaged-ai-ask-text-success.png"
+      ]
+    }
+  ]
+}

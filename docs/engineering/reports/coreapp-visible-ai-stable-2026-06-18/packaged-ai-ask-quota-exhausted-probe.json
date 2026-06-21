@@ -1,0 +1,88 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-20T17:28:29.105Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9382/json/list",
+  "inputQuery": "ai please answer quota stable evidence",
+  "targets": [
+    {
+      "id": "7B68F762AA6E9C7560A55AD573D5757D",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "F328736002D59AB455ECCE1BDD911AC9",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    },
+    {
+      "id": "560C1FA8B6A397834DAB4BBBB13E3773",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay"
+    },
+    {
+      "id": "B20BF08B2865CD4835E0CB4148257160",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+    }
+  ],
+  "failures": [],
+  "submitPreparation": {
+    "alreadyInSendMode": false,
+    "clickedFeatureEntry": true,
+    "readyForPrompt": true,
+    "clickMethod": "cdp-enter",
+    "activationText": "send-button\nwidget-mode\nwidget-render\ntouch-intelligence\n智能问答\nai please answer quota stable evidence\nYOU\nAI\nError\n请求失败\nAI 配额不足，请稍后重试或调整用量：[Intelligence] Quota exceeded: Quota is disabled for this caller\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "submitMethod": "cdp-send-button"
+  },
+  "screenshotPath": "packaged-ai-ask-quota-exhausted.png",
+  "selectedTargetId": "B20BF08B2865CD4835E0CB4148257160",
+  "dom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "readyState": "complete",
+    "bodyText": "touch-intelligence\n智能问答\nai please answer quota stable evidence\nYOU\n\nplease answer quota stable evidence\n\nAI\nError\n\nAI 配额不足，请稍后重试或调整用量：[Intelligence] Quota exceeded: Quota is disabled for this caller\n\n请求失败\nAI 配额不足，请稍后重试或调整用量：[Intelligence] Quota exceeded: Quota is disabled for this caller\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "bodyClass": "MacIntel core-box",
+    "hasCoreBoxClass": true,
+    "inputIdExists": true,
+    "inputValue": "ai please answer quota stable evidence",
+    "hasPromptSendButton": true,
+    "hasAiChatbot": true,
+    "hasErrorNotice": true,
+    "hasPermissionText": false,
+    "hasModelUnsupportedText": false,
+    "hasProviderUnavailableText": false,
+    "hasLoggedOutText": false,
+    "hasQuotaText": true,
+    "buttons": [
+      "↓"
+    ]
+  },
+  "evidenceChecks": [
+    {
+      "tag": "AI-STABLE-05",
+      "requirement": "Quota exhausted failure shows credits or quota recovery",
+      "matched": true,
+      "signalMatched": true,
+      "blockedByFailureSignal": false,
+      "hasVisualArtifact": true,
+      "matchedSignals": [
+        "quota",
+        "配额",
+        "重试"
+      ],
+      "missingSignals": [],
+      "matchedBlockedSignals": [],
+      "artifactPaths": [
+        "packaged-ai-ask-quota-exhausted-probe.json",
+        "packaged-ai-ask-quota-exhausted.png"
+      ],
+      "visualArtifactPaths": [
+        "packaged-ai-ask-quota-exhausted.png"
+      ]
+    }
+  ]
+}

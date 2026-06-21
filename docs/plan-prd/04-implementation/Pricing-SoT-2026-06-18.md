@@ -1,7 +1,7 @@
 # Pricing SoT
 
 > 更新时间：2026-06-18
-> 定位：当前公开定价、套餐分层与待决策项的单一口径。本文替代旧 `NEXUS-SUBSCRIPTION-PRD.md` 作为 pricing 决策入口；旧订阅 PRD 仅保留历史方案参考。
+> 定位：当前公开定价、套餐分层与待决策项的单一口径。本文是 pricing 决策入口。
 
 ## 1. 当前公开口径
 
@@ -48,4 +48,4 @@
 1. 确认 GA 前 Pioneer 权益边界。
 2. 制定 Pro / Team 首版候选价格和 credits 配额。
 3. 选择正式 checkout / billing provider。
-4. 重写 `docs/plan-prd/03-features/nexus/NEXUS-SUBSCRIPTION-PRD.md`，把历史授权码方案升级为当前订阅/credits/团队计费 PRD。
+4. 如需推进订阅/credits/团队计费，基于本文新建当前 PRD，不恢复旧订阅方案。

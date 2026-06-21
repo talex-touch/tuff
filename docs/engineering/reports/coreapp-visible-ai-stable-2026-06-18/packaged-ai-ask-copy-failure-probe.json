@@ -1,0 +1,293 @@
+{
+  "ok": true,
+  "evidenceStatus": "passed",
+  "checkedAt": "2026-06-21T02:38:29.097Z",
+  "listUrl": "http://127.0.0.1:9412/json/list",
+  "isolatedUserData": "/private/tmp/tuff-ai-stable-visible-user-data-copy-failure-actionpanel-1782006500",
+  "pluginInstallShape": "dist/build with precompiled build.widgets",
+  "selectedTargetId": "9C007DEF9F7797E5297B7619083C72D1",
+  "selectedTargetUrl": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "screenshotPath": "packaged-ai-ask-copy-failure.png",
+  "invokedFromTargetId": "C26E8F6966151B0159D9E18D7123EC13",
+  "invokeEvent": "meta-overlay:action:execute",
+  "invokePath": "MetaOverlayEvents.action.execute -> CoreBoxEvents.metaOverlay.itemAction -> useActionPanel -> CoreBoxEvents.item.execute",
+  "registerWidgetResult": {
+    "success": true
+  },
+  "executeResult": {
+    "success": true
+  },
+  "permissionState": {
+    "grants": [
+      {
+        "pluginId": "touch-intelligence",
+        "permissionId": "intelligence.basic",
+        "grantedAt": 1782007710116,
+        "grantedBy": "visible-evidence-isolated-profile"
+      },
+      {
+        "pluginId": "touch-intelligence",
+        "permissionId": "search.root-results",
+        "grantedAt": 1782007710118,
+        "grantedBy": "visible-evidence-isolated-profile"
+      }
+    ],
+    "status": {
+      "pluginId": "touch-intelligence",
+      "sdkapi": "clipboard.write",
+      "enforcePermissions": false,
+      "required": [
+        "intelligence.basic",
+        "search.root-results"
+      ],
+      "optional": [
+        "clipboard.write"
+      ],
+      "granted": [
+        "intelligence.basic",
+        "search.root-results"
+      ],
+      "deprecatedGranted": [],
+      "outdatedByAppUpdate": [],
+      "outdatedByPluginChange": [],
+      "denied": [
+        "clipboard.write"
+      ],
+      "missingRequired": [],
+      "warning": "Plugin \"touch-intelligence\" is blocked because sdkapi \"clipboard.write\" is invalid. Use YYMMDD format and declare at least 251212.",
+      "backendState": {
+        "mode": "sqlite",
+        "writable": true,
+        "reason": null
+      }
+    },
+    "checkClipboardWrite": false
+  },
+  "dom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "readyState": "complete",
+    "bodyClass": "MacIntel core-box",
+    "bodyText": "touch-intelligence\n万物尽在塔内\n图像\nYOU\n\nOutput one short English sentence. Include copy failure evidence.\n\nAI\n\nCopy failure evidence answer from packaged action panel refresh probe.\n\nRouting provider metadata\nProvider\nlocal-default\nModel\nqwen2.5:3b\nLatency\n321 ms\nTrace\ntrace-actionpanel-refresh-copy-failure\nInput kind\ntext\nCapability\ntext.chat\n复制失败\n复制失败：缺少 clipboard.write 权限\n请在插件权限中允许 clipboard.write 后重试。\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+    "hasCoreBoxClass": true,
+    "hasDivisionBoxClass": false,
+    "inputIdExists": true,
+    "inputValue": "",
+    "hasAiChatbot": true,
+    "hasCopyFailureNotice": true,
+    "copyFailureText": "复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。",
+    "hasVisibleCopyFailureSignal": true,
+    "hasClipboardWriteText": true,
+    "hasRecoveryText": true,
+    "buttons": [
+      "↓"
+    ],
+    "visibleWidgetTexts": [
+      {
+        "className": "CoreBoxRes flex CoreBoxRes--widget CoreBoxRes--visible",
+        "text": "YouOutput one short English sentence. Include copy failure evidence.\nAICopy failure evidence answer from packaged action panel refresh probe.\nRouting provider metadataProviderlocal-defaultModelqwen2.5:3bLatency321 msTracetrace-actionpanel-refresh-copy-failureInput kindtextCapabilitytext.chat复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。 ↓ CoreBoxtouch-intelligence最近处理共 0 条暂无记录"
+      },
+      {
+        "className": "CoreBoxRender CoreBoxRender-Widget",
+        "text": "YouOutput one short English sentence. Include copy failure evidence.\nAICopy failure evidence answer from packaged action panel refresh probe.\nRouting provider metadataProviderlocal-defaultModelqwen2.5:3bLatency321 msTracetrace-actionpanel-refresh-copy-failureInput kindtextCapabilitytext.chat复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。 ↓"
+      },
+      {
+        "className": "AiChatbot",
+        "text": "YouOutput one short English sentence. Include copy failure evidence.\nAICopy failure evidence answer from packaged action panel refresh probe.\nRouting provider metadataProviderlocal-defaultModelqwen2.5:3bLatency321 msTracetrace-actionpanel-refresh-copy-failureInput kindtextCapabilitytext.chat复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。 ↓"
+      },
+      {
+        "className": "AiChatbot__conversation",
+        "text": "YouOutput one short English sentence. Include copy failure evidence.\nAICopy failure evidence answer from packaged action panel refresh probe.\nRouting provider metadataProviderlocal-defaultModelqwen2.5:3bLatency321 msTracetrace-actionpanel-refresh-copy-failureInput kindtextCapabilitytext.chat复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。 ↓"
+      },
+      {
+        "className": "AiChatbot__content",
+        "text": "YouOutput one short English sentence. Include copy failure evidence.\nAICopy failure evidence answer from packaged action panel refresh probe.\nRouting provider metadataProviderlocal-defaultModelqwen2.5:3bLatency321 msTracetrace-actionpanel-refresh-copy-failureInput kindtextCapabilitytext.chat复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。"
+      },
+      {
+        "className": "tx-ai-conversation AiChatbot__aiConversation",
+        "text": "YouOutput one short English sentence. Include copy failure evidence.\nAICopy failure evidence answer from packaged action panel refresh probe."
+      },
+      {
+        "className": "AiChatbot__runtimeMetadata",
+        "text": "Routing provider metadataProviderlocal-defaultModelqwen2.5:3bLatency321 msTracetrace-actionpanel-refresh-copy-failureInput kindtextCapabilitytext.chat"
+      },
+      {
+        "className": "AiChatbot__copyFailureNotice",
+        "text": "复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。"
+      },
+      {
+        "className": "AiChatbot__scrollButton",
+        "text": "↓"
+      }
+    ]
+  },
+  "failures": [],
+  "evidenceChecks": [
+    {
+      "tag": "AI-STABLE-07",
+      "matched": true,
+      "requirement": "Copy-answer permission denial keeps clipboard.write recovery visible in packaged CoreBox widget",
+      "signalMatched": true,
+      "blockedByFailureSignal": false,
+      "hasVisualArtifact": true,
+      "matchedSignals": [
+        "copyFailureNoticeVisible",
+        "clipboardWriteTextVisible",
+        "recoveryTextVisible"
+      ],
+      "missingSignals": [],
+      "matchedBlockedSignals": [],
+      "artifactPaths": [
+        "packaged-ai-ask-copy-failure-probe.json",
+        "packaged-ai-ask-copy-failure.png"
+      ],
+      "visualArtifactPaths": [
+        "packaged-ai-ask-copy-failure.png"
+      ]
+    }
+  ],
+  "targets": [
+    {
+      "id": "3D04C8503B04B531F2B3F75FE1606751",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+        "bodyClass": "MacIntel core-box division-box",
+        "bodyText": "万物尽在塔内\n图像\n智能问答\n\n使用 ai/@ai 前缀在 CoreBox 里调用 AI 回答，支持图片 OCR\n\nTOUCH-INTELLIGENCE\n⌘1\n智能问答\ntouch-intelligence\nWIDGET\n最近处理\n共 0 条\n暂无记录",
+        "hasCoreBoxClass": true,
+        "hasDivisionBoxClass": true,
+        "hasCopyFailureNotice": false,
+        "copyFailureText": "",
+        "hasClipboardWriteText": false,
+        "hasRecoveryText": false
+      }
+    },
+    {
+      "id": "DC068F83555E5F4A1966A97291912341",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+        "bodyClass": "MacIntel",
+        "bodyText": "Tuff\n应用设置\n\n主要\n\n设置\n智能\n市场\n样式\nAI\n1\ntouch-intelligence\n下载中心\n版本\nv2.4.12-beta.8\nTUFF\n\n为创造者们重新构想的命令栏。\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\n账户\n\n管理您的账户信息和登录状态。\n\n无账户\n\n当前无法访问账户。\n\n登录\nAI 积分\n\n查看 Nexus AI credits 的个人剩余、已用和额度。\n\nAI 积分\n\n登录后可查看 credits 剩余和消耗。\n\n需要登录\n\n请先登录 Tuff 账户以读取 Nexus credits summary。\n\n语言设置\n\n选择您喜欢的应用程序语言。\n\n跟随系统语言\n\n自动匹配系统语言设置。\n\n选择语言\n\n手动选择您喜欢的显示语言。\n\n简体中文\nEnglish\n通用配置\n\n配置权限和基础设置\n\n权限\n\n统一管理文件访问、系统辅助、麦克风和平台级权限。\n\n已授权 2/4\n管理权限\n开机自动启动\n\n系统启动时自动运行应用\n\n显示托盘图标\n\n在系统托盘显示应用图标\n\n不在 Dock 栏显示\n仅限 macOS\n\n关闭主窗口后不在显示 Dock 图标（macOS only）\n\n静默启动\n\n应用启动时不显示窗口，仅在后台运行\n\n安装后自动装载 OmniPanel Feature\n\n启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。\n\n实用工具\n\n实用工具为您提供统一的快速桌面启动器。\n\n自定义占位文本\n\n自定义 CoreBox 输入框的占位提示文本，留空使用默认。\n\n使用\n\n进入时引导您使用应用程序。\n\n快捷方式\n\n集中管理系统级快捷键设置。\n\n共 6 项\n管理\n自动粘贴\n\n复制内容后呼出 CoreBox 时，自动带入新鲜剪贴板内容。\n\n自动清除\n\nCoreBox 隐藏超过指定时间后，下次打开时自动退出上次功能并清空输入。短时间重新打开会保留状态。\n\n自动隐藏\n\n触发模糊时隐藏搜索栏。\n\n智能推荐\n\n启用智能推荐功能，根据使用习惯提供个性化建议。\n\n显示推荐理由\n\n在推荐项目旁显示推荐原因。\n\nAssistant 悬浮球\n\n开启桌面悬浮入口，点击后可把文本指令发送到 CoreBox。\n\n启用 Assistant\n\n启用后才会响应悬浮球、语音面板等 Assistant 入口。默认保持关闭。\n\n显示悬浮球\n\n在桌面上显示可拖动的悬浮入口；点击后打开文本指令面板。\n\n助手名称\n\n显示在 Assistant 面板顶部的名称。\n\n语音唤醒\n\n开启后悬浮球和面板才会请求语音识别；关闭时只保留文本输入。\n\n唤醒词\n\n多个唤醒词用英文逗号分隔。\n\n应用更新\n\n管理应用更新下载、状态与检查操作。\n\n自动下载更新\n\n发现新版本时自动下载更新包\n\n状态\n\n上次检查：",
+        "hasCoreBoxClass": false,
+        "hasDivisionBoxClass": false,
+        "hasCopyFailureNotice": false,
+        "copyFailureText": "",
+        "hasClipboardWriteText": false,
+        "hasRecoveryText": false
+      }
+    },
+    {
+      "id": "C26E8F6966151B0159D9E18D7123EC13",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+        "bodyClass": "meta-overlay MacIntel",
+        "bodyText": "",
+        "hasCoreBoxClass": false,
+        "hasDivisionBoxClass": false,
+        "hasCopyFailureNotice": false,
+        "copyFailureText": "",
+        "hasClipboardWriteText": false,
+        "hasRecoveryText": false
+      }
+    },
+    {
+      "id": "9C007DEF9F7797E5297B7619083C72D1",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "dom": {
+        "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+        "bodyClass": "MacIntel core-box",
+        "bodyText": "touch-intelligence\n万物尽在塔内\n图像\nYOU\n\nOutput one short English sentence. Include copy failure evidence.\n\nAI\n\nCopy failure evidence answer from packaged action panel refresh probe.\n\nRouting provider metadata\nProvider\nlocal-default\nModel\nqwen2.5:3b\nLatency\n321 ms\nTrace\ntrace-actionpanel-refresh-copy-failure\nInput kind\ntext\nCapability\ntext.chat\n复制失败\n复制失败：缺少 clipboard.write 权限\n请在插件权限中允许 clipboard.write 后重试。\n↓\nCoreBox\ntouch-intelligence\n最近处理\n共 0 条\n暂无记录",
+        "hasCoreBoxClass": true,
+        "hasDivisionBoxClass": false,
+        "hasCopyFailureNotice": true,
+        "copyFailureText": "复制失败复制失败：缺少 clipboard.write 权限请在插件权限中允许 clipboard.write 后重试。",
+        "hasClipboardWriteText": true,
+        "hasRecoveryText": true
+      }
+    }
+  ],
+  "executedItem": {
+    "id": "touch-intelligence-copy-failure-actionpanel-refresh-evidence",
+    "kind": "widget",
+    "source": {
+      "id": "plugin-features",
+      "type": "plugin",
+      "name": "Plugin Features"
+    },
+    "render": {
+      "mode": "custom",
+      "custom": {
+        "type": "vue",
+        "content": "touch-intelligence::intelligence-ask",
+        "data": {
+          "prompt": "Output one short English sentence. Include copy failure evidence.",
+          "status": "ready",
+          "stage": "chat",
+          "capabilityId": "text.chat",
+          "inputKinds": [
+            "text"
+          ],
+          "messages": [
+            {
+              "id": "copy-failure-user",
+              "role": "user",
+              "content": "Output one short English sentence. Include copy failure evidence.",
+              "status": "complete"
+            },
+            {
+              "id": "copy-failure-assistant",
+              "role": "assistant",
+              "content": "Copy failure evidence answer from packaged action panel refresh probe.",
+              "status": "complete"
+            }
+          ],
+          "metadata": {
+            "provider": "local-default",
+            "model": "qwen2.5:3b",
+            "traceId": "trace-actionpanel-refresh-copy-failure",
+            "latency": 321,
+            "inputKinds": [
+              "text"
+            ]
+          }
+        }
+      },
+      "basic": {
+        "title": "智能问答",
+        "subtitle": "Copy failure evidence answer from packaged action panel refresh probe."
+      }
+    },
+    "meta": {
+      "pluginName": "touch-intelligence",
+      "featureId": "intelligence-ask",
+      "defaultAction": "intelligence-action",
+      "actionId": "copy-answer",
+      "keepCoreBoxOpen": true,
+      "payload": {
+        "prompt": "Output one short English sentence. Include copy failure evidence.",
+        "answer": "Copy failure evidence answer from packaged action panel refresh probe.",
+        "provider": "local-default",
+        "model": "qwen2.5:3b",
+        "traceId": "trace-actionpanel-refresh-copy-failure",
+        "latency": 321,
+        "inputKinds": [
+          "text"
+        ]
+      }
+    },
+    "actions": [
+      {
+        "id": "copy-answer",
+        "type": "execute",
+        "title": "复制回答",
+        "label": "复制回答"
+      }
+    ]
+  }
+}

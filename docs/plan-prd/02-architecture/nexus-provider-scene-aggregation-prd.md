@@ -1,8 +1,7 @@
 # PRD: Nexus Provider 聚合与 Scene 编排重构
 
 > 状态：Architecture PRD / Partial Implementation
-> 更新时间：2026-05-14
-> 完整快照：`./archive/nexus-provider-scene-aggregation-prd.full-2026-05-14.md`
+> 更新时间：2026-06-21
 
 ## 1. 最终目标
 
@@ -36,7 +35,7 @@ Nexus 升级为统一 Provider 聚合中心：Provider 独立声明 `Capability`
 
 ## 4. 未闭环
 
-- 旧 `intelligence_providers` 表退场已补实施计划：`../04-implementation/NexusIntelligenceProviderRetirement-2026-05-16.md`。仍需按 Phase 0/1 采集 dry-run/execute evidence，再推进 registry-primary reads 与最终删除窗口。
+- 旧 `intelligence_providers` 表退场已纳入 Nexus Governance evidence 口径；后续以 `../04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md` 为准。
 - user-scope AI mirror OCR 自动绑定策略。
 - success rate、quota、dynamic pricingRef 成本估算等高级策略。
 - 真实 provider 端到端验证与生产配置检查。
@@ -78,7 +77,7 @@ Nexus 升级为统一 Provider 聚合中心：Provider 独立声明 `Capability`
 ## 8. 关联入口
 
 - 当前执行清单：`../TODO.md`
-- 产品路线图：`../01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- 产品路线图：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 - 质量基线：`../docs/PRD-QUALITY-BASELINE.md`
 - AI 2.5 PRD：`../03-features/ai-2.5.0-plan-prd.md`
 - 变更日志：`../01-project/CHANGES.md`

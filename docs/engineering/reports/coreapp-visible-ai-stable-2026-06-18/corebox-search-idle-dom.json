@@ -1,0 +1,61 @@
+{
+  "capturedAt": "2026-06-21T03:51:52.365Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9446/json/list",
+  "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "readyState": "complete",
+  "bodyClass": "MacIntel core-box",
+  "inner": {
+    "w": 720,
+    "h": 56,
+    "dpr": 2
+  },
+  "query": "",
+  "text": "万物尽在塔内\n图像",
+  "hasRawI18n": false,
+  "hasIdle": false,
+  "hasSearchingOrWarmup": false,
+  "hasNoResult": false,
+  "hasRetry": false,
+  "hasFileIndexSettings": false,
+  "input": {
+    "x": 60,
+    "y": 4,
+    "w": 508,
+    "h": 48,
+    "visible": true
+  },
+  "coreBoxRect": {
+    "x": 0,
+    "y": 0,
+    "w": 720,
+    "h": 56,
+    "visible": true
+  },
+  "resRect": {
+    "x": 0,
+    "y": 0,
+    "w": 0,
+    "h": 0,
+    "visible": false
+  },
+  "searchState": null,
+  "itemCount": 0,
+  "items": [],
+  "footerText": "",
+  "debug": {
+    "builtAt": "2026-06-21T03:51:49.554Z",
+    "queryTextLength": 0,
+    "clipboardLastType": "image",
+    "pendingTextClipboardType": null,
+    "filePathCount": 0,
+    "useFileMode": false,
+    "inputTypes": [
+      "image"
+    ],
+    "inputCount": 1,
+    "hasImageInput": true,
+    "hasTextInput": false,
+    "hasFileInput": false
+  }
+}

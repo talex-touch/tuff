@@ -3,7 +3,7 @@
 > 更新时间：2026-06-18
 > 状态：In Implementation / Stable Scope Reconciled / Evidence Open
 > 目标版本：2.5.0
-> 完整快照：`./archive/ai-2.5.0-plan-prd.full-2026-05-14.md`
+> 当前路线：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 > 当前验收矩阵：`../04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
 
 ## 1. 最终目标
@@ -114,6 +114,6 @@
 - 当前执行清单：`../TODO.md`
 - Roadmap vNext：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 - AI Stable Evidence Matrix：`../04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
-- 产品路线图：`../01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- 产品路线图：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 - 质量基线：`../docs/PRD-QUALITY-BASELINE.md`
 - Nexus Provider Scene PRD：`../02-architecture/nexus-provider-scene-aggregation-prd.md`
