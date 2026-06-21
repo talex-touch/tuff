@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 39 批 strict pending verified sample 已完成 Playwright-core 证据与文档回填；本批抽样 `base-anchor` / `select` / `radio` 三个 `syncStatus: migrated + verified: true` 页面，确认第 36/38 批通用 split 规则不止覆盖 `glass-surface`：三页均为 status 200、initial shell true、initial demos 1、props nodes 0、after deferred true、failed/warnings/errors 0；`tabs` reviewed+verified 对照页仍 shell false。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部从本文任务树领取。
+> 当前状态：Nexus 第 40 批 docs-only 收尾冻结中；第 39 批 strict pending verified sample 已完成 Playwright-core 证据与文档回填，并确认 `base-anchor` / `select` / `radio` 三个 `syncStatus: migrated + verified: true` 页面均已被第 36/38 批通用 split 规则覆盖：status 200、initial shell true、initial demos 1、props nodes 0、after deferred true、failed/warnings/errors 0；`tabs` reviewed+verified 对照页仍 shell false。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部从本文任务树领取，不再从聊天上下文临时恢复范围。
 
 ## Goal 原句
 
@@ -32,17 +32,38 @@
 - 第 38 批本地验证 dev server：`http://127.0.0.1:3219`。
 - 第 39 批本地验证 dev server：`http://127.0.0.1:3220`。
 
+## 当前批收尾冻结（第 40 批 docs-only）
+
+本批目的：按用户最新要求快速完成当前任务收尾；只更新本文，不继续混入代码改动、Playwright 新采样、首页 warning、dev SSR 深化、production chunk 复核或更多 pending 逐页拆分。
+
+后续领取入口固定如下：
+
+- P0-1 `docs 文档内容加载继续拆分`：固定 docs template 静态壳、审计 `body=0` payload 字段、复核 components index/detail 共用模板、继续拆可见区 demo / API table lazy boundary。
+- P0-2 `AI review / aireview 未审批组件优化`：以 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md` 为工作表，继续对 76 个 pending 组件分组为可静态化、可懒加载、应移出首屏、应合并模板、应删除或后置。
+- P0-3 `dev SSR TTFB 二轮`：覆盖 `/`、`/store`、`/en/docs/dev/components/tabs`、`/sign-in`、未登录 dashboard redirect，区分 Nuxt transform/cache、Content query/frontmatter fast path、i18n init、store memory init、auth/middleware 与 route payload。
+- P0-4 `全站 route matrix 二轮`：补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` Playwright screenshot/HAR。
+- P1-1 `production chunk / payload / CSS 复核`：检查 docs/store/dashboard/landing 是否互相污染；若存在，优先修 import boundary、layout boundary 或 component registration。
+- P1-2 `首页剩余 warning`：单独定位 WebGL ReadPixels、async lifecycle `onBeforeUnmount`、`Invalid scope`，不混入 docs 文档批次。
+
+当前批验证边界：
+
+- 只允许改动 `docs/plan-prd/TODO-nexus.md`。
+- `output/playwright/` 继续只作为 ignored evidence 引用目录，不纳入提交。
+- Nexus 相关代码文件应保持第 39 批后的 clean 状态；CoreApp / AI dirty files 属于其它任务，不混入本批。
+- 当前 goal 原句、触发页、已完成批次、子任务百分比、Playwright/HAR/Markdown/JSON 证据路径、后续任务树均已在本文保留。
+
 ## 当前进度
 
 - 本轮 tabs/card 文档链路：约 99%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry、pending 长文档后半段正文从首屏重型路径拆出。
 - 整体 goal 估算：约 92%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path、docs Assistant 上下文按需构建，`fusion` / `card` pending 长文档后半段 client deferred render，`avatar-variants` 单章节大 demo fallback split，`glass-surface` / `base-anchor` / `select` / `radio` 这类 `migrated + verified` strict pending 页面 deferred body 覆盖，以及 `card` 首屏第二个 demo shell 后置；后续仍需系统性覆盖剩余 AI review / aireview 未审批组件、dev SSR TTFB 深化、生产构建 chunk 复核与文档模板静态化。
 - 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `vue-sonner` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建、pending 长文档后半段渲染延迟到用户意图或静置后。
-- 当前第 39 批只做 strict pending verified Playwright 抽样与文档回填，不继续混入代码改动、首页 warning、dev SSR TTFB 或生产 chunk 复核。后续全部进入 TODO 队列：重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
+- 当前第 40 批只做 docs-only 收尾冻结，不继续混入代码改动、首页 warning、dev SSR TTFB 或生产 chunk 复核。后续全部进入 TODO 队列：重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
+| 当前第 40 批 docs-only 收尾冻结 | 100% | 按用户最新要求，把当前 goal 原句、追加收尾要求、触发页、已完成批次、docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、首页 warning、production chunk / payload / CSS 复核和下一批领取边界全部固定到本文；本批不扩业务代码、不新增 Playwright artifact。 |
 | 当前第 39 批 strict pending verified 抽样 | 100% | 抽样 `base-anchor` / `select` / `radio`，三页均 initial shell true、initial demos 1、props nodes 0、after deferred true、failed/warnings/errors 0；`tabs` 对照页 shell false，说明第 36/38 批通用规则覆盖更多 `migrated + verified` 页面。 |
 | 当前第 38 批 pending demo/API 二刀 | 100% | Playwright-core baseline 证明 `fusion` / `card` API/Props 表首屏节点为 0，demo registry/chunks 为 0；本批只收紧 pending split 点到第二个 demo/API boundary，使 `card` initial demo shells 2 -> 1，`fusion` 保持 1，`tabs` 保持 shell false。 |
 | 当前第 37 批 TODO-nexus docs-only 收尾 | 100% | 按用户最新要求，把当前 goal 原句、追加收尾要求、已完成批次、docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核和下一批领取边界全部固定到本文；本批不扩业务代码、不新增 Playwright artifact。 |
@@ -110,7 +131,8 @@
 | 36 | `bf4b46692` | `perf(nexus): defer strict pending docs sections` | 已完成 |
 | 37 | docs-only | `docs(nexus): finalize docs aireview todo` | 已完成 |
 | 38 | `da283b466` | `perf(nexus): tighten pending docs demo split` | 已完成 |
-| 39 | 当前批 | `docs(nexus): record strict pending verified sample` | 已验证；提交 hash 以 git log 为准 |
+| 39 | `929b850a2` | `docs(nexus): record strict pending verified sample` | 已完成 |
+| 40 | 当前批 | `docs(nexus): freeze performance followups` | docs-only 收尾；提交 hash 以 git log 为准 |
 
 ## 本轮收尾结论
 
@@ -477,6 +499,27 @@ pending 排序快照：
 1. P0：dev SSR TTFB 二轮，区分 Nuxt dev transform、Content query/frontmatter fast path、i18n init、store memory init 与 middleware。
 2. P0：route matrix 二轮，补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` screenshot / HAR。
 3. P1：`fusion` / `card` production chunk / route-switch timing 复核；dev 初始 API/demo eager 路径已 clean。
+
+## 第 40 批收口记录
+
+目标：按用户最新要求快速完成当前任务收尾。本批只更新 `docs/plan-prd/TODO-nexus.md`，把后续 docs 文档内容加载、AI review / aireview 未审批组件优化、全站 route matrix 二轮、dev SSR TTFB、首页剩余 warning、production chunk / payload / CSS 复核全部固定在本文，并把当前 goal 原句、追加要求、触发页、批次状态和下一批领取边界放到顶部可见位置。
+
+改动范围：
+
+- `docs/plan-prd/TODO-nexus.md`
+
+收口口径：
+
+- 第 39 批真实提交固定为 `929b850a2 docs(nexus): record strict pending verified sample`。
+- 当前第 40 批为 docs-only 收尾冻结，不新增业务代码、不新增测试文件、不新增 Playwright artifact、不触碰 CoreApp / AI dirty files。
+- 后续 docs 文档内容、AI review / aireview 相关事项统一从 `后续任务树` 和 `当前批收尾冻结（第 40 批 docs-only）` 领取。
+- 下一批只允许选择 1 个 P0 子任务和 1-2 个页面先跑 baseline，再决定是否落代码；优先 dev SSR TTFB 二轮、route matrix 二轮、production chunk / payload / CSS 复核或 pending 工作表剩余页面分组。
+- 每批结束继续回填本文：提交 hash、改动范围、测试命令、核心性能数字、Playwright screenshot / HAR / Markdown / JSON 路径和下一批候选。
+- `output/playwright/` 继续作为 ignored evidence 目录，只引用路径，不纳入 git。
+
+验证证据：
+
+- Markdown whitespace：`git diff --check -- "docs/plan-prd/TODO-nexus.md"`。
 
 ## 第 38 批收口记录
 
@@ -1474,6 +1517,7 @@ pending 排序快照：
 - [x] 当前第 37 批只做 TODO 文档收尾，不继续混入业务代码、Playwright 新采样、docs demo、DocApiTable、section split、首页 warning、dev SSR 深化或生产 chunk 复核。
 - [x] 当前第 38 批只做 pending demo second-boundary split，不继续混入 DocApiTable 重构、首页 warning、dev SSR 深化或生产 chunk 复核。
 - [x] 当前第 39 批只做 strict pending verified Playwright 抽样与文档回填，不继续混入代码改动、首页 warning、dev SSR 深化或生产 chunk 复核。
+- [x] 当前第 40 批只做 TODO 文档收尾冻结，不继续混入代码改动、Playwright 新采样、docs demo、DocApiTable、首页 warning、dev SSR 深化或生产 chunk 复核。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [x] 第 36 批开始前已选定 `glass-surface` / `gradual-blur` docs pending 优化，并先跑 Playwright / HAR baseline 后再落代码。
@@ -1586,6 +1630,7 @@ pending 排序快照：
 - [x] 第 37 批结束已更新本文：当前 goal 原句、追加收尾要求、第 36 批真实提交 hash、后续 docs / aireview / route matrix / TTFB / chunk 任务树、下一批领取优先级和当前批 docs-only 边界。
 - [x] 第 38 批结束已更新本文：pending demo second-boundary split、`tabs` / `fusion` / `card` Playwright-core baseline/after screenshot/HAR/Markdown/JSON、核心 DOM 数字和下一批候选。
 - [x] 第 39 批结束已更新本文：strict pending verified sample、`tabs` / `base-anchor` / `select` / `radio` Playwright-core screenshot/HAR/Markdown/JSON、核心 DOM 数字和下一批候选。
+- [x] 第 40 批结束已更新本文：当前 goal 原句、追加收尾要求、第 39 批真实提交 hash、docs / aireview / route matrix / dev SSR TTFB / 首页 warning / production chunk 任务树、下一批领取优先级和当前批 docs-only 边界。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
