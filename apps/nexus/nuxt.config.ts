@@ -33,6 +33,11 @@ const tuffexComponentEntry = useWorkspaceSource
   : `${tuffexDistRoot}/$1/index.js`
 const tuffexComponentSourceEntry = `${tuffexComponentsSourceRoot}/$1/index.ts`
 const tuffexComponentStyleEntry = resolve(tuffexDistRoot, '$1/style.css')
+const tuffexComponentTypePathEntry = useWorkspaceSource
+  ? `${tuffexComponentsSourceRoot}/*/index.ts`
+  : `${tuffexDistRoot}/*/index.d.ts`
+const tuffexComponentSourceTypePathEntry = `${tuffexComponentsSourceRoot}/*/index.ts`
+const tuffexComponentStyleTypePathEntry = resolve(tuffexDistRoot, '*/style.css')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 const tuffexDistUtilsEntry = useWorkspaceSource
   ? tuffexUtilsEntry
@@ -405,12 +410,12 @@ export default defineNuxtConfig({
       compilerOptions: {
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
-          '@tuffex-components/*': [tuffexComponentSourceEntry],
+          '@tuffex-components/*': [tuffexComponentSourceTypePathEntry],
           '@talex-touch/tuffex': [useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry],
           '@talex-touch/tuffex/base.css': [tuffexBaseStyleEntry],
-          '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleEntry],
+          '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleTypePathEntry],
           '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
-          '@talex-touch/tuffex/*': [tuffexComponentEntry],
+          '@talex-touch/tuffex/*': [tuffexComponentTypePathEntry],
         },
       },
     },

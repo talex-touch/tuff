@@ -47,7 +47,7 @@ function normalizeTuffexStylesheetHref(href: string) {
   if (!href.includes(TUFFEX_SOURCE_STYLESHEET_MARKER))
     return null
 
-  const [path, query = ''] = href.split('?', 2)
+  const [path = '', query = ''] = href.split('?', 2)
   const normalizedPath = path.replace(/^\/_nuxt\/@fs\//, '/_nuxt/')
   return query ? `${normalizedPath}?${query}` : normalizedPath
 }
