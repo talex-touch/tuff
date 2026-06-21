@@ -95,6 +95,19 @@ describe('docs page performance boundaries', () => {
     expect(docHero).toContain('radial-gradient(circle at center')
   })
 
+  it('keeps code block copy headers out of the SSR Vue render graph', () => {
+    expect(page).toContain('function renderCodeHeader(target: HTMLElement, language: string, codeText: string)')
+    expect(page).toContain("document.createElement('button')")
+    expect(page).toContain("copyButton.className = 'docs-code-copy'")
+    expect(page).toContain('copyButton.addEventListener(\'click\'')
+    expect(page).toContain('target.append(languageLabel, copyButton)')
+    expect(page).toContain('target.replaceChildren()')
+    expect(page).not.toContain('const CodeHeader = defineComponent')
+    expect(page).not.toContain('render(vnode, target)')
+    expect(page).not.toContain('const nuxtApp = useNuxtApp()')
+    expect(page).not.toMatch(/import \{[^}]*defineComponent[^}]*render[^}]*\} from 'vue'/)
+  })
+
   it('keeps lightweight docs tracking separate from bottom engagement widgets', () => {
     expect(page).toContain('DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 2500')
     expect(page).toContain('DOC_CLIENT_PANEL_INTENT_EVENTS')
@@ -129,7 +142,7 @@ describe('docs page performance boundaries', () => {
     expect(page).not.toContain("from '@talex-touch/tuffex/loading-state'")
     expect(page).not.toContain('h(TxButton')
     expect(page).not.toContain('<TxLoadingState')
-    expect(page).toContain("h(\n        'button'")
+    expect(page).toContain("document.createElement('button')")
     expect(page).toContain('class="docs-loading-state"')
 
     expect(docsLayout).not.toContain("import Drawer from '~/components/ui/Drawer.vue'")

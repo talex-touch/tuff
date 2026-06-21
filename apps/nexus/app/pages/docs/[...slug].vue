@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineComponent, h, render, type FunctionalComponent } from 'vue'
+import { h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
 import { appDescription, appName } from '~/constants'
@@ -97,7 +97,6 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const requestUrl = useRequestURL()
-const nuxtApp = useNuxtApp()
 const { t, setLocale } = useI18n()
 const toast = useToast()
 const activeRoutePath = ref(route.path)
@@ -1394,55 +1393,44 @@ async function shareCurrentPage() {
   }
 }
 
-const CodeHeader = defineComponent({
-  name: 'DocsCodeHeader',
-  props: {
-    language: { type: String, default: '' },
-    codeText: { type: String, default: '' },
-  },
-  setup(props) {
-    const label = computed(() => formatLanguageLabel(props.language))
-
-    const handleCopy = async () => {
-      try {
-        await writeToClipboard(props.codeText)
-        toast.success(copyLabels.value.copied)
-        dispatchDocsAction({
-          type: 'copy',
-          source: 'code_block',
-          sectionId: 'root',
-          sectionTitle: 'Code Block',
-          text: props.codeText,
-        })
-      }
-      catch {
-        toast.error(copyLabels.value.failed)
-      }
-    }
-
-    return () => [
-      h('span', { class: 'docs-code-language' }, label.value),
-      h(
-        'button',
-        {
-          'type': 'button',
-          'class': 'docs-code-copy',
-          'aria-label': copyLabels.value.copy,
-          'onClick': handleCopy,
-        },
-        [
-          h('span', { class: 'i-carbon-copy docs-code-copy__icon', 'aria-hidden': 'true' }),
-          h('span', copyLabels.value.copy),
-        ],
-      ),
-    ]
-  },
-})
-
 function renderCodeHeader(target: HTMLElement, language: string, codeText: string) {
-  const vnode = h(CodeHeader, { language, codeText })
-  vnode.appContext = nuxtApp.vueApp._context
-  render(vnode, target)
+  target.textContent = ''
+
+  const languageLabel = document.createElement('span')
+  languageLabel.className = 'docs-code-language'
+  languageLabel.textContent = formatLanguageLabel(language)
+
+  const copyButton = document.createElement('button')
+  copyButton.type = 'button'
+  copyButton.className = 'docs-code-copy'
+  copyButton.setAttribute('aria-label', copyLabels.value.copy)
+
+  const copyIcon = document.createElement('span')
+  copyIcon.className = 'i-carbon-copy docs-code-copy__icon'
+  copyIcon.setAttribute('aria-hidden', 'true')
+
+  const copyText = document.createElement('span')
+  copyText.textContent = copyLabels.value.copy
+
+  copyButton.append(copyIcon, copyText)
+  copyButton.addEventListener('click', async () => {
+    try {
+      await writeToClipboard(codeText)
+      toast.success(copyLabels.value.copied)
+      dispatchDocsAction({
+        type: 'copy',
+        source: 'code_block',
+        sectionId: 'root',
+        sectionTitle: 'Code Block',
+        text: codeText,
+      })
+    }
+    catch {
+      toast.error(copyLabels.value.failed)
+    }
+  })
+
+  target.append(languageLabel, copyButton)
   codeHeaderTargets.add(target)
 }
 
@@ -1480,10 +1468,7 @@ function clearRenderedCodeHeaders() {
     return
 
   for (const target of codeHeaderTargets) {
-    try {
-      render(null, target)
-    }
-    catch {}
+    target.replaceChildren()
   }
   codeHeaderTargets.clear()
 }
