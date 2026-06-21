@@ -350,20 +350,36 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
                   </template>
 
                   <TxDropdownItem v-if="hasCoordinates(device)" @select="toggleMap(device)">
-                    {{ expandedMapDeviceId === device.id ? t('common.collapse', '收起') : t('dashboard.devices.viewLocation', '查看位置') }}
+                    <span class="DashboardDevices-MenuItem">
+                      <span class="DashboardDevices-MenuIcon i-carbon-location" aria-hidden="true" />
+                      <span>{{ expandedMapDeviceId === device.id ? t('common.collapse', '收起') : t('dashboard.devices.viewLocation', '查看位置') }}</span>
+                    </span>
                   </TxDropdownItem>
                   <TxDropdownItem v-if="editingId !== device.id" @select="startRename(device)">
-                    {{ t('dashboard.devices.rename', '重命名') }}
+                    <span class="DashboardDevices-MenuItem">
+                      <span class="DashboardDevices-MenuIcon i-carbon-edit" aria-hidden="true" />
+                      <span>{{ t('dashboard.devices.rename', '重命名') }}</span>
+                    </span>
                   </TxDropdownItem>
                   <TxDropdownItem :disabled="actionLoading || Boolean(device.revokedAt)" @select="setTrusted(device, !device.trusted)">
-                    {{ device.trusted ? t('dashboard.devices.untrust', '取消信任') : t('dashboard.devices.trust', '信任') }}
+                    <span class="DashboardDevices-MenuItem">
+                      <span
+                        class="DashboardDevices-MenuIcon"
+                        :class="device.trusted ? 'i-carbon-security' : 'i-carbon-checkmark-outline'"
+                        aria-hidden="true"
+                      />
+                      <span>{{ device.trusted ? t('dashboard.devices.untrust', '取消信任') : t('dashboard.devices.trust', '信任') }}</span>
+                    </span>
                   </TxDropdownItem>
                   <TxDropdownItem
                     danger
                     :disabled="actionLoading || isCurrent(device) || Boolean(device.revokedAt)"
                     @select="revokeDevice(device)"
                   >
-                    {{ t('dashboard.devices.revoke', '踢出') }}
+                    <span class="DashboardDevices-MenuItem is-danger">
+                      <span class="DashboardDevices-MenuIcon i-carbon-logout" aria-hidden="true" />
+                      <span>{{ t('dashboard.devices.revoke', '踢出') }}</span>
+                    </span>
                   </TxDropdownItem>
                 </TxDropdownMenu>
               </div>
@@ -654,6 +670,28 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
   margin-left: 2px;
   color: currentColor;
   font-size: 12px;
+}
+
+.DashboardDevices-MenuItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.DashboardDevices-MenuIcon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--tx-text-color-secondary);
+  font-size: 16px;
+}
+
+.DashboardDevices-MenuItem.is-danger .DashboardDevices-MenuIcon {
+  color: var(--tx-color-danger);
 }
 
 .DashboardDevices-Footer {
