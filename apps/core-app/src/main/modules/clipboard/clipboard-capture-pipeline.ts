@@ -183,8 +183,13 @@ export class ClipboardCapturePipeline {
       return `${formatsKey}|t:${quickTextSignature}|f:${quickFilesSignature}|i:${quickImageSignature}`
     })
 
+    const shouldCaptureCoreBoxBaselineImage =
+      source === 'corebox-show-baseline' &&
+      this.options.getLastImagePersistAt() === 0 &&
+      hasImageFormats &&
+      readPrefetchedImage() !== null
     const sameFormats = helper.lastFormats.length > 0 && helper.lastFormatsKey === formatsKey
-    if (sameFormats && helper.lastChangeHash === quickHash) {
+    if (sameFormats && helper.lastChangeHash === quickHash && !shouldCaptureCoreBoxBaselineImage) {
       return
     }
 
@@ -215,6 +220,7 @@ export class ClipboardCapturePipeline {
       const imageItem = await this.tryBuildImageItem({
         helper,
         image: cachedImage,
+        force: shouldCaptureCoreBoxBaselineImage,
         phaseDurations,
         metaEntries
       })
@@ -357,15 +363,17 @@ export class ClipboardCapturePipeline {
   private async tryBuildImageItem({
     helper,
     image,
+    force,
     phaseDurations,
     metaEntries
   }: {
     helper: ClipboardHelper
     image: NativeImage
+    force?: boolean
     phaseDurations: ClipboardPhaseDurations
     metaEntries: ClipboardMetaEntry[]
   }): Promise<{ item: PendingClipboardItem | null; cachedImage: NativeImage | null }> {
-    if (!trackPhase(phaseDurations, 'diff.image', () => helper.didImageChange(image))) {
+    if (!trackPhase(phaseDurations, 'diff.image', () => force || helper.didImageChange(image))) {
       return { item: null, cachedImage: image }
     }
 

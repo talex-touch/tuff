@@ -2,10 +2,39 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClipboardCapturePipeline } from './clipboard-capture-pipeline'
 import { ClipboardHelper } from './clipboard-capture-freshness'
 
+interface FakeClipboardImage {
+  isEmpty: () => boolean
+  getSize: () => { width: number; height: number }
+  resize: ReturnType<typeof vi.fn<() => { toDataURL: () => string }>>
+  toDataURL: () => string
+  toPNG: () => Buffer
+}
+
+function createEmptyImage(): FakeClipboardImage {
+  return {
+    isEmpty: () => true,
+    getSize: () => ({ width: 0, height: 0 }),
+    resize: vi.fn(() => ({ toDataURL: () => '' })),
+    toDataURL: () => '',
+    toPNG: () => Buffer.alloc(0)
+  }
+}
+
+function createImage(): FakeClipboardImage {
+  return {
+    isEmpty: () => false,
+    getSize: () => ({ width: 640, height: 360 }),
+    resize: vi.fn(() => ({ toDataURL: () => 'data:image/png;base64,thumb' })),
+    toDataURL: () => 'data:image/png;base64,fingerprint',
+    toPNG: () => Buffer.from('png')
+  }
+}
+
 const mocks = vi.hoisted(() => ({
   availableFormats: vi.fn(),
   readText: vi.fn(),
   readHTML: vi.fn(),
+  readImage: vi.fn(createEmptyImage),
   sendToPlugin: vi.fn(async () => undefined),
   getAttachedPlugin: vi.fn(),
   shouldForwardClipboardChange: vi.fn(),
@@ -31,7 +60,7 @@ vi.mock('electron', () => ({
     availableFormats: mocks.availableFormats,
     readText: mocks.readText,
     readHTML: mocks.readHTML,
-    readImage: vi.fn(() => ({ isEmpty: () => true }))
+    readImage: mocks.readImage
   }
 }))
 
@@ -71,6 +100,10 @@ function createPipeline() {
     }),
     persistMetaEntriesSafely: vi.fn()
   }
+  const createClipboardImageFile = vi.fn(async () => ({
+    path: '/tmp/tuff/clipboard/images/image.png',
+    sizeBytes: 123
+  }))
   const updateMemoryCache = vi.fn()
   const notifyTransportChange = vi.fn()
   const rememberFreshness = vi.fn()
@@ -89,7 +122,7 @@ function createPipeline() {
     getLastImagePersistAt: () => lastImagePersistAt,
     getTransport: () => ({ sendToPlugin: mocks.sendToPlugin }) as never,
     imagePersistence: {
-      createClipboardImageFile: vi.fn()
+      createClipboardImageFile
     } as never,
     metaPersistence: metaPersistence as never,
     rememberFreshness,
@@ -115,6 +148,7 @@ function createPipeline() {
     pipeline,
     helper,
     metaPersistence,
+    createClipboardImageFile,
     updateMemoryCache,
     notifyTransportChange,
     rememberFreshness,
@@ -129,6 +163,7 @@ describe('clipboard-capture-pipeline', () => {
     mocks.availableFormats.mockReturnValue(['text/plain', 'text/html'])
     mocks.readText.mockReturnValue('https://example.test')
     mocks.readHTML.mockReturnValue('<b>https://example.test</b>')
+    mocks.readImage.mockReturnValue(createEmptyImage())
     mocks.getAttachedPlugin.mockReturnValue({ name: 'demo-plugin', _uniqueChannelKey: 'key' })
     mocks.shouldForwardClipboardChange.mockReturnValue(true)
   })
@@ -171,5 +206,92 @@ describe('clipboard-capture-pipeline', () => {
     expect(mocks.setTaskMeta).toHaveBeenCalledWith(
       expect.objectContaining({ durationMs: expect.any(Number) })
     )
+  })
+
+  it('captures a CoreBox show baseline image even when bootstrap already saw the same image', async () => {
+    const image = createImage()
+    mocks.availableFormats.mockReturnValue(['public.png'])
+    mocks.readText.mockReturnValue('')
+    mocks.readHTML.mockReturnValue('')
+    mocks.readImage.mockReturnValue(image)
+    mocks.values.mockReturnValueOnce({
+      returning: vi.fn(async () => [
+        {
+          id: 12,
+          type: 'image',
+          content: '/tmp/tuff/clipboard/images/image.png',
+          rawContent: '',
+          thumbnail: 'data:image/png;base64,thumb',
+          metadata: null
+        }
+      ])
+    })
+    const context = createPipeline()
+
+    await context.pipeline.process('corebox-show-baseline')
+
+    expect(context.createClipboardImageFile).toHaveBeenCalledWith(Buffer.from('png'))
+    expect(context.rememberFreshness).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 12, type: 'image' }),
+      expect.objectContaining({ eligible: false, captureSource: 'corebox-show-baseline' })
+    )
+    expect(context.updateMemoryCache).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 12, type: 'image' })
+    )
+    expect(context.notifyTransportChange).toHaveBeenCalled()
+  })
+
+  it('keeps background polling deduped for a bootstrap-seen image', async () => {
+    const image = createImage()
+    mocks.availableFormats.mockReturnValue(['public.png'])
+    mocks.readText.mockReturnValue('')
+    mocks.readHTML.mockReturnValue('')
+    mocks.readImage.mockReturnValue(image)
+    const context = createPipeline()
+
+    await context.pipeline.process('background-poll')
+
+    expect(context.createClipboardImageFile).not.toHaveBeenCalled()
+    expect(context.updateMemoryCache).not.toHaveBeenCalled()
+    expect(context.notifyTransportChange).not.toHaveBeenCalled()
+  })
+
+  it('captures a CoreBox baseline image after an earlier poll saw the bootstrap image', async () => {
+    const image = createImage()
+    mocks.availableFormats.mockReturnValue(['public.png'])
+    mocks.readText.mockReturnValue('')
+    mocks.readHTML.mockReturnValue('')
+    mocks.readImage.mockReturnValue(image)
+    const context = createPipeline()
+
+    await context.pipeline.process('background-poll')
+
+    expect(context.getState().lastSuccessfulScanAt).toEqual(expect.any(Number))
+    expect(context.createClipboardImageFile).not.toHaveBeenCalled()
+
+    mocks.values.mockReturnValueOnce({
+      returning: vi.fn(async () => [
+        {
+          id: 13,
+          type: 'image',
+          content: '/tmp/tuff/clipboard/images/image.png',
+          rawContent: '',
+          thumbnail: 'data:image/png;base64,thumb',
+          metadata: null
+        }
+      ])
+    })
+
+    await context.pipeline.process('corebox-show-baseline')
+
+    expect(context.createClipboardImageFile).toHaveBeenCalledWith(Buffer.from('png'))
+    expect(context.rememberFreshness).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 13, type: 'image' }),
+      expect.objectContaining({ eligible: false, captureSource: 'corebox-show-baseline' })
+    )
+    expect(context.updateMemoryCache).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 13, type: 'image' })
+    )
+    expect(context.notifyTransportChange).toHaveBeenCalled()
   })
 })

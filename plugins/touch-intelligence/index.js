@@ -1,5 +1,6 @@
 const { plugin, clipboard, logger, TuffItemBuilder, permission, touchChannel, intelligence } = globalThis
 const crypto = require('node:crypto')
+const AUTH_SESSION_GET_STATE_EVENT = resolveAuthSessionGetStateEvent()
 
 let makeWidgetIdLoader = null
 
@@ -32,10 +33,21 @@ const INPUT_TYPE_TEXT = 'text'
 const INPUT_TYPE_IMAGE = 'image'
 const HISTORY_FILE = 'conversation-history.json'
 
+function resolveAuthSessionGetStateEvent() {
+  try {
+    const { AuthEvents } = require('@talex-touch/utils/transport/events')
+    return AuthEvents.session.getState.toEventName()
+  }
+  catch {
+    return 'auth:session:get-state'
+  }
+}
+
 const AI_ERROR_MESSAGES = {
+  AUTH_REQUIRED: '未登录，请先登录后重试；可在登录恢复后再次发送',
   PERMISSION_DENIED: '权限已拒绝，请在插件权限中授予 intelligence.basic',
   OCR_EMPTY: 'OCR 未识别到可用文字',
-  PROVIDER_UNAVAILABLE: 'Provider 不可用，请检查默认模型或 BYOK 配置',
+  PROVIDER_UNAVAILABLE: 'Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试',
   QUOTA_EXCEEDED: 'AI 配额不足，请稍后重试或调整用量',
   MODEL_UNSUPPORTED: '当前模型不支持该能力，请切换支持 text.chat / vision.ocr 的模型',
   EMPTY_RESPONSE: 'AI 未返回可用内容',
@@ -490,6 +502,24 @@ function createPluginError(code, message) {
   return error
 }
 
+async function getAuthState() {
+  if (!touchChannel?.send)
+    return null
+
+  try {
+    return await touchChannel.send(AUTH_SESSION_GET_STATE_EVENT)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] failed to resolve auth state', error)
+    return null
+  }
+}
+
+async function ensureSignedIn() {
+  const state = await getAuthState()
+  return state?.isSignedIn === true
+}
+
 function normalizeInvokeError(error) {
   const rawCode = normalizeText(error?.code).toUpperCase()
   const rawMessage = toErrorMessage(error)
@@ -498,6 +528,14 @@ function normalizeInvokeError(error) {
   let code = AI_ERROR_MESSAGES[rawCode] ? rawCode : 'UNKNOWN'
   if (code === 'UNKNOWN') {
     if (
+      lower.includes('not authenticated')
+      || lower.includes('auth required')
+      || lower.includes('未登录')
+      || lower.includes('需要登录')
+    ) {
+      code = 'AUTH_REQUIRED'
+    }
+    else if (
       lower.includes('permission')
       || lower.includes('denied')
       || lower.includes('intelligence.basic')
@@ -508,14 +546,6 @@ function normalizeInvokeError(error) {
       code = 'QUOTA_EXCEEDED'
     }
     else if (
-      lower.includes('unsupported')
-      || lower.includes('not supported')
-      || lower.includes('capability not supported')
-      || lower.includes('model does not support')
-    ) {
-      code = 'MODEL_UNSUPPORTED'
-    }
-    else if (
       lower.includes('provider')
       || lower.includes('api key')
       || lower.includes('not configured')
@@ -524,6 +554,14 @@ function normalizeInvokeError(error) {
       || lower.includes('no providers available')
     ) {
       code = 'PROVIDER_UNAVAILABLE'
+    }
+    else if (
+      lower.includes('unsupported')
+      || lower.includes('not supported')
+      || lower.includes('capability not supported')
+      || lower.includes('model does not support')
+    ) {
+      code = 'MODEL_UNSUPPORTED'
     }
     else if (lower.includes('empty response') || lower.includes('未返回可用内容')) {
       code = 'EMPTY_RESPONSE'
@@ -536,6 +574,18 @@ function normalizeInvokeError(error) {
     code,
     message: `${fallback}${detail}`,
   }
+}
+
+async function pushAuthRequiredState(featureId, state = {}) {
+  const normalizedError = normalizeInvokeError(createPluginError('AUTH_REQUIRED'))
+  await pushWidgetState(featureId, {
+    ...state,
+    status: 'error',
+    stage: 'error',
+    errorCode: normalizedError.code,
+    errorMessage: normalizedError.message,
+  })
+  return normalizedError
 }
 
 async function ensurePermission(permissionId, reason) {
@@ -750,6 +800,9 @@ function buildWidgetPayload(state = {}) {
     inputKinds: normalizeStringList(state.inputKinds),
     errorCode: normalizeText(state.errorCode),
     errorMessage: normalizeText(state.errorMessage),
+    copyStatus: normalizeText(state.copyStatus),
+    copyError: normalizeText(state.copyError),
+    copyRecovery: normalizeText(state.copyRecovery),
     messages: buildWidgetMessages(state),
     imageContext: buildImageContext(state),
     streamMode: 'visual-reveal',
@@ -774,12 +827,14 @@ function resolveWidgetAction(state = {}) {
       actionId: 'copy-answer',
       payload: {
         prompt: state.prompt,
+        requestId: state.requestId,
         answer: state.answer,
         provider: state.provider,
         model: state.model,
         traceId: state.traceId,
         latency: state.latency,
         handoffSessionId: state.handoffSessionId,
+        inputKinds: state.inputKinds,
       },
     }
   }
@@ -856,12 +911,13 @@ function buildWidgetItem(featureId, state = {}) {
 async function pushWidgetState(featureId, state = {}) {
   try {
     plugin.feature.clearItems()
-    await plugin.feature.pushItems([buildWidgetItem(featureId, state)])
-    return true
+    const item = buildWidgetItem(featureId, state)
+    await plugin.feature.pushItems([item])
+    return item
   }
   catch (error) {
     logger?.warn?.('[touch-intelligence] failed to push widget state', error)
-    return false
+    return null
   }
 }
 
@@ -940,15 +996,17 @@ function buildReadyItem(featureId, state) {
     description,
     accessory: modelInfo || 'text.chat',
     actionId: 'copy-answer',
-    payload: {
-      prompt: state.prompt,
-      answer: state.answer,
-      provider: state.provider,
-      model: state.model,
-      traceId: state.traceId,
-      latency: state.latency,
-      handoffSessionId: state.handoffSessionId,
-    },
+      payload: {
+        prompt: state.prompt,
+        requestId: state.requestId,
+        answer: state.answer,
+        provider: state.provider,
+        model: state.model,
+        traceId: state.traceId,
+        latency: state.latency,
+        handoffSessionId: state.handoffSessionId,
+        inputKinds: state.inputKinds,
+      },
     status: 'ready',
     handoffSessionId: state.handoffSessionId,
     intelligence: {
@@ -1029,12 +1087,13 @@ function extractInputKinds(query) {
   return Array.from(inputKinds)
 }
 
-function extractQueryContext(query) {
+function extractQueryContext(query, options = {}) {
   const rawText = getQueryText(query)
   const prompt = normalizePrompt(rawText)
   const imageDataUrl = extractImageDataUrl(query)
   const isExplicitAiQuery = hasAiPrefix(rawText)
-  const shouldUseOcr = Boolean(imageDataUrl && prompt && isExplicitAiQuery)
+  const forceImageOcr = options?.forceImageOcr === true
+  const shouldUseOcr = Boolean(imageDataUrl && prompt && (isExplicitAiQuery || forceImageOcr))
   const shouldShowEntry = Boolean(prompt || shouldUseOcr)
 
   return {
@@ -1261,8 +1320,14 @@ async function copyAnswer(answer) {
   if (!canCopy)
     return false
 
-  clipboard.writeText(answer)
-  return true
+  try {
+    await clipboard.writeText(answer)
+    return true
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] failed to copy answer', error)
+    return false
+  }
 }
 
 const pluginLifecycle = {
@@ -1270,7 +1335,9 @@ const pluginLifecycle = {
     try {
       const resolvedFeatureId = resolveFeatureId(featureId)
       const session = getSession(resolvedFeatureId)
-      const queryContext = extractQueryContext(query)
+      const queryContext = extractQueryContext(query, {
+        forceImageOcr: resolvedFeatureId === DEFAULT_FEATURE_ID,
+      })
       const storedHistory = await loadStoredHistory(resolvedFeatureId)
       if (storedHistory.length > session.history.length) {
         session.history = storedHistory
@@ -1293,6 +1360,16 @@ const pluginLifecycle = {
       const displayPrompt = resolveDisplayPrompt(draft.prompt, Boolean(draft.imageDataUrl || draft.ocrText))
       if (!displayPrompt)
         return true
+
+      if (!(await ensureSignedIn())) {
+        await pushAuthRequiredState(resolvedFeatureId, {
+          ...draft,
+          prompt: displayPrompt,
+          handoffSessionId: session.handoffSessionId,
+          history: cloneHistory(session.history),
+        })
+        return true
+      }
 
       const hasPermission = await ensurePermission(
         'intelligence.basic',
@@ -1352,12 +1429,12 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
     try {
       if (item?.meta?.defaultAction !== ACTION_ID)
         return
 
-      const actionId = item.meta?.actionId
+      const actionId = context?.actionId || item.meta?.actionId
       const payload = item.meta?.payload || {}
       const prompt = normalizePrompt(payload.prompt)
       const featureId = resolveFeatureId(item.meta?.featureId)
@@ -1370,9 +1447,40 @@ const pluginLifecycle = {
 
         const copied = await copyAnswer(answer)
         if (!copied) {
+          const failedItem = await pushWidgetState(featureId, {
+            prompt,
+            answer,
+            provider: payload.provider,
+            model: payload.model,
+            traceId: payload.traceId,
+            latency: payload.latency,
+            handoffSessionId: payload.handoffSessionId,
+            inputKinds: payload.inputKinds,
+            status: 'ready',
+            stage: 'chat',
+            capabilityId: 'text.chat',
+            copyStatus: 'failed',
+            copyError: '复制失败：缺少 clipboard.write 权限',
+            copyRecovery: '请在插件权限中允许 clipboard.write 后重试。',
+            history: cloneHistory(session.history),
+          })
           return {
             externalAction: true,
             success: false,
+            shouldActivate: Boolean(failedItem),
+            activation: failedItem
+              ? {
+                  id: SOURCE_ID,
+                  meta: {
+                    pluginName: PLUGIN_NAME,
+                    featureId,
+                    feature: failedItem,
+                  },
+                  hideResults: false,
+                  showInput: true,
+                  forceMax: true,
+                }
+              : undefined,
             status: 'blocked',
             reason: 'permission-denied',
             message: '复制失败：缺少 clipboard.write 权限',
@@ -1389,6 +1497,19 @@ const pluginLifecycle = {
 
         if (!displayPrompt)
           return
+
+        if (!(await ensureSignedIn())) {
+          const normalizedError = await pushAuthRequiredState(featureId, {
+            prompt: displayPrompt,
+            inputKinds: draft.inputKinds,
+            handoffSessionId: session.handoffSessionId,
+          })
+          return {
+            externalAction: true,
+            success: false,
+            message: normalizedError.message,
+          }
+        }
 
         const hasPermission = await ensurePermission(
           'intelligence.basic',
@@ -1465,6 +1586,8 @@ module.exports = {
     extractInputKinds,
     extractQueryContext,
     formatLatency,
+    getAuthState,
+    ensureSignedIn,
     mapInvokeResult,
     normalizeInvokeError,
     normalizeLatency,

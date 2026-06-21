@@ -46,6 +46,9 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
   }
 }
 
+const INTERNAL_SYSTEM_OCR_CAPABILITY_ID = 'vision.ocr'
+const INTERNAL_SYSTEM_OCR_MODEL = 'system-ocr'
+
 let lastAppliedRuntimeConfigSignature: string | null = null
 let teardownConfigUpdateListener: (() => void) | null = null
 
@@ -233,6 +236,7 @@ function createDefaultPersistedConfig(): IntelligenceSDKPersistedConfig {
       defaultStrategy: DEFAULT_GLOBAL_CONFIG.defaultStrategy,
       enableAudit: DEFAULT_GLOBAL_CONFIG.enableAudit,
       enableCache: DEFAULT_GLOBAL_CONFIG.enableCache,
+      enableQuota: DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
       cacheExpiration: DEFAULT_GLOBAL_CONFIG.cacheExpiration
     },
     capabilities: cloneValue(DEFAULT_CAPABILITIES),
@@ -257,8 +261,14 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
       defaultStrategy: DEFAULT_GLOBAL_CONFIG.defaultStrategy,
       enableAudit: DEFAULT_GLOBAL_CONFIG.enableAudit,
       enableCache: DEFAULT_GLOBAL_CONFIG.enableCache,
+      enableQuota: DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
       cacheExpiration: DEFAULT_GLOBAL_CONFIG.cacheExpiration
     }
+    changed = true
+  }
+
+  if (config.globalConfig.enableQuota === undefined) {
+    config.globalConfig.enableQuota = DEFAULT_GLOBAL_CONFIG.enableQuota ?? true
     changed = true
   }
 
@@ -272,12 +282,22 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     changed = true
   }
 
+  const hadExplicitProviderEnabledState = config.providers.some(
+    (provider) => typeof provider.enabled === 'boolean'
+  )
+  const allPersistedProvidersExplicitlyDisabled =
+    config.providers.length > 0 && config.providers.every((provider) => provider.enabled === false)
+
   const nexusDefault = DEFAULT_PROVIDERS.find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
   if (
     nexusDefault &&
     !config.providers.some((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
   ) {
-    config.providers.unshift(cloneValue(nexusDefault))
+    const nextNexusProvider = cloneValue(nexusDefault)
+    if (allPersistedProvidersExplicitlyDisabled) {
+      nextNexusProvider.enabled = false
+    }
+    config.providers.unshift(nextNexusProvider)
     changed = true
   }
 
@@ -295,7 +315,12 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     }
   }
 
-  if (enabledProviderCount === 0 && nexusProvider && nexusProvider.enabled !== true) {
+  if (
+    enabledProviderCount === 0 &&
+    !hadExplicitProviderEnabledState &&
+    nexusProvider &&
+    nexusProvider.enabled !== true
+  ) {
     nexusProvider.enabled = true
     changed = true
   }
@@ -322,6 +347,37 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
       DEFAULT_CAPABILITIES['image.translate.e2e']
     )
     changed = true
+  }
+
+  if (process.env.TUFF_DISABLE_NATIVE_OCR !== '1') {
+    if (!config.capabilities[INTERNAL_SYSTEM_OCR_CAPABILITY_ID]) {
+      config.capabilities[INTERNAL_SYSTEM_OCR_CAPABILITY_ID] = cloneValue(
+        DEFAULT_CAPABILITIES[INTERNAL_SYSTEM_OCR_CAPABILITY_ID]
+      )
+      changed = true
+    }
+
+    const visionOcrCapability = config.capabilities[INTERNAL_SYSTEM_OCR_CAPABILITY_ID]
+    if (visionOcrCapability) {
+      if (!Array.isArray(visionOcrCapability.providers)) {
+        visionOcrCapability.providers = []
+        changed = true
+      }
+
+      if (
+        !visionOcrCapability.providers.some(
+          (binding) => binding.providerId === INTERNAL_SYSTEM_OCR_PROVIDER_ID
+        )
+      ) {
+        visionOcrCapability.providers.unshift({
+          providerId: INTERNAL_SYSTEM_OCR_PROVIDER_ID,
+          priority: 0,
+          enabled: true,
+          models: [INTERNAL_SYSTEM_OCR_MODEL]
+        })
+        changed = true
+      }
+    }
   }
 
   if (syncPromptSchema(config)) {
@@ -384,6 +440,7 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     defaultStrategy: normalizedStrategy,
     enableAudit: stored.globalConfig?.enableAudit ?? true,
     enableCache: stored.globalConfig?.enableCache ?? false,
+    enableQuota: stored.globalConfig?.enableQuota ?? true,
     cacheExpiration: stored.globalConfig?.cacheExpiration,
     capabilities: stored.capabilities ?? {},
     promptRegistry: stored.promptRegistry ?? [],
@@ -419,6 +476,12 @@ export function getCapabilityOptions(capabilityId: string): {
       .filter((provider) => provider.enabled !== false)
       .map((provider) => provider.id)
   )
+  if (
+    normalizedCapabilityId === INTERNAL_SYSTEM_OCR_CAPABILITY_ID &&
+    process.env.TUFF_DISABLE_NATIVE_OCR !== '1'
+  ) {
+    enabledProviderIds.add(INTERNAL_SYSTEM_OCR_PROVIDER_ID)
+  }
   const enabledBindings =
     config.providers?.filter(
       (binding) => binding.enabled !== false && enabledProviderIds.has(binding.providerId)

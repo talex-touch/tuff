@@ -1,9 +1,10 @@
-import type {
-  IProviderActivate,
-  TuffItem,
-  TuffQuery,
-  TuffQueryInput,
-  TuffSearchResult
+import {
+  TuffInputType,
+  type IProviderActivate,
+  type TuffItem,
+  type TuffQuery,
+  type TuffQueryInput,
+  type TuffSearchResult
 } from '@talex-touch/utils'
 import type { ActivationState } from '@talex-touch/utils/transport/events/types'
 import type { IBoxOptions } from '..'
@@ -17,6 +18,7 @@ import {
   CoreBoxRetainedEvents,
   DivisionBoxEvents
 } from '@talex-touch/utils/transport/events'
+import { hasWindow } from '@talex-touch/utils/env'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
@@ -28,6 +30,7 @@ import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './deta
 import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { isBackgroundAppLaunchItem } from './app-launch-item'
 import { buildClipboardQueryInputs } from './clipboard-query-inputs'
+import { getLatestClipboard } from './useClipboardChannel'
 import { useResize } from './useResize'
 
 interface SearchEndData {
@@ -181,6 +184,53 @@ function hasPluginWidgetRenderItem(items: TuffItem[]): boolean {
       !String(custom.content).startsWith('core-')
     )
   })
+}
+
+function getPluginFeatureIdentity(
+  item: TuffItem
+): { pluginName: string; featureId: string } | null {
+  const meta = isRecord(item.meta) ? item.meta : null
+  const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : ''
+  const featureId = typeof meta?.featureId === 'string' ? meta.featureId : ''
+  if (!pluginName || !featureId) return null
+  return { pluginName, featureId }
+}
+
+function refreshActiveWidgetFeature(
+  activations: IProviderActivate[] | null,
+  items: TuffItem[]
+): IProviderActivate[] | null {
+  if (!activations?.length || !items.length) return activations
+
+  const widgetItemsByKey = new Map<string, TuffItem>()
+  for (const item of items) {
+    const custom = item.render?.mode === 'custom' ? item.render.custom : null
+    if (!custom || !['vue', 'webcomponent', 'arrow'].includes(custom.type)) continue
+    const identity = getPluginFeatureIdentity(item)
+    if (!identity) continue
+    widgetItemsByKey.set(`${identity.pluginName}:${identity.featureId}`, item)
+  }
+  if (!widgetItemsByKey.size) return activations
+
+  let changed = false
+  const nextActivations = activations.map((activation) => {
+    if (activation.id !== 'plugin-features') return activation
+    const meta = isRecord(activation.meta) ? activation.meta : {}
+    const pluginName = typeof meta.pluginName === 'string' ? meta.pluginName : ''
+    const featureId = typeof meta.featureId === 'string' ? meta.featureId : ''
+    const nextFeature = widgetItemsByKey.get(`${pluginName}:${featureId}`)
+    if (!nextFeature || meta.feature === nextFeature) return activation
+    changed = true
+    return {
+      ...activation,
+      meta: {
+        ...meta,
+        feature: nextFeature
+      }
+    }
+  })
+
+  return changed ? nextActivations : activations
 }
 
 function mergePluginFeatureActivationState(
@@ -337,6 +387,10 @@ export function useSearch(
     return filterDetachedItems(result).slice(0, MAX_RENDERED_RESULTS)
   })
 
+  watch(boxItems, (items) => {
+    activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, [...items])
+  })
+
   const searchResult = ref<TuffSearchResult | null>(null)
   const loading = ref(false)
   const recommendationPending = ref(false)
@@ -363,6 +417,10 @@ export function useSearch(
 
   function limitRenderedItems(items: TuffItem[]): TuffItem[] {
     return items.length > MAX_RENDERED_RESULTS ? items.slice(0, MAX_RENDERED_RESULTS) : items
+  }
+
+  function replaceSearchResults(items: TuffItem[]): void {
+    searchResults.value = limitRenderedItems(filterDetachedItems(items))
   }
 
   function mergeRenderedItems(current: TuffItem[], incoming: TuffItem[]): TuffItem[] {
@@ -480,15 +538,51 @@ export function useSearch(
   function buildQueryInputs(options?: {
     queryText?: string
     allowPendingTextClipboard?: boolean
+    includeClipboardImage?: boolean
   }): TuffQueryInput[] {
-    return buildClipboardQueryInputs({
+    const queryText = options?.queryText ?? searchVal.value
+    const inputs = buildClipboardQueryInputs({
       clipboardItem: clipboardOptions?.last,
       pendingTextClipboardItem: clipboardOptions?.pendingAutoFillItem,
-      queryText: options?.queryText,
+      queryText,
       allowPendingTextClipboard: options?.allowPendingTextClipboard ?? false,
+      includeClipboardImage:
+        options?.includeClipboardImage ??
+        (!queryText.trim() || hasPluginFeatureActivation(activeActivations.value)),
       filePaths: boxOptions.file?.paths,
       useFileMode: boxOptions.mode === BoxMode.FILE
     })
+    if (hasWindow()) {
+      window.__coreboxQueryInputDebug = {
+        builtAt: new Date().toISOString(),
+        queryTextLength: queryText.length,
+        clipboardLastType: clipboardOptions?.last?.type ?? null,
+        pendingTextClipboardType: clipboardOptions?.pendingAutoFillItem?.type ?? null,
+        filePathCount: boxOptions.file?.paths?.length ?? 0,
+        useFileMode: boxOptions.mode === BoxMode.FILE,
+        inputTypes: inputs.map((input) => input.type),
+        inputCount: inputs.length,
+        hasImageInput: inputs.some((input) => input.type === TuffInputType.Image),
+        hasTextInput: inputs.some(
+          (input) => input.type === TuffInputType.Text || input.type === TuffInputType.Html
+        ),
+        hasFileInput: inputs.some((input) => input.type === TuffInputType.Files)
+      }
+    }
+    return inputs
+  }
+
+  async function refreshClipboardBeforeInputBuild(): Promise<void> {
+    if (!clipboardOptions) return
+    try {
+      const latest = await getLatestClipboard({ refresh: true })
+      if (!latest) return
+      clipboardOptions.last = latest
+      clipboardOptions.pendingAutoFillItem = null
+      clipboardOptions.detectedAt = Date.now()
+    } catch {
+      // Keep existing clipboard state when the typed transport is unavailable.
+    }
   }
 
   function clearRecommendationTimeout(): void {
@@ -600,6 +694,7 @@ export function useSearch(
   }
 
   async function executeSearch(options: ExecuteSearchOptions = {}): Promise<void> {
+    await refreshClipboardBeforeInputBuild()
     const inputs = buildQueryInputs()
     const queryKey = buildQueryKey(searchVal.value, inputs, activeActivations.value)
 
@@ -918,6 +1013,7 @@ export function useSearch(
       : typeof searchResult.value?.query?.text === 'string'
         ? searchResult.value.query.text
         : searchVal.value
+    await refreshClipboardBeforeInputBuild()
     const currentInputs = buildQueryInputs({
       queryText: currentQueryText,
       allowPendingTextClipboard: isPluginFeature
@@ -1155,6 +1251,7 @@ export function useSearch(
       currentTotal: searchResults.value.length
     })
     searchResults.value = mergeRenderedItems(searchResults.value, filteredItems)
+    activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, filteredItems)
   })
 
   const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
@@ -1212,6 +1309,7 @@ export function useSearch(
       coreBoxShownHandler = null
     }
 
+    window.__coreboxQueryInputDebug = undefined
     clearRecommendationTimeout()
   })
 
@@ -1295,6 +1393,7 @@ export function useSearch(
     recommendationPending,
     activeItem,
     activeActivations,
+    replaceSearchResults,
     handleExecute,
     handleExit,
     handleSearchImmediate,

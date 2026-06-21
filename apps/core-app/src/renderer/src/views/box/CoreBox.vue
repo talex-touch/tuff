@@ -82,6 +82,7 @@ const {
   recommendationPending,
   activeItem,
   activeActivations,
+  replaceSearchResults,
   handleExecute,
   handleExit,
   handleSearchImmediate,
@@ -107,7 +108,7 @@ function getFeatureInteraction(feature: CoreBoxSendFeatureItem | null | undefine
 }
 
 function isWidgetFeature(feature: CoreBoxSendFeatureItem | null | undefined): boolean {
-  return getFeatureInteraction(feature)?.type === 'widget'
+  return getFeatureInteraction(feature)?.type === 'widget' || isPluginWidgetRenderItem(feature)
 }
 
 function isSendModeFeature(feature: CoreBoxSendFeatureItem | null | undefined): boolean {
@@ -183,7 +184,7 @@ watch(isWidgetActivationActive, (active) => {
 
 const widgetItemToRender = computed(() => {
   if (widgetRenderItem.value) return widgetRenderItem.value
-  if (isWidgetActivationActive.value) return lastWidgetItem.value
+  if (isWidgetActivationActive.value) return activeWidgetFeatureItem.value ?? lastWidgetItem.value
   return null
 })
 const isWidgetMode = computed(
@@ -509,6 +510,19 @@ const detach = useDetach({
 const actionPanel = useActionPanel({
   openFlowSelector: detach.openFlowSelector,
   refreshSearch: handleSearchImmediate,
+  onActivationState: (activations) => {
+    activeActivations.value = activations
+    const widgetFeature = activations
+      ?.map((activation) => {
+        const feature = (activation.meta as { feature?: TuffItem } | undefined)?.feature
+        return isPluginWidgetRenderItem(feature) ? feature : null
+      })
+      .find((feature): feature is TuffItem => Boolean(feature))
+    if (widgetFeature) {
+      replaceSearchResults([widgetFeature])
+      boxOptions.focus = 0
+    }
+  },
   navigate: (path) => {
     void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     void router.push(path).catch(() => {})
@@ -593,6 +607,16 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   await focusWindowAndInput()
 }
 
+async function handleRetrySearch(): Promise<void> {
+  await handleSearchImmediate({ force: true })
+  await focusWindowAndInput()
+}
+
+function handleOpenFileIndexSettings(): void {
+  void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
+  void router.push('/setting?section=file-index').catch(() => {})
+}
+
 const { themeConfig, themeCSSVars, canvasConfig, canvasEnabled } = useCoreBoxTheme()
 const showLogo = computed(() => themeConfig.value.logo.position !== 'hidden')
 const logoOrderRight = computed(() => themeConfig.value.logo.position === 'right')
@@ -606,12 +630,23 @@ const searchState = computed(() =>
   resolveCoreBoxSearchState({
     query: searchVal.value,
     resultCount: res.value.length,
+    loading: loading.value,
     recommendationPending: recommendationPending.value,
     mode: boxOptions.mode
   })
 )
 const shouldShowResultArea = computed(
   () => !isUIMode.value && (res.value.length > 0 || !!searchState.value)
+)
+
+watch(
+  () => [searchState.value?.kind ?? '', shouldShowResultArea.value] as const,
+  () => {
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
+    })
+  },
+  { flush: 'post' }
 )
 
 type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
@@ -840,6 +875,24 @@ const customCss = computed(() => {
                   </div>
                   <div class="CoreBoxSearchState-Detail">
                     {{ t(searchState.detailKey, searchState.detailFallback) }}
+                  </div>
+                  <div v-if="searchState.kind === 'no-results'" class="CoreBoxSearchState-Actions">
+                    <button
+                      type="button"
+                      class="CoreBoxSearchState-Action"
+                      @click="handleRetrySearch"
+                    >
+                      <TuffIcon :icon="{ type: 'class', value: 'i-ri-refresh-line' }" />
+                      <span>{{ t('coreBox.searchState.retryAction') }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="CoreBoxSearchState-Action"
+                      @click="handleOpenFileIndexSettings"
+                    >
+                      <TuffIcon :icon="{ type: 'class', value: 'i-ri-folder-settings-line' }" />
+                      <span>{{ t('coreBox.searchState.fileIndexSettingsAction') }}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1201,8 +1254,40 @@ div.CoreBoxRes.CoreBoxRes--widget {
   color: var(--tx-text-color-secondary);
 }
 
+.CoreBoxSearchState-Actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.CoreBoxSearchState-Action {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--tx-bg-color) 86%, var(--tx-fill-color-light));
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.CoreBoxSearchState-Action:hover {
+  border-color: color-mix(in srgb, var(--tx-color-primary) 45%, var(--tx-border-color));
+  color: var(--tx-color-primary);
+}
+
 .CoreBoxSearchState--progress .CoreBoxSearchState-Icon {
   color: var(--tx-color-primary);
+}
+
+.CoreBoxSearchState--empty .CoreBoxSearchState-Icon {
+  color: var(--tx-text-color-secondary);
 }
 
 @keyframes corebox-state-spin {

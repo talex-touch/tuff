@@ -36,6 +36,7 @@ export interface IUseSearch {
   recommendationPending: Ref<boolean>
   activeItem: ComputedRef<TuffItem>
   activeActivations: Ref<IProviderActivate[] | null>
+  replaceSearchResults: (items: TuffItem[]) => void
   handleExecute: (item?: TuffItem) => Promise<void>
   handleExit: () => Promise<void>
   handleSearchImmediate: (options?: { force?: boolean }) => Promise<void>

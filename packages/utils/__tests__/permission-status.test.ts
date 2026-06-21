@@ -45,6 +45,22 @@ describe('permission status resolution', () => {
     expect(status.missingRequired).toEqual([])
   })
 
+  it('requires explicit grants for optional clipboard writes', () => {
+    const status = getPluginPermissionStatus(
+      'demo-plugin',
+      ENFORCED_SDK,
+      {
+        required: [],
+        optional: ['clipboard.write'],
+      },
+      [],
+    )
+
+    expect(status.granted).toEqual([])
+    expect(status.denied).toEqual(['clipboard.write'])
+    expect(hasPermission(status, 'clipboard.write')).toBe(false)
+  })
+
   it('does not keep pre-baseline sdkapi as a permission bypass path', () => {
     const status = getPluginPermissionStatus(
       'demo-plugin',

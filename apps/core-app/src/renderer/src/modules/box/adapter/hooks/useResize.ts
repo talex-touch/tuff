@@ -77,9 +77,12 @@ function measureResultContentHeight(resultContent: HTMLElement): number {
   return Math.ceil(Math.max(visualBottom + paddingBottom, paddingTop + paddingBottom))
 }
 
-function calculateDesiredHeight(resultCount: number): number {
+function calculateDesiredHeight(
+  resultCount: number,
+  options: { hasSearchState?: boolean } = {}
+): number {
   const headerHeight = getHeaderHeight()
-  if (resultCount === 0) return clampHeight(headerHeight)
+  if (resultCount === 0 && !options.hasSearchState) return clampHeight(headerHeight)
 
   const scrollRoot = document.querySelector('.CoreBoxRes-Main .scroll-area')
   if (!scrollRoot) {
@@ -147,8 +150,9 @@ export function useResize(options: UseResizeOptions): void {
     const isRecommendationPending = recommendationEnabled
       ? (recommendationPending?.value ?? false)
       : false
+    const hasSearchState = document.querySelector('.CoreBoxSearchState') !== null
 
-    const height = calculateDesiredHeight(resultCount)
+    const height = calculateDesiredHeight(resultCount, { hasSearchState })
     const forceMax = hasForceMaxActivation(activeActivations.value)
 
     const payload: CoreBoxLayoutUpdateRequest = {

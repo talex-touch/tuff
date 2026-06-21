@@ -27,6 +27,23 @@ const mocks = vi.hoisted(() => ({
         focus: vi.fn()
       }
     }
+  },
+  parentWindow: {
+    isDestroyed: vi.fn(() => false),
+    getBounds: vi.fn(() => ({ x: 0, y: 0, width: 720, height: 480 })),
+    contentView: {
+      addChildView: vi.fn(),
+      removeChildView: vi.fn(),
+      children: []
+    },
+    webContents: {
+      isDestroyed: vi.fn(() => false),
+      focus: vi.fn()
+    }
+  },
+  senderWebContents: {
+    isDestroyed: vi.fn(() => false),
+    focus: vi.fn()
   }
 }))
 
@@ -82,6 +99,7 @@ vi.mock('electron', () => ({
       on: vi.fn(),
       isLoading: vi.fn(() => false),
       isDestroyed: vi.fn(() => false),
+      close: vi.fn(),
       loadURL: vi.fn(),
       loadFile: vi.fn(),
       focus: vi.fn()
@@ -109,6 +127,7 @@ describe('MetaOverlayManager action execution', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     metaOverlayManager.unregisterPluginActions('plugin-a')
+    metaOverlayManager.destroy()
   })
 
   it('bridges builtin actions to the CoreBox renderer action pipeline', async () => {
@@ -125,6 +144,51 @@ describe('MetaOverlayManager action execution', () => {
       mocks.coreBoxWindow.window.webContents,
       CoreBoxRetainedEvents.legacy.metaOverlayItemAction,
       { actionId: 'reveal-in-finder', item }
+    )
+  })
+
+  it('routes renderer item actions back to the MetaOverlay parent window', async () => {
+    metaOverlayManager.init(mocks.parentWindow as never)
+
+    const result = await metaOverlayManager.executeAction('copy-answer', item)
+
+    expect(result).toEqual({ success: true })
+    expect(mocks.sendTo).toHaveBeenCalledWith(
+      mocks.parentWindow.webContents,
+      CoreBoxEvents.metaOverlay.itemAction,
+      { actionId: 'copy-answer', item }
+    )
+    expect(mocks.sendTo).toHaveBeenCalledWith(
+      mocks.parentWindow.webContents,
+      CoreBoxRetainedEvents.legacy.metaOverlayItemAction,
+      { actionId: 'copy-answer', item }
+    )
+    expect(mocks.sendTo).not.toHaveBeenCalledWith(
+      mocks.coreBoxWindow.window.webContents,
+      CoreBoxEvents.metaOverlay.itemAction,
+      expect.anything()
+    )
+  })
+
+  it('prefers a non-overlay sender webContents for renderer item actions', async () => {
+    metaOverlayManager.init(mocks.parentWindow as never)
+
+    const result = await metaOverlayManager.executeAction(
+      'copy-answer',
+      item,
+      mocks.senderWebContents as never
+    )
+
+    expect(result).toEqual({ success: true })
+    expect(mocks.sendTo).toHaveBeenCalledWith(
+      mocks.senderWebContents,
+      CoreBoxEvents.metaOverlay.itemAction,
+      { actionId: 'copy-answer', item }
+    )
+    expect(mocks.sendTo).not.toHaveBeenCalledWith(
+      mocks.parentWindow.webContents,
+      CoreBoxEvents.metaOverlay.itemAction,
+      expect.anything()
     )
   })
 
@@ -155,6 +219,37 @@ describe('MetaOverlayManager action execution', () => {
       'plugin-a',
       CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted,
       { actionId: 'plugin-action', item, pluginId: 'plugin-a' }
+    )
+  })
+
+  it('prefers current item actions over registered plugin actions with the same id', async () => {
+    metaOverlayManager.registerPluginAction('plugin-a', {
+      id: 'copy-answer',
+      render: {
+        basic: {
+          title: 'Plugin copy'
+        }
+      }
+    })
+    const itemWithAction = {
+      ...item,
+      actions: [
+        {
+          id: 'copy-answer',
+          type: 'execute',
+          label: 'Copy answer'
+        }
+      ]
+    } as TuffItem
+
+    const result = await metaOverlayManager.executeAction('copy-answer', itemWithAction)
+
+    expect(result).toEqual({ success: true })
+    expect(mocks.sendToPlugin).not.toHaveBeenCalled()
+    expect(mocks.sendTo).toHaveBeenCalledWith(
+      mocks.coreBoxWindow.window.webContents,
+      CoreBoxEvents.metaOverlay.itemAction,
+      { actionId: 'copy-answer', item: itemWithAction }
     )
   })
 

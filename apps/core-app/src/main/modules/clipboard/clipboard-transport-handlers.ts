@@ -4,6 +4,7 @@ import type {
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
   ClipboardDeleteRequest,
+  ClipboardGetLatestRequest,
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
   ClipboardItem,
@@ -48,6 +49,7 @@ export interface ClipboardTransportHandlers {
     permission: ClipboardPermissionName,
     payload: unknown
   ) => void
+  refreshLatest: () => Promise<void>
   ensureInitialCacheLoaded: () => Promise<void>
   getLatestItem: () => IClipboardItem | undefined
   toTransportItem: (item: IClipboardItem) => ClipboardItem | null
@@ -133,12 +135,21 @@ export class ClipboardTransportHandlersRegistry {
     const transport = this.requireTransport()
 
     this.disposers.push(
-      transport.on(ClipboardEvents.getLatest, async (_request: void, context: HandlerContext) => {
-        handlers.enforcePermission(context.plugin?.name, 'clipboard:read', undefined)
-        await handlers.ensureInitialCacheLoaded()
-        const latest = handlers.getLatestItem()
-        return latest ? handlers.toTransportItem(latest) : null
-      })
+      transport.on(
+        ClipboardEvents.getLatest,
+        async (
+          request: ClipboardGetLatestRequest | void,
+          context: HandlerContext
+        ): Promise<ClipboardItem | null> => {
+          handlers.enforcePermission(context.plugin?.name, 'clipboard:read', request)
+          if (request?.refresh === true) {
+            await handlers.refreshLatest()
+          }
+          await handlers.ensureInitialCacheLoaded()
+          const latest = handlers.getLatestItem()
+          return latest ? handlers.toTransportItem(latest) : null
+        }
+      )
     )
 
     this.disposers.push(

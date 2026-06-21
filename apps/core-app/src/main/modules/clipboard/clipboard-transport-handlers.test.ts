@@ -35,6 +35,7 @@ function createHandlers(
 
   return {
     enforcePermission: vi.fn(),
+    refreshLatest: vi.fn(async () => {}),
     ensureInitialCacheLoaded: vi.fn(async () => {}),
     getLatestItem: vi.fn(() => latestItem),
     toTransportItem: vi.fn((item) => ({
@@ -113,6 +114,29 @@ describe('clipboard-transport-handlers', () => {
     expect(handlers.enforcePermission).toHaveBeenCalledWith('sample-plugin', 'clipboard:read', {
       page: 1
     })
+  })
+
+  it('refreshes clipboard before returning latest item when requested', async () => {
+    const registry = new ClipboardTransportHandlersRegistry()
+    const handlers = createHandlers()
+    registry.register({ keyManager: {} }, handlers)
+
+    const getLatestHandler = transportOn.mock.calls.find(
+      ([event]) => event === ClipboardEvents.getLatest
+    )?.[1]
+    const response = await getLatestHandler({ refresh: true }, createContext())
+
+    expect(response).toEqual({
+      id: 1,
+      type: TuffInputType.Text,
+      value: 'latest',
+      createdAt: 1
+    })
+    expect(handlers.enforcePermission).toHaveBeenCalledWith('sample-plugin', 'clipboard:read', {
+      refresh: true
+    })
+    expect(handlers.refreshLatest).toHaveBeenCalledTimes(1)
+    expect(handlers.ensureInitialCacheLoaded).toHaveBeenCalledTimes(1)
   })
 
   it('fans out change stream updates and disposes registered handlers', async () => {

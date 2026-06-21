@@ -213,4 +213,79 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
       actionId: 'run-custom-action'
     })
   })
+
+  it('applies returned activation state after execute item actions', async () => {
+    const onActivationState = vi.fn()
+    const activationState = [
+      {
+        id: 'plugin-features',
+        meta: {
+          pluginName: 'touch-intelligence',
+          featureId: 'intelligence-ask',
+          feature: createItem({
+            id: 'touch-intelligence/intelligence-ask/result',
+            kind: 'widget'
+          })
+        }
+      }
+    ]
+    state.send.mockResolvedValue(activationState)
+    useActionPanel({ onActivationState })
+    const item = createItem({
+      actions: [
+        {
+          id: 'copy-answer',
+          type: 'execute',
+          label: 'Copy Answer'
+        }
+      ]
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'copy-answer',
+      item
+    })
+    await flushAsyncAction()
+
+    expect(onActivationState).toHaveBeenCalledWith(activationState)
+  })
+
+  it('preserves object activations returned inside activeProviders', async () => {
+    const onActivationState = vi.fn()
+    const widgetFeature = createItem({
+      id: 'touch-intelligence/intelligence-ask/result',
+      kind: 'widget'
+    })
+    const activationState = {
+      activeProviders: [
+        {
+          id: 'plugin-features',
+          meta: {
+            pluginName: 'touch-intelligence',
+            featureId: 'intelligence-ask',
+            feature: widgetFeature
+          }
+        }
+      ]
+    }
+    state.send.mockResolvedValue(activationState)
+    useActionPanel({ onActivationState })
+    const item = createItem({
+      actions: [
+        {
+          id: 'copy-answer',
+          type: 'execute',
+          label: 'Copy Answer'
+        }
+      ]
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'copy-answer',
+      item
+    })
+    await flushAsyncAction()
+
+    expect(onActivationState).toHaveBeenCalledWith(activationState.activeProviders)
+  })
 })

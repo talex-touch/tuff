@@ -8,6 +8,7 @@ describe('CoreBox search state', () => {
       resolveCoreBoxSearchState({
         query: 'calendar',
         resultCount: 1,
+        loading: false,
         recommendationPending: false,
         mode: BoxMode.INPUT
       })
@@ -19,6 +20,7 @@ describe('CoreBox search state', () => {
       resolveCoreBoxSearchState({
         query: '',
         resultCount: 0,
+        loading: false,
         recommendationPending: false,
         mode: BoxMode.FEATURE
       })
@@ -30,6 +32,7 @@ describe('CoreBox search state', () => {
       resolveCoreBoxSearchState({
         query: '',
         resultCount: 0,
+        loading: true,
         recommendationPending: true,
         mode: BoxMode.INPUT
       })?.kind
@@ -41,21 +44,23 @@ describe('CoreBox search state', () => {
       resolveCoreBoxSearchState({
         query: 'notes',
         resultCount: 0,
+        loading: true,
         recommendationPending: false,
         mode: BoxMode.INPUT
       })
     ).toBeNull()
   })
 
-  it('does not show a state when a query finishes without results', () => {
+  it('shows retry and settings recovery when a query finishes without results', () => {
     expect(
       resolveCoreBoxSearchState({
         query: 'definitely-missing',
         resultCount: 0,
+        loading: false,
         recommendationPending: false,
         mode: BoxMode.INPUT
-      })
-    ).toBeNull()
+      })?.kind
+    ).toBe('no-results')
   })
 
   it('does not show a state when nothing is loading and no query exists', () => {
@@ -63,6 +68,7 @@ describe('CoreBox search state', () => {
       resolveCoreBoxSearchState({
         query: '   ',
         resultCount: 0,
+        loading: false,
         recommendationPending: false,
         mode: BoxMode.INPUT
       })

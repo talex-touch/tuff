@@ -31,6 +31,7 @@ export interface CoreBoxProbeDom {
   hasCoreBoxClass: boolean
   inputIdExists: boolean
   inputValue: string
+  hasPromptSendButton: boolean
   hasAiChatbot: boolean
   hasErrorNotice: boolean
   hasPermissionText: boolean
@@ -39,6 +40,31 @@ export interface CoreBoxProbeDom {
   hasLoggedOutText: boolean
   hasQuotaText: boolean
   buttons: string[]
+  debug: CoreBoxProbeDebug
+}
+
+export interface CoreBoxProbeDebug {
+  visibleInputKinds: string[]
+  visibleCapabilities: string[]
+  hasVisibleImageInput: boolean
+  hasVisibleOcrSignal: boolean
+  hasVisibleTextChatSignal: boolean
+  hasVisibleCopyFailureSignal: boolean
+  queryInputDebug: CoreBoxQueryInputDebug | null
+}
+
+export interface CoreBoxQueryInputDebug {
+  builtAt: string
+  queryTextLength: number
+  clipboardLastType: string | null
+  pendingTextClipboardType: string | null
+  filePathCount: number
+  useFileMode: boolean
+  inputTypes: string[]
+  inputCount: number
+  hasImageInput: boolean
+  hasTextInput: boolean
+  hasFileInput: boolean
 }
 
 interface ProbeResult {
@@ -261,6 +287,31 @@ async function inspectTarget(target: DevToolsTarget): Promise<CoreBoxProbeDom> {
       .map((button) => (button.textContent || '').trim())
       .filter(Boolean)
       .slice(0, 20)
+    const visibleInputKinds = Array.from(text.matchAll(/Input kind\\s*\\n([^\\n]+)/gi))
+      .map((match) => (match[1] || '').trim())
+      .filter(Boolean)
+      .slice(-5)
+    const visibleCapabilities = Array.from(text.matchAll(/Capability\\s*\\n([^\\n]+)/gi))
+      .map((match) => (match[1] || '').trim())
+      .filter(Boolean)
+      .slice(-5)
+    const rawQueryInputDebug = window.__coreboxQueryInputDebug
+    const queryInputDebug = rawQueryInputDebug && typeof rawQueryInputDebug === 'object'
+      ? {
+          builtAt: typeof rawQueryInputDebug.builtAt === 'string' ? rawQueryInputDebug.builtAt : '',
+          queryTextLength: Number.isFinite(rawQueryInputDebug.queryTextLength) ? rawQueryInputDebug.queryTextLength : 0,
+          clipboardLastType: typeof rawQueryInputDebug.clipboardLastType === 'string' ? rawQueryInputDebug.clipboardLastType : null,
+          pendingTextClipboardType: typeof rawQueryInputDebug.pendingTextClipboardType === 'string' ? rawQueryInputDebug.pendingTextClipboardType : null,
+          filePathCount: Number.isFinite(rawQueryInputDebug.filePathCount) ? rawQueryInputDebug.filePathCount : 0,
+          useFileMode: rawQueryInputDebug.useFileMode === true,
+          inputTypes: Array.isArray(rawQueryInputDebug.inputTypes) ? rawQueryInputDebug.inputTypes.map(String).slice(0, 5) : [],
+          inputCount: Number.isFinite(rawQueryInputDebug.inputCount) ? rawQueryInputDebug.inputCount : 0,
+          hasImageInput: rawQueryInputDebug.hasImageInput === true,
+          hasTextInput: rawQueryInputDebug.hasTextInput === true,
+          hasFileInput: rawQueryInputDebug.hasFileInput === true
+        }
+      : null
+    const normalizedInputKinds = visibleInputKinds.join('\\n').toLowerCase()
     return {
       href: location.href,
       title: document.title,
@@ -270,6 +321,7 @@ async function inspectTarget(target: DevToolsTarget): Promise<CoreBoxProbeDom> {
       hasCoreBoxClass: document.body?.classList?.contains('core-box') === true,
       inputIdExists: Boolean(input),
       inputValue: input && 'value' in input ? input.value : '',
+      hasPromptSendButton: Boolean(document.querySelector('.CoreBox-SendButton')),
       hasAiChatbot: text.includes('AI') || text.includes('智能问答'),
       hasErrorNotice: text.includes('Error') || text.includes('请求失败') || text.includes('失败'),
       hasPermissionText: text.includes('intelligence.basic') || text.includes('权限'),
@@ -277,7 +329,16 @@ async function inspectTarget(target: DevToolsTarget): Promise<CoreBoxProbeDom> {
       hasProviderUnavailableText: text.includes('provider unavailable') || text.includes('Provider unavailable') || text.includes('Provider 不可用') || text.includes('服务不可用'),
       hasLoggedOutText: text.includes('未登录') || text.includes('需要登录') || text.includes('sign in') || text.includes('logged out'),
       hasQuotaText: text.includes('quota') || text.includes('credits') || text.includes('积分') || text.includes('配额'),
-      buttons
+      buttons,
+      debug: {
+        visibleInputKinds,
+        visibleCapabilities,
+        hasVisibleImageInput: normalizedInputKinds.includes('image') || normalizedInputKinds.includes('图片'),
+        hasVisibleOcrSignal: /\\bOCR\\b|vision\\.ocr|图片/i.test(text),
+        hasVisibleTextChatSignal: /text\\.chat|text chat/i.test(text),
+        hasVisibleCopyFailureSignal: /复制失败|clipboard\.write 权限|缺少 clipboard\.write|剪贴板权限/i.test(text),
+        queryInputDebug
+      }
     }
   })()`
 
@@ -403,7 +464,10 @@ export async function prepareCoreBoxPromptSendMode(
     options.keyboardTimeoutMs ?? 1_500
   )
   const keyboardActivationText = await getCoreBoxActivationText(send)
-  if (enteredSendModeFromKeyboard || /widget-mode|widget-render|AI 正在思考|请求失败|配额|quota/i.test(keyboardActivationText)) {
+  if (
+    enteredSendModeFromKeyboard ||
+    /widget-mode|widget-render|AI 正在思考|请求失败|配额|quota/i.test(keyboardActivationText)
+  ) {
     return {
       alreadyInSendMode: false,
       clickedFeatureEntry: true,
@@ -415,7 +479,11 @@ export async function prepareCoreBoxPromptSendMode(
 
   const response = await send('Runtime.evaluate', {
     expression: `(() => {
-      const selectors = ['.item-list .CoreBoxRender', '.CoreBoxRender']
+      const selectors = [
+        '.BoxGridItem',
+        '.item-list .CoreBoxRender',
+        '.CoreBoxRender'
+      ]
       const items = selectors.flatMap((selector) => Array.from(document.querySelectorAll(selector)))
       const uniqueItems = Array.from(new Set(items))
       const feature = uniqueItems.find((item) => /智能问答|touch-intelligence|AI Ask/i.test(item.textContent || '')) || uniqueItems[0]
@@ -475,22 +543,34 @@ async function setCoreBoxInput(
   inputQuery: string,
   submit: boolean
 ): Promise<CoreBoxSubmitPreparation | undefined> {
-  const setInputExpression = `(async () => {
+  const createSetInputExpression = (value: string) => `(async () => {
     const input = document.querySelector('#core-box-input input, input#core-box-input, input')
     if (!input) return false
     input.focus()
     const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     if (valueSetter) {
-      valueSetter.call(input, ${JSON.stringify(inputQuery)})
+      valueSetter.call(input, ${JSON.stringify(value)})
     } else {
-      input.value = ${JSON.stringify(inputQuery)}
+      input.value = ${JSON.stringify(value)}
     }
-    input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(inputQuery)} }))
+    input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(value)} }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
     return true
   })()`
+  const setInputExpression = createSetInputExpression(inputQuery)
 
   return await withTarget(target, async (send) => {
+    let submitPreparation: CoreBoxSubmitPreparation | undefined
+    if (submit) {
+      await send('Runtime.evaluate', {
+        expression: createSetInputExpression(''),
+        returnByValue: true,
+        awaitPromise: true
+      })
+      await sleep(250)
+      submitPreparation = await prepareCoreBoxPromptSendMode(send)
+    }
+
     const response = await send('Runtime.evaluate', {
       expression: setInputExpression,
       returnByValue: true,
@@ -499,19 +579,8 @@ async function setCoreBoxInput(
     if (response.result?.result?.value !== true) {
       throw new Error('CoreBox input was not available when setting probe input.')
     }
-    if (submit) {
-      await sleep(250)
-    }
-    const submitPreparation = submit ? await prepareCoreBoxPromptSendMode(send) : undefined
+
     if (submit && submitPreparation?.readyForPrompt) {
-      const sendModeInputResponse = await send('Runtime.evaluate', {
-        expression: setInputExpression,
-        returnByValue: true,
-        awaitPromise: true
-      })
-      if (sendModeInputResponse.result?.result?.value !== true) {
-        throw new Error('CoreBox input was not available after entering prompt send mode.')
-      }
       if (await clickCoreBoxSendButton(send)) {
         submitPreparation.submitMethod = 'cdp-send-button'
       } else {
@@ -543,10 +612,28 @@ export function selectCoreBoxTarget(
   inspected: Array<{ target: DevToolsTarget; dom: CoreBoxProbeDom }>
 ): { target: DevToolsTarget; dom: CoreBoxProbeDom } | undefined {
   const candidates = inspected.filter((item) => item.dom.hasCoreBoxClass && item.dom.inputIdExists)
-  return (
-    candidates.find((item) => !item.dom.bodyClass.split(/\s+/).includes('division-box')) ??
-    candidates[0]
+  const primaryCandidates = candidates.filter(
+    (item) => !item.dom.bodyClass.split(/\s+/).includes('division-box')
   )
+  const scoredCandidates = primaryCandidates.length > 0 ? primaryCandidates : candidates
+  return scoredCandidates
+    .map((item, index) => ({ item, index, score: scoreCoreBoxTarget(item) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.item
+}
+
+function scoreCoreBoxTarget(item: { target: DevToolsTarget; dom: CoreBoxProbeDom }): number {
+  const href = `${item.target.url}\n${item.dom.href}`.toLowerCase()
+  const bodyText = item.dom.bodyText || ''
+  let score = 0
+
+  if (href.includes('meta-overlay')) score += 100
+  if (item.dom.hasPromptSendButton) score += 80
+  if (/智能问答|touch-intelligence|AI Ask/i.test(bodyText)) score += 60
+  if (item.dom.hasAiChatbot) score += 20
+  if (href.includes('#/setting')) score -= 30
+  if (item.dom.bodyClass.split(/\s+/).includes('division-box')) score -= 50
+
+  return score
 }
 
 function includesAny(text: string, signals: string[]): string[] {
@@ -735,6 +822,12 @@ function getEvidenceSignals(tag: AiStableEvidenceTag): {
           'Error',
           '请求失败',
           '失败',
+          'Please provide the image',
+          'provide the image',
+          "can't see the image",
+          'cannot see the image',
+          '请提供图片',
+          '无法查看图片',
           'NEXUS_STREAM_UNSUPPORTED',
           '不支持该能力',
           'unsupported',

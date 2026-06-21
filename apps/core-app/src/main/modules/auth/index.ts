@@ -749,6 +749,10 @@ function scheduleAuthStartupRefresh(delayMs = AUTH_PROFILE_STARTUP_REFRESH_DELAY
   }, delayMs)
 }
 
+function shouldKeepVisibleEvidenceCachedAuthState(cachedUser: AuthUser | null): boolean {
+  return isVisibleAuthEvidenceMode() && Boolean(authToken) && Boolean(cachedUser)
+}
+
 async function patchRemoteUserProfile(
   token: string,
   payload: { name?: string | null; bio?: string | null; image?: string | null }
@@ -795,6 +799,12 @@ async function initializeAuthState(): Promise<void> {
   const cachedUser = getCachedAuthUser()
   if (cachedUser) {
     updateAuthState(cachedUser, authState.sessionId)
+  }
+  if (shouldKeepVisibleEvidenceCachedAuthState(cachedUser)) {
+    authLog.info('Keeping visible auth evidence cached auth state without startup refresh', {
+      meta: { userId: cachedUser?.id ?? null }
+    })
+    return
   }
   scheduleAuthStartupRefresh()
 }
@@ -1473,6 +1483,8 @@ function resetAuthModuleTestState(): void {
   authUseSecureStorage = false
   stepUpToken = null
   stepUpTokenExpiresAt = 0
+  deviceAuthLoginAttempt += 1
+  activeDeviceAuthCode = null
 }
 
 function setAuthModuleTestState(nextState: AuthModuleTestState): void {
@@ -1490,6 +1502,9 @@ function setAuthModuleTestState(nextState: AuthModuleTestState): void {
 export const __test__ = {
   loadAuthToken,
   clearAuthToken,
+  initializeAuthState,
+  getCachedAuthUser,
+  getState: cloneAuthState,
   handleAuthStoragePreferenceChanged,
   resetState: resetAuthModuleTestState,
   setState: setAuthModuleTestState

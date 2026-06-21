@@ -182,6 +182,20 @@ describe('intelligence plugin', () => {
     })
 
     expect(
+      intelligenceTest.extractQueryContext(
+        {
+          text: '这张图里有什么',
+          inputs: [{ type: 'image', content: 'data:image/png;base64,abc' }],
+        },
+        { forceImageOcr: true },
+      ),
+    ).toMatchObject({
+      prompt: '这张图里有什么',
+      imageDataUrl: 'data:image/png;base64,abc',
+      shouldShowEntry: true,
+    })
+
+    expect(
       intelligenceTest.extractQueryContext({
         text: 'ai 这张图里有什么',
         inputs: [{ type: 'image', content: 'data:image/png;base64,abc' }],
@@ -265,6 +279,56 @@ describe('intelligence plugin', () => {
       status: 'idle',
       capabilityId: 'text.chat',
       messages: [],
+    })
+  })
+
+  it('starts OCR for AI Ask feature image prompts without ai prefix', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const invoke = vi.fn(async (capabilityId: string) => {
+      if (capabilityId === 'vision.ocr') {
+        return { result: { text: '图片文字' } }
+      }
+      return { result: 'ok' }
+    })
+    const pluginWithFeatureMocks = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        intelligence: { invoke },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', {
+      text: '这张图里有什么',
+      inputs: [{ type: 'image', content: 'data:image/png;base64,abc' }],
+    })
+
+    expect(clearItems).toHaveBeenCalled()
+    expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
+      prompt: '这张图里有什么',
+      status: 'ocr-pending',
+      stage: 'ocr',
+      capabilityId: 'vision.ocr',
+      inputKinds: ['text', 'image'],
+      imageContext: {
+        status: 'attached',
+        note: '图片将作为上下文参与本次提问。',
+      },
     })
   })
 
@@ -467,6 +531,13 @@ describe('intelligence plugin', () => {
   it('normalizes visible invoke errors', () => {
     expect(
       intelligenceTest.normalizeInvokeError(new Error('No enabled providers for text.chat')),
+    ).toMatchObject({
+      code: 'PROVIDER_UNAVAILABLE',
+    })
+    expect(
+      intelligenceTest.normalizeInvokeError(
+        new Error('[Intelligence] No enabled providers for text.chat: capability not supported'),
+      ),
     ).toMatchObject({
       code: 'PROVIDER_UNAVAILABLE',
     })
@@ -713,6 +784,59 @@ describe('intelligence plugin', () => {
     })
   })
 
+  it('blocks AI send when auth state is logged out', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const invoke = vi.fn()
+    const permission = {
+      check: vi.fn(async () => true),
+      request: vi.fn(async () => true),
+    }
+    const touchChannel = {
+      send: vi.fn(async (eventName: string) => {
+        if (eventName === 'auth:session:get-state') {
+          return { isSignedIn: false }
+        }
+        return null
+      }),
+    }
+    const pluginWithLoggedOutAuth = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission,
+        touchChannel,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithLoggedOutAuth.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    const errorItem = pushItems.mock.calls[0][0][0]
+
+    expect(touchChannel.send).toHaveBeenCalledWith('auth:session:get-state')
+    expect(permission.check).not.toHaveBeenCalledWith('intelligence.basic')
+    expect(invoke).not.toHaveBeenCalled()
+    expect(clearItems).toHaveBeenCalled()
+    expect(errorItem.meta).toMatchObject({
+      status: 'error',
+      actionId: 'retry',
+      intelligence: {
+        status: 'error',
+        errorCode: 'AUTH_REQUIRED',
+      },
+    })
+  })
+
   it('blocks AI send when permission sdk is unavailable', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
@@ -760,6 +884,8 @@ describe('intelligence plugin', () => {
   })
 
   it('requires clipboard.write before copying answers', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
     const writeText = vi.fn()
     const permission = {
       check: vi.fn(async () => false),
@@ -768,18 +894,38 @@ describe('intelligence plugin', () => {
     const pluginWithDeniedClipboard = loadPluginModule(
       new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
         clipboard: { writeText },
         permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
       }),
     )
 
     const result = await pluginWithDeniedClipboard.onItemAction({
       meta: {
         defaultAction: 'intelligence-action',
-        actionId: 'copy-answer',
         featureId: 'intelligence-ask',
-        payload: { answer: 'hello' },
+        payload: {
+          prompt: 'question',
+          answer: 'hello',
+          provider: 'local-default',
+          model: 'qwen2.5:3b',
+          traceId: 'trace-copy',
+          latency: 12,
+          inputKinds: ['text'],
+        },
       },
+    }, {
+      actionId: 'copy-answer',
     })
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
@@ -788,9 +934,100 @@ describe('intelligence plugin', () => {
       '需要剪贴板权限以复制 AI 回答',
     )
     expect(writeText).not.toHaveBeenCalled()
+    expect(clearItems).toHaveBeenCalled()
+    expect(pushItems).toHaveBeenCalledOnce()
+    expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
+      prompt: 'question',
+      answer: 'hello',
+      status: 'ready',
+      capabilityId: 'text.chat',
+      copyStatus: 'failed',
+      copyError: '复制失败：缺少 clipboard.write 权限',
+      copyRecovery: '请在插件权限中允许 clipboard.write 后重试。',
+      provider: 'local-default',
+      model: 'qwen2.5:3b',
+      traceId: 'trace-copy',
+      latency: 12,
+      inputKinds: ['text'],
+    })
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
+      shouldActivate: true,
+      activation: {
+        id: 'plugin-features',
+        meta: {
+          pluginName: 'touch-intelligence',
+          featureId: 'intelligence-ask',
+          feature: expect.objectContaining({
+            id: 'intelligence-widget',
+          }),
+        },
+      },
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+  })
+
+  it('prefers explicit action context over stale widget meta action id', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const writeText = vi.fn()
+    const permission = {
+      check: vi.fn(async () => false),
+      request: vi.fn(async () => false),
+    }
+    const pluginWithDeniedClipboard = loadPluginModule(
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        clipboard: { writeText },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    const result = await pluginWithDeniedClipboard.onItemAction({
+      meta: {
+        defaultAction: 'intelligence-action',
+        actionId: 'send',
+        featureId: 'intelligence-ask',
+        payload: {
+          prompt: 'question',
+          answer: 'hello',
+          provider: 'local-default',
+          model: 'qwen2.5:3b',
+          traceId: 'trace-copy',
+          latency: 12,
+          inputKinds: ['text'],
+        },
+      },
+    }, {
+      actionId: 'copy-answer',
+    })
+
+    expect(writeText).not.toHaveBeenCalled()
+    expect(clearItems).toHaveBeenCalled()
+    expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
+      prompt: 'question',
+      answer: 'hello',
+      status: 'ready',
+      copyStatus: 'failed',
+      copyError: '复制失败：缺少 clipboard.write 权限',
+    })
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      shouldActivate: true,
       status: 'blocked',
       reason: 'permission-denied',
     })
@@ -819,6 +1056,73 @@ describe('intelligence plugin', () => {
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+  })
+
+  it('shows copy failure state when clipboard write rejects', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const writeText = vi.fn(async () => {
+      throw new Error('clipboard.write denied')
+    })
+    const permission = {
+      check: vi.fn(async () => true),
+      request: vi.fn(async () => true),
+    }
+    const pluginWithRejectedClipboard = loadPluginModule(
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        clipboard: { writeText },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    const result = await pluginWithRejectedClipboard.onItemAction({
+      meta: {
+        defaultAction: 'intelligence-action',
+        actionId: 'copy-answer',
+        featureId: 'intelligence-ask',
+        payload: {
+          prompt: 'question',
+          answer: 'hello',
+          provider: 'local-default',
+          model: 'qwen2.5:3b',
+          traceId: 'trace-copy',
+          latency: 12,
+          inputKinds: ['text'],
+        },
+      },
+    })
+
+    expect(permission.check).toHaveBeenCalledWith('clipboard.write')
+    expect(writeText).toHaveBeenCalledWith('hello')
+    expect(clearItems).toHaveBeenCalled()
+    expect(pushItems).toHaveBeenCalledOnce()
+    expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
+      prompt: 'question',
+      answer: 'hello',
+      status: 'ready',
+      copyStatus: 'failed',
+      copyError: '复制失败：缺少 clipboard.write 权限',
+      copyRecovery: '请在插件权限中允许 clipboard.write 后重试。',
+    })
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      shouldActivate: true,
       status: 'blocked',
       reason: 'permission-denied',
     })

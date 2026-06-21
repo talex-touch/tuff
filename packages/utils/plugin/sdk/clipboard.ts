@@ -307,7 +307,7 @@ export function useClipboard() {
      * Gets the most recent clipboard item.
      */
     async getLatest(): Promise<PluginClipboardItem | null> {
-      const result = await transport.send(ClipboardEvents.getLatest)
+      const result = await transport.send(ClipboardEvents.getLatest, withSdkApiPayload({}))
       return toPluginClipboardItem(result)
     },
 

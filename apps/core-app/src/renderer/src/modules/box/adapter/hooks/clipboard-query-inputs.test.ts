@@ -61,4 +61,43 @@ describe('buildClipboardQueryInputs', () => {
 
     expect(inputs).toEqual([])
   })
+
+  it('marks clipboard image previews as resolvable original image inputs', () => {
+    const inputs = buildClipboardQueryInputs({
+      clipboardItem: createClipboardItem({
+        id: 42,
+        type: 'image',
+        content: 'data:image/png;base64,preview',
+        thumbnail: 'data:image/png;base64,thumb'
+      })
+    })
+
+    expect(inputs).toEqual([
+      {
+        type: TuffInputType.Image,
+        content: 'data:image/png;base64,thumb',
+        thumbnail: 'data:image/png;base64,thumb',
+        metadata: {
+          clipboardId: 42,
+          contentKind: 'preview',
+          canResolveOriginal: true
+        }
+      }
+    ])
+  })
+
+  it('can ignore clipboard image previews for plain text search', () => {
+    const inputs = buildClipboardQueryInputs({
+      clipboardItem: createClipboardItem({
+        id: 42,
+        type: 'image',
+        content: 'data:image/png;base64,preview',
+        thumbnail: 'data:image/png;base64,thumb'
+      }),
+      queryText: 'calculator',
+      includeClipboardImage: false
+    })
+
+    expect(inputs).toEqual([])
+  })
 })

@@ -354,7 +354,13 @@ export class CoreBoxModule extends BaseModule {
       return
     }
 
-    const shouldCollapse = resultCount === 0 && !loading && !recommendationPending
+    const safeHeight = Math.max(
+      COREBOX_MIN_HEIGHT,
+      Math.min(Number(payload.height) || COREBOX_MIN_HEIGHT, 600)
+    )
+    const hasVisibleEmptyState = resultCount === 0 && safeHeight > COREBOX_MIN_HEIGHT
+    const shouldCollapse =
+      resultCount === 0 && !loading && !recommendationPending && !hasVisibleEmptyState
     if (shouldCollapse) {
       if (logEnabled) {
         coreBoxLog.info('Layout update: shrink (empty, idle)', {
@@ -382,11 +388,6 @@ export class CoreBoxModule extends BaseModule {
       }
       return
     }
-
-    const safeHeight = Math.max(
-      COREBOX_MIN_HEIGHT,
-      Math.min(Number(payload.height) || COREBOX_MIN_HEIGHT, 600)
-    )
 
     // Guard: if UI has results but height measurement isn't ready, skip this update.
     if (resultCount > 0 && safeHeight <= COREBOX_MIN_HEIGHT) {

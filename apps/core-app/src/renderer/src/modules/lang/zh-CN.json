@@ -1601,7 +1601,11 @@
       "idleTitle": "可直接搜索",
       "idleDetail": "输入关键词搜索应用、文件、命令或 AI 动作。",
       "recommendationLoadingTitle": "正在准备推荐",
-      "recommendationLoadingDetail": "最近使用和高频动作正在预热。"
+      "recommendationLoadingDetail": "最近使用和高频动作正在预热。",
+      "noResultsTitle": "未找到结果",
+      "noResultsDetail": "检查关键词、重试搜索，或打开文件索引设置。",
+      "retryAction": "重试",
+      "fileIndexSettingsAction": "文件索引设置"
     },
     "intelligence": {
       "emptyPrompt": "输入要询问 AI 的问题",

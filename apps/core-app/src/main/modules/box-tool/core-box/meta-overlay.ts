@@ -54,6 +54,28 @@ export class MetaOverlayManager {
     return useAliveTarget(this.parentWindow)
   }
 
+  private isMetaOverlayWebContents(webContents: Electron.WebContents | null | undefined): boolean {
+    if (!webContents) return false
+    return webContents === this.getAliveMetaWebContents()
+  }
+
+  private resolveCoreBoxRendererWebContents(
+    sender?: Electron.WebContents | null
+  ): Electron.WebContents | null {
+    const senderWebContents = useAliveWebContents(sender ?? null)
+    if (senderWebContents && !this.isMetaOverlayWebContents(senderWebContents)) {
+      return senderWebContents
+    }
+
+    const parentWebContents = useAliveWebContents(this.parentWindow ?? null)
+    if (parentWebContents) {
+      return parentWebContents
+    }
+
+    const coreBoxWindow = getCoreBoxWindow()
+    return useAliveWebContents(coreBoxWindow?.window ?? null)
+  }
+
   /**
    * Gets the singleton instance of MetaOverlayManager.
    *
@@ -423,31 +445,35 @@ export class MetaOverlayManager {
    */
   public async executeAction(
     actionId: string,
-    item?: TuffItem
+    item?: TuffItem,
+    sender?: Electron.WebContents | null
   ): Promise<{ success: boolean; error?: string }> {
-    // Find the action
-    let action: MetaAction | undefined
-    let pluginId: string | undefined
-
-    // Check plugin actions first
-    for (const [pid, actions] of this.pluginActions.entries()) {
-      const found = actions.find((a) => a.id === actionId)
-      if (found) {
-        action = found
-        pluginId = pid
-        break
-      }
-    }
-
-    if (!action) {
-      metaOverlayLog.debug(`Executing CoreBox renderer action ${actionId}`)
-    }
-
     const targetItem = item ?? this.currentItem
     if (!targetItem) {
       metaOverlayLog.warn(`Cannot execute action ${actionId}: missing item context`)
       this.hide()
       return { success: false, error: 'Missing item context' }
+    }
+
+    // Find the action
+    let action: MetaAction | undefined
+    let pluginId: string | undefined
+    const hasItemAction = targetItem.actions?.some((itemAction) => itemAction.id === actionId)
+
+    // Item actions belong to the CoreBox renderer action pipeline.
+    if (!hasItemAction) {
+      for (const [pid, actions] of this.pluginActions.entries()) {
+        const found = actions.find((a) => a.id === actionId)
+        if (found) {
+          action = found
+          pluginId = pid
+          break
+        }
+      }
+    }
+
+    if (!action) {
+      metaOverlayLog.debug(`Executing CoreBox renderer action ${actionId}`)
     }
 
     const runtime = getCoreBoxRuntimeOrNull()
@@ -484,9 +510,8 @@ export class MetaOverlayManager {
         })
     } else {
       // Built-in and item actions are handled by the CoreBox renderer action pipeline.
-      const coreBoxWindow = getCoreBoxWindow()
-      const coreBoxWebContents = useAliveWebContents(coreBoxWindow?.window ?? null)
-      if (coreBoxWindow && coreBoxWebContents) {
+      const coreBoxWebContents = this.resolveCoreBoxRendererWebContents(sender)
+      if (coreBoxWebContents) {
         const channel = touchApp.channel
         const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
         void transport
