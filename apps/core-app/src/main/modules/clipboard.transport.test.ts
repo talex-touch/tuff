@@ -40,8 +40,15 @@ const clipboardRuntimeMocks = vi.hoisted(() => ({
   appTaskGate: {
     waitForIdle: vi.fn(async () => undefined),
     isActive: vi.fn(() => false)
-  }
+  },
+  coreBoxWindowVisible: false
 }))
+
+async function flushMicrotasks(count = 1): Promise<void> {
+  for (let i = 0; i < count; i += 1) {
+    await Promise.resolve()
+  }
+}
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
@@ -367,6 +374,14 @@ vi.mock('./box-tool/core-box/manager', () => ({
 
 vi.mock('./box-tool/core-box/window', () => ({
   windowManager: {
+    get current() {
+      return {
+        window: {
+          isDestroyed: vi.fn(() => false),
+          isVisible: vi.fn(() => clipboardRuntimeMocks.coreBoxWindowVisible)
+        }
+      }
+    },
     getWindows: vi.fn(() => [])
   }
 }))
@@ -401,6 +416,7 @@ afterEach(() => {
   clipboardRuntimeMocks.pollingService.isRegistered.mockReturnValue(false)
   clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(undefined)
   clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(false)
+  clipboardRuntimeMocks.coreBoxWindowVisible = false
 })
 
 describe('ClipboardModule transport registration', () => {
@@ -514,11 +530,79 @@ describe('ClipboardModule startup tasks', () => {
     )
     expect(nativeStart).not.toHaveBeenCalled()
 
-    await Promise.resolve()
-    await Promise.resolve()
+    await flushMicrotasks(2)
 
     expect(clipboardRuntimeMocks.appTaskGate.waitForIdle).toHaveBeenCalled()
     expect(nativeStart).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs CoreBox baseline capture after idle when the CoreBox window is already visible', async () => {
+    const nativeStart = vi.fn(async () => undefined)
+    const runClipboardMonitor = vi.fn(async () => undefined)
+    const module = new ClipboardModule() as unknown as {
+      clipboardHelper: { bootstrap: ReturnType<typeof vi.fn> } | null
+      nativeWatcher: { start: typeof nativeStart }
+      startClipboardMonitoring: () => void
+      runClipboardMonitor: typeof runClipboardMonitor
+      coreBoxVisible: boolean
+    }
+
+    clipboardRuntimeMocks.coreBoxWindowVisible = true
+    module.clipboardHelper = { bootstrap: vi.fn() }
+    module.nativeWatcher.start = nativeStart
+    module.runClipboardMonitor = runClipboardMonitor
+
+    module.startClipboardMonitoring()
+
+    await flushMicrotasks(4)
+
+    expect(module.coreBoxVisible).toBe(true)
+    expect(runClipboardMonitor).toHaveBeenCalledWith({
+      source: 'corebox-show-baseline',
+      bypassCooldown: true
+    })
+  })
+
+  it('waits for pending CoreBox baseline refresh when a clipboard check is already in flight', async () => {
+    const releaseFirstChecks: Array<() => void> = []
+    const checkClipboard = vi.fn(async () => {
+      if (checkClipboard.mock.calls.length > 1) return
+      await new Promise<void>((resolve) => {
+        releaseFirstChecks.push(resolve)
+      })
+    })
+    const module = new ClipboardModule() as unknown as {
+      checkClipboard: typeof checkClipboard
+      runClipboardMonitor: (options?: {
+        bypassCooldown?: boolean
+        source?: string
+      }) => Promise<void>
+    }
+
+    module.checkClipboard = checkClipboard
+
+    const firstRun = module.runClipboardMonitor({ source: 'background-poll' })
+    await flushMicrotasks(2)
+
+    const refreshRun = module.runClipboardMonitor({
+      source: 'corebox-show-baseline',
+      bypassCooldown: true
+    })
+    await flushMicrotasks(2)
+
+    expect(checkClipboard).toHaveBeenCalledTimes(1)
+    releaseFirstChecks[0]?.()
+    await firstRun
+    await refreshRun
+
+    expect(checkClipboard).toHaveBeenNthCalledWith(1, {
+      source: 'background-poll',
+      bypassCooldown: false
+    })
+    expect(checkClipboard).toHaveBeenNthCalledWith(2, {
+      source: 'corebox-show-baseline',
+      bypassCooldown: true
+    })
   })
 })
 

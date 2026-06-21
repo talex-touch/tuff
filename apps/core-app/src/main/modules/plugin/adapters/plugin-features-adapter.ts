@@ -188,20 +188,32 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       if (plugin?.pluginLifecycle?.onItemAction) {
         const actionStartTime = Date.now()
+        const itemMeta = item.meta as Record<string, unknown> | undefined
+        const itemActionId = typeof itemMeta?.actionId === 'string' ? itemMeta.actionId : undefined
+        const actionItem =
+          args.actionId && itemActionId !== args.actionId
+            ? {
+                ...item,
+                meta: {
+                  ...item.meta,
+                  actionId: args.actionId
+                }
+              }
+            : item
 
         try {
-          const result = await plugin.pluginLifecycle.onItemAction(item, {
+          const result = await plugin.pluginLifecycle.onItemAction(actionItem, {
             actionId: args.actionId
           })
           const executionTime = Date.now() - actionStartTime
           const isExternalAction = executionTime > 100 || result?.externalAction === true
 
-          if (isExternalAction) {
-            return null
-          }
-
           if (result?.shouldActivate) {
             return result.activation || null
+          }
+
+          if (isExternalAction) {
+            return null
           }
         } catch (error) {
           pluginFeaturesLog.error(

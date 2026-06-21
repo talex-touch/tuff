@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useResize } from './useResize'
 
 const mocks = vi.hoisted(() => ({
-  send: vi.fn(async () => undefined)
+  send: vi.fn<(event: unknown, payload: unknown) => Promise<void>>(async () => undefined)
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
@@ -118,6 +118,45 @@ describe('useResize forceMax activation', () => {
       expect.anything(),
       expect.objectContaining({ forceMax: true })
     )
+    harness.cleanup()
+  })
+
+  it('keeps CoreBox expanded for visible empty search states', async () => {
+    document.body.innerHTML = `
+      <div class="CoreBox" style="height: 56px"></div>
+      <div class="CoreBoxRes-Main">
+        <div class="scroll-area">
+          <div class="CoreBoxRes-ScrollContent">
+            <div class="CoreBoxSearchState" style="height: 160px"></div>
+          </div>
+        </div>
+      </div>
+    `
+    const searchState = document.querySelector('.CoreBoxSearchState') as HTMLElement
+    Object.defineProperty(searchState, 'offsetTop', { configurable: true, value: 0 })
+    Object.defineProperty(searchState, 'offsetHeight', { configurable: true, value: 160 })
+    vi.spyOn(searchState, 'getBoundingClientRect').mockReturnValue({
+      bottom: 160,
+      height: 160,
+      left: 0,
+      right: 720,
+      top: 0,
+      width: 720,
+      x: 0,
+      y: 0,
+      toJSON: () => ({})
+    } as DOMRect)
+
+    const harness = mountResizeHarness([])
+
+    await flushLayoutUpdate()
+
+    expect(mocks.send).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ height: expect.any(Number), resultCount: 0 })
+    )
+    const payload = mocks.send.mock.calls.at(-1)?.[1] as { height?: number } | undefined
+    expect(payload?.height).toBeGreaterThan(56)
     harness.cleanup()
   })
 })

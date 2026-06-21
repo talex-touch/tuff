@@ -43,6 +43,7 @@ import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 import { activeAppService } from './system/active-app'
+import { windowManager } from './box-tool/core-box/window'
 import {
   createIneligibleClipboardFreshnessState,
   type ClipboardFreshnessState
@@ -268,6 +269,8 @@ export class ClipboardModule extends BaseModule {
   private clipboardCheckCooldownUntil = 0
   private clipboardCheckInFlight = false
   private clipboardCheckPending = false
+  private clipboardCheckPendingOptions: ClipboardMonitorOptions | null = null
+  private clipboardCheckWaiters: Array<() => void> = []
   private clipboardStageBJob: ClipboardStageBJob | null = null
   private clipboardStageBInFlight = false
   private clipboardStageBGeneration = 0
@@ -283,6 +286,7 @@ export class ClipboardModule extends BaseModule {
   private powerListenersSetup = false
   private lastImagePersistAt = 0
   private lastLagSkipLogAt = 0
+  private coreBoxBaselineCaptureQueued = false
   private readonly handlePowerStateChanged = (): void => {
     if (this.coreBoxVisible) return
     this.updateClipboardPolling()
@@ -296,9 +300,7 @@ export class ClipboardModule extends BaseModule {
   private readonly handleCoreBoxShown = (): void => {
     this.coreBoxVisible = true
     this.updateClipboardPolling()
-    setImmediate(() => {
-      void this.runClipboardMonitor({ source: 'corebox-show-baseline' })
-    })
+    this.scheduleCoreBoxBaselineCapture()
   }
 
   private readonly handleCoreBoxHidden = (): void => {
@@ -403,6 +405,48 @@ export class ClipboardModule extends BaseModule {
 
   private stopNativeClipboardWatcher(): void {
     this.nativeWatcher.stop()
+  }
+
+  private isCoreBoxWindowVisible(): boolean {
+    const coreBoxWindow = windowManager.current?.window
+    return Boolean(coreBoxWindow && !coreBoxWindow.isDestroyed() && coreBoxWindow.isVisible())
+  }
+
+  private scheduleCoreBoxBaselineCapture(): void {
+    if (this.coreBoxBaselineCaptureQueued) {
+      return
+    }
+
+    this.coreBoxBaselineCaptureQueued = true
+    void appTaskGate
+      .waitForIdle()
+      .then(() => {
+        this.coreBoxBaselineCaptureQueued = false
+        if (this.isDestroyed || (!this.coreBoxVisible && !this.isCoreBoxWindowVisible())) {
+          return
+        }
+
+        void this.runClipboardMonitor({
+          source: 'corebox-show-baseline',
+          bypassCooldown: true
+        })
+      })
+      .catch((error) => {
+        this.coreBoxBaselineCaptureQueued = false
+        clipboardLog.warn('Failed to run CoreBox clipboard baseline after idle', { error })
+      })
+  }
+
+  private syncCoreBoxVisibleBaselineAfterIdle(): void {
+    if (!this.isCoreBoxWindowVisible()) {
+      return
+    }
+
+    if (!this.coreBoxVisible) {
+      this.coreBoxVisible = true
+      this.updateClipboardPolling()
+    }
+    this.scheduleCoreBoxBaselineCapture()
   }
 
   private ensureAppSettingSubscription(): void {
@@ -683,6 +727,28 @@ export class ClipboardModule extends BaseModule {
     return true
   }
 
+  private mergePendingMonitorOptions(
+    current: ClipboardMonitorOptions | null,
+    next?: ClipboardMonitorOptions
+  ): ClipboardMonitorOptions | null {
+    if (!current && !next) return null
+    const source =
+      current?.source === 'corebox-show-baseline' || next?.source === 'corebox-show-baseline'
+        ? 'corebox-show-baseline'
+        : (next?.source ?? current?.source)
+    return {
+      source,
+      bypassCooldown: Boolean(current?.bypassCooldown || next?.bypassCooldown)
+    }
+  }
+
+  private resolveClipboardCheckWaiters(): void {
+    const waiters = this.clipboardCheckWaiters.splice(0)
+    for (const resolve of waiters) {
+      resolve()
+    }
+  }
+
   /**
    * Save custom (non-clipboard) entry to clipboard history
    * Used by AI chat, preview, and other features
@@ -779,7 +845,10 @@ export class ClipboardModule extends BaseModule {
     this.scheduleActiveAppRefresh()
     void appTaskGate
       .waitForIdle()
-      .then(() => this.startNativeClipboardWatcher())
+      .then(async () => {
+        await this.startNativeClipboardWatcher()
+        this.syncCoreBoxVisibleBaselineAfterIdle()
+      })
       .catch((error) => clipboardLog.warn('Failed to start native clipboard watcher', { error }))
   }
 
@@ -810,25 +879,43 @@ export class ClipboardModule extends BaseModule {
   private async runClipboardMonitor(options?: ClipboardMonitorOptions): Promise<void> {
     if (this.clipboardCheckInFlight) {
       this.clipboardCheckPending = true
-      return
+      this.clipboardCheckPendingOptions = this.mergePendingMonitorOptions(
+        this.clipboardCheckPendingOptions,
+        options
+      )
+      return await new Promise<void>((resolve) => {
+        this.clipboardCheckWaiters.push(resolve)
+      })
     }
     this.clipboardCheckInFlight = true
-    let bypassCooldown = options?.bypassCooldown ?? false
-    const source = options?.source ?? (this.coreBoxVisible ? 'visible-poll' : 'background-poll')
+    let currentOptions = options
     try {
       do {
         this.clipboardCheckPending = false
+        this.clipboardCheckPendingOptions = null
+        const bypassCooldown = currentOptions?.bypassCooldown ?? false
+        const source =
+          currentOptions?.source ?? (this.coreBoxVisible ? 'visible-poll' : 'background-poll')
         try {
           await this.checkClipboard({ bypassCooldown, source })
         } catch (error) {
           clipboardLog.warn('Clipboard check failed', { error })
         }
-        bypassCooldown = bypassCooldown || this.clipboardCheckPending
+        currentOptions = this.clipboardCheckPendingOptions ?? undefined
       } while (this.clipboardCheckPending && !this.isDestroyed)
     } finally {
       this.clipboardCheckInFlight = false
       this.clipboardCheckPending = false
+      this.clipboardCheckPendingOptions = null
+      this.resolveClipboardCheckWaiters()
     }
+  }
+
+  private async refreshLatestClipboard(): Promise<void> {
+    await this.runClipboardMonitor({
+      source: 'corebox-show-baseline',
+      bypassCooldown: true
+    })
   }
 
   private async checkClipboard(options: ClipboardCheckOptions): Promise<void> {
@@ -836,7 +923,13 @@ export class ClipboardModule extends BaseModule {
       return
     }
     if (appTaskGate.isActive()) {
-      return
+      if (options.source !== 'corebox-show-baseline') {
+        return
+      }
+      await appTaskGate.waitForIdle()
+      if (this.isDestroyed || !this.clipboardHelper || !this.db) {
+        return
+      }
     }
     const now = Date.now()
     const lagSnapshot = perfMonitor.getRecentEventLoopLagSnapshot()
@@ -1032,6 +1125,9 @@ export class ClipboardModule extends BaseModule {
       enforcePermission: (pluginName, permission, payload) => {
         this.enforceClipboardPermission(pluginName, permission, payload)
       },
+      refreshLatest: async () => {
+        await this.refreshLatestClipboard()
+      },
       ensureInitialCacheLoaded: async () => {
         await this.ensureInitialCacheLoaded()
       },
@@ -1099,6 +1195,8 @@ export class ClipboardModule extends BaseModule {
     this.appSettingSnapshot = null
     this.clipboardCheckInFlight = false
     this.clipboardCheckPending = false
+    this.clipboardCheckPendingOptions = null
+    this.resolveClipboardCheckWaiters()
     this.clipboardStageBJob = null
     this.clipboardStageBInFlight = false
     this.clipboardStageBGeneration = 0
@@ -1109,6 +1207,7 @@ export class ClipboardModule extends BaseModule {
     this.lastLagSkipLogAt = 0
     this.lastSuccessfulClipboardScanAt = null
     this.coreBoxVisible = false
+    this.coreBoxBaselineCaptureQueued = false
     this.currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
   }
 

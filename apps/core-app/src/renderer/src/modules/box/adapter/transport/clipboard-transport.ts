@@ -6,6 +6,7 @@
 
 import type {
   ClipboardChangePayload,
+  ClipboardGetLatestRequest,
   ClipboardItem,
   ClipboardQueryRequest
 } from '@talex-touch/utils/transport/events'
@@ -18,8 +19,10 @@ const transport = createTuffRendererTransport('clipboard')
  * Get the latest clipboard item.
  * @returns The latest clipboard item, or null if none exists.
  */
-export async function getLatest(): Promise<ClipboardItem | null> {
-  return transport.send(ClipboardEvents.getLatest)
+export async function getLatest(
+  request?: ClipboardGetLatestRequest
+): Promise<ClipboardItem | null> {
+  return transport.send(ClipboardEvents.getLatest, request)
 }
 
 /**

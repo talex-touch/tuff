@@ -76,6 +76,7 @@ import type {
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
   ClipboardDeleteRequest,
+  ClipboardGetLatestRequest,
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
   ClipboardItem,
@@ -2745,7 +2746,7 @@ export const ClipboardEvents = {
   getLatest: defineEvent("clipboard")
     .module("history")
     .event("latest")
-    .define<void, ClipboardItem | null>(),
+    .define<ClipboardGetLatestRequest | void, ClipboardItem | null>(),
 
   /**
    * Apply clipboard item to active application with auto-paste.

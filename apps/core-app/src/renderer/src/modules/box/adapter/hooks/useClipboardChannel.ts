@@ -1,6 +1,7 @@
 import type {
   ClipboardActionResult,
   ClipboardChangePayload,
+  ClipboardGetLatestRequest,
   ClipboardItem
 } from '@talex-touch/utils/transport/events'
 import type { IClipboardItem } from './types'
@@ -86,8 +87,10 @@ export function useClipboardChannel(handlers?: ClipboardChannelHandlers): () => 
 /**
  * Get the latest clipboard item asynchronously
  */
-export async function getLatestClipboard(): Promise<IClipboardItem | null> {
-  const item = await getLatestClipboardItem()
+export async function getLatestClipboard(
+  request?: ClipboardGetLatestRequest
+): Promise<IClipboardItem | null> {
+  const item = await getLatestClipboardItem(request)
   return convertClipboardItem(item)
 }
 

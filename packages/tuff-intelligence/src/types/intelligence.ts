@@ -1918,6 +1918,7 @@ export interface IntelligenceSDKPersistedConfig {
     defaultStrategy: string
     enableAudit: boolean
     enableCache: boolean
+    enableQuota?: boolean
     cacheExpiration?: number
   }
   /** Capability configurations. */
@@ -2016,6 +2017,8 @@ export interface IntelligenceGlobalConfig {
   enableAudit: boolean
   /** Enable result caching. */
   enableCache: boolean
+  /** Enable quota management. */
+  enableQuota?: boolean
   /** Cache expiration in seconds. */
   cacheExpiration?: number
   /** Maximum retry attempts. */
@@ -2192,6 +2195,7 @@ export const DEFAULT_GLOBAL_CONFIG: IntelligenceGlobalConfig = {
   defaultStrategy: 'adaptive-default',
   enableAudit: false,
   enableCache: true,
+  enableQuota: true,
   cacheExpiration: 3600,
 }
 

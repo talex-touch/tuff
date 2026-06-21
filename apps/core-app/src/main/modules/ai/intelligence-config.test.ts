@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { getCapabilityOptions } from './intelligence-config'
+import { getCapabilityOptions, ensureIntelligenceConfigLoaded } from './intelligence-config'
+import { tuffIntelligence } from './intelligence-sdk'
 
 const storageMocks = vi.hoisted(() => ({
   storedConfig: undefined as unknown,
@@ -156,6 +157,153 @@ describe('intelligence-config capability options', () => {
     expect(getCapabilityOptions('text.chat')).toMatchObject({
       allowedProviderIds: ['local-default'],
       modelPreference: ['llama3.1']
+    })
+  })
+
+  it('preserves quota enforcement when persisted global config is missing enableQuota', () => {
+    storageMocks.storedConfig = {
+      providers: [],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false
+      },
+      capabilities: {},
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ enableQuota: true })
+    )
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        globalConfig: expect.objectContaining({ enableQuota: true })
+      })
+    )
+  })
+
+  it('does not re-enable Nexus when persisted providers are explicitly disabled', () => {
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          enabled: false,
+          priority: 1,
+          capabilities: ['text.chat']
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          name: 'Chat',
+          type: 'chat',
+          providers: [{ providerId: 'local-default', priority: 1, enabled: true }]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
+          expect.objectContaining({ id: 'local-default', enabled: false })
+        ])
+      })
+    )
+    expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
+          expect.objectContaining({ id: 'local-default', enabled: false })
+        ])
+      })
+    )
+  })
+
+  it('routes vision.ocr through the internal system OCR provider', () => {
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          enabled: true,
+          priority: 1,
+          capabilities: ['text.chat']
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          name: 'Chat',
+          type: 'chat',
+          providers: [{ providerId: 'local-default', priority: 1, enabled: true }]
+        },
+        'vision.ocr': {
+          id: 'vision.ocr',
+          name: 'OCR',
+          type: 'vision',
+          providers: [{ providerId: 'tuff-nexus-default', priority: 1, enabled: false }]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'local-system-ocr',
+            enabled: true,
+            capabilities: ['vision.ocr']
+          })
+        ]),
+        capabilities: expect.objectContaining({
+          'vision.ocr': expect.objectContaining({
+            providers: expect.arrayContaining([
+              expect.objectContaining({
+                providerId: 'local-system-ocr',
+                enabled: true,
+                models: ['system-ocr']
+              })
+            ])
+          })
+        })
+      })
+    )
+
+    expect(getCapabilityOptions('vision.ocr')).toMatchObject({
+      allowedProviderIds: ['local-system-ocr'],
+      modelPreference: ['system-ocr']
     })
   })
 })

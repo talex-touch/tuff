@@ -1,4 +1,4 @@
-import type { TuffItem } from '@talex-touch/utils'
+import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import {
@@ -32,10 +32,11 @@ interface UseActionPanelOptions {
   openFlowSelector?: (item: TuffItem) => void
   refreshSearch?: () => void
   navigate?: (path: string) => void
+  onActivationState?: (activations: IProviderActivate[] | null) => void
 }
 
 export function useActionPanel(options: UseActionPanelOptions = {}) {
-  const { openFlowSelector, refreshSearch, navigate } = options
+  const { openFlowSelector, refreshSearch, navigate, onActivationState } = options
   const { t } = useI18n()
   const transport = useTuffTransport()
   const appSdk = useAppSdk()
@@ -168,24 +169,67 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
           }
         }
         if (itemAction?.type === 'execute') {
-          await transport.send(CoreBoxEvents.item.execute, {
+          const activationState = await transport.send(CoreBoxEvents.item.execute, {
             item: JSON.parse(JSON.stringify(targetItem)),
             actionId
           })
+          applyActivationState(activationState)
           return
         }
         devLog('[useActionPanel] Fallback execute for MetaOverlay action:', actionId, targetItem.id)
         try {
-          await transport.send(CoreBoxEvents.item.execute, {
+          const activationState = await transport.send(CoreBoxEvents.item.execute, {
             item: JSON.parse(JSON.stringify(targetItem)),
             actionId
           })
+          applyActivationState(activationState)
         } catch (error) {
           devLog('[useActionPanel] Fallback execute failed:', error)
           toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
         }
         break
     }
+  }
+
+  function applyActivationState(state: unknown): void {
+    if (!onActivationState) return
+    onActivationState(normalizeActivationState(state))
+  }
+
+  function normalizeActivationState(state: unknown): IProviderActivate[] | null {
+    if (!state) return null
+    if (Array.isArray(state)) return state.length > 0 ? (state as IProviderActivate[]) : null
+    if (typeof state !== 'object') return null
+
+    const activeProviders = (state as { activeProviders?: unknown }).activeProviders
+    if (!Array.isArray(activeProviders) || activeProviders.length === 0) return null
+
+    const activations = activeProviders
+      .map<IProviderActivate | null>((provider) => {
+        if (
+          provider &&
+          typeof provider === 'object' &&
+          typeof (provider as { id?: unknown }).id === 'string'
+        ) {
+          return provider as IProviderActivate
+        }
+
+        if (typeof provider !== 'string' || provider.length === 0) {
+          return null
+        }
+
+        if (provider.startsWith('plugin-features:')) {
+          const pluginName = provider.slice('plugin-features:'.length)
+          return {
+            id: 'plugin-features',
+            meta: pluginName ? { pluginName } : undefined
+          }
+        }
+        return { id: provider }
+      })
+      .filter((activation): activation is IProviderActivate => Boolean(activation))
+
+    return activations.length > 0 ? activations : null
   }
 
   async function handleAction(actionId: string): Promise<void> {

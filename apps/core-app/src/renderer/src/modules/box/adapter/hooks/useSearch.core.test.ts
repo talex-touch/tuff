@@ -1,8 +1,8 @@
 import type { IBoxOptions } from '..'
-import type { IClipboardOptions } from './types'
-import type { TuffItem, TuffSearchResult } from '@talex-touch/utils'
+import type { IClipboardItem, IClipboardOptions } from './types'
+import { TuffInputType, type TuffItem, type TuffSearchResult } from '@talex-touch/utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, ref, type Ref } from 'vue'
 import { BoxMode } from '..'
 import { useSearch } from './useSearch'
 
@@ -24,6 +24,9 @@ const state = vi.hoisted(() => ({
   },
   backgroundAppLaunch: false,
   boxItems: [] as TuffItem[],
+  boxItemsRef: null as Ref<TuffItem[]> | null,
+  latestClipboard: null as IClipboardItem | null,
+  latestClipboardRequests: [] as unknown[],
   dispatchEvent: vi.fn()
 }))
 
@@ -75,7 +78,7 @@ vi.mock('vue', async (importOriginal) => {
 
 vi.mock('~/modules/box/item-sdk', () => ({
   useBoxItems: () => ({
-    items: { value: state.boxItems }
+    items: state.boxItemsRef ?? ref(state.boxItems)
   })
 }))
 
@@ -109,6 +112,13 @@ vi.mock('./app-launch-item', () => ({
 
 vi.mock('./useResize', () => ({
   useResize: vi.fn()
+}))
+
+vi.mock('./useClipboardChannel', () => ({
+  getLatestClipboard: vi.fn(async (request?: unknown) => {
+    state.latestClipboardRequests.push(request)
+    return state.latestClipboard
+  })
 }))
 
 function createBoxOptions(): IBoxOptions {
@@ -167,9 +177,12 @@ describe('useSearch CoreBox reopen behavior', () => {
     vi.clearAllMocks()
     state.listeners.clear()
     state.boxItems = []
+    state.boxItemsRef = ref(state.boxItems)
     state.windowState.type = 'corebox'
     state.windowState.divisionBox = null
     state.backgroundAppLaunch = false
+    state.latestClipboard = null
+    state.latestClipboardRequests = []
     state.appSetting.recommendation.enabled = true
     state.send.mockReset()
     state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
@@ -240,6 +253,31 @@ describe('useSearch CoreBox reopen behavior', () => {
         query: { text: 'aaa', inputs: [] }
       }
     )
+  })
+
+  it('does not attach stale clipboard image input to plain text search', async () => {
+    state.latestClipboard = {
+      id: 92,
+      type: 'image',
+      content: 'tfile:///tmp/tuff/clipboard/images/original.png',
+      thumbnail: 'data:image/png;base64,thumb',
+      timestamp: new Date().toISOString(),
+      captureSource: 'corebox-show-baseline',
+      autoPasteEligible: false
+    }
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    hook.searchVal.value = 'calculator'
+    await nextTick()
+    await flushPromises()
+
+    const queryCall = state.send.mock.calls.find(([event]) => String(event) === 'core-box:query')
+    const queryPayload = queryCall?.[1] as { query?: { text?: string; inputs?: unknown[] } }
+
+    expect(queryPayload?.query?.text).toBe('calculator')
+    expect(queryPayload?.query?.inputs).toEqual([])
   })
 
   it('hides CoreBox immediately before dispatching background app launch', async () => {
@@ -342,6 +380,68 @@ describe('useSearch CoreBox reopen behavior', () => {
     expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
   })
 
+  it('refreshes latest clipboard before executing a plugin feature with image input', async () => {
+    state.latestClipboard = {
+      id: 91,
+      type: 'image',
+      content: 'tfile:///tmp/tuff/clipboard/images/original.png',
+      thumbnail: 'data:image/png;base64,thumb',
+      timestamp: new Date().toISOString(),
+      captureSource: 'corebox-show-baseline',
+      autoPasteEligible: false
+    }
+    const clipboardOptions = createClipboardOptions()
+    const hook = useSearch(createBoxOptions(), clipboardOptions)
+    await flushPromises()
+
+    hook.searchVal.value = 'describe the image'
+    await nextTick()
+    await flushPromises()
+
+    state.send.mockClear()
+    state.send.mockImplementation(async (event: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:execute') {
+        return { activeProviders: ['plugin-features:touch-intelligence'] }
+      }
+      if (eventName.includes('provider')) return []
+      return undefined
+    })
+
+    const featureItem = {
+      id: 'touch-intelligence/intelligence-ask',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: '智能问答' } },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        interaction: { type: 'widget', allowInput: true, sendMode: true },
+        extension: { acceptedInputTypes: ['text', 'image'] }
+      }
+    } as TuffItem
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+
+    const executeCall = state.send.mock.calls.find(
+      ([event]) => String(event) === 'core-box:execute'
+    )
+    const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
+    const input = executePayload?.searchResult?.query.inputs?.[0]
+
+    expect(state.latestClipboardRequests).toContainEqual({ refresh: true })
+    expect(input).toMatchObject({
+      type: TuffInputType.Image,
+      content: 'data:image/png;base64,thumb',
+      metadata: expect.objectContaining({
+        clipboardId: 91,
+        canResolveOriginal: true,
+        contentKind: 'preview'
+      })
+    })
+  })
+
   it('keeps widget feature metadata when search end returns compressed activation', async () => {
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()
@@ -404,6 +504,180 @@ describe('useSearch CoreBox reopen behavior', () => {
           inputKinds: ['text']
         }
       }
+    })
+  })
+
+  it('refreshes active widget feature from search updates with custom render data', async () => {
+    const searchId = 'widget-session'
+    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:execute') {
+        return { activeProviders: ['plugin-features:touch-intelligence'] }
+      }
+      if (eventName.includes('provider')) return []
+      if (eventName === 'core-box:query') {
+        return {
+          ...createSearchResult(getSearchQueryText(payload)),
+          sessionId: searchId
+        }
+      }
+      return undefined
+    })
+
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = 'ai hello'
+    await nextTick()
+    await flushPromises()
+
+    state.send.mockClear()
+    const featureItem = {
+      id: 'touch-intelligence/intelligence-ask',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: '智能问答' } },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        interaction: { type: 'widget', allowInput: true, sendMode: true },
+        extension: { acceptedInputTypes: ['text'] }
+      }
+    } as TuffItem
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+
+    const updatedWidgetItem = {
+      id: 'intelligence-widget',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: {
+        mode: 'custom',
+        custom: {
+          type: 'vue',
+          content: 'touch-intelligence::intelligence-ask',
+          data: {
+            prompt: 'ai hello',
+            answer: 'hello',
+            status: 'ready',
+            copyStatus: 'failed',
+            copyError: '复制失败：缺少 clipboard.write 权限'
+          }
+        }
+      },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        status: 'ready',
+        defaultAction: 'intelligence-action',
+        actionId: 'copy-answer',
+        payload: { prompt: 'ai hello', answer: 'hello' }
+      }
+    } as TuffItem
+
+    state.listeners.get('core-box:search-update')?.({
+      searchId,
+      items: [updatedWidgetItem]
+    })
+    await flushPromises()
+
+    expect(hook.activeActivations.value?.[0]?.meta).toMatchObject({
+      pluginName: 'touch-intelligence',
+      featureId: 'intelligence-ask',
+      feature: expect.objectContaining({
+        id: 'intelligence-widget',
+        render: {
+          mode: 'custom',
+          custom: expect.objectContaining({
+            data: expect.objectContaining({
+              copyStatus: 'failed',
+              copyError: '复制失败：缺少 clipboard.write 权限'
+            })
+          })
+        }
+      })
+    })
+  })
+
+  it('refreshes active widget feature when BoxItem SDK pushes updated custom render data', async () => {
+    state.send.mockImplementation(async (event: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:execute') {
+        return { activeProviders: ['plugin-features:touch-intelligence'] }
+      }
+      if (eventName.includes('provider')) return []
+      if (eventName === 'core-box:query') return createSearchResult('ai hello')
+      return undefined
+    })
+
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const featureItem = {
+      id: 'touch-intelligence/intelligence-ask',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: '智能问答' } },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        interaction: { type: 'widget', allowInput: true, sendMode: true },
+        extension: { acceptedInputTypes: ['text'] }
+      }
+    } as TuffItem
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+
+    const pushedWidgetItem = {
+      id: 'intelligence-widget',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: {
+        mode: 'custom',
+        custom: {
+          type: 'vue',
+          content: 'touch-intelligence::intelligence-ask',
+          data: {
+            prompt: 'ai hello',
+            answer: 'hello',
+            status: 'ready',
+            copyStatus: 'failed',
+            copyError: '复制失败：缺少 clipboard.write 权限',
+            copyRecovery: '请在插件权限中允许 clipboard.write 后重试。'
+          }
+        }
+      },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        status: 'ready',
+        defaultAction: 'intelligence-action',
+        actionId: 'copy-answer',
+        payload: { prompt: 'ai hello', answer: 'hello' }
+      }
+    } as TuffItem
+
+    state.boxItemsRef!.value = [pushedWidgetItem]
+    await flushPromises()
+
+    expect(hook.activeActivations.value?.[0]?.meta).toMatchObject({
+      pluginName: 'touch-intelligence',
+      featureId: 'intelligence-ask',
+      feature: expect.objectContaining({
+        id: 'intelligence-widget',
+        render: {
+          mode: 'custom',
+          custom: expect.objectContaining({
+            data: expect.objectContaining({
+              copyStatus: 'failed',
+              copyError: '复制失败：缺少 clipboard.write 权限',
+              copyRecovery: '请在插件权限中允许 clipboard.write 后重试。'
+            })
+          })
+        }
+      })
     })
   })
 

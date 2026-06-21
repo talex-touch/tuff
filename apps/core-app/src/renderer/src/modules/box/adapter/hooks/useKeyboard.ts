@@ -328,20 +328,24 @@ function convertTuffActionToMetaAction(tuffAction: TuffActionLike): MetaAction {
   }
 }
 
-function resolveQuickActionsItem(
+export function resolveQuickActionsItem(
   results: TuffItem[],
   focus: number,
   activations: IProviderActivate[] | null
 ): TuffItem | null {
+  const featureItem = activations?.find((activation) => activation?.id === 'plugin-features')?.meta
+    ?.feature as TuffItem | undefined
+  if (
+    featureItem &&
+    featureItem.id &&
+    (featureItem.render?.basic?.title || featureItem.actions?.length)
+  ) {
+    return featureItem
+  }
+
   const focused = results[focus]
   if (focused) {
     return focused
-  }
-
-  const featureItem = activations?.find((activation) => activation?.id === 'plugin-features')?.meta
-    ?.feature as TuffItem | undefined
-  if (featureItem && featureItem.id && featureItem.render?.basic?.title) {
-    return featureItem
   }
 
   const fallbackActivation = activations?.[0]

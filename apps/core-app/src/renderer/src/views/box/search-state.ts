@@ -1,8 +1,8 @@
 import { BoxMode } from '../../modules/box/adapter'
 
-export type CoreBoxSearchStateKind = 'recommendation-loading'
+export type CoreBoxSearchStateKind = 'recommendation-loading' | 'no-results'
 
-export type CoreBoxSearchStateTone = 'progress'
+export type CoreBoxSearchStateTone = 'progress' | 'empty'
 
 export interface CoreBoxSearchState {
   kind: CoreBoxSearchStateKind
@@ -17,6 +17,7 @@ export interface CoreBoxSearchState {
 export interface CoreBoxSearchStateInput {
   query: string
   resultCount: number
+  loading: boolean
   recommendationPending: boolean
   mode: BoxMode
 }
@@ -24,7 +25,9 @@ export interface CoreBoxSearchStateInput {
 export function resolveCoreBoxSearchState(
   input: CoreBoxSearchStateInput
 ): CoreBoxSearchState | null {
-  if (input.resultCount > 0 || input.mode === BoxMode.FEATURE || input.query.trim()) {
+  const query = input.query.trim()
+
+  if (input.resultCount > 0 || input.mode === BoxMode.FEATURE) {
     return null
   }
 
@@ -37,6 +40,18 @@ export function resolveCoreBoxSearchState(
       titleFallback: 'Preparing recommendations',
       detailKey: 'coreBox.searchState.recommendationLoadingDetail',
       detailFallback: 'Recent and frequent actions are warming up.'
+    }
+  }
+
+  if (query && !input.loading) {
+    return {
+      kind: 'no-results',
+      tone: 'empty',
+      icon: 'i-ri-search-eye-line',
+      titleKey: 'coreBox.searchState.noResultsTitle',
+      titleFallback: 'No results found',
+      detailKey: 'coreBox.searchState.noResultsDetail',
+      detailFallback: 'Check spelling, retry the search, or open File Index settings.'
     }
   }
 

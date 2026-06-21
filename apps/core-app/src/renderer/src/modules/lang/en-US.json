@@ -1601,7 +1601,11 @@
       "idleTitle": "Ready to search",
       "idleDetail": "Type a keyword to search apps, files, commands, or AI actions.",
       "recommendationLoadingTitle": "Preparing recommendations",
-      "recommendationLoadingDetail": "Recent and frequent actions are warming up."
+      "recommendationLoadingDetail": "Recent and frequent actions are warming up.",
+      "noResultsTitle": "No results found",
+      "noResultsDetail": "Check spelling, retry the search, or open File Index settings.",
+      "retryAction": "Retry",
+      "fileIndexSettingsAction": "File Index settings"
     },
     "intelligence": {
       "emptyPrompt": "Type a question to ask the AI",

@@ -111,6 +111,11 @@ const PROVIDER_HEALTH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_JITTER_MS = 10 * 60 * 1000
 
+function hasConcreteActivationFeature(activation: IProviderActivate): boolean {
+  const meta = activation.meta
+  return Boolean(meta && typeof meta === 'object' && 'feature' in meta && meta.feature)
+}
+
 interface SearchPipelineStageDurations {
   parseDuration: number
   providerAggregationDuration: number
@@ -2598,8 +2603,10 @@ export class SearchEngineCore
         }
         instance.activateProviders([activation])
 
-        const query: TuffQuery = { text: '' }
-        await instance.search(query)
+        if (!hasConcreteActivationFeature(activation)) {
+          const query: TuffQuery = { text: '' }
+          await instance.search(query)
+        }
       }
 
       return instance.getActivationState()

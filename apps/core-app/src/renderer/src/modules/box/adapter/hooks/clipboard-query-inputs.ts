@@ -12,6 +12,7 @@ type BuildClipboardQueryInputsOptions = {
   pendingTextClipboardItem?: IClipboardItem | null
   queryText?: string
   allowPendingTextClipboard?: boolean
+  includeClipboardImage?: boolean
   filePaths?: string[]
   useFileMode?: boolean
 }
@@ -90,10 +91,15 @@ function resolveTextClipboardSource(
 export function buildClipboardQueryInputs(
   options: BuildClipboardQueryInputsOptions
 ): TuffQueryInput[] {
-  const { clipboardItem, filePaths = [], useFileMode = false } = options
+  const {
+    clipboardItem,
+    filePaths = [],
+    useFileMode = false,
+    includeClipboardImage = true
+  } = options
   const inputs: TuffQueryInput[] = []
 
-  if (clipboardItem?.type === 'image') {
+  if (clipboardItem?.type === 'image' && includeClipboardImage) {
     const content = clipboardItem.thumbnail || clipboardItem.content || ''
     const metadata = buildClipboardMetadata(clipboardItem, {
       contentKind: 'preview',

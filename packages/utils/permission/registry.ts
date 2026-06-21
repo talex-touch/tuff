@@ -334,6 +334,5 @@ export type PermissionId = (typeof PermissionIds)[keyof typeof PermissionIds]
  */
 export const DEFAULT_PERMISSIONS: string[] = [
   PermissionIds.STORAGE_PLUGIN,
-  PermissionIds.CLIPBOARD_WRITE,
   PermissionIds.WINDOW_CREATE,
 ]

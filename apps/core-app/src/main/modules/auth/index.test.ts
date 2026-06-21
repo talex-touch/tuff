@@ -156,6 +156,7 @@ type MockAppSetting = {
     secureStorageUserOverridden?: boolean
     secureStorageReminderShown: boolean
     secureStorageUnavailable: boolean
+    cachedUser?: unknown
   }
   security: {
     machineCodeHash: string
@@ -523,5 +524,55 @@ describe('auth secure storage preference', () => {
       userCode: 'TUFF26',
       browserOpenFailed: true
     })
+  })
+
+  it('keeps cached signed-in state during visible auth evidence startup', async () => {
+    process.env.TUFF_VISIBLE_EVIDENCE_AUTH = '1'
+    process.env.TUFF_STARTUP_BENCHMARK_ONCE = '1'
+    appSettingState.auth!.cachedUser = {
+      id: 'visible-user',
+      email: 'visible@example.test',
+      name: 'Visible User',
+      avatar: null,
+      role: null,
+      locale: null,
+      emailVerified: true,
+      bio: null,
+      createdAt: null,
+      updatedAt: null
+    }
+
+    const authModule = await import('./index')
+    authModule.__test__.resetState()
+    authModule.__test__.setState({
+      appRootPath: '/tmp/tuff',
+      authToken: 'visible-evidence-token'
+    })
+    expect(authModule.__test__.getCachedAuthUser()).toMatchObject({
+      id: 'visible-user',
+      email: 'visible@example.test'
+    })
+
+    await authModule.__test__.initializeAuthState()
+
+    expect(
+      networkRequestMock.mock.calls.some(([request]) =>
+        String((request as { url?: unknown })?.url ?? '').includes('/api/v1/auth/me')
+      )
+    ).toBe(false)
+    expect(authModule.__test__.getState()).toMatchObject({
+      isLoaded: true,
+      isSignedIn: true,
+      user: expect.objectContaining({
+        id: 'visible-user',
+        email: 'visible@example.test'
+      })
+    })
+    expect(authLoggerMock.info).toHaveBeenCalledWith(
+      'Keeping visible auth evidence cached auth state without startup refresh',
+      expect.objectContaining({
+        meta: expect.objectContaining({ userId: 'visible-user' })
+      })
+    )
   })
 })

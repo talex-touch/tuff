@@ -281,6 +281,54 @@ describe('plugin-features-adapter', () => {
     vi.mocked(searchEngineCore.getActivationState).mockReturnValue(null)
   })
 
+  it('maps execute actionId into item meta for legacy plugin item actions', async () => {
+    const adapter = new PluginFeaturesAdapter()
+    const activation = { id: 'plugin-features', meta: { pluginName: 'test-plugin' } }
+    const onItemAction = vi.fn(async () => ({
+      externalAction: true,
+      shouldActivate: true,
+      activation
+    }))
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: {
+        onItemAction
+      }
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    const result = await adapter.onExecute({
+      actionId: 'copy-answer',
+      item: {
+        id: 'test-plugin/widget-ready',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: {
+          pluginName: 'test-plugin',
+          defaultAction: 'intelligence-action',
+          payload: {
+            answer: 'ready answer'
+          }
+        }
+      }
+    } as never)
+
+    expect(result).toEqual(activation)
+    expect(onItemAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          actionId: 'copy-answer',
+          payload: expect.objectContaining({
+            answer: 'ready answer'
+          })
+        })
+      }),
+      { actionId: 'copy-answer' }
+    )
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
   it('honors explicit hidden input for webcontent features with accepted inputs', async () => {
     const adapter = new PluginFeaturesAdapter()
     const feature = {

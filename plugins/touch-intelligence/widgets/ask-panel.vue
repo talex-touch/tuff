@@ -41,6 +41,9 @@ interface IntelligenceWidgetPayload {
   inputKinds?: string[]
   errorCode?: string
   errorMessage?: string
+  copyStatus?: string
+  copyError?: string
+  copyRecovery?: string
   messages?: IntelligenceWidgetMessage[]
   imageContext?: IntelligenceImageContext | null
 }
@@ -85,6 +88,9 @@ export default defineComponent({
     const errorCode = computed(() => String(widgetPayload.value.errorCode || '').trim())
     const errorMessage = computed(() => String(widgetPayload.value.errorMessage || '').trim())
     const isPermissionDenied = computed(() => errorCode.value === 'PERMISSION_DENIED')
+    const copyFailed = computed(() => String(widgetPayload.value.copyStatus || '').trim() === 'failed')
+    const copyError = computed(() => String(widgetPayload.value.copyError || '').trim())
+    const copyRecovery = computed(() => String(widgetPayload.value.copyRecovery || '').trim())
     const runtimeMetadata = computed<RuntimeMetadataItem[]>(() => {
       const payload = widgetPayload.value
       const items: RuntimeMetadataItem[] = []
@@ -159,6 +165,9 @@ export default defineComponent({
       errorCode,
       errorMessage,
       isPermissionDenied,
+      copyFailed,
+      copyError,
+      copyRecovery,
       runtimeMetadata,
       hasRuntimeMetadata,
       scrollToBottom,
@@ -211,6 +220,12 @@ export default defineComponent({
           <strong>{{ isPermissionDenied ? '需要授权 AI 权限' : '请求失败' }}</strong>
           <span>{{ errorMessage }}</span>
           <small v-if="isPermissionDenied">请到插件权限设置中允许 intelligence.basic 后重试。</small>
+        </div>
+
+        <div v-if="copyFailed" class="AiChatbot__copyFailureNotice">
+          <strong>复制失败</strong>
+          <span>{{ copyError || '无法复制回答到剪贴板。' }}</span>
+          <small>{{ copyRecovery || '请检查插件剪贴板权限后重试。' }}</small>
         </div>
       </div>
 
@@ -537,6 +552,29 @@ export default defineComponent({
 }
 
 .AiChatbot__errorNotice small {
+  color: color-mix(in srgb, var(--tx-color-danger, #e5484d) 78%, var(--ai-chat-text));
+  font-size: 12px;
+}
+
+.AiChatbot__copyFailureNotice {
+  display: grid;
+  max-width: min(78%, 720px);
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--ai-chat-danger-border);
+  border-radius: 14px;
+  background: var(--ai-chat-danger-bg);
+  color: var(--tx-color-danger, #e5484d);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.AiChatbot__copyFailureNotice strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.AiChatbot__copyFailureNotice small {
   color: color-mix(in srgb, var(--tx-color-danger, #e5484d) 78%, var(--ai-chat-text));
   font-size: 12px;
 }

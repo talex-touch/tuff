@@ -212,6 +212,8 @@ export async function migrateIntelligenceSettings(): Promise<void> {
       defaultStrategy: normalizedStrategy,
       enableAudit: currentData.globalConfig?.enableAudit ?? false,
       enableCache: currentData.globalConfig?.enableCache ?? true,
+      enableQuota:
+        currentData.globalConfig?.enableQuota ?? DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
       cacheExpiration: currentData.globalConfig?.cacheExpiration ?? 3600,
     }
 

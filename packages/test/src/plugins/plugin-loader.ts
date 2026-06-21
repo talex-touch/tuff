@@ -93,6 +93,14 @@ export function createPluginGlobals(overrides: GlobalOverrides = {}): GlobalOver
       info() {},
       log() {},
     },
+    touchChannel: {
+      async send(eventName: string) {
+        if (eventName === 'auth:session:get-state') {
+          return { isSignedIn: true }
+        }
+        return null
+      },
+    },
     ...overrides,
   }
 }

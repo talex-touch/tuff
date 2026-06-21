@@ -53,6 +53,13 @@ export interface ClipboardChangePayload {
 }
 
 /**
+ * Request to get the latest clipboard item.
+ */
+export interface ClipboardGetLatestRequest extends ClipboardSdkApiPayload {
+  refresh?: boolean
+}
+
+/**
  * Request to query clipboard history.
  */
 export interface ClipboardQueryRequest extends ClipboardSdkApiPayload {

@@ -19,6 +19,7 @@ function makeProbeDom(bodyText: string, overrides: Partial<CoreBoxProbeDom> = {}
     hasCoreBoxClass: true,
     inputIdExists: true,
     inputValue: '',
+    hasPromptSendButton: false,
     hasAiChatbot: true,
     hasErrorNotice: false,
     hasPermissionText: false,
@@ -27,6 +28,15 @@ function makeProbeDom(bodyText: string, overrides: Partial<CoreBoxProbeDom> = {}
     hasLoggedOutText: false,
     hasQuotaText: false,
     buttons: [],
+    debug: {
+      visibleInputKinds: [],
+      visibleCapabilities: [],
+      hasVisibleImageInput: false,
+      hasVisibleOcrSignal: false,
+      hasVisibleTextChatSignal: false,
+      hasVisibleCopyFailureSignal: false,
+      queryInputDebug: null
+    },
     ...overrides
   }
 }
@@ -214,19 +224,77 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
   it('prefers the primary CoreBox target over detached DivisionBox targets', () => {
     const detached = {
       target: { id: 'detached', title: 'Tuff', type: 'page', url: 'app://detached' },
-      dom: makeProbeDom('touch-intelligence detached', { bodyClass: 'MacIntel core-box division-box' })
+      dom: makeProbeDom('touch-intelligence detached', {
+        bodyClass: 'MacIntel core-box division-box'
+      })
     }
     const primary = {
       target: { id: 'primary', title: 'Tuff', type: 'page', url: 'app://primary' },
       dom: makeProbeDom('touch-intelligence primary', { bodyClass: 'MacIntel core-box' })
     }
 
-    const selected = selectCoreBoxTarget([
-      detached,
-      primary
-    ] as Array<{ target: DevToolsTarget; dom: CoreBoxProbeDom }>)
+    const selected = selectCoreBoxTarget([detached, primary] as Array<{
+      target: DevToolsTarget
+      dom: CoreBoxProbeDom
+    }>)
 
     expect(selected?.target.id).toBe('primary')
+  })
+
+  it('does not let an active DivisionBox send-mode target outrank the primary CoreBox', () => {
+    const activeDetached = {
+      target: { id: 'detached', title: 'Tuff', type: 'page', url: 'app://detached' },
+      dom: makeProbeDom('touch-intelligence detached send mode', {
+        bodyClass: 'MacIntel core-box division-box',
+        hasPromptSendButton: true
+      })
+    }
+    const primary = {
+      target: { id: 'primary', title: 'Tuff', type: 'page', url: 'app://primary' },
+      dom: makeProbeDom('touch-intelligence primary', { bodyClass: 'MacIntel core-box' })
+    }
+
+    const selected = selectCoreBoxTarget([activeDetached, primary] as Array<{
+      target: DevToolsTarget
+      dom: CoreBoxProbeDom
+    }>)
+
+    expect(selected?.target.id).toBe('primary')
+  })
+
+  it('prefers the meta overlay AI CoreBox target over settings-page CoreBox inputs', () => {
+    const settings = {
+      target: {
+        id: 'settings',
+        title: 'Tuff',
+        type: 'page',
+        url: 'file:///tuff/out/renderer/index.html#/setting'
+      },
+      dom: makeProbeDom('plain settings CoreBox echo', {
+        href: 'file:///tuff/out/renderer/index.html#/setting',
+        bodyClass: 'MacIntel core-box',
+        hasAiChatbot: false
+      })
+    }
+    const metaOverlay = {
+      target: {
+        id: 'meta-overlay',
+        title: 'Tuff',
+        type: 'page',
+        url: 'file:///tuff/out/renderer/index.html#/meta-overlay'
+      },
+      dom: makeProbeDom('touch-intelligence\n智能问答\n使用 ai/@ai 前缀在 CoreBox 里调用 AI 回答', {
+        href: 'file:///tuff/out/renderer/index.html#/meta-overlay',
+        bodyClass: 'MacIntel core-box'
+      })
+    }
+
+    const selected = selectCoreBoxTarget([settings, metaOverlay] as Array<{
+      target: DevToolsTarget
+      dom: CoreBoxProbeDom
+    }>)
+
+    expect(selected?.target.id).toBe('meta-overlay')
   })
 
   it('deduplicates requested AI Stable tags and binds artifact paths', () => {
@@ -243,6 +311,42 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
       signalMatched: true,
       hasVisualArtifact: true,
       artifactPaths: ['probe.json', 'screen.png']
+    })
+  })
+
+  it('keeps packaged probe debug metadata out of evidence matching', () => {
+    const [check] = buildEvidenceChecks(
+      makeProbeDom('未登录', {
+        debug: {
+          visibleInputKinds: ['image'],
+          visibleCapabilities: ['vision.ocr', 'text.chat'],
+          hasVisibleImageInput: true,
+          hasVisibleOcrSignal: true,
+          hasVisibleTextChatSignal: true,
+          hasVisibleCopyFailureSignal: false,
+          queryInputDebug: {
+            builtAt: '2026-06-21T00:00:00.000Z',
+            queryTextLength: 10,
+            clipboardLastType: 'image',
+            pendingTextClipboardType: null,
+            filePathCount: 0,
+            useFileMode: false,
+            inputTypes: ['image'],
+            inputCount: 1,
+            hasImageInput: true,
+            hasTextInput: false,
+            hasFileInput: false
+          }
+        }
+      }),
+      ['AI-STABLE-02'],
+      ['screen.png']
+    )
+
+    expect(check).toMatchObject({
+      matched: false,
+      blockedByFailureSignal: true,
+      matchedBlockedSignals: expect.arrayContaining(['未登录'])
     })
   })
 
@@ -310,11 +414,9 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
     const inputValue = 'ai reply with exactly local-ok for AI-STABLE-08 Local Ollama routing'
     const [check] = buildEvidenceChecks(
       makeProbeDom(
-        [
-          inputValue,
-          '智能问答',
-          '使用 ai/@ai 前缀在 CoreBox 里调用 AI 回答，支持图片 OCR'
-        ].join('\n'),
+        [inputValue, '智能问答', '使用 ai/@ai 前缀在 CoreBox 里调用 AI 回答，支持图片 OCR'].join(
+          '\n'
+        ),
         { inputValue }
       ),
       ['AI-STABLE-08'],
@@ -562,6 +664,25 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
       blockedByFailureSignal: true,
       hasVisualArtifact: true,
       matchedBlockedSignals: expect.arrayContaining(['permission denied', 'no answer'])
+    })
+  })
+
+  it('rejects OCR evidence when the answer asks for the missing image', () => {
+    const [check] = buildEvidenceChecks(
+      makeProbeDom(
+        'vision.ocr image text.chat answer Please provide the image for me to describe the text content. provider Local model qwen latency 90 ms input kind text, image trace xyz'
+      ),
+      ['AI-STABLE-02'],
+      ['ocr.png']
+    )
+
+    expect(check).toMatchObject({
+      tag: 'AI-STABLE-02',
+      matched: false,
+      signalMatched: true,
+      blockedByFailureSignal: true,
+      hasVisualArtifact: true,
+      matchedBlockedSignals: expect.arrayContaining(['Please provide the image'])
     })
   })
 

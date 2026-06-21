@@ -2,6 +2,7 @@
 
 import type { IArgMapperOptions } from '@talex-touch/utils/electron'
 import type { PreloadAPI } from '@talex-touch/utils/preload'
+import type { TuffInputType } from '@talex-touch/utils'
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { Router } from 'vue-router'
 
@@ -23,6 +24,19 @@ declare global {
     $argMapper: IArgMapperOptions
     __VUE_ROUTER__?: Router
     __devAuthToken?: (token: string) => void
+    __coreboxQueryInputDebug?: {
+      builtAt: string
+      queryTextLength: number
+      clipboardLastType: string | null
+      pendingTextClipboardType: string | null
+      filePathCount: number
+      useFileMode: boolean
+      inputTypes: TuffInputType[]
+      inputCount: number
+      hasImageInput: boolean
+      hasTextInput: boolean
+      hasFileInput: boolean
+    }
     api: PreloadAPI
     electron: ElectronAPI
   }
