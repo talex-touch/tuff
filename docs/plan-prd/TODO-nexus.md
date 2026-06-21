@@ -65,6 +65,18 @@
 - 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建、pending 长文档后半段渲染延迟到用户意图或静置后、docs code header 原生 DOM 客户端增强、docs toast feedback 动态加载、公开 docs auth/profile graph 延迟到 authenticated protected route、legacy `vue-sonner` 迁移到自研 toast host。
 - 当前第 46 批只做 typedPages no-op、pending `auto-sizer` / `scroll` 抽样和 sidebase runtime evidence，不继续混入首页 WebGL warning 修复、production chunk/CSS 复核、认证模块重构或 pending 逐页 demo/API 二刀。后续全部进入 TODO 队列：`@sidebase/nuxt-auth` client plugin 拆分/门控、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB / Nuxt macro 继续深化、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
+## 本轮暂停硬性要点
+
+本轮暂不继续修代码，后续恢复时必须从本文领取，不从聊天上下文猜范围：
+
+- 不要重复尝试 `experimental.typedPages=false`；第 46 批已证明它不会减少 tabs 首访的 61 条 Nuxt dev `?macro=true` 请求。
+- 不要把 `@sidebase/nuxt-auth` 的 12 条 dev client runtime 误记为第 43 批 `current-user` 回退；第 46 批三页 `/api/auth/*` 为 0、current-user 为 0，问题是模块级 Nuxt plugin/runtime 边界。
+- 若下一批处理 sidebase auth runtime，必须同时验证 public docs、`/sign-in`、OAuth callback、`/dashboard`、`/team/join`、`/auth/admin-bootstrap` 和 header user menu，不允许只看 docs HAR 就改认证边界。
+- 若下一批处理 pending / aireview，优先补未采样 `text-transformer` / `base-surface` baseline；`auto-sizer` / `scroll` 已有第 46 批 current sample，首访 `body=1` 0、demo registry 0、failed 0。
+- 若下一批处理 production chunk / CSS，必须用 production build / preview HAR 证明 docs/store/dashboard/landing chunk 边界，不用 dev-only HAR 替代生产结论。
+- 每批仍保持小切片：Playwright screenshot/HAR/Markdown/JSON、focused 验证或等价静态检查、`git diff --check`、只提交 Nexus 相关文件；`output/playwright/` 继续 ignored，不纳入 git。
+- CoreApp / AI dirty files 与本 goal 无关，继续不 stage、不 revert、不混入 Nexus 批次。
+
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
