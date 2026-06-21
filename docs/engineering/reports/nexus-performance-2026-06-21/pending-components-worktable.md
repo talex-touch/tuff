@@ -23,6 +23,7 @@
 - `output/playwright/nexus-docs-metadata-fastpath-b28-after-3214-2026-06-21.json`
 - `output/playwright/nexus-docs-assistant-context-b30-after-3200-2026-06-21.json`
 - `output/playwright/nexus-docs-demo-api-b38-after-3219-2026-06-21.json`
+- `output/playwright/nexus-docs-strict-pending-verified-b39-sample-3220-2026-06-21.json`
 
 `Requests` is shown as `requests/scripts/styles/failed`. Rows without current Playwright data are marked `not sampled`; they must get a baseline before code changes.
 
@@ -40,12 +41,12 @@
 | 8 | `text-transformer` | migrated | false | 27 KB (13/13) | 10 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
 | 9 | `scroll` | migrated | false | 22 KB (11/10) | 12 | 0 | yes | 419/418/33/0 (b22 after) | P1 demo visible-only plus API table visible-only. |
 | 10 | `base-surface` | migrated | false | 21 KB (11/10) | 10 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
-| 11 | `base-anchor` | migrated | true | 20 KB (10/10) | 12 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
+| 11 | `base-anchor` | migrated | true | 20 KB (10/10) | 12 | 0 | yes | 436/415/16/0 (b39 sample) | P1 b36/b38 rules cover this strict pending verified page; initial shell true, one demo shell, props nodes 0. Production chunk check remains. |
 | 12 | `foundations` | migrated | false | 19 KB (10/10) | 0 | 0 | no | not sampled | P2 keep in pending queue; sample before code change. |
 | 13 | `group-block` | migrated | false | 18 KB (10/9) | 14 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
-| 14 | `select` | migrated | true | 18 KB (9/9) | 12 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
+| 14 | `select` | migrated | true | 18 KB (9/9) | 12 | 0 | yes | 439/418/16/0 (b39 sample) | P1 b36/b38 rules cover this strict pending verified page; initial shell true, one demo shell, props nodes 0. Production chunk check remains. |
 | 15 | `container` | migrated | false | 18 KB (9/9) | 2 | 0 | yes | not sampled | P1 API/props table visible-only boundary. |
-| 16 | `radio` | migrated | true | 17 KB (9/8) | 12 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
+| 16 | `radio` | migrated | true | 17 KB (9/8) | 12 | 0 | yes | 438/417/16/0 (b39 sample) | P1 b36/b38 rules cover this strict pending verified page; initial shell true, one demo shell, props nodes 0. Production chunk check remains. |
 | 17 | `icon` | migrated | false | 15 KB (8/8) | 2 | 0 | yes | not sampled | P1 API/props table visible-only boundary. |
 | 18 | `button` | migrated | true | 15 KB (7/8) | 0 | 0 | yes | not sampled | P1 API/props table visible-only boundary. |
 | 19 | `flat-radio` | migrated | false | 14 KB (7/7) | 14 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
@@ -64,12 +65,12 @@
 ## Next Batch Candidates
 
 1. `text-transformer` or `base-surface`: first unsampled P1 baseline batch. Run Playwright screenshot/HAR before any code change.
-2. `base-anchor` / `select` / `radio`: strict pending verified sampling to confirm the b36 rule covers more than `glass-surface`.
-3. `fusion` / `card`: production chunk and route-switch timing check after b38; dev initial API/demo eager path is already clean.
-4. dev SSR TTFB second pass: distinguish Nuxt transform, content query/frontmatter fast path, i18n init, store init, and middleware.
+2. `fusion` / `card`: production chunk and route-switch timing check after b38; dev initial API/demo eager path is already clean.
+3. dev SSR TTFB second pass: distinguish Nuxt transform, content query/frontmatter fast path, i18n init, store init, and middleware.
+4. `dialog` / `picker` / `switch`: next strict pending verified sample if more coverage is needed.
 
 ## Notes
 
 - `glass-surface`, `index`, `base-anchor`, `select`, `radio`, `button`, `dialog`, `picker`, `switch`, `date-picker`, and `input` are still pending by the strict rule because `syncStatus` remains `migrated`, even when `verified: true`.
-- Existing evidence proves `fusion`, `card`, `avatar-variants`, `glass-surface`, `gradual-blur`, `auto-sizer`, and `scroll` have clean failed request counts in the sampled runs. It does not prove unsampled pages are fast.
+- Existing evidence proves `fusion`, `card`, `avatar-variants`, `glass-surface`, `gradual-blur`, `auto-sizer`, `scroll`, `base-anchor`, `select`, and `radio` have clean failed request counts in the sampled runs. It does not prove unsampled pages are fast.
 - This file is a planning/report artifact only. It does not add a reusable audit script or broaden the test harness.
