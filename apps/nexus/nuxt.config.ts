@@ -360,7 +360,6 @@ export default defineNuxtConfig({
         'echarts/charts',
         'echarts/components',
         'echarts/renderers',
-        'vue-sonner',
         'dompurify',
         '@floating-ui/vue',
         'v-wave',

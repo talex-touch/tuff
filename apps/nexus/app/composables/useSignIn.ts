@@ -1,6 +1,5 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
-import { toast } from 'vue-sonner'
 import {
   buildOauthCallbackUrl,
   clearOauthContext,
@@ -86,6 +85,7 @@ async function waitForLinkedProvider(provider: OauthProvider, maxAttempts = 6, i
 
 export function useSignIn() {
   const { t } = useI18n()
+  const toast = useToast()
   const route = useRoute()
   const router = useRouter()
   const { signIn, signOut, status, getSession } = useAuth()

@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 43 批 public docs auth/profile graph 小切片已完成代码、focused tests、scoped ESLint、Playwright CLI screenshot/HAR/Markdown/JSON 报告与文档回填；本批把公开 docs 首访从 `useAuthUser` / `useCurrentUserApi` 静态依赖图里拆出，docs 页只读 shared `auth-user` admin state，app root 仅在 authenticated protected route 后动态 import `fetchCurrentUserProfile`，locale orchestrator 也只在 profile sync / locale patch 意图后动态加载 current-user API。第 43 批 evidence：`/en/docs/dev/components/tabs` status 200、requests 463、scripts 404、styles 76、auth graph requests 0、failed 0；fresh-server tabs cold TTFB 3081.9ms，hot warm 24.1/21.5ms，TTFB 仍以 Nuxt dev 首次 transform 噪声为主。本批发现 `vue-sonner` CSS 仍在 docs 首访 HAR 出现 2 条，已作为后续独立 CSS/import-boundary 项进入任务树，不混入当前批。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部从本文任务树领取，不再从聊天上下文临时恢复范围。
+> 当前状态：Nexus 第 44 批 legacy sonner boundary 小切片已完成代码、focused tests、scoped ESLint、Playwright CLI screenshot/HAR/Markdown/JSON 报告与文档回填；本批把 sign-in / admin bootstrap 的旧 `vue-sonner` toast 迁到项目已有 `useToast`，移除 sign-in 页 `vue-sonner/style.css` 与 `Toaster`，并从 Vite dev pre-bundle 移除 `vue-sonner`。第 44 批 evidence：`/en/docs/dev/components/tabs` status 200、requests 425、scripts 268、styles 39、sonner requests 0、auth graph requests 0、failed 0；cold TTFB 2803.9ms，warm 27.7ms。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部从本文任务树领取，不再从聊天上下文临时恢复范围。
 
 ## Goal 原句
 
@@ -34,38 +34,40 @@
 - 第 41 批 baseline dev server：`http://127.0.0.1:3222`；after dev server：`http://127.0.0.1:3223`。
 - 第 42 批 baseline dev server：`http://127.0.0.1:3224`；after dev server：`http://127.0.0.1:3225`。
 - 第 43 批本地验证 dev server：`http://127.0.0.1:3226`。
+- 第 44 批本地验证 dev server：`http://127.0.0.1:3227`。
 
-## 当前批收尾冻结（第 43 批 public docs auth/profile graph）
+## 当前批收尾冻结（第 44 批 legacy sonner boundary）
 
-本批目的：按用户最新要求快速完成当前任务收尾；代码侧只收 `public docs auth/profile graph` 小切片，文档侧把后续 docs 文档内容、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、production chunk / payload / CSS 复核、`vue-sonner` CSS 首访复核和首页 warning 全部固定到本文，不继续混入更多 pending 逐页拆分。
+本批目的：按用户最新要求快速完成当前任务收尾；代码侧只收 `legacy sonner boundary` 小切片，文档侧把后续 docs 文档内容、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、production chunk / payload / CSS 复核和首页 warning 全部固定到本文，不继续混入更多 pending 逐页拆分。
 
 后续领取入口固定如下：
 
 - P0-1 `docs 文档内容加载继续拆分`：固定 docs template 静态壳、审计 `body=0` payload 字段、复核 components index/detail 共用模板、继续拆可见区 demo / API table lazy boundary。
 - P0-2 `AI review / aireview 未审批组件优化`：以 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md` 为工作表，继续对 76 个 pending 组件分组为可静态化、可懒加载、应移出首屏、应合并模板、应删除或后置。
-- P0-3 `dev SSR TTFB 深化`：覆盖 `/`、`/store`、`/en/docs/dev/components/tabs`、`/sign-in`、未登录 dashboard redirect，区分 Nuxt transform/cache、Content query/frontmatter fast path、i18n init、store memory init、auth/middleware 与 route payload；第 43 批后 public docs auth/profile graph 已从 docs 首访拆出，下一刀继续看 share/engagement/comment/right rail/layout graph 与 Nuxt dev transform。
+- P0-3 `dev SSR TTFB 深化`：覆盖 `/`、`/store`、`/en/docs/dev/components/tabs`、`/sign-in`、未登录 dashboard redirect，区分 Nuxt transform/cache、Content query/frontmatter fast path、i18n init、store memory init、auth/middleware 与 route payload；第 44 批后 public docs auth/profile graph 与 legacy sonner CSS 均已从 docs 首访拆出，下一刀继续看 share/engagement/comment/right rail/layout graph 与 Nuxt dev transform。
 - P0-4 `全站 route matrix 二轮`：补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` Playwright screenshot/HAR。
-- P1-1 `production chunk / payload / CSS 复核`：检查 docs/store/dashboard/landing 是否互相污染；若存在，优先修 import boundary、layout boundary 或 component registration；第 43 批另记 `vue-sonner` CSS 仍在 docs 首访 HAR 出现 2 条，需要单独查全局 CSS/import boundary。
+- P1-1 `production chunk / payload / CSS 复核`：检查 docs/store/dashboard/landing 是否互相污染；若存在，优先修 import boundary、layout boundary 或 component registration；第 44 批已将 `vue-sonner` 从 docs 首访 HAR 清零，后续继续查其它 CSS/chunk 污染。
 - P1-2 `首页剩余 warning`：单独定位 WebGL ReadPixels、async lifecycle `onBeforeUnmount`、`Invalid scope`，不混入 docs 文档批次。
 
 当前批验证边界：
 
-- 只允许改动 `apps/nexus/app/app.vue`、`apps/nexus/app/composables/useLocaleOrchestrator.ts`、`apps/nexus/app/pages/docs/[...slug].vue`、`apps/nexus/app/pages/docs/docs-page-performance.test.ts`、`docs/plan-prd/TODO-nexus.md`。
+- 只允许改动 `apps/nexus/app/pages/sign-in/index.vue`、`apps/nexus/app/composables/useSignIn.ts`、`apps/nexus/app/pages/auth/admin-bootstrap.vue`、`apps/nexus/nuxt.config.ts`、`apps/nexus/app/components/content/demo-client-boundary.test.ts`、`docs/plan-prd/TODO-nexus.md`。
 - `output/playwright/` 继续只作为 ignored evidence 引用目录，不纳入提交。
-- Nexus 相关代码文件仅保留第 43 批 public docs auth/profile graph 改动；CoreApp / AI dirty files 属于其它任务，不混入本批。
+- Nexus 相关代码文件仅保留第 44 批 legacy sonner boundary 改动；CoreApp / AI dirty files 属于其它任务，不混入本批。
 - 当前 goal 原句、触发页、已完成批次、子任务百分比、Playwright/HAR/Markdown/JSON 证据路径、后续任务树均已在本文保留。
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 99%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry、pending 文档后半段正文、code copy header、toast feedback、公开 docs auth/profile graph 从首屏重型路径拆出。
-- 整体 goal 估算：约 94%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path、docs Assistant 上下文按需构建，`fusion` / `card` pending 长文档后半段 client deferred render，`avatar-variants` 单章节大 demo fallback split，`glass-surface` / `base-anchor` / `select` / `radio` 这类 `migrated + verified` strict pending 页面 deferred body 覆盖，`card` 首屏第二个 demo shell 后置，docs code-block copy header 原生 DOM 化，docs toast feedback 用户意图后加载，以及 public docs auth/profile graph 按 protected route 动态加载；后续仍需系统性覆盖剩余 AI review / aireview 未审批组件、dev SSR TTFB 深化、生产构建 chunk/CSS 复核与文档模板静态化。
-- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `vue-sonner` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建、pending 长文档后半段渲染延迟到用户意图或静置后、docs code header 原生 DOM 客户端增强、docs toast feedback 动态加载、公开 docs auth/profile graph 延迟到 authenticated protected route。
-- 当前第 43 批只做 public docs auth/profile graph 小切片和 dev SSR TTFB 第四刀的一部分，不继续混入首页 WebGL warning 修复、production chunk/CSS 复核或 pending 逐页 demo/API 二刀。后续全部进入 TODO 队列：重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB 继续深化、`vue-sonner` CSS 首访来源复核、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
+- 本轮 tabs/card 文档链路：约 99%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry、pending 文档后半段正文、code copy header、toast feedback、公开 docs auth/profile graph、legacy sonner CSS 从首屏重型路径拆出。
+- 整体 goal 估算：约 95%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path、docs Assistant 上下文按需构建，`fusion` / `card` pending 长文档后半段 client deferred render，`avatar-variants` 单章节大 demo fallback split，`glass-surface` / `base-anchor` / `select` / `radio` 这类 `migrated + verified` strict pending 页面 deferred body 覆盖，`card` 首屏第二个 demo shell 后置，docs code-block copy header 原生 DOM 化，docs toast feedback 用户意图后加载，public docs auth/profile graph 按 protected route 动态加载，以及 legacy sonner CSS 从 docs 首访清零；后续仍需系统性覆盖剩余 AI review / aireview 未审批组件、dev SSR TTFB 深化、生产构建 chunk/CSS 复核与文档模板静态化。
+- 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建、pending 长文档后半段渲染延迟到用户意图或静置后、docs code header 原生 DOM 客户端增强、docs toast feedback 动态加载、公开 docs auth/profile graph 延迟到 authenticated protected route、legacy `vue-sonner` 迁移到自研 toast host。
+- 当前第 44 批只做 legacy sonner boundary 小切片和 CSS/import boundary 清理，不继续混入首页 WebGL warning 修复、production chunk/CSS 复核或 pending 逐页 demo/API 二刀。后续全部进入 TODO 队列：重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB 继续深化、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
+| 当前第 44 批 legacy sonner boundary | 100% | sign-in / admin bootstrap 从 `vue-sonner` 迁到自研 `useToast`，移除 sign-in `vue-sonner/style.css` / `Toaster`，并从 Vite dev pre-bundle 移除 `vue-sonner`；tabs after status 200、requests 425、scripts 268、styles 39、sonnerRequests 0、authGraphRequests 0、failed 0。 |
 | 当前第 43 批 public docs auth/profile graph | 100% | docs 页不再调用 `useAuthUser({ fetchOnAuth: false, server: false })`，admin 状态改读 shared `auth-user`；app root 仅在 authenticated protected route 后动态 import `fetchCurrentUserProfile`；locale orchestrator 也改为 profile sync / patch 时动态 import current-user API。tabs after status 200、requests 463、authGraphRequests 0、failed 0；`vue-sonner` CSS 仍出现 2 条，已转后续独立项。 |
 | 当前第 42 批 docs toast intent | 100% | 移除 docs 页 setup 顶层 `useToast()`，copy/share 后动态 import；tabs after status 200、requests 461、failed 0、toastRequests 0，4 个 warning 为既有 WebGL ReadPixels；`context-menu` code copy 点击后 `toastRequestsAfterClick 1`、toast visible true、7 个 code header/copy button 正常。 |
 | 当前第 41 批 dev SSR TTFB 二轮 | 100% | baseline 3222 / after 3223 fresh-server 对比：tabs cold TTFB 4128ms -> 3083ms（25.3%），home 1145ms -> 903ms，store 860ms -> 666ms，sign-in 323ms -> 244ms，dashboard 145ms -> 106ms；Playwright after 覆盖 tabs/home/store/sign-in/dashboard，tabs failed/warnings/errors 0；`context-menu` code header smoke 确认 7 个 code header / copy button 正常生成。 |
@@ -88,10 +90,10 @@
 | 当前第 24 批 component docs scoped navigation | 100% | `/en/docs/dev/components/tabs` SSR async-data key 从 `docs-navigation:en` 改为 `docs-navigation:en:components`；navigation API `all -> components` wire bytes 49291 -> 16786，节点 244 -> 110；tabs HTML 107061 -> 86611 bytes；Playwright after failed 0。 |
 | 当前第 23 批 TODO 收尾 | 100% | 本批只更新 `docs/plan-prd/TODO-nexus.md`，把当前 goal 原句、用户追加收尾要求、已完成批次、后续 docs / aireview / 矩阵 / chunk / TTFB 子任务和验收口径集中到本文，作为下一轮唯一入口。 |
 | 当前第 22 批 sidebar full-body prefetch cancel | 100% | 已完成代码、focused test、scoped ESLint、`git diff --check`、production build sanity、Playwright CLI baseline/after screenshot/HAR/Markdown 报告；`scroll` 1.8s 首访窗口内 `body=1` 从 1 -> 0，demo registry/client renderer 仍为 0。 |
-| `/en/docs/dev/components/tabs` 触发链路 | 99% | 页面 200；第 24 批后 tabs SSR payload 不再携带 guide/api/architecture 全量导航分支；第 41 批将 tabs fresh-server cold TTFB 4128ms -> 3083ms，warm 24-31ms；第 43 批确认 auth/profile graph request 为 0；剩余是 Nuxt/runtime、`node_modules`、CSS/import boundary 与 docs demo 模块碎片继续拆。 |
-| docs 内容加载拆分 | 97% | `body=0` / idle `body=1` 已落地；第 21 批把 dev SSR 组件文档首访切到 metadata-first，production SSR 保持 full body；第 22 / 26 批把 sidebar 与 pager full-body 预取改为可取消；第 24 批把 component docs navigation SSR async-data 缩到 components 分支；第 28 批把 component docs dev `body=0` metadata 请求切到 frontmatter fast path；第 30 批把 Assistant context 抽文本后置到用户意图；第 33 批把 pending 长文档后半段渲染后置到用户意图或静置后；第 34 批补上单章节大 demo fallback split；第 36 批补上 strict pending verified 页面；第 38 批补上首段多 demo 的 second-boundary split；第 41 批把 code-block copy header 从 SSR Vue render graph 拆成客户端原生 DOM 增强；第 42 批把 toast feedback 移到 copy/share 用户意图后；第 43 批把 public docs auth/profile graph 移出首访；模板静态 shell、CSS/import boundary 与更多页面复核仍待做。 |
+| `/en/docs/dev/components/tabs` 触发链路 | 99% | 页面 200；第 24 批后 tabs SSR payload 不再携带 guide/api/architecture 全量导航分支；第 41 批将 tabs fresh-server cold TTFB 4128ms -> 3083ms，warm 24-31ms；第 43 批确认 auth/profile graph request 为 0；第 44 批确认 sonner requests 为 0；剩余是 Nuxt/runtime、`node_modules`、docs demo 模块碎片和 production chunk/CSS 复核。 |
+| docs 内容加载拆分 | 97% | `body=0` / idle `body=1` 已落地；第 21 批把 dev SSR 组件文档首访切到 metadata-first，production SSR 保持 full body；第 22 / 26 批把 sidebar 与 pager full-body 预取改为可取消；第 24 批把 component docs navigation SSR async-data 缩到 components 分支；第 28 批把 component docs dev `body=0` metadata 请求切到 frontmatter fast path；第 30 批把 Assistant context 抽文本后置到用户意图；第 33 批把 pending 长文档后半段渲染后置到用户意图或静置后；第 34 批补上单章节大 demo fallback split；第 36 批补上 strict pending verified 页面；第 38 批补上首段多 demo 的 second-boundary split；第 41 批把 code-block copy header 从 SSR Vue render graph 拆成客户端原生 DOM 增强；第 42 批把 toast feedback 移到 copy/share 用户意图后；第 43 批把 public docs auth/profile graph 移出首访；第 44 批把 legacy sonner CSS 移出首访；模板静态 shell、production CSS/chunk 与更多页面复核仍待做。 |
 | AI review / aireview 未审批组件 | 61% | 已完成 pending 口径、高风险文档清单、正式 Top 30 工作表、fusion/card/avatar-variants/tabs Playwright baseline、gradual-blur/auto-sizer/scroll baseline、glass-surface/base-anchor/select/radio baseline/after、AI notice eager mount 修复、无代码 pending 页 code block renderer eager load 修复、pending 长文档 MDC Prose wrapper / global Prose registry / PWA dev client 削减、dev SSR metadata-first、sidebar / pager full-body 预取可取消化、component docs metadata fast path、Assistant context 按需构建、fusion/card section-level deferred render、avatar-variants 单章节大 demo deferred render、strict pending verified 页面 deferred render、card 首段第二个 demo 后置；剩余 pending 页面逐页 demo/模板/section split 待做。 |
-| 全站页面切换矩阵 | 40% | 第 18 批已覆盖 `/`、`/en/docs`、tabs、card、`/store`、dashboard redirect、Provider Registry redirect、Data Governance redirect、home -> store；第 19 批补了 home/store/sign-in/dashboard-overview/docs-tabs；第 20 批补了 zh landing home；第 21 批补了 fusion/card/avatar-variants/tabs baseline/after；第 22 批补了 gradual-blur/auto-sizer/scroll baseline/after screenshot/HAR；第 41 批补了 dev SSR TTFB 二轮 `/`、`/store`、tabs、`/sign-in`、未登录 dashboard redirect 的 curl 与 Playwright after；第 43 批补了 tabs auth/profile graph screenshot/HAR。下一步要做 authenticated dashboard、移动端和 production preview 口径。 |
+| 全站页面切换矩阵 | 41% | 第 18 批已覆盖 `/`、`/en/docs`、tabs、card、`/store`、dashboard redirect、Provider Registry redirect、Data Governance redirect、home -> store；第 19 批补了 home/store/sign-in/dashboard-overview/docs-tabs；第 20 批补了 zh landing home；第 21 批补了 fusion/card/avatar-variants/tabs baseline/after；第 22 批补了 gradual-blur/auto-sizer/scroll baseline/after screenshot/HAR；第 41 批补了 dev SSR TTFB 二轮 `/`、`/store`、tabs、`/sign-in`、未登录 dashboard redirect 的 curl 与 Playwright after；第 43 批补了 tabs auth/profile graph screenshot/HAR；第 44 批补了 tabs sonner boundary screenshot/HAR。下一步要做 authenticated dashboard、移动端和 production preview 口径。 |
 | 生产构建 chunk 复核 | 25% | 第 10/11/12/13/14/15/16/17/18/19/20/21/22/24/26/28/30 批均已通过 production build sanity；第 33 批为 dev/client-only section split，未重跑 production build；完整 chunk/payload/CSS 深查待做。 |
 | TODO 与交接文档 | 100% | 当前 goal 原句、批次、证据路径、后续子任务已沉淀在本文。 |
 
@@ -142,6 +144,7 @@
 | 41 | `3d2a0d549` | `perf(nexus): simplify docs code headers` | 已完成 |
 | 42 | `6475b8e23` | `perf(nexus): load docs toast on intent` | 已完成 |
 | 43 | `7446f9e4b` | `perf(nexus): defer public docs auth profile graph` | 已完成 |
+| 44 | pending | `perf(nexus): remove legacy sonner from docs graph` | 当前批收口中 |
 
 ## 本轮收尾结论
 
@@ -178,10 +181,11 @@
 - 第 38 批为 pending demo second-boundary split：Playwright-core baseline 证明 `fusion` / `card` 的 API/Props 表和 demo registry 不在首屏 eager 路径；本批把 pending split 点收紧到第二个 demo/API boundary 与第二个 `h2` 的较早者，`card` initial demo shells 2 -> 1，`fusion` 保持 1，`tabs` 不启用 deferred shell。
 - 第 39 批为 strict pending verified sample：抽样 `base-anchor` / `select` / `radio`，确认这些 `migrated + verified` 页面均 initial shell true、initial demos 1、props nodes 0、after deferred true；本批没有发现需要新增代码的回退点，只回填证据和工作表。
 - 第 43 批为 public docs auth/profile graph：公开 docs 页不再直接调用 `useAuthUser`，app root 和 locale orchestrator 只在 protected/authenticated profile 场景动态 import current-user API；tabs Playwright after 记录 auth graph requests 0。
+- 第 44 批为 legacy sonner boundary：sign-in / admin bootstrap 不再直接 import `vue-sonner`，统一使用自研 `useToast` host；tabs Playwright after 记录 sonner requests 0。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵二轮都按下方 TODO 分批处理。
-- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，第 16 批将 MDC Prose registry 请求归零，第 17 批将普通 dev 的 PWA client plugin 请求归零，第 18 批将首页 Vue attrs / aurora hydration warning 清理并预打包 `@vueuse/core`，第 19 批清理 `marked` / `echarts/*` / `vue-sonner` runtime discovery，第 20 批清理 zh landing route-local warning，第 21 批降低 dev SSR 组件文档首访正文体量，第 22 批收紧 sidebar full-body 预取，第 43 批移除 public docs auth/profile graph；但 Nuxt runtime、`node_modules`、`vue-sonner` CSS 首访来源、docs demo 模块碎片、移动端/production preview 和首页剩余 warning 仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
+- 仍需继续追的已知剩余瓶颈：tabs 首屏 script request 仍偏高；第 10 批已将 Vue Router / Pinia devtools bridge 请求从 18 降到 3，第 16 批将 MDC Prose registry 请求归零，第 17 批将普通 dev 的 PWA client plugin 请求归零，第 18 批将首页 Vue attrs / aurora hydration warning 清理并预打包 `@vueuse/core`，第 19 批清理 `marked` / `echarts/*` runtime discovery，第 20 批清理 zh landing route-local warning，第 21 批降低 dev SSR 组件文档首访正文体量，第 22 批收紧 sidebar full-body 预取，第 43 批移除 public docs auth/profile graph，第 44 批移除 legacy sonner CSS 首访；但 Nuxt runtime、`node_modules`、docs demo 模块碎片、移动端/production preview 和首页剩余 warning 仍待继续拆。下一批必须先用 Playwright / HAR 验证有效收益，再决定是否落代码。
 
 ## 第 28 批收口记录
 
@@ -684,6 +688,55 @@ pending 排序快照：
 2. P0：`vue-sonner` CSS 首访来源复核，确认是否来自 ToastContainer、global CSS、pre-bundle side effect 或 Vite dev CSS discovery；不要和 auth/profile graph 批次混做。
 3. P0：route matrix 二轮，补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` screenshot/HAR。
 4. P0：pending / aireview 工作表继续分组，把剩余 76 个 pending 组件拆为可静态化、可懒加载、应移出首屏、应合并模板、应删除或后置。
+
+## 第 44 批收口记录
+
+目标：领取第 43 批留下的 `vue-sonner` CSS 首访复核小切片。第 43 批 HAR 证明 public docs auth/profile graph 已清零，但 tabs 首访仍有 2 条 `vue-sonner` CSS；本批只收旧 sonner import boundary，避免继续把 sign-in/auth bootstrap 的通知库扫进 docs first visit。
+
+改动范围：
+
+- `apps/nexus/app/pages/sign-in/index.vue`
+- `apps/nexus/app/composables/useSignIn.ts`
+- `apps/nexus/app/pages/auth/admin-bootstrap.vue`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/components/content/demo-client-boundary.test.ts`
+- `docs/plan-prd/TODO-nexus.md`
+
+实现口径：
+
+- sign-in 页面移除 `import 'vue-sonner/style.css'`、`Toaster` 和对应模板节点。
+- `useSignIn()` 改用项目已有 `useToast()`，保留 `notify(error/success/warning, message)` 调用语义。
+- admin bootstrap 页面改用 `useToast()`，保留 blocked / required / success / failed toast 语义。
+- `vite.optimizeDeps.include` 移除 `vue-sonner`，避免 legacy route-local toast 依赖继续进入 docs dev 首访发现路径。
+- focused regression 从“sonner style route-local”升级为“legacy sonner out of first-paint app modules”，同时不新增宽泛审计脚手架。
+- 不改变自研 `useToast` / `ToastHost` 合同，不改 dashboard/store 既有 toast 调用，不混入首页 warning、production chunk 复核或 pending 逐页 demo/API 二刀。
+
+验证证据：
+
+- Search：`rg -n "from 'vue-sonner'|vue-sonner/style.css|<Toaster|vue-sonner" "apps/nexus/app" "apps/nexus/nuxt.config.ts"` 只剩 regression 断言，不再有 app runtime import。
+- Focused Vitest：`pnpm -C "apps/nexus" exec vitest run "app/components/content/demo-client-boundary.test.ts" "app/pages/docs/docs-page-performance.test.ts"`，2 files / 47 tests passed。
+- Scoped ESLint：`pnpm -C "apps/nexus" exec eslint --cache --max-warnings=0 --no-warn-ignored "app/pages/sign-in/index.vue" "app/composables/useSignIn.ts" "app/pages/auth/admin-bootstrap.vue" "nuxt.config.ts" "app/components/content/demo-client-boundary.test.ts"` 通过。
+- Whitespace：`git diff --check -- "apps/nexus/app/pages/sign-in/index.vue" "apps/nexus/app/composables/useSignIn.ts" "apps/nexus/app/pages/auth/admin-bootstrap.vue" "apps/nexus/nuxt.config.ts" "apps/nexus/app/components/content/demo-client-boundary.test.ts" "docs/plan-prd/TODO-nexus.md"` 通过。
+- Curl after（3227）：
+  - `/en/docs/dev/components/tabs` cold TTFB 2803.9ms，warm TTFB 27.7ms，status 200。
+- Playwright CLI after：
+  - 报告：`output/playwright/nexus-docs-sonner-boundary-b44-after-3227-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-sonner-boundary-b44-after-3227-2026-06-21.json`
+  - 截图：`output/playwright/nexus-docs-sonner-boundary-b44-after-3227-2026-06-21-tabs.png`
+  - HAR：`output/playwright/nexus-docs-sonner-boundary-b44-after-3227-2026-06-21-tabs.har`
+  - tabs：status 200，requests 425，scripts 268，styles 39，sonnerRequestCount 0，authGraphRequestCount 0，failedRequestCount 0。
+
+结论：
+
+- 第 43 批遗留的 docs 首访 `vue-sonner` CSS 已清零；tabs request count 463 -> 425，styles 76 -> 39。
+- 本批是 CSS/import boundary 收口，不代表生产 chunk/CSS 全量复核完成；production preview 和 chunk 污染仍按任务树独立领取。
+- 第 44 批不继续处理首页 WebGL warning、production chunk 复核、share/engagement/comment/right rail 或 pending 组件逐页 demo/API 二刀；这些均从后续任务树领取。
+
+下一批建议：
+
+1. P0：dev SSR TTFB 第五刀，继续拆 docs page/layout 的 share、engagement、comment、right rail 非首屏 graph，并用 fresh-server curl + Playwright HAR 同步验证。
+2. P0：route matrix 二轮，补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` screenshot/HAR。
+3. P1：production chunk / payload / CSS 复核，确认 docs/store/dashboard/landing 是否仍互相污染。
 
 ## 第 38 批收口记录
 
@@ -1685,6 +1738,7 @@ pending 排序快照：
 - [x] 当前第 41 批只做 docs code header SSR graph 小切片与 dev SSR TTFB 二轮，不继续混入首页 warning、production chunk 复核或 pending 逐页 demo/API 二刀。
 - [x] 当前第 42 批只做 docs toast intent 小切片与 dev SSR TTFB 第三刀，不继续混入首页 WebGL warning、production chunk 复核或 pending 逐页 demo/API 二刀。
 - [x] 当前第 43 批只做 public docs auth/profile graph 小切片与 dev SSR TTFB 第四刀的一部分，不继续混入 `vue-sonner` CSS 首访、首页 WebGL warning、production chunk 复核或 pending 逐页 demo/API 二刀。
+- [x] 当前第 44 批只做 legacy sonner boundary 小切片，不继续混入首页 WebGL warning、production chunk 复核、share/engagement/comment/right rail 或 pending 逐页 demo/API 二刀。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [x] 第 36 批开始前已选定 `glass-surface` / `gradual-blur` docs pending 优化，并先跑 Playwright / HAR baseline 后再落代码。
@@ -1717,6 +1771,7 @@ pending 排序快照：
 - [x] 将 docs code block copy header 从 Vue runtime render graph 拆出：第 41 批后 `renderCodeHeader()` 使用客户端原生 DOM，fresh-server tabs cold TTFB 4128ms -> 3083ms，真实 code 页面 `context-menu` 7 个 copy header 正常生成。
 - [x] 将 docs toast feedback 从 setup 顶层拆到 copy/share 用户意图后：第 42 批后 tabs 首访 `toastRequests 0`，`context-menu` code copy 点击后 `toastRequestsAfterClick 1` 且 toast visible true。
 - [x] 将 public docs auth/profile graph 从首访路径拆出：第 43 批后 docs 页只读 shared `auth-user`，app root / locale orchestrator 对 current-user API 使用动态 import；tabs Playwright after `authGraphRequestCount 0`。
+- [x] 将 legacy sonner CSS 从 docs 首访路径拆出：第 44 批后 sign-in / admin bootstrap 使用自研 `useToast`，tabs Playwright after `sonnerRequestCount 0`。
 - [x] 对 tabs/card 等组件页建立最小 Playwright 性能基线：首屏截图、HAR、request count、failed count、DOMContentLoaded/load、client-side route switch timing。
 - [x] 为 docs 内容加载新增 focused tests，钉住不会回退到全量 MDC parse、同步 full-body prefetch 或全局 demo registry eager load。
 
@@ -1760,7 +1815,7 @@ pending 排序快照：
 - [x] 已完成候选 E：普通 dev PWA module gate。第 17 批已验证 docs 首屏 `pwaClient 0`、warning 0，production PWA SW 仍生成。
 - [ ] 下一批候选 F：route matrix 首轮扩展。原因：当前证据集中在 docs/components，仍需把 `/`、`/store`、dashboard、Provider Registry、Data Governance 纳入同一性能口径。
 - [x] 已完成候选 F 首轮：第 18 批已覆盖 `/`、`/en/docs`、tabs、card、`/store`、dashboard redirect、Provider Registry redirect、Data Governance redirect、home -> store，并输出 screenshot / HAR / JSON / Markdown。
-- [x] 已完成候选 G：dev runtime dependency reload。第 19 批已将 `marked`、`echarts/*`、`vue-sonner` 纳入 Vite dev pre-bundle，3211 dev server 路由访问后未再出现这些依赖的 runtime discovery / reload。
+- [x] 已完成候选 G：dev runtime dependency reload。第 19 批已将 `marked`、`echarts/*`、`vue-sonner` 纳入 Vite dev pre-bundle，3211 dev server 路由访问后未再出现这些依赖的 runtime discovery / reload；第 44 批迁走 legacy sonner 后已移除 `vue-sonner` pre-bundle。
 - [ ] 下一批候选 H：首页剩余 warning。原因：第 18 批已清理 Vue attrs / hydration mismatch，剩余 warning 主要是 WebGL ReadPixels、async lifecycle `onBeforeUnmount`、`Invalid scope`，需要单独定位源头，避免把视觉 canvas 问题混入 docs 批次。
 - [x] 已完成候选 I：zh locale message missing warning。第 20 批确认根因是 locale 切换后未补当前 route 的目标语言 route-local chunk，并通过共享 chunk resolver + locale switch preload 修复；3212 dev server `/` 与 `/new` zh 首访不再出现 `landing.*` missing key warning。
 - [x] 已完成候选 J 第一刀：dev SSR component docs metadata-first。第 21 批确认 pending 组件文档 dev SSR 首访改请求 `body=0`，fusion HTML 185053 -> 109102 bytes，curl TTFB 2850ms -> 241ms；production SSR 仍请求 `body=1`。
@@ -1770,8 +1825,8 @@ pending 排序快照：
 - [x] 已完成候选 J 第五刀：dev SSR TTFB 二轮 code header graph。第 41 批确认 docs API warm path 毫秒级，慢点集中在 fresh-server SSR import / transform graph；移除 Vue runtime code-header render 后 tabs cold 4128ms -> 3083ms。
 - [x] 已完成候选 J 第六刀：dev SSR TTFB 第三刀 toast intent。第 42 批把 docs setup 顶层 `useToast()` 改为 copy/share 后动态 import；tabs cold 2919.6ms -> 2911.8ms 为噪声级小幅变化，但 tabs 首访 `toastRequests 0`，真实 copy 后才加载 toast。
 - [x] 已完成候选 J 第七刀：dev SSR TTFB 第四刀 public docs auth/profile graph。第 43 批把 docs admin state 改读 shared state，app root 和 locale orchestrator 动态加载 current-user API；tabs after auth graph requests 为 0。
-- [ ] 下一批候选 J：dev SSR TTFB 第五刀。原因：第 43 批后 tabs fresh-server cold 仍约 3.08s，需要继续拆 docs page/layout 的 share、engagement、comment、right rail 非首屏 graph 与 Nuxt dev transform 噪声。
-- [ ] 下一批候选 K：`vue-sonner` CSS 首访来源复核。原因：第 43 批 tabs HAR 仍出现 2 条 `vue-sonner` CSS 请求，需独立判断来自 ToastContainer、global CSS、pre-bundle side effect 或 Vite dev CSS discovery。
+- [x] 已完成候选 K：legacy `vue-sonner` CSS 首访来源复核。第 44 批确认来源为 sign-in / admin bootstrap 旧 sonner import boundary，迁移到自研 `useToast` 后 tabs sonner requests 0。
+- [ ] 下一批候选 J：dev SSR TTFB 第五刀。原因：第 44 批后 tabs fresh-server cold 仍约 2.80s，需要继续拆 docs page/layout 的 share、engagement、comment、right rail 非首屏 graph 与 Nuxt dev transform 噪声。
 
 ### P0：当前 goal 后续验收清单
 
@@ -1808,6 +1863,7 @@ pending 排序快照：
 - [x] 第 41 批结束已更新本文：docs code header 原生 DOM 化、fresh-server curl baseline/after、Playwright-core screenshot/HAR/Markdown/JSON、context-menu code header smoke、focused test / ESLint / whitespace 验证和下一批候选。
 - [x] 第 42 批结束已更新本文：docs toast feedback 动态 import、fresh-server curl baseline/after、Playwright-core screenshot/HAR/Markdown/JSON、context-menu copy 动态 toast smoke、focused test / ESLint / whitespace 验证和下一批候选。
 - [x] 第 43 批结束已更新本文：public docs auth/profile graph 动态加载、fresh-server / hot-server curl after、Playwright CLI screenshot/HAR/Markdown/JSON、auth graph requests 0、focused test / ESLint / whitespace 验证和下一批候选。
+- [x] 第 44 批结束已更新本文：legacy sonner 迁移到自研 toast、curl after、Playwright CLI screenshot/HAR/Markdown/JSON、sonner requests 0、focused test / ESLint / whitespace 验证和下一批候选。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -1831,6 +1887,7 @@ pending 排序快照：
 - [x] 第 41 批补充 dev SSR TTFB 二轮验证：`/`、`/store`、`/en/docs/dev/components/tabs`、`/sign-in`、未登录 dashboard redirect 的 curl baseline/after 与 Playwright-core after screenshot / HAR / Markdown / JSON；记录 tabs cold TTFB 4128ms -> 3083ms。
 - [x] 第 42 批补充 docs toast intent 验证：`/en/docs/dev/components/tabs` 与 `/en/docs/dev/components/context-menu` 的 Playwright-core screenshot / HAR / Markdown / JSON；记录 tabs `toastRequests 0`，context-menu copy 后 `toastRequestsAfterClick 1`、toast visible true。
 - [x] 第 43 批补充 docs auth/profile graph 验证：`/en/docs/dev/components/tabs` 的 Playwright CLI screenshot / HAR / Markdown / JSON；记录 auth graph requests 0、failed 0、`vue-sonner` CSS 2 条转后续独立项。
+- [x] 第 44 批补充 docs sonner boundary 验证：`/en/docs/dev/components/tabs` 的 Playwright CLI screenshot / HAR / Markdown / JSON；记录 sonner requests 0、auth graph requests 0、failed 0。
 - [ ] 对比每批提交前后 request count、stylesheet/script count、failed count、elapsed。
 - [ ] 将结果归档到 `output/playwright/`，只引用报告路径，不把 artifact 纳入 git。
 - [ ] route matrix 二轮补：authenticated `/dashboard`、Provider Registry、Data Governance；移动端 viewport；production preview；back/forward cache；首屏 media failed request 分类；补 `/new` Playwright screenshot/HAR。
@@ -1864,7 +1921,7 @@ pending 排序快照：
 - [x] 不直接 alias 不稳定的 Nuxt / Vue Router 内部路径，除非确认版本边界、fallback 和运行时兼容性。
 - [x] 普通 docs dev 不默认启用 PWA dev client plugin；需要 PWA 调试时显式使用 `pnpm -C "apps/nexus" run dev:pwa`。
 - [x] 将 `@vueuse/core` 加入 Vite dev pre-bundle，避免首页视觉路由首次访问 runtime dependency discovery。
-- [x] 将 `marked`、`echarts/core`、`echarts/charts`、`echarts/components`、`echarts/renderers`、`vue-sonner` 加入 Vite dev pre-bundle，避免 docs renderer / dashboard charts / sign-in toast 在 route visit 时触发 runtime dependency discovery。
+- [x] 将 `marked`、`echarts/core`、`echarts/charts`、`echarts/components`、`echarts/renderers` 加入 Vite dev pre-bundle，避免 docs renderer / dashboard charts 在 route visit 时触发 runtime dependency discovery；`vue-sonner` 曾在第 19 批加入，已在第 44 批迁移 legacy toast 后移除。
 - [x] 将 `dompurify` 加入 Vite dev pre-bundle，避免 docs Assistant 打开后 `TxMarkdownView` 触发 runtime dependency discovery / reload。
 - [ ] 继续拆剩余 dev scripts：Nuxt runtime、`node_modules`、demo wrapper 可见区加载、真实 code block 页 renderer chunk 体量。
 - [ ] 继续观察 Vite runtime discovery 是否在 route matrix 二轮出现新的依赖；若出现，先定位收益，再决定 pre-bundle 或拆 route-local/lazy import。
@@ -1905,3 +1962,4 @@ pending 排序快照：
 - 当前第 39 批 strict pending verified sample 已经完成，后续不要继续往本批塞代码改动、aireview 逐页 section split、dev SSR 深化、首页 WebGL/lifecycle warning 或生产 chunk 复核；新改动按上方 TODO 独立切批、独立验证、独立提交。
 - 当前第 42 批 docs toast intent 已经完成，后续不要继续往本批塞 share UI、engagement、admin、comment、首页 WebGL warning、production chunk 复核或 pending 逐页 demo/API 二刀；新改动按上方 TODO 独立切批、独立验证、独立提交。
 - 当前第 43 批 public docs auth/profile graph 已经完成，后续不要继续往本批塞 `vue-sonner` CSS 首访、share/engagement/comment/right rail、首页 warning、production chunk 复核或 pending 逐页 demo/API 二刀；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 44 批 legacy sonner boundary 已经完成，后续不要继续往本批塞 share/engagement/comment/right rail、首页 warning、production chunk 复核或 pending 逐页 demo/API 二刀；新改动按上方 TODO 独立切批、独立验证、独立提交。

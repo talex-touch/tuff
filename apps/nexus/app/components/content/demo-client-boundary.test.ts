@@ -73,12 +73,21 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("!normalized.endsWith('/server/utils/telemetryRetentionCore.ts')")
   })
 
-  it('keeps legacy sonner styles route-local instead of loading them on every docs page', () => {
+  it('keeps legacy sonner out of first-paint app modules', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
     const signInPage = readProjectFile('../../pages/sign-in/index.vue')
+    const signInComposable = readProjectFile('../../composables/useSignIn.ts')
+    const adminBootstrapPage = readProjectFile('../../pages/auth/admin-bootstrap.vue')
 
     expect(config).not.toContain("'vue-sonner/style.css'")
-    expect(signInPage).toContain("import 'vue-sonner/style.css'")
+    expect(config).not.toContain("'vue-sonner'")
+    expect(signInPage).not.toContain("from 'vue-sonner'")
+    expect(signInPage).not.toContain("vue-sonner/style.css")
+    expect(signInPage).not.toContain('<Toaster')
+    expect(signInComposable).not.toContain("from 'vue-sonner'")
+    expect(signInComposable).toContain('const toast = useToast()')
+    expect(adminBootstrapPage).not.toContain("from 'vue-sonner'")
+    expect(adminBootstrapPage).toContain('const toast = useToast()')
   })
 
   it('normalizes TuffEx dev component aliases to one source module id', () => {
@@ -113,7 +122,6 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("'echarts/charts'")
     expect(config).toContain("'echarts/components'")
     expect(config).toContain("'echarts/renderers'")
-    expect(config).toContain("'vue-sonner'")
     expect(config).toContain("'dompurify'")
   })
 

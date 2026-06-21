@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import 'vue-sonner/style.css'
-import { Toaster } from 'vue-sonner'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import Logo from '~/components/icon/Logo.vue'
@@ -73,10 +71,6 @@ function goTo(path: string) {
 </script>
 
 <template>
-  <ClientOnly>
-    <Toaster position="bottom-right" :duration="4000" />
-  </ClientOnly>
-
   <AuthVisualShell
     :loading="authLoading"
     :block-text="isCallbackBlocking ? t('auth.sessionBlocking', '正在处理登录，请稍候...') : ''"
