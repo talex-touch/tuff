@@ -22,6 +22,7 @@
 - `output/playwright/nexus-docs-pending-b22-after-3200-2026-06-21.json`
 - `output/playwright/nexus-docs-metadata-fastpath-b28-after-3214-2026-06-21.json`
 - `output/playwright/nexus-docs-assistant-context-b30-after-3200-2026-06-21.json`
+- `output/playwright/nexus-docs-demo-api-b38-after-3219-2026-06-21.json`
 
 `Requests` is shown as `requests/scripts/styles/failed`. Rows without current Playwright data are marked `not sampled`; they must get a baseline before code changes.
 
@@ -29,8 +30,8 @@
 
 | Rank | Slug | syncStatus | verified | Body total | Demos | Code blocks | API table | Requests | Next action |
 | ---: | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- |
-| 1 | `fusion` | migrated | false | 101 KB (51/50) | 20 | 0 | yes | 427/268/36/0 (b30 after) | P0 section split plus API table visible-only; keep Assistant/context on intent. |
-| 2 | `card` | migrated | false | 94 KB (47/47) | 24 | 0 | yes | 432/428/37/0 (b28 after) | P0 split API table and demo sections; verify code block renderer stays lazy. |
+| 1 | `fusion` | migrated | false | 101 KB (51/50) | 20 | 0 | yes | 436/415/16/0 (b38 after) | P0 section split already leaves one initial demo shell; API table and demo registry are not eager. Next action: production chunk check or route-switch timing. |
+| 2 | `card` | migrated | false | 94 KB (47/47) | 24 | 0 | yes | 440/419/16/0 (b38 after) | P0 demo second-boundary split done; initial demo shells 2 -> 1, API table and demo registry remain non-eager. Next action: production chunk check or code block route timing. |
 | 3 | `avatar-variants` | migrated | false | 70 KB (35/35) | 2 | 0 | no | 425/403/18/0 (b21 after) | P0 static summary shell plus defer long examples/body sections. |
 | 4 | `glass-surface` | migrated | true | 32 KB (17/15) | 4 | 0 | yes | 465/430/16/0 (b36 after2) | P1 strict pending defer now covers `migrated + verified`; API/props table visible-only remains a later production/chunk check. |
 | 5 | `index` | migrated | true | 32 KB (16/16) | 0 | 0 | no | not sampled | P1 static shell plus section split. |
@@ -62,10 +63,10 @@
 
 ## Next Batch Candidates
 
-1. `fusion`: first P0 code batch. Split long body sections and API table behind visible-only boundaries, while keeping current Assistant context behavior on intent.
-2. `card`: second P0 code batch. Split demo/API sections and guard the real code block path so the renderer remains lazy.
-3. `avatar-variants`: P0 template/static-shell batch. It has less demo pressure but a large body, so it is useful for proving section-level body deferral.
-4. `text-transformer` or `base-surface`: first unsampled P1 baseline batch. Run Playwright screenshot/HAR before any code change.
+1. `text-transformer` or `base-surface`: first unsampled P1 baseline batch. Run Playwright screenshot/HAR before any code change.
+2. `base-anchor` / `select` / `radio`: strict pending verified sampling to confirm the b36 rule covers more than `glass-surface`.
+3. `fusion` / `card`: production chunk and route-switch timing check after b38; dev initial API/demo eager path is already clean.
+4. dev SSR TTFB second pass: distinguish Nuxt transform, content query/frontmatter fast path, i18n init, store init, and middleware.
 
 ## Notes
 
