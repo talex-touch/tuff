@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 45 批 docs aside shell evidence / TODO handoff 已完成 Playwright CLI screenshot/HAR/Markdown/JSON、curl smoke 与文档回填；本批先验证第 44 批后的 `share/engagement/comment/right rail` 假设，没有发现 `DocsAsideCardsShell`、`DocsAsideCards`、Assistant、`TxMarkdownView`、`dompurify`、auth/profile graph 或 `vue-sonner` 进入 `/en/docs/dev/components/tabs` 3.5s 首访图谱，因此不做无收益代码改动。第 45 批 evidence：`/en/docs/dev/components/tabs` status 200、requests 425、scripts 405、styles 40、failed 0、aside shell requests 0、assistant requests 0、dompurify requests 0、sonner requests 0、auth graph requests 0；curl cold TTFB 3022.4ms。HAR 中剩余 2 条 comments/analytics match 为 Nuxt dev `?macro=true` page meta 扫描 `dashboard/admin/analytics.vue` 与 `dashboard/admin/doc-comments.vue`，已转入 dev SSR / route macro 专项。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部从本文任务树领取，不再从聊天上下文临时恢复范围。
+> 当前状态：Nexus 第 46 批 docs pending / Nuxt macro evidence 已完成 Playwright CLI screenshot/HAR/Markdown/JSON、Node fetch smoke 与文档回填；本批先验证第 45 批后的 `typedPages` 假设，A/B 证明关闭 `experimental.typedPages` 并不会减少 `/en/docs/dev/components/tabs` 的 Nuxt dev `?macro=true` 请求，因此配置已恢复，不落无收益代码改动。随后抽样 `tabs`、`auto-sizer`、`scroll`：三页 status 200、failed 0、`body=1` 0、demo registry 0、Assistant/dom 0、sonner 0、current-user profile graph 0；剩余共同慢点是 Nuxt dev 全页面 macro 扫描 61 条、admin macro 15 条、auth page macro 3 条，以及 `@sidebase/nuxt-auth` 模块级 client runtime 12 条。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、sidebase auth runtime 拆分、生产 chunk / payload / CSS 复核全部从本文任务树领取，不再从聊天上下文临时恢复范围。
 
 ## Goal 原句
 
@@ -36,6 +36,7 @@
 - 第 43 批本地验证 dev server：`http://127.0.0.1:3226`。
 - 第 44 批本地验证 dev server：`http://127.0.0.1:3227`。
 - 第 45 批本地验证 dev server：`http://127.0.0.1:3228`。
+- 第 46 批本地验证 dev server：`http://127.0.0.1:3229`。
 
 ## 当前批收尾冻结（第 45 批 docs aside shell evidence / TODO handoff）
 
@@ -59,15 +60,16 @@
 
 ## 当前进度
 
-- 本轮 tabs/card 文档链路：约 99%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry、pending 文档后半段正文、code copy header、toast feedback、公开 docs auth/profile graph、legacy sonner CSS 从首屏重型路径拆出；第 45 批复核 3.5s HAR 确认 aside shell / assistant / dompurify 不进入 tabs 首访图谱。
-- 整体 goal 估算：约 96%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path、docs Assistant 上下文按需构建，`fusion` / `card` pending 长文档后半段 client deferred render，`avatar-variants` 单章节大 demo fallback split，`glass-surface` / `base-anchor` / `select` / `radio` 这类 `migrated + verified` strict pending 页面 deferred body 覆盖，`card` 首屏第二个 demo shell 后置，docs code-block copy header 原生 DOM 化，docs toast feedback 用户意图后加载，public docs auth/profile graph 按 protected route 动态加载，legacy sonner CSS 从 docs 首访清零，以及 right rail shell 假设已用 HAR 排除；后续仍需系统性覆盖剩余 AI review / aireview 未审批组件、dev SSR TTFB / Nuxt macro 扫描深化、生产构建 chunk/CSS 复核与文档模板静态化。
+- 本轮 tabs/card 文档链路：约 99%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry、pending 文档后半段正文、code copy header、toast feedback、公开 docs auth/profile graph、legacy sonner CSS 从首屏重型路径拆出；第 45 批复核 3.5s HAR 确认 aside shell / assistant / dompurify 不进入 tabs 首访图谱；第 46 批确认 `typedPages` 不是 macro 请求根因，并把 `@sidebase/nuxt-auth` 模块级 client runtime 单独拆成下一刀候选。
+- 整体 goal 估算：约 96.5%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path、docs Assistant 上下文按需构建，`fusion` / `card` pending 长文档后半段 client deferred render，`avatar-variants` 单章节大 demo fallback split，`glass-surface` / `base-anchor` / `select` / `radio` 这类 `migrated + verified` strict pending 页面 deferred body 覆盖，`card` 首屏第二个 demo shell 后置，docs code-block copy header 原生 DOM 化，docs toast feedback 用户意图后加载，public docs auth/profile graph 按 protected route 动态加载，legacy sonner CSS 从 docs 首访清零，right rail shell 假设已用 HAR 排除，`typedPages` no-op 已排除，`auto-sizer` / `scroll` 最新 pending 抽样 failed 0、body=1 0、demo registry 0；后续仍需系统性覆盖剩余 AI review / aireview 未审批组件、dev SSR TTFB / Nuxt macro / sidebase auth runtime 深化、生产构建 chunk/CSS 复核与文档模板静态化。
 - 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建、pending 长文档后半段渲染延迟到用户意图或静置后、docs code header 原生 DOM 客户端增强、docs toast feedback 动态加载、公开 docs auth/profile graph 延迟到 authenticated protected route、legacy `vue-sonner` 迁移到自研 toast host。
-- 当前第 45 批只做 docs aside shell / route macro evidence 与 TODO 收尾，不继续混入首页 WebGL warning 修复、production chunk/CSS 复核或 pending 逐页 demo/API 二刀。后续全部进入 TODO 队列：重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB / Nuxt macro 继续深化、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
+- 当前第 46 批只做 typedPages no-op、pending `auto-sizer` / `scroll` 抽样和 sidebase runtime evidence，不继续混入首页 WebGL warning 修复、production chunk/CSS 复核、认证模块重构或 pending 逐页 demo/API 二刀。后续全部进入 TODO 队列：`@sidebase/nuxt-auth` client plugin 拆分/门控、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB / Nuxt macro 继续深化、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
+| 当前第 46 批 docs pending / macro evidence | 100% | 3229 dev server tabs / auto-sizer / scroll 3.5s HAR：status 200，failed 0，`body=1` 0，demo registry 0，Assistant/dom 0，sonner 0，current-user 0；tabs requests 416/415/35，auto-sizer 417/416/35，scroll 417/416/35。`typedPages=false` A/B 对 tabs 仍为 requests 425、scripts 405、styles 40、macro 61、adminMacro 15，确认不是有效优化方向；新候选为 Nuxt dev macro 61 条与 `@sidebase/nuxt-auth` module-level client runtime 12 条。本批不改业务代码。 |
 | 当前第 45 批 docs aside shell evidence / TODO handoff | 100% | 3228 dev server tabs 3.5s HAR：status 200、requests 425、scripts 405、styles 40、failed 0、DocsAsideCardsShell 0、DocsAsideCards 0、Assistant 0、TxMarkdownView 0、dompurify 0、sonner 0、authGraph 0；2 条 comments/analytics match 是 Nuxt dev `?macro=true` 页面 meta 扫描，已转后续 dev SSR / route macro 专项。本批不改业务代码。 |
 | 当前第 44 批 legacy sonner boundary | 100% | sign-in / admin bootstrap 从 `vue-sonner` 迁到自研 `useToast`，移除 sign-in `vue-sonner/style.css` / `Toaster`，并从 Vite dev pre-bundle 移除 `vue-sonner`；tabs after status 200、requests 425、scripts 268、styles 39、sonnerRequests 0、authGraphRequests 0、failed 0。 |
 | 当前第 43 批 public docs auth/profile graph | 100% | docs 页不再调用 `useAuthUser({ fetchOnAuth: false, server: false })`，admin 状态改读 shared `auth-user`；app root 仅在 authenticated protected route 后动态 import `fetchCurrentUserProfile`；locale orchestrator 也改为 profile sync / patch 时动态 import current-user API。tabs after status 200、requests 463、authGraphRequests 0、failed 0；`vue-sonner` CSS 仍出现 2 条，已转后续独立项。 |
@@ -780,6 +782,47 @@ pending 排序快照：
 - 下一批只允许选择 1 个 P0 子任务和 1-2 个页面先跑 baseline，再决定是否落代码；优先 Nuxt dev macro 扫描 / dev SSR TTFB、pending 工作表剩余页面分组、production chunk/CSS 复核或 route matrix 二轮。
 - 每批结束继续回填本文：提交 hash、改动范围、测试命令、核心性能数字、Playwright screenshot / HAR / Markdown / JSON 路径和下一批候选。
 - `output/playwright/` 继续作为 ignored evidence 目录，只引用路径，不纳入 git。
+
+## 第 46 批收口记录
+
+目标：继续领取第 45 批后的 dev SSR / Nuxt macro 与 pending / aireview 抽样。先做 `experimental.typedPages` A/B，不把无效配置实验落成代码；随后用 Playwright CLI 对 `/en/docs/dev/components/tabs`、`/en/docs/dev/components/auto-sizer`、`/en/docs/dev/components/scroll` 做 3.5s 首访 screenshot/HAR，确认 `auto-sizer` / `scroll` 当前没有 `body=1`、demo registry、Assistant、sonner 或 current-user profile graph 抢首访。
+
+改动范围：
+
+- `docs/plan-prd/TODO-nexus.md`
+- `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`
+
+验证证据：
+
+- Dev server：`pnpm -C "apps/nexus" exec nuxi dev --host 127.0.0.1 --port 3229`。
+- `typedPages=false` A/B：临时关闭 `apps/nexus/nuxt.config.ts` 的 `experimental.typedPages` 后重跑 tabs Playwright，配置已恢复。
+  - JSON：`output/playwright/nexus-docs-typed-pages-b46-after-3229-2026-06-21.json`
+  - 截图：`output/playwright/nexus-docs-typed-pages-b46-after-3229-2026-06-21.png`
+  - HAR：`output/playwright/nexus-docs-typed-pages-b46-after-3229-2026-06-21.har`
+- Playwright CLI pending sample：
+  - 报告：`output/playwright/nexus-docs-pending-b46-sample-3229-2026-06-21.md`
+  - JSON：`output/playwright/nexus-docs-pending-b46-sample-3229-2026-06-21.json`
+  - tabs 截图/HAR：`output/playwright/nexus-docs-pending-b46-sample-3229-2026-06-21-tabs.png` / `.har`
+  - auto-sizer 截图/HAR：`output/playwright/nexus-docs-pending-b46-sample-3229-2026-06-21-auto-sizer.png` / `.har`
+  - scroll 截图/HAR：`output/playwright/nexus-docs-pending-b46-sample-3229-2026-06-21-scroll.png` / `.har`
+- Node fetch smoke（curl 在当前 shell 不可用）：tabs status 200 / header 75.2ms / total 77.0ms；auto-sizer status 200 / header 29.4ms / total 29.9ms；scroll status 200 / header 33.8ms / total 34.1ms。
+- Search / source check：`@sidebase/nuxt-auth` client runtime 来源为模块全局 plugin `apps/nexus/node_modules/@sidebase/nuxt-auth/dist/runtime/plugin.js`，不是 docs 业务 `useCurrentUserApi` 回退；`globalAppMiddleware` 默认未开启，但 module plugin 仍会初始化 `useAuthState()` / `useAuth()` / refresh handler。
+- `output/playwright/` 已由 `.gitignore` 忽略，临时 `.tmp-b46-pw` 采样尝试也留在 ignored evidence 目录，不纳入提交。
+
+核心数字：
+
+- `typedPages=false` tabs：status 200，requests 425，scripts 405，styles 40，failed 0，macro 61，adminMacro 15；结论是 `typedPages` 不是 `?macro=true` 请求根因。
+- tabs current sample：status 200，requests 416，scripts 415，styles 35，failed 0，macro 61，adminMacro 15，authPageMacro 3，`body=1` 0，demo registry 0，Assistant/dom 0，sonner 0，current-user 0，sidebase client runtime 12。
+- auto-sizer current sample：status 200，requests 417，scripts 416，styles 35，failed 0，macro 61，adminMacro 15，authPageMacro 3，`body=1` 0，demo registry 0，Assistant/dom 0，sonner 0，current-user 0，sidebase client runtime 12。
+- scroll current sample：status 200，requests 417，scripts 416，styles 35，failed 0，macro 61，adminMacro 15，authPageMacro 3，`body=1` 0，demo registry 0，Assistant/dom 0，sonner 0，current-user 0，sidebase client runtime 12。
+- `/api/auth/*` request count 为 0；12 条 `@sidebase/nuxt-auth` 是 dev client runtime 模块请求，3 条 auth macro 是 Nuxt dev page meta 扫描。
+
+收口口径：
+
+- 第 46 批不修改 `apps/nexus/**` 业务代码，因为 `typedPages` A/B 无收益，`auto-sizer` / `scroll` 已证明首访没有 `body=1` / demo registry / current-user 回退，sidebase runtime 拆分属于认证模块边界变更，需要独立批次验证 sign-in / dashboard。
+- `@sidebase/nuxt-auth` module-level client runtime 是新的 P0 候选：目标是让公开 docs 首访不下载 auth client runtime，同时保持 `dashboard`、`team/join`、`auth/admin-bootstrap`、sign-in OAuth callback 和 header user menu 行为正确。
+- Nuxt dev `?macro=true` 仍是独立候选；`typedPages=false` 已排除，后续不要重复试同一方向。
+- 下一批优先二选一：P0 sidebase auth runtime boundary；P0 production chunk / payload / CSS 复核；P1 unsampled pending `text-transformer` / `base-surface` baseline。
 
 ## 第 38 批收口记录
 
@@ -1872,9 +1915,10 @@ pending 排序快照：
 - [x] 已完成候选 J 第七刀：dev SSR TTFB 第四刀 public docs auth/profile graph。第 43 批把 docs admin state 改读 shared state，app root 和 locale orchestrator 动态加载 current-user API；tabs after auth graph requests 为 0。
 - [x] 已完成候选 K：legacy `vue-sonner` CSS 首访来源复核。第 44 批确认来源为 sign-in / admin bootstrap 旧 sonner import boundary，迁移到自研 `useToast` 后 tabs sonner requests 0。
 - [x] 已完成候选 J 第八刀：right rail / Assistant 首访污染排除。第 45 批确认 docs aside shell、aside cards、Assistant、TxMarkdownView、dompurify 在 tabs 3.5s 首访 HAR 均为 0。
-- [ ] 下一批候选 J：dev SSR TTFB 第五刀转 Nuxt macro / runtime。原因：第 45 批后 tabs fresh-server cold 仍约 3.02s，且 HAR 显示 Nuxt dev 会拉全页面 `?macro=true` meta 扫描；下一刀应先判断 macro 扫描、route manifest transform、Nuxt runtime 和 docs page setup 中哪个是可安全削减的真实瓶颈。
-- [ ] 下一批候选 L：pending / aireview 剩余页面分组落地。原因：76 个 pending 组件已建工作表，但还需要按可静态化、可懒加载、首屏移出、模板合并、删除或后置分组，并优先抽样 `auto-sizer` / `scroll` / `glass-surface` / `base-anchor` 后续二刀。
+- [ ] 下一批候选 J：dev SSR TTFB 第五刀转 Nuxt macro / runtime。原因：第 46 批确认 `typedPages=false` 不能减少 tabs 的 61 条 `?macro=true` 请求；下一刀不要重复试 typedPages，应判断 route manifest transform、Nuxt page meta extraction、auth page macro 与 docs page setup 中哪个是可安全削减的真实瓶颈。
+- [ ] 下一批候选 L：pending / aireview 剩余页面分组落地。原因：76 个 pending 组件已建工作表；第 46 批复核 `auto-sizer` / `scroll` current sample 为 failed 0、`body=1` 0、demo registry 0，后续优先补 `text-transformer` / `base-surface` 这类未采样 P1 baseline，再决定是否做 visible-only demo/API 二刀。
 - [ ] 下一批候选 M：production chunk / payload / CSS 污染复核。原因：dev 首访已连续清理 auth、sonner、right rail；仍需用 production build / preview HAR 证明 docs/store/dashboard/landing chunk 和 CSS 没有互相污染。
+- [ ] 下一批候选 N：`@sidebase/nuxt-auth` client runtime boundary。原因：第 46 批 tabs / auto-sizer / scroll 首访仍共同下载 12 条 `@sidebase/nuxt-auth` dev client runtime，且 `/api/auth/*` 为 0、current-user 为 0；下一刀应评估是否能把公开 docs 首访从 sidebase module plugin 中拆出，同时保护 dashboard、team join、admin bootstrap、sign-in OAuth callback、header user menu。
 
 ### P0：当前 goal 后续验收清单
 
@@ -1913,6 +1957,7 @@ pending 排序快照：
 - [x] 第 43 批结束已更新本文：public docs auth/profile graph 动态加载、fresh-server / hot-server curl after、Playwright CLI screenshot/HAR/Markdown/JSON、auth graph requests 0、focused test / ESLint / whitespace 验证和下一批候选。
 - [x] 第 44 批结束已更新本文：legacy sonner 迁移到自研 toast、curl after、Playwright CLI screenshot/HAR/Markdown/JSON、sonner requests 0、focused test / ESLint / whitespace 验证和下一批候选。
 - [x] 第 45 批结束已更新本文：docs aside shell / right rail 假设 Playwright CLI screenshot/HAR/Markdown/JSON、curl smoke、aside shell / assistant / dompurify requests 0、Nuxt dev macro 扫描转后续专项和下一批候选。
+- [x] 第 46 批结束已更新本文：typedPages A/B no-op、tabs / auto-sizer / scroll Playwright CLI screenshot/HAR/Markdown/JSON、Node fetch smoke、`body=1` 0、demo registry 0、current-user 0、sidebase client runtime 12 和下一批候选。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -1938,6 +1983,7 @@ pending 排序快照：
 - [x] 第 43 批补充 docs auth/profile graph 验证：`/en/docs/dev/components/tabs` 的 Playwright CLI screenshot / HAR / Markdown / JSON；记录 auth graph requests 0、failed 0、`vue-sonner` CSS 2 条转后续独立项。
 - [x] 第 44 批补充 docs sonner boundary 验证：`/en/docs/dev/components/tabs` 的 Playwright CLI screenshot / HAR / Markdown / JSON；记录 sonner requests 0、auth graph requests 0、failed 0。
 - [x] 第 45 批补充 docs aside shell / macro scan 验证：`/en/docs/dev/components/tabs` 的 Playwright CLI screenshot / HAR / Markdown / JSON；记录 aside shell / assistant / dompurify / sonner / auth graph requests 均为 0，Nuxt dev macro scan 2 条转后续专项。
+- [x] 第 46 批补充 typedPages no-op 与 pending sample 验证：`/en/docs/dev/components/tabs`、`/en/docs/dev/components/auto-sizer`、`/en/docs/dev/components/scroll` 的 Playwright CLI screenshot / HAR / Markdown / JSON；记录三页 failed 0、`body=1` 0、demo registry 0、Assistant/dom 0、sonner 0、current-user 0，`@sidebase/nuxt-auth` client runtime 12 转后续专项。
 - [ ] 对比每批提交前后 request count、stylesheet/script count、failed count、elapsed。
 - [ ] 将结果归档到 `output/playwright/`，只引用报告路径，不把 artifact 纳入 git。
 - [ ] route matrix 二轮补：authenticated `/dashboard`、Provider Registry、Data Governance；移动端 viewport；production preview；back/forward cache；首屏 media failed request 分类；补 `/new` Playwright screenshot/HAR。

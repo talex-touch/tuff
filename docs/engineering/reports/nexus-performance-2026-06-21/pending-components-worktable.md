@@ -24,6 +24,7 @@
 - `output/playwright/nexus-docs-assistant-context-b30-after-3200-2026-06-21.json`
 - `output/playwright/nexus-docs-demo-api-b38-after-3219-2026-06-21.json`
 - `output/playwright/nexus-docs-strict-pending-verified-b39-sample-3220-2026-06-21.json`
+- `output/playwright/nexus-docs-pending-b46-sample-3229-2026-06-21.json`
 
 `Requests` is shown as `requests/scripts/styles/failed`. Rows without current Playwright data are marked `not sampled`; they must get a baseline before code changes.
 
@@ -37,9 +38,9 @@
 | 4 | `glass-surface` | migrated | true | 32 KB (17/15) | 4 | 0 | yes | 465/430/16/0 (b36 after2) | P1 strict pending defer now covers `migrated + verified`; API/props table visible-only remains a later production/chunk check. |
 | 5 | `index` | migrated | true | 32 KB (16/16) | 0 | 0 | no | not sampled | P1 static shell plus section split. |
 | 6 | `gradual-blur` | migrated | false | 30 KB (15/14) | 14 | 0 | yes | 450/415/16/0 (b36 after2) | P1 current fallback split already defers API and later demos; demo visible-only remains a later production/chunk check. |
-| 7 | `auto-sizer` | migrated | false | 27 KB (14/13) | 14 | 0 | yes | 419/418/33/0 (b22 after) | P1 demo visible-only plus API table visible-only. |
+| 7 | `auto-sizer` | migrated | false | 27 KB (14/13) | 14 | 0 | yes | 417/416/35/0 (b46 sample) | P1 current sample has `body=1` 0, demo registry 0, Assistant/dom 0, sonner 0, current-user 0; sidebase client runtime remains a shared docs-shell candidate. Demo visible-only plus API table visible-only remains a later production/chunk check. |
 | 8 | `text-transformer` | migrated | false | 27 KB (13/13) | 10 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
-| 9 | `scroll` | migrated | false | 22 KB (11/10) | 12 | 0 | yes | 419/418/33/0 (b22 after) | P1 demo visible-only plus API table visible-only. |
+| 9 | `scroll` | migrated | false | 22 KB (11/10) | 12 | 0 | yes | 417/416/35/0 (b46 sample) | P1 current sample has `body=1` 0, demo registry 0, Assistant/dom 0, sonner 0, current-user 0; sidebase client runtime remains a shared docs-shell candidate. Demo visible-only plus API table visible-only remains a later production/chunk check. |
 | 10 | `base-surface` | migrated | false | 21 KB (11/10) | 10 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
 | 11 | `base-anchor` | migrated | true | 20 KB (10/10) | 12 | 0 | yes | 436/415/16/0 (b39 sample) | P1 b36/b38 rules cover this strict pending verified page; initial shell true, one demo shell, props nodes 0. Production chunk check remains. |
 | 12 | `foundations` | migrated | false | 19 KB (10/10) | 0 | 0 | no | not sampled | P2 keep in pending queue; sample before code change. |
@@ -65,12 +66,13 @@
 ## Next Batch Candidates
 
 1. `text-transformer` or `base-surface`: first unsampled P1 baseline batch. Run Playwright screenshot/HAR before any code change.
-2. `fusion` / `card`: production chunk and route-switch timing check after b38; dev initial API/demo eager path is already clean.
-3. dev SSR TTFB second pass: distinguish Nuxt transform, content query/frontmatter fast path, i18n init, store init, and middleware.
-4. `dialog` / `picker` / `switch`: next strict pending verified sample if more coverage is needed.
+2. Shared docs shell: investigate `@sidebase/nuxt-auth` client runtime boundary from b46 before doing more per-page demo work; tabs, auto-sizer, and scroll all show sidebase client runtime 12 with `/api/auth/*` 0 and current-user 0.
+3. `fusion` / `card`: production chunk and route-switch timing check after b38; dev initial API/demo eager path is already clean.
+4. dev SSR TTFB macro pass: b46 ruled out `experimental.typedPages=false`; continue with route manifest transform / page meta extraction / auth page macro instead of repeating typedPages.
+5. `dialog` / `picker` / `switch`: next strict pending verified sample if more coverage is needed.
 
 ## Notes
 
 - `glass-surface`, `index`, `base-anchor`, `select`, `radio`, `button`, `dialog`, `picker`, `switch`, `date-picker`, and `input` are still pending by the strict rule because `syncStatus` remains `migrated`, even when `verified: true`.
-- Existing evidence proves `fusion`, `card`, `avatar-variants`, `glass-surface`, `gradual-blur`, `auto-sizer`, `scroll`, `base-anchor`, `select`, and `radio` have clean failed request counts in the sampled runs. It does not prove unsampled pages are fast.
+- Existing evidence proves `fusion`, `card`, `avatar-variants`, `glass-surface`, `gradual-blur`, `auto-sizer`, `scroll`, `base-anchor`, `select`, and `radio` have clean failed request counts in the sampled runs. b46 further proves `auto-sizer` and `scroll` do not request `body=1`, demo registry, Assistant/dom, sonner, or current-user on first visit. It does not prove unsampled pages are fast.
 - This file is a planning/report artifact only. It does not add a reusable audit script or broaden the test harness.
