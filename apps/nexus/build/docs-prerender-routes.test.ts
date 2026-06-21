@@ -67,7 +67,7 @@ describe('docs prerender routes', () => {
     ])
   })
 
-  it('creates static docs page API routes for component metadata and full body payloads', () => {
+  it('keeps docs page API responses dynamic during prerender', () => {
     const root = mkdtempSync(join(tmpdir(), 'nexus-docs-page-api-routes-'))
     const docsDir = join(root, 'content/docs/dev/components')
     mkdirSync(docsDir, { recursive: true })
@@ -75,16 +75,7 @@ describe('docs prerender routes', () => {
     writeFileSync(join(docsDir, 'tabs.zh.mdc'), '# Tabs 标签页')
     writeFileSync(join(docsDir, 'button.en.mdc'), '# Button')
 
-    expect(createDocsPageApiPrerenderRoutes(root)).toEqual([
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=en&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=en&body=1',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=zh&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Fbutton&locale=zh&body=1',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=1',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=1',
-    ])
+    expect(createDocsPageApiPrerenderRoutes(root)).toEqual([])
   })
 
   it('combines public pages, docs APIs, and scanned docs into Nexus prerender routes', () => {
@@ -123,12 +114,7 @@ describe('docs prerender routes', () => {
     const evidence = createNexusPrerenderEvidence(root)
 
     expect(evidence.docsApiRoutes).toEqual([...docsApiPrerenderRoutes])
-    expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=en&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=en&body=1',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=zh&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Findex&locale=zh&body=1',
-    ]))
+    expect(evidence.docsPageApiRoutes).toEqual([])
     expect(evidence.missingRequiredDocsRoutes).toEqual([])
     expect(evidence.requiredDocsRoutes).toEqual(expect.arrayContaining([
       '/en/docs',
@@ -169,12 +155,7 @@ describe('docs prerender routes', () => {
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
     ]))
-    expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=en&body=1',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=0',
-      '/api/docs/page?path=%2Fdocs%2Fdev%2Fcomponents%2Ftabs&locale=zh&body=1',
-    ]))
+    expect(evidence.docsPageApiRoutes).toEqual([])
     expect(evidence.docsRoutes).not.toEqual(expect.arrayContaining([
       '/docs',
       '/docs/dev/getting-started/quickstart',

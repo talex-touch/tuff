@@ -190,73 +190,78 @@ async function readDevDocsPageFromFile(contentPath: string, includeBody: boolean
     import('node:fs/promises'),
     import('node:path'),
   ])
-  const docsRoot = resolve(process.cwd(), 'content/docs')
-  const docsRootPrefix = `${docsRoot}${sep}`
+  const docsRootCandidates = [
+    resolve(process.cwd(), 'content/docs'),
+    resolve(process.cwd(), 'apps/nexus/content/docs'),
+  ]
 
   for (const relativeFile of candidates) {
-    const filePath = resolve(docsRoot, relativeFile)
-    if (filePath !== docsRoot && !filePath.startsWith(docsRootPrefix))
-      continue
-
-    let fileStat: { mtimeMs: number }
-    try {
-      fileStat = await stat(filePath)
-    }
-    catch (error) {
-      if (isFileNotFound(error))
+    for (const docsRoot of docsRootCandidates) {
+      const docsRootPrefix = `${docsRoot}${sep}`
+      const filePath = resolve(docsRoot, relativeFile)
+      if (filePath !== docsRoot && !filePath.startsWith(docsRootPrefix))
         continue
-      throw error
-    }
 
-    const cached = devDocsPageFileCache.get(filePath)
-    if (cached && cached.mtimeMs === fileStat.mtimeMs) {
-      const cachedDoc = includeBody ? cached.fullDoc : cached.metaDoc
-      if (cachedDoc)
-        return cachedDoc
-    }
+      let fileStat: { mtimeMs: number }
+      try {
+        fileStat = await stat(filePath)
+      }
+      catch (error) {
+        if (isFileNotFound(error))
+          continue
+        throw error
+      }
 
-    const raw = await readFile(filePath, 'utf8')
-    if (!includeBody) {
-      const data = parseFrontmatterMetadata(raw)
+      const cached = devDocsPageFileCache.get(filePath)
+      if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+        const cachedDoc = includeBody ? cached.fullDoc : cached.metaDoc
+        if (cachedDoc)
+          return cachedDoc
+      }
+
+      const raw = await readFile(filePath, 'utf8')
+      if (!includeBody) {
+        const data = parseFrontmatterMetadata(raw)
+        const doc: DocsPageRecord = {
+          ...data,
+          path: contentPath,
+          _path: contentPath,
+          meta: data,
+        }
+        const nextCache = cached && cached.mtimeMs === fileStat.mtimeMs
+          ? cached
+          : { mtimeMs: fileStat.mtimeMs }
+        nextCache.metaDoc = doc
+        devDocsPageFileCache.set(filePath, nextCache)
+        return doc
+      }
+
+      const { parseMarkdown } = await import('@nuxtjs/mdc/runtime')
+      const parsed = await parseMarkdown(raw, {
+        highlight: false,
+        toc: { depth: 4, searchDepth: 4 },
+      })
+      const data = parsed.data && typeof parsed.data === 'object'
+        ? parsed.data as Record<string, unknown>
+        : {}
+      const body = parsed.body && typeof parsed.body === 'object'
+        ? { ...parsed.body, toc: parsed.toc }
+        : parsed.body
       const doc: DocsPageRecord = {
         ...data,
         path: contentPath,
         _path: contentPath,
         meta: data,
+        body,
+        toc: parsed.toc,
       }
       const nextCache = cached && cached.mtimeMs === fileStat.mtimeMs
         ? cached
         : { mtimeMs: fileStat.mtimeMs }
-      nextCache.metaDoc = doc
+      nextCache.fullDoc = doc
       devDocsPageFileCache.set(filePath, nextCache)
       return doc
     }
-
-    const { parseMarkdown } = await import('@nuxtjs/mdc/runtime')
-    const parsed = await parseMarkdown(raw, {
-      highlight: false,
-      toc: { depth: 4, searchDepth: 4 },
-    })
-    const data = parsed.data && typeof parsed.data === 'object'
-      ? parsed.data as Record<string, unknown>
-      : {}
-    const body = parsed.body && typeof parsed.body === 'object'
-      ? { ...parsed.body, toc: parsed.toc }
-      : parsed.body
-    const doc: DocsPageRecord = {
-      ...data,
-      path: contentPath,
-      _path: contentPath,
-      meta: data,
-      body,
-      toc: parsed.toc,
-    }
-    const nextCache = cached && cached.mtimeMs === fileStat.mtimeMs
-      ? cached
-      : { mtimeMs: fileStat.mtimeMs }
-    nextCache.fullDoc = doc
-    devDocsPageFileCache.set(filePath, nextCache)
-    return doc
   }
 
   return null
