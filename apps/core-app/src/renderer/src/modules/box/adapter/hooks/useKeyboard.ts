@@ -30,7 +30,9 @@ type ScrollbarLike = {
 
 type ItemRef = { $el?: HTMLElement } | HTMLElement | null
 
-type ClipboardOptions = { last?: unknown }
+type ClipboardOptions = {
+  last?: unknown
+}
 
 type TuffActionLike = TuffAction & {
   title?: string
@@ -384,6 +386,84 @@ export function resolveQuickActionsItem(
   }
 }
 
+export function hasCoreBoxAttachment(
+  boxOptions: Pick<IBoxOptions, 'mode' | 'file'>,
+  clipboardOptions: ClipboardOptions
+): boolean {
+  return (
+    Boolean(clipboardOptions.last) ||
+    (boxOptions.mode === BoxMode.FILE && (boxOptions.file?.paths?.length ?? 0) > 0)
+  )
+}
+
+export function clearCoreBoxAttachment(
+  boxOptions: Pick<IBoxOptions, 'mode' | 'file'>,
+  clearClipboard: (options?: { remember?: boolean }) => void
+): void {
+  clearClipboard({ remember: true })
+
+  if (boxOptions.mode === BoxMode.FILE) {
+    boxOptions.mode = BoxMode.INPUT
+    boxOptions.file = { buffer: null, paths: [] }
+  }
+}
+
+type EscapeKeyResult = 'overlay' | 'attachment' | 'provider' | 'query' | 'hide'
+
+export async function handleCoreBoxEscapeKey(options: {
+  event: KeyboardEvent
+  isMetaOverlayVisible: () => Promise<boolean>
+  hideMetaOverlay: () => Promise<unknown>
+  boxOptions: Pick<IBoxOptions, 'mode' | 'file'>
+  clipboardOptions: ClipboardOptions
+  clearClipboard: (options?: { remember?: boolean }) => void
+  activeCount: number
+  handleExit: () => Promise<void>
+  searchVal: Ref<string>
+}): Promise<EscapeKeyResult> {
+  const {
+    event,
+    isMetaOverlayVisible,
+    hideMetaOverlay,
+    boxOptions,
+    clipboardOptions,
+    clearClipboard,
+    activeCount,
+    handleExit,
+    searchVal
+  } = options
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  try {
+    if (await isMetaOverlayVisible()) {
+      await hideMetaOverlay()
+      return 'overlay'
+    }
+  } catch {
+    // If check fails, continue with normal ESC handling.
+  }
+
+  if (hasCoreBoxAttachment(boxOptions, clipboardOptions)) {
+    clearCoreBoxAttachment(boxOptions, clearClipboard)
+    return 'attachment'
+  }
+
+  if (activeCount > 0) {
+    void handleExit()
+    return 'provider'
+  }
+
+  if (searchVal.value) {
+    searchVal.value = ''
+    return 'query'
+  }
+
+  void handleExit()
+  return 'hide'
+}
+
 function resolveActiveFeatureItem(activations: IProviderActivate[] | null): TuffItem | null {
   const feature = activations?.find((activation) => activation?.id === 'plugin-features')?.meta
     ?.feature
@@ -565,7 +645,7 @@ export function useKeyboard(
    * Global keyboard event handler for CoreBox window
    * @param event - KeyboardEvent from user interaction
    */
-  function onKeyDown(event: KeyboardEvent): void {
+  async function onKeyDown(event: KeyboardEvent): Promise<void> {
     // Debug: log all meta+arrow events at entry point
     if (event.metaKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
       devLog(
@@ -822,7 +902,7 @@ export function useKeyboard(
     } else if (event.key === 'Escape') {
       /**
        * ESC key strict sequential handling (UPDATED):
-       * 1. Close MetaOverlay if visible (HIGHEST PRIORITY)
+       * 1. Close MetaOverlay if visible
        * 2. Clear clipboard/file attachments
        * 3. Deactivate active providers (attachUIView)
        * 4. Clear input query
@@ -830,49 +910,20 @@ export function useKeyboard(
        * 6. Hide CoreBox window
        */
 
-      // Step 0: Check MetaOverlay visibility (highest priority)
-      // Use async/await pattern for better control flow
-      void (async () => {
-        try {
+      await handleCoreBoxEscapeKey({
+        event,
+        isMetaOverlayVisible: async () => {
           const response = await transport.send(MetaOverlayEvents.ui.isVisible)
-          if (response?.visible) {
-            await transport.send(MetaOverlayEvents.ui.hide)
-            event.preventDefault()
-            event.stopPropagation()
-          }
-        } catch {
-          // If check fails, continue with normal ESC handling
-        }
-      })()
-
-      // Step 1: Clear clipboard/file attachments
-      if (clipboardOptions.last || boxOptions.file?.paths?.length > 0) {
-        clearClipboard({ remember: true })
-        if (boxOptions.mode === BoxMode.FILE) {
-          boxOptions.mode = BoxMode.INPUT
-          boxOptions.file = { buffer: null, paths: [] }
-        }
-        event.preventDefault()
-        return
-      }
-
-      // Step 2: Deactivate active providers (attachUIView)
-      const activeCount = activeActivations.value?.length ?? 0
-      if (activeCount > 0) {
-        void handleExit()
-        event.preventDefault()
-        return
-      }
-
-      // Step 3: Clear input query
-      if (searchVal.value) {
-        searchVal.value = ''
-        event.preventDefault()
-        return
-      }
-
-      // Step 4: Hide CoreBox window (final step)
-      void handleExit()
+          return response?.visible === true
+        },
+        hideMetaOverlay: () => transport.send(MetaOverlayEvents.ui.hide),
+        boxOptions,
+        clipboardOptions,
+        clearClipboard,
+        activeCount: activeActivations.value?.length ?? 0,
+        handleExit,
+        searchVal
+      })
     }
 
     if (boxOptions.focus < 0) {

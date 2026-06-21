@@ -28,6 +28,7 @@ export interface DownloadAsset {
   platform: 'win32' | 'darwin' | 'linux'
   arch: 'x64' | 'arm64'
   checksum?: string
+  signatureUrl?: string
 }
 
 /**

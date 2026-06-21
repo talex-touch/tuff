@@ -280,6 +280,31 @@ describe('useSearch CoreBox reopen behavior', () => {
     expect(queryPayload?.query?.inputs).toEqual([])
   })
 
+  it('does not restore a dismissed clipboard image during search refresh', async () => {
+    const timestamp = new Date().toISOString()
+    state.latestClipboard = {
+      id: 93,
+      type: 'image',
+      content: 'tfile:///tmp/tuff/clipboard/images/original.png',
+      thumbnail: 'data:image/png;base64,thumb',
+      timestamp,
+      captureSource: 'native-watch',
+      autoPasteEligible: true
+    }
+    const clipboardOptions = createClipboardOptions()
+    clipboardOptions.lastClearedTimestamp = timestamp
+    const hook = useSearch(createBoxOptions(), clipboardOptions)
+    await flushPromises()
+
+    state.send.mockClear()
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    expect(state.latestClipboardRequests).toContainEqual({ refresh: true })
+    expect(clipboardOptions.last).toBeNull()
+  })
+
   it('hides CoreBox immediately before dispatching background app launch', async () => {
     state.backgroundAppLaunch = true
     const hook = useSearch(createBoxOptions(), createClipboardOptions())

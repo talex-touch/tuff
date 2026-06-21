@@ -35,6 +35,12 @@ export interface ThemeStyleState {
   }
 }
 
+export interface ThemeDocumentState {
+  resolvedTheme: ResolvedTheme
+  coloring: boolean
+  contrast: boolean
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -124,4 +130,14 @@ export function areThemeStylesEqual(a: ThemeStyleState, b: ThemeStyleState): boo
     a.theme.addon.coloring === b.theme.addon.coloring &&
     a.theme.transition.route === b.theme.transition.route
   )
+}
+
+export function applyThemeDocumentState(root: HTMLElement, state: ThemeDocumentState): void {
+  root.classList.toggle('dark', state.resolvedTheme === 'dark')
+  root.classList.toggle('coloring', state.coloring)
+  root.classList.toggle('contrast', state.contrast)
+  root.dataset.theme = state.resolvedTheme
+  root.dataset.txColoring = String(state.coloring)
+  root.dataset.txContrast = state.contrast ? 'high' : 'normal'
+  root.style.colorScheme = state.resolvedTheme
 }
