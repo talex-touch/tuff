@@ -11,7 +11,7 @@
 
 ## References
 - docs/updates-module.md
-- docs/engineering/plans/planprd-release-pipeline.md
+- docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md
 - apps/core-app/electron-builder.yml
 - apps/core-app/scripts/build-target.js
 - apps/core-app/src/main/modules/update/UpdateService.ts
