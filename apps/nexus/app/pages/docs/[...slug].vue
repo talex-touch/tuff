@@ -950,27 +950,39 @@ function resolveDeferredBodySplitIndex(body: unknown) {
   if (children.length < 5)
     return -1
 
+  let secondH2SplitIndex = -1
   let h2Count = 0
   for (let index = 0; index < children.length; index += 1) {
     if (!isBodyHeadingNode(children[index], 'h2'))
       continue
 
     h2Count += 1
-    if (h2Count === 2)
-      return index
+    if (h2Count === 2) {
+      secondH2SplitIndex = index
+      break
+    }
   }
 
+  let deferredBoundaryCount = 0
   for (let index = 3; index < children.length; index += 1) {
     if (!isDeferredBoundaryNode(children[index]))
       continue
 
-    if (index > 3 && isBodyHeadingNode(children[index - 1], 'h3'))
-      return index - 1
+    deferredBoundaryCount += 1
+    if (deferredBoundaryCount < 2 && secondH2SplitIndex > 0)
+      continue
 
-    return index
+    const boundarySplitIndex = index > 3 && isBodyHeadingNode(children[index - 1], 'h3')
+      ? index - 1
+      : index
+
+    if (secondH2SplitIndex > 0)
+      return Math.min(secondH2SplitIndex, boundarySplitIndex)
+
+    return boundarySplitIndex
   }
 
-  return -1
+  return secondH2SplitIndex
 }
 
 function cloneDocWithBodyChildren(source: Record<string, any> | null | undefined, children: unknown[]) {
