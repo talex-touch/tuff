@@ -144,7 +144,7 @@
 | 41 | `3d2a0d549` | `perf(nexus): simplify docs code headers` | 已完成 |
 | 42 | `6475b8e23` | `perf(nexus): load docs toast on intent` | 已完成 |
 | 43 | `7446f9e4b` | `perf(nexus): defer public docs auth profile graph` | 已完成 |
-| 44 | pending | `perf(nexus): remove legacy sonner from docs graph` | 当前批收口中 |
+| 44 | `9e4d2a8bb` | `perf(nexus): remove legacy sonner from docs graph` | 已完成 |
 
 ## 本轮收尾结论
 
