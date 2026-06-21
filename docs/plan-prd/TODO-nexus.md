@@ -2,7 +2,7 @@
 
 > 更新时间：2026-06-21
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台的性能收口。
-> 当前状态：Nexus 第 36 批 strict pending performance defer 已完成代码与验证；`glass-surface` 属于 `syncStatus: migrated + verified: true`，仍在 AI review / aireview strict pending 口径内，本批把 deferred body 触发条件从 UI verified 状态拆成性能 pending 状态，避免这类页面首屏同步挂载 API / props / 后续 demo。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部从本文任务树领取。
+> 当前状态：Nexus 第 37 批 docs-only TODO 收尾已完成；本批不继续扩大代码改动，只把当前 goal 原句、用户最新收尾要求、已完成批次、子任务百分比和后续 docs / aireview / route matrix / dev SSR TTFB / production chunk 任务树固定到本文。第 36 批 strict pending performance defer 已完成代码与验证；`glass-surface` 属于 `syncStatus: migrated + verified: true`，仍在 AI review / aireview strict pending 口径内，deferred body 触发条件已从 UI verified 状态拆成性能 pending 状态，避免这类页面首屏同步挂载 API / props / 后续 demo。正式 pending / aireview 组件性能工作表已落到 `docs/engineering/reports/nexus-performance-2026-06-21/pending-components-worktable.md`。当前扫描 216 个本地化组件文档、108 个组件条目，按 `syncStatus != reviewed || verified != true` 口径得到 76 个 pending 组件条目；后续 docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、生产 chunk / payload / CSS 复核全部从本文任务树领取。
 
 ## Goal 原句
 
@@ -35,12 +35,13 @@
 - 本轮 tabs/card 文档链路：约 99%。触发页 `/en/docs/dev/components/tabs` 已修复 500 风险、full-body 抢首屏、组件侧栏链接晚出现、一批 dev route-local CSS 污染、dev-only Vue Devtools bridge 请求、PWA dev client plugin 抢首屏问题，并将右侧 DocsOutline、DocsAsideCardsShell、pending 文档 AI notice、无 code 页面 code block renderer/CSS、docs 主正文 MDC Prose wrapper、Nuxt Content global Prose registry、pending 长文档后半段正文从首屏重型路径拆出。
 - 整体 goal 估算：约 91%。已完成 docs 路由关键路径止血、一批 dev 模式请求削减、首页 hydration/warning 止血、全站 route matrix 首轮基线、route-local dev runtime dependency reload 止血、`/` / `/new` zh landing route-local locale warning 修复、dev SSR 组件文档 metadata-first 首访、sidebar / pager full-body prefetch 可取消化、component docs dev metadata fast path、docs Assistant 上下文按需构建，`fusion` / `card` pending 长文档后半段 client deferred render，`avatar-variants` 单章节大 demo fallback split，以及 `glass-surface` 这类 `migrated + verified` strict pending 页面 deferred body 覆盖；后续仍需系统性覆盖剩余 AI review / aireview 未审批组件、dev SSR TTFB 深化、生产构建 chunk 复核与文档模板静态化。
 - 已完成：docs sidebar metadata 延迟加载、docs metadata 避免全量 MDC 解析、i18n locale messages 懒加载、docs highlight 全局插件移除、route-local locale messages 拆分、dev SSR route-local stylesheet 过滤、docs full-body 请求与预取 idle 调度、组件侧栏 metadata 从 8s 延迟改为水合后短延迟、组件侧栏 full-body 预取可取消化、docs route 过滤 new/asset-create/version drawer 类无关 stylesheet、dev 模式 `@vue/devtools-api` noop bridge、DocsOutline 首屏懒挂载、DocsAsideCardsShell 占位按钮 + idle 延迟挂载、AI notice 静态化且不再 eager mount aside cards / shell、code block renderer/style 从无代码文档首屏拆出、docs 主正文禁用默认 MDC Prose 全量映射并保留 heading anchors、Nuxt Content global Prose registry 过滤、policy 页面显式 native prose、普通 dev 模式 PWA module gate 与 `VitePwaManifest` wrapper、首页 sticky attrs warning 修复、waitlist aurora SSR hydration mismatch 修复、`@vueuse/core` / `marked` / `echarts/*` / `vue-sonner` / `dompurify` dev 预打包、locale 切换前预合并当前 route 需要的 route-local message chunk、dev SSR 组件文档 metadata-first、component docs dev `body=0` metadata frontmatter fast path、docs Assistant context 按需构建、pending 长文档后半段渲染延迟到用户意图或静置后。
-- 当前第 36 批只做 strict pending deferred body 边界修复，不继续混入 demo registry、DocApiTable、首页 warning、dev SSR TTFB 或生产 chunk 复核。后续全部进入 TODO 队列：`fusion` / `card` demo / API table 二刀、更多 strict pending verified 页面抽样、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
+- 当前第 37 批只做 TODO-nexus docs-only 收尾，不继续混入 demo registry、DocApiTable、首页 warning、dev SSR TTFB 或生产 chunk 复核。后续全部进入 TODO 队列：`fusion` / `card` demo / API table 二刀、更多 strict pending verified 页面抽样、重型 demo / report / preview lazy boundary、首页 WebGL / lifecycle warning、dev SSR TTFB、生产构建 chunk 污染复核、全站页面切换矩阵二轮。
 
 ## 子任务百分比快照
 
 | 子任务 | 当前进度 | 说明 |
 | --- | ---: | --- |
+| 当前第 37 批 TODO-nexus docs-only 收尾 | 100% | 按用户最新要求，把当前 goal 原句、追加收尾要求、已完成批次、docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核和下一批领取边界全部固定到本文；本批不扩业务代码、不新增 Playwright artifact。 |
 | 当前第 36 批 strict pending deferred body | 100% | 将 `syncStatus != reviewed || verified != true` 的 strict pending 口径用于性能 deferred body；`glass-surface` 初始 shell false -> true，initial API/Props false，滚动后 deferred true/API true；`tabs` 仍 shell false，未误伤 reviewed+verified 页面。 |
 | 当前第 35 批 docs-only 收尾 | 100% | 按用户最新要求，把当前 goal 原句、追加收尾要求、触发页、真实批次提交、docs 文档内容加载、AI review / aireview 未审批组件、route matrix、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核和下一批领取顺序全部固定到本文；本批不扩业务代码、不新增 Playwright artifact。 |
 | 当前第 34 批 pending single-section demo fallback split | 100% | `avatar-variants` 顶层只有一个 `h2 Gallery`，第 34 批用首个 demo/API 自定义节点 fallback 切分；initial demo title true -> false、demo-like nodes 22 -> 0，滚动后恢复 22。 |
@@ -102,7 +103,8 @@
 | 33 | `4793a0240` | `perf(nexus): defer pending docs body sections` | 已完成 |
 | 34 | `03de407dd` | `perf(nexus): defer single-section docs demos` | 已完成 |
 | 35 | `15df6cca1` | `docs(nexus): finalize performance TODO handoff` | 已完成 |
-| 36 | 当前批 | `perf(nexus): defer strict pending docs sections` | 已验证；提交 hash 以 git log 为准 |
+| 36 | `bf4b46692` | `perf(nexus): defer strict pending docs sections` | 已完成 |
+| 37 | docs-only | `docs(nexus): finalize docs aireview todo` | 已完成 |
 
 ## 本轮收尾结论
 
@@ -135,6 +137,7 @@
 - 第 34 批已提交：`03de407dd perf(nexus): defer single-section docs demos`；`avatar-variants` 顶层只有一个 `h2 Gallery`，第 33 批第二个 `h2` 规则覆盖不到；本批在首个 demo/API 组件边界 fallback 切分，并把 demo 前的 `h3` 一起后置，避免首屏留下空 demo 标题。
 - 第 35 批已提交：`15df6cca1 docs(nexus): finalize performance TODO handoff`；按用户最新要求，把当前 goal 原句、追加收尾要求、后续 docs 文档内容、AI review / aireview 未审批组件、全站 route matrix、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核和下一批领取顺序全部固定到本文。
 - 第 36 批为 strict pending deferred body：把性能 deferred body 从 UI verified 状态拆出，按 strict pending 口径覆盖 `syncStatus: migrated + verified: true` 的 `glass-surface`；`tabs` 作为 reviewed+verified 触发页保持 shell false，不误伤。
+- 第 37 批为 docs-only 收尾：按用户最新要求，不再继续扩大当前批；后续 docs 文档内容加载、AI review / aireview 未审批组件、全站 route matrix、dev SSR TTFB、首页 warning、生产 chunk / payload / CSS 复核全部从本文任务树领取。
 - 当前工作树存在 CoreApp 相关未提交改动，属于其它任务范围；Nexus 本轮收尾不混入这些文件。
 - `output/playwright/` 继续作为 ignored evidence 目录，只在本文引用报告路径，不纳入 git。
 - 下一阶段不再继续扩大当前批次；所有 docs 内容、AI review / aireview 未审批组件和全站矩阵二轮都按下方 TODO 分批处理。
@@ -421,6 +424,33 @@ pending 排序快照：
 2. P0：dev SSR TTFB 二轮；覆盖 `/`、`/store`、`/en/docs/dev/components/tabs`、`/sign-in`、未登录 dashboard redirect，区分 Nuxt dev transform、Content query/frontmatter fast path、i18n init、store memory init、middleware 与 route payload。
 3. P0：route matrix 二轮；补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` screenshot / HAR。
 4. P1：production preview chunk / payload / CSS 复核；确认 docs、store、dashboard、landing 是否仍互相污染，若存在优先修 import boundary、layout boundary 或 component registration。
+
+验证证据：
+
+- Markdown whitespace：`git diff --check -- "docs/plan-prd/TODO-nexus.md"`。
+
+## 第 37 批收口记录
+
+目标：按用户最新要求快速完成当前任务收尾。当前批只更新 `docs/plan-prd/TODO-nexus.md`，把后续 docs 文档内容加载、AI review / aireview 未审批组件优化、全站 route matrix 二轮、dev SSR TTFB、首页剩余 warning、生产 chunk / payload / CSS 复核全部放入本文，作为后续唯一领取入口。
+
+改动范围：
+
+- `docs/plan-prd/TODO-nexus.md`
+
+收口口径：
+
+- 当前 goal 原句、用户追加要求、触发页、已完成批次、真实提交 hash、子任务百分比、验证证据路径和后续任务树均保留在本文。
+- 后续 docs 文档内容和 AI review / aireview 相关事项不再从聊天上下文临时恢复范围，统一从 `后续任务树` 领取。
+- 下一批只允许选择 1 个 P0 子任务和 1-2 个页面先跑 baseline，再决定是否落代码；禁止一次性混入 docs demo、DocApiTable、section split、首页 warning、TTFB、chunk 复核等多个方向。
+- 每批结束继续回填本文：提交 hash、改动范围、测试命令、核心性能数字、Playwright screenshot / HAR / Markdown / JSON 路径和下一批候选。
+- 本批不新增业务代码、不新增测试文件、不新增 Playwright artifact、不触碰 CoreApp / AI dirty files。
+
+下一批领取优先级：
+
+1. P0：`fusion` / `card` demo / API table 二刀，独立确认 DocApiTable / TuffPropsTable 是否仍有 production chunk 污染或首屏 eager import。
+2. P0：dev SSR TTFB 二轮，区分 Nuxt dev transform、Content query/frontmatter fast path、i18n init、store memory init 与 middleware。
+3. P0：抽样另一个 strict pending verified 页面，例如 `base-anchor` / `select` / `radio`，确认第 36 批规则覆盖不止 `glass-surface`。
+4. P0：route matrix 二轮，补 authenticated dashboard、Provider Registry、Data Governance、移动端 viewport、production preview、back/forward cache、`/new` screenshot / HAR。
 
 验证证据：
 
@@ -1341,6 +1371,7 @@ pending 排序快照：
 - [x] 当前第 34 批只做 `avatar-variants` 单章节大 demo fallback split，不继续混入 demo registry 重构、首页 warning、dev SSR 深化或生产 chunk 复核。
 - [x] 当前第 35 批只做 TODO 文档收尾，不继续混入代码、Playwright 新采样、docs demo、DocApiTable、section split、首页 warning、dev SSR 深化或生产 chunk 复核。
 - [x] 当前第 36 批只做 strict pending deferred body，不继续混入 demo registry、DocApiTable、首页 warning、dev SSR 深化或生产 chunk 复核。
+- [x] 当前第 37 批只做 TODO 文档收尾，不继续混入业务代码、Playwright 新采样、docs demo、DocApiTable、section split、首页 warning、dev SSR 深化或生产 chunk 复核。
 - [x] 当前 goal 原句、用户追加要求、触发页、批次提交、验证证据、子任务百分比和后续执行队列已写入本文。
 - [x] 后续 docs 文档内容、AI review / aireview 相关事项统一从本文任务树领取，按小批次执行、验证、提交和回填。
 - [x] 第 36 批开始前已选定 `glass-surface` / `gradual-blur` docs pending 优化，并先跑 Playwright / HAR baseline 后再落代码。
@@ -1445,6 +1476,7 @@ pending 排序快照：
 - [x] 第 34 批结束已更新本文：`avatar-variants` 单章节大 demo fallback split、baseline/after Playwright/CDP screenshot/HAR/Markdown/JSON、核心 DOM 数字和下一批候选。
 - [x] 第 35 批结束已更新本文：当前 goal 原句、追加收尾要求、真实提交 hash、后续 docs / aireview / route matrix / TTFB / chunk 任务树、下一批领取优先级和当前批 docs-only 边界。
 - [x] 第 36 批结束已更新本文：strict pending deferred body 规则、`tabs` / `glass-surface` / `gradual-blur` Playwright/CDP baseline/after2 screenshot/HAR/Markdown/JSON、核心 DOM 数字和下一批候选。
+- [x] 第 37 批结束已更新本文：当前 goal 原句、追加收尾要求、第 36 批真实提交 hash、后续 docs / aireview / route matrix / TTFB / chunk 任务树、下一批领取优先级和当前批 docs-only 边界。
 - [ ] 后续每一批结束后更新本文：提交 hash、改动范围、测试命令、核心性能数字、下一批候选。
 
 ### P0：全站页面切换矩阵
@@ -1534,4 +1566,4 @@ pending 排序快照：
 - 普通 `git commit` 可能被本地 Husky 固定 pnpm shim 路径阻塞；若最近路径验证已通过，可用 `HUSKY=0 git commit ...` 提交当前批次。
 - 已知全量 typecheck 可能存在历史失败，当前 Nexus 性能批次以 focused Vitest、scoped ESLint、curl smoke、Playwright 报告和 `git diff --check` 为准。
 - 当前第 6 批是 dev-only 止血阀，后续仍要追 Nuxt dev SSR 为什么会收集跨页面 stylesheet，以及生产构建是否存在同类污染。
-- 当前第 31 批 docs-only 收尾已经完成，后续不要继续往本批塞 docs demo、DocApiTable、aireview 逐页 section split、dev SSR 深化、首页 WebGL/lifecycle warning 或生产 chunk 复核；新改动按上方 TODO 独立切批、独立验证、独立提交。
+- 当前第 37 批 docs-only 收尾已经完成，后续不要继续往本批塞 docs demo、DocApiTable、aireview 逐页 section split、dev SSR 深化、首页 WebGL/lifecycle warning 或生产 chunk 复核；新改动按上方 TODO 独立切批、独立验证、独立提交。
