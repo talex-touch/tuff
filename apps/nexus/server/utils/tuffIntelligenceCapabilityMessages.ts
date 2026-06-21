@@ -164,6 +164,10 @@ const INTENT_PROMPT = [
   'Detect user intent.',
   'Return JSON only: {"intent":"...","confidence":0.0,"entities":[]}',
 ].join(' ')
+const CONTENT_EXTRACT_PROMPT = [
+  'Extract structured information from the text.',
+  'Return JSON only: {"summary":"...","entities":[],"actions":[],"keywords":[]}',
+].join(' ')
 
 type CapabilityMessageBuilder = (record: Record<string, unknown>) => IntelligenceMessage[]
 
@@ -172,6 +176,7 @@ const capabilityMessageBuilders: Record<string, CapabilityMessageBuilder> = {
   'text.translate': textTranslateMessages,
   'text.summarize': textSummarizeMessages,
   'text.rewrite': textRewriteMessages,
+  'content.extract': record => jsonTextMessages(CONTENT_EXTRACT_PROMPT, record),
   'keywords.extract': record => jsonTextMessages(KEYWORD_PROMPT, record),
   'intent.detect': record => jsonTextMessages(INTENT_PROMPT, record),
   'code.explain': codeExplainMessages,

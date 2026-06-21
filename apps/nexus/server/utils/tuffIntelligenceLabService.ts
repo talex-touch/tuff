@@ -2583,7 +2583,7 @@ export async function orchestrateIntelligenceLabStream(
   const startedAt = now()
   const runId = createId('run')
   let streamEventCount = 0
-  let historyMessages = normalizeMessages(payload.history)
+  let historyMessages = normalizeCapabilityMessages(payload.history)
   let objective = incomingMessage
 
   let actions: IntelligenceLabAction[] = []
