@@ -121,8 +121,8 @@ watch(
   { immediate: import.meta.client },
 )
 
-const { user } = useAuthUser({ fetchOnAuth: false, server: false })
-const isAdmin = computed(() => user.value?.role === 'admin')
+const authUserState = useState<{ role?: string } | null>('auth-user', () => null)
+const isAdmin = computed(() => authUserState.value?.role === 'admin')
 
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))

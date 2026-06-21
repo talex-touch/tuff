@@ -1,4 +1,3 @@
-import { fetchCurrentUserProfile, patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { ensureRouteLocaleChunk } from '~/composables/useRouteLocaleChunks'
 import { resolveRouteLocaleChunks } from '~/utils/route-locale-chunks'
 
@@ -114,6 +113,7 @@ export function useLocaleOrchestrator() {
       return null
 
     try {
+      const { patchCurrentUserProfile } = await import('~/composables/useCurrentUserApi')
       await patchCurrentUserProfile({ locale: normalized })
       return normalized
     }
@@ -275,6 +275,7 @@ export function useLocaleOrchestrator() {
     try {
       let nextLocale = normalizeLocaleWithMetrics(input.profileLocale, 'profile')
       if (!nextLocale) {
+        const { fetchCurrentUserProfile } = await import('~/composables/useCurrentUserApi')
         const profile = await fetchCurrentUserProfile()
         nextLocale = normalizeLocaleWithMetrics(profile?.locale ?? null, 'profile')
       }
