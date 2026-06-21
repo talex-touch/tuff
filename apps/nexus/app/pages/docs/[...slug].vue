@@ -98,7 +98,6 @@ const route = useRoute()
 const router = useRouter()
 const requestUrl = useRequestURL()
 const { t, setLocale } = useI18n()
-const toast = useToast()
 const activeRoutePath = ref(route.path)
 if (import.meta.client) {
   activeRoutePath.value = router.currentRoute.value.path || route.path
@@ -1306,6 +1305,15 @@ function dispatchDocsAction(detail: Record<string, unknown>) {
   window.dispatchEvent(new CustomEvent('docs:action', { detail }))
 }
 
+async function showDocsToast(type: 'success' | 'error', title: string) {
+  if (!import.meta.client)
+    return
+
+  const { useToast } = await import('~/composables/useToast')
+  const toast = useToast()
+  toast[type](title)
+}
+
 async function copyInlineCode(code: HTMLElement) {
   const text = code.textContent?.trim() ?? ''
   if (!text)
@@ -1315,7 +1323,7 @@ async function copyInlineCode(code: HTMLElement) {
     await writeToClipboard(text)
     code.classList.add('is-copied')
     window.setTimeout(() => code.classList.remove('is-copied'), 900)
-    toast.success(copyLabels.value.copied)
+    await showDocsToast('success', copyLabels.value.copied)
     dispatchDocsAction({
       type: 'copy',
       source: 'inline_code',
@@ -1325,7 +1333,7 @@ async function copyInlineCode(code: HTMLElement) {
     })
   }
   catch {
-    toast.error(copyLabels.value.failed)
+    await showDocsToast('error', copyLabels.value.failed)
   }
 }
 
@@ -1386,10 +1394,10 @@ async function shareCurrentPage() {
     return
   try {
     await writeToClipboard(window.location.href)
-    toast.success(t('docs.shareCopied', 'Link copied!'))
+    await showDocsToast('success', t('docs.shareCopied', 'Link copied!'))
   }
   catch {
-    toast.error(t('docs.shareFailed', 'Copy failed'))
+    await showDocsToast('error', t('docs.shareFailed', 'Copy failed'))
   }
 }
 
@@ -1416,7 +1424,7 @@ function renderCodeHeader(target: HTMLElement, language: string, codeText: strin
   copyButton.addEventListener('click', async () => {
     try {
       await writeToClipboard(codeText)
-      toast.success(copyLabels.value.copied)
+      await showDocsToast('success', copyLabels.value.copied)
       dispatchDocsAction({
         type: 'copy',
         source: 'code_block',
@@ -1426,7 +1434,7 @@ function renderCodeHeader(target: HTMLElement, language: string, codeText: strin
       })
     }
     catch {
-      toast.error(copyLabels.value.failed)
+      await showDocsToast('error', copyLabels.value.failed)
     }
   })
 
