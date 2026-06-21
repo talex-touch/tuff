@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
+  createDefaultSceneCapabilityInput,
   createProviderQuotaPanel,
   createProviderEditPanel,
+  createSceneRunPanel,
   filterProvidersByObservability,
   filterScenesByObservability,
   filterHealthCheckEntries,
@@ -22,6 +24,7 @@ import {
   summarizeProviderQuota,
   summarizeProviderQuotaList,
   providerRegistryTemplates,
+  providerServiceCategoryOptions,
   type ProviderHealthCheckEntry,
   type ProviderQuotaRecord,
   type ProviderRegistryRecord,
@@ -248,7 +251,7 @@ describe('provider registry quota UI contract', () => {
     const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
 
     expect(panel).toContain('getProviderQuotaList')
-    expect(panel).toContain('getProviderQuotaList(provider.id).slice(0, 4)')
+    expect(panel).toContain('getProviderQuotaList(selectedProvider.id)')
     expect(panel).toContain('dashboard.providerRegistry.quota.channels')
     expect(panel).toContain('dashboard.providerRegistry.quota.defaultChannel')
     expect(panel).toContain('quota.channel')
@@ -263,6 +266,7 @@ describe('provider registry provider templates', () => {
 
     expect(aiTemplates.map(template => template.id)).toEqual(expect.arrayContaining([
       'openai-compatible-ai',
+      'openai-responses-ai',
       'deepseek-ai',
     ]))
     expect(aiTemplates.flatMap(template => template.capabilities.map(row => row.capability))).toEqual(expect.arrayContaining([
@@ -279,14 +283,76 @@ describe('provider registry provider templates', () => {
         routingShape: 'providers-scenes',
       })
     }
+    expect(aiTemplates.find(template => template.id === 'openai-responses-ai')?.metadata).toMatchObject({
+      adapter: 'openai-responses',
+      transport: 'responses',
+    })
   })
 
-  it('renders provider template selector in the admin panel', () => {
+  it('groups provider templates by service category before adapter selection', () => {
+    expect(providerServiceCategoryOptions).toEqual(['ai', 'exchange', 'screenshot', 'translation'])
+    expect(providerRegistryTemplates.map(template => template.serviceCategory)).toEqual(expect.arrayContaining([
+      'ai',
+      'exchange',
+      'screenshot',
+      'translation',
+    ]))
+    expect(providerRegistryTemplates.find(template => template.id === 'exchange-rate')?.capabilities.map(row => row.capability)).toEqual([
+      'fx.rate.latest',
+      'fx.convert',
+    ])
+    expect(providerRegistryTemplates.find(template => template.id === 'screenshot-overlay')?.capabilities.map(row => row.capability)).toEqual([
+      'overlay.render',
+    ])
+  })
+
+  it('renders service category and adapter selectors in the admin panel', () => {
     const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
 
+    expect(panel).toContain('providerServiceCategoryOptions')
+    expect(panel).toContain('applyProviderServiceCategory')
     expect(panel).toContain('providerTemplateOptions')
     expect(panel).toContain('applyProviderTemplate')
-    expect(panel).toContain('dashboard.providerRegistry.fields.template')
+    expect(panel).toContain('dashboard.providerRegistry.fields.serviceCategory')
+    expect(panel).toContain('dashboard.providerRegistry.fields.adapter')
+  })
+
+  it('seeds runnable OpenAI scene inputs for admin verification', () => {
+    expect(createDefaultSceneCapabilityInput('chat.completion')).toEqual({
+      messages: [
+        expect.objectContaining({
+          role: 'user',
+          content: expect.stringContaining('chat completion is working'),
+        }),
+      ],
+    })
+    expect(createDefaultSceneCapabilityInput('text.summarize')).toMatchObject({
+      text: expect.stringContaining('Provider Registry'),
+      style: 'concise',
+      maxLength: 160,
+    })
+    expect(createDefaultSceneCapabilityInput('content.extract')).toMatchObject({
+      text: expect.stringContaining('Provider Registry owners'),
+      tags: ['summary', 'entities', 'actions', 'keywords'],
+    })
+
+    const panel = createSceneRunPanel(sceneRecord({
+      requiredCapabilities: ['text.summarize'],
+      bindings: [],
+    }))
+    expect(JSON.parse(panel.inputText)).toMatchObject({
+      text: expect.stringContaining('Provider Registry'),
+      style: 'concise',
+    })
+  })
+
+  it('keeps run drawer wired to capability-specific samples and failed run hints', () => {
+    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+
+    expect(panel).toContain('applySceneRunCapabilitySample')
+    expect(panel).toContain('selectSceneRunCapability')
+    expect(panel).toContain('dashboard.providerRegistry.scenes.resetSample')
+    expect(panel).toContain('activeSceneRunPanel.error')
   })
 })
 

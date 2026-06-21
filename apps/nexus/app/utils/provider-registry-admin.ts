@@ -1,4 +1,5 @@
 export type ProviderVendor = 'tencent-cloud' | 'openai' | 'deepseek' | 'exchange-rate' | 'custom'
+export type ProviderServiceCategory = 'ai' | 'exchange' | 'screenshot' | 'translation'
 export type ProviderStatus = 'enabled' | 'disabled' | 'degraded'
 export type ProviderAuthType = 'api_key' | 'secret_pair' | 'oauth' | 'none'
 export type OwnerScope = 'system' | 'workspace' | 'user'
@@ -87,10 +88,17 @@ export interface CapabilityFormRow {
   meteringUnit: string
 }
 
-export type ProviderRegistryTemplateId = 'tencent-translation' | 'openai-compatible-ai' | 'deepseek-ai'
+export type ProviderRegistryTemplateId =
+  | 'tencent-translation'
+  | 'openai-compatible-ai'
+  | 'openai-responses-ai'
+  | 'deepseek-ai'
+  | 'exchange-rate'
+  | 'screenshot-overlay'
 
 export interface ProviderRegistryTemplate {
   id: ProviderRegistryTemplateId
+  serviceCategory: ProviderServiceCategory
   vendor: ProviderVendor
   name: string
   displayName: string
@@ -362,6 +370,7 @@ export interface SceneRunPanelState {
 }
 
 export const providerVendorOptions: ProviderVendor[] = ['tencent-cloud', 'openai', 'deepseek', 'exchange-rate', 'custom']
+export const providerServiceCategoryOptions: ProviderServiceCategory[] = ['ai', 'exchange', 'screenshot', 'translation']
 export const providerStatusOptions: ProviderStatus[] = ['enabled', 'disabled', 'degraded']
 export const authTypeOptions: ProviderAuthType[] = ['secret_pair', 'api_key', 'oauth', 'none']
 export const ownerScopeOptions: OwnerScope[] = ['system', 'workspace', 'user']
@@ -372,6 +381,7 @@ export const bindingStatusOptions: BindingStatus[] = ['enabled', 'disabled']
 export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
   {
     id: 'tencent-translation',
+    serviceCategory: 'translation',
     vendor: 'tencent-cloud',
     name: 'tencent-cloud-mt-main',
     displayName: 'Tencent Cloud Machine Translation',
@@ -391,6 +401,7 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
   },
   {
     id: 'openai-compatible-ai',
+    serviceCategory: 'ai',
     vendor: 'openai',
     name: 'openai-compatible-ai-main',
     displayName: 'OpenAI Compatible AI',
@@ -406,12 +417,45 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     ],
     metadata: {
       source: 'intelligence',
+      adapter: 'openai-compatible',
       routingShape: 'providers-scenes',
       template: 'openai-compatible-ai',
+      transport: 'chat.completions',
+      intelligenceProviderId: 'openai-compatible-ai-main',
+      intelligenceType: 'openai',
+      defaultModel: 'gpt-4.1-mini',
+    },
+  },
+  {
+    id: 'openai-responses-ai',
+    serviceCategory: 'ai',
+    vendor: 'openai',
+    name: 'openai-responses-ai-main',
+    displayName: 'OpenAI Responses',
+    authType: 'api_key',
+    authRef: 'secure://providers/openai-responses-ai-main',
+    endpoint: 'https://api.openai.com/v1',
+    region: 'global',
+    capabilities: [
+      { capability: 'chat.completion', schemaRef: 'nexus://schemas/provider/chat-completion.v1', meteringUnit: 'token' },
+      { capability: 'text.summarize', schemaRef: 'nexus://schemas/provider/text-summarize.v1', meteringUnit: 'token' },
+      { capability: 'content.extract', schemaRef: 'nexus://schemas/provider/content-extract.v1', meteringUnit: 'token' },
+      { capability: 'vision.ocr', schemaRef: 'nexus://schemas/provider/vision-ocr.v1', meteringUnit: 'token' },
+    ],
+    metadata: {
+      source: 'intelligence',
+      adapter: 'openai-responses',
+      routingShape: 'providers-scenes',
+      template: 'openai-responses-ai',
+      transport: 'responses',
+      intelligenceProviderId: 'openai-responses-ai-main',
+      intelligenceType: 'openai',
+      defaultModel: 'gpt-4.1-mini',
     },
   },
   {
     id: 'deepseek-ai',
+    serviceCategory: 'ai',
     vendor: 'deepseek',
     name: 'deepseek-ai-main',
     displayName: 'DeepSeek AI',
@@ -426,8 +470,52 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     ],
     metadata: {
       source: 'intelligence',
+      adapter: 'openai-compatible',
       routingShape: 'providers-scenes',
       template: 'deepseek-ai',
+      transport: 'chat.completions',
+      intelligenceProviderId: 'deepseek-ai-main',
+      intelligenceType: 'deepseek',
+      defaultModel: 'deepseek-chat',
+    },
+  },
+  {
+    id: 'exchange-rate',
+    serviceCategory: 'exchange',
+    vendor: 'exchange-rate',
+    name: 'exchange-rate-official',
+    displayName: 'Exchange Rate API',
+    authType: 'api_key',
+    authRef: 'secure://providers/exchange-rate-official',
+    endpoint: 'https://v6.exchangerate-api.com/v6',
+    region: 'global',
+    capabilities: [
+      { capability: 'fx.rate.latest', schemaRef: 'nexus://schemas/provider/fx-rate-latest.v1', meteringUnit: 'fx_quote' },
+      { capability: 'fx.convert', schemaRef: 'nexus://schemas/provider/fx-convert.v1', meteringUnit: 'fx_quote' },
+    ],
+    metadata: {
+      source: 'provider-registry',
+      adapter: 'exchange-rate',
+      template: 'exchange-rate',
+    },
+  },
+  {
+    id: 'screenshot-overlay',
+    serviceCategory: 'screenshot',
+    vendor: 'custom',
+    name: 'local-overlay-renderer',
+    displayName: 'Local Screenshot Overlay',
+    authType: 'none',
+    authRef: '',
+    endpoint: 'local://overlay-render',
+    region: 'local',
+    capabilities: [
+      { capability: 'overlay.render', schemaRef: 'nexus://schemas/provider/overlay-render.v1', meteringUnit: 'image' },
+    ],
+    metadata: {
+      source: 'provider-registry',
+      adapter: 'local-overlay',
+      template: 'screenshot-overlay',
     },
   },
 ]
@@ -1145,6 +1233,37 @@ export function sceneCapabilities(scene: SceneRegistryRecord) {
 
 export function createDefaultSceneInput(scene: SceneRegistryRecord) {
   const capabilities = sceneCapabilities(scene)
+  return createDefaultSceneCapabilityInput(capabilities)
+}
+
+export function createDefaultSceneCapabilityInput(capabilityOrCapabilities: string | string[]) {
+  const capabilities = Array.isArray(capabilityOrCapabilities) ? capabilityOrCapabilities : [capabilityOrCapabilities]
+  if (capabilities.includes('chat.completion')) {
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: 'Reply with one short sentence confirming Provider Registry chat completion is working.',
+        },
+      ],
+    }
+  }
+
+  if (capabilities.includes('text.summarize')) {
+    return {
+      text: 'Provider Registry lets administrators route scenes to provider capabilities, run dry-runs, execute safe samples, and inspect usage evidence before enabling production traffic.',
+      style: 'concise',
+      maxLength: 160,
+    }
+  }
+
+  if (capabilities.includes('content.extract')) {
+    return {
+      text: 'Provider Registry owners should verify credentials, endpoint health, scene bindings, fallback behavior, and usage ledger rows before marking an OpenAI provider ready.',
+      tags: ['summary', 'entities', 'actions', 'keywords'],
+    }
+  }
+
   if (capabilities.includes('text.translate') && !capabilities.includes('vision.ocr')) {
     return {
       text: 'Hello',
