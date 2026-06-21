@@ -13,7 +13,7 @@ defineI18nRoute(false)
 
 const { t } = useI18n()
 const route = useRoute()
-const { status } = useAuth()
+const { status } = useNexusAuth()
 
 const state = ref<'loading' | 'ready' | 'approved' | 'expired' | 'cancelled' | 'error'>('loading')
 const errorMessage = ref('')

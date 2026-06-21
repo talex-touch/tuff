@@ -48,7 +48,7 @@ export function useLocaleOrchestrator() {
   const composer = useI18n()
   const { locale, setLocale } = composer
   const route = useRoute()
-  const { status } = useAuth()
+  const { status } = useNexusAuth()
   const { getPreferredLocale, hasManualPreferredLocale, markManualPreferredLocale, markProfilePreferredLocale, persistPreferredLocale } = useLocalePreference()
   const initDone = useState<boolean>('nexus-locale-init-done', () => false)
   const clientInitDone = useState<boolean>('nexus-locale-client-init-done', () => false)

@@ -2,7 +2,6 @@
 import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
-import { TxFileUploader, type FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { TxTimeline, TxTimelineItem } from '@talex-touch/tuffex/timeline'
@@ -17,27 +16,40 @@ import {
 } from '~/composables/useOauthContext'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
+import { formatCompactEmail } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const toast = useToast()
 const { user, refresh } = useAuthUser()
 const { subscription, pending: subscriptionPending } = useSubscriptionData()
 
-type LoginTabKey = 'methods' | 'history'
+type LoginTabKey = 'methods' | 'history' | 'details'
+
+interface AccountDetailItem {
+  key: string
+  label: string
+  value: string
+  title?: string
+  copyable?: boolean
+}
 
 const displayName = ref('')
+const emailDraft = ref('')
 const savingProfile = ref(false)
+const savingEmail = ref(false)
 const avatarUploading = ref(false)
 const profileMessage = ref('')
+const emailMessage = ref('')
+const editingEmail = ref(false)
 const activeLoginTab = ref<LoginTabKey>('methods')
 const loginTabSizerRef = ref<any>(null)
-const manageOverlayVisible = ref(false)
-const manageOverlaySource = ref<HTMLElement | null>(null)
-const avatarUploaderRef = ref<{ pick: () => void } | null>(null)
-const avatarFiles = ref<FileUploaderFile[]>([])
+const profileEditOverlayVisible = ref(false)
+const profileEditOverlaySource = ref<HTMLElement | null>(null)
+const avatarInputRef = ref<HTMLInputElement | null>(null)
 
 const linkingGithub = ref(false)
 const linkingLinuxdo = ref(false)
@@ -92,7 +104,7 @@ const planStatusLabel = computed(() => (subscription.value?.isActive === false
 const activeLoginTabModel = computed<LoginTabKey>({
   get: () => activeLoginTab.value,
   set: (value) => {
-    const next = value === 'history' ? 'history' : 'methods'
+    const next = value === 'history' || value === 'details' ? value : 'methods'
     if (activeLoginTab.value === next)
       return
     const sizer = loginTabSizerRef.value
@@ -107,6 +119,8 @@ const activeLoginTabModel = computed<LoginTabKey>({
 })
 
 const daysLeftText = computed(() => {
+  if (planCode.value === 'FREE')
+    return t('dashboard.account.daysLeftForever', '永久')
   const raw = subscription.value?.expiresAt
   if (!raw)
     return t('dashboard.account.daysLeftUnknown', '-- days left')
@@ -117,9 +131,50 @@ const daysLeftText = computed(() => {
   return t('dashboard.account.daysLeft', { n: diff }, `${diff} days left`)
 })
 const hasProfileChanges = computed(() => displayName.value.trim() !== (user.value?.name || '').trim())
+const hasEmailChanges = computed(() => emailDraft.value.trim().toLowerCase() !== (user.value?.email || '').trim().toLowerCase())
+const userRoleLabel = computed(() => formatUserRole(user.value?.role))
+const accountDetailItems = computed<AccountDetailItem[]>(() => [
+  {
+    key: 'id',
+    label: t('dashboard.account.detailUserId', '账户 ID'),
+    value: user.value?.id || '-',
+    copyable: true,
+  },
+  {
+    key: 'email',
+    label: t('dashboard.account.detailEmail', '邮箱'),
+    value: emailLabel.value || '-',
+    title: emailLabel.value || '',
+    copyable: true,
+  },
+  {
+    key: 'role',
+    label: t('dashboard.account.detailRole', '角色'),
+    value: userRoleLabel.value,
+  },
+  {
+    key: 'locale',
+    label: t('dashboard.account.detailLocale', '语言偏好'),
+    value: user.value?.locale || '-',
+  },
+  {
+    key: 'createdAt',
+    label: t('dashboard.account.detailCreatedAt', '创建时间'),
+    value: formatAccountDate(user.value?.createdAt),
+  },
+  {
+    key: 'updatedAt',
+    label: t('dashboard.account.detailUpdatedAt', '最近更新'),
+    value: formatAccountDate(user.value?.updatedAt),
+  },
+])
 
-function providerLabel(provider: OauthProvider) {
-  return provider === 'github' ? 'GitHub' : 'LinuxDO'
+function providerLabel(provider: string | null | undefined) {
+  if (provider === 'github')
+    return 'GitHub'
+  if (provider === 'linuxdo')
+    return 'LinuxDO'
+  return provider || t('dashboard.account.unknownProvider', '未知来源')
 }
 
 function boundTarget(provider: OauthProvider, accountId?: string | null) {
@@ -130,6 +185,36 @@ function boundTarget(provider: OauthProvider, accountId?: string | null) {
 function boundMessage(provider: OauthProvider, accountId?: string | null) {
   const target = boundTarget(provider, accountId)
   return t('dashboard.account.boundTo', { target }, `已绑定到 ${target}`)
+}
+
+function formatUserRole(value: string | null | undefined) {
+  const normalized = typeof value === 'string' ? value.toLowerCase() : ''
+  if (normalized === 'admin')
+    return t('dashboard.account.roles.admin', '管理员')
+  if (normalized === 'user')
+    return t('dashboard.account.roles.user', '用户')
+  return value || '-'
+}
+
+function formatAccountDate(value: string | null | undefined) {
+  if (!value)
+    return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+async function copyAccountDetail(item: AccountDetailItem) {
+  if (!item.copyable || !item.value || item.value === '-')
+    return
+
+  try {
+    await navigator.clipboard.writeText(item.value)
+    toast.success(t('dashboard.account.detailCopied', '已复制'))
+  }
+  catch (error) {
+    console.error('Failed to copy account detail:', error)
+    toast.error(t('dashboard.account.detailCopyFailed', '复制失败'))
+  }
 }
 
 // OAuth bind feedback is handled on the sign-in page now.
@@ -145,17 +230,19 @@ const emailLabel = computed(() => {
     return t('auth.accountNoEmail', '未绑定邮箱')
   return user.value.email || ''
 })
+const compactEmailLabel = computed(() => {
+  if (!user.value || emailState.value === 'missing')
+    return emailLabel.value
+  return user.value.email ? formatCompactEmail(user.value.email) : ''
+})
 const isEmailVerified = computed(() => emailState.value === 'verified')
 const isRestricted = computed(() => user.value?.isRestricted ?? emailState.value !== 'verified')
-const roleLabel = computed(() => (user.value?.role ?? 'user').toUpperCase())
-const roleClass = computed(() => (user.value?.role === 'admin'
-  ? 'bg-purple-500/20 text-purple-600 dark:text-purple-300'
-  : 'bg-slate-500/20 text-slate-600 dark:text-slate-300'))
 
 watch(
   () => user.value,
   (value) => {
     displayName.value = value?.name || ''
+    emailDraft.value = value?.email || ''
   },
   { immediate: true },
 )
@@ -164,9 +251,9 @@ onMounted(() => {
   supportsPasskey.value = hasWindow() && Boolean(window.PublicKeyCredential)
 })
 
-function openManageProfile(source: HTMLElement | null = null) {
-  manageOverlaySource.value = source
-  manageOverlayVisible.value = true
+function openProfileEdit(source: HTMLElement | null = null) {
+  profileEditOverlaySource.value = source
+  profileEditOverlayVisible.value = true
   profileMessage.value = ''
 }
 
@@ -175,7 +262,7 @@ function handlePlanAction() {
 }
 
 function triggerAvatarSelect() {
-  avatarUploaderRef.value?.pick()
+  avatarInputRef.value?.click()
 }
 
 async function fileToDataUrl(file: File): Promise<string> {
@@ -187,10 +274,11 @@ async function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-async function handleAvatarFilesChange(files: FileUploaderFile[]) {
-  avatarFiles.value = files
-  const file = files[0]?.file
+async function handleAvatarInputChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (!file || !user.value) {
+    input.value = ''
     return
   }
 
@@ -207,7 +295,7 @@ async function handleAvatarFilesChange(files: FileUploaderFile[]) {
   }
   finally {
     avatarUploading.value = false
-    avatarFiles.value = []
+    input.value = ''
   }
 }
 
@@ -234,6 +322,45 @@ async function saveProfile() {
   finally {
     savingProfile.value = false
   }
+}
+
+async function saveEmail() {
+  if (!user.value)
+    return
+  const email = emailDraft.value.trim().toLowerCase()
+  if (!email || !email.includes('@')) {
+    emailMessage.value = t('auth.invalidEmail', '请输入有效邮箱')
+    return
+  }
+  if (!hasEmailChanges.value) {
+    editingEmail.value = false
+    emailMessage.value = ''
+    return
+  }
+
+  savingEmail.value = true
+  emailMessage.value = ''
+  try {
+    await requestJson('/api/auth/bind-email', {
+      method: 'POST',
+      body: { email },
+    })
+    await refresh()
+    editingEmail.value = false
+    emailMessage.value = t('dashboard.account.emailChangeSent', '验证邮件已发送，请完成验证。')
+  }
+  catch (error: any) {
+    emailMessage.value = error?.data?.statusMessage || error?.message || t('dashboard.account.emailChangeFailed', '邮箱更新失败')
+  }
+  finally {
+    savingEmail.value = false
+  }
+}
+
+function cancelEmailEdit() {
+  emailDraft.value = user.value?.email || ''
+  editingEmail.value = false
+  emailMessage.value = ''
 }
 
 async function startOauthBind(provider: OauthProvider) {
@@ -375,6 +502,8 @@ function formatLoginClient(value: string | null | undefined) {
     return t('dashboard.account.clientTypes.cli', 'CLI')
   if (normalized === 'external')
     return t('dashboard.account.clientTypes.external', 'External')
+  if (normalized === 'web')
+    return t('dashboard.account.clientTypes.web', 'Web')
   if (normalized === 'app')
     return t('dashboard.account.clientTypes.app', 'App')
   return t('dashboard.account.clientTypes.unknown', '未知来源')
@@ -399,15 +528,16 @@ function formatHistoryTime(value: string) {
 
     <DashboardAccountProfilePlanCard
       :display-name="user?.name || t('dashboard.account.displayNamePlaceholder', '输入显示名称')"
-      :email-label="emailLabel"
+      :email-label="compactEmailLabel"
+      :email-title="emailLabel"
       :avatar-url="avatarUrl"
       :profile-initial="profileInitial"
+      :avatar-edit-text="t('dashboard.account.changeAvatar', '修改头像')"
+      :avatar-uploading="avatarUploading"
       :is-email-verified="isEmailVerified"
       :verified-text="t('auth.verified', '已验证')"
       :unverified-text="t('dashboard.account.unverifiedTag', 'Unverified')"
-      :role-label="roleLabel"
-      :role-class="roleClass"
-      :manage-text="t('dashboard.account.manageProfile', '管理')"
+      :edit-profile-text="t('dashboard.account.editProfile', '编辑')"
       :current-plan-text="t('dashboard.account.subscriptionTitle', 'Subscription')"
       :plan-status-label="planStatusLabel"
       :plan-active="subscription?.isActive ?? true"
@@ -416,9 +546,19 @@ function formatHistoryTime(value: string) {
       :days-left-text="daysLeftText"
       :show-plan-skeleton="showPlanSkeleton"
       :plan-code="planCode"
-      @manage="openManageProfile"
+      @profile-edit="openProfileEdit"
+      @avatar-edit="triggerAvatarSelect"
       @plan-action="handlePlanAction"
     />
+    <input
+      ref="avatarInputRef"
+      class="sr-only"
+      type="file"
+      accept="image/*"
+      :disabled="avatarUploading"
+      :aria-label="t('dashboard.account.changeAvatar', '修改头像')"
+      @change="handleAvatarInputChange"
+    >
 
     <p
       v-if="isRestricted"
@@ -444,9 +584,37 @@ function formatHistoryTime(value: string) {
           borderless
           class="h-auto"
         >
-        <TxTabItem name="methods" activation>
+          <TxTabItem name="methods" activation>
+            <template #name>
+              {{ t('dashboard.account.loginMethods', '登录方式') }}
+            </template>
             <div class="space-y-4 pt-2">
               <div class="space-y-3 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
+                  <div class="min-w-0">
+                    <p class="text-black dark:text-white">
+                      {{ t('auth.email', '邮箱') }}
+                    </p>
+                    <p v-if="!editingEmail" class="truncate text-xs text-black/50 dark:text-white/50" :title="emailLabel">
+                      {{ compactEmailLabel }}
+                    </p>
+                    <div v-else class="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+                      <TuffInput v-model="emailDraft" class="min-w-[240px]" type="email" :placeholder="t('auth.email', '邮箱')" />
+                      <TxButton size="small" :loading="savingEmail" :disabled="!hasEmailChanges" @click="saveEmail">
+                        {{ t('common.save', '保存') }}
+                      </TxButton>
+                      <TxButton size="small" variant="secondary" :disabled="savingEmail" @click="cancelEmailEdit">
+                        {{ t('common.cancel', '取消') }}
+                      </TxButton>
+                    </div>
+                    <p v-if="emailMessage" class="mt-1 text-xs text-black/55 dark:text-white/55">
+                      {{ emailMessage }}
+                    </p>
+                  </div>
+                  <TxButton v-if="!editingEmail" size="small" variant="secondary" @click="editingEmail = true">
+                    {{ t('dashboard.account.editEmail', '编辑') }}
+                  </TxButton>
+                </div>
                 <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
                   <div>
                     <p class="text-black dark:text-white">
@@ -503,6 +671,9 @@ function formatHistoryTime(value: string) {
           </TxTabItem>
 
           <TxTabItem name="history">
+            <template #name>
+              {{ t('dashboard.account.loginHistory', '登录历史') }}
+            </template>
             <div class="space-y-4 pt-1">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex flex-wrap items-center gap-3">
@@ -562,7 +733,7 @@ function formatHistoryTime(value: string) {
                             </span>
                           </div>
                           <p class="text-xs text-black/55 dark:text-white/55">
-                            {{ formatLoginClient(item.clientType) }} · {{ item.reason || '-' }} · {{ item.ip || 'unknown' }}
+                            {{ formatLoginClient(item.clientType) }} · {{ item.reason || '-' }} · {{ item.ipMasked || 'unknown' }}
                           </p>
                         </div>
                         <div class="text-xs text-black/40 dark:text-white/40 whitespace-nowrap">
@@ -578,109 +749,104 @@ function formatHistoryTime(value: string) {
               </div>
             </div>
           </TxTabItem>
+
+          <TxTabItem name="details">
+            <template #name>
+              {{ t('dashboard.account.detailTab', '详情信息') }}
+            </template>
+            <div class="space-y-4 pt-1">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-black dark:text-white">
+                    {{ t('dashboard.account.detailTitle', '账号详情') }}
+                  </p>
+                  <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.account.detailHint', '展示当前登录账号的基础元数据') }}
+                  </p>
+                </div>
+                <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
+                  {{ userRoleLabel }}
+                </span>
+              </div>
+
+              <dl class="AccountDetailsList">
+                <div
+                  v-for="item in accountDetailItems"
+                  :key="item.key"
+                  class="AccountDetailsLine"
+                  :class="{ 'AccountDetailsLine--Copyable': item.copyable }"
+                  :role="item.copyable ? 'button' : undefined"
+                  :tabindex="item.copyable ? 0 : undefined"
+                  @click="copyAccountDetail(item)"
+                  @keydown.enter.prevent="copyAccountDetail(item)"
+                  @keydown.space.prevent="copyAccountDetail(item)"
+                >
+                  <dt>{{ item.label }}</dt>
+                  <dd :title="item.title || item.value">
+                    {{ item.value }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </TxTabItem>
         </TxTabs>
       </TxAutoSizer>
     </section>
 
     <FlipDialog
-        v-model="manageOverlayVisible"
-        :reference="manageOverlaySource"
-        size="md"
-      >
-        <template #default="{ close }">
-          <div class="AccountManageOverlay-Inner">
-            <div class="space-y-1">
-              <h2 class="AccountManageOverlay-Title">
-                {{ t('dashboard.account.manageSection', 'Profile Manage') }}
+      v-model="profileEditOverlayVisible"
+      :reference="profileEditOverlaySource"
+      :header="false"
+      size="md"
+    >
+      <template #default="{ close }">
+        <div class="AccountProfileEditOverlay-Inner">
+          <div class="AccountProfileEditOverlay-Header">
+            <div class="min-w-0 space-y-1">
+              <h2 class="AccountProfileEditOverlay-Title">
+                {{ t('dashboard.account.manageSection', '编辑资料') }}
               </h2>
-              <p class="AccountManageOverlay-Desc">
-                {{ t('dashboard.account.manageDialogDesc', '更新头像、显示名称与基础资料。') }}
+              <p class="AccountProfileEditOverlay-Desc">
+                {{ t('dashboard.account.manageDialogDesc', '更新控制台展示的显示名称。') }}
               </p>
             </div>
-
-            <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] p-3 dark:border-white/[0.12]">
-              <div class="flex min-w-0 items-center gap-3">
-                <div class="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-black/[0.1] bg-black/[0.03] dark:border-white/[0.12] dark:bg-white/[0.04]">
-                  <img
-                    v-if="avatarUrl"
-                    :src="avatarUrl"
-                    :alt="displayName || emailLabel || 'User'"
-                    class="h-full w-full object-cover"
-                  >
-                  <div v-else class="flex h-full w-full items-center justify-center text-sm font-semibold text-black/65 dark:text-white/75">
-                    {{ profileInitial }}
-                  </div>
-                </div>
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-semibold text-black dark:text-white">
-                    {{ user?.name || t('dashboard.account.displayNamePlaceholder', '输入显示名称') }}
-                  </p>
-                  <p class="truncate text-xs text-black/50 dark:text-white/50">
-                    {{ emailLabel }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex items-center gap-2">
-                <TxButton size="small" variant="secondary" :loading="avatarUploading" @click="triggerAvatarSelect">
-                  {{ t('dashboard.account.changeAvatar', '修改头像') }}
-                </TxButton>
-                <TxFileUploader
-                  ref="avatarUploaderRef"
-                  v-model="avatarFiles"
-                  class="hidden"
-                  :multiple="false"
-                  :max="1"
-                  accept="image/*"
-                  :disabled="avatarUploading"
-                  :button-text="t('dashboard.account.changeAvatar', '修改头像')"
-                  :drop-text="t('dashboard.account.changeAvatar', '修改头像')"
-                  :hint-text="t('dashboard.account.avatarUploadHint', '选择图片作为头像')"
-                  @change="handleAvatarFilesChange"
-                />
-              </div>
-            </div>
-
-            <div class="grid gap-3 md:grid-cols-2">
-              <div class="space-y-2">
-                <label class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('dashboard.account.displayName', '显示名称') }}
-                </label>
-                <TuffInput v-model="displayName" type="text" :placeholder="t('dashboard.account.displayNamePlaceholder', '输入显示名称')" />
-              </div>
-              <div class="space-y-2 rounded-xl border border-black/[0.08] p-3 dark:border-white/[0.12]">
-                <p class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('auth.email', '邮箱') }}
-                </p>
-                <p class="truncate text-sm text-black dark:text-white">
-                  {{ emailLabel }}
-                </p>
-                <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ t('dashboard.account.emailHint', '邮箱修改由登录方式提供方管理。') }}
-                </p>
-              </div>
-            </div>
-
-            <p v-if="profileMessage" class="text-xs text-black/60 dark:text-white/60">
-              {{ profileMessage }}
-            </p>
-
-            <div class="AccountManageOverlay-Actions">
-              <TxButton size="small" variant="secondary" @click="close">
-                {{ t('common.cancel', '取消') }}
-              </TxButton>
-              <TxButton size="small" :loading="savingProfile" :disabled="!hasProfileChanges" @click="saveProfile">
-                {{ t('common.save', '保存') }}
-              </TxButton>
-            </div>
+            <button
+              type="button"
+              class="AccountProfileEditOverlay-Close"
+              :aria-label="t('common.close', '关闭')"
+              @click="close"
+            >
+              <span class="i-carbon-close" aria-hidden="true" />
+            </button>
           </div>
-        </template>
-      </FlipDialog>
+
+          <div class="space-y-2">
+            <label class="text-xs text-black/60 dark:text-white/60">
+              {{ t('dashboard.account.displayName', '显示名称') }}
+            </label>
+            <TuffInput v-model="displayName" type="text" :placeholder="t('dashboard.account.displayNamePlaceholder', '输入显示名称')" />
+          </div>
+
+          <p v-if="profileMessage" class="text-xs text-black/60 dark:text-white/60">
+            {{ profileMessage }}
+          </p>
+
+          <div class="AccountProfileEditOverlay-Actions">
+            <TxButton size="small" variant="secondary" @click="close">
+              {{ t('common.cancel', '取消') }}
+            </TxButton>
+            <TxButton size="small" :loading="savingProfile" :disabled="!hasProfileChanges" @click="saveProfile">
+              {{ t('common.save', '保存') }}
+            </TxButton>
+          </div>
+        </div>
+      </template>
+    </FlipDialog>
   </div>
 </template>
 
 <style scoped>
-.AccountManageOverlay-Inner {
+.AccountProfileEditOverlay-Inner {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -688,18 +854,46 @@ function formatHistoryTime(value: string) {
   padding: 18px;
 }
 
-.AccountManageOverlay-Title {
+.AccountProfileEditOverlay-Header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.AccountProfileEditOverlay-Title {
   font-size: 18px;
   font-weight: 700;
   color: var(--tx-text-color-primary);
 }
 
-.AccountManageOverlay-Desc {
+.AccountProfileEditOverlay-Desc {
   font-size: 13px;
   color: var(--tx-text-color-secondary);
 }
 
-.AccountManageOverlay-Actions {
+.AccountProfileEditOverlay-Close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color, rgba(255, 255, 255, 0.18)) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #101114) 72%, transparent);
+  color: var(--tx-text-color-secondary);
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.AccountProfileEditOverlay-Close:hover {
+  border-color: color-mix(in srgb, var(--tx-text-color-primary) 22%, transparent);
+  background: color-mix(in srgb, var(--tx-text-color-primary) 8%, transparent);
+  color: var(--tx-text-color-primary);
+}
+
+.AccountProfileEditOverlay-Actions {
   margin-top: auto;
   display: flex;
   justify-content: flex-end;
@@ -716,5 +910,75 @@ function formatHistoryTime(value: string) {
 
 .LoginHistoryTimeline :deep(.tx-timeline-item__content) {
   width: 100%;
+}
+
+.AccountDetailsList {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color, rgba(255, 255, 255, 0.12)) 72%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tx-text-color-primary) 3%, transparent);
+}
+
+.AccountDetailsLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  padding: 3px 18px 3px 48px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color, rgba(255, 255, 255, 0.12)) 52%, transparent);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.AccountDetailsLine:last-child {
+  border-bottom: 0;
+}
+
+.AccountDetailsLine dt {
+  width: 120px;
+  flex: 0 0 120px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-text-color-secondary);
+}
+
+.AccountDetailsLine dd {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tx-text-color-secondary);
+}
+
+.AccountDetailsLine--Copyable {
+  cursor: pointer;
+}
+
+.AccountDetailsLine--Copyable:hover,
+.AccountDetailsLine--Copyable:focus-visible {
+  background: color-mix(in srgb, var(--tx-color-primary, #3b82f6) 8%, transparent);
+  outline: none;
+}
+
+.AccountDetailsLine--Copyable:hover dd,
+.AccountDetailsLine--Copyable:focus-visible dd {
+  color: var(--tx-color-primary, #3b82f6);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .AccountDetailsLine {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 14px;
+  }
+
+  .AccountDetailsLine dt {
+    width: auto;
+    flex-basis: auto;
+  }
 }
 </style>

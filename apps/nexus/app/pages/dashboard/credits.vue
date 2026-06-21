@@ -1,25 +1,39 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxStatCard } from '@talex-touch/tuffex/stat-card'
+import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'
+import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { computed, ref } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
 import { useToast } from '~/composables/useToast'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const toast = useToast()
 
 const { data: summary, pending: summaryPending, refresh: refreshSummary } = useTypedFetch<any>('/api/credits/summary')
 const { data: ledger, pending: ledgerPending, refresh: refreshLedger } = useTypedFetch<any[]>('/api/credits/ledger')
 const { data: checkinStatus, pending: checkinPending, refresh: refreshCheckin } = useTypedFetch<any>('/api/credits/checkin/status')
 const { data: checkinCalendar, pending: checkinCalendarPending, refresh: refreshCheckinCalendar } = useTypedFetch<any>('/api/credits/checkin/month')
-const { data: trend, pending: trendPending, refresh: refreshTrend } = useTypedFetch<any>('/api/credits/trend')
 const { data: models, pending: modelsPending, refresh: refreshModels } = useTypedFetch<any>('/api/credits/models')
 
-const creditTab = ref<'overview' | 'signin' | 'apis' | 'audits' | 'models'>('overview')
+type TrendWindowDays = 7 | 14 | 30
+
+const creditTab = ref<'overview' | 'apis' | 'audits' | 'models'>('overview')
+const trendWindowOptions: TrendWindowDays[] = [7, 14, 30]
+const trendWindowDays = ref<TrendWindowDays>(7)
+const checkinDialogVisible = ref(false)
+const checkinTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
+const creditResetWindowMs = 30 * 24 * 60 * 60 * 1000
+const { data: trend, pending: trendPending, refresh: refreshTrend } = useTypedFetch<any>('/api/credits/trend', {
+  key: computed(() => `credits-trend-${trendWindowDays.value}`),
+  query: computed(() => ({
+    days: trendWindowDays.value,
+  })),
+})
 
 const teamBalance = computed(() => summary.value?.team ?? null)
 const userBalance = computed(() => summary.value?.user ?? null)
@@ -43,6 +57,7 @@ const weekLabels = computed(() => ([
   t('dashboard.credits.signin.weekdays.fri', '五'),
   t('dashboard.credits.signin.weekdays.sat', '六'),
 ]))
+const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 
 const calendarMonthKey = computed(() => {
   const month = checkinCalendar.value?.month
@@ -61,7 +76,7 @@ const calendarLabel = computed(() => {
   if (!Number.isFinite(year) || !Number.isFinite(month))
     return calendarMonthKey.value
   const date = new Date(Date.UTC(year, month - 1, 1))
-  return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long' }).format(date)
+  return new Intl.DateTimeFormat(localeTag.value, { year: 'numeric', month: 'long' }).format(date)
 })
 
 const calendarCells = computed(() => {
@@ -103,22 +118,50 @@ const calendarCells = computed(() => {
 const checkinCount = computed(() => checkinDays.value.size)
 
 const userQuota = computed(() => userBalance.value?.quota ?? 0)
-const userUsed = computed(() => userBalance.value?.used ?? 0)
-const userRemaining = computed(() => Math.max(0, userQuota.value - userUsed.value))
-const teamQuota = computed(() => teamBalance.value?.quota ?? 0)
-const teamUsed = computed(() => teamBalance.value?.used ?? 0)
-const teamRemaining = computed(() => Math.max(0, teamQuota.value - teamUsed.value))
-const totalQuota = computed(() => userQuota.value + (hasTeamPool.value ? teamQuota.value : 0))
-const personalShare = computed(() => {
-  const total = totalQuota.value
-  if (!total)
-    return 0
-  return userQuota.value / total
+const creditUsageQuota = computed(() => userQuota.value)
+const creditConsumptionEntries = computed(() => {
+  const entries: Array<{ amount: number; date: Date | null }> = []
+  for (const entry of ledger.value ?? []) {
+    const delta = Number(entry?.delta)
+    if (!Number.isFinite(delta) || delta >= 0)
+      continue
+    const date = entry?.created_at ? new Date(entry.created_at) : null
+    entries.push({
+      amount: Math.abs(delta),
+      date: date && !Number.isNaN(date.getTime()) ? date : null,
+    })
+  }
+  return entries
 })
-const personalSharePercent = computed(() => Math.round(personalShare.value * 100))
-const personalShareDash = computed(() => `${personalSharePercent.value} ${100 - personalSharePercent.value}`)
+const consumedCredits = computed(() => creditConsumptionEntries.value.reduce((total, entry) => total + entry.amount, 0))
+const creditUsagePercent = computed(() => {
+  if (!creditUsageQuota.value)
+    return 0
+  return Math.min(100, Math.max(0, Math.round((consumedCredits.value / creditUsageQuota.value) * 100)))
+})
+const lastCreditUsageAt = computed(() => {
+  let latest: Date | null = null
+  for (const entry of creditConsumptionEntries.value) {
+    if (!entry.date)
+      continue
+    if (!latest || entry.date.getTime() > latest.getTime())
+      latest = entry.date
+  }
+  return latest
+})
+const nextCreditResetAt = computed(() => lastCreditUsageAt.value
+  ? new Date(lastCreditUsageAt.value.getTime() + creditResetWindowMs)
+  : null)
+const nextCreditResetLabel = computed(() => {
+  if (ledgerPending.value)
+    return t('dashboard.credits.usage.resetLoading', '计算重置时间')
+  if (!nextCreditResetAt.value)
+    return t('dashboard.credits.usage.noUsageReset', '暂无使用记录')
+  return t('dashboard.credits.usage.nextReset', { time: formatCreditResetTime(nextCreditResetAt.value) })
+})
 
 const trendTotalUsed = computed(() => trend.value?.totalUsed ?? 0)
+const trendSubtitle = computed(() => t('dashboard.credits.trend.subtitle', { n: formatNumber(trendWindowDays.value) }))
 const trendRangeLabels = computed(() => {
   const days = trend.value?.days ?? []
   if (!days.length)
@@ -180,6 +223,12 @@ function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat().format(value)
 }
 
+function formatCreditAmount(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return '0'
+  return new Intl.NumberFormat().format(Math.abs(Math.round(value)))
+}
+
 function formatMultiplier(value: number | null | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value))
     return '1'
@@ -189,7 +238,31 @@ function formatMultiplier(value: number | null | undefined) {
 
 function formatLedgerTime(value: string) {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(localeTag.value)
+}
+
+function formatTrendWindowLabel(days: TrendWindowDays) {
+  return t('dashboard.credits.trend.windowLabel', { n: days })
+}
+
+function formatCreditResetTime(value: Date) {
+  return new Intl.DateTimeFormat(localeTag.value, {
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(value)
+}
+
+async function refreshOverview() {
+  await Promise.all([
+    refreshSummary(),
+    refreshLedger(),
+    refreshTrend(),
+    refreshCheckin(),
+    refreshCheckinCalendar(),
+  ])
 }
 
 async function handleClaimBoost() {
@@ -254,159 +327,99 @@ function handleGoAccount() {
       </p>
     </header>
 
-    <section v-if="summaryPending" class="apple-card-lg p-4 space-y-3">
-      <div class="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
-        <TxSpinner :size="16" />
-        {{ t('dashboard.credits.loading', '加载积分概览') }}
-      </div>
-      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div v-for="item in 4" :key="`credits-skeleton-${item}`" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-      </div>
-    </section>
-
-    <section v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <TxStatCard
-        :value="formatNumber(userRemaining)"
-        :label="t('dashboard.credits.stats.personalRemaining', '个人剩余')"
-        icon-class="i-carbon-user text-5xl text-[var(--tx-color-primary)] sm:text-6xl"
-      >
-        <template #label>
-          <div class="space-y-1">
-            <span class="block">{{ t('dashboard.credits.stats.personalRemaining', '个人剩余') }}</span>
-            <span class="block text-[11px] text-black/45 dark:text-white/45">
-              {{ t('dashboard.credits.stats.personalTotal', { n: formatNumber(userQuota) }) }}
-            </span>
-          </div>
-        </template>
-      </TxStatCard>
-
-      <TxStatCard
-        v-if="hasTeamPool"
-        :value="formatNumber(teamRemaining)"
-        :label="t('dashboard.credits.stats.teamRemaining', '团队池剩余')"
-        icon-class="i-carbon-group text-5xl text-[var(--tx-color-success)] sm:text-6xl"
-      >
-        <template #label>
-          <div class="space-y-1">
-            <span class="block">{{ t('dashboard.credits.stats.teamRemaining', '团队池剩余') }}</span>
-            <span class="block text-[11px] text-black/45 dark:text-white/45">
-              {{ t('dashboard.credits.stats.teamTotal', { n: formatNumber(teamQuota) }) }}
-            </span>
-          </div>
-        </template>
-      </TxStatCard>
-
-      <TxStatCard
-        :value="formatNumber(userUsed)"
-        :label="t('dashboard.credits.stats.used', '本月已用')"
-        icon-class="i-carbon-chart-line-smooth text-5xl text-[var(--tx-color-warning)] sm:text-6xl"
-      >
-        <template #label>
-          <div class="space-y-1">
-            <span class="block">{{ t('dashboard.credits.stats.used', '本月已用') }}</span>
-            <span class="block text-[11px] text-black/45 dark:text-white/45">
-              {{ t('dashboard.credits.stats.usedHint', { n: formatNumber(userQuota) }) }}
-            </span>
-          </div>
-        </template>
-      </TxStatCard>
-
-      <TxStatCard
-        v-if="hasTeamPool"
-        :value="`${personalSharePercent}%`"
-        :label="t('dashboard.credits.stats.personalShare', '个人占比')"
-        icon-class="i-carbon-pie-chart text-5xl text-[var(--tx-color-info)] sm:text-6xl"
-      >
-        <template #label>
-          <div class="space-y-1">
-            <span class="block">{{ t('dashboard.credits.stats.personalShare', '个人占比') }}</span>
-            <span class="block text-[11px] text-black/45 dark:text-white/45">
-              {{ t('dashboard.credits.stats.shareHint', { personal: formatNumber(userQuota), total: formatNumber(totalQuota) }) }}
-            </span>
-          </div>
-        </template>
-      </TxStatCard>
-    </section>
-
-    <section v-if="boost" class="apple-card-lg p-6">
-      <p class="apple-section-title">
-        {{ t('dashboard.credits.boost.title', '认证提升额度') }}
-      </p>
-      <p class="mt-2 text-xs text-black/50 dark:text-white/50">
-        {{ t('dashboard.credits.boost.subtitle', { n: formatNumber(boost?.boostedQuota ?? 0) }) }}
-      </p>
-      <ul class="mt-3 space-y-1 text-xs text-black/40 dark:text-white/40">
-        <li>
-          {{ t('dashboard.credits.boost.email', '邮箱验证') }}
-          <span class="ml-2">{{ boostRequirements?.emailVerified ? t('dashboard.credits.boost.ok', '已完成') : t('dashboard.credits.boost.pending', '未完成') }}</span>
-        </li>
-        <li>
-          {{ t('dashboard.credits.boost.oauth', 'OAuth 绑定') }}
-          <span class="ml-2">{{ boostRequirements?.oauthLinked ? t('dashboard.credits.boost.ok', '已完成') : t('dashboard.credits.boost.pending', '未完成') }}</span>
-        </li>
-        <li>
-          {{ t('dashboard.credits.boost.passkey', 'Passkey 绑定') }}
-          <span class="ml-2">{{ boostRequirements?.passkeyBound ? t('dashboard.credits.boost.ok', '已完成') : t('dashboard.credits.boost.pending', '未完成') }}</span>
-        </li>
-      </ul>
-      <div class="mt-4 flex flex-wrap items-center gap-3">
-        <TxButton
-          v-if="boost?.eligible"
-          size="small"
-          :loading="claimLoading"
-          :disabled="!canClaimBoost"
-          @click="handleClaimBoost"
-        >
-          {{
-            canClaimBoost
-              ? t('dashboard.credits.boost.claim', '领取本月提升额度')
-              : t('dashboard.credits.boost.claimedHint', { n: formatNumber(boost?.boostedQuota ?? 0) })
-          }}
-        </TxButton>
-        <TxButton
-          v-else
-          size="small"
-          variant="secondary"
-          @click="handleGoAccount"
-        >
-          {{ t('dashboard.credits.boost.goBind', '前往绑定') }}
-        </TxButton>
-        <span
-          v-if="boost?.eligible && !canClaimBoost"
-          class="text-xs text-black/40 dark:text-white/40"
-        >
-          {{ t('dashboard.credits.boost.alreadyClaimed', '本月已领取提升额度') }}
-        </span>
-      </div>
-    </section>
-
     <section class="apple-card-lg p-6">
       <TxTabs v-model="creditTab" placement="top" :content-scrollable="false">
-        <TxTabItem name="overview" icon-class="i-carbon-chart-line-smooth">
+        <TxTabItem name="overview">
           <template #name>
-            {{ t('dashboard.credits.tabs.overview', '概览') }}
+            <span class="inline-flex items-center gap-2">
+              <span class="i-carbon-chart-line-smooth" aria-hidden="true" />
+              <span>{{ t('dashboard.credits.tabs.overview', '概览') }}</span>
+            </span>
           </template>
 
           <div class="space-y-4">
-            <div class="flex items-center justify-between">
-              <TxButton size="small" variant="secondary" @click="() => { refreshSummary(); refreshTrend() }">
-                {{ t('common.refresh', '刷新') }}
-              </TxButton>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <TxRadioGroup
+                v-model="trendWindowDays"
+                type="button"
+                indicator-variant="glass"
+                glass
+              >
+                <TxRadio
+                  v-for="days in trendWindowOptions"
+                  :key="days"
+                  :value="days"
+                  :label="formatTrendWindowLabel(days)"
+                  class="min-w-14"
+                >
+                  {{ formatTrendWindowLabel(days) }}
+                </TxRadio>
+              </TxRadioGroup>
+              <div class="flex flex-wrap items-center justify-end gap-2">
+                <TxButton
+                  ref="checkinTriggerRef"
+                  size="small"
+                  variant="secondary"
+                  :loading="checkinLoading || checkinPending"
+                  @click="checkinDialogVisible = true"
+                >
+                  <span class="i-carbon-calendar text-sm" aria-hidden="true" />
+                  {{ checkinToday ? t('dashboard.credits.checkin.done', '今日已签到') : t('dashboard.credits.checkin.cta', '签到领积分') }}
+                </TxButton>
+                <TxButton size="small" variant="secondary" @click="refreshOverview">
+                  <span class="i-carbon-renew text-sm" aria-hidden="true" />
+                  {{ t('common.refresh', '刷新') }}
+                </TxButton>
+              </div>
             </div>
 
-            <div class="grid gap-4" :class="hasTeamPool ? 'lg:grid-cols-2' : 'lg:grid-cols-1'">
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <div v-if="summaryPending" class="space-y-3">
+                <div class="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
+                  <TxSpinner :size="16" />
+                  {{ t('dashboard.credits.loading', '加载积分概览') }}
+                </div>
+                <TxSkeleton :loading="true" :lines="2" />
+              </div>
+              <div v-else class="space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-sm font-medium text-black dark:text-white">
+                    {{ t('dashboard.credits.usage.title', '额度使用') }}
+                  </p>
+                  <p class="text-xs font-medium text-black/45 dark:text-white/45">
+                    {{ t('dashboard.credits.usage.consumed', { n: formatCreditAmount(consumedCredits) }) }}
+                  </p>
+                  <p class="text-sm font-semibold text-primary">
+                    {{ t('dashboard.credits.usage.usedPercent', { n: creditUsagePercent }) }}
+                  </p>
+                </div>
+                <TxProgressBar
+                  class="credits-usage-progress"
+                  :percentage="creditUsagePercent"
+                  height="10px"
+                  mask-background="glass"
+                  flow-effect="shimmer"
+                  tooltip
+                  :tooltip-content="t('dashboard.credits.usage.usedPercent', { n: creditUsagePercent })"
+                  :aria-label="t('dashboard.credits.usage.title', '额度使用')"
+                />
+                <p class="text-xs text-black/45 dark:text-white/45">
+                  {{ nextCreditResetLabel }}
+                </p>
+              </div>
+            </div>
+
+            <div class="grid gap-4">
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
                 <div class="flex items-center justify-between text-xs text-black/40 dark:text-white/40">
                   <span>{{ t('dashboard.credits.trend.title', '消耗趋势') }}</span>
                   <span>{{ trendSparkline.trend }}</span>
                 </div>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ formatNumber(trendTotalUsed) }}
+                  {{ t('dashboard.credits.usage.consumed', { n: formatCreditAmount(trendTotalUsed) }) }}
                 </p>
                 <p class="text-[11px] text-black/45 dark:text-white/45">
-                  {{ t('dashboard.credits.trend.subtitle', '最近 14 天累计消耗') }}
+                  {{ trendSubtitle }}
                 </p>
 
                 <div v-if="trendPending" class="flex items-center justify-center py-6">
@@ -431,124 +444,68 @@ function handleGoAccount() {
                   {{ t('dashboard.credits.trend.empty', '暂无趋势数据') }}
                 </p>
               </div>
-
-              <div v-if="hasTeamPool" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-                <div class="flex items-center justify-between text-xs text-black/40 dark:text-white/40">
-                  <span>{{ t('dashboard.credits.share.title', '个人占比') }}</span>
-                  <span>{{ t('dashboard.credits.share.subtitle', { personal: formatNumber(userQuota), total: formatNumber(totalQuota) }) }}</span>
-                </div>
-                <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ personalSharePercent }}%
-                </p>
-                <div class="mt-4 flex items-center gap-4">
-                  <svg viewBox="0 0 36 36" class="h-20 w-20">
-                    <circle
-                      cx="18"
-                      cy="18"
-                      r="16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                      pathLength="100"
-                      class="text-black/10 dark:text-white/10"
-                    />
-                    <circle
-                      cx="18"
-                      cy="18"
-                      r="16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                      stroke-linecap="round"
-                      pathLength="100"
-                      class="text-primary"
-                      :stroke-dasharray="personalShareDash"
-                      stroke-dashoffset="25"
-                    />
-                  </svg>
-                  <div class="space-y-2 text-xs text-black/50 dark:text-white/50">
-                    <div class="flex items-center gap-2">
-                      <span class="h-2 w-2 rounded-full bg-[var(--tx-color-primary)]" />
-                      {{ t('dashboard.credits.share.personal', { n: formatNumber(userQuota) }) }}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <span class="h-2 w-2 rounded-full bg-black/20 dark:bg-white/20" />
-                      {{ t('dashboard.credits.share.team', { n: formatNumber(teamQuota) }) }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </TxTabItem>
-
-        <TxTabItem name="signin" icon-class="i-carbon-calendar">
-          <template #name>
-            {{ t('dashboard.credits.tabs.signin', '签到') }}
-          </template>
-
-          <div class="space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-medium text-black dark:text-white">
-                  {{ t('dashboard.credits.signin.title', '签到日历') }}
-                </p>
-                <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ t('dashboard.credits.signin.subtitle', { n: formatNumber(checkinReward) }) }}
-                </p>
-              </div>
-              <TxButton
-                size="small"
-                :loading="checkinLoading || checkinPending"
-                :disabled="checkinToday"
-                @click="handleCheckin"
-              >
-                {{ checkinToday ? t('dashboard.credits.checkin.done', '今日已签到') : t('dashboard.credits.checkin.cta', '签到领积分') }}
-              </TxButton>
             </div>
 
-            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-              <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-black/50 dark:text-white/50">
-                <span class="text-sm font-medium text-black dark:text-white">
-                  {{ calendarLabel }}
-                </span>
-                <span>{{ t('dashboard.credits.signin.total', { n: formatNumber(checkinCount) }) }}</span>
-              </div>
-
-              <div class="mt-3 grid grid-cols-7 gap-2 text-[11px] text-black/40 dark:text-white/40">
-                <span v-for="label in weekLabels" :key="label" class="text-center">
-                  {{ label }}
-                </span>
-              </div>
-
-              <div v-if="checkinCalendarPending" class="flex items-center justify-center py-6">
-                <TxSpinner :size="16" />
-              </div>
-              <div v-else class="mt-2 grid grid-cols-7 gap-2 text-xs">
-                <div
-                  v-for="cell in calendarCells"
-                  :key="cell.key"
-                  class="flex h-9 items-center justify-center rounded-lg"
-                  :class="[
-                    cell.day ? 'text-black/80 dark:text-white/80' : 'text-black/20 dark:text-white/20',
-                    cell.checked ? 'bg-primary/15 text-primary' : 'bg-black/[0.04] dark:bg-white/[0.05]',
-                    cell.today && !cell.checked ? 'ring-1 ring-primary/40' : '',
-                  ]"
-                >
-                  <span>{{ cell.day || '' }}</span>
-                </div>
-              </div>
-
-              <p class="mt-3 text-[11px] text-black/45 dark:text-white/45">
-                {{ t('dashboard.credits.checkin.today', '按 UTC 日期计算') }}
+            <div v-if="boost" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <p class="text-sm font-medium text-black dark:text-white">
+                {{ t('dashboard.credits.boost.title', '认证提升额度') }}
               </p>
+              <p class="mt-2 text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.credits.boost.subtitle', '完成邮箱验证、绑定 OAuth 与 Passkey 后会提升额度。') }}
+              </p>
+              <ul class="mt-3 space-y-1 text-xs text-black/45 dark:text-white/45">
+                <li>
+                  {{ t('dashboard.credits.boost.email', '邮箱验证') }}
+                  <span class="ml-2">{{ boostRequirements?.emailVerified ? t('dashboard.credits.boost.ok', '已完成') : t('dashboard.credits.boost.pending', '未完成') }}</span>
+                </li>
+                <li>
+                  {{ t('dashboard.credits.boost.oauth', 'OAuth 绑定') }}
+                  <span class="ml-2">{{ boostRequirements?.oauthLinked ? t('dashboard.credits.boost.ok', '已完成') : t('dashboard.credits.boost.pending', '未完成') }}</span>
+                </li>
+                <li>
+                  {{ t('dashboard.credits.boost.passkey', 'Passkey 绑定') }}
+                  <span class="ml-2">{{ boostRequirements?.passkeyBound ? t('dashboard.credits.boost.ok', '已完成') : t('dashboard.credits.boost.pending', '未完成') }}</span>
+                </li>
+              </ul>
+              <div class="mt-4 flex flex-wrap items-center gap-3">
+                <TxButton
+                  v-if="boost?.eligible"
+                  size="small"
+                  :loading="claimLoading"
+                  :disabled="!canClaimBoost"
+                  @click="handleClaimBoost"
+                >
+                  {{
+                    canClaimBoost
+                      ? t('dashboard.credits.boost.claim', '领取本月提升额度')
+                      : t('dashboard.credits.boost.claimedHint', '下月自动生效')
+                  }}
+                </TxButton>
+                <TxButton
+                  v-else
+                  size="small"
+                  variant="secondary"
+                  @click="handleGoAccount"
+                >
+                  {{ t('dashboard.credits.boost.goBind', '前往绑定') }}
+                </TxButton>
+                <span
+                  v-if="boost?.eligible && !canClaimBoost"
+                  class="text-xs text-black/40 dark:text-white/40"
+                >
+                  {{ t('dashboard.credits.boost.alreadyClaimed', '本月已领取提升额度') }}
+                </span>
+              </div>
             </div>
           </div>
         </TxTabItem>
 
-        <TxTabItem name="apis" icon-class="i-carbon-cloud-service-management">
+        <TxTabItem name="apis">
           <template #name>
-            {{ t('dashboard.credits.tabs.apis', 'APIs') }}
+            <span class="inline-flex items-center gap-2">
+              <span class="i-carbon-cloud-service-management" aria-hidden="true" />
+              <span>{{ t('dashboard.credits.tabs.apis', 'APIs') }}</span>
+            </span>
           </template>
 
           <div class="space-y-4">
@@ -581,9 +538,12 @@ function handleGoAccount() {
           </div>
         </TxTabItem>
 
-        <TxTabItem name="audits" icon-class="i-carbon-document">
+        <TxTabItem name="audits">
           <template #name>
-            {{ t('dashboard.credits.tabs.audits', '审计') }}
+            <span class="inline-flex items-center gap-2">
+              <span class="i-carbon-document" aria-hidden="true" />
+              <span>{{ t('dashboard.credits.tabs.audits', '审计') }}</span>
+            </span>
           </template>
 
           <div class="space-y-4">
@@ -628,7 +588,7 @@ function handleGoAccount() {
                   </p>
                 </div>
                 <span class="text-sm font-semibold text-black dark:text-white">
-                  {{ entry.delta }}
+                  {{ entry.delta < 0 ? t('dashboard.credits.usage.entryConsumed', { n: formatCreditAmount(entry.delta) }) : t('dashboard.credits.usage.entryAdded', { n: formatCreditAmount(entry.delta) }) }}
                 </span>
               </li>
             </ul>
@@ -638,9 +598,12 @@ function handleGoAccount() {
           </div>
         </TxTabItem>
 
-        <TxTabItem name="models" icon-class="i-carbon-machine-learning-model">
+        <TxTabItem name="models">
           <template #name>
-            {{ t('dashboard.credits.tabs.models', '模型') }}
+            <span class="inline-flex items-center gap-2">
+              <span class="i-carbon-machine-learning-model" aria-hidden="true" />
+              <span>{{ t('dashboard.credits.tabs.models', '模型') }}</span>
+            </span>
           </template>
 
           <div class="space-y-4">
@@ -698,5 +661,105 @@ function handleGoAccount() {
         </TxTabItem>
       </TxTabs>
     </section>
+
+    <FlipDialog
+      v-model="checkinDialogVisible"
+      :reference="checkinTriggerRef?.$el || null"
+      size="md"
+      max-height="calc(86dvh - 24px)"
+    >
+      <template #default="{ close }">
+        <div class="space-y-4 p-5">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-semibold text-black dark:text-white">
+                {{ t('dashboard.credits.signin.title', '签到日历') }}
+              </h2>
+              <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.credits.signin.subtitle', { n: formatNumber(checkinReward) }) }}
+              </p>
+            </div>
+            <TxButton size="small" variant="secondary" @click="close">
+              {{ t('common.close', '关闭') }}
+            </TxButton>
+          </div>
+
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-black/50 dark:text-white/50">
+              <span class="text-sm font-medium text-black dark:text-white">
+                {{ calendarLabel }}
+              </span>
+              <span>{{ t('dashboard.credits.signin.total', { n: formatNumber(checkinCount) }) }}</span>
+            </div>
+
+            <div class="mt-3 grid grid-cols-7 gap-2 text-[11px] text-black/40 dark:text-white/40">
+              <span v-for="label in weekLabels" :key="label" class="text-center">
+                {{ label }}
+              </span>
+            </div>
+
+            <div v-if="checkinCalendarPending" class="flex items-center justify-center py-6">
+              <TxSpinner :size="16" />
+            </div>
+            <div v-else class="mt-2 grid grid-cols-7 gap-2 text-xs">
+              <div
+                v-for="cell in calendarCells"
+                :key="cell.key"
+                class="flex h-9 items-center justify-center rounded-lg"
+                :class="[
+                  cell.day ? 'text-black/80 dark:text-white/80' : 'text-black/20 dark:text-white/20',
+                  cell.checked ? 'bg-primary/15 text-primary' : 'bg-black/[0.04] dark:bg-white/[0.05]',
+                  cell.today && !cell.checked ? 'ring-1 ring-primary/40' : '',
+                ]"
+              >
+                <span>{{ cell.day || '' }}</span>
+              </div>
+            </div>
+
+            <p class="mt-3 text-[11px] text-black/45 dark:text-white/45">
+              {{ t('dashboard.credits.checkin.today', '按 UTC 日期计算') }}
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-end gap-3">
+            <TxButton size="small" variant="secondary" @click="close">
+              {{ t('common.cancel', '取消') }}
+            </TxButton>
+            <TxButton
+              size="small"
+              :loading="checkinLoading || checkinPending"
+              :disabled="checkinToday"
+              @click="handleCheckin"
+            >
+              {{ checkinToday ? t('dashboard.credits.checkin.done', '今日已签到') : t('dashboard.credits.checkin.cta', '签到领积分') }}
+            </TxButton>
+          </div>
+        </div>
+      </template>
+    </FlipDialog>
   </div>
 </template>
+
+<style scoped>
+.credits-usage-progress :deep(.tx-progress-bar__track) {
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.credits-usage-progress :deep(.tx-progress-bar__mask) {
+  background: rgba(148, 163, 184, 0.26);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.credits-usage-progress :deep(.tx-progress-bar__track::after) {
+  border-color: rgba(148, 163, 184, 0.32);
+}
+
+:global(.dark) .credits-usage-progress :deep(.tx-progress-bar__track) {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+:global(.dark) .credits-usage-progress :deep(.tx-progress-bar__mask) {
+  background: rgba(148, 163, 184, 0.28);
+}
+</style>

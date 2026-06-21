@@ -26,7 +26,7 @@ const isAuthShellRoute = computed(() => {
 })
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
-const { status, getSession } = useAuth()
+const { status, getSession } = useNexusAuth()
 interface AppAuthUserState {
   id?: string
   locale?: string | null

@@ -9,7 +9,6 @@ defineI18nRoute(false)
 interface LoginHistoryItem {
   id: string
   success: boolean
-  ip: string | null
   ipMasked?: string | null
   reason?: string | null
   clientType?: string | null
@@ -28,7 +27,9 @@ interface DeviceItem {
   id: string
   deviceName: string | null
   platform: string | null
+  clientType?: string | null
   lastSeenAt: string | null
+  lastSeenIpMasked?: string | null
   createdAt: string
   revokedAt?: string | null
   lastLocation?: {
@@ -41,6 +42,7 @@ interface DeviceItem {
     updatedAt: string | null
   } | null
   lastLoginIpMasked?: string | null
+  lastLoginAt?: string | null
 }
 
 interface TelemetryDailyPoint {
@@ -81,8 +83,18 @@ interface OverviewViewModel {
     points: TelemetryDailyPoint[]
     hasData: boolean
   }
-  recentLogins: LoginHistoryItem[]
+  recentActivities: RecentActivityItem[]
   devices: DeviceItem[]
+}
+
+interface RecentActivityItem {
+  id: string
+  kind: 'login' | 'device'
+  success: boolean
+  title: string
+  time: string
+  meta: string
+  location: string
 }
 
 const { t, locale } = useI18n()
@@ -99,7 +111,8 @@ const fallbackName = computed(() => t('dashboard.header.defaultName'))
 const greetingName = computed(() => {
   if (userPending.value || !user.value)
     return fallbackName.value
-  return user.value.name || user.value.email || fallbackName.value
+  const name = user.value.name?.trim()
+  return name ? t('dashboard.header.namedName', { name }) : fallbackName.value
 })
 const greetingLine = computed(() => t('dashboard.header.greeting', { name: greetingName.value }))
 
@@ -126,7 +139,41 @@ const recentSevenDayHistory = computed(() => historyItems.value.filter((item) =>
   return Number.isFinite(ts) && ts >= sevenDayStart.value
 }))
 
-const recentLoginPreview = computed(() => historyItems.value.slice(0, 5))
+const recentActivities = computed<RecentActivityItem[]>(() => {
+  const loginActivities = historyItems.value.map(item => ({
+    id: `login-${item.id}`,
+    kind: 'login' as const,
+    success: item.success,
+    title: item.success ? t('dashboard.overview.stream.success') : t('dashboard.overview.stream.failed'),
+    time: item.created_at,
+    meta: [
+      formatLoginClient(item.clientType),
+      item.ipMasked || t('dashboard.overview.ipUnknown'),
+    ].filter(Boolean).join(' · '),
+    location: formatLoginLocation(item),
+  }))
+
+  const deviceActivities = deviceItems.value
+    .filter(device => toDateValue(device.lastSeenAt || device.createdAt) > 0)
+    .map(device => ({
+      id: `device-${device.id}`,
+      kind: 'device' as const,
+      success: !device.revokedAt,
+      title: t('dashboard.overview.stream.deviceAccess'),
+      time: device.lastSeenAt || device.createdAt,
+      meta: [
+        device.deviceName || t('dashboard.devices.unnamed'),
+        formatDevicePlatform(device.platform),
+        device.lastSeenIpMasked || device.lastLoginIpMasked || t('dashboard.overview.ipUnknown'),
+      ].filter(Boolean).join(' · '),
+      location: formatDeviceLocation(device),
+    }))
+
+  return [...loginActivities, ...deviceActivities]
+    .sort((a, b) => toDateValue(b.time) - toDateValue(a.time))
+    .slice(0, 5)
+})
+
 const recentLoginMapPoints = computed(() => {
   return historyItems.value
     .filter(item => item.success && Number.isFinite(item.location?.latitude) && Number.isFinite(item.location?.longitude))
@@ -220,7 +267,7 @@ const viewModel = computed<OverviewViewModel>(() => ({
     points: currentTelemetryPoints.value,
     hasData: searchTrendHasData.value,
   },
-  recentLogins: recentLoginPreview.value,
+  recentActivities: recentActivities.value,
   devices: recentDevicePreview.value,
 }))
 
@@ -310,9 +357,37 @@ function formatLoginClient(value: string | null | undefined): string {
     return t('dashboard.account.clientTypes.cli', 'CLI')
   if (normalized === 'external')
     return t('dashboard.account.clientTypes.external', 'External')
+  if (normalized === 'web')
+    return t('dashboard.account.clientTypes.web', 'Web')
   if (normalized === 'app')
     return t('dashboard.account.clientTypes.app', 'App')
   return t('dashboard.account.clientTypes.unknown', '未知来源')
+}
+
+function formatDevicePlatform(value: string | null | undefined): string {
+  if (!value)
+    return t('dashboard.overview.deviceUnknown')
+
+  return value
+}
+
+function getDeviceBrandIcon(device: DeviceItem): string {
+  const value = `${device.platform || ''} ${device.deviceName || ''} ${device.clientType || ''}`.toLowerCase()
+  if (value.includes('mac') || value.includes('darwin') || value.includes('iphone') || value.includes('ipad') || value.includes('ios'))
+    return 'i-cib-apple'
+  if (value.includes('win'))
+    return 'i-cib-windows'
+  if (value.includes('linux'))
+    return 'i-cib-linux'
+  if (value.includes('android'))
+    return 'i-cib-android'
+  if (value.includes('safari'))
+    return 'i-cib-safari'
+  if (value.includes('edge'))
+    return 'i-cib-microsoft-edge'
+  if (value.includes('web'))
+    return 'i-carbon-application-web'
+  return 'i-carbon-devices'
 }
 
 function formatLoginLocation(item: LoginHistoryItem): string {
@@ -351,10 +426,7 @@ function isCurrentDevice(device: DeviceItem) {
 <template>
   <div class="space-y-5">
     <header class="space-y-2">
-      <p class="apple-section-title">
-        {{ t('dashboard.header.badge') }}
-      </p>
-      <h1 class="apple-heading-lg">
+      <h1 class="DashboardOverview-Heading apple-heading-lg">
         {{ greetingLine }}
       </h1>
       <p class="max-w-2xl apple-body text-black/60 dark:text-white/60">
@@ -527,7 +599,7 @@ function isCurrentDevice(device: DeviceItem) {
       </section>
 
       <section class="grid gap-3 xl:grid-cols-12">
-        <div class="apple-card-lg p-4 space-y-3 xl:col-span-7">
+        <div class="apple-card-lg p-4 space-y-3 xl:col-span-8">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.stream.title') }}
           </h2>
@@ -542,32 +614,32 @@ function isCurrentDevice(device: DeviceItem) {
             </TxButton>
           </div>
 
-          <div v-else-if="!viewModel.recentLogins.length" class="rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
+          <div v-else-if="!viewModel.recentActivities.length" class="rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/50 dark:border-white/[0.08] dark:text-white/50">
             {{ t('dashboard.overview.stream.empty') }}
           </div>
 
           <div v-else class="space-y-2">
             <div
-              v-for="item in viewModel.recentLogins"
+              v-for="item in viewModel.recentActivities"
               :key="item.id"
               class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-black/[0.02] px-4 py-3 text-sm dark:bg-white/[0.03]"
             >
               <div>
                 <p class="text-black dark:text-white">
-                  {{ item.success ? t('dashboard.overview.stream.success') : t('dashboard.overview.stream.failed') }}
+                  {{ item.title }}
                 </p>
                 <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ formatDateTime(item.created_at) }} · {{ formatLoginClient(item.clientType) }} · {{ item.ipMasked || item.ip || t('dashboard.overview.ipUnknown') }}
+                  {{ formatDateTime(item.time) }} · {{ item.meta }}
                 </p>
                 <p class="text-xs text-black/45 dark:text-white/45">
-                  {{ formatLoginLocation(item) }}
+                  {{ item.location }}
                 </p>
               </div>
               <span
                 class="rounded-full px-2 py-0.5 text-xs"
                 :class="item.success ? 'bg-green-500/20 text-green-600 dark:text-green-300' : 'bg-red-500/20 text-red-600 dark:text-red-300'"
               >
-                {{ item.success ? t('dashboard.account.statusSuccess') : t('dashboard.account.statusFailed') }}
+                {{ item.kind === 'device' ? t('dashboard.overview.stream.device') : item.success ? t('dashboard.account.statusSuccess') : t('dashboard.account.statusFailed') }}
               </span>
             </div>
           </div>
@@ -580,7 +652,7 @@ function isCurrentDevice(device: DeviceItem) {
           </div>
         </div>
 
-        <div class="apple-card-lg p-4 space-y-3 xl:col-span-5">
+        <div class="apple-card-lg p-4 space-y-3 xl:col-span-4">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.devices.title') }}
           </h2>
@@ -603,29 +675,34 @@ function isCurrentDevice(device: DeviceItem) {
             <div
               v-for="device in viewModel.devices"
               :key="device.id"
-              class="rounded-xl border border-black/[0.05] bg-black/[0.02] px-4 py-3 text-sm dark:border-white/[0.08] dark:bg-white/[0.03]"
+              class="flex gap-3 rounded-xl border border-black/[0.05] bg-black/[0.02] px-4 py-3 text-sm dark:border-white/[0.08] dark:bg-white/[0.03]"
             >
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-black dark:text-white">
-                  {{ device.deviceName || t('dashboard.devices.unnamed') }}
-                  <span
-                    v-if="isCurrentDevice(device)"
-                    class="ml-2 rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-600 dark:text-green-300"
-                  >
-                    {{ t('dashboard.overview.devices.current') }}
-                  </span>
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/[0.04] text-xl text-black/70 dark:bg-white/[0.06] dark:text-white/75">
+                <span :class="getDeviceBrandIcon(device)" aria-hidden="true" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="min-w-0 text-black dark:text-white">
+                    <span class="truncate align-bottom">{{ device.deviceName || t('dashboard.devices.unnamed') }}</span>
+                    <span
+                      v-if="isCurrentDevice(device)"
+                      class="ml-2 rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-600 dark:text-green-300"
+                    >
+                      {{ t('dashboard.overview.devices.current') }}
+                    </span>
+                  </p>
+                  <p class="text-xs text-black/50 dark:text-white/50">
+                    {{ formatRelativeTime(device.lastSeenAt || device.createdAt) }}
+                  </p>
+                </div>
+                <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                  {{ formatDevicePlatform(device.platform) }}
                 </p>
-                <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ formatRelativeTime(device.lastSeenAt || device.createdAt) }}
+                <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                  {{ formatDeviceLocation(device) }}
+                  <span v-if="device.lastSeenIpMasked || device.lastLoginIpMasked"> · {{ device.lastSeenIpMasked || device.lastLoginIpMasked }}</span>
                 </p>
               </div>
-              <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-                {{ device.platform || t('dashboard.overview.deviceUnknown') }}
-              </p>
-              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                {{ formatDeviceLocation(device) }}
-                <span v-if="device.lastLoginIpMasked"> · {{ device.lastLoginIpMasked }}</span>
-              </p>
             </div>
           </div>
         </div>
@@ -633,3 +710,10 @@ function isCurrentDevice(device: DeviceItem) {
     </template>
   </div>
 </template>
+
+<style scoped>
+.DashboardOverview-Heading {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+</style>

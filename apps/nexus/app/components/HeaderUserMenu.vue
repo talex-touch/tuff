@@ -4,9 +4,10 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { useTheme } from '~/composables/useTheme'
+import { formatCompactEmail } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 
-const { data: session, status, signOut } = useAuth()
+const { data: session, status, signOut } = useNexusAuth()
 const { t, te, locale } = useI18n()
 const route = useRoute()
 const { setManualLocale } = useLocaleOrchestrator()
@@ -39,9 +40,16 @@ let languageMenuTimer: ReturnType<typeof setTimeout> | null = null
 const userLabel = computed(() => session.value?.user?.name || session.value?.user?.email || '')
 const userEmail = computed(() => {
   const email = session.value?.user?.email || ''
-  if (!email || email === userLabel.value)
+  if (!email)
     return ''
   return email
+})
+const userEmailDisplay = computed(() => {
+  const email = userEmail.value.trim()
+  if (!email)
+    return tSafe('auth.menu.emailPlaceholder', 'jefjheljkls...@gmail.com')
+
+  return formatCompactEmail(email)
 })
 const userAvatar = computed(() => session.value?.user?.image || '')
 
@@ -220,7 +228,7 @@ watch(
       placement="bottom-end"
       :offset="10"
       :animation="{ type: 'transfer', duration: menuMotionDuration }"
-      :min-width="280"
+      :min-width="328"
       :panel-padding="0"
       :close-on-select="false"
       :panel-card="userMenuPanelCard"
@@ -258,8 +266,8 @@ watch(
             <div class="header-user-name">
               {{ userLabel || tSafe('nav.account', 'Account') }}
             </div>
-            <div v-if="userEmail" class="header-user-email" :title="userEmail">
-              {{ userEmail }}
+            <div class="header-user-email" :title="userEmail || userEmailDisplay">
+              {{ userEmailDisplay }}
             </div>
           </div>
         </div>
@@ -296,7 +304,8 @@ watch(
             placement="right"
             :offset="6"
             :animation="{ type: 'transfer', duration: menuMotionDuration }"
-            :min-width="160"
+            :width="132"
+            :min-width="132"
             reference-class="header-user-submenu-reference"
             :panel-padding="0"
             :panel-radius="14"
@@ -400,6 +409,17 @@ watch(
 
 :global(.tx-popover:has(.header-user-submenu-panel)) {
   --tx-index-popper: 2300;
+  width: 132px !important;
+  min-width: 132px !important;
+}
+
+:global(.tx-tooltip:has(.header-user-submenu-panel)),
+:global(.tx-tooltip:has(.header-user-submenu-panel) .tx-tooltip__content),
+:global(.tx-base-anchor:has(.header-user-submenu-panel)),
+:global(.tx-base-anchor:has(.header-user-submenu-panel) .tx-base-anchor__card) {
+  width: 132px !important;
+  min-width: 132px !important;
+  max-width: 132px !important;
 }
 
 :global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__outline),
@@ -408,7 +428,7 @@ watch(
 }
 
 :global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__card) {
-  overflow-x: hidden !important;
+  overflow-x: visible !important;
 }
 
 :global(.header-user-submenu-reference),
@@ -479,7 +499,8 @@ watch(
   gap: 8px;
   padding: 12px;
   box-sizing: border-box;
-  min-width: 280px;
+  width: min(328px, calc(100vw - 32px));
+  min-width: min(328px, calc(100vw - 32px));
   margin: 0;
   background: transparent;
   border: 1px solid var(--header-user-border);
@@ -492,16 +513,16 @@ watch(
 .header-user-profile {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid var(--header-user-border);
+  gap: 11px;
+  padding: 8px 8px 10px;
+  border-radius: 12px;
 
-  --fake-opacity: 0.25;
+  --fake-opacity: 0;
 }
 
 .header-user-profile-avatar {
-  --tx-avatar-size: 40px;
+  flex: 0 0 auto;
+  --tx-avatar-size: 36px;
   --tx-avatar-border-radius: 999px;
   --tx-avatar-background: color-mix(in srgb, var(--header-user-text) 18%, transparent);
   --tx-avatar-color: var(--header-user-text);
@@ -515,18 +536,25 @@ watch(
 }
 
 .header-user-name {
+  max-width: 100%;
+  overflow: hidden;
   font-size: 15px;
   font-weight: 600;
   color: var(--header-user-text);
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .header-user-email {
-  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
   color: var(--header-user-muted);
   width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  line-height: 1.35;
 }
 
 .header-user-stats {
@@ -590,6 +618,8 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .header-user-submenu {
@@ -608,7 +638,8 @@ watch(
   gap: 4px;
   padding: 8px;
   box-sizing: border-box;
-  min-width: 150px;
+  width: min(132px, calc(100vw - 32px));
+  min-width: min(132px, calc(100vw - 32px));
   border-radius: 14px;
   background: transparent;
   border: 1px solid var(--header-user-border);
@@ -620,8 +651,9 @@ watch(
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-width: 0;
   text-align: left;
-  padding: 8px 10px;
+  padding: 7px 9px;
   border-radius: 10px;
   font-size: 13px;
   color: color-mix(in srgb, var(--header-user-text) 82%, transparent);
@@ -640,6 +672,12 @@ watch(
   justify-content: space-between;
 }
 
+.header-user-submenu-item :deep(.tx-button__content) {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+}
+
 .header-user-submenu-item:hover {
   background: var(--header-user-hover);
   border-color: var(--header-user-hover-border);
@@ -654,11 +692,12 @@ watch(
 }
 
 .header-user-theme-switch {
+  flex: 0 0 auto;
   margin-left: 8px;
 }
 
 .header-user-panel :deep(.tx-dropdown-item) {
-  --tx-card-item-padding: 9px 10px;
+  --tx-card-item-padding: 8px 10px;
   --tx-card-item-radius: 12px;
 }
 

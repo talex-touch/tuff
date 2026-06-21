@@ -10,7 +10,7 @@ interface AuthUserOptions {
 }
 
 export function useAuthUser(options: AuthUserOptions = {}) {
-  const { status } = useAuth()
+  const { status } = useNexusAuth()
   const userState = useState<AuthUserProfile | null>('auth-user', () => null)
   const pendingState = useState<boolean>('auth-user-pending', () => false)
   const errorState = useState<string | null>('auth-user-error', () => null)

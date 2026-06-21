@@ -18,11 +18,11 @@ const { isAuthenticated } = useAuthUser()
   <div class="relative">
     <section
       v-if="isAuthenticated"
-      class="grid gap-10 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]"
+      class="dashboard-shell grid gap-8 lg:grid-cols-[192px_minmax(0,1fr)] xl:grid-cols-[208px_minmax(0,1fr)]"
     >
       <DashboardNav />
 
-      <div class="space-y-10">
+      <div class="min-w-0 space-y-10 overflow-hidden">
         <NuxtPage />
       </div>
     </section>
@@ -31,3 +31,11 @@ const { isAuthenticated } = useAuthUser()
     </div>
   </div>
 </template>
+
+<style scoped>
+.dashboard-shell {
+  width: 100%;
+  max-width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+</style>

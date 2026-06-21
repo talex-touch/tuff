@@ -15,8 +15,17 @@ defineI18nRoute(false)
 
 interface TeamInvite {
   id: string
-  code: string
   email: string | null
+  role: 'admin' | 'member'
+  status: 'pending' | 'accepted' | 'expired' | 'revoked'
+  expiresAt: string | null
+  createdAt: string
+}
+
+interface ReceivedTeamInvite {
+  id: string
+  teamId: string
+  teamName: string
   role: 'admin' | 'member'
   status: 'pending' | 'accepted' | 'expired' | 'revoked'
   expiresAt: string | null
@@ -57,6 +66,7 @@ interface DashboardTeam {
   upgrade: TeamUpgradeHint
   members: TeamMember[]
   invites: TeamInvite[]
+  receivedInvites: ReceivedTeamInvite[]
 }
 
 interface CreditUsageItem {
@@ -93,22 +103,6 @@ interface Pagination {
   totalPages: number
 }
 
-interface InvitePreview {
-  invite: {
-    code: string
-    teamId: string
-    teamName: string
-    expiresAt: string | null
-    status: string
-    role: 'admin' | 'member'
-    seats: { used: number, total: number }
-  }
-  validation: {
-    canJoin: boolean
-    reason: string
-  }
-}
-
 const { t } = useI18n()
 const { data, pending, refresh } = useTypedFetch<{ team: DashboardTeam }>('/api/dashboard/team')
 
@@ -118,6 +112,7 @@ const canCreateTeam = computed(() => Boolean(team.value?.permissions.canCreateTe
 const canDisband = computed(() => Boolean(team.value?.permissions.canDisband))
 const isPersonalTeam = computed(() => team.value?.type === 'personal')
 const showTeamCredits = computed(() => team.value?.type === 'organization' && team.value?.permissions.canViewUsage)
+const receivedInvites = computed(() => team.value?.receivedInvites ?? [])
 
 const actionError = ref('')
 const actionSuccess = ref('')
@@ -125,8 +120,6 @@ const createLoading = ref(false)
 const inviteLoading = ref(false)
 const deleteInviteLoading = ref(false)
 const disbandLoading = ref(false)
-const joinLoading = ref(false)
-const joinPreviewLoading = ref(false)
 const activationLoading = ref(false)
 
 const creditUsage = ref<CreditUsageItem[]>([])
@@ -160,20 +153,17 @@ const creditTrendError = ref('')
 const createOverlayVisible = ref(false)
 const inviteOverlayVisible = ref(false)
 const disbandOverlayVisible = ref(false)
-const joinOverlayVisible = ref(false)
+const activationOverlayVisible = ref(false)
 
 const createTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const inviteTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const disbandTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
-const joinTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
+const activationTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 
 const createTeamName = ref('')
-const inviteEmail = ref('')
+const inviteTarget = ref('')
 const inviteRole = ref<'admin' | 'member'>('member')
-const joinCode = ref('')
 const activationCode = ref('')
-const invitePreview = ref<InvitePreview | null>(null)
-const joinPreviewMessage = ref('')
 
 function formatDateTime(value: string | null) {
   if (!value)
@@ -186,6 +176,12 @@ function formatNumber(value: number | null | undefined) {
   if (typeof value !== 'number')
     return '0'
   return new Intl.NumberFormat().format(value)
+}
+
+function formatCreditAmount(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return '0'
+  return new Intl.NumberFormat().format(Math.abs(Math.round(value)))
 }
 
 function resolveCreditUserLabel(item: { name?: string | null; email?: string | null; userId?: string | null }) {
@@ -221,22 +217,6 @@ function normalizeErrorMessage(error: any, fallback: string) {
 function resetMessages() {
   actionError.value = ''
   actionSuccess.value = ''
-}
-
-function resolveJoinReason(reason: string) {
-  const key = reason || 'unknown'
-  const mapping: Record<string, string> = {
-    ok: t('team.join.reason.ok', '邀请码可用，可以加入团队。'),
-    expired: t('team.join.reason.expired', '邀请码已过期。'),
-    revoked: t('team.join.reason.revoked', '邀请码已撤销。'),
-    used_up: t('team.join.reason.usedUp', '邀请码已达到使用上限。'),
-    email_mismatch: t('team.join.reason.emailMismatch', '当前账号邮箱与邀请码绑定邮箱不一致。'),
-    already_member: t('team.join.reason.alreadyMember', '你已经在团队中。'),
-    seat_full: t('team.join.reason.seatFull', '团队席位已满。'),
-    plan_locked: t('team.join.reason.planLocked', '团队套餐不支持协作。'),
-  }
-
-  return mapping[key] || t('team.join.reason.unknown', '邀请码暂不可用。')
 }
 
 async function handleCreateTeam(close?: () => void) {
@@ -279,22 +259,21 @@ async function handleCreateInvite(close?: () => void) {
     await requestJson('/api/dashboard/team/invites', {
       method: 'POST',
       body: {
-        email: inviteEmail.value.trim() || undefined,
+        target: inviteTarget.value.trim() || undefined,
         role: inviteRole.value,
-        maxUses: 1,
         expiresInDays: 7,
       },
     })
 
-    inviteEmail.value = ''
+    inviteTarget.value = ''
     inviteRole.value = 'member'
     inviteOverlayVisible.value = false
     close?.()
     await refresh()
-    actionSuccess.value = t('dashboard.team.success.inviteCreated', '邀请已生成')
+    actionSuccess.value = t('dashboard.team.success.inviteCreated', '邀请已发送')
   }
   catch (error: any) {
-    actionError.value = normalizeErrorMessage(error, t('dashboard.team.errors.inviteFailed', '生成邀请失败'))
+    actionError.value = normalizeErrorMessage(error, t('dashboard.team.errors.inviteFailed', '发送邀请失败'))
   }
   finally {
     inviteLoading.value = false
@@ -349,74 +328,7 @@ async function handleDisband(close?: () => void) {
   }
 }
 
-async function previewInvite() {
-  const code = joinCode.value.trim()
-  invitePreview.value = null
-  joinPreviewMessage.value = ''
-
-  if (!code)
-    return
-
-  joinPreviewLoading.value = true
-  resetMessages()
-
-  try {
-    const result = await requestJson<InvitePreview>(`/api/team/invite/${encodeURIComponent(code)}`)
-    invitePreview.value = result
-    joinPreviewMessage.value = resolveJoinReason(result.validation.reason)
-  }
-  catch (error: any) {
-    const reason = error?.data?.data?.reason
-    joinPreviewMessage.value = reason ? resolveJoinReason(reason) : normalizeErrorMessage(error, t('team.join.previewFailed', '邀请码预览失败'))
-  }
-  finally {
-    joinPreviewLoading.value = false
-  }
-}
-
-async function handleJoinTeam(close?: () => void) {
-  if (joinLoading.value)
-    return
-
-  const code = joinCode.value.trim()
-  if (!code) {
-    joinPreviewMessage.value = t('team.join.codeRequired', '请输入邀请码')
-    return
-  }
-
-  if (!invitePreview.value)
-    await previewInvite()
-
-  if (!invitePreview.value?.validation.canJoin)
-    return
-
-  joinLoading.value = true
-  resetMessages()
-
-  try {
-    await requestJson('/api/team/join', {
-      method: 'POST',
-      body: { code },
-    })
-
-    joinCode.value = ''
-    invitePreview.value = null
-    joinPreviewMessage.value = ''
-    joinOverlayVisible.value = false
-    close?.()
-    await refresh()
-    actionSuccess.value = t('team.join.success', '加入成功')
-  }
-  catch (error: any) {
-    const reason = error?.data?.data?.reason
-    joinPreviewMessage.value = reason ? resolveJoinReason(reason) : normalizeErrorMessage(error, t('team.join.failed', '加入团队失败'))
-  }
-  finally {
-    joinLoading.value = false
-  }
-}
-
-async function handleActivateCode() {
+async function handleActivateCode(close?: () => void) {
   const code = activationCode.value.trim()
   if (!code || activationLoading.value)
     return
@@ -431,6 +343,8 @@ async function handleActivateCode() {
     })
 
     activationCode.value = ''
+    activationOverlayVisible.value = false
+    close?.()
     await refresh()
     actionSuccess.value = `${t('dashboard.team.success.codeActivated', '激活码兑换成功')} (${result.plan})`
   }
@@ -544,6 +458,13 @@ function openManagePlan() {
   return navigateTo('/pricing')
 }
 
+function openReceivedInvite(inviteId: string) {
+  return navigateTo({
+    path: '/team/join',
+    query: { invitation: inviteId },
+  })
+}
+
 watch(
   () => showTeamCredits.value,
   (value) => {
@@ -578,8 +499,8 @@ watch(() => creditTab.value, (value) => {
       </p>
     </header>
 
-    <section v-if="pending" class="apple-card-lg p-6 space-y-4">
-      <div class="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
+    <section v-if="pending" class="apple-card-lg p-6 space-y-6">
+      <div class="flex min-h-24 items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
         <TxSpinner :size="16" />
         {{ t('dashboard.team.pending', '正在加载团队信息…') }}
       </div>
@@ -601,24 +522,34 @@ watch(() => creditTab.value, (value) => {
 
     <template v-else-if="team">
       <section class="apple-card-lg p-6">
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4" :class="isPersonalTeam ? 'sm:grid-cols-2' : 'sm:grid-cols-4'">
           <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <p class="apple-section-title">
-              {{ t('dashboard.team.planLabel', '当前套餐') }}
-            </p>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="apple-section-title">
+                {{ t('dashboard.team.planLabel', '当前套餐') }}
+              </p>
+              <TxButton variant="secondary" size="small" @click="openManagePlan">
+                {{ t('dashboard.team.managePlan', '管理套餐') }}
+              </TxButton>
+            </div>
             <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
               {{ team.plan }}
             </p>
           </div>
           <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <p class="apple-section-title">
-              {{ t('dashboard.sections.team.currentTeam', '当前团队') }}
-            </p>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="apple-section-title">
+                {{ t('dashboard.sections.team.currentTeam', '当前团队') }}
+              </p>
+              <TxButton ref="activationTriggerRef" variant="primary" size="small" @click="activationOverlayVisible = true">
+                {{ t('dashboard.team.activationButton', '激活') }}
+              </TxButton>
+            </div>
             <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
               {{ team.name }}
             </p>
           </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <div v-if="!isPersonalTeam" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
             <p class="apple-section-title">
               {{ t('dashboard.team.currentRole', '角色') }}
             </p>
@@ -626,7 +557,7 @@ watch(() => creditTab.value, (value) => {
               {{ team.role }}
             </p>
           </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <div v-if="!isPersonalTeam" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
             <p class="apple-section-title">
               {{ t('dashboard.team.memberStatus.active', '已激活') }}
             </p>
@@ -635,46 +566,10 @@ watch(() => creditTab.value, (value) => {
             </p>
           </div>
         </div>
-
-        <div class="mt-5 flex flex-wrap items-center gap-2">
-          <TxButton variant="secondary" size="small" @click="refresh()">
-            {{ t('common.refresh', '刷新') }}
-          </TxButton>
-          <TxButton variant="secondary" size="small" @click="openManagePlan">
-            {{ t('dashboard.team.managePlan', '管理套餐') }}
-          </TxButton>
-        </div>
       </section>
 
-      <section class="apple-card-lg p-6 space-y-4">
-        <div>
-          <h2 class="apple-heading-sm">
-            {{ t('dashboard.team.activationTitle', '激活码兑换') }}
-          </h2>
-          <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-            {{ t('dashboard.team.activationDesc', '输入系统发放的 activation code 进行套餐兑换。') }}
-          </p>
-        </div>
-
-        <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <TuffInput
-            v-model="activationCode"
-            type="text"
-            autocomplete="off"
-            placeholder="TUFF-TEAM-XXXX-XXXX"
-            @keyup.enter="handleActivateCode"
-          />
-          <TxButton variant="primary" size="small" :loading="activationLoading" @click="handleActivateCode">
-            {{ t('dashboard.team.activateCode', '兑换') }}
-          </TxButton>
-        </div>
-      </section>
-
-      <section class="apple-card-lg p-6">
-        <div class="flex flex-wrap items-center gap-2">
-          <TxButton v-if="isPersonalTeam" ref="joinTriggerRef" variant="secondary" size="small" @click="joinOverlayVisible = true">
-            {{ t('dashboard.team.joinByCode', '通过邀请码加入团队') }}
-          </TxButton>
+      <section v-if="canCreateTeam || canInvite || canDisband || (isPersonalTeam && receivedInvites.length)" class="apple-card-lg p-6">
+        <div v-if="canCreateTeam || canInvite || canDisband" class="flex flex-wrap items-center gap-2">
           <TxButton v-if="canCreateTeam" ref="createTriggerRef" variant="secondary" size="small" @click="createOverlayVisible = true">
             {{ t('dashboard.team.modal.createTitle', '创建团队') }}
           </TxButton>
@@ -686,9 +581,34 @@ watch(() => creditTab.value, (value) => {
           </TxButton>
         </div>
 
-        <p v-if="team.upgrade.required" class="mt-3 text-sm text-black/50 dark:text-white/50">
-          {{ t('dashboard.team.notInvitedDesc', '当前套餐仅支持个人团队，升级到 TEAM 后可邀请成员协作。') }}
-        </p>
+        <div v-if="isPersonalTeam && receivedInvites.length" class="space-y-3" :class="canCreateTeam || canInvite || canDisband ? 'mt-4' : ''">
+          <h2 class="apple-heading-sm">
+            {{ t('dashboard.team.receivedInvites', '收到的团队邀请') }}
+          </h2>
+          <div class="space-y-2">
+            <button
+              v-for="invite in receivedInvites"
+              :key="invite.id"
+              type="button"
+              class="w-full rounded-xl bg-black/[0.02] px-4 py-3 text-left transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+              @click="openReceivedInvite(invite.id)"
+            >
+              <span class="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  <span class="block text-sm font-medium text-black dark:text-white">
+                    {{ invite.teamName }}
+                  </span>
+                  <span class="mt-1 block text-xs text-black/55 dark:text-white/55">
+                    {{ invite.role }} · {{ formatDateTime(invite.expiresAt) }}
+                  </span>
+                </span>
+                <span class="text-xs text-primary">
+                  {{ t('dashboard.team.viewInvite', '查看邀请') }}
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
       </section>
 
       <section v-if="team.type === 'organization'" class="apple-card-lg p-6 space-y-5">
@@ -747,21 +667,13 @@ watch(() => creditTab.value, (value) => {
                 </TxButton>
               </div>
 
-              <div class="grid gap-4 sm:grid-cols-2">
+              <div class="grid gap-4">
                 <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
                   <p class="text-xs text-black/40 dark:text-white/40">
                     {{ t('dashboard.team.credits.totalUsed', '本月总消耗') }}
                   </p>
                   <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                    {{ formatNumber(creditUsageSummary.totalUsed) }}
-                  </p>
-                </div>
-                <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-                  <p class="text-xs text-black/40 dark:text-white/40">
-                    {{ t('dashboard.team.credits.totalQuota', '本月总额度') }}
-                  </p>
-                  <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                    {{ formatNumber(creditUsageSummary.totalQuota) }}
+                    {{ t('dashboard.credits.usage.consumed', { n: formatCreditAmount(creditUsageSummary.totalUsed) }) }}
                   </p>
                 </div>
               </div>
@@ -846,7 +758,7 @@ watch(() => creditTab.value, (value) => {
                   <span>{{ creditTrendSparkline.trend }}</span>
                 </div>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ formatNumber(creditTrend?.totalUsed ?? 0) }}
+                  {{ t('dashboard.credits.usage.consumed', { n: formatCreditAmount(creditTrend?.totalUsed ?? 0) }) }}
                 </p>
                 <DashboardSparklineChart
                   class="mt-3"
@@ -915,7 +827,7 @@ watch(() => creditTab.value, (value) => {
                   </div>
                   <div class="text-right">
                     <p class="text-sm font-semibold" :class="entry.delta < 0 ? 'text-red-500' : 'text-green-600'">
-                      {{ entry.delta }}
+                      {{ entry.delta < 0 ? t('dashboard.credits.usage.entryConsumed', { n: formatCreditAmount(entry.delta) }) : t('dashboard.credits.usage.entryAdded', { n: formatCreditAmount(entry.delta) }) }}
                     </p>
                     <p v-if="entry.metadata?.tokens" class="text-[11px] text-black/40 dark:text-white/40">
                       tokens {{ entry.metadata.tokens }}
@@ -948,11 +860,11 @@ watch(() => creditTab.value, (value) => {
             class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-4 py-3 dark:bg-white/[0.03]"
           >
             <div>
-              <p class="font-mono text-xs text-black/70 dark:text-white/70">
-                {{ invite.code }}
+              <p class="text-sm font-medium text-black dark:text-white">
+                {{ invite.email || '-' }}
               </p>
               <p class="text-xs text-black/55 dark:text-white/55">
-                {{ invite.email || '-' }} · {{ invite.role }} · {{ invite.status }} · {{ formatDateTime(invite.expiresAt) }}
+                {{ invite.role }} · {{ invite.status }} · {{ formatDateTime(invite.expiresAt) }}
               </p>
             </div>
             <TxButton v-if="canInvite" variant="secondary" size="small" :disabled="deleteInviteLoading" @click="handleDeleteInvite(invite.id)">
@@ -1013,15 +925,15 @@ watch(() => creditTab.value, (value) => {
               {{ t('dashboard.team.modal.inviteTitle', '邀请成员') }}
             </h2>
             <p class="TeamOverlay-Desc">
-              {{ t('dashboard.team.modal.inviteDesc', '输入成员邮箱，系统会生成专属邀请码。') }}
+              {{ t('dashboard.team.modal.inviteDesc', '搜索成员邮箱或用户 ID，发送团队邀请。') }}
             </p>
 
             <div class="space-y-3">
               <TuffInput
-                v-model="inviteEmail"
-                type="email"
+                v-model="inviteTarget"
+                type="text"
                 autocomplete="off"
-                placeholder="user@example.com"
+                :placeholder="t('dashboard.team.modal.invitePlaceholder', 'user@example.com / user_id')"
               />
 
               <TuffSelect v-model="inviteRole" class="w-full">
@@ -1035,7 +947,7 @@ watch(() => creditTab.value, (value) => {
                 {{ t('common.cancel', '取消') }}
               </TxButton>
               <TxButton variant="primary" size="small" :loading="inviteLoading" @click="handleCreateInvite(close)">
-                {{ t('dashboard.team.modal.createInvite', '生成邀请') }}
+                {{ t('dashboard.team.modal.createInvite', '发送邀请') }}
               </TxButton>
             </div>
           </div>
@@ -1043,52 +955,36 @@ watch(() => creditTab.value, (value) => {
       </FlipDialog>
 
     <FlipDialog
-        v-model="joinOverlayVisible"
-        :reference="joinTriggerRef?.$el || null"
+        v-model="activationOverlayVisible"
+        :reference="activationTriggerRef?.$el || null"
         size="md"
       >
-        <template #default="{ close }">
-          <div class="TeamOverlay-Inner">
-            <h2 class="TeamOverlay-Title">
-              {{ t('dashboard.team.joinByCode', '通过邀请码加入团队') }}
+        <template #header-display>
+          <div class="TeamActivationOverlay-Header">
+            <h2 class="TeamActivationOverlay-Title">
+              {{ t('dashboard.team.activationTitle', '激活码兑换') }}
             </h2>
-            <p class="TeamOverlay-Desc">
-              {{ t('team.join.desc', '输入邀请码后可预览并加入团队。') }}
+            <p class="TeamActivationOverlay-Desc">
+              {{ t('dashboard.team.activationDesc', '输入系统发放的 activation code 进行套餐兑换。') }}
             </p>
-
-            <div class="space-y-3">
-              <TuffInput
-                v-model="joinCode"
-                type="text"
-                autocomplete="off"
-                placeholder="ABCDEFGH"
-                @keyup.enter="previewInvite"
-              />
-
-              <TxButton variant="secondary" size="small" :loading="joinPreviewLoading" @click="previewInvite">
-                {{ t('team.join.preview', '预览邀请码') }}
-              </TxButton>
-
-              <div v-if="invitePreview" class="rounded-xl bg-black/[0.03] px-3 py-2 text-xs text-black/70 dark:bg-white/[0.06] dark:text-white/70">
-                <p class="font-medium text-black dark:text-white">
-                  {{ invitePreview.invite.teamName }}
-                </p>
-                <p>
-                  {{ invitePreview.invite.seats.used }}/{{ invitePreview.invite.seats.total }} seats · {{ invitePreview.invite.role }}
-                </p>
-              </div>
-
-              <p v-if="joinPreviewMessage" class="text-xs" :class="invitePreview?.validation.canJoin ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-500'">
-                {{ joinPreviewMessage }}
-              </p>
-            </div>
-
-            <div class="TeamOverlay-Actions">
+          </div>
+        </template>
+        <template #default="{ close }">
+          <div class="TeamActivationOverlay-Form">
+            <TuffInput
+              v-model="activationCode"
+              type="text"
+              autocomplete="off"
+              class="min-w-0 flex-1"
+              placeholder="TUFF-TEAM-XXXX-XXXX"
+              @keyup.enter="handleActivateCode(close)"
+            />
+            <div class="TeamActivationOverlay-Actions">
               <TxButton variant="secondary" size="small" @click="close">
                 {{ t('common.cancel', '取消') }}
               </TxButton>
-              <TxButton variant="primary" size="small" :loading="joinLoading" :disabled="!invitePreview?.validation.canJoin" @click="handleJoinTeam(close)">
-                {{ t('team.join.join', '加入团队') }}
+              <TxButton variant="primary" size="small" :loading="activationLoading" @click="handleActivateCode(close)">
+                {{ t('dashboard.team.activateCode', '兑换') }}
               </TxButton>
             </div>
           </div>
@@ -1148,5 +1044,54 @@ watch(() => creditTab.value, (value) => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.TeamActivationOverlay-Header {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.TeamActivationOverlay-Title {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tx-text-color-primary);
+}
+
+.TeamActivationOverlay-Desc {
+  margin: 0;
+  min-width: 240px;
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--tx-text-color-secondary);
+}
+
+.TeamActivationOverlay-Form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px 18px;
+}
+
+.TeamActivationOverlay-Actions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .TeamActivationOverlay-Form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .TeamActivationOverlay-Actions {
+    width: 100%;
+  }
 }
 </style>

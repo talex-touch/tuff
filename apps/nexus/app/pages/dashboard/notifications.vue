@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxRadio, TxRadioGroup, type TxRadioValue } from '@talex-touch/tuffex/radio'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import { hasWindow } from '@talex-touch/utils/env'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -36,7 +38,6 @@ interface BrowserNotificationItem {
 interface InboxResponse {
   notifications: BrowserNotificationItem[]
   unreadCount: number
-  generatedAt: string
 }
 
 interface BrowserPushSubscriptionSummary {
@@ -69,7 +70,6 @@ const notifications = ref<BrowserNotificationItem[]>([])
 const browserPushSubscriptions = ref<BrowserPushSubscriptionSummary[]>([])
 const unreadCount = ref(0)
 const navigationUnreadCount = useState<number>('dashboard-notification-unread-count', () => 0)
-const generatedAt = ref('')
 const loading = ref(false)
 const actionLoading = ref(false)
 const browserNotificationBusy = ref(false)
@@ -77,6 +77,7 @@ const browserPushBusy = ref(false)
 const browserNotificationPermission = ref<BrowserNotificationPermissionState>('unsupported')
 const browserNotificationError = ref<string | null>(null)
 const error = ref<string | null>(null)
+const browserSetupOverlayVisible = ref(false)
 
 const filterOptions = computed(() => [
   {
@@ -88,10 +89,16 @@ const filterOptions = computed(() => [
     label: t('dashboard.notifications.filters.all', '全部'),
   },
 ])
+const selectedFilter = computed<TxRadioValue>({
+  get: () => filter.value,
+  set: (value) => {
+    if (value === 'unread' || value === 'all')
+      filter.value = value
+  },
+})
 
 const visibleNotifications = computed(() => notifications.value)
 const hasUnread = computed(() => unreadCount.value > 0)
-const generatedAtLabel = computed(() => generatedAt.value ? formatDateTime(generatedAt.value) : '-')
 const browserPushSubscription = computed(() => browserPushSubscriptions.value[0] ?? null)
 const browserPushPublicKey = computed(() => runtimeConfig.public?.notificationWebPush?.publicKey ?? '')
 const browserPushStatusLabel = computed(() => {
@@ -119,11 +126,16 @@ const browserNotificationActionLabel = computed(() => {
     return t('dashboard.notifications.browser.blocked', '已被浏览器阻止')
   return t('dashboard.notifications.browser.unsupported', '浏览器不支持')
 })
-const browserNotificationActionDisabled = computed(() => {
-  return browserNotificationBusy.value || browserNotificationPermission.value === 'denied' || browserNotificationPermission.value === 'unsupported'
+const browserSetupActionLabel = computed(() => {
+  return browserPushSubscription.value
+    ? t('dashboard.notifications.browser.manageWebPush')
+    : t('dashboard.notifications.browser.setupWebPush')
 })
-const browserPushActionDisabled = computed(() => {
-  return browserPushBusy.value || browserNotificationPermission.value !== 'granted' || !browserPushPublicKey.value
+const browserSetupDialogMessage = computed(() => {
+  const intro = t('dashboard.notifications.browser.setupDialogHint')
+  if (!browserNotificationError.value)
+    return intro
+  return `${intro} ${t('dashboard.notifications.browser.setupDialogError', { error: browserNotificationError.value })}`
 })
 
 function readErrorMessage(errorValue: unknown): string {
@@ -338,7 +350,6 @@ async function loadNotifications() {
     notifications.value = data.notifications
     unreadCount.value = data.unreadCount
     navigationUnreadCount.value = data.unreadCount
-    generatedAt.value = data.generatedAt
   }
   catch (caught) {
     error.value = readErrorMessage(caught)
@@ -411,102 +422,118 @@ onMounted(() => {
         </p>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <TxButton size="small" variant="secondary" :disabled="browserNotificationActionDisabled" :loading="browserNotificationBusy" icon="i-carbon-notification" @click="handleBrowserNotificationAction">
-          {{ browserNotificationActionLabel }}
-        </TxButton>
-        <TxButton
-          v-if="!browserPushSubscription"
-          size="small"
-          variant="secondary"
-          :disabled="browserPushActionDisabled"
-          :loading="browserPushBusy"
-          icon="i-carbon-send-alt"
-          @click="handleBrowserPushSubscribe"
-        >
-          {{ t('dashboard.notifications.browser.webPushSubscribe', '注册 Web Push') }}
-        </TxButton>
-        <TxButton
-          v-else
-          size="small"
-          variant="secondary"
-          :disabled="browserPushBusy"
-          :loading="browserPushBusy"
-          icon="i-carbon-notification-off"
-          @click="handleBrowserPushUnsubscribe"
-        >
-          {{ t('dashboard.notifications.browser.webPushUnsubscribe', '注销 Web Push') }}
-        </TxButton>
-        <TxButton size="small" variant="secondary" :loading="loading" icon="i-carbon-renew" @click="loadNotifications">
-          {{ t('dashboard.notifications.refresh', '刷新') }}
-        </TxButton>
-        <TxButton size="small" variant="primary" :disabled="!hasUnread || actionLoading" :loading="actionLoading" icon="i-carbon-checkmark" @click="markAllRead">
-          {{ t('dashboard.notifications.markAllRead', '全部已读') }}
-        </TxButton>
-      </div>
-    </header>
+      <FlipDialog
+        v-model="browserSetupOverlayVisible"
+        size="md"
+        width="min(560px, calc(100vw - 32px))"
+        max-height="calc(100dvh - 32px)"
+        :header="false"
+        :closable="false"
+      >
+        <template #reference>
+          <TxButton
+            size="small"
+            variant="secondary"
+            :loading="browserNotificationBusy || browserPushBusy"
+            icon="i-carbon-send-alt"
+          >
+            {{ browserSetupActionLabel }}
+          </TxButton>
+        </template>
 
-    <section class="grid gap-4 md:grid-cols-4">
-      <div class="apple-card-lg p-5">
-        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
-          {{ t('dashboard.notifications.metrics.unread', 'Unread') }}
-        </p>
-        <p class="mt-3 text-3xl text-black font-semibold dark:text-white">
-          {{ unreadCount }}
-        </p>
-      </div>
-      <div class="apple-card-lg p-5">
-        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
-          {{ t('dashboard.notifications.metrics.loaded', 'Loaded') }}
-        </p>
-        <p class="mt-3 text-3xl text-black font-semibold dark:text-white">
-          {{ notifications.length }}
-        </p>
-      </div>
-      <div class="apple-card-lg p-5">
-        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
-          {{ t('dashboard.notifications.metrics.generatedAt', 'Updated') }}
-        </p>
-        <p class="mt-3 text-sm text-black font-medium dark:text-white">
-          {{ generatedAtLabel }}
-        </p>
-      </div>
-      <div class="apple-card-lg p-5">
-        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
-          {{ t('dashboard.notifications.metrics.browser', 'Browser') }}
-        </p>
-        <p class="mt-3 text-sm text-black font-medium dark:text-white">
-          {{ browserNotificationPermissionLabel }}
-        </p>
-        <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-          {{ browserPushStatusLabel }}
-          <span v-if="browserPushSubscription">
-            · {{ browserPushSubscription.endpointHost }}
-          </span>
-        </p>
-        <p v-if="browserNotificationError" class="mt-2 text-xs text-red-600 dark:text-red-300">
-          {{ browserNotificationError }}
-        </p>
-      </div>
-    </section>
+        <template #default>
+          <div class="space-y-4 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <h2 class="text-base text-black font-semibold dark:text-white">
+                  {{ t('dashboard.notifications.browser.setupDialogTitle') }}
+                </h2>
+                <p class="text-xs text-black/55 leading-5 dark:text-white/55">
+                  {{ browserSetupDialogMessage }}
+                </p>
+              </div>
+            </div>
+
+            <div class="grid gap-2 text-sm sm:grid-cols-2">
+              <div class="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-black/[0.04] px-3 py-2 dark:bg-white/[0.06]">
+                <span class="shrink-0 text-black/55 dark:text-white/55">
+                  {{ t('dashboard.notifications.browser.permissionLabel') }}
+                </span>
+                <span class="truncate text-black font-medium dark:text-white">
+                  {{ browserNotificationPermissionLabel }}
+                </span>
+              </div>
+              <div class="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-black/[0.04] px-3 py-2 dark:bg-white/[0.06]">
+                <span class="shrink-0 text-black/55 dark:text-white/55">
+                  {{ t('dashboard.notifications.browser.webPushLabel') }}
+                </span>
+                <span class="truncate text-black font-medium dark:text-white">
+                  {{ browserPushStatusLabel }}
+                </span>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <TxButton
+                size="small"
+                variant="secondary"
+                :disabled="browserNotificationBusy || browserNotificationPermission === 'denied' || browserNotificationPermission === 'unsupported'"
+                :loading="browserNotificationBusy"
+                icon="i-carbon-notification"
+                @click="handleBrowserNotificationAction"
+              >
+                {{ browserNotificationActionLabel }}
+              </TxButton>
+              <TxButton
+                v-if="!browserPushSubscription"
+                size="small"
+                variant="primary"
+                :disabled="browserPushBusy || browserNotificationPermission !== 'granted' || !browserPushPublicKey"
+                :loading="browserPushBusy"
+                icon="i-carbon-send-alt"
+                @click="handleBrowserPushSubscribe"
+              >
+                {{ t('dashboard.notifications.browser.webPushSubscribe', '注册 Web Push') }}
+              </TxButton>
+              <TxButton
+                v-else
+                size="small"
+                variant="danger"
+                :disabled="browserPushBusy"
+                :loading="browserPushBusy"
+                icon="i-carbon-notification-off"
+                @click="handleBrowserPushUnsubscribe"
+              >
+                {{ t('dashboard.notifications.browser.webPushUnsubscribe', '注销 Web Push') }}
+              </TxButton>
+            </div>
+          </div>
+        </template>
+      </FlipDialog>
+    </header>
 
     <section class="apple-card-lg p-5">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="inline-flex rounded-2xl bg-black/[0.04] p-1 dark:bg-white/[0.06]">
-          <button
+        <TxRadioGroup v-model="selectedFilter" type="button" indicator-variant="glass" glass>
+          <TxRadio
             v-for="option in filterOptions"
             :key="option.value"
-            type="button"
-            class="rounded-xl px-3 py-1.5 text-sm transition"
-            :class="filter === option.value ? 'bg-white text-black shadow-sm dark:bg-white/12 dark:text-white' : 'text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white'"
-            @click="filter = option.value"
+            :value="option.value"
           >
             {{ option.label }}
-          </button>
+          </TxRadio>
+        </TxRadioGroup>
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <p class="text-xs text-black/45 dark:text-white/45">
+            {{ t('dashboard.notifications.scopeHint', '仅显示当前登录用户的通知。') }}
+          </p>
+          <TxButton size="small" variant="secondary" :loading="loading" icon="i-carbon-renew" @click="loadNotifications">
+            {{ t('dashboard.notifications.refresh', '刷新') }}
+          </TxButton>
+          <TxButton size="small" variant="primary" :disabled="!hasUnread || actionLoading" :loading="actionLoading" icon="i-carbon-checkmark" @click="markAllRead">
+            {{ t('dashboard.notifications.markAllRead', '全部已读') }}
+          </TxButton>
         </div>
-        <p class="text-xs text-black/45 dark:text-white/45">
-          {{ t('dashboard.notifications.scopeHint', '仅显示当前登录用户的通知。') }}
-        </p>
       </div>
 
       <div v-if="loading" class="flex items-center justify-center py-12">

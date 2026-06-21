@@ -321,7 +321,7 @@ const activeSection = computed(() => {
 </script>
 
 <template>
-  <aside class="dashboard-nav sticky top-24 space-y-6">
+  <aside class="dashboard-nav sticky top-24 max-h-[calc(100vh-6rem)] self-start overflow-y-auto pr-1 space-y-6">
     <nav class="relative p-4" aria-label="Dashboard workspace sections">
       <p class="apple-section-title mb-4 px-3">
         {{ t('dashboard.sections.menu.workspaceTitle', '工作台') }}

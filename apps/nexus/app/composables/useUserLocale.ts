@@ -6,7 +6,7 @@ const LOCALE_STORAGE_KEY = 'tuff_locale_sync'
 
 export function useUserLocale() {
   const { locale } = useI18n()
-  const { status } = useAuth()
+  const { status } = useNexusAuth()
   const { setLocaleSerial, persistLocale } = useLocaleOrchestrator()
 
   const getSavedLocale = (): string | null => {

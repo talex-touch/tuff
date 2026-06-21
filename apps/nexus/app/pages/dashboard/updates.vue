@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
+import { computed, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxCardItem } from '@talex-touch/tuffex/card-item'
+import { TxDataTable } from '@talex-touch/tuffex/data-table'
 import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
@@ -54,6 +56,7 @@ const dateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { 
 const isZh = computed(() => locale.value.startsWith('zh'))
 const UPDATE_RELEASE_TAG_COLOR = 'var(--tx-color-primary)'
 const UPDATE_KEYWORD_TAG_COLOR = 'var(--tx-text-color-secondary)'
+const UPDATES_PAGE_SIZE = 5
 
 const searchKeyword = ref('')
 const selectedType = ref<UpdateTypeFilter>('all')
@@ -61,6 +64,7 @@ const selectedScope = ref<UpdateScopeFilter>('all')
 const selectedChannel = ref<UpdateChannelFilter>('all')
 const selectedSource = ref<UpdateSourceFilter>('all')
 const selectedDateRange = ref<UpdateDateRangeFilter>('all')
+const currentUpdatePage = ref(1)
 
 const isAdmin = computed(() => user.value?.role === 'admin')
 
@@ -151,6 +155,53 @@ const filteredUpdates = computed(() => {
   })
 })
 
+const updateTableColumns = computed<DataTableColumn<DashboardUpdate>[]>(() => [
+  { key: 'title', title: isZh.value ? '标题 / 摘要' : 'Title / Summary', width: '36%' },
+  { key: 'type', title: isZh.value ? '类型' : 'Type', width: 108 },
+  { key: 'channels', title: isZh.value ? '渠道' : 'Channel', width: 150 },
+  { key: 'scope', title: isZh.value ? '范围' : 'Scope', width: 120 },
+  { key: 'source', title: isZh.value ? '来源' : 'Source', width: 110 },
+  { key: 'timestamp', title: isZh.value ? '时间' : 'Date', width: 130 },
+  {
+    key: 'actions',
+    title: isZh.value ? '操作' : 'Actions',
+    width: 92,
+    align: 'right',
+    headerClass: 'UpdateTable-ActionsHeader',
+    cellClass: 'UpdateTable-ActionsCell',
+  },
+])
+
+const updateTotalPages = computed(() => Math.max(1, Math.ceil(filteredUpdates.value.length / UPDATES_PAGE_SIZE)))
+
+const pagedUpdates = computed(() => {
+  const page = Math.min(currentUpdatePage.value, updateTotalPages.value)
+  const start = (page - 1) * UPDATES_PAGE_SIZE
+  return filteredUpdates.value.slice(start, start + UPDATES_PAGE_SIZE)
+})
+
+const pagedUpdateSummary = computed(() => {
+  if (!filteredUpdates.value.length)
+    return isZh.value ? `共 ${updates.value.length} 条，筛选 0 条` : `Total ${updates.value.length}, filtered 0`
+
+  const page = Math.min(currentUpdatePage.value, updateTotalPages.value)
+  const start = (page - 1) * UPDATES_PAGE_SIZE + 1
+  const end = Math.min(start + UPDATES_PAGE_SIZE - 1, filteredUpdates.value.length)
+
+  return isZh.value
+    ? `共 ${updates.value.length} 条，筛选 ${filteredUpdates.value.length} 条，当前 ${start}-${end} 条，每页 ${UPDATES_PAGE_SIZE} 条`
+    : `Total ${updates.value.length}, filtered ${filteredUpdates.value.length}, showing ${start}-${end}, ${UPDATES_PAGE_SIZE} per page`
+})
+
+watch(filteredUpdates, () => {
+  currentUpdatePage.value = 1
+})
+
+watch(updateTotalPages, (totalPages) => {
+  if (currentUpdatePage.value > totalPages)
+    currentUpdatePage.value = totalPages
+})
+
 function clearFilters() {
   searchKeyword.value = ''
   selectedType.value = 'all'
@@ -222,18 +273,6 @@ function updateScopeLabel(scope: DashboardUpdate['scope']) {
   if (scope === 'both')
     return t('dashboard.sections.updates.scopeBoth', '官网+系统')
   return isZh.value ? '官网' : 'Web'
-}
-
-function resolveTypeIcon(type: DashboardUpdate['type']) {
-  if (type === 'release')
-    return 'i-carbon-version-major'
-  if (type === 'announcement')
-    return 'i-carbon-bullhorn'
-  if (type === 'config')
-    return 'i-carbon-settings'
-  if (type === 'data')
-    return 'i-carbon-data-table'
-  return 'i-carbon-notification'
 }
 
 function updateTypeTagColor(type: DashboardUpdate['type']) {
@@ -483,107 +522,133 @@ function closeDeleteConfirm() {
         {{ isZh ? '没有匹配结果，请调整筛选条件。' : 'No results. Try adjusting the filters.' }}
       </div>
 
-      <div v-else class="UpdateList mt-5">
-        <TxCardItem
-          v-for="update in filteredUpdates"
-          :key="update.id"
-          class="UpdateList-Card"
-          :title="resolveLocalizedText(update.title)"
-          :icon-class="resolveTypeIcon(update.type)"
-          :clickable="Boolean(update.link)"
-          @click="openUpdateLink(update.link)"
+      <div v-else class="UpdateTable mt-5">
+        <TxDataTable
+          :columns="updateTableColumns"
+          :data="pagedUpdates"
+          row-key="id"
+          bordered
+          hover
+          class="UpdateTable-Data min-w-[920px]"
+          @row-click="({ row }) => openUpdateLink(row.link)"
         >
-          <template #subtitle>
-            <div class="UpdateList-Meta">
-              <span class="UpdateList-Date">{{ formatDate(update.timestamp) }}</span>
-              <TxTag class="UpdateList-Tag" size="sm" :label="updateTypeLabel(update)" :color="updateTypeTagColor(update.type)" />
-              <TxTag
-                v-if="update.scope !== 'web'"
-                class="UpdateList-Tag"
-                size="sm"
-                :label="updateScopeLabel(update.scope)"
-                :color="updateScopeTagColor(update.scope)"
-              />
-              <TxTag class="UpdateList-Tag" size="sm" :label="sourceLabel(update)" :color="updateSourceTagColor(update)" />
-              <TxTag
-                v-if="update.releaseTag"
-                class="UpdateList-Tag"
-                size="sm"
-                :label="update.releaseTag"
-                :color="UPDATE_RELEASE_TAG_COLOR"
-              />
+          <template #cell-title="{ row }">
+            <div class="UpdateTable-TitleCell">
+              <button
+                class="UpdateTable-TitleButton"
+                type="button"
+                :disabled="!row.link"
+                @click.stop="openUpdateLink(row.link)"
+              >
+                {{ resolveLocalizedText(row.title) }}
+              </button>
+              <p class="UpdateTable-Summary line-clamp-2">
+                {{ resolveLocalizedText(row.summary) }}
+              </p>
+              <div v-if="row.releaseTag || row.tags.length" class="UpdateTable-Tags">
+                <TxTag
+                  v-if="row.releaseTag"
+                  class="UpdateTable-Tag"
+                  size="sm"
+                  :label="row.releaseTag"
+                  :color="UPDATE_RELEASE_TAG_COLOR"
+                />
+                <TxTag
+                  v-for="tag in row.tags.slice(0, 3)"
+                  :key="`${row.id}-tag-${tag}`"
+                  class="UpdateTable-Tag"
+                  size="sm"
+                  :label="`#${tag}`"
+                  :color="UPDATE_KEYWORD_TAG_COLOR"
+                />
+              </div>
             </div>
           </template>
 
-          <template #description>
-            <p class="UpdateList-Summary line-clamp-2">
-              {{ resolveLocalizedText(update.summary) }}
-            </p>
-            <div v-if="update.channels.length || update.tags.length" class="UpdateList-Tags">
+          <template #cell-type="{ row }">
+            <TxTag class="UpdateTable-Tag" size="sm" :label="updateTypeLabel(row)" :color="updateTypeTagColor(row.type)" />
+          </template>
+
+          <template #cell-channels="{ row }">
+            <div class="UpdateTable-Tags">
               <TxTag
-                v-for="channel in update.channels.slice(0, 3)"
-                :key="`${update.id}-channel-${channel}`"
-                class="UpdateList-Tag"
+                v-for="channel in row.channels.slice(0, 2)"
+                :key="`${row.id}-channel-${channel}`"
+                class="UpdateTable-Tag"
                 size="sm"
                 :label="channel"
                 :color="updateChannelTagColor(channel)"
               />
-              <TxTag
-                v-for="tag in update.tags.slice(0, 3)"
-                :key="`${update.id}-tag-${tag}`"
-                class="UpdateList-Tag"
-                size="sm"
-                :label="`#${tag}`"
-                :color="UPDATE_KEYWORD_TAG_COLOR"
-              />
+              <span v-if="!row.channels.length" class="UpdateTable-Muted">-</span>
             </div>
           </template>
 
-          <template #right>
-            <div class="UpdateList-Actions">
-              <TxButton
-                v-if="update.link"
-                variant="bare"
-                circle
-                size="mini"
-                native-type="button"
+          <template #cell-scope="{ row }">
+            <TxTag class="UpdateTable-Tag" size="sm" :label="updateScopeLabel(row.scope)" :color="updateScopeTagColor(row.scope)" />
+          </template>
+
+          <template #cell-source="{ row }">
+            <TxTag class="UpdateTable-Tag" size="sm" :label="sourceLabel(row)" :color="updateSourceTagColor(row)" />
+          </template>
+
+          <template #cell-timestamp="{ row }">
+            <span class="UpdateTable-Date">{{ formatDate(row.timestamp) }}</span>
+          </template>
+
+          <template #cell-actions="{ row }">
+            <div class="UpdateTable-Actions">
+              <button
+                v-if="row.link"
+                class="UpdateTable-IconButton"
+                type="button"
                 :title="isZh ? '打开链接' : 'Open link'"
-                @click.stop="openUpdateLink(update.link)"
+                :aria-label="isZh ? '打开链接' : 'Open link'"
+                @click.stop="openUpdateLink(row.link)"
               >
-                <span class="i-carbon-launch text-sm" />
-              </TxButton>
-              <TxButton
-                v-if="isAdmin && update.type !== 'release'"
-                variant="bare"
-                circle
-                size="mini"
-                native-type="button"
+                <span class="i-carbon-launch" />
+              </button>
+              <button
+                v-if="isAdmin && row.type !== 'release'"
+                class="UpdateTable-IconButton"
+                type="button"
                 :title="t('dashboard.sections.updates.editButton')"
-                @click.stop="openEdit(update)"
+                :aria-label="t('dashboard.sections.updates.editButton')"
+                @click.stop="openEdit(row)"
               >
-                <span class="i-carbon-edit text-sm" />
-              </TxButton>
-              <TxButton
-                v-if="isAdmin && update.type !== 'release'"
-                variant="bare"
-                circle
-                size="mini"
-                native-type="button"
+                <span class="i-carbon-edit" />
+              </button>
+              <button
+                v-if="isAdmin && row.type !== 'release'"
+                class="UpdateTable-IconButton"
+                type="button"
                 :title="t('dashboard.sections.updates.delete', 'Delete')"
-                @click.stop="deleteUpdateItem(update)"
+                :aria-label="t('dashboard.sections.updates.delete', 'Delete')"
+                @click.stop="deleteUpdateItem(row)"
               >
-                <span class="i-carbon-trash-can text-sm" />
-              </TxButton>
+                <span class="i-carbon-trash-can" />
+              </button>
             </div>
           </template>
-        </TxCardItem>
+        </TxDataTable>
       </div>
 
       <div
         v-if="!updatesPending && updates.length"
-        class="UpdateList-Footer mt-4 text-xs text-black/40 dark:text-white/40"
+        class="UpdateTable-Footer mt-4"
       >
-        {{ isZh ? `共 ${updates.length} 条，当前 ${filteredUpdates.length} 条` : `Total ${updates.length}, showing ${filteredUpdates.length}` }}
+        <span class="UpdateTable-Count">{{ pagedUpdateSummary }}</span>
+        <TxPagination
+          v-if="filteredUpdates.length > UPDATES_PAGE_SIZE"
+          v-model:current-page="currentUpdatePage"
+          :total="filteredUpdates.length"
+          :page-size="UPDATES_PAGE_SIZE"
+          show-info
+          show-first-last
+        >
+          <template #info="{ currentPage, totalPages: pages }">
+            {{ isZh ? `第 ${currentPage} / ${pages} 页` : `Page ${currentPage} of ${pages}` }}
+          </template>
+        </TxPagination>
       </div>
     </section>
 
@@ -647,55 +712,182 @@ function closeDeleteConfirm() {
   justify-content: flex-end;
 }
 
-.UpdateList {
+.UpdateTable {
+  overflow-x: auto;
+  border-radius: 14px;
+}
+
+.UpdateTable-Data {
+  --tx-data-table-title-color: var(--tx-text-color-primary, rgba(245, 245, 245, 0.92));
+  --update-table-sticky-bg: var(--tx-bg-color, #fff);
+  overflow: visible;
+}
+
+.UpdateTable-Data :deep(.UpdateTable-ActionsHeader),
+.UpdateTable-Data :deep(.UpdateTable-ActionsCell) {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: var(--update-table-sticky-bg);
+  box-shadow:
+    -1px 0 0 color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 90%, transparent),
+    -10px 0 20px -12px rgba(0, 0, 0, 0.92);
+}
+
+.UpdateTable-Data :deep(.UpdateTable-ActionsHeader::before),
+.UpdateTable-Data :deep(.UpdateTable-ActionsCell::before) {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0 auto 0 -22px;
+  width: 22px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--update-table-sticky-bg) 42%, transparent) 42%,
+    var(--update-table-sticky-bg)
+  );
+}
+
+.UpdateTable-Data :deep(.UpdateTable-ActionsHeader) {
+  z-index: 4;
+}
+
+.dark .UpdateTable-Data {
+  --update-table-sticky-bg: var(--tx-bg-color, #121212);
+}
+
+.UpdateTable-TitleCell {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 5px;
 }
 
-.UpdateList-Card {
-  min-height: 112px;
+.UpdateTable-TitleButton {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tx-data-table-title-color);
+  font: inherit;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
-.UpdateList-Meta {
+.UpdateTable-TitleButton:disabled {
+  cursor: default;
+}
+
+.UpdateTable-TitleButton:not(:disabled):hover {
+  color: var(--tx-color-primary);
+}
+
+.UpdateTable-Summary {
+  margin: 0;
+  max-width: 38rem;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 94%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.UpdateTable-Tags {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 
-.UpdateList-Date {
-  font-size: 12px;
-  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 90%, transparent);
-  margin-right: 2px;
-}
-
-.UpdateList-Summary {
-  margin-top: 2px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 94%, transparent);
-}
-
-.UpdateList-Tags {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.UpdateList-Tag {
+.UpdateTable-Tag {
   letter-spacing: 0;
 }
 
-.UpdateList-Actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+.UpdateTable-Date,
+.UpdateTable-Muted {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 90%, transparent);
 }
 
-.UpdateList-Footer {
+.UpdateTable-Actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.UpdateTable-IconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 92%, transparent);
+  cursor: pointer;
+}
+
+.UpdateTable-IconButton:hover {
+  color: var(--tx-color-primary);
+}
+
+.UpdateTable-IconButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tx-color-primary) 68%, transparent);
+  outline-offset: 2px;
+}
+
+.UpdateTable-IconButton > span {
+  width: 16px;
+  height: 16px;
+}
+
+.UpdateTable-Footer {
   border-top: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 100%, transparent);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding-top: 10px;
+}
+
+.UpdateTable-Count {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 82%, transparent);
+  font-size: 12px;
+}
+
+.UpdateTable-Footer :deep(.tx-pagination) {
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.UpdateTable-Footer :deep(.tx-pagination__list) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.UpdateTable-Footer :deep(.tx-pagination__info) {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 82%, transparent);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .UpdateTable-Footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .UpdateTable-Footer :deep(.tx-pagination) {
+    align-items: flex-start;
+  }
+
+  .UpdateTable-Footer :deep(.tx-pagination__list) {
+    justify-content: flex-start;
+  }
 }
 </style>

@@ -72,6 +72,15 @@ function isRouteLocalPageComponent(file: string | undefined) {
   return normalized.includes('/app/pages/') && normalized.includes('/components/')
 }
 
+function isSidebaseAuthClientPlugin(file: string | undefined) {
+  if (!file)
+    return false
+
+  const normalized = file.replace(/\\/g, '/')
+  return normalized.endsWith('/@sidebase/nuxt-auth/dist/runtime/plugin.js')
+    || (normalized.includes('/@sidebase+nuxt-auth') && normalized.endsWith('/dist/runtime/plugin.js'))
+}
+
 function isEnvFlagEnabled(value?: string) {
   if (!value)
     return false
@@ -410,6 +419,12 @@ export default defineNuxtConfig({
   debug: false,
 
   hooks: {
+    'app:resolve'(app) {
+      for (let index = app.plugins.length - 1; index >= 0; index -= 1) {
+        if (isSidebaseAuthClientPlugin(app.plugins[index]?.src))
+          app.plugins.splice(index, 1)
+      }
+    },
     'components:extend'(components) {
       const ignoredContentComponentPatterns = [
         '/app/components/content/demos/',

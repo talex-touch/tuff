@@ -3,6 +3,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed, ref, watch } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
@@ -98,6 +99,8 @@ const saving = ref(false)
 const updating = ref(false)
 const rotatingId = ref<string | null>(null)
 const errorMessage = ref('')
+const createDialogVisible = ref(false)
+const createErrorMessage = ref('')
 
 const formName = ref('')
 const formDescription = ref('')
@@ -171,16 +174,22 @@ watch(
   { immediate: true },
 )
 
+watch(createDialogVisible, (visible) => {
+  if (visible) {
+    createErrorMessage.value = ''
+  }
+})
+
 async function createApplication() {
   const name = formName.value.trim()
   const redirectUris = parseRedirectUris(formRedirectUris.value)
   if (!name || redirectUris.length <= 0) {
-    errorMessage.value = t('dashboard.sections.oauth.errors.invalidForm', 'Name and redirect URIs are required.')
+    createErrorMessage.value = t('dashboard.sections.oauth.errors.invalidForm', 'Name and redirect URIs are required.')
     return
   }
 
   saving.value = true
-  errorMessage.value = ''
+  createErrorMessage.value = ''
   try {
     const data = await requestJson<CreateOauthApplicationResponse>('/api/dashboard/oauth/clients', {
       method: 'POST',
@@ -201,14 +210,22 @@ async function createApplication() {
     formName.value = ''
     formDescription.value = ''
     formRedirectUris.value = ''
+    createDialogVisible.value = false
     await fetchApplications()
   }
   catch (error: any) {
-    errorMessage.value = normalizeErrorMessage(error, t('dashboard.sections.oauth.errors.create', 'Failed to create oauth application.'))
+    createErrorMessage.value = normalizeErrorMessage(error, t('dashboard.sections.oauth.errors.create', 'Failed to create oauth application.'))
   }
   finally {
     saving.value = false
   }
+}
+
+function closeCreateDialog() {
+  if (saving.value) {
+    return
+  }
+  createDialogVisible.value = false
 }
 
 function beginEdit(application: OauthApplication) {
@@ -327,65 +344,6 @@ async function copySecret() {
     </p>
 
     <template v-else-if="canManageOauth">
-      <section class="apple-card-lg p-4 space-y-4">
-        <div v-if="scopeOptions.length > 1" class="flex flex-wrap gap-2">
-          <TxButton
-            v-for="scope in scopeOptions"
-            :key="scope.value"
-            :variant="activeScope === scope.value ? 'primary' : 'secondary'"
-            size="small"
-            @click="activeScope = scope.value"
-          >
-            {{ scope.label }}
-          </TxButton>
-        </div>
-
-        <div class="grid gap-3 lg:grid-cols-2">
-          <div class="space-y-2">
-            <p class="text-sm font-medium text-black/75 dark:text-white/75">
-              {{ t('dashboard.sections.oauth.form.name', 'Application Name') }}
-            </p>
-            <TuffInput
-              v-model="formName"
-              :placeholder="t('dashboard.sections.oauth.form.namePlaceholder', 'e.g. OAuth Integration')"
-              size="small"
-            />
-          </div>
-          <div class="space-y-2">
-            <p class="text-sm font-medium text-black/75 dark:text-white/75">
-              {{ t('dashboard.sections.oauth.form.description', 'Description') }}
-            </p>
-            <TuffInput
-              v-model="formDescription"
-              :placeholder="t('dashboard.sections.oauth.form.descriptionPlaceholder', 'Optional short description')"
-              size="small"
-            />
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <p class="text-sm font-medium text-black/75 dark:text-white/75">
-            {{ t('dashboard.sections.oauth.form.redirectUris', 'Redirect URIs') }}
-          </p>
-          <TuffInput
-            v-model="formRedirectUris"
-            type="textarea"
-            :rows="5"
-            :placeholder="t('dashboard.sections.oauth.form.redirectUrisPlaceholder', 'One URI per line, or comma separated')"
-            class="w-full"
-          />
-        </div>
-
-        <div class="flex items-center gap-3">
-          <TxButton variant="primary" :loading="saving" @click="createApplication">
-            {{ saving ? t('dashboard.sections.oauth.actions.creating', 'Creating...') : t('dashboard.sections.oauth.actions.create', 'Create OAuth App') }}
-          </TxButton>
-          <span class="text-xs text-black/45 dark:text-white/45">
-            {{ t('dashboard.sections.oauth.scopeHint', { scope: activeScope }) }}
-          </span>
-        </div>
-      </section>
-
       <section v-if="createdSecret" class="rounded-xl border border-green-500/20 bg-green-500/10 p-4">
         <p class="text-sm font-semibold text-green-700 dark:text-green-300">
           {{ t('dashboard.sections.oauth.created.title', { name: createdSecret.name }) }}
@@ -407,13 +365,123 @@ async function copySecret() {
       </section>
 
       <section class="apple-card-lg p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.sections.oauth.listTitle', 'Registered Applications') }}
           </h2>
-          <TxButton size="small" variant="secondary" @click="fetchApplications">
-            {{ t('common.refresh', 'Refresh') }}
-          </TxButton>
+          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <ClientOnly>
+              <FlipDialog
+                v-model="createDialogVisible"
+                size="md"
+                :header-title="t('dashboard.sections.oauth.actions.create', 'Create OAuth App')"
+                :header-desc="t('dashboard.sections.oauth.scopeHint', { scope: activeScope })"
+                :closable="!saving"
+                :prevent-accidental-close="saving"
+              >
+                <template #reference>
+                  <TxButton
+                    size="small"
+                    variant="primary"
+                    icon="i-carbon-add"
+                    native-type="button"
+                  >
+                    {{ t('dashboard.sections.oauth.actions.create', 'Create OAuth App') }}
+                  </TxButton>
+                </template>
+
+                <form class="space-y-4 px-6 pb-6 pt-2 sm:px-7" @submit.prevent="createApplication">
+                  <div v-if="scopeOptions.length > 1" class="flex flex-wrap gap-2">
+                    <TxButton
+                      v-for="scope in scopeOptions"
+                      :key="scope.value"
+                      :variant="activeScope === scope.value ? 'primary' : 'secondary'"
+                      size="small"
+                      native-type="button"
+                      @click="activeScope = scope.value"
+                    >
+                      {{ scope.label }}
+                    </TxButton>
+                  </div>
+
+                  <div class="grid gap-3 lg:grid-cols-2">
+                    <label class="space-y-2">
+                      <span class="text-sm font-medium text-black/75 dark:text-white/75">
+                        {{ t('dashboard.sections.oauth.form.name', 'Application Name') }}
+                      </span>
+                      <TuffInput
+                        v-model="formName"
+                        :placeholder="t('dashboard.sections.oauth.form.namePlaceholder', 'e.g. OAuth Integration')"
+                        size="small"
+                      />
+                    </label>
+                    <label class="space-y-2">
+                      <span class="text-sm font-medium text-black/75 dark:text-white/75">
+                        {{ t('dashboard.sections.oauth.form.description', 'Description') }}
+                      </span>
+                      <TuffInput
+                        v-model="formDescription"
+                        :placeholder="t('dashboard.sections.oauth.form.descriptionPlaceholder', 'Optional short description')"
+                        size="small"
+                      />
+                    </label>
+                  </div>
+
+                  <label class="block space-y-2">
+                    <span class="text-sm font-medium text-black/75 dark:text-white/75">
+                      {{ t('dashboard.sections.oauth.form.redirectUris', 'Redirect URIs') }}
+                    </span>
+                    <TuffInput
+                      v-model="formRedirectUris"
+                      type="textarea"
+                      :rows="5"
+                      :placeholder="t('dashboard.sections.oauth.form.redirectUrisPlaceholder', 'One URI per line, or comma separated')"
+                      class="w-full"
+                    />
+                  </label>
+
+                  <p v-if="createErrorMessage" class="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                    {{ createErrorMessage }}
+                  </p>
+
+                  <div class="flex flex-wrap items-center justify-end gap-2">
+                    <TxButton
+                      size="small"
+                      variant="secondary"
+                      native-type="button"
+                      :disabled="saving"
+                      @click="closeCreateDialog"
+                    >
+                      {{ t('dashboard.sections.oauth.actions.cancel', 'Cancel') }}
+                    </TxButton>
+                    <TxButton
+                      size="small"
+                      variant="primary"
+                      native-type="submit"
+                      :loading="saving"
+                    >
+                      {{ saving ? t('dashboard.sections.oauth.actions.creating', 'Creating...') : t('dashboard.sections.oauth.actions.create', 'Create OAuth App') }}
+                    </TxButton>
+                  </div>
+                </form>
+              </FlipDialog>
+
+              <template #fallback>
+                <TxButton
+                  size="small"
+                  variant="primary"
+                  icon="i-carbon-add"
+                  native-type="button"
+                  disabled
+                >
+                  {{ t('dashboard.sections.oauth.actions.create', 'Create OAuth App') }}
+                </TxButton>
+              </template>
+            </ClientOnly>
+            <TxButton size="small" variant="secondary" native-type="button" @click="fetchApplications">
+              {{ t('common.refresh', 'Refresh') }}
+            </TxButton>
+          </div>
         </div>
 
         <div v-if="loading" class="flex items-center justify-center py-6">
