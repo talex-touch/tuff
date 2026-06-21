@@ -72,4 +72,33 @@ describe('txDataTable', () => {
     const emitted = wrapper.emitted('update:selectedKeys')
     expect(emitted?.[0][0]).toEqual([1])
   })
+
+  it('applies layout, nowrap, auto width, and fixed column styles', () => {
+    const wrapper = mount(TxDataTable, {
+      props: {
+        tableLayout: 'fixed',
+        nowrap: true,
+        columns: [
+          { key: 'name', title: 'Name', minWidth: 180, maxWidth: 260, fixed: 'left' },
+          { key: 'age', title: 'Age', auto: true },
+          { key: 'actions', title: 'Actions', width: 120, fixed: 'right' },
+        ],
+        data,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('is-layout-fixed')
+    expect(wrapper.classes()).toContain('is-nowrap')
+    expect(wrapper.classes()).toContain('has-fixed-columns')
+    expect(wrapper.find('table').attributes('style')).toContain('table-layout: fixed')
+
+    const headers = wrapper.findAll('thead th')
+    expect(headers[0].classes()).toEqual(expect.arrayContaining(['is-fixed', 'is-fixed-left']))
+    expect(headers[0].attributes('style')).toContain('min-width: 180px')
+    expect(headers[0].attributes('style')).toContain('max-width: 260px')
+    expect(headers[1].classes()).toContain('is-auto')
+    expect(headers[1].attributes('style')).toContain('width: auto')
+    expect(headers[2].classes()).toEqual(expect.arrayContaining(['is-fixed', 'is-fixed-right']))
+    expect(headers[2].attributes('style')).toContain('right: 0px')
+  })
 })

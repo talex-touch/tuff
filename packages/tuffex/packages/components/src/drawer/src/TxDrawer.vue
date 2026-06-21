@@ -6,6 +6,7 @@ import TxDivider from '../../divider/src/TxDivider.vue'
 import { getZIndex, nextZIndex, refreshZIndex } from '../../../../utils/z-index-manager'
 
 const MOBILE_BREAKPOINT = 768
+const DRAWER_Z_INDEX_SEED = 10000
 
 /**
  * TxDrawer Component
@@ -118,6 +119,9 @@ watch(
     if (newVal) {
       if (props.zIndex != null) {
         refreshZIndex(props.zIndex, 'drawer(zIndex prop)')
+      }
+      else {
+        refreshZIndex(DRAWER_Z_INDEX_SEED, 'drawer')
       }
       internalZIndex.value = props.zIndex ?? nextZIndex()
       previouslyFocusedElement = typeof document !== 'undefined' ? document.activeElement as HTMLElement : null

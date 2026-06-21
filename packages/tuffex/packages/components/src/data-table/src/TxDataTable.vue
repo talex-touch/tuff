@@ -18,6 +18,8 @@ const props = withDefaults(defineProps<DataTableProps<any>>(), {
   selectable: false,
   selectedKeys: () => [],
   sortOnClient: true,
+  tableLayout: 'auto',
+  nowrap: false,
 })
 
 const emit = defineEmits<DataTableEmits<any>>()
@@ -155,14 +157,91 @@ function formatCell(row: any, column: DataTableColumn, index: number): string {
   return String(value)
 }
 
+function toCssUnit(value: string | number | undefined): string | undefined {
+  if (value === undefined)
+    return undefined
+  return typeof value === 'number' ? `${value}px` : value
+}
+
+function getFixedSide(column: DataTableColumn): 'left' | 'right' | null {
+  if (column.fixed === true || column.fixed === 'left')
+    return 'left'
+  if (column.fixed === 'right')
+    return 'right'
+  return null
+}
+
+function getStickyWidth(column: DataTableColumn): number {
+  const value = column.width ?? column.minWidth
+  if (typeof value === 'number')
+    return value
+  if (typeof value !== 'string')
+    return 0
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)px$/)
+  return match ? Number(match[1]) : 0
+}
+
+const fixedColumnOffsets = computed(() => {
+  const left = new Map<string, string>()
+  const right = new Map<string, string>()
+  let leftOffset = 0
+  let rightOffset = 0
+
+  for (const column of props.columns) {
+    if (getFixedSide(column) !== 'left')
+      continue
+    left.set(column.key, `${leftOffset}px`)
+    leftOffset += getStickyWidth(column)
+  }
+
+  for (const column of [...props.columns].reverse()) {
+    if (getFixedSide(column) !== 'right')
+      continue
+    right.set(column.key, `${rightOffset}px`)
+    rightOffset += getStickyWidth(column)
+  }
+
+  return { left, right }
+})
+
+const hasFixedColumns = computed(() => props.columns.some(column => Boolean(getFixedSide(column))))
+
 function columnStyle(column: DataTableColumn): Record<string, string> {
   const style: Record<string, string> = {}
-  if (column.width !== undefined) {
-    style.width = typeof column.width === 'number' ? `${column.width}px` : column.width
-  }
+  if (column.auto)
+    style.width = 'auto'
+  else if (column.width !== undefined)
+    style.width = toCssUnit(column.width) ?? ''
+  if (column.minWidth !== undefined)
+    style.minWidth = toCssUnit(column.minWidth) ?? ''
+  if (column.maxWidth !== undefined)
+    style.maxWidth = toCssUnit(column.maxWidth) ?? ''
   if (column.align)
     style.textAlign = column.align
+
+  const fixedSide = getFixedSide(column)
+  if (fixedSide === 'left')
+    style.left = fixedColumnOffsets.value.left.get(column.key) ?? '0px'
+  else if (fixedSide === 'right')
+    style.right = fixedColumnOffsets.value.right.get(column.key) ?? '0px'
+
   return style
+}
+
+function columnClass(column: DataTableColumn, type: 'header' | 'cell') {
+  const fixedSide = getFixedSide(column)
+  return [
+    type === 'header' ? column.headerClass : column.cellClass,
+    {
+      'is-auto': column.auto,
+      'is-fixed': Boolean(fixedSide),
+      'is-fixed-left': fixedSide === 'left',
+      'is-fixed-right': fixedSide === 'right',
+      'is-nowrap': props.nowrap || column.nowrap,
+      'is-sortable': type === 'header' && column.sortable,
+      'is-sorted': type === 'header' && sortState.value?.key === column.key,
+    },
+  ]
 }
 
 const colspan = computed(() => props.columns.length + (props.selectable ? 1 : 0))
@@ -179,13 +258,16 @@ function emitRowClick(row: any, index: number) {
       'is-striped': striped,
       'is-bordered': bordered,
       'is-hover': hover,
+      'is-nowrap': nowrap,
+      'has-fixed-columns': hasFixedColumns,
+      [`is-layout-${tableLayout}`]: true,
     }"
   >
     <div v-if="loading" class="tx-data-table__loading" aria-live="polite">
       <TxSpinner :size="20" />
     </div>
 
-    <table class="tx-data-table__table" :aria-busy="loading">
+    <table class="tx-data-table__table" :style="{ tableLayout }" :aria-busy="loading">
       <thead>
         <tr>
           <th v-if="selectable" class="tx-data-table__th tx-data-table__th--select" scope="col">
@@ -200,10 +282,7 @@ function emitRowClick(row: any, index: number) {
             :key="column.key"
             class="tx-data-table__th"
             scope="col"
-            :class="[
-              column.headerClass,
-              { 'is-sortable': column.sortable, 'is-sorted': sortState?.key === column.key },
-            ]"
+            :class="columnClass(column, 'header')"
             :style="columnStyle(column)"
             :tabindex="column.sortable ? 0 : undefined"
             :aria-sort="getColumnAriaSort(column)"
@@ -243,7 +322,7 @@ function emitRowClick(row: any, index: number) {
             v-for="column in columns"
             :key="column.key"
             class="tx-data-table__cell"
-            :class="column.cellClass"
+            :class="columnClass(column, 'cell')"
             :style="columnStyle(column)"
           >
             <slot
@@ -280,6 +359,10 @@ function emitRowClick(row: any, index: number) {
   &.is-bordered {
     border-color: var(--tx-border-color-lighter, #ebeef5);
   }
+
+  &.has-fixed-columns {
+    overflow: visible;
+  }
 }
 
 .tx-data-table__table {
@@ -289,6 +372,10 @@ function emitRowClick(row: any, index: number) {
   background: var(--tx-bg-color, #fff);
 }
 
+.tx-data-table.is-layout-fixed .tx-data-table__table {
+  table-layout: fixed;
+}
+
 .tx-data-table__th,
 .tx-data-table__cell {
   padding: 10px 12px;
@@ -296,6 +383,35 @@ function emitRowClick(row: any, index: number) {
   border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.tx-data-table__th.is-nowrap,
+.tx-data-table__cell.is-nowrap,
+.tx-data-table.is-nowrap .tx-data-table__th,
+.tx-data-table.is-nowrap .tx-data-table__cell {
+  white-space: nowrap;
+}
+
+.tx-data-table__th.is-fixed,
+.tx-data-table__cell.is-fixed {
+  position: sticky;
+  z-index: 1;
+  background: var(--tx-bg-color, #fff);
+}
+
+.tx-data-table__th.is-fixed {
+  z-index: 3;
+  background: var(--tx-fill-color-lighter, #fafafa);
+}
+
+.tx-data-table__th.is-fixed-left,
+.tx-data-table__cell.is-fixed-left {
+  box-shadow: 1px 0 0 var(--tx-border-color-lighter, #ebeef5);
+}
+
+.tx-data-table__th.is-fixed-right,
+.tx-data-table__cell.is-fixed-right {
+  box-shadow: -1px 0 0 var(--tx-border-color-lighter, #ebeef5);
 }
 
 .tx-data-table__th {
