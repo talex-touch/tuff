@@ -1,6 +1,14 @@
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
-import { describe, expect, it } from 'vitest'
-import { resolveQuickActionsItem } from './useKeyboard'
+import type { Ref } from 'vue'
+import { describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
+import { BoxMode } from '..'
+import {
+  clearCoreBoxAttachment,
+  handleCoreBoxEscapeKey,
+  hasCoreBoxAttachment,
+  resolveQuickActionsItem
+} from './useKeyboard'
 
 function createFocusedItem(): TuffItem {
   return {
@@ -87,5 +95,115 @@ describe('resolveQuickActionsItem', () => {
     const focused = createFocusedItem()
 
     expect(resolveQuickActionsItem([focused], 0, null)).toBe(focused)
+  })
+})
+
+describe('CoreBox attachment keyboard helpers', () => {
+  it('treats clipboard images as attachments', () => {
+    expect(
+      hasCoreBoxAttachment(
+        {
+          mode: BoxMode.INPUT,
+          file: { buffer: null, paths: [] }
+        },
+        {
+          last: {
+            type: 'image',
+            content: 'data:image/png;base64,preview'
+          }
+        }
+      )
+    ).toBe(true)
+  })
+
+  it('does not treat absent visible clipboard content as an attachment', () => {
+    expect(
+      hasCoreBoxAttachment(
+        {
+          mode: BoxMode.INPUT,
+          file: { buffer: null, paths: [] }
+        },
+        {}
+      )
+    ).toBe(false)
+  })
+
+  it('clears file mode back to plain input mode', () => {
+    const boxOptions = {
+      mode: BoxMode.FILE,
+      file: { iconPath: '/tmp/a.png', paths: ['/tmp/a.png'] }
+    }
+    const clearClipboard = vi.fn()
+
+    clearCoreBoxAttachment(boxOptions, clearClipboard)
+
+    expect(clearClipboard).toHaveBeenCalledWith({ remember: true })
+    expect(boxOptions.mode).toBe(BoxMode.INPUT)
+    expect(boxOptions.file).toEqual({ buffer: null, paths: [] })
+  })
+})
+
+function createEscapeEvent(): KeyboardEvent {
+  return {
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
+  } as unknown as KeyboardEvent
+}
+
+function createEscapeOptions(overrides?: {
+  overlayVisible?: boolean
+  searchVal?: Ref<string>
+  clearClipboard?: ReturnType<typeof vi.fn>
+}) {
+  const event = createEscapeEvent()
+  const isMetaOverlayVisible = vi.fn(async () => overrides?.overlayVisible === true)
+  const hideMetaOverlay = vi.fn(async () => undefined)
+  const clearClipboard = overrides?.clearClipboard ?? vi.fn()
+  const handleExit = vi.fn(async () => undefined)
+  const searchVal = overrides?.searchVal ?? ref('')
+
+  return {
+    event,
+    isMetaOverlayVisible,
+    hideMetaOverlay,
+    boxOptions: {
+      mode: BoxMode.INPUT,
+      file: { buffer: null, paths: [] }
+    },
+    clipboardOptions: {
+      last: {
+        type: 'image',
+        content: 'data:image/png;base64,preview'
+      }
+    },
+    clearClipboard,
+    activeCount: 0,
+    handleExit,
+    searchVal
+  }
+}
+
+describe('handleCoreBoxEscapeKey', () => {
+  it('closes MetaOverlay before clearing visible attachments', async () => {
+    const options = createEscapeOptions({ overlayVisible: true })
+
+    const result = await handleCoreBoxEscapeKey(options)
+
+    expect(result).toBe('overlay')
+    expect(options.event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(options.event.stopPropagation).toHaveBeenCalledTimes(1)
+    expect(options.isMetaOverlayVisible).toHaveBeenCalledTimes(1)
+    expect(options.hideMetaOverlay).toHaveBeenCalledTimes(1)
+    expect(options.clearClipboard).not.toHaveBeenCalled()
+  })
+
+  it('clears attachments after confirming MetaOverlay is not visible', async () => {
+    const options = createEscapeOptions({ overlayVisible: false })
+
+    const result = await handleCoreBoxEscapeKey(options)
+
+    expect(result).toBe('attachment')
+    expect(options.clearClipboard).toHaveBeenCalledWith({ remember: true })
+    expect(options.handleExit).not.toHaveBeenCalled()
   })
 })

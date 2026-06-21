@@ -1,10 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyThemeDocumentState,
   createDefaultThemeStyle,
   normalizeThemeStyle,
   resolveThemeModeFromStyle,
   resolveThemeModeState
 } from './theme-style.utils'
+
+function createThemeRootStub(): HTMLElement {
+  const classes = new Set<string>()
+
+  return {
+    classList: {
+      toggle(name: string, force?: boolean): boolean {
+        if (force) {
+          classes.add(name)
+          return true
+        }
+        classes.delete(name)
+        return false
+      },
+      contains(name: string): boolean {
+        return classes.has(name)
+      }
+    },
+    dataset: {},
+    style: {}
+  } as HTMLElement
+}
 
 describe('theme-style utils', () => {
   it('maps theme mode to auto/dark flags consistently', () => {
@@ -63,5 +86,37 @@ describe('theme-style utils', () => {
     expect(normalized.theme.style.dark).toBe(false)
     expect(normalized.theme.addon).toEqual(createDefaultThemeStyle().theme.addon)
     expect(normalized.theme.transition).toEqual(createDefaultThemeStyle().theme.transition)
+  })
+
+  it('applies addon theme state to the document root', () => {
+    const root = createThemeRootStub()
+
+    applyThemeDocumentState(root, {
+      resolvedTheme: 'dark',
+      coloring: true,
+      contrast: true
+    })
+
+    expect(root.classList.contains('dark')).toBe(true)
+    expect(root.classList.contains('coloring')).toBe(true)
+    expect(root.classList.contains('contrast')).toBe(true)
+    expect(root.dataset.theme).toBe('dark')
+    expect(root.dataset.txColoring).toBe('true')
+    expect(root.dataset.txContrast).toBe('high')
+    expect(root.style.colorScheme).toBe('dark')
+
+    applyThemeDocumentState(root, {
+      resolvedTheme: 'light',
+      coloring: false,
+      contrast: false
+    })
+
+    expect(root.classList.contains('dark')).toBe(false)
+    expect(root.classList.contains('coloring')).toBe(false)
+    expect(root.classList.contains('contrast')).toBe(false)
+    expect(root.dataset.theme).toBe('light')
+    expect(root.dataset.txColoring).toBe('false')
+    expect(root.dataset.txContrast).toBe('normal')
+    expect(root.style.colorScheme).toBe('light')
   })
 })

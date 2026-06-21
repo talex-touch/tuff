@@ -6,6 +6,7 @@ import { useDark, usePreferredDark } from '@vueuse/core'
 import { computed, watchEffect } from 'vue'
 import {
   areThemeStylesEqual,
+  applyThemeDocumentState,
   createDefaultThemeStyle,
   normalizeThemeStyle,
   resolveThemeModeFromStyle,
@@ -101,10 +102,12 @@ function updateDocumentTheme(resolved: ResolvedTheme): void {
     return
   }
 
-  const root = document.documentElement
-  root.classList.toggle('dark', resolved === 'dark')
-  root.dataset.theme = resolved
-  root.style.colorScheme = resolved
+  const addon = themeStyle.value.theme.addon
+  applyThemeDocumentState(document.documentElement, {
+    resolvedTheme: resolved,
+    coloring: addon.coloring,
+    contrast: addon.contrast
+  })
 }
 
 function syncResolvedTheme(nextThemeState: ThemeModeState): void {

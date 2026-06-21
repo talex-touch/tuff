@@ -779,7 +779,6 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           v-model="themeStyle.theme.addon.contrast"
           :title="t('themeStyle.highContrast')"
           :description="t('themeStyle.highContrastDesc')"
-          disabled
         >
           <template #icon="{ active }">
             <ThemePreviewIcon variant="contrast" :active="active" />

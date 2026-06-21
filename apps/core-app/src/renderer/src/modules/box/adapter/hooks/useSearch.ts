@@ -61,6 +61,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
 }
 
+function normalizeClipboardTimestamp(value: string | Date | null | undefined): number | null {
+  if (value == null) return null
+  const time = value instanceof Date ? value.getTime() : Date.parse(value)
+  return Number.isFinite(time) ? time : null
+}
+
 interface DetachedDivisionPayload {
   item: TuffItem
   query?: string
@@ -577,6 +583,15 @@ export function useSearch(
     try {
       const latest = await getLatestClipboard({ refresh: true })
       if (!latest) return
+      const latestTimestamp = normalizeClipboardTimestamp(latest.timestamp)
+      const dismissedTimestamp = normalizeClipboardTimestamp(clipboardOptions.lastClearedTimestamp)
+      if (
+        latestTimestamp !== null &&
+        dismissedTimestamp !== null &&
+        latestTimestamp === dismissedTimestamp
+      ) {
+        return
+      }
       clipboardOptions.last = latest
       clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = Date.now()

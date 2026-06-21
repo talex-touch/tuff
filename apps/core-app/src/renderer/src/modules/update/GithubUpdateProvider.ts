@@ -261,7 +261,8 @@ export class GithubUpdateProvider extends UpdateProvider {
           size: asset.size,
           platform: asset.platform,
           arch: asset.arch,
-          ...(asset.checksum ? { checksum: asset.checksum } : {})
+          ...(asset.checksum ? { checksum: asset.checksum } : {}),
+          ...(asset.signatureUrl ? { signatureUrl: asset.signatureUrl } : {})
         })
       )
   }
