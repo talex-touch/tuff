@@ -2,7 +2,6 @@
 import { computed, ref, watchEffect } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
-import { toast } from 'vue-sonner'
 import Input from '~/components/ui/Input.vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { requestJson, useTypedFetch } from '~/utils/request'
@@ -26,6 +25,7 @@ const { t } = useI18n()
 const route = useRoute()
 const { refresh } = useAuthUser()
 const { signOut } = useAuth()
+const toast = useToast()
 
 const secret = ref('')
 const submitting = ref(false)
