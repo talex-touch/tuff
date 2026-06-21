@@ -730,8 +730,8 @@ function closeDeleteConfirm() {
   z-index: 3;
   background: var(--update-table-sticky-bg);
   box-shadow:
-    -1px 0 0 color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 90%, transparent),
-    -12px 0 22px -12px rgba(0, 0, 0, 0.98);
+    -1px 0 0 color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 70%, transparent),
+    -18px 0 28px -24px rgba(0, 0, 0, 0.78);
 }
 
 .UpdateTable-Data :deep(.UpdateTable-ActionsHeader::before),
@@ -739,14 +739,15 @@ function closeDeleteConfirm() {
   content: '';
   pointer-events: none;
   position: absolute;
-  inset: 0 auto 0 -22px;
-  width: 22px;
+  inset: 0 auto 0 -42px;
+  width: 42px;
   background: linear-gradient(
     to right,
-    transparent,
-    rgba(0, 0, 0, 0.28) 28%,
-    color-mix(in srgb, var(--update-table-sticky-bg) 34%, rgba(0, 0, 0, 0.36)) 62%,
-    var(--update-table-sticky-bg)
+    transparent 0%,
+    rgba(0, 0, 0, 0.12) 28%,
+    rgba(0, 0, 0, 0.22) 48%,
+    color-mix(in srgb, var(--update-table-sticky-bg) 55%, rgba(0, 0, 0, 0.32)) 74%,
+    var(--update-table-sticky-bg) 100%
   );
 }
 
