@@ -15,6 +15,8 @@ const DOCS_FULL_BODY_IDLE_DELAY_MS = 180
 const DOCS_FULL_BODY_IDLE_TIMEOUT_MS = 1200
 const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 900
 const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
+const DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS = 3200
+const DOCS_DEFERRED_BODY_INTENT_EVENTS = ['scroll', 'wheel', 'keydown', 'touchstart'] as const
 const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
 const prefetchedDocMetadataTargets = new Set<string>()
@@ -527,7 +529,9 @@ const viewCount = ref<number | null>(null)
 const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
 const shouldMountDocEngagementPanels = ref(false)
+const shouldRenderDeferredDocBody = ref(false)
 const docEngagementAnchorRef = ref<HTMLElement | null>(null)
+const deferredDocBodySentinelRef = ref<HTMLElement | null>(null)
 
 watch(
   () => requestKey.value,
@@ -539,8 +543,10 @@ watch(
     docAssistantContextState.value = ''
     clearDocClientPanelIntentListeners()
     clearDocClientPanelSchedule()
+    clearDeferredDocBodySchedule()
     shouldMountDocClientPanels.value = false
     shouldMountDocEngagementPanels.value = false
+    shouldRenderDeferredDocBody.value = false
     pendingAssistantContextRequest.value = 0
     lastAssistantContextBuildKey = ''
   },
@@ -888,6 +894,70 @@ const docSyncStatus = computed<DocSyncStatusKey>(() => {
   return DOC_SYNC_STATUS_ALIASES[raw] ?? 'not_started'
 })
 
+function readBodyChildren(body: unknown) {
+  if (!body || typeof body !== 'object')
+    return []
+
+  const record = body as Record<string, unknown>
+  if (Array.isArray(record.children))
+    return record.children
+  if (Array.isArray(record.value))
+    return record.value
+  return []
+}
+
+function isBodyHeadingNode(node: unknown, tag: string) {
+  if (Array.isArray(node))
+    return node[0] === tag
+
+  return Boolean(
+    node
+    && typeof node === 'object'
+    && (node as Record<string, unknown>).tag === tag,
+  )
+}
+
+function resolveDeferredBodySplitIndex(body: unknown) {
+  const children = readBodyChildren(body)
+  if (children.length < 12)
+    return -1
+
+  let h2Count = 0
+  for (let index = 0; index < children.length; index += 1) {
+    if (!isBodyHeadingNode(children[index], 'h2'))
+      continue
+
+    h2Count += 1
+    if (h2Count === 2)
+      return index
+  }
+
+  return -1
+}
+
+function cloneDocWithBodyChildren(source: Record<string, any> | null | undefined, children: unknown[]) {
+  if (!source?.body || typeof source.body !== 'object')
+    return source
+
+  const body = source.body as Record<string, unknown>
+  const childKey = Array.isArray(body.children)
+    ? 'children'
+    : Array.isArray(body.value)
+      ? 'value'
+      : null
+
+  if (!childKey)
+    return source
+
+  return {
+    ...source,
+    body: {
+      ...body,
+      [childKey]: children,
+    },
+  }
+}
+
 const heroSyncBanner = computed(() => {
   if (!docScope.value.isComponent || docSyncStatus.value === 'verified')
     return null
@@ -1031,6 +1101,38 @@ const currentDocRenderKey = computed(() => {
   return `${path}:${docsLocale.value}:${source?.body ? 'body' : 'meta'}`
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
+const deferredBodySplitIndex = computed(() => resolveDeferredBodySplitIndex(renderDoc.value?.body))
+const shouldDeferDocBodySections = computed(() =>
+  import.meta.dev
+  && import.meta.client
+  && docsClientPanelsMounted.value
+  && docScope.value.isComponent
+  && docSyncStatus.value !== 'verified'
+  && deferredBodySplitIndex.value > 0,
+)
+const primaryRenderDoc = computed(() => {
+  if (!shouldDeferDocBodySections.value)
+    return renderDoc.value
+
+  return cloneDocWithBodyChildren(
+    renderDoc.value as Record<string, any> | null,
+    readBodyChildren(renderDoc.value?.body).slice(0, deferredBodySplitIndex.value),
+  )
+})
+const deferredRenderDoc = computed(() => {
+  if (!shouldDeferDocBodySections.value)
+    return null
+
+  return cloneDocWithBodyChildren(
+    renderDoc.value as Record<string, any> | null,
+    readBodyChildren(renderDoc.value?.body).slice(deferredBodySplitIndex.value),
+  )
+})
+const shouldShowDeferredDocBodyShell = computed(() =>
+  shouldDeferDocBodySections.value
+  && Boolean(deferredRenderDoc.value?.body)
+  && !shouldRenderDeferredDocBody.value,
+)
 let lastEnhancedDocKey = ''
 let lastAssistantContextBuildKey = ''
 const DOC_ENGAGEMENT_PANEL_DELAY_MS = 3200
@@ -1077,6 +1179,7 @@ onBeforeUnmount(() => {
   clearAssistantContextSchedule()
   clearDocClientPanelIntentListeners()
   clearDocClientPanelSchedule()
+  clearDeferredDocBodySchedule()
   clearEngagementPanelSchedule()
   clearRenderedCodeHeaders()
   if (import.meta.client) {
@@ -1303,6 +1406,8 @@ const pendingAssistantContextRequest = ref(0)
 let engagementPanelTimer: ReturnType<typeof setTimeout> | null = null
 let engagementPanelIdleId: number | null = null
 let engagementPanelObserver: IntersectionObserver | null = null
+let deferredBodyTimer: ReturnType<typeof setTimeout> | null = null
+let deferredBodyIntentDisposers: Array<() => void> = []
 let docClientPanelIdleId: number | null = null
 let docClientPanelFrameId: number | null = null
 let docClientPanelIntentDisposers: Array<() => void> = []
@@ -1367,6 +1472,89 @@ function clearEngagementPanelSchedule() {
     engagementPanelObserver.disconnect()
     engagementPanelObserver = null
   }
+}
+
+function clearDeferredDocBodySchedule() {
+  if (import.meta.server)
+    return
+
+  if (deferredBodyTimer) {
+    clearTimeout(deferredBodyTimer)
+    deferredBodyTimer = null
+  }
+  for (const dispose of deferredBodyIntentDisposers)
+    dispose()
+  deferredBodyIntentDisposers = []
+}
+
+function mountDeferredDocBodySections() {
+  if (!shouldDeferDocBodySections.value || shouldRenderDeferredDocBody.value)
+    return
+
+  shouldRenderDeferredDocBody.value = true
+  clearDeferredDocBodySchedule()
+}
+
+function scrollToDeferredHashTarget(hash: string) {
+  if (!hash)
+    return
+
+  const id = decodeURIComponent(hash.slice(1))
+  if (!id)
+    return
+
+  void nextTick(() => {
+    document.getElementById(id)?.scrollIntoView({ block: 'start' })
+  })
+}
+
+function revealDeferredDocBodyForHash(hash = route.hash) {
+  if (!import.meta.client || !hash || !shouldDeferDocBodySections.value)
+    return false
+
+  mountDeferredDocBodySections()
+  scrollToDeferredHashTarget(hash)
+  return true
+}
+
+function handleDeferredDocBodyIntent() {
+  mountDeferredDocBodySections()
+}
+
+function bindDeferredDocBodyIntentListeners() {
+  if (import.meta.server || deferredBodyIntentDisposers.length)
+    return
+
+  for (const eventName of DOCS_DEFERRED_BODY_INTENT_EVENTS) {
+    window.addEventListener(eventName, handleDeferredDocBodyIntent, { passive: true })
+    deferredBodyIntentDisposers.push(() => {
+      window.removeEventListener(eventName, handleDeferredDocBodyIntent)
+    })
+  }
+}
+
+function scheduleDeferredDocBodySections() {
+  if (import.meta.server || !shouldDeferDocBodySections.value || shouldRenderDeferredDocBody.value)
+    return
+
+  clearDeferredDocBodySchedule()
+
+  void nextTick(() => {
+    if (!shouldDeferDocBodySections.value || shouldRenderDeferredDocBody.value)
+      return
+    if (revealDeferredDocBodyForHash())
+      return
+    if (window.scrollY > 0) {
+      mountDeferredDocBodySections()
+      return
+    }
+
+    bindDeferredDocBodyIntentListeners()
+    deferredBodyTimer = setTimeout(() => {
+      deferredBodyTimer = null
+      mountDeferredDocBodySections()
+    }, DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS)
+  })
 }
 
 function clearDocClientPanelSchedule() {
@@ -1601,6 +1789,7 @@ watch(
       return
 
     bindDocClientPanelIntentListeners()
+    scheduleDeferredDocBodySections()
     if (lastEnhancedDocKey !== renderKey) {
       lastEnhancedDocKey = renderKey
       void scheduleCodeEnhance(260)
@@ -1611,6 +1800,25 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  shouldRenderDeferredDocBody,
+  (isRendered) => {
+    if (!isRendered)
+      return
+
+    void scheduleCodeEnhance(80)
+    void scheduleOutlineSync(80)
+  },
+)
+
+watch(
+  () => route.hash,
+  (hash) => {
+    if (hash)
+      revealDeferredDocBodyForHash(hash)
+  },
 )
 
 watch(
@@ -1629,6 +1837,7 @@ watch(
       return
 
     bindDocClientPanelIntentListeners()
+    scheduleDeferredDocBodySections()
     void scheduleCodeEnhance(260)
     void scheduleOutlineSync(280)
     if (docAssistantContextRequestState.value > 0)
@@ -1700,22 +1909,41 @@ watch(
               </p>
             </div>
           </div>
-          <ContentRenderer
-            v-if="renderDoc?.body"
-            :key="currentDocRenderKey"
-            :value="renderDoc ?? {}"
-            :prose="false"
-            :components="docsProseComponents"
-            :class="[
-              'docs-prose',
-              'markdown-body',
-              'max-w-none',
-              'prose',
-              'prose-neutral',
-              'dark:prose-invert',
-              { 'docs-prose--hero': showDocHero },
-            ]"
-          />
+          <template v-if="renderDoc?.body">
+            <ContentRenderer
+              :key="currentDocRenderKey"
+              :value="primaryRenderDoc ?? {}"
+              :prose="false"
+              :components="docsProseComponents"
+              :class="[
+                'docs-prose',
+                'markdown-body',
+                'max-w-none',
+                'prose',
+                'prose-neutral',
+                'dark:prose-invert',
+                { 'docs-prose--hero': showDocHero },
+              ]"
+            />
+            <div
+              v-if="shouldShowDeferredDocBodyShell"
+              ref="deferredDocBodySentinelRef"
+              class="docs-deferred-body-shell"
+              aria-hidden="true"
+            >
+              <span class="docs-deferred-body-shell__line is-wide" />
+              <span class="docs-deferred-body-shell__line" />
+              <span class="docs-deferred-body-shell__block" />
+            </div>
+            <ContentRenderer
+              v-if="shouldRenderDeferredDocBody && deferredRenderDoc?.body"
+              :key="`${currentDocRenderKey}:deferred`"
+              :value="deferredRenderDoc ?? {}"
+              :prose="false"
+              :components="docsProseComponents"
+              class="docs-prose docs-prose--deferred markdown-body max-w-none prose prose-neutral dark:prose-invert"
+            />
+          </template>
           <div v-else class="docs-prose docs-prose-skeleton markdown-body max-w-none prose prose-neutral dark:prose-invert">
             <span class="docs-prose-skeleton__line is-wide" />
             <span class="docs-prose-skeleton__line" />
@@ -1918,6 +2146,41 @@ watch(
   opacity: 0;
   filter: blur(8px);
   transform: translateY(6px);
+}
+
+.docs-deferred-body-shell {
+  display: grid;
+  gap: 14px;
+  padding-block: 8px 4px;
+}
+
+.docs-deferred-body-shell__line,
+.docs-deferred-body-shell__block {
+  display: block;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--docs-muted) 8%, transparent),
+      color-mix(in srgb, var(--docs-muted) 14%, transparent),
+      color-mix(in srgb, var(--docs-muted) 8%, transparent)
+    );
+  animation: docs-prose-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.docs-deferred-body-shell__line {
+  width: min(68%, 540px);
+  height: 12px;
+}
+
+.docs-deferred-body-shell__line.is-wide {
+  width: min(82%, 680px);
+}
+
+.docs-deferred-body-shell__block {
+  width: 100%;
+  height: 88px;
+  border-radius: 18px;
 }
 
 :global(.docs-page-enter-active),
