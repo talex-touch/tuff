@@ -731,7 +731,7 @@ function closeDeleteConfirm() {
   background: var(--update-table-sticky-bg);
   box-shadow:
     -1px 0 0 color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 90%, transparent),
-    -10px 0 20px -12px rgba(0, 0, 0, 0.92);
+    -12px 0 22px -12px rgba(0, 0, 0, 0.98);
 }
 
 .UpdateTable-Data :deep(.UpdateTable-ActionsHeader::before),
@@ -744,7 +744,8 @@ function closeDeleteConfirm() {
   background: linear-gradient(
     to right,
     transparent,
-    color-mix(in srgb, var(--update-table-sticky-bg) 42%, transparent) 42%,
+    rgba(0, 0, 0, 0.28) 28%,
+    color-mix(in srgb, var(--update-table-sticky-bg) 34%, rgba(0, 0, 0, 0.36)) 62%,
     var(--update-table-sticky-bg)
   );
 }
