@@ -233,7 +233,7 @@ function scheduleDocsAsideShellMount() {
 
   docsAsideShellTimer = setTimeout(() => {
     docsAsideShellTimer = null
-    if ('requestIdleCallback' in window) {
+    if (typeof window.requestIdleCallback === 'function') {
       docsAsideShellIdleId = window.requestIdleCallback(mount, { timeout: DOCS_ASIDE_SHELL_IDLE_TIMEOUT_MS })
       return
     }
@@ -285,7 +285,7 @@ function scheduleDocsOutlineMount() {
     docsOutlineTimer = null
     if (!shouldShowAsideOutline.value)
       return
-    if ('requestIdleCallback' in window) {
+    if (typeof window.requestIdleCallback === 'function') {
       docsOutlineIdleId = window.requestIdleCallback(mount, { timeout: DOCS_OUTLINE_IDLE_TIMEOUT_MS })
       return
     }

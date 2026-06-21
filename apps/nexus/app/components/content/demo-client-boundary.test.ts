@@ -94,10 +94,11 @@ describe('Tuff demo client boundary', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
     expect(config).toContain('const tuffexComponentSourceEntry = ')
+    expect(config).toContain('const tuffexComponentSourceTypePathEntry = ')
     expect(config).toContain('tuffexComponentsSourceRoot')
     expect(config).toContain('/$1/index.ts')
     expect(config).toContain('{ find: /^@tuffex-components\\/(.+)$/, replacement: tuffexComponentSourceEntry }')
-    expect(config).toContain("'@tuffex-components/*': [tuffexComponentSourceEntry]")
+    expect(config).toContain("'@tuffex-components/*': [tuffexComponentSourceTypePathEntry]")
   })
 
   it('pre-bundles TuffEx runtime dependencies used by docs chrome', () => {
