@@ -1757,7 +1757,7 @@ function filterLabel(option: { value: string, label: string }) {
             <div class="md:col-span-2">
               <div class="mb-1 flex items-center justify-between gap-2">
                 <label class="apple-section-title block">{{ t('dashboard.providerRegistry.scenes.inputJson', 'Input JSON') }}</label>
-                <TxButton variant="secondary" size="xsmall" @click="selectSceneRunCapability(selectedScene, activeSceneRunPanel.capability)">
+                <TxButton variant="secondary" size="mini" @click="selectSceneRunCapability(selectedScene, activeSceneRunPanel.capability)">
                   {{ t('dashboard.providerRegistry.scenes.resetSample', 'Reset sample') }}
                 </TxButton>
               </div>
