@@ -16,6 +16,7 @@
 - AI Stable：`Evidence-Matrix-AI-Stable-2026-06-18.md`。
 - Nexus Governance：`Evidence-Matrix-Nexus-Governance-2026-06-18.md`。
 - Platform Capability：`Evidence-Matrix-Platform-2026-06-18.md`（非阻塞 smoke / regression，不恢复为 release blocker）。
+- Release Integrity：`Evidence-Matrix-Release-Integrity-2026-06-21.md`。
 
 ## Roadmap
 
