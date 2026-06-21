@@ -108,6 +108,18 @@ describe('docs page performance boundaries', () => {
     expect(page).not.toMatch(/import \{[^}]*defineComponent[^}]*render[^}]*\} from 'vue'/)
   })
 
+  it('loads docs toast feedback only after copy or share intent', () => {
+    expect(page).toContain("async function showDocsToast(type: 'success' | 'error', title: string)")
+    expect(page).toContain("const { useToast } = await import('~/composables/useToast')")
+    expect(page).toContain("await showDocsToast('success', copyLabels.value.copied)")
+    expect(page).toContain("await showDocsToast('error', copyLabels.value.failed)")
+    expect(page).toContain("await showDocsToast('success', t('docs.shareCopied', 'Link copied!'))")
+    expect(page).toContain("await showDocsToast('error', t('docs.shareFailed', 'Copy failed'))")
+    expect(page).toContain('const { t, setLocale } = useI18n()\nconst activeRoutePath = ref(route.path)')
+    expect(page).not.toContain('toast.success(')
+    expect(page).not.toContain('toast.error(')
+  })
+
   it('keeps lightweight docs tracking separate from bottom engagement widgets', () => {
     expect(page).toContain('DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 2500')
     expect(page).toContain('DOC_CLIENT_PANEL_INTENT_EVENTS')
