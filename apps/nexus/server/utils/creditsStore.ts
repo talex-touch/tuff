@@ -20,15 +20,13 @@ const PASSKEYS_TABLE = 'auth_passkeys'
 
 let creditsSchemaInitialized = false
 
-const DEFAULT_TEAM_QUOTA = 10000
-const DEFAULT_PERSONAL_QUOTA = 5
-const BOOSTED_PERSONAL_QUOTA = 100
+const DEFAULT_TEAM_QUOTA = 2000000
+const DEFAULT_PERSONAL_QUOTA = 1000
+const BOOSTED_PERSONAL_QUOTA = 5000
 const CHECKIN_REWARD = 1
 const TEAM_BASE_SEATS = 5
-const TEAM_POOL_PER_SEAT = 2000
+const TEAM_POOL_PER_SEAT = 400000
 const DEFAULT_PLAN_ID = 'default'
-const CREDIT_DECIMALS = 2
-const CREDIT_SCALE = 10 ** CREDIT_DECIMALS
 
 export type TeamType = 'personal' | 'organization'
 export type TeamMemberRole = 'owner' | 'admin' | 'member'
@@ -95,16 +93,21 @@ function mapTeamMemberRow(row: D1TeamMemberRow): TeamMemberRecord {
 function normalizeCreditAmount(value: number): number {
   if (!Number.isFinite(value))
     return 0
-  return Math.round(value * CREDIT_SCALE) / CREDIT_SCALE
+  return Math.max(0, Math.round(value))
 }
 
 function resolveCreditAmount(value: unknown): number {
-  return normalizeCreditAmount(Number(value ?? 0))
+  const numeric = Number(value ?? 0)
+  if (!Number.isFinite(numeric))
+    return 0
+  if (numeric === 0)
+    return 0
+  return Math.sign(numeric) * Math.max(1, Math.round(Math.abs(numeric)))
 }
 
 function sumCredits(...values: number[]): number {
   const total = values.reduce((acc, current) => acc + current, 0)
-  return normalizeCreditAmount(total)
+  return Math.round(total)
 }
 
 function normalizeCreditBalanceRow<T extends { quota?: unknown; used?: unknown }>(
@@ -256,10 +259,10 @@ export interface CreditCheckinStatus {
 
 const PERSONAL_QUOTA_BY_PLAN: Record<CreditPlan, number> = {
   FREE: DEFAULT_PERSONAL_QUOTA,
-  PLUS: 500,
-  PRO: 1200,
-  TEAM: 5000,
-  ENTERPRISE: 5000,
+  PLUS: 100000,
+  PRO: 240000,
+  TEAM: 1000000,
+  ENTERPRISE: 1000000,
 }
 
 async function resolvePlanForScope(event: H3Event, scope: 'team' | 'user', scopeId: string): Promise<CreditPlan> {
@@ -640,6 +643,11 @@ async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: st
     INSERT OR IGNORE INTO ${CREDIT_BALANCES_TABLE} (scope, scope_id, month, quota, used)
     VALUES (?, ?, ?, ?, 0)
   `).bind(scope, scopeId, month, quota).run()
+  await db.prepare(`
+    UPDATE ${CREDIT_BALANCES_TABLE}
+    SET quota = ?
+    WHERE scope = ? AND scope_id = ? AND month = ? AND quota < ?
+  `).bind(quota, scope, scopeId, month, quota).run()
 }
 
 async function resolveActiveCreditTeam(event: H3Event, userId: string) {
@@ -923,10 +931,11 @@ export async function consumeCredits(
   const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
   await ensureBalance(event, 'team', activeCreditTeam.teamId)
   await ensureBalance(event, 'user', userId)
-  const normalizedAmount = normalizeCreditAmount(amount)
-  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+  const numericAmount = Number(amount)
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
     throw new Error('Invalid credit amount.')
   }
+  const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
   const month = getMonthKey()
   const teamBalance = await db.prepare(`
     SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?

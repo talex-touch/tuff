@@ -253,6 +253,32 @@ export async function listInvites(
   return (results ?? []).map(mapInviteRow)
 }
 
+export async function listPendingInvitesForEmail(
+  event: H3Event,
+  email: string,
+): Promise<TeamInvite[]> {
+  const db = getD1Database(event)
+  if (!db) {
+    return []
+  }
+
+  const normalizedEmail = normalizeEmail(email)
+  if (!normalizedEmail) {
+    return []
+  }
+
+  await ensureTeamSchema(db)
+
+  const { results } = await db.prepare(`
+    SELECT * FROM ${INVITES_TABLE}
+    WHERE lower(email) = ?1
+      AND status = 'pending'
+    ORDER BY created_at DESC;
+  `).bind(normalizedEmail).all<D1InviteRow>()
+
+  return (results ?? []).map(mapInviteRow)
+}
+
 export async function getInviteByCode(
   event: H3Event,
   code: string,
@@ -292,6 +318,7 @@ export async function getInviteById(
 export async function hasInviteForEmail(
   event: H3Event,
   email: string,
+  organizationId?: string,
 ): Promise<boolean> {
   const db = getD1Database(event)
   if (!db) {
@@ -305,12 +332,24 @@ export async function hasInviteForEmail(
 
   await ensureTeamSchema(db)
 
-  const row = await db.prepare(`
+  const query = organizationId
+    ? `
     SELECT id FROM ${INVITES_TABLE}
     WHERE lower(email) = ?1
-      AND status IN ('pending', 'accepted')
+      AND organization_id = ?2
+      AND status = 'pending'
     LIMIT 1;
-  `).bind(normalizedEmail).first<{ id: string }>()
+  `
+    : `
+    SELECT id FROM ${INVITES_TABLE}
+    WHERE lower(email) = ?1
+      AND status = 'pending'
+    LIMIT 1;
+  `
+
+  const row = organizationId
+    ? await db.prepare(query).bind(normalizedEmail, organizationId).first<{ id: string }>()
+    : await db.prepare(query).bind(normalizedEmail).first<{ id: string }>()
 
   return Boolean(row?.id)
 }

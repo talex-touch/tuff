@@ -2,14 +2,18 @@ import { getHeader, readBody } from 'h3'
 import type { H3Event } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAppAuth } from '../../../utils/auth'
-import { consumeLoginToken, listPasskeys, readDeviceId } from '../../../utils/authStore'
+import { consumeLoginToken, getDevice, listPasskeys, readDeviceId } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
 import { issueDeviceKey } from '../../../utils/syncStoreV1'
 
 type IssueBody = paths['/api/v1/keys/issue-device']['post']['requestBody']['content']['application/json']
 type IssueResponse = paths['/api/v1/keys/issue-device']['post']['responses']['200']['content']['application/json']
 
-async function requireStepUpIfPasskeyEnabled(event: H3Event, userId: string) {
+async function requireStepUpIfPasskeyEnabled(event: H3Event, userId: string, deviceId: string) {
+  const device = await getDevice(event, userId, deviceId)
+  if (device?.trusted && !device.revokedAt)
+    return
+
   const passkeys = await listPasskeys(event, userId)
   if (!passkeys || passkeys.length === 0)
     return
@@ -29,7 +33,7 @@ export default defineEventHandler(async (event) => {
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
 
-  await requireStepUpIfPasskeyEnabled(event, userId)
+  await requireStepUpIfPasskeyEnabled(event, userId, deviceId)
 
   const body = await readBody<IssueBody>(event)
   const targetDeviceId = typeof body?.target_device_id === 'string' ? body.target_device_id.trim() : ''

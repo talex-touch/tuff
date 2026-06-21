@@ -32,6 +32,20 @@ const DEVICE_AUTH_LONG_TERM_SESSION_WINDOW_MS = 10 * 60 * 1000
 
 let authSchemaInitialized = false
 
+export interface UserPrivacySettings {
+  analytics: boolean
+  crashReports: boolean
+  usageData: boolean
+  personalization: boolean
+}
+
+export const DEFAULT_USER_PRIVACY_SETTINGS: UserPrivacySettings = {
+  analytics: true,
+  crashReports: true,
+  usageData: false,
+  personalization: true,
+}
+
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
@@ -64,6 +78,10 @@ async function ensureAuthSchema(db: D1Database) {
       merged_at TEXT,
       merged_by_user_id TEXT,
       disabled_at TEXT,
+      privacy_analytics INTEGER NOT NULL DEFAULT 1,
+      privacy_crash_reports INTEGER NOT NULL DEFAULT 1,
+      privacy_usage_data INTEGER NOT NULL DEFAULT 0,
+      privacy_personalization INTEGER NOT NULL DEFAULT 1,
       allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
@@ -201,6 +219,15 @@ async function ensureAuthSchema(db: D1Database) {
       trusted_at TEXT,
       user_agent TEXT,
       last_seen_at TEXT,
+      last_seen_ip TEXT,
+      last_seen_country_code TEXT,
+      last_seen_region_code TEXT,
+      last_seen_region_name TEXT,
+      last_seen_city TEXT,
+      last_seen_latitude REAL,
+      last_seen_longitude REAL,
+      last_seen_timezone TEXT,
+      last_seen_geo_source TEXT,
       created_at TEXT NOT NULL,
       revoked_at TEXT,
       token_version INTEGER NOT NULL DEFAULT 0,
@@ -283,6 +310,10 @@ async function ensureAuthSchema(db: D1Database) {
   await addUserColumnIfMissing('merged_at', 'merged_at TEXT')
   await addUserColumnIfMissing('merged_by_user_id', 'merged_by_user_id TEXT')
   await addUserColumnIfMissing('disabled_at', 'disabled_at TEXT')
+  await addUserColumnIfMissing('privacy_analytics', 'privacy_analytics INTEGER NOT NULL DEFAULT 1')
+  await addUserColumnIfMissing('privacy_crash_reports', 'privacy_crash_reports INTEGER NOT NULL DEFAULT 1')
+  await addUserColumnIfMissing('privacy_usage_data', 'privacy_usage_data INTEGER NOT NULL DEFAULT 0')
+  await addUserColumnIfMissing('privacy_personalization', 'privacy_personalization INTEGER NOT NULL DEFAULT 1')
   await addUserColumnIfMissing('allow_cli_ip_mismatch', 'allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0')
 
   const deviceAuthColumns = await db.prepare(`PRAGMA table_info(${DEVICE_AUTH_TABLE});`).all<{ name: string }>()
@@ -362,6 +393,15 @@ async function ensureAuthSchema(db: D1Database) {
 
   await addDeviceColumnIfMissing('client_type', 'client_type TEXT')
   await addDeviceColumnIfMissing('trusted_at', 'trusted_at TEXT')
+  await addDeviceColumnIfMissing('last_seen_ip', 'last_seen_ip TEXT')
+  await addDeviceColumnIfMissing('last_seen_country_code', 'last_seen_country_code TEXT')
+  await addDeviceColumnIfMissing('last_seen_region_code', 'last_seen_region_code TEXT')
+  await addDeviceColumnIfMissing('last_seen_region_name', 'last_seen_region_name TEXT')
+  await addDeviceColumnIfMissing('last_seen_city', 'last_seen_city TEXT')
+  await addDeviceColumnIfMissing('last_seen_latitude', 'last_seen_latitude REAL')
+  await addDeviceColumnIfMissing('last_seen_longitude', 'last_seen_longitude REAL')
+  await addDeviceColumnIfMissing('last_seen_timezone', 'last_seen_timezone TEXT')
+  await addDeviceColumnIfMissing('last_seen_geo_source', 'last_seen_geo_source TEXT')
 
   const loginHistoryColumns = await db.prepare(`PRAGMA table_info(${LOGIN_HISTORY_TABLE});`).all<{ name: string }>()
   const addLoginHistoryColumnIfMissing = async (column: string, ddl: string) => {
@@ -386,6 +426,7 @@ async function ensureAuthSchema(db: D1Database) {
 export type UserStatus = 'active' | 'merged' | 'disabled'
 export type EmailState = 'verified' | 'unverified' | 'missing'
 export type AuthClientType = 'app' | 'cli' | 'external'
+export type AuthLoginClientType = AuthClientType | 'web'
 
 export interface AuthUser {
   id: string
@@ -401,6 +442,7 @@ export interface AuthUser {
   mergedAt: string | null
   mergedByUserId: string | null
   disabledAt: string | null
+  privacySettings: UserPrivacySettings
   allowCliIpMismatch: boolean
   createdAt: string
 }
@@ -415,10 +457,13 @@ export interface AuthDevice {
   trusted: boolean
   userAgent: string | null
   lastSeenAt: string | null
+  lastSeenIp?: string | null
+  lastSeenIpMasked?: string | null
   createdAt: string
   revokedAt: string | null
   tokenVersion: number
   lastLocation?: AuthGeoLocation | null
+  lastLoginIp?: string | null
   lastLoginIpMasked?: string | null
   lastLoginAt?: string | null
 }
@@ -450,7 +495,7 @@ export interface AuthLoginHistoryRecord {
   user_agent: string | null
   success: boolean
   reason: string | null
-  client_type: AuthClientType | null
+  client_type: AuthLoginClientType | null
   created_at: string
   country_code: string | null
   region_code: string | null
@@ -521,14 +566,14 @@ function toNullableNumber(value: unknown): number | null {
 }
 
 function resolveLocationFromRow(row: Record<string, any>): AuthGeoLocation | null {
-  const countryCode = row.country_code ?? null
-  const regionCode = row.region_code ?? null
-  const regionName = row.region_name ?? null
-  const city = row.city ?? null
-  const latitude = toNullableNumber(row.latitude)
-  const longitude = toNullableNumber(row.longitude)
-  const timezone = row.timezone ?? null
-  const updatedAt = row.last_login_at ?? row.created_at ?? null
+  const countryCode = row.country_code ?? row.last_seen_country_code ?? null
+  const regionCode = row.region_code ?? row.last_seen_region_code ?? null
+  const regionName = row.region_name ?? row.last_seen_region_name ?? null
+  const city = row.city ?? row.last_seen_city ?? null
+  const latitude = toNullableNumber(row.latitude ?? row.last_seen_latitude)
+  const longitude = toNullableNumber(row.longitude ?? row.last_seen_longitude)
+  const timezone = row.timezone ?? row.last_seen_timezone ?? null
+  const updatedAt = row.last_login_at ?? row.last_seen_at ?? row.created_at ?? null
 
   if (!countryCode && !regionCode && !regionName && !city && latitude == null && longitude == null && !timezone) {
     return null
@@ -579,11 +624,29 @@ export interface LinkedAccount {
   providerAccountId: string
 }
 
+export interface UserAccountActivitySummary {
+  updatedAt: string | null
+}
+
+function readBooleanColumn(value: unknown, fallback: boolean): boolean {
+  if (value === 1 || value === true || value === '1')
+    return true
+  if (value === 0 || value === false || value === '0')
+    return false
+  return fallback
+}
+
 function mapUser(row: Record<string, any> | null): AuthUser | null {
   if (!row)
     return null
   const emailState = (row.email_state as EmailState | null) ?? (row.email_verified ? 'verified' : 'unverified')
-  const allowCliIpMismatch = row.allow_cli_ip_mismatch === 1 || row.allow_cli_ip_mismatch === true || row.allow_cli_ip_mismatch === '1'
+  const privacySettings: UserPrivacySettings = {
+    analytics: readBooleanColumn(row.privacy_analytics, DEFAULT_USER_PRIVACY_SETTINGS.analytics),
+    crashReports: readBooleanColumn(row.privacy_crash_reports, DEFAULT_USER_PRIVACY_SETTINGS.crashReports),
+    usageData: readBooleanColumn(row.privacy_usage_data, DEFAULT_USER_PRIVACY_SETTINGS.usageData),
+    personalization: readBooleanColumn(row.privacy_personalization, DEFAULT_USER_PRIVACY_SETTINGS.personalization),
+  }
+  const allowCliIpMismatch = readBooleanColumn(row.allow_cli_ip_mismatch, false)
   return {
     id: row.id,
     email: row.email,
@@ -598,6 +661,7 @@ function mapUser(row: Record<string, any> | null): AuthUser | null {
     mergedAt: row.merged_at ?? null,
     mergedByUserId: row.merged_by_user_id ?? null,
     disabledAt: row.disabled_at ?? null,
+    privacySettings,
     allowCliIpMismatch,
     createdAt: row.created_at
   }
@@ -607,6 +671,9 @@ function mapDevice(row: Record<string, any> | null): AuthDevice | null {
   if (!row)
     return null
   const lastLocation = resolveLocationFromRow(row)
+  const lastSeenIp = row.last_seen_ip ?? null
+  const lastLoginIp = row.last_login_ip ?? row.ip ?? null
+  const lastSeenIpMasked = maskIpAddress(row.last_seen_ip ?? null)
   const lastLoginIpMasked = maskIpAddress(row.last_login_ip ?? row.ip ?? null)
   return {
     id: row.id,
@@ -618,10 +685,13 @@ function mapDevice(row: Record<string, any> | null): AuthDevice | null {
     trusted: Boolean(row.trusted_at),
     userAgent: row.user_agent ?? null,
     lastSeenAt: row.last_seen_at ?? null,
+    lastSeenIp,
+    lastSeenIpMasked,
     createdAt: row.created_at,
     revokedAt: row.revoked_at ?? null,
     tokenVersion: Number(row.token_version ?? 0),
     lastLocation,
+    lastLoginIp,
     lastLoginIpMasked,
     lastLoginAt: row.last_login_at ?? null,
   }
@@ -695,6 +765,7 @@ export async function createUser(
     mergedAt: null,
     mergedByUserId: null,
     disabledAt: null,
+    privacySettings: { ...DEFAULT_USER_PRIVACY_SETTINGS },
     allowCliIpMismatch: false,
     createdAt: now
   }
@@ -732,6 +803,35 @@ export async function setAllowCliIpMismatch(event: H3Event, userId: string, allo
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   await db.prepare(`UPDATE ${USERS_TABLE} SET allow_cli_ip_mismatch = ? WHERE id = ?`).bind(allowed ? 1 : 0, userId).run()
+  return getUserById(event, userId)
+}
+
+export async function setUserPrivacySettings(
+  event: H3Event,
+  userId: string,
+  settings: Partial<UserPrivacySettings>,
+): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+
+  const sets: string[] = []
+  const values: number[] = []
+  const append = (column: string, value: boolean | undefined) => {
+    if (typeof value !== 'boolean')
+      return
+    sets.push(`${column} = ?`)
+    values.push(value ? 1 : 0)
+  }
+
+  append('privacy_analytics', settings.analytics)
+  append('privacy_crash_reports', settings.crashReports)
+  append('privacy_usage_data', settings.usageData)
+  append('privacy_personalization', settings.personalization)
+
+  if (!sets.length)
+    return getUserById(event, userId)
+
+  await db.prepare(`UPDATE ${USERS_TABLE} SET ${sets.join(', ')} WHERE id = ?`).bind(...values, userId).run()
   return getUserById(event, userId)
 }
 
@@ -1832,6 +1932,49 @@ export async function listUserLinkedAccounts(event: H3Event, userId: string): Pr
     }))
 }
 
+export async function getUserAccountActivitySummary(event: H3Event, userId: string): Promise<UserAccountActivitySummary> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+
+  const row = await db.prepare(`
+    SELECT MAX(value) AS updated_at
+    FROM (
+      SELECT created_at AS value
+      FROM ${USERS_TABLE}
+      WHERE id = ?
+
+      UNION ALL
+
+      SELECT updated_at AS value
+      FROM ${CREDENTIALS_TABLE}
+      WHERE user_id = ?
+
+      UNION ALL
+
+      SELECT created_at AS value
+      FROM ${ACCOUNTS_TABLE}
+      WHERE user_id = ?
+
+      UNION ALL
+
+      SELECT created_at AS value
+      FROM ${PASSKEYS_TABLE}
+      WHERE user_id = ?
+
+      UNION ALL
+
+      SELECT last_used_at AS value
+      FROM ${PASSKEYS_TABLE}
+      WHERE user_id = ? AND last_used_at IS NOT NULL
+    )
+    WHERE value IS NOT NULL
+  `).bind(userId, userId, userId, userId, userId).first<{ updated_at?: string | null }>()
+
+  return {
+    updatedAt: row?.updated_at ?? null,
+  }
+}
+
 export async function listPasskeys(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -2146,6 +2289,8 @@ export async function upsertDevice(
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const now = new Date().toISOString()
+  const geo = resolveRequestGeo(event)
+  const requestIp = getRequestIp(event)
   const existing = await db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE id = ?`).bind(deviceId).first<Record<string, any>>()
   if (existing?.user_id === userId) {
     await db.prepare(`
@@ -2155,6 +2300,15 @@ export async function upsertDevice(
           client_type = COALESCE(?, client_type),
           user_agent = COALESCE(?, user_agent),
           last_seen_at = ?,
+          last_seen_ip = ?,
+          last_seen_country_code = ?,
+          last_seen_region_code = ?,
+          last_seen_region_name = ?,
+          last_seen_city = ?,
+          last_seen_latitude = ?,
+          last_seen_longitude = ?,
+          last_seen_timezone = ?,
+          last_seen_geo_source = ?,
           revoked_at = CASE WHEN ? THEN NULL ELSE revoked_at END,
           token_version = CASE WHEN ? AND revoked_at IS NOT NULL THEN token_version + 1 ELSE token_version END
       WHERE id = ? AND user_id = ?
@@ -2164,6 +2318,15 @@ export async function upsertDevice(
       data?.clientType ?? null,
       getUserAgent(event),
       now,
+      requestIp,
+      geo.countryCode,
+      geo.regionCode,
+      geo.regionName,
+      geo.city,
+      geo.latitude,
+      geo.longitude,
+      geo.timezone,
+      geo.source,
       data?.reactivateRevoked ? 1 : 0,
       data?.reactivateRevoked ? 1 : 0,
       deviceId,
@@ -2180,6 +2343,15 @@ export async function upsertDevice(
           user_agent = ?,
           trusted_at = NULL,
           last_seen_at = ?,
+          last_seen_ip = ?,
+          last_seen_country_code = ?,
+          last_seen_region_code = ?,
+          last_seen_region_name = ?,
+          last_seen_city = ?,
+          last_seen_latitude = ?,
+          last_seen_longitude = ?,
+          last_seen_timezone = ?,
+          last_seen_geo_source = ?,
           created_at = ?,
           revoked_at = NULL,
           token_version = token_version + 1
@@ -2191,14 +2363,28 @@ export async function upsertDevice(
       data?.clientType ?? null,
       getUserAgent(event),
       now,
+      requestIp,
+      geo.countryCode,
+      geo.regionCode,
+      geo.regionName,
+      geo.city,
+      geo.latitude,
+      geo.longitude,
+      geo.timezone,
+      geo.source,
       now,
       deviceId
     ).run()
   }
   else {
     await db.prepare(`
-      INSERT INTO ${DEVICES_TABLE} (id, user_id, device_name, platform, client_type, user_agent, last_seen_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ${DEVICES_TABLE} (
+        id, user_id, device_name, platform, client_type, user_agent,
+        last_seen_at, last_seen_ip, last_seen_country_code, last_seen_region_code,
+        last_seen_region_name, last_seen_city, last_seen_latitude, last_seen_longitude,
+        last_seen_timezone, last_seen_geo_source, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       deviceId,
       userId,
@@ -2207,9 +2393,33 @@ export async function upsertDevice(
       data?.clientType ?? null,
       getUserAgent(event),
       now,
+      requestIp,
+      geo.countryCode,
+      geo.regionCode,
+      geo.regionName,
+      geo.city,
+      geo.latitude,
+      geo.longitude,
+      geo.timezone,
+      geo.source,
       now
     ).run()
   }
+
+  const activeDeviceCountRow = await db.prepare(`
+    SELECT COUNT(*) as total
+    FROM ${DEVICES_TABLE}
+    WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(userId).first<{ total: number }>()
+  const activeDeviceCount = Number(activeDeviceCountRow?.total ?? 0)
+  if (activeDeviceCount === 1) {
+    await db.prepare(`
+      UPDATE ${DEVICES_TABLE}
+      SET trusted_at = COALESCE(trusted_at, ?)
+      WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+    `).bind(now, deviceId, userId).run()
+  }
+
   const row = await db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE id = ? AND user_id = ?`).bind(deviceId, userId).first()
   const device = mapDevice(row as Record<string, any> | null)
   if (!device) {
@@ -2234,13 +2444,13 @@ export async function listDevices(event: H3Event, userId: string): Promise<AuthD
       d.*,
       h.ip AS last_login_ip,
       h.created_at AS last_login_at,
-      h.country_code,
-      h.region_code,
-      h.region_name,
-      h.city,
-      h.latitude,
-      h.longitude,
-      h.timezone
+      COALESCE(d.last_seen_country_code, h.country_code) AS country_code,
+      COALESCE(d.last_seen_region_code, h.region_code) AS region_code,
+      COALESCE(d.last_seen_region_name, h.region_name) AS region_name,
+      COALESCE(d.last_seen_city, h.city) AS city,
+      COALESCE(d.last_seen_latitude, h.latitude) AS latitude,
+      COALESCE(d.last_seen_longitude, h.longitude) AS longitude,
+      COALESCE(d.last_seen_timezone, h.timezone) AS timezone
     FROM ${DEVICES_TABLE} d
     LEFT JOIN ${LOGIN_HISTORY_TABLE} h
       ON h.id = (
@@ -2402,14 +2612,14 @@ export async function logLoginAttempt(event: H3Event, payload: {
   deviceId?: string | null
   success: boolean
   reason?: string | null
-  clientType?: AuthClientType | null
+  clientType?: AuthLoginClientType | null
 }): Promise<void> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const geo = resolveRequestGeo(event)
-  const clientType = payload.clientType ?? normalizeClientType(event.node.req.headers['x-device-client'])
+  const clientType = payload.clientType ?? normalizeLoginClientType(event.node.req.headers['x-device-client'])
   await db.prepare(`
     INSERT INTO ${LOGIN_HISTORY_TABLE} (
       id, user_id, device_id, ip,
@@ -2460,7 +2670,7 @@ export async function listLoginHistory(event: H3Event, userId: string, days = 90
       user_agent: row.user_agent ?? null,
       success: Number(row.success ?? 0) === 1,
       reason: row.reason ?? null,
-      client_type: normalizeClientType(row.client_type),
+      client_type: normalizeLoginClientType(row.client_type),
       created_at: row.created_at,
       country_code: location?.countryCode ?? null,
       region_code: location?.regionCode ?? null,
@@ -2558,6 +2768,13 @@ export function normalizeClientType(value: unknown): AuthClientType | null {
   if (normalized === 'app' || normalized === 'cli' || normalized === 'external')
     return normalized
   return null
+}
+
+export function normalizeLoginClientType(value: unknown): AuthLoginClientType | null {
+  const normalized = normalizeClientType(value)
+  if (normalized)
+    return normalized
+  return typeof value === 'string' && value.trim().toLowerCase() === 'web' ? 'web' : null
 }
 
 export function readDeviceMetadata(event: H3Event): { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null } {

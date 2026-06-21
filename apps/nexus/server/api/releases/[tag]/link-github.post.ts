@@ -10,6 +10,7 @@ interface LinkGitHubAssetInput {
   downloadUrl: string
   size: number
   sha256?: string | null
+  signatureUrl?: string | null
   contentType?: string
 }
 
@@ -34,6 +35,9 @@ export default defineEventHandler(async (event) => {
   if (!body.downloadUrl.startsWith('https://'))
     throw createError({ statusCode: 400, statusMessage: 'downloadUrl must be a valid HTTPS URL.' })
 
+  if (body.signatureUrl && !body.signatureUrl.startsWith('https://'))
+    throw createError({ statusCode: 400, statusMessage: 'signatureUrl must be a valid HTTPS URL.' })
+
   const asset = await createReleaseAsset(event, {
     releaseId: release.id,
     platform: body.platform,
@@ -41,6 +45,8 @@ export default defineEventHandler(async (event) => {
     filename: body.filename,
     sourceType: 'github',
     fileKey: null,
+    signatureKey: null,
+    signatureUrl: body.signatureUrl ?? null,
     downloadUrl: body.downloadUrl,
     size: body.size || 0,
     sha256: body.sha256 ?? null,

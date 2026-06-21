@@ -6,7 +6,7 @@ import { createError } from 'h3'
 import { addTeamMember, countTeamMembers, getTeamById, isUserTeamMember, listUserTeams } from './creditsStore'
 import { getUserById } from './authStore'
 import { getUserSubscription } from './subscriptionStore'
-import { getInviteByCode, getTeamQuota, updateTeamSeats, useInvite } from './teamStore'
+import { getInviteByCode, getInviteById, getTeamQuota, updateTeamSeats, useInvite } from './teamStore'
 
 export type InviteValidationReason =
   | 'ok'
@@ -51,12 +51,23 @@ function resolveValidationErrorMessage(reason: InviteValidationReason): string {
   return messageMap[reason]
 }
 
+async function resolveInviteByReference(
+  event: H3Event,
+  inviteRef: string,
+  refType: 'code' | 'id' = 'code',
+): Promise<TeamInvite | null> {
+  return refType === 'id'
+    ? await getInviteById(event, inviteRef)
+    : await getInviteByCode(event, inviteRef)
+}
+
 export async function validateInviteForUser(
   event: H3Event,
   userId: string,
-  code: string,
+  inviteRef: string,
+  refType: 'code' | 'id' = 'code',
 ): Promise<InviteValidationResult> {
-  const invite = await getInviteByCode(event, code)
+  const invite = await resolveInviteByReference(event, inviteRef, refType)
   if (!invite) {
     throw createError({ statusCode: 404, statusMessage: 'Invite not found' })
   }
@@ -147,9 +158,10 @@ export async function validateInviteForUser(
 export async function joinTeamWithInvite(
   event: H3Event,
   userId: string,
-  code: string,
+  inviteRef: string,
+  refType: 'code' | 'id' = 'code',
 ) {
-  const validation = await validateInviteForUser(event, userId, code)
+  const validation = await validateInviteForUser(event, userId, inviteRef, refType)
   if (!validation.canJoin) {
     throw createError({
       statusCode: 400,

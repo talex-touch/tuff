@@ -9,5 +9,14 @@ export default defineEventHandler(async (event) => {
   assertTeamCapability(context, 'canInvite', 'Only team owner/admin can view invites')
 
   const invites = await listInvites(event, context.team.id)
-  return { invites }
+  return {
+    invites: invites.map(invite => ({
+      id: invite.id,
+      email: invite.email,
+      role: invite.role,
+      status: invite.status,
+      expiresAt: invite.expiresAt,
+      createdAt: invite.createdAt,
+    })),
+  }
 })

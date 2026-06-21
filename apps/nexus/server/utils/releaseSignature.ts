@@ -15,9 +15,7 @@ export function attachSignatureUrls(release: AppRelease, event?: H3Event): AppRe
           arch: asset.arch
         })
       : null
-    const signatureUrl = asset.fileKey
-      ? `/api/releases/${release.tag}/signature/${asset.platform}/${asset.arch}`
-      : undefined
+    const signatureUrl = asset.signatureUrl ?? undefined
     return {
       ...(asset as ReleaseAsset),
       downloadUrl: signedDownloadUrl || asset.downloadUrl,

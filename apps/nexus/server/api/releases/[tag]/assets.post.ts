@@ -161,18 +161,16 @@ export default defineEventHandler(async (event) => {
     filename: file.name,
     sourceType: 'upload',
     fileKey,
+    signatureKey,
+    signatureUrl: signatureKey ? `/api/releases/${tag}/signature/${platform}/${arch}` : null,
     downloadUrl,
     size: file.size,
     sha256,
     contentType: file.type || 'application/octet-stream',
   })
 
-  const signatureUrl = signatureKey
-    ? `/api/releases/${tag}/signature/${platform}/${arch}`
-    : null
-
   return {
-    asset: { ...asset, signatureUrl },
+    asset,
     message: 'Asset uploaded successfully.',
   }
 })

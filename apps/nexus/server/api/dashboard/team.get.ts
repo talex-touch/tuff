@@ -1,12 +1,13 @@
 import { requireAuth } from '../../utils/auth'
 import { getUserById } from '../../utils/authStore'
-import { listTeamMembers } from '../../utils/creditsStore'
+import { getTeamById, listTeamMembers } from '../../utils/creditsStore'
 import { resolveActiveTeamContext } from '../../utils/teamContext'
-import { listInvites } from '../../utils/teamStore'
+import { listInvites, listPendingInvitesForEmail } from '../../utils/teamStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
   const context = await resolveActiveTeamContext(event, userId)
+  const currentUser = await getUserById(event, userId)
 
   const members = await listTeamMembers(event, context.team.id)
   const membersWithProfile = await Promise.all(members.map(async (member) => {
@@ -23,7 +24,30 @@ export default defineEventHandler(async (event) => {
   }))
 
   const invites = context.permissions.canInvite
-    ? await listInvites(event, context.team.id)
+    ? (await listInvites(event, context.team.id)).map(invite => ({
+        id: invite.id,
+        email: invite.email,
+        role: invite.role,
+        status: invite.status,
+        expiresAt: invite.expiresAt,
+        createdAt: invite.createdAt,
+      }))
+    : []
+
+  const receivedInvites = context.team.type === 'personal'
+    ? await Promise.all((await listPendingInvitesForEmail(event, currentUser?.email || '')).map(async (invite) => {
+        const inviteTeam = await getTeamById(event, invite.organizationId)
+
+        return {
+          id: invite.id,
+          teamId: invite.organizationId,
+          teamName: inviteTeam?.name || invite.organizationId,
+          role: invite.role,
+          status: invite.status,
+          expiresAt: invite.expiresAt,
+          createdAt: invite.createdAt,
+        }
+      }))
     : []
 
   return {
@@ -53,6 +77,7 @@ export default defineEventHandler(async (event) => {
       upgrade: context.upgrade,
       members: membersWithProfile,
       invites,
+      receivedInvites,
       pendingInvites: invites.filter(invite => invite.status === 'pending').length,
       manageUrl: '/dashboard/team',
     },

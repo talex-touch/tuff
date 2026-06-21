@@ -7,7 +7,6 @@ export default defineEventHandler(async (event) => {
   return records.map(record => ({
     id: record.id,
     success: record.success,
-    ip: record.ip,
     ipMasked: record.ip_masked,
     reason: record.reason,
     clientType: record.client_type,
