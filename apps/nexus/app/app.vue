@@ -27,10 +27,19 @@ const isAuthShellRoute = computed(() => {
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
-const { user, pending: authUserPending } = useAuthUser({
-  fetchOnAuth: isProtectedRoute,
-  server: false,
-})
+interface AppAuthUserState {
+  id?: string
+  locale?: string | null
+  adminBootstrap?: {
+    required?: boolean
+  }
+}
+
+const authUserState = useState<AppAuthUserState | null>('auth-user', () => null)
+const authUserPending = useState<boolean>('auth-user-pending', () => false)
+const authUserError = useState<string | null>('auth-user-error', () => null)
+const user = computed(() => authUserState.value)
+let authUserFetchPromise: Promise<void> | null = null
 const mounted = ref(false)
 const toastHostMounted = ref(false)
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
@@ -46,6 +55,57 @@ const docsRouteLocale = computed(() => {
     ? resolveDocsLocaleFromRoute(path)
     : null
 })
+
+async function fetchProtectedAuthUser() {
+  if (import.meta.server || status.value !== 'authenticated' || !isProtectedRoute.value)
+    return
+  if (authUserFetchPromise)
+    return authUserFetchPromise
+
+  authUserPending.value = true
+  authUserError.value = null
+
+  authUserFetchPromise = (async () => {
+    try {
+      const { fetchCurrentUserProfile } = await import('~/composables/useCurrentUserApi')
+      const data = await fetchCurrentUserProfile()
+      if (status.value === 'authenticated' && isProtectedRoute.value)
+        authUserState.value = data ?? null
+    }
+    catch (error: any) {
+      authUserError.value = error?.data?.statusMessage || error?.message || 'Failed to load user.'
+      if (!authUserState.value)
+        authUserState.value = null
+    }
+    finally {
+      authUserPending.value = false
+      authUserFetchPromise = null
+    }
+  })()
+
+  return authUserFetchPromise
+}
+
+watch(
+  () => [status.value, isProtectedRoute.value] as const,
+  ([currentStatus, protectedRoute]) => {
+    if (import.meta.server)
+      return
+
+    if (currentStatus === 'authenticated' && protectedRoute) {
+      void fetchProtectedAuthUser()
+      return
+    }
+
+    if (currentStatus !== 'authenticated') {
+      authUserState.value = null
+      authUserError.value = null
+    }
+    authUserPending.value = false
+  },
+  { immediate: true },
+)
+
 await initLocale({
   isAuthenticated: status.value === 'authenticated',
   profileLocale: status.value === 'authenticated' ? user.value?.locale ?? null : null,

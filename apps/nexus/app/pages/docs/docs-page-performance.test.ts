@@ -120,6 +120,25 @@ describe('docs page performance boundaries', () => {
     expect(page).not.toContain('toast.error(')
   })
 
+  it('reads docs admin state without pulling auth composables into the docs setup graph', () => {
+    expect(page).toContain("const authUserState = useState<{ role?: string } | null>('auth-user', () => null)")
+    expect(page).toContain("const isAdmin = computed(() => authUserState.value?.role === 'admin')")
+    expect(page).not.toContain('useAuthUser({ fetchOnAuth: false, server: false })')
+    expect(page).not.toContain('const { user } = useAuthUser')
+
+    expect(appRoot).toContain("const authUserState = useState<AppAuthUserState | null>('auth-user', () => null)")
+    expect(appRoot).toContain("const authUserPending = useState<boolean>('auth-user-pending', () => false)")
+    expect(appRoot).toContain('async function fetchProtectedAuthUser()')
+    expect(appRoot).toContain("const { fetchCurrentUserProfile } = await import('~/composables/useCurrentUserApi')")
+    expect(appRoot).toMatch(/if \(currentStatus === 'authenticated' && protectedRoute\) \{[\s\S]*void fetchProtectedAuthUser\(\)/)
+    expect(appRoot).not.toContain('const { user, pending: authUserPending } = useAuthUser')
+    expect(appRoot).not.toContain('useAuthUser({')
+
+    expect(localeOrchestrator).not.toContain("import { fetchCurrentUserProfile, patchCurrentUserProfile } from '~/composables/useCurrentUserApi'")
+    expect(localeOrchestrator).toContain("const { patchCurrentUserProfile } = await import('~/composables/useCurrentUserApi')")
+    expect(localeOrchestrator).toContain("const { fetchCurrentUserProfile } = await import('~/composables/useCurrentUserApi')")
+  })
+
   it('keeps lightweight docs tracking separate from bottom engagement widgets', () => {
     expect(page).toContain('DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 2500')
     expect(page).toContain('DOC_CLIENT_PANEL_INTENT_EVENTS')
