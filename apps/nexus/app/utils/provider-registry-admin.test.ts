@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
+import { getTuffIntelligenceBuiltinAbility } from '@talex-touch/tuff-intelligence/light'
 import { describe, expect, it } from 'vitest'
 import {
   createDefaultSceneCapabilityInput,
+  createProviderAuthRef,
   createProviderQuotaPanel,
   createProviderEditPanel,
   createSceneRunPanel,
@@ -21,6 +23,7 @@ import {
   resolveUsageLedgerActionHint,
   resolveUsageLedgerEmptyState,
   resolveUsageLedgerReference,
+  resolveFirstProviderTemplateForServiceCategory,
   summarizeProviderQuota,
   summarizeProviderQuotaList,
   providerRegistryTemplates,
@@ -124,6 +127,20 @@ function quotaRecord(overrides: Partial<ProviderQuotaRecord>): ProviderQuotaReco
 }
 
 describe('provider registry adapter readiness helpers', () => {
+  it('derives internal provider auth refs from provider names', () => {
+    expect(createProviderAuthRef('openai-compatible-ai-main')).toBe('secure://providers/openai-compatible-ai-main')
+    expect(createProviderAuthRef('OpenAI Compatible AI Main')).toBe('secure://providers/openai-compatible-ai-main')
+    expect(createProviderAuthRef('')).toBe('secure://providers/provider')
+  })
+
+  it('resolves the first adapter template for each service category', () => {
+    expect(resolveFirstProviderTemplateForServiceCategory('ai')?.id).toBe('openai-compatible-ai')
+    expect(resolveFirstProviderTemplateForServiceCategory('exchange')?.id).toBe('exchange-rate')
+    expect(resolveFirstProviderTemplateForServiceCategory('screenshot')?.id).toBe('screenshot-overlay')
+    expect(resolveFirstProviderTemplateForServiceCategory('translation')?.id).toBe('tencent-translation')
+    expect(resolveFirstProviderTemplateForServiceCategory('unknown')).toBeNull()
+  })
+
   it('preserves capability adapter readiness metadata for provider edit panels', () => {
     const provider = providerRecord({
       capabilities: [
@@ -260,9 +277,27 @@ describe('provider registry quota UI contract', () => {
   })
 })
 
+describe('provider registry capability template UI contract', () => {
+  it('uses a compact table for adapter-scoped capability rows without exposing schema refs', () => {
+    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+
+    expect(panel).toContain('providerCapabilityTemplateOptions')
+    expect(panel).toContain('applyProviderCapabilityTemplate(row, $event)')
+    expect(panel).not.toContain('providerSchemaRefOptions')
+    expect(panel).not.toContain('row.schemaRef')
+    expect(panel).toContain('providerMeteringUnitOptions')
+    expect(panel).toContain('<table class="w-full min-w-[620px]')
+    expect(panel).toContain('dashboard.providerRegistry.fields.meteringUnit')
+    expect(panel).toContain('text-red-500')
+    expect(panel).toContain('i-carbon-close')
+    expect(panel).toContain('w-full min-w-0')
+  })
+})
+
 describe('provider registry provider templates', () => {
   it('includes AI provider templates so Intelligence configuration starts in Provider Registry', () => {
     const aiTemplates = providerRegistryTemplates.filter(template => template.metadata.source === 'intelligence')
+    const chatAbility = getTuffIntelligenceBuiltinAbility('text.chat')
 
     expect(aiTemplates.map(template => template.id)).toEqual(expect.arrayContaining([
       'openai-compatible-ai',
@@ -275,6 +310,11 @@ describe('provider registry provider templates', () => {
       'content.extract',
       'vision.ocr',
     ]))
+    expect(aiTemplates[0]?.capabilities.find(row => row.capability === 'chat.completion')).toEqual({
+      capability: chatAbility?.id,
+      schemaRef: chatAbility?.schemaRef,
+      meteringUnit: chatAbility?.meteringUnit,
+    })
     for (const template of aiTemplates) {
       expect(template.authType).toBe('api_key')
       expect(template.authRef).toMatch(/^secure:\/\/providers\//)
@@ -351,7 +391,7 @@ describe('provider registry provider templates', () => {
 
     expect(panel).toContain('applySceneRunCapabilitySample')
     expect(panel).toContain('selectSceneRunCapability')
-    expect(panel).toContain('dashboard.providerRegistry.scenes.resetSample')
+    expect(panel).toContain('dashboard.providerRegistry.routes.resetSample')
     expect(panel).toContain('activeSceneRunPanel.error')
   })
 })

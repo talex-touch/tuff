@@ -618,6 +618,9 @@ importers:
       '@sidebase/nuxt-auth':
         specifier: ^0.9.4
         version: 0.9.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)(magicast@0.5.1)(next-auth@4.24.14(@auth/core@0.34.3))
+      '@talex-touch/intelligence-uikit':
+        specifier: workspace:*
+        version: link:../../packages/intelligence-uikit
       '@talex-touch/tuff-business':
         specifier: workspace:*
         version: link:../../packages/tuff-business

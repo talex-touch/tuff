@@ -1,3 +1,4 @@
+export * from './builtin-abilities'
 export * from './capabilities'
 export * from './payloads'
 export * from './prompts'

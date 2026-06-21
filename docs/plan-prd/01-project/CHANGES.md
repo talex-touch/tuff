@@ -3,6 +3,17 @@
 > 更新时间：2026-06-21
 > 定位：只保留 6 月当前阶段的高信号变更索引。6 月以前流水记录已从文档树移除，可从 Git 历史追溯。
 
+## 2026-06-22
+
+### tuffex: stabilize select dynamic dropdown behavior
+
+- `TuffSelect` 支持直接 `options` 数据源、loading / empty 状态与自定义 option/loading/empty slot。
+- `TuffSelect` 增加多选标签返显、标签移除、自助创建、分组选项、自定义 footer 与 error / warning 状态。
+- Select 选中反显改为基于 props options 与 slot item registry 的统一 label map，slot item 卸载时注销，避免动态选项旧状态残留。
+- 下拉 spacing 收敛为 content / option padding，动画 duration 默认缩短并支持透传 animation。
+- `TxBaseAnchor` 在 reference / content 尺寸变化时同步刷新 floating 位置与轮廓尺寸。
+- disabled Select 触发器统一整块 `not-allowed` 光标，避免只有边缘显示禁用光标。
+
 ## 2026-06-21
 
 ### nexus: standardize provider registry admin workspace

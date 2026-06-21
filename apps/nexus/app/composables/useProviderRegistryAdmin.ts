@@ -5,6 +5,7 @@ import {
   authTypeOptions,
   bindingStatusOptions,
   createProviderEditPanel,
+  createProviderAuthRef,
   createProviderQuotaPanel,
   createDefaultSceneCapabilityInput,
   createSceneEditPanel,
@@ -36,6 +37,7 @@ import {
   resolveHealthCheckActionHint,
   resolveHealthCheckEmptyState,
   resolveHealthCheckReason,
+  resolveFirstProviderTemplateForServiceCategory,
   resolveSceneObservability,
   resolveSceneObservabilityActionHint,
   resolveSceneObservabilityEmptyState,
@@ -53,7 +55,6 @@ import {
   type CapabilityFormRow,
   type HealthCheckFilter,
   type OwnerScope,
-  type ProviderAuthType,
   type ProviderCapabilityRecord,
   type ProviderCheckResult,
   type ProviderEditPanelState,
@@ -67,7 +68,6 @@ import {
   type ProviderRegistryTemplateId,
   type ProviderStatus,
   type ProviderUsageLedgerEntry,
-  type ProviderVendor,
   type SceneEditPanelState,
   type SceneFallback,
   type SceneObservabilityFilter,
@@ -109,7 +109,6 @@ export function useProviderRegistryAdmin() {
   const healthEntries = ref<ProviderHealthCheckEntry[]>([])
   const loading = ref(false)
   const savingProvider = ref(false)
-  const savingCapability = ref(false)
   const savingScene = ref(false)
   const actionPending = ref<string | null>(null)
   const providerCheckResults = ref<Record<string, ProviderCheckResult>>({})
@@ -125,39 +124,26 @@ export function useProviderRegistryAdmin() {
   const providerQuotaLists = ref<Record<string, ProviderQuotaRecord[]>>({})
   const error = ref<string | null>(null)
   const providerServiceCategoryId = ref<ProviderServiceCategory>('ai')
-  const providerTemplateId = ref<ProviderRegistryTemplateId>('openai-compatible-ai')
+  const initialProviderTemplate = providerRegistryTemplates.find(template => template.id === 'openai-compatible-ai')
+    ?? providerRegistryTemplates[0]!
+  const providerTemplateId = ref<ProviderRegistryTemplateId>(initialProviderTemplate.id)
 
   const providerForm = reactive({
-    name: 'openai-compatible-ai-main',
-    displayName: 'OpenAI Compatible AI',
-    vendor: 'openai' as ProviderVendor,
+    name: initialProviderTemplate.name,
+    displayName: initialProviderTemplate.displayName,
+    vendor: initialProviderTemplate.vendor,
     status: 'disabled' as ProviderStatus,
-    authType: 'api_key' as ProviderAuthType,
-    authRef: 'secure://providers/openai-compatible-ai-main',
+    authType: initialProviderTemplate.authType,
+    authRef: createProviderAuthRef(initialProviderTemplate.name),
     ownerScope: 'system' as OwnerScope,
-    endpoint: 'https://api.openai.com/v1',
-    region: 'global',
+    endpoint: initialProviderTemplate.endpoint,
+    region: initialProviderTemplate.region,
+    apiKey: '',
     secretId: '',
     secretKey: '',
   })
 
-  const capabilityRows = ref<CapabilityFormRow[]>([
-    {
-      capability: 'chat.completion',
-      schemaRef: 'nexus://schemas/provider/chat-completion.v1',
-      meteringUnit: 'token',
-    },
-    {
-      capability: 'text.summarize',
-      schemaRef: 'nexus://schemas/provider/text-summarize.v1',
-      meteringUnit: 'token',
-    },
-    {
-      capability: 'content.extract',
-      schemaRef: 'nexus://schemas/provider/content-extract.v1',
-      meteringUnit: 'token',
-    },
-  ])
+  const capabilityRows = ref<CapabilityFormRow[]>(initialProviderTemplate.capabilities.map(row => ({ ...row })))
 
   const sceneForm = reactive({
     id: 'corebox.screenshot.translate',
@@ -262,9 +248,12 @@ export function useProviderRegistryAdmin() {
   const providerTemplateOptions = computed(() => providerRegistryTemplates
     .filter(template => template.serviceCategory === providerServiceCategoryId.value)
     .map(template => ({
-    value: template.id,
-    label: template.displayName,
-  })))
+      value: template.id,
+      label: template.displayName,
+    })))
+  const activeProviderTemplate = computed(() => providerRegistryTemplates.find(template => template.id === providerTemplateId.value) ?? null)
+  const providerCapabilityTemplateOptions = computed(() => activeProviderTemplate.value?.capabilities.map(row => ({ ...row })) ?? [])
+  const providerMeteringUnitOptions = computed(() => Array.from(new Set(providerCapabilityTemplateOptions.value.map(row => row.meteringUnit))))
 
   function applyProviderTemplate(templateId: ProviderRegistryTemplateId | string | number) {
     const template = providerRegistryTemplates.find(item => item.id === String(templateId))
@@ -278,10 +267,11 @@ export function useProviderRegistryAdmin() {
     providerForm.vendor = template.vendor
     providerForm.status = 'disabled'
     providerForm.authType = template.authType
-    providerForm.authRef = template.authRef
+    providerForm.authRef = createProviderAuthRef(template.name)
     providerForm.ownerScope = 'system'
     providerForm.endpoint = template.endpoint
     providerForm.region = template.region
+    providerForm.apiKey = ''
     providerForm.secretId = ''
     providerForm.secretKey = ''
     capabilityRows.value = template.capabilities.map(row => ({ ...row }))
@@ -289,7 +279,7 @@ export function useProviderRegistryAdmin() {
 
   function applyProviderServiceCategory(category: ProviderServiceCategory | string | number) {
     const normalized = String(category) as ProviderServiceCategory
-    const template = providerRegistryTemplates.find(item => item.serviceCategory === normalized)
+    const template = resolveFirstProviderTemplateForServiceCategory(normalized)
     if (!template)
       return
 
@@ -297,12 +287,36 @@ export function useProviderRegistryAdmin() {
     applyProviderTemplate(template.id)
   }
 
+  watch(providerServiceCategoryId, (category) => {
+    const currentTemplate = providerRegistryTemplates.find(item => item.id === providerTemplateId.value)
+    if (currentTemplate?.serviceCategory === category)
+      return
+
+    const template = resolveFirstProviderTemplateForServiceCategory(category)
+    if (template)
+      applyProviderTemplate(template.id)
+  })
+
   function addCapabilityRow() {
-    capabilityRows.value.push({ capability: '', schemaRef: '', meteringUnit: 'request' })
+    const usedCapabilities = new Set(capabilityRows.value.map(row => row.capability))
+    const template = providerCapabilityTemplateOptions.value.find(row => !usedCapabilities.has(row.capability))
+      ?? providerCapabilityTemplateOptions.value[0]
+
+    capabilityRows.value.push(template ? { ...template } : { capability: '', schemaRef: '', meteringUnit: 'request' })
   }
 
   function removeCapabilityRow(index: number) {
     capabilityRows.value.splice(index, 1)
+  }
+
+  function applyProviderCapabilityTemplate(row: CapabilityFormRow, capability: string | number) {
+    const template = providerCapabilityTemplateOptions.value.find(item => item.capability === String(capability))
+    if (!template)
+      return
+
+    row.capability = template.capability
+    row.schemaRef = template.schemaRef
+    row.meteringUnit = template.meteringUnit
   }
 
   function addBindingRow() {
@@ -607,16 +621,21 @@ export function useProviderRegistryAdmin() {
     error.value = null
     try {
       const targetStatus = providerForm.status
-      const hasCredentialInput = providerForm.authType === 'secret_pair'
+      const authRef = providerForm.authType === 'none'
+        ? undefined
+        : createProviderAuthRef(providerForm.name)
+      const hasApiKeyInput = providerForm.authType === 'api_key' && providerForm.apiKey.trim()
+      const hasSecretPairInput = providerForm.authType === 'secret_pair'
         && providerForm.secretId.trim()
         && providerForm.secretKey.trim()
+      const hasCredentialInput = Boolean(hasApiKeyInput || hasSecretPairInput)
       const body = {
         name: providerForm.name.trim(),
         displayName: providerForm.displayName.trim(),
         vendor: providerForm.vendor,
         status: hasCredentialInput ? 'disabled' : providerForm.status,
         authType: providerForm.authType,
-        authRef: providerForm.authType === 'none' ? undefined : providerForm.authRef.trim(),
+        authRef,
         ownerScope: providerForm.ownerScope,
         endpoint: providerForm.endpoint.trim() || undefined,
         region: providerForm.region.trim() || undefined,
@@ -639,14 +658,19 @@ export function useProviderRegistryAdmin() {
         await rawFetch('/api/dashboard/provider-registry/credentials', {
           method: 'POST',
           body: {
-            authRef: providerForm.authRef.trim(),
+            authRef,
             authType: providerForm.authType,
-            credentials: {
-              secretId: providerForm.secretId.trim(),
-              secretKey: providerForm.secretKey,
-            },
+            credentials: hasSecretPairInput
+              ? {
+                  secretId: providerForm.secretId.trim(),
+                  secretKey: providerForm.secretKey,
+                }
+              : {
+                  apiKey: providerForm.apiKey.trim(),
+                },
           },
         })
+        providerForm.apiKey = ''
         providerForm.secretId = ''
         providerForm.secretKey = ''
 
@@ -654,7 +678,7 @@ export function useProviderRegistryAdmin() {
           const providerResult = await rawFetch<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers', {
             query: { vendor: providerForm.vendor },
           })
-          const provider = (providerResult.providers ?? []).find(item => item.authRef === providerForm.authRef.trim())
+          const provider = (providerResult.providers ?? []).find(item => item.authRef === authRef)
           if (provider) {
             await rawFetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
               method: 'PATCH',
@@ -837,88 +861,6 @@ export function useProviderRegistryAdmin() {
     catch (err: any) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
       toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
-    }
-    finally {
-      actionPending.value = null
-    }
-  }
-
-  async function createCapability(providerId: string, input: {
-    capability: string
-    schemaRef: string
-    meteringText: string
-    constraintsText: string
-    metadataText: string
-  }) {
-    savingCapability.value = true
-    error.value = null
-    try {
-      await rawFetch(providerCapabilityCollectionUrl(providerId), {
-        method: 'POST',
-        body: {
-          capability: input.capability.trim(),
-          schemaRef: input.schemaRef.trim() || null,
-          metering: parseJsonObjectField(input.meteringText, 'capability.metering'),
-          constraints: parseJsonObjectField(input.constraintsText, 'capability.constraints'),
-          metadata: parseJsonObjectField(input.metadataText, 'capability.metadata'),
-        },
-      })
-      toast.success(t('dashboard.providerRegistry.capabilities.created', 'Capability created.'))
-      await fetchRegistry()
-    }
-    catch (err: any) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.createCapabilityFailed', 'Failed to create capability.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.createCapabilityFailed', 'Failed to create capability.'))
-    }
-    finally {
-      savingCapability.value = false
-    }
-  }
-
-  async function saveCapabilityEdit(capability: ProviderCapabilityRecord, input: {
-    capability: string
-    schemaRef: string
-    meteringText: string
-    constraintsText: string
-    metadataText: string
-  }) {
-    savingCapability.value = true
-    error.value = null
-    try {
-      await rawFetch(providerCapabilityUrl(capability.providerId, capability.id), {
-        method: 'PATCH',
-        body: {
-          capability: input.capability.trim(),
-          schemaRef: input.schemaRef.trim() || null,
-          metering: parseJsonObjectField(input.meteringText, 'capability.metering'),
-          constraints: parseJsonObjectField(input.constraintsText, 'capability.constraints'),
-          metadata: parseJsonObjectField(input.metadataText, 'capability.metadata'),
-        },
-      })
-      toast.success(t('dashboard.providerRegistry.capabilities.updated', 'Capability updated.'))
-      await fetchRegistry()
-    }
-    catch (err: any) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.updateCapabilityFailed', 'Failed to update capability.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.updateCapabilityFailed', 'Failed to update capability.'))
-    }
-    finally {
-      savingCapability.value = false
-    }
-  }
-
-  async function deleteCapability(capability: ProviderCapabilityRecord) {
-    actionPending.value = `capability:${capability.id}:delete`
-    error.value = null
-    try {
-      await rawFetch(providerCapabilityUrl(capability.providerId, capability.id), {
-        method: 'DELETE',
-      })
-      await fetchRegistry()
-    }
-    catch (err: any) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteCapabilityFailed', 'Failed to delete capability.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteCapabilityFailed', 'Failed to delete capability.'))
     }
     finally {
       actionPending.value = null
@@ -1109,6 +1051,7 @@ export function useProviderRegistryAdmin() {
     addCapabilityRow,
     addProviderCapabilityEditRow,
     addSceneBindingEditRow,
+    applyProviderCapabilityTemplate,
     applyProviderServiceCategory,
     applyProviderTemplate,
     authTypeOptions,
@@ -1118,10 +1061,8 @@ export function useProviderRegistryAdmin() {
     capabilityCount,
     capabilityRows,
     checkProvider,
-    createCapability,
     createProvider,
     createScene,
-    deleteCapability,
     deleteProvider,
     deleteScene,
     enabledProviders,
@@ -1165,6 +1106,8 @@ export function useProviderRegistryAdmin() {
     providerObservabilityFilter,
     providerObservabilityEmptyState,
     providerOptions,
+    providerCapabilityTemplateOptions,
+    providerMeteringUnitOptions,
     providerStatusOptions,
     providerServiceCategoryId,
     providerServiceCategoryOptions: providerServiceCategoryOptionsView,
@@ -1179,7 +1122,6 @@ export function useProviderRegistryAdmin() {
     removeProviderCapabilityEditRow,
     removeSceneBindingEditRow,
     runScene,
-    saveCapabilityEdit,
     saveProviderEdit,
     saveProviderQuota,
     saveSceneEdit,
@@ -1193,7 +1135,6 @@ export function useProviderRegistryAdmin() {
     sceneOwnerOptions,
     sceneProviderOptions,
     scenes,
-    savingCapability,
     savingProvider,
     savingScene,
     observabilityTone,

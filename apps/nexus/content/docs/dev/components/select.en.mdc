@@ -1,6 +1,6 @@
 ---
 title: "Select"
-description: "Popover-backed primitive select with local filtering, editable remote search, disabled states, and panel styling controls."
+description: "Popover-backed primitive select with single select, multi-tag select, local filtering, remote search, creation, grouping, and custom dropdown content."
 category: Form
 status: beta
 since: 1.0.0
@@ -10,7 +10,7 @@ verified: true
 ---
 # Select
 
-`TuffSelect` renders a Popover-backed dropdown for one primitive `string | number` value. Options are registered by `TuffSelectItem`, selected labels mirror into the trigger input, disabled options stay visible, and editable remote mode emits search queries from the trigger.
+`TuffSelect` renders a Popover-backed dropdown for primitive `string | number` values. It defaults to single select, and `multiple` switches it to array values with tag rendering. Options can be declared with `TuffSelectItem` or passed directly through `options`; the dropdown supports local filtering, remote search, loading / empty states, grouping, inline creation, and custom footer content.
 
 ## Basic Selection
 
@@ -69,7 +69,7 @@ code: |
 
 ## Remote Search
 
-Use `remote` with `editable` when option data comes from a remote source. The trigger becomes an editable input, opens on focus, and emits `search` while the dropdown is open.
+Use `remote` with `editable` when option data comes from a remote source. The trigger becomes an editable input, opens on focus, and emits `search` while the dropdown is open. Use `loading` / `loadingText`, or the `loading` slot, for remote pending feedback.
 
 ### Select (remote searchable)
 :::TuffDemoWrapper{demo="SelectSelectRemoteSearchableDemo" code-lang="vue"}
@@ -95,9 +95,157 @@ code: |
   </script>
 
   <template>
-    <TuffSelect v-model="value" remote editable placeholder="Search remote capability" @search="onSearch">
-      <TuffSelectItem v-for="option in options" :key="option.value" :value="option.value" :label="option.label" />
+    <TuffSelect
+      v-model="value"
+      remote
+      editable
+      placeholder="Search remote capability"
+      :options="options"
+      :loading="false"
+      loading-text="Loading..."
+      @search="onSearch"
+    />
+  </template>
+---
+:::
+
+## Multiple Tags
+
+Set `multiple` to make `v-model` an `Array<string | number>`. The trigger renders selected values as removable tags. Clicking an option toggles it and keeps the dropdown open.
+
+### Select (multiple tags)
+:::TuffDemoWrapper{demo="SelectSelectMultipleTagsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue[]>(['a1', 'b2'])
+  const options = [
+    { value: 'a1', label: 'a1' },
+    { value: 'b2', label: 'b2' },
+    { value: 'c3', label: 'c3' },
+  ]
+  </script>
+
+  <template>
+    <TuffSelect
+      v-model="value"
+      multiple
+      :options="options"
+      :max-tag-count="2"
+      placeholder="Select tags"
+    />
+  </template>
+---
+:::
+
+## Inline Creation
+
+Combine `multiple`, `searchable`, and `allowCreate` for user-created tags. Press Enter or click the default footer action to create `{ value, label }` from the current input. Persist created options by appending them to your own `options` source in the `create` handler.
+
+### Select (allow create)
+:::TuffDemoWrapper{demo="SelectSelectAllowCreateDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxSelectOption, TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue[]>(['agent'])
+  const options = ref<TxSelectOption[]>([
+    { value: 'agent', label: 'agent' },
+    { value: 'workflow', label: 'workflow' },
+  ])
+
+  function onCreate(option: TxSelectOption) {
+    options.value = [...options.value, option]
+  }
+  </script>
+
+  <template>
+    <TuffSelect
+      v-model="value"
+      multiple
+      searchable
+      allow-create
+      create-text="Add tag"
+      placeholder="Type or select tags"
+      :options="options"
+      @create="onCreate"
+    />
+  </template>
+---
+:::
+
+## Groups and Footer
+
+`options` supports grouped entries shaped as `{ label, options }`. Use the `footer` slot for add buttons, helper copy, or shortcut actions at the bottom of the dropdown.
+
+### Select (grouped with footer)
+:::TuffDemoWrapper{demo="SelectSelectGroupedFooterDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('lucy')
+  const options = [
+    {
+      label: 'Manager',
+      options: [
+        { value: 'jack', label: 'Jack' },
+        { value: 'lucy', label: 'Lucy' },
+      ],
+    },
+    {
+      label: 'Engineer',
+      options: [
+        { value: 'yiminghe', label: 'Yiminghe' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <TuffSelect v-model="value" :options="options" placeholder="Select member">
+      <template #footer>
+        <button type="button" style="padding: 6px 10px;">
+          + Add member
+        </button>
+      </template>
     </TuffSelect>
+  </template>
+---
+:::
+
+## Status Border
+
+Use `status="error"` or `status="warning"` for validation state. Status only controls the visual border; validation messages should still live in the form item or host UI.
+
+### Select (status)
+:::TuffDemoWrapper{demo="SelectSelectStatusDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const errorValue = ref<TxSelectValue>('')
+  const warningValue = ref<TxSelectValue>('')
+  const options = [
+    { value: 'stable', label: 'Stable' },
+    { value: 'beta', label: 'Beta' },
+  ]
+  </script>
+
+  <template>
+    <div style="display: grid; gap: 12px;">
+      <TuffSelect v-model="errorValue" status="error" :options="options" placeholder="Error status" />
+      <TuffSelect v-model="warningValue" status="warning" :options="options" placeholder="Warning status" />
+    </div>
   </template>
 ---
 :::
@@ -180,13 +328,16 @@ code: |
 
 ## Interaction Contract
 
-- `TuffSelect` owns a single primitive `string | number` value. Empty state is represented by `''`.
+- `TuffSelect` owns a single primitive `string | number` value by default. Empty state is represented by `''`.
+- In `multiple` mode, `TuffSelect` owns `Array<string | number>`, renders selected values as tags, toggles options on click, and keeps the dropdown open.
+- `options` can contain plain options or grouped options. Plain options use `{ value, label, disabled? }`; grouped options use `{ label, disabled?, options }`.
 - `TuffSelectItem` registers its value and label with the parent select; when `label` is omitted, slot text is used, then the raw value.
 - Clicking the trigger toggles the dropdown in non-editable mode. In `editable` or `remote` mode, focusing the trigger opens the dropdown and the trigger text becomes editable.
 - Picking an enabled option emits `update:modelValue` and `change`, updates the selected label, and closes the dropdown.
-- Disabled selects close the dropdown and block trigger/option interaction. Use `eager` when a disabled select must resolve the selected label before the panel is ever opened. Disabled items remain visible but do not emit updates.
+- Disabled selects close the dropdown and block trigger/option interaction. Disabled items remain visible but do not emit updates.
 - `searchable` filters registered option labels locally through the panel search input. It is ignored for editable/remote filtering.
-- `remote` mode clears child local filtering and emits `search` from editable trigger text only while the dropdown is open.
+- `remote` mode clears child local filtering and emits `search` from input text only while the dropdown is open; use `searchDebounce` to delay requests.
+- `allowCreate` only creates `{ value, label }` from the current input and emits `create`; append created options to your host `options` source when they should appear in the list.
 - When a value is provided before items mount, the select resolves the display label after options register. Numeric strings and numbers compare by numeric value when both are finite.
 
 ## API
@@ -195,30 +346,58 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` / `v-model` | `string \| number` | `''` | Selected primitive value. |
+| `modelValue` / `v-model` | `string \| number \| Array<string \| number>` | `''` | Selected value; array in `multiple` mode. |
 | `placeholder` | `string` | `'请选择'` | Placeholder shown in the trigger input when no label is selected. |
 | `disabled` | `boolean` | `false` | Disables the trigger, closes the dropdown, and blocks option selection. |
-| `eager` | `boolean` | `false` | Eagerly mounts the Popover panel. |
+| `multiple` | `boolean` | `false` | Enables multi-select tag mode. |
+| `status` | `'default' \| 'error' \| 'warning'` | `'default'` | Validation border state. |
+| `eager` | `boolean` | `true` | Eagerly mounts the Popover panel for stable slot option registration. |
+| `options` | `TxSelectOptionLike[]` | `[]` | Plain or grouped option data. |
+| `maxTagCount` | `number` | - | Maximum visible selected tags; extra tags render as `+ N ...`. |
+| `maxTagTextLength` | `number` | - | Maximum visible tag label length before truncation. |
 | `searchable` | `boolean` | `false` | Shows an internal search input for local option filtering when the select is not editable. |
 | `searchPlaceholder` | `string` | `'Search'` | Placeholder for the internal local search input. |
 | `editable` | `boolean` | `false` | Uses the trigger input as editable search text and opens on focus. |
 | `remote` | `boolean` | `false` | Enables editable remote mode and emits `search` while the dropdown is open. |
+| `allowCreate` | `boolean` | `false` | Allows creating a new option from the current input. |
+| `createText` | `string` | `'Add item'` | Default create action label. |
+| `loading` | `boolean` | `false` | Shows the loading state. |
+| `loadingText` | `string` | `'Loading...'` | Default loading text. |
+| `emptyText` | `string` | `'No results'` | Default empty text. |
+| `searchDebounce` | `number` | `0` | Remote search debounce in milliseconds. |
 | `dropdownMaxHeight` | `number` | `280` | Maximum dropdown list height in pixels. |
 | `dropdownOffset` | `number` | `6` | Popover offset from the trigger. |
+| `contentPadding` | `number` | `8` | Inner dropdown content spacing. |
+| `optionPadding` | `number` | `0` | Horizontal option inset compensation. |
+| `animation` | `BaseAnchorAnimationOptions` | - | Animation configuration forwarded to Popover / BaseAnchor. |
+| `duration` | `number` | `120` | Dropdown animation duration in milliseconds. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover panel surface variant. |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Popover panel background style. |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover panel shadow strength. |
 | `panelRadius` | `number` | `18` | Popover panel corner radius. |
-| `panelPadding` | `number` | `4` | Popover panel inner padding. |
+| `panelPadding` | `number` | `0` | Popover panel inner padding. |
 | `panelCard` | `BaseAnchorPanelCardProps` | - | Optional panel card overrides forwarded to the Popover panel. |
 
 ### TuffSelect Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(value: string \| number)` | Emitted with the selected value, or `''` when `clear()` is called through the exposed instance. |
-| `change` | `(value: string \| number)` | Emitted with the same value after enabled selection or clear. |
+| `update:modelValue` | `(value: string \| number \| Array<string \| number>)` | Emitted with the selected value; array in `multiple` mode. |
+| `change` | `(value: string \| number \| Array<string \| number>)` | Emitted with the same value after enabled selection or clear. |
 | `search` | `(query: string)` | Emitted in remote mode while the dropdown is open and editable text changes. |
+| `create` | `(option: TxSelectOption)` | Emitted when `allowCreate` creates an option from input. |
+
+### TuffSelect Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | Legacy `TuffSelectItem` option declarations. |
+| `option` | `{ option, selected }` | Custom option content in `options` mode. |
+| `tag` | `{ option, remove }` | Custom selected tag content. |
+| `group` | `{ group }` | Custom group heading content. |
+| `loading` | - | Custom loading state. |
+| `empty` | - | Custom empty state. |
+| `footer` | `{ query, canCreate, create }` | Custom dropdown footer content. |
 
 ### TuffSelectItem Props
 
@@ -237,7 +416,7 @@ code: |
 | `toggle()` | Toggles the dropdown. |
 | `focus()` | Focuses the trigger input. |
 | `blur()` | Blurs the trigger input. |
-| `clear()` | Clears the value and selected label, then emits `update:modelValue` / `change` with `''`. |
+| `clear()` | Clears the value and selected label; emits `''` in single mode and `[]` in multiple mode. |
 
 ## Source
 <TuffDocSourceLink />

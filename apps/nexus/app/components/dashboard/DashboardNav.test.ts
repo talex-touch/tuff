@@ -11,8 +11,8 @@ describe('DashboardNav Intelligence consolidation', () => {
     expect(nav).toContain('overflow-y-auto')
   })
 
-  it('uses the TuffInte module as the single Intelligence sidebar entry', () => {
-    expect(nav).toContain("label: t('dashboard.sections.menu.intelligence', '塔芙智能')")
+  it('uses the Lab module as the single Intelligence sidebar entry', () => {
+    expect(nav).toContain("label: t('dashboard.sections.menu.intelligence', '实验场')")
   })
 
   it('keeps provider registry routed through the Intelligence navigation section', () => {
