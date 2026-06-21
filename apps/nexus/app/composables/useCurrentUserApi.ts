@@ -10,6 +10,9 @@ export interface CurrentUserProfile {
   image: string | null
   role: string
   locale: string | null
+  status?: string
+  createdAt?: string
+  updatedAt?: string | null
   emailVerified: boolean
   emailState: 'verified' | 'unverified' | 'missing'
   isRestricted: boolean

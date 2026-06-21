@@ -88,7 +88,7 @@ export function useSignIn() {
   const toast = useToast()
   const route = useRoute()
   const router = useRouter()
-  const { signIn, signOut, status, getSession } = useAuth()
+  const { signIn, signOut, status, getSession } = useNexusAuth()
   const runtimeConfig = useRuntimeConfig()
 
   const step = ref<AuthStep>('email')

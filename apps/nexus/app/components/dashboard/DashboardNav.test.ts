@@ -4,6 +4,13 @@ import { describe, expect, it } from 'vitest'
 const nav = readFileSync(new URL('./DashboardNav.vue', import.meta.url), 'utf8')
 
 describe('DashboardNav Intelligence consolidation', () => {
+  it('keeps the sidebar sticky and internally scrollable', () => {
+    expect(nav).toContain('sticky top-24')
+    expect(nav).toContain('max-h-[calc(100vh-6rem)]')
+    expect(nav).toContain('self-start')
+    expect(nav).toContain('overflow-y-auto')
+  })
+
   it('keeps provider registry routed through the Intelligence navigation section', () => {
     expect(nav).toContain("'provider-registry': '/dashboard/admin/provider-registry'")
     expect(nav).toContain("if (route.path.startsWith('/dashboard/admin/provider-registry'))\n    return 'intelligence'")

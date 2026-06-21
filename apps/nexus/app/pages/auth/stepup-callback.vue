@@ -11,7 +11,7 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { status: sessionStatus } = useAuth()
+const { status: sessionStatus } = useNexusAuth()
 
 const status = ref<'idle' | 'verifying' | 'success' | 'error'>('idle')
 const errorMessage = ref('')

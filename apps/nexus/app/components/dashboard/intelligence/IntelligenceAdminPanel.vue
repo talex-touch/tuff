@@ -1328,6 +1328,12 @@ function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat().format(value)
 }
 
+function formatCreditAmount(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return '0'
+  return new Intl.NumberFormat().format(Math.abs(Math.round(value)))
+}
+
 function formatTime(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
@@ -2190,21 +2196,13 @@ function formatEndpointCandidates(list?: string[]) {
               </TxButton>
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid gap-4">
               <div class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]">
                 <p class="text-xs text-black/40 dark:text-white/40">
                   {{ t('dashboard.adminCredits.usage.totalUsed', '本月总消耗') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ formatNumber(usageSummary.totalUsed) }}
-                </p>
-              </div>
-              <div class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]">
-                <p class="text-xs text-black/40 dark:text-white/40">
-                  {{ t('dashboard.adminCredits.usage.totalQuota', '本月总额度') }}
-                </p>
-                <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ formatNumber(usageSummary.totalQuota) }}
+                  {{ t('dashboard.credits.usage.consumed', { n: formatCreditAmount(usageSummary.totalUsed) }) }}
                 </p>
               </div>
             </div>
@@ -2325,7 +2323,7 @@ function formatEndpointCandidates(list?: string[]) {
                 </div>
                 <div class="text-right">
                   <p class="text-sm font-semibold" :class="entry.delta < 0 ? 'text-red-500' : 'text-green-600'">
-                    {{ entry.delta }}
+                    {{ entry.delta < 0 ? t('dashboard.credits.usage.entryConsumed', { n: formatCreditAmount(entry.delta) }) : t('dashboard.credits.usage.entryAdded', { n: formatCreditAmount(entry.delta) }) }}
                   </p>
                   <p v-if="entry.metadata?.tokens" class="text-[11px] text-black/40 dark:text-white/40">
                     tokens {{ entry.metadata.tokens }}

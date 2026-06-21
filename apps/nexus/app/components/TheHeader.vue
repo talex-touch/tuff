@@ -12,7 +12,7 @@ withDefaults(defineProps<{
 const HeaderUserMenu = defineAsyncComponent(() => import('./HeaderUserMenu.vue'))
 
 const route = useRoute()
-const { status } = useAuth()
+const { status } = useNexusAuth()
 
 const scrolled = ref(false)
 const { locale, t } = useI18n()

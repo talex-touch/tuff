@@ -24,7 +24,7 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 const { refresh } = useAuthUser()
-const { signOut } = useAuth()
+const { signOut } = useNexusAuth()
 const toast = useToast()
 
 const secret = ref('')

@@ -17,7 +17,7 @@ const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 900
 const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 const DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS = 3200
 const DOCS_DEFERRED_BODY_INTENT_EVENTS = ['scroll', 'wheel', 'keydown', 'touchstart'] as const
-const DOCS_CURRENT_PAGE_FETCH_KEY = 'docs-current-page'
+const DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX = 'docs-current-page'
 const docsFullBodyCache = new Map<string, Record<string, any> | null>()
 const prefetchedDocMetadataTargets = new Set<string>()
 const prefetchedDocFullBodyTargets = new Set<string>()
@@ -130,6 +130,8 @@ const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 const shouldSplitDocBody = computed(() => normalizeDocsPagePath(activeRoutePath.value).includes('/docs/dev/components'))
 const shouldRequestMetadataOnlyDocBody = computed(() => shouldSplitDocBody.value && (import.meta.client || import.meta.dev))
+const currentDocsPageBodyMode = computed(() => (shouldRequestMetadataOnlyDocBody.value ? '0' : '1'))
+const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${currentDocsPageBodyMode.value}`)
 const docsNavigationScope = computed(() => (shouldSplitDocBody.value ? 'components' : undefined))
 
 function normalizeContentPath(path: string | null | undefined) {
@@ -212,11 +214,11 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
 const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
   '/api/docs/page',
   {
-    key: DOCS_CURRENT_PAGE_FETCH_KEY,
+    key: currentDocsPageFetchKey,
     query: computed(() => ({
       path: docPath.value,
       locale: docsLocale.value,
-      body: shouldRequestMetadataOnlyDocBody.value ? '0' : '1',
+      body: currentDocsPageBodyMode.value,
     })),
     default: () => null,
     immediate: import.meta.server || !shouldSplitDocBody.value,

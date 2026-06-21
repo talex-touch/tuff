@@ -7,12 +7,13 @@ interface Props {
   emailLabel: string
   avatarUrl: string
   profileInitial: string
+  avatarEditText: string
+  avatarUploading: boolean
   isEmailVerified: boolean
   verifiedText: string
   unverifiedText: string
-  roleLabel: string
-  roleClass: string
-  manageText: string
+  editProfileText: string
+  emailTitle: string
   currentPlanText: string
   planStatusLabel: string
   planActive: boolean
@@ -26,11 +27,12 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  (e: 'manage', source: HTMLElement | null): void
+  (e: 'profile-edit', source: HTMLElement | null): void
+  (e: 'avatar-edit'): void
   (e: 'plan-action'): void
 }>()
 
-const manageTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
+const profileEditTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 
 const planAccent = computed(() => {
   switch (props.planCode) {
@@ -66,8 +68,8 @@ const planStatusClass = computed(() => (props.planActive
   ? 'bg-emerald-500/18 text-emerald-600 dark:text-emerald-300'
   : 'bg-slate-500/16 text-slate-600 dark:text-slate-300'))
 
-function handleManage() {
-  emit('manage', manageTriggerRef.value?.$el || null)
+function handleProfileEdit() {
+  emit('profile-edit', profileEditTriggerRef.value?.$el || null)
 }
 </script>
 
@@ -84,28 +86,40 @@ function handleManage() {
       <div class="flex min-w-0 items-center justify-start pl-1 pr-6">
         <div class="flex w-full items-center justify-between gap-4">
           <div class="flex min-w-0 items-center gap-3">
-            <div class="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-black/[0.1] bg-black/[0.03] dark:border-white/[0.12] dark:bg-white/[0.04]">
-              <img
-                v-if="avatarUrl"
-                :src="avatarUrl"
-                :alt="displayName || 'User'"
-                class="h-full w-full object-cover"
-              >
-              <div v-else class="flex h-full w-full items-center justify-center text-sm font-semibold text-black/65 dark:text-white/75">
-                {{ profileInitial }}
+            <div class="relative h-12 w-12 shrink-0">
+              <div class="h-full w-full overflow-hidden rounded-full border border-black/[0.1] bg-black/[0.03] dark:border-white/[0.12] dark:bg-white/[0.04]">
+                <img
+                  v-if="avatarUrl"
+                  :src="avatarUrl"
+                  :alt="displayName || 'User'"
+                  class="h-full w-full object-cover"
+                >
+                <div v-else class="flex h-full w-full items-center justify-center text-sm font-semibold text-black/65 dark:text-white/75">
+                  {{ profileInitial }}
+                </div>
               </div>
+              <button
+                class="profile-avatar-edit"
+                type="button"
+                :disabled="avatarUploading"
+                :title="avatarEditText"
+                :aria-label="avatarEditText"
+                @click="emit('avatar-edit')"
+              >
+                <span :class="avatarUploading ? 'i-carbon-circle-dash animate-spin' : 'i-carbon-edit'" aria-hidden="true" />
+              </button>
             </div>
             <div class="min-w-0 flex flex-col items-start justify-center gap-2">
               <div class="flex min-w-0 items-center gap-2">
                 <p class="truncate text-base leading-tight font-semibold my-0 text-black dark:text-white">
                   {{ displayName }}
                 </p>
-                <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px]" :class="roleClass">
-                  {{ roleLabel }}
-                </span>
+                <TxButton ref="profileEditTriggerRef" size="mini" variant="secondary" icon="i-carbon-edit" class="h-6 shrink-0 text-xs" @click="handleProfileEdit">
+                  {{ editProfileText }}
+                </TxButton>
               </div>
               <div class="flex flex-wrap items-center gap-1.5 text-xs leading-none text-black/55 dark:text-white/60">
-                <span class="truncate">{{ emailLabel }}</span>
+                <span class="truncate" :title="emailTitle || emailLabel">{{ emailLabel }}</span>
                 <span
                   v-if="isEmailVerified"
                   class="i-carbon-checkmark-filled inline-flex items-center justify-center text-[13px] leading-none text-green-500 dark:text-green-400"
@@ -121,10 +135,6 @@ function handleManage() {
               </div>
             </div>
           </div>
-
-          <TxButton ref="manageTriggerRef" size="small" variant="secondary" icon="i-carbon-edit" class="h-6 shrink-0 bg-amber-100/70 text-xs text-amber-700 backdrop-blur-sm transition-colors hover:bg-amber-100 dark:bg-amber-400/16 dark:text-amber-200 dark:hover:bg-amber-300/20" @click="handleManage">
-            {{ manageText }}
-          </TxButton>
         </div>
       </div>
       <div class="h-[70%] w-px justify-self-center bg-gradient-to-b from-transparent via-black/[0.12] to-transparent dark:via-white/[0.16]" />
@@ -169,5 +179,29 @@ function handleManage() {
 .profile-plan-glass {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+}
+
+.profile-avatar-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.profile-avatar-edit:disabled {
+  cursor: progress;
+  opacity: 0.72;
 }
 </style>
