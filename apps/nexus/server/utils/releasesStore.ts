@@ -37,8 +37,9 @@ export interface ReleaseAsset {
   filename: string
   sourceType: AssetSourceType
   fileKey: string | null
-  downloadUrl: string
+  signatureKey: string | null
   signatureUrl?: string | null
+  downloadUrl: string
   size: number
   sha256: string | null
   contentType: string
@@ -99,6 +100,8 @@ interface D1ReleaseAssetRow {
   filename: string
   source_type: string
   file_key: string | null
+  signature_key: string | null
+  signature_url: string | null
   download_url: string
   size: number
   sha256: string | null
@@ -147,6 +150,8 @@ interface CreateAssetInput {
   filename: string
   sourceType: AssetSourceType
   fileKey?: string | null
+  signatureKey?: string | null
+  signatureUrl?: string | null
   downloadUrl: string
   size: number
   sha256?: string | null
@@ -206,6 +211,8 @@ async function ensureReleasesSchema(db: D1Database) {
       filename TEXT NOT NULL,
       source_type TEXT NOT NULL DEFAULT 'upload',
       file_key TEXT,
+      signature_key TEXT,
+      signature_url TEXT,
       download_url TEXT NOT NULL,
       size INTEGER NOT NULL,
       sha256 TEXT,
@@ -239,6 +246,8 @@ async function ensureReleasesSchema(db: D1Database) {
   await ensureTableColumns(db, RELEASE_ASSETS_TABLE, [
     { name: 'source_type', ddl: `source_type TEXT NOT NULL DEFAULT 'upload'` },
     { name: 'file_key', ddl: 'file_key TEXT' },
+    { name: 'signature_key', ddl: 'signature_key TEXT' },
+    { name: 'signature_url', ddl: 'signature_url TEXT' },
     { name: 'sha256', ddl: 'sha256 TEXT' },
     { name: 'content_type', ddl: `content_type TEXT NOT NULL DEFAULT 'application/octet-stream'` },
     { name: 'download_count', ddl: 'download_count INTEGER NOT NULL DEFAULT 0' },
@@ -295,6 +304,8 @@ function mapAssetRow(row: D1ReleaseAssetRow): ReleaseAsset {
     filename: row.filename,
     sourceType: row.source_type as AssetSourceType,
     fileKey: row.file_key,
+    signatureKey: row.signature_key ?? null,
+    signatureUrl: row.signature_url ?? null,
     downloadUrl: row.download_url,
     size: row.size,
     sha256: row.sha256,
@@ -970,6 +981,8 @@ export async function createReleaseAsset(
     filename: input.filename,
     sourceType: input.sourceType,
     fileKey: input.fileKey ?? null,
+    signatureKey: input.signatureKey ?? null,
+    signatureUrl: input.signatureUrl ?? null,
     downloadUrl: input.downloadUrl,
     size: input.size,
     sha256: input.sha256 ?? null,
@@ -1002,6 +1015,8 @@ export async function createReleaseAsset(
         filename: asset.filename,
         sourceType: asset.sourceType,
         fileKey: asset.fileKey,
+        signatureKey: asset.signatureKey,
+        signatureUrl: asset.signatureUrl,
         downloadUrl: asset.downloadUrl,
         size: asset.size,
         sha256: asset.sha256,
@@ -1015,16 +1030,20 @@ export async function createReleaseAsset(
           filename = ?1,
           source_type = ?2,
           file_key = ?3,
-          download_url = ?4,
-          size = ?5,
-          sha256 = ?6,
-          content_type = ?7,
-          updated_at = ?8
-        WHERE id = ?9;
+          signature_key = ?4,
+          signature_url = ?5,
+          download_url = ?6,
+          size = ?7,
+          sha256 = ?8,
+          content_type = ?9,
+          updated_at = ?10
+        WHERE id = ?11;
       `).bind(
         upsertedAsset.filename,
         upsertedAsset.sourceType,
         upsertedAsset.fileKey,
+        upsertedAsset.signatureKey,
+        upsertedAsset.signatureUrl,
         upsertedAsset.downloadUrl,
         upsertedAsset.size,
         upsertedAsset.sha256,
@@ -1039,9 +1058,9 @@ export async function createReleaseAsset(
     await db.prepare(`
       INSERT INTO ${RELEASE_ASSETS_TABLE} (
         id, release_id, platform, arch, filename, source_type, file_key,
-        download_url, size, sha256, content_type, download_count,
-        created_at, updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);
+        signature_key, signature_url, download_url, size, sha256, content_type,
+        download_count, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16);
     `).bind(
       asset.id,
       asset.releaseId,
@@ -1050,6 +1069,8 @@ export async function createReleaseAsset(
       asset.filename,
       asset.sourceType,
       asset.fileKey,
+      asset.signatureKey,
+      asset.signatureUrl,
       asset.downloadUrl,
       asset.size,
       asset.sha256,
@@ -1078,6 +1099,8 @@ export async function createReleaseAsset(
         filename: asset.filename,
         sourceType: asset.sourceType,
         fileKey: asset.fileKey,
+        signatureKey: asset.signatureKey,
+        signatureUrl: asset.signatureUrl,
         downloadUrl: asset.downloadUrl,
         size: asset.size,
         sha256: asset.sha256,

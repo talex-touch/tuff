@@ -1,7 +1,14 @@
 import type { H3Event } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { requireSessionAuth } from '../../utils/auth'
-import { getAdminBootstrapState, getUserById, hasUserPasswordCredential, listPasskeys, listUserLinkedAccounts } from '../../utils/authStore'
+import {
+  getAdminBootstrapState,
+  getUserAccountActivitySummary,
+  getUserById,
+  hasUserPasswordCredential,
+  listPasskeys,
+  listUserLinkedAccounts,
+} from '../../utils/authStore'
 import { normalizeLocaleCode } from '../../utils/locale'
 
 function hasBootstrapSecret(event: H3Event) {
@@ -23,6 +30,7 @@ export default defineEventHandler(async (event) => {
   const linkedAccounts = await listUserLinkedAccounts(event, userId)
   const linkedProviders = [...new Set(linkedAccounts.map(account => account.provider))]
   const hasPassword = await hasUserPasswordCredential(event, userId)
+  const accountActivity = await getUserAccountActivitySummary(event, userId)
   const bootstrap = await getAdminBootstrapState(event, userId)
   const bootstrapEnabled = hasBootstrapSecret(event)
 
@@ -33,6 +41,9 @@ export default defineEventHandler(async (event) => {
     image: user.image,
     role: user.role,
     locale: normalizeLocaleCode(user.locale),
+    status: user.status,
+    createdAt: user.createdAt,
+    updatedAt: accountActivity.updatedAt,
     emailVerified: Boolean(user.emailVerified),
     emailState: user.emailState,
     isRestricted: user.emailState !== 'verified',

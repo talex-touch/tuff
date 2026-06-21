@@ -413,11 +413,12 @@ function applyNextAuthOriginFallback(configuredOrigin: string, trustForwardedHos
     process.env.AUTH_TRUST_HOST = 'true'
 }
 
-function getAuthOptions(): AuthOptions {
+function getAuthOptions(event?: H3Event): AuthOptions {
   const config = useRuntimeConfig()
   const configuredOrigin = normalizeAuthOrigin(config.auth?.origin)
   const trustForwardedHost = shouldTrustForwardedAuthHost(configuredOrigin)
   applyNextAuthOriginFallback(configuredOrigin, trustForwardedHost)
+  const createRequestAuthEvent = () => createAuthEvent(event?.node.req.headers as AuthRequestHeaders | undefined)
   const linuxdoIssuer = config.auth?.linuxdo?.issuer || 'https://connect.linux.do'
   const linuxdoClientId = config.auth?.linuxdo?.clientId
   const linuxdoClientSecret = config.auth?.linuxdo?.clientSecret
@@ -438,24 +439,30 @@ function getAuthOptions(): AuthOptions {
         if (loginToken) {
           const user = await consumeLoginToken(authEvent, loginToken)
           if (user) {
-            await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'login_token', clientType: 'app' })
             return { id: user.id, email: user.email, name: user.name, image: user.image }
           }
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid', clientType: 'app' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid', clientType: 'web' })
           return null
         }
 
         if (!email || !password) {
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'missing_credentials', clientType: 'app' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'missing_credentials', clientType: 'web' })
           return null
         }
 
         const user = await verifyUserPassword(authEvent, email, password)
         if (!user) {
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'invalid_password', clientType: 'app' })
+          const attemptedUser = await getUserByEmail(authEvent, email)
+          await logLoginAttempt(authEvent, {
+            userId: attemptedUser?.status === 'active' ? attemptedUser.id : null,
+            deviceId: null,
+            success: false,
+            reason: 'invalid_password',
+            clientType: 'web',
+          })
           return null
         }
-        await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'password', clientType: 'app' })
+        await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'password', clientType: 'web' })
         return { id: user.id, email: user.email, name: user.name, image: user.image }
       }
     }),
@@ -623,7 +630,7 @@ function getAuthOptions(): AuthOptions {
   return {
     secret: config.auth?.secret,
     session: { strategy: 'jwt' },
-    adapter: createD1Adapter(() => createAuthEvent()) as AuthOptions['adapter'],
+    adapter: createD1Adapter(createRequestAuthEvent) as AuthOptions['adapter'],
     pages: {
       signIn: '/sign-in',
       error: '/sign-in',
@@ -635,9 +642,11 @@ function getAuthOptions(): AuthOptions {
         return normalizeAuthRedirectUrl(url, baseUrl)
       },
       async signIn({ user, account, profile }: { user: User, account: Account | null, profile?: Profile | undefined }) {
-        const authEvent = createAuthEvent()
+        const authEvent = createRequestAuthEvent()
         if (!account)
           return false
+        if (account.provider === 'credentials')
+          return true
         if (account.type === 'oauth') {
           if (account.provider && account.providerAccountId) {
             const existingByAccount = await getUserByAccount(authEvent, account.provider, account.providerAccountId)
@@ -694,7 +703,23 @@ function getAuthOptions(): AuthOptions {
         }
         return session
       }
-    }
+    },
+    events: {
+      async signIn({ user, account }: { user: User, account: Account | null }) {
+        if (!account || account.provider === 'credentials')
+          return
+        const userId = (user as { id?: unknown }).id
+        if (typeof userId !== 'string' || !userId)
+          return
+        await logLoginAttempt(createRequestAuthEvent(), {
+          userId,
+          deviceId: null,
+          success: true,
+          reason: account.provider,
+          clientType: 'web',
+        })
+      },
+    },
   }
 }
 
@@ -742,10 +767,9 @@ function markSessionError(event: H3Event) {
   })
 }
 
-const authHandler = NuxtAuthHandler(getAuthOptions())
-
 export default defineEventHandler(async (event) => {
   const baseUrl = resolveAuthBaseUrl(event)
+  const authHandler = NuxtAuthHandler(getAuthOptions(event))
   try {
     const result = await authHandler(event)
     return await normalizeAuthResponseResult(result, event, baseUrl)

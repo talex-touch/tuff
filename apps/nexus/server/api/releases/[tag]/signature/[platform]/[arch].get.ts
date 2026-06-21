@@ -25,12 +25,11 @@ export default defineEventHandler(async (event) => {
   if (!asset)
     throw createError({ statusCode: 404, statusMessage: 'Asset not found for this platform/arch.' })
 
-  if (!asset.fileKey) {
-    throw createError({ statusCode: 404, statusMessage: 'Asset file is not available.' })
+  if (!asset.signatureKey) {
+    throw createError({ statusCode: 404, statusMessage: 'Asset signature is not available.' })
   }
 
-  const signatureKey = `${asset.fileKey}.sig`
-  const result = await requireReleaseAsset(event, signatureKey, {
+  const result = await requireReleaseAsset(event, asset.signatureKey, {
     governanceResourceId: `release:${tag}:${platform}:${arch}:signature`,
     resourceType: 'release-signature',
   })
