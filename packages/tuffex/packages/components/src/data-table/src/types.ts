@@ -2,6 +2,10 @@ export type DataTableKey = string | number
 
 export type DataTableAlign = 'left' | 'center' | 'right'
 
+export type DataTableLayout = 'auto' | 'fixed'
+
+export type DataTableColumnFixed = boolean | 'left' | 'right'
+
 export type DataTableSortOrder = 'asc' | 'desc' | null
 
 export interface DataTableSortState {
@@ -14,6 +18,11 @@ export interface DataTableColumn<T = any> {
   title: string
   dataIndex?: string
   width?: string | number
+  minWidth?: string | number
+  maxWidth?: string | number
+  auto?: boolean
+  fixed?: DataTableColumnFixed
+  nowrap?: boolean
   align?: DataTableAlign
   sortable?: boolean
   sorter?: (a: T, b: T) => number
@@ -37,6 +46,8 @@ export interface DataTableProps<T = any> {
   selectedKeys?: DataTableKey[]
   defaultSort?: DataTableSortState
   sortOnClient?: boolean
+  tableLayout?: DataTableLayout
+  nowrap?: boolean
 }
 
 export interface DataTableEmits<T = any> {

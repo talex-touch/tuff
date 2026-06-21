@@ -1,8 +1,10 @@
 import type {
   DataTableAlign,
+  DataTableColumnFixed,
   DataTableColumn,
   DataTableEmits,
   DataTableKey,
+  DataTableLayout,
   DataTableProps,
   DataTableRowKey,
   DataTableSortOrder,
@@ -16,9 +18,11 @@ const DataTable = withInstall(TxDataTable)
 export { DataTable, TxDataTable }
 export type {
   DataTableAlign,
+  DataTableColumnFixed,
   DataTableColumn,
   DataTableEmits,
   DataTableKey,
+  DataTableLayout,
   DataTableProps,
   DataTableRowKey,
   DataTableSortOrder,

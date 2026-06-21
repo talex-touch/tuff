@@ -43,6 +43,7 @@ describe('txDrawer', () => {
     expect(drawer?.classList.contains('tx-drawer--visible')).toBe(true)
     expect(drawer?.getAttribute('style')).toContain('--tx-drawer-size: 420px')
     expect(drawer?.getAttribute('style')).toContain('--tx-drawer-width: 420px')
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-z-index: 10001')
     expect(document.getElementById(titleId ?? '')?.textContent).toBe('Settings')
     expect(document.body.querySelector('.drawer-body')?.textContent).toBe('Body')
     expect(document.body.querySelector('.drawer-footer')?.textContent).toBe('Save')
