@@ -374,43 +374,34 @@ function closeDeleteConfirm() {
 
 <template>
   <div class="mx-auto max-w-5xl space-y-6">
-    <div>
-      <h2 class="apple-heading-sm">
-        {{ t('dashboard.sections.updates.title') }}
-      </h2>
-      <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.updates.subtitle') }}
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="apple-heading-sm">
+          {{ t('dashboard.sections.updates.title') }}
+        </h2>
+        <p class="mt-1 text-sm text-black/50 dark:text-white/50">
+          {{ t('dashboard.sections.updates.subtitle') }}
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <TxButton
+          variant="secondary"
+          size="small"
+          icon="i-carbon-launch"
+          native-type="button"
+          @click="openUpdateLink('https://docs.tuff.chat/changelog')"
+        >
+          {{ isZh ? 'Changelog 文档' : 'Changelog' }}
+        </TxButton>
+        <TxButton v-if="isAdmin" variant="primary" icon="i-carbon-add" size="small" native-type="button" @click="openCreate">
+          {{ t('dashboard.sections.updates.addButton') }}
+        </TxButton>
+      </div>
     </div>
 
     <section class="apple-card-lg p-5">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 class="text-base font-semibold text-black dark:text-white">
-            {{ t('dashboard.sections.updates.listTitle', '更新与要闻') }}
-          </h3>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.listSubtitle', '统一管理要闻与版本更新。') }}
-          </p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <TxButton
-            variant="secondary"
-            size="small"
-            icon="i-carbon-launch"
-            native-type="button"
-            @click="openUpdateLink('https://docs.tuff.chat/changelog')"
-          >
-            {{ isZh ? 'Changelog 文档' : 'Changelog' }}
-          </TxButton>
-          <TxButton v-if="isAdmin" variant="primary" icon="i-carbon-add" size="small" native-type="button" @click="openCreate">
-            {{ t('dashboard.sections.updates.addButton') }}
-          </TxButton>
-        </div>
-      </div>
-
-      <div class="UpdateFilters mt-4">
+      <div class="UpdateFilters">
         <div class="UpdateFilters-Grid">
           <div class="UpdateFilters-Field UpdateFilters-Field--search">
             <label class="UpdateFilters-Label">{{ isZh ? '搜索' : 'Search' }}</label>
@@ -675,8 +666,7 @@ function closeDeleteConfirm() {
 
 <style scoped>
 .UpdateFilters {
-  border-top: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 100%, transparent);
-  padding-top: 14px;
+  min-width: 0;
 }
 
 .UpdateFilters-Grid {
@@ -728,27 +718,18 @@ function closeDeleteConfirm() {
   position: sticky;
   right: 0;
   z-index: 3;
-  background: var(--update-table-sticky-bg);
-  box-shadow:
-    -1px 0 0 color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 70%, transparent),
-    -18px 0 28px -24px rgba(0, 0, 0, 0.78);
-}
-
-.UpdateTable-Data :deep(.UpdateTable-ActionsHeader::before),
-.UpdateTable-Data :deep(.UpdateTable-ActionsCell::before) {
-  content: '';
-  pointer-events: none;
-  position: absolute;
-  inset: 0 auto 0 -42px;
-  width: 42px;
-  background: linear-gradient(
+  background-color: var(--update-table-sticky-bg);
+  background-image: linear-gradient(
     to right,
-    transparent 0%,
-    rgba(0, 0, 0, 0.12) 28%,
-    rgba(0, 0, 0, 0.22) 48%,
-    color-mix(in srgb, var(--update-table-sticky-bg) 55%, rgba(0, 0, 0, 0.32)) 74%,
-    var(--update-table-sticky-bg) 100%
+    #0000,
+    color-mix(in srgb, var(--update-table-sticky-bg) 56%, rgba(0, 0, 0, 0.28)) 54%,
+    var(--update-table-sticky-bg)
   );
+  background-repeat: no-repeat;
+  background-size: 18px 100%;
+  box-shadow:
+    -1px 0 0 color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 90%, transparent),
+    -5px 0 12px -11px rgba(0, 0, 0, 0.9);
 }
 
 .UpdateTable-Data :deep(.UpdateTable-ActionsHeader) {
