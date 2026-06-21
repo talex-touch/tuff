@@ -107,7 +107,7 @@
 | 35 | `15df6cca1` | `docs(nexus): finalize performance TODO handoff` | 已完成 |
 | 36 | `bf4b46692` | `perf(nexus): defer strict pending docs sections` | 已完成 |
 | 37 | docs-only | `docs(nexus): finalize docs aireview todo` | 已完成 |
-| 38 | 当前批 | `perf(nexus): tighten pending docs demo split` | 已验证；提交 hash 以 git log 为准 |
+| 38 | `da283b466` | `perf(nexus): tighten pending docs demo split` | 已完成 |
 
 ## 本轮收尾结论
 
