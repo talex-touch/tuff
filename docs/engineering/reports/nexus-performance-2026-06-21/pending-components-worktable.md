@@ -32,9 +32,9 @@
 | 1 | `fusion` | migrated | false | 101 KB (51/50) | 20 | 0 | yes | 427/268/36/0 (b30 after) | P0 section split plus API table visible-only; keep Assistant/context on intent. |
 | 2 | `card` | migrated | false | 94 KB (47/47) | 24 | 0 | yes | 432/428/37/0 (b28 after) | P0 split API table and demo sections; verify code block renderer stays lazy. |
 | 3 | `avatar-variants` | migrated | false | 70 KB (35/35) | 2 | 0 | no | 425/403/18/0 (b21 after) | P0 static summary shell plus defer long examples/body sections. |
-| 4 | `glass-surface` | migrated | true | 32 KB (17/15) | 4 | 0 | yes | not sampled | P1 API/props table visible-only boundary. |
+| 4 | `glass-surface` | migrated | true | 32 KB (17/15) | 4 | 0 | yes | 465/430/16/0 (b36 after2) | P1 strict pending defer now covers `migrated + verified`; API/props table visible-only remains a later production/chunk check. |
 | 5 | `index` | migrated | true | 32 KB (16/16) | 0 | 0 | no | not sampled | P1 static shell plus section split. |
-| 6 | `gradual-blur` | migrated | false | 30 KB (15/14) | 14 | 0 | yes | 419/418/33/0 (b22 after) | P1 demo visible-only plus API table visible-only. |
+| 6 | `gradual-blur` | migrated | false | 30 KB (15/14) | 14 | 0 | yes | 450/415/16/0 (b36 after2) | P1 current fallback split already defers API and later demos; demo visible-only remains a later production/chunk check. |
 | 7 | `auto-sizer` | migrated | false | 27 KB (14/13) | 14 | 0 | yes | 419/418/33/0 (b22 after) | P1 demo visible-only plus API table visible-only. |
 | 8 | `text-transformer` | migrated | false | 27 KB (13/13) | 10 | 0 | yes | not sampled | P1 demo visible-only plus API table visible-only. |
 | 9 | `scroll` | migrated | false | 22 KB (11/10) | 12 | 0 | yes | 419/418/33/0 (b22 after) | P1 demo visible-only plus API table visible-only. |
@@ -70,5 +70,5 @@
 ## Notes
 
 - `glass-surface`, `index`, `base-anchor`, `select`, `radio`, `button`, `dialog`, `picker`, `switch`, `date-picker`, and `input` are still pending by the strict rule because `syncStatus` remains `migrated`, even when `verified: true`.
-- Existing evidence proves `fusion`, `card`, `avatar-variants`, `gradual-blur`, `auto-sizer`, and `scroll` have clean failed request counts in the sampled runs. It does not prove unsampled pages are fast.
+- Existing evidence proves `fusion`, `card`, `avatar-variants`, `glass-surface`, `gradual-blur`, `auto-sizer`, and `scroll` have clean failed request counts in the sampled runs. It does not prove unsampled pages are fast.
 - This file is a planning/report artifact only. It does not add a reusable audit script or broaden the test harness.
