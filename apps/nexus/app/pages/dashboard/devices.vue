@@ -48,6 +48,7 @@ const renameValue = ref('')
 
 const devices = computed(() => data.value ?? [])
 const expandedMapDeviceId = ref<string | null>(null)
+const openActionDeviceId = ref<string | null>(null)
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 
 const countryDisplayNames = computed(() => {
@@ -185,6 +186,14 @@ function toggleMap(device: DeviceItem) {
 function cancelRename() {
   editingId.value = null
   renameValue.value = ''
+}
+
+function isActionMenuOpen(device: DeviceItem): boolean {
+  return openActionDeviceId.value === device.id
+}
+
+function setActionMenuOpen(device: DeviceItem, open: boolean) {
+  openActionDeviceId.value = open ? device.id : null
 }
 
 async function saveRename(device: DeviceItem) {
@@ -327,7 +336,12 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
 
             <div class="DashboardDevices-Actions">
               <div class="DashboardDevices-ActionsTop">
-                <TxDropdownMenu placement="bottom-end" :min-width="180">
+                <TxDropdownMenu
+                  :model-value="isActionMenuOpen(device)"
+                  placement="bottom-end"
+                  :min-width="180"
+                  @update:model-value="setActionMenuOpen(device, $event)"
+                >
                   <template #trigger>
                     <TxButton class="DashboardDevices-ActionButton" size="small" variant="secondary" icon="i-carbon-overflow-menu-horizontal">
                       {{ t('dashboard.devices.actions', '操作') }}
