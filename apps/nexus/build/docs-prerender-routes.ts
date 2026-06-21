@@ -1,10 +1,9 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { DOCS_SUPPORTED_LOCALES, normalizeDocsPagePath, toLocalizedDocsPaths, type DocsLocale } from '../shared/utils/docs-path'
+import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
 
 const DOC_FILE_PATTERN = /\.(md|mdc)$/i
 const LOCALE_SUFFIX_PATTERN = /\.(en|zh)$/i
-const COMPONENT_DOC_ROUTE_PREFIX = '/docs/dev/components/'
 
 function toPosixPath(path: string) {
   return path.replace(/\\/g, '/')
@@ -68,32 +67,7 @@ export function createDocsPrerenderRoutes(nexusRoot: string) {
   return [...routes].sort((a, b) => a.localeCompare(b))
 }
 
-function buildDocsPageApiRoute(path: string, locale: DocsLocale, includeBody: boolean) {
-  const params = new URLSearchParams({
-    path,
-    locale,
-    body: includeBody ? '1' : '0',
-  })
-  return `/api/docs/page?${params.toString()}`
-}
-
 export function createDocsPageApiPrerenderRoutes(nexusRoot: string) {
-  const docsRoutes = createDocsPrerenderRoutes(nexusRoot)
-  const componentPaths = new Set<string>()
-
-  for (const route of docsRoutes) {
-    const normalized = normalizeDocsPagePath(route)
-    if (normalized.startsWith(COMPONENT_DOC_ROUTE_PREFIX))
-      componentPaths.add(normalized)
-  }
-
-  const routes = new Set<string>()
-  for (const path of componentPaths) {
-    for (const locale of DOCS_SUPPORTED_LOCALES) {
-      routes.add(buildDocsPageApiRoute(path, locale, false))
-      routes.add(buildDocsPageApiRoute(path, locale, true))
-    }
-  }
-
-  return [...routes].sort((a, b) => a.localeCompare(b))
+  void nexusRoot
+  return []
 }
