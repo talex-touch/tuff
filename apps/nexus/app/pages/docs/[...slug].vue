@@ -893,6 +893,15 @@ const docSyncStatus = computed<DocSyncStatusKey>(() => {
 
   return DOC_SYNC_STATUS_ALIASES[raw] ?? 'not_started'
 })
+const isDocPerformancePending = computed(() => {
+  const raw = typeof docMeta.value?.syncStatus === 'string'
+    ? docMeta.value.syncStatus.trim().toLowerCase()
+    : ''
+  const normalizedSyncStatus = DOC_SYNC_STATUS_ALIASES[raw] ?? raw
+  const hasReviewedSyncStatus = raw === 'reviewed' || normalizedSyncStatus === 'verified'
+
+  return !hasReviewedSyncStatus || !isDocVerified.value
+})
 
 function readBodyChildren(body: unknown) {
   if (!body || typeof body !== 'object')
@@ -1136,7 +1145,7 @@ const shouldDeferDocBodySections = computed(() =>
   && import.meta.client
   && docsClientPanelsMounted.value
   && docScope.value.isComponent
-  && docSyncStatus.value !== 'verified'
+  && isDocPerformancePending.value
   && deferredBodySplitIndex.value > 0,
 )
 const primaryRenderDoc = computed(() => {
