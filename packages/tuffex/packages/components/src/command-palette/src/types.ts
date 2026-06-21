@@ -1,5 +1,7 @@
 import type { TxIconSource } from '../../icon'
 
+export type CommandPaletteClassValue = string | string[] | Record<string, boolean>
+
 export interface CommandPaletteItem {
   id: string
   title: string
@@ -18,6 +20,8 @@ export interface CommandPaletteProps {
   maxHeight?: number
   autoFocus?: boolean
   closeOnSelect?: boolean
+  overlayClass?: CommandPaletteClassValue
+  panelClass?: CommandPaletteClassValue
 }
 
 export interface CommandPaletteEmits {

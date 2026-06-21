@@ -116,6 +116,8 @@ code: |
 | `maxHeight` | `number` | `320` | 列表最大高度 |
 | `autoFocus` | `boolean` | `true` | 自动聚焦 |
 | `closeOnSelect` | `boolean` | `true` | 选中后关闭 |
+| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | 叠层自定义类名 |
+| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | 面板自定义类名 |
 
 ### CommandPaletteItem
 
@@ -138,3 +140,10 @@ code: |
 | `open` | - | 打开 |
 | `close` | - | 关闭 |
 | `update:query` | `(value)` | 搜索输入 |
+
+### Slots
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `empty` | `{ query, emptyText }` | 自定义空状态 |
+| `footer` | `{ query, visibleCount }` | 自定义底部区域 |

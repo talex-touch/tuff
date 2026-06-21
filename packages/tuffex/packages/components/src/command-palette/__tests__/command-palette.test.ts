@@ -66,4 +66,24 @@ describe('txCommandPalette', () => {
     const highlighted = wrapper.findAll('.tx-command-palette__highlight')
     expect(highlighted.length).toBeGreaterThan(0)
   })
+
+  it('renders custom empty and footer slots', () => {
+    const wrapper = mount(TxCommandPalette, {
+      props: {
+        modelValue: true,
+        commands: [],
+        emptyText: 'No matches',
+      },
+      slots: {
+        empty: '<div class="custom-empty">Try docs</div>',
+        footer: '<div class="custom-footer">Powered</div>',
+      },
+      global: {
+        stubs: { Teleport: true },
+      },
+    })
+
+    expect(wrapper.find('.custom-empty').text()).toBe('Try docs')
+    expect(wrapper.find('.custom-footer').text()).toBe('Powered')
+  })
 })

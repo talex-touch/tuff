@@ -33,6 +33,68 @@
   }
 }
 
+html[data-tx-coloring='true'],
+html.coloring {
+  .fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare)::after,
+  .tx-base-surface::after,
+  .tx-card:not(.is-plain)::after,
+  .tx-modal__content::after,
+  .tx-command-palette__panel::after,
+  .tx-drawer__panel::after,
+  .tx-data-table::after,
+  .tx-code-editor::after,
+  .tx-markdown-editor::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: var(--tx-coloring-border-z-index, 6);
+    border-radius: inherit;
+    box-shadow: var(--tx-coloring-border-shadow);
+    pointer-events: none;
+  }
+
+  .tx-base-surface,
+  .tx-card:not(.is-plain),
+  .tx-modal__content,
+  .tx-command-palette__panel,
+  .tx-drawer__panel,
+  .tx-data-table,
+  .tx-code-editor,
+  .tx-markdown-editor {
+    position: relative;
+  }
+
+  .tx-input,
+  .tx-textarea,
+  .tx-number-input,
+  .tx-tag-input,
+  .tx-date-picker-field,
+  .tx-cascader,
+  .tx-tree-select,
+  .tx-select,
+  .tx-flat-select {
+    border-color: var(--tx-coloring-border-color);
+  }
+
+  .tx-button:not(.borderless):not(.variant-bare):not(.variant-ghost):not(.tone-text) {
+    --tx-button-border-color: var(--tx-coloring-border-color);
+  }
+
+  .tx-card:not(.is-plain):hover::after,
+  .tx-base-surface:hover::after,
+  .fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare):hover::after {
+    box-shadow: var(--tx-coloring-border-shadow-hover);
+  }
+}
+
+html[data-tx-contrast='high'],
+html.contrast {
+  *:focus-visible {
+    outline-color: var(--tx-focus-ring-color, var(--tx-color-primary));
+    box-shadow: var(--tx-focus-ring-shadow);
+  }
+}
+
 .fake-background.index-fix {
   z-index: var(--fake-fix-index, 0);
 }

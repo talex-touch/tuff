@@ -116,6 +116,8 @@ code: |
 | `maxHeight` | `number` | `320` | Max list height |
 | `autoFocus` | `boolean` | `true` | Auto focus input |
 | `closeOnSelect` | `boolean` | `true` | Close after select |
+| `overlayClass` | `string \| string[] \| Record<string, boolean>` | - | Custom overlay class |
+| `panelClass` | `string \| string[] \| Record<string, boolean>` | - | Custom panel class |
 
 ### CommandPaletteItem
 
@@ -138,3 +140,10 @@ code: |
 | `open` | - | Opened |
 | `close` | - | Closed |
 | `update:query` | `(value)` | Search input update |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `empty` | `{ query, emptyText }` | Custom empty state |
+| `footer` | `{ query, visibleCount }` | Custom footer area |
