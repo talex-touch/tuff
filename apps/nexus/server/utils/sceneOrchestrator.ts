@@ -4,14 +4,19 @@ import type { SceneRegistryRecord, SceneStrategyBindingRecord } from './sceneReg
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
+import { toRuntimeCapabilityId, type IntelligenceMessage } from '@talex-touch/tuff-intelligence/light'
+import { networkClient } from '@talex-touch/utils/network'
 import { getLatestProviderHealthChecks, type ProviderHealthCheckEntry } from './providerHealthStore'
 import { completeUploadGovernance, failUploadGovernance, startUploadGovernance } from './uploadGovernance'
 import { assertIntelligenceProviderQuota, recordIntelligenceProviderRequest, recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { getProviderRegistryEntry } from './providerRegistryStore'
+import { getProviderCredential } from './providerCredentialStore'
 import { recordProviderUsageLedger } from './providerUsageLedgerStore'
 import { getSceneRegistryEntry } from './sceneRegistryStore'
 import { buildSceneAssetGovernanceResourceId, uploadSceneAsset } from './sceneAssetStorage'
 import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
+import { buildCapabilityMessages } from './tuffIntelligenceCapabilityMessages'
+import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from './intelligenceModels'
 import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
 import { convertUsd, getUsdRates } from './exchangeRateService'
 import {
@@ -288,6 +293,302 @@ const intelligenceVisionOcrAdapter: SceneCapabilityAdapter = async ({ event, pro
       },
     ],
   }
+}
+
+function readMetadataString(provider: ProviderRegistryRecord, key: string): string | null {
+  return readString(provider.metadata?.[key])
+}
+
+function readMetadataStringArray(provider: ProviderRegistryRecord, key: string): string[] {
+  const value = provider.metadata?.[key]
+  return Array.isArray(value)
+    ? value.map(item => readString(item)).filter((item): item is string => Boolean(item))
+    : []
+}
+
+function normalizeIntelligenceScenePayload(capability: string, input: unknown): unknown {
+  const record = isRecord(input) ? input : { text: String(input ?? '') }
+  if (capability === 'chat.completion') {
+    if (Array.isArray(record.messages))
+      return record
+    const prompt = readString(record.prompt) ?? readString(record.input) ?? readString(record.text)
+    return prompt ? { ...record, messages: [{ role: 'user', content: prompt }] } : record
+  }
+  if (capability === 'content.extract') {
+    return {
+      ...record,
+      tags: Array.isArray(record.tags) ? record.tags : ['summary', 'entities', 'actions'],
+    }
+  }
+  return record
+}
+
+function buildSceneIntelligenceMessages(capability: string, input: unknown): IntelligenceMessage[] {
+  return buildCapabilityMessages(
+    toRuntimeCapabilityId(capability),
+    normalizeIntelligenceScenePayload(capability, input),
+  )
+}
+
+async function resolveProviderApiKey(event: H3Event, provider: ProviderRegistryRecord): Promise<string> {
+  if (provider.authType !== 'api_key' || !provider.authRef) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Provider API key credential is missing.',
+    })
+  }
+
+  const credential = await getProviderCredential(event, provider.authRef)
+  if (!credential || !('apiKey' in credential) || !credential.apiKey) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Provider API key credential is missing.',
+    })
+  }
+
+  return credential.apiKey
+}
+
+function extractOpenAiResponsesText(data: unknown): string {
+  const record = isRecord(data) ? data : {}
+  const outputText = readString(record.output_text)
+  if (outputText)
+    return outputText
+
+  const output = Array.isArray(record.output) ? record.output : []
+  return output
+    .flatMap((item) => {
+      const content = isRecord(item) && Array.isArray(item.content) ? item.content : []
+      return content.map((part) => {
+        if (!isRecord(part))
+          return ''
+        return readString(part.text) ?? readString(part.content) ?? ''
+      })
+    })
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+}
+
+function summarizeProviderErrorData(data: unknown): string {
+  if (typeof data === 'string')
+    return data.trim().slice(0, 200)
+
+  if (!isRecord(data))
+    return ''
+
+  const error = isRecord(data.error) ? data.error : null
+  const message = readString(error?.message)
+    ?? readString(data.message)
+    ?? readString(data.error)
+  if (message)
+    return message.slice(0, 200)
+
+  return JSON.stringify(data).slice(0, 200)
+}
+
+function extractOpenAiResponsesUsage(data: unknown): SceneRunUsage {
+  const usage = isRecord(data) && isRecord(data.usage) ? data.usage : {}
+  const inputTokens = typeof usage.input_tokens === 'number' ? usage.input_tokens : 0
+  const outputTokens = typeof usage.output_tokens === 'number' ? usage.output_tokens : 0
+  const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens : inputTokens + outputTokens
+  return {
+    unit: 'token',
+    quantity: totalTokens,
+    billable: true,
+  }
+}
+
+function resolveOpenAiSceneModel(provider: ProviderRegistryRecord, input: unknown): string {
+  const record = isRecord(input) ? input : {}
+  const model = readString(record.model)
+    ?? readMetadataString(provider, 'defaultModel')
+    ?? readMetadataStringArray(provider, 'models')[0]
+  if (!model) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'OpenAI Responses model is missing.',
+    })
+  }
+  return model
+}
+
+function buildOpenAiResponsesTextInput(messages: IntelligenceMessage[]): string {
+  return messages
+    .filter(message => message.role !== 'system')
+    .map(message => `${message.role}: ${message.content}`)
+    .join('\n')
+    .trim()
+}
+
+function buildOpenAiResponsesInstructions(messages: IntelligenceMessage[], input: unknown): string | null {
+  const explicitInstructions = isRecord(input) ? readString(input.instructions) : null
+  const systemInstructions = messages
+    .filter(message => message.role === 'system')
+    .map(message => message.content)
+    .join('\n')
+    .trim()
+  return explicitInstructions ?? (systemInstructions || null)
+}
+
+async function invokeOpenAiResponsesSceneAdapter(
+  event: H3Event,
+  provider: ProviderRegistryRecord,
+  capability: string,
+  input: unknown,
+): Promise<SceneAdapterResult> {
+  const apiKey = await resolveProviderApiKey(event, provider)
+  const intelligenceType = readMetadataString(provider, 'intelligenceType') ?? provider.vendor
+  const baseUrl = resolveProviderBaseUrl(intelligenceType, provider.endpoint)
+  const compatBaseUrl = buildOpenAiCompatBaseUrls(baseUrl)[0] ?? baseUrl.replace(/\/+$/, '')
+  const endpoint = `${compatBaseUrl}/responses`
+  const normalizedInput = normalizeIntelligenceScenePayload(capability, input)
+  const model = resolveOpenAiSceneModel(provider, normalizedInput)
+  const messages = buildSceneIntelligenceMessages(capability, normalizedInput)
+  const instructions = buildOpenAiResponsesInstructions(messages, normalizedInput)
+  const timeoutMs = typeof provider.metadata?.timeout === 'number' ? provider.metadata.timeout : 45000
+  const startedAt = Date.now()
+  const response = await networkClient.request<Record<string, unknown> | string>({
+    method: 'POST',
+    url: endpoint,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      model,
+      input: buildOpenAiResponsesTextInput(messages),
+      store: false,
+      ...(instructions ? { instructions } : {}),
+    },
+    timeoutMs,
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
+  if (response.status < 200 || response.status >= 300) {
+    const detail = summarizeProviderErrorData(response.data)
+    throw createError({
+      statusCode: response.status,
+      statusMessage: `OpenAI Responses returned ${response.status}: ${detail}`,
+    })
+  }
+
+  const text = extractOpenAiResponsesText(response.data)
+  if (!text) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'OpenAI Responses returned empty content.',
+    })
+  }
+
+  return {
+    output: text,
+    providerRequestId: readString(isRecord(response.data) ? response.data.id : undefined) ?? `responses:${Date.now()}`,
+    latencyMs: Date.now() - startedAt,
+    usage: [
+      {
+        ...extractOpenAiResponsesUsage(response.data),
+        providerId: provider.id,
+        capability,
+        model,
+        providerType: intelligenceType,
+      },
+    ],
+  }
+}
+
+function extractOpenAiChatContent(data: unknown): string {
+  const choices = isRecord(data) && Array.isArray(data.choices) ? data.choices : []
+  for (const choice of choices) {
+    const message = isRecord(choice) ? choice.message : null
+    const content = isRecord(message) ? message.content : null
+    const text = readString(content)
+    if (text)
+      return text
+  }
+  return ''
+}
+
+function extractOpenAiChatUsage(data: unknown): SceneRunUsage {
+  const usage = isRecord(data) && isRecord(data.usage) ? data.usage : {}
+  const promptTokens = typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : 0
+  const completionTokens = typeof usage.completion_tokens === 'number' ? usage.completion_tokens : 0
+  const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens : promptTokens + completionTokens
+  return {
+    unit: 'token',
+    quantity: totalTokens,
+    billable: true,
+  }
+}
+
+async function invokeOpenAiCompatibleSceneAdapter(
+  event: H3Event,
+  provider: ProviderRegistryRecord,
+  capability: string,
+  input: unknown,
+): Promise<SceneAdapterResult> {
+  const apiKey = await resolveProviderApiKey(event, provider)
+  const intelligenceType = readMetadataString(provider, 'intelligenceType') ?? provider.vendor
+  const baseUrl = resolveProviderBaseUrl(intelligenceType, provider.endpoint)
+  const compatBaseUrl = buildOpenAiCompatBaseUrls(baseUrl)[0] ?? baseUrl.replace(/\/+$/, '')
+  const endpoint = `${compatBaseUrl}/chat/completions`
+  const normalizedInput = normalizeIntelligenceScenePayload(capability, input)
+  const model = resolveOpenAiSceneModel(provider, normalizedInput)
+  const messages = buildSceneIntelligenceMessages(capability, normalizedInput)
+  const timeoutMs = typeof provider.metadata?.timeout === 'number' ? provider.metadata.timeout : 45000
+  const startedAt = Date.now()
+  const response = await networkClient.request<Record<string, unknown> | string>({
+    method: 'POST',
+    url: endpoint,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      model,
+      messages,
+      temperature: 0.2,
+    },
+    timeoutMs,
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+  })
+  if (response.status < 200 || response.status >= 300) {
+    const detail = summarizeProviderErrorData(response.data)
+    throw createError({
+      statusCode: response.status,
+      statusMessage: `OpenAI-compatible chat returned ${response.status}: ${detail}`,
+    })
+  }
+
+  const text = extractOpenAiChatContent(response.data)
+  if (!text) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'OpenAI-compatible chat returned empty content.',
+    })
+  }
+
+  return {
+    output: text,
+    providerRequestId: readString(isRecord(response.data) ? response.data.id : undefined) ?? `chat:${Date.now()}`,
+    latencyMs: Date.now() - startedAt,
+    usage: [
+      {
+        ...extractOpenAiChatUsage(response.data),
+        providerId: provider.id,
+        capability,
+        model,
+        providerType: intelligenceType,
+      },
+    ],
+  }
+}
+
+const intelligenceTextAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability }) => {
+  if (readMetadataString(provider, 'transport') === 'responses') {
+    return await invokeOpenAiResponsesSceneAdapter(event, provider, capability, input)
+  }
+
+  return await invokeOpenAiCompatibleSceneAdapter(event, provider, capability, input)
 }
 
 function normalizeFxConvertInput(input: unknown) {
@@ -570,8 +871,17 @@ function registerDefaultSceneCapabilityAdapters() {
   registerSceneCapabilityAdapter('tencent-cloud:text.translate', tencentTextTranslateAdapter)
   registerSceneCapabilityAdapter('tencent-cloud:image.translate', tencentImageTranslateAdapter)
   registerSceneCapabilityAdapter('tencent-cloud:image.translate.e2e', tencentImageTranslateAdapter)
+  registerSceneCapabilityAdapter('openai:chat.completion', intelligenceTextAdapter)
+  registerSceneCapabilityAdapter('openai:text.summarize', intelligenceTextAdapter)
+  registerSceneCapabilityAdapter('openai:content.extract', intelligenceTextAdapter)
   registerSceneCapabilityAdapter('openai:vision.ocr', intelligenceVisionOcrAdapter)
+  registerSceneCapabilityAdapter('deepseek:chat.completion', intelligenceTextAdapter)
+  registerSceneCapabilityAdapter('deepseek:text.summarize', intelligenceTextAdapter)
+  registerSceneCapabilityAdapter('deepseek:content.extract', intelligenceTextAdapter)
   registerSceneCapabilityAdapter('deepseek:vision.ocr', intelligenceVisionOcrAdapter)
+  registerSceneCapabilityAdapter('custom:chat.completion', intelligenceTextAdapter)
+  registerSceneCapabilityAdapter('custom:text.summarize', intelligenceTextAdapter)
+  registerSceneCapabilityAdapter('custom:content.extract', intelligenceTextAdapter)
   registerSceneCapabilityAdapter('custom:vision.ocr', intelligenceVisionOcrAdapter)
   registerSceneCapabilityAdapter('custom:overlay.render', localOverlayRenderAdapter)
   registerSceneCapabilityAdapter('exchange-rate:fx.rate.latest', fxRateLatestAdapter)
@@ -1640,7 +1950,9 @@ export async function runSceneOrchestrator(
         break
       }
       catch (error) {
-        const message = error instanceof Error ? error.message : 'Provider adapter failed.'
+        const message = error && typeof error === 'object' && 'statusMessage' in error && typeof error.statusMessage === 'string'
+          ? error.statusMessage
+          : error instanceof Error ? error.message : 'Provider adapter failed.'
         lastFailure = {
           statusCode: 502,
           code: 'PROVIDER_ADAPTER_FAILED',

@@ -40,6 +40,14 @@ const intelligenceOcrMocks = vi.hoisted(() => ({
   invokeIntelligenceVisionOcr: vi.fn(),
 }))
 
+const credentialMocks = vi.hoisted(() => ({
+  getProviderCredential: vi.fn(),
+}))
+
+const networkMocks = vi.hoisted(() => ({
+  request: vi.fn(),
+}))
+
 vi.mock('./providerRegistryStore', () => ({
   getProviderRegistryEntry: storeMocks.getProviderRegistryEntry,
 }))
@@ -52,6 +60,12 @@ vi.mock('./providerUsageLedgerStore', () => ledgerMocks)
 vi.mock('./providerHealthStore', () => healthMocks)
 vi.mock('./exchangeRateService', () => fxMocks)
 vi.mock('./intelligenceVisionOcrProvider', () => intelligenceOcrMocks)
+vi.mock('./providerCredentialStore', () => credentialMocks)
+vi.mock('@talex-touch/utils/network', () => ({
+  networkClient: {
+    request: networkMocks.request,
+  },
+}))
 
 function provider(overrides: Partial<ProviderRegistryRecord> = {}): ProviderRegistryRecord {
   return {
@@ -255,6 +269,15 @@ describe('runSceneOrchestrator', () => {
     storeMocks.getProviderRegistryEntry.mockResolvedValue(provider())
     ledgerMocks.recordProviderUsageLedger.mockResolvedValue([])
     healthMocks.getLatestProviderHealthChecks.mockResolvedValue(new Map())
+    credentialMocks.getProviderCredential.mockResolvedValue({ apiKey: 'sk-test' })
+    networkMocks.request.mockResolvedValue({
+      status: 200,
+      data: {
+        id: 'resp_1',
+        output_text: 'hello from responses',
+        usage: { input_tokens: 3, output_tokens: 4, total_tokens: 7 },
+      },
+    })
   })
 
   it('exposes provider capability adapter readiness for registry convergence', () => {
@@ -300,6 +323,32 @@ describe('runSceneOrchestrator', () => {
     })
   })
 
+  it('marks default AI text adapters as ready for provider registry templates', () => {
+    resetSceneCapabilityAdaptersForTest()
+    const openAiProvider = provider({
+      id: 'prv_openai_responses',
+      vendor: 'openai',
+      capabilities: [
+        capability('prv_openai_responses', 'chat.completion', 'token'),
+        capability('prv_openai_responses', 'text.summarize', 'token'),
+        capability('prv_openai_responses', 'content.extract', 'token'),
+      ],
+    })
+
+    expect(resolveSceneCapabilityAdapterReadiness(openAiProvider, 'chat.completion')).toMatchObject({
+      ready: true,
+      matchedKey: 'openai:chat.completion',
+    })
+    expect(resolveSceneCapabilityAdapterReadiness(openAiProvider, 'text.summarize')).toMatchObject({
+      ready: true,
+      matchedKey: 'openai:text.summarize',
+    })
+    expect(resolveSceneCapabilityAdapterReadiness(openAiProvider, 'content.extract')).toMatchObject({
+      ready: true,
+      matchedKey: 'openai:content.extract',
+    })
+  })
+
   it('dry run 只解析 scene、provider 与 strategy，不调用 adapter', async () => {
     const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
       input: { text: 'hello' },
@@ -328,6 +377,204 @@ describe('runSceneOrchestrator', () => {
       status: 'planned',
       mode: 'dry_run',
     }))
+  })
+
+  it('默认 OpenAI Responses adapter 调用 /responses 并返回标准 output/usage', async () => {
+    resetSceneCapabilityAdaptersForTest()
+    const openAiProvider = provider({
+      id: 'prv_openai_responses',
+      name: 'openai-responses-ai-main',
+      displayName: 'OpenAI Responses',
+      vendor: 'openai',
+      authType: 'api_key',
+      authRef: 'secure://providers/openai-responses-ai-main',
+      endpoint: 'https://api.openai.com/v1',
+      metadata: {
+        source: 'intelligence',
+        transport: 'responses',
+        intelligenceType: 'openai',
+        defaultModel: 'gpt-4.1-mini',
+      },
+      capabilities: [
+        capability('prv_openai_responses', 'chat.completion', 'token'),
+      ],
+    })
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(openAiProvider)
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      id: 'nexus.intelligence.chat',
+      requiredCapabilities: ['chat.completion'],
+      bindings: [
+        {
+          ...binding('prv_openai_responses', 'chat.completion', 10),
+          sceneId: 'nexus.intelligence.chat',
+        },
+      ],
+    }))
+
+    const run = await runSceneOrchestrator(makeEvent(), 'nexus.intelligence.chat', {
+      input: { messages: [{ role: 'user', content: 'hello' }] },
+    })
+
+    expect(credentialMocks.getProviderCredential).toHaveBeenCalledWith(
+      expect.anything(),
+      'secure://providers/openai-responses-ai-main',
+    )
+    expect(networkMocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'https://api.openai.com/v1/responses',
+      headers: expect.objectContaining({ Authorization: 'Bearer sk-test' }),
+      body: expect.objectContaining({
+        model: 'gpt-4.1-mini',
+        input: 'user: hello',
+        store: false,
+      }),
+    }))
+    expect(run).toMatchObject({
+      status: 'completed',
+      output: 'hello from responses',
+      usage: [
+        expect.objectContaining({
+          unit: 'token',
+          quantity: 7,
+          providerId: 'prv_openai_responses',
+          capability: 'chat.completion',
+          model: 'gpt-4.1-mini',
+          providerType: 'openai',
+        }),
+      ],
+    })
+  })
+
+  it('默认 OpenAI-compatible adapter 调用 /chat/completions 支持摘要场景', async () => {
+    resetSceneCapabilityAdaptersForTest()
+    networkMocks.request.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        id: 'chatcmpl_1',
+        choices: [{ message: { content: 'short summary' } }],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      },
+    })
+    const openAiProvider = provider({
+      id: 'prv_openai_compat',
+      name: 'openai-compatible-ai-main',
+      displayName: 'OpenAI Compatible AI',
+      vendor: 'openai',
+      authType: 'api_key',
+      authRef: 'secure://providers/openai-compatible-ai-main',
+      endpoint: 'https://api.openai.com/v1',
+      metadata: {
+        source: 'intelligence',
+        transport: 'chat.completions',
+        intelligenceType: 'openai',
+        defaultModel: 'gpt-4.1-mini',
+      },
+      capabilities: [
+        capability('prv_openai_compat', 'text.summarize', 'token'),
+      ],
+    })
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(openAiProvider)
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      id: 'nexus.intelligence.summarize',
+      requiredCapabilities: ['text.summarize'],
+      bindings: [
+        {
+          ...binding('prv_openai_compat', 'text.summarize', 10),
+          sceneId: 'nexus.intelligence.summarize',
+        },
+      ],
+    }))
+
+    const run = await runSceneOrchestrator(makeEvent(), 'nexus.intelligence.summarize', {
+      input: { text: 'Long text for summarization.', style: 'concise' },
+    })
+
+    expect(networkMocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'https://api.openai.com/v1/chat/completions',
+      body: expect.objectContaining({
+        model: 'gpt-4.1-mini',
+        messages: expect.arrayContaining([
+          expect.objectContaining({ role: 'system', content: expect.stringContaining('summarization assistant') }),
+          expect.objectContaining({ role: 'user', content: 'Long text for summarization.' }),
+        ]),
+      }),
+    }))
+    expect(run).toMatchObject({
+      status: 'completed',
+      output: 'short summary',
+      usage: [
+        expect.objectContaining({
+          quantity: 8,
+          providerId: 'prv_openai_compat',
+          capability: 'text.summarize',
+        }),
+      ],
+    })
+  })
+
+  it('OpenAI adapter failure returns provider error message in failed scene run', async () => {
+    resetSceneCapabilityAdaptersForTest()
+    networkMocks.request.mockResolvedValueOnce({
+      status: 401,
+      data: {
+        error: {
+          message: 'Incorrect API key provided.',
+        },
+      },
+    })
+    const openAiProvider = provider({
+      id: 'prv_openai_extract',
+      name: 'openai-compatible-ai-main',
+      displayName: 'OpenAI Compatible AI',
+      vendor: 'openai',
+      authType: 'api_key',
+      authRef: 'secure://providers/openai-compatible-ai-main',
+      endpoint: 'https://api.openai.com/v1',
+      metadata: {
+        source: 'intelligence',
+        transport: 'chat.completions',
+        intelligenceType: 'openai',
+        defaultModel: 'gpt-4.1-mini',
+      },
+      capabilities: [
+        capability('prv_openai_extract', 'content.extract', 'token'),
+      ],
+    })
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(openAiProvider)
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      id: 'nexus.intelligence.extract',
+      requiredCapabilities: ['content.extract'],
+      fallback: 'disabled',
+      bindings: [
+        {
+          ...binding('prv_openai_extract', 'content.extract', 10),
+          sceneId: 'nexus.intelligence.extract',
+        },
+      ],
+    }))
+
+    await expect(runSceneOrchestrator(makeEvent(), 'nexus.intelligence.extract', {
+      input: { text: 'Extract actions from this text.' },
+    })).rejects.toMatchObject({
+      statusCode: 502,
+      data: {
+        code: 'PROVIDER_ADAPTER_FAILED',
+        run: expect.objectContaining({
+          status: 'failed',
+          error: expect.objectContaining({
+            message: 'OpenAI-compatible chat returned 401: Incorrect API key provided.',
+          }),
+          fallbackTrail: expect.arrayContaining([
+            expect.objectContaining({
+              providerId: 'prv_openai_extract',
+              status: 'failed',
+              reason: 'OpenAI-compatible chat returned 401: Incorrect API key provided.',
+            }),
+          ]),
+        }),
+      },
+    })
   })
 
   it('真实执行但缺少 provider adapter 时返回标准 adapter unavailable 错误', async () => {
