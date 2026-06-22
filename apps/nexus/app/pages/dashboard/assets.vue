@@ -392,13 +392,13 @@ const myPlugins = computed(() =>
 )
 
 const myPluginColumns = computed<DataTableColumn<DashboardPlugin>[]>(() => [
-  { key: 'asset', title: isZh.value ? '发布物' : 'Asset', width: '30%' },
-  { key: 'typeCategory', title: isZh.value ? '类型 / 分类' : 'Type / Category', width: 150 },
-  { key: 'status', title: isZh.value ? '状态' : 'Status', width: 130 },
-  { key: 'latestVersion', title: isZh.value ? '最新版本' : 'Latest Version', width: 140 },
-  { key: 'installs', title: isZh.value ? '安装量' : 'Installs', width: 100 },
-  { key: 'updatedAt', title: isZh.value ? '更新时间' : 'Updated', width: 130 },
-  { key: 'actions', title: isZh.value ? '操作' : 'Actions', width: 110, align: 'right' },
+  { key: 'asset', title: isZh.value ? '发布物' : 'Asset', width: '34%' },
+  { key: 'typeCategory', title: isZh.value ? '类型 / 分类' : 'Type / Category', width: 126 },
+  { key: 'status', title: isZh.value ? '状态' : 'Status', width: 96, nowrap: true },
+  { key: 'latestVersion', title: isZh.value ? '最新版本' : 'Latest Version', width: 104, nowrap: true },
+  { key: 'installs', title: isZh.value ? '安装量' : 'Installs', width: 82, nowrap: true },
+  { key: 'updatedAt', title: isZh.value ? '更新时间' : 'Updated', width: 142, nowrap: true },
+  { key: 'actions', title: isZh.value ? '操作' : 'Actions', width: 92, align: 'right', nowrap: true },
 ])
 
 const pluginsInitialLoading = computed(() =>
@@ -1304,7 +1304,8 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
             :columns="myPluginColumns"
             :data="myPlugins"
             row-key="id"
-            class="min-w-[980px]"
+            table-layout="fixed"
+            class="DashboardAssetsTable min-w-[1040px]"
             @row-click="handlePluginRowClick"
           >
             <template #cell-asset="{ row: plugin }">
@@ -1345,6 +1346,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 :anchor="{ placement: 'top', showArrow: true }"
               >
                 <TxStatusBadge
+                  class="DashboardAssetStatusBadge"
                   :text="t(`dashboard.sections.plugins.statuses.${plugin.status}`)"
                   :status="resolvePluginStatus(plugin.status)"
                   :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
@@ -1362,8 +1364,9 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 :anchor="{ placement: 'top', showArrow: true }"
               >
                 <TxTag
+                  class="DashboardAssetVersionTag"
                   :label="`v${plugin.latestVersion.version}`"
-                  :color="resolveToneColor(resolveChannelStatus(plugin.latestVersion.channel))"
+                  :color="resolveToneColor('muted')"
                   :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
                   size="sm"
                 />
@@ -1374,7 +1377,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
               <span class="text-sm text-black/65 dark:text-white/65">{{ formatInstalls(plugin.installs) }}</span>
             </template>
             <template #cell-updatedAt="{ row: plugin }">
-              <span class="text-sm text-black/55 dark:text-white/55">{{ formatDate(plugin.updatedAt) }}</span>
+              <span class="DashboardAssetDate text-sm text-black/55 dark:text-white/55">{{ formatDate(plugin.updatedAt) }}</span>
             </template>
             <template #cell-actions="{ row: plugin }">
               <TxButton
@@ -1465,9 +1468,15 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
 </template>
 
 <style scoped>
+:deep(.DashboardAssetsTable .tx-data-table__th),
+:deep(.DashboardAssetsTable .tx-data-table__cell) {
+  vertical-align: middle;
+}
+
 :deep(.DashboardAssetMetaHeader.TxPluginMetaHeader) {
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 :deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-Icon) {
@@ -1489,6 +1498,12 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
 :deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-Description) {
   margin-top: 2px;
   font-size: 0.75rem;
+  line-height: 1.35;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 :deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-MetaRow),
@@ -1498,5 +1513,26 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
 
 .DashboardAssetMetaHeader-OfficialMark {
   color: color-mix(in srgb, var(--tx-color-warning, #f59e0b) 88%, transparent);
+}
+
+:deep(.DashboardAssetStatusBadge.tx-status-badge) {
+  gap: 4px;
+  border-radius: 7px;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+:deep(.DashboardAssetStatusBadge .tx-status-badge__icon) {
+  font-size: 12px;
+}
+
+:deep(.DashboardAssetVersionTag.tx-tag) {
+  letter-spacing: 0;
+}
+
+.DashboardAssetDate {
+  display: inline-block;
+  white-space: normal;
+  line-height: 1.45;
 }
 </style>

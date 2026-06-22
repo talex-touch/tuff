@@ -317,7 +317,7 @@ onBeforeUnmount(() => {
     :empty-text="emptyText"
     overlay-class="NexusGlobalSearchOverlay"
     panel-class="NexusGlobalSearchPanel"
-    :max-height="150"
+    :max-height="195"
     @open="runFlipAnimation"
     @close="runFlipCloseAnimation"
     @update:query="onQueryUpdate"
@@ -368,18 +368,18 @@ onBeforeUnmount(() => {
 }
 
 :global(.NexusGlobalSearchPanel.tx-command-palette__panel) {
-  width: min(456px, calc(100vw - 32px));
+  width: min(593px, calc(100vw - 32px));
   background: color-mix(in srgb, var(--tx-bg-color, #fff) 92%, rgba(12, 14, 18, 0.08));
   border-color: color-mix(in srgb, var(--tx-border-color, #d4d7de) 62%, transparent);
-  border-radius: 16px;
+  border-radius: 21px;
   box-shadow:
-    0 14px 42px rgba(0, 0, 0, 0.24),
+    0 18px 55px rgba(0, 0, 0, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__search) {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 52px;
+  padding: 0 18px;
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__search-icon) {
@@ -387,35 +387,40 @@ onBeforeUnmount(() => {
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__input) {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 500;
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__list) {
-  min-height: 76px;
-  padding: 8px;
-  gap: 4px;
+  min-height: 99px;
+  padding: 10px;
+  gap: 5px;
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__item) {
-  min-height: 34px;
-  border-radius: 9px;
-  padding: 5px 8px;
-  gap: 8px;
+  min-height: 44px;
+  border-radius: 12px;
+  padding: 7px 10px;
+  gap: 10px;
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__icon) {
-  width: 16px;
-  flex: 0 0 16px;
+  width: 21px;
+  flex: 0 0 21px;
+}
+
+:global(.NexusGlobalSearchPanel .tx-command-palette__icon .tuff-icon),
+:global(.NexusGlobalSearchPanel .tx-command-palette__search-icon .tuff-icon) {
+  font-size: 21px !important;
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__title) {
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.25;
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__desc) {
-  font-size: 10px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -425,55 +430,56 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 13px;
 }
 
 .NexusGlobalSearchEmpty span:first-child {
-  font-size: 18px;
+  font-size: 23px;
 }
 
 :global(.NexusGlobalSearchPanel .tx-command-palette__empty) {
-  min-height: 58px;
+  min-height: 75px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 17px;
 }
 
 .NexusGlobalSearchFooter {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px 8px;
+  gap: 10px;
+  padding: 8px 13px 10px;
   border-top: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, #ebeef5) 72%, transparent);
   color: var(--tx-text-color-secondary, #909399);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .NexusGlobalSearchShortcuts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  max-width: 300px;
+  gap: 10px 16px;
+  max-width: 390px;
 }
 
 .NexusGlobalSearchShortcut {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   white-space: nowrap;
 }
 
 .NexusGlobalSearchShortcut kbd {
-  min-width: 18px;
-  padding: 1px 5px;
+  min-width: 23px;
+  padding: 1px 7px;
   border: 1px solid color-mix(in srgb, var(--tx-border-color, #d4d7de) 78%, transparent);
-  border-radius: 5px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 84%, transparent);
   color: var(--tx-text-color-primary, #303133);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.45;
   text-align: center;

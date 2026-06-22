@@ -527,7 +527,7 @@ onMounted(() => {
           <p class="text-xs text-black/45 dark:text-white/45">
             {{ t('dashboard.notifications.scopeHint', '仅显示当前登录用户的通知。') }}
           </p>
-          <TxButton size="small" variant="secondary" :loading="loading" icon="i-carbon-renew" @click="loadNotifications">
+          <TxButton size="small" variant="secondary" :loading="loading" @click="loadNotifications">
             {{ t('dashboard.notifications.refresh', '刷新') }}
           </TxButton>
           <TxButton size="small" variant="primary" :disabled="!hasUnread || actionLoading" :loading="actionLoading" icon="i-carbon-checkmark" @click="markAllRead">

@@ -850,8 +850,25 @@ function closeDeleteConfirm() {
 }
 
 .UpdateTable-Footer :deep(.tx-pagination__list) {
+  display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.UpdateTable-Footer :deep(.tx-pagination__item) {
+  display: flex;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.UpdateTable-Footer :deep(.tx-pagination__item::marker) {
+  content: '';
 }
 
 .UpdateTable-Footer :deep(.tx-pagination__info) {

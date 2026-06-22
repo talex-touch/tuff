@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
+import { formatCompactAccountLabel } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
@@ -112,7 +113,7 @@ const greetingName = computed(() => {
   if (userPending.value || !user.value)
     return fallbackName.value
   const name = user.value.name?.trim()
-  return name ? t('dashboard.header.namedName', { name }) : fallbackName.value
+  return name ? t('dashboard.header.namedName', { name: formatCompactAccountLabel(name) }) : fallbackName.value
 })
 const greetingLine = computed(() => t('dashboard.header.greeting', { name: greetingName.value }))
 
@@ -369,6 +370,10 @@ function formatDevicePlatform(value: string | null | undefined): string {
     return t('dashboard.overview.deviceUnknown')
 
   return value
+}
+
+function formatDevicePreviewName(device: DeviceItem): string {
+  return device.deviceName || t('dashboard.devices.unnamed')
 }
 
 function getDeviceBrandIcon(device: DeviceItem): string {
@@ -675,30 +680,35 @@ function isCurrentDevice(device: DeviceItem) {
             <div
               v-for="device in viewModel.devices"
               :key="device.id"
-              class="flex gap-3 rounded-xl border border-black/[0.05] bg-black/[0.02] px-4 py-3 text-sm dark:border-white/[0.08] dark:bg-white/[0.03]"
+              class="DashboardOverviewDevice"
             >
-              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/[0.04] text-xl text-black/70 dark:bg-white/[0.06] dark:text-white/75">
-                <span :class="getDeviceBrandIcon(device)" aria-hidden="true" />
+              <div class="DashboardOverviewDevice-Brand">
+                <div class="DashboardOverviewDevice-Icon">
+                  <span :class="getDeviceBrandIcon(device)" aria-hidden="true" />
+                </div>
               </div>
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="min-w-0 text-black dark:text-white">
-                    <span class="truncate align-bottom">{{ device.deviceName || t('dashboard.devices.unnamed') }}</span>
+
+              <div class="DashboardOverviewDevice-Content">
+                <div class="DashboardOverviewDevice-TitleRow">
+                  <p class="DashboardOverviewDevice-Title">
+                    <span class="DashboardOverviewDevice-TitleName truncate">{{ formatDevicePreviewName(device) }}</span>
+                  </p>
+                  <div class="DashboardOverviewDevice-Meta">
                     <span
                       v-if="isCurrentDevice(device)"
-                      class="ml-2 rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-600 dark:text-green-300"
+                      class="DashboardOverviewDevice-Badge"
                     >
                       {{ t('dashboard.overview.devices.current') }}
                     </span>
-                  </p>
-                  <p class="text-xs text-black/50 dark:text-white/50">
-                    {{ formatRelativeTime(device.lastSeenAt || device.createdAt) }}
-                  </p>
+                    <span class="DashboardOverviewDevice-Time">
+                      {{ formatRelativeTime(device.lastSeenAt || device.createdAt) }}
+                    </span>
+                  </div>
                 </div>
-                <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                <p class="DashboardOverviewDevice-Platform">
                   {{ formatDevicePlatform(device.platform) }}
                 </p>
-                <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                <p class="DashboardOverviewDevice-Subtle">
                   {{ formatDeviceLocation(device) }}
                   <span v-if="device.lastSeenIpMasked || device.lastLoginIpMasked"> · {{ device.lastSeenIpMasked || device.lastLoginIpMasked }}</span>
                 </p>
@@ -715,5 +725,161 @@ function isCurrentDevice(device: DeviceItem) {
 .DashboardOverview-Heading {
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.DashboardOverviewDevice {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid rgb(0 0 0 / 0.05);
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.02);
+  padding: 12px;
+  font-size: 14px;
+}
+
+.dark .DashboardOverviewDevice {
+  border-color: rgb(255 255 255 / 0.08);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.DashboardOverviewDevice-Brand {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.DashboardOverviewDevice-Icon {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.04);
+  color: rgb(0 0 0 / 0.7);
+  font-size: 22px;
+}
+
+.dark .DashboardOverviewDevice-Icon {
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(255 255 255 / 0.75);
+}
+
+.DashboardOverviewDevice-Content {
+  min-width: 0;
+}
+
+.DashboardOverviewDevice-TitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.DashboardOverviewDevice-Title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: rgb(0 0 0);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.dark .DashboardOverviewDevice-Title {
+  color: rgb(255 255 255);
+}
+
+.DashboardOverviewDevice-TitleName {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.DashboardOverviewDevice-Meta {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 44%;
+}
+
+.DashboardOverviewDevice-Badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: 999px;
+  background: rgb(34 197 94 / 0.2);
+  padding: 2px 8px;
+  color: rgb(22 163 74);
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.dark .DashboardOverviewDevice-Badge {
+  color: rgb(134 239 172);
+}
+
+.DashboardOverviewDevice-Time {
+  flex: 0 0 auto;
+  color: rgb(0 0 0 / 0.5);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.dark .DashboardOverviewDevice-Time {
+  color: rgb(255 255 255 / 0.5);
+}
+
+.DashboardOverviewDevice-Platform,
+.DashboardOverviewDevice-Subtle {
+  margin: 4px 0 0;
+  color: rgb(0 0 0 / 0.5);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.DashboardOverviewDevice-Subtle {
+  color: rgb(0 0 0 / 0.45);
+  overflow-wrap: anywhere;
+}
+
+.dark .DashboardOverviewDevice-Platform {
+  color: rgb(255 255 255 / 0.5);
+}
+
+.dark .DashboardOverviewDevice-Subtle {
+  color: rgb(255 255 255 / 0.45);
+}
+
+@media (max-width: 420px) {
+  .DashboardOverviewDevice {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .DashboardOverviewDevice-Icon {
+    width: 38px;
+    height: 38px;
+    font-size: 20px;
+  }
+
+  .DashboardOverviewDevice-TitleRow {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .DashboardOverviewDevice-Meta {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
 }
 </style>

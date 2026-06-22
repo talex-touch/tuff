@@ -521,7 +521,7 @@ onUnmounted(() => {
         :model-value="false"
         guidance
         :title="t('dashboard.privacy.deleteData', '删除我的数据')"
-        :description="t('dashboard.privacy.deleteDataDesc', '进入 30 天注销冷静期；30 天内重新登录会自动取消注销。')"
+        :description="t('dashboard.privacy.deleteDataDesc', '提交注销确认后才会进入 30 天冷静期。')"
         default-icon="i-carbon-trash-can"
         active-icon="i-carbon-trash-can"
         @click="openDeletionDialog"

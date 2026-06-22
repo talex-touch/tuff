@@ -11,6 +11,7 @@ export const publicPrerenderRoutes = [
   '/protocol',
   '/updates',
   '/store',
+  '/login',
   '/sign-in',
   '/forgot-password',
   '/verify-waiting',
