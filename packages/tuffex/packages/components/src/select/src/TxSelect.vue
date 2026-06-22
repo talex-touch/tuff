@@ -161,16 +161,6 @@ function isOptionVisible(opt: TxSelectOption, query: string) {
 
 const activeQuery = computed(() => props.multiple ? multiInput.value : searchQuery.value)
 
-const filteredOptions = computed<TxSelectOption[]>(() => {
-  const list = flattenOptions(props.options ?? [])
-  if (props.remote)
-    return list
-  const q = activeQuery.value.trim().toLowerCase()
-  if (!q)
-    return list
-  return list.filter(opt => isOptionVisible(opt, q))
-})
-
 const renderedOptionGroups = computed(() => {
   const q = activeQuery.value.trim().toLowerCase()
   const source = props.options ?? []

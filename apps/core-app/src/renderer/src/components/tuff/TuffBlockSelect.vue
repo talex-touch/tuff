@@ -5,6 +5,7 @@ import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'
 import { computed } from 'vue'
 import { TxSelect } from '@talex-touch/tuffex/select'
+import type { TxSelectModelValue } from '@talex-touch/tuffex/select'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(
@@ -29,8 +30,10 @@ const emits = defineEmits<{
 const value = useModelWrapper(props, emits) as unknown as WritableComputedRef<string | number>
 const isActive = computed(() => value.value !== undefined && value.value !== null)
 
-function handleChange(val: string | number, evt?: Event) {
-  emits('change', val, evt)
+function handleChange(val: TxSelectModelValue) {
+  if (Array.isArray(val)) return
+
+  emits('change', val)
 }
 </script>
 
