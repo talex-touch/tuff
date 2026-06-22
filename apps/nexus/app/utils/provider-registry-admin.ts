@@ -108,6 +108,8 @@ export interface ProviderRegistryTemplate {
   authRef: string
   endpoint: string
   region: string
+  models?: string[]
+  defaultModel?: string
   capabilities: CapabilityFormRow[]
   metadata: Record<string, unknown>
 }
@@ -419,8 +421,10 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     displayName: 'OpenAI Compatible AI',
     authType: 'api_key',
     authRef: 'secure://providers/openai-compatible-ai-main',
-    endpoint: 'https://api.openai.com/v1',
+    endpoint: 'https://api.openai.com',
     region: 'global',
+    models: ['gpt-4.1-mini'],
+    defaultModel: 'gpt-4.1-mini',
     capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract', 'vision.ocr']),
     metadata: {
       source: 'intelligence',
@@ -441,8 +445,10 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     displayName: 'OpenAI Responses',
     authType: 'api_key',
     authRef: 'secure://providers/openai-responses-ai-main',
-    endpoint: 'https://api.openai.com/v1',
+    endpoint: 'https://api.openai.com',
     region: 'global',
+    models: ['gpt-4.1-mini'],
+    defaultModel: 'gpt-4.1-mini',
     capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract', 'vision.ocr']),
     metadata: {
       source: 'intelligence',
@@ -463,8 +469,10 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     displayName: 'DeepSeek AI',
     authType: 'api_key',
     authRef: 'secure://providers/deepseek-ai-main',
-    endpoint: 'https://api.deepseek.com/v1',
+    endpoint: 'https://api.deepseek.com',
     region: 'global',
+    models: ['deepseek-chat'],
+    defaultModel: 'deepseek-chat',
     capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract']),
     metadata: {
       source: 'intelligence',

@@ -367,6 +367,25 @@ describe('/api/dashboard/provider-registry', () => {
     ])
   })
 
+  it('capabilities 接口返回 capability adapter readiness', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    await createProviderHandler(makeEvent())
+
+    h3Mocks.getQuery.mockReturnValue({ vendor: 'tencent-cloud' })
+    const result = await listCapabilitiesHandler(makeEvent())
+
+    expect(result.capabilities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        capability: 'text.translate',
+        adapter: expect.objectContaining({
+          ready: true,
+          matchedKey: 'tencent-cloud:text.translate',
+          reason: 'adapter-ready',
+        }),
+      }),
+    ]))
+  })
+
   it('Provider quota API 按 provider id 保存并返回 request/token 限制', async () => {
     h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
     const created = await createProviderHandler(makeEvent())

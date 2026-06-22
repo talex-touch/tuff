@@ -126,6 +126,9 @@ const providerDrawerOpen = ref(false)
 const providerDrawerMode = ref<'create' | 'edit' | 'quota'>('create')
 const selectedProvider = ref<ProviderRegistryRecord | null>(null)
 const providerSearch = ref('')
+const providerCheckDialogOpen = ref(false)
+const providerCheckDialogProvider = ref<ProviderRegistryRecord | null>(null)
+const providerCheckDialogCapability = ref('')
 
 const sceneDrawerOpen = ref(false)
 const sceneDrawerMode = ref<'create' | 'edit' | 'run'>('create')
@@ -242,6 +245,20 @@ const capabilityColumns = computed<DataTableColumn<ProviderCapabilityRecord>[]>(
   { key: 'adapter', title: t('dashboard.providerRegistry.table.adapter', 'Adapter'), width: 140 },
 ])
 
+function capabilityAdapterText(capability: ProviderCapabilityRecord): string {
+  if (!capability.adapter)
+    return t('dashboard.providerRegistry.adapter.unknown', 'adapter unknown')
+  return capability.adapter.ready
+    ? t('dashboard.providerRegistry.adapter.ready', 'adapter ready')
+    : t('dashboard.providerRegistry.adapter.missing', 'adapter missing')
+}
+
+function capabilityAdapterStatus(capability: ProviderCapabilityRecord): 'success' | 'warning' | 'muted' {
+  if (!capability.adapter)
+    return 'muted'
+  return capability.adapter.ready ? 'success' : 'warning'
+}
+
 const sceneColumns = computed<DataTableColumn<SceneRegistryRecord>[]>(() => [
   { key: 'scene', title: t('dashboard.providerRegistry.table.route', 'Route'), sortable: true, width: '26%' },
   { key: 'status', title: t('dashboard.providerRegistry.fields.status', 'Status'), width: 120 },
@@ -285,10 +302,6 @@ function getProviderName(providerId: string | null | undefined) {
   return providers.value.find(provider => provider.id === providerId)?.displayName ?? providerId
 }
 
-function providerIdentityText(provider: ProviderRegistryRecord) {
-  return `${provider.id} · ${valueLabel(provider.vendor)} · ${valueLabel(provider.authType)}`
-}
-
 function capabilityMeteringUnit(capability: ProviderCapabilityRecord) {
   const unit = capability.metering?.unit
   return typeof unit === 'string' && unit.trim() ? unit : '-'
@@ -305,10 +318,41 @@ function providerModelOptions(panel: ProviderEditPanelState | null) {
   ))
 }
 
+function providerFormModelOptions() {
+  return Array.from(new Set(
+    providerForm.modelsText
+      .split(/[\n,]/)
+      .map(model => model.trim())
+      .filter(Boolean),
+  ))
+}
+
+function providerCheckCapabilityOptions(provider: ProviderRegistryRecord | null) {
+  if (!provider)
+    return []
+  return provider.capabilities
+    .map(capability => capability.capability)
+    .filter(Boolean)
+}
+
 function openCreateProvider() {
   providerDrawerMode.value = 'create'
   selectedProvider.value = null
   providerDrawerOpen.value = true
+}
+
+function openProviderCheckDialog(provider: ProviderRegistryRecord) {
+  providerCheckDialogProvider.value = provider
+  providerCheckDialogCapability.value = providerCheckCapabilityOptions(provider)[0] ?? ''
+  providerCheckDialogOpen.value = true
+}
+
+async function submitProviderCheckDialog() {
+  if (!providerCheckDialogProvider.value)
+    return
+  const provider = providerCheckDialogProvider.value
+  await checkProvider(provider, providerCheckDialogCapability.value || undefined)
+  providerCheckDialogOpen.value = false
 }
 
 function openEditProvider(provider: ProviderRegistryRecord) {
@@ -581,31 +625,6 @@ function filterLabel(option: { value: string, label: string }) {
                     <p class="truncate font-medium text-black dark:text-white" :title="provider.displayName">
                       {{ provider.displayName }}
                     </p>
-                    <TxTooltip
-                      reference-full-width
-                      :open-delay="120"
-                      :close-delay="80"
-                      :anchor="{ placement: 'top-start', maxWidth: 460, showArrow: true }"
-                    >
-                      <p class="w-full min-w-0 overflow-hidden truncate whitespace-nowrap text-xs text-black/50 dark:text-white/50">
-                        {{ providerIdentityText(provider) }}
-                      </p>
-                      <template #content>
-                        <div class="space-y-2 text-xs">
-                          <p class="max-w-[26rem] break-all font-mono text-black/70 dark:text-white/70">
-                            {{ provider.id }}
-                          </p>
-                          <p class="text-black/50 dark:text-white/50">
-                            {{ t('dashboard.providerRegistry.fields.vendor', 'Vendor') }}:
-                            {{ valueLabel(provider.vendor) }}
-                          </p>
-                          <p class="text-black/50 dark:text-white/50">
-                            {{ t('dashboard.providerRegistry.fields.authType', 'Auth type') }}:
-                            {{ valueLabel(provider.authType) }}
-                          </p>
-                        </div>
-                      </template>
-                    </TxTooltip>
                   </div>
                 </template>
                 <template #cell-status="{ row: provider }">
@@ -688,17 +707,19 @@ function filterLabel(option: { value: string, label: string }) {
                       variant="secondary"
                       size="mini"
                       circle
+                      class="provider-action-button"
                       :loading="actionPending === `provider:${provider.id}:check`"
                       :disabled="actionPending !== null && actionPending !== `provider:${provider.id}:check`"
                       icon="i-carbon-data-check"
                       :title="t('dashboard.providerRegistry.actions.check', 'Check')"
                       :aria-label="t('dashboard.providerRegistry.actions.check', 'Check')"
-                      @click="checkProvider(provider)"
+                      @click="openProviderCheckDialog(provider)"
                     />
                     <TxButton
                       variant="secondary"
                       size="mini"
                       circle
+                      class="provider-action-button"
                       icon="i-carbon-edit"
                       :title="t('dashboard.providerRegistry.actions.edit', 'Edit')"
                       :aria-label="t('dashboard.providerRegistry.actions.edit', 'Edit')"
@@ -708,7 +729,8 @@ function filterLabel(option: { value: string, label: string }) {
                       variant="secondary"
                       size="mini"
                       circle
-                      icon="i-carbon-meter"
+                      class="provider-action-button"
+                      icon="i-carbon-wallet"
                       :title="t('dashboard.providerRegistry.actions.quota', 'Quota')"
                       :aria-label="t('dashboard.providerRegistry.actions.quota', 'Quota')"
                       @click="openProviderQuota(provider)"
@@ -717,6 +739,7 @@ function filterLabel(option: { value: string, label: string }) {
                       variant="secondary"
                       size="mini"
                       circle
+                      class="provider-action-button"
                       :disabled="actionPending !== null"
                       icon="i-carbon-trash-can"
                       :title="t('common.delete', 'Delete')"
@@ -901,8 +924,8 @@ function filterLabel(option: { value: string, label: string }) {
                   </template>
                   <template #cell-adapter="{ row: capability }">
                     <TxStatusBadge
-                      :text="capability.adapter?.ready ? t('dashboard.providerRegistry.adapter.ready', 'adapter ready') : t('dashboard.providerRegistry.adapter.missing', 'adapter missing')"
-                      :status="capability.adapter?.ready ? 'success' : 'warning'"
+                      :text="capabilityAdapterText(capability)"
+                      :status="capabilityAdapterStatus(capability)"
                       size="sm"
                     />
                   </template>
@@ -1208,6 +1231,53 @@ function filterLabel(option: { value: string, label: string }) {
           </section>
 
           <section class="space-y-3">
+            <div>
+              <h3 class="text-sm font-medium text-black dark:text-white">
+                {{ t('dashboard.providerRegistry.providers.modelsTitle', 'Models') }}
+              </h3>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.providerRegistry.providers.modelsHint', 'Configure the model IDs this AI channel can dispatch. The fetch action uses the stored secure credential server-side.') }}
+              </p>
+            </div>
+            <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.45fr)]">
+              <div>
+                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.models', 'Models') }}</label>
+                <TuffInput
+                  v-model="providerForm.modelsText"
+                  type="textarea"
+                  :rows="5"
+                  class="w-full font-mono text-xs"
+                  :placeholder="t('dashboard.providerRegistry.providers.modelsPlaceholder', 'One model ID per line, e.g. gpt-4.1-mini')"
+                />
+              </div>
+              <div>
+                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.defaultModel', 'Default model') }}</label>
+                <TuffSelect
+                  v-if="providerFormModelOptions().length"
+                  v-model="providerForm.defaultModel"
+                  class="w-full"
+                  searchable
+                  :search-placeholder="t('dashboard.providerRegistry.providers.modelSearchPlaceholder', 'Search models...')"
+                  :placeholder="t('dashboard.providerRegistry.fields.defaultModel', 'Default model')"
+                >
+                  <TuffSelectItem
+                    v-for="model in providerFormModelOptions()"
+                    :key="model"
+                    :value="model"
+                    :label="model"
+                  />
+                </TuffSelect>
+                <TuffInput
+                  v-else
+                  v-model="providerForm.defaultModel"
+                  class="w-full"
+                  placeholder="gpt-4.1-mini"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section class="space-y-3">
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-sm font-medium text-black dark:text-white">
                 {{ t('dashboard.providerRegistry.providers.capabilitiesTitle', 'Capabilities') }}
@@ -1364,6 +1434,8 @@ function filterLabel(option: { value: string, label: string }) {
                   v-if="providerModelOptions(activeProviderEditPanel).length"
                   v-model="activeProviderEditPanel.defaultModel"
                   class="w-full"
+                  searchable
+                  :search-placeholder="t('dashboard.providerRegistry.providers.modelSearchPlaceholder', 'Search models...')"
                   :placeholder="t('dashboard.providerRegistry.fields.defaultModel', 'Default model')"
                 >
                   <TuffSelectItem
@@ -1388,6 +1460,10 @@ function filterLabel(option: { value: string, label: string }) {
               {{ t('dashboard.providerRegistry.providers.advancedTitle', 'Advanced details') }}
             </summary>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
+              <div class="md:col-span-2">
+                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.providerId', 'Provider ID') }}</label>
+                <TuffInput :model-value="selectedProvider.id" class="w-full font-mono text-xs" readonly />
+              </div>
               <div>
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.authRef', 'Auth ref') }}</label>
                 <TuffInput v-model="activeProviderEditPanel.authRef" class="w-full font-mono text-xs" />
@@ -1418,75 +1494,98 @@ function filterLabel(option: { value: string, label: string }) {
                 {{ t('dashboard.providerRegistry.actions.addCapability', 'Add capability') }}
               </TxButton>
             </div>
-            <div class="space-y-3">
-              <div
-                v-for="(row, index) in activeProviderEditPanel.capabilities"
-                :key="index"
-                class="rounded-xl border border-black/[0.08] p-3 dark:border-white/[0.1]"
-              >
-                <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px_160px_44px]">
-                  <div>
-                    <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}</label>
-                    <TuffInput v-model="row.capability" class="w-full" placeholder="text.chat" />
-                  </div>
-                  <div>
-                    <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit') }}</label>
-                    <TuffInput v-model="row.meteringUnit" class="w-full" placeholder="token" />
-                  </div>
-                  <div>
-                    <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.providerModel', 'Model') }}</label>
-                    <TuffSelect
-                      v-if="providerModelOptions(activeProviderEditPanel).length"
-                      v-model="row.providerModel"
-                      class="w-full"
-                      :placeholder="t('dashboard.providerRegistry.fields.providerModel', 'Model')"
-                    >
-                      <TuffSelectItem value="" :label="t('dashboard.providerRegistry.providers.modelDefault', 'Use default model')" />
-                      <TuffSelectItem
-                        v-for="model in providerModelOptions(activeProviderEditPanel)"
-                        :key="model"
-                        :value="model"
-                        :label="model"
-                      />
-                    </TuffSelect>
-                    <TuffInput v-else v-model="row.providerModel" class="w-full" placeholder="gpt-4.1-mini" />
-                  </div>
-                  <div class="flex items-end justify-end">
-                    <button
-                      type="button"
-                      class="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-red-500 transition hover:bg-red-500/10"
-                      :title="t('common.remove', 'Remove')"
-                      :aria-label="t('common.remove', 'Remove')"
-                      @click="removeProviderCapabilityEditRow(selectedProvider, index)"
-                    >
-                      <span class="i-carbon-close text-base" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-                <details class="mt-3 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.04]">
-                  <summary class="cursor-pointer select-none font-medium text-black/65 dark:text-white/65">
-                    {{ t('dashboard.providerRegistry.providers.capabilityAdvancedTitle', 'Advanced capability JSON') }}
-                  </summary>
-                  <div class="mt-3 grid gap-3 lg:grid-cols-3">
-                    <div>
-                      <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.maxImageBytes', 'Max image bytes') }}</label>
-                      <TuffInput v-model="row.maxImageBytes" type="number" class="w-full" placeholder="5242880" />
-                    </div>
-                    <div class="lg:col-span-2">
-                      <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.meteringJson', 'Metering JSON') }}</label>
-                      <TuffInput v-model="row.meteringText" type="textarea" :rows="3" class="w-full font-mono text-xs" placeholder="{ }" />
-                    </div>
-                    <div>
-                      <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.constraintsJson', 'Constraints JSON') }}</label>
-                      <TuffInput v-model="row.constraintsText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
-                    </div>
-                    <div class="lg:col-span-2">
-                      <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
-                      <TuffInput v-model="row.metadataText" type="textarea" :rows="4" class="w-full font-mono text-xs" placeholder="{ }" />
-                    </div>
-                  </div>
-                </details>
-              </div>
+            <div class="overflow-x-auto rounded-xl border border-black/[0.08] dark:border-white/[0.1]">
+              <table class="w-full min-w-[920px] border-collapse text-left text-sm">
+                <thead class="bg-black/[0.03] text-xs font-medium text-black/55 dark:bg-white/[0.04] dark:text-white/55">
+                  <tr>
+                    <th class="px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}
+                    </th>
+                    <th class="w-36 px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit') }}
+                    </th>
+                    <th class="w-64 px-3 py-2">
+                      {{ t('dashboard.providerRegistry.fields.providerModel', 'Model') }}
+                    </th>
+                    <th class="w-48 px-3 py-2">
+                      {{ t('dashboard.providerRegistry.providers.capabilityAdvancedTitle', 'Advanced capability JSON') }}
+                    </th>
+                    <th class="w-16 px-3 py-2 text-right">
+                      {{ t('dashboard.providerRegistry.table.actions', 'Actions') }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template
+                    v-for="(row, index) in activeProviderEditPanel.capabilities"
+                    :key="index"
+                  >
+                    <tr class="border-t border-black/[0.06] align-top dark:border-white/[0.08]">
+                      <td class="px-3 py-2">
+                        <TuffInput v-model="row.capability" class="w-full" placeholder="text.chat" />
+                      </td>
+                      <td class="px-3 py-2">
+                        <TuffInput v-model="row.meteringUnit" class="w-full" placeholder="token" />
+                      </td>
+                      <td class="px-3 py-2">
+                        <TuffSelect
+                          v-if="providerModelOptions(activeProviderEditPanel).length"
+                          v-model="row.providerModel"
+                          class="w-full"
+                          searchable
+                          :search-placeholder="t('dashboard.providerRegistry.providers.modelSearchPlaceholder', 'Search models...')"
+                          :placeholder="t('dashboard.providerRegistry.fields.providerModel', 'Model')"
+                        >
+                          <TuffSelectItem value="" :label="t('dashboard.providerRegistry.providers.modelDefault', 'Use default model')" />
+                          <TuffSelectItem
+                            v-for="model in providerModelOptions(activeProviderEditPanel)"
+                            :key="model"
+                            :value="model"
+                            :label="model"
+                          />
+                        </TuffSelect>
+                        <TuffInput v-else v-model="row.providerModel" class="w-full" placeholder="gpt-4.1-mini" />
+                      </td>
+                      <td class="px-3 py-2">
+                        <details class="rounded-lg bg-black/[0.02] px-3 py-2 text-xs dark:bg-white/[0.04]">
+                          <summary class="cursor-pointer select-none font-medium text-black/65 dark:text-white/65">
+                            {{ t('dashboard.providerRegistry.providers.advancedTitle', 'Advanced details') }}
+                          </summary>
+                          <div class="mt-3 grid gap-3">
+                            <div>
+                              <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.maxImageBytes', 'Max image bytes') }}</label>
+                              <TuffInput v-model="row.maxImageBytes" type="number" class="w-full" placeholder="5242880" />
+                            </div>
+                            <div>
+                              <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.meteringJson', 'Metering JSON') }}</label>
+                              <TuffInput v-model="row.meteringText" type="textarea" :rows="3" class="w-full font-mono text-xs" placeholder="{ }" />
+                            </div>
+                            <div>
+                              <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.constraintsJson', 'Constraints JSON') }}</label>
+                              <TuffInput v-model="row.constraintsText" type="textarea" :rows="3" class="w-full font-mono text-xs" placeholder="{ }" />
+                            </div>
+                            <div>
+                              <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.metadataJson', 'Metadata JSON') }}</label>
+                              <TuffInput v-model="row.metadataText" type="textarea" :rows="3" class="w-full font-mono text-xs" placeholder="{ }" />
+                            </div>
+                          </div>
+                        </details>
+                      </td>
+                      <td class="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          class="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-red-500 transition hover:bg-red-500/10"
+                          :title="t('common.remove', 'Remove')"
+                          :aria-label="t('common.remove', 'Remove')"
+                          @click="removeProviderCapabilityEditRow(selectedProvider, index)"
+                        >
+                          <span class="i-carbon-close text-base" aria-hidden="true" />
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
             </div>
           </section>
         </template>
@@ -1844,5 +1943,132 @@ function filterLabel(option: { value: string, label: string }) {
         </div>
       </template>
     </TxDrawer>
+
+    <TxDrawer
+      v-model:visible="providerCheckDialogOpen"
+      :title="t('dashboard.providerRegistry.providers.testTitle', 'Test service channel')"
+      size="min(760px, 100vw)"
+      direction="right"
+    >
+      <div v-if="providerCheckDialogProvider" class="space-y-6">
+        <section class="space-y-1">
+          <p class="text-sm font-medium text-black dark:text-white">
+            {{ t('dashboard.providerRegistry.providers.testConnectivity', 'Test connectivity') }}
+            · {{ providerCheckDialogProvider.displayName }}
+          </p>
+          <p class="text-xs text-black/45 dark:text-white/45">
+            {{ t('dashboard.providerRegistry.providers.testHint', 'Select a declared provider capability before running the check.') }}
+          </p>
+        </section>
+
+        <section class="grid gap-3 md:grid-cols-2">
+          <div>
+            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}</label>
+            <TuffSelect
+              v-model="providerCheckDialogCapability"
+              class="w-full"
+              searchable
+              :search-placeholder="t('dashboard.providerRegistry.providers.capabilitySearchPlaceholder', 'Search capabilities...')"
+            >
+              <TuffSelectItem
+                v-for="capability in providerCheckCapabilityOptions(providerCheckDialogProvider)"
+                :key="capability"
+                :value="capability"
+                :label="capability"
+              />
+            </TuffSelect>
+          </div>
+          <div>
+            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.defaultModel', 'Default model') }}</label>
+            <TuffInput
+              :model-value="String(providerCheckDialogProvider.metadata?.defaultModel || '-')"
+              class="w-full"
+              readonly
+            />
+          </div>
+          <div class="md:col-span-2">
+            <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.endpoint', 'Endpoint') }}</label>
+            <TuffInput
+              :model-value="providerCheckDialogProvider.endpoint || '-'"
+              class="w-full font-mono text-xs"
+              readonly
+            />
+          </div>
+        </section>
+
+        <section class="space-y-2">
+          <p class="apple-section-title">
+            {{ t('dashboard.providerRegistry.providers.candidateCapabilities', 'Candidate capabilities') }}
+          </p>
+          <div class="overflow-x-auto rounded-xl border border-black/[0.08] dark:border-white/[0.1]">
+            <table class="w-full min-w-[520px] border-collapse text-left text-sm">
+              <thead class="bg-black/[0.03] text-xs font-medium text-black/55 dark:bg-white/[0.04] dark:text-white/55">
+                <tr>
+                  <th class="px-3 py-2">
+                    {{ t('dashboard.providerRegistry.fields.capability', 'Capability') }}
+                  </th>
+                  <th class="w-36 px-3 py-2">
+                    {{ t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit') }}
+                  </th>
+                  <th class="w-40 px-3 py-2">
+                    {{ t('dashboard.providerRegistry.fields.providerModel', 'Model') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="capability in providerCheckDialogProvider.capabilities"
+                  :key="capability.id"
+                  class="border-t border-black/[0.06] dark:border-white/[0.08]"
+                >
+                  <td class="px-3 py-2 font-mono text-xs">
+                    {{ capability.capability }}
+                  </td>
+                  <td class="px-3 py-2 text-xs text-black/55 dark:text-white/55">
+                    {{ capabilityMeteringUnit(capability) }}
+                  </td>
+                  <td class="px-3 py-2 text-xs text-black/55 dark:text-white/55">
+                    {{ capability.metadata?.providerModel || t('dashboard.providerRegistry.providers.modelDefault', 'Use default model') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-end gap-2">
+          <TxButton variant="secondary" size="small" :disabled="actionPending !== null" @click="providerCheckDialogOpen = false">
+            {{ t('common.cancel', 'Cancel') }}
+          </TxButton>
+          <TxButton
+            variant="primary"
+            size="small"
+            :disabled="!providerCheckDialogProvider || !providerCheckDialogCapability || actionPending !== null"
+            @click="submitProviderCheckDialog"
+          >
+            <TxSpinner
+              v-if="providerCheckDialogProvider && actionPending === `provider:${providerCheckDialogProvider.id}:check`"
+              :size="14"
+            />
+            <span :class="providerCheckDialogProvider && actionPending === `provider:${providerCheckDialogProvider.id}:check` ? 'ml-2' : ''">
+              {{ t('dashboard.providerRegistry.actions.check', 'Check') }}
+            </span>
+          </TxButton>
+        </div>
+      </template>
+    </TxDrawer>
   </div>
 </template>
+
+<style scoped>
+.provider-action-button.tx-button.circle {
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+}
+</style>
