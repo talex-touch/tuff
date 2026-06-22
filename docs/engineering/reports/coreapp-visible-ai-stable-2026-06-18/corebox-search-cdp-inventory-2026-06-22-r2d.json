@@ -1,0 +1,38 @@
+{
+  "capturedAt": "2026-06-22T05:40:40.129Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9472/json/list",
+  "targets": [
+    {
+      "index": 0,
+      "id": "7331C0E6F32C52512664AD88D020A902",
+      "type": "page",
+      "title": "Tuff",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "hasWebSocketDebuggerUrl": true
+    },
+    {
+      "index": 1,
+      "id": "6736DFD4CFC5E321A7B57FCADB5E15AD",
+      "type": "page",
+      "title": "Tuff",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "hasWebSocketDebuggerUrl": true
+    },
+    {
+      "index": 2,
+      "id": "F9FC3AC3439FF79ADF0F880292AACE5F",
+      "type": "page",
+      "title": "Tuff",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "hasWebSocketDebuggerUrl": true
+    },
+    {
+      "index": 3,
+      "id": "08BD31AB124DE9EE7654D6BF7E77928F",
+      "type": "page",
+      "title": "Tuff",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+      "hasWebSocketDebuggerUrl": true
+    }
+  ]
+}

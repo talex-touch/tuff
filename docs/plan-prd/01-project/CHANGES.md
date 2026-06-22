@@ -59,7 +59,8 @@
 - 空查询、插件/AI send-mode 或显式 `includeClipboardImage=true` 仍可带图片输入。
 - no-result 空态保留 retry 与 File Index settings action，并在空态 DOM 落地后触发布局刷新。
 - 代码侧验证通过 focused CoreBox tests、CoreApp typecheck 与 `build:unpack`。
-- 2026-06-22 packaged 复采通过本机 Apple Development 签名绕过 macOS 启动阻断，`corebox-search-states` 已取得 idle 与 no-result DOM/stale-image recovery partial evidence；该 surface 仍保持 pending，因为 BrowserWindow 仍停在 `720x56`，searching/warm-up 与 result rows/source/status/reason pills 仍缺真实可见样本。
+- 2026-06-22 R2D packaged 复采通过本机 Apple Development 签名绕过 macOS 启动阻断，并修复普通 `core-box` 可见搜索态 resize 链路；`corebox-search-states` 已取得 idle、searching/warm-up 与 no-result retry/File Index settings 可接受截图。该 surface 仍保持 pending，因为 isolated packaged profile 无 result rows，source/status/reason pills 仍缺真实可见样本，采集期间 app scanner 报 `spawn EBADF`。
+- 2026-06-22 R2I packaged 复采关闭 `corebox-search-states`：`set-query` 会强制触发搜索并在 accept 后派发布局刷新，CoreBox manager 会在内部 `_show=true` 但 BrowserWindow 实际 hidden 时重试 show；真实 `screenshot` 查询让窗口从 `720x56` resize 到 `720x242`，并采到 source/status/reason pills 无重叠的可见截图。
 - 2026-06-22 R3 非 schema runtime-store 小切片完成：FileProvider incremental DB persist、FTS write/delete 与 index worker flush 现在统一进入 indexed source runtime/store evidence；未触碰 `scan_progress` schema migration。
 
 ### ai: pass CoreBox AI Ask packaged stable surface

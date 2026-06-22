@@ -1,0 +1,92 @@
+{
+  "label": "no-result",
+  "capturedAt": "2026-06-22T05:40:42.116Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9472/json/list",
+  "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "readyState": "complete",
+  "bodyClass": "MacIntel core-box",
+  "inner": {
+    "w": 720,
+    "h": 195,
+    "dpr": 2
+  },
+  "documentElement": {
+    "clientHeight": 195,
+    "scrollHeight": 195,
+    "offsetHeight": 195
+  },
+  "body": {
+    "clientHeight": 195,
+    "scrollHeight": 195,
+    "offsetHeight": 195
+  },
+  "text": "searching warmup r2d 1782106840182\n未找到结果\n检查关键词、重试搜索，或打开文件索引设置。\n重试\n文件索引设置\nCoreBox\n最近处理\n共 0 条\n暂无记录",
+  "input": {
+    "value": "searching warmup r2d 1782106840182",
+    "rect": {
+      "x": 60,
+      "y": 4,
+      "w": 612,
+      "h": 48,
+      "bottom": 52,
+      "visible": true
+    }
+  },
+  "coreBoxRect": {
+    "x": 0,
+    "y": 0,
+    "w": 720,
+    "h": 56,
+    "bottom": 56,
+    "visible": true
+  },
+  "resRect": {
+    "x": 0,
+    "y": 56,
+    "w": 720,
+    "h": 139,
+    "bottom": 195,
+    "visible": true
+  },
+  "scrollContentRect": {
+    "x": 0,
+    "y": 57,
+    "w": 718,
+    "h": 128,
+    "bottom": 185,
+    "visible": true
+  },
+  "searchState": {
+    "className": "CoreBoxSearchState CoreBoxSearchState--empty",
+    "text": "未找到结果\n检查关键词、重试搜索，或打开文件索引设置。\n重试\n文件索引设置",
+    "rect": {
+      "x": 0,
+      "y": 57,
+      "w": 718,
+      "h": 128,
+      "bottom": 185,
+      "visible": true
+    },
+    "buttons": [
+      "重试",
+      "文件索引设置"
+    ]
+  },
+  "itemCount": 0,
+  "items": [],
+  "resultPillCandidates": [],
+  "checks": {
+    "hasCoreBox": true,
+    "hasDivisionBox": false,
+    "hasIdleText": false,
+    "hasSearchingText": true,
+    "hasNoResult": true,
+    "hasRetry": true,
+    "hasFileIndexSettings": true,
+    "hasResultRows": false,
+    "hasResultPills": false,
+    "noResultStateInViewport": true,
+    "searchStateVisible": true
+  }
+}

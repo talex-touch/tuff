@@ -1,0 +1,218 @@
+{
+  "capturedAt": "2026-06-22T06:36:39.077Z",
+  "app": {
+    "version": "2.4.12-beta.10",
+    "packaged": true,
+    "profile": "/tmp/tuff-corebox-r2-profile-20260622-r2d",
+    "cdpPort": 9472
+  },
+  "inventoryBefore": [
+    {
+      "contextIndex": 0,
+      "pageIndex": 0,
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "title": "Tuff",
+      "bodyClass": "MacIntel core-box",
+      "viewport": {
+        "width": 720,
+        "height": 56
+      },
+      "inputValue": "",
+      "itemCount": 0,
+      "sourceBadgeCount": 0,
+      "resultSignalCount": 0,
+      "resultReasonCount": 0,
+      "debug": {
+        "builtAt": "2026-06-22T06:35:56.572Z",
+        "queryTextLength": 0,
+        "clipboardLastType": "image",
+        "pendingTextClipboardType": null,
+        "filePathCount": 0,
+        "useFileMode": false,
+        "inputTypes": [
+          "image"
+        ],
+        "inputCount": 1,
+        "hasImageInput": true,
+        "hasTextInput": false,
+        "hasFileInput": false
+      }
+    },
+    {
+      "contextIndex": 0,
+      "pageIndex": 1,
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "title": "Tuff",
+      "bodyClass": "MacIntel core-box division-box",
+      "viewport": {
+        "width": 720,
+        "height": 500
+      },
+      "inputValue": "",
+      "itemCount": 0,
+      "sourceBadgeCount": 0,
+      "resultSignalCount": 0,
+      "resultReasonCount": 0,
+      "debug": {
+        "builtAt": "2026-06-22T06:35:56.486Z",
+        "queryTextLength": 0,
+        "clipboardLastType": "image",
+        "pendingTextClipboardType": null,
+        "filePathCount": 0,
+        "useFileMode": false,
+        "inputTypes": [
+          "image"
+        ],
+        "inputCount": 1,
+        "hasImageInput": true,
+        "hasTextInput": false,
+        "hasFileInput": false
+      }
+    },
+    {
+      "contextIndex": 0,
+      "pageIndex": 2,
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "title": "Tuff",
+      "bodyClass": "MacIntel",
+      "viewport": {
+        "width": 1100,
+        "height": 680
+      },
+      "inputValue": null,
+      "itemCount": 0,
+      "sourceBadgeCount": 0,
+      "resultSignalCount": 0,
+      "resultReasonCount": 0,
+      "debug": null
+    },
+    {
+      "contextIndex": 0,
+      "pageIndex": 3,
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+      "title": "Tuff",
+      "bodyClass": "meta-overlay MacIntel",
+      "viewport": {
+        "width": 720,
+        "height": 56
+      },
+      "inputValue": null,
+      "itemCount": 0,
+      "sourceBadgeCount": 0,
+      "resultSignalCount": 0,
+      "resultReasonCount": 0,
+      "debug": null
+    }
+  ],
+  "selectedPageIndex": 0,
+  "before": {
+    "bodyClass": "MacIntel core-box",
+    "viewport": {
+      "width": 720,
+      "height": 56
+    },
+    "inputValue": "",
+    "debug": {
+      "builtAt": "2026-06-22T06:35:56.572Z",
+      "queryTextLength": 0,
+      "clipboardLastType": "image",
+      "pendingTextClipboardType": null,
+      "filePathCount": 0,
+      "useFileMode": false,
+      "inputTypes": [
+        "image"
+      ],
+      "inputCount": 1,
+      "hasImageInput": true,
+      "hasTextInput": false,
+      "hasFileInput": false
+    }
+  },
+  "afterShow": {
+    "bounds": {
+      "bounds": {
+        "x": 668,
+        "y": 340,
+        "width": 720,
+        "height": 56
+      }
+    },
+    "viewport": {
+      "width": 720,
+      "height": 56
+    },
+    "inputValue": ""
+  },
+  "waitError": null,
+  "after": {
+    "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "bodyClass": "MacIntel core-box",
+    "viewport": {
+      "width": 720,
+      "height": 242
+    },
+    "bounds": {
+      "bounds": {
+        "x": 668,
+        "y": 340,
+        "width": 720,
+        "height": 242
+      }
+    },
+    "documentSize": {
+      "width": 720,
+      "height": 242
+    },
+    "inputValue": "screenshot",
+    "itemCount": 2,
+    "sourceBadgeCount": 2,
+    "resultSignalCount": 1,
+    "resultReasonCount": 1,
+    "debug": {
+      "builtAt": "2026-06-22T06:36:38.106Z",
+      "queryTextLength": 10,
+      "clipboardLastType": "image",
+      "pendingTextClipboardType": null,
+      "filePathCount": 0,
+      "useFileMode": false,
+      "inputTypes": [],
+      "inputCount": 0,
+      "hasImageInput": false,
+      "hasTextInput": false,
+      "hasFileInput": false
+    },
+    "items": [
+      {
+        "text": "Screenshot/System/Applications/Utilities/Screenshot.app应用⌘1",
+        "sourceBadges": [
+          "应用"
+        ],
+        "sourceBadgeTitles": [
+          "应用"
+        ],
+        "signals": [],
+        "signalTitles": [],
+        "reasons": []
+      },
+      {
+        "text": "截图并复制捕获当前光标所在显示器系统 · System Actions系统⌘2",
+        "sourceBadges": [
+          "系统"
+        ],
+        "sourceBadgeTitles": [
+          "系统"
+        ],
+        "signals": [
+          "系统 · System Actions"
+        ],
+        "signalTitles": [
+          "System Actions"
+        ],
+        "reasons": [
+          "· System Actions"
+        ]
+      }
+    ]
+  }
+}

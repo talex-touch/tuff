@@ -17,13 +17,13 @@
 - FileProvider runtime reset cleanup 已覆盖当前 watch roots 下的 scan-progress cleanup。
 - Runtime automatic scan/reconcile retry policy 已在同类成功任务后重置失败 backoff。
 - Settings recovery chip display 已输出结构化 wait metadata。
-- 本阶段没有新增 schema、真实 watcher、SQLite/FTS 或 Settings evidence 改动。
+- FileProvider incremental DB persist、FTS write/delete summary 与 index worker flush trace 已进入 indexed source runtime/store evidence；本阶段未新增 schema/migration、真实 watcher 或 Settings packaged evidence。
 
 ## 未完成
 
 | 主题 | 状态 | 缺口 |
 | --- | --- | --- |
-| FileProvider SQLite/FTS runtime-store migration | open | scan worker、incremental DB persist、index worker flush trace 与 FTS 写入仍主要在 FileProvider/SearchIndex worker 内部。 |
+| FileProvider SQLite/FTS durable migration | open | 非 schema runtime/store evidence 已覆盖 incremental DB persist、FTS write/delete summary 与 index worker flush trace；剩余是 SQLite/FTS durable ownership 迁移、兼容读写、rollback 与真实 Settings evidence。 |
 | `scan_progress` source-scoped schema | open | 需要 schema/source migration 设计、兼容读写、rollback、数据清理影响范围与验证命令。 |
 | Durable job history | partial | 需要 history append/update/store、Settings diagnostics recovery chip UI evidence、packaged/真实 Settings 截图或录屏。 |
 | Quicklinks persistent feed | open | 需要官方插件持久 feed storage、用户级 clear/rebuild UI 与 Settings evidence。 |
@@ -32,11 +32,10 @@
 
 ## 下一步
 
-1. 继续非 schema 小切片，优先移除 FileProvider 内部仍手写 root/path/progress 规则的地方。
-2. 把 index worker flush trace、incremental DB persist、FTS write/delete summary 迁到 runtime store/task evidence。
-3. 补 durable job history 的持久化边界与 Settings diagnostics evidence。
-4. 设计 `scan_progress` source-scoped migration；执行前必须单独确认。
-5. Browser Bookmarks、Everything、Quicklinks 只用真实平台/evidence artifact 关闭，不用 mock evidence 替代。
+1. 继续非 schema 小切片，优先移除 FileProvider 内部仍手写 root/path/progress 规则的地方，但不要重复实现已有 runtime write evidence。
+2. 补 durable job history 的持久化边界与 Settings diagnostics evidence。
+3. 设计 SQLite/FTS durable ownership 与 `scan_progress` source-scoped migration；执行前必须单独确认。
+4. Browser Bookmarks、Everything、Quicklinks 只用真实平台/evidence artifact 关闭，不用 mock evidence 替代。
 
 ## 验证命令
 
