@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxPopover } from '@talex-touch/tuffex/popover'
@@ -41,6 +42,8 @@ interface DeviceItem {
   lastLoginAt?: string | null
 }
 
+type DeviceFilter = 'all' | 'revoked' | 'trusted'
+
 const { data, pending, refresh } = useTypedFetch<DeviceItem[]>('/api/devices')
 const actionLoading = ref(false)
 const editingId = ref<string | null>(null)
@@ -49,6 +52,8 @@ const renameValue = ref('')
 const devices = computed(() => data.value ?? [])
 const expandedMapDeviceId = ref<string | null>(null)
 const openActionDeviceId = ref<string | null>(null)
+const filterOpen = ref(false)
+const selectedSessionFilters = ref<DeviceFilter[]>(['all'])
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 
 const countryDisplayNames = computed(() => {
@@ -70,6 +75,76 @@ const absoluteDateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.v
 
 function isCurrent(device: DeviceItem) {
   return device.id === currentDeviceId.value
+}
+
+function isTrustedDevice(device: DeviceItem) {
+  return device.trusted && !device.revokedAt
+}
+
+const sessionFilterOptions = computed<Array<{ value: DeviceFilter, label: string, icon: string, count: number }>>(() => [
+  {
+    value: 'all',
+    label: t('dashboard.devices.filters.all', '全部'),
+    icon: 'i-carbon-list',
+    count: devices.value.length,
+  },
+  {
+    value: 'revoked',
+    label: t('dashboard.devices.revoked', '已撤销'),
+    icon: 'i-carbon-logout',
+    count: devices.value.filter(device => Boolean(device.revokedAt)).length,
+  },
+  {
+    value: 'trusted',
+    label: t('dashboard.devices.trusted', '可信设备'),
+    icon: 'i-carbon-security',
+    count: devices.value.filter(isTrustedDevice).length,
+  },
+])
+
+const activeSessionFilterLabel = computed(() => {
+  if (selectedSessionFilters.value.includes('all'))
+    return t('dashboard.devices.filters.all', '全部')
+
+  return sessionFilterOptions.value
+    .filter(option => selectedSessionFilters.value.includes(option.value))
+    .map(option => option.label)
+    .join(' / ')
+})
+
+const filteredDevices = computed(() => {
+  const orderedDevices = [...devices.value].sort((a, b) => {
+    return Number(Boolean(a.revokedAt)) - Number(Boolean(b.revokedAt))
+  })
+
+  if (selectedSessionFilters.value.includes('all'))
+    return orderedDevices
+
+  return orderedDevices.filter((device) => {
+    return (
+      (selectedSessionFilters.value.includes('revoked') && Boolean(device.revokedAt))
+      || (selectedSessionFilters.value.includes('trusted') && isTrustedDevice(device))
+    )
+  })
+})
+
+function isSessionFilterSelected(filter: DeviceFilter) {
+  return selectedSessionFilters.value.includes(filter)
+}
+
+function toggleSessionFilter(filter: DeviceFilter, selected: boolean) {
+  if (filter === 'all') {
+    selectedSessionFilters.value = ['all']
+    return
+  }
+
+  const next = new Set(selectedSessionFilters.value.filter(item => item !== 'all'))
+  if (selected)
+    next.add(filter)
+  else
+    next.delete(filter)
+
+  selectedSessionFilters.value = next.size > 0 ? Array.from(next) : ['all']
 }
 
 function formatClientType(value: string | null) {
@@ -271,6 +346,46 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
         <h2 class="DashboardDevices-CardTitle">
           {{ t('dashboard.devices.activeSessions', '设备列表') }}
         </h2>
+        <TxPopover
+          v-model="filterOpen"
+          placement="bottom-end"
+          :min-width="220"
+          :max-width="260"
+          :panel-padding="10"
+          panel-background="pure"
+        >
+          <template #reference>
+            <TxButton class="DashboardDevices-FilterButton" size="small" variant="secondary" icon="i-carbon-filter">
+              {{ t('dashboard.devices.filters.label', '筛选') }}
+              <span class="DashboardDevices-FilterSummary">{{ activeSessionFilterLabel }}</span>
+              <span class="DashboardDevices-ActionChevron i-carbon-chevron-down" aria-hidden="true" />
+            </TxButton>
+          </template>
+
+          <div class="DashboardDevices-FilterPanel">
+            <p class="DashboardDevices-FilterTitle">
+              {{ t('dashboard.devices.filters.title', '会话筛选') }}
+            </p>
+            <button
+              v-for="option in sessionFilterOptions"
+              :key="option.value"
+              type="button"
+              class="DashboardDevices-FilterOption"
+              :class="{ 'is-selected': isSessionFilterSelected(option.value) }"
+              @click="toggleSessionFilter(option.value, !isSessionFilterSelected(option.value))"
+            >
+              <TxCheckbox
+                :model-value="isSessionFilterSelected(option.value)"
+                :aria-label="option.label"
+                @click.stop
+                @change="(value: boolean) => toggleSessionFilter(option.value, value)"
+              />
+              <span class="DashboardDevices-FilterIcon" :class="option.icon" aria-hidden="true" />
+              <span class="DashboardDevices-FilterLabel">{{ option.label }}</span>
+              <span class="DashboardDevices-FilterCount">{{ option.count }}</span>
+            </button>
+          </div>
+        </TxPopover>
       </div>
 
       <div v-if="pending" class="space-y-3">
@@ -285,19 +400,22 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
         </div>
       </div>
 
-      <ul v-else-if="devices.length" class="DashboardDevices-List">
+      <ul v-else-if="filteredDevices.length" class="DashboardDevices-List">
         <li
-          v-for="device in devices"
+          v-for="device in filteredDevices"
           :key="device.id"
           class="DashboardDevices-Item"
-          :class="{ 'is-current': isCurrent(device), 'is-trusted': device.trusted && !device.revokedAt }"
+          :class="{ 'is-current': isCurrent(device), 'is-trusted': isTrustedDevice(device), 'is-revoked': Boolean(device.revokedAt) }"
         >
+          <span v-if="isCurrent(device)" class="DashboardDevices-CurrentRibbon">
+            {{ t('dashboard.devices.currentDevice', '当前设备') }}
+          </span>
           <div class="DashboardDevices-ItemMain">
             <div class="DashboardDevices-Brand">
               <div class="DashboardDevices-BrandIcon">
                 <span :class="getDeviceBrandIcon(device)" aria-hidden="true" />
                 <span
-                  v-if="device.trusted && !device.revokedAt"
+                  v-if="isTrustedDevice(device)"
                   class="DashboardDevices-BrandTrustMark i-carbon-checkmark-filled"
                   aria-hidden="true"
                 />
@@ -308,15 +426,12 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
             <div class="DashboardDevices-Content">
               <p class="DashboardDevices-Title">
                 <span class="DashboardDevices-TitleName truncate">{{ device.deviceName || t('dashboard.devices.unnamed', '未命名设备') }}</span>
-                <span v-if="isCurrent(device)" class="DashboardDevices-Badge is-current">
-                  {{ t('dashboard.devices.currentDevice', '当前设备') }}
+                <span v-if="isTrustedDevice(device)" class="DashboardDevices-Badge is-trusted">
+                  <span class="i-carbon-checkmark-filled" aria-hidden="true" />
+                  {{ t('dashboard.devices.trusted', '可信设备') }}
                 </span>
                 <span v-if="device.revokedAt" class="DashboardDevices-Badge is-revoked">
                   {{ t('dashboard.devices.revoked', '已撤销') }}
-                </span>
-                <span v-else-if="device.trusted" class="DashboardDevices-Badge is-trusted">
-                  <span class="i-carbon-checkmark-filled" aria-hidden="true" />
-                  {{ t('dashboard.devices.trusted', '可信设备') }}
                 </span>
               </p>
               <p class="DashboardDevices-Subtle">
@@ -462,7 +577,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
       </ul>
 
       <div v-else class="DashboardDevices-Empty">
-        {{ t('dashboard.devices.noSessions', '暂无设备') }}
+        {{ devices.length ? t('dashboard.devices.noFilteredSessions', '当前筛选下暂无设备') : t('dashboard.devices.noSessions', '暂无设备') }}
       </div>
     </section>
   </div>
@@ -488,6 +603,85 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
   color: var(--tx-text-color-primary);
   font-size: 18px;
   font-weight: 700;
+}
+
+.DashboardDevices-FilterButton {
+  --tx-button-gap: 6px;
+  flex: 0 0 auto;
+}
+
+.DashboardDevices-FilterSummary {
+  max-width: 112px;
+  overflow: hidden;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.DashboardDevices-FilterPanel {
+  display: flex;
+  min-width: 200px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.DashboardDevices-FilterTitle {
+  margin: 0 0 4px;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.DashboardDevices-FilterOption {
+  appearance: none;
+  display: grid;
+  grid-template-columns: 18px 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tx-text-color-regular);
+  cursor: pointer;
+  font: inherit;
+  padding: 8px;
+  text-align: left;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.DashboardDevices-FilterOption:hover,
+.DashboardDevices-FilterOption:focus-visible {
+  border-color: var(--tx-border-color-lighter);
+  background: var(--tx-fill-color-light);
+  outline: none;
+}
+
+.DashboardDevices-FilterOption.is-selected {
+  border-color: color-mix(in srgb, var(--tx-color-primary) 24%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary) 8%, transparent);
+  color: var(--tx-text-color-primary);
+}
+
+.DashboardDevices-FilterIcon {
+  display: inline-flex;
+  color: var(--tx-text-color-secondary);
+  font-size: 15px;
+}
+
+.DashboardDevices-FilterLabel {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.DashboardDevices-FilterCount {
+  color: var(--tx-text-color-placeholder);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .DashboardDevices-List {
@@ -529,6 +723,36 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
 
 .DashboardDevices-Item.is-trusted::after {
   opacity: 1;
+}
+
+.DashboardDevices-Item.is-revoked {
+  border-color: color-mix(in srgb, var(--tx-color-danger) 18%, var(--tx-border-color-lighter));
+}
+
+.DashboardDevices-Item.is-revoked::after {
+  background: radial-gradient(circle at 100% 50%, rgba(239, 68, 68, 0.08), transparent 72%);
+  opacity: 1;
+}
+
+.DashboardDevices-CurrentRibbon {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  left: 6px;
+  display: inline-flex;
+  width: 92px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-34deg);
+  background: color-mix(in srgb, var(--tx-color-primary) 16%, var(--tx-fill-color-blank));
+  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(64, 158, 255, 0.12);
+  color: var(--tx-color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .DashboardDevices-ItemMain {
@@ -633,6 +857,12 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
   border-color: color-mix(in srgb, var(--tx-color-success) 42%, transparent);
   background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
   color: var(--tx-color-success);
+}
+
+.DashboardDevices-Badge.is-revoked {
+  border-color: color-mix(in srgb, var(--tx-color-danger) 22%, transparent);
+  background: color-mix(in srgb, var(--tx-color-danger) 7%, transparent);
+  color: color-mix(in srgb, var(--tx-color-danger) 72%, var(--tx-text-color-secondary));
 }
 
 .DashboardDevices-Subtle {
@@ -821,6 +1051,15 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
 }
 
 @media (max-width: 768px) {
+  .DashboardDevices-CardHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .DashboardDevices-FilterButton {
+    align-self: flex-end;
+  }
+
   .DashboardDevices-ItemMain {
     grid-template-columns: 76px minmax(0, 1fr);
     gap: 12px;

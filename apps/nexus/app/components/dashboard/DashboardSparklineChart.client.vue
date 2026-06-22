@@ -99,7 +99,27 @@ function buildOptions(): EChartsOption {
           opacity: props.fillOpacity,
         },
         emphasis: {
-          focus: 'series',
+          focus: 'none',
+          lineStyle: {
+            color: props.color,
+            width: 2.4,
+            opacity: 1,
+          },
+          areaStyle: {
+            color: props.color,
+            opacity: props.fillOpacity,
+          },
+        },
+        blur: {
+          lineStyle: {
+            opacity: 1,
+          },
+          areaStyle: {
+            opacity: props.fillOpacity,
+          },
+        },
+        select: {
+          disabled: true,
         },
       },
     ],

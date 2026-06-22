@@ -99,6 +99,33 @@ const dialogCardStyle = computed(() =>
   })
 )
 
+const resolvedSurfaceOpacity = computed(() => {
+  const attrValue = attrs.surfaceOpacity ?? attrs['surface-opacity']
+  if (typeof props.surfaceOpacity === 'number')
+    return props.surfaceOpacity
+  if (typeof attrValue === 'number')
+    return attrValue
+  if (typeof attrValue === 'string') {
+    const parsed = Number(attrValue)
+    if (Number.isFinite(parsed))
+      return parsed
+  }
+  return 1
+})
+
+const overlayProps = computed(() => {
+  const nextAttrs: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === 'surfaceOpacity' || key === 'surface-opacity')
+      continue
+    nextAttrs[key] = value
+  }
+  return {
+    ...nextAttrs,
+    surfaceOpacity: resolvedSurfaceOpacity.value
+  }
+})
+
 const referenceSlotProps = computed(() => ({
   open,
   close,
@@ -239,7 +266,7 @@ defineExpose({
     <TxFlipOverlay
       ref="overlayRef"
       v-model="visible"
-      v-bind="attrs"
+      v-bind="overlayProps"
       :source="resolvedReference"
       :card-class="dialogCardClass"
       :card-style="dialogCardStyle"
@@ -279,6 +306,14 @@ defineExpose({
   width: var(--flip-dialog-width, min(1040px, calc(100vw - 48px)));
   max-height: var(--flip-dialog-max-height, calc(82dvh - 24px));
   min-height: var(--flip-dialog-min-height, 0);
+  background: var(--tx-bg-color-overlay, #fff);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+  isolation: isolate;
+}
+
+.FlipDialog-Card .TxFlipOverlay-Shell {
+  border-radius: inherit;
+  background: var(--tx-bg-color-overlay, #fff);
 }
 
 @media (max-width: 767px) {

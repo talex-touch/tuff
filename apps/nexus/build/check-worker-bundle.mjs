@@ -28,6 +28,7 @@ const expectedStaticRoutes = [
   '/protocol',
   '/updates',
   '/store',
+  '/login',
   '/sign-in',
   '/forgot-password',
   '/verify-waiting',

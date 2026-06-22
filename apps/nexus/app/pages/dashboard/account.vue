@@ -16,7 +16,7 @@ import {
 } from '~/composables/useOauthContext'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
-import { formatCompactEmail } from '~/utils/account-display'
+import { formatCompactAccountLabel, formatCompactEmail } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
@@ -229,6 +229,14 @@ const emailLabel = computed(() => {
   if (emailState.value === 'missing')
     return t('auth.accountNoEmail', '未绑定邮箱')
   return user.value.email || ''
+})
+const compactDisplayName = computed(() => {
+  const fallback = t('dashboard.account.displayNamePlaceholder', '输入显示名称')
+  if (!user.value)
+    return fallback
+
+  const name = user.value.name?.trim()
+  return name ? formatCompactAccountLabel(name) : fallback
 })
 const compactEmailLabel = computed(() => {
   if (!user.value || emailState.value === 'missing')
@@ -527,9 +535,8 @@ function formatHistoryTime(value: string) {
     </header>
 
     <DashboardAccountProfilePlanCard
-      :display-name="user?.name || t('dashboard.account.displayNamePlaceholder', '输入显示名称')"
+      :display-name="compactDisplayName"
       :email-label="compactEmailLabel"
-      :email-title="emailLabel"
       :avatar-url="avatarUrl"
       :profile-initial="profileInitial"
       :avatar-edit-text="t('dashboard.account.changeAvatar', '修改头像')"

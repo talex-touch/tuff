@@ -4,7 +4,7 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { useTheme } from '~/composables/useTheme'
-import { formatCompactEmail } from '~/utils/account-display'
+import { formatCompactAccountLabel, formatCompactEmail } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 
 const { data: session, status, signOut } = useNexusAuth()
@@ -37,7 +37,10 @@ const menuMotionDuration = 207
 let userMenuTimer: ReturnType<typeof setTimeout> | null = null
 let languageMenuTimer: ReturnType<typeof setTimeout> | null = null
 
-const userLabel = computed(() => session.value?.user?.name || session.value?.user?.email || '')
+const userLabel = computed(() => {
+  const rawLabel = session.value?.user?.name || session.value?.user?.email || ''
+  return rawLabel ? formatCompactAccountLabel(rawLabel) : ''
+})
 const userEmail = computed(() => {
   const email = session.value?.user?.email || ''
   if (!email)
@@ -266,7 +269,7 @@ watch(
             <div class="header-user-name">
               {{ userLabel || tSafe('nav.account', 'Account') }}
             </div>
-            <div class="header-user-email" :title="userEmail || userEmailDisplay">
+            <div class="header-user-email" :title="userEmailDisplay">
               {{ userEmailDisplay }}
             </div>
           </div>

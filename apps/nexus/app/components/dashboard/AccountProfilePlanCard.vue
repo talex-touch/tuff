@@ -13,7 +13,6 @@ interface Props {
   verifiedText: string
   unverifiedText: string
   editProfileText: string
-  emailTitle: string
   currentPlanText: string
   planStatusLabel: string
   planActive: boolean
@@ -119,7 +118,7 @@ function handleProfileEdit() {
                 </TxButton>
               </div>
               <div class="flex flex-wrap items-center gap-1.5 text-xs leading-none text-black/55 dark:text-white/60">
-                <span class="truncate" :title="emailTitle || emailLabel">{{ emailLabel }}</span>
+                <span class="truncate" :title="emailLabel">{{ emailLabel }}</span>
                 <span
                   v-if="isEmailVerified"
                   class="i-carbon-checkmark-filled inline-flex items-center justify-center text-[13px] leading-none text-green-500 dark:text-green-400"
