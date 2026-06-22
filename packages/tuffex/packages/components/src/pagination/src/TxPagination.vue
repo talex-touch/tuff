@@ -171,6 +171,7 @@ function handlePageChange(page: number) {
 .tx-pagination__list {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -179,6 +180,14 @@ function handlePageChange(page: number) {
 
 .tx-pagination__item {
   display: flex;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tx-pagination__item::marker {
+  content: '';
 }
 
 .tx-pagination__button {
