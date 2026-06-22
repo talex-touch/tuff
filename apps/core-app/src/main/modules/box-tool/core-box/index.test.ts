@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const callOrder: string[] = []
@@ -175,6 +175,8 @@ import { CoreBoxModule } from './index'
 
 describe('CoreBoxModule', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-10T00:00:00.000Z'))
     mocks.callOrder.length = 0
     mocks.showCoreBox = false
     mocks.isCollapsed = false
@@ -182,6 +184,10 @@ describe('CoreBoxModule', () => {
     mocks.windows = []
     mocks.getMainConfig.mockReturnValue({ beginner: { init: true } })
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('registers core.box.toggle as enabled by default and AI quick call as disabled', async () => {
@@ -237,8 +243,8 @@ describe('CoreBoxModule', () => {
     expect(mocks.coreBoxManagerTrigger).not.toHaveBeenCalledWith(false)
   })
 
-  it('brings CoreBox forward when visible but not focused', async () => {
-    mocks.currentWindow = {
+  it('hides CoreBox when visible on the same screen even if it is not focused', async () => {
+    const visibleWindow = {
       window: {
         isDestroyed: () => false,
         isVisible: () => true,
@@ -258,11 +264,54 @@ describe('CoreBoxModule', () => {
     )
     const toggleHandler = toggleRegistration?.[2] as (() => void) | undefined
 
+    mocks.currentWindow = null
     toggleHandler?.()
 
-    expect(mocks.coreBoxManagerTrigger).toHaveBeenCalledWith(true, {
+    mocks.coreBoxManagerTrigger.mockClear()
+    mocks.currentWindow = visibleWindow
+    vi.advanceTimersByTime(200)
+    toggleHandler?.()
+
+    expect(mocks.coreBoxManagerTrigger).toHaveBeenCalledWith(false)
+    expect(mocks.coreBoxManagerTrigger).not.toHaveBeenCalledWith(true, {
       triggeredByShortcut: true
     })
+  })
+
+  it('moves visible CoreBox instead of hiding when shortcut is pressed on another screen', async () => {
+    mocks.getCurScreen.mockReturnValueOnce({ id: 1 }).mockReturnValueOnce({ id: 2 })
+    const visibleWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => true,
+        isFocused: () => false
+      }
+    }
+
+    const module = new CoreBoxModule()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+
+    const toggleRegistration = mocks.registerMainShortcut.mock.calls.find(
+      ([id]) => id === 'core.box.toggle'
+    )
+    const toggleHandler = toggleRegistration?.[2] as (() => void) | undefined
+
+    mocks.currentWindow = null
+    toggleHandler?.()
+
+    mocks.coreBoxManagerTrigger.mockClear()
+    mocks.currentWindow = visibleWindow
+    vi.advanceTimersByTime(200)
+    toggleHandler?.()
+
+    expect(mocks.updatePosition).toHaveBeenCalledWith(
+      visibleWindow,
+      expect.objectContaining({ id: 2 })
+    )
     expect(mocks.coreBoxManagerTrigger).not.toHaveBeenCalledWith(false)
   })
 

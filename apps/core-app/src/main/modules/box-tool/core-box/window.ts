@@ -52,6 +52,9 @@ export const COREBOX_HEADER_HEIGHT = 56
 export const COREBOX_MIN_HEIGHT = COREBOX_HEADER_HEIGHT
 const COREBOX_HEIGHT_TARGET_TOLERANCE = 4
 const COREBOX_ANIMATION_RETARGET_TOLERANCE = 12
+const COREBOX_BLUR_HIDE_CONFIRM_MS = 120
+const COREBOX_SHORTCUT_FOCUS_GRACE_MS = 1500
+const COREBOX_DEFAULT_FOCUS_GRACE_MS = 500
 const BLOCKED_COREBOX_FUNCTION_KEYS = new Set(
   Array.from({ length: 24 }, (_, index) => `F${index + 1}`)
 )
@@ -123,6 +126,7 @@ export class WindowManager {
   private customTopPercent: number | null = null // Custom position offset (0-1)
   private readonly pollingService = PollingService.getInstance()
   private suppressBlurHideUntil = 0
+  private blurHideTimer: ReturnType<typeof setTimeout> | null = null
   private pinned = false
   private appSettingUnsubscribe: (() => void) | null = null
 
@@ -142,6 +146,40 @@ export class WindowManager {
 
   private syncMetaOverlayBounds(): void {
     metaOverlayManager.updateBounds()
+  }
+
+  private clearPendingBlurHide(): void {
+    if (!this.blurHideTimer) return
+    clearTimeout(this.blurHideTimer)
+    this.blurHideTimer = null
+  }
+
+  private scheduleBlurHide(window: TouchWindow): void {
+    this.clearPendingBlurHide()
+    this.blurHideTimer = setTimeout(async () => {
+      this.blurHideTimer = null
+
+      if (this.isPinned()) return
+      if (Date.now() < this.suppressBlurHideUntil) return
+      if (this.current !== window || window.window.isDestroyed() || !window.window.isVisible()) {
+        return
+      }
+      if (window.window.isFocused()) return
+
+      if (coreBoxManager.isUIMode) {
+        await sleep(17)
+        if (
+          this.uiViewFocused ||
+          Date.now() < this.suppressBlurHideUntil ||
+          window.window.isDestroyed() ||
+          window.window.isFocused()
+        ) {
+          return
+        }
+      }
+
+      coreBoxManager.trigger(false)
+    }, COREBOX_BLUR_HIDE_CONFIRM_MS)
   }
 
   public static getInstance(): WindowManager {
@@ -312,7 +350,12 @@ export class WindowManager {
     })
 
     window.window.on('hide', () => {
+      this.clearPendingBlurHide()
       coreBoxManager.syncVisibility(false)
+    })
+
+    window.window.on('focus', () => {
+      this.clearPendingBlurHide()
     })
 
     window.window.on('blur', async () => {
@@ -327,14 +370,14 @@ export class WindowManager {
       const isUIMode = coreBoxManager.isUIMode
 
       if (!isUIMode) {
-        coreBoxManager.trigger(false)
+        this.scheduleBlurHide(window)
         return
       }
 
       await sleep(17)
 
       if (!this.uiViewFocused && Date.now() >= this.suppressBlurHideUntil) {
-        coreBoxManager.trigger(false)
+        this.scheduleBlurHide(window)
       }
     })
 
@@ -676,11 +719,14 @@ export class WindowManager {
     const window = this.current
     if (!window) return
 
+    this.clearPendingBlurHide()
     this.stopBoundsAnimation()
     this.updatePosition(window)
 
     const shouldFocus = triggeredByShortcut || coreBoxManager.isUIMode || !!this.uiView
-    this.suppressBlurHideUntil = Date.now() + (triggeredByShortcut ? 800 : 400)
+    this.suppressBlurHideUntil =
+      Date.now() +
+      (triggeredByShortcut ? COREBOX_SHORTCUT_FOCUS_GRACE_MS : COREBOX_DEFAULT_FOCUS_GRACE_MS)
     if (triggeredByShortcut) {
       try {
         app.focus({ steal: true })
