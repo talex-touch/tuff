@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxPagination from '../src/TxPagination.vue'
+import txPaginationSource from '../src/TxPagination.vue?raw'
 
 describe('txPagination', () => {
   it('calculates pages from total and pageSize', () => {
@@ -92,5 +93,21 @@ describe('txPagination', () => {
     })
 
     expect(wrapper.find('.tx-pagination__info').text()).toBe('Page 3/5, total 42')
+  })
+
+  it('keeps pagination list styles isolated from prose list styles', () => {
+    const wrapper = mount(TxPagination, {
+      props: {
+        currentPage: 1,
+        totalPages: 3,
+      },
+    })
+
+    expect(wrapper.find('.tx-pagination__list').element.tagName).toBe('UL')
+    expect(wrapper.findAll('.tx-pagination__item').every(item => item.element.tagName === 'LI')).toBe(true)
+    expect(txPaginationSource).toContain('.tx-pagination__item::marker')
+    expect(txPaginationSource).toContain('list-style: none;')
+    expect(txPaginationSource).toContain('margin: 0;')
+    expect(txPaginationSource).toContain('padding: 0;')
   })
 })
