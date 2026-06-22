@@ -123,6 +123,7 @@ export function useProviderRegistryAdmin() {
   const providerQuotas = ref<Record<string, ProviderQuotaRecord | null>>({})
   const providerQuotaLists = ref<Record<string, ProviderQuotaRecord[]>>({})
   const error = ref<string | null>(null)
+  const fetchingProviderModels = ref<string | null>(null)
   const providerServiceCategoryId = ref<ProviderServiceCategory>('ai')
   const initialProviderTemplate = providerRegistryTemplates.find(template => template.id === 'openai-compatible-ai')
     ?? providerRegistryTemplates[0]!
@@ -373,6 +374,9 @@ export function useProviderRegistryAdmin() {
     getProviderEditPanel(provider).capabilities.push({
       capability: '',
       schemaRef: '',
+      meteringUnit: 'token',
+      maxImageBytes: '',
+      providerModel: '',
       meteringText: '',
       constraintsText: '',
       metadataText: '',
@@ -406,6 +410,32 @@ export function useProviderRegistryAdmin() {
     return parseCommaList(sceneForm.requiredCapabilitiesText)
   }
 
+  function mergeJsonObjects(
+    base: Record<string, unknown> | null,
+    patch: Record<string, unknown>,
+  ): Record<string, unknown> | null {
+    const next = { ...(base ?? {}) }
+
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined || value === null || value === '')
+        delete next[key]
+      else
+        next[key] = value
+    }
+
+    return Object.keys(next).length > 0 ? next : null
+  }
+
+  function parseOptionalNumber(value: string, field: string): number | null {
+    const trimmed = value.trim()
+    if (!trimmed)
+      return null
+    const parsed = Number(trimmed)
+    if (!Number.isFinite(parsed) || parsed < 0)
+      throw new Error(`${field} must be a non-negative number.`)
+    return parsed
+  }
+
   async function syncProviderCapabilities(provider: ProviderRegistryRecord, panel: ProviderEditPanelState) {
     const blankedExistingCapabilityIds = panel.capabilities
       .filter(row => row.id && !row.capability.trim())
@@ -416,9 +446,23 @@ export function useProviderRegistryAdmin() {
         id: row.id,
         capability: row.capability.trim(),
         schemaRef: row.schemaRef.trim() || null,
-        metering: parseJsonObjectField(row.meteringText, `capabilities[${index}].metering`),
-        constraints: parseJsonObjectField(row.constraintsText, `capabilities[${index}].constraints`),
-        metadata: parseJsonObjectField(row.metadataText, `capabilities[${index}].metadata`),
+        metering: mergeJsonObjects(
+          parseJsonObjectField(row.meteringText, `capabilities[${index}].metering`),
+          { unit: row.meteringUnit.trim() || null },
+        ),
+        constraints: mergeJsonObjects(
+          parseJsonObjectField(row.constraintsText, `capabilities[${index}].constraints`),
+          {
+            maxImageBytes: parseOptionalNumber(
+              row.maxImageBytes,
+              `capabilities[${index}].maxImageBytes`,
+            ),
+          },
+        ),
+        metadata: mergeJsonObjects(
+          parseJsonObjectField(row.metadataText, `capabilities[${index}].metadata`),
+          { providerModel: row.providerModel.trim() || null },
+        ),
       }))
 
     ensureUniqueCapabilities(capabilityInputs)
@@ -759,6 +803,36 @@ export function useProviderRegistryAdmin() {
     }
   }
 
+  async function fetchProviderModels(provider: ProviderRegistryRecord) {
+    const panel = getProviderEditPanel(provider)
+    fetchingProviderModels.value = provider.id
+    panel.error = null
+    error.value = null
+    try {
+      const result = await rawFetch<{ models: string[] }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/models`, {
+        method: 'POST',
+      })
+      const models = Array.from(new Set(
+        (result.models ?? [])
+          .map(model => model.trim())
+          .filter(Boolean),
+      ))
+      panel.modelsText = models.join('\n')
+      if (!panel.defaultModel && models[0])
+        panel.defaultModel = models[0]
+      toast.success(t('dashboard.providerRegistry.providers.modelsFetched', { count: models.length }, `Fetched ${models.length} model(s).`))
+    }
+    catch (err: any) {
+      const message = normalizeError(err, t('dashboard.providerRegistry.errors.fetchModelsFailed', 'Failed to fetch provider models.'))
+      panel.error = message
+      error.value = message
+      toast.warning(message)
+    }
+    finally {
+      fetchingProviderModels.value = null
+    }
+  }
+
   async function saveProviderEdit(provider: ProviderRegistryRecord) {
     const panel = getProviderEditPanel(provider)
     panel.saving = true
@@ -777,7 +851,13 @@ export function useProviderRegistryAdmin() {
         description: panel.description.trim() || null,
         endpoint: panel.endpoint.trim() || null,
         region: panel.region.trim() || null,
-        metadata: parseJsonObjectField(panel.metadataText, 'provider.metadata'),
+        metadata: mergeJsonObjects(
+          parseJsonObjectField(panel.metadataText, 'provider.metadata'),
+          {
+            models: parseCommaList(panel.modelsText.replace(/\n/g, ',')),
+            defaultModel: panel.defaultModel.trim() || null,
+          },
+        ),
       }
 
       await rawFetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
@@ -1069,6 +1149,8 @@ export function useProviderRegistryAdmin() {
     error,
     fallbackOptions,
     fetchRegistry,
+    fetchProviderModels,
+    fetchingProviderModels,
     filteredHealthEntries,
     filteredProviders,
     filteredScenes,

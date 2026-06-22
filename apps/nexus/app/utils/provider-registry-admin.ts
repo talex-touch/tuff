@@ -122,6 +122,9 @@ export interface CapabilityEditRow {
   id?: string
   capability: string
   schemaRef: string
+  meteringUnit: string
+  maxImageBytes: string
+  providerModel: string
   meteringText: string
   constraintsText: string
   metadataText: string
@@ -141,6 +144,8 @@ export interface ProviderEditPanelState {
   description: string
   endpoint: string
   region: string
+  modelsText: string
+  defaultModel: string
   metadataText: string
   capabilities: CapabilityEditRow[]
   removedCapabilityIds: string[]
@@ -1118,6 +1123,37 @@ export function parseJsonObjectField(value: string, field: string): Record<strin
   return parsed as Record<string, unknown>
 }
 
+function readStringField(value: Record<string, unknown> | null | undefined, key: string): string {
+  const item = value?.[key]
+  return typeof item === 'string' ? item : ''
+}
+
+function readNumberField(value: Record<string, unknown> | null | undefined, key: string): string {
+  const item = value?.[key]
+  return typeof item === 'number' && Number.isFinite(item) ? String(item) : ''
+}
+
+function readStringArrayField(value: Record<string, unknown> | null | undefined, key: string): string[] {
+  const item = value?.[key]
+  return Array.isArray(item)
+    ? item.filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
+    : []
+}
+
+function omitFields(
+  value: Record<string, unknown> | null | undefined,
+  keys: string[],
+): Record<string, unknown> | null {
+  if (!value)
+    return null
+
+  const next = { ...value }
+  for (const key of keys)
+    delete next[key]
+
+  return Object.keys(next).length > 0 ? next : null
+}
+
 export function ensureUniqueCapabilities(capabilities: Array<{ capability: string }>) {
   const seen = new Set<string>()
   for (const item of capabilities) {
@@ -1143,14 +1179,19 @@ export function createProviderEditPanel(provider: ProviderRegistryRecord): Provi
     description: provider.description ?? '',
     endpoint: provider.endpoint ?? '',
     region: provider.region ?? '',
-    metadataText: formatEditJson(provider.metadata),
+    modelsText: readStringArrayField(provider.metadata, 'models').join('\n'),
+    defaultModel: readStringField(provider.metadata, 'defaultModel'),
+    metadataText: formatEditJson(omitFields(provider.metadata, ['models', 'defaultModel'])),
     capabilities: provider.capabilities.map(capability => ({
       id: capability.id,
       capability: capability.capability,
       schemaRef: capability.schemaRef ?? '',
-      meteringText: formatEditJson(capability.metering),
-      constraintsText: formatEditJson(capability.constraints),
-      metadataText: formatEditJson(capability.metadata),
+      meteringUnit: readStringField(capability.metering, 'unit'),
+      maxImageBytes: readNumberField(capability.constraints, 'maxImageBytes'),
+      providerModel: readStringField(capability.metadata, 'providerModel'),
+      meteringText: formatEditJson(omitFields(capability.metering, ['unit'])),
+      constraintsText: formatEditJson(omitFields(capability.constraints, ['maxImageBytes'])),
+      metadataText: formatEditJson(omitFields(capability.metadata, ['providerModel'])),
     })),
     removedCapabilityIds: [],
     error: null,
