@@ -9,7 +9,7 @@ import type { OAuthConfig } from 'next-auth/providers/oauth'
 import Credentials from 'next-auth/providers/credentials'
 import GitHub from 'next-auth/providers/github'
 import { createD1Adapter } from '../../utils/authAdapter'
-import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, verifyUserPassword } from '../../utils/authStore'
+import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, restorePendingDeletionIfWithinWindow, verifyUserPassword } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
 import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
 
@@ -413,6 +413,11 @@ function applyNextAuthOriginFallback(configuredOrigin: string, trustForwardedHos
     process.env.AUTH_TRUST_HOST = 'true'
 }
 
+async function restoreForInteractiveSignIn(authEvent: H3Event, userId: string) {
+  const user = await restorePendingDeletionIfWithinWindow(authEvent, userId)
+  return user?.status === 'active' ? user : null
+}
+
 function getAuthOptions(event?: H3Event): AuthOptions {
   const config = useRuntimeConfig()
   const configuredOrigin = normalizeAuthOrigin(config.auth?.origin)
@@ -439,7 +444,9 @@ function getAuthOptions(event?: H3Event): AuthOptions {
         if (loginToken) {
           const user = await consumeLoginToken(authEvent, loginToken)
           if (user) {
-            return { id: user.id, email: user.email, name: user.name, image: user.image }
+            const activeUser = await restoreForInteractiveSignIn(authEvent, user.id)
+            if (activeUser)
+              return { id: activeUser.id, email: activeUser.email, name: activeUser.name, image: activeUser.image }
           }
           await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid', clientType: 'web' })
           return null
@@ -462,8 +469,13 @@ function getAuthOptions(event?: H3Event): AuthOptions {
           })
           return null
         }
-        await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'password', clientType: 'web' })
-        return { id: user.id, email: user.email, name: user.name, image: user.image }
+        const activeUser = await restoreForInteractiveSignIn(authEvent, user.id)
+        if (!activeUser) {
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'account_deletion_pending', clientType: 'web' })
+          return null
+        }
+        await logLoginAttempt(authEvent, { userId: activeUser.id, deviceId: null, success: true, reason: 'password', clientType: 'web' })
+        return { id: activeUser.id, email: activeUser.email, name: activeUser.name, image: activeUser.image }
       }
     }),
   ]
@@ -651,7 +663,7 @@ function getAuthOptions(event?: H3Event): AuthOptions {
           if (account.provider && account.providerAccountId) {
             const existingByAccount = await getUserByAccount(authEvent, account.provider, account.providerAccountId)
             if (existingByAccount)
-              return existingByAccount.status === 'active'
+              return Boolean(await restoreForInteractiveSignIn(authEvent, existingByAccount.id))
           }
           const email = user?.email ?? (profile as any)?.email
           if (!email)
@@ -659,14 +671,16 @@ function getAuthOptions(event?: H3Event): AuthOptions {
           const existing = await getUserByEmail(authEvent, email)
           if (!existing)
             return true
-          return existing.status === 'active'
+          return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         if (account.provider === 'email') {
           const email = user?.email
           if (!email)
             return false
           const existing = await getUserByEmail(authEvent, email)
-          return Boolean(existing && existing.status === 'active')
+          if (!existing)
+            return false
+          return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         return true
       },
