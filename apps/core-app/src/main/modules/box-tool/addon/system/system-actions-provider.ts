@@ -721,7 +721,8 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     const title = i18nMsgWithParams(titleKeyMap[action.type], { name: action.displayName })
     const subtitle = i18nMsgWithParams(subtitleKeyMap[action.type], { path: action.displayPath })
 
-    return new TuffItemBuilder(`${this.id}:${action.type}:${action.path}`, this.type, this.id)
+    return new TuffItemBuilder(`${this.id}:${action.type}:${action.path}`)
+      .setSource(this.type, this.id, this.name, undefined, 'system')
       .setKind('action')
       .setTitle(title)
       .setSubtitle(subtitle)

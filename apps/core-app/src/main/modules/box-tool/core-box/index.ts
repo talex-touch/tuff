@@ -1,4 +1,5 @@
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { HandlerContext } from '@talex-touch/utils/transport'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../../core/eventbus/touch-event'
@@ -45,6 +46,7 @@ export class CoreBoxModule extends BaseModule {
   private disposeLagBurstSubscription: (() => void) | null = null
 
   private pendingLayoutUpdate: CoreBoxLayoutUpdateRequest | null = null
+  private pendingLayoutContext: Pick<HandlerContext, 'sender'> | undefined
   private layoutApplyTimer: NodeJS.Timeout | null = null
 
   constructor() {
@@ -219,23 +221,29 @@ export class CoreBoxModule extends BaseModule {
     if (!this.transport) return
 
     this.transportDisposers.push(
-      this.transport.on(CoreBoxEvents.layout.update, (payload) => {
-        this.queueLayoutUpdate(payload)
+      this.transport.on(CoreBoxEvents.layout.update, (payload, context) => {
+        this.queueLayoutUpdate(payload, context)
       })
     )
   }
 
-  private queueLayoutUpdate(payload: CoreBoxLayoutUpdateRequest): void {
+  private queueLayoutUpdate(
+    payload: CoreBoxLayoutUpdateRequest,
+    context?: Pick<HandlerContext, 'sender'>
+  ): void {
     this.pendingLayoutUpdate = payload
+    this.pendingLayoutContext = context
 
     if (this.layoutApplyTimer) return
 
     this.layoutApplyTimer = setTimeout(() => {
       this.layoutApplyTimer = null
       const next = this.pendingLayoutUpdate
+      const nextContext = this.pendingLayoutContext
       this.pendingLayoutUpdate = null
+      this.pendingLayoutContext = undefined
       if (!next) return
-      this.applyLayoutUpdate(next)
+      this.applyLayoutUpdate(next, nextContext)
     }, 16)
   }
 
@@ -248,7 +256,20 @@ export class CoreBoxModule extends BaseModule {
     }
   }
 
-  private applyLayoutUpdate(payload: CoreBoxLayoutUpdateRequest): void {
+  private resolveLayoutTarget(context?: Pick<HandlerContext, 'sender'>) {
+    const senderId = context?.sender?.id
+    if (typeof senderId === 'number') {
+      const matched = windowManager.windows.find((item) => item.window.webContents.id === senderId)
+      if (matched) return matched
+    }
+
+    return windowManager.current
+  }
+
+  private applyLayoutUpdate(
+    payload: CoreBoxLayoutUpdateRequest,
+    context?: Pick<HandlerContext, 'sender'>
+  ): void {
     const logEnabled = this.shouldLogLayout()
     if (isAppQuitting() || devProcessManager.isShuttingDownProcess()) {
       if (logEnabled) {
@@ -273,8 +294,8 @@ export class CoreBoxModule extends BaseModule {
       return
     }
 
-    const currentWindow = windowManager.current?.window
-    if (!currentWindow || currentWindow.isDestroyed()) {
+    const currentWindow = this.resolveLayoutTarget(context)
+    if (!currentWindow || currentWindow.window.isDestroyed()) {
       if (logEnabled) {
         coreBoxLog.info('Layout update skipped (no window)', {
           meta: {
@@ -290,7 +311,7 @@ export class CoreBoxModule extends BaseModule {
       return
     }
 
-    if (!currentWindow.isVisible()) {
+    if (!currentWindow.window.isVisible()) {
       if (logEnabled) {
         coreBoxLog.info('Layout update skipped (window hidden)', {
           meta: {
@@ -375,9 +396,9 @@ export class CoreBoxModule extends BaseModule {
       return
     }
 
-    // When waiting for data (loading/recommendation), keep current window size stable.
-    // This avoids collapse-then-expand jitter while results are still pending.
-    if (resultCount === 0 && (loading || recommendationPending)) {
+    // When waiting for data, keep compact size stable unless the renderer has
+    // already measured a visible search state that needs room.
+    if (resultCount === 0 && (loading || recommendationPending) && !hasVisibleEmptyState) {
       if (logEnabled) {
         coreBoxLog.info('Layout update: skip (pending)', {
           meta: {
@@ -406,7 +427,7 @@ export class CoreBoxModule extends BaseModule {
       coreBoxManager.markExpanded()
     }
 
-    windowManager.setHeight(safeHeight)
+    windowManager.setHeight(safeHeight, currentWindow)
     if (logEnabled) {
       coreBoxLog.info('Layout update: setHeight', {
         meta: {

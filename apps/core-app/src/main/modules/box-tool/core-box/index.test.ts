@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     })),
     getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
     showCoreBox: false,
+    isCollapsed: false,
     coreBoxManagerTrigger: vi.fn(),
     getCurScreen: vi.fn(() => ({ id: 1 })),
     updatePosition: vi.fn(),
@@ -31,8 +32,17 @@ const mocks = vi.hoisted(() => {
         isDestroyed: () => boolean
         isVisible: () => boolean
         isFocused: () => boolean
+        webContents?: { id: number }
       }
     },
+    windows: [] as Array<{
+      window: {
+        isDestroyed: () => boolean
+        isVisible: () => boolean
+        isFocused: () => boolean
+        webContents: { id: number }
+      }
+    }>,
     registerMainShortcut: vi.fn(
       (_id: string, _defaultAccelerator: string, _callback: () => void, _options?: unknown) => true
     ),
@@ -135,6 +145,9 @@ vi.mock('./manager', () => ({
     destroy: mocks.coreBoxManagerDestroy,
     trigger: mocks.coreBoxManagerTrigger,
     markExpanded: mocks.markExpanded,
+    get isCollapsed() {
+      return mocks.isCollapsed
+    },
     get showCoreBox() {
       return mocks.showCoreBox
     }
@@ -149,6 +162,9 @@ vi.mock('./window', () => ({
     updatePosition: mocks.updatePosition,
     setHeight: mocks.setHeight,
     stopAppSettingSubscription: mocks.stopAppSettingSubscription,
+    get windows() {
+      return mocks.windows
+    },
     get current() {
       return mocks.currentWindow
     }
@@ -161,7 +177,9 @@ describe('CoreBoxModule', () => {
   beforeEach(() => {
     mocks.callOrder.length = 0
     mocks.showCoreBox = false
+    mocks.isCollapsed = false
     mocks.currentWindow = null
+    mocks.windows = []
     mocks.getMainConfig.mockReturnValue({ beginner: { init: true } })
     vi.clearAllMocks()
   })
@@ -284,6 +302,100 @@ describe('CoreBoxModule', () => {
     expect(mocks.coreBoxManagerTrigger).not.toHaveBeenCalled()
     expect(mocks.markExpanded).not.toHaveBeenCalled()
     expect(mocks.setHeight).not.toHaveBeenCalled()
+  })
+
+  it('applies measured visible search-state height while search is pending', async () => {
+    mocks.isCollapsed = true
+    mocks.currentWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => true,
+        isFocused: () => true,
+        webContents: { id: 10 }
+      }
+    }
+    mocks.windows = [mocks.currentWindow as (typeof mocks.windows)[number]]
+
+    const module = new CoreBoxModule()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+    ;(
+      module as unknown as {
+        applyLayoutUpdate: (payload: {
+          height: number
+          resultCount: number
+          loading: boolean
+          recommendationPending: boolean
+          activationCount: number
+        }) => void
+      }
+    ).applyLayoutUpdate({
+      height: 196,
+      resultCount: 0,
+      loading: true,
+      recommendationPending: false,
+      activationCount: 0
+    })
+
+    expect(mocks.markExpanded).toHaveBeenCalled()
+    expect(mocks.setHeight).toHaveBeenCalledWith(196, mocks.currentWindow)
+  })
+
+  it('applies layout updates to the sender CoreBox window when another CoreBox is current', async () => {
+    mocks.isCollapsed = true
+    const senderWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => true,
+        isFocused: () => true,
+        webContents: { id: 31 }
+      }
+    }
+    const currentWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => true,
+        isFocused: () => true,
+        webContents: { id: 42 }
+      }
+    }
+    mocks.currentWindow = currentWindow
+    mocks.windows = [senderWindow, currentWindow]
+
+    const module = new CoreBoxModule()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+    ;(
+      module as unknown as {
+        applyLayoutUpdate: (
+          payload: {
+            height: number
+            resultCount: number
+            loading: boolean
+            recommendationPending: boolean
+            activationCount: number
+          },
+          context?: { sender: { id: number } }
+        ) => void
+      }
+    ).applyLayoutUpdate(
+      {
+        height: 196,
+        resultCount: 0,
+        loading: true,
+        recommendationPending: false,
+        activationCount: 0
+      },
+      { sender: { id: 31 } }
+    )
+
+    expect(mocks.setHeight).toHaveBeenCalledWith(196, senderWindow)
   })
 
   it('cleans up shortcuts and disposers before clearing runtime registration', async () => {

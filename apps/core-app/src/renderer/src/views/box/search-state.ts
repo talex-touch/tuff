@@ -1,6 +1,6 @@
 import { BoxMode } from '../../modules/box/adapter'
 
-export type CoreBoxSearchStateKind = 'recommendation-loading' | 'no-results'
+export type CoreBoxSearchStateKind = 'searching' | 'recommendation-loading' | 'no-results'
 
 export type CoreBoxSearchStateTone = 'progress' | 'empty'
 
@@ -40,6 +40,18 @@ export function resolveCoreBoxSearchState(
       titleFallback: 'Preparing recommendations',
       detailKey: 'coreBox.searchState.recommendationLoadingDetail',
       detailFallback: 'Recent and frequent actions are warming up.'
+    }
+  }
+
+  if (query && input.loading) {
+    return {
+      kind: 'searching',
+      tone: 'progress',
+      icon: 'i-ri-loader-4-line',
+      titleKey: 'coreBox.searchState.searchingTitle',
+      titleFallback: 'Searching',
+      detailKey: 'coreBox.searchState.searchingDetail',
+      detailFallback: 'Checking local providers and indexed content.'
     }
   }
 
