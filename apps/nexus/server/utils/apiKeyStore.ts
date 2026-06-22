@@ -172,6 +172,22 @@ export async function deleteApiKey(event: H3Event, userId: string, keyId: string
   return (result.meta?.changes ?? 0) > 0
 }
 
+export async function deleteApiKeysForUser(event: H3Event, userId: string): Promise<number> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureApiKeySchema(db)
+
+  const result = await db.prepare(`
+    DELETE FROM ${API_KEYS_TABLE}
+    WHERE user_id = ?1;
+  `).bind(userId).run()
+
+  return Number(result.meta?.changes ?? 0)
+}
+
 /**
  * Validate an API key and return the user ID if valid
  */

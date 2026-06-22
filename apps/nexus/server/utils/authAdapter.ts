@@ -1,6 +1,17 @@
 import type { H3Event } from 'h3'
 import { ensurePersonalTeam } from './creditsStore'
-import { createUser, createVerificationToken, getUserByAccount, getUserByEmail, getUserById, isUserActive, linkAccount, updateUserProfile, useVerificationToken } from './authStore'
+import {
+  createUser,
+  createVerificationToken,
+  getUserByAccount,
+  getUserByEmail,
+  getUserById,
+  isUserActive,
+  linkAccount,
+  restorePendingDeletionIfWithinWindow,
+  updateUserProfile,
+  useVerificationToken,
+} from './authStore'
 
 function toAdapterUser(user: { id: string, email: string, name: string | null, image: string | null, emailVerified: string | null }) {
   return {
@@ -26,10 +37,11 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
       if (hasEmail) {
         const existing = await getUserByEmail(event, email)
         if (existing) {
-          if (!isUserActive(existing)) {
+          const restored = await restorePendingDeletionIfWithinWindow(event, existing.id)
+          if (!isUserActive(restored)) {
             throw new Error('Account is disabled.')
           }
-          return toAdapterUser(existing)
+          return toAdapterUser(restored)
         }
       }
       const emailVerified = hasEmail

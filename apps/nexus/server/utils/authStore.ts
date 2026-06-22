@@ -29,6 +29,7 @@ const DEVICE_AUTH_RATE_LIMIT_MAX_BY_USER = 20
 const DEVICE_AUTH_COOLDOWN_WINDOW_MS = 10 * 60 * 1000
 const DEVICE_AUTH_COOLDOWN_THRESHOLD = 3
 const DEVICE_AUTH_LONG_TERM_SESSION_WINDOW_MS = 10 * 60 * 1000
+const ACCOUNT_DELETION_RECOVERY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
 let authSchemaInitialized = false
 
@@ -83,6 +84,10 @@ async function ensureAuthSchema(db: D1Database) {
       privacy_usage_data INTEGER NOT NULL DEFAULT 0,
       privacy_personalization INTEGER NOT NULL DEFAULT 1,
       allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0,
+      deletion_requested_at TEXT,
+      deletion_scheduled_at TEXT,
+      deletion_cancelled_at TEXT,
+      deletion_terms_version TEXT,
       created_at TEXT NOT NULL
     );
   `).run()
@@ -315,6 +320,10 @@ async function ensureAuthSchema(db: D1Database) {
   await addUserColumnIfMissing('privacy_usage_data', 'privacy_usage_data INTEGER NOT NULL DEFAULT 0')
   await addUserColumnIfMissing('privacy_personalization', 'privacy_personalization INTEGER NOT NULL DEFAULT 1')
   await addUserColumnIfMissing('allow_cli_ip_mismatch', 'allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0')
+  await addUserColumnIfMissing('deletion_requested_at', 'deletion_requested_at TEXT')
+  await addUserColumnIfMissing('deletion_scheduled_at', 'deletion_scheduled_at TEXT')
+  await addUserColumnIfMissing('deletion_cancelled_at', 'deletion_cancelled_at TEXT')
+  await addUserColumnIfMissing('deletion_terms_version', 'deletion_terms_version TEXT')
 
   const deviceAuthColumns = await db.prepare(`PRAGMA table_info(${DEVICE_AUTH_TABLE});`).all<{ name: string }>()
   const addDeviceAuthColumnIfMissing = async (column: string, ddl: string) => {
@@ -423,7 +432,7 @@ async function ensureAuthSchema(db: D1Database) {
   authSchemaInitialized = true
 }
 
-export type UserStatus = 'active' | 'merged' | 'disabled'
+export type UserStatus = 'active' | 'merged' | 'disabled' | 'deletion_pending'
 export type EmailState = 'verified' | 'unverified' | 'missing'
 export type AuthClientType = 'app' | 'cli' | 'external'
 export type AuthLoginClientType = AuthClientType | 'web'
@@ -442,6 +451,10 @@ export interface AuthUser {
   mergedAt: string | null
   mergedByUserId: string | null
   disabledAt: string | null
+  deletionRequestedAt: string | null
+  deletionScheduledAt: string | null
+  deletionCancelledAt: string | null
+  deletionTermsVersion: string | null
   privacySettings: UserPrivacySettings
   allowCliIpMismatch: boolean
   createdAt: string
@@ -661,6 +674,10 @@ function mapUser(row: Record<string, any> | null): AuthUser | null {
     mergedAt: row.merged_at ?? null,
     mergedByUserId: row.merged_by_user_id ?? null,
     disabledAt: row.disabled_at ?? null,
+    deletionRequestedAt: row.deletion_requested_at ?? null,
+    deletionScheduledAt: row.deletion_scheduled_at ?? null,
+    deletionCancelledAt: row.deletion_cancelled_at ?? null,
+    deletionTermsVersion: row.deletion_terms_version ?? null,
     privacySettings,
     allowCliIpMismatch,
     createdAt: row.created_at
@@ -765,6 +782,10 @@ export async function createUser(
     mergedAt: null,
     mergedByUserId: null,
     disabledAt: null,
+    deletionRequestedAt: null,
+    deletionScheduledAt: null,
+    deletionCancelledAt: null,
+    deletionTermsVersion: null,
     privacySettings: { ...DEFAULT_USER_PRIVACY_SETTINGS },
     allowCliIpMismatch: false,
     createdAt: now
@@ -975,6 +996,59 @@ export async function setUserStatus(event: H3Event, userId: string, status: User
   return getUserById(event, userId)
 }
 
+export async function requestUserDeletion(
+  event: H3Event,
+  userId: string,
+  termsVersion: string,
+): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const now = new Date()
+  const requestedAt = now.toISOString()
+  const scheduledAt = new Date(now.getTime() + ACCOUNT_DELETION_RECOVERY_WINDOW_MS).toISOString()
+
+  await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET status = 'deletion_pending',
+        disabled_at = NULL,
+        deletion_requested_at = ?,
+        deletion_scheduled_at = ?,
+        deletion_cancelled_at = NULL,
+        deletion_terms_version = ?
+    WHERE id = ? AND status = 'active'
+  `).bind(requestedAt, scheduledAt, termsVersion, userId).run()
+
+  return getUserById(event, userId)
+}
+
+export async function restorePendingDeletionIfWithinWindow(
+  event: H3Event,
+  userId: string,
+): Promise<AuthUser | null> {
+  const user = await getUserById(event, userId)
+  if (!user || user.status !== 'deletion_pending')
+    return user
+
+  const scheduledAtMs = user.deletionScheduledAt ? Date.parse(user.deletionScheduledAt) : Number.NaN
+  if (!Number.isFinite(scheduledAtMs) || scheduledAtMs <= Date.now())
+    return user
+
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const cancelledAt = new Date().toISOString()
+  await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET status = 'active',
+        deletion_requested_at = NULL,
+        deletion_scheduled_at = NULL,
+        deletion_cancelled_at = ?,
+        deletion_terms_version = NULL
+    WHERE id = ? AND status = 'deletion_pending'
+  `).bind(cancelledAt, userId).run()
+
+  return getUserById(event, userId)
+}
+
 export async function setUserPassword(event: H3Event, userId: string, password: string): Promise<void> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -992,7 +1066,7 @@ export async function verifyUserPassword(event: H3Event, email: string, password
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const user = await getUserByEmail(event, email)
-  if (!user || user.status !== 'active')
+  if (!user || (user.status !== 'active' && user.status !== 'deletion_pending'))
     return null
   const row = await db.prepare(`SELECT password_hash, password_salt FROM ${CREDENTIALS_TABLE} WHERE user_id = ?`).bind(user.id).first()
   if (!row)
@@ -2594,6 +2668,29 @@ export async function revokeDevice(event: H3Event, userId: string, deviceId: str
         token_version = token_version + 1
     WHERE id = ? AND user_id = ?
   `).bind(now, deviceId, userId).run()
+}
+
+export async function revokeAllDevicesForUser(event: H3Event, userId: string): Promise<number> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const now = new Date().toISOString()
+  const result = await db.prepare(`
+    UPDATE ${DEVICES_TABLE}
+    SET revoked_at = ?,
+        token_version = token_version + 1
+    WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(now, userId).run()
+  return Number(result.meta?.changes ?? 0)
+}
+
+export async function clearUserAuthEphemeralTokens(event: H3Event, userId: string): Promise<void> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await db.prepare(`DELETE FROM ${LOGIN_TOKEN_TABLE} WHERE user_id = ?`).bind(userId).run()
+  await db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ?`).bind(userId).run()
+  await db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE user_id = ?`).bind(userId).run()
+  await db.prepare(`DELETE FROM ${DEVICE_AUTH_TABLE} WHERE user_id = ?`).bind(userId).run()
+  await db.prepare(`DELETE FROM ${OAUTH_CODE_TABLE} WHERE user_id = ? AND consumed_at IS NULL`).bind(userId).run()
 }
 
 export async function setDeviceTrusted(event: H3Event, userId: string, deviceId: string, trusted: boolean): Promise<AuthDevice | null> {
