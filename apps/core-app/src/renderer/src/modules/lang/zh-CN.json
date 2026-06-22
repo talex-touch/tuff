@@ -1600,6 +1600,8 @@
     "searchState": {
       "idleTitle": "可直接搜索",
       "idleDetail": "输入关键词搜索应用、文件、命令或 AI 动作。",
+      "searchingTitle": "正在搜索",
+      "searchingDetail": "正在检查本地 Provider 和索引内容。",
       "recommendationLoadingTitle": "正在准备推荐",
       "recommendationLoadingDetail": "最近使用和高频动作正在预热。",
       "noResultsTitle": "未找到结果",

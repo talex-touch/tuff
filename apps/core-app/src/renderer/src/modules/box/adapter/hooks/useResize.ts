@@ -51,6 +51,7 @@ function measureResultContentHeight(resultContent: HTMLElement): number {
   const containerStyle = getComputedStyle(resultContent)
   const paddingTop = toPx(containerStyle.paddingTop)
   const paddingBottom = toPx(containerStyle.paddingBottom)
+  const contentTop = resultContent.getBoundingClientRect().top
 
   let visualBottom = 0
   let measuredChildren = 0
@@ -61,7 +62,9 @@ function measureResultContentHeight(resultContent: HTMLElement): number {
 
     const childStyle = getComputedStyle(child)
     const marginBottom = toPx(childStyle.marginBottom)
-    const childBottom = child.offsetTop + child.offsetHeight + marginBottom
+    const rectBottom = childRect.bottom - contentTop
+    const offsetBottom = child.offsetTop + child.offsetHeight
+    const childBottom = Math.max(rectBottom, offsetBottom) + marginBottom
     if (childBottom > visualBottom) {
       visualBottom = childBottom
     }
@@ -98,9 +101,24 @@ function calculateDesiredHeight(
   // can lock the next height to current viewport height and prevent shrinking.
   const resultContent = scrollRoot.querySelector('.CoreBoxRes-ScrollContent') as HTMLElement | null
   if (resultContent) {
+    const searchState = resultContent.querySelector('.CoreBoxSearchState') as HTMLElement | null
+    if (searchState && resultCount === 0) {
+      const stateRect = searchState.getBoundingClientRect()
+      if (Number.isFinite(stateRect.bottom) && stateRect.bottom > headerHeight) {
+        return clampHeight(Math.ceil(stateRect.bottom + HEIGHT_SAFETY_PADDING))
+      }
+    }
+
     const contentHeight = measureResultContentHeight(resultContent)
     if (Number.isFinite(contentHeight) && contentHeight > 0) {
       return clampHeight(contentHeight + headerHeight + HEIGHT_SAFETY_PADDING)
+    }
+
+    if (searchState) {
+      const stateRect = searchState.getBoundingClientRect()
+      if (Number.isFinite(stateRect.bottom) && stateRect.bottom > headerHeight) {
+        return clampHeight(Math.ceil(stateRect.bottom + HEIGHT_SAFETY_PADDING))
+      }
     }
 
     return clampHeight(headerHeight)

@@ -39,7 +39,7 @@ describe('CoreBox search state', () => {
     ).toBe('recommendation-loading')
   })
 
-  it('does not show a state when a query is still loading', () => {
+  it('shows searching while a query is still loading', () => {
     expect(
       resolveCoreBoxSearchState({
         query: 'notes',
@@ -47,8 +47,8 @@ describe('CoreBox search state', () => {
         loading: true,
         recommendationPending: false,
         mode: BoxMode.INPUT
-      })
-    ).toBeNull()
+      })?.kind
+    ).toBe('searching')
   })
 
   it('shows retry and settings recovery when a query finishes without results', () => {

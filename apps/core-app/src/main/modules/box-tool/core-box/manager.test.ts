@@ -8,6 +8,12 @@ const mocks = vi.hoisted(() => ({
   hide: vi.fn(),
   shrink: vi.fn(),
   expand: vi.fn(),
+  currentWindow: null as null | {
+    window: {
+      isDestroyed: () => boolean
+      isVisible: () => boolean
+    }
+  },
   on: vi.fn(),
   logger: {
     warn: vi.fn(),
@@ -86,7 +92,9 @@ vi.mock('./window', () => ({
     expand: mocks.expand,
     attachUIView: vi.fn(),
     detachUIView: vi.fn(),
-    current: null
+    get current() {
+      return mocks.currentWindow
+    }
   }
 }))
 
@@ -103,6 +111,7 @@ describe('CoreBoxManager polling pressure', () => {
     vi.resetModules()
     vi.clearAllMocks()
     mocks.getMainConfig.mockReturnValue({ beginner: { init: true } })
+    mocks.currentWindow = null
   })
 
   afterEach(() => {
@@ -150,5 +159,21 @@ describe('CoreBoxManager polling pressure', () => {
     coreBoxManager.trigger(false, { immediate: true })
 
     expect(mocks.hide).toHaveBeenCalledWith({ immediate: true })
+  })
+
+  it('retries showing when manager state is visible but the native window is hidden', async () => {
+    const { coreBoxManager } = await import('./manager')
+    coreBoxManager.trigger(true)
+    mocks.show.mockClear()
+    mocks.currentWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => false
+      }
+    }
+
+    coreBoxManager.trigger(true)
+
+    expect(mocks.show).toHaveBeenCalledWith(false)
   })
 })

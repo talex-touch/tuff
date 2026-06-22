@@ -160,7 +160,10 @@ export class CoreBoxManager {
     }
 
     const now = Date.now()
-    if (now - this.lastTrigger < 200 && this._show === show) {
+    const currentWindow = windowManager.current?.window
+    const realVisible =
+      currentWindow && !currentWindow.isDestroyed() ? currentWindow.isVisible() : false
+    if (now - this.lastTrigger < 200 && this._show === show && realVisible === show) {
       return
     }
     this.lastTrigger = now

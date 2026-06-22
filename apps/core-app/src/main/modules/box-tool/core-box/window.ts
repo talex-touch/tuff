@@ -886,10 +886,10 @@ export class WindowManager {
   /**
    * Set CoreBox to a specific height (called from frontend)
    */
-  public setHeight(height: number): void {
+  public setHeight(height: number, targetWindow?: TouchWindow): void {
     const safeHeight = Math.round(Math.max(COREBOX_MIN_HEIGHT, Math.min(height, 600)))
 
-    const currentWindow = this.current
+    const currentWindow = targetWindow ?? this.current
     if (!currentWindow) {
       coreBoxWindowLog.error('No current window available for setHeight')
       return

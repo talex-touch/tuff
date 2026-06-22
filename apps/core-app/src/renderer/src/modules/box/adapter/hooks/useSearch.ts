@@ -908,6 +908,9 @@ export function useSearch(
       logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
 
       boxOptions.layout = undefined
+      nextTick(() => {
+        window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
+      })
     } catch (error) {
       devLog('Search initiation failed:', error)
       if (inFlightQueryKey === queryKey) {
@@ -1272,6 +1275,7 @@ export function useSearch(
   const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
     const nextValue = typeof value === 'string' ? value : ''
     searchVal.value = nextValue
+    void handleSearchImmediate({ force: true })
     window.dispatchEvent(new CustomEvent(CoreBoxEvents.input.focus.toEventName()))
     window.dispatchEvent(new CustomEvent(CoreBoxRetainedEvents.legacy.focusInput.toEventName()))
   })

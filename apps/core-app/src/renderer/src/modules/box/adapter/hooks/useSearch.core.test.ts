@@ -305,6 +305,28 @@ describe('useSearch CoreBox reopen behavior', () => {
     expect(clipboardOptions.last).toBeNull()
   })
 
+  it('runs a forced search when the main process sets the query', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    state.listeners.get('core-box:input:set-query')?.({ value: 'screenshot' })
+    await flushPromises()
+
+    expect(hook.searchVal.value).toBe('screenshot')
+    expect(state.send).toHaveBeenCalledWith(
+      expect.objectContaining({ toEventName: expect.any(Function) }),
+      {
+        query: { text: 'screenshot', inputs: [] }
+      }
+    )
+    expect(hook.res.value).toHaveLength(1)
+    expect(hook.res.value[0].render.basic?.title).toBe('screenshot-1')
+    expect(state.dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'corebox:layout-refresh' })
+    )
+  })
+
   it('hides CoreBox immediately before dispatching background app launch', async () => {
     state.backgroundAppLaunch = true
     const hook = useSearch(createBoxOptions(), createClipboardOptions())

@@ -203,6 +203,12 @@ describe('SystemActionsProvider app index actions', () => {
       action: 'screenshot-cursor-display',
       path: 'native:screenshot:cursor-display:copy'
     })
+    expect(item.source).toEqual({
+      id: 'system-actions-provider',
+      name: 'System Actions',
+      permission: 'system',
+      type: 'system'
+    })
 
     await provider.onExecute({ item } satisfies IExecuteArgs)
 
