@@ -28,7 +28,8 @@ import type {
   IndexedSourceResetRequest,
   IndexedSourceResetResult,
   IndexedSourceScanRequest,
-  IndexedSourceWatchEvent
+  IndexedSourceWatchEvent,
+  IndexedWriteFlushSnapshot
 } from '@talex-touch/utils/search'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { Buffer } from 'node:buffer'
@@ -58,9 +59,12 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   IndexedSourceIntegrityEvidenceService,
   IndexedWriteFlushEvidenceService,
+  IndexedWriteFlushSnapshotService,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   IndexedWriteRuntimeEmitterService,
+  buildIndexedWriteFlushFailureSnapshot,
+  buildIndexedWriteFlushResultSnapshot,
   isIndexedWatchPathOwned,
   mapIndexedFileSourceRecord,
   resolveIndexedWatchRootSet
@@ -237,6 +241,9 @@ interface ThumbnailStatusPayload {
 }
 
 type ThumbnailFileSnapshot = Pick<typeof filesSchema.$inferSelect, 'mtime' | 'size'>
+type FileProviderRuntimeWriteSnapshot = Omit<IndexedWriteFlushSnapshot, 'status'> & {
+  status: 'flushed' | 'failed'
+}
 
 interface FileUpdateRecord {
   id: number
@@ -474,6 +481,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     typeof filesSchema.$inferSelect
   >
   private readonly incrementalDeleteExecutor: IndexedWriteDeleteExecutorService<IndexedWriteDeleteRecord>
+  private readonly incrementalPersistSnapshotService =
+    new IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>()
+  private readonly ftsWriteSnapshotService =
+    new IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>()
+  private readonly ftsDeleteSnapshotService =
+    new IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>()
   private readonly cleanupDeleteService: FileProviderCleanupDeleteService<
     IndexedWriteDeleteRecord,
     FileIndexRunOptions | undefined
@@ -926,7 +939,31 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async removeSearchIndexItems(itemIds: string[], reason: string): Promise<void> {
     if (itemIds.length === 0) return
     if (!(await this.ensureSearchIndexWorkerReady(reason))) return
-    await this.searchIndexWorker.removeProviderItems(this.id, itemIds)
+    const startedAt = performance.now()
+    try {
+      await this.searchIndexWorker.removeProviderItems(this.id, itemIds)
+      this.recordRuntimeWriteSnapshot(this.ftsDeleteSnapshotService, {
+        entries: itemIds.length,
+        reason,
+        durationMs: performance.now() - startedAt,
+        metadata: {
+          requestedRows: itemIds.length,
+          removedItems: itemIds.length,
+          storeBoundary: 'fts-delete'
+        }
+      })
+    } catch (error) {
+      this.recordRuntimeWriteFailureSnapshot(this.ftsDeleteSnapshotService, {
+        error,
+        reason,
+        entries: itemIds.length,
+        metadata: {
+          requestedRows: itemIds.length,
+          storeBoundary: 'fts-delete'
+        }
+      })
+      throw error
+    }
   }
 
   private cleanupStaleFileResult(file: typeof filesSchema.$inferSelect, reason: string): void {
@@ -1115,9 +1152,34 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<Array<typeof filesSchema.$inferSelect>> {
     if (records.length === 0) return []
     if (!(await this.ensureSearchIndexWorkerReady(reason))) return []
-    return (await this.searchIndexWorker.upsertFiles(records)) as unknown as Array<
-      typeof filesSchema.$inferSelect
-    >
+    const startedAt = performance.now()
+    try {
+      const persisted = (await this.searchIndexWorker.upsertFiles(records)) as unknown as Array<
+        typeof filesSchema.$inferSelect
+      >
+      this.recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
+        entries: persisted.length,
+        reason,
+        durationMs: performance.now() - startedAt,
+        metadata: {
+          requestedRows: records.length,
+          persistedRows: persisted.length,
+          storeBoundary: 'fts-write'
+        }
+      })
+      return persisted
+    } catch (error) {
+      this.recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
+        error,
+        reason,
+        entries: records.length,
+        metadata: {
+          requestedRows: records.length,
+          storeBoundary: 'fts-write'
+        }
+      })
+      throw error
+    }
   }
 
   private mapFileToIndexedSourceRecord(file: IndexedFileSourceRecordRow): IndexedSourceRecord {
@@ -1754,7 +1816,92 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       )
     }
 
+    this.pushRuntimeWriteEvidence(evidence)
+
     return evidence
+  }
+
+  private pushRuntimeWriteEvidence(evidence: IndexedSourceEvidence[]): void {
+    const snapshots: Array<{
+      snapshot: FileProviderRuntimeWriteSnapshot | null
+      id: string
+      label: string
+    }> = [
+      {
+        snapshot: this.incrementalPersistSnapshotService.getSnapshot(),
+        id: `${this.id}:incremental-persist`,
+        label: 'File incremental DB persist'
+      },
+      {
+        snapshot: this.ftsWriteSnapshotService.getSnapshot(),
+        id: `${this.id}:fts-write`,
+        label: 'File FTS write'
+      },
+      {
+        snapshot: this.ftsDeleteSnapshotService.getSnapshot(),
+        id: `${this.id}:fts-delete`,
+        label: 'File FTS delete'
+      }
+    ]
+
+    for (const item of snapshots) {
+      if (!item.snapshot) continue
+      evidence.push(
+        indexFlushEvidenceService.build({
+          id: item.id,
+          label: item.label,
+          snapshot: item.snapshot
+        })
+      )
+    }
+  }
+
+  private recordRuntimeWriteSnapshot(
+    service: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>,
+    input: {
+      entries: number
+      reason: string
+      metadata?: Record<string, unknown>
+      durationMs?: number
+    }
+  ): void {
+    service.record(
+      buildIndexedWriteFlushResultSnapshot<FileProviderRuntimeWriteSnapshot>({
+        status: 'flushed',
+        entries: input.entries,
+        pending: 0,
+        inflight: 0,
+        reason: input.reason,
+        metadata: input.metadata,
+        durationMs: input.durationMs
+      })
+    )
+  }
+
+  private recordRuntimeWriteFailureSnapshot(
+    service: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>,
+    input: {
+      error: unknown
+      reason: string
+      entries?: number
+      metadata?: Record<string, unknown>
+    }
+  ): void {
+    service.record(
+      buildIndexedWriteFlushFailureSnapshot<FileProviderRuntimeWriteSnapshot>({
+        error: input.error,
+        pendingSize: 0,
+        inflightSize: 0,
+        flushResult: {
+          status: 'failed',
+          entries: input.entries ?? 0,
+          pending: 0,
+          inflight: 0,
+          reason: input.reason,
+          metadata: input.metadata
+        }
+      })
+    )
   }
 
   /**
@@ -2534,7 +2681,36 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<void> {
     if (!this.dbUtils) return
 
-    await this.incrementalWriteService.execute(entries as FileProviderIncrementalChangeEntry[])
+    const startedAt = performance.now()
+    try {
+      const result = await this.incrementalWriteService.execute(
+        entries as FileProviderIncrementalChangeEntry[]
+      )
+      this.recordRuntimeWriteSnapshot(this.incrementalPersistSnapshotService, {
+        entries: result.inserted.length + result.updated.length,
+        reason: 'incremental.add-change',
+        durationMs: performance.now() - startedAt,
+        metadata: {
+          requestedRows: entries.length,
+          insertedRows: result.inserted.length,
+          updatedRows: result.updated.length,
+          unchangedRows: result.unchangedCount,
+          manual: result.manual,
+          storeBoundary: 'incremental-db-persist'
+        }
+      })
+    } catch (error) {
+      this.recordRuntimeWriteFailureSnapshot(this.incrementalPersistSnapshotService, {
+        error,
+        reason: 'incremental.add-change',
+        entries: entries.length,
+        metadata: {
+          requestedRows: entries.length,
+          storeBoundary: 'incremental-db-persist'
+        }
+      })
+      throw error
+    }
   }
 
   private async insertIncrementalRecords(
