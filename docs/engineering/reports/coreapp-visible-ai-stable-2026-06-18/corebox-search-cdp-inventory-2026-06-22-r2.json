@@ -1,0 +1,30 @@
+[
+  {
+    "id": "3C8206051FDF4D1281BFFC93BEBC699D",
+    "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "bodyClass": "MacIntel",
+    "text": "Tuff\n应用设置\n\n主要\n\n设置\n智能\n市场\n样式\n下载中心\n版本\nv2.4.12-beta.8\nTUFF\n\n为创造者们重新构想的命令栏。\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\n账户\n\n管理您的账户信息和登录状态。\n\n无账户\n\n当前无法访问账户。\n\n登录\nAI 积分\n\n查看 Nexus AI credits 的个人剩余、已用和额度。\n\nAI 积分\n\n登录后可查看 credits 剩余和消耗。\n\n需要登录\n\n请先登录 Tuff 账户以读取 Nexus credits summary。\n\n语言设置\n\n选择您喜欢的应用程序语言。\n\n跟随系统语言\n\n自动匹配系统语言设置。\n\n选择语言\n\n手动选择您喜欢的显示语言。\n\n简体中文\nEnglish\n通用配置\n\n配置权限和基础设置\n\n权限\n\n统一管理文件访问、系统辅助、麦克风和平台"
+  },
+  {
+    "id": "A237849DC5C7E235084792E23DF06E0D",
+    "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "bodyClass": "MacIntel core-box division-box",
+    "text": "万物尽在塔内\n图像\n最近处理\n共 0 条\n暂无记录"
+  },
+  {
+    "id": "D706068B3A8FE100585CFF3A9784BF1F",
+    "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+    "title": "Tuff",
+    "bodyClass": "meta-overlay MacIntel",
+    "text": ""
+  },
+  {
+    "id": "6DB20FB7D979A8236D8B5F0639B1EF5A",
+    "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "bodyClass": "MacIntel core-box",
+    "text": "searching warmup__tuff_no_result_zzzz_20260622_r2__设置settingappcoretufffileclipboardsearchhelpabout插件pluginsearching warmup r2\n图像\n未找到结果\n检查关键词、重试搜索，或打开文件索引设置。\n重试\n文件索引设置\nCoreBox\n最近处理\n共 0 条\n暂无记录"
+  }
+]

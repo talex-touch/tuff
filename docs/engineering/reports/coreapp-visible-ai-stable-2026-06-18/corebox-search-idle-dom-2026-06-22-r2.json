@@ -1,0 +1,63 @@
+{
+  "label": "idle",
+  "capturedAt": "2026-06-21T18:12:00.314Z",
+  "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "readyState": "complete",
+  "bodyClass": "MacIntel core-box",
+  "inner": {
+    "w": 720,
+    "h": 56,
+    "dpr": 2
+  },
+  "documentElement": {
+    "clientHeight": 56,
+    "scrollHeight": 56,
+    "offsetHeight": 56
+  },
+  "body": {
+    "clientHeight": 56,
+    "scrollHeight": 56,
+    "offsetHeight": 56
+  },
+  "text": "万物尽在塔内 图像",
+  "query": "",
+  "input": {
+    "x": 60,
+    "y": 4,
+    "w": 508,
+    "h": 48,
+    "visible": true
+  },
+  "coreBoxRect": {
+    "x": 0,
+    "y": 0,
+    "w": 720,
+    "h": 56,
+    "visible": true
+  },
+  "resRect": {
+    "x": 0,
+    "y": 0,
+    "w": 0,
+    "h": 0,
+    "visible": false
+  },
+  "scrollContentRect": null,
+  "searchState": null,
+  "itemCount": 0,
+  "items": [],
+  "footerText": "",
+  "debug": null,
+  "checks": {
+    "hasCoreBox": true,
+    "hasDivisionBox": false,
+    "hasIdleText": true,
+    "hasSearchingText": false,
+    "hasNoResult": false,
+    "hasRetry": false,
+    "hasFileIndexSettings": false,
+    "hasResultRows": false,
+    "hasVisibleResultArea": false
+  }
+}

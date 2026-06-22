@@ -1,0 +1,329 @@
+{
+  "ok": false,
+  "capturedAt": "2026-06-21T18:12:21.073Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9461/json/list",
+  "selectedTargetId": "6DB20FB7D979A8236D8B5F0639B1EF5A",
+  "selectedTargetInfo": {
+    "id": "6DB20FB7D979A8236D8B5F0639B1EF5A",
+    "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "bodyClass": "MacIntel core-box",
+    "text": "searching warmup__tuff_no_result_zzzz_20260622_r2__设置settingappcoretufffileclipboardsearchhelpabout插件pluginsearching warmup r2\n图像\n未找到结果\n检查关键词、重试搜索，或打开文件索引设置。\n重试\n文件索引设置\nCoreBox\n最近处理\n共 0 条\n暂无记录"
+  },
+  "artifacts": [
+    "corebox-search-cdp-inventory-2026-06-22-r2.json",
+    "corebox-search-idle-dom-2026-06-22-r2.json",
+    "corebox-search-idle-2026-06-22-r2.png",
+    "corebox-search-no-result-dom-2026-06-22-r2.json",
+    "corebox-search-no-result-2026-06-22-r2.png",
+    "corebox-search-searching-immediate-dom-2026-06-22-r2.json",
+    "corebox-search-searching-immediate-2026-06-22-r2.png",
+    "corebox-search-searching-dom-2026-06-22-r2.json",
+    "corebox-search-searching-2026-06-22-r2.png"
+  ],
+  "checks": {
+    "idleVisible": true,
+    "noResultRecoveryVisible": true,
+    "noStaleClipboardImageForNoResultTextQuery": true,
+    "noStaleClipboardImageForResultTextQuery": null,
+    "resultRowsVisible": false,
+    "searchingOrWarmupVisible": false,
+    "noResultDomVisible": true,
+    "windowExpandedForNoResult": false,
+    "noResultScreenshotViewportCoversState": false
+  },
+  "layout": {
+    "idle": {
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "visible": false
+      },
+      "searchState": null
+    },
+    "noResult": {
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": {
+        "x": 0,
+        "y": 57,
+        "w": 718,
+        "h": 128,
+        "visible": true
+      }
+    },
+    "searching": {
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": {
+        "x": 0,
+        "y": 57,
+        "w": 718,
+        "h": 128,
+        "visible": true
+      }
+    }
+  },
+  "resultAttempts": [
+    {
+      "term": "设置",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "设置 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "setting",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "setting 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "app",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "app 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "core",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "core 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "tuff",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "tuff 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "file",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "file 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "clipboard",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "clipboard 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "search",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "search 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "help",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "help 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "about",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "about 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "插件",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "插件 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    },
+    {
+      "term": "plugin",
+      "rowCount": 0,
+      "hasNoResult": true,
+      "inner": {
+        "w": 720,
+        "h": 56,
+        "dpr": 2
+      },
+      "resRect": {
+        "x": 0,
+        "y": 56,
+        "w": 720,
+        "h": 1,
+        "visible": true
+      },
+      "searchState": "CoreBoxSearchState CoreBoxSearchState--empty",
+      "text": "plugin 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录"
+    }
+  ],
+  "notes": [
+    "After corebox:shown and corebox:layout-refresh, ordinary core-box target still reports innerHeight 56 and .CoreBoxRes height 1 while no-result DOM state rect is visible below the viewport.",
+    "Fresh isolated packaged profile returned no result rows for settings/app/core/tuff/file/clipboard/search/help/about/plugin queries; result source/status/reason pills cannot be accepted without a real row sample.",
+    "Searching/warm-up state was not observable in the sampled packaged UI; queries settled directly to no-result."
+  ]
+}
