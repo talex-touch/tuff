@@ -258,6 +258,18 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
       metadata?: Record<string, unknown>
     }>
   >
+  recordRuntimeWriteSnapshot: (
+    service: unknown,
+    input: {
+      entries: number
+      reason: string
+      metadata?: Record<string, unknown>
+      durationMs?: number
+    }
+  ) => void
+  incrementalPersistSnapshotService: unknown
+  ftsWriteSnapshotService: unknown
+  ftsDeleteSnapshotService: unknown
   setIndexedSourceRuntimeResetDelegate: (
     delegate:
       | null
@@ -707,6 +719,103 @@ describe('file-provider startup readiness', () => {
               durationMs: 16,
               error: 'worker unavailable',
               withContent: 2
+            })
+          })
+        ])
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
+    }
+  })
+
+  it('adds runtime write summaries to indexed source evidence', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalDbUtils = provider.dbUtils
+
+    provider.dbUtils = null
+    provider.recordRuntimeWriteSnapshot(provider.incrementalPersistSnapshotService, {
+      entries: 3,
+      reason: 'incremental.add-change',
+      durationMs: 12,
+      metadata: {
+        requestedRows: 5,
+        insertedRows: 2,
+        updatedRows: 1,
+        unchangedRows: 2,
+        storeBoundary: 'incremental-db-persist'
+      }
+    })
+    provider.recordRuntimeWriteSnapshot(provider.ftsWriteSnapshotService, {
+      entries: 4,
+      reason: 'full-scan',
+      durationMs: 8,
+      metadata: {
+        requestedRows: 4,
+        persistedRows: 4,
+        storeBoundary: 'fts-write'
+      }
+    })
+    provider.recordRuntimeWriteSnapshot(provider.ftsDeleteSnapshotService, {
+      entries: 2,
+      reason: 'incremental.delete',
+      durationMs: 5,
+      metadata: {
+        requestedRows: 2,
+        removedItems: 2,
+        storeBoundary: 'fts-delete'
+      }
+    })
+
+    try {
+      const evidence = await provider.getIndexedSourceEvidence()
+
+      expect(evidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'file-provider:incremental-persist',
+            label: 'File incremental DB persist',
+            status: 'ready',
+            itemCount: 3,
+            reason: 'incremental.add-change',
+            metadata: expect.objectContaining({
+              status: 'flushed',
+              entries: 3,
+              requestedRows: 5,
+              insertedRows: 2,
+              updatedRows: 1,
+              unchangedRows: 2,
+              storeBoundary: 'incremental-db-persist',
+              durationMs: 12
+            })
+          }),
+          expect.objectContaining({
+            id: 'file-provider:fts-write',
+            label: 'File FTS write',
+            status: 'ready',
+            itemCount: 4,
+            reason: 'full-scan',
+            metadata: expect.objectContaining({
+              status: 'flushed',
+              entries: 4,
+              requestedRows: 4,
+              persistedRows: 4,
+              storeBoundary: 'fts-write',
+              durationMs: 8
+            })
+          }),
+          expect.objectContaining({
+            id: 'file-provider:fts-delete',
+            label: 'File FTS delete',
+            status: 'ready',
+            itemCount: 2,
+            reason: 'incremental.delete',
+            metadata: expect.objectContaining({
+              status: 'flushed',
+              entries: 2,
+              requestedRows: 2,
+              removedItems: 2,
+              storeBoundary: 'fts-delete',
+              durationMs: 5
             })
           })
         ])
