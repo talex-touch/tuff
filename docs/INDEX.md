@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-22
 > 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主入口
@@ -21,6 +21,7 @@
 - `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` - AI Stable 固定证据矩阵。
 - `docs/plan-prd/04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md` - Nexus production governance 证据矩阵。
 - `docs/plan-prd/04-implementation/Evidence-Matrix-Platform-2026-06-18.md` - 平台能力非阻塞 smoke 矩阵。
+- `docs/engineering/reports/release-integrity-2026-06-22/` - R1 Release Integrity Gate E 真实链路复采证据。
 - `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/` - CoreApp visible AI curated evidence。
 - `docs/engineering/reports/startup-packaged-hot-runs-2026-06-21/` - packaged hot startup benchmark 摘要。
 - `docs/engineering/reports/startup-packaged-cold-runs-2026-06-21/` - packaged cold startup benchmark 摘要。

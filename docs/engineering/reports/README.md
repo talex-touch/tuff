@@ -1,6 +1,6 @@
 # Engineering Reports Hygiene
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-22
 > 定位：工程报告、审计输出与 evidence 产物的提交边界。
 
 ## 提交边界
@@ -30,6 +30,7 @@
 ## 当前 reports
 
 - `coreapp-visible-ai-stable-2026-06-18/`：AI Stable / visible experience curated evidence。
+- `release-integrity-2026-06-22/`：R1 Release Integrity Gate E 真实链路复采证据。
 - `startup-packaged-hot-runs-2026-06-21/`：packaged hot startup benchmark 摘要与结构化数据。
 - `startup-packaged-cold-runs-2026-06-21/`：packaged cold startup benchmark 摘要与结构化数据。
 - `native-screenshot-rust-2026-06-21/`：native screenshot Rust 验证摘要。
