@@ -1,9 +1,15 @@
 # 变更日志
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-22
 > 定位：只保留 6 月当前阶段的高信号变更索引。6 月以前流水记录已从文档树移除，可从 Git 历史追溯。
 
 ## 2026-06-22
+
+### release: bind real R1 gate-e evidence
+
+- 对 `v2.4.12-beta.8` 执行 GitHub Release、Nexus release/latest/assets/download/signature endpoint 与 CoreApp signature verifier 复采。
+- 证据落到 `docs/engineering/reports/release-integrity-2026-06-22/`，并同步 R1 Evidence Matrix。
+- 当前真实链路结论：Nexus metadata/latest/assets/download 已通；GitHub manifest 存在；Gate E 仍被 `.sig/.asc` sidecar、manifest `signature` 字段、Nexus `signatureUrl/signatureKey` 与 signing public key 缺失阻塞。
 
 ### tuffex: stabilize select dynamic dropdown behavior
 
@@ -47,7 +53,8 @@
 - 空查询、插件/AI send-mode 或显式 `includeClipboardImage=true` 仍可带图片输入。
 - no-result 空态保留 retry 与 File Index settings action，并在空态 DOM 落地后触发布局刷新。
 - 代码侧验证通过 focused CoreBox tests、CoreApp typecheck 与 `build:unpack`。
-- packaged 复采仍受当前 macOS signing / AMFI / Gatekeeper 环境阻断，`corebox-search-states` 仍保持 pending。
+- 2026-06-22 packaged 复采通过本机 Apple Development 签名绕过 macOS 启动阻断，`corebox-search-states` 已取得 idle 与 no-result DOM/stale-image recovery partial evidence；该 surface 仍保持 pending，因为 BrowserWindow 仍停在 `720x56`，searching/warm-up 与 result rows/source/status/reason pills 仍缺真实可见样本。
+- 2026-06-22 R3 非 schema runtime-store 小切片完成：FileProvider incremental DB persist、FTS write/delete 与 index worker flush 现在统一进入 indexed source runtime/store evidence；未触碰 `scan_progress` schema migration。
 
 ### ai: pass CoreBox AI Ask packaged stable surface
 

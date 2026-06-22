@@ -30,16 +30,16 @@
 
 | 主题 | 状态 | 缺口 |
 | --- | --- | --- |
-| `corebox-search-states` | open | 代码侧已修普通文本 stale image input 与 no-result layout refresh；仍缺可运行签名包下 idle/no-result/result screenshot + DOM evidence。 |
+| `corebox-search-states` | open | 2026-06-22 可运行签名包已复采 idle 与 no-result DOM/stale-image recovery partial evidence；仍缺可接受 no-result screenshot、searching/warm-up、result source/status/reason pills。 |
 | Broader visible surfaces | open | app-index、login、OmniPanel、Assistant、Workflow、Provider surfaces 仍 pending。 |
 | Global visible gate | open | strict visible verifier 仍不能标 passed。 |
 | AI Beta surfaces | open | Workflow Use Model、Review Queue、Assistant、Agent 工具执行等不反向阻塞 CoreBox Stable。 |
 
 ## 下一步
 
-1. 恢复可运行签名包启动环境，重采 `corebox-search-states`。
-2. 用真实普通 CoreBox target 采 idle、warm-up/searching、no-result retry + File Index settings、result source/status/reason pills。
-3. 确认普通文本查询不会携带 stale image clipboard input。
+1. 解决普通 `core-box` BrowserWindow 仍停在 `720x56` 的 packaged resize 链路，让 no-result retry + File Index settings 出现在可接受截图中。
+2. 补采真实 warm-up/searching 可见态与 result source/status/reason pills；fresh profile 当前无 result rows，必要时先准备可复现索引/Provider 数据。
+3. 保留 2026-06-22 no-result DOM 作为普通文本查询不携带 stale image clipboard input 的 partial evidence。
 4. 每新增 evidence 同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/`、Evidence Matrix、CHANGES。
 5. 不使用旧 raw blocker artifact 冒充最终 evidence。
 
