@@ -210,6 +210,7 @@ vi.mock('./web-contents-view-guard', () => ({
   getLiveViewWebContents: vi.fn(() => null)
 }))
 
+import { coreBoxManager } from './manager'
 import { COREBOX_MIN_HEIGHT, COREBOX_WIDTH, WindowManager } from './window'
 
 describe('WindowManager CoreBox compact bounds', () => {
@@ -282,5 +283,63 @@ describe('WindowManager CoreBox compact bounds', () => {
       },
       false
     )
+  })
+
+  it('does not hide when a transient blur regains focus before confirmation', async () => {
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      let focused = false
+      const browserWindow = {
+        isDestroyed: vi.fn(() => false),
+        isVisible: vi.fn(() => true),
+        isFocused: vi.fn(() => focused)
+      }
+      const touchWindow = {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+
+      manager.windows = [touchWindow]
+      ;(
+        manager as unknown as {
+          scheduleBlurHide: (window: WindowManager['windows'][number]) => void
+        }
+      ).scheduleBlurHide(touchWindow)
+
+      focused = true
+      await vi.advanceTimersByTimeAsync(130)
+
+      expect(coreBoxManager.trigger).not.toHaveBeenCalledWith(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('hides after blur remains unfocused through confirmation', async () => {
+    vi.useFakeTimers()
+    try {
+      const manager = new WindowManager()
+      const browserWindow = {
+        isDestroyed: vi.fn(() => false),
+        isVisible: vi.fn(() => true),
+        isFocused: vi.fn(() => false)
+      }
+      const touchWindow = {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+
+      manager.windows = [touchWindow]
+      ;(
+        manager as unknown as {
+          scheduleBlurHide: (window: WindowManager['windows'][number]) => void
+        }
+      ).scheduleBlurHide(touchWindow)
+
+      await vi.advanceTimersByTimeAsync(130)
+
+      expect(coreBoxManager.trigger).toHaveBeenCalledWith(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

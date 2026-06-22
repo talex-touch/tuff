@@ -26,7 +26,7 @@ import { COREBOX_MIN_HEIGHT, windowManager } from './window'
 const coreBoxLog = createLogger('CoreBox')
 const SEARCH_DIAGNOSTICS_BURST_DURATION_MS = 30_000
 const COREBOX_SHORTCUT_OWNER = 'module.corebox'
-const COREBOX_SHORTCUT_CLOSE_GRACE_MS = 800
+const COREBOX_SHORTCUT_CLOSE_GRACE_MS = 160
 
 export { getCoreBoxWindow } from './window'
 
@@ -123,9 +123,8 @@ export class CoreBoxModule extends BaseModule {
         const currentWindow = windowManager.current
         const isWindowVisible =
           currentWindow && !currentWindow.window.isDestroyed() && currentWindow.window.isVisible()
-        const isWindowFocused = isWindowVisible && currentWindow.window.isFocused()
 
-        if (isWindowVisible && isWindowFocused) {
+        if (isWindowVisible && currentWindow) {
           if (Date.now() - lastShortcutOpenAt < COREBOX_SHORTCUT_CLOSE_GRACE_MS) {
             coreBoxManager.trigger(true, { triggeredByShortcut: true })
             lastScreenId = curScreen.id
