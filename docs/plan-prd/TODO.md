@@ -28,6 +28,35 @@
 - R1 Gate E 仍失败：`docs/engineering/reports/release-integrity-2026-06-22/` 已绑定真实链路证据，阻塞项为发布资产签名材料与生产 signing key 配置缺失；旧本地 gate 缺已清理 risk-register 文件，本轮不作为闭环阻塞。
 - R3 schema 与 durable runtime-store 属数据结构和持久化边界改动，执行前必须单独列影响范围并确认；2026-06-22 已完成的 runtime write evidence 小切片不包含 schema/migration。
 
+## AI 批次估时
+
+> 口径：单个 AI agent 连续执行，包含定位、必要代码修改、focused tests、evidence/文档同步；不包含等待外部凭证、人工平台操作或生产审批。
+
+| 任务 | 预估 AI 时间 | 风险 / 备注 |
+| --- | ---: | --- |
+| R2 `app-index-workbench` evidence | 3-5h | 可能复现 app scanner `spawn EBADF`；优先作为下一批 visible surface。 |
+| R2 `browser-login-recovery` | 2-4h | 取决于本地登录 / OAuth recovery 链路是否可复现。 |
+| R2 `omnipanel-writing-tools` | 3-5h | 需要真实选中文本、AI preview、copy / retry / confirmation 状态。 |
+| R2 `assistant-floating-ball-entry` | 3-5h | 涉及浮窗位置持久化、焦点不抢占与 Voice Panel 打开证据。 |
+| R2 `assistant-screenshot-translate` | 4-6h | 剪贴板图片、翻译结果窗口与 provider fallback evidence 容易受环境影响。 |
+| R2 `workflow-use-model-review-queue` | 4-7h | Workflow、Review Queue、失败态和成本信号链路较长。 |
+| R2 `provider-registry-observability` | 3-5h | 偏 UI / evidence，可作为中等风险批次。 |
+| R2 `provider-migration-evidence` | 3-6h | 必须确认 dry-run / execute 口径，且不能暴露 secret。 |
+| R3 durable job history + Settings diagnostics | 5-8h | 可拆小切片；需要持久化边界、Settings recovery chip 与 evidence。 |
+| R3 Quicklinks persistent feed | 6-10h | 官方插件持久 feed storage、clear / rebuild UI 与 Settings evidence。 |
+| R3 Browser Bookmarks platform evidence | 4-8h | 主要取决于真实浏览器 profile、watch root 与 packaged evidence 可采性。 |
+| R3 Everything productionization | 8-16h | Windows / SDK / CLI / registry / PATH / fail-closed evidence 链路长。 |
+| R1 Release Integrity | 2-4h code/check pass，外部资产另算 | 缺 `.sig/.asc`、manifest signature、signing key；AI 不能凭空闭环。 |
+| R7 Nexus Governance | 8-20h+ | production / preview、D1/R2/live send/provider quota 受环境和凭证限制。 |
+| Nexus performance 单批 | 3-6h/批 | 独立线程推进；每批只处理一个页面族或一个 runtime 问题。 |
+
+需要先设计并确认影响范围，不建议直接开干：
+
+| 任务 | 预估 AI 时间 | 风险 / 备注 |
+| --- | ---: | --- |
+| R3 SQLite/FTS durable ownership migration | 8-14h | 数据结构 / 持久化所有权高风险；先出设计、兼容读写、rollback 与验证矩阵。 |
+| R3 `scan_progress` source-scoped schema migration | 8-16h | schema/source migration 高风险；执行前必须单独确认数据清理范围和回滚策略。 |
+
 ## 验证命令
 
 ```bash
