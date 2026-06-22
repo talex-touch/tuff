@@ -1,0 +1,99 @@
+{
+  "sampledAt": "2026-06-22T01:53:32+0800",
+  "tag": "v2.4.12-beta.8",
+  "baseUrl": "https://tuff.tagzxia.com",
+  "result": "fail",
+  "remote": {
+    "release": {
+      "status": "pass",
+      "tag": "v2.4.12-beta.8",
+      "version": "2.4.12-beta.8",
+      "channel": "BETA",
+      "releaseStatus": "published"
+    },
+    "latest": {
+      "status": "pass",
+      "channel": "BETA",
+      "latestTag": "v2.4.12-beta.8",
+      "latestVersion": "2.4.12-beta.8",
+      "latestStatus": "published"
+    },
+    "assets": [
+      {
+        "platform": "darwin",
+        "arch": "x64",
+        "filename": "macos-latest-beta-tuff.app.zip",
+        "sha256": "3ee2477c25badb5753cad915427bbef342282bd36b2af06d16f96ed58bc13202",
+        "hasSignatureUrl": false,
+        "signatureEndpointStatus": 404,
+        "downloadEndpointStatus": 302,
+        "downloadRedirect": "https://github.com/talex-touch/tuff/releases/download/v2.4.12-beta.8/macos-latest-beta-tuff.app.zip"
+      },
+      {
+        "platform": "linux",
+        "arch": "x64",
+        "filename": "ubuntu-latest-beta-tuff-2.4.12-beta.8.deb",
+        "sha256": "5811b2dd7123aa03fc3c12022e19c79dd11143d9465a1bb17dfb4fe878bb105c",
+        "hasSignatureUrl": false,
+        "signatureEndpointStatus": 404,
+        "downloadEndpointStatus": 302,
+        "downloadRedirect": "https://github.com/talex-touch/tuff/releases/download/v2.4.12-beta.8/ubuntu-latest-beta-tuff-2.4.12-beta.8.deb"
+      },
+      {
+        "platform": "win32",
+        "arch": "x64",
+        "filename": "windows-2022-beta-tuff-2.4.12-SNAPSHOT.8-setup.exe",
+        "sha256": "3ca55becd93e731c2b27c26c174bf05537c4c8372e76ba7c5be50bf7f3bdbe35",
+        "hasSignatureUrl": false,
+        "signatureEndpointStatus": 404,
+        "downloadEndpointStatus": 302,
+        "downloadRedirect": "https://github.com/talex-touch/tuff/releases/download/v2.4.12-beta.8/windows-2022-beta-tuff-2.4.12-SNAPSHOT.8-setup.exe"
+      }
+    ],
+    "signingKey": {
+      "status": "fail",
+      "publicKeyConfigured": false
+    }
+  },
+  "github": {
+    "checkedWith": "gh authenticated CLI",
+    "status": "partial",
+    "tagName": "v2.4.12-beta.8",
+    "isDraft": false,
+    "isPrerelease": true,
+    "assetCount": 10,
+    "manifest": {
+      "found": true,
+      "downloaded": true,
+      "validatorStatus": "fail",
+      "validatorIssues": [
+        "core artifacts are missing signature fields",
+        "linux/x64 appears twice in manifest",
+        "AppImage artifact name does not match current core naming spec"
+      ]
+    },
+    "signatureSidecars": {
+      "status": "fail",
+      "count": 0
+    }
+  },
+  "focusedTests": {
+    "coreApp": {
+      "status": "pass",
+      "files": 2,
+      "tests": 4,
+      "command": "pnpm -C \"apps/core-app\" exec vitest run \"src/main/utils/release-signature.test.ts\" \"src/renderer/src/modules/update/GithubUpdateProvider.test.ts\""
+    },
+    "nexus": {
+      "status": "pass",
+      "files": 3,
+      "tests": 8,
+      "command": "pnpm -C \"apps/nexus\" exec vitest run \"server/utils/releaseSignature.test.ts\" \"test/api/releases/signature.get.test.ts\" \"test/api/releases/assets.post.test.ts\""
+    }
+  },
+  "notes": [
+    "node scripts/check-release-gates.mjs currently fails before remote checks because a cleaned local risk-register file is missing; remote checkRemoteRelease was invoked directly.",
+    "Unauthenticated GitHub API returned 403 due to rate limiting; authenticated gh CLI was used for GitHub Release evidence.",
+    "CoreApp real file signature verification is blocked until release assets expose signatureUrl and a public signing key is configured."
+  ]
+}

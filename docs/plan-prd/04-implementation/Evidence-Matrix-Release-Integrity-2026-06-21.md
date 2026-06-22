@@ -3,6 +3,15 @@
 > 更新时间：2026-06-21
 > 定位：R1 GitHub Release ↔ Nexus release metadata / download / artifact signature 的校验矩阵。
 
+## 2026-06-22 真实链路复核
+
+本轮对 `v2.4.12-beta.8` 执行只读远程采样，证据见 `docs/engineering/reports/release-integrity-2026-06-22/`。
+
+- Nexus release metadata / `/api/releases/latest?channel=BETA` / assets / signed download endpoint 可访问，download endpoint 对 `darwin/x64`、`linux/x64`、`win32/x64` 均返回 302 到同 tag GitHub asset。
+- GitHub Release 经认证 `gh` 复核存在 `tuff-release-manifest.json`，release 为 `isDraft=false`、`isPrerelease=true`。
+- Gate E 仍失败：GitHub Release 未上传 artifact `.sig` / `.asc`；manifest core artifacts 缺 `signature` 字段；Nexus assets 没有 `signatureUrl` / `signatureKey`；signature endpoint 全部 404；`/api/releases/signing-key` 未配置 public key。
+- CoreApp / Nexus focused signature tests 通过，说明当前阻塞是 release 资产与生产配置未闭环，不是代码侧 focused matrix 未通过。
+
 ## 当前推进
 
 本轮已补齐代码侧断点：
