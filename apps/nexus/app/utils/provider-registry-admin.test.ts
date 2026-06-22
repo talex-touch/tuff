@@ -174,7 +174,8 @@ describe('provider registry adapter readiness helpers', () => {
     })
     expect(createProviderEditPanel(provider).capabilities[0]).toMatchObject({
       capability: 'text.translate',
-      meteringText: '{\n  "unit": "character"\n}',
+      meteringUnit: 'character',
+      meteringText: '',
     })
   })
 })

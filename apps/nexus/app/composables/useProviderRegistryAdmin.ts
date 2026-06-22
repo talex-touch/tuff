@@ -139,6 +139,8 @@ export function useProviderRegistryAdmin() {
     ownerScope: 'system' as OwnerScope,
     endpoint: initialProviderTemplate.endpoint,
     region: initialProviderTemplate.region,
+    modelsText: (initialProviderTemplate.models ?? []).join('\n'),
+    defaultModel: initialProviderTemplate.defaultModel ?? '',
     apiKey: '',
     secretId: '',
     secretKey: '',
@@ -272,6 +274,8 @@ export function useProviderRegistryAdmin() {
     providerForm.ownerScope = 'system'
     providerForm.endpoint = template.endpoint
     providerForm.region = template.region
+    providerForm.modelsText = (template.models ?? []).join('\n')
+    providerForm.defaultModel = template.defaultModel ?? ''
     providerForm.apiKey = ''
     providerForm.secretId = ''
     providerForm.secretKey = ''
@@ -683,7 +687,13 @@ export function useProviderRegistryAdmin() {
         ownerScope: providerForm.ownerScope,
         endpoint: providerForm.endpoint.trim() || undefined,
         region: providerForm.region.trim() || undefined,
-        metadata: providerRegistryTemplates.find(item => item.id === providerTemplateId.value)?.metadata ?? undefined,
+        metadata: mergeJsonObjects(
+          providerRegistryTemplates.find(item => item.id === providerTemplateId.value)?.metadata ?? null,
+          {
+            models: parseCommaList(providerForm.modelsText.replace(/\n/g, ',')),
+            defaultModel: providerForm.defaultModel.trim() || null,
+          },
+        ),
         capabilities: capabilityRows.value
           .filter(row => row.capability.trim())
           .map(row => ({
@@ -743,13 +753,14 @@ export function useProviderRegistryAdmin() {
     }
   }
 
-  async function checkProvider(provider: ProviderRegistryRecord) {
+  async function checkProvider(provider: ProviderRegistryRecord, capability?: string) {
     actionPending.value = `provider:${provider.id}:check`
     error.value = null
+    const targetCapability = capability?.trim() || provider.capabilities[0]?.capability || 'text.translate'
     try {
       const result = await rawFetch<ProviderCheckResult>(`/api/dashboard/provider-registry/providers/${provider.id}/check`, {
         method: 'POST',
-        body: { capability: 'text.translate' },
+        body: { capability: targetCapability },
       })
       providerCheckResults.value = {
         ...providerCheckResults.value,
@@ -770,7 +781,7 @@ export function useProviderRegistryAdmin() {
         [provider.id]: {
           success: false,
           providerId: provider.id,
-          capability: 'text.translate',
+          capability: targetCapability,
           latency: 0,
           endpoint: provider.endpoint || '',
           message,
