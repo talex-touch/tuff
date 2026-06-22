@@ -256,7 +256,7 @@ export function useProviderRegistryAdmin() {
   const providerCapabilityTemplateOptions = computed(() => activeProviderTemplate.value?.capabilities.map(row => ({ ...row })) ?? [])
   const providerMeteringUnitOptions = computed(() => Array.from(new Set(providerCapabilityTemplateOptions.value.map(row => row.meteringUnit))))
 
-  function applyProviderTemplate(templateId: ProviderRegistryTemplateId | string | number) {
+  function applyProviderTemplate(templateId: unknown) {
     const template = providerRegistryTemplates.find(item => item.id === String(templateId))
     if (!template)
       return
@@ -278,7 +278,7 @@ export function useProviderRegistryAdmin() {
     capabilityRows.value = template.capabilities.map(row => ({ ...row }))
   }
 
-  function applyProviderServiceCategory(category: ProviderServiceCategory | string | number) {
+  function applyProviderServiceCategory(category: unknown) {
     const normalized = String(category) as ProviderServiceCategory
     const template = resolveFirstProviderTemplateForServiceCategory(normalized)
     if (!template)
@@ -310,7 +310,7 @@ export function useProviderRegistryAdmin() {
     capabilityRows.value.splice(index, 1)
   }
 
-  function applyProviderCapabilityTemplate(row: CapabilityFormRow, capability: string | number) {
+  function applyProviderCapabilityTemplate(row: CapabilityFormRow, capability: unknown) {
     const template = providerCapabilityTemplateOptions.value.find(item => item.capability === String(capability))
     if (!template)
       return

@@ -66,6 +66,7 @@ vi.mock('@talex-touch/utils/network', () => ({
 let createProviderHandler: (event: any) => Promise<any>
 let storeCredentialHandler: (event: any) => Promise<any>
 let checkProviderHandler: (event: any) => Promise<any>
+let fetchProviderModelsHandler: (event: any) => Promise<any>
 let listProvidersHandler: (event: any) => Promise<any>
 let patchProviderHandler: (event: any) => Promise<any>
 let deleteProviderHandler: (event: any) => Promise<any>
@@ -83,6 +84,7 @@ beforeAll(async () => {
   createProviderHandler = (await import('../../../../server/api/dashboard/provider-registry/providers.post')).default as (event: any) => Promise<any>
   storeCredentialHandler = (await import('../../../../server/api/dashboard/provider-registry/credentials.post')).default as (event: any) => Promise<any>
   checkProviderHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/check.post')).default as (event: any) => Promise<any>
+  fetchProviderModelsHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/models.post')).default as (event: any) => Promise<any>
   listProvidersHandler = (await import('../../../../server/api/dashboard/provider-registry/providers.get')).default as (event: any) => Promise<any>
   patchProviderHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id].patch')).default as (event: any) => Promise<any>
   deleteProviderHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id].delete')).default as (event: any) => Promise<any>
@@ -1084,6 +1086,69 @@ describe('/api/dashboard/provider-registry', () => {
         capability: 'chat.completion',
       }),
     )
+  })
+
+  it('Provider Registry models endpoint 使用安全凭证拉取 AI 模型且不返回密钥', async () => {
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'ip_ai_models_provider',
+      displayName: 'OpenAI Models',
+      vendor: 'openai',
+      status: 'enabled',
+      authType: 'api_key',
+      authRef: 'secure://providers/intelligence-ip_ai_models_provider',
+      ownerScope: 'user',
+      ownerId: 'admin_1',
+      endpoint: 'https://api.openai.com/v1',
+      metadata: {
+        source: 'intelligence',
+        intelligenceProviderId: 'ip_ai_models_provider',
+        intelligenceType: 'openai',
+      },
+      capabilities: [
+        {
+          capability: 'chat.completion',
+          schemaRef: 'nexus://schemas/provider/chat-completion.v1',
+          metering: { unit: 'token' },
+        },
+      ],
+    })
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.readBody.mockResolvedValue({
+      authRef: 'secure://providers/intelligence-ip_ai_models_provider',
+      authType: 'api_key',
+      credentials: {
+        apiKey: 'sk-models-unit-test',
+      },
+    })
+    await storeCredentialHandler(makeEvent())
+
+    networkMocks.request.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: {
+        data: [
+          { id: 'gpt-4.1-mini' },
+          { id: 'gpt-4.1' },
+        ],
+      },
+      url: 'https://api.openai.com/v1/models',
+      ok: true,
+    })
+    h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+
+    const result = await fetchProviderModelsHandler(makeEvent())
+
+    expect(networkMocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'GET',
+      url: 'https://api.openai.com/v1/models',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer sk-models-unit-test',
+      }),
+    }))
+    expect(result).toEqual({ models: ['gpt-4.1-mini', 'gpt-4.1'] })
+    expect(JSON.stringify(result)).not.toContain('sk-models-unit-test')
   })
 
   it('AI registry mirror provider check 支持 vision.ocr probe 输入透传', async () => {
