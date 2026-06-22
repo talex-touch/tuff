@@ -57,24 +57,28 @@
     },
     {
       "id": "corebox-search-states",
-      "status": "pending",
+      "status": "passed",
       "artifactPaths": [
-        "corebox-search-states-recapture-2026-06-22-r2.json",
-        "corebox-search-cdp-inventory-2026-06-22-r2.json",
-        "corebox-search-idle-2026-06-22-r2.png",
-        "corebox-search-idle-dom-2026-06-22-r2.json",
-        "corebox-search-no-result-2026-06-22-r2.png",
-        "corebox-search-no-result-dom-2026-06-22-r2.json",
-        "corebox-search-searching-immediate-2026-06-22-r2.png",
-        "corebox-search-searching-immediate-dom-2026-06-22-r2.json",
-        "corebox-search-searching-2026-06-22-r2.png",
-        "corebox-search-searching-dom-2026-06-22-r2.json"
+        "corebox-search-states-recapture-2026-06-22-r2d.json",
+        "corebox-search-cdp-inventory-2026-06-22-r2d.json",
+        "corebox-search-idle-2026-06-22-r2d.png",
+        "corebox-search-idle-2026-06-22-r2d-dom.json",
+        "corebox-search-searching-2026-06-22-r2d.png",
+        "corebox-search-searching-2026-06-22-r2d-dom.json",
+        "corebox-search-no-result-2026-06-22-r2d.png",
+        "corebox-search-no-result-2026-06-22-r2d-dom.json",
+        "corebox-search-cdp-inventory-2026-06-22-r2i.json",
+        "corebox-search-result-pills-2026-06-22-r2i.png",
+        "corebox-search-result-pills-2026-06-22-r2i-dom.json"
       ],
       "checkedEvidence": [
-        "Idle state is visible before query input"
+        "Idle state is visible before query input",
+        "Searching or recommendation warm-up state is visible",
+        "No-result state shows retry and File Index settings actions",
+        "Result source/status/reason pills fit without overlap"
       ],
-      "notes": "2026-06-22 packaged recapture used a freshly rebuilt 2.4.12-beta.8 app.asar and local Apple Development signing to get past the previous macOS startup blocker. The ordinary core-box target is reachable and idle evidence is valid. The no-result DOM evidence shows retry and File Index settings actions and confirms the text no-result query no longer carries a stale image input, but Page.captureScreenshot still returns a 1440x112 image because the BrowserWindow remains 720x56 while the no-result state is laid out below the viewport. Searching/warm-up text was not observable and the fresh profile produced no result rows for settings/app/core/tuff/file/clipboard/search/help/about/plugin queries, so source/status/reason pills remain unproven.",
-      "checkedAt": "2026-06-21T18:12:21.073Z"
+      "notes": "2026-06-22 R2D packaged recapture uses the rebuilt 2.4.12-beta.10 signed app bundle, TUFF_STARTUP_BENCHMARK_ONCE=1, and isolated profile /tmp/tuff-corebox-r2-profile-20260622-r2d. The ordinary core-box target is reachable; resize no longer sticks at 720x56 for visible search states. Searching/warm-up is visible at 720x243, and the no-result screenshot covers retry plus File Index settings at 720x195 / 1440x390. 2026-06-22 R2I reused the initialized packaged profile and captured a real result query for screenshot: the ordinary core-box window resized from 720x56 to 720x242, returned 2 rows, and showed source/status/reason pills without overlap, including the system row source badge 系统, status 系统 · System Actions, and reason · System Actions. corebox-search-states is now passed; the global visible gate still remains open for broader pending surfaces.",
+      "checkedAt": "2026-06-22T06:36:39.077Z"
     },
     {
       "id": "app-index-workbench",

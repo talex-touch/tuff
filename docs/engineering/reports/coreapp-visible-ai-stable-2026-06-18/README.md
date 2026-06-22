@@ -2,7 +2,7 @@
 
 > 日期：2026-06-18
 > 范围：Tuff 2.5.0 AI Stable 的 CoreBox 文本/OCR、provider routing 与固定失败路径 evidence 采集清单。
-> 状态：CoreBox AI Ask packaged surface 已通过；packaged hot/cold startup benchmark 与 startup first-screen visible state 已通过；packaged CDP/CoreBox/AI Ask 链路可用，已采到 text.chat success、vision.ocr -> text.chat handoff、logged-out、provider unavailable、quota、model/capability unsupported、permission denied、copy failure 与 Local/Ollama routing evidence；全局 strict visible gate 仍因其它 required surfaces pending 而失败。
+> 状态：CoreBox AI Ask packaged surface 已通过；CoreBox search states packaged surface 已通过；packaged hot/cold startup benchmark 与 startup first-screen visible state 已通过；packaged CDP/CoreBox/AI Ask 链路可用，已采到 text.chat success、vision.ocr -> text.chat handoff、logged-out、provider unavailable、quota、model/capability unsupported、permission denied、copy failure 与 Local/Ollama routing evidence；全局 strict visible gate 仍因其它 required surfaces pending 而失败。
 
 ## 当前结论
 
@@ -21,7 +21,9 @@
 - CoreBox AI Ask text.chat 成功态已采到：`packaged-ai-ask-text-success.png` 展示真实 packaged CoreBox AI Ask 经 `local-default` / `qwen2.5:3b` 返回 `Response succeeded with answer.`，并展示 provider/model/latency/trace/input kind/capability metadata；probe JSON 通过 `AI-STABLE-01` advisory check。
 - CoreBox AI Ask OCR handoff 成功态已采到：`raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait.png` 展示真实 packaged CoreBox AI Ask 经剪贴板图片进入 OCR，再以 `local-default` / `qwen2.5:3b` 返回 `OCR response: vision ocr text success`，并展示 provider/model/latency/trace/input kind `text, image`/capability metadata；probe JSON 通过 `AI-STABLE-02` advisory check。
 - CoreBox AI Ask copy failure 已采到：`packaged-ai-ask-copy-failure.png` 展示真实 packaged CoreBox AI Ask 在缺少 `clipboard.write` 时仍把 `复制失败：缺少 clipboard.write 权限` 与 `请在插件权限中允许 clipboard.write 后重试。` 留在 answer preview；probe JSON 为 `ok=true`，DOM 同时包含 `.AiChatbot__copyFailureNotice`、`clipboard.write` 与恢复提示。
-- `corebox-ai-ask` manifest 已更新为 `passed`：text.chat success、OCR handoff success、logged-out、provider unavailable、quota exhausted、model unsupported、permission denied、copy failure 与 Local/Ollama routing evidence 均已绑定 artifact。全局 strict visible gate 仍是 `failed`，因为 startup/search/app-index/login/OmniPanel/Assistant/Workflow/Provider surfaces 仍 pending。
+- `corebox-ai-ask` manifest 已更新为 `passed`：text.chat success、OCR handoff success、logged-out、provider unavailable、quota exhausted、model unsupported、permission denied、copy failure 与 Local/Ollama routing evidence 均已绑定 artifact。
+- `corebox-search-states` manifest 已更新为 `passed`：R2D 覆盖 idle、searching/warm-up、no-result retry/File Index settings 可接受截图；R2I 覆盖真实 result source/status/reason pills，窗口从 `720x56` resize 到 `720x242`。
+- 全局 strict visible gate 仍是 `failed`，因为 app-index/login/OmniPanel/Assistant/Workflow/Provider broader surfaces 仍 pending。
 
 ## 本次已完成
 
@@ -39,7 +41,9 @@
 - 2026-06-21 startup hot/cold evidence 同步后复跑严格验证：`gate.passed=false`、`failure_count=68`、exit `1` 仍符合预期；`startup-packaged-hot`、`startup-packaged-cold` 与 `corebox-ai-ask` 均为 `passed`，当时剩余 failures 来自 first-screen/search/app-index/login/OmniPanel/Assistant/Workflow/Provider surfaces pending。
 - 2026-06-21 startup first-screen evidence 同步后复跑严格验证：`gate.passed=false`、`failure_count=62`、exit `1` 仍符合预期；`startup-packaged-hot`、`startup-packaged-cold`、`startup-first-screen` 与 `corebox-ai-ask` 均为 `passed`，剩余 failures 来自 search/app-index/login/OmniPanel/Assistant/Workflow/Provider surfaces pending。
 - 2026-06-21 CoreBox search states 复采仍保持 pending：CDP 9434/9435 中 `division-box` target 可见 720x500 结果区但只广播输入、不走本地搜索；普通 `core-box` target 接受 query input 但停在 720x56，`.CoreBoxRes` hidden，no-result retry / File Index settings 与 result source/status/reason pills 均未出现。无效采证已移动到 `raw/blocker-corebox-search-*`，仅作为 blocker 诊断，不进入 manifest。
-- 2026-06-22 CoreBox search states packaged 复采取得部分证据：重新构建 `apps/core-app/dist/mac-arm64/tuff.app` 并用本机 Apple Development 身份签名后，普通 `core-box` target 可通过 CDP 9461 访问；`corebox-search-idle-*r2` 证明 idle state，`corebox-search-no-result-dom-2026-06-22-r2.json` 证明 no-result DOM 有 retry/File Index settings 且文本查询不再携带 stale image input。该 surface 仍保持 pending，因为截图仍是 `1440x112`、BrowserWindow 仍为 `720x56`，no-result DOM 位于视口外；searching/warm-up 文案不可见，fresh profile 的 settings/app/core/tuff/file/clipboard/search/help/about/plugin 查询均无 result rows，source/status/reason pills 仍无真实样本。
+- 2026-06-22 CoreBox search states R2D packaged 复采取得可见态证据：重新构建 `apps/core-app/dist/mac-arm64/tuff.app` 到 `2.4.12-beta.10` 并用本机 Apple Development 身份签名后，普通 `core-box` target 可通过 CDP 9472 访问；`corebox-search-idle-2026-06-22-r2d.*` 证明 idle state，`corebox-search-searching-2026-06-22-r2d.*` 证明 searching/warm-up 可见态，`corebox-search-no-result-2026-06-22-r2d.*` 证明 no-result retry/File Index settings 出现在可接受截图中。R2D-only 阶段仍保持 pending，因为 isolated packaged profile 无 result rows，source/status/reason pills 仍缺真实可见样本；本次采集还记录 app scanner `spawn EBADF`。
+- 2026-06-22 CoreBox search states R2I packaged 复采关闭 result pills 缺口：同一个 initialized packaged profile 通过 `screenshot` 查询返回真实结果，普通 `core-box` 窗口从 `720x56` resize 到 `720x242`，`corebox-search-result-pills-2026-06-22-r2i.png` 展示 2 行结果、2 个 source badge、system 行 status/reason pills 无重叠。`corebox-search-states` 已标记 `passed`；全局 visible gate 仍因 broader surfaces pending 失败。
+- 2026-06-22 R2I evidence 同步后复跑严格验证：`gate.passed=false`、`failureCount=55`、exit `1` 仍符合预期；`corebox-search-states` 不再出现在 failure list 中，剩余 failures 来自 app-index/login/OmniPanel/Assistant/Workflow/Provider broader surfaces pending。
 - CoreBox AI Ask checklist 已包含 `permission denied` 与 `Local/Ollama routing` evidence 项。
 - CoreBox AI Ask manifest/checklist 已新增 `evidenceTags` 与 `evidenceTagArtifacts`：当前把 packaged evidence 绑定到 `AI-STABLE-01/02/03/04/05/06/07/08`，且每个 tag 都指向对应 packaged probe JSON / screenshot；由于 `corebox-ai-ask` surface 已为 `passed`，checklist 用 `[x]` 标记这些 tag。
 - 采集 readiness 输出：`coreapp-visible-readiness.json` 与 `coreapp-visible-readiness-output.json`。
@@ -57,6 +61,8 @@
 - Packaged CoreBox AI Ask copy failure evidence：`packaged-ai-ask-copy-failure-probe.json` 与 `packaged-ai-ask-copy-failure.png`。
 - Packaged startup benchmark evidence：`../startup-packaged-hot-runs-2026-06-21/汇总报告.md`、`../startup-packaged-hot-runs-2026-06-21/第10次运行报告.md`、`../startup-packaged-cold-runs-2026-06-21/汇总报告.md`、`../startup-packaged-cold-runs-2026-06-21/第01次运行报告.md` 与 `startup-packaged-cold-long-tail-notes.md`。
 - Packaged startup first-screen evidence：`startup-first-screen-settings.png`、`startup-first-screen-settings-dom.json`、`startup-health-summary.png`、`startup-health-summary-dom.json` 与 `startup-first-screen-cdp-target-inventory.json`。
+- CoreBox search states R2D evidence：`corebox-search-states-recapture-2026-06-22-r2d.json`、`corebox-search-cdp-inventory-2026-06-22-r2d.json`、`corebox-search-idle-2026-06-22-r2d.*`、`corebox-search-searching-2026-06-22-r2d.*` 与 `corebox-search-no-result-2026-06-22-r2d.*`。
+- CoreBox search states R2I evidence：`corebox-search-cdp-inventory-2026-06-22-r2i.json`、`corebox-search-result-pills-2026-06-22-r2i.png` 与 `corebox-search-result-pills-2026-06-22-r2i-dom.json`。
 - Raw probe logs, pid files, `*-output.json` mirrors and duplicate stage screenshots are intentionally not required by the manifest and should stay local / ignored unless a future investigation needs them.
 - `raw/blocker-corebox-search-*` 是 2026-06-21 `corebox-search-states` blocker 诊断：它们证明当前 packaged capture target/resize/search 触发链路未满足验收，不能作为 passed evidence。
 

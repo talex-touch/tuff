@@ -13,6 +13,7 @@
 
 - `AI-STABLE-01/02/03/04/05/06/07/08` 已绑定独立 packaged probe JSON + PNG artifact。
 - CoreBox AI Ask packaged surface 已标记 `passed`。
+- `corebox-search-states` packaged surface 已标记 `passed`：R2D 覆盖 idle、searching/warm-up、no-result retry/File Index settings 可接受截图；R2I 覆盖真实 result source/status/reason pills。
 - 已覆盖：
   - text.chat success
   - OCR handoff success
@@ -24,22 +25,22 @@
   - Local/Ollama routing
 - packaged startup hot/cold benchmark 已 passed。
 - startup first-screen evidence 已 passed。
-- strict visible verifier 仍按预期失败，最近口径为 `gate.failures.length=62`。
+- strict visible verifier 仍按预期失败，最近口径为 `gate.failures.length=55`，剩余失败均来自 broader visible surfaces。
 
 ## 未完成
 
 | 主题 | 状态 | 缺口 |
 | --- | --- | --- |
-| `corebox-search-states` | open | 2026-06-22 可运行签名包已复采 idle 与 no-result DOM/stale-image recovery partial evidence；仍缺可接受 no-result screenshot、searching/warm-up、result source/status/reason pills。 |
+| `corebox-search-states` | closed | 2026-06-22 R2D/R2I packaged evidence 已覆盖 idle、searching/warm-up、no-result retry/File Index settings 与 result source/status/reason pills；普通 `core-box` 从 `720x56` resize 到 `720x242`。 |
 | Broader visible surfaces | open | app-index、login、OmniPanel、Assistant、Workflow、Provider surfaces 仍 pending。 |
 | Global visible gate | open | strict visible verifier 仍不能标 passed。 |
 | AI Beta surfaces | open | Workflow Use Model、Review Queue、Assistant、Agent 工具执行等不反向阻塞 CoreBox Stable。 |
 
 ## 下一步
 
-1. 解决普通 `core-box` BrowserWindow 仍停在 `720x56` 的 packaged resize 链路，让 no-result retry + File Index settings 出现在可接受截图中。
-2. 补采真实 warm-up/searching 可见态与 result source/status/reason pills；fresh profile 当前无 result rows，必要时先准备可复现索引/Provider 数据。
-3. 保留 2026-06-22 no-result DOM 作为普通文本查询不携带 stale image clipboard input 的 partial evidence。
+1. 继续收 app-index、login、OmniPanel、Assistant、Workflow、Provider broader visible surfaces，不把 global visible gate 标 passed。
+2. 保留 R2D idle、searching/warm-up、no-result 与 R2I result pills 作为最终 CoreBox Search evidence，避免旧 r2/r2b/r2c 或 `corebox-search-result-reasons.png` 被误用。
+3. R2D 采集中记录的 app scanner `spawn EBADF` 已不再阻塞 CoreBox Search surface；如后续 app-index surface 复现，再单独处理。
 4. 每新增 evidence 同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/`、Evidence Matrix、CHANGES。
 5. 不使用旧 raw blocker artifact 冒充最终 evidence。
 
