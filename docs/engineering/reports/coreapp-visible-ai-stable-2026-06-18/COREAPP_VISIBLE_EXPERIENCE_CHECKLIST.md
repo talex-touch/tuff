@@ -112,7 +112,7 @@
   - Run a query that returns no results and capture the retry/settings actions.
   - Run a query with mixed sources and capture status/reason pills in result rows.
 - Required evidence:
-  - [ ] Idle state is visible before query input
+  - [x] Idle state is visible before query input
   - [ ] Searching or recommendation warm-up state is visible
   - [ ] No-result state shows retry and File Index settings actions
   - [ ] Result source/status/reason pills fit without overlap
@@ -124,9 +124,21 @@
   - A screenshot only shows populated results and misses idle/no-result states.
   - Reason/status text overlaps row content or is clipped.
 - Artifact paths:
-  - _none_
+  - corebox-search-states-recapture-2026-06-22-r2.json
+  - corebox-search-cdp-inventory-2026-06-22-r2.json
+  - corebox-search-idle-2026-06-22-r2.png
+  - corebox-search-idle-dom-2026-06-22-r2.json
+  - corebox-search-no-result-2026-06-22-r2.png
+  - corebox-search-no-result-dom-2026-06-22-r2.json
+  - corebox-search-searching-immediate-2026-06-22-r2.png
+  - corebox-search-searching-immediate-dom-2026-06-22-r2.json
+  - corebox-search-searching-2026-06-22-r2.png
+  - corebox-search-searching-dom-2026-06-22-r2.json
 - Notes:
   - 2026-06-21 packaged CDP 9434/9435 attempted recapture is blocker-only. The 720x500 `division-box` target shows the shell but does not run local search results; the ordinary `core-box` target accepts input but remains 720x56 with `.CoreBoxRes` hidden, so no-result retry/settings and result reason pills are not visible. Invalid captures were moved to `raw/blocker-corebox-search-*` and must not be used to mark this item passed.
+  - 2026-06-22 packaged recapture used a freshly rebuilt `2.4.12-beta.8` `app.asar` and local Apple Development signing, so the previous macOS packaged startup blocker is no longer the active blocker. The ordinary `core-box` target is reachable and `corebox-search-idle-*r2` proves the idle state before query input.
+  - 2026-06-22 `corebox-search-no-result-dom-2026-06-22-r2.json` proves the no-result DOM contains retry and File Index settings actions and the text no-result query does not carry stale image input; however the screenshot remains `1440x112` because the BrowserWindow still reports `720x56` while the no-result state is positioned below the viewport. Keep this evidence as partial DOM recovery, not a full visual pass.
+  - 2026-06-22 searching/warm-up text was not observable and the fresh packaged profile produced no result rows for settings/app/core/tuff/file/clipboard/search/help/about/plugin queries, so result source/status/reason pills remain unproven.
 
 ### App Index manager workbench
 

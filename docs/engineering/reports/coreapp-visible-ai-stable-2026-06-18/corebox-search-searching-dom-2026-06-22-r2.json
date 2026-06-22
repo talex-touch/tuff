@@ -1,0 +1,83 @@
+{
+  "label": "searching",
+  "capturedAt": "2026-06-21T18:12:21.006Z",
+  "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "readyState": "complete",
+  "bodyClass": "MacIntel core-box",
+  "inner": {
+    "w": 720,
+    "h": 56,
+    "dpr": 2
+  },
+  "documentElement": {
+    "clientHeight": 56,
+    "scrollHeight": 56,
+    "offsetHeight": 56
+  },
+  "body": {
+    "clientHeight": 56,
+    "scrollHeight": 56,
+    "offsetHeight": 56
+  },
+  "text": "searching warmup r2 图像 未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置 CoreBox 最近处理 共 0 条 暂无记录",
+  "query": "searching warmup r2",
+  "input": {
+    "x": 60,
+    "y": 4,
+    "w": 508,
+    "h": 48,
+    "visible": true
+  },
+  "coreBoxRect": {
+    "x": 0,
+    "y": 0,
+    "w": 720,
+    "h": 56,
+    "visible": true
+  },
+  "resRect": {
+    "x": 0,
+    "y": 56,
+    "w": 720,
+    "h": 1,
+    "visible": true
+  },
+  "scrollContentRect": {
+    "x": 0,
+    "y": 57,
+    "w": 718,
+    "h": 128,
+    "visible": true
+  },
+  "searchState": {
+    "className": "CoreBoxSearchState CoreBoxSearchState--empty",
+    "text": "未找到结果 检查关键词、重试搜索，或打开文件索引设置。 重试 文件索引设置",
+    "rect": {
+      "x": 0,
+      "y": 57,
+      "w": 718,
+      "h": 128,
+      "visible": true
+    },
+    "buttons": [
+      "重试",
+      "文件索引设置"
+    ]
+  },
+  "itemCount": 0,
+  "items": [],
+  "footerText": "CoreBox",
+  "debug": null,
+  "checks": {
+    "hasCoreBox": true,
+    "hasDivisionBox": false,
+    "hasIdleText": false,
+    "hasSearchingText": false,
+    "hasNoResult": true,
+    "hasRetry": true,
+    "hasFileIndexSettings": true,
+    "hasResultRows": false,
+    "hasVisibleResultArea": true
+  }
+}
