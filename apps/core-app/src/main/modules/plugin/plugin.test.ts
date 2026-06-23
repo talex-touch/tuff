@@ -3,12 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TuffItem } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import {
-  FlowEvents,
-  NotificationEvents,
-  PluginEvents,
-  QuickOpsEvents
-} from '@talex-touch/utils/transport/events'
+import { FlowEvents, PluginEvents, QuickOpsEvents } from '@talex-touch/utils/transport/events'
 import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import fse from 'fs-extra'
 
@@ -30,8 +25,16 @@ const appSettingsMock = vi.hoisted(() => ({
   value: {} as Record<string, unknown>
 }))
 
+const notificationModuleMock = vi.hoisted(() => ({
+  showInternalSystemNotification: vi.fn(() => ({ id: 'notification-id' }))
+}))
+
 vi.mock('../permission', () => ({
   getPermissionModule: () => permissionModuleMock
+}))
+
+vi.mock('../notification', () => ({
+  notificationModule: notificationModuleMock
 }))
 
 vi.mock('../storage', () => ({
@@ -175,6 +178,8 @@ function clearBoxItemMocks(): void {
     permissionId: 'search.root-results',
     pluginId: 'test-plugin'
   })
+  notificationModuleMock.showInternalSystemNotification.mockClear()
+  notificationModuleMock.showInternalSystemNotification.mockReturnValue({ id: 'notification-id' })
   appSettingsMock.value = {}
 }
 
@@ -755,7 +760,7 @@ describe('TouchPlugin.triggerFeature', () => {
     })
   })
 
-  it('notifies CoreBox when widget registration fails', async () => {
+  it('notifies system only when widget registration fails', async () => {
     const coreBoxWindow = {
       window: {
         id: 1,
@@ -800,19 +805,20 @@ describe('TouchPlugin.triggerFeature', () => {
     const result = await plugin.triggerFeature(feature, { text: '', inputs: [] })
 
     expect(result).toBe(false)
-    expect(transport.sendToWindow).toHaveBeenCalledWith(
-      1,
-      NotificationEvents.push.notify,
-      expect.objectContaining({
-        id: expect.any(String),
-        request: expect.objectContaining({
-          channel: 'app',
-          level: 'error',
-          title: 'Widget 加载失败',
-          message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。'
-        })
-      })
-    )
+    expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith({
+      id: 'plugin-widget-load-failed:test-plugin:test-feature',
+      title: 'Widget 加载失败',
+      message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。',
+      level: 'error',
+      dedupeKey: 'plugin-widget-load-failed:test-plugin:test-feature',
+      meta: {
+        pluginName: 'test-plugin',
+        featureId: 'test-feature',
+        kind: 'plugin.widgetLoadFailed'
+      },
+      system: { silent: false }
+    })
+    expect(transport.sendToWindow).not.toHaveBeenCalled()
   })
 
   it('converts widget registration throws into a feature failure', async () => {
@@ -850,6 +856,14 @@ describe('TouchPlugin.triggerFeature', () => {
     } as IPluginFeature
 
     await expect(plugin.triggerFeature(feature, { text: '', inputs: [] })).resolves.toBe(false)
+    expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'plugin-widget-load-failed:test-plugin:test-feature',
+        title: 'Widget 加载失败',
+        message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。',
+        level: 'error'
+      })
+    )
     expect(plugin.issues.at(-1)).toMatchObject({
       code: 'RUNTIME_ERROR',
       source: 'runtime:registerWidget'

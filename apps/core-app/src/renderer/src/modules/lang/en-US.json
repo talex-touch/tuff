@@ -1052,6 +1052,17 @@
         "grantAll": "Grant All",
         "revokeAll": "Revoke All"
       },
+      "searchProviders": {
+        "title": "Search Sources",
+        "loading": "Reading plugin search sources",
+        "summary": "This plugin registers {total} search source(s), {enabled} enabled, {issues} registration issue(s)",
+        "statusTitle": "Search Source Status",
+        "statusDesc": "Control whether this plugin's search results can enter root search results",
+        "empty": "This plugin has no registered search sources",
+        "providerDesc": "{mode} · source {source}",
+        "issueDesc": "{count} registration issue(s)",
+        "consentRequired": "Consent required"
+      },
       "blockedTitle": "Plugin Blocked",
       "blockedWarning": "This plugin is blocked because its SDK version is too old. The permission page is read-only.",
       "blockedStatusTitle": "Blocked Reason",
@@ -3788,6 +3799,8 @@
         "testFailedDesc": "Unable to connect to the provider, please check your configuration",
         "testErrorDesc": "An error occurred during connection: {message}",
         "connectionFailed": "Connection failed",
+        "networkRecovering": "Network connection is recovering. Test connection again to probe the provider.",
+        "networkRecoveringWithRetry": "Network connection is recovering. Retry in {seconds}s, or test connection again to probe the provider.",
         "modelsFetchSuccessTitle": "Models Fetched",
         "modelsFetchSuccessDesc": "Fetched {count} available models",
         "modelsFetchFailed": "Failed to fetch models",

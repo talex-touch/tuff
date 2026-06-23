@@ -1,0 +1,115 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NetworkCooldownError } from '@talex-touch/utils/network'
+import { NetworkService } from './network-service'
+
+const electronMocks = vi.hoisted(() => {
+  const fetch = vi.fn()
+  const setProxy = vi.fn()
+  return {
+    fetch,
+    setProxy,
+    session: {
+      fromPartition: vi.fn(() => ({
+        fetch,
+        setProxy
+      }))
+    }
+  }
+})
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => '/tmp')
+  },
+  session: electronMocks.session
+}))
+
+vi.mock('../storage', () => ({
+  getMainConfig: vi.fn(() => undefined),
+  saveMainConfig: vi.fn()
+}))
+
+vi.mock('../../utils/app-root-path', () => ({
+  resolveRuntimeRootPath: vi.fn(() => '/tmp')
+}))
+
+vi.mock('../../utils/local-file-policy', () => ({
+  getAllowedLocalFileRoots: vi.fn(() => ['/tmp']),
+  isAllowedLocalFilePath: vi.fn(() => true)
+}))
+
+vi.mock('../../utils/logger', () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
+  }))
+}))
+
+vi.mock('../../utils/secure-store', () => ({
+  getSecureStoreValue: vi.fn()
+}))
+
+describe('NetworkService cooldown policy', () => {
+  beforeEach(() => {
+    electronMocks.fetch.mockReset()
+    electronMocks.setProxy.mockReset()
+    electronMocks.session.fromPartition.mockClear()
+    electronMocks.setProxy.mockResolvedValue(undefined)
+  })
+
+  it('blocks ordinary requests while cooldown is active', async () => {
+    const service = new NetworkService()
+    electronMocks.fetch
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'))
+
+    const options = {
+      method: 'GET' as const,
+      url: 'https://example.test/health',
+      cooldownPolicy: {
+        key: 'provider:health',
+        failureThreshold: 1,
+        cooldownMs: 30_000
+      },
+      retryPolicy: {
+        maxRetries: 0
+      }
+    }
+
+    await expect(service.request(options)).rejects.toThrow('offline')
+    await expect(service.request(options)).rejects.toBeInstanceOf(NetworkCooldownError)
+    expect(electronMocks.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets probe requests bypass cooldown and clear the key on success', async () => {
+    const service = new NetworkService()
+    electronMocks.fetch
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+
+    const baseOptions = {
+      method: 'GET' as const,
+      url: 'https://example.test/health',
+      cooldownPolicy: {
+        key: 'provider:health',
+        failureThreshold: 1,
+        cooldownMs: 30_000
+      },
+      retryPolicy: {
+        maxRetries: 0
+      }
+    }
+
+    await expect(service.request(baseOptions)).rejects.toThrow('offline')
+    await expect(
+      service.request({ ...baseOptions, skipCooldownCheck: true })
+    ).resolves.toMatchObject({
+      ok: true
+    })
+    await expect(service.request(baseOptions)).resolves.toMatchObject({ ok: true })
+    expect(electronMocks.fetch).toHaveBeenCalledTimes(3)
+  })
+})

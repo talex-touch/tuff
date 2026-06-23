@@ -482,6 +482,38 @@ describe('intelligence plugin', () => {
     })
   })
 
+  it('adds one-shot provider and model preference to chat invoke options', () => {
+    const baseOptions = intelligenceTest.buildInvokeOptions({
+      featureId: 'intelligence-ask',
+      requestId: 'req-1',
+      capabilityId: 'text.chat',
+      inputKinds: ['text'],
+    })
+
+    expect(
+      intelligenceTest.buildModelSelectionInvokeOptions(baseOptions, {
+        providerId: 'openai',
+        model: 'gpt-4.1-mini',
+      }),
+    ).toEqual({
+      ...baseOptions,
+      preferredProviderId: 'openai',
+      modelPreference: ['gpt-4.1-mini'],
+      metadata: {
+        ...baseOptions.metadata,
+        selectedProviderId: 'openai',
+        selectedModel: 'gpt-4.1-mini',
+      },
+    })
+
+    expect(
+      intelligenceTest.buildModelSelectionInvokeOptions(baseOptions, {
+        providerId: '__auto__',
+        model: '__auto__',
+      }),
+    ).toBe(baseOptions)
+  })
+
   it('builds stable collision-resistant handoff session ids', () => {
     expect(intelligenceTest.buildHandoffSessionId('intelligence-ask')).toMatch(
       /^corebox_ai_ask_intelligence-ask_[0-9a-f]{8}$/,
@@ -625,6 +657,81 @@ describe('intelligence plugin', () => {
     })
   })
 
+  it('normalizes widget provider model options without secret fields', () => {
+    expect(
+      intelligenceTest.normalizeModelOptions([
+        {
+          providerId: ' openai ',
+          providerName: ' OpenAI ',
+          providerType: 'cloud',
+          models: ['gpt-4.1-mini', ' gpt-4.1-mini ', 'gpt-4.1'],
+          defaultModel: ' gpt-4.1-mini ',
+          capabilities: ['text.chat', 'text.chat'],
+          available: true,
+          apiKey: 'must-not-leak',
+        },
+        {
+          providerId: '',
+          models: ['ignored'],
+        },
+      ]),
+    ).toEqual([
+      {
+        providerId: 'openai',
+        providerName: 'OpenAI',
+        providerType: 'cloud',
+        models: ['gpt-4.1-mini', 'gpt-4.1'],
+        defaultModel: 'gpt-4.1-mini',
+        capabilities: ['text.chat'],
+        available: true,
+      },
+    ])
+  })
+
+  it('includes selected provider and model in widget payload only when concrete', () => {
+    expect(
+      intelligenceTest.buildWidgetPayload({
+        modelOptions: [
+          {
+            providerId: 'openai',
+            providerName: 'OpenAI',
+            providerType: 'cloud',
+            models: ['gpt-4.1-mini'],
+            defaultModel: 'gpt-4.1-mini',
+            capabilities: ['text.chat'],
+            available: true,
+          },
+        ],
+        selectedProviderId: 'openai',
+        selectedModel: 'gpt-4.1-mini',
+      }),
+    ).toMatchObject({
+      modelOptions: [
+        {
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          providerType: 'cloud',
+          models: ['gpt-4.1-mini'],
+          defaultModel: 'gpt-4.1-mini',
+          capabilities: ['text.chat'],
+          available: true,
+        },
+      ],
+      selectedProviderId: 'openai',
+      selectedModel: 'gpt-4.1-mini',
+    })
+
+    expect(
+      intelligenceTest.buildWidgetPayload({
+        selectedProviderId: '__auto__',
+        selectedModel: '__auto__',
+      }),
+    ).toMatchObject({
+      selectedProviderId: '',
+      selectedModel: '',
+    })
+  })
+
   it('builds visible widget metadata for CoreBox AI Ask', () => {
     const pluginWithBuilder = loadPluginModule(
       intelligencePluginUrl,
@@ -682,6 +789,85 @@ describe('intelligence plugin', () => {
         inputKinds: ['text'],
       },
     })
+  })
+
+  it('updates model selection through widget host action without clearing ready payload', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const getProviderModelOptions = vi.fn(async () => [
+      {
+        providerId: 'openai',
+        providerName: 'OpenAI',
+        providerType: 'cloud',
+        models: ['gpt-4.1-mini'],
+        defaultModel: 'gpt-4.1-mini',
+        capabilities: ['text.chat'],
+        available: true,
+      },
+    ])
+    const pluginWithModelOptions = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke: vi.fn(), getProviderModelOptions },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    const result = await pluginWithModelOptions.onItemAction({
+      meta: {
+        defaultAction: 'intelligence-action',
+        actionId: 'select-model',
+        featureId: 'intelligence-ask',
+        payload: {
+          requestId: 'req-1',
+          prompt: 'question',
+          answer: 'answer',
+          status: 'ready',
+          provider: 'local',
+          model: 'qwen2.5',
+          traceId: 'trace-1',
+          latency: 42,
+          capabilityId: 'text.chat',
+          inputKinds: ['text'],
+          selectedProviderId: 'openai',
+          selectedModel: 'gpt-4.1-mini',
+        },
+      },
+    })
+
+    expect(getProviderModelOptions).toHaveBeenCalledWith({ capabilityId: 'text.chat' })
+    expect(pushItems).toHaveBeenCalledOnce()
+    expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
+      requestId: 'req-1',
+      prompt: 'question',
+      answer: 'answer',
+      status: 'ready',
+      provider: 'local',
+      model: 'qwen2.5',
+      traceId: 'trace-1',
+      latency: 42,
+      capabilityId: 'text.chat',
+      selectedProviderId: 'openai',
+      selectedModel: 'gpt-4.1-mini',
+      modelOptions: [
+        {
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          models: ['gpt-4.1-mini'],
+        },
+      ],
+    })
+    expect(result).toEqual({ externalAction: true })
   })
 
   it('builds visible error item metadata for retryable AI failures', () => {
@@ -784,10 +970,17 @@ describe('intelligence plugin', () => {
     })
   })
 
-  it('blocks AI send when auth state is logged out', async () => {
+  it('allows local/BYOK AI send when auth state is logged out', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
-    const invoke = vi.fn()
+    const invoke = vi.fn(async () => ({
+      result: 'local answer',
+      provider: 'local-default',
+      model: 'qwen2.5:3b',
+      traceId: 'trace-local',
+      latency: 15,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    }))
     const permission = {
       check: vi.fn(async () => true),
       request: vi.fn(async () => true),
@@ -821,20 +1014,94 @@ describe('intelligence plugin', () => {
     )
 
     await pluginWithLoggedOutAuth.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
-    const errorItem = pushItems.mock.calls[0][0][0]
+    const sendItem = pushItems.mock.calls[0][0][0]
+    pushItems.mockClear()
 
-    expect(touchChannel.send).toHaveBeenCalledWith('auth:session:get-state')
-    expect(permission.check).not.toHaveBeenCalledWith('intelligence.basic')
-    expect(invoke).not.toHaveBeenCalled()
-    expect(clearItems).toHaveBeenCalled()
-    expect(errorItem.meta).toMatchObject({
-      status: 'error',
-      actionId: 'retry',
-      intelligence: {
-        status: 'error',
-        errorCode: 'AUTH_REQUIRED',
-      },
+    await pluginWithLoggedOutAuth.onItemAction(sendItem)
+    await vi.waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        'text.chat',
+        expect.objectContaining({ messages: expect.any(Array) }),
+        expect.any(Object),
+      )
     })
+
+    expect(touchChannel.send).not.toHaveBeenCalledWith('auth:session:get-state')
+    expect(permission.check).toHaveBeenCalledWith('intelligence.basic')
+    expect(clearItems).toHaveBeenCalled()
+    expect(pushItems.mock.calls.some(call =>
+      call[0][0].render?.custom?.data?.status === 'ready'
+      && call[0][0].render.custom.data.answer === 'local answer'
+      && call[0][0].render.custom.data.provider === 'local-default',
+    )).toBe(true)
+  })
+
+  it('falls back to invoke when stream auth fails for local/BYOK chat', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const stream = vi.fn(async () => {
+      throw new Error('NEXUS_AUTH_REQUIRED')
+    })
+    const invoke = vi.fn(async () => ({
+      result: 'local answer after stream fallback',
+      provider: 'local-default',
+      model: 'qwen2.5:3b',
+      traceId: 'trace-local-fallback',
+      latency: 21,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    }))
+    const permission = {
+      check: vi.fn(async () => true),
+      request: vi.fn(async () => true),
+    }
+    const pluginWithStreamAuthFailure = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { stream, invoke },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithStreamAuthFailure.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await vi.waitFor(() => {
+      expect(stream).toHaveBeenCalledWith(
+        'text.chat',
+        expect.objectContaining({ messages: expect.any(Array) }),
+        expect.objectContaining({
+          onStart: expect.any(Function),
+          onDelta: expect.any(Function),
+          onEnd: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            capabilityId: 'text.chat',
+          }),
+        }),
+      )
+      expect(invoke).toHaveBeenCalledWith(
+        'text.chat',
+        expect.objectContaining({ messages: expect.any(Array) }),
+        expect.any(Object),
+      )
+    })
+
+    expect(pushItems.mock.calls.some(call =>
+      call[0][0].render?.custom?.data?.status === 'ready'
+      && call[0][0].render.custom.data.answer === 'local answer after stream fallback'
+      && call[0][0].render.custom.data.provider === 'local-default',
+    )).toBe(true)
   })
 
   it('blocks AI send when permission sdk is unavailable', async () => {

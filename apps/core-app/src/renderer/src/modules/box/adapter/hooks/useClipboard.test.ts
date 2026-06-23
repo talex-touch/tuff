@@ -62,7 +62,9 @@ function createClipboardOptions(item?: IClipboardItem | null): IClipboardOptions
     last: item ?? null,
     pendingAutoFillItem: null,
     detectedAt: null,
-    lastClearedTimestamp: null
+    lastClearedTimestamp: null,
+    lastTextAttachmentIdentity: null,
+    lastTextAttachmentSource: null
   }
 }
 
@@ -163,6 +165,173 @@ describe('useClipboard auto-paste freshness', () => {
     await Promise.resolve()
 
     expect(searchVal.value).toBe('')
+    hook.cleanup()
+  })
+
+  it('records first manual long text paste as an attachment', async () => {
+    const item = createClipboardItem({
+      id: 21,
+      content: 'manual long text '.repeat(8),
+      autoPasteEligible: false
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions()
+    state.latest = item
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe('')
+    expect(clipboardOptions.last?.id).toBe(21)
+    expect(clipboardOptions.lastTextAttachmentIdentity).toEqual(expect.any(String))
+    expect(clipboardOptions.lastTextAttachmentSource).toBe('manual')
+    hook.cleanup()
+  })
+
+  it('fills input on repeated manual paste of the same long text', async () => {
+    const content = 'manual repeated long text '.repeat(6)
+    const first = createClipboardItem({
+      id: 22,
+      content,
+      autoPasteEligible: false
+    })
+    const second = createClipboardItem({
+      id: 23,
+      content,
+      timestamp: new Date(Date.now() + 1000).toISOString(),
+      autoPasteEligible: false
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions()
+    state.latest = first
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    state.latest = second
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe(content)
+    expect(clipboardOptions.last).toBeNull()
+    expect(clipboardOptions.pendingAutoFillItem?.id).toBe(23)
+    expect(clipboardOptions.lastTextAttachmentSource).toBe('manual')
+    hook.cleanup()
+  })
+
+  it('fills input when manual paste repeats a long text seen by auto-paste', async () => {
+    const content = 'auto then manual long text '.repeat(6)
+    const first = createClipboardItem({
+      id: 24,
+      content,
+      freshnessBaseAt: Date.now() - 1000,
+      autoPasteEligible: true
+    })
+    const second = createClipboardItem({
+      id: 25,
+      content,
+      timestamp: new Date(Date.now() + 1000).toISOString(),
+      autoPasteEligible: false
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions(first)
+    state.latest = first
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ attemptAutoFill: true, triggerSearch: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe('')
+    expect(clipboardOptions.lastTextAttachmentSource).toBe('auto')
+
+    state.latest = second
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe(content)
+    expect(clipboardOptions.last).toBeNull()
+    expect(clipboardOptions.pendingAutoFillItem?.id).toBe(25)
+    hook.cleanup()
+  })
+
+  it('fills input when auto-paste repeats a long text first pasted manually', async () => {
+    const content = 'manual then auto long text '.repeat(6)
+    const first = createClipboardItem({
+      id: 26,
+      content,
+      autoPasteEligible: false
+    })
+    const second = createClipboardItem({
+      id: 27,
+      content,
+      timestamp: new Date(Date.now() + 1000).toISOString(),
+      freshnessBaseAt: Date.now() - 500,
+      autoPasteEligible: true
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions()
+    state.latest = first
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    state.latest = second
+    hook.handlePaste({ attemptAutoFill: true, triggerSearch: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe(content)
+    expect(clipboardOptions.last).toBeNull()
+    expect(clipboardOptions.pendingAutoFillItem?.id).toBe(27)
+    expect(clipboardOptions.lastTextAttachmentSource).toBe('auto')
+    hook.cleanup()
+  })
+
+  it('does not inline a different long text after a previous attachment', async () => {
+    const first = createClipboardItem({
+      id: 28,
+      content: 'first long text '.repeat(8),
+      autoPasteEligible: false
+    })
+    const second = createClipboardItem({
+      id: 29,
+      content: 'second long text '.repeat(8),
+      timestamp: new Date(Date.now() + 1000).toISOString(),
+      autoPasteEligible: false
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions()
+    state.latest = first
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    const firstIdentity = clipboardOptions.lastTextAttachmentIdentity
+    state.latest = second
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe('')
+    expect(clipboardOptions.last?.id).toBe(29)
+    expect(clipboardOptions.lastTextAttachmentIdentity).not.toBe(firstIdentity)
+    expect(clipboardOptions.lastTextAttachmentSource).toBe('manual')
     hook.cleanup()
   })
 

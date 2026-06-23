@@ -31,7 +31,6 @@ import {
   resolveIndexedSourceManifestDescriptors,
   resolveSearchProviderManifestDescriptors
 } from '@talex-touch/utils/search'
-import { app } from 'electron'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
@@ -140,19 +139,6 @@ abstract class BasePluginLoader {
       enable: rawDevConfig.enable === true,
       source: rawDevConfig.source === true,
       address: typeof rawDevConfig.address === 'string' ? rawDevConfig.address.trim() : ''
-    }
-    if (app.isPackaged && normalizedDevConfig.enable && normalizedDevConfig.source) {
-      normalizedDevConfig.source = false
-      this.touchPlugin.issues.push({
-        type: 'warning',
-        message:
-          'dev.source is disabled in packaged runtime. Plugin will fall back to local bundled assets.',
-        source: 'manifest.json',
-        code: 'DEV_SOURCE_DISABLED_IN_PACKAGED',
-        suggestion:
-          'Set dev.source=false in packaged manifests, or keep it for local development only.',
-        timestamp: Date.now()
-      })
     }
     this.touchPlugin.dev = normalizedDevConfig
     this.touchPlugin.build = Array.isArray(pluginInfo.build?.widgets)
@@ -816,10 +802,6 @@ export function createPluginLoader(pluginName: string, pluginPath: string): IPlu
   if (!shouldUseDevSource) {
     return new LocalPluginLoader(pluginName, pluginPath)
   }
-  if (app.isPackaged) {
-    return new LocalPluginLoader(pluginName, pluginPath)
-  }
-
   try {
     const parsed = new URL(devAddress)
     if (!['http:', 'https:'].includes(parsed.protocol)) {

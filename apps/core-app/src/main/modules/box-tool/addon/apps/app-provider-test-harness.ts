@@ -404,6 +404,7 @@ export type AppProviderPrivate = {
   loadScannedApps: (options?: { forceRefresh?: boolean }) => Promise<unknown[]>
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<unknown>
+  _syncSemanticAliasCatalogIfNeeded: () => Promise<void>
   _waitForItemStable: (path: string) => Promise<boolean>
   processAppPath: (path: string) => Promise<{
     success: boolean

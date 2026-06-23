@@ -13,7 +13,8 @@
   "main": "index.js",
   "dev": {
     "enable": true,
-    "source": true
+    "source": true,
+    "address": "http://127.0.0.1:5174/"
   },
   "build": {
     "index": {

@@ -133,6 +133,10 @@ import {
   normalizeOptionalString
 } from './app-provider-path-utils'
 import { formatLog, LogStyle, normalizeStringList } from './app-utils'
+import {
+  APP_SEMANTIC_ALIAS_CATALOG_VERSION,
+  resolveScannedAppSemanticAliases
+} from './app-semantic-catalog'
 import { isSearchableAppRow, processSearchResults } from './search-processing-service'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
@@ -327,6 +331,7 @@ const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
 const PENDING_DELETION_CONFIG_KEY = 'app_provider_pending_deletion'
 const BACKFILL_LAST_RUN_CONFIG_KEY = 'app_provider_last_backfill'
 const FULL_SYNC_LAST_RUN_CONFIG_KEY = 'app_provider_last_full_sync'
+const SEMANTIC_ALIAS_CATALOG_VERSION_CONFIG_KEY = 'app_provider_semantic_alias_catalog_version'
 const FULL_SYNC_PERSIST_RETRY_BASE_DELAY_MS = 200
 const DELETION_GRACE_PERIOD_MS = 3 * 60 * 1000 // 3 minutes grace period
 const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
@@ -448,6 +453,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this._scheduleStartupBackfill()
     this._scheduleFullSync()
     this._scheduleStartupIndexHealthCheck()
+    this._scheduleSemanticAliasCatalogSync()
 
     // 注意：补漏/全量同步会在后台触发关键词同步；实时事件由 IndexingRuntime 统一路由
     this._registerWatchPaths()
@@ -1498,6 +1504,81 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private _scheduleSemanticAliasCatalogSync(): void {
+    setTimeout(() => {
+      void this._syncSemanticAliasCatalogIfNeeded()
+    }, 2000)
+  }
+
+  private async _syncSemanticAliasCatalogIfNeeded(): Promise<void> {
+    if (!this.dbUtils || !this.searchIndex) {
+      return
+    }
+
+    try {
+      const storedVersion = await this._getConfigNumber(SEMANTIC_ALIAS_CATALOG_VERSION_CONFIG_KEY)
+      if (storedVersion === APP_SEMANTIC_ALIAS_CATALOG_VERSION) {
+        return
+      }
+
+      await this.runMaintenanceTask('semantic-alias-catalog-sync', async () => {
+        await this.syncExistingAppKeywordsForSemanticAliasCatalog()
+      })
+
+      await this._setConfigValue(
+        SEMANTIC_ALIAS_CATALOG_VERSION_CONFIG_KEY,
+        APP_SEMANTIC_ALIAS_CATALOG_VERSION.toString()
+      )
+    } catch (error) {
+      logApp('Failed to sync app semantic alias catalog', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  private async syncExistingAppKeywordsForSemanticAliasCatalog(): Promise<void> {
+    if (!this.dbUtils) return
+
+    const allApps = await this.dbUtils.getFilesByType('app')
+    const appsWithExtensions = (await this.fetchExtensionsForFiles(allApps)).filter(
+      isSearchableAppRow
+    )
+    if (appsWithExtensions.length === 0) {
+      return
+    }
+
+    logApp(
+      `Syncing App Semantic Alias Catalog v${chalk.cyan(
+        APP_SEMANTIC_ALIAS_CATALOG_VERSION
+      )} for ${chalk.cyan(appsWithExtensions.length)} apps...`,
+      LogStyle.process
+    )
+
+    await runAdaptiveTaskQueue(
+      appsWithExtensions,
+      async (app, index) => {
+        await this._syncKeywordsForApp(this._mapDbAppToScannedInfo(app))
+
+        if ((index + 1) % 100 === 0 || index === appsWithExtensions.length - 1) {
+          logApp(
+            `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(
+              appsWithExtensions.length
+            )} semantic alias catalog syncs`,
+            LogStyle.info
+          )
+        }
+      },
+      {
+        estimatedTaskTimeMs: 5,
+        yieldIntervalMs: 10,
+        maxBatchSize: 10,
+        label: 'AppProvider::semanticAliasCatalogSync'
+      }
+    )
+
+    logApp('App Semantic Alias Catalog keyword sync complete', LogStyle.success)
+  }
+
   private _scheduleStartupBackfill(): void {
     if (!this.appIndexSettings.startupBackfillEnabled) {
       logApp('Startup backfill disabled, skipping', LogStyle.info)
@@ -2128,20 +2209,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _isAliasForApp(keyword: string, appInfo: ScannedAppInfo): boolean {
-    const uniqueId = resolveAppItemId(appInfo)
-    const aliasList =
-      this.aliases[uniqueId] || this.aliases[appInfo.path] || this.aliases[appInfo.bundleId] || []
+    const aliasList = this.resolveAliasesForApp(appInfo)
     return aliasList.includes(keyword)
   }
 
-  private _getAliasesForApp(appInfo: ScannedAppInfo): string[] {
+  private resolveAliasesForApp(appInfo: ScannedAppInfo): string[] {
     const uniqueId = resolveAppItemId(appInfo)
     const aliasesById = this.aliases[uniqueId] || []
     const aliasesByPath = this.aliases[appInfo.path] || []
     const aliasesByBundleId = this.aliases[appInfo.bundleId] || []
-    return Array.from(new Set([...aliasesById, ...aliasesByPath, ...aliasesByBundleId])).map(
-      (alias) => alias.toLowerCase()
-    )
+    return normalizeStringList([
+      ...aliasesById,
+      ...aliasesByPath,
+      ...aliasesByBundleId,
+      ...resolveScannedAppSemanticAliases(appInfo)
+    ]).map((alias) => alias.toLowerCase())
+  }
+
+  private _getAliasesForApp(appInfo: ScannedAppInfo): string[] {
+    return this.resolveAliasesForApp(appInfo)
   }
 
   private async _recordMissingIconApps(scannedApps: ScannedAppInfo[]): Promise<void> {
@@ -2188,12 +2274,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const uniqueId = resolveAppItemId(appInfo)
-    const aliasList = [
-      ...(this.aliases[uniqueId] || []),
-      ...(this.aliases[appInfo.path] || []),
-      ...(this.aliases[appInfo.bundleId] || [])
-    ]
+    const aliasList = this.resolveAliasesForApp(appInfo)
     aliasList.forEach((alias) => generatedKeywords.add(alias.toLowerCase()))
 
     const finalKeywords = new Set<string>()
@@ -3407,7 +3488,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await this._runManualRebuild()
   }
 
-  private async _getConfigTimestamp(key: string): Promise<number | null> {
+  private async _getConfigNumber(key: string): Promise<number | null> {
     if (!this.dbUtils) return null
 
     try {
@@ -3424,6 +3505,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     return null
+  }
+
+  private async _getConfigTimestamp(key: string): Promise<number | null> {
+    return this._getConfigNumber(key)
   }
 
   private async _setConfigValue(key: string, value: string): Promise<boolean> {

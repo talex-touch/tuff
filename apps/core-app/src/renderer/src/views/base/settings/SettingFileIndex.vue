@@ -5,14 +5,12 @@ import type {
   DeviceIdleSettings,
   FileIndexStatus,
   FileIndexBatteryStatus,
-  FileIndexStats,
-  SearchProviderSourceLink
+  FileIndexStats
 } from '@talex-touch/utils/transport/events/types'
 import type {
   IndexedSourceDiagnostics,
   IndexedSourceMaintenanceAction,
   IndexedSourceMaintenanceActionState,
-  SearchProviderRegistryIssue,
   SearchProviderRuntimeConfig,
   SearchProviderUserConfig
 } from '@talex-touch/utils/search'
@@ -30,7 +28,6 @@ import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/tran
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { vDraggable } from 'vue-draggable-plus'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -107,12 +104,8 @@ const sourceDiagnosticsCheckedAt = ref<Date | null>(null)
 const sourceMaintenanceAction = ref<Record<string, IndexedSourceMaintenanceAction | undefined>>({})
 const sourceMaintenanceActions: IndexedSourceMaintenanceAction[] = ['scan', 'reconcile', 'reset']
 const searchProviderConfigs = ref<SearchProviderRuntimeConfig[]>([])
-const searchProviderSourceLinks = ref<SearchProviderSourceLink[]>([])
-const searchProviderIssues = ref<SearchProviderRegistryIssue[]>([])
 const searchProviderConfigLoading = ref(false)
 const searchProviderConfigSaving = ref(false)
-const searchProviderConfigDialogVisible = ref(false)
-const searchProviderConfigDialogSource = ref<HTMLElement | null>(null)
 const sourceDiagnosticDialogVisible = ref(false)
 const sourceDiagnosticDialogSource = ref<HTMLElement | null>(null)
 const selectedSourceDiagnosticId = ref<string | null>(null)
@@ -128,12 +121,6 @@ const indexedSourceDiagnosticsById = computed(() => {
   return new Map(
     (sourceDiagnostics.value?.sources ?? []).map((source) => [source.descriptor.id, source])
   )
-})
-const searchProviderSourceIdByProviderId = computed(() => {
-  const entries = searchProviderSourceLinks.value.flatMap((link) =>
-    link.providerIds.map((providerId) => [providerId, link.sourceId] as const)
-  )
-  return new Map(entries)
 })
 const browserBookmarksSource = computed(() =>
   indexedSourceDiagnosticsById.value.get(BROWSER_BOOKMARKS_SOURCE_ID)
@@ -177,15 +164,6 @@ const selectedSourceDiagnostic = computed(() => {
   if (!selectedId) return null
   return indexedSourceDiagnosticsById.value.get(selectedId) ?? null
 })
-const providerDraggableOptions = computed(() => ({
-  animation: 0,
-  handle: '.provider-config-drag-handle',
-  ghostClass: 'provider-config-ghost',
-  onEnd: () => {
-    void saveSearchProviderConfig()
-  }
-}))
-
 const DEFAULT_DEVICE_IDLE_SETTINGS: DeviceIdleSettings = {
   idleThresholdMs: 60 * 60 * 1000,
   minBatteryPercent: 60,
@@ -302,25 +280,12 @@ async function loadSearchProviderConfig() {
   try {
     const response = await settingsSdk.indexedSource.getProviderConfig()
     searchProviderConfigs.value = response.providers
-    searchProviderSourceLinks.value = response.sourceLinks ?? []
-    searchProviderIssues.value = response.issues ?? []
   } catch (error) {
     settingFileIndexLog.error('Failed to load search provider config', error)
     searchProviderConfigs.value = []
-    searchProviderIssues.value = []
     toast.error(t('settings.settingFileIndex.providerConfigLoadFailed'))
   } finally {
     searchProviderConfigLoading.value = false
-  }
-}
-
-function openSearchProviderConfigDialog(event?: MouseEvent) {
-  searchProviderConfigDialogSource.value =
-    event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  searchProviderConfigDialogVisible.value = true
-
-  if (searchProviderConfigs.value.length === 0 && !searchProviderConfigLoading.value) {
-    void loadSearchProviderConfig()
   }
 }
 
@@ -350,8 +315,6 @@ async function saveSearchProviderConfig(providers = searchProviderConfigs.value)
       providers: toSearchProviderUserConfigs(providers)
     })
     searchProviderConfigs.value = response.providers
-    searchProviderSourceLinks.value = response.sourceLinks ?? []
-    searchProviderIssues.value = response.issues ?? []
     toast.success(t('settings.settingFileIndex.providerConfigSaved'))
   } catch (error) {
     settingFileIndexLog.error('Failed to save search provider config', error)
@@ -416,46 +379,6 @@ async function clearBrowserBookmarksRuntime() {
   }
 
   await runSourceMaintenance(browserBookmarksSource.value, 'reset')
-}
-
-function formatSearchProviderIssue(issue: SearchProviderRegistryIssue): string {
-  const provider = issue.providerId || issue.pluginName || issue.source || issue.code
-  return t('settings.settingFileIndex.providerConfigIssue', {
-    provider,
-    code: issue.code,
-    message: issue.message
-  })
-}
-
-function getSearchProviderSource(provider: SearchProviderRuntimeConfig) {
-  const sourceId =
-    searchProviderSourceIdByProviderId.value.get(provider.providerId) ??
-    provider.descriptor.policy.indexedSourceId ??
-    provider.descriptor.policy.indexedSource?.id
-  if (!sourceId) return null
-
-  return {
-    sourceId,
-    diagnostics: indexedSourceDiagnosticsById.value.get(sourceId)
-  }
-}
-
-function formatSearchProviderMeta(provider: SearchProviderRuntimeConfig): string {
-  const base = t('settings.settingFileIndex.providerConfigMeta', {
-    mode: provider.descriptor.mode,
-    owner: provider.descriptor.owner
-  })
-  const source = getSearchProviderSource(provider)
-  if (!source) return base
-
-  const status = source.diagnostics
-    ? t(resolveIndexingSourceStatusKey(source.diagnostics.health.status))
-    : t('settings.settingFileIndex.providerConfigSourceUnknown')
-
-  return `${base} · ${t('settings.settingFileIndex.providerConfigSource', {
-    source: source.sourceId,
-    status
-  })}`
 }
 
 function formatSourceDiagnosticDescription(source: IndexedSourceDiagnostics): string {
@@ -852,18 +775,6 @@ const sourceDiagnosticsSummaryText = computed(() => {
     degraded: summary.degraded,
     unavailable: summary.unavailable,
     attention: sourceDiagnosticsAttentionCount.value
-  })
-})
-
-const searchProviderConfigSummaryText = computed(() => {
-  if (searchProviderConfigLoading.value) {
-    return t('settings.settingFileIndex.providerConfigLoading')
-  }
-
-  return t('settings.settingFileIndex.providerConfigSummary', {
-    total: searchProviderConfigs.value.length,
-    enabled: searchProviderConfigs.value.filter((provider) => provider.enabled).length,
-    issues: searchProviderIssues.value.length
   })
 })
 
@@ -1285,29 +1196,6 @@ async function triggerRebuild() {
         >
           <div class="i-carbon-renew text-12px" />
           <span>{{ t('settings.settingFileIndex.diagnosticRefresh') }}</span>
-        </TxButton>
-      </div>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      :title="t('settings.settingFileIndex.providerConfigTitle')"
-      :description="t('settings.settingFileIndex.providerConfigDesc')"
-      default-icon="i-carbon-list-boxes"
-      active-icon="i-carbon-list-boxes"
-      :active="searchProviderConfigLoading || searchProviderConfigSaving"
-    >
-      <div class="provider-config-summary">
-        <span class="provider-config-summary-text">
-          {{ searchProviderConfigSummaryText }}
-        </span>
-        <TxButton
-          variant="flat"
-          size="sm"
-          :disabled="searchProviderConfigLoading"
-          @click="openSearchProviderConfigDialog"
-        >
-          <div class="i-carbon-settings-adjust text-12px" />
-          <span>{{ t('settings.settingFileIndex.providerConfigManage') }}</span>
         </TxButton>
       </div>
     </TuffBlockSlot>
@@ -2018,91 +1906,6 @@ async function triggerRebuild() {
 
     <SettingFileIndexAppDiagnostic />
   </TuffGroupBlock>
-
-  <FlipDialog
-    v-model="searchProviderConfigDialogVisible"
-    :reference="searchProviderConfigDialogSource"
-    :header-title="t('settings.settingFileIndex.providerConfigTitle')"
-    :header-desc="t('settings.settingFileIndex.providerConfigDesc')"
-    size="lg"
-  >
-    <template #header-actions>
-      <TxButton
-        variant="flat"
-        size="sm"
-        :disabled="searchProviderConfigLoading"
-        @click="loadSearchProviderConfig"
-      >
-        <div class="i-carbon-renew text-12px" />
-        <span>{{ t('settings.settingFileIndex.diagnosticRefresh') }}</span>
-      </TxButton>
-    </template>
-
-    <template #default>
-      <div class="provider-config-dialog">
-        <div
-          v-draggable="[searchProviderConfigs, providerDraggableOptions]"
-          class="provider-config-list provider-config-list--dialog"
-        >
-          <span
-            v-if="searchProviderConfigs.length === 0 && searchProviderIssues.length === 0"
-            class="provider-config-empty"
-          >
-            {{ t('settings.settingFileIndex.providerConfigEmpty') }}
-          </span>
-          <div
-            v-if="searchProviderIssues.length > 0"
-            class="source-history-row provider-config-issues"
-          >
-            <span class="source-history-label">
-              {{ t('settings.settingFileIndex.providerConfigIssues') }}
-            </span>
-            <span
-              v-for="issue in searchProviderIssues"
-              :key="`${issue.pluginName ?? 'core'}:${issue.providerId ?? issue.code}:${issue.source ?? ''}`"
-              class="source-diagnostic-chip source-history-chip"
-              :class="
-                issue.type === 'error'
-                  ? 'source-diagnostic-task-chip--error'
-                  : 'source-diagnostic-task-chip--warning'
-              "
-            >
-              {{ formatSearchProviderIssue(issue) }}
-            </span>
-          </div>
-          <div
-            v-for="provider in searchProviderConfigs"
-            :key="provider.providerId"
-            class="provider-config-item"
-            :class="{ 'provider-config-item--disabled': !provider.enabled }"
-          >
-            <div
-              class="provider-config-drag-handle"
-              :title="t('settings.settingFileIndex.providerDragHandle')"
-            />
-            <span class="provider-config-name">{{ provider.descriptor.displayName }}</span>
-            <span class="provider-config-meta">
-              {{ formatSearchProviderMeta(provider) }}
-            </span>
-            <TxButton
-              variant="flat"
-              size="sm"
-              class="provider-config-toggle"
-              :type="provider.enabled ? undefined : 'primary'"
-              :disabled="searchProviderConfigSaving"
-              @click="toggleSearchProvider(provider.providerId, !provider.enabled)"
-            >
-              {{
-                provider.enabled
-                  ? t('settings.settingFileIndex.providerDisabled')
-                  : t('settings.settingFileIndex.providerEnabled')
-              }}
-            </TxButton>
-          </div>
-        </div>
-      </div>
-    </template>
-  </FlipDialog>
 
   <TModal
     v-model="appIndexManagerVisible"

@@ -1,6 +1,6 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { SyncEvents } from '@talex-touch/utils/transport/events'
+import { NetworkEvents, SyncEvents } from '@talex-touch/utils/transport/events'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 let onlineListenerBound = false
@@ -27,6 +27,10 @@ export async function startAutoSync(): Promise<void> {
 
   if (!onlineListenerBound && hasWindow()) {
     onlineHandler = () => {
+      const transport = useTuffTransport()
+      transport.send(NetworkEvents.lifecycle.online, { reason: 'online' }).catch((error) => {
+        syncLog.warn('Failed to dispatch network online event', error)
+      })
       void triggerManualSync('online')
     }
     window.addEventListener('online', onlineHandler)

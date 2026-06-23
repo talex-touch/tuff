@@ -1052,6 +1052,17 @@
         "grantAll": "授予全部",
         "revokeAll": "撤销全部"
       },
+      "searchProviders": {
+        "title": "搜索源",
+        "loading": "正在读取插件搜索源",
+        "summary": "此插件注册 {total} 个搜索源，{enabled} 个已启用，{issues} 个注册问题",
+        "statusTitle": "搜索源状态",
+        "statusDesc": "控制此插件的搜索结果是否进入根搜索结果",
+        "empty": "此插件未注册搜索源",
+        "providerDesc": "{mode} · 源 {source}",
+        "issueDesc": "{count} 个注册问题",
+        "consentRequired": "需授权"
+      },
       "blockedTitle": "插件已阻断",
       "blockedWarning": "此插件因 SDK 版本过低已被阻断，权限页面仅展示状态，不提供授权操作。",
       "blockedStatusTitle": "阻断原因",
@@ -3780,6 +3791,8 @@
         "testFailedDesc": "无法连接到提供商，请检查您的配置",
         "testErrorDesc": "连接过程中发生错误: {message}",
         "connectionFailed": "连接失败",
+        "networkRecovering": "网络连接正在恢复。可再次点击测试连接探测提供商。",
+        "networkRecoveringWithRetry": "网络连接正在恢复。请在 {seconds} 秒后重试，或再次点击测试连接探测提供商。",
         "modelsFetchSuccessTitle": "模型获取成功",
         "modelsFetchSuccessDesc": "已获取 {count} 个可用模型",
         "modelsFetchFailed": "获取模型失败",

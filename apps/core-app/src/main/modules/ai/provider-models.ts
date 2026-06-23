@@ -15,6 +15,12 @@ const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
 const ANTHROPIC_VERSION = '2023-06-01'
 const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
 const LOCAL_DIRECT_PROXY = { mode: 'direct' as const }
+const LOCAL_OLLAMA_CHAT_COOLDOWN_KEY_SUFFIX = ':ollama.chat'
+
+export interface FetchProviderModelsOptions {
+  allowStoredFallback?: boolean
+  skipCooldownCheck?: boolean
+}
 
 function joinUrl(base: string, path: string): string {
   const normalizedBase = base.replace(/\/+$/, '')
@@ -82,7 +88,8 @@ function normalizeModelEntries(entries: unknown[]): string[] {
 
 async function fetchOpenAiCompatibleModels(
   provider: IntelligenceProviderConfig,
-  baseUrl = resolveBaseUrl(provider)
+  baseUrl = resolveBaseUrl(provider),
+  options: FetchProviderModelsOptions = {}
 ): Promise<string[]> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
@@ -104,6 +111,16 @@ async function fetchOpenAiCompatibleModels(
     url: endpoint,
     headers,
     responseType: 'json',
+    skipCooldownCheck: options.skipCooldownCheck,
+    cooldownPolicy:
+      provider.type === IntelligenceProviderType.LOCAL
+        ? {
+            key: `${provider.id}${LOCAL_OLLAMA_CHAT_COOLDOWN_KEY_SUFFIX}`,
+            failureThreshold: 2,
+            cooldownMs: 15_000,
+            autoResetOnSuccess: true
+          }
+        : undefined,
     proxyOverride: provider.type === IntelligenceProviderType.LOCAL ? LOCAL_DIRECT_PROXY : undefined
   })
 
@@ -118,7 +135,10 @@ async function fetchOpenAiCompatibleModels(
   return normalizeModelEntries(rawEntries)
 }
 
-async function fetchOllamaModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+async function fetchOllamaModels(
+  provider: IntelligenceProviderConfig,
+  options: FetchProviderModelsOptions = {}
+): Promise<string[]> {
   const endpoint = joinUrl(resolveOllamaBaseUrl(provider), 'api/tags')
   const response = await getNetworkService().request<unknown>({
     method: 'GET',
@@ -127,6 +147,13 @@ async function fetchOllamaModels(provider: IntelligenceProviderConfig): Promise<
       'Content-Type': 'application/json'
     },
     responseType: 'json',
+    skipCooldownCheck: options.skipCooldownCheck,
+    cooldownPolicy: {
+      key: `${provider.id}${LOCAL_OLLAMA_CHAT_COOLDOWN_KEY_SUFFIX}`,
+      failureThreshold: 2,
+      cooldownMs: 15_000,
+      autoResetOnSuccess: true
+    },
     proxyOverride: LOCAL_DIRECT_PROXY
   })
 
@@ -136,14 +163,18 @@ async function fetchOllamaModels(provider: IntelligenceProviderConfig): Promise<
   return normalizeModelEntries(rawEntries)
 }
 
-async function fetchLocalModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+async function fetchLocalModels(
+  provider: IntelligenceProviderConfig,
+  options: FetchProviderModelsOptions = {}
+): Promise<string[]> {
   const storedModels = getStoredModels(provider)
+  const allowStoredFallback = options.allowStoredFallback !== false
   let lastError: unknown
 
   for (const fetcher of [
-    fetchOllamaModels,
+    (config: IntelligenceProviderConfig) => fetchOllamaModels(config, options),
     (config: IntelligenceProviderConfig) =>
-      fetchOpenAiCompatibleModels(config, resolveOpenAiCompatibleBaseUrl(config))
+      fetchOpenAiCompatibleModels(config, resolveOpenAiCompatibleBaseUrl(config), options)
   ]) {
     try {
       const models = await fetcher(provider)
@@ -155,7 +186,7 @@ async function fetchLocalModels(provider: IntelligenceProviderConfig): Promise<s
     }
   }
 
-  if (storedModels.length) {
+  if (allowStoredFallback && storedModels.length) {
     return storedModels
   }
 
@@ -166,19 +197,22 @@ async function fetchLocalModels(provider: IntelligenceProviderConfig): Promise<s
   return []
 }
 
-export async function fetchProviderModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+export async function fetchProviderModels(
+  provider: IntelligenceProviderConfig,
+  options: FetchProviderModelsOptions = {}
+): Promise<string[]> {
   if (isNexusManagedProvider(provider)) {
     return getStoredModels(provider)
   }
 
   if (provider.type === IntelligenceProviderType.LOCAL) {
-    return await fetchLocalModels(provider)
+    return await fetchLocalModels(provider, options)
   }
 
-  const models = await fetchOpenAiCompatibleModels(provider)
+  const models = await fetchOpenAiCompatibleModels(provider, resolveBaseUrl(provider), options)
 
   // Fallback to stored models if API returned nothing
-  if (models.length === 0) {
+  if (models.length === 0 && options.allowStoredFallback !== false) {
     return getStoredModels(provider)
   }
 

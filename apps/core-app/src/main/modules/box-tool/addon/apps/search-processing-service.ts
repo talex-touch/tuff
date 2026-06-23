@@ -20,6 +20,7 @@ import { formatLog, LogStyle, parseStringList } from './app-utils'
 import { resolveDisplayName } from './display-name-sync-utils'
 import { createLogger } from '../../../../utils/logger'
 import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
+import { resolveAppSemanticAliases } from './app-semantic-catalog'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
 const searchProcessingLog = createLogger('AppScanner').child('SearchProcessing')
@@ -232,12 +233,24 @@ export async function processSearchResults(
       aliases[uniqueId] || aliases[app.path] || aliases[app.extensions.bundleId || ''] || []
     const displayPath = app.extensions.displayPath || app.path
     const description = app.extensions.description || ''
+    const semanticAliases = resolveAppSemanticAliases({
+      name,
+      displayName,
+      alternateNames,
+      path: app.path,
+      displayPath,
+      fileName: deriveAppFileName(displayPath || app.path || name),
+      bundleId: app.extensions.bundleId || '',
+      appIdentity,
+      launchTarget: app.extensions.launchTarget || app.path,
+      description
+    })
     const searchTokens = buildAppSearchTokens(
       {
         title: displayName,
         name,
         alternateNames,
-        aliases: aliasList,
+        aliases: [...aliasList, ...semanticAliases],
         path: app.path,
         displayPath,
         fileName: deriveAppFileName(displayPath || app.path || name),

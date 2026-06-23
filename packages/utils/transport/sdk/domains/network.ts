@@ -1,6 +1,8 @@
 import type {
   NetworkConfigGetResponse,
   NetworkConfigUpdateRequest,
+  NetworkCooldownClearRequest,
+  NetworkLifecycleOnlinePayload,
   NetworkReadBinaryRequest,
   NetworkReadTextRequest,
   NetworkRequest,
@@ -18,6 +20,8 @@ export interface NetworkSdk {
   toTfileUrl: (pathOrUrl: string) => Promise<string>
   getConfig: () => Promise<NetworkConfigGetResponse>
   updateConfig: (request: NetworkConfigUpdateRequest) => Promise<NetworkConfigGetResponse>
+  clearCooldown: (request?: NetworkCooldownClearRequest) => Promise<void>
+  notifyOnline: (payload?: NetworkLifecycleOnlinePayload) => Promise<void>
 }
 
 export function createNetworkSdk(transport: ITuffTransport): NetworkSdk {
@@ -38,6 +42,10 @@ export function createNetworkSdk(transport: ITuffTransport): NetworkSdk {
       transport.send(NetworkEvents.api.toTfileUrl, { source: pathOrUrl } as NetworkToTfileRequest),
     getConfig: () => transport.send(NetworkEvents.api.getConfig),
     updateConfig: (request: NetworkConfigUpdateRequest) =>
-      transport.send(NetworkEvents.api.updateConfig, request)
+      transport.send(NetworkEvents.api.updateConfig, request),
+    clearCooldown: (request?: NetworkCooldownClearRequest) =>
+      transport.send(NetworkEvents.api.clearCooldown, request),
+    notifyOnline: (payload?: NetworkLifecycleOnlinePayload) =>
+      transport.send(NetworkEvents.lifecycle.online, payload)
   }
 }

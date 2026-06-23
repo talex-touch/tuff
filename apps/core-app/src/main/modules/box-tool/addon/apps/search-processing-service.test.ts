@@ -318,4 +318,186 @@ describe('search-processing-service', () => {
     ])
     expect(meta?.extension?.matchAlias).toBeUndefined()
   })
+
+  it('matches Photoshop from short and category semantic aliases', async () => {
+    const rows = [
+      createAppSearchRow({
+        name: 'Adobe Photoshop 2026',
+        displayName: 'Adobe Photoshop 2026',
+        path: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+        extensions: {
+          appIdentity: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+          bundleId: 'com.adobe.Photoshop',
+          launchKind: 'path',
+          launchTarget: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app'
+        }
+      })
+    ] as unknown as Parameters<typeof processSearchResults>[0]
+
+    const psItems = await processSearchResults(
+      rows,
+      { text: 'ps', inputs: [] } as Parameters<typeof processSearchResults>[1],
+      false,
+      {}
+    )
+    const designItems = await processSearchResults(
+      rows,
+      { text: 'design', inputs: [] } as Parameters<typeof processSearchResults>[1],
+      false,
+      {}
+    )
+
+    expect(psItems).toHaveLength(1)
+    expect(psItems[0]?.meta?.extension).toMatchObject({
+      source: 'tag',
+      matchAlias: {
+        text: 'Ps',
+        matchResult: [{ start: 0, end: 2 }]
+      }
+    })
+    expect(designItems).toHaveLength(1)
+    expect(designItems[0]?.meta?.extension).toMatchObject({
+      source: 'tag',
+      matchAlias: {
+        text: 'Design',
+        matchResult: [{ start: 0, end: 6 }]
+      }
+    })
+  })
+
+  it('matches IM apps from English and Chinese category semantic aliases', async () => {
+    const rows = [
+      createAppSearchRow({
+        name: 'Feishu',
+        displayName: '飞书',
+        path: '/Applications/Feishu.app',
+        extensions: {
+          appIdentity: '/Applications/Feishu.app',
+          bundleId: 'com.bytedance.feishu',
+          launchKind: 'path',
+          launchTarget: '/Applications/Feishu.app'
+        }
+      }),
+      createAppSearchRow({
+        id: 2,
+        name: 'Telegram',
+        displayName: 'Telegram',
+        path: '/Applications/Telegram.app',
+        extensions: {
+          appIdentity: '/Applications/Telegram.app',
+          bundleId: 'org.telegram.desktop',
+          launchKind: 'path',
+          launchTarget: '/Applications/Telegram.app'
+        }
+      })
+    ] as unknown as Parameters<typeof processSearchResults>[0]
+
+    const imItems = await processSearchResults(
+      rows,
+      { text: 'im', inputs: [] } as Parameters<typeof processSearchResults>[1],
+      false,
+      {}
+    )
+    const chatItems = await processSearchResults(
+      rows,
+      { text: '即时通讯', inputs: [] } as Parameters<typeof processSearchResults>[1],
+      false,
+      {}
+    )
+
+    expect(imItems.map((item) => item.render.basic?.title)).toEqual(['飞书', 'Telegram'])
+    expect(chatItems.map((item) => item.render.basic?.title)).toEqual(['飞书', 'Telegram'])
+    expect(imItems[0]?.meta?.extension).toMatchObject({
+      source: 'tag',
+      matchAlias: {
+        text: 'Im',
+        matchResult: [{ start: 0, end: 2 }]
+      }
+    })
+  })
+
+  it('matches VS Code from semantic short aliases while keeping title matches stronger', async () => {
+    const rows = [
+      createAppSearchRow({
+        name: 'Visual Studio Code',
+        displayName: 'Visual Studio Code',
+        path: '/Applications/Visual Studio Code.app',
+        extensions: {
+          appIdentity: '/Applications/Visual Studio Code.app',
+          bundleId: 'com.microsoft.VSCode',
+          launchKind: 'path',
+          launchTarget: '/Applications/Visual Studio Code.app'
+        }
+      }),
+      createAppSearchRow({
+        id: 2,
+        name: 'Code Notes',
+        displayName: 'Code Notes',
+        path: '/Applications/Code Notes.app',
+        extensions: {
+          appIdentity: '/Applications/Code Notes.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/Code Notes.app'
+        }
+      })
+    ] as unknown as Parameters<typeof processSearchResults>[0]
+
+    const vscItems = await processSearchResults(
+      rows,
+      { text: 'vsc', inputs: [] } as Parameters<typeof processSearchResults>[1],
+      false,
+      {}
+    )
+    const codeItems = await processSearchResults(
+      rows,
+      { text: 'code', inputs: [] } as Parameters<typeof processSearchResults>[1],
+      false,
+      {}
+    )
+
+    expect(vscItems).toHaveLength(1)
+    expect(vscItems[0]?.render.basic?.title).toBe('Visual Studio Code')
+    expect(vscItems[0]?.meta?.extension).toMatchObject({
+      source: 'initials',
+      matchResult: [
+        { start: 0, end: 1 },
+        { start: 7, end: 8 },
+        { start: 14, end: 15 }
+      ]
+    })
+    expect(codeItems.map((item) => item.render.basic?.title)).toEqual([
+      'Code Notes',
+      'Visual Studio Code'
+    ])
+  })
+
+  it('keeps Codex searchable through direct title matching', async () => {
+    const rows = [
+      createAppSearchRow({
+        name: 'Codex',
+        displayName: 'Codex',
+        path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+        extensions: {
+          appIdentity: 'uwp:openai.codex_2p2nqsd0c76g0!app',
+          bundleId: 'OpenAI.Codex_2p2nqsd0c76g0',
+          launchKind: 'uwp',
+          launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App'
+        }
+      })
+    ] as unknown as Parameters<typeof processSearchResults>[0]
+
+    const items = await processSearchResults(
+      rows,
+      { text: 'codex', inputs: [] } as Parameters<typeof processSearchResults>[1],
+      false,
+      {}
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.render.basic?.title).toBe('Codex')
+    expect(items[0]?.meta?.extension).toMatchObject({
+      source: 'name',
+      matchResult: [{ start: 0, end: 5 }]
+    })
+  })
 })

@@ -32,6 +32,7 @@ const HANDOFF_SESSION_PREFIX = 'corebox_ai_ask'
 const INPUT_TYPE_TEXT = 'text'
 const INPUT_TYPE_IMAGE = 'image'
 const HISTORY_FILE = 'conversation-history.json'
+const AUTO_MODEL_SELECTION = '__auto__'
 
 function resolveAuthSessionGetStateEvent() {
   try {
@@ -119,6 +120,36 @@ function buildHandoffSessionId(featureId) {
   return `${HANDOFF_SESSION_PREFIX}_${slug}_${digest}`
 }
 
+function shouldSkipOptionalHandoff(error) {
+  const message = toErrorMessage(error).toLowerCase()
+  return (
+    message.includes('not authenticated')
+    || message.includes('auth required')
+    || message.includes('nexus_auth_required')
+    || message.includes('permission')
+    || message.includes('denied')
+    || message.includes('intelligence.basic')
+    || message.includes('未登录')
+    || message.includes('需要登录')
+  )
+}
+
+function shouldFallbackFromStream(error) {
+  const message = toErrorMessage(error).toLowerCase()
+  return (
+    message.includes('stream-capable transport')
+    || message.includes('transport.stream')
+    || message.includes('not authenticated')
+    || message.includes('auth required')
+    || message.includes('nexus_auth_required')
+    || message.includes('permission')
+    || message.includes('denied')
+    || message.includes('intelligence.basic')
+    || message.includes('未登录')
+    || message.includes('需要登录')
+  )
+}
+
 function normalizeHistory(messages) {
   if (!Array.isArray(messages))
     return []
@@ -194,6 +225,9 @@ function getSession(featureId) {
       drafts: new Map(),
       lastReadyDraftId: '',
       lastReadyPromptKey: '',
+      modelOptions: [],
+      selectedProviderId: '',
+      selectedModel: '',
     })
   }
 
@@ -234,10 +268,9 @@ function buildHandoffContext({ featureId, prompt, history, answer, requestId, in
 async function ensureHandoffSession(client, session, params) {
   const handoffSessionId = normalizeText(session.handoffSessionId)
     || buildHandoffSessionId(params.featureId)
-  session.handoffSessionId = handoffSessionId
 
   if (!client?.agentSessionStart)
-    return handoffSessionId
+    return ''
 
   try {
     const handoff = await client.agentSessionStart({
@@ -255,12 +288,16 @@ async function ensureHandoffSession(client, session, params) {
     if (restoredMessages.length > session.history.length) {
       session.history = keepNewestBusinessMessages(restoredMessages)
     }
+    session.handoffSessionId = handoffSessionId
+    return handoffSessionId
   }
   catch (error) {
     logger?.warn?.('[touch-intelligence] handoff session unavailable', error)
+    if (shouldSkipOptionalHandoff(error))
+      session.handoffSessionId = ''
   }
 
-  return handoffSessionId
+  return ''
 }
 
 async function updateHandoffSession(client, session, params) {
@@ -347,6 +384,35 @@ function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [
   }
 }
 
+function normalizeModelSelection(selection = {}) {
+  const providerId = normalizeText(selection.providerId)
+  const model = normalizeText(selection.model)
+  if (!providerId || !model || providerId === AUTO_MODEL_SELECTION || model === AUTO_MODEL_SELECTION) {
+    return {
+      providerId: '',
+      model: '',
+    }
+  }
+  return { providerId, model }
+}
+
+function buildModelSelectionInvokeOptions(baseOptions, selection = {}) {
+  const normalized = normalizeModelSelection(selection)
+  if (!normalized.providerId || !normalized.model) {
+    return baseOptions
+  }
+  return {
+    ...baseOptions,
+    preferredProviderId: normalized.providerId,
+    modelPreference: [normalized.model],
+    metadata: {
+      ...(baseOptions.metadata ?? {}),
+      selectedProviderId: normalized.providerId,
+      selectedModel: normalized.model,
+    },
+  }
+}
+
 function normalizeStringList(values) {
   if (!Array.isArray(values))
     return []
@@ -400,6 +466,9 @@ async function streamChatAnswer({
   ocrText,
   history,
   session,
+  selectedProviderId,
+  selectedModel,
+  modelOptions,
 }) {
   if (typeof client?.stream !== 'function')
     return null
@@ -442,6 +511,9 @@ async function streamChatAnswer({
             imageDataUrl,
             ocrText,
             history,
+            selectedProviderId,
+            selectedModel,
+            modelOptions,
           })
         },
         onUsage(eventUsage, event) {
@@ -466,7 +538,8 @@ async function streamChatAnswer({
   }
   catch (error) {
     const message = toErrorMessage(error).toLowerCase()
-    if (message.includes('stream-capable transport') || message.includes('transport.stream')) {
+    if (shouldFallbackFromStream(error)) {
+      logger?.warn?.('[touch-intelligence] stream unavailable, falling back to invoke', error)
       return null
     }
     throw error
@@ -485,6 +558,8 @@ async function streamChatAnswer({
     latency,
     handoffSessionId,
     inputKinds: normalizeStringList(inputKinds),
+    selectedProviderId: normalizeText(selectedProviderId),
+    selectedModel: normalizeText(selectedModel),
   }
 }
 
@@ -530,6 +605,7 @@ function normalizeInvokeError(error) {
     if (
       lower.includes('not authenticated')
       || lower.includes('auth required')
+      || lower.includes('nexus_auth_required')
       || lower.includes('未登录')
       || lower.includes('需要登录')
     ) {
@@ -785,6 +861,10 @@ function buildImageContext(state = {}) {
 }
 
 function buildWidgetPayload(state = {}) {
+  const selected = normalizeModelSelection({
+    providerId: state.selectedProviderId,
+    model: state.selectedModel,
+  })
   return {
     requestId: normalizeText(state.requestId),
     prompt: normalizeText(state.prompt),
@@ -803,6 +883,9 @@ function buildWidgetPayload(state = {}) {
     copyStatus: normalizeText(state.copyStatus),
     copyError: normalizeText(state.copyError),
     copyRecovery: normalizeText(state.copyRecovery),
+    modelOptions: normalizeModelOptions(state.modelOptions),
+    selectedProviderId: selected.providerId,
+    selectedModel: selected.model,
     messages: buildWidgetMessages(state),
     imageContext: buildImageContext(state),
     streamMode: 'visual-reveal',
@@ -819,6 +902,8 @@ function resolveWidgetAction(state = {}) {
         prompt: state.prompt,
         draftId: state.draftId,
         inputKinds: state.inputKinds,
+        selectedProviderId: state.selectedProviderId,
+        selectedModel: state.selectedModel,
       },
     }
   }
@@ -835,6 +920,8 @@ function resolveWidgetAction(state = {}) {
         latency: state.latency,
         handoffSessionId: state.handoffSessionId,
         inputKinds: state.inputKinds,
+        selectedProviderId: state.selectedProviderId,
+        selectedModel: state.selectedModel,
       },
     }
   }
@@ -849,6 +936,8 @@ function resolveWidgetAction(state = {}) {
         errorCode: state.errorCode,
         errorMessage: state.errorMessage,
         handoffSessionId: state.handoffSessionId,
+        selectedProviderId: state.selectedProviderId,
+        selectedModel: state.selectedModel,
       },
     }
   }
@@ -856,6 +945,7 @@ function resolveWidgetAction(state = {}) {
 }
 
 function buildWidgetItem(featureId, state = {}) {
+  const session = getSession(featureId)
   const status = normalizeText(state.status) || 'idle'
   const prompt = resolveDisplayPrompt(state.prompt, Boolean(state.imageDataUrl || state.ocrText))
   const title = prompt ? `智能问答：${truncateText(prompt, 48)}` : '智能问答'
@@ -875,6 +965,9 @@ function buildWidgetItem(featureId, state = {}) {
     .setSubtitle(subtitleMap[status] || '智能问答')
     .setIcon(ICON)
     .setCustomRender('vue', getMakeWidgetId()(PLUGIN_NAME, featureId), buildWidgetPayload({
+      modelOptions: state.modelOptions ?? session.modelOptions,
+      selectedProviderId: state.selectedProviderId ?? session.selectedProviderId,
+      selectedModel: state.selectedModel ?? session.selectedModel,
       ...state,
       prompt: prompt || state.prompt,
     }))
@@ -903,6 +996,8 @@ function buildWidgetItem(featureId, state = {}) {
         errorCode: state.errorCode,
         errorMessage: state.errorMessage,
         handoffSessionId: state.handoffSessionId,
+        selectedProviderId: state.selectedProviderId,
+        selectedModel: state.selectedModel,
       }),
     })
     .build()
@@ -940,6 +1035,8 @@ function buildSendItem(featureId, draft) {
       prompt: draft.prompt,
       draftId: draft.draftId,
       inputKinds: draft.inputKinds,
+      selectedProviderId: draft.selectedProviderId,
+      selectedModel: draft.selectedModel,
     },
     status: 'ready-to-send',
     intelligence: {
@@ -1045,6 +1142,8 @@ function buildErrorItem(featureId, prompt, error, history = [], retryContext = {
       errorCode: normalizedError.code,
       errorMessage: normalizedError.message,
       handoffSessionId: retryContext.handoffSessionId,
+      selectedProviderId: retryContext.selectedProviderId,
+      selectedModel: retryContext.selectedModel,
     },
     status: 'error',
     handoffSessionId: retryContext.handoffSessionId,
@@ -1106,6 +1205,10 @@ function extractQueryContext(query, options = {}) {
 }
 
 function storeDraft(session, draft) {
+  const selected = normalizeModelSelection({
+    providerId: draft.selectedProviderId ?? session.selectedProviderId,
+    model: draft.selectedModel ?? session.selectedModel,
+  })
   const draftId = draft.draftId || crypto.randomUUID()
   const normalizedDraft = {
     draftId,
@@ -1113,6 +1216,8 @@ function storeDraft(session, draft) {
     imageDataUrl: normalizeText(draft.imageDataUrl),
     ocrText: normalizeText(draft.ocrText),
     inputKinds: Array.isArray(draft.inputKinds) ? draft.inputKinds.filter(Boolean) : [],
+    selectedProviderId: selected.providerId,
+    selectedModel: selected.model,
   }
   session.drafts.set(draftId, normalizedDraft)
 
@@ -1134,7 +1239,55 @@ function resolveDraft(session, payload, prompt) {
     draftId,
     prompt,
     inputKinds: Array.isArray(payload?.inputKinds) ? payload.inputKinds : [],
+    selectedProviderId: payload?.selectedProviderId,
+    selectedModel: payload?.selectedModel,
   })
+}
+
+function normalizeModelOptions(values) {
+  if (!Array.isArray(values))
+    return []
+
+  return values
+    .map((option) => {
+      const providerId = normalizeText(option?.providerId)
+      const providerName = normalizeText(option?.providerName) || providerId
+      const providerType = normalizeText(option?.providerType)
+      const defaultModel = normalizeText(option?.defaultModel)
+      const models = normalizeStringList(option?.models)
+      if (!providerId || !models.length)
+        return null
+      return {
+        providerId,
+        providerName,
+        providerType,
+        models,
+        defaultModel,
+        capabilities: normalizeStringList(option?.capabilities),
+        available: option?.available !== false,
+      }
+    })
+    .filter(Boolean)
+}
+
+async function resolveModelOptions(client) {
+  if (!client?.getProviderModelOptions)
+    return []
+  try {
+    return normalizeModelOptions(await client.getProviderModelOptions({ capabilityId: 'text.chat' }))
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] failed to load model options', error)
+    return []
+  }
+}
+
+async function refreshSessionModelOptions(session, client) {
+  const options = await resolveModelOptions(client)
+  if (options.length) {
+    session.modelOptions = options
+  }
+  return session.modelOptions
 }
 
 async function dispatchPrompt({
@@ -1146,12 +1299,15 @@ async function dispatchPrompt({
   ocrText,
   inputKinds,
   draftId,
+  selectedProviderId,
+  selectedModel,
 }) {
   const resolvedFeatureId = resolveFeatureId(featureId)
   const normalizedPrompt = normalizePrompt(prompt)
   const session = getSession(resolvedFeatureId)
   let resolvedHistory = cloneHistory(historySnapshot)
   let resolvedOcrText = normalizeText(ocrText)
+  const selected = normalizeModelSelection({ providerId: selectedProviderId, model: selectedModel })
   const displayPrompt = resolveDisplayPrompt(
     normalizedPrompt,
     Boolean(imageDataUrl || resolvedOcrText),
@@ -1162,6 +1318,7 @@ async function dispatchPrompt({
 
   try {
     const client = resolveIntelligenceClient()
+    const modelOptions = await refreshSessionModelOptions(session, client)
     const handoffSessionId = await ensureHandoffSession(client, session, {
       featureId: resolvedFeatureId,
       prompt: displayPrompt,
@@ -1201,6 +1358,8 @@ async function dispatchPrompt({
           prompt: normalizedPrompt,
           ocrText: resolvedOcrText,
           inputKinds,
+          selectedProviderId: selected.providerId,
+          selectedModel: selected.model,
         })
       }
 
@@ -1215,18 +1374,24 @@ async function dispatchPrompt({
         imageDataUrl,
         ocrText: resolvedOcrText,
         history: resolvedHistory,
+        modelOptions,
+        selectedProviderId: selected.providerId,
+        selectedModel: selected.model,
       })
     }
 
     const chatPrompt = normalizedPrompt || '请总结剪贴板图片中的文字。'
     const payload = buildInvokePayload(chatPrompt, resolvedHistory, { ocrText: resolvedOcrText })
-    const invokeOptions = buildInvokeOptions({
-      featureId: resolvedFeatureId,
-      requestId,
-      capabilityId: 'text.chat',
-      inputKinds,
-      sessionId: handoffSessionId,
-    })
+    const invokeOptions = buildModelSelectionInvokeOptions(
+      buildInvokeOptions({
+        featureId: resolvedFeatureId,
+        requestId,
+        capabilityId: 'text.chat',
+        inputKinds,
+        sessionId: handoffSessionId,
+      }),
+      selected,
+    )
     const streamed = await streamChatAnswer({
       client,
       featureId: resolvedFeatureId,
@@ -1240,6 +1405,9 @@ async function dispatchPrompt({
       ocrText: resolvedOcrText,
       history: resolvedHistory,
       session,
+      selectedProviderId: selected.providerId,
+      selectedModel: selected.model,
+      modelOptions,
     })
     const mapped = streamed || mapInvokeResult(
       await client.invoke('text.chat', payload, invokeOptions),
@@ -1283,6 +1451,9 @@ async function dispatchPrompt({
       imageDataUrl,
       ocrText: resolvedOcrText,
       history: resolvedHistory,
+      modelOptions,
+      selectedProviderId: selected.providerId,
+      selectedModel: selected.model,
     })
   }
   catch (error) {
@@ -1308,6 +1479,9 @@ async function dispatchPrompt({
       errorMessage: normalizedError.message,
       handoffSessionId: session.handoffSessionId,
       history: resolvedHistory,
+      modelOptions: session.modelOptions,
+      selectedProviderId: selected.providerId,
+      selectedModel: selected.model,
     })
   }
 }
@@ -1344,6 +1518,8 @@ const pluginLifecycle = {
       }
 
       if (!queryContext.shouldShowEntry) {
+        const client = resolveIntelligenceClient()
+        await refreshSessionModelOptions(session, client)
         session.lastReadyDraftId = ''
         session.lastReadyPromptKey = ''
         await pushWidgetState(resolvedFeatureId, {
@@ -1352,6 +1528,9 @@ const pluginLifecycle = {
           capabilityId: 'text.chat',
           history: cloneHistory(session.history),
           handoffSessionId: session.handoffSessionId,
+          modelOptions: session.modelOptions,
+          selectedProviderId: session.selectedProviderId,
+          selectedModel: session.selectedModel,
         })
         return true
       }
@@ -1360,16 +1539,6 @@ const pluginLifecycle = {
       const displayPrompt = resolveDisplayPrompt(draft.prompt, Boolean(draft.imageDataUrl || draft.ocrText))
       if (!displayPrompt)
         return true
-
-      if (!(await ensureSignedIn())) {
-        await pushAuthRequiredState(resolvedFeatureId, {
-          ...draft,
-          prompt: displayPrompt,
-          handoffSessionId: session.handoffSessionId,
-          history: cloneHistory(session.history),
-        })
-        return true
-      }
 
       const hasPermission = await ensurePermission(
         'intelligence.basic',
@@ -1403,6 +1572,7 @@ const pluginLifecycle = {
         capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
         handoffSessionId: session.handoffSessionId,
         history: cloneHistory(session.history),
+        modelOptions: session.modelOptions,
       })
       void dispatchPrompt({
         featureId: resolvedFeatureId,
@@ -1413,6 +1583,8 @@ const pluginLifecycle = {
         ocrText: draft.ocrText,
         inputKinds: draft.inputKinds,
         draftId: draft.draftId,
+        selectedProviderId: draft.selectedProviderId,
+        selectedModel: draft.selectedModel,
       })
       return true
     }
@@ -1463,6 +1635,9 @@ const pluginLifecycle = {
             copyError: '复制失败：缺少 clipboard.write 权限',
             copyRecovery: '请在插件权限中允许 clipboard.write 后重试。',
             history: cloneHistory(session.history),
+            modelOptions: session.modelOptions,
+            selectedProviderId: payload.selectedProviderId,
+            selectedModel: payload.selectedModel,
           })
           return {
             externalAction: true,
@@ -1490,6 +1665,46 @@ const pluginLifecycle = {
         return { externalAction: true, status: 'started' }
       }
 
+      if (actionId === 'select-model') {
+        const selected = normalizeModelSelection({
+          providerId: payload.selectedProviderId,
+          model: payload.selectedModel,
+        })
+        session.selectedProviderId = selected.providerId
+        session.selectedModel = selected.model
+
+        const client = resolveIntelligenceClient()
+        await refreshSessionModelOptions(session, client)
+
+        await pushWidgetState(featureId, {
+          prompt,
+          requestId: payload.requestId,
+          answer: payload.answer,
+          provider: payload.provider,
+          model: payload.model,
+          traceId: payload.traceId,
+          latency: payload.latency,
+          status: normalizeText(payload.status) || 'idle',
+          stage: normalizeText(payload.stage) || 'chat',
+          capabilityId: normalizeText(payload.capabilityId) || 'text.chat',
+          errorCode: payload.errorCode,
+          errorMessage: payload.errorMessage,
+          copyStatus: payload.copyStatus,
+          copyError: payload.copyError,
+          copyRecovery: payload.copyRecovery,
+          handoffSessionId: session.handoffSessionId,
+          inputKinds: Array.isArray(payload.inputKinds) ? payload.inputKinds : [],
+          imageDataUrl: payload.imageDataUrl,
+          ocrText: payload.ocrText,
+          history: cloneHistory(session.history),
+          modelOptions: session.modelOptions,
+          selectedProviderId: session.selectedProviderId,
+          selectedModel: session.selectedModel,
+        })
+
+        return { externalAction: true }
+      }
+
       if (actionId === 'send' || actionId === 'retry') {
         const draft = resolveDraft(session, payload, prompt)
         const hasImageContext = Boolean(draft.imageDataUrl || draft.ocrText)
@@ -1497,19 +1712,6 @@ const pluginLifecycle = {
 
         if (!displayPrompt)
           return
-
-        if (!(await ensureSignedIn())) {
-          const normalizedError = await pushAuthRequiredState(featureId, {
-            prompt: displayPrompt,
-            inputKinds: draft.inputKinds,
-            handoffSessionId: session.handoffSessionId,
-          })
-          return {
-            externalAction: true,
-            success: false,
-            message: normalizedError.message,
-          }
-        }
 
         const hasPermission = await ensurePermission(
           'intelligence.basic',
@@ -1547,6 +1749,9 @@ const pluginLifecycle = {
           capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
           handoffSessionId: session.handoffSessionId,
           inputKinds: draft.inputKinds,
+          modelOptions: session.modelOptions,
+          selectedProviderId: draft.selectedProviderId,
+          selectedModel: draft.selectedModel,
         })
         void dispatchPrompt({
           featureId,
@@ -1557,6 +1762,8 @@ const pluginLifecycle = {
           ocrText: draft.ocrText,
           inputKinds: draft.inputKinds,
           draftId: draft.draftId,
+          selectedProviderId: draft.selectedProviderId,
+          selectedModel: draft.selectedModel,
         })
         return { externalAction: true }
       }
@@ -1591,7 +1798,10 @@ module.exports = {
     mapInvokeResult,
     normalizeInvokeError,
     normalizeLatency,
+    normalizeModelOptions,
+    normalizeModelSelection,
     normalizePrompt,
+    buildModelSelectionInvokeOptions,
     resolveIntelligenceClient,
   },
 }

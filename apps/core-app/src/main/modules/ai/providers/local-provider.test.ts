@@ -208,4 +208,40 @@ describe('LocalProvider.chat', () => {
       })
     )
   })
+
+  it('marks test-run chat requests as cooldown probes', async () => {
+    networkMocks.request.mockResolvedValueOnce({
+      data: {
+        model: 'llama3.1:8b',
+        message: { content: 'pong' }
+      }
+    })
+
+    const provider = new LocalProvider({
+      id: 'local-default',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Local Model',
+      enabled: true,
+      priority: 3,
+      baseUrl: 'http://localhost:11434',
+      defaultModel: 'llama3.1:8b',
+      models: ['llama3.1:8b']
+    })
+
+    await provider.chat(
+      {
+        messages: [{ role: 'user', content: 'ping' }]
+      },
+      { testRun: true }
+    )
+
+    expect(networkMocks.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cooldownPolicy: expect.objectContaining({
+          key: 'local-default:ollama.chat'
+        }),
+        skipCooldownCheck: true
+      })
+    )
+  })
 })

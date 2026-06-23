@@ -4,7 +4,6 @@ import type { TouchPlugin } from '../plugin'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from '../../box-tool/core-box/manager'
 
@@ -168,14 +167,14 @@ export class PluginViewLoader {
         return null
       }
 
-      if (app.isPackaged && REMOTE_PROTOCOLS.has(devAddress.protocol)) {
-        viewLog.error(`Security: remote protocol blocked in production for plugin ${plugin.name}`)
+      if (!REMOTE_PROTOCOLS.has(devAddress.protocol)) {
+        viewLog.error(`Security: dev protocol blocked for plugin ${plugin.name}`)
         pushViewIssue(
           plugin,
           feature,
           'PROTOCOL_NOT_ALLOWED',
-          'HTTP(S) protocol is not allowed in production environment.',
-          'Disable dev.source in manifest.json for production builds.'
+          'Only HTTP(S) protocol is allowed for dev source views.',
+          'Use an HTTP(S) dev.address or disable dev.source in manifest.json.'
         )
         return null
       }
