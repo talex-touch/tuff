@@ -85,6 +85,16 @@ export interface IntelligenceCapabilityStatus {
   reason?: string
 }
 
+export interface IntelligenceProviderModelOption {
+  providerId: string
+  providerName: string
+  providerType: string
+  models: string[]
+  defaultModel: string | null
+  capabilities: string[]
+  available: boolean
+}
+
 export interface IntelligenceQuotaConfig {
   callerId: string
   callerType: 'plugin' | 'user' | 'system'
@@ -347,6 +357,7 @@ export interface IntelligenceSdk {
   testCapability: (params: Record<string, unknown>) => Promise<unknown>
   getCapabilityTestMeta: (payload: { capabilityId: string }) => Promise<{ requiresUserInput: boolean, inputHint: string }>
   getCapabilityStatus: (payload: { capabilityId: string }) => Promise<IntelligenceCapabilityStatus>
+  getProviderModelOptions: (payload?: { capabilityId?: string }) => Promise<IntelligenceProviderModelOption[]>
   fetchModels: (config: IntelligenceProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
 
   getAuditLogs: (options?: IntelligenceAuditLogQueryOptions) => Promise<IntelligenceAuditLogEntry[]>
@@ -468,6 +479,13 @@ export const intelligenceApiEvents = {
     .define<
       { capabilityId: string },
       IntelligenceApiResponse<IntelligenceCapabilityStatus>
+    >(),
+  getProviderModelOptions: defineEvent('intelligence')
+    .module('api')
+    .event('get-provider-model-options')
+    .define<
+      { capabilityId?: string } | undefined,
+      IntelligenceApiResponse<IntelligenceProviderModelOption[]>
     >(),
   fetchModels: defineEvent('intelligence')
     .module('api')
@@ -803,6 +821,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async getCapabilityStatus(payload) {
       const response = await transport.send(intelligenceApiEvents.getCapabilityStatus, payload)
       return assertApiResponse(response, 'Failed to get capability status')
+    },
+
+    async getProviderModelOptions(payload = {}) {
+      const response = await transport.send(intelligenceApiEvents.getProviderModelOptions, payload)
+      return assertApiResponse(response, 'Failed to get provider model options')
     },
 
     async fetchModels(config) {

@@ -1,5 +1,7 @@
 import type { IClipboardItem } from './types'
 
+export const MIN_TEXT_ATTACHMENT_LENGTH = 80
+
 function getClipboardTags(item: IClipboardItem): string[] {
   const raw = item.meta?.tags
   if (!Array.isArray(raw)) return []
@@ -21,4 +23,22 @@ export function isUrlLikeClipboardText(item: IClipboardItem): boolean {
   const tags = getClipboardTags(item)
   if (tags.includes('url')) return true
   return isLikelyUrlText(item.content ?? '')
+}
+
+function hashClipboardText(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+export function resolveTextClipboardAttachmentIdentity(
+  item: IClipboardItem | null | undefined
+): string | null {
+  if (!item || (item.type !== 'text' && item.type !== 'html')) return null
+  const content = item.content ?? ''
+  if (!content) return null
+  return `text-attachment:${item.type}:${content.length}:${hashClipboardText(content)}`
 }

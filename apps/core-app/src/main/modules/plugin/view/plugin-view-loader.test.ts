@@ -131,7 +131,7 @@ describe('PluginViewLoader', () => {
     )
   })
 
-  it('blocks remote protocol in packaged runtime', async () => {
+  it('keeps dev.source remote route usable in packaged runtime', async () => {
     appMock.isPackaged = true
     const plugin = createPlugin({
       dev: { enable: true, source: true, address: 'http://localhost:3733/' }
@@ -140,16 +140,10 @@ describe('PluginViewLoader', () => {
 
     const result = await PluginViewLoader.loadPluginView(plugin, feature)
 
-    expect(result).toBeNull()
-    expect(enterUIModeMock).not.toHaveBeenCalled()
-    expect(plugin.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PROTOCOL_NOT_ALLOWED',
-          source: 'feature:multi-source-translate'
-        })
-      ])
-    )
+    expect(result).toBeUndefined()
+    expect(enterUIModeMock).toHaveBeenCalledTimes(1)
+    const viewUrl = enterUIModeMock.mock.calls[0]?.[0] as string
+    expect(viewUrl).toBe('http://localhost:3733/multi-translate')
   })
 
   it('keeps dev.source remote route usable in unpackaged mode', async () => {

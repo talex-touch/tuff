@@ -61,7 +61,6 @@ import type {
   SecureStoreHealthResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { TouchWindow } from '../../core/touch-window'
-import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
@@ -80,12 +79,7 @@ import {
 
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import {
-  AppEvents,
-  NotificationEvents,
-  PluginEvents,
-  QuickOpsEvents
-} from '@talex-touch/utils/transport/events'
+import { AppEvents, PluginEvents, QuickOpsEvents } from '@talex-touch/utils/transport/events'
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import {
@@ -106,6 +100,7 @@ import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
 import { getSearchProviderUserConfigs } from '../box-tool/search-engine/search-provider-config'
 import { getNetworkService } from '../network'
+import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
 import { deviceIdleService } from '../../service/device-idle-service'
 import {
@@ -418,6 +413,25 @@ export class TouchPlugin implements ITouchPlugin {
     throw new Error(`[Plugin ${this.name}] Transport runtime is not initialized`)
   }
 
+  private notifyWidgetLoadFailure(feature: IPluginFeature): void {
+    const title = translate('plugin.notifications.widgetLoadFailedTitle')
+    const message = translate('plugin.notifications.widgetLoadFailedMessage')
+
+    notificationModule.showInternalSystemNotification({
+      id: `plugin-widget-load-failed:${this.name}:${feature.id}`,
+      title,
+      message,
+      level: 'error',
+      dedupeKey: `plugin-widget-load-failed:${this.name}:${feature.id}`,
+      meta: {
+        pluginName: this.name,
+        featureId: feature.id,
+        kind: 'plugin.widgetLoadFailed'
+      },
+      system: { silent: false }
+    })
+  }
+
   private runtimeContext: TouchPluginRuntimeContext | null = null
 
   dev: IPluginDev
@@ -717,6 +731,7 @@ export class TouchPlugin implements ITouchPlugin {
             errorCode: getRuntimeErrorCode(error)
           })
           this.handleRuntimeError('registerWidget', error)
+          this.notifyWidgetLoadFailure(feature)
           return false
         }
         if (!registration) {
@@ -724,26 +739,7 @@ export class TouchPlugin implements ITouchPlugin {
             durationMs: Date.now() - executeStart
           })
           this.logger.warn(`Widget interaction failed to load for feature: ${feature.id}`)
-          const coreBoxWindow = getCoreBoxWindow()
-          if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-            const transport = this.resolveTransport()
-            void transport
-              .sendToWindow(coreBoxWindow.window.id, NotificationEvents.push.notify, {
-                id: randomUUID(),
-                request: {
-                  channel: 'app',
-                  level: 'error',
-                  title: translate('plugin.notifications.widgetLoadFailedTitle'),
-                  message: translate('plugin.notifications.widgetLoadFailedMessage'),
-                  app: { presentation: 'toast' }
-                }
-              })
-              .catch((error) => {
-                this.logger.warn('Failed to notify CoreBox about widget load failure', {
-                  error: error instanceof Error ? error.message : String(error)
-                })
-              })
-          }
+          this.notifyWidgetLoadFailure(feature)
           return false
         }
         logFeatureBreadcrumb('widget-register-ready', {
@@ -1178,7 +1174,7 @@ export class TouchPlugin implements ITouchPlugin {
     this._runtimeStats.errorTimestamps = []
 
     try {
-      const shouldBundlePrelude = !app.isPackaged && this.dev.enable
+      const shouldBundlePrelude = this.dev.enable
 
       if (this.dev.enable && this.dev.source && this.dev.address) {
         // Dev mode: load from remote

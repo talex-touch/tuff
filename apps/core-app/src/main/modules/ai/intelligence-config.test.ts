@@ -112,6 +112,178 @@ describe('intelligence-config capability options', () => {
     storageMocks.storedConfig = undefined
   })
 
+  it('does not enable Nexus by default for a fresh intelligence config', () => {
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false })
+        ]),
+        capabilities: expect.objectContaining({
+          'text.chat': expect.objectContaining({
+            providers: expect.arrayContaining([
+              expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false })
+            ])
+          })
+        })
+      })
+    )
+  })
+
+  it('does not auto-enable Nexus when patching a config without explicit enabled flags', () => {
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          priority: 1,
+          capabilities: ['text.chat']
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {},
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false })
+        ])
+      })
+    )
+    expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false })
+        ])
+      })
+    )
+  })
+
+  it('adds missing Nexus text.chat binding as disabled during config patching', () => {
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          enabled: true,
+          priority: 1,
+          capabilities: ['text.chat']
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          name: 'Chat',
+          type: 'chat',
+          providers: [{ providerId: 'local-default', priority: 1, enabled: true }]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        capabilities: expect.objectContaining({
+          'text.chat': expect.objectContaining({
+            providers: expect.arrayContaining([
+              expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false })
+            ])
+          })
+        })
+      })
+    )
+  })
+
+  it('disables stale Nexus capability bindings when the Nexus provider is disabled', () => {
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'tuff-nexus-default',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Tuff Nexus',
+          enabled: false,
+          priority: 1,
+          capabilities: ['text.chat'],
+          metadata: { origin: 'tuff-nexus' }
+        },
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          enabled: true,
+          priority: 1,
+          capabilities: ['text.chat']
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          name: 'Chat',
+          type: 'chat',
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+            { providerId: 'local-default', priority: 1, enabled: true, models: [] }
+          ]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        capabilities: expect.objectContaining({
+          'text.chat': expect.objectContaining({
+            providers: expect.arrayContaining([
+              expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false }),
+              expect.objectContaining({ providerId: 'local-default', enabled: true })
+            ])
+          })
+        })
+      })
+    )
+    expect(getCapabilityOptions('text.chat')).toMatchObject({
+      allowedProviderIds: ['local-default']
+    })
+  })
+
   it('excludes capability bindings whose provider is disabled', () => {
     storageMocks.storedConfig = {
       providers: [

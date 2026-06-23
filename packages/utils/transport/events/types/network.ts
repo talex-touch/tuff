@@ -30,3 +30,11 @@ export interface NetworkConfigUpdateRequest {
   cooldown?: NetworkConfigSnapshot['cooldown']
   timeoutMs?: number
 }
+
+export interface NetworkCooldownClearRequest {
+  key?: string
+}
+
+export interface NetworkLifecycleOnlinePayload {
+  reason?: 'online' | 'resume' | 'manual'
+}

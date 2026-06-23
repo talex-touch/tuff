@@ -16,6 +16,7 @@
 - Scan progress 读写边界已过滤空路径、重复路径、非法 timestamp，并返回真实写入 row count summary。
 - FileProvider runtime reset cleanup 已覆盖当前 watch roots 下的 scan-progress cleanup。
 - Runtime automatic scan/reconcile retry policy 已在同类成功任务后重置失败 backoff。
+- App Semantic Alias Catalog（应用语义别名目录）已完成无 schema 小切片：AppProvider 复用现有 SearchIndex alias/token 通道，为已安装主流 IM、Design、Dev、Office、Browser、AI、DB/API、Git、Screenshot/OCR、Media、Archive/Transfer、Security、Remote/VM、国内高频工具等应用补内置语义别名，使 `im`、`design`、`ps`、`vsc`、`code`、`codex`、`ai`、`db`、`api`、`screenshot`、`password` 等查询可召回对应已安装应用；启动时按 catalog version 对既有 app SearchIndex keyword 做一次性回填，避免旧索引缺少新增别名；本切片不新增未安装应用推荐、不新增设置页、不改变 SQLite schema。
 - Settings recovery chip display 已输出结构化 wait metadata。
 - FileProvider incremental DB persist、FTS write/delete summary 与 index worker flush trace 已进入 indexed source runtime/store evidence；本阶段未新增 schema/migration、真实 watcher 或 Settings packaged evidence。
 

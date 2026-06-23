@@ -99,7 +99,10 @@ const resultTransitionName = computed(() => {
 })
 
 type CoreBoxSendFeatureItem = TuffItem & {
-  meta?: { interaction?: { type?: string; sendMode?: boolean } }
+  meta?: {
+    interaction?: { type?: string; sendMode?: boolean }
+    payload?: Record<string, unknown>
+  }
   interaction?: { type?: string; sendMode?: boolean }
 }
 
@@ -159,6 +162,83 @@ function isPluginWidgetRenderItem(item: TuffItem | null | undefined): item is Tu
     return false
   }
   return !isDefaultWidgetRenderer(custom.content)
+}
+
+async function handleWidgetHostAction(
+  payload: { actionId: string; payload?: Record<string, unknown> },
+  item: TuffItem
+): Promise<void> {
+  if (!payload?.actionId) return
+
+  const meta = (item.meta ?? {}) as NonNullable<TuffItem['meta']> & {
+    payload?: Record<string, unknown>
+  }
+  const actionItem = {
+    ...item,
+    meta: {
+      ...meta,
+      actionId: payload.actionId,
+      payload: {
+        ...(meta.payload ?? {}),
+        ...(payload.payload ?? {})
+      }
+    }
+  }
+
+  const activationState = await transport.send(CoreBoxEvents.item.execute, {
+    item: JSON.parse(JSON.stringify(actionItem)),
+    actionId: payload.actionId
+  })
+  applyCoreBoxActivationState(activationState)
+}
+
+function applyCoreBoxActivationState(state: unknown): void {
+  const activations = normalizeCoreBoxActivationState(state)
+  activeActivations.value = activations
+  const widgetFeature = activations
+    ?.map((activation) => {
+      const feature = (activation.meta as { feature?: TuffItem } | undefined)?.feature
+      return isPluginWidgetRenderItem(feature) ? feature : null
+    })
+    .find((feature): feature is TuffItem => Boolean(feature))
+  if (widgetFeature) {
+    replaceSearchResults([widgetFeature])
+    boxOptions.focus = 0
+  }
+}
+
+function normalizeCoreBoxActivationState(state: unknown): IProviderActivate[] | null {
+  if (!state) return null
+  if (Array.isArray(state)) return state.length > 0 ? (state as IProviderActivate[]) : null
+  if (typeof state !== 'object') return null
+
+  const activeProviders = (state as { activeProviders?: unknown }).activeProviders
+  if (!Array.isArray(activeProviders) || activeProviders.length === 0) return null
+
+  return activeProviders
+    .map<IProviderActivate | null>((provider) => {
+      if (
+        provider &&
+        typeof provider === 'object' &&
+        typeof (provider as { id?: unknown }).id === 'string'
+      ) {
+        return provider as IProviderActivate
+      }
+
+      if (typeof provider !== 'string' || provider.length === 0) {
+        return null
+      }
+
+      if (provider.startsWith('plugin-features:')) {
+        const pluginName = provider.slice('plugin-features:'.length)
+        return {
+          id: 'plugin-features',
+          meta: pluginName ? { pluginName } : undefined
+        }
+      }
+      return { id: provider }
+    })
+    .filter((activation): activation is IProviderActivate => Boolean(activation))
 }
 
 const widgetRenderItem = computed(() => {
@@ -510,19 +590,7 @@ const detach = useDetach({
 const actionPanel = useActionPanel({
   openFlowSelector: detach.openFlowSelector,
   refreshSearch: handleSearchImmediate,
-  onActivationState: (activations) => {
-    activeActivations.value = activations
-    const widgetFeature = activations
-      ?.map((activation) => {
-        const feature = (activation.meta as { feature?: TuffItem } | undefined)?.feature
-        return isPluginWidgetRenderItem(feature) ? feature : null
-      })
-      .find((feature): feature is TuffItem => Boolean(feature))
-    if (widgetFeature) {
-      replaceSearchResults([widgetFeature])
-      boxOptions.focus = 0
-    }
-  },
+  onActivationState: applyCoreBoxActivationState,
   navigate: (path) => {
     void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     void router.push(path).catch(() => {})
@@ -816,6 +884,7 @@ const customCss = computed(() => {
               :index="0"
               class="CoreBoxRender-Widget"
               @trigger="handleItemTrigger(0, widgetItemToRender)"
+              @host-action="handleWidgetHostAction($event, widgetItemToRender)"
             />
           </div>
           <TxScroll

@@ -14,6 +14,7 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   (e: 'trigger', item: TuffItem): void
+  (e: 'host-action', payload: { actionId: string; payload?: Record<string, unknown> }): void
 }>()
 
 const render = computed(() => props.item?.render)
@@ -59,6 +60,10 @@ function handleCopyPrimary(): void {
     })
   )
 }
+
+function handleHostAction(payload: { actionId: string; payload?: Record<string, unknown> }): void {
+  emits('host-action', payload)
+}
 </script>
 
 <template>
@@ -74,6 +79,7 @@ function handleCopyPrimary(): void {
           :payload="customPayload"
           @show-history="handleShowHistory"
           @copy-primary="handleCopyPrimary"
+          @host-action="handleHostAction"
         />
       </div>
     </template>

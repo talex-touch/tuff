@@ -282,26 +282,15 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     changed = true
   }
 
-  const hadExplicitProviderEnabledState = config.providers.some(
-    (provider) => typeof provider.enabled === 'boolean'
-  )
-  const allPersistedProvidersExplicitlyDisabled =
-    config.providers.length > 0 && config.providers.every((provider) => provider.enabled === false)
-
   const nexusDefault = DEFAULT_PROVIDERS.find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
   if (
     nexusDefault &&
     !config.providers.some((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
   ) {
-    const nextNexusProvider = cloneValue(nexusDefault)
-    if (allPersistedProvidersExplicitlyDisabled) {
-      nextNexusProvider.enabled = false
-    }
-    config.providers.unshift(nextNexusProvider)
+    config.providers.unshift(cloneValue(nexusDefault))
     changed = true
   }
 
-  const enabledProviderCount = config.providers.filter((provider) => provider.enabled).length
   const nexusProvider = config.providers.find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
   if (nexusProvider) {
     const defaultCapabilities = nexusDefault?.capabilities ?? []
@@ -315,14 +304,19 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     }
   }
 
-  if (
-    enabledProviderCount === 0 &&
-    !hadExplicitProviderEnabledState &&
-    nexusProvider &&
-    nexusProvider.enabled !== true
-  ) {
-    nexusProvider.enabled = true
-    changed = true
+  if (nexusProvider?.enabled !== true) {
+    for (const capability of Object.values(config.capabilities)) {
+      if (!Array.isArray(capability.providers)) {
+        continue
+      }
+
+      for (const binding of capability.providers) {
+        if (binding.providerId === TUFF_NEXUS_PROVIDER_ID && binding.enabled !== false) {
+          binding.enabled = false
+          changed = true
+        }
+      }
+    }
   }
 
   if (!config.capabilities['text.chat']) {
@@ -337,7 +331,7 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     config.capabilities['text.chat'].providers.unshift({
       providerId: TUFF_NEXUS_PROVIDER_ID,
       priority: 1,
-      enabled: true
+      enabled: false
     })
     changed = true
   }

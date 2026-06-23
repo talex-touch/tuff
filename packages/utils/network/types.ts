@@ -50,6 +50,7 @@ export interface NetworkRequestOptions<TBody = unknown> {
   signal?: AbortSignal
   retryPolicy?: NetworkRetryPolicy
   cooldownPolicy?: NetworkCooldownPolicy
+  skipCooldownCheck?: boolean
   proxyOverride?: NetworkProxyConfig
   responseType?: NetworkResponseType
   validateStatus?: number[]
@@ -70,6 +71,7 @@ export interface NetworkFileOptions {
   timeoutMs?: number
   retryPolicy?: NetworkRetryPolicy
   cooldownPolicy?: NetworkCooldownPolicy
+  skipCooldownCheck?: boolean
   proxyOverride?: NetworkProxyConfig
 }
 

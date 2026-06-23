@@ -204,6 +204,8 @@ import type {
 import type {
   NetworkConfigGetResponse,
   NetworkConfigUpdateRequest,
+  NetworkCooldownClearRequest,
+  NetworkLifecycleOnlinePayload,
   NetworkReadBinaryRequest,
   NetworkReadTextRequest,
   NetworkRequest,
@@ -2059,6 +2061,14 @@ export const NetworkEvents = {
       NetworkConfigUpdateRequest,
       NetworkConfigGetResponse
     >("network:update-config"),
+    clearCooldown: defineRawEvent<NetworkCooldownClearRequest | void, void>(
+      "network:clear-cooldown",
+    ),
+  },
+  lifecycle: {
+    online: defineRawEvent<NetworkLifecycleOnlinePayload | void, void>(
+      "network:lifecycle:online",
+    ),
   },
 } as const;
 

@@ -52,6 +52,7 @@ import {
 import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
+import { getProviderModelOptions } from './intelligence-provider-model-options'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
 import { createCustomProvider } from './provider-factory'
@@ -1261,6 +1262,19 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         return resolveCapabilityStatus(data.capabilityId)
+      }
+    )
+
+    registerSafe(
+      intelligenceApiEvents.getProviderModelOptions,
+      'Get provider model options',
+      async (data) => {
+        const capabilityId =
+          data && typeof data === 'object' && typeof data.capabilityId === 'string'
+            ? data.capabilityId
+            : 'text.chat'
+
+        return getProviderModelOptions(capabilityId)
       }
     )
 

@@ -1,11 +1,14 @@
 import type { TuffQueryInput } from '@talex-touch/utils'
 import { TuffInputType } from '@talex-touch/utils'
 import type { IClipboardItem } from './types'
-import { isUrlLikeClipboardText } from './clipboard-text-utils'
+import {
+  isUrlLikeClipboardText,
+  MIN_TEXT_ATTACHMENT_LENGTH,
+  resolveTextClipboardAttachmentIdentity
+} from './clipboard-text-utils'
 
 export const MAX_TEXT_INPUT_LENGTH = 2000
 export const MAX_HTML_INPUT_LENGTH = 5000
-export const MIN_TEXT_ATTACHMENT_LENGTH = 80
 
 type BuildClipboardQueryInputsOptions = {
   clipboardItem?: IClipboardItem | null
@@ -82,10 +85,22 @@ function resolveTextClipboardSource(
     return null
   }
 
+  if (
+    resolveTextClipboardAttachmentIdentity(pendingTextClipboardItem) &&
+    contentShouldAttach(pendingTextClipboardItem)
+  ) {
+    return null
+  }
+
   return {
     item: pendingTextClipboardItem,
     forceAttach: true
   }
+}
+
+function contentShouldAttach(item: IClipboardItem): boolean {
+  const content = item.content ?? ''
+  return isUrlLikeClipboardText(item) || content.length >= MIN_TEXT_ATTACHMENT_LENGTH
 }
 
 export function buildClipboardQueryInputs(
@@ -142,8 +157,7 @@ export function buildClipboardQueryInputs(
 
   const { item, forceAttach } = resolvedTextClipboard
   const content = item.content ?? ''
-  const shouldAttachText =
-    forceAttach || isUrlLikeClipboardText(item) || content.length >= MIN_TEXT_ATTACHMENT_LENGTH
+  const shouldAttachText = forceAttach || contentShouldAttach(item)
 
   if (!shouldAttachText) {
     return inputs

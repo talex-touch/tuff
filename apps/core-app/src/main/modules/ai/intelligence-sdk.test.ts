@@ -151,8 +151,12 @@ class FakeProviderManager implements IntelligenceProviderManagerAdapter {
     return this.providers.get(providerId)
   }
 
-  createProviderInstance(): IntelligenceProviderAdapter {
-    throw new Error('not needed in test')
+  createProviderInstance(config: IntelligenceProviderConfig): IntelligenceProviderAdapter {
+    const provider = this.providers.get(config.id)
+    if (!provider) {
+      throw new Error(`provider not found: ${config.id}`)
+    }
+    return provider
   }
 }
 
@@ -201,6 +205,128 @@ afterEach(() => {
 })
 
 describe('TuffIntelligenceSDK invoke', () => {
+  it('passes testRun through non-local provider connection tests', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      result: 'ok',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'chat-local',
+      latency: 10,
+      traceId: 'trace-chat',
+      provider: IntelligenceProviderType.LOCAL
+    })
+    const providerConfig = {
+      id: 'chat-local',
+      type: IntelligenceProviderType.CUSTOM,
+      name: 'Chat Local',
+      enabled: true,
+      priority: 1,
+      apiKey: 'test-key',
+      models: ['chat-local'],
+      capabilities: ['text.chat']
+    }
+    const provider = createProvider(providerConfig, vi.fn())
+    provider.chat = chat
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const result = await sdk.testProvider(providerConfig)
+
+    expect(result.success).toBe(true)
+    expect(chat).toHaveBeenCalledWith(expect.any(Object), {
+      timeout: 30000,
+      testRun: true
+    })
+  })
+
+  it('uses lightweight local model probe for local provider connection tests', async () => {
+    const providerConfig = {
+      id: 'chat-local',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Chat Local',
+      enabled: true,
+      priority: 1,
+      baseUrl: 'http://localhost:11434',
+      models: ['chat-local'],
+      capabilities: ['text.chat']
+    }
+    const provider = createProvider(providerConfig, vi.fn())
+    provider.chat = vi.fn()
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const network = await import('../network')
+    const requestSpy = vi.spyOn(network.getNetworkService(), 'request').mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: { models: [{ name: 'chat-local' }] },
+      url: 'http://localhost:11434/api/tags',
+      ok: true
+    })
+
+    const result = await sdk.testProvider(providerConfig)
+
+    expect(result.success).toBe(true)
+    expect(provider.chat).not.toHaveBeenCalled()
+    expect(requestSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: 'http://localhost:11434/api/tags',
+        skipCooldownCheck: true,
+        cooldownPolicy: expect.objectContaining({
+          key: 'chat-local:ollama.chat'
+        })
+      })
+    )
+    requestSpy.mockRestore()
+  })
+
+  it('returns a stable code for provider cooldown failures', async () => {
+    const cooldownError = Object.assign(new Error('Network guard cooldown active for key "x"'), {
+      name: 'NetworkCooldownError',
+      code: 'NETWORK_COOLDOWN_ACTIVE',
+      retryAfterMs: 2300
+    })
+    const providerConfig = {
+      id: 'chat-local',
+      type: IntelligenceProviderType.CUSTOM,
+      name: 'Chat Local',
+      enabled: true,
+      apiKey: 'test-key',
+      priority: 1,
+      models: ['chat-local'],
+      capabilities: ['text.chat']
+    }
+    const provider = createProvider(providerConfig, vi.fn())
+    provider.chat = vi.fn().mockRejectedValue(cooldownError)
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const result = await sdk.testProvider(providerConfig)
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'NETWORK_COOLDOWN_ACTIVE',
+      message: 'NETWORK_COOLDOWN_ACTIVE:3'
+    })
+    expect(result.message).not.toContain('Network guard cooldown')
+  })
+
   it('falls back to secondary provider when primary provider fails', async () => {
     intelligenceCapabilityRegistry.register({
       id: 'vision.ocr',
@@ -268,7 +394,7 @@ describe('TuffIntelligenceSDK invoke', () => {
     expect(secondProviderVision).toHaveBeenCalledOnce()
   })
 
-  it('falls back when Nexus default provider requires sign-in', async () => {
+  it('skips guest Nexus provider before routing and uses the next available provider', async () => {
     intelligenceCapabilityRegistry.register({
       id: 'text.chat',
       type: IntelligenceCapabilityType.CHAT,
@@ -329,8 +455,205 @@ describe('TuffIntelligenceSDK invoke', () => {
     })
 
     expect(result.result).toBe('fallback chat')
-    expect(nexusChat).toHaveBeenCalledOnce()
+    expect(nexusChat).not.toHaveBeenCalled()
     expect(localChat).toHaveBeenCalledOnce()
+  })
+
+  it('ignores stale enabled Nexus capability binding when the provider is disabled', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    const nexusChat = vi.fn().mockRejectedValue(new Error('NEXUS_AUTH_REQUIRED'))
+    const localChat = vi.fn().mockResolvedValue({
+      result: 'local chat',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'qwen2.5:3b',
+      latency: 7,
+      traceId: 'trace-local-chat',
+      provider: IntelligenceProviderType.LOCAL
+    })
+
+    const nexusProvider = createProvider(
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: false,
+        priority: 1,
+        apiKey: 'guest',
+        capabilities: ['text.chat'],
+        metadata: { origin: 'tuff-nexus', tokenMode: 'guest' }
+      },
+      vi.fn()
+    )
+    nexusProvider.chat = nexusChat
+
+    const localProvider = createProvider(
+      {
+        id: 'local-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Ollama',
+        enabled: true,
+        priority: 2,
+        models: ['qwen2.5:3b'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    localProvider.chat = localChat
+
+    setIntelligenceProviderManager(new FakeProviderManager([nexusProvider, localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'text.chat': {
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+            { providerId: 'local-default', priority: 1, enabled: true, models: [] }
+          ]
+        }
+      }
+    })
+
+    const result = await sdk.invoke<string>('text.chat', {
+      messages: [{ role: 'user', content: 'hello' }]
+    })
+
+    expect(result.result).toBe('local chat')
+    expect(nexusChat).not.toHaveBeenCalled()
+    expect(localChat).toHaveBeenCalledOnce()
+  })
+
+  it('fails explicit unavailable provider selection instead of silently falling back', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    const localChat = vi.fn().mockResolvedValue({
+      result: 'local chat',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'qwen2.5:3b',
+      latency: 7,
+      traceId: 'trace-local-chat',
+      provider: IntelligenceProviderType.LOCAL
+    })
+
+    const localProvider = createProvider(
+      {
+        id: 'local-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Ollama',
+        enabled: true,
+        priority: 1,
+        models: ['qwen2.5:3b'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    localProvider.chat = localChat
+
+    setIntelligenceProviderManager(new FakeProviderManager([localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    await expect(
+      sdk.invoke<string>(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'hello' }] },
+        {
+          preferredProviderId: 'tuff-nexus-default',
+          modelPreference: ['nexus-default']
+        }
+      )
+    ).rejects.toThrow('[Intelligence] No enabled providers for text.chat')
+    expect(localChat).not.toHaveBeenCalled()
+  })
+
+  it('fails explicit provider runtime errors instead of silently falling back', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    const nexusChat = vi.fn().mockRejectedValue(new Error('NEXUS_AUTH_REQUIRED'))
+    const localChat = vi.fn().mockResolvedValue({
+      result: 'local chat',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'qwen2.5:3b',
+      latency: 7,
+      traceId: 'trace-local-chat',
+      provider: IntelligenceProviderType.LOCAL
+    })
+
+    const nexusProvider = createProvider(
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: true,
+        priority: 1,
+        apiKey: 'nexus-token',
+        models: ['nexus-default'],
+        capabilities: ['text.chat'],
+        metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+      },
+      vi.fn()
+    )
+    nexusProvider.chat = nexusChat
+
+    const localProvider = createProvider(
+      {
+        id: 'local-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Ollama',
+        enabled: true,
+        priority: 2,
+        models: ['qwen2.5:3b'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    localProvider.chat = localChat
+
+    setIntelligenceProviderManager(new FakeProviderManager([nexusProvider, localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    await expect(
+      sdk.invoke<string>(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'hello' }] },
+        {
+          preferredProviderId: 'tuff-nexus-default',
+          modelPreference: ['nexus-default']
+        }
+      )
+    ).rejects.toThrow('NEXUS_AUTH_REQUIRED')
+    expect(nexusChat).toHaveBeenCalledOnce()
+    expect(localChat).not.toHaveBeenCalled()
   })
 
   it('renders routing prompt template before chat invoke', async () => {
@@ -548,6 +871,171 @@ describe('TuffIntelligenceSDK invoke', () => {
       content: 'local',
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
     })
+  })
+
+  it('falls back to local stream when selected Nexus stream requires auth', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    async function* localStreamChunks() {
+      yield { delta: 'local', done: false }
+      yield {
+        delta: '',
+        done: true,
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+      }
+    }
+
+    const nexusProvider = createProvider(
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: true,
+        priority: 1,
+        apiKey: 'nexus-token',
+        models: ['nexus-default'],
+        capabilities: ['text.chat'],
+        metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+      },
+      vi.fn()
+    )
+    nexusProvider.chatStream = vi.fn(async function* () {
+      throw new Error('NEXUS_AUTH_REQUIRED')
+    })
+
+    const localProvider = createProvider(
+      {
+        id: 'local-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Ollama',
+        enabled: true,
+        priority: 2,
+        models: ['llama3.1'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    localProvider.chatStream = vi.fn(() => localStreamChunks())
+
+    setIntelligenceProviderManager(new FakeProviderManager([nexusProvider, localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'text.chat': {
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+            { providerId: 'local-default', priority: 2, enabled: true }
+          ]
+        }
+      }
+    })
+
+    const events: IntelligenceStreamEvent<string>[] = []
+    for await (const event of sdk.stream<string>('text.chat', {
+      messages: [{ role: 'user', content: 'hello' }]
+    })) {
+      events.push(event)
+    }
+
+    expect(nexusProvider.chatStream).toHaveBeenCalledOnce()
+    expect(localProvider.chatStream).toHaveBeenCalledOnce()
+    expect(events.at(-1)).toMatchObject({
+      type: 'end',
+      provider: 'local-default',
+      result: 'local',
+      content: 'local',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+    })
+  })
+
+  it('fails explicit stream provider errors instead of silently falling back', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    async function* localStreamChunks() {
+      yield { delta: 'local', done: false }
+    }
+
+    const nexusProvider = createProvider(
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: true,
+        priority: 1,
+        apiKey: 'nexus-token',
+        models: ['nexus-default'],
+        capabilities: ['text.chat'],
+        metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+      },
+      vi.fn()
+    )
+    nexusProvider.chatStream = vi.fn(async function* () {
+      throw new Error('NEXUS_AUTH_REQUIRED')
+    })
+
+    const localProvider = createProvider(
+      {
+        id: 'local-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Ollama',
+        enabled: true,
+        priority: 2,
+        models: ['llama3.1'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    localProvider.chatStream = vi.fn(() => localStreamChunks())
+
+    setIntelligenceProviderManager(new FakeProviderManager([nexusProvider, localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'text.chat': {
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+            { providerId: 'local-default', priority: 2, enabled: true }
+          ]
+        }
+      }
+    })
+
+    const consume = async () => {
+      const events: IntelligenceStreamEvent<string>[] = []
+      for await (const event of sdk.stream<string>(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'hello' }] },
+        {
+          preferredProviderId: 'tuff-nexus-default',
+          modelPreference: ['nexus-default']
+        }
+      )) {
+        events.push(event)
+      }
+      return events
+    }
+
+    await expect(consume()).rejects.toThrow('NEXUS_AUTH_REQUIRED')
+    expect(nexusProvider.chatStream).toHaveBeenCalledOnce()
+    expect(localProvider.chatStream).not.toHaveBeenCalled()
   })
 
   it('dispatches audio.tts to provider TTS capability', async () => {

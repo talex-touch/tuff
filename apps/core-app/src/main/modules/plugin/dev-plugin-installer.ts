@@ -33,7 +33,7 @@ function normalizeDevManifest(manifest: IManifest): IManifest {
     ...manifest,
     dev: {
       enable: true,
-      source: false,
+      source: manifest.dev?.source === true,
       address: manifest.dev?.address ?? ''
     }
   }

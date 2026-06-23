@@ -66,6 +66,7 @@ import {
   resolveIntelligencePromptTemplate,
   toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
+import { NetworkCooldownError } from '@talex-touch/utils/network'
 import { enterPerfContext } from '../../utils/perf-context'
 import { createLogger } from '../../utils/logger'
 import { agentManager } from './agents'
@@ -73,11 +74,50 @@ import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
+import { fetchProviderModels } from './provider-models'
 import { strategyManager } from './intelligence-strategy-manager'
 import { IntelligenceProvider } from './runtime/base-provider'
 
 const intelligenceLog = createLogger('Intelligence')
 const formatLogMessage = (...args: unknown[]) => format(...args)
+
+function isNetworkCooldownError(error: unknown): error is Error & { retryAfterMs?: number } {
+  if (error instanceof NetworkCooldownError) {
+    return true
+  }
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const code = (error as { code?: unknown }).code
+  return (
+    code === 'NETWORK_COOLDOWN_ACTIVE' ||
+    error.name === 'NetworkCooldownError' ||
+    /NETWORK_COOLDOWN_ACTIVE|network guard cooldown/i.test(error.message)
+  )
+}
+
+function formatNetworkCooldownMessage(error: Error & { retryAfterMs?: number }): string {
+  const retryAfterMs = typeof error.retryAfterMs === 'number' ? error.retryAfterMs : 0
+  const retryAfterSeconds = Math.ceil(Math.max(0, retryAfterMs) / 1000)
+  if (retryAfterSeconds > 0) {
+    return `NETWORK_COOLDOWN_ACTIVE:${retryAfterSeconds}`
+  }
+  return 'NETWORK_COOLDOWN_ACTIVE'
+}
+function hasUsableRuntimeCredential(provider: IntelligenceProviderConfig): boolean {
+  if (provider.type === IntelligenceProviderType.LOCAL) {
+    return true
+  }
+
+  const apiKey = typeof provider.apiKey === 'string' ? provider.apiKey.trim() : ''
+  return Boolean(apiKey) && apiKey !== 'guest' && provider.metadata?.tokenMode !== 'guest'
+}
+
+function hasExplicitProviderSelection(options: IntelligenceInvokeOptions): boolean {
+  return (
+    typeof options.preferredProviderId === 'string' && options.preferredProviderId.trim() !== ''
+  )
+}
 const findErrorArg = (args: unknown[]): unknown => args.find((arg) => arg instanceof Error)
 const logInfo = (...args: unknown[]) => intelligenceLog.info(formatLogMessage(...args))
 const logWarn = (...args: unknown[]) => intelligenceLog.warn(formatLogMessage(...args))
@@ -494,14 +534,16 @@ export class TuffIntelligenceSDK {
           promptVariables
         })
 
-        const fallbackResult = await this.tryFallbackProviders<T>({
-          capabilityId,
-          capabilityType: capability.type,
-          payload,
-          runtimeOptions,
-          manager,
-          fallbackProviders: strategyResult.fallbackProviders
-        })
+        const fallbackResult = hasExplicitProviderSelection(runtimeOptions)
+          ? null
+          : await this.tryFallbackProviders<T>({
+              capabilityId,
+              capabilityType: capability.type,
+              payload,
+              runtimeOptions,
+              manager,
+              fallbackProviders: strategyResult.fallbackProviders
+            })
 
         if (fallbackResult) {
           return fallbackResult
@@ -566,81 +608,120 @@ export class TuffIntelligenceSDK {
         options: runtimeOptions,
         availableProviders
       })
-      const provider = manager.get(strategyResult.selectedProvider.id)
-      if (!provider) {
-        throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
-      }
-
-      this.applyModelPreference(runtimeOptions, strategyResult.selectedProvider, capabilityId)
-      let renderedTemplate = promptTemplate
-      if (promptTemplate) {
-        try {
-          renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
-        } catch (error) {
-          logWarn('Failed to render prompt template, falling back to raw template', error)
+      const streamFromProvider = async function* (
+        sdk: TuffIntelligenceSDK,
+        providerConfig: IntelligenceProviderConfig
+      ): AsyncGenerator<IntelligenceStreamEvent<T>> {
+        const provider = manager.get(providerConfig.id)
+        if (!provider) {
+          throw new Error(`[Intelligence] Provider ${providerConfig.id} not found`)
         }
-      }
 
-      const chatPayload = payload as IntelligenceChatPayload
-      const nextPayload: IntelligenceChatPayload = {
-        ...chatPayload,
-        messages: this.applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
-      }
-      const startTime = Date.now()
-      const traceId = intelligenceAuditLogger.generateTraceId()
-      let accumulated = ''
-      let finalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-
-      yield {
-        type: 'start',
-        capabilityId,
-        requestId:
-          typeof runtimeOptions.metadata?.requestId === 'string'
-            ? runtimeOptions.metadata.requestId
-            : undefined,
-        traceId,
-        provider: strategyResult.selectedProvider.id,
-        model: runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel,
-        metadata: runtimeOptions.metadata
-      }
-
-      for await (const chunk of provider.chatStream(nextPayload, runtimeOptions)) {
-        if (chunk.usage) {
-          finalUsage = chunk.usage
-          yield {
-            type: 'usage',
-            capabilityId,
-            traceId,
-            usage: chunk.usage
+        const providerRuntimeOptions: IntelligenceInvokeOptions = {
+          ...runtimeOptions,
+          metadata: { ...(runtimeOptions.metadata ?? {}) }
+        }
+        sdk.applyModelPreference(providerRuntimeOptions, providerConfig, capabilityId)
+        let renderedTemplate = promptTemplate
+        if (promptTemplate) {
+          try {
+            renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
+          } catch (error) {
+            logWarn('Failed to render prompt template, falling back to raw template', error)
           }
         }
-        if (chunk.delta) {
-          accumulated += chunk.delta
-          yield {
-            type: 'delta',
-            capabilityId,
-            traceId,
-            delta: chunk.delta,
-            content: accumulated,
-            provider: strategyResult.selectedProvider.id,
-            model:
-              runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel
+
+        const chatPayload = payload as IntelligenceChatPayload
+        const nextPayload: IntelligenceChatPayload = {
+          ...chatPayload,
+          messages: sdk.applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
+        }
+        const startTime = Date.now()
+        const traceId = intelligenceAuditLogger.generateTraceId()
+        let accumulated = ''
+        let finalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+
+        yield {
+          type: 'start',
+          capabilityId,
+          requestId:
+            typeof providerRuntimeOptions.metadata?.requestId === 'string'
+              ? providerRuntimeOptions.metadata.requestId
+              : undefined,
+          traceId,
+          provider: providerConfig.id,
+          model: providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel,
+          metadata: providerRuntimeOptions.metadata
+        }
+
+        for await (const chunk of provider.chatStream(nextPayload, providerRuntimeOptions)) {
+          if (chunk.usage) {
+            finalUsage = chunk.usage
+            yield {
+              type: 'usage',
+              capabilityId,
+              traceId,
+              usage: chunk.usage
+            }
+          }
+          if (chunk.delta) {
+            accumulated += chunk.delta
+            yield {
+              type: 'delta',
+              capabilityId,
+              traceId,
+              delta: chunk.delta,
+              content: accumulated,
+              provider: providerConfig.id,
+              model: providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel
+            }
+          }
+        }
+
+        yield {
+          type: 'end',
+          capabilityId,
+          traceId,
+          result: accumulated as T,
+          content: accumulated,
+          usage: finalUsage,
+          provider: providerConfig.id,
+          model: providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel,
+          metadata: {
+            latency: Date.now() - startTime
           }
         }
       }
 
-      yield {
-        type: 'end',
-        capabilityId,
-        traceId,
-        result: accumulated as T,
-        content: accumulated,
-        usage: finalUsage,
-        provider: strategyResult.selectedProvider.id,
-        model: runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel,
-        metadata: {
-          latency: Date.now() - startTime
+      try {
+        yield* streamFromProvider(this, strategyResult.selectedProvider)
+      } catch (error) {
+        if (
+          strategyResult.fallbackProviders.length === 0 ||
+          hasExplicitProviderSelection(runtimeOptions)
+        ) {
+          throw error
         }
+
+        logWarn(
+          `Stream failed for ${capabilityId} via ${strategyResult.selectedProvider.id}, attempting fallback providers`,
+          toInvokeErrorMessage(error)
+        )
+
+        let lastError: unknown = error
+        for (const fallbackProvider of strategyResult.fallbackProviders) {
+          try {
+            yield* streamFromProvider(this, fallbackProvider)
+            return
+          } catch (fallbackError) {
+            lastError = fallbackError
+            logWarn(
+              `Stream fallback provider ${fallbackProvider.id} failed: ${toInvokeErrorMessage(fallbackError)}`
+            )
+          }
+        }
+
+        throw lastError
       }
     } finally {
       disposeStream()
@@ -761,6 +842,14 @@ export class TuffIntelligenceSDK {
       capabilityId
     }
 
+    const preferredProviderId =
+      typeof runtimeOptions.preferredProviderId === 'string'
+        ? runtimeOptions.preferredProviderId.trim()
+        : ''
+    if (preferredProviderId) {
+      runtimeOptions.allowedProviderIds = [preferredProviderId]
+    }
+
     const capabilityRouting = this.config.capabilities?.[capabilityId]
     const configuredProviders =
       capabilityRouting?.providers
@@ -823,6 +912,7 @@ export class TuffIntelligenceSDK {
     const typeFilteredProviders = enabledProviders.filter((provider) =>
       supportedProviderTypes.includes(provider.getConfig().type)
     )
+    const explicitProviderSelection = hasExplicitProviderSelection(runtimeOptions)
 
     const accessFilteredProviders = typeFilteredProviders.filter((provider) => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
@@ -841,20 +931,23 @@ export class TuffIntelligenceSDK {
       )
     }
 
-    const missingKeyProviders = capabilityFilteredProviders
-      .filter((provider) => provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
-      .map((provider) => provider.getConfig().id)
+    const unavailableCredentialProviders = capabilityFilteredProviders
+      .map((provider) => provider.getConfig())
+      .filter((provider) => !hasUsableRuntimeCredential(provider))
+      .map((provider) => provider.id)
 
     const availableProviders = capabilityFilteredProviders
-      .filter(
-        (provider) => !(provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
-      )
       .map((provider) => provider.getConfig())
+      .filter((provider) => hasUsableRuntimeCredential(provider))
+
+    if (!explicitProviderSelection && availableProviders.length > 0) {
+      runtimeOptions.allowedProviderIds = availableProviders.map((provider) => provider.id)
+    }
 
     if (availableProviders.length === 0) {
-      if (missingKeyProviders.length > 0) {
+      if (unavailableCredentialProviders.length > 0) {
         throw new Error(
-          `[Intelligence] No enabled providers for ${capabilityId}: missing API key for ${missingKeyProviders.join(', ')}`
+          `[Intelligence] No enabled providers for ${capabilityId}: missing API key for ${unavailableCredentialProviders.join(', ')}`
         )
       }
       throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
@@ -887,6 +980,11 @@ export class TuffIntelligenceSDK {
 
     const filtered = runtimeOptions.modelPreference.filter((model) => providerModels.has(model))
     if (filtered.length === 0) {
+      if (hasExplicitProviderSelection(runtimeOptions)) {
+        throw new Error(
+          `[Intelligence] Model unsupported by ${selectedProvider.id} for ${capabilityId}: ${runtimeOptions.modelPreference.join(', ')}`
+        )
+      }
       logWarn(
         `Model preference not supported by ${selectedProvider.id} for ${capabilityId}, fallback to provider default.`
       )
@@ -1421,51 +1519,14 @@ export class TuffIntelligenceSDK {
     }
 
     const manager = ensureProviderManager()
-
-    if (!resolveCapabilityMethod(capability.type, true)) {
-      throw new Error(`[Intelligence] Capability type ${capability.type} not supported`)
-    }
-
-    const enabledProviders = manager.getEnabled()
-    const typeFilteredProviders = enabledProviders.filter((provider) =>
-      capability.supportedProviders.includes(provider.getConfig().type)
+    const availableProviders = this.resolveAvailableProviders(
+      manager,
+      capabilityId,
+      capability.type,
+      capability.supportedProviders,
+      runtimeOptions,
+      true
     )
-
-    const accessFilteredProviders = typeFilteredProviders.filter((provider) => {
-      if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
-        return true
-      }
-      return runtimeOptions.allowedProviderIds.includes(provider.getConfig().id)
-    })
-
-    const capabilityFilteredProviders = accessFilteredProviders.filter((provider) =>
-      providerSupportsCapability(provider, capabilityId, capability.type, true)
-    )
-
-    if (capabilityFilteredProviders.length === 0 && accessFilteredProviders.length > 0) {
-      throw new Error(
-        `[Intelligence] No enabled providers for ${capabilityId}: capability not supported`
-      )
-    }
-
-    const missingKeyProviders = capabilityFilteredProviders
-      .filter((provider) => provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
-      .map((provider) => provider.getConfig().id)
-
-    const availableProviders = capabilityFilteredProviders
-      .filter(
-        (provider) => !(provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
-      )
-      .map((provider) => provider.getConfig())
-
-    if (availableProviders.length === 0) {
-      if (missingKeyProviders.length > 0) {
-        throw new Error(
-          `[Intelligence] No enabled providers for ${capabilityId}: missing API key for ${missingKeyProviders.join(', ')}`
-        )
-      }
-      throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
-    }
 
     const strategyResult = await strategyManager.select({
       capabilityId,
@@ -1758,6 +1819,7 @@ export class TuffIntelligenceSDK {
   async testProvider(providerConfig: IntelligenceProviderConfig): Promise<{
     success: boolean
     message: string
+    code?: string
     latency?: number
     timestamp: number
   }> {
@@ -1799,9 +1861,23 @@ export class TuffIntelligenceSDK {
 
       const timeout = providerConfig.timeout || 30000
 
+      if (providerConfig.type === IntelligenceProviderType.LOCAL) {
+        const models = await fetchProviderModels(providerConfig, {
+          allowStoredFallback: false,
+          skipCooldownCheck: true
+        })
+        const latency = Date.now() - startTime
+        return {
+          success: true,
+          message: `Connection successful. Models: ${models.length}`,
+          latency,
+          timestamp
+        }
+      }
+
       // Test the provider with timeout
       const result = await Promise.race([
-        provider.chat(testPayload, { timeout }),
+        provider.chat(testPayload, { timeout, testRun: true }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), timeout)
         )
@@ -1818,10 +1894,14 @@ export class TuffIntelligenceSDK {
     } catch (error) {
       const latency = Date.now() - startTime
       let message = 'Connection failed'
+      let code: string | undefined
 
       if (error instanceof Error) {
         // Parse common error messages
-        if (error.message.includes('timeout')) {
+        if (isNetworkCooldownError(error)) {
+          message = formatNetworkCooldownMessage(error)
+          code = 'NETWORK_COOLDOWN_ACTIVE'
+        } else if (error.message.includes('timeout')) {
           message = 'Request timeout - check your network connection'
         } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
           message = 'Invalid API key'
@@ -1846,6 +1926,7 @@ export class TuffIntelligenceSDK {
 
       return {
         success: false,
+        ...(code ? { code } : {}),
         message,
         latency,
         timestamp

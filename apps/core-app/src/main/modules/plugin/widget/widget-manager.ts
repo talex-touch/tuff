@@ -131,7 +131,9 @@ function isRuntimeCompileExplicitlyEnabled(): boolean {
 }
 
 function canRuntimeCompileWidget(plugin: ITouchPlugin): boolean {
-  return Boolean(plugin.dev?.enable && plugin.dev?.source) || isRuntimeCompileExplicitlyEnabled()
+  // dev.enable is the local development marker, regardless of whether widget
+  // source comes from disk or a dev server.
+  return Boolean(plugin.dev?.enable) || isRuntimeCompileExplicitlyEnabled()
 }
 
 function findPrecompiledWidgetEntry(

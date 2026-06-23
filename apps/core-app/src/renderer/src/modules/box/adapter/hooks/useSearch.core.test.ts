@@ -137,7 +137,9 @@ function createClipboardOptions(): IClipboardOptions {
     last: null,
     pendingAutoFillItem: null,
     detectedAt: null,
-    lastClearedTimestamp: null
+    lastClearedTimestamp: null,
+    lastTextAttachmentIdentity: null,
+    lastTextAttachmentSource: null
   }
 }
 
@@ -487,6 +489,62 @@ describe('useSearch CoreBox reopen behavior', () => {
         contentKind: 'preview'
       })
     })
+  })
+
+  it('executes a plugin feature with repeated long text inline without duplicate text input', async () => {
+    const content = 'repeated long clipboard prompt '.repeat(5)
+    const clipboardOptions = createClipboardOptions()
+    clipboardOptions.pendingAutoFillItem = {
+      id: 94,
+      type: 'text',
+      content,
+      timestamp: new Date().toISOString(),
+      captureSource: 'native-watch',
+      autoPasteEligible: false
+    }
+    clipboardOptions.lastClearedTimestamp = clipboardOptions.pendingAutoFillItem.timestamp
+    state.latestClipboard = null
+
+    const hook = useSearch(createBoxOptions(), clipboardOptions)
+    await flushPromises()
+
+    hook.searchVal.value = content
+    await nextTick()
+    await flushPromises()
+
+    state.send.mockClear()
+    state.send.mockImplementation(async (event: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:execute') {
+        return { activeProviders: ['plugin-features:touch-intelligence'] }
+      }
+      if (eventName.includes('provider')) return []
+      return undefined
+    })
+
+    const featureItem = {
+      id: 'touch-intelligence/intelligence-ask',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: '智能问答' } },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        interaction: { type: 'widget', allowInput: true, sendMode: true },
+        extension: { acceptedInputTypes: ['text'] }
+      }
+    } as TuffItem
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+
+    const executeCall = state.send.mock.calls.find(
+      ([event]) => String(event) === 'core-box:execute'
+    )
+    const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
+
+    expect(executePayload?.searchResult?.query.text).toBe(content)
+    expect(executePayload?.searchResult?.query.inputs).toEqual([])
   })
 
   it('keeps widget feature metadata when search end returns compressed activation', async () => {

@@ -5,7 +5,11 @@ import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { BoxMode } from '..'
-import { isUrlLikeClipboardText } from './clipboard-text-utils'
+import {
+  isUrlLikeClipboardText,
+  MIN_TEXT_ATTACHMENT_LENGTH,
+  resolveTextClipboardAttachmentIdentity
+} from './clipboard-text-utils'
 import { getLatestClipboard, useClipboardChannel } from './useClipboardChannel'
 
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
@@ -195,7 +199,38 @@ export function useClipboard(
     return data.type === 'text' || (data.type as string) === 'html'
   }
 
-  function autoFillText(data: IClipboardItem): boolean {
+  function rememberTextAttachment(data: IClipboardItem, source: 'manual' | 'auto'): void {
+    const identity = resolveTextClipboardAttachmentIdentity(data)
+    if (!identity) return
+    clipboardOptions.lastTextAttachmentIdentity = identity
+    clipboardOptions.lastTextAttachmentSource = source
+  }
+
+  function shouldTrackTextAttachment(data: IClipboardItem): boolean {
+    if (!isTextType(data)) return false
+    const content = data.content || ''
+    return content.length >= MIN_TEXT_ATTACHMENT_LENGTH || isUrlLikeClipboardText(data)
+  }
+
+  function shouldFillRepeatedTextAttachment(data: IClipboardItem): boolean {
+    if (!searchVal || !shouldTrackTextAttachment(data)) return false
+    const identity = resolveTextClipboardAttachmentIdentity(data)
+    return Boolean(identity && identity === clipboardOptions.lastTextAttachmentIdentity)
+  }
+
+  function fillRepeatedTextAttachment(data: IClipboardItem, source: 'manual' | 'auto'): boolean {
+    if (!searchVal || !shouldFillRepeatedTextAttachment(data)) return false
+    searchVal.value = data.content || ''
+    clipboardOptions.last = data
+    clipboardOptions.pendingAutoFillItem = { ...data }
+    rememberTextAttachment(data, source)
+    markIdentityAsAutoPasted(data)
+    clearClipboard({ remember: true, preservePendingAutoFill: true })
+    if (Math.random() < AUTOFILL_CLEANUP_PROBABILITY) cleanupAutoPastedRecords()
+    return true
+  }
+
+  function autoFillText(data: IClipboardItem, source: 'manual' | 'auto' = 'auto'): boolean {
     if (!isTextType(data)) return false
     if (!searchVal) return false
 
@@ -215,6 +250,7 @@ export function useClipboard(
     }
 
     // Long/plain URL text: show as tag only
+    rememberTextAttachment(data, source)
     markIdentityAsAutoPasted(data)
     return true
   }
@@ -225,8 +261,8 @@ export function useClipboard(
     return true
   }
 
-  function autoFillClipboard(data: IClipboardItem): boolean {
-    return autoFillFiles(data) || autoFillText(data) || autoFillImage(data)
+  function autoFillClipboard(data: IClipboardItem, source: 'manual' | 'auto' = 'auto'): boolean {
+    return autoFillFiles(data) || autoFillText(data, source) || autoFillImage(data)
   }
 
   async function resolveLatestClipboard(): Promise<IClipboardItem | null> {
@@ -282,20 +318,37 @@ export function useClipboard(
       return
     }
 
+    const clipboardIdentity = resolveClipboardIdentity(clipboard)
+    const alreadyPasted = clipboardIdentity && autoPastedClipboardIdentities.has(clipboardIdentity)
+    const canFillRepeatedAttachment =
+      overrideDismissed ||
+      !attemptAutoFill ||
+      !alreadyPasted ||
+      clipboardOptions.lastTextAttachmentSource === 'manual'
+
+    if (canFillRepeatedAttachment && shouldFillRepeatedTextAttachment(clipboard)) {
+      autoPasteActive.value = fillRepeatedTextAttachment(
+        clipboard,
+        overrideDismissed ? 'manual' : 'auto'
+      )
+      return
+    }
+
     if (!isSameClipboard || overrideDismissed) {
       autoPasteActive.value = false
       clipboardOptions.last = clipboard
       clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = Date.now()
       clipboardOptions.lastClearedTimestamp = null
+      if (shouldTrackTextAttachment(clipboard)) {
+        rememberTextAttachment(clipboard, overrideDismissed ? 'manual' : 'auto')
+      }
 
-      const identity = resolveClipboardIdentity(clipboard)
-      const alreadyPasted = identity && autoPastedClipboardIdentities.has(identity)
       const shouldAutoPaste = !overrideDismissed && !alreadyPasted && canAutoPaste()
       let didAutoPaste = false
 
-      if (identity && (overrideDismissed || shouldAutoPaste)) {
-        didAutoPaste = autoFillClipboard(clipboard)
+      if (clipboardIdentity && (overrideDismissed || shouldAutoPaste)) {
+        didAutoPaste = autoFillClipboard(clipboard, overrideDismissed ? 'manual' : 'auto')
 
         if (shouldAutoPaste) autoPasteActive.value = didAutoPaste
       }
@@ -307,11 +360,9 @@ export function useClipboard(
     }
 
     if (attemptAutoFill && !overrideDismissed) {
-      const identity = resolveClipboardIdentity(clipboard)
-      const alreadyPasted = identity && autoPastedClipboardIdentities.has(identity)
       const shouldAutoPaste = !alreadyPasted && canAutoPaste()
 
-      if (identity && shouldAutoPaste) {
+      if (clipboardIdentity && shouldAutoPaste) {
         const didAutoPaste = autoFillClipboard(clipboard)
         autoPasteActive.value = didAutoPaste
       }

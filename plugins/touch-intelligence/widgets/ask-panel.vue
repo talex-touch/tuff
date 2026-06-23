@@ -46,12 +46,37 @@ interface IntelligenceWidgetPayload {
   copyRecovery?: string
   messages?: IntelligenceWidgetMessage[]
   imageContext?: IntelligenceImageContext | null
+  modelOptions?: IntelligenceProviderModelOption[]
+  selectedProviderId?: string
+  selectedModel?: string
 }
 
 interface RuntimeMetadataItem {
   label: string
   value: string
 }
+
+interface IntelligenceProviderModelOption {
+  providerId?: string
+  providerName?: string
+  providerType?: string
+  models?: string[]
+  defaultModel?: string | null
+  capabilities?: string[]
+  available?: boolean
+}
+
+interface ModelSelectOption {
+  value: string
+  label: string
+  providerId: string
+  model: string
+  providerName: string
+  providerType: string
+  defaultModel?: string | null
+}
+
+const AUTO_MODEL_VALUE = '__auto__'
 
 export default defineComponent({
   name: 'ask-panel',
@@ -63,8 +88,10 @@ export default defineComponent({
     payload: { type: Object as () => IntelligenceWidgetPayload | undefined, required: false },
     hostKeyEvent: { type: Object as () => HostKeyEventEnvelope | null | undefined, required: false },
   },
-  setup(props) {
+  emits: ['host-action'],
+  setup(props, { emit }) {
     const contentRef = ref<HTMLElement | null>(null)
+    const modelSearch = ref('')
     const widgetPayload = computed<IntelligenceWidgetPayload>(() => props.payload ?? {})
     const status = computed<IntelligenceWidgetStatus>(() => {
       const value = widgetPayload.value.status
@@ -123,6 +150,79 @@ export default defineComponent({
       return items
     })
     const hasRuntimeMetadata = computed(() => runtimeMetadata.value.length > 0)
+    const selectedProviderId = computed(() => String(widgetPayload.value.selectedProviderId || '').trim())
+    const selectedModel = computed(() => String(widgetPayload.value.selectedModel || '').trim())
+    const selectedModelValue = computed(() => {
+      if (!selectedProviderId.value || !selectedModel.value)
+        return AUTO_MODEL_VALUE
+      return `${selectedProviderId.value}::${selectedModel.value}`
+    })
+    const modelOptions = computed(() => {
+      const values = Array.isArray(widgetPayload.value.modelOptions)
+        ? widgetPayload.value.modelOptions
+        : []
+      return values
+        .map((option) => {
+          const providerId = String(option?.providerId || '').trim()
+          const providerName = String(option?.providerName || providerId).trim()
+          const providerType = String(option?.providerType || '').trim()
+          const defaultModel = String(option?.defaultModel || '').trim()
+          const models = Array.isArray(option?.models)
+            ? Array.from(new Set(option.models.map(model => String(model || '').trim()).filter(Boolean)))
+            : []
+          return {
+            providerId,
+            providerName,
+            providerType,
+            defaultModel,
+            models,
+            available: option?.available !== false,
+          }
+        })
+        .filter(option => option.providerId && option.models.length > 0)
+    })
+    const flattenedModelOptions = computed<ModelSelectOption[]>(() => {
+      return modelOptions.value.flatMap((provider) => {
+        const orderedModels = [...provider.models].sort((a, b) => {
+          if (provider.defaultModel && a === provider.defaultModel) return -1
+          if (provider.defaultModel && b === provider.defaultModel) return 1
+          return a.localeCompare(b)
+        })
+        return orderedModels.map(model => ({
+          value: `${provider.providerId}::${model}`,
+          label: model,
+          providerId: provider.providerId,
+          model,
+          providerName: provider.providerName,
+          providerType: provider.providerType,
+          defaultModel: provider.defaultModel,
+        }))
+      })
+    })
+    const filteredModelGroups = computed(() => {
+      const query = modelSearch.value.trim().toLowerCase()
+      return modelOptions.value
+        .map((provider) => {
+          const models = provider.models.filter((model) => {
+            if (!query) return true
+            return [
+              provider.providerId,
+              provider.providerName,
+              provider.providerType,
+              model,
+            ].some(value => value.toLowerCase().includes(query))
+          })
+          return { ...provider, models }
+        })
+        .filter(provider => provider.models.length > 0)
+    })
+    const selectedModelSummary = computed(() => {
+      if (!selectedProviderId.value || !selectedModel.value)
+        return '自动路由'
+      const provider = modelOptions.value.find(option => option.providerId === selectedProviderId.value)
+      const providerName = provider?.providerName || selectedProviderId.value
+      return `${providerName} / ${selectedModel.value}`
+    })
 
     function cloneMessage(message: IntelligenceWidgetMessage): IntelligenceWidgetMessage {
       return {
@@ -155,8 +255,40 @@ export default defineComponent({
       { immediate: true, deep: true, flush: 'post' },
     )
 
+    function handleModelChange(event: Event) {
+      const target = event.target as HTMLSelectElement | null
+      const value = target?.value || AUTO_MODEL_VALUE
+      const option = flattenedModelOptions.value.find(item => item.value === value)
+      const payload = widgetPayload.value
+      emit('host-action', {
+        actionId: 'select-model',
+        payload: {
+          requestId: payload.requestId || '',
+          prompt: payload.prompt || '',
+          answer: payload.answer || '',
+          status: payload.status || 'idle',
+          provider: payload.provider || '',
+          model: payload.model || '',
+          latency: payload.latency,
+          traceId: payload.traceId || '',
+          capabilityId: payload.capabilityId || 'text.chat',
+          inputKinds: payload.inputKinds || [],
+          errorCode: payload.errorCode || '',
+          errorMessage: payload.errorMessage || '',
+          copyStatus: payload.copyStatus || '',
+          copyError: payload.copyError || '',
+          copyRecovery: payload.copyRecovery || '',
+          imageDataUrl: payload.imageContext?.preview || '',
+          ocrText: payload.imageContext?.ocrText || '',
+          selectedProviderId: option?.providerId || '',
+          selectedModel: option?.model || '',
+        },
+      })
+    }
+
     return {
       contentRef,
+      modelSearch,
       status,
       messages: visibleMessages,
       isEmpty,
@@ -170,6 +302,11 @@ export default defineComponent({
       copyRecovery,
       runtimeMetadata,
       hasRuntimeMetadata,
+      selectedModelValue,
+      selectedModelSummary,
+      filteredModelGroups,
+      AUTO_MODEL_VALUE,
+      handleModelChange,
       scrollToBottom,
     }
   },
@@ -233,6 +370,40 @@ export default defineComponent({
         ↓
       </button>
     </div>
+
+    <div class="AiChatbot__modelToolbar" aria-label="渠道模型选择">
+      <div class="AiChatbot__modelSummary">
+        <span>渠道模型</span>
+        <strong>{{ selectedModelSummary }}</strong>
+      </div>
+      <input
+        v-model="modelSearch"
+        class="AiChatbot__modelSearch"
+        type="search"
+        placeholder="搜索渠道或模型"
+        aria-label="搜索渠道或模型"
+      />
+      <select
+        class="AiChatbot__modelSelect"
+        :value="selectedModelValue"
+        aria-label="选择渠道模型"
+        @change="handleModelChange"
+      >
+        <option :value="AUTO_MODEL_VALUE">自动路由</option>
+        <template v-for="provider in filteredModelGroups" :key="provider.providerId">
+          <option disabled :value="`group:${provider.providerId}`">
+            {{ provider.providerName }}{{ provider.providerType ? ` · ${provider.providerType}` : '' }}
+          </option>
+          <option
+            v-for="model in provider.models"
+            :key="`${provider.providerId}:${model}`"
+            :value="`${provider.providerId}::${model}`"
+          >
+            {{ model }}{{ provider.defaultModel === model ? ' · 默认' : '' }}
+          </option>
+        </template>
+      </select>
+    </div>
   </section>
 </template>
 
@@ -274,7 +445,7 @@ export default defineComponent({
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
-  padding: 24px 28px;
+  padding: 24px 28px 86px;
   scrollbar-width: thin;
 }
 
@@ -518,6 +689,81 @@ export default defineComponent({
   color: var(--ai-chat-text);
 }
 
+.AiChatbot__modelToolbar {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  left: 16px;
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(120px, 160px) minmax(180px, 260px);
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 12px;
+  background: var(--ai-chat-floating-bg);
+  backdrop-filter: blur(18px);
+}
+
+.AiChatbot__modelSummary {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.AiChatbot__modelSummary span {
+  color: var(--ai-chat-text-secondary);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.AiChatbot__modelSummary strong {
+  overflow: hidden;
+  color: var(--ai-chat-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.AiChatbot__modelSearch,
+.AiChatbot__modelSelect {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-bg-color, #ffffff) 92%, transparent);
+  color: var(--ai-chat-text);
+  font-size: 12px;
+  outline: none;
+}
+
+.AiChatbot__modelSearch {
+  padding: 0 10px;
+}
+
+.AiChatbot__modelSelect {
+  padding: 0 8px;
+}
+
+.AiChatbot__modelSearch:focus,
+.AiChatbot__modelSelect:focus {
+  border-color: color-mix(in srgb, var(--tx-color-primary, #3082ff) 64%, var(--ai-chat-border));
+}
+
+@media (max-width: 640px) {
+  .AiChatbot__content {
+    padding: 18px 16px 126px;
+  }
+
+  .AiChatbot__modelToolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
 .AiImageContext.is-unsupported {
   border-color: var(--ai-chat-danger-border);
   background: var(--ai-chat-danger-bg);
@@ -598,8 +844,5 @@ export default defineComponent({
 @keyframes ai-conversation-dot {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
   40% { transform: translateY(-3px); opacity: 1; }
-}
-
-  46%, 100% { opacity: 0; }
 }
 </style>

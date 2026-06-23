@@ -55,7 +55,42 @@ describe('fetchProviderModels', () => {
       expect.objectContaining({
         method: 'GET',
         url: 'http://localhost:11434/api/tags',
+        cooldownPolicy: expect.objectContaining({
+          key: 'local-default:ollama.chat'
+        }),
         proxyOverride: { mode: 'direct' }
+      })
+    )
+  })
+
+  it('lets local provider probes bypass chat cooldown without stored fallback', async () => {
+    networkMocks.request.mockRejectedValue(new Error('provider unavailable'))
+
+    await expect(
+      fetchProviderModels(
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          enabled: true,
+          priority: 3,
+          baseUrl: 'http://localhost:11434',
+          models: ['stale-model']
+        },
+        {
+          allowStoredFallback: false,
+          skipCooldownCheck: true
+        }
+      )
+    ).rejects.toThrow('provider unavailable')
+
+    expect(networkMocks.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://localhost:11434/api/tags',
+        skipCooldownCheck: true,
+        cooldownPolicy: expect.objectContaining({
+          key: 'local-default:ollama.chat'
+        })
       })
     )
   })

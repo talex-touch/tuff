@@ -186,7 +186,8 @@ export async function readText(source: string, options: NetworkFileOptions = {})
       responseType: 'text',
       proxyOverride: options.proxyOverride,
       retryPolicy: options.retryPolicy,
-      cooldownPolicy: options.cooldownPolicy
+      cooldownPolicy: options.cooldownPolicy,
+      skipCooldownCheck: options.skipCooldownCheck
     })
     return response.data
   }
@@ -231,7 +232,8 @@ export async function readBinary(
       responseType: 'arrayBuffer',
       proxyOverride: options.proxyOverride,
       retryPolicy: options.retryPolicy,
-      cooldownPolicy: options.cooldownPolicy
+      cooldownPolicy: options.cooldownPolicy,
+      skipCooldownCheck: options.skipCooldownCheck
     })
     return response.data
   }

@@ -97,7 +97,8 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
         failureThreshold: 2,
         cooldownMs: 15_000,
         autoResetOnSuccess: true
-      }
+      },
+      skipCooldownCheck: options.testRun === true
     }
   }
 

@@ -30,6 +30,21 @@ const VIRTUAL_PREFIX_RESOLVED = `\0${VIRTUAL_PREFIX}`
 
 const debug = Debug('unplugin-tuff:core')
 
+function stripRequestSuffix(id: string): string {
+  const suffixIndex = id.search(/[?#]/)
+  return suffixIndex === -1 ? id : id.slice(0, suffixIndex)
+}
+
+function hasRawRequestQuery(id: string): boolean {
+  const queryIndex = id.indexOf('?')
+  if (queryIndex === -1)
+    return false
+
+  const hashIndex = id.indexOf('#', queryIndex)
+  const query = id.slice(queryIndex + 1, hashIndex === -1 ? undefined : hashIndex)
+  return new URLSearchParams(query).has('raw')
+}
+
 /**
  * Build the Prelude source folder to index.js using esbuild (for dev mode).
  */
@@ -186,8 +201,9 @@ export default createUnplugin<Options | undefined>((options, meta) => {
 
     resolveId(id) {
       const normalizedId = id.startsWith('/') ? id.slice(1) : id
+      const fileId = stripRequestSuffix(normalizedId)
 
-      if (filesToVirtualize.includes(normalizedId) || normalizedId.startsWith('widgets/')) {
+      if (filesToVirtualize.includes(fileId) || fileId.startsWith('widgets/')) {
         const resolvedId = VIRTUAL_PREFIX_RESOLVED + normalizedId
         return resolvedId
       }
@@ -197,10 +213,11 @@ export default createUnplugin<Options | undefined>((options, meta) => {
     async load(id) {
       if (id.startsWith(VIRTUAL_PREFIX_RESOLVED)) {
         const originalId = id.slice(VIRTUAL_PREFIX_RESOLVED.length)
-        const filePath = path.join(projectRoot, originalId)
+        const fileId = stripRequestSuffix(originalId)
+        const filePath = path.join(projectRoot, fileId)
 
         // Special handling for virtual index.js when Prelude source is configured or detected
-        if (originalId === PRELUDE_OUTPUT_FILE && preludeConfig) {
+        if (fileId === PRELUDE_OUTPUT_FILE && preludeConfig) {
           const chalk = await getChalk()
           const bundledCode = await buildPreludeBundle(
             projectRoot,
@@ -216,6 +233,9 @@ export default createUnplugin<Options | undefined>((options, meta) => {
         try {
           await fs.access(filePath)
           const content = await fs.readFile(filePath, 'utf-8')
+          if (hasRawRequestQuery(originalId)) {
+            return `export default ${JSON.stringify(content)};`
+          }
           return content
         }
         catch (e) {
@@ -303,6 +323,61 @@ export default createUnplugin<Options | undefined>((options, meta) => {
         watcher.on('change', handleFileChange)
         watcher.on('add', handleFileChange)
         watcher.on('unlink', handleFileChange)
+
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url)
+            return next()
+
+          let requestUrl: URL
+          try {
+            requestUrl = new URL(req.url, 'http://tuff.local')
+          }
+          catch {
+            return next()
+          }
+
+          if (!requestUrl.searchParams.has('raw'))
+            return next()
+
+          let requestPath: string
+          try {
+            requestPath = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '')
+          }
+          catch {
+            return next()
+          }
+
+          const fileId = path.normalize(requestPath)
+          if (
+            !fileId ||
+            fileId === '.' ||
+            fileId === '..' ||
+            fileId.startsWith('../') ||
+            path.isAbsolute(fileId)
+          ) {
+            return next()
+          }
+
+          if (!filesToVirtualize.includes(fileId) && !fileId.startsWith('widgets/'))
+            return next()
+
+          const filePath = path.resolve(projectRoot, fileId)
+          const relative = path.relative(projectRoot, filePath)
+          if (relative.startsWith('..') || path.isAbsolute(relative))
+            return next()
+
+          try {
+            const content = await fs.readFile(filePath, 'utf-8')
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+            res.end(content)
+          }
+          catch {
+            res.statusCode = 404
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+            res.end(`[Tuff DevKit] File not found: ${fileId}`)
+          }
+        })
 
         server.middlewares.use('/_tuff_devkit/update', async (req, res) => {
           const coreFiles = ['manifest.json', 'index.js', 'preload.js', 'README.md']

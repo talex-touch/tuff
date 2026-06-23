@@ -412,6 +412,7 @@ export class NetworkService {
         responseType: 'text',
         retryPolicy: options.retryPolicy,
         cooldownPolicy: options.cooldownPolicy,
+        skipCooldownCheck: options.skipCooldownCheck,
         proxyOverride: options.proxyOverride
       })
       return response.data
@@ -461,6 +462,7 @@ export class NetworkService {
         responseType: 'arrayBuffer',
         retryPolicy: options.retryPolicy,
         cooldownPolicy: options.cooldownPolicy,
+        skipCooldownCheck: options.skipCooldownCheck,
         proxyOverride: options.proxyOverride
       })
       return response.data
@@ -567,9 +569,11 @@ export class NetworkService {
     const cooldownPolicy = mergeCooldownPolicy(baseConfig.cooldown, options.cooldownPolicy)
     const cooldownKey = cooldownPolicy.key || `${method}:${url}`
 
-    const gate = this.guard.canRequest(cooldownKey)
-    if (!gate.allowed) {
-      throw new NetworkCooldownError(cooldownKey, gate.retryAfterMs ?? 0)
+    if (!options.skipCooldownCheck) {
+      const gate = this.guard.canRequest(cooldownKey)
+      if (!gate.allowed) {
+        throw new NetworkCooldownError(cooldownKey, gate.retryAfterMs ?? 0)
+      }
     }
 
     let attempt = 0
@@ -592,6 +596,10 @@ export class NetworkService {
         }
       }
     }
+  }
+
+  clearCooldown(key?: string): void {
+    this.guard.clear(key)
   }
 
   private shouldRetry(error: unknown, attempt: number, retryPolicy: NetworkRetryPolicy): boolean {

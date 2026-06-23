@@ -19,6 +19,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
+import PluginSearchProviders from './PluginSearchProviders.vue'
 
 interface Props {
   plugin: ITouchPlugin
@@ -621,6 +622,8 @@ onMounted(() => {
         </TuffBlockLine>
       </TuffGroupBlock>
     </template>
+
+    <PluginSearchProviders v-if="!loading" :plugin="plugin" />
   </div>
 </template>
 

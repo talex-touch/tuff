@@ -6,6 +6,7 @@ import type {
 } from '@talex-touch/utils'
 import { NetworkEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import { powerMonitor } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
@@ -45,8 +46,24 @@ export class NetworkModule extends BaseModule {
       }),
       transport.on(NetworkEvents.api.toTfileUrl, (payload) => service.toTfileUrl(payload.source)),
       transport.on(NetworkEvents.api.getConfig, () => service.getConfig()),
-      transport.on(NetworkEvents.api.updateConfig, (payload) => service.updateConfig(payload ?? {}))
+      transport.on(NetworkEvents.api.updateConfig, (payload) =>
+        service.updateConfig(payload ?? {})
+      ),
+      transport.on(NetworkEvents.api.clearCooldown, (payload) => {
+        service.clearCooldown(payload?.key)
+      }),
+      transport.on(NetworkEvents.lifecycle.online, () => {
+        service.clearCooldown()
+      })
     )
+
+    if (typeof powerMonitor?.on === 'function') {
+      const handleResume = () => {
+        service.clearCooldown()
+      }
+      powerMonitor.on('resume', handleResume)
+      this.disposers.push(() => powerMonitor.off('resume', handleResume))
+    }
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): MaybePromise<void> {

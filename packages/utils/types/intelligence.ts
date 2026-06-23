@@ -2279,6 +2279,8 @@ export interface IntelligenceGlobalConfig {
 export interface IntelligenceTestResult {
   /** Whether test succeeded. */
   success: boolean
+  /** Stable machine-readable result code. */
+  code?: string
   /** Result message. */
   message?: string
   /** Latency in milliseconds. */
@@ -2392,7 +2394,7 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
     id: 'tuff-nexus-default',
     type: IntelligenceProviderType.CUSTOM,
     name: 'Tuff Nexus',
-    enabled: true,
+    enabled: false,
     priority: 1,
     baseUrl: `${NEXUS_BASE_URL}/v1`,
     models: ['gpt-4o', 'gpt-4o-mini'],
@@ -2439,7 +2441,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     label: '对话 / Chat',
     description: '通用对话、问答、助理类能力',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'openai-default', priority: 2, enabled: false },
       { providerId: 'anthropic-default', priority: 3, enabled: false },
       { providerId: 'deepseek-default', priority: 4, enabled: true },
@@ -2498,7 +2500,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     label: '图片翻译 / Image Translation',
     description: '将图片中的文字翻译并返回译后图片',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
     ],
   },
   'text.translate': {
@@ -2507,7 +2509,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '多语言文本翻译',
     promptTemplate: '你是专业翻译助手。请将以下文本翻译成 {{targetLang}}，只返回译文，不要解释。',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', priority: 2, enabled: true },
       { providerId: 'openai-default', priority: 3, enabled: false },
       { providerId: 'anthropic-default', priority: 4, enabled: false },
@@ -2519,7 +2521,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '生成文本内容的简洁摘要',
     promptTemplate: '请用简洁的语言总结以下内容的核心要点，不超过 {{maxLength}} 字。',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', priority: 2, enabled: true },
       { providerId: 'openai-default', priority: 3, enabled: false },
       { providerId: 'anthropic-default', priority: 4, enabled: false },
@@ -2531,7 +2533,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '识别用户查询的意图类型（搜索、打开、计算等）',
     promptTemplate: '分析用户输入的意图，返回 JSON 格式：{intent: string, confidence: number, entities: string[]}',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', priority: 2, enabled: true },
       { providerId: 'openai-default', priority: 3, enabled: false },
     ],
@@ -2542,7 +2544,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '根据需求生成代码片段',
     promptTemplate: '你是编程助手。根据需求生成 {{language}} 代码，包含注释说明。',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 2, enabled: true },
       { providerId: 'openai-default', models: ['gpt-4o'], priority: 3, enabled: false },
     ],
@@ -2553,7 +2555,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '解释代码的功能和逻辑',
     promptTemplate: '你是编程导师。用通俗易懂的语言解释这段代码的功能、逻辑和关键点。',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 2, enabled: true },
       { providerId: 'anthropic-default', priority: 3, enabled: false },
     ],
@@ -2564,7 +2566,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '从文本中提取关键信息（日期、人名、地点等）',
     promptTemplate: '从文本中提取关键信息，返回 JSON 格式：{dates: [], people: [], locations: [], keywords: []}',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', priority: 2, enabled: true },
       { providerId: 'openai-default', priority: 3, enabled: false },
     ],
@@ -2575,7 +2577,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '分析文本的情感倾向（积极/消极/中性）',
     promptTemplate: '分析文本情感倾向，返回 JSON：{sentiment: "positive"|"negative"|"neutral", score: 0-1, keywords: []}',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', priority: 2, enabled: true },
       { providerId: 'openai-default', priority: 3, enabled: false },
     ],
@@ -2586,7 +2588,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '审查代码，发现潜在问题、最佳实践和改进建议',
     promptTemplate: '作为资深代码审查员，审查以下代码。关注：1) 潜在bug 2) 性能问题 3) 安全隐患 4) 最佳实践 5) 可读性',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 2, enabled: true },
       { providerId: 'anthropic-default', priority: 3, enabled: false },
       { providerId: 'openai-default', models: ['gpt-4o'], priority: 4, enabled: false },
@@ -2598,7 +2600,7 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
     description: '从文本中提取关键词和短语',
     promptTemplate: '从文本中提取最重要的关键词，返回 JSON 数组：{keywords: [{term: string, relevance: number}]}',
     providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
       { providerId: 'deepseek-default', priority: 2, enabled: true },
       { providerId: 'openai-default', priority: 3, enabled: false },
     ],

@@ -12,6 +12,7 @@ import {
   setupConfigUpdateListener
 } from './intelligence-config'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
+import { getProviderModelOptions } from './intelligence-provider-model-options'
 import { createCustomProvider } from './provider-factory'
 import { fetchProviderModels } from './provider-models'
 import { normalizeProviderForRuntime } from './provider-runtime'
@@ -131,6 +132,20 @@ export function initIntelligenceSdkService(): void {
       return ok(resolveCapabilityStatus(data.capabilityId))
     } catch (error) {
       logError('Capability status failed:', error)
+      return fail(error)
+    }
+  })
+
+  transport.on(intelligenceApiEvents.getProviderModelOptions, async (data, _context) => {
+    try {
+      const capabilityId =
+        data && typeof data === 'object' && typeof data.capabilityId === 'string'
+          ? data.capabilityId
+          : 'text.chat'
+
+      return ok(getProviderModelOptions(capabilityId))
+    } catch (error) {
+      logError('Provider model options failed:', error)
       return fail(error)
     }
   })

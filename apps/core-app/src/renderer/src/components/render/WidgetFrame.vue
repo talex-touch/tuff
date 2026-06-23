@@ -26,6 +26,7 @@ const props = withDefaults(
     item?: TuffItem
     payload?: PreviewCardPayload | Record<string, unknown>
     renderMode?: 'light' | 'shadow'
+    hostAction?: (payload: { actionId: string; payload?: Record<string, unknown> }) => void
   }>(),
   {
     preview: false,
@@ -36,6 +37,7 @@ const props = withDefaults(
 const emits = defineEmits<{
   (e: 'show-history'): void
   (e: 'copy-primary'): void
+  (e: 'host-action', payload: { actionId: string; payload?: Record<string, unknown> }): void
   (e: 'render-error', error: Error): void
 }>()
 
@@ -55,7 +57,9 @@ const shadowProps = reactive({
   widgetId: props.rendererId,
   hostKeyEvent: null as unknown,
   onShowHistory: () => emits('show-history'),
-  onCopyPrimary: () => emits('copy-primary')
+  onCopyPrimary: () => emits('copy-primary'),
+  onHostAction: (payload: { actionId: string; payload?: Record<string, unknown> }) =>
+    emits('host-action', payload)
 })
 
 const isDev = import.meta.env?.DEV ?? false
@@ -336,7 +340,8 @@ function mountShadowApp(): void {
         'widget-id': shadowProps.widgetId,
         'host-key-event': shadowProps.hostKeyEvent,
         onShowHistory: shadowProps.onShowHistory,
-        onCopyPrimary: shadowProps.onCopyPrimary
+        onCopyPrimary: shadowProps.onCopyPrimary,
+        onHostAction: shadowProps.onHostAction
       })
   })
   app.config.errorHandler = (error) => {
@@ -399,6 +404,7 @@ onBeforeUnmount(() => {
       :on-vnode-unmounted="handleVnodeUnmounted"
       @show-history="emits('show-history')"
       @copy-primary="emits('copy-primary')"
+      @host-action="emits('host-action', $event)"
     />
     <div
       v-else

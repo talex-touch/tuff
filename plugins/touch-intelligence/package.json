@@ -4,7 +4,7 @@
   "version": "1.0.2",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "build": "pnpm -C ../../packages/tuff-intelligence run build && node ../../packages/tuff-cli/bin/tuff.js builder",
     "publish:nexus": "node ../../packages/tuff-cli/bin/tuff.js publish --channel RELEASE"
   },
   "dependencies": {

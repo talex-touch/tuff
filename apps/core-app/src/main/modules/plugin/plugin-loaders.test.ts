@@ -136,7 +136,7 @@ describe('createPluginLoader', () => {
     expect(loader.constructor.name).toBe('DevPluginLoader')
   })
 
-  it('falls back to LocalPluginLoader in packaged runtime even when dev.source is enabled', async () => {
+  it('uses DevPluginLoader for dev-source plugins even in packaged runtime', async () => {
     appMock.isPackaged = true
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
@@ -148,7 +148,7 @@ describe('createPluginLoader', () => {
     createdPaths.push(pluginPath)
 
     const loader = createPluginLoader('touch-translation', pluginPath)
-    expect(loader.constructor.name).toBe('LocalPluginLoader')
+    expect(loader.constructor.name).toBe('DevPluginLoader')
   })
 
   it('keeps LocalPluginLoader when dev.source is disabled', async () => {

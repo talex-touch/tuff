@@ -496,6 +496,72 @@ describe('WidgetManager precompiled widgets', () => {
     }
   })
 
+  it('runtime compiles stale precompiled output for local dev plugins', async () => {
+    const root = await createPackagedPluginRoot()
+    try {
+      const manager = new WidgetManager()
+      const plugin = {
+        ...createPlugin(),
+        dev: { enable: true, address: 'http://127.0.0.1:5173/', source: false },
+        pluginPath: root,
+        build: {
+          widgets: [
+            {
+              compiledAt: Date.now(),
+              compiledPath: 'widgets/.compiled/test-plugin__test.widget.cjs',
+              dependencies: ['vue'],
+              featureId: 'test.widget',
+              hash: 'old-source-hash',
+              metaPath: 'widgets/.compiled/test-plugin__test.widget.meta.json',
+              sourcePath: 'widgets/panel.ts',
+              styles: '.panel{}',
+              widgetId: 'test-plugin::test.widget'
+            }
+          ]
+        }
+      } as ITouchPlugin
+      const feature = createFeature()
+      const compiledPath = path.join(root, 'widgets', '.compiled', 'test-plugin__test.widget.cjs')
+      const sourcePath = path.join(root, 'widgets', 'panel.ts')
+      const source = 'export default { name: "Fresh" }'
+      const sourceHash = crypto.createHash('sha256').update(source).digest('hex')
+
+      await fs.ensureDir(path.dirname(compiledPath))
+      await fs.writeFile(compiledPath, 'module.exports = {}', 'utf-8')
+      await fs.writeFile(sourcePath, source, 'utf-8')
+      mocks.loadWidget.mockResolvedValue({
+        featureId: 'test.widget',
+        filePath: sourcePath,
+        hash: sourceHash,
+        loadedAt: Date.now(),
+        pluginName: 'test-plugin',
+        runtime: 'vue',
+        source,
+        widgetId: 'test-plugin::test.widget'
+      })
+      mocks.compileWidgetSource.mockResolvedValue({
+        code: 'module.exports = { fresh: true }',
+        dependencies: ['vue'],
+        runtime: 'vue',
+        styles: '.fresh{}'
+      })
+
+      await manager.registerWidget(plugin, feature)
+
+      expect(mocks.loadWidget).toHaveBeenCalledOnce()
+      expect(mocks.compileWidgetSource).toHaveBeenCalledOnce()
+      expect(mocks.broadcastToWindow.mock.calls[0]?.[2]).toMatchObject({
+        code: 'module.exports = { fresh: true }',
+        featureId: 'test.widget',
+        hash: sourceHash,
+        pluginName: 'test-plugin',
+        widgetId: 'test-plugin::test.widget'
+      })
+    } finally {
+      await fs.remove(root)
+    }
+  })
+
   it('blocks packaged precompiled output when meta does not match manifest', async () => {
     const root = await createPackagedPluginRoot()
     try {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TuffInputType } from '@talex-touch/utils'
 import type { IClipboardItem } from './types'
 import { buildClipboardQueryInputs } from './clipboard-query-inputs'
+import { resolveTextClipboardAttachmentIdentity } from './clipboard-text-utils'
 
 function createClipboardItem(overrides?: Partial<IClipboardItem>): IClipboardItem {
   return {
@@ -33,6 +34,23 @@ describe('buildClipboardQueryInputs', () => {
     ])
   })
 
+  it('uses the same text attachment identity for repeated clipboard content', () => {
+    const first = createClipboardItem({
+      id: 1,
+      content: 'repeat me'.repeat(20),
+      timestamp: '2026-04-09T12:00:00.000Z'
+    })
+    const second = createClipboardItem({
+      id: 2,
+      content: 'repeat me'.repeat(20),
+      timestamp: '2026-04-09T12:01:00.000Z'
+    })
+
+    expect(resolveTextClipboardAttachmentIdentity(second)).toBe(
+      resolveTextClipboardAttachmentIdentity(first)
+    )
+  })
+
   it('attaches pending short text clipboard content for plugin execution when query matches', () => {
     const inputs = buildClipboardQueryInputs({
       pendingTextClipboardItem: createClipboardItem({
@@ -56,6 +74,17 @@ describe('buildClipboardQueryInputs', () => {
     const inputs = buildClipboardQueryInputs({
       pendingTextClipboardItem: createClipboardItem({ content: 'hello' }),
       queryText: 'hello world',
+      allowPendingTextClipboard: true
+    })
+
+    expect(inputs).toEqual([])
+  })
+
+  it('ignores pending long text clipboard content when it is already inline in query text', () => {
+    const content = 'long text '.repeat(20)
+    const inputs = buildClipboardQueryInputs({
+      pendingTextClipboardItem: createClipboardItem({ content }),
+      queryText: content,
       allowPendingTextClipboard: true
     })
 

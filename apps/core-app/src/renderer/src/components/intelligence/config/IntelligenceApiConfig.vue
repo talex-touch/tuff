@@ -81,6 +81,19 @@ const canTest = computed(() => {
   return localApiKey.value.trim().length > 0
 })
 
+function resolveTestFailureMessage(result?: { code?: string; message?: string }): string {
+  if (result?.code === 'NETWORK_COOLDOWN_ACTIVE') {
+    const retryAfterSeconds = Number(result.message?.match(/^NETWORK_COOLDOWN_ACTIVE:(\d+)$/)?.[1])
+    if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+      return t('intelligence.config.api.networkRecoveringWithRetry', {
+        seconds: retryAfterSeconds
+      })
+    }
+    return t('intelligence.config.api.networkRecovering')
+  }
+  return result?.message || t('intelligence.config.api.connectionFailed')
+}
+
 function validateApiKey(value: string): boolean {
   apiKeyError.value = ''
 
@@ -157,6 +170,7 @@ async function handleTest() {
 
     const result = (await aiClient.testProvider(testProvider)) as {
       success?: boolean
+      code?: string
       message?: string
     }
 
@@ -172,11 +186,12 @@ async function handleTest() {
 
       await fetchAvailableModels(testProvider)
     } else {
-      testError.value = result?.message || t('intelligence.config.api.connectionFailed')
+      const message = resolveTestFailureMessage(result)
+      testError.value = message
 
       await forDialogMention(
         t('intelligence.config.api.testFailedTitle'),
-        result?.message || t('intelligence.config.api.testFailedDesc'),
+        message || t('intelligence.config.api.testFailedDesc'),
         { type: 'class', value: 'i-ri-error-warning-line' },
         [{ content: t('intelligence.config.api.confirm'), type: 'danger', onClick: () => true }]
       )

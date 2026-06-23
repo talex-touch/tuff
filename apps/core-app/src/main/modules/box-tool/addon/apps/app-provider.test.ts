@@ -1079,6 +1079,51 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
+  it('merges built-in semantic aliases with external aliases when indexing apps', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async (_items: unknown[]) => undefined)
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+
+    await appProvider.setAliases({
+      '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app': ['retouch']
+    })
+
+    await privateProvider._syncKeywordsForApp({
+      name: 'Adobe Photoshop 2026',
+      displayName: 'Adobe Photoshop 2026',
+      fileName: 'Adobe Photoshop 2026',
+      bundleId: 'com.adobe.Photoshop',
+      path: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+      stableId: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(indexItemsMock).toHaveBeenCalledTimes(1)
+    const indexedBatch = indexItemsMock.mock.calls[0]?.[0] as Array<{
+      itemId?: string
+      aliases?: Array<{ value: string; priority?: number }>
+      keywords?: Array<{ value: string; priority?: number }>
+    }>
+    const indexedItem = indexedBatch[0]
+    expect(indexedItem).toMatchObject({
+      itemId: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+      aliases: expect.arrayContaining([
+        expect.objectContaining({ value: 'retouch', priority: 1.5 }),
+        expect.objectContaining({ value: 'ps', priority: 1.5 }),
+        expect.objectContaining({ value: 'design', priority: 1.5 })
+      ]),
+      keywords: expect.arrayContaining([
+        expect.objectContaining({ value: 'retouch', priority: 1.5 }),
+        expect.objectContaining({ value: 'ps', priority: 1.5 }),
+        expect.objectContaining({ value: 'design', priority: 1.5 })
+      ])
+    })
+  })
+
   it('keeps steady-state keyword sync removal as a no-op when no retired ids exist', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
@@ -1873,6 +1918,104 @@ describe('appProvider rebuild maintenance', () => {
     expect(syncKeywordsMock).not.toHaveBeenCalledWith(
       expect.objectContaining({ path: '/Applications/Disabled.app' })
     )
+  })
+
+  it('syncs existing app keywords when semantic alias catalog version changes', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const appRows = [
+      {
+        id: 11,
+        path: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+        name: 'Adobe Photoshop 2026',
+        displayName: 'Adobe Photoshop 2026',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      }
+    ]
+    const rowsWithExtensions = [
+      {
+        ...appRows[0],
+        extensions: {
+          appIdentity: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+          bundleId: 'com.adobe.Photoshop',
+          launchKind: 'path',
+          launchTarget: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app'
+        }
+      }
+    ]
+    const configStore = new Map<string, string>([
+      ['app_provider_semantic_alias_catalog_version', '1']
+    ])
+    const indexItemsMock = vi.fn(async (_items: unknown[]) => undefined)
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => appRows),
+      getDb: () => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [
+                { key: 'app_provider_semantic_alias_catalog_version', value: '1' }
+              ])
+            }))
+          }))
+        })),
+        insert: vi.fn(() => ({
+          values: vi.fn((row: { key: string; value: string }) => ({
+            onConflictDoUpdate: vi.fn(async () => {
+              configStore.set(row.key, row.value)
+            })
+          }))
+        }))
+      })
+    }
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => rowsWithExtensions)
+
+    await privateProvider._syncSemanticAliasCatalogIfNeeded()
+
+    expect(indexItemsMock).toHaveBeenCalledTimes(1)
+    const indexedItem = indexItemsMock.mock.calls[0]?.[0]?.[0] as {
+      itemId?: string
+      aliases?: Array<{ value: string; priority?: number }>
+    }
+    expect(indexedItem).toMatchObject({
+      itemId: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+      aliases: expect.arrayContaining([
+        expect.objectContaining({ value: 'ps' }),
+        expect.objectContaining({ value: 'design' })
+      ])
+    })
+    expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe('2')
+  })
+
+  it('skips semantic alias catalog sync when the stored version is current', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const indexItemsMock = vi.fn(async (_items: unknown[]) => undefined)
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => []),
+      getDb: () => ({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [
+                { key: 'app_provider_semantic_alias_catalog_version', value: '2' }
+              ])
+            }))
+          }))
+        }))
+      })
+    }
+    privateProvider.searchIndex = { indexItems: indexItemsMock }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [])
+
+    await privateProvider._syncSemanticAliasCatalogIfNeeded()
+
+    expect(indexItemsMock).not.toHaveBeenCalled()
   })
 
   it('rejects managed launcher entries that collide with scanned apps', async () => {
