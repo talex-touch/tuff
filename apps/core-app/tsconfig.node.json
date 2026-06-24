@@ -38,6 +38,8 @@
   "include": [
     "electron.vite.config.*",
     "scripts/coreapp-packaged-ai-ask-probe*.ts",
+    "scripts/coreapp-visible-app-index-workbench-probe*.ts",
+    "scripts/coreapp-packaged-login-recovery-probe*.ts",
     "scripts/quickops-evidence-*.ts",
     "scripts/windows-acceptance-*.ts",
     "src/main/**/*",
