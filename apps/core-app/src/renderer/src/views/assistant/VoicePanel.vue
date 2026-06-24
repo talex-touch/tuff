@@ -530,8 +530,11 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   padding: 9px 12px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 1.2;
   cursor: pointer;
+  min-height: 32px;
+  max-width: 150px;
+  white-space: normal;
 }
 
 .secondary-btn {

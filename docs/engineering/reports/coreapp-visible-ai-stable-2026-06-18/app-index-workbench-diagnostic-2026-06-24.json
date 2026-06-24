@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "app-index-diagnostic-evidence",
-  "createdAt": "2026-06-24T06:00:15.241Z",
+  "createdAt": "2026-06-24T06:04:11.896Z",
   "input": {
     "target": "shell:AppsFolder\\TuffEvidence.Uwp!App",
     "query": "Tuff Evidence UWP"
@@ -143,8 +143,8 @@
     "ftsQuery": "tuff evidence uwp",
     "candidateItemIds": [
       "steam://rungameid/424242",
-      "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
-      "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+      "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+      "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence PathApp",
       "app-index-workbench:protocol-attention",
       "app-index-workbench:uwp-found"
     ],
@@ -159,12 +159,12 @@
             "priority": 1.1
           },
           {
-            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
             "keyword": "tuff",
             "priority": 1.1
           },
           {
-            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence PathApp",
             "keyword": "tuff",
             "priority": 1.1
           },
@@ -184,12 +184,12 @@
             "priority": 1.1
           },
           {
-            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
             "keyword": "evidence",
             "priority": 1.1
           },
           {
-            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence PathApp",
             "keyword": "evidence",
             "priority": 1.1
           },
@@ -240,11 +240,11 @@
             "overlapCount": 12
           },
           {
-            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
             "overlapCount": 10
           },
           {
-            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence PathApp",
             "overlapCount": 10
           },
           {
@@ -272,12 +272,12 @@
           "priority": 1.1
         },
         {
-          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
           "keyword": "tuff",
           "priority": 1.1
         },
         {
-          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence PathApp",
           "keyword": "tuff",
           "priority": 1.1
         },
@@ -297,12 +297,12 @@
           "priority": 1.1
         },
         {
-          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
           "keyword": "evidence",
           "priority": 1.1
         },
         {
-          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence PathApp",
           "keyword": "evidence",
           "priority": 1.1
         },
@@ -357,11 +357,11 @@
           "overlapCount": 12
         },
         {
-          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
           "overlapCount": 10
         },
         {
-          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060402/app-index-workbench-fixtures/Tuff Evidence PathApp",
           "overlapCount": 10
         },
         {
