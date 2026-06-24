@@ -9,7 +9,8 @@ const electronMocks = vi.hoisted(() => ({
   readImage: vi.fn(),
   writeImage: vi.fn(),
   createFromBuffer: vi.fn(() => ({
-    isEmpty: () => false
+    isEmpty: () => false,
+    toPNG: () => Buffer.from('native-image')
   }))
 }))
 
@@ -55,6 +56,9 @@ describe('normalizeImageBase64Payload', () => {
 
 describe('translateCoreBoxImageItem', () => {
   afterEach(() => {
+    delete process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE
+    delete process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR
+    delete process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE_CLIPBOARD_FILE
     vi.clearAllMocks()
   })
 
@@ -283,6 +287,68 @@ describe('translateCoreBoxImageItem', () => {
     expect(electronMocks.writeImage).not.toHaveBeenCalled()
   })
 
+  it('uses visible evidence clipboard file only inside isolated userData', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'visible-evidence-clipboard-'))
+    const imagePath = path.join(tempDir, 'clipboard.png')
+    await writeFile(imagePath, Buffer.from('clipboard-image'))
+    process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR = tempDir
+    process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE_CLIPBOARD_FILE = imagePath
+    electronMocks.readImage.mockReturnValue({
+      isEmpty: () => true,
+      toPNG: () => Buffer.from('unused')
+    })
+    sceneMocks.runNexusScene.mockResolvedValue({
+      status: 'completed',
+      output: {
+        translatedImageBase64: Buffer.from('translated-image').toString('base64')
+      }
+    })
+    sceneMocks.extractTranslatedImageFromSceneRun.mockReturnValue({
+      translatedImageBase64: Buffer.from('translated-image').toString('base64'),
+      imageMimeType: 'image/png',
+      sourceText: 'hello',
+      targetText: '你好',
+      overlay: { mode: 'client-render' }
+    })
+
+    const result = await translateClipboardImage('zh', { openPinWindow: true })
+
+    expect(result).toMatchObject({
+      success: true,
+      sourceText: 'hello',
+      targetText: '你好'
+    })
+    expect(sceneMocks.runNexusScene).toHaveBeenCalledWith('corebox.screenshot.translate', {
+      input: {
+        imageBase64: Buffer.from('clipboard-image').toString('base64'),
+        targetLang: 'zh'
+      },
+      capability: undefined
+    })
+    expect(electronMocks.createFromBuffer).toHaveBeenCalledWith(Buffer.from('translated-image'))
+  })
+
+  it('ignores visible evidence clipboard file outside isolated userData', async () => {
+    const userDataDir = await mkdtemp(path.join(tmpdir(), 'visible-evidence-user-data-'))
+    const externalDir = await mkdtemp(path.join(tmpdir(), 'visible-evidence-external-'))
+    const imagePath = path.join(externalDir, 'clipboard.png')
+    await writeFile(imagePath, Buffer.from('clipboard-image'))
+    process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR = userDataDir
+    process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE_CLIPBOARD_FILE = imagePath
+    electronMocks.readImage.mockReturnValue({
+      isEmpty: () => true,
+      toPNG: () => Buffer.from('unused')
+    })
+
+    const result = await translateClipboardImage('zh', { openPinWindow: true })
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'IMAGE_UNAVAILABLE'
+    })
+    expect(sceneMocks.runNexusScene).not.toHaveBeenCalled()
+  })
+
   it('returns SCENE_UNAVAILABLE when Nexus screenshot scene request fails', async () => {
     sceneMocks.runNexusScene.mockRejectedValue(new Error('provider unavailable'))
 
@@ -301,6 +367,33 @@ describe('translateCoreBoxImageItem', () => {
     })
     expect(pinWindowMocks.openImageTranslatePinWindow).not.toHaveBeenCalled()
     expect(electronMocks.writeImage).not.toHaveBeenCalled()
+  })
+
+  it('uses visible evidence image translate payload only when explicitly enabled', async () => {
+    process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE = '1'
+    process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR = '/tmp/tuff-visible-evidence-test'
+
+    const result = await translateImageBase64(
+      Buffer.from('source-image').toString('base64'),
+      'zh',
+      {
+        openPinWindow: true
+      }
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      sourceText: 'Visible evidence clipboard image: hello world',
+      targetText: '可见证据剪贴板图片：你好世界'
+    })
+    expect(sceneMocks.runNexusScene).not.toHaveBeenCalled()
+    expect(pinWindowMocks.openImageTranslatePinWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageMimeType: 'image/png',
+        sourceText: 'Visible evidence clipboard image: hello world',
+        targetText: '可见证据剪贴板图片：你好世界'
+      })
+    )
   })
 
   it('translates a raw image base64 payload through the screenshot scene and opens pin window', async () => {

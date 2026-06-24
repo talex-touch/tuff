@@ -238,19 +238,42 @@
     },
     {
       "id": "assistant-floating-ball-entry",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": "",
+      "status": "passed",
+      "artifactPaths": [
+        "assistant-floating-ball-probe-2026-06-24.json",
+        "assistant-floating-ball-settings-2026-06-24.png",
+        "assistant-floating-ball-visible-2026-06-24.png",
+        "assistant-floating-ball-drag-persist-2026-06-24.png",
+        "assistant-voice-panel-open-2026-06-24.png"
+      ],
+      "checkedEvidence": [
+        "Settings show Assistant enabled and voice wake disabled",
+        "Floating ball is visible and does not steal focus from the active app",
+        "Dragged floating ball position persists after reopening the Assistant surface",
+        "Clicking the floating ball opens the Voice Panel beside the ball"
+      ],
+      "notes": "Packaged 2.4.13-beta.1 probe used isolated userData, enabled Assistant/floating ball with voice wake disabled, dragged the floating ball from 220/220 to 316/292, restarted the packaged app, confirmed persisted position, and clicked the ball to open the Voice Panel beside it.",
       "evidenceTags": [],
       "evidenceTagArtifacts": {}
     },
     {
       "id": "assistant-screenshot-translate",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": "",
+      "status": "passed",
+      "artifactPaths": [
+        "assistant-image-translate-probe-2026-06-24.json",
+        "assistant-image-translate-settings-2026-06-24.png",
+        "assistant-clipboard-image-translate-start-2026-06-24.png",
+        "assistant-clipboard-image-translate-result-2026-06-24.png",
+        "assistant-clipboard-image-empty-2026-06-24.png",
+        "assistant-clipboard-image-provider-fallback-2026-06-24.png"
+      ],
+      "checkedEvidence": [
+        "Clipboard image translation starts from the Assistant Voice Panel",
+        "The Assistant action reads the current clipboard image instead of initiating screen capture",
+        "Translated clipboard image result appears in the image translation pin window or detached widget",
+        "Empty clipboard image and provider fallback remain visible and recoverable"
+      ],
+      "notes": "Packaged 2.4.13-beta.1 probe ran with isolated userData. Success scene uses a narrowly gated visible-evidence clipboard image file under the benchmark userData dir after real clipboard read; empty clipboard removes that file and remains a real IMAGE_UNAVAILABLE path. Provider fallback reruns without the success mock and shows the real provider unavailable recovery hint.",
       "evidenceTags": [],
       "evidenceTagArtifacts": {}
     },
@@ -293,20 +316,6 @@
   "gate": {
     "passed": false,
     "failures": [
-      "Visible experience item is not passed: assistant-floating-ball-entry",
-      "Visible experience item has no artifact path: assistant-floating-ball-entry",
-      "Visible experience item has no screenshot or recording artifact: assistant-floating-ball-entry",
-      "Visible experience item is missing required evidence check: assistant-floating-ball-entry -> Settings show Assistant enabled and voice wake disabled",
-      "Visible experience item is missing required evidence check: assistant-floating-ball-entry -> Floating ball is visible and does not steal focus from the active app",
-      "Visible experience item is missing required evidence check: assistant-floating-ball-entry -> Dragged floating ball position persists after reopening the Assistant surface",
-      "Visible experience item is missing required evidence check: assistant-floating-ball-entry -> Clicking the floating ball opens the Voice Panel beside the ball",
-      "Visible experience item is not passed: assistant-screenshot-translate",
-      "Visible experience item has no artifact path: assistant-screenshot-translate",
-      "Visible experience item has no screenshot or recording artifact: assistant-screenshot-translate",
-      "Visible experience item is missing required evidence check: assistant-screenshot-translate -> Clipboard image translation starts from the Assistant Voice Panel",
-      "Visible experience item is missing required evidence check: assistant-screenshot-translate -> The Assistant action reads the current clipboard image instead of initiating screen capture",
-      "Visible experience item is missing required evidence check: assistant-screenshot-translate -> Translated clipboard image result appears in the image translation pin window or detached widget",
-      "Visible experience item is missing required evidence check: assistant-screenshot-translate -> Empty clipboard image and provider fallback remain visible and recoverable",
       "Visible experience item is not passed: workflow-use-model-review-queue",
       "Visible experience item has no artifact path: workflow-use-model-review-queue",
       "Visible experience item has no screenshot or recording artifact: workflow-use-model-review-queue",
