@@ -562,12 +562,33 @@ function resolveHighRiskFlowAction(query) {
   return HIGH_RISK_FLOW_ACTIONS.find(action => matchesAnyPattern(text, action.patterns)) || null
 }
 
+function isCleanupFlowAction(action) {
+  return /^quickops\.(?:stop|reset)-/.test(action?.targetId || '')
+}
+
+function isScreenCleanFlowAction(action) {
+  return action?.targetId === 'quickops.clean-screen' || action?.targetId === 'quickops.stop-clean-screen'
+}
+
+function buildFlowVisualContract(action) {
+  if (!isScreenCleanFlowAction(action))
+    return undefined
+
+  return {
+    id: 'quickops-screen-clean-visual',
+    kind: 'screen-clean-overlay',
+    requiresVisualArtifact: true,
+  }
+}
+
 function buildFlowPayload(action) {
   return {
     type: 'json',
     data: {
       action: action.id,
       targetId: action.targetId,
+      cleanup: isCleanupFlowAction(action),
+      statefulRuntime: true,
     },
     context: {
       sourcePluginId: QUICKOPS_FLOW_SENDER_ID,
@@ -584,6 +605,7 @@ function buildFlowDispatchOptions(action) {
 }
 
 function buildFlowActionItem(featureId, action, query) {
+  const visualContract = buildFlowVisualContract(action)
   const payload = {
     actionId: action.id,
     targetId: action.targetId,
@@ -607,9 +629,12 @@ function buildFlowActionItem(featureId, action, query) {
       runtimeBoundary: 'official-plugin',
       quickOpsMigrationShell: true,
       mode: 'flow-action',
+      cleanup: isCleanupFlowAction(action),
+      statefulRuntime: true,
       defaultAction: FLOW_ACTION_ID,
       actionId: FLOW_ACTION_ID,
       flowTargetId: action.targetId,
+      ...(visualContract ? { visualContract } : {}),
       payload,
       flowAdapterTrace: {
         ...flowAdapterTrace,
@@ -621,6 +646,7 @@ function buildFlowActionItem(featureId, action, query) {
 }
 
 function buildConfirmationRequiredItems(featureId, action, query) {
+  const visualContract = buildFlowVisualContract(action)
   const flowAdapterTrace = buildFlowAdapterTrace(
     query,
     action,
@@ -637,6 +663,7 @@ function buildConfirmationRequiredItems(featureId, action, query) {
       meta: {
         mode: 'confirmation-required',
         flowTargetId: action.targetId,
+        ...(visualContract ? { visualContract } : {}),
         requiresConfirmation: true,
         flowAdapterTrace: {
           ...flowAdapterTrace,
@@ -781,6 +808,23 @@ function buildCapabilityItems(featureId, response) {
   return items
 }
 
+function buildPomodoroTemplateSummary(diagnostics = {}) {
+  const focusMs = Number(diagnostics.defaultPomodoroFocusMs) || 0
+  const breakMs = Number(diagnostics.defaultPomodoroBreakMs) || 0
+  if (focusMs <= 0 || breakMs <= 0)
+    return null
+
+  return {
+    id: 'default-focus-break',
+    title: '默认专注 / 休息',
+    focusMs,
+    breakMs,
+    cycles: 1,
+    advancedLoop: false,
+    state: 'read-only',
+  }
+}
+
 function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) {
   const diagnostics = diagnosticsResponse?.diagnostics
   const entries = Array.isArray(capabilityResponse?.entries) ? capabilityResponse.entries : []
@@ -817,6 +861,7 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
   ]
 
   if (diagnostics) {
+    const pomodoroTemplate = buildPomodoroTemplateSummary(diagnostics)
     items.push(buildInfoItem({
       featureId,
       id: 'settings-defaults',
@@ -836,6 +881,12 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
           pomodoroBreakMs: diagnostics.defaultPomodoroBreakMs,
           screenCleanMs: diagnostics.defaultScreenCleanDurationMs,
         },
+        ...(pomodoroTemplate
+          ? {
+              pomodoroTemplates: [pomodoroTemplate],
+              pomodoroAdvancedLoopState: 'pending-host-capability',
+            }
+          : {}),
       },
     }))
   }
@@ -1651,6 +1702,7 @@ module.exports = {
     buildSettingsItems,
     extractFilesFromQuery,
     buildFlowActionItem,
+    isCleanupFlowAction,
     buildConfirmationRequiredItems,
     buildHighRiskBlockedItems,
     buildFlowAdapterTrace,

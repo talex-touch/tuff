@@ -89,6 +89,7 @@ const {
   buildFlowAdapterTrace,
   buildResultItems,
   extractFilesFromQuery,
+  isCleanupFlowAction,
   resolveConfirmationFlowAction,
   resolveHighRiskFlowAction,
   resolveMode,
@@ -197,16 +198,21 @@ test('buildResultItems renders safe state actions as plugin Flow dispatch items'
   assert.equal(resolveSafeFlowAction('stop timer').targetId, 'quickops.stop-timer')
   assert.equal(resolveSafeFlowAction('暂停番茄钟').targetId, 'quickops.pause-pomodoro')
   assert.equal(resolveSafeFlowAction('reset stopwatch').targetId, 'quickops.reset-stopwatch')
+  assert.equal(isCleanupFlowAction(resolveSafeFlowAction('stop timer')), true)
+  assert.equal(isCleanupFlowAction(resolveSafeFlowAction('pause timer')), false)
 
-  const items = await buildResultItems('quickops', 'stop timer', {})
+  const items = await buildResultItems('quickops', 'stop timer secret payload', {})
 
   assert.equal(items.length, 1)
   assert.equal(items[0].title, '停止计时器')
   assert.equal(items[0].meta.mode, 'flow-action')
+  assert.equal(items[0].meta.cleanup, true)
+  assert.equal(items[0].meta.statefulRuntime, true)
   assert.equal(items[0].meta.defaultAction, 'quickops-flow-action')
   assert.equal(items[0].meta.flowTargetId, 'quickops.stop-timer')
+  assert.equal(items[0].meta.visualContract, undefined)
   assert.deepEqual(items[0].meta.flowAdapterTrace, {
-    requestHash: buildFlowAdapterTrace('stop timer', { targetId: 'quickops.stop-timer' }, 'not-required', 'dispatch-plan').requestHash,
+    requestHash: buildFlowAdapterTrace('stop timer secret payload', { targetId: 'quickops.stop-timer' }, 'not-required', 'dispatch-plan').requestHash,
     targetId: 'quickops.stop-timer',
     confirmation: 'not-required',
     result: 'dispatch-plan',
@@ -224,12 +230,30 @@ test('buildResultItems renders safe state actions as plugin Flow dispatch items'
     data: {
       action: 'stop-timer',
       targetId: 'quickops.stop-timer',
+      cleanup: true,
+      statefulRuntime: true,
     },
     context: {
       sourcePluginId: 'touch-quickops',
     },
   })
+  assert.doesNotMatch(JSON.stringify(items[0].meta.payload.payload), /secret payload/)
   assert.equal(items[0].actions.length, 1)
+})
+
+test('buildResultItems marks screen-clean flow actions with the visual evidence contract', async () => {
+  const items = await buildResultItems('quickops', 'stop clean screen', {})
+
+  assert.equal(items.length, 1)
+  assert.equal(items[0].meta.mode, 'flow-action')
+  assert.equal(items[0].meta.flowTargetId, 'quickops.stop-clean-screen')
+  assert.deepEqual(items[0].meta.visualContract, {
+    id: 'quickops-screen-clean-visual',
+    kind: 'screen-clean-overlay',
+    requiresVisualArtifact: true,
+  })
+  assert.equal(items[0].meta.payload.payload.data.cleanup, true)
+  assert.equal(items[0].meta.payload.payload.data.statefulRuntime, true)
 })
 
 test('buildResultItems blocks confirmation-only actions in plugin shell', async () => {
@@ -247,6 +271,21 @@ test('buildResultItems blocks confirmation-only actions in plugin shell', async 
   assert.equal(items[0].meta.flowAdapterTrace.sensitivePayloadRedacted, true)
   assert.doesNotMatch(JSON.stringify(items[0].meta.flowAdapterTrace), /secret payload/)
   assert.match(items[0].subtitle, /confirmationToken/)
+  assert.equal(items[0].actions.length, 0)
+})
+
+test('buildResultItems preserves screen-clean visual contract when confirmation is required', async () => {
+  const items = await buildResultItems('quickops', 'start clean screen', {})
+
+  assert.equal(items.length, 1)
+  assert.equal(items[0].meta.mode, 'confirmation-required')
+  assert.equal(items[0].meta.flowTargetId, 'quickops.clean-screen')
+  assert.equal(items[0].meta.requiresConfirmation, true)
+  assert.deepEqual(items[0].meta.visualContract, {
+    id: 'quickops-screen-clean-visual',
+    kind: 'screen-clean-overlay',
+    requiresVisualArtifact: true,
+  })
   assert.equal(items[0].actions.length, 0)
 })
 
@@ -364,6 +403,18 @@ test('buildResultItems renders plugin-owned QuickOps settings summary read-only'
   assert.match(items[1].subtitle, /stateful-tools-disabled-by-policy/)
   assert.equal(items[2].title, 'QuickOps 默认参数摘要')
   assert.match(items[2].subtitle, /keepAwake 1h 0m/)
+  assert.deepEqual(items[2].meta.pomodoroTemplates, [
+    {
+      id: 'default-focus-break',
+      title: '默认专注 / 休息',
+      focusMs: 25 * 60 * 1000,
+      breakMs: 5 * 60 * 1000,
+      cycles: 1,
+      advancedLoop: false,
+      state: 'read-only',
+    },
+  ])
+  assert.equal(items[2].meta.pomodoroAdvancedLoopState, 'pending-host-capability')
   assert.equal(items[3].meta.privateIpcFallback, false)
   assert.equal(items.every(item => item.actions.length === 0), true)
 })
@@ -496,7 +547,12 @@ test('onItemAction dispatches safe QuickOps Flow action', async () => {
           targetId: 'quickops.stop-timer',
           payload: {
             type: 'json',
-            data: { action: 'stop-timer', targetId: 'quickops.stop-timer' },
+            data: {
+              action: 'stop-timer',
+              targetId: 'quickops.stop-timer',
+              cleanup: true,
+              statefulRuntime: true,
+            },
             context: { sourcePluginId: 'touch-quickops' },
           },
           options: {
@@ -512,7 +568,12 @@ test('onItemAction dispatches safe QuickOps Flow action', async () => {
       {
         payload: {
           type: 'json',
-          data: { action: 'stop-timer', targetId: 'quickops.stop-timer' },
+          data: {
+            action: 'stop-timer',
+            targetId: 'quickops.stop-timer',
+            cleanup: true,
+            statefulRuntime: true,
+          },
           context: { sourcePluginId: 'touch-quickops' },
         },
         options: {
