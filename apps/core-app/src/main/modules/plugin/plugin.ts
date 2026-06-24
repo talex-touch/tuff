@@ -1,4 +1,5 @@
 import type { ITuffIcon, TuffQuery } from '@talex-touch/utils'
+import type { LocalizedTextValue } from '@talex-touch/utils/i18n'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
@@ -436,6 +437,9 @@ export class TouchPlugin implements ITouchPlugin {
 
   dev: IPluginDev
   name: string
+  displayName?: string
+  localizedName?: LocalizedTextValue
+  localizedDescription?: LocalizedTextValue
   readme: string
   version: string
   desc: string
@@ -464,6 +468,7 @@ export class TouchPlugin implements ITouchPlugin {
     required: string[]
     optional: string[]
     reasons: Record<string, string>
+    localizedReasons?: Record<string, LocalizedTextValue>
   }
   loadState: PluginLoadState = 'ready'
   loadError?: PluginLoadError
@@ -512,6 +517,9 @@ export class TouchPlugin implements ITouchPlugin {
   toJSONObject(): object {
     return {
       name: this.name,
+      displayName: this.displayName,
+      localizedName: this.localizedName,
+      localizedDescription: this.localizedDescription,
       readme: this.readme,
       version: this.version,
       desc: this.desc,
@@ -555,7 +563,10 @@ export class TouchPlugin implements ITouchPlugin {
         ? {
             required: [...this.declaredPermissions.required],
             optional: [...this.declaredPermissions.optional],
-            reasons: { ...this.declaredPermissions.reasons }
+            reasons: { ...this.declaredPermissions.reasons },
+            localizedReasons: this.declaredPermissions.localizedReasons
+              ? { ...this.declaredPermissions.localizedReasons }
+              : undefined
           }
         : undefined,
       features: this.features
@@ -2306,8 +2317,11 @@ export class TouchPlugin implements ITouchPlugin {
       getInfo: () => {
         return {
           name: this.name,
+          displayName: this.displayName,
           version: this.version,
           desc: this.desc,
+          localizedName: this.localizedName,
+          localizedDescription: this.localizedDescription,
           readme: this.readme,
           dev: this.dev,
           status: this.status,

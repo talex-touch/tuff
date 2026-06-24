@@ -19,13 +19,17 @@ interface PluginManifest {
     required?: string[]
     optional?: string[]
   }
-  permissionReasons?: Record<string, string>
+  permissionReasons?: Record<string, string | { default: string }>
   features?: Array<{
     id: string
     push?: boolean
   }>
   searchProviders?: Array<Record<string, unknown>>
   indexedSources?: Array<Record<string, unknown>>
+}
+
+function defaultManifestText(value: string | { default: string } | undefined): string {
+  return typeof value === 'string' ? value : value?.default ?? ''
 }
 
 interface LoadedManifest {
@@ -97,7 +101,7 @@ describe('official plugin manifest trust boundary', () => {
     for (const { manifest } of manifests) {
       for (const permissionId of declaredPermissionIds(manifest)) {
         expect(
-          manifest.permissionReasons?.[permissionId]?.trim(),
+          defaultManifestText(manifest.permissionReasons?.[permissionId]).trim(),
           `${manifest.name} permission reason for ${permissionId}`,
         ).toBeTruthy()
       }
@@ -173,7 +177,7 @@ describe('official plugin manifest trust boundary', () => {
 
     for (const { manifest } of manifests.filter(({ manifest }) => declaredPermissionIds(manifest).includes('system.shell'))) {
       const declaredPermissions = declaredPermissionIds(manifest)
-      expect(manifest.permissionReasons?.['system.shell']?.trim(), `${manifest.name} shell reason`).toBeTruthy()
+      expect(defaultManifestText(manifest.permissionReasons?.['system.shell']).trim(), `${manifest.name} shell reason`).toBeTruthy()
 
       for (const provider of manifest.searchProviders ?? []) {
         const permissionScopes = provider.permissionScopes as Parameters<typeof resolveSearchProviderPermissionIds>[0]

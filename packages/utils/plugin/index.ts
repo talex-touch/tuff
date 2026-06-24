@@ -1,4 +1,5 @@
 import type { FSWatcher } from 'chokidar'
+import type { LocalizedListValue, LocalizedTextValue } from '../i18n'
 import type {
   ManifestPermissionReasons,
   ManifestPermissions,
@@ -80,6 +81,18 @@ export type IPlatform = {
 
 export interface IPluginBaseInfo {
   name: string
+  /**
+   * User-facing plugin name resolved from manifest display metadata.
+   */
+  displayName?: string
+  /**
+   * Raw localized display metadata from manifest.
+   */
+  localizedName?: LocalizedTextValue
+  /**
+   * Raw localized description metadata from manifest.
+   */
+  localizedDescription?: LocalizedTextValue
   readme: string
   version: string
   desc: string
@@ -144,6 +157,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
     required: string[]
     optional: string[]
     reasons: Record<string, string>
+    localizedReasons?: ManifestPermissionReasons
   }
   loadState?: 'loading' | 'ready' | 'load_failed'
   loadError?: {
@@ -548,10 +562,13 @@ export interface IManifest {
    */
   id?: string
   /**
-   * Display name of the plugin.
-   * This is the human-readable name shown to users.
+   * Stable plugin identifier. Localized display names should use `displayName`.
    */
   name: string
+  /**
+   * Optional localized display name shown to users.
+   */
+  displayName?: LocalizedTextValue
   /**
    * Version of the plugin, following semantic versioning (e.g., "1.0.0").
    */
@@ -581,7 +598,7 @@ export interface IManifest {
   /**
    * Short description of the plugin's functionality.
    */
-  description: string
+  description: LocalizedTextValue
   /**
    * Author of the plugin, typically a name or email.
    */
@@ -600,7 +617,7 @@ export interface IManifest {
    * Optional keywords for activating the plugin, e.g., for search or command matching.
    * These keywords help users discover and launch the plugin.
    */
-  activationKeywords?: string[]
+  activationKeywords?: LocalizedListValue
   /**
    * Optional supported runtime platforms declared by the manifest.
    */

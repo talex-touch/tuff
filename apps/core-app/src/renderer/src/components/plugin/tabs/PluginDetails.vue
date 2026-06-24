@@ -68,7 +68,9 @@ const pluginDescription = computed(
 )
 
 const pluginId = computed(() => pickString('id') || pickString('pluginId') || plugin.value.name)
-const pluginName = computed(() => pickString('name') || plugin.value.name)
+const pluginName = computed(
+  () => plugin.value.displayName || pickString('name') || plugin.value.name
+)
 const hasDevSettings = computed(() => Boolean(plugin.value.dev?.enable))
 const isAppDev = computed(() => startupInfo.value?.isDev === true)
 const canViewManifestJson = computed(() => hasDevSettings.value || isAppDev.value)

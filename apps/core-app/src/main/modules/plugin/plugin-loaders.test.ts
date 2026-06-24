@@ -37,6 +37,9 @@ vi.mock('../../core/tuff-icon', () => ({
 vi.mock('./plugin', () => ({
   TouchPlugin: class {
     name: string
+    displayName?: string
+    localizedName?: unknown
+    localizedDescription?: unknown
     icon: unknown
     version: string
     desc: string
@@ -47,6 +50,12 @@ vi.mock('./plugin', () => ({
     features: unknown[]
     searchProviders?: unknown[]
     indexedSources?: unknown[]
+    declaredPermissions?: {
+      required: string[]
+      optional: string[]
+      reasons: Record<string, string>
+      localizedReasons?: Record<string, unknown>
+    }
     loadState: string
     loadError?: { code: string; message: string }
     creationOptions?: { skipDataInit?: boolean }
@@ -294,6 +303,80 @@ describe('createPluginLoader', () => {
       ]
     })
     expect(plugin.build).not.toHaveProperty('internalOnly')
+  })
+
+  it('resolves localized manifest metadata for runtime display without changing plugin id', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      displayName: {
+        default: 'Translation',
+        locales: {
+          'zh-CN': '翻译'
+        }
+      },
+      version: '1.0.0',
+      description: {
+        default: 'Translate text',
+        locales: {
+          'zh-CN': '翻译文本'
+        }
+      },
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['search.root-results'],
+        optional: []
+      },
+      permissionReasons: {
+        'search.root-results': {
+          default: 'Show translation results',
+          locales: {
+            'zh-CN': '显示翻译结果'
+          }
+        }
+      },
+      features: [
+        {
+          id: 'translate',
+          name: {
+            default: 'Translate',
+            locales: {
+              'zh-CN': '翻译'
+            }
+          },
+          desc: {
+            default: 'Translate selected text',
+            locales: {
+              'zh-CN': '翻译选中文本'
+            }
+          },
+          icon: { type: 'emoji', value: 'x' },
+          keywords: {
+            default: ['translate'],
+            locales: {
+              'zh-CN': ['翻译']
+            }
+          },
+          push: true,
+          platform: { darwin: true, win32: true, linux: true },
+          commands: []
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+
+    expect(plugin.name).toBe('touch-translation')
+    expect(plugin.displayName).toBe('翻译')
+    expect(plugin.desc).toBe('翻译文本')
+    expect(plugin.declaredPermissions?.reasons).toMatchObject({
+      'search.root-results': '显示翻译结果'
+    })
+    expect(plugin.searchProviders?.[0]).toMatchObject({
+      displayName: '翻译'
+    })
   })
 
   it('keeps valid manifest search provider descriptors on plugin state', async () => {

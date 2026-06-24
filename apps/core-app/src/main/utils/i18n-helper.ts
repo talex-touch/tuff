@@ -4,6 +4,7 @@
  */
 
 import { app } from 'electron'
+import { type AppLocale, normalizeLocale } from '@talex-touch/utils/i18n'
 import enUS from '../../renderer/src/modules/lang/en-US.json'
 import zhCN from '../../renderer/src/modules/lang/zh-CN.json'
 import { createLogger } from './logger'
@@ -14,7 +15,7 @@ type TranslationKey = string
 /**
  * Available locales
  */
-export type Locale = 'zh-CN' | 'en-US'
+export type Locale = AppLocale
 
 /**
  * Translation messages by locale
@@ -43,13 +44,7 @@ export function initI18n(): void {
  * Resolve system locale to supported locale
  */
 function resolveLocale(locale: string): Locale {
-  const normalized = locale.replace('_', '-').toLowerCase()
-
-  if (normalized.startsWith('zh')) {
-    return 'zh-CN'
-  }
-
-  return 'en-US'
+  return normalizeLocale(locale) ?? 'en-US'
 }
 
 /**

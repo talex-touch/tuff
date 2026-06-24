@@ -1,4 +1,5 @@
 import type { ITuffIcon, ManifestDivisionBoxConfig } from '@talex-touch/utils'
+import type { AppLocale, LocalizedListValue, LocalizedTextValue } from '@talex-touch/utils/i18n'
 import type { ManifestPermissionReasons, ManifestPermissions } from '@talex-touch/utils/permission'
 import type {
   IPluginBuildInfo,
@@ -15,6 +16,13 @@ import type {
   SearchProviderManifestDescriptor
 } from '@talex-touch/utils/search'
 import path from 'node:path'
+import {
+  isLocalizedList,
+  isLocalizedText,
+  normalizeLocale,
+  resolveLocalizedList,
+  resolveLocalizedText
+} from '@talex-touch/utils/i18n'
 import {
   generatePermissionIssue,
   getPluginPermissionStatus,
@@ -35,6 +43,7 @@ import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
 import { getNetworkService } from '../network'
+import { getLocale } from '../../utils/i18n-helper'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
@@ -44,9 +53,11 @@ import { getPluginSdkHardCutGate, SDKAPI_BLOCKED_CODE } from './sdkapi-hard-cut-
  * Plugin manifest structure from manifest.json
  */
 interface PluginManifest {
-  name: string
+  id?: string
+  name: string | LocalizedTextValue
+  displayName?: LocalizedTextValue
   version: string
-  description: string
+  description: LocalizedTextValue
   /**
    * Category id synced with Nexus (e.g., 'utilities', 'productivity').
    */
@@ -55,7 +66,7 @@ interface PluginManifest {
   dev?: IPluginDev
   build?: IPluginBuildInfo
   platforms?: Record<string, boolean>
-  features?: IPluginFeature[]
+  features?: LocalizedPluginFeature[]
   searchProviders?: SearchProviderManifestDescriptor[]
   indexedSources?: IndexedSourceManifestDescriptor[]
   divisionBox?: ManifestDivisionBoxConfig
@@ -72,6 +83,83 @@ interface PluginManifest {
    * Permission reasons for user display
    */
   permissionReasons?: ManifestPermissionReasons
+}
+
+type LocalizedPluginFeature = Omit<IPluginFeature, 'name' | 'desc' | 'keywords'> & {
+  name: LocalizedTextValue
+  desc: LocalizedTextValue
+  keywords?: LocalizedListValue
+}
+
+function getCurrentAppLocale(): AppLocale {
+  return normalizeLocale(getLocale()) ?? 'en-US'
+}
+
+function resolveManifestPluginName(pluginInfo: PluginManifest, fallbackName: string): string {
+  if (typeof pluginInfo.name === 'string' && pluginInfo.name.trim()) {
+    return pluginInfo.name.trim()
+  }
+
+  if (typeof pluginInfo.id === 'string' && pluginInfo.id.trim()) {
+    return pluginInfo.id.trim()
+  }
+
+  return fallbackName
+}
+
+function resolveManifestDisplayName(pluginInfo: PluginManifest, locale: AppLocale): string {
+  const value = pluginInfo.displayName ?? pluginInfo.name
+  if (typeof value === 'string') {
+    return value.trim() || resolveManifestPluginName(pluginInfo, '')
+  }
+  if (isLocalizedText(value)) {
+    return resolveLocalizedText(value, locale)
+  }
+  return resolveManifestPluginName(pluginInfo, '')
+}
+
+function resolveManifestDescription(pluginInfo: PluginManifest, locale: AppLocale): string {
+  const value = pluginInfo.description
+  if (typeof value === 'string') {
+    return value || 'No description.'
+  }
+  if (isLocalizedText(value)) {
+    return resolveLocalizedText(value, locale)
+  }
+  return 'No description.'
+}
+
+function resolveManifestPermissionReasons(
+  reasons: ManifestPermissionReasons | undefined,
+  locale: AppLocale
+): Record<string, string> {
+  const resolved: Record<string, string> = {}
+  for (const [permissionId, reason] of Object.entries(reasons ?? {})) {
+    resolved[permissionId] = isLocalizedText(reason) ? resolveLocalizedText(reason, locale) : reason
+  }
+  return resolved
+}
+
+function resolveManifestFeature(
+  feature: LocalizedPluginFeature,
+  locale: AppLocale
+): IPluginFeature {
+  const name = isLocalizedText(feature.name)
+    ? resolveLocalizedText(feature.name, locale)
+    : feature.name
+  const desc = isLocalizedText(feature.desc)
+    ? resolveLocalizedText(feature.desc, locale)
+    : feature.desc
+  const keywords = isLocalizedList(feature.keywords)
+    ? resolveLocalizedList(feature.keywords, locale)
+    : feature.keywords
+
+  return {
+    ...feature,
+    name,
+    desc,
+    keywords
+  }
 }
 
 /**
@@ -99,20 +187,33 @@ abstract class BasePluginLoader {
    * @param pluginInfo - Plugin manifest data
    */
   protected async loadCommon(pluginInfo: PluginManifest): Promise<void> {
-    if (pluginInfo.name !== this.pluginName) {
+    const locale = getCurrentAppLocale()
+    const manifestPluginName = resolveManifestPluginName(pluginInfo, this.pluginName)
+    const manifestDisplayName = resolveManifestDisplayName(pluginInfo, locale)
+    const manifestDescription = resolveManifestDescription(pluginInfo, locale)
+    const localizedName =
+      pluginInfo.displayName ?? (isLocalizedText(pluginInfo.name) ? pluginInfo.name : undefined)
+    const localizedDescription = isLocalizedText(pluginInfo.description)
+      ? pluginInfo.description
+      : undefined
+    const resolvedFeatures = pluginInfo.features?.map((feature) =>
+      resolveManifestFeature(feature, locale)
+    )
+
+    if (manifestPluginName !== this.pluginName) {
       this.touchPlugin.issues.push({
         type: 'error',
-        message: `Plugin name in manifest ('${pluginInfo.name}') does not match directory name ('${this.pluginName}').`,
+        message: `Plugin name in manifest ('${manifestPluginName}') does not match directory name ('${this.pluginName}').`,
         source: 'manifest.json',
         code: 'NAME_MISMATCH',
         suggestion: 'Ensure the plugin directory name matches the "name" field in manifest.json.',
-        meta: { expected: this.pluginName, actual: pluginInfo.name },
+        meta: { expected: this.pluginName, actual: manifestPluginName },
         timestamp: Date.now()
       })
     }
 
     // B.3: Validate required manifest fields
-    if (!pluginInfo.name) {
+    if (!manifestPluginName) {
       this.touchPlugin.issues.push({
         type: 'error',
         message: 'Missing required "name" field in manifest.json.',
@@ -131,9 +232,12 @@ abstract class BasePluginLoader {
       })
     }
 
-    this.touchPlugin.name = pluginInfo.name || this.pluginName
+    this.touchPlugin.name = manifestPluginName || this.pluginName
+    this.touchPlugin.displayName = manifestDisplayName || this.touchPlugin.name
+    this.touchPlugin.localizedName = localizedName
+    this.touchPlugin.localizedDescription = localizedDescription
     this.touchPlugin.version = pluginInfo.version || '0.0.0'
-    this.touchPlugin.desc = pluginInfo.description || 'No description.'
+    this.touchPlugin.desc = manifestDescription
     const rawDevConfig = pluginInfo.dev || { enable: false, address: '', source: false }
     const normalizedDevConfig: IPluginDev = {
       enable: rawDevConfig.enable === true,
@@ -233,17 +337,22 @@ abstract class BasePluginLoader {
       permissions: pluginInfo.permissions,
       permissionReasons: pluginInfo.permissionReasons
     })
+    const resolvedPermissionReasons = resolveManifestPermissionReasons(
+      parsedPermissions.reasons,
+      locale
+    )
 
     // Store permission info on plugin for later reference (use copies to avoid circular refs)
     this.touchPlugin.declaredPermissions = {
       required: [...parsedPermissions.required],
       optional: [...parsedPermissions.optional],
-      reasons: { ...parsedPermissions.reasons }
+      reasons: resolvedPermissionReasons,
+      localizedReasons: { ...parsedPermissions.reasons }
     }
 
     this.touchPlugin.searchProviders = this.resolveSearchProviders(
       pluginInfo.searchProviders,
-      pluginInfo.features,
+      resolvedFeatures,
       parsedPermissions
     )
     this.touchPlugin.indexedSources = this.resolveIndexedSources(
@@ -311,9 +420,9 @@ abstract class BasePluginLoader {
 
     if (sdkBlocked) return
 
-    if (pluginInfo.features) {
+    if (resolvedFeatures) {
       const iconInitPromises: Promise<void>[] = []
-      ;[...pluginInfo.features].forEach((feature: IPluginFeature) => {
+      ;[...resolvedFeatures].forEach((feature: IPluginFeature) => {
         if (
           feature.omniTransfer?.enabled === true &&
           (resolvedSdkapi === undefined || resolvedSdkapi < OMNI_TRANSFER_DECLARATIVE_MIN_VERSION)

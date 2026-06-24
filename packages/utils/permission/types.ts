@@ -1,3 +1,5 @@
+import type { LocalizedTextValue } from '../i18n'
+
 /**
  * Permission System Types
  *
@@ -169,4 +171,4 @@ export interface ManifestPermissions {
 /**
  * Permission reasons in manifest
  */
-export type ManifestPermissionReasons = Record<string, string>
+export type ManifestPermissionReasons = Record<string, LocalizedTextValue>

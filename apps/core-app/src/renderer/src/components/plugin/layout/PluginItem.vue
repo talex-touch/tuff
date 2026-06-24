@@ -16,6 +16,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
+const pluginDisplayName = computed(() => props.plugin.displayName || props.plugin.name)
 const pluginSummary = computed(() => {
   if (props.plugin.loadState === 'loading') {
     return t('plugin.summary.loading')
@@ -93,7 +94,7 @@ const pluginIconStyle = {
       class="PluginItem-Icon flex-shrink-0"
       :empty="DefaultIcon"
       :icon="plugin.icon"
-      :alt="plugin.name"
+      :alt="pluginDisplayName"
       :colorful="shouldPreservePluginIconColor"
       :size="32"
       :style="pluginIconStyle"
@@ -101,7 +102,7 @@ const pluginIconStyle = {
 
     <div class="main-content flex-1 ml-4 flex flex-col justify-center overflow-hidden">
       <p class="font-semibold text-base truncate">
-        {{ plugin.name }}
+        {{ pluginDisplayName }}
       </p>
 
       <p class="text-xs text-gray-400 mt-1 truncate">
