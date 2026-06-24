@@ -203,6 +203,10 @@ export class WidgetLoader {
     return this.cache.get(widgetId)
   }
 
+  invalidateWidget(widgetId: string): void {
+    this.cache.delete(widgetId)
+  }
+
   private resolveRemoteWidgetUrl(devAddress: string, rawPath: string): string | null {
     const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '')
     if (!normalized) {

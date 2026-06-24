@@ -60,6 +60,7 @@ import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
+import { getNetworkService } from '../network'
 import { getPermissionModule } from '../permission'
 import {
   getSecureStoreHealth,
@@ -1814,6 +1815,7 @@ export class PluginModule extends BaseModule {
   healthMonitor?: DevServerHealthMonitor
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
+  private networkStatusCleanup: (() => void) | null = null
   private pluginSqliteClients = new Map<string, Client>()
   private secureStoreRootPath = ''
 
@@ -1847,6 +1849,15 @@ export class PluginModule extends BaseModule {
     this.pluginManager = pluginRuntime.pluginManager
     this.installQueue = pluginRuntime.installQueue
     this.healthMonitor = pluginRuntime.healthMonitor
+
+    if (!this.networkStatusCleanup) {
+      this.networkStatusCleanup = getNetworkService().onStatusChange((status) => {
+        if (!status.online) {
+          return
+        }
+        void this.refreshRemoteWidgetsAfterNetworkRecovery()
+      })
+    }
 
     // Listen for permission granted events to retry enabling plugins
     touchEventBus.on(TalexEvents.PERMISSION_GRANTED, (event) => {
@@ -1891,6 +1902,8 @@ export class PluginModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    this.networkStatusCleanup?.()
+    this.networkStatusCleanup = null
     for (const disposer of this.transportDisposers) {
       try {
         disposer()
@@ -1910,6 +1923,42 @@ export class PluginModule extends BaseModule {
     this.pluginManager?.plugins.forEach((plugin) => plugin.disable())
     this.healthMonitor?.destroy()
     stopUpdateScheduler()
+  }
+
+  private async refreshRemoteWidgetsAfterNetworkRecovery(): Promise<void> {
+    const manager = this.pluginManager
+    if (!manager) {
+      return
+    }
+
+    const runnableStatuses = new Set<PluginStatus>([
+      PluginStatus.ENABLED,
+      PluginStatus.ACTIVE,
+      PluginStatus.LOADED
+    ])
+
+    for (const plugin of manager.plugins.values()) {
+      if (!plugin.dev?.enable || !plugin.dev?.source || !runnableStatuses.has(plugin.status)) {
+        continue
+      }
+
+      for (const feature of plugin.features) {
+        if (!isWidgetFeatureEnabled(plugin, feature)) {
+          continue
+        }
+        if (feature.interaction?.type !== 'widget' || !feature.interaction.path) {
+          continue
+        }
+        try {
+          await widgetManager.refreshRemoteWidget(plugin, feature)
+        } catch (error) {
+          plugin.logger.warn(
+            `[Widget] Remote widget refresh failed after network recovery: ${feature.id}`,
+            error as Error
+          )
+        }
+      }
+    }
   }
 
   /**
