@@ -16,6 +16,34 @@ The CoreBox search system provides powerful matching capabilities:
 ## Introduction
 Search matching combines Feature metadata, keywords, and clipboard inputs to drive ranking and highlights in CoreBox.
 
+## SemanticAliasSDK
+
+Recognition marker: **App Semantic Alias Catalog / 应用语义别名目录**. Starting with `sdkapi: 260626`, developers can import `SemanticAliasSDK` helpers from `@talex-touch/utils/plugin/sdk` or `@talex-touch/utils/search` to normalize short aliases, category terms, Chinese/English synonyms, and common abbreviations before merging them into existing `keywords`, `searchTokens`, or provider write paths.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { buildSemanticAliasPayload } from '@talex-touch/utils/plugin/sdk'
+
+  const semantic = buildSemanticAliasPayload({
+    existingKeywords: ['todo'],
+    aliases: ['td'],
+    categories: ['office', '办公'],
+    synonyms: ['待办', '任务'],
+  })
+
+  export const feature = {
+    id: 'todo.new',
+    name: 'Create Todo',
+    desc: 'Create a local todo from input text',
+    keywords: semantic.keywords,
+    searchTokens: semantic.searchTokens,
+  }
+---
+:::
+
+This SDK is a pure declaration/normalization helper. It does not auto-register providers, scan local applications, open external links, or change the SQLite schema. The built-in CoreApp app catalog uses the same alias token source, so `matchAlias`, highlighting, and ranking explanations stay aligned.
+
 ## Indexed Source Types
 
 `@talex-touch/utils/search` also exports shared types for local indexed search sources. They describe the lifecycle of App, File, Everything, Browser Data, Quicklinks, and similar sources; they do not replace CoreBox Feature matching.

@@ -7,7 +7,7 @@
 | `name` | string or map | ✓ | Display name, supports locales |
 | `description` | string |  | Short summary |
 | `version` | string | ✓ | SemVer |
-| `sdkapi` | number | **Recommended** | SDK API version, format YYMMDD (e.g., 260615) |
+| `sdkapi` | number | **Recommended** | SDK API version, format YYMMDD (e.g., 260626) |
 | `category` | string | Conditional | Category id synced with Nexus (e.g., `utilities`, `productivity`) (required when `sdkapi >= 260114`) |
 | `main` | string | ✓ | Prelude script entry, usually `index.js` |
 | `entry` | string | Legacy | Legacy init entry; do not use for new plugins |
@@ -17,22 +17,49 @@
 | `permissionReasons` | object |  | Reasons for permissions |
 | `features[].acceptedInputTypes` | string[] |  | `text`, `image`, `files`, `html` |
 | `features` | object[] |  | CoreBox commands, widgets, workflow nodes |
+| `semanticAliases` | object[] |  | Semantic alias declarations with marker `App Semantic Alias Catalog / 应用语义别名目录` (recommended with `sdkapi >= 260626`) |
 
 ## SDK API Version (sdkapi)
 
 The `sdkapi` field declares the SDK API version the plugin is compatible with. Format is `YYMMDD` (year-month-day).
 
-- **Current version**: `260615` (2026-06-15)
-- **Supported list**: `251212`, `260114`, `260121`, `260215`, `260225`, `260228`, `260428`, `260615`
+- **Current version**: `260626` (2026-06-26)
+- **Supported list**: `251212`, `260114`, `260121`, `260215`, `260225`, `260228`, `260428`, `260615`, `260626`
 - **Not declared, invalid, unsupported, or below 251212**: Blocked by runtime with `SDKAPI_BLOCKED`
 - **251212 ~ 260113**: Full permission enforcement enabled
 - **Equal to or above 260114**: Requires `category` for UI grouping (in addition to 251212 baseline)
 - **Equal to or above 260215**: Can use plugin SQLite SDK (`usePluginSqlite`)
 - **Equal to or above 260228**: Plugin capability auth baseline is enabled
 - **260428**: Supported marker; no additional runtime gate is introduced
-- **260615**: Current recommended marker; no additional runtime gate is introduced
+- **260615**: Supported marker; no additional runtime gate is introduced
+- **260626**: Current recommended marker; exposes `SemanticAliasSDK` and `semanticAliases` declarations without adding a SQLite schema change or extra runtime gate
 
 New plugins should always declare the latest `sdkapi` version for complete permission protection.
+
+## Semantic Aliases (semanticAliases)
+
+Recognition marker: **App Semantic Alias Catalog / 应用语义别名目录**.
+
+`semanticAliases` declares discoverability terms for a plugin, feature, or provider: short aliases, category terms, Chinese/English synonyms, and common abbreviations. It is manifest metadata in V1 so developers can keep aliases in one structure; runtime integration should still write through existing `features[].keywords`, `searchTokens`, or Search Provider paths. It does not automatically add uninstalled apps or external website results.
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260626,
+    "semanticAliases": [
+      {
+        "id": "todo.create",
+        "target": "todo.new",
+        "label": "Create Todo",
+        "aliases": ["todo", "task"],
+        "categories": ["office", "办公"],
+        "synonyms": ["待办", "任务"]
+      }
+    ]
+  }
+---
+:::
 
 ## Permissions
 
@@ -90,7 +117,7 @@ code: |
     },
     "description": "Capture and sync todos",
     "version": "1.3.0",
-    "sdkapi": 260615,
+    "sdkapi": 260626,
     "category": "utilities",
     "main": "index.js",
     "features": [
@@ -98,12 +125,21 @@ code: |
         "id": "todo.new",
         "name": "Create Todo",
         "desc": "Create a local todo from input text",
-        "keywords": ["todo", "task"],
+        "keywords": ["todo", "task", "待办", "任务"],
         "push": true,
         "acceptedInputTypes": ["text", "files"],
         "commands": [
           { "type": "over", "value": ["todo", "task"] }
         ]
+      }
+    ],
+    "semanticAliases": [
+      {
+        "id": "todo.create",
+        "target": "todo.new",
+        "aliases": ["todo", "task"],
+        "categories": ["office", "办公"],
+        "synonyms": ["待办", "任务"]
       }
     ],
     "permissions": {

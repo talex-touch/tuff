@@ -7,7 +7,7 @@
 | `name` | string | 是 | 显示名称，支持本地化 |
 | `description` | string | 否 | 简短介绍 |
 | `version` | string | 是 | 语义化版本 |
-| `sdkapi` | number | **推荐** | SDK API 版本，格式 YYMMDD（如 260615） |
+| `sdkapi` | number | **推荐** | SDK API 版本，格式 YYMMDD（如 260626） |
 | `category` | string | 条件必填 | 分类 ID（与 Nexus 同步，如 `utilities`、`productivity`），用于 UI 分组（`sdkapi >= 260114` 必填） |
 | `main` | string | 是 | 先导脚本入口，通常为 `index.js` |
 | `entry` | string | 旧字段 | 旧版 init 入口；新插件不要继续使用 |
@@ -17,24 +17,51 @@
 | `permissionReasons` | object | 否 | 权限用途说明 |
 | `features[].acceptedInputTypes` | string[] | 否 | `text`、`image`、`files`、`html` |
 | `features` | object[] | 否 | CoreBox 指令、Widget、Workflow 节点 |
+| `semanticAliases` | object[] | 否 | 语义别名声明，识别标记为 `App Semantic Alias Catalog / 应用语义别名目录`（建议 `sdkapi >= 260626`） |
 
 ## SDK API 版本 (sdkapi)
 
 `sdkapi` 字段用于声明插件兼容的 SDK API 版本。格式为 `YYMMDD`（年月日）。
 
-- **当前版本**: `260615` (2026-06-15)
-- **支持列表**: `251212`、`260114`、`260121`、`260215`、`260225`、`260228`、`260428`、`260615`
+- **当前版本**: `260626` (2026-06-26)
+- **支持列表**: `251212`、`260114`、`260121`、`260215`、`260225`、`260228`、`260428`、`260615`、`260626`
 - **未声明、非法、未列入支持列表或低于 251212**: 运行时直接以 `SDKAPI_BLOCKED` 阻断
 - **251212 ~ 260113**: 启用完整权限校验
 - **等于或高于 260114**: 在 251212 基础上，要求声明 `category`（用于 UI 分组）
 - **等于或高于 260215**: 可使用插件 SQLite SDK（`usePluginSqlite`）
 - **等于或高于 260228**: 启用插件 capability auth 基线
 - **260428**: 受支持 marker，不新增额外运行时门槛
-- **260615**: 当前推荐 marker，不新增额外运行时门槛
+- **260615**: 受支持 marker，不新增额外运行时门槛
+- **260626**: 当前推荐 marker，开放 `SemanticAliasSDK` 与 `semanticAliases` 声明，不新增 SQLite schema 或额外运行时门槛
 
 自 `260114` 起：建议补充 `category` 以参与 UI 分组展示；当 `sdkapi >= 260114` 且缺失 `category` 时，插件将被拒绝启动并在列表中标记问题。
 
 建议新插件始终声明最新的 `sdkapi` 版本以获得完整的权限保护。
+
+## 语义别名声明 (semanticAliases)
+
+识别标记：**App Semantic Alias Catalog / 应用语义别名目录**。
+
+`semanticAliases` 用于声明插件、Feature 或 Provider 的可发现语义词，例如短别名、类别词、中文/英文同义词和常见缩写。它是 manifest metadata，首版用于让开发者用统一结构维护别名；真实运行时接入仍应通过现有 `features[].keywords`、`searchTokens` 或 Search Provider 写入路径，不会自动新增未安装应用或外链结果。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260626,
+    "semanticAliases": [
+      {
+        "id": "todo.create",
+        "target": "todo.new",
+        "label": "Create Todo",
+        "aliases": ["todo", "task"],
+        "categories": ["office", "办公"],
+        "synonyms": ["待办", "任务"]
+      }
+    ]
+  }
+---
+:::
 
 ## 权限声明 (permissions)
 
@@ -92,7 +119,7 @@ code: |
     },
     "description": "快速记录与同步待办",
     "version": "1.3.0",
-    "sdkapi": 260615,
+    "sdkapi": 260626,
     "category": "utilities",
     "main": "index.js",
     "features": [
@@ -100,12 +127,21 @@ code: |
         "id": "todo.new",
         "name": "快速创建待办",
         "desc": "从输入文本创建本地待办",
-        "keywords": ["todo", "task"],
+        "keywords": ["todo", "task", "待办", "任务"],
         "push": true,
         "acceptedInputTypes": ["text", "files"],
         "commands": [
           { "type": "over", "value": ["todo", "task"] }
         ]
+      }
+    ],
+    "semanticAliases": [
+      {
+        "id": "todo.create",
+        "target": "todo.new",
+        "aliases": ["todo", "task"],
+        "categories": ["office", "办公"],
+        "synonyms": ["待办", "任务"]
       }
     ],
     "permissions": {

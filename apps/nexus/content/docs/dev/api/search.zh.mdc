@@ -16,6 +16,34 @@ CoreBox 搜索系统提供强大的搜索匹配能力，支持：
 ## 介绍
 搜索匹配由 Feature 的标题、描述、关键词与剪贴板输入组合生成，适合用于构建自定义搜索与高亮 UI。
 
+## SemanticAliasSDK
+
+识别标记：**App Semantic Alias Catalog / 应用语义别名目录**。自 `sdkapi: 260626` 起，开发者可以从 `@talex-touch/utils/plugin/sdk` 或 `@talex-touch/utils/search` 使用 `SemanticAliasSDK`，把短别名、类别词、中文/英文同义词和常见缩写归一后并入现有 `keywords` / `searchTokens` / provider 写入路径。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { buildSemanticAliasPayload } from '@talex-touch/utils/plugin/sdk'
+
+  const semantic = buildSemanticAliasPayload({
+    existingKeywords: ['todo'],
+    aliases: ['td'],
+    categories: ['office', '办公'],
+    synonyms: ['待办', '任务'],
+  })
+
+  export const feature = {
+    id: 'todo.new',
+    name: '快速创建待办',
+    desc: '从输入文本创建本地待办',
+    keywords: semantic.keywords,
+    searchTokens: semantic.searchTokens,
+  }
+---
+:::
+
+该 SDK 是纯声明/归一化工具，不会自动注册 provider、扫描本机应用、打开外链或修改 SQLite schema。CoreApp 内置应用目录也走同一 alias token source，因此 `matchAlias`、高亮和排序解释会保持一致。
+
 ## Indexed Source 类型
 
 `@talex-touch/utils/search` 同时暴露本地索引型搜索源的共享类型。它们用于描述 App、File、Everything、Browser Data、Quicklinks 等 source 的生命周期，不直接替代 CoreBox Feature 搜索。
