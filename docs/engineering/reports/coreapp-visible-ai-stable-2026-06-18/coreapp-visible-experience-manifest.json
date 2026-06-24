@@ -252,10 +252,18 @@
     },
     {
       "id": "provider-migration-evidence",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": ""
+      "status": "passed",
+      "artifactPaths": [
+        "provider-migration-dry-run-2026-06-24.md"
+      ],
+      "checkedEvidence": [
+        "Dry-run or execute migration evidence summary is attached",
+        "Readiness, blockers, migrated/skipped/failed counts are visible",
+        "No provider secret is copied into metadata or evidence text",
+        "Registry-primary readiness is not claimed for dry-run-only evidence"
+      ],
+      "notes": "2026-06-24 Nexus local-only dry-run evidence used the real /api/dashboard/intelligence/providers/migrate handler, migrateLegacyIntelligenceProvidersToRegistry bridge, MockD1Database, and a seeded OpenAI legacy intelligence provider. The summary records mode dry-run, readiness planning, registryPrimaryReady no, total 1, migrated/skipped/failed counts 0/0/0, blockers migration_dry_run_only and migration_not_executed, and the would_create action with secret=unchanged. The dry-run test asserts no provider registry rows or secure-store credential rows are written and that the evidence summary does not include encrypted-local-secret-placeholder or raw API key material. This closes only the migration-evidence artifact requirement and does not claim registry-primary runtime readiness.",
+      "checkedAt": "2026-06-24T00:00:00.000Z"
     }
   ]
 }
