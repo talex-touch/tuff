@@ -167,10 +167,35 @@ function rowToHit(row: KnowledgeRow): KnowledgeSearchHit {
 }
 
 function metadataValueMatches(actual: unknown, expected: string | number | boolean): boolean {
+  if (Array.isArray(actual)) {
+    return actual.some((item) => metadataValueMatches(item, expected))
+  }
+
   return (
     (typeof actual === 'string' || typeof actual === 'number' || typeof actual === 'boolean') &&
     actual === expected
   )
+}
+
+function readMetadataValue(metadata: Record<string, unknown>, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(metadata, key)) {
+    return metadata[key]
+  }
+
+  const parts = key.split('.').filter(Boolean)
+  if (parts.length <= 1) {
+    return undefined
+  }
+
+  let current: unknown = metadata
+  for (const part of parts) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[part]
+  }
+
+  return current
 }
 
 function matchesMetadataFilters(
@@ -184,8 +209,8 @@ function matchesMetadataFilters(
   const chunkMetadata = parseJsonRecord(row.chunk_metadata)
   return entries.every(
     ([key, expected]) =>
-      metadataValueMatches(chunkMetadata[key], expected) ||
-      metadataValueMatches(documentMetadata[key], expected)
+      metadataValueMatches(readMetadataValue(chunkMetadata, key), expected) ||
+      metadataValueMatches(readMetadataValue(documentMetadata, key), expected)
   )
 }
 

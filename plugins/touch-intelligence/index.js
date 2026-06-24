@@ -1,5 +1,6 @@
 const { plugin, clipboard, logger, TuffItemBuilder, permission, touchChannel, intelligence } = globalThis
 const crypto = require('node:crypto')
+
 const AUTH_SESSION_GET_STATE_EVENT = resolveAuthSessionGetStateEvent()
 
 let makeWidgetIdLoader = null
@@ -29,6 +30,7 @@ const ENTRY_ID = 'corebox.ai-ask'
 const WIDGET_ITEM_ID = 'intelligence-widget'
 const HANDOFF_SOURCE = 'corebox.touch-intelligence'
 const HANDOFF_SESSION_PREFIX = 'corebox_ai_ask'
+const CONTEXT_TRACE_PREFIX = 'corebox_ai_ask'
 const INPUT_TYPE_TEXT = 'text'
 const INPUT_TYPE_IMAGE = 'image'
 const HISTORY_FILE = 'conversation-history.json'
@@ -118,6 +120,12 @@ function buildHandoffSessionId(featureId) {
     .digest('hex')
     .slice(0, 8)
   return `${HANDOFF_SESSION_PREFIX}_${slug}_${digest}`
+}
+
+function buildContextTraceId(featureId, requestId) {
+  const slug = toSessionIdPart(featureId) || DEFAULT_FEATURE_ID
+  const id = normalizeText(requestId) || crypto.randomUUID()
+  return `${CONTEXT_TRACE_PREFIX}_${slug}_${id}`
 }
 
 function shouldSkipOptionalHandoff(error) {
@@ -323,6 +331,166 @@ async function updateHandoffSession(client, session, params) {
   }
 }
 
+function summarizeContextPackage(contextPackage) {
+  if (!contextPackage || typeof contextPackage !== 'object')
+    return null
+
+  const items = Array.isArray(contextPackage.items) ? contextPackage.items : []
+  const sourceTypes = {}
+  let citationCount = 0
+  let retrievalItemCount = 0
+
+  for (const item of items) {
+    const sourceType = normalizeText(item?.sourceType) || 'unknown'
+    sourceTypes[sourceType] = (sourceTypes[sourceType] || 0) + 1
+    if (sourceType === 'retrieval')
+      retrievalItemCount += 1
+    if (item?.metadata?.citation && typeof item.metadata.citation === 'object')
+      citationCount += 1
+  }
+
+  const retrieval = contextPackage.metadata?.retrieval
+    && typeof contextPackage.metadata.retrieval === 'object'
+    ? contextPackage.metadata.retrieval
+    : null
+  const metadataCitationCount = Number(retrieval?.citationCount)
+
+  return {
+    id: normalizeText(contextPackage.id),
+    sessionId: normalizeText(contextPackage.sessionId),
+    scope: normalizeText(contextPackage.scope),
+    traceId: normalizeText(contextPackage.traceId),
+    tokenBudget: Number(contextPackage.tokenBudget) || 0,
+    tokenEstimate: Number(contextPackage.tokenEstimate) || 0,
+    itemCount: items.length,
+    retrievalItemCount,
+    citationCount: Number.isFinite(metadataCitationCount) ? metadataCitationCount : citationCount,
+    sourceTypes,
+    retrievalStatus: normalizeText(retrieval?.status),
+    degradedReason: normalizeText(retrieval?.degradedReason),
+  }
+}
+
+function hasExplicitMemoryIntent(prompt) {
+  return [
+    /\b(remember this|remember that|save this as memory|save this memory)\b/i,
+    /(请)?记住|帮我记住|保存为记忆|加入记忆|记到记忆/,
+  ].some(pattern => pattern.test(normalizeText(prompt)))
+}
+
+function summarizeMemoryPolicy(result) {
+  if (!result || typeof result !== 'object')
+    return null
+
+  const candidate = result.candidate && typeof result.candidate === 'object'
+    ? result.candidate
+    : null
+  const summary = {
+    status: normalizeText(result.status),
+    reason: normalizeText(result.reason),
+  }
+  if (candidate) {
+    summary.candidate = {
+      type: normalizeText(candidate.type),
+      scope: normalizeText(candidate.scope),
+      summary: truncateText(candidate.summary, 160),
+      tags: normalizeStringList(candidate.tags),
+      confidence: Number(candidate.confidence) || 0,
+      privacyLevel: normalizeText(candidate.privacyLevel),
+      ...(candidate.sourceSessionId ? { sourceSessionId: normalizeText(candidate.sourceSessionId) } : {}),
+      ...(candidate.sourceTurnId ? { sourceTurnId: normalizeText(candidate.sourceTurnId) } : {}),
+    }
+  }
+  return summary
+}
+
+async function evaluateMemoryPolicyForAsk(client, {
+  prompt,
+  contextState,
+}) {
+  if (typeof client?.contextEvaluateMemory !== 'function')
+    return null
+
+  const content = normalizeText(prompt)
+  if (!content || !hasExplicitMemoryIntent(content))
+    return null
+
+  try {
+    const result = await client.contextEvaluateMemory({
+      content,
+      type: 'preference',
+      scope: 'session',
+      tags: ['corebox-ai-ask'],
+      sourceSessionId: normalizeText(contextState?.sessionId),
+      sourceTurnId: normalizeText(contextState?.turnId),
+      privacyLevel: 'normal',
+      metadata: {
+        caller: CALLER_ID,
+        entry: ENTRY_ID,
+        source: HANDOFF_SOURCE,
+      },
+    })
+    return summarizeMemoryPolicy(result)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] memory policy unavailable', error)
+    return null
+  }
+}
+
+async function prepareContextTurnForAsk(client, {
+  featureId,
+  prompt,
+  requestId,
+  inputKinds = [],
+  handoffSessionId = '',
+  selectedProviderId = '',
+  selectedModel = '',
+}) {
+  if (typeof client?.contextPrepareTurn !== 'function')
+    return null
+
+  const displayPrompt = normalizeText(prompt)
+  if (!displayPrompt)
+    return null
+
+  const contextTraceId = buildContextTraceId(featureId, requestId)
+
+  try {
+    const prepared = await client.contextPrepareTurn({
+      owner: 'corebox',
+      input: displayPrompt,
+      objective: displayPrompt,
+      explicitScope: 'retrieval',
+      continueSession: Boolean(handoffSessionId),
+      traceId: contextTraceId,
+      tokenBudget: 1200,
+      metadata: {
+        caller: CALLER_ID,
+        entry: ENTRY_ID,
+        featureId: resolveFeatureId(featureId),
+        source: HANDOFF_SOURCE,
+        requestId,
+        inputKinds: normalizeStringList(inputKinds),
+        ...(handoffSessionId ? { handoffSessionId } : {}),
+        ...(selectedProviderId ? { selectedProviderId } : {}),
+        ...(selectedModel ? { selectedModel } : {}),
+      },
+    })
+    return {
+      traceId: contextTraceId,
+      sessionId: normalizeText(prepared?.session?.id),
+      turnId: normalizeText(prepared?.turn?.id),
+      checkpointId: normalizeText(prepared?.checkpoint?.id),
+      package: summarizeContextPackage(prepared?.package),
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] context hygiene unavailable', error)
+    return null
+  }
+}
+
 function truncateForContext(value, max = MAX_OCR_CONTEXT_CHARS) {
   const text = normalizeText(value)
   if (text.length <= max)
@@ -364,7 +532,21 @@ function buildOcrPayload(imageDataUrl) {
   }
 }
 
-function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [], sessionId }) {
+function buildInvokeOptions({
+  featureId,
+  requestId,
+  capabilityId,
+  inputKinds = [],
+  sessionId,
+  contextPackage,
+  memoryPolicy,
+}) {
+  const contextSummary = contextPackage && typeof contextPackage === 'object'
+    ? contextPackage
+    : null
+  const memoryPolicySummary = memoryPolicy && typeof memoryPolicy === 'object'
+    ? memoryPolicy
+    : null
   return {
     metadata: {
       caller: CALLER_ID,
@@ -378,6 +560,22 @@ function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [
             sessionId,
             handoffSessionId: sessionId,
             handoffSource: HANDOFF_SOURCE,
+          }
+        : {}),
+      ...(contextSummary
+        ? {
+            contextTraceId: contextSummary.traceId,
+            contextSessionId: contextSummary.sessionId,
+            contextPackageId: contextSummary.id,
+            contextScope: contextSummary.scope,
+            contextTokenEstimate: contextSummary.tokenEstimate,
+            contextCitationCount: contextSummary.citationCount,
+          }
+        : {}),
+      ...(memoryPolicySummary
+        ? {
+            memoryPolicyStatus: memoryPolicySummary.status,
+            memoryPolicyReason: memoryPolicySummary.reason,
           }
         : {}),
     },
@@ -439,7 +637,15 @@ function buildCapabilitySummary(values) {
   return normalizeStringList(values).join(' + ')
 }
 
-function mapInvokeResult(result, prompt, requestId, handoffSessionId = '', inputKinds = []) {
+function mapInvokeResult(
+  result,
+  prompt,
+  requestId,
+  handoffSessionId = '',
+  inputKinds = [],
+  contextPackage = null,
+  memoryPolicy = null,
+) {
   return {
     requestId,
     prompt,
@@ -450,6 +656,8 @@ function mapInvokeResult(result, prompt, requestId, handoffSessionId = '', input
     latency: normalizeLatency(result?.latency ?? result?.latencyMs),
     handoffSessionId: normalizeText(handoffSessionId),
     inputKinds: normalizeStringList(inputKinds),
+    contextPackage,
+    memoryPolicy,
   }
 }
 
@@ -469,6 +677,8 @@ async function streamChatAnswer({
   selectedProviderId,
   selectedModel,
   modelOptions,
+  contextPackage,
+  memoryPolicy,
 }) {
   if (typeof client?.stream !== 'function')
     return null
@@ -514,6 +724,8 @@ async function streamChatAnswer({
             selectedProviderId,
             selectedModel,
             modelOptions,
+            contextPackage,
+            memoryPolicy,
           })
         },
         onUsage(eventUsage, event) {
@@ -537,7 +749,6 @@ async function streamChatAnswer({
     })
   }
   catch (error) {
-    const message = toErrorMessage(error).toLowerCase()
     if (shouldFallbackFromStream(error)) {
       logger?.warn?.('[touch-intelligence] stream unavailable, falling back to invoke', error)
       return null
@@ -560,6 +771,8 @@ async function streamChatAnswer({
     inputKinds: normalizeStringList(inputKinds),
     selectedProviderId: normalizeText(selectedProviderId),
     selectedModel: normalizeText(selectedModel),
+    contextPackage,
+    memoryPolicy,
   }
 }
 
@@ -652,18 +865,6 @@ function normalizeInvokeError(error) {
   }
 }
 
-async function pushAuthRequiredState(featureId, state = {}) {
-  const normalizedError = normalizeInvokeError(createPluginError('AUTH_REQUIRED'))
-  await pushWidgetState(featureId, {
-    ...state,
-    status: 'error',
-    stage: 'error',
-    errorCode: normalizedError.code,
-    errorMessage: normalizedError.message,
-  })
-  return normalizedError
-}
-
 async function ensurePermission(permissionId, reason) {
   if (!permission?.check || !permission?.request)
     return false
@@ -699,6 +900,12 @@ function buildIntelligenceMeta(details = {}) {
   const errorMessage = normalizeText(details.errorMessage)
   const inputKinds = normalizeStringList(details.inputKinds)
   const capabilities = normalizeStringList(details.capabilities)
+  const contextPackage = details.contextPackage && typeof details.contextPackage === 'object'
+    ? details.contextPackage
+    : null
+  const memoryPolicy = details.memoryPolicy && typeof details.memoryPolicy === 'object'
+    ? details.memoryPolicy
+    : null
   const latency = normalizeLatency(details.latency)
 
   if (status)
@@ -728,6 +935,22 @@ function buildIntelligenceMeta(details = {}) {
   if (handoffSessionId) {
     meta.handoffSessionId = handoffSessionId
     meta.sessionId = handoffSessionId
+  }
+  if (contextPackage) {
+    meta.contextPackage = contextPackage
+    if (contextPackage.traceId)
+      meta.contextTraceId = contextPackage.traceId
+    if (contextPackage.sessionId)
+      meta.contextSessionId = contextPackage.sessionId
+    if (contextPackage.id)
+      meta.contextPackageId = contextPackage.id
+  }
+  if (memoryPolicy) {
+    meta.memoryPolicy = memoryPolicy
+    if (memoryPolicy.status)
+      meta.memoryPolicyStatus = memoryPolicy.status
+    if (memoryPolicy.reason)
+      meta.memoryPolicyReason = memoryPolicy.reason
   }
 
   return meta
@@ -883,6 +1106,12 @@ function buildWidgetPayload(state = {}) {
     copyStatus: normalizeText(state.copyStatus),
     copyError: normalizeText(state.copyError),
     copyRecovery: normalizeText(state.copyRecovery),
+    contextPackage: state.contextPackage && typeof state.contextPackage === 'object'
+      ? state.contextPackage
+      : null,
+    memoryPolicy: state.memoryPolicy && typeof state.memoryPolicy === 'object'
+      ? state.memoryPolicy
+      : null,
     modelOptions: normalizeModelOptions(state.modelOptions),
     selectedProviderId: selected.providerId,
     selectedModel: selected.model,
@@ -920,6 +1149,8 @@ function resolveWidgetAction(state = {}) {
         latency: state.latency,
         handoffSessionId: state.handoffSessionId,
         inputKinds: state.inputKinds,
+        contextPackage: state.contextPackage,
+        memoryPolicy: state.memoryPolicy,
         selectedProviderId: state.selectedProviderId,
         selectedModel: state.selectedModel,
       },
@@ -936,6 +1167,8 @@ function resolveWidgetAction(state = {}) {
         errorCode: state.errorCode,
         errorMessage: state.errorMessage,
         handoffSessionId: state.handoffSessionId,
+        contextPackage: state.contextPackage,
+        memoryPolicy: state.memoryPolicy,
         selectedProviderId: state.selectedProviderId,
         selectedModel: state.selectedModel,
       },
@@ -996,6 +1229,8 @@ function buildWidgetItem(featureId, state = {}) {
         errorCode: state.errorCode,
         errorMessage: state.errorMessage,
         handoffSessionId: state.handoffSessionId,
+        contextPackage: state.contextPackage,
+        memoryPolicy: state.memoryPolicy,
         selectedProviderId: state.selectedProviderId,
         selectedModel: state.selectedModel,
       }),
@@ -1093,17 +1328,17 @@ function buildReadyItem(featureId, state) {
     description,
     accessory: modelInfo || 'text.chat',
     actionId: 'copy-answer',
-      payload: {
-        prompt: state.prompt,
-        requestId: state.requestId,
-        answer: state.answer,
-        provider: state.provider,
-        model: state.model,
-        traceId: state.traceId,
-        latency: state.latency,
-        handoffSessionId: state.handoffSessionId,
-        inputKinds: state.inputKinds,
-      },
+    payload: {
+      prompt: state.prompt,
+      requestId: state.requestId,
+      answer: state.answer,
+      provider: state.provider,
+      model: state.model,
+      traceId: state.traceId,
+      latency: state.latency,
+      handoffSessionId: state.handoffSessionId,
+      inputKinds: state.inputKinds,
+    },
     status: 'ready',
     handoffSessionId: state.handoffSessionId,
     intelligence: {
@@ -1312,6 +1547,8 @@ async function dispatchPrompt({
     normalizedPrompt,
     Boolean(imageDataUrl || resolvedOcrText),
   )
+  let contextPackage = null
+  let memoryPolicy = null
 
   if (!displayPrompt)
     return
@@ -1329,6 +1566,20 @@ async function dispatchPrompt({
     if (session.history.length > resolvedHistory.length) {
       resolvedHistory = cloneHistory(session.history)
     }
+    const contextState = await prepareContextTurnForAsk(client, {
+      featureId: resolvedFeatureId,
+      prompt: displayPrompt,
+      requestId,
+      inputKinds,
+      handoffSessionId,
+      selectedProviderId: selected.providerId,
+      selectedModel: selected.model,
+    })
+    contextPackage = contextState?.package || null
+    memoryPolicy = await evaluateMemoryPolicyForAsk(client, {
+      prompt: displayPrompt,
+      contextState,
+    })
 
     if (imageDataUrl && !resolvedOcrText) {
       const ocrPayload = buildOcrPayload(imageDataUrl)
@@ -1341,6 +1592,8 @@ async function dispatchPrompt({
           capabilityId: 'vision.ocr',
           inputKinds,
           sessionId: handoffSessionId,
+          contextPackage,
+          memoryPolicy,
         }),
       )
       resolvedOcrText = normalizeText(ocrResult?.result?.text)
@@ -1377,6 +1630,8 @@ async function dispatchPrompt({
         modelOptions,
         selectedProviderId: selected.providerId,
         selectedModel: selected.model,
+        contextPackage,
+        memoryPolicy,
       })
     }
 
@@ -1389,6 +1644,8 @@ async function dispatchPrompt({
         capabilityId: 'text.chat',
         inputKinds,
         sessionId: handoffSessionId,
+        contextPackage,
+        memoryPolicy,
       }),
       selected,
     )
@@ -1408,6 +1665,8 @@ async function dispatchPrompt({
       selectedProviderId: selected.providerId,
       selectedModel: selected.model,
       modelOptions,
+      contextPackage,
+      memoryPolicy,
     })
     const mapped = streamed || mapInvokeResult(
       await client.invoke('text.chat', payload, invokeOptions),
@@ -1415,6 +1674,8 @@ async function dispatchPrompt({
       requestId,
       handoffSessionId,
       inputKinds,
+      contextPackage,
+      memoryPolicy,
     )
 
     if (!mapped.answer) {
@@ -1454,6 +1715,8 @@ async function dispatchPrompt({
       modelOptions,
       selectedProviderId: selected.providerId,
       selectedModel: selected.model,
+      contextPackage,
+      memoryPolicy,
     })
   }
   catch (error) {
@@ -1482,6 +1745,8 @@ async function dispatchPrompt({
       modelOptions: session.modelOptions,
       selectedProviderId: selected.providerId,
       selectedModel: selected.model,
+      contextPackage: contextPackage ?? null,
+      memoryPolicy: memoryPolicy ?? null,
     })
   }
 }
@@ -1638,6 +1903,7 @@ const pluginLifecycle = {
             modelOptions: session.modelOptions,
             selectedProviderId: payload.selectedProviderId,
             selectedModel: payload.selectedModel,
+            contextPackage: payload.contextPackage,
           })
           return {
             externalAction: true,
@@ -1700,6 +1966,7 @@ const pluginLifecycle = {
           modelOptions: session.modelOptions,
           selectedProviderId: session.selectedProviderId,
           selectedModel: session.selectedModel,
+          contextPackage: payload.contextPackage,
         })
 
         return { externalAction: true }

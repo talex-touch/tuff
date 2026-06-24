@@ -1135,6 +1135,247 @@ describe('transport domain sdk mappings', () => {
     expect(onEnd).toHaveBeenCalledWith({ type: 'end', capabilityId: 'text.chat' })
   })
 
+  it('intelligence sdk maps local knowledge and context hygiene calls through typed events', async () => {
+    const transport = createTransportMock()
+    transport.send
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          status: 'ok',
+          contextText: '[1] Knowledge Notes\ncitation evidence',
+          chunks: [],
+          tokenEstimate: 0,
+          citations: []
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          session: { id: 'ctxs_1', owner: 'corebox', status: 'active', createdAt: 1, updatedAt: 1 },
+          turn: {
+            id: 'ctxt_1',
+            sessionId: 'ctxs_1',
+            role: 'user',
+            content: 'Use local knowledge',
+            privacyLevel: 'normal',
+            tokenEstimate: 5,
+            createdAt: 1
+          },
+          package: {
+            id: 'ctxpkg_1',
+            sessionId: 'ctxs_1',
+            scope: 'retrieval',
+            tokenBudget: 120,
+            tokenEstimate: 5,
+            items: [
+              {
+                sourceType: 'retrieval',
+                sourceId: 'chunk-1',
+                reason: 'local knowledge match: Knowledge Notes',
+                content: 'citation evidence',
+                tokenEstimate: 4,
+                metadata: {
+                  citation: {
+                    documentId: 'doc-1',
+                    chunkId: 'chunk-1',
+                    title: 'Knowledge Notes',
+                    sourceType: 'manual',
+                    updatedAt: 2
+                  },
+                  status: 'ok'
+                }
+              }
+            ],
+            metadata: {
+              retrieval: {
+                status: 'ok',
+                chunkCount: 1,
+                citationCount: 1
+              }
+            },
+            createdAt: 1
+          }
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          checkpoints: [
+            {
+              id: 'ctxcp_1',
+              sessionId: 'ctxs_1',
+              type: 'session_start',
+              reason: 'new-session',
+              contextScope: 'retrieval',
+              metadata: { source: 'test' },
+              createdAt: 1
+            }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          logs: [
+            {
+              id: 'ctxpkg_1',
+              sessionId: 'ctxs_1',
+              scope: 'retrieval',
+              traceId: 'trace-1',
+              tokenBudget: 120,
+              tokenEstimate: 5,
+              items: [
+                {
+                  sourceType: 'retrieval',
+                  sourceId: 'chunk-1',
+                  reason: 'local knowledge match: Knowledge Notes',
+                  tokenEstimate: 4,
+                  metadata: {
+                    citation: {
+                      documentId: 'doc-1',
+                      chunkId: 'chunk-1',
+                      title: 'Knowledge Notes'
+                    }
+                  }
+                }
+              ],
+              metadata: {
+                retrieval: {
+                  status: 'ok',
+                  chunkCount: 1,
+                  citationCount: 1
+                }
+              },
+              createdAt: 1
+            }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          status: 'suggested',
+          reason: 'explicit_memory_candidate',
+          candidate: {
+            type: 'preference',
+            scope: 'workspace',
+            summary: 'Use Chinese replies by default',
+            tags: ['language'],
+            confidence: 0.8,
+            privacyLevel: 'normal'
+          }
+        }
+      })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    const context = await sdk.knowledgeBuildContext({
+      query: 'local knowledge',
+      tokenBudget: 120,
+      maxChunks: 4,
+      dedupe: true
+    })
+    const prepared = await sdk.contextPrepareTurn({
+      owner: 'corebox',
+      input: 'Use local knowledge',
+      explicitScope: 'retrieval',
+      tokenBudget: 120
+    })
+    const checkpoints = await sdk.contextListCheckpoints({
+      sessionId: 'ctxs_1',
+      type: 'session_start',
+      limit: 20
+    })
+    const logs = await sdk.contextListPackageLogs({
+      sessionId: 'ctxs_1',
+      traceId: 'trace-1',
+      limit: 20
+    })
+    const memory = await sdk.contextEvaluateMemory({
+      content: 'Use Chinese replies by default',
+      type: 'preference',
+      scope: 'workspace',
+      tags: ['language']
+    })
+
+    expect(context.status).toBe('ok')
+    expect(prepared.package.items[0]?.metadata).toMatchObject({
+      citation: {
+        documentId: 'doc-1',
+        chunkId: 'chunk-1',
+        title: 'Knowledge Notes'
+      },
+      status: 'ok'
+    })
+    expect(logs.logs[0]?.items[0]).toMatchObject({
+      sourceType: 'retrieval',
+      sourceId: 'chunk-1',
+      metadata: {
+        citation: {
+          documentId: 'doc-1',
+          chunkId: 'chunk-1'
+        }
+      }
+    })
+    expect(checkpoints.checkpoints[0]).toMatchObject({
+      id: 'ctxcp_1',
+      sessionId: 'ctxs_1',
+      type: 'session_start',
+      reason: 'new-session',
+      contextScope: 'retrieval'
+    })
+    expect(memory).toMatchObject({
+      status: 'suggested',
+      candidate: {
+        type: 'preference',
+        scope: 'workspace',
+        privacyLevel: 'normal'
+      }
+    })
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:knowledge:build-context',
+    )
+    expect(transport.send.mock.calls[0]?.[1]).toEqual({
+      query: 'local knowledge',
+      tokenBudget: 120,
+      maxChunks: 4,
+      dedupe: true
+    })
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:context:prepare-turn',
+    )
+    expect(transport.send.mock.calls[1]?.[1]).toEqual({
+      owner: 'corebox',
+      input: 'Use local knowledge',
+      explicitScope: 'retrieval',
+      tokenBudget: 120
+    })
+    expect(transport.send.mock.calls[2]?.[0]?.toEventName?.()).toBe(
+      'intelligence:context:checkpoints:list',
+    )
+    expect(transport.send.mock.calls[2]?.[1]).toEqual({
+      sessionId: 'ctxs_1',
+      type: 'session_start',
+      limit: 20
+    })
+    expect(transport.send.mock.calls[3]?.[0]?.toEventName?.()).toBe(
+      'intelligence:context:package-logs:list',
+    )
+    expect(transport.send.mock.calls[3]?.[1]).toEqual({
+      sessionId: 'ctxs_1',
+      traceId: 'trace-1',
+      limit: 20
+    })
+    expect(transport.send.mock.calls[4]?.[0]?.toEventName?.()).toBe(
+      'intelligence:context:memory:evaluate',
+    )
+    expect(transport.send.mock.calls[4]?.[1]).toEqual({
+      content: 'Use Chinese replies by default',
+      type: 'preference',
+      scope: 'workspace',
+      tags: ['language']
+    })
+  })
+
   it('intelligence sdk stream throws when stream transport is unavailable', async () => {
     const transport = { send: vi.fn() }
     const sdk = createIntelligenceSdk(transport as any)
