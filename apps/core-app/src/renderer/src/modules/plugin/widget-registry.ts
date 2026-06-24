@@ -5,7 +5,12 @@ import type {
   WidgetSandboxEvidence
 } from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
-import { WIDGET_ALLOWED_PACKAGES, WIDGET_RUNTIMES } from '@talex-touch/utils/plugin/widget'
+import {
+  WIDGET_ALLOWED_PACKAGE_SCOPE,
+  WIDGET_ALLOWED_PACKAGES,
+  WIDGET_RUNTIMES,
+  isAllowedWidgetModule
+} from '@talex-touch/utils/plugin/widget'
 import * as ArrowCore from '@arrow-js/core'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
@@ -632,6 +637,46 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/tuffex/ai-elements': TuffexAiElements
 }
 
+function resolveTalexTouchModule(moduleName: string): unknown {
+  if (moduleName in preloadedModuleCache) {
+    return preloadedModuleCache[moduleName]
+  }
+
+  if (moduleName.startsWith('@talex-touch/tuffex/')) {
+    return Tuffex
+  }
+
+  if (moduleName.startsWith('@talex-touch/utils/plugin/sdk')) {
+    return TalexUtilsPluginSdk
+  }
+
+  if (moduleName.startsWith('@talex-touch/utils/plugin')) {
+    return TalexUtilsPlugin
+  }
+
+  if (moduleName.startsWith('@talex-touch/utils/core-box')) {
+    return TalexUtilsCoreBox
+  }
+
+  if (moduleName.startsWith('@talex-touch/utils/transport')) {
+    return TalexUtilsTransport
+  }
+
+  if (moduleName.startsWith('@talex-touch/utils/common')) {
+    return TalexUtilsCommon
+  }
+
+  if (moduleName.startsWith('@talex-touch/utils/types')) {
+    return TalexUtilsTypes
+  }
+
+  if (moduleName.startsWith('@talex-touch/utils')) {
+    return TalexUtils
+  }
+
+  return undefined
+}
+
 function normalizeWidgetDependencies(dependencies?: string[]): string[] {
   return Array.from(
     new Set(
@@ -643,6 +688,14 @@ function normalizeWidgetDependencies(dependencies?: string[]): string[] {
 }
 
 function isWidgetDependencyAvailable(dependency: string): boolean {
+  if (!isAllowedWidgetModule(dependency)) {
+    return false
+  }
+
+  if (dependency.startsWith(WIDGET_ALLOWED_PACKAGE_SCOPE)) {
+    return true
+  }
+
   return ALLOWED_PACKAGES.includes(dependency) && dependency in preloadedModuleCache
 }
 
@@ -1262,7 +1315,17 @@ function createSandboxRequire(evidence: WidgetSandboxEvidence): (id: string) => 
       )
     }
 
-    return preloadedModuleCache[moduleName]
+    const resolved = moduleName.startsWith(WIDGET_ALLOWED_PACKAGE_SCOPE)
+      ? resolveTalexTouchModule(moduleName)
+      : preloadedModuleCache[moduleName]
+
+    if (resolved === undefined) {
+      throw new Error(
+        `[WidgetSandbox] Module "${moduleName}" is allowed but not available in renderer sandbox.`
+      )
+    }
+
+    return resolved
   }
 }
 

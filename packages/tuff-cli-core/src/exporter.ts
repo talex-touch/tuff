@@ -16,6 +16,7 @@ import {
   makeWidgetId,
   resolveWidgetRuntime,
   resolveWidgetRuntimeStage,
+  WIDGET_ALLOWED_PACKAGE_SCOPE,
   WIDGET_ALLOWED_PACKAGES,
   WIDGET_COMPILED_DIR,
   WIDGET_RUNTIMES,
@@ -637,7 +638,10 @@ module.exports = __component
     format: 'cjs',
     platform: 'browser',
     target: 'node24',
-    external: Array.from(WIDGET_ALLOWED_PACKAGES),
+    external: [
+      ...Array.from(WIDGET_ALLOWED_PACKAGES),
+      `${WIDGET_ALLOWED_PACKAGE_SCOPE}*`,
+    ],
     plugins: [
       createWidgetBundlePlugin(
         context.buildDir,
