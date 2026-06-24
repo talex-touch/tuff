@@ -480,6 +480,39 @@ function isProviderQuotaError(error: Error): boolean {
   return Boolean(code && PROVIDER_QUOTA_ERROR_CODES.has(code))
 }
 
+async function recordProviderQuotaBlockedEvidence(
+  event: H3Event,
+  input: {
+    actorId: string
+    providerId: string
+    channel: string
+    source: string
+    stage: string
+    error: Error
+  },
+): Promise<void> {
+  const code = getErrorCode(input.error)
+  await recordPlatformGovernanceEvent(event, {
+    scope: 'intelligence',
+    action: 'provider.quota_blocked',
+    actorId: input.actorId,
+    resourceType: 'provider',
+    resourceId: input.providerId,
+    channel: input.channel,
+    unit: 'blocked',
+    quantity: 0,
+    metadata: {
+      evidenceSource: 'live',
+      providerId: input.providerId,
+      channel: input.channel,
+      source: input.source,
+      stage: input.stage,
+      reason: code ?? 'provider-quota-exceeded',
+      requestBlocked: true,
+    },
+  })
+}
+
 function extractStatusBlockLines(raw: string): string[] {
   const normalized = raw.trim()
   if (!normalized) {
@@ -792,6 +825,17 @@ async function invokeModel(
         const hasRetryBudget = attemptIndex < maxAttempts - 1
         const willRetry = retryable && hasRetryBudget
         const status = tryResolveHttpStatus(normalizedError) ?? (isProviderQuotaError(normalizedError) ? 429 : 500)
+
+        if (isProviderQuotaError(normalizedError)) {
+          await recordProviderQuotaBlockedEvidence(event, {
+            actorId: userId,
+            providerId: governanceProviderId,
+            channel: governanceChannel,
+            source: payload.source || 'intelligence-agent',
+            stage: payload.stage || 'invoke',
+            error: normalizedError,
+          })
+        }
 
         detail.attempt = index + 1
         detail.providerAttempt = providerAttempt
@@ -1319,7 +1363,23 @@ export async function invokeIntelligenceCapability(
   if (capabilityId === 'vision.ocr') {
     const provider = await resolveVisionOcrProvider(event, userId, providerId)
     const governanceProviderId = provider.id
-    await assertIntelligenceProviderQuota(event, governanceProviderId, capabilityId)
+    try {
+      await assertIntelligenceProviderQuota(event, governanceProviderId, capabilityId)
+    }
+    catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      if (isProviderQuotaError(normalizedError)) {
+        await recordProviderQuotaBlockedEvidence(event, {
+          actorId: userId,
+          providerId: governanceProviderId,
+          channel: capabilityId,
+          source: audit.source,
+          stage: `capability:${capabilityId}`,
+          error: normalizedError,
+        })
+      }
+      throw error
+    }
     await recordIntelligenceProviderRequest(event, governanceProviderId, capabilityId)
     const startedAt = now()
     const ocr = await invokeIntelligenceVisionOcr(event, provider, normalizedRequest.payload)

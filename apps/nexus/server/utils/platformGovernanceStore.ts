@@ -465,6 +465,19 @@ export interface IntelligenceProviderQuotaSmokeEvidenceItem {
   uniqueActors: number
 }
 
+export interface IntelligenceProviderQuotaBlockEvidenceItem {
+  key: string
+  providerId: string
+  channel: string | null
+  evidenceSource: PlatformGovernanceReportEvidenceStatus
+  status: 'blocked'
+  reason: string | null
+  requestBlocked: boolean
+  latestAt: string
+  events: number
+  uniqueActors: number
+}
+
 export interface IntelligenceProviderQuotaRiskItem {
   configId: string
   providerId: string
@@ -6452,6 +6465,7 @@ function createProviderQuotaAnalytics(
   const riskItems = createProviderQuotaRiskItems(items, topLimit)
   const actionQueue = createProviderQuotaActionQueue(items, topLimit)
   const smokeEvidence = createProviderQuotaSmokeEvidence(providerEvents, topLimit)
+  const blockEvidence = createProviderQuotaBlockEvidence(providerEvents, topLimit)
 
   const summary = items.reduce((result, item) => {
     result.total += 1
@@ -6510,6 +6524,7 @@ function createProviderQuotaAnalytics(
     riskItems,
     actionQueue,
     smokeEvidence,
+    blockEvidence,
     items: items.slice(0, topLimit),
   }
 }
@@ -6576,6 +6591,59 @@ function createProviderQuotaSmokeEvidence(
       item.reason = readEventMetadataString(event, 'reason')
       item.requestRecorded = readEventMetadataBoolean(event, 'requestRecorded') ?? false
       item.tokensRecorded = readEventMetadataNumber(event, 'tokensRecorded') ?? 0
+      item.latestAt = event.occurredAt
+      item.latestTime = latestTime
+    }
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    buckets.set(key, item)
+  }
+
+  return Array.from(buckets.values())
+    .map(({ actors, latestTime: _latestTime, ...item }) => ({
+      ...item,
+      uniqueActors: actors.size,
+    }))
+    .sort((left, right) => right.latestAt.localeCompare(left.latestAt) || right.events - left.events)
+    .slice(0, limit)
+}
+
+function createProviderQuotaBlockEvidence(
+  events: PlatformGovernanceEvent[],
+  limit: number,
+): IntelligenceProviderQuotaBlockEvidenceItem[] {
+  const buckets = new Map<string, IntelligenceProviderQuotaBlockEvidenceItem & { actors: Set<string>, latestTime: number }>()
+
+  for (const event of events) {
+    if (event.action !== 'provider.quota_blocked')
+      continue
+
+    const providerId = event.resourceId ?? readEventMetadataString(event, 'providerId') ?? 'unknown'
+    const channel = event.channel ?? readEventMetadataString(event, 'channel')
+    const key = `${providerId}:${channel ?? 'global'}`
+    const occurredTime = Date.parse(event.occurredAt)
+    const latestTime = Number.isFinite(occurredTime) ? occurredTime : 0
+    const item = buckets.get(key) ?? {
+      key,
+      providerId,
+      channel,
+      evidenceSource: readEventEvidenceSource(event),
+      status: 'blocked',
+      reason: readEventMetadataString(event, 'reason'),
+      requestBlocked: readEventMetadataBoolean(event, 'requestBlocked') ?? false,
+      latestAt: event.occurredAt,
+      latestTime,
+      events: 0,
+      uniqueActors: 0,
+      actors: new Set<string>(),
+    }
+
+    item.events += 1
+    if (latestTime >= item.latestTime) {
+      item.evidenceSource = readEventEvidenceSource(event)
+      item.reason = readEventMetadataString(event, 'reason')
+      item.requestBlocked = readEventMetadataBoolean(event, 'requestBlocked') ?? false
       item.latestAt = event.occurredAt
       item.latestTime = latestTime
     }
@@ -6999,6 +7067,7 @@ function createOperationsDashboardSummary(input: {
     quotaSummary: ReturnType<typeof createProviderQuotaAnalytics>['summary']
     quotaActionQueue: ReturnType<typeof createProviderQuotaAnalytics>['actionQueue']
     quotaRiskItems: ReturnType<typeof createProviderQuotaAnalytics>['riskItems']
+    quotaBlockEvidence: ReturnType<typeof createProviderQuotaAnalytics>['blockEvidence']
     quotaSmokeEvidence: ReturnType<typeof createProviderQuotaAnalytics>['smokeEvidence']
     quotas: ReturnType<typeof createProviderQuotaAnalytics>['items']
   }
@@ -7289,10 +7358,10 @@ function createGovernanceReportEvidenceStatus(
     && item.adapter !== 'browser'
     && item.evidenceSource === 'live',
   )
-  const hasLiveProviderQuotaFailClosed = analytics.providers.quotaSmokeEvidence.some(item =>
-    item.mode === 'consume'
-    && item.status === 'blocked'
-    && item.requestRecorded
+  const providerQuotaEvidenceCount = analytics.providers.quotaBlockEvidence.length + analytics.providers.quotaSmokeEvidence.length
+  const hasLiveProviderQuotaFailClosed = analytics.providers.quotaBlockEvidence.some(item =>
+    item.status === 'blocked'
+    && item.requestBlocked
     && item.evidenceSource === 'live',
   )
   const notificationEvidenceCount = analytics.notifications.deliveryEvidence.length + analytics.notifications.testEvidence.length
@@ -7329,8 +7398,8 @@ function createGovernanceReportEvidenceStatus(
     {
       key: 'provider-quota',
       label: 'Provider quota fail-closed evidence',
-      status: hasLiveProviderQuotaFailClosed ? 'live' : analytics.providers.quotaSmokeEvidence.length > 0 ? 'local-only' : 'open',
-      evidenceCount: analytics.providers.quotaSmokeEvidence.length,
+      status: hasLiveProviderQuotaFailClosed ? 'live' : providerQuotaEvidenceCount > 0 ? 'local-only' : 'open',
+      evidenceCount: providerQuotaEvidenceCount,
       blocker: 'real-provider-call-evidence-required',
     },
     {
@@ -7772,6 +7841,7 @@ export async function getPlatformGovernanceAnalytics(
     quotaSummary: providerQuotaAnalytics.summary,
     quotaActionQueue: providerQuotaAnalytics.actionQueue,
     quotaRiskItems: providerQuotaAnalytics.riskItems,
+    quotaBlockEvidence: providerQuotaAnalytics.blockEvidence,
     quotaSmokeEvidence: providerQuotaAnalytics.smokeEvidence,
     quotas: providerQuotaAnalytics.items,
   }
@@ -8572,9 +8642,6 @@ async function recordProviderQuotaSmokeAudit(
   actorId: unknown,
   result: IntelligenceProviderQuotaSmokeResult,
 ): Promise<void> {
-  const evidenceSource = result.mode === 'consume' && result.status === 'blocked' && result.requestRecorded
-    ? 'live'
-    : 'local-only'
   await recordPlatformGovernanceEvent(event, {
     scope: 'intelligence',
     action: `provider.quota_smoke.${result.status}`,
@@ -8588,7 +8655,7 @@ async function recordProviderQuotaSmokeAudit(
       providerId: result.providerId,
       channel: result.channel,
       mode: result.mode,
-      evidenceSource,
+      evidenceSource: 'local-only',
       reason: result.reason,
       requestRecorded: result.requestRecorded,
       tokensRecorded: result.tokensRecorded,

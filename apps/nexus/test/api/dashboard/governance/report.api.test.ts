@@ -376,9 +376,9 @@ describe('/api/dashboard/governance/report', () => {
     })
   })
 
-  it('promotes provider quota evidence only after live consume mode is fail-closed', async () => {
+  it('does not promote provider quota evidence from smoke-only blocked events', async () => {
     const marker = crypto.randomUUID()
-    const event = makeEvent(`quota-blocked-${marker}`)
+    const event = makeEvent(`quota-smoke-blocked-${marker}`)
     await recordPlatformGovernanceEvent(event, {
       scope: 'intelligence',
       action: 'provider.quota_smoke.blocked',
@@ -394,6 +394,33 @@ describe('/api/dashboard/governance/report', () => {
         reason: 'request-quota-exceeded',
         requestRecorded: true,
         tokensRecorded: 10,
+      },
+    })
+
+    const result = await reportHandler(event)
+
+    expect(findEvidence(result, 'provider-quota')).toMatchObject({
+      key: 'provider-quota',
+      status: 'local-only',
+    })
+  })
+
+  it('promotes provider quota evidence only after a live provider call is fail-closed', async () => {
+    const marker = crypto.randomUUID()
+    const event = makeEvent(`quota-blocked-${marker}`)
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'intelligence',
+      action: 'provider.quota_blocked',
+      actorId: 'provider-admin@example.com',
+      resourceType: 'provider',
+      resourceId: `provider-${marker}`,
+      channel: 'text.chat',
+      unit: 'blocked',
+      quantity: 0,
+      metadata: {
+        evidenceSource: 'live',
+        reason: 'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED',
+        requestBlocked: true,
       },
     })
 
