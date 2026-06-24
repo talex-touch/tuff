@@ -479,21 +479,43 @@ async function saveSnippets(snippets) {
 }
 
 async function readClipboardText(reason) {
-  const hasClipboardPermission = await ensurePermission('clipboard.read', reason)
-  if (!hasClipboardPermission)
-    return ''
-  try {
-    return clipboard.readText()
+  const permissionResult = await ensurePermission('clipboard.read', reason)
+  if (!permissionResult.granted) {
+    return {
+      read: false,
+      text: '',
+      reason: permissionResult.reason || 'permission-denied',
+    }
   }
-  catch {
-    return ''
+
+  if (typeof clipboard?.readText !== 'function') {
+    return {
+      read: false,
+      text: '',
+      reason: 'clipboard-unavailable',
+    }
+  }
+
+  try {
+    return {
+      read: true,
+      text: await clipboard.readText(),
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-snippets] Failed to read clipboard', error)
+    return {
+      read: false,
+      text: '',
+      reason: 'clipboard-read-failed',
+    }
   }
 }
 
 async function readClipboardTextForContent(content, reason) {
   if (!/\{\{clipboard\}\}/i.test(String(content ?? '')))
     return ''
-  return readClipboardText(reason)
+  return (await readClipboardText(reason)).text
 }
 
 async function writeClipboardText(text, reason) {
@@ -505,8 +527,24 @@ async function writeClipboardText(text, reason) {
     }
   }
 
-  clipboard.writeText(text)
-  return { written: true }
+  if (typeof clipboard?.writeText !== 'function') {
+    return {
+      written: false,
+      reason: 'clipboard-unavailable',
+    }
+  }
+
+  try {
+    await clipboard.writeText(text)
+    return { written: true }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-snippets] Failed to write clipboard', error)
+    return {
+      written: false,
+      reason: 'clipboard-write-failed',
+    }
+  }
 }
 
 function getTypeLabel(type) {
@@ -611,9 +649,10 @@ async function buildSearchItems(featureId, query) {
 
 async function buildSaveItems(featureId, query) {
   const text = normalizeText(getQueryText(query))
-  const clipboardText = text
-    ? ''
+  const clipboardResult = text
+    ? { text: '' }
     : await readClipboardText('需要读取剪贴板以将当前剪贴板内容保存为片段')
+  const clipboardText = clipboardResult.text
   const content = text || normalizeText(clipboardText)
   const items = []
 
@@ -865,7 +904,18 @@ const pluginLifecycle = {
           return { externalAction: true }
         }
         if (actionId === 'pack-import-clipboard') {
-          const content = await readClipboardText('需要读取剪贴板以导入片段包')
+          const clipboardResult = await readClipboardText('需要读取剪贴板以导入片段包')
+          if (!clipboardResult.read) {
+            return {
+              externalAction: true,
+              success: false,
+              status: 'blocked',
+              reason: clipboardResult.reason || 'permission-denied',
+              message: '缺少 clipboard.read 权限',
+            }
+          }
+
+          const content = clipboardResult.text
           const parsed = await loadSnippetStore()
           const merged = importSnippetPack(parsed.snippets, content)
           await saveSnippets(merged.snippets)
@@ -925,8 +975,10 @@ module.exports = {
     normalizeSnippetPack,
     parseSnippets,
     publishSnippetPack,
+    readClipboardText,
     resolveAccountAuthToken,
     rankSnippets,
     serializeSnippets,
+    writeClipboardText,
   },
 }

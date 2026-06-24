@@ -112,19 +112,31 @@ function searchEmojiSymbols(query, limit = MAX_RESULTS) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request)
-    return false
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
 
   try {
     const hasPermission = await permission.check(permissionId)
     if (hasPermission)
-      return true
+      return { granted: true }
     const granted = await permission.request(permissionId, reason)
-    return Boolean(granted)
+    return granted
+      ? { granted: true }
+      : {
+          granted: false,
+          reason: 'permission-denied',
+        }
   }
   catch (error) {
     logger?.warn?.('[touch-emoji-symbols] Failed to request permission', error)
-    return false
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
   }
 }
 
@@ -203,22 +215,39 @@ const pluginLifecycle = {
       if (typeof output !== 'string')
         return
 
-      const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制 Emoji 或符号')
-      if (!canCopy) {
+      const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制 Emoji 或符号')
+      if (!permissionResult.granted) {
         return {
           externalAction: true,
           success: false,
           status: 'blocked',
-          reason: 'permission-denied',
+          reason: permissionResult.reason || 'permission-denied',
           message: '缺少 clipboard.write 权限',
         }
       }
 
-      clipboard.writeText(output)
+      if (typeof clipboard?.writeText !== 'function') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'clipboard-unavailable',
+          message: '当前环境不支持写入剪贴板',
+        }
+      }
+
+      await clipboard.writeText(output)
       return { externalAction: true, status: 'started' }
     }
     catch (error) {
       logger?.error?.('[touch-emoji-symbols] Action failed', error)
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'clipboard-write-failed',
+        message: error?.message || '复制失败',
+      }
     }
   },
 }

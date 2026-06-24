@@ -31,20 +31,31 @@ function getQueryText(query) {
 
 async function ensurePermission(permissionId, reason) {
   if (!permission?.check || !permission?.request) {
-    return false
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
   }
 
   try {
     const hasPermission = await permission.check(permissionId)
     if (hasPermission) {
-      return true
+      return { granted: true }
     }
     const granted = await permission.request(permissionId, reason)
-    return Boolean(granted)
+    return granted
+      ? { granted: true }
+      : {
+          granted: false,
+          reason: 'permission-denied',
+        }
   }
   catch (error) {
     logger?.warn?.('[touch-dev-utils] Failed to request permission', error)
-    return false
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
   }
 }
 
@@ -537,13 +548,13 @@ const pluginLifecycle = {
         : null
 
       if (copyAction?.payload) {
-        const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制开发工具结果')
-        if (!canCopy) {
+        const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制开发工具结果')
+        if (!permissionResult.granted) {
           return {
             externalAction: true,
             success: false,
             status: 'blocked',
-            reason: 'permission-denied',
+            reason: permissionResult.reason || 'permission-denied',
             message: '缺少 clipboard.write 权限',
           }
         }
@@ -551,12 +562,30 @@ const pluginLifecycle = {
         if (typeof payloadText !== 'string') {
           return
         }
-        clipboard.writeText(payloadText)
+
+        if (typeof clipboard?.writeText !== 'function') {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'clipboard-unavailable',
+            message: '当前环境不支持写入剪贴板',
+          }
+        }
+
+        await clipboard.writeText(payloadText)
         return { externalAction: true, status: 'started' }
       }
     }
     catch (error) {
       logger?.error?.('[touch-dev-utils] Action failed', error)
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'clipboard-write-failed',
+        message: error?.message || '复制失败',
+      }
     }
   },
 }

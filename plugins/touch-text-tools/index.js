@@ -28,19 +28,31 @@ function truncateText(value, max = 96) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request)
-    return false
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
 
   try {
     const hasPermission = await permission.check(permissionId)
     if (hasPermission)
-      return true
+      return { granted: true }
     const granted = await permission.request(permissionId, reason)
-    return Boolean(granted)
+    return granted
+      ? { granted: true }
+      : {
+          granted: false,
+          reason: 'permission-denied',
+        }
   }
   catch (error) {
     logger?.warn?.('[touch-text-tools] Failed to request permission', error)
-    return false
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
   }
 }
 
@@ -278,18 +290,28 @@ const pluginLifecycle = {
       if (typeof payloadText !== 'string')
         return
 
-      const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制文本工具结果')
-      if (!canCopy) {
+      const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制文本工具结果')
+      if (!permissionResult.granted) {
         return {
           externalAction: true,
           success: false,
           status: 'blocked',
-          reason: 'permission-denied',
+          reason: permissionResult.reason || 'permission-denied',
           message: '缺少 clipboard.write 权限',
         }
       }
 
-      clipboard.writeText(payloadText)
+      if (typeof clipboard?.writeText !== 'function') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'clipboard-unavailable',
+          message: '当前环境不支持写入剪贴板',
+        }
+      }
+
+      await clipboard.writeText(payloadText)
       logger?.log?.('[touch-text-tools] Copied to clipboard')
 
       const isFeatureExecution = Boolean(item.meta?.featureId)
@@ -299,6 +321,13 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-text-tools] Action failed', error)
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'clipboard-write-failed',
+        message: error?.message || '复制失败',
+      }
     }
   },
 }

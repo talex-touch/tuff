@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TranslationResult } from '../types/translation'
+import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
 import { computed } from 'vue'
 
 interface Props {
@@ -20,14 +21,25 @@ const emit = defineEmits<{
   retry: [providerId: string]
 }>()
 
+let clipboard: ReturnType<typeof useClipboard> | null = null
+
+try {
+  clipboard = useClipboard()
+}
+catch {
+  clipboard = null
+}
+
 async function copyResult() {
-  if (props.result?.text) {
-    try {
-      await navigator.clipboard.writeText(props.result.text)
-    }
-    catch (err) {
-      void err
-    }
+  if (!props.result?.text || !clipboard) {
+    return
+  }
+
+  try {
+    await clipboard.writeText(props.result.text)
+  }
+  catch (err) {
+    void err
   }
 }
 

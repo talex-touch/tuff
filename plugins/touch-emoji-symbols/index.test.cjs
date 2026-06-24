@@ -152,11 +152,96 @@ test('onItemAction blocks copy when permission sdk is unavailable', async () => 
     assert.deepEqual(writes, [])
     assert.equal(result.externalAction, true)
     assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-denied')
+    assert.equal(result.reason, 'permission-sdk-unavailable')
   }
   finally {
     globalThis.permission = originalPermission
     globalThis.clipboard.writeText = originalWriteText
+  }
+})
+
+test('onItemAction blocks copy when clipboard sdk is unavailable', async () => {
+  const originalWriteText = globalThis.clipboard.writeText
+  const originalCheck = globalThis.permission.check
+  const originalRequest = globalThis.permission.request
+
+  delete globalThis.clipboard.writeText
+  globalThis.permission.check = async () => true
+  globalThis.permission.request = async () => true
+
+  try {
+    const result = await emojiPlugin.onItemAction({
+      meta: { defaultAction: 'copy' },
+      actions: [{ type: 'copy', payload: '✨' }],
+    })
+
+    assert.equal(result.externalAction, true)
+    assert.equal(result.status, 'blocked')
+    assert.equal(result.reason, 'clipboard-unavailable')
+  }
+  finally {
+    globalThis.clipboard.writeText = originalWriteText
+    globalThis.permission.check = originalCheck
+    globalThis.permission.request = originalRequest
+  }
+})
+
+test('onItemAction blocks copy when permission request fails', async () => {
+  const writes = []
+  const originalWriteText = globalThis.clipboard.writeText
+  const originalCheck = globalThis.permission.check
+  const originalRequest = globalThis.permission.request
+
+  globalThis.clipboard.writeText = value => writes.push(value)
+  globalThis.permission.check = async () => {
+    throw new Error('permission down')
+  }
+  globalThis.permission.request = async () => true
+
+  try {
+    const result = await emojiPlugin.onItemAction({
+      meta: { defaultAction: 'copy' },
+      actions: [{ type: 'copy', payload: '✨' }],
+    })
+
+    assert.deepEqual(writes, [])
+    assert.equal(result.externalAction, true)
+    assert.equal(result.status, 'blocked')
+    assert.equal(result.reason, 'permission-request-failed')
+  }
+  finally {
+    globalThis.clipboard.writeText = originalWriteText
+    globalThis.permission.check = originalCheck
+    globalThis.permission.request = originalRequest
+  }
+})
+
+test('onItemAction returns explicit failure when clipboard write fails', async () => {
+  const originalWriteText = globalThis.clipboard.writeText
+  const originalCheck = globalThis.permission.check
+  const originalRequest = globalThis.permission.request
+
+  globalThis.clipboard.writeText = async () => {
+    throw new Error('clipboard down')
+  }
+  globalThis.permission.check = async () => true
+  globalThis.permission.request = async () => true
+
+  try {
+    const result = await emojiPlugin.onItemAction({
+      meta: { defaultAction: 'copy' },
+      actions: [{ type: 'copy', payload: '✨' }],
+    })
+
+    assert.equal(result.externalAction, true)
+    assert.equal(result.status, 'blocked')
+    assert.equal(result.reason, 'clipboard-write-failed')
+    assert.equal(result.message, 'clipboard down')
+  }
+  finally {
+    globalThis.clipboard.writeText = originalWriteText
+    globalThis.permission.check = originalCheck
+    globalThis.permission.request = originalRequest
   }
 })
 

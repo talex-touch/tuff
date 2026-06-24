@@ -55,9 +55,11 @@ const {
   normalizeSnippetPack,
   parseSnippets,
   publishSnippetPack,
+  readClipboardText,
   resolveAccountAuthToken,
   rankSnippets,
   serializeSnippets,
+  writeClipboardText,
 } = require('./index.js').__test
 
 test('applyPlaceholders resolves date time uuid and clipboard placeholders', () => {
@@ -73,6 +75,116 @@ test('applyPlaceholders resolves date time uuid and clipboard placeholders', () 
 
   assert.equal(resolved, '2026-05-17 08:09:10 123e4567-e89b-12d3-a456-426614174000 123e4567-e89b-12d3-a456-426614174000 copied')
   assert.equal(uuidCalls, 1)
+})
+
+test('readClipboardText does not read when clipboard.read permission is denied', async () => {
+  const reads = []
+  const requests = []
+  const originalReadText = globalThis.clipboard.readText
+  const originalCheck = globalThis.permission.check
+  const originalRequest = globalThis.permission.request
+
+  globalThis.clipboard.readText = async () => {
+    reads.push('read')
+    return 'secret'
+  }
+  globalThis.permission.check = async () => false
+  globalThis.permission.request = async (permissionId, reason) => {
+    requests.push({ permissionId, reason })
+    return false
+  }
+
+  try {
+    const result = await readClipboardText('需要读取剪贴板')
+
+    assert.deepEqual(requests, [{ permissionId: 'clipboard.read', reason: '需要读取剪贴板' }])
+    assert.deepEqual(reads, [])
+    assert.deepEqual(result, {
+      read: false,
+      text: '',
+      reason: 'permission-denied',
+    })
+  }
+  finally {
+    globalThis.clipboard.readText = originalReadText
+    globalThis.permission.check = originalCheck
+    globalThis.permission.request = originalRequest
+  }
+})
+
+test('readClipboardText fails closed when clipboard read sdk is unavailable', async () => {
+  const originalReadText = globalThis.clipboard.readText
+  const originalCheck = globalThis.permission.check
+  const originalRequest = globalThis.permission.request
+
+  delete globalThis.clipboard.readText
+  globalThis.permission.check = async () => true
+  globalThis.permission.request = async () => true
+
+  try {
+    const result = await readClipboardText('需要读取剪贴板')
+
+    assert.deepEqual(result, {
+      read: false,
+      text: '',
+      reason: 'clipboard-unavailable',
+    })
+  }
+  finally {
+    globalThis.clipboard.readText = originalReadText
+    globalThis.permission.check = originalCheck
+    globalThis.permission.request = originalRequest
+  }
+})
+
+test('writeClipboardText fails closed when clipboard write sdk is unavailable', async () => {
+  const originalWriteText = globalThis.clipboard.writeText
+  const originalCheck = globalThis.permission.check
+  const originalRequest = globalThis.permission.request
+
+  delete globalThis.clipboard.writeText
+  globalThis.permission.check = async () => true
+  globalThis.permission.request = async () => true
+
+  try {
+    const result = await writeClipboardText('snippet', '需要写入剪贴板')
+
+    assert.deepEqual(result, {
+      written: false,
+      reason: 'clipboard-unavailable',
+    })
+  }
+  finally {
+    globalThis.clipboard.writeText = originalWriteText
+    globalThis.permission.check = originalCheck
+    globalThis.permission.request = originalRequest
+  }
+})
+
+test('writeClipboardText returns explicit failure when clipboard write throws', async () => {
+  const originalWriteText = globalThis.clipboard.writeText
+  const originalCheck = globalThis.permission.check
+  const originalRequest = globalThis.permission.request
+
+  globalThis.clipboard.writeText = async () => {
+    throw new Error('clipboard down')
+  }
+  globalThis.permission.check = async () => true
+  globalThis.permission.request = async () => true
+
+  try {
+    const result = await writeClipboardText('snippet', '需要写入剪贴板')
+
+    assert.deepEqual(result, {
+      written: false,
+      reason: 'clipboard-write-failed',
+    })
+  }
+  finally {
+    globalThis.clipboard.writeText = originalWriteText
+    globalThis.permission.check = originalCheck
+    globalThis.permission.request = originalRequest
+  }
 })
 
 test('parseSnippets accepts string payloads and keeps legacy snippet shape', () => {
