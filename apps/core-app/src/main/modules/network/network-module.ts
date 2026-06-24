@@ -6,11 +6,13 @@ import type {
 } from '@talex-touch/utils'
 import { NetworkEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { powerMonitor } from 'electron'
+import { net, powerMonitor } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from './network-service'
+
+const NETWORK_STATUS_POLL_INTERVAL_MS = 5000
 
 function resolveKeyManager(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value
@@ -23,6 +25,7 @@ export class NetworkModule extends BaseModule {
   name: ModuleKey = NetworkModule.key
 
   private readonly disposers: Array<() => void> = []
+  private statusPollTimer: NodeJS.Timeout | null = null
 
   constructor() {
     super(NetworkModule.key, {
@@ -35,6 +38,28 @@ export class NetworkModule extends BaseModule {
     const runtime = resolveMainRuntime(ctx, 'NetworkModule.onInit')
     const transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
     const service = getNetworkService()
+    const publishStatus = (
+      online: boolean,
+      reason: 'online' | 'offline' | 'resume' | 'manual' | 'probe'
+    ) => {
+      const previous = service.getStatus()
+      const status = service.setOnlineStatus(online, reason)
+      if (previous?.online === status.online) {
+        return
+      }
+      transport.broadcast(NetworkEvents.lifecycle.status, status)
+      if (online) {
+        transport.broadcast(NetworkEvents.lifecycle.online, { ...status, online: true })
+        return
+      }
+      transport.broadcast(NetworkEvents.lifecycle.offline, { ...status, online: false })
+    }
+    const probeStatus = (reason: 'resume' | 'probe') => {
+      if (typeof net?.isOnline !== 'function') {
+        return
+      }
+      publishStatus(net.isOnline(), reason)
+    }
 
     this.disposers.push(
       transport.on(NetworkEvents.api.request, async (request) => await service.request(request)),
@@ -52,18 +77,34 @@ export class NetworkModule extends BaseModule {
       transport.on(NetworkEvents.api.clearCooldown, (payload) => {
         service.clearCooldown(payload?.key)
       }),
-      transport.on(NetworkEvents.lifecycle.online, () => {
-        service.clearCooldown()
+      transport.on(NetworkEvents.lifecycle.online, (payload) => {
+        publishStatus(true, payload?.reason ?? 'online')
+      }),
+      transport.on(NetworkEvents.lifecycle.offline, (payload) => {
+        publishStatus(false, payload?.reason ?? 'offline')
       })
     )
 
+    this.statusPollTimer = setInterval(() => {
+      probeStatus('probe')
+    }, NETWORK_STATUS_POLL_INTERVAL_MS)
+    this.statusPollTimer.unref?.()
+    this.disposers.push(() => {
+      if (this.statusPollTimer) {
+        clearInterval(this.statusPollTimer)
+        this.statusPollTimer = null
+      }
+    })
+
     if (typeof powerMonitor?.on === 'function') {
       const handleResume = () => {
-        service.clearCooldown()
+        probeStatus('resume')
       }
       powerMonitor.on('resume', handleResume)
       this.disposers.push(() => powerMonitor.off('resume', handleResume))
     }
+
+    probeStatus('probe')
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): MaybePromise<void> {

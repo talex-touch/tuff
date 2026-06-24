@@ -35,6 +35,22 @@ export interface NetworkCooldownClearRequest {
   key?: string
 }
 
+export type NetworkLifecycleReason = 'online' | 'offline' | 'resume' | 'manual' | 'probe'
+
+export interface NetworkLifecycleStatusPayload {
+  online: boolean
+  reason?: NetworkLifecycleReason
+  changedAt: number
+}
+
 export interface NetworkLifecycleOnlinePayload {
-  reason?: 'online' | 'resume' | 'manual'
+  online?: true
+  reason?: NetworkLifecycleReason
+  changedAt?: number
+}
+
+export interface NetworkLifecycleOfflinePayload {
+  online?: false
+  reason?: NetworkLifecycleReason
+  changedAt?: number
 }
