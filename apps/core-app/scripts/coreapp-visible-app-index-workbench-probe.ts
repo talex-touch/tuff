@@ -902,24 +902,35 @@ function diagnoseManagerEntryExpression(entryId: string, timeoutMs = 12_000): st
     const targetEntry = entries.find((entry) => entry.id === ${JSON.stringify(entryId)})
     const targetTitle = targetEntry?.displayName || ${JSON.stringify(entryId)}
     const textOf = (node) => (node?.textContent || '').replace(/\\s+/g, ' ').trim()
-    const row = Array.from(document.querySelectorAll('.app-index-entry')).find((entry) => {
-      const title = textOf(entry.querySelector('.app-index-entry-title-row strong'))
-      return title === targetTitle
-    })
+    let row = null
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < ${timeoutMs}) {
+      row = Array.from(document.querySelectorAll('.app-index-entry')).find((entry) => {
+        const title = textOf(entry.querySelector('.app-index-entry-title-row strong'))
+        return title === targetTitle
+      })
+      if (row) break
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
     if (!row) {
       return { diagnosed: false, reason: 'entry-row-not-found', targetTitle }
     }
     const buttons = Array.from(row.querySelectorAll('button'))
     const diagnoseButton = buttons.find((button) => {
       const text = textOf(button)
-      return text === 'Diagnose' || text === '运行诊断'
+      return text === 'Diagnose' || text === '诊断' || text === '运行诊断'
     })
     if (!diagnoseButton) {
-      return { diagnosed: false, reason: 'diagnose-button-not-found', targetTitle }
+      return {
+        diagnosed: false,
+        reason: 'diagnose-button-not-found',
+        targetTitle,
+        buttonTexts: buttons.map(textOf)
+      }
     }
     diagnoseButton.click()
-    const startedAt = Date.now()
-    while (Date.now() - startedAt < ${timeoutMs}) {
+    const diagnosticStartedAt = Date.now()
+    while (Date.now() - diagnosticStartedAt < ${timeoutMs}) {
       const summary = textOf(row.querySelector('.app-index-entry-diagnostic-summary'))
       if (
         summary.includes('Found') ||
