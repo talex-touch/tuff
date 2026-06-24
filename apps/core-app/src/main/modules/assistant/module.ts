@@ -34,7 +34,7 @@ import {
 } from '../box-tool/core-box/image-translate'
 import { windowManager } from '../box-tool/core-box/window'
 import { getNativeScreenshotService } from '../native-capabilities/screenshot-service'
-import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
+import { getMainConfig, persistMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 interface FloatingBallPosition {
   x: number
@@ -593,8 +593,11 @@ export class AssistantModule extends BaseModule {
         saveMainConfig(StorageList.APP_SETTING, setting)
       }
       setting.floatingBall.position = { ...this.pendingPosition }
-      saveMainConfig(StorageList.APP_SETTING, setting)
+      saveMainConfig(StorageList.APP_SETTING, setting, { force: true })
       this.pendingPosition = null
+      void persistMainConfig(StorageList.APP_SETTING).catch((error) => {
+        assistantLog.warn('Failed to persist floating ball position immediately', { error })
+      })
     }, 220)
   }
 
@@ -645,13 +648,9 @@ export class AssistantModule extends BaseModule {
       voiceWindow.window.focus()
 
       if (this.transport) {
-        await this.transport.sendTo(
-          voiceWindow.window.webContents,
-          AssistantEvents.voice.panelOpened,
-          {
-            source
-          }
-        )
+        this.transport.broadcastToWindow(voiceWindow.window.id, AssistantEvents.voice.panelOpened, {
+          source
+        })
       }
     } finally {
       this.releaseVoicePanelAutoHideSuppression()

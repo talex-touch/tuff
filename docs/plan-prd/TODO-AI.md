@@ -17,7 +17,11 @@
 - `app-index-workbench` packaged surface 已标记 `passed`：Settings -> File Index -> App Index Manager 覆盖 summary counts、6 类 source filters、found/unchecked/disabled/attention diagnostic filters 与 filtered-empty state。
 - `browser-login-recovery` packaged surface 已标记 `passed`：覆盖 browser-open failure waiting session、manual login URL copy、short code copy、timeout retry 文案与 network failure copy JSON。
 - `omnipanel-writing-tools` packaged surface 已标记 `passed`：覆盖 selected-text context / recovery hint、writing actions、AI result preview、Retry / Copy / Replace Clipboard 与 replace confirmation。
-- `assistant-screenshot-translate` 已完成初步 MVP 代码切片：Assistant typed events、VoicePanel 双入口、cursor-display screenshot -> image translate -> pin window 主流程与 focused tests 已落地；packaged visible evidence 仍 pending。
+- `provider-migration-evidence` surface 已标记 `passed`：覆盖 Nexus local-only dry-run migration summary、readiness/blockers/counts、secret redaction 与 dry-run 不声明 registry-primary readiness 边界。
+- `assistant-floating-ball-entry` surface 已标记 `passed`：packaged evidence 覆盖 Settings 中 Assistant enabled + voice wake disabled、悬浮球可见且不抢焦点、拖动位置重启后持久化、点击打开 Voice Panel。
+- `assistant-screenshot-translate` surface 已标记 `passed`：packaged evidence 覆盖 Settings 开关、剪贴板图片翻译入口、翻译结果窗口、空剪贴板与 provider fallback。
+- `workflow-use-model-review-queue` surface 已标记 `passed`：packaged evidence 覆盖 Review Queue pending/failed 队列态、Use Model 输出、成本/trace 信号与失败恢复。
+- `provider-registry-observability` surface 已标记 `passed`：packaged evidence 覆盖 provider health、scene latest run/recent failure、状态 filter 与 next-action hint。
 - 已覆盖：
   - text.chat success
   - OCR handoff success
@@ -29,7 +33,7 @@
   - Local/Ollama routing
 - packaged startup hot/cold benchmark 已 passed。
 - startup first-screen evidence 已 passed。
-- strict visible verifier 仍按预期失败，最近口径为 `gate.failures.length=34`，剩余失败均来自 Assistant / Workflow / Provider broader visible surfaces；2026-06-24 app-index evidence 后 inventory 确认 manifest 引用的 54 个唯一 artifact 均存在、非空，JSON artifact 均可解析。
+- strict visible verifier 当前通过：`gate.passed=true`，13/13 required surfaces `passed`；2026-06-24 evidence inventory 确认 manifest 引用的 72 个唯一 artifact 均存在、非空，JSON artifact 均可解析。
 
 ## 状态明细
 
@@ -39,35 +43,38 @@
 | `app-index-workbench` | closed | 2026-06-24 packaged Settings UI evidence 已覆盖 summary counts、UWP/Store、Steam、shortcut、protocol、AppRef、path filters，found/unchecked/disabled/attention states 与 filtered-empty distinction；diagnostic JSON gate 已通过。 |
 | `browser-login-recovery` | closed | 2026-06-24 packaged evidence 已覆盖 browser-open failure waiting session、manual login URL copy、short code copy、timeout retry 文案与 network failure copy JSON。 |
 | `omnipanel-writing-tools` | closed | 2026-06-24 packaged evidence 已覆盖 selected-text context / recovery hint、5 个 writing actions、AI result preview metadata、Retry / Copy / Replace Clipboard 与 replace confirmation。 |
-| `assistant-screenshot-translate` | code-partial | 初步 MVP 主流程与 focused tests 已完成；仍缺 packaged clipboard image translate、screenshot translate、pin window 展示、provider unavailable、截图权限/unsupported failure evidence。 |
-| Broader visible surfaces | open | Assistant、Workflow、Provider surfaces 仍 pending；`browser-login-recovery` 与 `omnipanel-writing-tools` 已 passed。 |
-| Global visible gate | open | strict visible verifier 仍不能标 passed。 |
+| `provider-migration-evidence` | closed | 2026-06-24 Nexus local-only dry-run evidence 已覆盖 migration summary、planning readiness、blocker/counts、secret redaction 与 dry-run 不声明 registry-primary readiness；不代表生产 registry-primary ready。 |
+| `assistant-floating-ball-entry` | closed | 2026-06-24 packaged probe 已覆盖 Assistant enabled + voice wake disabled、悬浮球可见且不抢焦点、拖动位置重启后持久化、点击打开 Voice Panel。 |
+| `assistant-screenshot-translate` | closed | 2026-06-24 packaged evidence 已覆盖 Settings、clipboard image translate start/result、empty clipboard 与 provider fallback；截图翻译后续进入产品化 polish。 |
+| `workflow-use-model-review-queue` | closed | 2026-06-24 packaged evidence 已覆盖 pending / failed queue、Use Model output、runtime cost/trace 与恢复文案。 |
+| `provider-registry-observability` | closed | 2026-06-24 packaged evidence 已覆盖 provider health、scene latest run/recent failure、状态 filter 与 next-action hint。 |
+| Broader visible surfaces | closed | R2 visible manifest 13/13 surfaces passed。 |
+| Global visible gate | closed | strict visible verifier 当前可标 passed。 |
 | AI Beta surfaces | open | Workflow Use Model、Review Queue、Assistant、Agent 工具执行等不反向阻塞 CoreBox Stable。 |
 
-## Strict gate failure 分组
+## Strict gate 闭环分组
 
-| Surface | Failure count | 摘要 |
+| Surface | Artifact count | 摘要 |
 | --- | ---: | --- |
-| `assistant-floating-ball-entry` | 7 | 未 passed、无 artifact、无 screenshot/recording，4 个 floating ball evidence 未勾选。 |
-| `assistant-screenshot-translate` | 7 | 初步 MVP 代码已落地但未 passed；缺 packaged clipboard image translate、screenshot translate、pin window、provider/screenshot failure evidence。 |
-| `workflow-use-model-review-queue` | 7 | 未 passed、无 artifact、无 screenshot/recording，4 个 Review Queue evidence 未勾选。 |
-| `provider-registry-observability` | 7 | 未 passed、无 artifact、无 screenshot/recording，4 个 provider registry evidence 未勾选。 |
-| `provider-migration-evidence` | 6 | 未 passed、无 artifact，4 个 migration evidence 未勾选；该 surface 不要求 visual artifact。 |
+| `assistant-screenshot-translate` | 6 | packaged Assistant image translate probe + Settings/start/result/empty/fallback PNG 已绑定。 |
+| `workflow-use-model-review-queue` | 3 | Review Queue probe + pending/failed PNG 已绑定。 |
+| `provider-registry-observability` | 3 | Provider registry probe + health/scene run PNG 已绑定。 |
 
 ## R2 artifact inventory
 
-- Manifest artifact 总引用 54 次，去重后 54 个唯一文件，覆盖 startup hot/cold、startup first-screen、CoreBox search states、app-index workbench、browser login recovery、CoreBox AI Ask、OmniPanel writing tools 这 8 个 passed surfaces。
+- Manifest artifact 总引用 72 次，去重后 72 个唯一文件，覆盖 13 个 passed surfaces：startup hot/cold、startup first-screen、CoreBox search states、app-index workbench、browser login recovery、CoreBox AI Ask、OmniPanel writing tools、provider migration evidence、Assistant floating ball entry、Assistant screenshot translate、Workflow review queue 与 Provider registry observability。
 - `--requireExistingArtifacts --requireNonEmptyArtifacts` 已确认全部 manifest 引用存在且非空；JSON artifact 均可解析。
 - `evidenceTagArtifacts` 没有 unknown artifact 引用；AI-STABLE tag artifact 均同时落在 `artifactPaths`。
 - PNG / JSON 对应关系基本为同名 `*-dom.json` 或 `*-probe.json`；`packaged-corebox-hotkey-page-04.png` 由 `packaged-corebox-hotkey-capture.json` 的 `captures[].screenshotPath` 关联。
 
 ## 下一步
 
-1. Roadmap 推荐路径：优先 `assistant-floating-ball-entry` 或 `provider-registry-observability`，继续关闭 remaining broader visible surfaces。
-2. `assistant-screenshot-translate` 下一步只做 evidence pass：packaged 环境采剪贴板图片翻译、截图并翻译、pin window source/target 文本、provider unavailable、截图权限/unsupported failure；不能只凭 focused tests 关闭 surface。
-3. 后续排序：`assistant-floating-ball-entry`、`provider-registry-observability`、`provider-migration-evidence`、`assistant-screenshot-translate`、`workflow-use-model-review-queue`。
-4. 保留 R2D idle、searching/warm-up、no-result 与 R2I result pills 作为最终 CoreBox Search evidence，避免旧 r2/r2b/r2c 或 `corebox-search-result-reasons.png` 被误用。
-5. 每新增 evidence 同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/`、Evidence Matrix、CHANGES；不使用旧 raw blocker artifact 冒充最终 evidence。
+1. Assistant screenshot translate 进入灰度产品化：保留 Voice Panel 双入口，补截图模式选择、权限恢复、pin window polish 与 provider fallback 文案。
+2. OmniPanel / Assistant 性能优化：聚焦窗口生命周期、悬浮球拖拽持久化、事件广播、packaged asset 排除与首屏不阻塞。
+3. 桌面烟花 MVP：feature flag 默认关闭，轻量 overlay/canvas，限制粒子数、帧率、自动退出与无障碍降级。
+4. 截图功能逐步引入：先做截图 capture + preview + copy/save，再接 translate；失败态区分权限拒绝、平台 unsupported 与 provider unavailable。
+5. 保留 R2D idle、searching/warm-up、no-result 与 R2I result pills 作为最终 CoreBox Search evidence，避免旧 r2/r2b/r2c 或 `corebox-search-result-reasons.png` 被误用。
+6. 后续每次产品化变更仍同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/`、Evidence Matrix、TODO 与 CHANGES；不使用旧 raw blocker artifact 冒充最终 evidence。
 
 ## R2 visible gate 执行梯队
 
@@ -76,13 +83,13 @@
 | done | `browser-login-recovery` | closed | Browser-open failure 不丢 device authorization session；manual login URL copy、short code copy、timeout/network failure 文案可见 | 2026-06-24 packaged evidence 已绑定；strict verifier 不再列该 surface。 |
 | done | `app-index-workbench` | closed | Summary counts、UWP/Store/Steam/shortcut/protocol/AppRef/path source filters、attention/found/unchecked/disabled filters、no entries vs filtered-out empty states | 2026-06-24 packaged evidence 已绑定；strict verifier 不再列该 surface。 |
 | done | `omnipanel-writing-tools` | closed | Selected-text context / recovery hint、writing actions、AI result preview、copy / replace / retry / confirmation states | 2026-06-24 packaged evidence 已绑定；strict verifier 不再列该 surface。 |
-| 1 | `assistant-floating-ball-entry` | 3-5h | Settings enabled + voice wake disabled、浮窗不抢焦点、拖动位置持久化、点击打开 Voice Panel | 需要 screenshot/recording artifact。 |
-| 2 | `provider-registry-observability` | 3-5h | Provider health、latest usage、scene latest run、recent failure、attention/healthy/degraded/unhealthy/unknown filters、next-action hints | 不暴露 provider secret；截图/DOM evidence 绑定 manifest。 |
-| 4 | `provider-migration-evidence` | 3-6h | Dry-run 或 execute migration evidence、readiness/blockers/migrated/skipped/failed counts、secret redaction、dry-run 不声明 registry-primary readiness | 该 surface 不要求 visual artifact，但必须有可审计 evidence 文件。 |
-| 4 | `assistant-screenshot-translate` | 2-4h evidence pass | Clipboard image 与 screenshot translate 均从 Assistant Voice Panel 进入；pin window、source/target 文本、provider unavailable、截图权限/unsupported failure 可见 | 初步 MVP 代码已落地；环境不可复现时记录 blocker，不伪造 success。 |
-| 4 | `workflow-use-model-review-queue` | 4-7h | Use Model output 入 Review Queue、pending/copied/clipboard-replaced/failed filters、cost signals、failed copy/replace retry/clear-failure | 链路长，最后处理。 |
+| done | `provider-migration-evidence` | closed | Dry-run migration summary、readiness/blockers/migrated/skipped/failed counts、secret redaction、dry-run 不声明 registry-primary readiness | 2026-06-24 local-only dry-run evidence 已绑定；strict verifier 不再列该 surface。 |
+| done | `assistant-floating-ball-entry` | closed | Settings enabled + voice wake disabled、浮窗不抢焦点、拖动位置持久化、点击打开 Voice Panel | 2026-06-24 packaged evidence 已绑定；strict verifier 不再列该 surface。 |
+| done | `assistant-screenshot-translate` | closed | Clipboard image translate、result window、empty clipboard 与 provider fallback | 2026-06-24 packaged evidence 已绑定；后续做产品化 polish。 |
+| done | `workflow-use-model-review-queue` | closed | Use Model output 入 Review Queue、pending/failed queue、cost/trace signals、failed recovery | 2026-06-24 packaged evidence 已绑定。 |
+| done | `provider-registry-observability` | closed | Provider health、latest usage、scene latest run、recent failure、filters、next-action hints | 2026-06-24 packaged evidence 已绑定；不暴露 provider secret。 |
 
-每个 surface 批次结束必须同步：
+每个 R2 follow-up 批次结束必须同步：
 
 - `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`
 - `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json`
