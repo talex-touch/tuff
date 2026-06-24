@@ -65,14 +65,14 @@ describe('manifest validate', () => {
 
   it('rejects future sdkapi markers until runtime support is explicit', async () => {
     await withTempDir('tuff-validate-', async (root) => {
-      const manifestPath = await writeManifest(root, { sdkapi: 260501 })
+      const manifestPath = await writeManifest(root, { sdkapi: 260701 })
 
       await expect(runValidate(['--manifest', manifestPath])).rejects.toThrow(
         'Manifest validation failed',
       )
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('sdkapi 260501 is not a supported SDK marker'),
+        expect.stringContaining('sdkapi 260701 is not a supported SDK marker'),
       )
     })
   })

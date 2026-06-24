@@ -85,12 +85,12 @@ describe('official plugin manifest trust boundary', () => {
     }
   })
 
-  it('keeps touch-intelligence as the only plugin on the newest SDK marker until runtime migration expands', () => {
+  it('keeps repository plugins off the newest SDK marker until runtime migration expands', () => {
     const currentMarkerPlugins = manifests
       .filter(({ manifest }) => manifest.sdkapi === CURRENT_SDK_VERSION)
       .map(({ manifest }) => manifest.name)
 
-    expect(currentMarkerPlugins).toEqual(['touch-intelligence'])
+    expect(currentMarkerPlugins).toEqual([])
   })
 
   it('requires a permission reason for every declared plugin permission', () => {
