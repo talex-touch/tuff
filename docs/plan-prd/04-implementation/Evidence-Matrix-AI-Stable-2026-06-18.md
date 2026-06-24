@@ -1,6 +1,6 @@
 # Evidence Matrix: AI 2.5.0 Stable
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-22
 > 定位：AI 2.5.0 Stable 的固定证据矩阵。本文只定义验收证据，不把 SDK/schema/focused tests 误写成 packaged Electron 体验闭环。
 
 ## 1. Stable 范围
@@ -74,6 +74,8 @@ pnpm -C "packages/tuffex" run typecheck
 随后关闭 copy failure packaged evidence：旧 `raw/packaged-ai-ask-copy-failure-*` 继续保留为历史 blocker 诊断；发布形态 profile 改用 `touch-intelligence/dist/build` precompiled plugin 后，`packaged-ai-ask-copy-failure-probe.json` 为 `ok=true`，`packaged-ai-ask-copy-failure.png` 在真实 packaged CoreBox AI Ask answer preview 内展示 `复制失败：缺少 clipboard.write 权限` 与恢复提示。
 
 2026-06-21 当前阶段收尾复核：`useSearch.core.test.ts` 9 tests、`coreapp-packaged-ai-ask-probe.test.ts` 26 tests、`packages/test/src/plugins/intelligence.test.ts` 28 tests、`coreapp-visible-experience-evidence.test.ts` 15 tests、`plugins/touch-intelligence` build 与 `git diff --check` 均通过。Strict visible verifier 仍按预期 exit `1`，`gate.failures.length=80`；`corebox-ai-ask` 已是 `passed`，剩余 failures 属 startup/search/app-index/login/OmniPanel/Assistant/Workflow/Provider broader visible surfaces pending。
+
+2026-06-22 R2I evidence 同步后复跑严格验证：`gate.passed=false`、`failureCount=55`、exit `1` 仍符合预期；`corebox-search-states` 不再出现在 failure list 中，剩余 failures 来自 app-index/login/OmniPanel/Assistant/Workflow/Provider broader visible surfaces pending。CoreBox search states R2D/R2I packaged evidence 已覆盖 idle、searching/warm-up、no-result retry/File Index settings 与真实 result source/status/reason pills；普通 `core-box` 窗口从 `720x56` resize 到 `720x242`。
 
 ## 6. 推荐验证命令
 

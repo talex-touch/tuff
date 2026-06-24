@@ -40,6 +40,7 @@
 ## 高价值专题入口
 
 - [Tuff 2.5.0 AI 桌面入口收口 PRD](./03-features/ai-2.5.0-plan-prd.md)
+- [OmniPanel 与悬浮助手下一版本 PRD](./03-features/omnipanel-assistant-next-prd.md)
 - [本地知识检索 PRD](./03-features/ai-2.5.3-local-knowledge-retrieval-prd.md)
 - [ContextHygiene 与自动记忆治理 PRD](./03-features/ai-2.5.4-context-hygiene-memory-prd.md)
 - [本地开源模型运行时 PRD](./03-features/ai-2.5.5-local-model-runtime-prd.md)

@@ -1,6 +1,6 @@
 # Tuff R3 Search / Indexing Runtime TODO
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-24
 > 范围：Roadmap R3 / Search Provider 与 Indexing Runtime。专题设计以 `03-features/search/INDEXING-RUNTIME-V1-PLAN.md` 为准。
 
 ## 当前口径
@@ -31,11 +31,64 @@
 | Browser Bookmarks platform evidence | partial | 需要真实浏览器 profile、跨平台 watch root 与 packaged evidence。 |
 | Everything productionization | partial | 需要 SDK/CLI 最终策略、registry/PATH 探测、Windows 性能与 fail-closed 诊断 evidence。 |
 
+## 高风险迁移前置确认清单
+
+> 适用范围：SQLite/FTS durable ownership migration 与 `scan_progress` source-scoped schema migration。该清单只定义执行前必须确认的影响范围；未完成确认前，不进入 schema / 数据迁移实现。
+
+### SQLite / FTS durable ownership
+
+- 数据对象范围：确认 `files`、`file_extensions`、`file_index_progress`、`search_index` FTS5 虚表及 shadow tables、`search_index_meta`、`keyword_mappings` 是否纳入同一迁移批次；明确 `file_fts` 是否仍保留、迁移或废弃。
+- 写入所有权：确认 FileProvider、SearchIndexService、SearchIndexWorker、DbWriteScheduler、runtime task/store 的最终写入边界；迁移后不得出现 main thread 与 worker 对同一索引域并发写入。
+- 兼容读写窗口：确认旧表/旧 FTS schema 与新 runtime/store 在一个版本内的 dual-read / dual-write 或只读迁移策略；明确 hard-cut 条件和不可回退点。
+- FTS 重建影响：确认 `search_index` 重建、shadow table 清理、keyword mappings 清理、`searchIndex.didMigrate` 触发全量重扫的条件；估算重建耗时、UI degraded 状态与可取消/恢复行为。
+- 数据一致性：确认 files rows、FTS rows、keyword_mappings orphan、search_index_meta keyword hash 的一致性检查口径；迁移前后必须有 row-count diff、orphan cleanup diff 和 integrity snapshot。
+- SQLite 运行风险：确认 WAL / BUSY / retry / write queue / transaction 粒度 / batch size 对启动、搜索、扫描、删除和 Settings diagnostics 的影响；不得用无上限重试或大事务掩盖锁竞争。
+- 回滚策略：确认失败时是保留旧表、重建 FTS、清空 provider-scoped index，还是触发 full rescan；列出哪些失败会导致用户只能等待重扫。
+- 证据要求：除 focused tests 外，必须补 migration dry-run summary、真实/packaged profile row-count evidence、Settings diagnostics 截图或录屏、`git diff --check` 与 CoreApp 贴近测试。
+
+### `scan_progress` source-scoped schema
+
+- schema 范围：确认从当前 `scan_progress(path primary key, last_scanned)` 迁到 source-scoped 结构时的主键形态，例如 `(source_id, path)`；明确 `source_id` 默认值、索引、唯一约束和空/非法 path 处理。
+- 数据归属：确认现有 path-only rows 如何归属到 `file-provider`，以及 Browser Bookmarks、Everything、AppProvider 等 indexed source 是否需要独立 progress scope；避免不同 source 的相同 path 互相污染。
+- path 规范化：确认 raw path、normalized path、watch root 展开、大小写敏感、符号链接和跨平台分隔符的迁移规则；迁移前后 pending/completed root 计算必须一致。
+- 清理范围：确认 manual rebuild、schema migration、integrity repair、watch root 删除、permission revoked、provider disable 时清理的是 source-scoped rows 还是全局 rows；不得误删其它 source 的进度。
+- 兼容读写：确认迁移期 `FileProviderScanProgressService`、worker `upsertScanProgress`、runtime reset、integrity repair 对旧 rows 的读取、回填和去重策略；旧版本回退时要能接受 path-only 数据或明确不可回退。
+- 用户影响：确认迁移后会触发哪些 watch roots 全量重扫、哪些用户会看到 Settings recovery chip、预计扫描量/耗时、电池/权限 gate 与 failed file retry 是否被重置。
+- 数据清理与回滚：确认重复 rows、空 path、非法 timestamp、旧 root 不在当前 watch roots、孤儿 progress 的清理规则；回滚必须说明是否保留 migrated rows、还原 path-only rows 或强制 rescan。
+- 验证矩阵：至少覆盖旧 DB 迁移、新 DB 初始化、重复 path 跨 source、FTS 重建联动清 progress、manual rebuild、integrity repair、watch root 变更、Settings diagnostics evidence。
+
+## Durable job history 最小设计
+
+> 目标：先补 runtime task/job 的可审计历史和 Settings diagnostics evidence，不改变 SQLite schema，不迁移 SQLite/FTS ownership，也不改 `scan_progress` 结构。
+
+### 设计边界
+
+- 记录对象：scan、reconcile、reset 三类 source maintenance job；Browser Bookmarks、Everything、Quicklinks 后续接入时复用同一 history shape。
+- 最小字段：`jobId`、`sourceId`、`kind`、`status`、`queuedAt`、`startedAt`、`finishedAt`、`durationMs`、`reason`、`trigger`、`attempt`、`summary`、`errorCode`、`errorMessage`。
+- 状态流转：`queued -> running -> succeeded | failed | skipped | cancelled`；失败可记录 retry metadata，但不在本批实现 durable retry scheduler。
+- 存储策略：先复用现有 runtime diagnostics / task store 边界；若需要新持久表，必须先升级为独立 schema 设计批，不在 durable job history 小切片中直接落库。
+- Settings 展示：diagnostics recovery chip 显示最近 job 状态、失败 reason、下一步 action；不得展示 raw path、secret、完整 stack trace。
+- evidence 要求：focused tests 证明 append/update/store contract；Settings diagnostics 需要 packaged 或真实截图/录屏证明用户可见。
+
+### 推荐执行切片
+
+1. 侦察现有 `IndexingRuntime`、source task store、Settings diagnostics 数据流，确认是否已有可复用 history container。
+2. 增加 append/update 的纯函数或 store adapter contract tests，先覆盖 scan/reconcile/reset 成功、失败、skipped、retry metadata。
+3. Settings diagnostics 消费最近 job summary，展示 wait / scan / reconcile / reset recovery action。
+4. 采 Settings evidence；同步 `TODO-R3.md`、必要时同步 `INDEXING-RUNTIME-V1-PLAN.md` 与 CHANGES。
+
+### 非目标
+
+- 不新增 `scan_progress` source-scoped schema。
+- 不迁移 `search_index` / FTS ownership。
+- 不把 focused tests 写成真实 packaged Settings evidence。
+- 不用 mock Browser Bookmarks、Everything、Quicklinks evidence 关闭真实平台项。
+
 ## 下一步
 
 1. 继续非 schema 小切片，优先移除 FileProvider 内部仍手写 root/path/progress 规则的地方，但不要重复实现已有 runtime write evidence。
 2. 补 durable job history 的持久化边界与 Settings diagnostics evidence。
-3. 设计 SQLite/FTS durable ownership 与 `scan_progress` source-scoped migration；执行前必须单独确认。
+3. 设计 SQLite/FTS durable ownership 与 `scan_progress` source-scoped migration；执行前按上方高风险迁移前置确认清单单独确认。
 4. Browser Bookmarks、Everything、Quicklinks 只用真实平台/evidence artifact 关闭，不用 mock evidence 替代。
 
 ## 验证命令
