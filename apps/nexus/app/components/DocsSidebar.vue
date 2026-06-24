@@ -46,6 +46,8 @@ const { data: navigationTreePayload, pending, error } = await useTypedFetch<unkn
       locale: docsLocale.value,
       ...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {}),
     })),
+    server: false,
+    lazy: true,
     responseType: 'json',
     default: () => [],
   },

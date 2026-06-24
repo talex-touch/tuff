@@ -6,7 +6,7 @@ import type {
 } from '~/types/dashboard-plugin'
 import { TxButton } from '@talex-touch/tuffex/button'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
+import PluginMetaHeader from '~/components/plugin/PluginMetaHeader.vue'
 
 export interface ReviewItem {
   type: 'plugin' | 'version'

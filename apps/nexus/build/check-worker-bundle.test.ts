@@ -60,4 +60,69 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('duplicate sqlite wasm files found')
     expect(guardSource).toContain('duplicate root SQL dump files found')
   })
+
+  it('keeps sidebase app-side auth runtime out of client assets', () => {
+    const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
+
+    expect(guardSource).toContain('forbiddenClientAuthRuntimePatterns')
+    expect(guardSource).toContain('checkClientSidebaseAuthRuntime')
+    expect(guardSource).toContain('sidebase app-side auth runtime found in client assets')
+    expect(guardSource).toContain('nuxt-auth-app-side')
+    expect(guardSource).toContain('useAuthState')
+    expect(guardSource).toContain('navigateToAuthPages')
+    expect(guardSource).toContain('SessionRequired')
+  })
+
+  it('guards runtime-only route chunks needed by docs and auth smoke flows', () => {
+    const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
+
+    expect(guardSource).toContain('requiredWorkerRouteChunks')
+    expect(guardSource).toContain('checkRequiredWorkerRouteChunks')
+    expect(guardSource).toContain('required runtime route chunks are missing')
+    expect(guardSource).toContain('/api/docs/page')
+    expect(guardSource).toContain('/api/auth/**')
+    expect(guardSource).toContain('/api/auth/me')
+    expect(guardSource).toContain('/api/app-auth/device/start')
+    expect(guardSource).toContain('/api/app-auth/device/poll')
+    expect(guardSource).toContain('/api/app-auth/device/approve')
+  })
+
+  it('guards production route files and page payload boundaries', () => {
+    const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
+
+    expect(guardSource).toContain('routeToDistPath')
+    expect(guardSource).toContain('checkStaticRouteFiles')
+    expect(guardSource).toContain('missing static route files')
+    expect(guardSource).toContain('Static route files verified')
+
+    expect(guardSource).toContain('maxDocsDetailHtmlBytes')
+    expect(guardSource).toContain('isDocsRootHtml')
+    expect(guardSource).toContain('isDocsDetailHtml')
+    expect(guardSource).toContain('checkDocsDetailHtmlPayload')
+    expect(guardSource).toContain('contains full docs body payload')
+    expect(guardSource).toContain('contains navigation API payload')
+
+    expect(guardSource).toContain('htmlBoundaryChecks')
+    expect(guardSource).toContain('checkHtmlCssBoundaries')
+    expect(guardSource).toContain('page CSS boundary violations')
+    expect(guardSource).toContain('docs HTML pulled non-doc CSS')
+    expect(guardSource).toContain('store HTML pulled docs/dashboard/landing CSS')
+    expect(guardSource).toContain('landing HTML pulled docs/store/dashboard CSS')
+    expect(guardSource).toContain('auth HTML pulled docs/store/dashboard/landing CSS')
+  })
+
+  it('guards initial JS and CSS budgets for public route families', () => {
+    const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
+
+    expect(guardSource).toContain('htmlInitialAssetBudgets')
+    expect(guardSource).toContain('checkHtmlInitialAssetBudgets')
+    expect(guardSource).toContain('getAssetStats')
+    expect(guardSource).toContain('missing js assets')
+    expect(guardSource).toContain('missing css assets')
+    expect(guardSource).toContain('page initial asset budget violations')
+    expect(guardSource).toContain('docs initial assets')
+    expect(guardSource).toContain('store initial assets')
+    expect(guardSource).toContain('landing initial assets')
+    expect(guardSource).toContain('auth initial assets')
+  })
 })

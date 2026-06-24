@@ -20,7 +20,7 @@ import {
 } from '@talex-touch/utils/renderer/shared/components'
 import { computed, reactive, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
+import PluginMetaHeader from '~/components/plugin/PluginMetaHeader.vue'
 import StoreItem from '~/components/store/StoreItem.vue'
 import StoreSearch from '~/components/store/StoreSearch.vue'
 import Input from '~/components/ui/Input.vue'

@@ -127,12 +127,17 @@ const isAdmin = computed(() => authUserState.value?.role === 'admin')
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))
 
+function shouldSplitDocsPageBody(path: string) {
+  const normalized = normalizeDocsPagePath(path)
+  return normalized.startsWith('/docs/') && normalized !== '/docs/index'
+}
+
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
-const shouldSplitDocBody = computed(() => normalizeDocsPagePath(activeRoutePath.value).includes('/docs/dev/components'))
-const shouldRequestMetadataOnlyDocBody = computed(() => shouldSplitDocBody.value && (import.meta.client || import.meta.dev))
+const shouldSplitDocBody = computed(() => shouldSplitDocsPageBody(activeRoutePath.value))
+const shouldRequestMetadataOnlyDocBody = computed(() => shouldSplitDocBody.value)
 const currentDocsPageBodyMode = computed(() => (shouldRequestMetadataOnlyDocBody.value ? '0' : '1'))
 const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${currentDocsPageBodyMode.value}`)
-const docsNavigationScope = computed(() => (shouldSplitDocBody.value ? 'components' : undefined))
+const docsNavigationScope = computed(() => (docPath.value.includes('/docs/dev/components') ? 'components' : undefined))
 
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
@@ -514,6 +519,8 @@ const { data: navigationTreePayload } = await useTypedFetch<unknown>(
       locale: docsLocale.value,
       ...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {}),
     })),
+    server: false,
+    lazy: true,
     responseType: 'json',
     default: () => [],
   },

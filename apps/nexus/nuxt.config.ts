@@ -81,9 +81,34 @@ function isSidebaseAuthClientPlugin(file: string | undefined) {
   if (!file)
     return false
 
-  const normalized = file.replace(/\\/g, '/')
-  return normalized.endsWith('/@sidebase/nuxt-auth/dist/runtime/plugin.js')
-    || (normalized.includes('/@sidebase+nuxt-auth') && normalized.endsWith('/dist/runtime/plugin.js'))
+  const normalized = file.replace(/\\/g, '/').replace(/\.js$/, '')
+  return normalized.endsWith('/@sidebase/nuxt-auth/dist/runtime/plugin')
+    || (normalized.includes('/@sidebase+nuxt-auth') && normalized.endsWith('/dist/runtime/plugin'))
+}
+
+function isSidebaseAuthMiddleware(name: string | undefined, file: string | undefined) {
+  if (name !== 'auth' || !file)
+    return false
+
+  const normalized = file.replace(/\\/g, '/').replace(/\.js$/, '')
+  return normalized.endsWith('/@sidebase/nuxt-auth/dist/runtime/middleware/auth')
+    || (normalized.includes('/@sidebase+nuxt-auth') && normalized.endsWith('/dist/runtime/middleware/auth'))
+}
+
+function removeSidebaseAuthAppRuntime(app: {
+  plugins: Array<{ src?: string }>
+  middleware: Array<{ name?: string, path?: string }>
+}) {
+  for (let index = app.plugins.length - 1; index >= 0; index -= 1) {
+    if (isSidebaseAuthClientPlugin(app.plugins[index]?.src))
+      app.plugins.splice(index, 1)
+  }
+
+  for (let index = app.middleware.length - 1; index >= 0; index -= 1) {
+    const middleware = app.middleware[index]
+    if (isSidebaseAuthMiddleware(middleware?.name, middleware?.path))
+      app.middleware.splice(index, 1)
+  }
 }
 
 function isEnvFlagEnabled(value?: string) {
@@ -425,10 +450,10 @@ export default defineNuxtConfig({
 
   hooks: {
     'app:resolve'(app) {
-      for (let index = app.plugins.length - 1; index >= 0; index -= 1) {
-        if (isSidebaseAuthClientPlugin(app.plugins[index]?.src))
-          app.plugins.splice(index, 1)
-      }
+      removeSidebaseAuthAppRuntime(app)
+    },
+    'app:templates'(app) {
+      removeSidebaseAuthAppRuntime(app)
     },
     'components:extend'(components) {
       const ignoredContentComponentPatterns = [
