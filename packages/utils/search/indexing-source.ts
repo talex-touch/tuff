@@ -906,6 +906,12 @@ export interface IndexedSourceTaskHistoryEntry {
   queuedAt?: number;
   startedAt?: number;
   occurredAt?: number;
+  durationMs?: number;
+  reason?: string;
+  trigger?: string;
+  attempt?: number;
+  errorCode?: string;
+  errorMessage?: string;
   error?: string;
   summary?: Record<string, string | number | boolean | undefined>;
 }
@@ -987,9 +993,23 @@ function sanitizeIndexedSourceTaskHistoryEntry(
     ...optionalTaskHistoryTimestamp("queuedAt", task.queuedAt, completedAt),
     ...optionalTaskHistoryTimestamp("startedAt", task.startedAt, completedAt),
     ...optionalTaskHistoryTimestamp("occurredAt", task.occurredAt, completedAt),
+    ...optionalTaskHistoryNumber("durationMs", task.durationMs),
+    ...(typeof task.reason === "string" ? { reason: task.reason } : {}),
+    ...(typeof task.trigger === "string" ? { trigger: task.trigger } : {}),
+    ...optionalTaskHistoryNumber("attempt", task.attempt),
+    ...(typeof task.errorCode === "string" ? { errorCode: task.errorCode } : {}),
+    ...(typeof task.errorMessage === "string" ? { errorMessage: task.errorMessage } : {}),
     ...(typeof task.error === "string" ? { error: task.error } : {}),
     ...sanitizeIndexedSourceTaskHistorySummary(task.summary),
   };
+}
+
+function optionalTaskHistoryNumber<TKey extends "durationMs" | "attempt">(
+  key: TKey,
+  value: number | undefined,
+): Partial<Record<TKey, number>> {
+  const number = normalizeNonNegativeFiniteNumber(value);
+  return number === undefined ? {} : ({ [key]: number } as Record<TKey, number>);
 }
 
 function optionalTaskHistoryTimestamp<TKey extends "queuedAt" | "startedAt" | "occurredAt">(

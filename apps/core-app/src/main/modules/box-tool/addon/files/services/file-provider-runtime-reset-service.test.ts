@@ -10,14 +10,20 @@ function createDbUtils(rowCount: number) {
   const where = vi.fn(async () => [{ cnt: rowCount }])
   const from = vi.fn(() => ({ where }))
   const select = vi.fn(() => ({ from }))
+  const all = vi.fn(async () => [{ name: 'path' }, { name: 'last_scanned' }])
+  const run = vi.fn(async () => undefined)
 
   return {
     dbUtils: {
       getDb: vi.fn(() => ({
+        all,
+        run,
         select,
         delete: deleteTable
       }))
     },
+    all,
+    run,
     deleteResult,
     deleteTable,
     deleteWhere,

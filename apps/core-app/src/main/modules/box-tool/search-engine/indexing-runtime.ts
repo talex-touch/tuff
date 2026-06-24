@@ -233,7 +233,10 @@ export class IndexingRuntime {
     if (!eligibility.eligible) {
       const timestamp = Date.now()
       const reason = eligibility.reason ?? 'diagnostics:unavailable'
-      this.recordScanSkipped(sourceId, job.queuedAt, timestamp, reason, job)
+      this.recordScanSkipped(sourceId, job.queuedAt, timestamp, reason, job, {
+        trigger: request.reason ?? reason,
+        errorCode: 'eligibility'
+      })
       return {
         sourceId,
         batches: 0,
@@ -246,7 +249,7 @@ export class IndexingRuntime {
 
     try {
       const result = await this.scanScheduler.scanSource(source, reason, request)
-      this.recordScanResult(result, job)
+      this.recordScanResult(result, job, request.reason ?? reason)
       return result
     } catch (error) {
       this.recordScanFailure(
@@ -254,7 +257,11 @@ export class IndexingRuntime {
         job.queuedAt,
         Date.now(),
         error instanceof Error ? error.message : String(error),
-        job
+        job,
+        {
+          trigger: request.reason ?? reason,
+          errorCode: 'runtime'
+        }
       )
       throw error
     }
@@ -280,7 +287,7 @@ export class IndexingRuntime {
     const result = await this.scanScheduler.scanSourcesWithResult(eligible.sources, reason)
     const enrichedResult = this.withScanSkippedSources(result, allSources.length, eligible.skipped)
     for (const sourceResult of result.results) {
-      this.recordScanResult(sourceResult, jobs.get(sourceResult.sourceId))
+      this.recordScanResult(sourceResult, jobs.get(sourceResult.sourceId), reason)
     }
     for (const failure of result.errors) {
       this.recordScanFailure(
@@ -293,7 +300,9 @@ export class IndexingRuntime {
           phase: failure.phase,
           batches: failure.batches,
           records: failure.records,
-          indexedRecords: failure.indexedRecords
+          indexedRecords: failure.indexedRecords,
+          trigger: reason,
+          errorCode: failure.phase
         }
       )
     }
@@ -303,7 +312,11 @@ export class IndexingRuntime {
         result.startedAt,
         result.completedAt,
         skipped.reason,
-        this.createScanJob(skipped.sourceId)
+        this.createScanJob(skipped.sourceId),
+        {
+          trigger: reason,
+          errorCode: 'eligibility'
+        }
       )
     }
     return enrichedResult
@@ -323,7 +336,10 @@ export class IndexingRuntime {
     if (!eligibility.eligible) {
       const timestamp = Date.now()
       const reason = eligibility.reason ?? 'diagnostics:unavailable'
-      this.recordReconcileSkipped(sourceId, timestamp, timestamp, reason)
+      this.recordReconcileSkipped(sourceId, timestamp, timestamp, reason, {
+        trigger: request.reason ?? reason,
+        errorCode: 'eligibility'
+      })
       return {
         sourceId,
         added: 0,
@@ -369,7 +385,10 @@ export class IndexingRuntime {
         failure.sourceId,
         result.startedAt,
         result.completedAt,
-        failure.message
+        failure.message,
+        {
+          errorCode: 'runtime'
+        }
       )
     }
     for (const skipped of eligible.skipped) {
@@ -377,7 +396,10 @@ export class IndexingRuntime {
         skipped.sourceId,
         result.startedAt,
         result.completedAt,
-        skipped.reason
+        skipped.reason,
+        {
+          errorCode: 'eligibility'
+        }
       )
     }
     return enrichedResult
@@ -731,11 +753,16 @@ export class IndexingRuntime {
     this.runGate.hydrateCompletion(sourceId, kind, completedAt)
   }
 
-  private recordScanResult(result: ScanSchedulerResult, job?: IndexedSourceRuntimeTaskJob): void {
+  private recordScanResult(
+    result: ScanSchedulerResult,
+    job?: IndexedSourceRuntimeTaskJob,
+    trigger?: string
+  ): void {
     const taskState = buildIndexedSourceScanTaskState({
       sourceId: result.sourceId,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
+      trigger,
       batches: result.batches,
       records: result.records,
       indexedRecords: result.indexedRecords,
@@ -755,6 +782,8 @@ export class IndexingRuntime {
       batches?: number
       records?: number
       indexedRecords?: number
+      trigger?: string
+      errorCode?: string
     }
   ): void {
     const taskState = buildIndexedSourceScanTaskState({
@@ -763,6 +792,8 @@ export class IndexingRuntime {
       completedAt,
       status: 'failed',
       error,
+      trigger: summary?.trigger,
+      errorCode: summary?.errorCode,
       phase: summary?.phase,
       batches: summary?.batches,
       records: summary?.records,
@@ -777,7 +808,11 @@ export class IndexingRuntime {
     startedAt: number,
     completedAt: number,
     reason: string,
-    job?: IndexedSourceRuntimeTaskJob
+    job?: IndexedSourceRuntimeTaskJob,
+    summary?: {
+      trigger?: string
+      errorCode?: string
+    }
   ): void {
     const taskState = buildIndexedSourceScanTaskState({
       sourceId,
@@ -785,6 +820,8 @@ export class IndexingRuntime {
       completedAt,
       status: 'skipped',
       skipReason: reason,
+      trigger: summary?.trigger,
+      errorCode: summary?.errorCode,
       job
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
@@ -820,7 +857,10 @@ export class IndexingRuntime {
         skippedDeltas: summary.skippedDeltas,
         status,
         job,
+        errorCode: status === 'failed' ? 'watch' : undefined,
         summary: {
+          durationMs: completedAt - event.occurredAt,
+          trigger: event.action,
           action: event.action,
           deltas: summary.deltas,
           appliedDeltas: summary.appliedDeltas,
@@ -853,7 +893,10 @@ export class IndexingRuntime {
         status: 'failed',
         error: error.message,
         job,
+        errorCode: error.phase,
         summary: {
+          durationMs: completedAt - event.occurredAt,
+          trigger: event.action,
           phase: error.phase,
           action: event.action,
           failedDeltas,
@@ -883,7 +926,10 @@ export class IndexingRuntime {
         status: 'skipped',
         skipReason: skipped.reason,
         job,
+        errorCode: 'eligibility',
         summary: {
+          durationMs: completedAt - event.occurredAt,
+          trigger: event.action,
           action: event.action
         }
       })
@@ -913,6 +959,7 @@ export class IndexingRuntime {
       skipped: result.skipped,
       errors: result.errors,
       reason: result.reason ?? request.reason,
+      trigger: result.reason ?? request.reason,
       rootCount: request.roots?.length,
       job,
       deltas: result.deltas?.length,
@@ -921,7 +968,9 @@ export class IndexingRuntime {
       skippedDeltas: result.skippedDeltas,
       status,
       error,
+      errorCode: status === 'failed' ? 'reconcile' : undefined,
       summary: {
+        durationMs: result.completedAt - result.startedAt,
         added: result.added,
         changed: result.changed,
         deleted: result.deleted,
@@ -942,7 +991,11 @@ export class IndexingRuntime {
     sourceId: string,
     startedAt: number,
     completedAt: number,
-    error: string
+    error: string,
+    summary?: {
+      trigger?: string
+      errorCode?: string
+    }
   ): void {
     const taskState = buildIndexedSourceReconcileTaskState({
       sourceId,
@@ -950,6 +1003,8 @@ export class IndexingRuntime {
       completedAt,
       errors: 1,
       status: 'failed',
+      trigger: summary?.trigger,
+      errorCode: summary?.errorCode,
       error
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
@@ -959,7 +1014,11 @@ export class IndexingRuntime {
     sourceId: string,
     startedAt: number,
     completedAt: number,
-    reason: string
+    reason: string,
+    summary?: {
+      trigger?: string
+      errorCode?: string
+    }
   ): void {
     const taskState = buildIndexedSourceReconcileTaskState({
       sourceId,
@@ -967,6 +1026,8 @@ export class IndexingRuntime {
       completedAt,
       skipped: 1,
       status: 'skipped',
+      trigger: summary?.trigger,
+      errorCode: summary?.errorCode,
       skipReason: reason
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
@@ -990,6 +1051,8 @@ export class IndexingRuntime {
       status,
       error: result.error,
       skipReason,
+      trigger: result.reason,
+      errorCode: result.error ? 'reset' : undefined,
       job
     })
     this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)

@@ -38,6 +38,11 @@ import * as schema from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createLogger } from '../../../../utils/logger'
 import { noopSearchIndexRuntimeLogger, SearchIndexService } from '../search-index-service'
+import {
+  normalizeScanProgressSourceId,
+  resolveScanProgressSchemaShape,
+  upsertSourceScopedScanProgress
+} from '../scan-progress-schema'
 import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
 
 const searchIndexWorkerLog = createLogger('SearchIndex').child('Worker')
@@ -103,6 +108,7 @@ interface UpsertScanProgressMessage {
   taskId: string
   paths: string[]
   lastScanned: string
+  sourceId?: string
 }
 
 type WorkerRequest =
@@ -242,7 +248,11 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
 
       case 'upsertScanProgress': {
         if (!db) throw new Error('Worker not initialized — send init first')
-        const upserted = await handleUpsertScanProgress(message.paths, message.lastScanned)
+        const upserted = await handleUpsertScanProgress(
+          message.paths,
+          message.lastScanned,
+          message.sourceId
+        )
         respond({ type: 'result', taskId, result: upserted })
         break
       }
@@ -467,11 +477,30 @@ async function handleUpsertFiles(
   return rows as Array<Record<string, unknown>>
 }
 
-async function handleUpsertScanProgress(paths: string[], lastScanned: string): Promise<number> {
+async function handleUpsertScanProgress(
+  paths: string[],
+  lastScanned: string,
+  sourceId?: string
+): Promise<number> {
   const normalizedUpsert = normalizeScanProgressUpsert(paths, lastScanned)
   if (!db) throw new Error('Worker not initialized')
   if (!normalizedUpsert) return 0
   const workerDb = db
+  const shape = await resolveScanProgressSchemaShape(workerDb)
+  if (shape.sourceScoped) {
+    const resolvedSourceId = normalizeScanProgressSourceId(sourceId)
+    await withWorkerWriteRetry(
+      () =>
+        upsertSourceScopedScanProgress(workerDb, {
+          sourceId: resolvedSourceId,
+          paths: normalizedUpsert.paths,
+          lastScannedAt: normalizedUpsert.lastScanned.getTime()
+        }),
+      WORKER_RETRY_LABELS.upsertScanProgress
+    )
+    return normalizedUpsert.paths.length
+  }
+
   await withWorkerWriteRetry(
     () =>
       workerDb

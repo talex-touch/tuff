@@ -379,17 +379,19 @@ function sanitizeTaskHistoryEntry(
 
   const startedAt = sanitizeTaskStartedAt(task.startedAt, completedAt, now)
   const occurredAt = sanitizeTaskStartedAt(task.occurredAt, completedAt, now)
-  const {
-    completedAt: _completedAt,
-    queuedAt: _queuedAt,
-    startedAt: _startedAt,
-    occurredAt: _occurredAt,
-    ...rest
-  } = task
 
   return {
-    ...rest,
+    kind: task.kind,
+    status: task.status,
     completedAt,
+    ...optionalString('jobId', task.jobId),
+    ...optionalNonNegativeNumber('durationMs', task.durationMs),
+    ...optionalString('reason', task.reason),
+    ...optionalString('trigger', task.trigger),
+    ...optionalNonNegativeNumber('attempt', task.attempt),
+    ...optionalString('errorCode', task.errorCode),
+    ...optionalString('errorMessage', task.errorMessage),
+    ...optionalString('error', task.error),
     ...optionalTaskHistorySummary(task.summary),
     ...(task.queuedAt === undefined ? {} : optionalTimestamp('queuedAt', task.queuedAt, now)),
     ...(startedAt === undefined ? {} : { startedAt }),
@@ -399,7 +401,20 @@ function sanitizeTaskHistoryEntry(
 
 function cloneTaskHistoryEntry(task: IndexedSourceTaskHistoryEntry): IndexedSourceTaskHistoryEntry {
   return {
-    ...task,
+    kind: task.kind,
+    status: task.status,
+    completedAt: task.completedAt,
+    ...optionalString('jobId', task.jobId),
+    ...optionalNonNegativeNumber('queuedAt', task.queuedAt),
+    ...optionalNonNegativeNumber('startedAt', task.startedAt),
+    ...optionalNonNegativeNumber('occurredAt', task.occurredAt),
+    ...optionalNonNegativeNumber('durationMs', task.durationMs),
+    ...optionalString('reason', task.reason),
+    ...optionalString('trigger', task.trigger),
+    ...optionalNonNegativeNumber('attempt', task.attempt),
+    ...optionalString('errorCode', task.errorCode),
+    ...optionalString('errorMessage', task.errorMessage),
+    ...optionalString('error', task.error),
     ...optionalTaskHistorySummary(task.summary)
   }
 }

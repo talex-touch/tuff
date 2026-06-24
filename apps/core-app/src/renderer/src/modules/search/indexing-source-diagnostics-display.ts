@@ -467,6 +467,34 @@ function toSummaryValue(value: unknown): string | number {
   return '-'
 }
 
+function appendAuditSummaryParts(parts: string[], task: IndexedSourceTaskHistoryEntry): void {
+  const summary = task.summary ?? {}
+  const durationMs = toSummaryValue(summary.durationMs ?? task.durationMs)
+  if (durationMs !== '-') {
+    parts.push(`duration ${durationMs}ms`)
+  }
+
+  const trigger = toSummaryValue(summary.trigger ?? task.trigger)
+  if (trigger !== '-') {
+    parts.push(`trigger ${trigger}`)
+  }
+
+  const reason = toSummaryValue(summary.reason ?? task.reason)
+  if (reason !== '-') {
+    parts.push(`reason ${reason}`)
+  }
+
+  const attempt = toSummaryValue(summary.attempt ?? task.attempt)
+  if (attempt !== '-') {
+    parts.push(`attempt ${attempt}`)
+  }
+
+  const errorCode = toSummaryValue(summary.errorCode ?? task.errorCode)
+  if (errorCode !== '-') {
+    parts.push(`code ${errorCode}`)
+  }
+}
+
 function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
   const summary = task.summary ?? {}
 
@@ -481,15 +509,26 @@ function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
       parts.push(`phase ${summary.phase.trim()}`)
     }
 
+    appendAuditSummaryParts(parts, task)
     return parts.join(' / ')
   }
 
   if (task.kind === 'watch') {
-    return `delta ${toSummaryValue(summary.appliedDeltas)}/${toSummaryValue(summary.deltas)} / action ${toSummaryValue(summary.action)}`
+    const parts = [
+      `delta ${toSummaryValue(summary.appliedDeltas)}/${toSummaryValue(summary.deltas)}`,
+      `action ${toSummaryValue(summary.action)}`
+    ]
+    appendAuditSummaryParts(parts, task)
+    return parts.join(' / ')
   }
 
   if (task.kind === 'reconcile') {
-    return `+${toSummaryValue(summary.added)} ~${toSummaryValue(summary.changed)} -${toSummaryValue(summary.deleted)} / skipped ${toSummaryValue(summary.skipped)}`
+    const parts = [
+      `+${toSummaryValue(summary.added)} ~${toSummaryValue(summary.changed)} -${toSummaryValue(summary.deleted)}`,
+      `skipped ${toSummaryValue(summary.skipped)}`
+    ]
+    appendAuditSummaryParts(parts, task)
+    return parts.join(' / ')
   }
 
   const parts = [`clear index ${toSummaryValue(summary.clearedSearchIndex)}`]
@@ -502,6 +541,7 @@ function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
     parts.push(`progress rows ${toSummaryValue(summary.scanProgressRows)}`)
   }
 
+  appendAuditSummaryParts(parts, task)
   return parts.join(' / ')
 }
 
@@ -607,6 +647,11 @@ export function resolveIndexingSourceRecentTaskChips(
     values: {
       jobId: task.jobId ?? '-',
       time: formatIndexingSourceTimestamp(task.completedAt),
+      duration: toSummaryValue(task.summary?.durationMs ?? task.durationMs),
+      trigger: toSummaryValue(task.summary?.trigger ?? task.trigger),
+      reason: toSummaryValue(task.summary?.reason ?? task.reason),
+      attempt: toSummaryValue(task.summary?.attempt ?? task.attempt),
+      errorCode: toSummaryValue(task.summary?.errorCode ?? task.errorCode),
       summary: resolveRecentTaskSummary(task),
       error: task.error ?? ''
     }

@@ -261,7 +261,11 @@ export class SearchIndexWorkerClient {
     return result ?? []
   }
 
-  async upsertScanProgress(paths: string[], lastScanned: string): Promise<number> {
+  async upsertScanProgress(
+    paths: string[],
+    lastScanned: string,
+    sourceId?: string
+  ): Promise<number> {
     const normalizedUpsert = normalizeScanProgressUpsert(paths, lastScanned)
     if (!normalizedUpsert) return 0
     await this.ensureInitialized()
@@ -270,7 +274,8 @@ export class SearchIndexWorkerClient {
       type: 'upsertScanProgress',
       taskId,
       paths: normalizedUpsert.paths,
-      lastScanned: normalizedUpsert.lastScanned.toISOString()
+      lastScanned: normalizedUpsert.lastScanned.toISOString(),
+      sourceId
     })
     return typeof result === 'number' && Number.isFinite(result)
       ? Math.max(0, Math.trunc(result))

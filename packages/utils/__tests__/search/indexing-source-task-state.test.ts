@@ -234,13 +234,15 @@ describe('indexing source task state', () => {
         status: 'succeeded',
         startedAt: 10,
         completedAt: 20,
+        durationMs: 10,
         jobId: 'file-provider:scan:1',
         queuedAt: 9,
-        error: undefined,
         summary: {
+          durationMs: 10,
           batches: 2,
           records: 5,
-          indexedRecords: 5
+          indexedRecords: 5,
+          phase: undefined
         }
       }
     })
@@ -273,10 +275,12 @@ describe('indexing source task state', () => {
         status: 'skipped',
         startedAt: 10,
         completedAt: 10,
-        jobId: undefined,
-        queuedAt: undefined,
+        durationMs: 0,
+        errorMessage: 'skipped:health:disabled',
         error: 'skipped:health:disabled',
-        summary: undefined
+        summary: {
+          durationMs: 0
+        }
       }
     })
   })
@@ -315,12 +319,16 @@ describe('indexing source task state', () => {
         completedAt: 20,
         jobId: undefined,
         queuedAt: undefined,
+        durationMs: 10,
+        errorMessage: 'sqlite busy',
         error: 'sqlite busy',
         summary: {
+          durationMs: 10,
           batches: 1,
           records: 10,
           indexedRecords: 8,
-          phase: 'store'
+          phase: 'store',
+          errorMessage: 'sqlite busy'
         }
       }
     })
@@ -443,6 +451,7 @@ describe('indexing source task state', () => {
       indexedRecords: 0
     })
     expect(scan.historyEntry.summary).toEqual({
+      durationMs: 10,
       batches: 0,
       records: 0,
       indexedRecords: 0,
@@ -455,6 +464,8 @@ describe('indexing source task state', () => {
       skippedDeltas: 0
     })
     expect(watch.historyEntry.summary).toEqual({
+      durationMs: 10,
+      trigger: 'change',
       action: 'change',
       deltas: 0,
       appliedDeltas: 0,
@@ -476,6 +487,7 @@ describe('indexing source task state', () => {
     expect(reset.value.clearedSearchIndexRows).toBeUndefined()
     expect(reset.value.scanProgressRows).toBeUndefined()
     expect(reset.historyEntry.summary).toEqual({
+      durationMs: 10,
       reason: 'manual-rebuild',
       clearedSearchIndex: true,
       clearedSearchIndexRows: undefined,
@@ -523,10 +535,12 @@ describe('indexing source task state', () => {
         status: 'succeeded',
         occurredAt: 10,
         completedAt: 20,
+        durationMs: 10,
         jobId: 'file-provider:watch:1',
         queuedAt: 9,
-        error: undefined,
         summary: {
+          durationMs: 10,
+          trigger: 'change',
           action: 'change',
           deltas: 2,
           appliedDeltas: 2,
@@ -597,11 +611,14 @@ describe('indexing source task state', () => {
         status: 'skipped',
         occurredAt: 10,
         completedAt: 20,
-        jobId: undefined,
-        queuedAt: undefined,
+        durationMs: 10,
+        errorMessage: 'skipped:health:disabled',
         error: 'skipped:health:disabled',
         summary: {
-          action: 'change'
+          durationMs: 10,
+          trigger: 'change',
+          action: 'change',
+          errorMessage: 'skipped:health:disabled'
         }
       }
     })
@@ -657,6 +674,7 @@ describe('indexing source task state', () => {
         deltas: 6,
         appliedDeltas: 6,
         failedDeltas: 0,
+        skippedDeltas: undefined,
         error: undefined
       },
       historyEntry: {
@@ -664,10 +682,12 @@ describe('indexing source task state', () => {
         status: 'succeeded',
         startedAt: 10,
         completedAt: 20,
+        durationMs: 10,
+        reason: 'manual-repair',
         jobId: 'file-provider:reconcile:1',
         queuedAt: 9,
-        error: undefined,
         summary: {
+          durationMs: 10,
           added: 1,
           changed: 2,
           deleted: 3,
@@ -702,10 +722,12 @@ describe('indexing source task state', () => {
     })
 
     expect(reconcile.historyEntry.summary).toEqual({
+      durationMs: 10,
       kept: 'yes',
       ok: true,
       count: 2,
-      missing: undefined
+      missing: undefined,
+      errorMessage: 'store failed'
     })
   })
 
@@ -737,6 +759,7 @@ describe('indexing source task state', () => {
         deltas: undefined,
         appliedDeltas: undefined,
         failedDeltas: undefined,
+        skippedDeltas: undefined,
         error: 'skipped:health:permission-required'
       },
       historyEntry: {
@@ -744,10 +767,13 @@ describe('indexing source task state', () => {
         status: 'skipped',
         startedAt: 10,
         completedAt: 20,
-        jobId: undefined,
-        queuedAt: undefined,
+        durationMs: 10,
+        errorMessage: 'skipped:health:permission-required',
         error: 'skipped:health:permission-required',
-        summary: undefined
+        summary: {
+          durationMs: 10,
+          errorMessage: 'skipped:health:permission-required'
+        }
       }
     })
   })
@@ -790,10 +816,12 @@ describe('indexing source task state', () => {
         status: 'succeeded',
         startedAt: 10,
         completedAt: 20,
+        durationMs: 10,
+        reason: 'manual-rebuild',
         jobId: 'file-provider:reset:1',
         queuedAt: 9,
-        error: undefined,
         summary: {
+          durationMs: 10,
           reason: 'manual-rebuild',
           clearedSearchIndex: true,
           clearedSearchIndexRows: 4,
@@ -837,13 +865,18 @@ describe('indexing source task state', () => {
         completedAt: 20,
         jobId: undefined,
         queuedAt: undefined,
+        durationMs: 10,
+        reason: 'integrity-repair',
+        errorMessage: 'reset failed',
         error: 'reset failed',
         summary: {
+          durationMs: 10,
           reason: 'integrity-repair',
           clearedSearchIndex: false,
           clearedSearchIndexRows: undefined,
           clearedScanProgress: false,
-          scanProgressRows: undefined
+          scanProgressRows: undefined,
+          errorMessage: 'reset failed'
         }
       }
     })
@@ -881,15 +914,18 @@ describe('indexing source task state', () => {
         status: 'skipped',
         startedAt: 10,
         completedAt: 20,
-        jobId: undefined,
-        queuedAt: undefined,
+        durationMs: 10,
+        reason: 'manual-rebuild',
+        errorMessage: 'skipped:already-running',
         error: 'skipped:already-running',
         summary: {
+          durationMs: 10,
           reason: 'manual-rebuild',
           clearedSearchIndex: false,
           clearedSearchIndexRows: undefined,
           clearedScanProgress: false,
-          scanProgressRows: undefined
+          scanProgressRows: undefined,
+          errorMessage: 'skipped:already-running'
         }
       }
     })

@@ -275,14 +275,16 @@ describe('SearchIndexWorkerClient init gate', () => {
 
     const upsertPromise = client.upsertScanProgress(
       ['/tmp/root-a', '', '/tmp/root-a', '/tmp/root-b'],
-      '2026-06-20T10:00:00.000Z'
+      '2026-06-20T10:00:00.000Z',
+      'file-provider'
     )
     await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
 
     expect(worker.messages[1]).toMatchObject({
       type: 'upsertScanProgress',
       paths: ['/tmp/root-a', '/tmp/root-b'],
-      lastScanned: '2026-06-20T10:00:00.000Z'
+      lastScanned: '2026-06-20T10:00:00.000Z',
+      sourceId: 'file-provider'
     })
 
     worker.emit('message', {
