@@ -10,26 +10,38 @@ defineOptions({
 
 const playListModel = ref(false)
 const volumeModel = ref(false)
-const playType = musicManager.playManager.playType
+const playType = ref(musicManager.playManager.playType)
 
 const volume = musicManager.playManager.volume
 function handleVolumeChange(value) {
   volume.value = value
 }
+
+function toggleVolume() {
+  volumeModel.value = !volumeModel.value
+}
+
+function togglePlayList() {
+  playListModel.value = !playListModel.value
+}
+
+function cyclePlayType() {
+  const nextPlayType = playType.value === PlayType.RANDOM ? PlayType.SINGLE : playType.value + 1
+  playType.value = nextPlayType
+  musicManager.playManager.playType = nextPlayType
+}
 </script>
 
 <template>
   <div class="Footer-Music-Function-Button" :class="{ volume: volumeModel }">
-    <IconButton :select="volumeModel" small icon="volume-up" @click="volumeModel = !volumeModel" />
+    <IconButton :select="volumeModel" small icon="volume-up" label="Toggle volume" @click="toggleVolume" />
     <span class="other-controller">
-      <IconButton small icon="dvd" />
-      <span @click="playType === 4 ? playType = 1 : playType += 1">
-        <IconButton v-if="playType === PlayType.SINGLE" small icon="repeat-one" />
-        <IconButton v-if="playType === PlayType.LIST" small icon="order-play" />
-        <IconButton v-if="playType === PlayType.CYCLE_LIST" small icon="repeat-2" />
-        <IconButton v-if="playType === PlayType.RANDOM" small icon="shuffle" />
-      </span>
-      <IconButton :select="playListModel" small icon="play-list-2" @click="playListModel = !playListModel" />
+      <IconButton small icon="dvd" label="Open disc view" />
+      <IconButton v-if="playType === PlayType.SINGLE" small icon="repeat-one" label="Cycle play mode" @click="cyclePlayType" />
+      <IconButton v-if="playType === PlayType.LIST" small icon="order-play" label="Cycle play mode" @click="cyclePlayType" />
+      <IconButton v-if="playType === PlayType.CYCLE_LIST" small icon="repeat-2" label="Cycle play mode" @click="cyclePlayType" />
+      <IconButton v-if="playType === PlayType.RANDOM" small icon="shuffle" label="Cycle play mode" @click="cyclePlayType" />
+      <IconButton :select="playListModel" small icon="play-list-2" label="Toggle playlist" @click="togglePlayList" />
     </span>
     <span class="volume-controller">
       <TxSlider

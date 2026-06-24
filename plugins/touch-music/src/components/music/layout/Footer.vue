@@ -96,10 +96,16 @@ watch(() => _song, async () => {
     </div>
 
     <div class="Footer-Music-Main">
-      <div v-if="song" class="Footer-Music-Image" @click="screenSongModel = true">
+      <button
+        v-if="song"
+        type="button"
+        class="Footer-Music-Image"
+        :aria-label="`Open lyrics for ${song?.detail?.song?.name || 'current song'}`"
+        @click="screenSongModel = true"
+      >
         <img :alt="song?.detail?.song?.name" :src="song?.detail?.song?.al.picUrl">
         <RemixIcon name="arrow-up-s" />
-      </div>
+      </button>
 
       <div v-if="song" class="Footer-Music-Main-Info">
         <span class="Footer-Music-Main-Info-Name">
@@ -110,9 +116,9 @@ watch(() => _song, async () => {
     </div>
 
     <div v-if="song" class="Footer-Music-Action">
-      <IconButton plain icon="arrow-left-s" @click="prevSong" />
+      <IconButton plain icon="arrow-left-s" label="Previous song" @click="prevSong" />
       <PlayPause v-model="playStatus" />
-      <IconButton plain icon="arrow-right-s" @click="nextSong" />
+      <IconButton plain icon="arrow-right-s" label="Next song" @click="nextSong" />
     </div>
 
     <!--    <div class="Footer-Music-Function" v-if="song"> -->
@@ -225,7 +231,12 @@ watch(() => _song, async () => {
 
     align-items: center;
 
+    padding: 0;
+    border: 0;
+    appearance: none;
+    color: inherit;
     cursor: pointer;
+    background: transparent;
     transition: all .15s;
   }
   img {

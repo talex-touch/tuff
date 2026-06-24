@@ -38,7 +38,13 @@ function refresh(value) {
 </script>
 
 <template>
-  <div role="button" class="PlayPause-Container" @click="refresh(!modelValue)">
+  <button
+    type="button"
+    class="PlayPause-Container"
+    :aria-label="modelValue ? 'Pause' : 'Play'"
+    :aria-pressed="modelValue"
+    @click="refresh(!modelValue)"
+  >
     <svg
       ref="_svg" class="icon-play" version="1.1" xmlns="https://www.w3.org/2000/svg" xmlns:xlink="https://www.w3.org/1999/xlink"
       width="100" height="100" viewBox="0 0 36 36"
@@ -47,7 +53,7 @@ function refresh(value) {
     >
       <path d="M 12,26 16.33,26 16.33,10 12,10 z M 20.66,26 25,26 25,10 20.66,10 z" />
     </svg>
-  </div>
+  </button>
 </template>
 
 <style lang="scss" scoped>
@@ -62,7 +68,15 @@ function refresh(value) {
   width: 48px;
   height: 48px;
 
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  color: inherit;
+  background: transparent;
   border-radius: 8px;
   transition: .1s;
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { NavBarEmits, NavBarProps } from './types'
-import { computed } from 'vue'
+import { computed, useSlots } from 'vue'
 
 defineOptions({ name: 'TxNavBar' })
 
@@ -14,12 +14,16 @@ const props = withDefaults(defineProps<NavBarProps>(), {
 })
 
 const emit = defineEmits<NavBarEmits>()
+const slots = useSlots()
 
 const rootStyle = computed<Record<string, string>>(() => {
   return {
     '--tx-nav-bar-z-index': String(props.zIndex ?? 2000),
   }
 })
+
+const leftInteractive = computed(() => props.showBack || Boolean(slots.left))
+const rightInteractive = computed(() => Boolean(slots.right))
 
 function onBack() {
   if (props.disabled)
@@ -39,6 +43,13 @@ function onRightClick() {
     return
   emit('click-right')
 }
+
+function onLeftAction() {
+  if (props.showBack && !slots.left)
+    onBack()
+  else
+    onLeftClick()
+}
 </script>
 
 <template>
@@ -50,20 +61,23 @@ function onRightClick() {
     <div v-if="safeAreaTop" class="tx-nav-bar__safe" aria-hidden="true" />
 
     <div class="tx-nav-bar__inner">
-      <div class="tx-nav-bar__left" @click="onLeftClick">
+      <button
+        type="button"
+        class="tx-nav-bar__left"
+        :disabled="disabled || !leftInteractive"
+        :aria-label="showBack ? 'Back' : 'Navigation left action'"
+        @click="onLeftAction"
+      >
         <slot name="left">
-          <button
+          <span
             v-if="showBack"
-            type="button"
             class="tx-nav-bar__back"
-            :disabled="disabled"
-            aria-label="Back"
-            @click.stop="onBack"
+            aria-hidden="true"
           >
             <i class="i-carbon-arrow-left" />
-          </button>
+          </span>
         </slot>
-      </div>
+      </button>
 
       <div class="tx-nav-bar__center">
         <slot name="title">
@@ -73,9 +87,15 @@ function onRightClick() {
         </slot>
       </div>
 
-      <div class="tx-nav-bar__right" @click="onRightClick">
+      <button
+        type="button"
+        class="tx-nav-bar__right"
+        :disabled="disabled || !rightInteractive"
+        aria-label="Navigation right action"
+        @click="onRightClick"
+      >
         <slot name="right" />
-      </div>
+      </button>
     </div>
   </header>
 </template>
@@ -119,6 +139,21 @@ function onRightClick() {
   display: flex;
   align-items: center;
   min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+
+  &:not(:disabled) {
+    cursor: pointer;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
 }
 
 .tx-nav-bar__left {
@@ -145,22 +180,18 @@ function onRightClick() {
 .tx-nav-bar__back {
   width: 34px;
   height: 34px;
-  border: none;
   border-radius: 10px;
-  background: transparent;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--tx-text-color-primary, #303133);
+}
 
-  &:hover {
-    background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent);
-  }
+.tx-nav-bar__left:not(:disabled):hover .tx-nav-bar__back {
+  background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent);
+}
 
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
+.tx-nav-bar__left:disabled .tx-nav-bar__back {
+  opacity: 0.6;
 }
 </style>

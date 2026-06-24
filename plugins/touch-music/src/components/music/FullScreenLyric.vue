@@ -47,7 +47,7 @@ function handleProgressChange(value) {
 
     <div class="FullScreenLyric-Header">
       <div class="FullScreenLyric-Header-Content">
-        <IconButton plain icon="fullscreen" active-icon="fullscreen-exit" @click="changeFullScreen" />
+        <IconButton plain icon="fullscreen" active-icon="fullscreen-exit" label="Toggle fullscreen" @click="changeFullScreen" />
       </div>
       <div class="Footer-Music-Main-Info-Name">
         {{ _song?.detail?.song?.name }}
@@ -77,9 +77,9 @@ function handleProgressChange(value) {
         </div>
 
         <div class="FullScreenLyric-Controller">
-          <IconButton plain icon="arrow-left-s" @click="musicManager.playManager.prevSong" />
+          <IconButton plain icon="arrow-left-s" label="Previous song" @click="musicManager.playManager.prevSong" />
           <PlayPause v-model="playStatus" />
-          <IconButton plain icon="arrow-right-s" @click="musicManager.playManager.nextSong" />
+          <IconButton plain icon="arrow-right-s" label="Next song" @click="musicManager.playManager.nextSong" />
         </div>
       </div>
 

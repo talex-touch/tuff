@@ -32,20 +32,17 @@ function handleHeaderClick() {
 
 <template>
   <div class="tx-collapse-item">
-    <div
+    <button
+      type="button"
       class="tx-collapse-item__header"
       :class="{
         'tx-collapse-item__header--active': isActive,
         'tx-collapse-item__header--disabled': disabled,
       }"
-      role="button"
-      tabindex="0"
+      :disabled="disabled"
       :aria-expanded="isActive"
       :aria-controls="contentId"
-      :aria-disabled="disabled ? 'true' : undefined"
       @click="handleHeaderClick"
-      @keydown.enter.prevent="handleHeaderClick"
-      @keydown.space.prevent="handleHeaderClick"
     >
       <TxIcon
         :name="arrowIcon"
@@ -55,7 +52,7 @@ function handleHeaderClick() {
       <slot name="title">
         {{ title }}
       </slot>
-    </div>
+    </button>
 
     <Transition name="tx-collapse">
       <div
@@ -81,10 +78,14 @@ function handleHeaderClick() {
 }
 
 .tx-collapse-item__header {
+  appearance: none;
   display: flex;
   align-items: center;
+  width: 100%;
   padding: 12px 16px;
+  border: 0;
   cursor: pointer;
+  font: inherit;
   user-select: none;
   background: var(--tx-collapse-header-bg, #ffffff);
   color: var(--tx-collapse-header-text, #374151);

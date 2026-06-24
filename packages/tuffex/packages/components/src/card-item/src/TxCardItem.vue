@@ -7,7 +7,7 @@ defineOptions({
 })
 
 const props = withDefaults(defineProps<CardItemProps>(), {
-  role: 'button',
+  role: undefined,
   title: '',
   subtitle: '',
   description: '',
@@ -46,8 +46,8 @@ const avatarStyle = computed(() => {
       'tx-card-item--disabled': disabled,
       'tx-card-item--no-left': !($slots.avatar || avatarUrl || iconClass || avatarText),
     }"
-    :role="role"
-    :tabindex="(clickable && !disabled) ? 0 : -1"
+    :role="clickable ? role : undefined"
+    :tabindex="(clickable && !disabled) ? 0 : undefined"
     @click="!disabled && clickable && $emit('click', $event)"
     @keydown.enter="!disabled && clickable && $emit('click', $event as any)"
   >

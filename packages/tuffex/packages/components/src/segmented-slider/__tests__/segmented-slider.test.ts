@@ -23,6 +23,9 @@ describe('txSegmentedSlider', () => {
 
     expect(progress.attributes('style')).toContain('width: 66.666')
     expect(items).toHaveLength(4)
+    expect(items.map(item => item.element.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON', 'BUTTON'])
+    expect(items[0]?.attributes('type')).toBe('button')
+    expect(items[0]?.attributes('role')).toBeUndefined()
     expect(items[0]?.attributes('style')).toContain('left: 0%')
     expect(items[1]?.attributes('style')).toContain('left: 33.333')
     expect(items[2]?.attributes('aria-pressed')).toBe('true')
@@ -51,7 +54,7 @@ describe('txSegmentedSlider', () => {
     expect(items[3]?.attributes('style')).toContain('bottom: 100%')
   })
 
-  it('emits model and change events from click and keyboard activation', async () => {
+  it('emits model and change events from segment clicks', async () => {
     const wrapper = mount(TxSegmentedSlider, {
       props: {
         modelValue: 0,
@@ -65,8 +68,8 @@ describe('txSegmentedSlider', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([1])
     expect(wrapper.emitted('change')?.[0]).toEqual([1])
 
-    await items[3]?.trigger('keydown', { key: 'Enter' })
-    await items[2]?.trigger('keydown', { key: ' ' })
+    await items[3]?.trigger('click')
+    await items[2]?.trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.[1]).toEqual(['xl'])
     expect(wrapper.emitted('change')?.[1]).toEqual(['xl'])
@@ -86,9 +89,9 @@ describe('txSegmentedSlider', () => {
     const item = wrapper.findAll('.tx-segmented-slider__segment')[1]
 
     await item?.trigger('click')
-    await item?.trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.classes()).toContain('is-disabled')
+    expect(item?.attributes('disabled')).toBeDefined()
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(wrapper.emitted('change')).toBeUndefined()
   })

@@ -127,17 +127,22 @@ defineExpose({ pick })
       @change="onInputChange"
     >
 
-    <div class="tx-file-uploader__drop" role="button" :aria-disabled="disabled" @click="pick">
-      <div class="tx-file-uploader__drop-title">
+    <button
+      type="button"
+      class="tx-file-uploader__drop"
+      :disabled="disabled"
+      @click="pick"
+    >
+      <span class="tx-file-uploader__drop-title">
         {{ dropText }}
-      </div>
-      <div class="tx-file-uploader__drop-hint">
+      </span>
+      <span class="tx-file-uploader__drop-hint">
         {{ hintText }}
-      </div>
-      <button type="button" class="tx-file-uploader__button" :disabled="disabled" @click.stop="pick">
+      </span>
+      <span class="tx-file-uploader__button">
         {{ buttonText }}
-      </button>
-    </div>
+      </span>
+    </button>
 
     <div v-if="value.length" class="tx-file-uploader__list">
       <div v-for="item in value" :key="item.id" class="tx-file-uploader__item">
@@ -177,6 +182,7 @@ defineExpose({ pick })
 }
 
 .tx-file-uploader__drop {
+  appearance: none;
   border: 1px dashed var(--tx-border-color-lighter, #e5e7eb);
   border-radius: 14px;
   padding: 18px;
@@ -186,8 +192,14 @@ defineExpose({ pick })
   gap: 8px;
   align-items: center;
   text-align: center;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease;
+}
+
+.tx-file-uploader__drop:disabled {
+  cursor: not-allowed;
 }
 
 .tx-file-uploader.is-dragging .tx-file-uploader__drop {
@@ -216,7 +228,7 @@ defineExpose({ pick })
   cursor: pointer;
 }
 
-.tx-file-uploader__button:disabled {
+.tx-file-uploader__drop:disabled .tx-file-uploader__button {
   opacity: 0.6;
   cursor: not-allowed;
 }

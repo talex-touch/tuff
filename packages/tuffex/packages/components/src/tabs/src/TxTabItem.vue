@@ -13,37 +13,43 @@ const props = withDefaults(defineProps<TabItemProps & { active?: boolean }>(), {
   active: false,
 })
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click'): void
 }>()
 
 const active = computed(() => !!props.active)
+
+function handleClick() {
+  if (!props.disabled) {
+    emit('click')
+  }
+}
 </script>
 
 <template>
-  <div
+  <button
+    type="button"
     class="tx-tab-item fake-background"
     :class="{ 'is-active': active, 'is-disabled': disabled }"
-    role="button"
-    :tabindex="disabled ? -1 : 0"
-    @click="!disabled && $emit('click')"
-    @keydown.enter="!disabled && $emit('click')"
+    :disabled="disabled"
+    @click="handleClick"
   >
-    <div v-if="iconClass || $slots.icon" class="tx-tab-item__icon">
+    <span v-if="iconClass || $slots.icon" class="tx-tab-item__icon">
       <slot name="icon">
         <i :class="iconClass" aria-hidden="true" />
       </slot>
-    </div>
-    <div class="tx-tab-item__name">
+    </span>
+    <span class="tx-tab-item__name">
       <slot name="name">
         {{ name }}
       </slot>
-    </div>
-  </div>
+    </span>
+  </button>
 </template>
 
 <style lang="scss" scoped>
 .tx-tab-item {
+  appearance: none;
   position: relative;
   display: flex;
   align-items: center;
@@ -52,8 +58,13 @@ const active = computed(() => !!props.active)
   margin: 6px 8px;
   padding: 8px 10px;
 
+  border: 0;
   border-radius: 10px;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
   user-select: none;
   box-sizing: border-box;
 

@@ -20,43 +20,53 @@ const props = withDefaults(defineProps<BlockLineProps>(), {
 const emit = defineEmits<BlockLineEmits>()
 
 function handleClick(event: MouseEvent): void {
-  if (!props.link)
-    return
   emit('click', event)
 }
 </script>
 
 <template>
   <div
+    v-if="!link"
     class="tx-block-line TBlockLine-Container fake-background index-fix"
-    :class="{ 'tx-block-line--link': link, link }"
-    role="button"
-    :tabindex="link ? 0 : undefined"
-    @click="handleClick"
-    @keydown.enter="link && handleClick($event as unknown as MouseEvent)"
   >
     <span class="tx-block-line__title TBlockLine-Title">{{ title }}</span>
-    <div v-if="!link" class="tx-block-line__description TBlockLine-Description">
+    <div class="tx-block-line__description TBlockLine-Description">
       <slot name="description">
         {{ description }}
       </slot>
     </div>
-    <div v-else class="tx-block-line__link-slot TBlockLine-LinkSlot">
-      <slot name="description" />
-    </div>
   </div>
+  <button
+    v-else
+    type="button"
+    class="tx-block-line TBlockLine-Container fake-background index-fix"
+    :class="{ 'tx-block-line--link': link, link }"
+    @click="handleClick"
+  >
+    <span class="tx-block-line__title TBlockLine-Title">{{ title }}</span>
+    <span class="tx-block-line__link-slot TBlockLine-LinkSlot">
+      <slot name="description" />
+    </span>
+  </button>
 </template>
 
 <style lang="scss">
 .tx-block-line,
 .TBlockLine-Container {
+  appearance: none;
   position: relative;
   display: flex;
   gap: 12px;
   align-items: flex-start;
   padding: 2px 18px 2px 50px;
   min-height: 24px;
+  width: 100%;
+  border: 0;
   border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   --fake-color: var(--tx-fill-color, #f0f2f5);
   --fake-opacity: 0.45;
 

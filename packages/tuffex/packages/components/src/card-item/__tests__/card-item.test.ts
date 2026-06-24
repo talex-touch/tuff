@@ -13,8 +13,8 @@ describe('txCardItem', () => {
       },
     })
 
-    expect(wrapper.attributes('role')).toBe('button')
-    expect(wrapper.attributes('tabindex')).toBe('-1')
+    expect(wrapper.attributes('role')).toBeUndefined()
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
     expect(wrapper.find('.tx-card-item__title').text()).toBe('Sync settings')
     expect(wrapper.find('.tx-card-item__subtitle').text()).toBe('Workspace')
     expect(wrapper.find('.tx-card-item__desc').text()).toBe('Keeps devices aligned.')
@@ -76,6 +76,7 @@ describe('txCardItem', () => {
   it('marks active and clickable states and emits click from mouse and Enter', async () => {
     const wrapper = mount(TxCardItem, {
       props: {
+        role: 'button',
         clickable: true,
         active: true,
       },
@@ -83,6 +84,7 @@ describe('txCardItem', () => {
 
     expect(wrapper.classes()).toContain('tx-card-item--clickable')
     expect(wrapper.classes()).toContain('tx-card-item--active')
+    expect(wrapper.attributes('role')).toBe('button')
     expect(wrapper.attributes('tabindex')).toBe('0')
 
     await wrapper.trigger('click')
@@ -100,7 +102,7 @@ describe('txCardItem', () => {
     })
 
     expect(wrapper.classes()).toContain('tx-card-item--disabled')
-    expect(wrapper.attributes('tabindex')).toBe('-1')
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
 
     await wrapper.trigger('click')
     await wrapper.trigger('keydown.enter')

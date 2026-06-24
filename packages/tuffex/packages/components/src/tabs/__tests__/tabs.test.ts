@@ -102,6 +102,13 @@ describe('txTabs', () => {
 
   it('switches enabled tabs and blocks disabled tabs', async () => {
     const wrapper = mountTabs()
+    const tabItems = wrapper.findAll('.tx-tab-item')
+
+    expect(tabItems).toHaveLength(3)
+    expect(tabItems.map(item => item.element.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON'])
+    expect(tabItems[0].attributes('type')).toBe('button')
+    expect(tabItems[0].attributes('role')).toBeUndefined()
+    expect(tabItems[2].attributes('disabled')).toBeDefined()
 
     await wrapper.findAllComponents(TxTabItem)[1].trigger('click')
     await nextTick()
