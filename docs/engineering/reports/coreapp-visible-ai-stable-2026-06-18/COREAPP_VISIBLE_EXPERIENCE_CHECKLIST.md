@@ -174,16 +174,16 @@
 - Group: auth
 - Required: yes
 - Requires screenshot/recording: yes
-- Status: pending
+- Status: passed
 - Collection steps:
   - Trigger login while forcing or observing a browser-open failure path.
   - Capture the recovery dialog with manual URL and short-code copy actions.
   - Capture timeout or network-failure copy if the session fails.
 - Required evidence:
-  - [ ] Browser-open failure keeps the device authorization session alive
-  - [ ] Manual login URL copy action is visible
-  - [ ] Short user code copy action is visible
-  - [ ] Timeout and network failure copy is user-readable
+  - [x] Browser-open failure keeps the device authorization session alive
+  - [x] Manual login URL copy action is visible
+  - [x] Short user code copy action is visible
+  - [x] Timeout and network failure copy is user-readable
 - Recommended artifacts:
   - evidence/coreapp-visible/login-browser-open-failure.png
   - evidence/coreapp-visible/login-timeout-or-network-failure.png
@@ -191,8 +191,11 @@
   - The dialog only shows a generic error without manual recovery actions.
   - The device authorization session is cancelled before the user can copy recovery data.
 - Artifact paths:
-  - _none_
-- Notes:
+  - login-browser-open-failure.png
+  - login-browser-open-failure-probe.json
+  - login-timeout-or-network-failure.png
+  - login-timeout-or-network-failure-probe.json
+- Notes: 2026-06-24 packaged 2.4.13-beta.1 capture used isolated userData profiles and TUFF_VISIBLE_EVIDENCE_AUTH=1 with TUFF_STARTUP_BENCHMARK_ONCE=1. The browser-open failure probe forced TUFF_VISIBLE_EVIDENCE_AUTH_BROWSER_OPEN_FAIL=1 and captured the waiting recovery dialog with manual login URL copy, short-code copy, reopen, and cancel actions; both copy buttons reported success. The timeout probe used TUFF_VISIBLE_EVIDENCE_AUTH_LOGIN_TIMEOUT_MS=3000 and captured readable timeout copy with retry/close actions, plus network failure copy recorded in JSON.
 
 ### CoreBox AI Ask preview
 
@@ -293,16 +296,16 @@
 - Group: ai
 - Required: yes
 - Requires screenshot/recording: yes
-- Status: pending
+- Status: passed
 - Collection steps:
   - Open OmniPanel with selected text and capture available writing actions.
   - Run translate, summarize, rewrite, explain, or review and capture the result preview.
   - Capture copy, replace clipboard, retry, and replace confirmation states.
 - Required evidence:
-  - [ ] Selected-text context or recovery hint is visible
-  - [ ] Translate/summarize/rewrite/explain/review actions are visible as applicable
-  - [ ] AI result preview is visible
-  - [ ] Copy, replace clipboard, retry, and confirmation states are visible
+  - [x] Selected-text context or recovery hint is visible
+  - [x] Translate/summarize/rewrite/explain/review actions are visible as applicable
+  - [x] AI result preview is visible
+  - [x] Copy, replace clipboard, retry, and confirmation states are visible
 - Recommended artifacts:
   - evidence/coreapp-visible/omnipanel-writing-tools.png
   - evidence/coreapp-visible/omnipanel-replace-confirmation.png
@@ -311,8 +314,14 @@
   - No selected-text context or recovery hint is visible.
   - Clipboard replace can happen without confirmation evidence.
 - Artifact paths:
-  - _none_
+  - omnipanel-writing-tools.png
+  - omnipanel-replace-confirmation.png
+  - omnipanel-selection-recovery.png
+  - omnipanel-writing-tools-probe.json
 - Notes:
+  - 2026-06-24 packaged CoreApp 2.4.13-beta.1 evidence used an isolated profile `/tmp/tuff-omnipanel-evidence-20260624-9485` and real OmniPanel renderer interaction over CDP.
+  - Local/Ollama provider `local-default` was configured with `qwen2.5:3b` and Nexus disabled; `AI 改写` invoked `text.rewrite` successfully through provider `local`, model `qwen2.5:3b`, trace `local-1782279378320-f5jm7e`, and latency `1234ms`.
+  - Screenshots show selected-text context/recovery hint, five writing actions (`AI 翻译`, `AI 摘要`, `AI 改写`, `AI 解释`, `AI Review`), AI result metadata chips, `重试` / `复制` / `替换剪贴板`, explicit replace confirmation (`待确认` / `确认替换`), and no-selection recovery hint.
 
 ### Assistant floating ball entry
 

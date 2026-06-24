@@ -89,10 +89,21 @@
     },
     {
       "id": "browser-login-recovery",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": ""
+      "status": "passed",
+      "artifactPaths": [
+        "login-browser-open-failure.png",
+        "login-browser-open-failure-probe.json",
+        "login-timeout-or-network-failure.png",
+        "login-timeout-or-network-failure-probe.json"
+      ],
+      "checkedEvidence": [
+        "Browser-open failure keeps the device authorization session alive",
+        "Manual login URL copy action is visible",
+        "Short user code copy action is visible",
+        "Timeout and network failure copy is user-readable"
+      ],
+      "notes": "2026-06-24 packaged 2.4.13-beta.1 capture used isolated userData profiles and TUFF_VISIBLE_EVIDENCE_AUTH=1 with TUFF_STARTUP_BENCHMARK_ONCE=1. login-browser-open-failure-probe.json on CDP 9481 forced TUFF_VISIBLE_EVIDENCE_AUTH_BROWSER_OPEN_FAIL=1 and captured the Settings login recovery dialog still waiting with manual login URL copy, short-code copy, reopen, and cancel actions; both copy buttons reported success through the typed ClipboardEvents.write transport. login-timeout-or-network-failure-probe.json on CDP 9482 used TUFF_VISIBLE_EVIDENCE_AUTH_LOGIN_TIMEOUT_MS=3000 and captured readable timeout copy with retry/close actions; the JSON also records the network failure classification copy for review.",
+      "checkedAt": "2026-06-24T05:12:49.903Z"
     },
     {
       "id": "corebox-ai-ask",
@@ -183,10 +194,20 @@
     },
     {
       "id": "omnipanel-writing-tools",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": ""
+      "status": "passed",
+      "artifactPaths": [
+        "omnipanel-writing-tools.png",
+        "omnipanel-replace-confirmation.png",
+        "omnipanel-selection-recovery.png"
+      ],
+      "checkedEvidence": [
+        "Selected-text context or recovery hint is visible",
+        "Translate/summarize/rewrite/explain/review actions are visible as applicable",
+        "AI result preview is visible",
+        "Copy, replace clipboard, retry, and confirmation states are visible"
+      ],
+      "notes": "2026-06-24 packaged CoreApp 2.4.13-beta.1 evidence used an isolated profile (/tmp/tuff-omnipanel-evidence-20260624-9485) and real OmniPanel renderer interaction over CDP. Local/Ollama provider local-default was configured with qwen2.5:3b and Nexus disabled; AI 改写 invoked text.rewrite successfully through provider local, model qwen2.5:3b, trace local-1782279378320-f5jm7e, and latency 1234ms. Captures show selected-text context/recovery hint, five writing actions (AI 翻译, AI 摘要, AI 改写, AI 解释, AI Review), AI result preview metadata chips, Retry/Copy/Replace Clipboard actions, explicit replace confirmation state (待确认 / 确认替换), and no-selection recovery hint.",
+      "checkedAt": "2026-06-24T05:35:46.158Z"
     },
     {
       "id": "assistant-floating-ball-entry",

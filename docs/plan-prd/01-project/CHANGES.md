@@ -3,6 +3,32 @@
 > 更新时间：2026-06-22
 > 定位：只保留 6 月当前阶段的高信号变更索引。6 月以前流水记录已从文档树移除，可从 Git 历史追溯。
 
+## 2026-06-24
+
+### coreapp: close browser login recovery visible evidence
+
+- `browser-login-recovery` visible surface 标记为 `passed`，绑定 `login-browser-open-failure.png/json` 与 `login-timeout-or-network-failure.png/json`。
+- 新增 packaged login recovery probe，覆盖 browser-open failure waiting session、manual login URL / short code copy action、timeout retry 文案与 network failure copy JSON。
+- `useAuth` 登录恢复状态机补齐 callback resolve 时清理 countdown interval、retry reopen 失败进入 failed 状态。
+
+### docs: stage remaining execution batches
+
+- `TODO.md` 新增分批执行计划，把 30min 侦察批、2-5h R2 surface、半天批、R3 durable 设计批与高风险 migration 设计批拆开，明确每批交付物和文档落点。
+- `TODO-AI.md` 新增 R2 visible gate 执行梯队，按 `browser-login-recovery`、`app-index-workbench`、Provider / OmniPanel / Assistant surfaces、长链路 surfaces 排序，并写明每个 surface 的关账条件。
+- `TODO-R3.md` 新增 durable job history 最小设计，限定在 runtime task/job history 与 Settings diagnostics evidence，不进入 SQLite/FTS ownership 或 `scan_progress` schema migration 实现。
+
+### corebox: add tool-only app search source aliases
+
+- App Index 增加 tool-only source/alias catalog，先覆盖开发工具、IM、设计工具三类以及 Photoshop、Codex、VSCode、飞书、微信、Telegram 高频工具。
+- CoreBox app 搜索将 `im`、`design`、`ps`、`codex` 归入稳定 alias 命中，并在结果 metadata 中暴露 `toolSources` 与更准确的 `alias` match source。
+- Indexed Source diagnostics 增加 `app-provider:tool-sources` evidence，便于确认工具 source/alias catalog 的覆盖范围和版本。
+
+### docs: draft OmniPanel and assistant next PRD
+
+- 新增 `docs/plan-prd/03-features/omnipanel-assistant-next-prd.md`，梳理 OmniPanel、悬浮助手、桌面烟花、性能优化与截图翻译逐步引入的下一版本 PRD。
+- 新增 `.spec-workflow/specs/omnipanel-assistant-next/requirements.md`，按 spec workflow 记录 EARS 风格需求与非功能约束。
+- 同步 `docs/plan-prd/README.md` 与 `docs/INDEX.md` 高价值专题入口。
+
 ## 2026-06-22
 
 ### nexus: harden privacy export and account deletion flow

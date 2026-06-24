@@ -1,6 +1,6 @@
 # Tuff TODO
 
-> 更新时间：2026-06-22
+> 更新时间：2026-06-24
 > 定位：当前 2 周执行清单。细项分别落到 `TODO-AI.md`、`TODO-R3.md`、`TODO-nexus.md`；6 月以前记录已从文档树移除。
 
 ## 当前执行窗口
@@ -17,16 +17,17 @@
 | --- | --- | --- |
 | R0 口径 / docs hygiene | done for current pass | 继续清理死链与超长文档；入口只保留当前 SoT。 |
 | R1 Release Integrity | blocked by release assets | `v2.4.12-beta.8` 真实链路已复采：Nexus latest/assets/download 通过，GitHub manifest 存在；仍缺 `.sig/.asc` sidecar、manifest `signature` 字段、Nexus `signatureUrl/signatureKey` 与 signing public key。 |
-| R2 AI Stable | partial | CoreBox AI Ask 与 `corebox-search-states` packaged surfaces 已 passed；R2I 已补真实 result source/status/reason pills，继续收 broader visible surfaces。 |
+| R2 AI Stable | partial | CoreBox AI Ask、`corebox-search-states` 与 `browser-login-recovery` packaged surfaces 已 passed；继续收 broader visible surfaces。 |
 | R3 Search / Indexing Runtime | partial | FileProvider incremental DB persist、FTS write/delete 与 index worker flush 已收敛到 runtime/store evidence；剩余 SQLite/FTS durable migration、source-scoped `scan_progress` schema、durable scheduler evidence。 |
 | R7 Nexus Governance | partial | production / preview operator evidence、D1/R2/live send/live storage、provider quota fail-closed。 |
 | Nexus performance | separate thread | 详见 `TODO-nexus.md`，不要混入 CoreApp/AI/R3 改动。 |
 
 ## 当前阻塞
 
-- R2 global visible gate 仍失败：CoreBox AI Ask 与 `corebox-search-states` 已 passed；剩余阻塞来自 app-index/login/OmniPanel/Assistant/Workflow/Provider broader surfaces pending。2026-06-22 R2I 已用 initialized packaged profile 补到真实 `screenshot` result rows，source/status/reason pills 可见且窗口从 `720x56` resize 到 `720x242`。
+- R2 global visible gate 仍失败：CoreBox AI Ask、`corebox-search-states` 与 `browser-login-recovery` 已 passed；剩余阻塞来自 app-index/OmniPanel/Assistant/Workflow/Provider broader surfaces pending。2026-06-24 login recovery 已用 packaged isolated profiles 补到 browser-open failure waiting/copy 和 timeout/network copy evidence。
+- R2 2026-06-24 inventory：strict gate 仍为 `gate.failures.length=48`；manifest 引用的 45 个唯一 artifact 均存在、非空且 JSON 可解析。Roadmap 推荐下一批仍可选 `app-index-workbench`。
 - R1 Gate E 仍失败：`docs/engineering/reports/release-integrity-2026-06-22/` 已绑定真实链路证据，阻塞项为发布资产签名材料与生产 signing key 配置缺失；旧本地 gate 缺已清理 risk-register 文件，本轮不作为闭环阻塞。
-- R3 schema 与 durable runtime-store 属数据结构和持久化边界改动，执行前必须单独列影响范围并确认；2026-06-22 已完成的 runtime write evidence 小切片不包含 schema/migration。
+- R3 schema 与 durable runtime-store 属数据结构和持久化边界改动，执行前必须按 `TODO-R3.md` 的高风险迁移前置确认清单单独确认 SQLite/FTS、`scan_progress` 影响范围；2026-06-22 已完成的 runtime write evidence 小切片不包含 schema/migration。
 
 ## AI 批次估时
 
@@ -34,14 +35,13 @@
 
 | 任务 | 预估 AI 时间 | 风险 / 备注 |
 | --- | ---: | --- |
-| R2 `app-index-workbench` evidence | 3-5h | 可能复现 app scanner `spawn EBADF`；优先作为下一批 visible surface。 |
-| R2 `browser-login-recovery` | 2-4h | 取决于本地登录 / OAuth recovery 链路是否可复现。 |
+| R2 `app-index-workbench` evidence | 3-5h | Roadmap 推荐下一批 visible surface；可能复现 app scanner `spawn EBADF`。 |
+| R2 `provider-registry-observability` | 3-5h | 偏 UI / evidence，可作为中等风险批次。 |
 | R2 `omnipanel-writing-tools` | 3-5h | 需要真实选中文本、AI preview、copy / retry / confirmation 状态。 |
 | R2 `assistant-floating-ball-entry` | 3-5h | 涉及浮窗位置持久化、焦点不抢占与 Voice Panel 打开证据。 |
+| R2 `provider-migration-evidence` | 3-6h | 必须确认 dry-run / execute 口径，且不能暴露 secret。 |
 | R2 `assistant-screenshot-translate` | 4-6h | 剪贴板图片、翻译结果窗口与 provider fallback evidence 容易受环境影响。 |
 | R2 `workflow-use-model-review-queue` | 4-7h | Workflow、Review Queue、失败态和成本信号链路较长。 |
-| R2 `provider-registry-observability` | 3-5h | 偏 UI / evidence，可作为中等风险批次。 |
-| R2 `provider-migration-evidence` | 3-6h | 必须确认 dry-run / execute 口径，且不能暴露 secret。 |
 | R3 durable job history + Settings diagnostics | 5-8h | 可拆小切片；需要持久化边界、Settings recovery chip 与 evidence。 |
 | R3 Quicklinks persistent feed | 6-10h | 官方插件持久 feed storage、clear / rebuild UI 与 Settings evidence。 |
 | R3 Browser Bookmarks platform evidence | 4-8h | 主要取决于真实浏览器 profile、watch root 与 packaged evidence 可采性。 |
@@ -56,6 +56,33 @@
 | --- | ---: | --- |
 | R3 SQLite/FTS durable ownership migration | 8-14h | 数据结构 / 持久化所有权高风险；先出设计、兼容读写、rollback 与验证矩阵。 |
 | R3 `scan_progress` source-scoped schema migration | 8-16h | schema/source migration 高风险；执行前必须单独确认数据清理范围和回滚策略。 |
+
+## 分批执行计划
+
+> 执行规则：每批只处理一个主题；R2 visible surface、R3 indexing、Nexus performance、TuffEx / SDK dirty files 不混批。每批结束都要同步对应 SoT 文档；如果只完成侦察或遇到环境 blocker，不能把 surface 标为 `passed`。
+
+| 批次 | 默认任务 | 交付物 | 文档落点 |
+| --- | --- | --- | --- |
+| 30min 侦察批 | R2 visible gate preflight | strict failure 分组、surface artifact 要求、截图要求、下一批推荐 | `TODO.md`、`TODO-AI.md` |
+| 3-5h 可闭环 | `app-index-workbench` | summary counts、source filters、diagnostic filters、empty states evidence；`spawn EBADF` 如复现只归入 app-index blocker | `TODO-AI.md`、AI report README、manifest、CHANGES |
+| 3-5h 中等风险 | `provider-registry-observability` | provider health、scene latest run、filters、next-action hints evidence | `TODO-AI.md`、AI report README、manifest、CHANGES |
+| 半天批 | `omnipanel-writing-tools`、`assistant-floating-ball-entry` | 单 surface evidence；不混 Workflow 或 screenshot translate | `TODO-AI.md`、专题 report、CHANGES |
+| 长链路批 | `assistant-screenshot-translate`、`workflow-use-model-review-queue` | clipboard image / Review Queue 完整链路 evidence 或 blocker | `TODO-AI.md`、专题 report、CHANGES |
+| R3 设计批 | durable job history + Settings diagnostics | append/update/store 最小设计、Settings chip 证据路径、focused test matrix | `TODO-R3.md` |
+| 高风险迁移设计批 | SQLite/FTS ownership、`scan_progress` source-scoped schema | 影响范围、兼容读写、rollback、验证矩阵；不进入实现 | `TODO-R3.md`、必要时专题设计文档 |
+
+### R2 surface 完成标准
+
+- `coreapp-visible-experience-manifest.json` 对应 surface 的 `status`、`artifactPaths`、`checkedEvidence` 与 `notes` 同步更新。
+- 运行 `coreapp-visible-experience-evidence.test.ts` 通过。
+- 运行 strict verifier 后，全局 gate 可以继续失败，但本批 surface 不再出现在 failure list。
+- 同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md`、`TODO-AI.md`、`CHANGES.md`；如影响总状态，同步本文件。
+
+### R3 批次完成标准
+
+- durable job history 先走设计和 focused tests，不触碰 schema。
+- SQLite/FTS ownership 与 `scan_progress` migration 必须先按 `TODO-R3.md` 高风险清单完成确认；未确认前不得实施迁移。
+- Browser Bookmarks、Everything、Quicklinks 只能用真实平台 / packaged evidence 关闭，不用 mock evidence 替代。
 
 ## 验证命令
 

@@ -30,6 +30,7 @@
 ## 高价值专题
 
 - `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 PRD。
+- `docs/plan-prd/03-features/omnipanel-assistant-next-prd.md` - OmniPanel 与悬浮助手下一版本 PRD。
 - `docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md` - 本地知识检索与上下文构建 PRD。
 - `docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md` - ContextHygiene 与自动记忆治理 PRD。
 - `docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md` - 本地开源模型运行时 PRD。
