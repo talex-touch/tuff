@@ -10,16 +10,16 @@ import {
 } from '../plugin'
 
 describe('sdk version markers', () => {
-  it('uses 260615 as the current supported sdkapi marker', () => {
-    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260615)
-    expect(SUPPORTED_SDK_VERSIONS[0]).toBe(SdkApi.V260615)
-    expect(formatSdkVersion(CURRENT_SDK_VERSION)).toBe('26.06.15')
+  it('uses 260626 as the current supported sdkapi marker', () => {
+    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260626)
+    expect(SUPPORTED_SDK_VERSIONS[0]).toBe(SdkApi.V260626)
+    expect(formatSdkVersion(CURRENT_SDK_VERSION)).toBe('26.06.26')
   })
 
-  it('accepts 260615 without adding a new runtime gate', () => {
-    expect(isSupportedSdkVersion(SdkApi.V260615)).toBe(true)
-    expect(resolveSdkApiVersion(260615)).toBe(SdkApi.V260615)
-    expect(checkSdkCompatibility(260615, 'touch-new-plugin')).toEqual({
+  it('accepts 260626 without adding a new runtime gate', () => {
+    expect(isSupportedSdkVersion(SdkApi.V260626)).toBe(true)
+    expect(resolveSdkApiVersion(260626)).toBe(SdkApi.V260626)
+    expect(checkSdkCompatibility(260626, 'touch-new-plugin')).toEqual({
       compatible: true,
       enforcePermissions: true,
     })

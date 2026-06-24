@@ -29,8 +29,12 @@ function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
 }
 
 describe('sdk-version', () => {
-  it('treats 260615 as the current sdkapi marker and keeps 260428 supported', () => {
-    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260615)
+  it('treats 260626 as the current sdkapi marker and keeps 260615/260428 supported', () => {
+    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260626)
+    expect(resolveSdkApiVersion(SdkApi.V260626)).toBe(SdkApi.V260626)
+    expect(checkSdkCompatibility(SdkApi.V260626, 'touch-intelligence').warning).toBeUndefined()
+
+    expect(isSupportedSdkVersion(SdkApi.V260615)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260615)).toBe(SdkApi.V260615)
     expect(checkSdkCompatibility(SdkApi.V260615, 'touch-intelligence').warning).toBeUndefined()
 
@@ -50,12 +54,12 @@ describe('sdk-version', () => {
   })
 
   it('blocks future sdkapi markers until the runtime explicitly supports them', () => {
-    const compatibility = checkSdkCompatibility(260501, 'future-plugin')
+    const compatibility = checkSdkCompatibility(260701, 'future-plugin')
 
-    expect(resolveSdkApiVersion(260501)).toBeUndefined()
+    expect(resolveSdkApiVersion(260701)).toBeUndefined()
     expect(compatibility.compatible).toBe(false)
     expect(compatibility.enforcePermissions).toBe(false)
-    expect(compatibility.warning).toContain('260501')
+    expect(compatibility.warning).toContain('260701')
   })
 
   it('keeps bundled plugin manifests on explicitly supported sdkapi markers', () => {
@@ -69,6 +73,6 @@ describe('sdk-version', () => {
       .sort()
 
     expect(unsupported).toEqual([])
-    expect(currentMarkerPlugins).toEqual(['touch-intelligence'])
+    expect(currentMarkerPlugins).toEqual([])
   })
 })

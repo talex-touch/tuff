@@ -9,6 +9,7 @@ import type {
   SearchProviderDescriptor,
   SearchProviderManifestDescriptor,
   FeatureSearchTokenInput,
+  SemanticAliasManifestEntry,
 } from '../search'
 import type { TuffFooterHints } from '../core-box/tuff/tuff-dsl'
 import type { ITuffIcon } from '../types/icon'
@@ -612,6 +613,11 @@ export interface IManifest {
    * Optional Search Provider declarations exposed by this plugin.
    */
   searchProviders?: SearchProviderManifestDescriptor[]
+  /**
+   * Optional semantic aliases for plugin discoverability.
+   * Requires sdkapi >= 260626 for new plugin templates.
+   */
+  semanticAliases?: SemanticAliasManifestEntry[]
   /**
    * Optional indexed source lifecycle declarations exposed by this plugin.
    * This is manifest metadata only; runtime registration still requires an explicit host bridge.
