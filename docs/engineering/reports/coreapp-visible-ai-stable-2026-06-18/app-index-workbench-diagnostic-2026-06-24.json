@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "kind": "app-index-diagnostic-evidence",
+  "createdAt": "2026-06-24T06:00:15.241Z",
+  "input": {
+    "target": "shell:AppsFolder\\TuffEvidence.Uwp!App",
+    "query": "Tuff Evidence UWP"
+  },
+  "diagnosis": {
+    "success": true,
+    "status": "found",
+    "target": "shell:AppsFolder\\TuffEvidence.Uwp!App",
+    "matchedStages": [
+      "precise",
+      "fts",
+      "ngram"
+    ]
+  },
+  "app": {
+    "id": 5,
+    "path": "shell:AppsFolder\\TuffEvidence.Uwp!App",
+    "name": "Windows Store",
+    "displayName": "Tuff Evidence UWP",
+    "rawDisplayName": "Tuff Evidence UWP",
+    "displayNameStatus": "clean",
+    "identityKind": "uwp",
+    "displayNameSource": "manual",
+    "displayNameQuality": "manifest",
+    "iconPresent": true,
+    "fileName": "Windows Store",
+    "bundleId": "com.tuff.visible.uwp-found",
+    "appIdentity": "app-index-workbench:uwp-found",
+    "launchKind": "uwp",
+    "launchTarget": "shell:AppsFolder\\TuffEvidence.Uwp!App",
+    "displayPath": "Windows Store",
+    "description": "Visible evidence UWP sample",
+    "alternateNames": [
+      "Tuff Evidence UWP",
+      "uwp",
+      "uwp-found"
+    ],
+    "entrySource": "manual",
+    "entryEnabled": true
+  },
+  "index": {
+    "itemId": "app-index-workbench:uwp-found",
+    "itemIds": [
+      "app-index-workbench:uwp-found",
+      "shell:AppsFolder\\TuffEvidence.Uwp!App",
+      "com.tuff.visible.uwp-found"
+    ],
+    "aliases": [],
+    "generatedKeywords": [
+      "evidence",
+      "found",
+      "store",
+      "teu",
+      "tuff",
+      "tuffevidenceuwp",
+      "uwp",
+      "windows",
+      "windowsstore",
+      "ws"
+    ],
+    "storedKeywords": [
+      "evidence",
+      "found",
+      "sample",
+      "store",
+      "t",
+      "teu",
+      "tuff",
+      "tuffevidenceuwp",
+      "uwp",
+      "visible",
+      "windows",
+      "windowsstore",
+      "ws"
+    ],
+    "storedKeywordEntries": [
+      {
+        "value": "evidence",
+        "priority": 1.1
+      },
+      {
+        "value": "found",
+        "priority": 1.1
+      },
+      {
+        "value": "sample",
+        "priority": 0.9
+      },
+      {
+        "value": "store",
+        "priority": 1.1
+      },
+      {
+        "value": "t",
+        "priority": 1.1
+      },
+      {
+        "value": "teu",
+        "priority": 1.5
+      },
+      {
+        "value": "tuff",
+        "priority": 1.1
+      },
+      {
+        "value": "tuffevidenceuwp",
+        "priority": 1.1
+      },
+      {
+        "value": "uwp",
+        "priority": 1.5
+      },
+      {
+        "value": "visible",
+        "priority": 0.9
+      },
+      {
+        "value": "windows",
+        "priority": 1.1
+      },
+      {
+        "value": "windowsstore",
+        "priority": 1.1
+      },
+      {
+        "value": "ws",
+        "priority": 1.5
+      }
+    ]
+  },
+  "query": {
+    "raw": "Tuff Evidence UWP",
+    "normalized": "tuff evidence uwp",
+    "terms": [
+      "tuff",
+      "evidence",
+      "uwp"
+    ],
+    "ftsQuery": "tuff evidence uwp",
+    "candidateItemIds": [
+      "steam://rungameid/424242",
+      "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+      "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+      "app-index-workbench:protocol-attention",
+      "app-index-workbench:uwp-found"
+    ],
+    "stages": {
+      "precise": {
+        "ran": true,
+        "targetHit": true,
+        "matches": [
+          {
+            "itemId": "steam://rungameid/424242",
+            "keyword": "tuff",
+            "priority": 1.1
+          },
+          {
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+            "keyword": "tuff",
+            "priority": 1.1
+          },
+          {
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+            "keyword": "tuff",
+            "priority": 1.1
+          },
+          {
+            "itemId": "app-index-workbench:protocol-attention",
+            "keyword": "tuff",
+            "priority": 1.5
+          },
+          {
+            "itemId": "app-index-workbench:uwp-found",
+            "keyword": "tuff",
+            "priority": 1.1
+          },
+          {
+            "itemId": "steam://rungameid/424242",
+            "keyword": "evidence",
+            "priority": 1.1
+          },
+          {
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+            "keyword": "evidence",
+            "priority": 1.1
+          },
+          {
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+            "keyword": "evidence",
+            "priority": 1.1
+          },
+          {
+            "itemId": "app-index-workbench:protocol-attention",
+            "keyword": "evidence",
+            "priority": 1.5
+          },
+          {
+            "itemId": "app-index-workbench:uwp-found",
+            "keyword": "evidence",
+            "priority": 1.1
+          },
+          {
+            "itemId": "app-index-workbench:uwp-found",
+            "keyword": "uwp",
+            "priority": 1.5
+          }
+        ]
+      },
+      "phrase": {
+        "ran": true,
+        "targetHit": false,
+        "matches": []
+      },
+      "prefix": {
+        "ran": false,
+        "targetHit": false,
+        "matches": [],
+        "reason": "query-too-long-for-prefix-stage"
+      },
+      "fts": {
+        "ran": true,
+        "targetHit": true,
+        "matches": [
+          {
+            "itemId": "app-index-workbench:uwp-found",
+            "score": -1.553382663758654
+          }
+        ]
+      },
+      "ngram": {
+        "ran": true,
+        "targetHit": true,
+        "matches": [
+          {
+            "itemId": "app-index-workbench:uwp-found",
+            "overlapCount": 12
+          },
+          {
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+            "overlapCount": 10
+          },
+          {
+            "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+            "overlapCount": 10
+          },
+          {
+            "itemId": "steam://rungameid/424242",
+            "overlapCount": 10
+          }
+        ]
+      },
+      "subsequence": {
+        "ran": true,
+        "targetHit": false,
+        "matches": []
+      }
+    }
+  },
+  "stages": {
+    "precise": {
+      "ran": true,
+      "targetHit": true,
+      "matchCount": 11,
+      "matches": [
+        {
+          "itemId": "steam://rungameid/424242",
+          "keyword": "tuff",
+          "priority": 1.1
+        },
+        {
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+          "keyword": "tuff",
+          "priority": 1.1
+        },
+        {
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+          "keyword": "tuff",
+          "priority": 1.1
+        },
+        {
+          "itemId": "app-index-workbench:protocol-attention",
+          "keyword": "tuff",
+          "priority": 1.5
+        },
+        {
+          "itemId": "app-index-workbench:uwp-found",
+          "keyword": "tuff",
+          "priority": 1.1
+        },
+        {
+          "itemId": "steam://rungameid/424242",
+          "keyword": "evidence",
+          "priority": 1.1
+        },
+        {
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+          "keyword": "evidence",
+          "priority": 1.1
+        },
+        {
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+          "keyword": "evidence",
+          "priority": 1.1
+        },
+        {
+          "itemId": "app-index-workbench:protocol-attention",
+          "keyword": "evidence",
+          "priority": 1.5
+        },
+        {
+          "itemId": "app-index-workbench:uwp-found",
+          "keyword": "evidence",
+          "priority": 1.1
+        },
+        {
+          "itemId": "app-index-workbench:uwp-found",
+          "keyword": "uwp",
+          "priority": 1.5
+        }
+      ]
+    },
+    "phrase": {
+      "ran": true,
+      "targetHit": false,
+      "matchCount": 0,
+      "matches": []
+    },
+    "prefix": {
+      "ran": false,
+      "targetHit": false,
+      "reason": "query-too-long-for-prefix-stage",
+      "matchCount": 0,
+      "matches": []
+    },
+    "fts": {
+      "ran": true,
+      "targetHit": true,
+      "matchCount": 1,
+      "matches": [
+        {
+          "itemId": "app-index-workbench:uwp-found",
+          "score": -1.553382663758654
+        }
+      ]
+    },
+    "ngram": {
+      "ran": true,
+      "targetHit": true,
+      "matchCount": 4,
+      "matches": [
+        {
+          "itemId": "app-index-workbench:uwp-found",
+          "overlapCount": 12
+        },
+        {
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence ClickOnce.appref-ms",
+          "overlapCount": 10
+        },
+        {
+          "itemId": "/tmp/tuff-app-index-workbench-20260624060007/app-index-workbench-fixtures/Tuff Evidence PathApp",
+          "overlapCount": 10
+        },
+        {
+          "itemId": "steam://rungameid/424242",
+          "overlapCount": 10
+        }
+      ]
+    },
+    "subsequence": {
+      "ran": true,
+      "targetHit": false,
+      "matchCount": 0,
+      "matches": []
+    }
+  },
+  "reindex": {
+    "success": true,
+    "status": "reindexed",
+    "path": "shell:AppsFolder\\TuffEvidence.Uwp!App",
+    "message": "App index reindex complete"
+  },
+  "manualRegression": {
+    "reusableCaseIds": [
+      "app-index-workbench-managed-ui"
+    ],
+    "suggestedEvidenceFields": {
+      "target": "shell:AppsFolder\\TuffEvidence.Uwp!App",
+      "query": "Tuff Evidence UWP",
+      "launchKind": "uwp",
+      "launchTarget": "shell:AppsFolder\\TuffEvidence.Uwp!App",
+      "bundleOrIdentity": "com.tuff.visible.uwp-found",
+      "displayNameStatus": "clean",
+      "iconPresent": true,
+      "matchedStages": [
+        "precise",
+        "fts",
+        "ngram"
+      ],
+      "reindexStatus": "reindexed"
+    }
+  }
+}
