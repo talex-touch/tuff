@@ -43,6 +43,38 @@ describe('SearchIndexStoreAdapter', () => {
     )
   })
 
+  it('maps tool source aliases and source tags from indexed record metadata', () => {
+    expect(
+      mapIndexedSourceRecordToSearchIndexItem({
+        sourceId: 'app-provider',
+        recordId: '/Applications/Adobe Photoshop 2026.app',
+        stableKey: '/Applications/Adobe Photoshop 2026.app',
+        kind: 'app',
+        title: 'Adobe Photoshop 2026',
+        path: '/Applications/Adobe Photoshop 2026.app',
+        keywords: ['Adobe Photoshop 2026', 'ps', 'design'],
+        tags: ['com.adobe.Photoshop'],
+        metadata: {
+          aliases: ['creative', 'graphics'],
+          toolSources: ['design']
+        }
+      })
+    ).toEqual(
+      expect.objectContaining({
+        itemId: '/Applications/Adobe Photoshop 2026.app',
+        providerId: 'app-provider',
+        type: 'application',
+        aliases: expect.arrayContaining([
+          expect.objectContaining({ value: 'ps' }),
+          expect.objectContaining({ value: 'design' }),
+          expect.objectContaining({ value: 'creative' })
+        ]),
+        keywords: expect.arrayContaining([expect.objectContaining({ value: 'graphics' })]),
+        tags: ['com.adobe.Photoshop', 'tool-source:design']
+      })
+    )
+  })
+
   it('indexes batches through SearchIndexService', async () => {
     const searchIndex = buildSearchIndex()
     const onBatchApplied = vi.fn(async () => {})

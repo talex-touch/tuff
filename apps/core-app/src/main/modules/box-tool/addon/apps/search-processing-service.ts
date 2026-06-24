@@ -21,6 +21,7 @@ import { resolveDisplayName } from './display-name-sync-utils'
 import { createLogger } from '../../../../utils/logger'
 import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
 import { resolveAppSemanticAliases } from './app-semantic-catalog'
+import { resolveAppToolSourceIds } from './app-tool-source-catalog'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
 const searchProcessingLog = createLogger('AppScanner').child('SearchProcessing')
@@ -39,6 +40,7 @@ interface AppMatchState {
   source: string
   alias?: FeatureMatchAlias
   searchTokens?: FeatureSearchToken[]
+  toolSources?: string[]
 }
 
 export function isSearchableAppRow(app: AppSearchRow): boolean {
@@ -94,6 +96,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
           : undefined,
         searchTokens: match.searchTokens,
         source: match.source,
+        toolSources: match.toolSources,
         keyWords: [
           ...new Set([displayName, name, ...alternateNames, deriveAppFileName(keywordPath)])
         ].filter(Boolean)
@@ -184,7 +187,7 @@ function mapTokenSourceToAppMatchSource(
     case 'alternate-initials':
       return 'alternate-initials'
     case 'alias':
-      return 'tag'
+      return 'alias'
     case 'description':
       return 'description'
     case 'path':
@@ -245,6 +248,18 @@ export async function processSearchResults(
       launchTarget: app.extensions.launchTarget || app.path,
       description
     })
+    const toolSourceIds = resolveAppToolSourceIds({
+      name,
+      displayName,
+      alternateNames,
+      path: app.path,
+      displayPath,
+      fileName: deriveAppFileName(displayPath || app.path || name),
+      bundleId: app.extensions.bundleId || '',
+      appIdentity,
+      launchTarget: app.extensions.launchTarget || app.path,
+      description
+    })
     const searchTokens = buildAppSearchTokens(
       {
         title: displayName,
@@ -284,7 +299,8 @@ export async function processSearchResults(
         alias: result.matchedAlias,
         score: normalizeAppMatchScore(result.score),
         source: resolveAppMatchSource(result),
-        searchTokens
+        searchTokens,
+        toolSources: toolSourceIds
       })
     )
   }

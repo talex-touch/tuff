@@ -402,6 +402,34 @@ export type AppProviderPrivate = {
   searchIndex: unknown
   fetchExtensionsForFiles: (files: unknown[]) => Promise<unknown[]>
   loadScannedApps: (options?: { forceRefresh?: boolean }) => Promise<unknown[]>
+  mapScannedAppToIndexedSourceRecord: (
+    sourceId: string,
+    app: {
+      alternateNames?: string[]
+      bundleId?: string
+      description?: string
+      displayName?: string
+      displayPath?: string
+      fileName?: string
+      icon?: string
+      lastModified?: Date
+      launchKind: string
+      launchTarget: string
+      name: string
+      path: string
+      stableId?: string
+      uniqueId?: string
+    }
+  ) => {
+    sourceId: string
+    recordId: string
+    stableKey: string
+    kind: string
+    title: string
+    keywords?: string[]
+    tags?: string[]
+    metadata?: Record<string, unknown>
+  }
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<unknown>
   _syncSemanticAliasCatalogIfNeeded: () => Promise<void>

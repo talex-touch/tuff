@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAppSemanticAliases } from './app-semantic-catalog'
+import { getAppToolSourceCatalogSummary, resolveAppToolSourceIds } from './app-tool-source-catalog'
 
 describe('app semantic alias catalog', () => {
   it('resolves AI and local LLM app aliases', () => {
@@ -71,6 +72,66 @@ describe('app semantic alias catalog', () => {
     )
     expect(resolveAppSemanticAliases({ name: '即时设计' })).toEqual(
       expect.arrayContaining(['design', 'prototype', '产品设计', '原型'])
+    )
+  })
+
+  it('resolves tool-only source aliases for high frequency CoreBox tools', () => {
+    const cases = [
+      {
+        app: {
+          name: 'Adobe Photoshop 2026',
+          bundleId: 'com.adobe.Photoshop',
+          path: '/Applications/Adobe Photoshop 2026.app'
+        },
+        sourceIds: ['design'],
+        aliases: ['design', 'ps', 'photoshop']
+      },
+      {
+        app: {
+          name: 'Codex',
+          bundleId: 'OpenAI.Codex_2p2nqsd0c76g0',
+          launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App'
+        },
+        sourceIds: ['dev'],
+        aliases: ['dev', 'codex', 'code']
+      },
+      {
+        app: {
+          name: 'Visual Studio Code',
+          bundleId: 'com.microsoft.VSCode',
+          path: '/Applications/Visual Studio Code.app'
+        },
+        sourceIds: ['dev'],
+        aliases: ['dev', 'vscode', 'code']
+      },
+      {
+        app: { name: '飞书', bundleId: 'com.bytedance.feishu' },
+        sourceIds: ['im'],
+        aliases: ['im', 'feishu', '飞书']
+      },
+      {
+        app: { name: '微信', bundleId: 'com.tencent.xin' },
+        sourceIds: ['im'],
+        aliases: ['im', 'wechat', '微信']
+      },
+      {
+        app: { name: 'Telegram', bundleId: 'org.telegram.desktop' },
+        sourceIds: ['im'],
+        aliases: ['im', 'telegram', 'tg']
+      }
+    ]
+
+    for (const entry of cases) {
+      expect(resolveAppToolSourceIds(entry.app)).toEqual(entry.sourceIds)
+      expect(resolveAppSemanticAliases(entry.app)).toEqual(expect.arrayContaining(entry.aliases))
+    }
+
+    expect(getAppToolSourceCatalogSummary()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'dev', appCount: 2 }),
+        expect.objectContaining({ sourceId: 'im', appCount: 3 }),
+        expect.objectContaining({ sourceId: 'design', appCount: 1 })
+      ])
     )
   })
 

@@ -349,7 +349,8 @@ describe('search-processing-service', () => {
 
     expect(psItems).toHaveLength(1)
     expect(psItems[0]?.meta?.extension).toMatchObject({
-      source: 'tag',
+      source: 'alias',
+      toolSources: ['design'],
       matchAlias: {
         text: 'Ps',
         matchResult: [{ start: 0, end: 2 }]
@@ -357,7 +358,8 @@ describe('search-processing-service', () => {
     })
     expect(designItems).toHaveLength(1)
     expect(designItems[0]?.meta?.extension).toMatchObject({
-      source: 'tag',
+      source: 'alias',
+      toolSources: ['design'],
       matchAlias: {
         text: 'Design',
         matchResult: [{ start: 0, end: 6 }]
@@ -408,7 +410,8 @@ describe('search-processing-service', () => {
     expect(imItems.map((item) => item.render.basic?.title)).toEqual(['飞书', 'Telegram'])
     expect(chatItems.map((item) => item.render.basic?.title)).toEqual(['飞书', 'Telegram'])
     expect(imItems[0]?.meta?.extension).toMatchObject({
-      source: 'tag',
+      source: 'alias',
+      toolSources: ['im'],
       matchAlias: {
         text: 'Im',
         matchResult: [{ start: 0, end: 2 }]
@@ -496,6 +499,7 @@ describe('search-processing-service', () => {
     expect(items).toHaveLength(1)
     expect(items[0]?.render.basic?.title).toBe('Codex')
     expect(items[0]?.meta?.extension).toMatchObject({
+      toolSources: ['dev'],
       source: 'name',
       matchResult: [{ start: 0, end: 5 }]
     })
