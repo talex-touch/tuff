@@ -10,7 +10,8 @@ import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type {
   AssistantClipboardImageTranslateResponse,
-  AssistantRuntimeConfig
+  AssistantRuntimeConfig,
+  AssistantScreenshotTranslateResponse
 } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
@@ -26,8 +27,13 @@ import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
 import { coreBoxManager } from '../box-tool/core-box/manager'
-import { translateClipboardImage } from '../box-tool/core-box/image-translate'
+import {
+  normalizeImageBase64Payload,
+  translateClipboardImage,
+  translateImageBase64
+} from '../box-tool/core-box/image-translate'
 import { windowManager } from '../box-tool/core-box/window'
+import { getNativeScreenshotService } from '../native-capabilities/screenshot-service'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 interface FloatingBallPosition {
@@ -183,6 +189,12 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.translateClipboardImage, async (payload) => {
         return await this.handleClipboardImageTranslate(payload?.targetLang)
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.translateScreenshot, async (payload) => {
+        return await this.handleScreenshotTranslate(payload?.targetLang)
       })
     )
   }
@@ -725,6 +737,67 @@ export class AssistantModule extends BaseModule {
     this.beginVoicePanelAutoHideSuppression()
     try {
       const result = await translateClipboardImage(targetLang || 'zh', {
+        openPinWindow: true
+      })
+      if (!result.success) {
+        return {
+          success: false,
+          code: result.code === 'SCENE_UNAVAILABLE' ? 'SCENE_UNAVAILABLE' : 'IMAGE_UNAVAILABLE',
+          error: result.error
+        }
+      }
+
+      return {
+        success: true,
+        translatedImageBase64: result.translatedImageBase64,
+        sourceText: result.sourceText,
+        targetText: result.targetText
+      }
+    } finally {
+      this.releaseVoicePanelAutoHideSuppression()
+    }
+  }
+
+  private async handleScreenshotTranslate(
+    targetLang?: string
+  ): Promise<AssistantScreenshotTranslateResponse> {
+    const setting = this.readAppSetting()
+    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
+      return {
+        success: false,
+        code: 'ASSISTANT_DISABLED',
+        error: 'Assistant floating ball is disabled.'
+      }
+    }
+
+    this.beginVoicePanelAutoHideSuppression()
+    try {
+      let dataUrl: string | undefined
+      try {
+        const captureResult = await getNativeScreenshotService().capture({
+          target: 'cursor-display',
+          output: 'data-url',
+          writeClipboard: false
+        })
+        dataUrl = captureResult.dataUrl
+      } catch (error) {
+        return {
+          success: false,
+          code: 'SCREENSHOT_UNAVAILABLE',
+          error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
+        }
+      }
+
+      const imageBase64 = typeof dataUrl === 'string' ? normalizeImageBase64Payload(dataUrl) : null
+      if (!imageBase64) {
+        return {
+          success: false,
+          code: 'SCREENSHOT_UNAVAILABLE',
+          error: 'Screenshot image is unavailable.'
+        }
+      }
+
+      const result = await translateImageBase64(imageBase64, targetLang || 'zh', {
         openPinWindow: true
       })
       if (!result.success) {
