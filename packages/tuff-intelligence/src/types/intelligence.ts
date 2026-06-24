@@ -1,5 +1,40 @@
 import { NEXUS_BASE_URL } from '../env'
 
+export type {
+  BuildContextInput,
+  BuildContextResult,
+  CompressionSnapshot,
+  ContextCheckpoint,
+  ContextPackage,
+  ContextPackageLog,
+  ContextPrivacyLevel,
+  ContextScope,
+  ContextSession,
+  ContextTurn,
+  EvaluateMemoryInput,
+  EvaluateMemoryResult,
+  IndexChunkInput,
+  IndexChunkResult,
+  IndexDocumentInput,
+  IndexDocumentResult,
+  KnowledgeChunk,
+  KnowledgeDocument,
+  KnowledgeSearchHit,
+  KnowledgeSearchInput,
+  KnowledgeSearchResult,
+  KnowledgeSourceType,
+  ListContextCheckpointsInput,
+  ListContextCheckpointsResult,
+  ListContextPackageLogsInput,
+  ListContextPackageLogsResult,
+  MemoryItem,
+  MemoryPolicyCandidate,
+  MemoryTombstone,
+  MemoryUpsertInput,
+  PrepareContextTurnInput,
+  PrepareContextTurnResult,
+} from '@talex-touch/utils/types/intelligence'
+
 /**
  * Supported intelligence provider types.
  */

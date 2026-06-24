@@ -5,6 +5,12 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createRendererLogger } from '~/utils/renderer-log'
+import {
+  summarizeContextCheckpoint,
+  summarizeContextPackageLog,
+  type ContextCheckpointSafeSummary,
+  type ContextPackageLogSafeSummary
+} from './context-package-log-summary'
 
 interface IntelligenceAuditLogEntry {
   traceId: string
@@ -34,6 +40,12 @@ const transport = useTuffTransport()
 const aiClient = createIntelligenceClient(transport)
 const intelligenceAuditLog = createRendererLogger('IntelligenceAuditLogs')
 const loading = ref(false)
+const packageLogsLoading = ref<Record<string, boolean>>({})
+const packageLogsByTraceId = ref<Record<string, ContextPackageLogSafeSummary[]>>({})
+const packageLogsErrorByTraceId = ref<Record<string, string>>({})
+const checkpointsLoadingBySessionId = ref<Record<string, boolean>>({})
+const checkpointsBySessionId = ref<Record<string, ContextCheckpointSafeSummary[]>>({})
+const checkpointsErrorBySessionId = ref<Record<string, string>>({})
 
 const logs = ref<IntelligenceAuditLogEntry[]>([])
 const selectedLog = ref<IntelligenceAuditLogEntry | null>(null)
@@ -64,6 +76,95 @@ async function loadLogs(append = false) {
 }
 
 onMounted(() => loadLogs())
+
+async function loadPackageLogsForTrace(traceId: string) {
+  if (
+    packageLogsLoading.value[traceId] ||
+    packageLogsByTraceId.value[traceId] ||
+    packageLogsErrorByTraceId.value[traceId]
+  ) {
+    return
+  }
+
+  packageLogsLoading.value = {
+    ...packageLogsLoading.value,
+    [traceId]: true
+  }
+  try {
+    const result = await aiClient.contextListPackageLogs({
+      traceId,
+      limit: 5
+    })
+    const summaries = result.logs.map(summarizeContextPackageLog)
+    packageLogsByTraceId.value = {
+      ...packageLogsByTraceId.value,
+      [traceId]: summaries
+    }
+    await loadCheckpointsForPackageLogs(summaries)
+  } catch (error) {
+    intelligenceAuditLog.error('Failed to load context package logs:', error)
+    packageLogsErrorByTraceId.value = {
+      ...packageLogsErrorByTraceId.value,
+      [traceId]: t('intelligence.audit.contextLoadFailed')
+    }
+  } finally {
+    packageLogsLoading.value = {
+      ...packageLogsLoading.value,
+      [traceId]: false
+    }
+  }
+}
+
+async function loadCheckpointsForPackageLogs(summaries: ContextPackageLogSafeSummary[]) {
+  const sessionIds = Array.from(
+    new Set(summaries.map((summary) => summary.sessionId).filter(Boolean))
+  )
+  await Promise.all(sessionIds.map((sessionId) => loadCheckpointsForSession(sessionId)))
+}
+
+async function loadCheckpointsForSession(sessionId: string) {
+  if (
+    checkpointsLoadingBySessionId.value[sessionId] ||
+    checkpointsBySessionId.value[sessionId] ||
+    checkpointsErrorBySessionId.value[sessionId]
+  ) {
+    return
+  }
+
+  checkpointsLoadingBySessionId.value = {
+    ...checkpointsLoadingBySessionId.value,
+    [sessionId]: true
+  }
+  try {
+    const result = await aiClient.contextListCheckpoints({
+      sessionId,
+      limit: 5
+    })
+    checkpointsBySessionId.value = {
+      ...checkpointsBySessionId.value,
+      [sessionId]: result.checkpoints.map(summarizeContextCheckpoint)
+    }
+  } catch (error) {
+    intelligenceAuditLog.error('Failed to load context checkpoints:', error)
+    checkpointsErrorBySessionId.value = {
+      ...checkpointsErrorBySessionId.value,
+      [sessionId]: t('intelligence.audit.contextLoadFailed')
+    }
+  } finally {
+    checkpointsLoadingBySessionId.value = {
+      ...checkpointsLoadingBySessionId.value,
+      [sessionId]: false
+    }
+  }
+}
+
+function handleToggleLog(log: IntelligenceAuditLogEntry) {
+  const nextLog = selectedLog.value?.traceId === log.traceId ? null : log
+  selectedLog.value = nextLog
+  if (nextLog?.traceId) {
+    void loadPackageLogsForTrace(nextLog.traceId)
+  }
+}
 
 function handleExportCSV() {
   const headers = [
@@ -131,6 +232,19 @@ function formatLatency(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
+function formatSourceTypes(summary: ContextPackageLogSafeSummary): string {
+  if (summary.sourceTypes.length === 0) {
+    return t('intelligence.audit.contextNoSources')
+  }
+  return summary.sourceTypes.map((source) => `${source.sourceType} x${source.count}`).join(', ')
+}
+
+function checkpointsForPackage(
+  summary: ContextPackageLogSafeSummary
+): ContextCheckpointSafeSummary[] {
+  return checkpointsBySessionId.value[summary.sessionId] ?? []
+}
+
 const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
   return log.success ? 'success' : 'error'
 })
@@ -174,7 +288,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
         :key="log.traceId"
         class="log-item"
         :class="{ selected: selectedLog?.traceId === log.traceId }"
-        @click="selectedLog = selectedLog?.traceId === log.traceId ? null : log"
+        @click="handleToggleLog(log)"
       >
         <div class="log-main">
           <div class="log-status" :class="statusClass(log)">
@@ -226,6 +340,104 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           <div v-if="log.error" class="detail-row error">
             <span class="label">Error:</span>
             <span>{{ log.error }}</span>
+          </div>
+          <div class="context-package-summary" @click.stop>
+            <div class="context-package-title">
+              <span>{{ t('intelligence.audit.contextPackage') }}</span>
+              <span v-if="packageLogsByTraceId[log.traceId]?.length" class="context-package-count">
+                {{ packageLogsByTraceId[log.traceId].length }}
+              </span>
+            </div>
+            <div v-if="packageLogsLoading[log.traceId]" class="context-package-state">
+              <i class="i-carbon-circle-dash animate-spin" />
+              {{ t('common.loading') }}
+            </div>
+            <div
+              v-else-if="packageLogsErrorByTraceId[log.traceId]"
+              class="context-package-state error"
+            >
+              {{ packageLogsErrorByTraceId[log.traceId] }}
+            </div>
+            <div
+              v-else-if="!packageLogsByTraceId[log.traceId]?.length"
+              class="context-package-state"
+            >
+              {{ t('intelligence.audit.contextPackageEmpty') }}
+            </div>
+            <div v-else class="context-package-list">
+              <div
+                v-for="summary in packageLogsByTraceId[log.traceId]"
+                :key="summary.id"
+                class="context-package-item"
+              >
+                <div class="context-package-line">
+                  <span class="context-scope">{{ summary.scope }}</span>
+                  <span>
+                    {{ summary.tokenEstimate }} / {{ summary.tokenBudget }}
+                    {{ t('intelligence.audit.contextTokens') }}
+                  </span>
+                  <span>{{ summary.itemCount }} {{ t('intelligence.audit.contextItems') }}</span>
+                </div>
+                <div class="context-package-line secondary">
+                  <span
+                    >{{ t('intelligence.audit.contextSources') }}:
+                    {{ formatSourceTypes(summary) }}</span
+                  >
+                  <span v-if="summary.retrievalItemCount">
+                    {{ t('intelligence.audit.contextRetrieval') }}: {{ summary.retrievalItemCount }}
+                  </span>
+                  <span v-if="summary.citationCount">
+                    {{ t('intelligence.audit.contextCitations') }}: {{ summary.citationCount }}
+                  </span>
+                  <span v-if="summary.retrievalStatus">
+                    {{ t('intelligence.audit.contextRetrievalStatus') }}:
+                    {{ summary.retrievalStatus }}
+                  </span>
+                </div>
+                <div v-if="summary.degradedReason" class="context-package-line warning">
+                  {{ t('intelligence.audit.contextDegradedReason') }}: {{ summary.degradedReason }}
+                </div>
+                <div class="context-checkpoint-summary">
+                  <div class="context-checkpoint-title">
+                    {{ t('intelligence.audit.contextCheckpoints') }}
+                  </div>
+                  <div
+                    v-if="checkpointsLoadingBySessionId[summary.sessionId]"
+                    class="context-package-state"
+                  >
+                    <i class="i-carbon-circle-dash animate-spin" />
+                    {{ t('common.loading') }}
+                  </div>
+                  <div
+                    v-else-if="checkpointsErrorBySessionId[summary.sessionId]"
+                    class="context-package-state error"
+                  >
+                    {{ checkpointsErrorBySessionId[summary.sessionId] }}
+                  </div>
+                  <div
+                    v-else-if="!checkpointsForPackage(summary).length"
+                    class="context-package-state"
+                  >
+                    {{ t('intelligence.audit.contextCheckpointsEmpty') }}
+                  </div>
+                  <div v-else class="context-checkpoint-list">
+                    <div
+                      v-for="checkpoint in checkpointsForPackage(summary)"
+                      :key="checkpoint.id"
+                      class="context-checkpoint-item"
+                    >
+                      <span class="context-scope">{{ checkpoint.type }}</span>
+                      <span>{{ checkpoint.reason }}</span>
+                      <span>{{ checkpoint.contextScope }}</span>
+                      <span v-if="checkpoint.metadataKeys.length">
+                        {{ t('intelligence.audit.contextMetadataKeys') }}:
+                        {{ checkpoint.metadataKeys.join(', ') }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -392,6 +604,109 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           &.error {
             color: var(--tx-color-danger);
           }
+        }
+
+        .context-package-summary {
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px solid var(--tx-border-color-lighter);
+        }
+
+        .context-package-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--tx-text-color-primary);
+        }
+
+        .context-package-count {
+          min-width: 20px;
+          height: 20px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          background: var(--tx-fill-color-dark);
+          color: var(--tx-text-color-secondary);
+          font-size: 11px;
+        }
+
+        .context-package-state {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          color: var(--tx-text-color-secondary);
+          font-size: 12px;
+
+          &.error {
+            color: var(--tx-color-danger);
+          }
+        }
+
+        .context-package-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .context-package-item {
+          padding: 8px 10px;
+          border: 1px solid var(--tx-border-color-lighter);
+          border-radius: 6px;
+          background: var(--tx-fill-color-lighter);
+        }
+
+        .context-package-line {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 12px;
+          color: var(--tx-text-color-primary);
+          font-size: 12px;
+
+          &.secondary {
+            margin-top: 4px;
+            color: var(--tx-text-color-secondary);
+          }
+
+          &.warning {
+            margin-top: 4px;
+            color: var(--tx-color-warning);
+          }
+        }
+
+        .context-scope {
+          color: var(--tx-color-primary);
+          font-weight: 600;
+        }
+
+        .context-checkpoint-summary {
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 1px solid var(--tx-border-color-lighter);
+        }
+
+        .context-checkpoint-title {
+          margin-bottom: 6px;
+          color: var(--tx-text-color-secondary);
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .context-checkpoint-list {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .context-checkpoint-item {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px 10px;
+          color: var(--tx-text-color-secondary);
+          font-size: 12px;
         }
       }
     }

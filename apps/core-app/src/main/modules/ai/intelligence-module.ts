@@ -1194,6 +1194,27 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     )
 
     registerProtectedSafe(
+      intelligenceContextEvents.listCheckpoints,
+      'List intelligence context checkpoints',
+      'intelligence.basic',
+      async (data) => contextHygieneService.listCheckpoints(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceContextEvents.listPackageLogs,
+      'List intelligence context package logs',
+      'intelligence.basic',
+      async (data) => contextHygieneService.listPackageLogs(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceContextEvents.evaluateMemory,
+      'Evaluate intelligence memory',
+      'intelligence.basic',
+      async (data) => contextHygieneService.evaluateMemory(data)
+    )
+
+    registerProtectedSafe(
       intelligenceContextEvents.saveMemory,
       'Save intelligence memory',
       'intelligence.basic',

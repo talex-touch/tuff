@@ -122,6 +122,71 @@ describe('LocalKnowledgeEngine', () => {
     )
   })
 
+  it('matches nested metadata paths and scalar values inside metadata arrays', async () => {
+    dbMock.client.execute.mockResolvedValueOnce({
+      rows: [
+        {
+          chunk_id: 'chunk-1',
+          document_id: 'doc-1',
+          chunk_index: 0,
+          content: 'Local knowledge retrieval keeps citations.',
+          chunk_hash: 'chunk-hash',
+          token_estimate: 8,
+          chunk_metadata: '{"tags":["retrieval","citation"]}',
+          chunk_created_at: 10,
+          chunk_updated_at: 20,
+          source_type: 'manual',
+          source_uri: 'note://knowledge',
+          title: 'Knowledge Notes',
+          document_hash: 'doc-hash',
+          permission_scope: 'workspace:tuff',
+          document_metadata: '{"area":{"team":"ai"}}',
+          document_created_at: 10,
+          document_updated_at: 20,
+          score: 1.2
+        },
+        {
+          chunk_id: 'chunk-2',
+          document_id: 'doc-2',
+          chunk_index: 0,
+          content: 'Other note.',
+          chunk_hash: 'chunk-hash-2',
+          token_estimate: 5,
+          chunk_metadata: '{"tags":["catalog"]}',
+          chunk_created_at: 10,
+          chunk_updated_at: 20,
+          source_type: 'manual',
+          source_uri: 'note://catalog',
+          title: 'Catalog Notes',
+          document_hash: 'doc-hash-2',
+          permission_scope: 'workspace:tuff',
+          document_metadata: '{"area":{"team":"i18n"}}',
+          document_created_at: 10,
+          document_updated_at: 20,
+          score: 1
+        }
+      ]
+    })
+    const engine = new LocalKnowledgeEngine()
+
+    const result = await engine.search({
+      query: 'knowledge',
+      metadata: {
+        'area.team': 'ai',
+        tags: 'retrieval'
+      },
+      limit: 5
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.hits).toHaveLength(1)
+    expect(result.hits[0]?.citation).toMatchObject({
+      documentId: 'doc-1',
+      chunkId: 'chunk-1',
+      title: 'Knowledge Notes'
+    })
+  })
+
   it('builds context within budget and dedupes by document', async () => {
     dbMock.client.execute.mockResolvedValueOnce({
       rows: [

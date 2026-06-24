@@ -1036,6 +1036,424 @@ describe('intelligence plugin', () => {
     )).toBe(true)
   })
 
+  it('prepares ContextHygiene package metadata before CoreBox AI Ask invocation', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const contextPrepareTurn = vi.fn(async () => ({
+      session: {
+        id: 'ctxs_1',
+        owner: 'corebox',
+        status: 'active',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      turn: {
+        id: 'turn_1',
+        sessionId: 'ctxs_1',
+        role: 'user',
+        content: '写一段总结',
+        privacyLevel: 'normal',
+        tokenEstimate: 4,
+        createdAt: 1,
+      },
+      package: {
+        id: 'ctxpkg_1',
+        sessionId: 'ctxs_1',
+        scope: 'retrieval',
+        traceId: 'ctx_trace_1',
+        tokenBudget: 1200,
+        tokenEstimate: 88,
+        items: [
+          {
+            sourceType: 'current_input',
+            sourceId: 'turn_1',
+            reason: 'current input',
+            content: '写一段总结',
+            tokenEstimate: 4,
+          },
+          {
+            sourceType: 'retrieval',
+            sourceId: 'chunk_1',
+            reason: 'local knowledge',
+            content: 'hidden content',
+            tokenEstimate: 84,
+            metadata: {
+              citation: {
+                documentId: 'doc_1',
+                chunkId: 'chunk_1',
+                title: 'Notes',
+              },
+            },
+          },
+        ],
+        metadata: {
+          retrieval: {
+            status: 'ok',
+            citationCount: 1,
+          },
+        },
+        createdAt: 1,
+      },
+    }))
+    const invoke = vi.fn(async () => ({
+      result: 'local answer',
+      provider: 'local-default',
+      model: 'qwen2.5:3b',
+      traceId: 'trace-local',
+      latency: 15,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    }))
+    const stream = vi.fn(async () => {
+      throw new Error('transport.stream unavailable')
+    })
+    const permission = {
+      check: vi.fn(async () => true),
+      request: vi.fn(async () => true),
+    }
+    const pluginWithContextHygiene = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { contextPrepareTurn, stream, invoke },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithContextHygiene.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+
+    await vi.waitFor(() => {
+      expect(contextPrepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+        owner: 'corebox',
+        input: '写一段总结',
+        explicitScope: 'retrieval',
+        tokenBudget: 1200,
+        metadata: expect.objectContaining({
+          caller: 'plugin:touch-intelligence',
+          entry: 'corebox.ai-ask',
+          featureId: 'intelligence-ask',
+          requestId: expect.any(String),
+          inputKinds: ['text'],
+        }),
+      }))
+      expect(invoke).toHaveBeenCalledWith(
+        'text.chat',
+        expect.objectContaining({ messages: expect.any(Array) }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            capabilityId: 'text.chat',
+            contextSessionId: 'ctxs_1',
+            contextPackageId: 'ctxpkg_1',
+            contextScope: 'retrieval',
+            contextTokenEstimate: 88,
+            contextCitationCount: 1,
+          }),
+        }),
+      )
+    })
+
+    const readyCall = pushItems.mock.calls.find(call =>
+      call[0][0].render?.custom?.data?.status === 'ready',
+    )
+    expect(readyCall?.[0][0].render.custom.data.contextPackage).toMatchObject({
+      id: 'ctxpkg_1',
+      sessionId: 'ctxs_1',
+      scope: 'retrieval',
+      tokenEstimate: 88,
+      citationCount: 1,
+      retrievalItemCount: 1,
+      retrievalStatus: 'ok',
+    })
+    expect(readyCall?.[0][0].render.custom.data.contextPackage).not.toHaveProperty('items')
+    expect(readyCall?.[0][0].meta.intelligence).toMatchObject({
+      contextPackageId: 'ctxpkg_1',
+      contextSessionId: 'ctxs_1',
+    })
+  })
+
+  it('previews explicit memory policy for CoreBox AI Ask without saving memory', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const contextPrepareTurn = vi.fn(async () => ({
+      session: {
+        id: 'ctxs_memory',
+        owner: 'corebox',
+        status: 'active',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      turn: {
+        id: 'turn_memory',
+        sessionId: 'ctxs_memory',
+        role: 'user',
+        content: '记住我喜欢中文回复',
+        privacyLevel: 'normal',
+        tokenEstimate: 6,
+        createdAt: 1,
+      },
+      package: {
+        id: 'ctxpkg_memory',
+        sessionId: 'ctxs_memory',
+        scope: 'retrieval',
+        traceId: 'ctx_trace_memory',
+        tokenBudget: 1200,
+        tokenEstimate: 6,
+        items: [],
+        metadata: {},
+        createdAt: 1,
+      },
+    }))
+    const contextEvaluateMemory = vi.fn(async () => ({
+      status: 'suggested',
+      reason: 'explicit_memory_candidate',
+      candidate: {
+        type: 'preference',
+        scope: 'session',
+        summary: '记住我喜欢中文回复',
+        tags: ['corebox-ai-ask'],
+        confidence: 0.6,
+        privacyLevel: 'normal',
+        sourceSessionId: 'ctxs_memory',
+        sourceTurnId: 'turn_memory',
+      },
+    }))
+    const contextSaveMemory = vi.fn()
+    const invoke = vi.fn(async () => ({
+      result: 'local answer',
+      provider: 'local-default',
+      model: 'qwen2.5:3b',
+      traceId: 'trace-local',
+      latency: 15,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    }))
+    const stream = vi.fn(async () => {
+      throw new Error('transport.stream unavailable')
+    })
+    const permission = {
+      check: vi.fn(async () => true),
+      request: vi.fn(async () => true),
+    }
+    const pluginWithMemoryPolicy = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { contextPrepareTurn, contextEvaluateMemory, contextSaveMemory, stream, invoke },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithMemoryPolicy.onFeatureTriggered('intelligence-ask', 'ai 记住我喜欢中文回复')
+
+    await vi.waitFor(() => {
+      expect(contextEvaluateMemory).toHaveBeenCalledWith(expect.objectContaining({
+        content: '记住我喜欢中文回复',
+        type: 'preference',
+        scope: 'session',
+        sourceSessionId: 'ctxs_memory',
+        sourceTurnId: 'turn_memory',
+      }))
+      expect(invoke).toHaveBeenCalledWith(
+        'text.chat',
+        expect.objectContaining({ messages: expect.any(Array) }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            memoryPolicyStatus: 'suggested',
+            memoryPolicyReason: 'explicit_memory_candidate',
+          }),
+        }),
+      )
+    })
+
+    const readyCall = pushItems.mock.calls.find(call =>
+      call[0][0].render?.custom?.data?.status === 'ready',
+    )
+    expect(readyCall?.[0][0].render.custom.data.memoryPolicy).toMatchObject({
+      status: 'suggested',
+      reason: 'explicit_memory_candidate',
+      candidate: {
+        type: 'preference',
+        scope: 'session',
+        summary: '记住我喜欢中文回复',
+        tags: ['corebox-ai-ask'],
+        privacyLevel: 'normal',
+      },
+    })
+    expect(readyCall?.[0][0].render.custom.data.memoryPolicy.candidate).not.toHaveProperty('content')
+    expect(readyCall?.[0][0].meta.intelligence).toMatchObject({
+      memoryPolicyStatus: 'suggested',
+      memoryPolicyReason: 'explicit_memory_candidate',
+    })
+    expect(contextSaveMemory).not.toHaveBeenCalled()
+  })
+
+  it('continues CoreBox AI Ask when memory policy preview is unavailable', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const contextPrepareTurn = vi.fn(async () => ({
+      session: {
+        id: 'ctxs_memory',
+        owner: 'corebox',
+        status: 'active',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      turn: {
+        id: 'turn_memory',
+        sessionId: 'ctxs_memory',
+        role: 'user',
+        content: '记住我喜欢中文回复',
+        privacyLevel: 'normal',
+        tokenEstimate: 6,
+        createdAt: 1,
+      },
+      package: {
+        id: 'ctxpkg_memory',
+        sessionId: 'ctxs_memory',
+        scope: 'retrieval',
+        traceId: 'ctx_trace_memory',
+        tokenBudget: 1200,
+        tokenEstimate: 6,
+        items: [],
+        metadata: {},
+        createdAt: 1,
+      },
+    }))
+    const contextEvaluateMemory = vi.fn(async () => {
+      throw new Error('memory policy unavailable')
+    })
+    const invoke = vi.fn(async () => ({
+      result: 'local answer',
+      provider: 'local-default',
+      model: 'qwen2.5:3b',
+      traceId: 'trace-local',
+      latency: 15,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    }))
+    const stream = vi.fn(async () => {
+      throw new Error('transport.stream unavailable')
+    })
+    const permission = {
+      check: vi.fn(async () => true),
+      request: vi.fn(async () => true),
+    }
+    const pluginWithUnavailableMemoryPolicy = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { contextPrepareTurn, contextEvaluateMemory, stream, invoke },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithUnavailableMemoryPolicy.onFeatureTriggered('intelligence-ask', 'ai 记住我喜欢中文回复')
+
+    await vi.waitFor(() => {
+      expect(contextEvaluateMemory).toHaveBeenCalled()
+      expect(invoke).toHaveBeenCalledWith(
+        'text.chat',
+        expect.objectContaining({ messages: expect.any(Array) }),
+        expect.objectContaining({
+          metadata: expect.not.objectContaining({
+            memoryPolicyStatus: expect.any(String),
+          }),
+        }),
+      )
+    })
+    expect(pushItems.mock.calls.some(call =>
+      call[0][0].render?.custom?.data?.status === 'ready'
+      && call[0][0].render.custom.data.memoryPolicy === null,
+    )).toBe(true)
+  })
+
+  it('continues CoreBox AI Ask when ContextHygiene prepareTurn is unavailable', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const contextPrepareTurn = vi.fn(async () => {
+      throw new Error('context unavailable')
+    })
+    const invoke = vi.fn(async () => ({
+      result: 'local answer without context',
+      provider: 'local-default',
+      model: 'qwen2.5:3b',
+      traceId: 'trace-local',
+      latency: 15,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    }))
+    const stream = vi.fn(async () => {
+      throw new Error('transport.stream unavailable')
+    })
+    const permission = {
+      check: vi.fn(async () => true),
+      request: vi.fn(async () => true),
+    }
+    const pluginWithUnavailableContext = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { contextPrepareTurn, stream, invoke },
+        permission,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithUnavailableContext.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+
+    await vi.waitFor(() => {
+      expect(contextPrepareTurn).toHaveBeenCalled()
+      expect(invoke).toHaveBeenCalledWith(
+        'text.chat',
+        expect.objectContaining({ messages: expect.any(Array) }),
+        expect.objectContaining({
+          metadata: expect.not.objectContaining({
+            contextPackageId: expect.any(String),
+          }),
+        }),
+      )
+    })
+    expect(pushItems.mock.calls.some(call =>
+      call[0][0].render?.custom?.data?.status === 'ready'
+      && call[0][0].render.custom.data.answer === 'local answer without context',
+    )).toBe(true)
+  })
+
   it('falls back to invoke when stream auth fails for local/BYOK chat', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()

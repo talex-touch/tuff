@@ -1413,6 +1413,10 @@ export interface KnowledgeSearchInput {
   sourceType?: KnowledgeSourceType | KnowledgeSourceType[]
   timeRange?: { from?: number, to?: number }
   permissionScope?: string | string[]
+  /**
+   * Exact metadata filters. Keys may target top-level metadata or dotted nested paths.
+   * Array metadata values match when they contain the requested scalar.
+   */
   metadata?: Record<string, string | number | boolean>
 }
 
@@ -1495,6 +1499,16 @@ export interface ContextCheckpoint {
   createdAt: number
 }
 
+export interface ListContextCheckpointsInput {
+  sessionId: string
+  type?: ContextCheckpoint['type']
+  limit?: number
+}
+
+export interface ListContextCheckpointsResult {
+  checkpoints: ContextCheckpoint[]
+}
+
 export interface CompressionSnapshot {
   id: string
   sessionId: string
@@ -1536,6 +1550,38 @@ export interface MemoryTombstone {
   createdAt: number
 }
 
+export interface EvaluateMemoryInput {
+  content: string
+  type?: MemoryItem['type']
+  scope?: MemoryItem['scope']
+  summary?: string
+  tags?: string[]
+  confidence?: number
+  sourceSessionId?: string
+  sourceTurnId?: string
+  privacyLevel?: ContextPrivacyLevel
+  ttl?: number
+  metadata?: Record<string, any>
+}
+
+export interface MemoryPolicyCandidate {
+  type: MemoryItem['type']
+  scope: MemoryItem['scope']
+  summary: string
+  tags: string[]
+  confidence: number
+  sourceSessionId?: string
+  sourceTurnId?: string
+  privacyLevel: ContextPrivacyLevel
+  ttl?: number
+}
+
+export interface EvaluateMemoryResult {
+  status: 'suggested' | 'rejected' | 'needs_review'
+  reason: string
+  candidate?: MemoryPolicyCandidate
+}
+
 export interface ContextPackage {
   id: string
   sessionId: string
@@ -1549,9 +1595,38 @@ export interface ContextPackage {
     reason: string
     content: string
     tokenEstimate: number
+    metadata?: Record<string, any>
   }>
   metadata?: Record<string, any>
   createdAt: number
+}
+
+export interface ContextPackageLog {
+  id: string
+  sessionId: string
+  scope: ContextScope
+  traceId?: string
+  tokenBudget: number
+  tokenEstimate: number
+  items: Array<{
+    sourceType: 'current_input' | 'recent_turn' | 'summary' | 'memory' | 'retrieval'
+    sourceId: string
+    reason: string
+    tokenEstimate: number
+    metadata?: Record<string, any>
+  }>
+  metadata?: Record<string, any>
+  createdAt: number
+}
+
+export interface ListContextPackageLogsInput {
+  sessionId?: string
+  traceId?: string
+  limit?: number
+}
+
+export interface ListContextPackageLogsResult {
+  logs: ContextPackageLog[]
 }
 
 export interface PrepareContextTurnInput {

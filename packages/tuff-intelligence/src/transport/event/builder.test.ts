@@ -18,7 +18,7 @@ describe('tuff-intelligence transport event builder', () => {
     expect(event.action).toBe('tool:approve')
   })
 
-  it('maps api, agent, and workflow sdk methods through typed event names', async () => {
+  it('maps api, knowledge, context, agent, and workflow sdk methods through typed event names', async () => {
     const sentEvents: Array<TuffEvent<unknown, unknown>> = []
     const send = async <TReq, TRes>(event: TuffEvent<TReq, TRes>): Promise<TRes> => {
       sentEvents.push(event as TuffEvent<unknown, unknown>)
@@ -30,6 +30,24 @@ describe('tuff-intelligence transport event builder', () => {
     const sdk = createIntelligenceSdk(transport)
 
     await sdk.invoke('text.chat', { messages: [] })
+    await sdk.knowledgeBuildContext({
+      query: 'local knowledge',
+      tokenBudget: 120,
+    })
+    await sdk.contextListCheckpoints({
+      sessionId: 'ctxs-1',
+      type: 'session_start',
+      limit: 20,
+    })
+    await sdk.contextListPackageLogs({
+      traceId: 'trace-1',
+      limit: 20,
+    })
+    await sdk.contextEvaluateMemory({
+      content: 'Use Chinese replies by default',
+      type: 'preference',
+      scope: 'workspace',
+    })
     await sdk.agentToolApprove({
       ticketId: 'ticket-1',
       approved: true,
@@ -40,9 +58,21 @@ describe('tuff-intelligence transport event builder', () => {
       'intelligence:api:invoke',
     )
     expect(sentEvents[1]?.toEventName()).toBe(
-      'intelligence:agent:tool:approve',
+      'intelligence:knowledge:build-context',
     )
     expect(sentEvents[2]?.toEventName()).toBe(
+      'intelligence:context:checkpoints:list',
+    )
+    expect(sentEvents[3]?.toEventName()).toBe(
+      'intelligence:context:package-logs:list',
+    )
+    expect(sentEvents[4]?.toEventName()).toBe(
+      'intelligence:context:memory:evaluate',
+    )
+    expect(sentEvents[5]?.toEventName()).toBe(
+      'intelligence:agent:tool:approve',
+    )
+    expect(sentEvents[6]?.toEventName()).toBe(
       'intelligence:workflow:get',
     )
   })

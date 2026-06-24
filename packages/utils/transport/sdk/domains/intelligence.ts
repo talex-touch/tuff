@@ -10,12 +10,18 @@ import type {
   IntelligenceTtsSpeakResult,
   BuildContextInput,
   BuildContextResult,
+  EvaluateMemoryInput,
+  EvaluateMemoryResult,
   IndexChunkInput,
   IndexChunkResult,
   IndexDocumentInput,
   IndexDocumentResult,
   KnowledgeSearchInput,
   KnowledgeSearchResult,
+  ListContextCheckpointsInput,
+  ListContextCheckpointsResult,
+  ListContextPackageLogsInput,
+  ListContextPackageLogsResult,
   MemoryItem,
   MemoryTombstone,
   MemoryUpsertInput,
@@ -388,6 +394,9 @@ export interface IntelligenceSdk {
   knowledgeSearch: (payload: KnowledgeSearchInput) => Promise<KnowledgeSearchResult>
   knowledgeBuildContext: (payload: BuildContextInput) => Promise<BuildContextResult>
   contextPrepareTurn: (payload: PrepareContextTurnInput) => Promise<PrepareContextTurnResult>
+  contextListCheckpoints: (payload: ListContextCheckpointsInput) => Promise<ListContextCheckpointsResult>
+  contextListPackageLogs: (payload: ListContextPackageLogsInput) => Promise<ListContextPackageLogsResult>
+  contextEvaluateMemory: (payload: EvaluateMemoryInput) => Promise<EvaluateMemoryResult>
   contextSaveMemory: (payload: MemoryUpsertInput) => Promise<MemoryItem>
   contextDeleteMemory: (payload: { memoryId: string, reason?: string }) => Promise<MemoryTombstone>
 
@@ -586,6 +595,18 @@ export const intelligenceContextEvents = {
     .module('context')
     .event('prepare-turn')
     .define<PrepareContextTurnInput, IntelligenceApiResponse<PrepareContextTurnResult>>(),
+  listCheckpoints: defineEvent('intelligence')
+    .module('context')
+    .event('checkpoints:list')
+    .define<ListContextCheckpointsInput, IntelligenceApiResponse<ListContextCheckpointsResult>>(),
+  listPackageLogs: defineEvent('intelligence')
+    .module('context')
+    .event('package-logs:list')
+    .define<ListContextPackageLogsInput, IntelligenceApiResponse<ListContextPackageLogsResult>>(),
+  evaluateMemory: defineEvent('intelligence')
+    .module('context')
+    .event('memory:evaluate')
+    .define<EvaluateMemoryInput, IntelligenceApiResponse<EvaluateMemoryResult>>(),
   saveMemory: defineEvent('intelligence')
     .module('context')
     .event('memory:save')
@@ -906,6 +927,21 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async contextPrepareTurn(payload) {
       const response = await transport.send(intelligenceContextEvents.prepareTurn, payload)
       return assertApiResponse(response, 'Failed to prepare intelligence context')
+    },
+
+    async contextListCheckpoints(payload) {
+      const response = await transport.send(intelligenceContextEvents.listCheckpoints, payload)
+      return assertApiResponse(response, 'Failed to list intelligence context checkpoints')
+    },
+
+    async contextListPackageLogs(payload) {
+      const response = await transport.send(intelligenceContextEvents.listPackageLogs, payload)
+      return assertApiResponse(response, 'Failed to list intelligence context package logs')
+    },
+
+    async contextEvaluateMemory(payload) {
+      const response = await transport.send(intelligenceContextEvents.evaluateMemory, payload)
+      return assertApiResponse(response, 'Failed to evaluate intelligence memory')
     },
 
     async contextSaveMemory(payload) {
