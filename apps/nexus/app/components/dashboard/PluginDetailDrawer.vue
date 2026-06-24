@@ -23,7 +23,7 @@ import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import DashboardMetricChart from '~/components/dashboard/DashboardMetricChart.client.vue'
-import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
+import PluginMetaHeader from '~/components/plugin/PluginMetaHeader.vue'
 
 interface Props {
   isOpen: boolean

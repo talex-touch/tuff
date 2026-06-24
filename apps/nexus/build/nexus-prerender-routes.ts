@@ -1,28 +1,8 @@
 import { createDocsPageApiPrerenderRoutes, createDocsPrerenderRoutes } from './docs-prerender-routes'
+import { docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-static-routes.mjs'
 import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
 
-export const publicPrerenderRoutes = [
-  '/',
-  '/new',
-  '/next',
-  '/pricing',
-  '/license',
-  '/privacy',
-  '/protocol',
-  '/updates',
-  '/store',
-  '/login',
-  '/sign-in',
-  '/forgot-password',
-  '/verify-waiting',
-  '/device-auth',
-] as const
-
-export const docsApiPrerenderRoutes = [
-  '/api/docs/component-sync',
-  '/api/docs/navigation',
-  '/api/docs/sidebar-components',
-] as const
+export { docsApiPrerenderRoutes, publicPrerenderRoutes }
 
 export const docsPrerenderEvidenceRoutes = [
   '/docs',
