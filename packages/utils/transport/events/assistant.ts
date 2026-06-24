@@ -59,7 +59,7 @@ export interface AssistantScreenshotTranslateResponse {
 
 const translateClipboardImageEvent = defineEvent('assistant')
   .module('voice-panel')
-  .event('translate-screenshot')
+  .event('translate-clipboard-image')
   .define<AssistantClipboardImageTranslatePayload | void, AssistantClipboardImageTranslateResponse>()
 
 export const AssistantEvents = {

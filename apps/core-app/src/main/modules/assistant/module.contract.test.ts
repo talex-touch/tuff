@@ -187,17 +187,15 @@ describe('Assistant module startup contract', () => {
     expect(assistantEventsSource).toContain('AssistantClipboardImageTranslateResponse')
     expect(assistantEventsSource).toContain('translateClipboardImage')
     expect(assistantEventsSource).toContain('translateScreenshot')
+    expect(assistantEventsSource).toContain("event('translate-clipboard-image')")
     expect(assistantEventsSource).toContain("event('translate-screenshot')")
+    expect(assistantEventsSource).toContain('translateClipboardImage: translateClipboardImageEvent')
     expect(assistantEventsSource).toContain('SCREENSHOT_UNAVAILABLE')
     expect(moduleSource).toContain('AssistantEvents.voice.translateClipboardImage')
+    expect(moduleSource).toContain('AssistantEvents.voice.translateScreenshot')
     expect(moduleSource).toContain('handleClipboardImageTranslate')
+    expect(moduleSource).toContain('handleScreenshotTranslate')
     expect(moduleSource).toContain('translateClipboardImage')
-    expect(moduleSource).not.toContain('SCREENSHOT_UNAVAILABLE')
-    expect(moduleSource).not.toContain('getNativeScreenshotService')
-    expect(moduleSource).not.toContain("target: 'cursor-display'")
-    expect(moduleSource).not.toContain("output: 'data-url'")
-    expect(moduleSource).not.toContain('writeClipboard: false')
-    expect(moduleSource).not.toContain('translateImageBase64')
     expect(moduleSource).toContain('openPinWindow: true')
     expect(moduleSource).toContain('voicePanelAutoHideSuppressionDepth')
     expect(moduleSource).toContain('beginVoicePanelAutoHideSuppression')
@@ -206,6 +204,28 @@ describe('Assistant module startup contract', () => {
     expect(moduleSource).toContain('this.voicePanelAutoHideSuppressionDepth - 1')
     expect(voicePanelSource).toContain('AssistantEvents.voice.translateClipboardImage')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:translate-screenshot')
+
+    const clipboardTranslateBlock = moduleSource.match(
+      /private async handleClipboardImageTranslate\([\s\S]*?\n {2}private async handleScreenshotTranslate/
+    )?.[0]
+    expect(clipboardTranslateBlock).toBeTruthy()
+    expect(clipboardTranslateBlock).not.toContain('SCREENSHOT_UNAVAILABLE')
+    expect(clipboardTranslateBlock).not.toContain('getNativeScreenshotService')
+    expect(clipboardTranslateBlock).not.toContain("target: 'cursor-display'")
+    expect(clipboardTranslateBlock).not.toContain("output: 'data-url'")
+    expect(clipboardTranslateBlock).not.toContain('writeClipboard: false')
+    expect(clipboardTranslateBlock).not.toContain('translateImageBase64')
+
+    const screenshotTranslateBlock = moduleSource.match(
+      /private async handleScreenshotTranslate\([\s\S]*?\n {2}private destroyFloatingBallWindow/
+    )?.[0]
+    expect(screenshotTranslateBlock).toBeTruthy()
+    expect(screenshotTranslateBlock).toContain('SCREENSHOT_UNAVAILABLE')
+    expect(screenshotTranslateBlock).toContain('getNativeScreenshotService')
+    expect(screenshotTranslateBlock).toContain("target: 'cursor-display'")
+    expect(screenshotTranslateBlock).toContain("output: 'data-url'")
+    expect(screenshotTranslateBlock).toContain('writeClipboard: false')
+    expect(screenshotTranslateBlock).toContain('translateImageBase64')
   })
 
   it('maps clipboard image translation failures to localized recovery hints', () => {
