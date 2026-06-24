@@ -9,12 +9,17 @@ describe('WidgetVueProcessor', () => {
       <script setup lang="ts">
       import { computed } from 'vue'
       import { useChannel } from '@talex-touch/utils/plugin/sdk'
+      import { TxButton } from '@talex-touch/tuffex/button'
       </script>
     `)
 
     expect(result.valid).toBe(true)
     expect(result.disallowedImports).toEqual([])
-    expect(result.allowedImports).toEqual(['vue', '@talex-touch/utils/plugin/sdk'])
+    expect(result.allowedImports).toEqual([
+      'vue',
+      '@talex-touch/utils/plugin/sdk',
+      '@talex-touch/tuffex/button'
+    ])
   })
 
   it('keeps rejecting relative imports inside widgets', () => {

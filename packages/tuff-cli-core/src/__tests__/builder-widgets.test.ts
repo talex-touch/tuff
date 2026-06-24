@@ -135,7 +135,7 @@ describe('builder widget precompile', () => {
     })
   })
 
-  it('fails when a widget imports an allowed package subpath not exposed by runtime sandbox', async () => {
+  it('allows widget imports from @talex-touch scoped packages', async () => {
     await withPluginFixture(async (root) => {
       await fs.writeFile(
         path.join(root, 'widgets', 'panel.vue'),
@@ -148,13 +148,14 @@ describe('builder widget precompile', () => {
         ].join('\n'),
       )
 
-      await expect(
-        build({
-          root,
-          outDir: 'dist',
-          versionSync: { enabled: false },
-        }),
-      ).rejects.toThrow(/WIDGET_INVALID_DEPENDENCY.*@talex-touch\/utils\/plugin\/widget/)
+      await build({
+        root,
+        outDir: 'dist',
+        versionSync: { enabled: false },
+      })
+
+      const manifest = await fs.readJson(path.join(root, 'dist', 'build', 'manifest.json'))
+      expect(manifest.build.widgets[0].dependencies).toContain('@talex-touch/utils/plugin/widget')
     })
   })
 

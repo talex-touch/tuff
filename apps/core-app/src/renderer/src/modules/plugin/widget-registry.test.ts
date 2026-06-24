@@ -306,6 +306,30 @@ describe('widget-registry runtime hosts', () => {
     })
   })
 
+  it('allows widgets to consume TuffEx component subpaths from the scoped sandbox bridge', async () => {
+    const payload = {
+      ...makePayload(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'const { TxButton } = require("@talex-touch/tuffex/button")',
+          'module.exports = { setup: () => () => h(TxButton, {}, () => "Run") }'
+        ].join('\n')
+      ),
+      dependencies: ['vue', '@talex-touch/tuffex/button']
+    }
+
+    await handleWidgetRegister(payload)
+
+    const evidence = getWidgetSandboxEvidence(payload.widgetId)
+    expect(evidence).toMatchObject({
+      declaredDependencies: ['vue', '@talex-touch/tuffex/button'],
+      allowedDependencies: ['vue', '@talex-touch/tuffex/button'],
+      blockedDependencies: [],
+      undeclaredDependencies: []
+    })
+  })
+
   it('blocks declared dependencies that are outside the widget allowlist', async () => {
     const payload = {
       ...makePayload(

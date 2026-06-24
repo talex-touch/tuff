@@ -40,6 +40,8 @@ export const WIDGET_ALLOWED_PACKAGES = [
   '@talex-touch/tuffex/ai-elements',
 ] as const
 
+export const WIDGET_ALLOWED_PACKAGE_SCOPE = '@talex-touch/' as const
+
 export type WidgetAllowedPackage = (typeof WIDGET_ALLOWED_PACKAGES)[number]
 
 export interface WidgetPrecompiledManifestEntry {
@@ -167,7 +169,10 @@ export function isAllowedWidgetModule(moduleName: string): boolean {
     return false
   }
 
-  return WIDGET_ALLOWED_PACKAGES.includes(normalized as WidgetAllowedPackage)
+  return (
+    normalized.startsWith(WIDGET_ALLOWED_PACKAGE_SCOPE) ||
+    WIDGET_ALLOWED_PACKAGES.includes(normalized as WidgetAllowedPackage)
+  )
 }
 
 export interface TouchWidgetDefinition<TProps = Record<string, unknown>> {
