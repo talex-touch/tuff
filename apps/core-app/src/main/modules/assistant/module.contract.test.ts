@@ -203,6 +203,11 @@ describe('Assistant module startup contract', () => {
     expect(moduleSource).toContain('setTimeout(() => {')
     expect(moduleSource).toContain('this.voicePanelAutoHideSuppressionDepth - 1')
     expect(voicePanelSource).toContain('AssistantEvents.voice.translateClipboardImage')
+    expect(voicePanelSource).toContain('AssistantEvents.voice.translateScreenshot')
+    expect(voicePanelSource).toContain('translateClipboardImage(): Promise<void>')
+    expect(voicePanelSource).toContain('translateScreenshot(): Promise<void>')
+    expect(voicePanelSource).toContain('translatingClipboardImage')
+    expect(voicePanelSource).toContain('translatingScreenshot')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:translate-screenshot')
 
     const clipboardTranslateBlock = moduleSource.match(
@@ -240,19 +245,25 @@ describe('Assistant module startup contract', () => {
       expect(voicePanelSource).toContain(expected)
     }
 
-    expect(voicePanelSource).not.toContain('SCREENSHOT_UNAVAILABLE')
-
     for (const expected of [
-      'screenshotTranslateAssistantDisabled',
-      'screenshotTranslateImageUnavailable',
-      'screenshotTranslateProviderUnavailable'
+      'imageTranslateAssistantDisabled',
+      'clipboardImageTranslateImageUnavailable',
+      'imageTranslateProviderUnavailable',
+      'clipboardImageTranslating',
+      'clipboardImageTranslateReady',
+      'clipboardImageTranslateFailed',
+      'screenshotTranslateUnavailable',
+      'screenshotTranslateImageUnavailable'
     ]) {
       expect(voicePanelSource).toContain(expected)
       expect(zhLocaleSource).toContain(expected)
       expect(enLocaleSource).toContain(expected)
     }
 
-    expect(voicePanelSource).not.toContain('screenshotTranslatePermissionDenied')
+    expect(voicePanelSource).toContain('SCREENSHOT_UNAVAILABLE')
+    expect(voicePanelSource).toContain('SCREENSHOT_TRANSLATE_ERROR_KEYS')
+    expect(zhLocaleSource).toContain('screenshotTranslateProviderUnavailable')
+    expect(enLocaleSource).toContain('screenshotTranslateProviderUnavailable')
     expect(zhLocaleSource).toContain('screenshotTranslatePermissionDenied')
     expect(enLocaleSource).toContain('screenshotTranslatePermissionDenied')
   })
