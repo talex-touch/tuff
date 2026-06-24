@@ -137,6 +137,11 @@ import {
   APP_SEMANTIC_ALIAS_CATALOG_VERSION,
   resolveScannedAppSemanticAliases
 } from './app-semantic-catalog'
+import {
+  APP_TOOL_SOURCE_CATALOG_VERSION,
+  getAppToolSourceCatalogSummary,
+  resolveAppToolSourceIds
+} from './app-tool-source-catalog'
 import { isSearchableAppRow, processSearchResults } from './search-processing-service'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
@@ -636,7 +641,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     ]
 
     const appEvidence = await this.getIndexedAppRecordEvidence()
-    return [...evidence, ...appEvidence]
+    return [...evidence, this.getIndexedToolSourceEvidence(), ...appEvidence]
   }
 
   public async scanIndexedSource(
@@ -743,6 +748,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   ): IndexedSourceRecord {
     const stableKey = resolveAppItemId(appInfo)
     const launchTarget = appInfo.launchTarget || appInfo.path
+    const semanticAliases = resolveScannedAppSemanticAliases(appInfo)
+    const toolSourceIds = this.resolveScannedAppToolSourceIds(appInfo)
     const extension =
       appInfo.launchKind === 'uwp'
         ? '.uwp'
@@ -768,14 +775,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         appInfo.name,
         appInfo.displayName,
         appInfo.fileName,
-        ...(appInfo.alternateNames ?? [])
+        ...(appInfo.alternateNames ?? []),
+        ...semanticAliases
       ]),
       tags: normalizeStringList([
         appInfo.bundleId,
         appInfo.stableId,
         appInfo.uniqueId,
         appInfo.path,
-        launchTarget
+        launchTarget,
+        ...toolSourceIds.map((sourceId) => `tool-source:${sourceId}`)
       ]),
       metadata: {
         extension,
@@ -786,7 +795,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         identityKind: appInfo.identityKind,
         displayNameSource: appInfo.displayNameSource,
         displayNameQuality: appInfo.displayNameQuality,
-        displayPath: appInfo.displayPath
+        displayPath: appInfo.displayPath,
+        toolSources: toolSourceIds
       }
     }
   }
@@ -1347,6 +1357,28 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           }
         })
       ]
+    }
+  }
+
+  private getIndexedToolSourceEvidence(): IndexedSourceEvidence {
+    const summary = getAppToolSourceCatalogSummary()
+    return {
+      id: 'app-provider:tool-sources',
+      label: 'Tool source aliases',
+      status: summary.length > 0 ? 'ready' : 'degraded',
+      itemCount: summary.reduce((total, source) => total + source.appCount, 0),
+      lastCheckedAt: Date.now(),
+      reason: summary.length > 0 ? undefined : 'app-tool-source-catalog-empty',
+      metadata: {
+        catalogVersion: APP_TOOL_SOURCE_CATALOG_VERSION,
+        semanticAliasCatalogVersion: APP_SEMANTIC_ALIAS_CATALOG_VERSION,
+        sources: summary.map((source) => ({
+          id: source.sourceId,
+          label: source.label,
+          appCount: source.appCount,
+          aliasCount: source.aliasCount
+        }))
+      }
     }
   }
 
@@ -2148,6 +2180,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       value: alias,
       priority: 1.5
     }))
+    const toolSourceIds = this.resolveScannedAppToolSourceIds(normalizedAppInfo)
 
     const indexItem: SearchIndexItem = {
       itemId,
@@ -2170,11 +2203,28 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         normalizedAppInfo.stableId,
         normalizedAppInfo.uniqueId,
         normalizedAppInfo.path,
-        normalizedAppInfo.launchTarget
+        normalizedAppInfo.launchTarget,
+        ...toolSourceIds.map((sourceId) => `tool-source:${sourceId}`)
       ])
     }
 
     await this.searchIndex.indexItems([indexItem])
+  }
+
+  private resolveScannedAppToolSourceIds(appInfo: ScannedAppInfo): string[] {
+    return resolveAppToolSourceIds({
+      name: appInfo.name,
+      displayName: appInfo.displayName,
+      fileName: appInfo.fileName,
+      alternateNames: appInfo.alternateNames,
+      bundleId: appInfo.bundleId,
+      uniqueId: appInfo.uniqueId,
+      stableId: appInfo.stableId,
+      path: appInfo.path,
+      launchTarget: appInfo.launchTarget || appInfo.path,
+      displayPath: appInfo.displayPath,
+      description: appInfo.description
+    })
   }
 
   private async syncIndexedAppState(

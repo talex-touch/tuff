@@ -82,6 +82,21 @@ function resolveContent(record: IndexedSourceRecord): string | null {
   return typeof record.metadata?.content === 'string' ? record.metadata.content : null
 }
 
+function getStringArrayMetadata(metadata: IndexedSourceRecord['metadata'], key: string): string[] {
+  const value = metadata?.[key]
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+}
+
+function buildToolSourceTags(metadata: IndexedSourceRecord['metadata']): string[] {
+  return getStringArrayMetadata(metadata, 'toolSources').map((sourceId) =>
+    sourceId.startsWith('tool-source:') ? sourceId : `tool-source:${sourceId}`
+  )
+}
+
 function buildKeywordEntries(keywords: string[] | undefined): SearchIndexKeyword[] | undefined {
   if (!Array.isArray(keywords) || keywords.length === 0) {
     return undefined
@@ -123,6 +138,11 @@ export function mapIndexedSourceRecordToSearchIndexItem(
   if (!itemId) {
     return null
   }
+  const aliases = [
+    ...(record.keywords ?? []),
+    ...getStringArrayMetadata(record.metadata, 'aliases')
+  ]
+  const tags = [...(record.tags ?? []), ...buildToolSourceTags(record.metadata)]
 
   return {
     itemId,
@@ -133,9 +153,9 @@ export function mapIndexedSourceRecordToSearchIndexItem(
     description: record.subtitle,
     path: resolveItemPath(record),
     extension: resolveExtension(record),
-    aliases: buildKeywordEntries(record.keywords),
-    keywords: buildKeywordEntries(record.keywords),
-    tags: record.tags,
+    aliases: buildKeywordEntries(aliases),
+    keywords: buildKeywordEntries(aliases),
+    tags,
     content: resolveContent(record)
   }
 }

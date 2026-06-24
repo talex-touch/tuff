@@ -1,8 +1,9 @@
 import path from 'node:path'
 import type { ScannedAppInfo } from './app-types'
 import { normalizeStringList } from './app-utils'
+import { resolveAppToolSourceAliases } from './app-tool-source-catalog'
 
-export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 2
+export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 3
 
 export interface AppSemanticAliasInput {
   name?: string | null
@@ -697,7 +698,7 @@ export function resolveAppSemanticAliases(app: AppSemanticAliasInput): string[] 
     }
   }
 
-  return normalizeStringList(aliases)
+  return normalizeStringList([...aliases, ...resolveAppToolSourceAliases(app)])
 }
 
 export function resolveScannedAppSemanticAliases(appInfo: ScannedAppInfo): string[] {

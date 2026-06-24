@@ -1107,6 +1107,7 @@ describe('appProvider rebuild maintenance', () => {
       itemId?: string
       aliases?: Array<{ value: string; priority?: number }>
       keywords?: Array<{ value: string; priority?: number }>
+      tags?: string[]
     }>
     const indexedItem = indexedBatch[0]
     expect(indexedItem).toMatchObject({
@@ -1120,7 +1121,67 @@ describe('appProvider rebuild maintenance', () => {
         expect.objectContaining({ value: 'retouch', priority: 1.5 }),
         expect.objectContaining({ value: 'ps', priority: 1.5 }),
         expect.objectContaining({ value: 'design', priority: 1.5 })
+      ]),
+      tags: expect.arrayContaining(['tool-source:design'])
+    })
+  })
+
+  it('exposes tool source alias catalog through indexed source evidence', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => [])
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [])
+
+    const evidence = await appProvider.getIndexedSourceEvidence()
+
+    expect(evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'app-provider:tool-sources',
+          label: 'Tool source aliases',
+          status: 'ready',
+          itemCount: 6,
+          metadata: expect.objectContaining({
+            catalogVersion: 1,
+            sources: expect.arrayContaining([
+              expect.objectContaining({ id: 'dev', appCount: 2 }),
+              expect.objectContaining({ id: 'im', appCount: 3 }),
+              expect.objectContaining({ id: 'design', appCount: 1 })
+            ])
+          })
+        })
       ])
+    )
+  })
+
+  it('maps scanned high-frequency tools to indexed record aliases and tool source metadata', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+
+    const record = privateProvider.mapScannedAppToIndexedSourceRecord('app-provider', {
+      name: 'Codex',
+      displayName: 'Codex',
+      fileName: 'Codex',
+      bundleId: 'OpenAI.Codex_2p2nqsd0c76g0',
+      path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+      launchKind: 'uwp',
+      launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App',
+      stableId: 'uwp:openai.codex_2p2nqsd0c76g0!app',
+      icon: '',
+      lastModified: new Date(0)
+    })
+
+    expect(record).toMatchObject({
+      sourceId: 'app-provider',
+      recordId: 'uwp:openai.codex_2p2nqsd0c76g0!app',
+      keywords: expect.arrayContaining(['Codex', 'dev', 'code']),
+      tags: expect.arrayContaining(['tool-source:dev']),
+      metadata: expect.objectContaining({
+        toolSources: ['dev']
+      })
     })
   })
 
@@ -1988,7 +2049,7 @@ describe('appProvider rebuild maintenance', () => {
         expect.objectContaining({ value: 'design' })
       ])
     })
-    expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe('2')
+    expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe('3')
   })
 
   it('skips semantic alias catalog sync when the stored version is current', async () => {
