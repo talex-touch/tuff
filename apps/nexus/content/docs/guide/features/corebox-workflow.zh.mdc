@@ -10,12 +10,23 @@
 | AI 问答 | 已落地 | `ai / @ai / /ai / 智能 / 问答` | `plugins/touch-intelligence/manifest.json` |
 | 翻译 | 已落地（单源 + 多源）；截图翻译为实验能力 | `fy / translate / 翻译 / fy-multi / 多源翻译` | `plugins/touch-translation/manifest.json` |
 | 壁纸 | 已落地（设置页高级项） | 设置 → 外观/样式（ThemeStyle） | `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue` |
+| App Semantic Alias Catalog / 应用语义别名目录 | 已落地：只增强已安装应用召回，不展示未安装应用 | `im / chat / 即时通讯 / design / ps / 设计 / vsc / code / dev / office / browser / terminal` | `apps/core-app/src/main/modules/box-tool/addon/apps/app-semantic-catalog.ts` |
 
 ## CoreBox 推荐路径
 
 1. 输入 `ai`：直接问答、改写、总结。
 2. 输入 `fy`：调用翻译插件；多源场景可用 `fy-multi`。
 3. 输入 `script`：执行 workspace `package.json` 脚本。
+4. 输入 `im` / `design` / `ps` / `vsc`：通过应用语义别名召回已安装应用。
+
+## 应用语义别名
+
+识别标记：**App Semantic Alias Catalog / 应用语义别名目录**。
+
+- 仅参与已安装应用搜索召回，不新增官网外链或未安装应用推荐。
+- 别名写入现有 SearchIndex alias/keyword 通道，无 SQLite schema 变更。
+- 常用类别包含 `im/chat/messenger/即时通讯/聊天`、`design/设计`、`dev/code/开发`、`office/办公`、`browser/浏览器`、`terminal/终端`、`notes/笔记`、`meeting/会议`。
+- 短别名如 `ps`、`vsc` 会作为精确 alias 参与排序；类别词如 `design`、`im` 主要用于召回同类应用。
 
 ## 壁纸能力说明（当前）
 

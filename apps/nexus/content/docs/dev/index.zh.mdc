@@ -11,6 +11,7 @@
 
 ## 深入学习
 - **[API 参考](./api/)** — 存储、通道和 UI 的类型化接口。
+- **[搜索匹配 API / SemanticAliasSDK](./api/search.zh.md)** — 使用 `App Semantic Alias Catalog / 应用语义别名目录` 标记和 `sdkapi: 260626` 接入语义别名。
 - **[QuickOps SDK](./api/quickops.zh.md)** — 读取内置本地快捷工具能力、会话和最近审计摘要，并通过 Flow 组合扩展。
 - **[扩展开发](./extensions/)** — 复杂集成的高级模式。
 - **[插件包与内容包边界](./getting-started/plugin-workflow.zh.md#插件包与内容包边界)** — 区分 `.tpex`、CloudShare 内容包与 CloudSync 私有同步。

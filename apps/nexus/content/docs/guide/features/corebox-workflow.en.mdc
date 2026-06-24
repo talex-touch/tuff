@@ -10,12 +10,23 @@
 | AI Q&A | Available | `ai / @ai / /ai` | `plugins/touch-intelligence/manifest.json` |
 | Translation | Available (single-source + multi-source); screenshot translate is experimental | `fy / translate / fy-multi` | `plugins/touch-translation/manifest.json` |
 | Wallpaper | Available (advanced setting in app style page) | Settings → Appearance/Style (ThemeStyle) | `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue` |
+| App Semantic Alias Catalog / 应用语义别名目录 | Available: improves recall for installed apps only; it does not show uninstalled apps | `im / chat / 即时通讯 / design / ps / 设计 / vsc / code / dev / office / browser / terminal` | `apps/core-app/src/main/modules/box-tool/addon/apps/app-semantic-catalog.ts` |
 
 ## Recommended CoreBox Path
 
 1. Type `ai` for direct Q&A, rewrite, and summaries.
 2. Type `fy` for translation; use `fy-multi` for multi-provider translation.
 3. Type `script` to run workspace `package.json` scripts.
+4. Type `im` / `design` / `ps` / `vsc` to recall installed apps through semantic app aliases.
+
+## App Semantic Aliases
+
+Recognition marker: **App Semantic Alias Catalog / 应用语义别名目录**.
+
+- It only improves installed-app recall; it does not add website links or uninstalled app suggestions.
+- Aliases use the existing SearchIndex alias/keyword channel, with no SQLite schema change.
+- Common categories include `im/chat/messenger/即时通讯/聊天`, `design/设计`, `dev/code/开发`, `office/办公`, `browser/浏览器`, `terminal/终端`, `notes/笔记`, and `meeting/会议`.
+- Short aliases such as `ps` and `vsc` participate as exact aliases; category terms such as `design` and `im` primarily recall related installed apps.
 
 ## Wallpaper Scope (Current)
 

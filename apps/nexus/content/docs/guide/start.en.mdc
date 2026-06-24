@@ -21,6 +21,7 @@
 
 ## 4. Try It
 - `⌘ + E` / `Ctrl + E`: summon CoreBox.
+- CoreBox includes **App Semantic Alias Catalog / 应用语义别名目录**: search `im`, `chat`, or `即时通讯` to recall installed messaging apps such as WeChat, Lark, and Telegram; search `design`, `ps`, or `设计` for Photoshop/Figma-style tools; search `vsc` or `code` for VS Code.
 - Drag the Dock icon to switch workspaces.
 - Notification widget shows workflow queue + plugin health.
 
