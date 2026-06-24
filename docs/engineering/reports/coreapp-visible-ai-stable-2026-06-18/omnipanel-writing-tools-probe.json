@@ -1,0 +1,152 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-24T05:35:46.158Z",
+  "remoteDebuggingUrl": "http://127.0.0.1:9485/json/list",
+  "userDataRoot": "/tmp/tuff-omnipanel-evidence-20260624-9485",
+  "runtimeRoot": "/tmp/tuff-omnipanel-evidence-20260624-9485/tuff",
+  "artifacts": {
+    "writing": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/omnipanel-writing-tools.png",
+    "confirmation": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/omnipanel-replace-confirmation.png",
+    "recovery": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/omnipanel-selection-recovery.png",
+    "probe": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/omnipanel-writing-tools-probe.json"
+  },
+  "targets": [
+    {
+      "id": "B8C4E5AD2CA49E7EA562D093B3D05EF9",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay"
+    },
+    {
+      "id": "27C132FCDB23D6AD84ACC35DD8771754",
+      "title": "",
+      "type": "page",
+      "url": ""
+    },
+    {
+      "id": "7F196015EEF35B14D01E8686F6726651",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html"
+    }
+  ],
+  "stages": [
+    {
+      "name": "main-target",
+      "target": {
+        "id": "27C132FCDB23D6AD84ACC35DD8771754",
+        "url": ""
+      }
+    },
+    {
+      "name": "omni-target",
+      "target": {
+        "id": "FFCFF2C8F0FBA482522468201A76E833",
+        "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+      }
+    },
+    {
+      "name": "context-target",
+      "target": {
+        "id": "FFCFF2C8F0FBA482522468201A76E833",
+        "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting"
+      }
+    },
+    {
+      "name": "writing-actions",
+      "bodyText": "builtin\n快速翻译\n将选中文本发送到翻译页面\nbuiltin\nAI 翻译\n预览译文后再复制或替换剪贴板\nbuiltin\nAI 摘要\n生成选中文本的要点摘要\nbuiltin\nAI 改写\n改写为更清晰自然的表达\nbuiltin\nAI 解释\n解释选中文本或代码片段\nbuiltin\nAI Review\n预览代码 Review 建议\nbuiltin\n网页搜索\n用浏览器搜索选中文本\nbuiltin\n在 CoreBox 中搜索\n回到启动器继续执行动作\nbuiltin\n复制文本\n把当前文本写回剪贴板\n\n选区已就绪 · OmniPanel writing too...",
+      "probe": {
+        "hasSelectedText": true,
+        "actionLabels": [
+          "AI 翻译",
+          "AI 摘要",
+          "AI 改写",
+          "AI 解释",
+          "AI Review"
+        ],
+        "hasAiPreview": false,
+        "hasMetadata": false,
+        "hasRetryCopyReplace": false,
+        "hasConfirmation": false,
+        "hasRecoveryHint": true
+      }
+    },
+    {
+      "name": "clicked-ai-action",
+      "label": "AI 改写"
+    },
+    {
+      "name": "ai-preview",
+      "bodyText": "builtin\n快速翻译\n将选中文本发送到翻译页面\nbuiltin\nAI 翻译\n预览译文后再复制或替换剪贴板\nbuiltin\nAI 摘要\n生成选中文本的要点摘要\nbuiltin\nAI 改写\n改写为更清晰自然的表达\nbuiltin\nAI 解释\n解释选中文本或代码片段\nbuiltin\nAI Review\n预览代码 Review 建议\nbuiltin\n网页搜索\n用浏览器搜索选中文本\nbuiltin\n在 CoreBox 中搜索\n回到启动器继续执行动作\nbuiltin\n复制文本\n把当前文本写回剪贴板\nAI 改写\n\nOmniPanel writing tools evidence sample. Rewrite this sentence clearly.\n\n可使用\n\n复制或替换剪贴板前，请先确认结果与元数据。\n\nEvidence of OmniPanel's writing tool capabilities is presented as a sample.\n能力: text.rewrite\nProvider: local\n模型: qwen2.5:3b\nTrace: local-1782279378320-f5jm7e\n耗时: 1234ms\nlocal-1782279378320-f5jm7e\n重试\n复制\n替换剪贴板\n\n选区已就绪 · OmniPanel writing too...",
+      "probe": {
+        "hasSelectedText": true,
+        "actionLabels": [
+          "AI 翻译",
+          "AI 摘要",
+          "AI 改写",
+          "AI 解释",
+          "AI Review"
+        ],
+        "hasAiPreview": true,
+        "hasMetadata": true,
+        "hasRetryCopyReplace": true,
+        "hasConfirmation": false,
+        "hasRecoveryHint": true
+      }
+    },
+    {
+      "name": "replace-confirmation",
+      "bodyText": "builtin\n快速翻译\n将选中文本发送到翻译页面\nbuiltin\nAI 翻译\n预览译文后再复制或替换剪贴板\nbuiltin\nAI 摘要\n生成选中文本的要点摘要\nbuiltin\nAI 改写\n改写为更清晰自然的表达\nbuiltin\nAI 解释\n解释选中文本或代码片段\nbuiltin\nAI Review\n预览代码 Review 建议\nbuiltin\n网页搜索\n用浏览器搜索选中文本\nbuiltin\n在 CoreBox 中搜索\n回到启动器继续执行动作\nbuiltin\n复制文本\n把当前文本写回剪贴板\nAI 改写\n\nOmniPanel writing tools evidence sample. Rewrite this sentence clearly.\n\n待确认\n\n确认后才会用该 AI 结果替换剪贴板。\n\nEvidence of OmniPanel's writing tool capabilities is presented as a sample.\n能力: text.rewrite\nProvider: local\n模型: qwen2.5:3b\nTrace: local-1782279378320-f5jm7e\n耗时: 1234ms\nlocal-1782279378320-f5jm7e\n重试\n复制\n确认替换\n\n选区已就绪 · OmniPanel writing too...",
+      "probe": {
+        "hasSelectedText": true,
+        "actionLabels": [
+          "AI 翻译",
+          "AI 摘要",
+          "AI 改写",
+          "AI 解释",
+          "AI Review"
+        ],
+        "hasAiPreview": true,
+        "hasMetadata": true,
+        "hasRetryCopyReplace": true,
+        "hasConfirmation": true,
+        "hasRecoveryHint": true
+      }
+    },
+    {
+      "name": "selection-recovery",
+      "bodyText": "builtin\n快速翻译\n将选中文本发送到翻译页面\nbuiltin\nAI 翻译\n预览译文后再复制或替换剪贴板\nbuiltin\nAI 摘要\n生成选中文本的要点摘要\nbuiltin\nAI 改写\n改写为更清晰自然的表达\nbuiltin\nAI 解释\n解释选中文本或代码片段\nbuiltin\nAI Review\n预览代码 Review 建议\nbuiltin\n网页搜索\n用浏览器搜索选中文本\nbuiltin\n在 CoreBox 中搜索\n回到启动器继续执行动作\nbuiltin\n复制文本\n把当前文本写回剪贴板\n\n先选中文本，再选择一个动作。",
+      "probe": {
+        "hasSelectedText": true,
+        "actionLabels": [
+          "AI 翻译",
+          "AI 摘要",
+          "AI 改写",
+          "AI 解释",
+          "AI Review"
+        ],
+        "hasAiPreview": false,
+        "hasMetadata": false,
+        "hasRetryCopyReplace": false,
+        "hasConfirmation": false,
+        "hasRecoveryHint": true
+      }
+    }
+  ],
+  "failures": [],
+  "summary": {
+    "selectedTextVisible": true,
+    "actionLabels": [
+      "AI 翻译",
+      "AI 摘要",
+      "AI 改写",
+      "AI 解释",
+      "AI Review"
+    ],
+    "aiPreviewVisible": true,
+    "metadataVisible": true,
+    "retryCopyReplaceVisible": true,
+    "confirmationVisible": true,
+    "recoveryHintVisible": true
+  }
+}
