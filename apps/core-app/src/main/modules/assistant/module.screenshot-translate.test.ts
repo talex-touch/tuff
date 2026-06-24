@@ -1,4 +1,4 @@
-import type { AppSetting } from '@talex-touch/utils'
+import { StorageList, type AppSetting } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { NativeScreenshotCaptureResult } from '@talex-touch/utils/transport/events/types'
 import type { CoreBoxImageTranslateResponse } from '../../../shared/events/corebox-scenes'
@@ -64,6 +64,7 @@ const mocks = vi.hoisted(() => ({
   }),
   getMainConfig: vi.fn<() => AppSetting>(),
   saveMainConfig: vi.fn(),
+  persistMainConfig: vi.fn(() => Promise.resolve()),
   subscribeMainConfig: vi.fn(() => vi.fn()),
   capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
   translateImageBase64: vi.fn<() => Promise<CoreBoxImageTranslateResponse>>(),
@@ -85,6 +86,7 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
       mocks.handlers.set(event.toEventName(), handler)
       return vi.fn()
     }),
+    broadcastToWindow: vi.fn(),
     sendTo: vi.fn()
   }))
 }))
@@ -150,6 +152,7 @@ vi.mock('../../utils/renderer-url', () => ({
 
 vi.mock('../storage', () => ({
   getMainConfig: mocks.getMainConfig,
+  persistMainConfig: mocks.persistMainConfig,
   saveMainConfig: mocks.saveMainConfig,
   subscribeMainConfig: mocks.subscribeMainConfig
 }))
@@ -216,6 +219,7 @@ describe('AssistantModule screenshot translation', () => {
     vi.resetModules()
     mocks.handlers.clear()
     mocks.getMainConfig.mockImplementation(() => mocks.createEnabledSetting())
+    mocks.persistMainConfig.mockResolvedValue(undefined)
     mocks.capture.mockResolvedValue(mocks.createCaptureResult())
     mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
   })
@@ -320,5 +324,28 @@ describe('AssistantModule screenshot translation', () => {
     })
 
     await module.onDestroy({} as never)
+  })
+
+  it('persists floating ball drag position immediately after the debounce window', async () => {
+    vi.useFakeTimers()
+    const setting = mocks.createEnabledSetting()
+    mocks.getMainConfig.mockImplementation(() => setting)
+    const { module } = await createInitializedModule()
+    const handler = mocks.handlers.get(AssistantEvents.floatingBall.updatePosition.toEventName())
+    if (!handler) {
+      throw new Error('updatePosition handler was not registered')
+    }
+
+    await handler({ x: 316.2, y: 292.8 }, {} as HandlerContext)
+    await vi.advanceTimersByTimeAsync(220)
+
+    expect(setting.floatingBall.position).toEqual({ x: 316, y: 293 })
+    expect(mocks.saveMainConfig).toHaveBeenLastCalledWith(StorageList.APP_SETTING, setting, {
+      force: true
+    })
+    expect(mocks.persistMainConfig).toHaveBeenCalledWith(StorageList.APP_SETTING)
+
+    await module.onDestroy({} as never)
+    vi.useRealTimers()
   })
 })

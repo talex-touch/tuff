@@ -679,6 +679,14 @@ export class StorageModule extends BaseModule {
     }
   }
 
+  async persistConfigNow(name: string): Promise<void> {
+    if (!this.cache.has(name)) {
+      this.getConfig(name)
+    }
+    await this.persistConfig(name)
+    this.cache.clearDirty(name)
+  }
+
   /**
    * Evict config from cache (called by LRU manager)
    * Saves dirty configs before eviction
@@ -830,6 +838,11 @@ export function subscribeMainConfig<K extends MainStorageKey>(
 export const getConfig = (name: string) => useMainStorage().getConfig(name)
 export function saveConfig(...args: Parameters<StorageModule['saveConfig']>) {
   return useMainStorage().saveConfig(...args)
+}
+
+export function persistMainConfig<K extends MainStorageKey>(key: K): Promise<void> {
+  const entry = mainStorageRegistry[key]
+  return useMainStorage().persistConfigNow(entry.key)
 }
 export { mainStorageRegistry }
 export type { MainStorageKey, MainStorageSchema } from './main-storage-registry'

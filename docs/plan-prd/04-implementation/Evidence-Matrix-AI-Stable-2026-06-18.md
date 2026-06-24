@@ -1,6 +1,6 @@
 # Evidence Matrix: AI 2.5.0 Stable
 
-> 更新时间：2026-06-22
+> 更新时间：2026-06-24
 > 定位：AI 2.5.0 Stable 的固定证据矩阵。本文只定义验收证据，不把 SDK/schema/focused tests 误写成 packaged Electron 体验闭环。
 
 ## 1. Stable 范围
@@ -16,6 +16,13 @@
 - OmniPanel Writing Tools、Workflow Use Model、Review Queue、Template Center 不再作为 Stable blocker。
 - `text.chat` 可以流式或非流式；`vision.ocr` 维持非流式，重点验证 OCR/text handoff。
 - 任何 focused test、SDK/schema、mock provider、dry-run、memory fallback 或 local fake response 都只能作为最近路径证据，不能替代 packaged Electron 体验证据。
+
+## 当前 visible gate 状态
+
+- `AI-STABLE-01/02/03/04/05/06/07/08` 均已绑定独立 packaged probe JSON + PNG artifact，CoreBox AI Ask packaged Stable evidence 已关闭。
+- 当前 passed packaged surfaces：`startup-packaged-hot`、`startup-packaged-cold`、`startup-first-screen`、`corebox-search-states`、`app-index-workbench`、`browser-login-recovery`、`corebox-ai-ask`、`omnipanel-writing-tools`、`provider-migration-evidence`、`assistant-floating-ball-entry`、`assistant-screenshot-translate`、`workflow-use-model-review-queue`、`provider-registry-observability`。
+- 2026-06-24 strict visible verifier 当前为 `gate.passed=true`；13/13 required surfaces 全部 passed，manifest artifact 总引用 72 次。
+- `assistant-screenshot-translate` 已从 code-partial 推进到 packaged visible evidence passed；后续工作不再是 evidence closure，而是截图模式、pin window polish、权限恢复与 provider fallback 的产品化优化。
 
 ## 3. 固定证据矩阵
 
@@ -38,6 +45,7 @@
 - provider metadata chips 空白但仍显示成功。
 - disabled provider 被 capability binding 带入真实调用。
 - OmniPanel / Workflow / Review Queue Beta evidence 反向替代 CoreBox 文本/OCR Stable evidence。
+- 后续新增截图翻译或桌面效果时，只凭 focused tests、代码路径或单元路径标记 packaged visible evidence passed。
 
 ## 5. 最近自动化验证
 
@@ -77,6 +85,8 @@ pnpm -C "packages/tuffex" run typecheck
 
 2026-06-22 R2I evidence 同步后复跑严格验证：`gate.passed=false`、`failureCount=55`、exit `1` 仍符合预期；`corebox-search-states` 不再出现在 failure list 中，剩余 failures 来自 app-index/login/OmniPanel/Assistant/Workflow/Provider broader visible surfaces pending。CoreBox search states R2D/R2I packaged evidence 已覆盖 idle、searching/warm-up、no-result retry/File Index settings 与真实 result source/status/reason pills；普通 `core-box` 窗口从 `720x56` resize 到 `720x242`。
 
+2026-06-24 继续同步 R2 visible evidence：`browser-login-recovery`、`app-index-workbench`、`omnipanel-writing-tools`、`provider-migration-evidence`、`assistant-floating-ball-entry`、`assistant-screenshot-translate`、`workflow-use-model-review-queue` 与 `provider-registry-observability` 均已标记 `passed`。Strict visible verifier 当前为 `gate.passed=true`，13/13 surfaces passed；dry-run migration evidence 仍只表示 Nexus local-only migration dry-run summary，不声明 registry-primary runtime ready。下一步进入 OmniPanel / Assistant 产品化、性能优化、桌面烟花 MVP 与截图功能渐进引入。
+
 ## 6. 推荐验证命令
 
 ```bash
@@ -88,4 +98,4 @@ pnpm -C "packages/tuffex" run typecheck
 ## 7. Roadmap 绑定
 
 - 对应 Roadmap vNext：`R2 AI 2.5.0 Stable`。
-- CoreBox AI Ask packaged Stable evidence 已关闭；全局 visible-experience gate 仍失败，不能把 broader visible surfaces 解读为已完成。
+- CoreBox AI Ask packaged Stable evidence 已关闭；CoreBox search states、App Index workbench、browser login recovery、OmniPanel writing tools、provider migration dry-run、Assistant、Workflow 与 Provider registry observability broader evidence 已继续关闭；全局 visible-experience gate 当前通过。

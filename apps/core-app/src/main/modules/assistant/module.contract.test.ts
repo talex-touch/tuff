@@ -113,7 +113,8 @@ describe('Assistant module startup contract', () => {
       'setPosition(nextX, nextY)',
       'this.pendingPosition = { x: nextX, y: nextY }',
       'this.schedulePositionPersist()',
-      'setting.floatingBall.position = { ...this.pendingPosition }'
+      'setting.floatingBall.position = { ...this.pendingPosition }',
+      'saveMainConfig(StorageList.APP_SETTING, setting, { force: true })'
     ]) {
       expect(moduleSource).toContain(expected)
     }
@@ -141,7 +142,9 @@ describe('Assistant module startup contract', () => {
     expect(openVoicePanelBlock).toContain('voiceWindow.window.setBounds')
     expect(openVoicePanelBlock).toContain('voiceWindow.window.show()')
     expect(openVoicePanelBlock).toContain('voiceWindow.window.focus()')
+    expect(openVoicePanelBlock).toContain('this.transport.broadcastToWindow')
     expect(openVoicePanelBlock).toContain('AssistantEvents.voice.panelOpened')
+    expect(openVoicePanelBlock).not.toContain('this.transport.sendTo')
     expect(openVoicePanelBlock).toContain('} finally {')
     expect(openVoicePanelBlock).toContain('this.releaseVoicePanelAutoHideSuppression()')
   })
