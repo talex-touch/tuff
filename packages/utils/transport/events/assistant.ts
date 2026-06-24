@@ -33,6 +33,10 @@ export type AssistantScreenshotTranslateErrorCode =
   | AssistantClipboardImageTranslateErrorCode
   | 'SCREENSHOT_UNAVAILABLE'
 
+export type AssistantScreenshotCaptureErrorCode =
+  | 'ASSISTANT_DISABLED'
+  | 'SCREENSHOT_UNAVAILABLE'
+
 export interface AssistantClipboardImageTranslatePayload {
   targetLang?: string
 }
@@ -48,6 +52,10 @@ export interface AssistantClipboardImageTranslateResponse {
 
 export type AssistantScreenshotTranslatePayload = AssistantClipboardImageTranslatePayload
 
+export interface AssistantScreenshotCapturePayload {
+  target?: 'cursor-display'
+}
+
 export interface AssistantScreenshotTranslateResponse {
   success: boolean
   translatedImageBase64?: string
@@ -55,6 +63,18 @@ export interface AssistantScreenshotTranslateResponse {
   targetText?: string
   error?: string
   code?: AssistantScreenshotTranslateErrorCode
+}
+
+export interface AssistantScreenshotCaptureResponse {
+  success: boolean
+  dataUrl?: string
+  mimeType?: string
+  width?: number
+  height?: number
+  displayName?: string
+  wroteClipboard?: boolean
+  error?: string
+  code?: AssistantScreenshotCaptureErrorCode
 }
 
 const translateClipboardImageEvent = defineEvent('assistant')
@@ -91,6 +111,10 @@ export const AssistantEvents = {
       .event('submit')
       .define<AssistantVoiceSubmitPayload, { accepted: boolean }>(),
     translateClipboardImage: translateClipboardImageEvent,
+    captureScreenshot: defineEvent('assistant')
+      .module('voice-panel')
+      .event('capture-screenshot')
+      .define<AssistantScreenshotCapturePayload | void, AssistantScreenshotCaptureResponse>(),
     translateScreenshot: defineEvent('assistant')
       .module('voice-panel')
       .event('translate-screenshot')

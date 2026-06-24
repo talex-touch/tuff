@@ -186,6 +186,14 @@ describe('transport domain sdk mappings', () => {
       module: 'voice-panel',
       action: 'submit',
     })
+    expect(AssistantEvents.voice.captureScreenshot.toEventName()).toBe(
+      'assistant:voice-panel:capture-screenshot',
+    )
+    expect(AssistantEvents.voice.captureScreenshot).toMatchObject({
+      namespace: 'assistant',
+      module: 'voice-panel',
+      action: 'capture-screenshot',
+    })
     expect(AssistantEvents.voice.translateScreenshot.toEventName()).toBe(
       'assistant:voice-panel:translate-screenshot',
     )

@@ -213,6 +213,25 @@ async function createInitializedModule(): Promise<{
   return { handler, module }
 }
 
+async function createInitializedModuleWithHandler(eventName: string): Promise<{
+  handler: AssistantHandler
+  module: InstanceType<typeof import('./module').AssistantModule>
+}> {
+  const { AssistantModule } = await import('./module')
+  const module = new AssistantModule()
+  await module.onInit({
+    app: { channel: {} },
+    runtime: { channel: {} },
+    file: { dirPath: '/tmp/assistant' }
+  } as unknown as Parameters<typeof module.onInit>[0])
+
+  const handler = mocks.handlers.get(eventName)
+  if (!handler) {
+    throw new Error(`${eventName} handler was not registered`)
+  }
+  return { handler, module }
+}
+
 describe('AssistantModule screenshot translation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -322,6 +341,50 @@ describe('AssistantModule screenshot translation', () => {
       code: 'SCENE_UNAVAILABLE',
       error: 'Scene unavailable'
     })
+
+    await module.onDestroy({} as never)
+  })
+
+  it('captures a screenshot preview and writes it to clipboard without invoking image translate', async () => {
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.captureScreenshot.toEventName()
+    )
+
+    const result = await handler({ target: 'cursor-display' }, {} as HandlerContext)
+
+    expect(result).toEqual({
+      success: true,
+      dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdC1pbWFnZQ==',
+      mimeType: 'image/png',
+      width: 12,
+      height: 8,
+      displayName: 'Display',
+      wroteClipboard: false
+    })
+    expect(mocks.capture).toHaveBeenCalledWith({
+      target: 'cursor-display',
+      output: 'data-url',
+      writeClipboard: true
+    })
+    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
+  })
+
+  it('maps screenshot capture failures to SCREENSHOT_UNAVAILABLE', async () => {
+    mocks.capture.mockRejectedValue(new Error('Screen recording permission denied'))
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.captureScreenshot.toEventName()
+    )
+
+    const result = await handler(undefined, {} as HandlerContext)
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'SCREENSHOT_UNAVAILABLE',
+      error: 'Screen recording permission denied'
+    })
+    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
   })

@@ -2,6 +2,7 @@
 import type {
   AssistantClipboardImageTranslateErrorCode,
   AssistantRuntimeConfig,
+  AssistantScreenshotCaptureErrorCode,
   AssistantScreenshotTranslateErrorCode
 } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
@@ -43,6 +44,11 @@ const SCREENSHOT_TRANSLATE_ERROR_KEYS: Record<AssistantScreenshotTranslateErrorC
   SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateUnavailable'
 }
 
+const SCREENSHOT_CAPTURE_ERROR_KEYS: Record<AssistantScreenshotCaptureErrorCode, string> = {
+  ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotCaptureAssistantDisabled',
+  SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotCaptureUnavailable'
+}
+
 const transport = useTuffTransport()
 const { t } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
@@ -59,11 +65,19 @@ const listening = ref(false)
 const submitting = ref(false)
 const translatingClipboardImage = ref(false)
 const translatingScreenshot = ref(false)
+const capturingScreenshot = ref(false)
 const inputText = ref('')
 const interimText = ref('')
 const errorMessage = ref('')
 const statusMessage = ref('')
 const sourceText = ref('')
+const screenshotPreview = ref<{
+  dataUrl: string
+  width: number
+  height: number
+  displayName: string
+  wroteClipboard: boolean
+} | null>(null)
 
 let recognition: SpeechRecognitionLike | null = null
 let restartTimer: ReturnType<typeof setTimeout> | null = null
@@ -220,12 +234,23 @@ function formatScreenshotTranslateError(
   return fallback || t('assistant.voicePanel.screenshotTranslateFailed')
 }
 
+function formatScreenshotCaptureError(
+  code?: AssistantScreenshotCaptureErrorCode,
+  fallback?: string
+): string {
+  if (code) {
+    return t(SCREENSHOT_CAPTURE_ERROR_KEYS[code])
+  }
+  return fallback || t('assistant.voicePanel.screenshotCaptureFailed')
+}
+
 async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   sourceText.value = payload?.source || ''
   inputText.value = ''
   interimText.value = ''
   errorMessage.value = ''
   statusMessage.value = ''
+  screenshotPreview.value = null
   await loadRuntimeConfig()
   keepListening = voiceWakeEnabled.value
   if (keepListening) {
@@ -264,7 +289,8 @@ async function submitText(): Promise<void> {
 }
 
 async function translateClipboardImage(): Promise<void> {
-  if (translatingClipboardImage.value || translatingScreenshot.value) return
+  if (translatingClipboardImage.value || translatingScreenshot.value || capturingScreenshot.value)
+    return
 
   keepListening = false
   stopRecognition()
@@ -291,13 +317,15 @@ async function translateClipboardImage(): Promise<void> {
 }
 
 async function translateScreenshot(): Promise<void> {
-  if (translatingScreenshot.value || translatingClipboardImage.value) return
+  if (translatingScreenshot.value || translatingClipboardImage.value || capturingScreenshot.value)
+    return
 
   keepListening = false
   stopRecognition()
   translatingScreenshot.value = true
   errorMessage.value = ''
   statusMessage.value = t('assistant.voicePanel.screenshotTranslating')
+  screenshotPreview.value = null
 
   try {
     const response = await transport.send(AssistantEvents.voice.translateScreenshot, {
@@ -314,6 +342,43 @@ async function translateScreenshot(): Promise<void> {
     errorMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
     translatingScreenshot.value = false
+  }
+}
+
+async function captureScreenshot(): Promise<void> {
+  if (capturingScreenshot.value || translatingScreenshot.value || translatingClipboardImage.value)
+    return
+
+  keepListening = false
+  stopRecognition()
+  capturingScreenshot.value = true
+  errorMessage.value = ''
+  statusMessage.value = t('assistant.voicePanel.screenshotCapturing')
+  screenshotPreview.value = null
+
+  try {
+    const response = await transport.send(AssistantEvents.voice.captureScreenshot, {
+      target: 'cursor-display'
+    })
+    if (!response?.success || !response.dataUrl) {
+      statusMessage.value = ''
+      errorMessage.value = formatScreenshotCaptureError(response?.code, response?.error)
+      return
+    }
+
+    screenshotPreview.value = {
+      dataUrl: response.dataUrl,
+      width: response.width ?? 0,
+      height: response.height ?? 0,
+      displayName: response.displayName || '',
+      wroteClipboard: response.wroteClipboard === true
+    }
+    statusMessage.value = t('assistant.voicePanel.screenshotCaptureReady')
+  } catch (error) {
+    statusMessage.value = ''
+    errorMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    capturingScreenshot.value = false
   }
 }
 
@@ -361,6 +426,27 @@ onBeforeUnmount(() => {
           :placeholder="t('assistant.voicePanel.placeholder')"
         />
         <p v-if="interimText" class="interim-text">{{ interimText }}</p>
+        <div v-if="screenshotPreview" class="screenshot-preview">
+          <img
+            class="screenshot-preview-image"
+            :src="screenshotPreview.dataUrl"
+            :alt="t('assistant.voicePanel.screenshotPreviewAlt')"
+          />
+          <p class="screenshot-preview-meta">
+            {{
+              t('assistant.voicePanel.screenshotPreviewMeta', {
+                width: screenshotPreview.width,
+                height: screenshotPreview.height,
+                display:
+                  screenshotPreview.displayName ||
+                  t('assistant.voicePanel.screenshotDisplayUnknown')
+              })
+            }}
+          </p>
+          <p v-if="screenshotPreview.wroteClipboard" class="screenshot-preview-copy">
+            {{ t('assistant.voicePanel.screenshotCopied') }}
+          </p>
+        </div>
         <p v-if="statusMessage" class="status-text">{{ statusMessage }}</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       </main>
@@ -369,7 +455,7 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="translatingClipboardImage || translatingScreenshot"
+          :disabled="translatingClipboardImage || translatingScreenshot || capturingScreenshot"
           @click="translateClipboardImage"
         >
           {{
@@ -381,13 +467,25 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="translatingScreenshot || translatingClipboardImage"
+          :disabled="translatingScreenshot || translatingClipboardImage || capturingScreenshot"
           @click="translateScreenshot"
         >
           {{
             translatingScreenshot
               ? t('assistant.voicePanel.imageTranslatingShort')
               : t('assistant.voicePanel.translateScreenshot')
+          }}
+        </button>
+        <button
+          class="secondary-btn"
+          type="button"
+          :disabled="capturingScreenshot || translatingScreenshot || translatingClipboardImage"
+          @click="captureScreenshot"
+        >
+          {{
+            capturingScreenshot
+              ? t('assistant.voicePanel.screenshotCapturingShort')
+              : t('assistant.voicePanel.captureScreenshot')
           }}
         </button>
         <button
@@ -513,6 +611,34 @@ onBeforeUnmount(() => {
 .status-text {
   margin: 0;
   font-size: 12px;
+  color: #047857;
+}
+
+.screenshot-preview {
+  border: 1px solid rgba(180, 83, 9, 0.22);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.screenshot-preview-image {
+  display: block;
+  width: 100%;
+  max-height: 82px;
+  object-fit: contain;
+  border-radius: 7px;
+  background: rgba(67, 20, 7, 0.06);
+}
+
+.screenshot-preview-meta,
+.screenshot-preview-copy {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #9a3412;
+}
+
+.screenshot-preview-copy {
   color: #047857;
 }
 

@@ -72,7 +72,7 @@
 1. Assistant screenshot translate 进入灰度产品化：保留 Voice Panel 双入口，补截图模式选择、权限恢复、pin window polish 与 provider fallback 文案。
 2. OmniPanel / Assistant 性能优化：聚焦窗口生命周期、悬浮球拖拽持久化、事件广播、packaged asset 排除与首屏不阻塞。
 3. 桌面烟花 MVP：feature flag 默认关闭，轻量 overlay/canvas，限制粒子数、帧率、自动退出与无障碍降级。
-4. 截图功能逐步引入：先做截图 capture + preview + copy/save，再接 translate；失败态区分权限拒绝、平台 unsupported 与 provider unavailable。
+4. 截图功能逐步引入：已落地 Voice Panel `capture + preview + copy` 基础切片；下一步补 save、权限恢复与平台 unsupported/provider unavailable 的可见失败态，再接 translate 产品化。
 5. 保留 R2D idle、searching/warm-up、no-result 与 R2I result pills 作为最终 CoreBox Search evidence，避免旧 r2/r2b/r2c 或 `corebox-search-result-reasons.png` 被误用。
 6. 后续每次产品化变更仍同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/`、Evidence Matrix、TODO 与 CHANGES；不使用旧 raw blocker artifact 冒充最终 evidence。
 

@@ -11,6 +11,7 @@ import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/a
 import type {
   AssistantClipboardImageTranslateResponse,
   AssistantRuntimeConfig,
+  AssistantScreenshotCaptureResponse,
   AssistantScreenshotTranslateResponse
 } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
@@ -189,6 +190,12 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.translateClipboardImage, async (payload) => {
         return await this.handleClipboardImageTranslate(payload?.targetLang)
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.captureScreenshot, async () => {
+        return await this.handleScreenshotCapture()
       })
     )
 
@@ -751,6 +758,51 @@ export class AssistantModule extends BaseModule {
         translatedImageBase64: result.translatedImageBase64,
         sourceText: result.sourceText,
         targetText: result.targetText
+      }
+    } finally {
+      this.releaseVoicePanelAutoHideSuppression()
+    }
+  }
+
+  private async handleScreenshotCapture(): Promise<AssistantScreenshotCaptureResponse> {
+    const setting = this.readAppSetting()
+    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
+      return {
+        success: false,
+        code: 'ASSISTANT_DISABLED',
+        error: 'Assistant floating ball is disabled.'
+      }
+    }
+
+    this.beginVoicePanelAutoHideSuppression()
+    try {
+      const captureResult = await getNativeScreenshotService().capture({
+        target: 'cursor-display',
+        output: 'data-url',
+        writeClipboard: true
+      })
+      if (typeof captureResult.dataUrl !== 'string' || !captureResult.dataUrl.trim()) {
+        return {
+          success: false,
+          code: 'SCREENSHOT_UNAVAILABLE',
+          error: 'Screenshot image is unavailable.'
+        }
+      }
+
+      return {
+        success: true,
+        dataUrl: captureResult.dataUrl,
+        mimeType: captureResult.mimeType,
+        width: captureResult.width,
+        height: captureResult.height,
+        displayName: captureResult.displayName,
+        wroteClipboard: captureResult.wroteClipboard
+      }
+    } catch (error) {
+      return {
+        success: false,
+        code: 'SCREENSHOT_UNAVAILABLE',
+        error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
       }
     } finally {
       this.releaseVoicePanelAutoHideSuppression()

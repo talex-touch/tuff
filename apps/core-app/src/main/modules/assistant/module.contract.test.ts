@@ -188,15 +188,20 @@ describe('Assistant module startup contract', () => {
 
   it('routes clipboard image translation through typed assistant transport events', () => {
     expect(assistantEventsSource).toContain('AssistantClipboardImageTranslateResponse')
+    expect(assistantEventsSource).toContain('AssistantScreenshotCaptureResponse')
     expect(assistantEventsSource).toContain('translateClipboardImage')
+    expect(assistantEventsSource).toContain('captureScreenshot')
     expect(assistantEventsSource).toContain('translateScreenshot')
     expect(assistantEventsSource).toContain("event('translate-clipboard-image')")
+    expect(assistantEventsSource).toContain("event('capture-screenshot')")
     expect(assistantEventsSource).toContain("event('translate-screenshot')")
     expect(assistantEventsSource).toContain('translateClipboardImage: translateClipboardImageEvent')
     expect(assistantEventsSource).toContain('SCREENSHOT_UNAVAILABLE')
     expect(moduleSource).toContain('AssistantEvents.voice.translateClipboardImage')
+    expect(moduleSource).toContain('AssistantEvents.voice.captureScreenshot')
     expect(moduleSource).toContain('AssistantEvents.voice.translateScreenshot')
     expect(moduleSource).toContain('handleClipboardImageTranslate')
+    expect(moduleSource).toContain('handleScreenshotCapture')
     expect(moduleSource).toContain('handleScreenshotTranslate')
     expect(moduleSource).toContain('translateClipboardImage')
     expect(moduleSource).toContain('openPinWindow: true')
@@ -206,15 +211,20 @@ describe('Assistant module startup contract', () => {
     expect(moduleSource).toContain('setTimeout(() => {')
     expect(moduleSource).toContain('this.voicePanelAutoHideSuppressionDepth - 1')
     expect(voicePanelSource).toContain('AssistantEvents.voice.translateClipboardImage')
+    expect(voicePanelSource).toContain('AssistantEvents.voice.captureScreenshot')
     expect(voicePanelSource).toContain('AssistantEvents.voice.translateScreenshot')
     expect(voicePanelSource).toContain('translateClipboardImage(): Promise<void>')
+    expect(voicePanelSource).toContain('captureScreenshot(): Promise<void>')
     expect(voicePanelSource).toContain('translateScreenshot(): Promise<void>')
     expect(voicePanelSource).toContain('translatingClipboardImage')
+    expect(voicePanelSource).toContain('capturingScreenshot')
+    expect(voicePanelSource).toContain('screenshotPreview')
     expect(voicePanelSource).toContain('translatingScreenshot')
+    expect(voicePanelSource).not.toContain('assistant:voice-panel:capture-screenshot')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:translate-screenshot')
 
     const clipboardTranslateBlock = moduleSource.match(
-      /private async handleClipboardImageTranslate\([\s\S]*?\n {2}private async handleScreenshotTranslate/
+      /private async handleClipboardImageTranslate\([\s\S]*?\n {2}private async handleScreenshotCapture/
     )?.[0]
     expect(clipboardTranslateBlock).toBeTruthy()
     expect(clipboardTranslateBlock).not.toContain('SCREENSHOT_UNAVAILABLE')
@@ -223,6 +233,17 @@ describe('Assistant module startup contract', () => {
     expect(clipboardTranslateBlock).not.toContain("output: 'data-url'")
     expect(clipboardTranslateBlock).not.toContain('writeClipboard: false')
     expect(clipboardTranslateBlock).not.toContain('translateImageBase64')
+
+    const screenshotCaptureBlock = moduleSource.match(
+      /private async handleScreenshotCapture\([\s\S]*?\n {2}private async handleScreenshotTranslate/
+    )?.[0]
+    expect(screenshotCaptureBlock).toBeTruthy()
+    expect(screenshotCaptureBlock).toContain('SCREENSHOT_UNAVAILABLE')
+    expect(screenshotCaptureBlock).toContain('getNativeScreenshotService')
+    expect(screenshotCaptureBlock).toContain("target: 'cursor-display'")
+    expect(screenshotCaptureBlock).toContain("output: 'data-url'")
+    expect(screenshotCaptureBlock).toContain('writeClipboard: true')
+    expect(screenshotCaptureBlock).not.toContain('translateImageBase64')
 
     const screenshotTranslateBlock = moduleSource.match(
       /private async handleScreenshotTranslate\([\s\S]*?\n {2}private destroyFloatingBallWindow/
@@ -255,6 +276,15 @@ describe('Assistant module startup contract', () => {
       'clipboardImageTranslating',
       'clipboardImageTranslateReady',
       'clipboardImageTranslateFailed',
+      'captureScreenshot',
+      'screenshotCapturing',
+      'screenshotCapturingShort',
+      'screenshotCaptureReady',
+      'screenshotCaptureFailed',
+      'screenshotCaptureUnavailable',
+      'screenshotPreviewAlt',
+      'screenshotPreviewMeta',
+      'screenshotCopied',
       'screenshotTranslateUnavailable',
       'screenshotTranslateImageUnavailable'
     ]) {
