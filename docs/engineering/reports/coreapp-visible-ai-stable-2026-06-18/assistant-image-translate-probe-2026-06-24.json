@@ -1,0 +1,147 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-24T14:02:34.436Z",
+  "packageVersion": "2.4.13-beta.1",
+  "appBundle": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+  "executablePath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+  "cdpPort": 9692,
+  "remoteDebuggingUrl": "http://127.0.0.1:9692/json/list",
+  "userDataDir": "/tmp/tuff-assistant-image-translate-20260624140234",
+  "artifactPaths": {
+    "output": "assistant-image-translate-probe-2026-06-24.json",
+    "settingsScreenshot": "assistant-image-translate-settings-2026-06-24.png",
+    "translateStartScreenshot": "assistant-clipboard-image-translate-start-2026-06-24.png",
+    "translateResultScreenshot": "assistant-clipboard-image-translate-result-2026-06-24.png",
+    "emptyClipboardScreenshot": "assistant-clipboard-image-empty-2026-06-24.png",
+    "providerFallbackScreenshot": "assistant-clipboard-image-provider-fallback-2026-06-24.png"
+  },
+  "selectedTargetIds": {
+    "settings": "40FDF73641EBA757E1E7ED541B18797B",
+    "floatingBall": "45DE3CD7D0F740646F2DDFC311B6EF3C",
+    "voicePanel": "C3711D8E2F79EF701C73DBD899AD2E07",
+    "imageTranslatePinWindow": "D16D6EC65A29BB95E6C4594951872C26",
+    "providerFallbackVoicePanel": "C8786B3CB50E59DDA5361BD7A2D80E3B"
+  },
+  "targets": [
+    {
+      "id": "40FDF73641EBA757E1E7ED541B18797B",
+      "title": "",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html"
+    }
+  ],
+  "evidenceChecks": {
+    "clipboardImageTranslationStartsFromVoicePanel": true,
+    "assistantReadsCurrentClipboardImage": true,
+    "translatedResultAppearsInPinWindow": true,
+    "emptyClipboardAndProviderFallbackRecoverable": true
+  },
+  "failures": [],
+  "settingsDom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting?section=assistant",
+    "text": "Tuff\n应用设置\n\n主要\n\n设置\n智能\n市场\n样式\n下载中心\n版本\nv2.4.13-beta.1\nTUFF\n\n为创造者们重新构想的命令栏。\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\n账户\n\n管理您的账户信息和登录状态。\n\n登录凭证保护\n\n本地加密保护已启用：凭证由本机 root 密钥加密保存，重启后仍可保持登录状态。\n\n无账户\n\n当前无法访问账户。\n\n登录\nAI 积分\n\n查看 Nexus AI credits 的个人剩余、已用和额度。\n\nAI 积分\n\n登录后可查看 credits 剩余和消耗。\n\n需要登录\n\n请先登录 Tuff 账户以读取 Nexus credits summary。\n\n语言设置\n\n选择您喜欢的应用程序语言。\n\n跟随系统语言\n\n自动匹配系统语言设置。\n\n选择语言\n\n手动选择您喜欢的显示语言。\n\n简体中文\nEnglish\n通用配置\n\n配置权限和基础设置\n\n权限\n\n统一管理文件访问、系统辅助、麦克风和平台级权限。\n\n已授权 0/4\n管理权限\n开机自动启动\n\n系统启动时自动运行应用\n\n显示托盘图标\n\n在系统托盘显示应用图标\n\n不在 Dock 栏显示\n仅限 macOS\n\n关闭主窗口后不在显示 Dock 图标（macOS only）\n\n静默启动\n\n应用启动时不显示窗口，仅在后台运行\n\n安装后自动装载 OmniPanel Feature\n\n启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。\n\n过滤系统噪音应用\n\n隐藏 Simulator / 系统 Helper/Agent 等不常用辅助应用（仅隐藏结果，不删除索引）\n\n实用工具\n\n实用工具为您提供统一的快速桌面启动器。\n\n自定义占位文本\n\n自定义 CoreBox 输入框的占位提示文本，留空使用默认。\n\n使用\n\n进入时引导您使用应用程序。\n\n快捷方式\n\n集中管理系统级快捷键设置。\n\n共 6 项\n管理\nOmniPanel 右键长按时长\n\n设置触发 OmniPanel 的右键长按阈值。\n\n自动粘贴\n\n复制内容后呼出 CoreBox 时，自动带入新鲜剪贴板内容。\n\n自动清除\n\nCoreBox 隐藏超过指定时间后，下次打开时自动退出上次功能并清空输入。短时间重新打开会保留状态。\n\n剪贴板轮询间隔\n\n空闲状态下检查剪贴板的频率，频率越高越耗电。CoreBox 显示时会自动提速到 0.5 秒。\n\n剪贴板省电轮询策略\n\n电池供电时自动降低剪贴板轮询频率以节省能耗。\n\n剪贴板省电轮询间隔\n\n启用剪贴板省电策略后，电池供电状态下使用的轮询间隔。\n\n自动隐藏\n\n触发模糊时隐藏搜索栏。\n\n智能推荐\n\n启用智能推荐功能，根据使用习惯提供个性化建议。\n\n显示推荐理由\n\n在推荐项目旁显示推荐原因。\n\n推荐数量\n\n搜索栏中显示的最大推荐项目数量。\n\n本地语义向量推荐\n\n在本机用上下文特征生成轻量语义分，不调用 AI 服务。\n\nAI 推荐重排\n\n开启后可用已配置的 AI Provider 对少量候选重排；失败或超时会自动退回本地排序。\n\nAI 向量增强\n\n开启后可用 embedding 能力增强少量候选的语义相似度；默认关闭。\n\n推荐分析：时间\n\n根据小时、工作日和时间段调整推荐。\n\n推荐分析：前台应用\n\n根据当前正在使用的应用补充相关工具推荐。\n\n推荐分析：剪贴板\n\n根据剪贴板内容类型推荐编辑器、浏览器、文件工具等。\n\n推荐分析：网络\n\n纳入联网状态、网络类型和脱敏网络桶，不记录明文网络名。\n\n推荐分析：蓝牙\n\n预留蓝牙可用性与连接数量信号，用于后续设备上下文推荐。\n\n推荐分析：专注状态\n\n纳入 macOS 专注 / 勿扰状态，专注时减少娱乐社交类推荐。\n\n推荐分析：电源与电量\n\n纳入充电、电池供电和电量区间，低电量时降低高耗能应用权重。\n\n推荐分析：位置桶\n\n使用时区和网络脱敏桶生成粗粒度位置桶，不记录具体位置。\n\nAssistant 悬浮球\n\n开启桌面悬浮入口，点击后可把文本指令发送到 CoreBox。\n\n启用 Assistant\n\n启用后才会响应悬浮球、语音面板等 Assistant 入口。默认保持关闭。\n\n显示悬浮球\n\n在桌面上显示可拖动的悬浮入口；点击后打开文本指令面板。\n\n助手名称\n\n显示在 Assistant 面板顶部的名称。\n\n语音唤醒\n\n开启后悬浮球和面板才会请求语音识别；关闭时只保留文本输入。\n\n唤醒词\n\n多个唤醒词用英文逗号分隔。\n\n文件索引\n\n管理文件搜索索引\n\n索引状态\n\n当前文件索引的运行状态\n\n正常\n重建文件索引\n\n清空文件搜索索引并重新扫描文件，不刷新应用展示名\n\n立即重建\n索引统计\n\n文件索引的详细统计信息\n\n已索引文件\n 0\n·\n索引失败\n 0\n·\n已跳过文件\n 0\n·\n已完成内容索引\n 0\n·\n已生成向量文件\n 0\n·\n向量记录\n 0\n最后检查\n\n最后一次状态检查的时间\n\n22:02:39\n搜索源诊断\n\n统一查看 App、File、Everything 等索引源的健康状态\n\n源健康总览\n\n共 5 个源，0 个就绪，1 个降级，2 个不可用，5 个需处理\n\n上次 22:02:39\n刷新\nBrowser Bookmarks 官方运行时\n\n已关闭 · 0 项 · 0 个监听根 · 1 条证据 · browser-bookmarks-official-provider-consent-required\n\n详情\nApplications\n\n合同问题：open-capability-missing-handler\n\n详情\nFile Index\n\n合同问题：open-capability-missing-handler\n\n详情\nEverything\n\n合同问题：open-capability-missing-handler\n\n详情\nQuicklinks\n\n原因：quicklinks-empty\n\n详情\nBrowser Bookmarks\n\n合同问题：open-capability-missing-handler\n\n详情\n后台索引策略\n\n控制后台索引在空闲与电量条件下的执行\n\n空闲阈值\n\n系统空闲超过该时长才允许后台索引执行\n\n分钟\n最低电量\n\n低于该电量时暂停后台索引（充电时可忽略）\n\n%\n电量禁区\n\n低于该电量时强制暂停后台索引\n\n%\n充电时允许\n\n连接电源时允许忽略最低电量限制\n\n强制执行间隔\n\n超过该时长未执行时允许跳过空闲判断\n\n小时\n空闲策略诊断\n\n当前空闲 26.9 分钟，低于阈值 1.0 小时，后台任务会继续等待。\n\n已拦截\n空闲\n26.9 分钟\n·\n电量\n-\n状态未知\n上次 22:02:40\n刷新\n应用索引调度\n\n控制启动补漏与周期性全量同步\n\n启动补漏\n\n应用启动后后台补漏应用列表\n\n补漏重试次数\n\n补漏失败后的最大重试次数\n\n次\n补漏重试基础间隔\n\n第一次重试的等待时间\n\n秒\n补漏重试最大间隔\n\n指数退避的最大等待时间\n\n分钟\n周期性全量同步\n\n周期性执行全量比对与同步\n\n全量同步间隔\n\n两次全量同步之间的最小间隔\n\n小时\n全量检查频率\n\n检查是否需要全量同步的频率\n\n分钟\n本地启动区 / 应用索引管理\n\n打开弹窗管理扫描到和手动加入的应用条目，避免设置页被长列表占满。\n\n打开管理\n应用搜索诊断\n\n输入应用路径、appIdentity、bundleId、显示名或搜索词，检查单个应用的索引内容与查询命中阶段\n\n打开\n下载设置\n\n配置下载行为和存储选项\n\n最大并发下载数\n\n同时进行的下载任务数量（1-10）\n\n自动调整并发数\n\n根据网络状况自动调整并发下载数\n\n网络感知\n\n根据网络质量调整下载行为\n\n基于优先级调度\n\n优先处理高优先级任务\n\n切片大小\n\n大文件下载时每个切片的大小\n\n启用断点续传\n\n支持从中断位置继续下载\n\n自动重试\n\n自动重试失败的下载\n\n最大重试次数\n\n失败切片的最大重试次数\n\n历史记录保留\n\n下载历史记录的保留时长\n\n自动清理\n\n下载完成后自动清理临时文件\n\n网络超时\n\n等待网络响应的最长时间\n\n重试延迟\n\n重试失败请求前的等待时间\n\n网络最大重试次数\n\n网络级别的最大重试次数\n\n临时目录\n\n临时下载文件的存储位置\n\n/tmp/tuff-assistant-image-translate-20260624140234/tuff/modules/download-center/temp\n选择目录\n恢复默认目录\n操作\n\n管理下载设置和临时文件\n\n清理临时文件\n恢复默认设置\n网络与代理\n\n配置 CoreApp 统一网络代理、重试与冷却策略\n\n代理模式\n\n控制统一 Network SDK 使用系统代理、直连或自定义代理\n\nHTTP 代理\n\n用于 HTTP 请求的代理地址\n\nHTTPS 代理\n\n用于 HTTPS 请求的代理地址\n\nSOCKS 代理\n\n可选 SOCKS4 / SOCKS5 代理地址\n\nPAC 地址\n\n可选代理自动配置脚本地址\n\n绕过规则\n\n每行或逗号分隔一个绕过代理的主机规则\n\n代理认证\n\n认证凭据只通过安全存储引用读取，本页不保存明文账号密码\n\n未配置\n网络策略\n\n配置统一网络请求的超时、重试和失败冷却\n\n请求超时\n\n单次网络请求等待响应的最长时间\n\nms\n最大重试次数\n\n网络请求失败后的最大自动重试次数\n\n基础重试延迟\n\n首次重试前等待的时间\n\nms\n最大重试延迟\n\n退避重试允许等待的最长时间\n\nms\n网络错误重试\n\n连接错误、DNS 错误等网络失败后自动重试\n\n超时重试\n\n请求超时后按重试策略再尝试\n\n冷却阈值\n\n连续失败达到该次数后进入短暂冷却\n\n冷却",
+    "hasSettingsShell": true,
+    "assistantEnabledVisible": true,
+    "floatingBallVisible": true,
+    "voiceWakeDisabledVisible": true
+  },
+  "floatingBallDom": {
+    "text": "阿",
+    "hasFloatingBall": true,
+    "hasVoicePanel": false,
+    "windowBounds": {
+      "left": 220,
+      "top": 220,
+      "width": 56,
+      "height": 56
+    }
+  },
+  "voicePanelBeforeTranslate": {
+    "text": "阿洛 aler\n\n文本输入模式\n\n关闭\n翻译剪贴板图片\n截图并翻译\n开始监听\n发送到 CoreBox",
+    "hasVoicePanel": true,
+    "hasClipboardImageTranslateButton": true,
+    "hasScreenshotTranslateButton": true,
+    "statusText": "",
+    "errorText": "",
+    "isTranslatingClipboardImage": false,
+    "hasTranslateReadyText": false,
+    "hasEmptyClipboardHint": false,
+    "hasProviderFallbackHint": false,
+    "windowBounds": {
+      "left": 288,
+      "top": 196,
+      "width": 420,
+      "height": 260
+    }
+  },
+  "voicePanelTranslateStart": {
+    "text": "阿洛 aler\n\n文本输入模式\n\n关闭\n\n剪贴板图片翻译已打开\n\n翻译剪贴板图片\n截图并翻译\n开始监听\n发送到 CoreBox",
+    "hasVoicePanel": true,
+    "hasClipboardImageTranslateButton": true,
+    "hasScreenshotTranslateButton": true,
+    "statusText": "剪贴板图片翻译已打开",
+    "errorText": "",
+    "isTranslatingClipboardImage": false,
+    "hasTranslateReadyText": true,
+    "hasEmptyClipboardHint": false,
+    "hasProviderFallbackHint": false,
+    "windowBounds": {
+      "left": 288,
+      "top": 196,
+      "width": 420,
+      "height": 260
+    }
+  },
+  "pinWindowDom": {
+    "href": "data:text/html;charset=utf-8,%3C!doctype%20html%3E%0A%3Chtml%3E%0A%3Chead%3E%0A%20%20%3Cmeta%20charset%3D%22utf-8%22%20%2F%3E%0A%20%20%3Cmeta%20http-equiv%3D%22Content-Security-Policy%22%20content%3D%22default-src%20'none'%3B%20img-src%20data%3A%3B%20style-src%20'unsafe-inline'%3B%22%20%2F%3E%0A%20%20%3Ctitle%3EImage%20Translation%3C%2Ftitle%3E%0A%20%20%3Cstyle%3E%0A%20%20%20%20%3Aroot%20%7B%0A%20%20%20%20%20%20color-scheme%3A%20dark%3B%0A%20%20%20%20%20%20font-family%3A%20-apple-system%2C%20BlinkMacSystemFont%2C%20%22Segoe%20UI%22%2C%20sans-serif%3B%0A%20%20%20%20%20%20background%3A%20%23111318%3B%0A%20%20%20%20%20%20color%3A%20%23f4f6fb%3B%0A%20%20%20%20%7D%0A%20%20%20%20body%20%7B%0A%20%20%20%20%20%20margin%3A%200%3B%0A%20%20%20%20%20%20min-height%3A%20100vh%3B%0A%20%20%20%20%20%20display%3A%20grid%3B%0A%20%20%20%20%20%20grid-template-rows%3A%20auto%20minmax(0%2C%201fr)%20auto%3B%0A%20%20%20%20%20%20overflow%3A%20hidden%3B%0A%20%20%20%20%20%20background%3A%20%23111318%3B%0A%20%20%20%20%7D%0A%20%20%20%20header%20%7B%0A%20%20%20%20%20%20-webkit-app-region%3A%20drag%3B%0A%20%20%20%20%20%20display%3A%20flex%3B%0A%20%20%20%20%20%20align-items%3A%20center%3B%0A%20%20%20%20%20%20justify-content%3A%20space-between%3B%0A%20%20%20%20%20%20height%3A%2042px%3B%0A%20%20%20%20%20%20padding%3A%200%2014px%3B%0A%20%20%20%20%20%20border-bottom%3A%201px%20solid%20rgba(255%2C%20255%2C%20255%2C%20.08)%3B%0A%20%20%20%20%20%20background%3A%20rgba(24%2C%2027%2C%2034%2C%20.92)%3B%0A%20%20%20%20%20%20font-size%3A%2013px%3B%0A%20%20%20%20%20%20font-weight%3A%20600%3B%0A%20%20%20%20%7D%0A%20%20%20%20main%20%7B%0A%20%20%20%20%20%20min-height%3A%200%3B%0A%20%20%20%20%20%20display%3A%20grid%3B%0A%20%20%20%20%20%20place-items%3A%20center%3B%0A%20%20%20%20%20%20padding%3A%2016px%3B%0A%20%20%20%20%7D%0A%20%20%20%20.stage%20%7B%0A%20%20%20%20%20%20position%3A%20relative%3B%0A%20%20%20%20%20%20display%3A%20grid%3B%0A%20%20%20%20%20%20place-items%3A%20center%3B%0A%20%20%20%20%20%20max-width%3A%20100%25%3B%0A%20%20%20%20%20%20max-height%3A%20calc(100vh%20-%20126px)%3B%0A%20%20%20%20%7D%0A%20%20%20%20img%20%7B%0A%20%20%20%20%20%20display%3A%20block%3B%0A%20%20%20%20%20%20max-width%3A%20100%25%3B%0A%20%20%20%20%20%20max-height%3A%20calc(100vh%20-%20126px)%3B%0A%20%20%20%20%20%20object-fit%3A%20contain%3B%0A%20%20%20%20%20%20border-radius%3A%206px%3B%0A%20%20%20%20%20%20background%3A%20rgba(255%2C%20255%2C%20255%2C%20.04)%3B%0A%20%20%20%20%20%20box-shadow%3A%200%2016px%2048px%20rgba(0%2C%200%2C%200%2C%20.32)%3B%0A%20%20%20%20%7D%0A%20%20%20%20.overlay%20%7B%0A%20%20%20%20%20%20position%3A%20absolute%3B%0A%20%20%20%20%20%20left%3A%200%3B%0A%20%20%20%20%20%20right%3A%200%3B%0A%20%20%20%20%20%20bottom%3A%200%3B%0A%20%20%20%20%20%20max-height%3A%2045%25%3B%0A%20%20%20%20%20%20overflow%3A%20auto%3B%0A%20%20%20%20%20%20padding%3A%2014px%2018px%2016px%3B%0A%20%20%20%20%20%20border-radius%3A%200%200%206px%206px%3B%0A%20%20%20%20%20%20color%3A%20%23fff%3B%0A%20%20%20%20%20%20background%3A%20rgba(17%2C%2024%2C%2039%2C%20.82)%3B%0A%20%20%20%20%20%20font-size%3A%20clamp(16px%2C%202.6vw%2C%2028px)%3B%0A%20%20%20%20%20%20font-weight%3A%20650%3B%0A%20%20%20%20%20%20line-height%3A%201.35%3B%0A%20%20%20%20%20%20text-shadow%3A%200%201px%202px%20rgba(0%2C%200%2C%200%2C%20.5)%3B%0A%20%20%20%20%20%20box-sizing%3A%20border-box%3B%0A%20%20%20%20%7D%0A%20%20%20%20footer%20%7B%0A%20%20%20%20%20%20min-height%3A%2048px%3B%0A%20%20%20%20%20%20max-height%3A%20112px%3B%0A%20%20%20%20%20%20overflow%3A%20auto%3B%0A%20%20%20%20%20%20padding%3A%2010px%2014px%2012px%3B%0A%20%20%20%20%20%20border-top%3A%201px%20solid%20rgba(255%2C%20255%2C%20255%2C%20.08)%3B%0A%20%20%20%20%20%20color%3A%20rgba(244%2C%20246%2C%20251%2C%20.78)%3B%0A%20%20%20%20%20%20font-size%3A%2012px%3B%0A%20%20%20%20%20%20line-height%3A%201.45%3B%0A%20%20%20%20%20%20background%3A%20rgba(17%2C%2019%2C%2024%2C%20.94)%3B%0A%20%20%20%20%7D%0A%20%20%20%20.row%20%2B%20.row%20%7B%0A%20%20%20%20%20%20margin-top%3A%204px%3B%0A%20%20%20%20%7D%0A%20%20%20%20.label%20%7B%0A%20%20%20%20%20%20color%3A%20rgba(244%2C%20246%2C%20251%2C%20.52)%3B%0A%20%20%20%20%20%20margin-right%3A%208px%3B%0A%20%20%20%20%7D%0A%20%20%3C%2Fstyle%3E%0A%3C%2Fhead%3E%0A%3Cbody%3E%0A%20%20%3Cheader%3E%0A%20%20%20%20%3Cspan%3EImage%20Translation%3C%2Fspan%3E%0A%20%20%20%20%3Cspan%3EAlways%20on%20Top%3C%2Fspan%3E%0A%20%20%3C%2Fheader%3E%0A%20%20%3Cmain%3E%0A%20%20%20%20%3Cdiv%20class%3D%22stage%22%3E%0A%20%20%20%20%20%20%3Cimg%20src%3D%22data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoAAAANSUhEUgAAAQAAAADECAYAAAA8K5jFAAAABmJLR0QA%2FwD%2FAP%2BgvaeTAAAFl0lEQVR4nO3dwW3bMBRAUQfqUFl6S64jl8WaIXckFoHzqrdKxA44hl4liWHAQmvj%2Fr6vdwJgd7vdHgC4SYAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgQQIIAAAgT%2BQQpMBuCLj%2BP84WfAFmlh4b%2FG%2Bf3%2BR69tdpF6w35%2BOt%2Byl0F%2Be6dLUerchmDTilBXtL7d7dcdNiFILPgpIAKwB0AAAiYAAAEEEAAAgYIAAABAoQQAAACBJAgAAAECCBAAAEIECBAAAAIECBAAAIECEEnBqfTzeei%2Ft1cUkn9%2FrfN8WFvl5zA5PWFYeC9nfP59PnYeVW18m177qj%2F6u7zI8VYX%2B7THQBCBgggQAA4IYAAAggQQAA4MIAAASZxHtsdpKJEUoJMWDbiz%2BUvbq4IC20Lmo9zfp9%2F64q%2F7gHQRX5mdJsSAQIEBAAUIIAAAgYIAAABAoQQAAACBJAgAAAECCBAAAEIECBAAAAIECBAAAIECHxwi%2B99BpVY8hICmu9zfr9%2FGiUcczNxxYgxSAEhggAB4JwAAQQIIECACQIEEEKATtbrYb8vRUn1AxhU%2FZ7z%2B%2F3a1zz4e%2Bwk7n0TWQIECAggIAABBAwgIABBAgggAABJAgQQIByBgwQQMAAAgQQMIAAAQQIIIAAASQIEECAchYMEEBAAAIEEDCAAAEECCCAAIEk0ej%2B4XvAezKZTMBXP9tj%2FYuINwZ5bL89rBzY1zP4dneQOvSt49oG4O0QIEAAgUK4BBCgk9AABRAgQAA4MIAAASZxrrFwOBygDuz3%2B%2BuStJvNpvde2azVa05T17%2Fbb8scwzDGmV2W96xFfhuIN%2FsGAAlABBBAAAEHCBAgABwYQIAAEgQIIEABAwQIIEAAOEqAACKBCSBA5a4PN7st8z09%2BYb46OLiMFtvCdTg9dp7OZv4vafTLfg7IWRaCJkCJIAAAgQIIIAAAQQgYIAAAhAwQIAAAgSQIEAAAcBcKyAAAQQIIIAAAgQQIIAAgd%2FHj%2Fwdd68AQIDCGhf4wJe%2F6sj5vpevc40i9snPLfvEU9vPRH5VmFg3A12EoIAAAgQQMMAEBBAAAEIECBBAgAACECCAAAEEIECAAAIEECAAAAQIECBAAAEECEI4EWp6bKGMbv6%2BNyvd5OXz%2BfzB0xvmo70%2B%2BNhBKUaNoTThaeW1wpCw3Z34Op%2FPO22fsPXJkHcAQAECCBAgAAECBBAAAECCBAAAEECiJxUUEfaYm2RnRLorjMccxMMbww1hLUzcsbPC16l%2BnvV853D7eXPrC20UOxMAUIEECBACAIQQCCAAAEkCBBACAECCBBAYOH1ZlqWH2dg93D9XpWnD8JOOa0YzkXny2QyeYduUMQbrgEAAgQQIEAAAQIIEECAAALggAADBCCAAAEkCBBACAECCBBAYAFVUxBBZoxtckny%2BXzY555%2Ba%2Fs5zuw9rVy5yQNcPIeXH0y%2BtJ%2FEL7%2FrdxgAHDABAAAECBBAgAADBCCAAAEkCBBACAECCBBAYMELAQQIIIAAAgQQIEAAggggQAAJBghAAIEBAQQIIEAAAT46QIBohADJuH4P0e%2BwJPOHq8O8pkDRfVe8PNoHf0etlf3sMvC%2Ft4%2B4dkieFLH98vt9J8AZIEAAAQIIECAAAAAEECAAAIIAEI33XgIEEECASuH5fKJJUBh97PM7fLmwRY5fW648S7ZLbdN1CP4O%2BwrCb9DbFk69S%2F9tt9sN6BxAgwAABAgQQIIAAAQQIIIAAAgQQgEAAAgQQIIAAxQ0QQEAAAgQQMIAAAQQIIIAAAeBfBO5oCxpGw4m5AAAAAElFTkSuQmCC%22%20alt%3D%22Translated%20image%22%20%2F%3E%0A%20%20%20%20%20%20%3Cdiv%20class%3D%22overlay%22%3E%E5%8F%AF%E8%A7%81%E8%AF%81%E6%8D%AE%E5%89%AA%E8%B4%B4%E6%9D%BF%E5%9B%BE%E7%89%87%EF%BC%9A%E4%BD%A0%E5%A5%BD%E4%B8%96%E7%95%8C%3C%2Fdiv%3E%0A%20%20%20%20%3C%2Fdiv%3E%0A%20%20%3C%2Fmain%3E%0A%20%20%3Cfooter%3E%0A%20%20%20%20%3Cdiv%20class%3D%22row%22%3E%3Cspan%20class%3D%22label%22%3ESource%3C%2Fspan%3EVisible%20evidence%20clipboard%20image%3A%20hello%20world%3C%2Fdiv%3E%0A%20%20%20%20%3Cdiv%20class%3D%22row%22%3E%3Cspan%20class%3D%22label%22%3ETarget%3C%2Fspan%3E%E5%8F%AF%E8%A7%81%E8%AF%81%E6%8D%AE%E5%89%AA%E8%B4%B4%E6%9D%BF%E5%9B%BE%E7%89%87%EF%BC%9A%E4%BD%A0%E5%A5%BD%E4%B8%96%E7%95%8C%3C%2Fdiv%3E%0A%20%20%3C%2Ffooter%3E%0A%3C%2Fbody%3E%0A%3C%2Fhtml%3E",
+    "title": "Image Translation",
+    "text": "Image Translation\nAlways on Top\n可见证据剪贴板图片：你好世界\nSourceVisible evidence clipboard image: hello world\nTarget可见证据剪贴板图片：你好世界",
+    "hasImageTranslationTitle": true,
+    "hasTranslatedImage": true,
+    "hasSourceText": true,
+    "hasTargetText": true,
+    "hasAlwaysOnTopLabel": true,
+    "windowBounds": {
+      "left": 668,
+      "top": 405,
+      "width": 720,
+      "height": 520
+    }
+  },
+  "voicePanelEmptyClipboard": {
+    "text": "阿洛 aler\n\n文本输入模式\n\n关闭\n\n未获取到可翻译的剪贴板图片，请先截图或复制图片\n\n翻译剪贴板图片\n截图并翻译\n开始监听\n发送到 CoreBox",
+    "hasVoicePanel": true,
+    "hasClipboardImageTranslateButton": true,
+    "hasScreenshotTranslateButton": true,
+    "statusText": "",
+    "errorText": "未获取到可翻译的剪贴板图片，请先截图或复制图片",
+    "isTranslatingClipboardImage": false,
+    "hasTranslateReadyText": false,
+    "hasEmptyClipboardHint": true,
+    "hasProviderFallbackHint": false,
+    "windowBounds": {
+      "left": 288,
+      "top": 196,
+      "width": 420,
+      "height": 260
+    }
+  },
+  "voicePanelProviderFallback": {
+    "text": "阿洛 aler\n\n文本输入模式\n\n关闭\n\n图片翻译服务暂不可用，请检查登录、额度或 provider 状态\n\n翻译剪贴板图片\n截图并翻译\n开始监听\n发送到 CoreBox",
+    "hasVoicePanel": true,
+    "hasClipboardImageTranslateButton": true,
+    "hasScreenshotTranslateButton": true,
+    "statusText": "",
+    "errorText": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
+    "isTranslatingClipboardImage": false,
+    "hasTranslateReadyText": false,
+    "hasEmptyClipboardHint": false,
+    "hasProviderFallbackHint": true,
+    "windowBounds": {
+      "left": 288,
+      "top": 196,
+      "width": 420,
+      "height": 260
+    }
+  }
+}
