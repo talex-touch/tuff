@@ -7,6 +7,7 @@
 
 - `Roadmap-vNext-2026-06-18.md` - R0-R9 当前路线图。
 - `Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
+- `R8-R9-Next-Stage-Execution-Plan-2026-06-24.md` - R8 i18n/Catalog 2.6.0 与 R9 AI 2.5.x 后续能力分批计划。
 - `Project-Roadmap-Audit-2026-06-18.md` - Roadmap / release / pricing / docs hygiene 审计记录。
 - `Pricing-SoT-2026-06-18.md` - Pricing 当前单一事实源。
 
