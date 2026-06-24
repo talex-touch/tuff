@@ -488,6 +488,23 @@ describe('invokeIntelligenceCapability', () => {
     })
     expect(requestEvents.filter(item => item.channel === 'text.chat')).toHaveLength(1)
     expect(requestEvents.filter(item => item.channel === 'text.translate')).toHaveLength(0)
+    const blockedEvents = await listPlatformGovernanceEvents(event, {
+      scope: 'intelligence',
+      action: 'provider.quota_blocked',
+      resourceType: 'provider',
+      resourceId: registryProviderId,
+      limit: 10,
+    })
+    expect(blockedEvents.filter(item => item.channel === 'text.chat')).toHaveLength(1)
+    expect(blockedEvents[0]?.metadata).toMatchObject({
+      evidenceSource: 'live',
+      providerId: registryProviderId,
+      channel: 'text.chat',
+      source: 'core-app',
+      stage: 'capability:text.chat',
+      reason: 'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED',
+      requestBlocked: true,
+    })
   })
 
   it('credits 不足时返回明确的 402 错误', async () => {
