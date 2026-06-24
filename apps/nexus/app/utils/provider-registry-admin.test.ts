@@ -278,6 +278,22 @@ describe('provider registry quota UI contract', () => {
   })
 })
 
+describe('provider registry observability UI contract', () => {
+  it('renders provider, scene, usage, and health next-action hints in the admin panel', () => {
+    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+
+    expect(panel).toContain('getProviderObservabilityActionHint(provider.id)')
+    expect(panel).toContain('getSceneObservabilityActionHint(scene.id)')
+    expect(panel).toContain('getUsageLedgerActionHint(entry)')
+    expect(panel).toContain('getHealthCheckActionHint(entry)')
+    expect(panel).toContain('dashboard.providerRegistry.observability.latestSceneRun')
+    expect(panel).toContain('getProviderObservability(provider.id).latestHealth?.latencyMs')
+    expect(panel).toContain('getSceneObservability(scene.id).latestUsage?.providerId')
+    expect(panel).toContain('getUsageLedgerReference(entry)')
+    expect(panel).toContain('getHealthCheckReason(entry)')
+  })
+})
+
 describe('provider registry capability template UI contract', () => {
   it('uses a compact table for adapter-scoped capability rows without exposing schema refs', () => {
     const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
