@@ -1,43 +1,47 @@
+import type { AppSetting } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { NativeScreenshotCaptureResult } from '@talex-touch/utils/transport/events/types'
+import type { CoreBoxImageTranslateResponse } from '../../../shared/events/corebox-scenes'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 
 type AssistantHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, AssistantHandler>(),
-  getMainConfig: vi.fn(() => ({
-    assistant: {
-      enabled: true,
-      name: '阿洛 aler',
-      identifier: 'aler'
-    },
-    floatingBall: {
-      enabled: true,
-      size: 56,
-      opacity: 1,
-      edgePadding: 24,
-      position: {
-        x: -1,
-        y: -1
-      }
-    },
-    voiceWake: {
-      enabled: false,
-      wakeWords: ['阿洛', 'aler'],
-      language: 'zh-CN',
-      continuous: true,
-      cooldownMs: 2200,
-      openPanelOnWake: true
-    },
-    setup: {
-      microphone: false
-    }
-  })),
-  saveMainConfig: vi.fn(),
-  subscribeMainConfig: vi.fn(() => vi.fn()),
-  capture: vi.fn(async () => ({
+  createEnabledSetting: (overrides: Partial<AppSetting> = {}): AppSetting =>
+    ({
+      assistant: {
+        enabled: true,
+        name: '阿洛 aler',
+        identifier: 'aler'
+      },
+      floatingBall: {
+        enabled: true,
+        size: 56,
+        opacity: 1,
+        edgePadding: 24,
+        position: {
+          x: -1,
+          y: -1
+        }
+      },
+      voiceWake: {
+        enabled: false,
+        wakeWords: ['阿洛', 'aler'],
+        language: 'zh-CN',
+        continuous: true,
+        cooldownMs: 2200,
+        openPanelOnWake: true
+      },
+      setup: {
+        microphone: false
+      },
+      ...overrides
+    }) as AppSetting,
+  createCaptureResult: (
+    overrides: Partial<NativeScreenshotCaptureResult> = {}
+  ): NativeScreenshotCaptureResult => ({
     dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdC1pbWFnZQ==',
     mimeType: 'image/png',
     width: 12,
@@ -49,14 +53,20 @@ const mocks = vi.hoisted(() => ({
     scaleFactor: 2,
     durationMs: 7,
     sizeBytes: 16,
-    wroteClipboard: false
-  })),
-  translateImageBase64: vi.fn(async () => ({
+    wroteClipboard: false,
+    ...overrides
+  }),
+  createTranslateSuccess: (): CoreBoxImageTranslateResponse => ({
     success: true,
     translatedImageBase64: 'dHJhbnNsYXRlZA==',
     sourceText: 'hello',
     targetText: '你好'
-  })),
+  }),
+  getMainConfig: vi.fn<() => AppSetting>(),
+  saveMainConfig: vi.fn(),
+  subscribeMainConfig: vi.fn(() => vi.fn()),
+  capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
+  translateImageBase64: vi.fn<() => Promise<CoreBoxImageTranslateResponse>>(),
   translateClipboardImage: vi.fn(),
   logger: {
     info: vi.fn(),
@@ -183,7 +193,7 @@ vi.mock('../native-capabilities/screenshot-service', () => ({
 
 async function createInitializedModule(): Promise<{
   handler: AssistantHandler
-  module: import('./module').AssistantModule
+  module: InstanceType<typeof import('./module').AssistantModule>
 }> {
   const { AssistantModule } = await import('./module')
   const module = new AssistantModule()
@@ -191,7 +201,7 @@ async function createInitializedModule(): Promise<{
     app: { channel: {} },
     runtime: { channel: {} },
     file: { dirPath: '/tmp/assistant' }
-  } as unknown as Parameters<AssistantModule['onInit']>[0])
+  } as unknown as Parameters<typeof module.onInit>[0])
 
   const handler = mocks.handlers.get(AssistantEvents.voice.translateScreenshot.toEventName())
   if (!handler) {
@@ -201,58 +211,13 @@ async function createInitializedModule(): Promise<{
 }
 
 describe('AssistantModule screenshot translation', () => {
-  afterEach(() => {
+  beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
     mocks.handlers.clear()
-    mocks.getMainConfig.mockImplementation(() => ({
-      assistant: {
-        enabled: true,
-        name: '阿洛 aler',
-        identifier: 'aler'
-      },
-      floatingBall: {
-        enabled: true,
-        size: 56,
-        opacity: 1,
-        edgePadding: 24,
-        position: {
-          x: -1,
-          y: -1
-        }
-      },
-      voiceWake: {
-        enabled: false,
-        wakeWords: ['阿洛', 'aler'],
-        language: 'zh-CN',
-        continuous: true,
-        cooldownMs: 2200,
-        openPanelOnWake: true
-      },
-      setup: {
-        microphone: false
-      }
-    }))
-    mocks.capture.mockResolvedValue({
-      dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdC1pbWFnZQ==',
-      mimeType: 'image/png',
-      width: 12,
-      height: 8,
-      displayId: 'display-1',
-      displayName: 'Display',
-      x: 0,
-      y: 0,
-      scaleFactor: 2,
-      durationMs: 7,
-      sizeBytes: 16,
-      wroteClipboard: false
-    })
-    mocks.translateImageBase64.mockResolvedValue({
-      success: true,
-      translatedImageBase64: 'dHJhbnNsYXRlZA==',
-      sourceText: 'hello',
-      targetText: '你好'
-    })
+    mocks.getMainConfig.mockImplementation(() => mocks.createEnabledSetting())
+    mocks.capture.mockResolvedValue(mocks.createCaptureResult())
+    mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
   })
 
   it('captures the cursor display and translates the screenshot image into a pin window', async () => {
@@ -279,12 +244,20 @@ describe('AssistantModule screenshot translation', () => {
   })
 
   it('fails closed when the assistant floating ball is disabled', async () => {
-    mocks.getMainConfig.mockReturnValue({
-      assistant: { enabled: true },
-      floatingBall: { enabled: false },
-      voiceWake: { enabled: false },
-      setup: { microphone: false }
-    })
+    mocks.getMainConfig.mockReturnValue(
+      mocks.createEnabledSetting({
+        floatingBall: {
+          enabled: false,
+          size: 56,
+          opacity: 1,
+          edgePadding: 24,
+          position: {
+            x: -1,
+            y: -1
+          }
+        }
+      })
+    )
     const { handler, module } = await createInitializedModule()
 
     const result = await handler({ targetLang: 'zh' }, {} as HandlerContext)
@@ -316,19 +289,7 @@ describe('AssistantModule screenshot translation', () => {
   })
 
   it('maps missing screenshot image payload to SCREENSHOT_UNAVAILABLE', async () => {
-    mocks.capture.mockResolvedValue({
-      mimeType: 'image/png',
-      width: 12,
-      height: 8,
-      displayId: 'display-1',
-      displayName: 'Display',
-      x: 0,
-      y: 0,
-      scaleFactor: 2,
-      durationMs: 7,
-      sizeBytes: 16,
-      wroteClipboard: false
-    })
+    mocks.capture.mockResolvedValue(mocks.createCaptureResult({ dataUrl: undefined }))
     const { handler, module } = await createInitializedModule()
 
     const result = await handler(undefined, {} as HandlerContext)
