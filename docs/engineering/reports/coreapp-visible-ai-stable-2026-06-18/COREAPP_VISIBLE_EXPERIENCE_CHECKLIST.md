@@ -140,7 +140,7 @@
   - 2026-06-22 R2D packaged recapture used the rebuilt `2.4.12-beta.10` signed app bundle, `TUFF_STARTUP_BENCHMARK_ONCE=1`, and isolated profile `/tmp/tuff-corebox-r2-profile-20260622-r2d`; the ordinary `core-box` target is reachable and idle evidence remains valid.
   - 2026-06-22 R2D confirms the packaged resize chain no longer sticks at `720x56` for visible search states: searching/warm-up is visible at `720x243`, and no-result retry plus File Index settings are covered by a `1440x390` screenshot (`720x195` CSS viewport).
   - 2026-06-22 R2I reused the initialized packaged profile and captured a real `screenshot` result query: the ordinary `core-box` window resized from `720x56` to `720x242`, returned 2 rows, and showed source/status/reason pills without overlap, including the system row source badge `系统`, status `系统 · System Actions`, and reason `· System Actions`.
-  - `corebox-search-states` is now `passed`; the global visible gate still remains open because app-index/login/OmniPanel/Assistant/Workflow/Provider broader surfaces are still pending.
+  - `corebox-search-states` is now `passed`; after the 2026-06-24 app-index, login recovery, and OmniPanel evidence updates, the global visible gate still remains open because Assistant/Workflow/Provider broader surfaces are still pending.
 
 ### App Index manager workbench
 
@@ -148,16 +148,16 @@
 - Group: search
 - Required: yes
 - Requires screenshot/recording: yes
-- Status: pending
+- Status: passed
 - Collection steps:
   - Open the App Index manager from Settings.
   - Capture summary counts and source filters.
   - Apply at least one source filter and one diagnostic filter, then capture the filtered state.
 - Required evidence:
-  - [ ] Summary counts are visible
-  - [ ] Source filters cover UWP/Store, Steam, shortcuts, protocol, AppRef, and path entries
-  - [ ] Diagnostic filters distinguish attention, found, unchecked, and disabled entries
-  - [ ] Empty states distinguish no entries from filtered-out entries
+  - [x] Summary counts are visible
+  - [x] Source filters cover UWP/Store, Steam, shortcuts, protocol, AppRef, and path entries
+  - [x] Diagnostic filters distinguish attention, found, unchecked, and disabled entries
+  - [x] Empty states distinguish no entries from filtered-out entries
 - Recommended artifacts:
   - evidence/coreapp-visible/app-index-summary.png
   - evidence/coreapp-visible/app-index-filtered-empty.png
@@ -165,8 +165,13 @@
   - The manager has no diagnostic/source filter evidence.
   - Filtered empty state cannot be distinguished from an unconfigured app index.
 - Artifact paths:
-  - _none_
-- Notes:
+  - app-index-workbench-probe-2026-06-24.json
+  - app-index-workbench-summary-2026-06-24.png
+  - app-index-workbench-summary-2026-06-24-dom.json
+  - app-index-workbench-filtered-empty-2026-06-24.png
+  - app-index-workbench-filtered-empty-2026-06-24-dom.json
+  - app-index-workbench-diagnostic-2026-06-24.json
+- Notes: 2026-06-24 packaged CoreApp 2.4.13-beta.1 capture used `apps/core-app/dist/mac-arm64/tuff.app`, isolated userData `/tmp/tuff-app-index-workbench-20260624060402`, and real Settings -> File Index -> App Index Manager UI via CDP. The probe seeded managed entries through the typed appIndex transport where platform validation allowed it, used isolated SQLite fallback only for UWP and custom protocol samples rejected by macOS validation, and captured source filters, diagnostic filters, summary counts, found/unchecked/disabled/attention states, and a Steam + disabled filtered-empty state. App scanner `spawn EBADF` was observed and recorded in probe JSON but did not block manager UI evidence or the diagnostic JSON gate.
 
 ### Browser login recovery
 

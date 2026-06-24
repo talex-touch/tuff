@@ -5,6 +5,12 @@
 
 ## 2026-06-24
 
+### coreapp: close app-index workbench visible evidence
+
+- `app-index-workbench` visible surface 标记为 `passed`，绑定 `app-index-workbench-summary-2026-06-24.*`、`app-index-workbench-filtered-empty-2026-06-24.*`、probe JSON 与 diagnostic JSON。
+- 新增 packaged App Index workbench probe，使用 isolated userData、真实 Settings -> File Index -> App Index Manager UI、typed appIndex transport 与 isolated SQLite fallback 覆盖 UWP/Store、Steam、shortcut、protocol、AppRef、path source filters。
+- 诊断证据覆盖 found / unchecked / disabled / attention 状态，`app-index:diagnostic:verify` 通过；strict visible gate 仍因 Assistant / Workflow / Provider broader surfaces pending 失败，但不再列出 `app-index-workbench`。
+
 ### coreapp: close browser login recovery visible evidence
 
 - `browser-login-recovery` visible surface 标记为 `passed`，绑定 `login-browser-open-failure.png/json` 与 `login-timeout-or-network-failure.png/json`。

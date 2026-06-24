@@ -22,7 +22,7 @@
 
 ## 当前单一口径
 
-- 当前代码版本为 root / CoreApp `2.4.12-beta.8`。
+- 当前代码版本为 root / CoreApp `2.4.13-beta.1`。
 - 当前主线按 Roadmap vNext 推进 R0-R9，优先 R1 Release Integrity、R2 AI Stable、R3 Indexing Runtime。
 - 公共包发布不再作为独立 Roadmap / blocker / evidence 项；版本变更后以 GitHub 自动发版 workflow 结果为准。
 - owner 已完成的平台人工验证不再作为 Roadmap 待办、平台后续或 release blocker。
@@ -31,7 +31,7 @@
 ## 当前验收边界
 
 - R1 Release Integrity：Nexus 资产 `sha256`、`signatureUrl`、signature endpoint 与真实自动发版 workflow evidence 仍未闭环。
-- R2 AI Stable：CoreBox AI Ask packaged surface 已 passed；global visible gate 仍需 broader visible surfaces。
+- R2 AI Stable：CoreBox AI Ask、CoreBox search states、App Index workbench、browser login recovery 与 OmniPanel writing tools packaged surfaces 已 passed；global visible gate 仍需 Assistant / Workflow / Provider broader visible surfaces。
 - R3 Indexing Runtime：仍需 FileProvider SQLite/FTS runtime-store migration、source-scoped `scan_progress`、durable scheduler evidence。
 - R7 Nexus Governance：production / preview 完成只接受 live/D1/R2 等可复现 evidence；memory/local-only 只能标 partial。
 - Platform Capability：平台 smoke 是非阻塞回归矩阵；要求 degraded/unsupported reason 与 fail-closed。

@@ -82,10 +82,23 @@
     },
     {
       "id": "app-index-workbench",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": ""
+      "status": "passed",
+      "artifactPaths": [
+        "app-index-workbench-probe-2026-06-24.json",
+        "app-index-workbench-summary-2026-06-24.png",
+        "app-index-workbench-summary-2026-06-24-dom.json",
+        "app-index-workbench-filtered-empty-2026-06-24.png",
+        "app-index-workbench-filtered-empty-2026-06-24-dom.json",
+        "app-index-workbench-diagnostic-2026-06-24.json"
+      ],
+      "checkedEvidence": [
+        "Summary counts are visible",
+        "Source filters cover UWP/Store, Steam, shortcuts, protocol, AppRef, and path entries",
+        "Diagnostic filters distinguish attention, found, unchecked, and disabled entries",
+        "Empty states distinguish no entries from filtered-out entries"
+      ],
+      "notes": "2026-06-24 packaged CoreApp 2.4.13-beta.1 capture used apps/core-app/dist/mac-arm64/tuff.app, isolated userData /tmp/tuff-app-index-workbench-20260624060402, and Settings -> File Index -> App Index Manager via CDP. The probe seeds managed entries through the typed appIndex transport where platform validation allows it, then uses isolated SQLite fallback only for UWP and custom protocol samples that macOS validation rejects, so the packaged UI reads real local DB state. Evidence covers 6 visible source samples (UWP/Store, Steam, shortcut, protocol, AppRef, path), diagnostic states (found/已命中, unchecked/未诊断, disabled/已禁用, attention/需要处理), and a Steam + disabled filtered-empty state distinct from an unconfigured app index. app scanner logged spawn EBADF during capture and is recorded in probe failures, but the probe ok remains true because the manager UI evidence and diagnostic JSON gate passed.",
+      "checkedAt": "2026-06-24T06:04:02.498Z"
     },
     {
       "id": "browser-login-recovery",
