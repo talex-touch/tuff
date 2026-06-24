@@ -212,14 +212,27 @@ export function useClipboard(
     return content.length >= MIN_TEXT_ATTACHMENT_LENGTH || isUrlLikeClipboardText(data)
   }
 
-  function shouldFillRepeatedTextAttachment(data: IClipboardItem): boolean {
+  function shouldFillRepeatedTextAttachment(
+    data: IClipboardItem,
+    options?: { includeVisibleAttachment?: boolean }
+  ): boolean {
     if (!searchVal || !shouldTrackTextAttachment(data)) return false
     const identity = resolveTextClipboardAttachmentIdentity(data)
-    return Boolean(identity && identity === clipboardOptions.lastTextAttachmentIdentity)
+    if (!identity) return false
+    if (identity === clipboardOptions.lastTextAttachmentIdentity) return true
+    if (!options?.includeVisibleAttachment) return false
+
+    const activeIdentity = resolveTextClipboardAttachmentIdentity(clipboardOptions.last)
+    return Boolean(activeIdentity && activeIdentity === identity)
   }
 
   function fillRepeatedTextAttachment(data: IClipboardItem, source: 'manual' | 'auto'): boolean {
-    if (!searchVal || !shouldFillRepeatedTextAttachment(data)) return false
+    if (
+      !searchVal ||
+      !shouldFillRepeatedTextAttachment(data, { includeVisibleAttachment: source === 'manual' })
+    ) {
+      return false
+    }
     searchVal.value = data.content || ''
     clipboardOptions.last = data
     clipboardOptions.pendingAutoFillItem = { ...data }
@@ -326,7 +339,10 @@ export function useClipboard(
       !alreadyPasted ||
       clipboardOptions.lastTextAttachmentSource === 'manual'
 
-    if (canFillRepeatedAttachment && shouldFillRepeatedTextAttachment(clipboard)) {
+    if (
+      canFillRepeatedAttachment &&
+      shouldFillRepeatedTextAttachment(clipboard, { includeVisibleAttachment: overrideDismissed })
+    ) {
       autoPasteActive.value = fillRepeatedTextAttachment(
         clipboard,
         overrideDismissed ? 'manual' : 'auto'

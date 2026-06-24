@@ -264,6 +264,30 @@ describe('useClipboard auto-paste freshness', () => {
     hook.cleanup()
   })
 
+  it('fills input when manual paste repeats a long text already visible as a clipboard suffix', async () => {
+    const content = 'visible suffix long text '.repeat(6)
+    const item = createClipboardItem({
+      id: 30,
+      content,
+      autoPasteEligible: true
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions(item)
+    state.latest = item
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe(content)
+    expect(clipboardOptions.last).toBeNull()
+    expect(clipboardOptions.pendingAutoFillItem?.id).toBe(30)
+    expect(clipboardOptions.lastTextAttachmentSource).toBe('manual')
+    hook.cleanup()
+  })
+
   it('fills input when auto-paste repeats a long text first pasted manually', async () => {
     const content = 'manual then auto long text '.repeat(6)
     const first = createClipboardItem({
