@@ -24,6 +24,7 @@ import path from 'node:path'
 import * as util from 'node:util'
 import { createClient } from '@libsql/client'
 import { sleep } from '@talex-touch/utils'
+import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-touch/utils/i18n'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { generatePermissionIssue, parseManifestPermissions } from '@talex-touch/utils/permission'
@@ -57,6 +58,7 @@ import { performStoreHttpRequest } from '../../service/store-http.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import { debounce } from '../../utils/common-util'
 import { createLogger } from '../../utils/logger'
+import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
@@ -107,6 +109,21 @@ const PERMISSION_MISSING_ISSUE_CODE = 'PERMISSION_MISSING'
 const ISSUE_FULL_RESYNC_INTERVAL_MS = 45 * 60 * 1000
 type PluginLifecycleChannel = {
   broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
+}
+
+function resolveInstallPermissionReasons(
+  reasons: Record<string, unknown> | undefined
+): Record<string, string> {
+  const locale = normalizeLocale(getLocale()) ?? 'en-US'
+  const resolved: Record<string, string> = {}
+  for (const [permissionId, reason] of Object.entries(reasons ?? {})) {
+    resolved[permissionId] = isLocalizedText(reason)
+      ? resolveLocalizedText(reason, locale)
+      : typeof reason === 'string'
+        ? reason
+        : ''
+  }
+  return resolved
 }
 
 const toErrorMessage = (error: unknown): string =>
@@ -943,7 +960,7 @@ function createPluginModuleInternal(
         permissions: {
           required: missing.required,
           optional: missing.optional,
-          reasons: declared.reasons
+          reasons: resolveInstallPermissionReasons(declared.reasons)
         }
       }
     },

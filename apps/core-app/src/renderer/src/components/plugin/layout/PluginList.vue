@@ -12,6 +12,10 @@ const target = ref<ITouchPlugin | null>(null)
 const searchQuery = ref('')
 const { t } = useI18n()
 
+function getPluginDisplayName(plugin: ITouchPlugin): string {
+  return plugin.displayName || plugin.name
+}
+
 const runningPlugins = computed(() =>
   props.plugins.filter((plugin) => plugin.status === 3 || plugin.status === 4)
 )
@@ -25,6 +29,7 @@ const filteredRunningPlugins = computed(() => {
   return runningPlugins.value.filter(
     (plugin) =>
       plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      getPluginDisplayName(plugin).toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 })
@@ -37,6 +42,7 @@ const filteredAllPlugins = computed(() => {
   return props.plugins.filter(
     (plugin) =>
       plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      getPluginDisplayName(plugin).toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 })

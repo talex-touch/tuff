@@ -7,9 +7,11 @@
 
 import enMessages from './locales/en.json'
 import zhMessages from './locales/zh.json'
+import type { ShortLocale } from './locale'
+import { toShortLocale, normalizeLocale } from './locale'
 import { I18N_PREFIX, isI18nMessage, parseI18nMessage } from './message-keys'
 
-type MessageLocale = 'en' | 'zh'
+type MessageLocale = ShortLocale
 type Messages = typeof enMessages
 
 const locales: Record<MessageLocale, Messages> = {
@@ -60,8 +62,11 @@ export class I18nResolver {
   /**
    * Set current locale
    */
-  setLocale(locale: MessageLocale): void {
-    this.locale = locale
+  setLocale(locale: MessageLocale | string): void {
+    const normalized = normalizeLocale(locale)
+    if (normalized) {
+      this.locale = toShortLocale(normalized)
+    }
   }
 
   /**

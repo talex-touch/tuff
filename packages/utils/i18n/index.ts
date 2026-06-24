@@ -31,6 +31,30 @@ export { default as enMessages } from './locales/en.json'
 
 export { default as zhMessages } from './locales/zh.json'
 
+export {
+  APP_LOCALES,
+  type AppLocale,
+  DEFAULT_APP_LOCALE,
+  getFallbackChain,
+  isAppLocale,
+  isShortLocale,
+  normalizeLocale,
+  SHORT_LOCALES,
+  type ShortLocale,
+  toAppLocale,
+  toShortLocale,
+} from './locale'
+export {
+  isLocalizedList,
+  isLocalizedText,
+  type LocalizedList,
+  type LocalizedListValue,
+  type LocalizedText,
+  type LocalizedTextValue,
+  resolveLocalizedList,
+  resolveLocalizedText,
+} from './localized'
+
 // Message keys and utilities for backend
 export {
   type CoreBoxOmniPanelKey,
