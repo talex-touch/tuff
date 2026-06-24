@@ -1,7 +1,8 @@
 <script lang="ts" setup name="VoicePanel">
 import type {
   AssistantClipboardImageTranslateErrorCode,
-  AssistantRuntimeConfig
+  AssistantRuntimeConfig,
+  AssistantScreenshotTranslateErrorCode
 } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -30,9 +31,16 @@ const CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS: Record<
   AssistantClipboardImageTranslateErrorCode,
   string
 > = {
-  ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotTranslateAssistantDisabled',
+  ASSISTANT_DISABLED: 'assistant.voicePanel.imageTranslateAssistantDisabled',
+  IMAGE_UNAVAILABLE: 'assistant.voicePanel.clipboardImageTranslateImageUnavailable',
+  SCENE_UNAVAILABLE: 'assistant.voicePanel.imageTranslateProviderUnavailable'
+}
+
+const SCREENSHOT_TRANSLATE_ERROR_KEYS: Record<AssistantScreenshotTranslateErrorCode, string> = {
+  ASSISTANT_DISABLED: 'assistant.voicePanel.imageTranslateAssistantDisabled',
   IMAGE_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateImageUnavailable',
-  SCENE_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateProviderUnavailable'
+  SCENE_UNAVAILABLE: 'assistant.voicePanel.imageTranslateProviderUnavailable',
+  SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateUnavailable'
 }
 
 const transport = useTuffTransport()
@@ -50,6 +58,7 @@ const runtimeConfig = ref<AssistantRuntimeConfig>({
 const listening = ref(false)
 const submitting = ref(false)
 const translatingClipboardImage = ref(false)
+const translatingScreenshot = ref(false)
 const inputText = ref('')
 const interimText = ref('')
 const errorMessage = ref('')
@@ -198,6 +207,16 @@ function formatClipboardImageTranslateError(
   if (code) {
     return t(CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS[code])
   }
+  return fallback || t('assistant.voicePanel.clipboardImageTranslateFailed')
+}
+
+function formatScreenshotTranslateError(
+  code?: AssistantScreenshotTranslateErrorCode,
+  fallback?: string
+): string {
+  if (code) {
+    return t(SCREENSHOT_TRANSLATE_ERROR_KEYS[code])
+  }
   return fallback || t('assistant.voicePanel.screenshotTranslateFailed')
 }
 
@@ -245,13 +264,13 @@ async function submitText(): Promise<void> {
 }
 
 async function translateClipboardImage(): Promise<void> {
-  if (translatingClipboardImage.value) return
+  if (translatingClipboardImage.value || translatingScreenshot.value) return
 
   keepListening = false
   stopRecognition()
   translatingClipboardImage.value = true
   errorMessage.value = ''
-  statusMessage.value = t('assistant.voicePanel.screenshotTranslating')
+  statusMessage.value = t('assistant.voicePanel.clipboardImageTranslating')
 
   try {
     const response = await transport.send(AssistantEvents.voice.translateClipboardImage, {
@@ -262,12 +281,39 @@ async function translateClipboardImage(): Promise<void> {
       errorMessage.value = formatClipboardImageTranslateError(response?.code, response?.error)
       return
     }
-    statusMessage.value = t('assistant.voicePanel.screenshotTranslateReady')
+    statusMessage.value = t('assistant.voicePanel.clipboardImageTranslateReady')
   } catch (error) {
     statusMessage.value = ''
     errorMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
     translatingClipboardImage.value = false
+  }
+}
+
+async function translateScreenshot(): Promise<void> {
+  if (translatingScreenshot.value || translatingClipboardImage.value) return
+
+  keepListening = false
+  stopRecognition()
+  translatingScreenshot.value = true
+  errorMessage.value = ''
+  statusMessage.value = t('assistant.voicePanel.screenshotTranslating')
+
+  try {
+    const response = await transport.send(AssistantEvents.voice.translateScreenshot, {
+      targetLang: 'zh'
+    })
+    if (!response?.success) {
+      statusMessage.value = ''
+      errorMessage.value = formatScreenshotTranslateError(response?.code, response?.error)
+      return
+    }
+    statusMessage.value = t('assistant.voicePanel.screenshotTranslateReady')
+  } catch (error) {
+    statusMessage.value = ''
+    errorMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    translatingScreenshot.value = false
   }
 }
 
@@ -323,12 +369,24 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="translatingClipboardImage"
+          :disabled="translatingClipboardImage || translatingScreenshot"
           @click="translateClipboardImage"
         >
           {{
             translatingClipboardImage
-              ? t('assistant.voicePanel.screenshotTranslatingShort')
+              ? t('assistant.voicePanel.imageTranslatingShort')
+              : t('assistant.voicePanel.translateClipboardImage')
+          }}
+        </button>
+        <button
+          class="secondary-btn"
+          type="button"
+          :disabled="translatingScreenshot || translatingClipboardImage"
+          @click="translateScreenshot"
+        >
+          {{
+            translatingScreenshot
+              ? t('assistant.voicePanel.imageTranslatingShort')
               : t('assistant.voicePanel.translateScreenshot')
           }}
         </button>
