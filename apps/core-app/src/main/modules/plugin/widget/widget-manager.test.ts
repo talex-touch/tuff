@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   broadcastToWindow: vi.fn(),
   compileWidgetSource: vi.fn(),
+  invalidateWidget: vi.fn(),
   loadWidget: vi.fn(),
   watch: vi.fn(() => {
     const watcher = {
@@ -58,6 +59,7 @@ vi.mock('./widget-compiler', () => ({
 
 vi.mock('./widget-loader', () => ({
   pluginWidgetLoader: {
+    invalidateWidget: mocks.invalidateWidget,
     loadWidget: mocks.loadWidget
   },
   resolveWidgetRuntimeFromFeature: vi.fn((feature: IPluginFeature) => {
@@ -193,6 +195,30 @@ describe('WidgetManager failure cache', () => {
         widgetId: 'test-plugin::test.widget'
       })
     ])
+  })
+
+  it('invalidates remote source and failure cache before refreshing after network recovery', async () => {
+    const manager = new WidgetManager()
+    const plugin = createPlugin()
+    const feature = createFeature()
+
+    mocks.loadWidget.mockResolvedValue(createSource())
+    mocks.compileWidgetSource.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({
+      code: 'module.exports = {}',
+      dependencies: ['vue'],
+      runtime: 'vue',
+      styles: '.ok{}'
+    })
+
+    await manager.registerWidget(plugin, feature)
+    await manager.refreshRemoteWidget(plugin, feature)
+
+    expect(mocks.invalidateWidget).toHaveBeenCalledWith('test-plugin::test.widget')
+    expect(mocks.compileWidgetSource).toHaveBeenCalledTimes(2)
+    expect(mocks.broadcastToWindow.mock.calls.at(-1)?.[2]).toMatchObject({
+      hash: 'same-source-hash',
+      widgetId: 'test-plugin::test.widget'
+    })
   })
 })
 

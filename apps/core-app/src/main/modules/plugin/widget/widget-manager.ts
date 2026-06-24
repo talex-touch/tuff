@@ -858,6 +858,25 @@ export class WidgetManager {
     return payload
   }
 
+  async refreshRemoteWidget(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature
+  ): Promise<WidgetRegistrationPayload | null> {
+    if (!plugin.dev?.enable || !plugin.dev?.source || feature.interaction?.type !== 'widget') {
+      return null
+    }
+
+    const widgetId = makeWidgetId(plugin.name, feature.id)
+    pluginWidgetLoader.invalidateWidget(widgetId)
+    Array.from(this.compileFailures.entries()).forEach(([key, failure]) => {
+      if (failure.payload.widgetId === widgetId) {
+        this.compileFailures.delete(key)
+      }
+    })
+
+    return await this.registerWidget(plugin, feature, { emitAsUpdate: true })
+  }
+
   async unregisterWidget(widgetId: string): Promise<void> {
     const targets = this.getWidgetWindowIds()
     targets.forEach((windowId) => {
