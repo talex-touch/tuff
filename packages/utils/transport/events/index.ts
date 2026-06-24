@@ -205,7 +205,9 @@ import type {
   NetworkConfigGetResponse,
   NetworkConfigUpdateRequest,
   NetworkCooldownClearRequest,
+  NetworkLifecycleOfflinePayload,
   NetworkLifecycleOnlinePayload,
+  NetworkLifecycleStatusPayload,
   NetworkReadBinaryRequest,
   NetworkReadTextRequest,
   NetworkRequest,
@@ -2066,8 +2068,14 @@ export const NetworkEvents = {
     ),
   },
   lifecycle: {
+    status: defineRawEvent<NetworkLifecycleStatusPayload, void>(
+      "network:lifecycle:status",
+    ),
     online: defineRawEvent<NetworkLifecycleOnlinePayload | void, void>(
       "network:lifecycle:online",
+    ),
+    offline: defineRawEvent<NetworkLifecycleOfflinePayload | void, void>(
+      "network:lifecycle:offline",
     ),
   },
 } as const;

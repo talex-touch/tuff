@@ -51,6 +51,8 @@
     "visible:experience:verify": "corepack pnpm exec tsx \"scripts/coreapp-visible-experience-verify.ts\"",
     "visible:experience:readiness": "corepack pnpm exec tsx \"scripts/coreapp-visible-experience-readiness.ts\"",
     "visible:experience:ai-ask-probe": "corepack pnpm exec tsx \"scripts/coreapp-packaged-ai-ask-probe.ts\"",
+    "visible:experience:app-index-workbench-probe": "corepack pnpm exec tsx \"scripts/coreapp-visible-app-index-workbench-probe.ts\"",
+    "visible:experience:login-recovery-probe": "corepack pnpm exec tsx \"scripts/coreapp-packaged-login-recovery-probe.ts\"",
     "smoke:assistant": "pnpm exec tsx \"scripts/assistant-floating-ball-smoke.ts\"",
     "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\"",
     "clipboard:stress:verify": "pnpm exec tsx \"scripts/clipboard-stress-verify.ts\"",

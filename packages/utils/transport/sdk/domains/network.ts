@@ -2,7 +2,9 @@ import type {
   NetworkConfigGetResponse,
   NetworkConfigUpdateRequest,
   NetworkCooldownClearRequest,
+  NetworkLifecycleOfflinePayload,
   NetworkLifecycleOnlinePayload,
+  NetworkLifecycleStatusPayload,
   NetworkReadBinaryRequest,
   NetworkReadTextRequest,
   NetworkRequest,
@@ -22,6 +24,10 @@ export interface NetworkSdk {
   updateConfig: (request: NetworkConfigUpdateRequest) => Promise<NetworkConfigGetResponse>
   clearCooldown: (request?: NetworkCooldownClearRequest) => Promise<void>
   notifyOnline: (payload?: NetworkLifecycleOnlinePayload) => Promise<void>
+  notifyOffline: (payload?: NetworkLifecycleOfflinePayload) => Promise<void>
+  onStatus: (handler: (payload: NetworkLifecycleStatusPayload) => void) => () => void
+  onOnline: (handler: (payload: NetworkLifecycleOnlinePayload | void) => void) => () => void
+  onOffline: (handler: (payload: NetworkLifecycleOfflinePayload | void) => void) => () => void
 }
 
 export function createNetworkSdk(transport: ITuffTransport): NetworkSdk {
@@ -46,6 +52,14 @@ export function createNetworkSdk(transport: ITuffTransport): NetworkSdk {
     clearCooldown: (request?: NetworkCooldownClearRequest) =>
       transport.send(NetworkEvents.api.clearCooldown, request),
     notifyOnline: (payload?: NetworkLifecycleOnlinePayload) =>
-      transport.send(NetworkEvents.lifecycle.online, payload)
+      transport.send(NetworkEvents.lifecycle.online, payload),
+    notifyOffline: (payload?: NetworkLifecycleOfflinePayload) =>
+      transport.send(NetworkEvents.lifecycle.offline, payload),
+    onStatus: (handler: (payload: NetworkLifecycleStatusPayload) => void) =>
+      transport.on(NetworkEvents.lifecycle.status, handler),
+    onOnline: (handler: (payload: NetworkLifecycleOnlinePayload | void) => void) =>
+      transport.on(NetworkEvents.lifecycle.online, handler),
+    onOffline: (handler: (payload: NetworkLifecycleOfflinePayload | void) => void) =>
+      transport.on(NetworkEvents.lifecycle.offline, handler)
   }
 }

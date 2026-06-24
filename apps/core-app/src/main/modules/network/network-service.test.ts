@@ -112,4 +112,50 @@ describe('NetworkService cooldown policy', () => {
     await expect(service.request(baseOptions)).resolves.toMatchObject({ ok: true })
     expect(electronMocks.fetch).toHaveBeenCalledTimes(3)
   })
+
+  it('clears cooldown and notifies listeners when status recovers online', async () => {
+    const service = new NetworkService()
+    const listener = vi.fn()
+    service.onStatusChange(listener)
+    electronMocks.fetch
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+
+    const options = {
+      method: 'GET' as const,
+      url: 'https://example.test/models',
+      cooldownPolicy: {
+        key: 'provider:models',
+        failureThreshold: 1,
+        cooldownMs: 30_000
+      },
+      retryPolicy: {
+        maxRetries: 0
+      }
+    }
+
+    await expect(service.request(options)).rejects.toThrow('offline')
+    await expect(service.request(options)).rejects.toBeInstanceOf(NetworkCooldownError)
+
+    const status = service.setOnlineStatus(true, 'online')
+
+    expect(status).toMatchObject({ online: true, reason: 'online' })
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ online: true }))
+    await expect(service.request(options)).resolves.toMatchObject({ ok: true })
+    expect(electronMocks.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not notify listeners when repeated probes keep the same status', () => {
+    const service = new NetworkService()
+    const listener = vi.fn()
+    service.onStatusChange(listener)
+
+    service.setOnlineStatus(false, 'offline')
+    service.setOnlineStatus(false, 'probe')
+    service.setOnlineStatus(true, 'online')
+    service.setOnlineStatus(true, 'probe')
+
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener.mock.calls.map(([payload]) => payload.online)).toEqual([false, true])
+  })
 })

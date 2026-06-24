@@ -7,6 +7,10 @@ import type {
   NetworkResponse,
   NetworkRetryPolicy
 } from '@talex-touch/utils/network'
+import type {
+  NetworkLifecycleReason,
+  NetworkLifecycleStatusPayload
+} from '@talex-touch/utils/transport/events/types'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ProxyConfig, Session } from 'electron'
 import { createHash } from 'node:crypto'
@@ -357,6 +361,8 @@ export class NetworkService {
   private readonly sessionCache = new Map<string, Session>()
   private readonly sessionProxyCache = new Map<string, string>()
   private readonly allowedRoots = getAllowedLocalFileRoots({ includeCwd: true })
+  private readonly statusListeners = new Set<(payload: NetworkLifecycleStatusPayload) => void>()
+  private lastStatus: NetworkLifecycleStatusPayload | null = null
 
   private getConfigFromSettings(): NetworkConfigSnapshot {
     const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
@@ -600,6 +606,54 @@ export class NetworkService {
 
   clearCooldown(key?: string): void {
     this.guard.clear(key)
+  }
+
+  getStatus(): NetworkLifecycleStatusPayload | null {
+    return this.lastStatus ? { ...this.lastStatus } : null
+  }
+
+  setOnlineStatus(
+    online: boolean,
+    reason: NetworkLifecycleReason = 'probe'
+  ): NetworkLifecycleStatusPayload {
+    const previous = this.lastStatus
+    const payload: NetworkLifecycleStatusPayload = {
+      online,
+      reason,
+      changedAt: Date.now()
+    }
+
+    if (previous?.online === online) {
+      this.lastStatus = {
+        ...payload,
+        changedAt: previous.changedAt
+      }
+      return { ...this.lastStatus }
+    }
+
+    this.lastStatus = payload
+    if (online) {
+      this.clearCooldown()
+    }
+    this.notifyStatusListeners(payload)
+    return { ...payload }
+  }
+
+  onStatusChange(listener: (payload: NetworkLifecycleStatusPayload) => void): () => void {
+    this.statusListeners.add(listener)
+    return () => {
+      this.statusListeners.delete(listener)
+    }
+  }
+
+  private notifyStatusListeners(payload: NetworkLifecycleStatusPayload): void {
+    for (const listener of this.statusListeners) {
+      try {
+        listener({ ...payload })
+      } catch (error) {
+        log.warn('Network status listener failed', { error })
+      }
+    }
   }
 
   private shouldRetry(error: unknown, attempt: number, retryPolicy: NetworkRetryPolicy): boolean {
