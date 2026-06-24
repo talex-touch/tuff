@@ -7,6 +7,10 @@ import {
 } from '@talex-touch/utils/search'
 import { inArray, sql } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
+import {
+  buildScanProgressPathInClause,
+  resolveScanProgressSchemaShape
+} from '../../../search-engine/scan-progress-schema'
 
 export interface FileProviderRuntimeResetRequest {
   request: IndexedSourceResetRequest
@@ -79,17 +83,31 @@ export class FileProviderRuntimeResetService {
       return { cleared: false, rows: 0 }
     }
 
-    const scanProgressCount = await db
-      .select({ cnt: sql<number>`count(*)` })
-      .from(scanProgress)
-      .where(inArray(scanProgress.path, paths))
+    const shape = await resolveScanProgressSchemaShape(db)
+    const scanProgressCount = shape.sourceScoped
+      ? await db.all<{ cnt: number }>(sql`
+          SELECT count(*) AS cnt
+          FROM scan_progress
+          WHERE source_id = ${this.sourceId}
+            AND path IN ${buildScanProgressPathInClause(paths)}
+        `)
+      : await db
+          .select({ cnt: sql<number>`count(*)` })
+          .from(scanProgress)
+          .where(inArray(scanProgress.path, paths))
     const clearDecision = resolveIndexedSourceProgressStoreClearDecision(scanProgressCount[0]?.cnt)
     if (!clearDecision.shouldClear) {
       return clearDecision.result
     }
 
     await this.withDbWrite(reason, () =>
-      db.delete(scanProgress).where(inArray(scanProgress.path, paths))
+      shape.sourceScoped
+        ? db.run(sql`
+            DELETE FROM scan_progress
+            WHERE source_id = ${this.sourceId}
+              AND path IN ${buildScanProgressPathInClause(paths)}
+          `)
+        : db.delete(scanProgress).where(inArray(scanProgress.path, paths))
     )
     return clearDecision.result
   }

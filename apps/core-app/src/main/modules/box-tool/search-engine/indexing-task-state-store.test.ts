@@ -422,6 +422,71 @@ describe('IndexingTaskStateStore', () => {
     })
   })
 
+  it('preserves whitelisted persisted sqlite task audit fields only', async () => {
+    const selectLimit = vi.fn(async () => [
+      {
+        stateJson: JSON.stringify({
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'failed',
+              completedAt: 20,
+              startedAt: 10,
+              durationMs: 10,
+              reason: 'manual-rebuild',
+              trigger: 'file-watch-root-recovered',
+              attempt: 2,
+              errorCode: 'runtime',
+              errorMessage: 'scanner failed',
+              error: 'scanner failed',
+              stack: 'do-not-persist',
+              summary: {
+                durationMs: 10,
+                trigger: 'file-watch-root-recovered',
+                nested: { bad: true },
+                errorCode: 'runtime'
+              }
+            }
+          ]
+        })
+      }
+    ])
+    const db = {
+      run: vi.fn(async () => {}),
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: selectLimit
+          }))
+        }))
+      })),
+      insert: vi.fn(),
+      delete: vi.fn()
+    }
+    const store = new SqliteIndexingTaskStateStore(db as never)
+
+    const state = await store.load('file-provider')
+
+    expect(state?.recentTasks?.[0]).toEqual({
+      kind: 'scan',
+      status: 'failed',
+      completedAt: 20,
+      startedAt: 10,
+      durationMs: 10,
+      reason: 'manual-rebuild',
+      trigger: 'file-watch-root-recovered',
+      attempt: 2,
+      errorCode: 'runtime',
+      errorMessage: 'scanner failed',
+      error: 'scanner failed',
+      summary: {
+        durationMs: 10,
+        trigger: 'file-watch-root-recovered',
+        errorCode: 'runtime'
+      }
+    })
+  })
+
   it('sanitizes persisted sqlite last task snapshots before exposing diagnostics state', async () => {
     const selectLimit = vi.fn(async () => [
       {

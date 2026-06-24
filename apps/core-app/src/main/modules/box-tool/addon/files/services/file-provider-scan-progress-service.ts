@@ -11,8 +11,12 @@ import {
   normalizeIndexedSourceProgressPaths,
   resolveIndexedScanEligibility
 } from '@talex-touch/utils/search'
-import { inArray } from 'drizzle-orm'
+import { inArray, sql } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
+import {
+  buildScanProgressPathInClause,
+  resolveScanProgressSchemaShape
+} from '../../../search-engine/scan-progress-schema'
 
 export interface FileProviderIndexStatsForEvidence {
   totalFiles: number
@@ -45,15 +49,21 @@ export interface FileProviderScanProgressEvidenceInput {
 }
 
 export interface FileProviderScanProgressServiceDeps {
+  sourceId?: string
   getDbUtils: () => DbUtils | null
   normalizePath?: (path: string) => string
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   getSearchIndexWorker: () => {
-    upsertScanProgress: (paths: string[], lastScanned: string) => Promise<number | void>
+    upsertScanProgress: (
+      paths: string[],
+      lastScanned: string,
+      sourceId?: string
+    ) => Promise<number | void>
   }
 }
 
 export class FileProviderScanProgressService {
+  private readonly sourceId: string
   private readonly getDbUtils: FileProviderScanProgressServiceDeps['getDbUtils']
   private readonly normalizePath: NonNullable<FileProviderScanProgressServiceDeps['normalizePath']>
   private readonly ensureSearchIndexWorkerReady: FileProviderScanProgressServiceDeps['ensureSearchIndexWorkerReady']
@@ -63,6 +73,7 @@ export class FileProviderScanProgressService {
   private lastUpsertSnapshot: FileProviderScanProgressUpsertSnapshot | null = null
 
   constructor(deps: FileProviderScanProgressServiceDeps) {
+    this.sourceId = deps.sourceId ?? 'file-provider'
     this.getDbUtils = deps.getDbUtils
     this.normalizePath = deps.normalizePath ?? ((path) => path)
     this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
@@ -72,7 +83,7 @@ export class FileProviderScanProgressService {
       deleteCompletedPaths: (paths) => this.deleteCompletedPaths(paths),
       ensureReadyForUpsert: (reason) => this.ensureSearchIndexWorkerReady(reason),
       upsertCompletedPaths: (paths, completedAt) =>
-        this.getSearchIndexWorker().upsertScanProgress(paths, completedAt)
+        this.getSearchIndexWorker().upsertScanProgress(paths, completedAt, this.sourceId)
     })
   }
 
@@ -120,6 +131,28 @@ export class FileProviderScanProgressService {
 
     const db = dbUtils.getDb()
     const scopedPaths = expandIndexedSourceProgressPaths(watchPaths ?? [], this.normalizePath)
+    const shape = await resolveScanProgressSchemaShape(db)
+    if (shape.sourceScoped) {
+      const completedScans =
+        scopedPaths.length > 0
+          ? await db.all<{ path: string }>(
+              sql`
+              SELECT path
+              FROM scan_progress
+              WHERE source_id = ${this.sourceId}
+                AND path IN ${buildScanProgressPathInClause(scopedPaths)}
+            `
+            )
+          : await db.all<{ path: string }>(
+              sql`
+              SELECT path
+              FROM scan_progress
+              WHERE source_id = ${this.sourceId}
+            `
+            )
+      return new Set(completedScans.map((row) => row.path))
+    }
+
     const query =
       scopedPaths.length > 0
         ? db
@@ -139,6 +172,34 @@ export class FileProviderScanProgressService {
 
     const db = dbUtils.getDb()
     const scopedPaths = expandIndexedSourceProgressPaths(watchPaths, this.normalizePath)
+    const shape = await resolveScanProgressSchemaShape(db)
+    const sourceScopedCompletedScans = shape.sourceScoped
+      ? scopedPaths.length > 0
+        ? await db.all<{ path: string; lastScanned: unknown }>(
+            sql`
+              SELECT path, last_scanned AS lastScanned
+              FROM scan_progress
+              WHERE source_id = ${this.sourceId}
+                AND path IN ${buildScanProgressPathInClause(scopedPaths)}
+            `
+          )
+        : await db.all<{ path: string; lastScanned: unknown }>(
+            sql`
+              SELECT path, last_scanned AS lastScanned
+              FROM scan_progress
+              WHERE source_id = ${this.sourceId}
+            `
+          )
+      : null
+    if (sourceScopedCompletedScans) {
+      return resolveIndexedScanEligibility({
+        watchPaths,
+        completedScans: sourceScopedCompletedScans,
+        intervalMs: Number.POSITIVE_INFINITY,
+        normalizePath: this.normalizePath
+      }).lastScannedAt
+    }
+
     const query =
       scopedPaths.length > 0
         ? db
@@ -247,6 +308,16 @@ export class FileProviderScanProgressService {
 
     const targetDb = db ?? this.getDbUtils()?.getDb()
     if (!targetDb) {
+      return
+    }
+
+    const shape = await resolveScanProgressSchemaShape(targetDb)
+    if (shape.sourceScoped) {
+      await targetDb.run(sql`
+        DELETE FROM scan_progress
+        WHERE source_id = ${this.sourceId}
+          AND path IN ${buildScanProgressPathInClause(paths)}
+      `)
       return
     }
 

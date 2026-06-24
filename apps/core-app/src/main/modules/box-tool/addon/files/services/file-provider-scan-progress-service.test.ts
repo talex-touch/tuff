@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { inArray } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 import {
@@ -15,7 +20,11 @@ const READY_STATS: FileProviderIndexStatsForEvidence = {
   embeddingRows: 2
 }
 
-function createDbUtils(rows: Array<{ path: string; lastScanned?: unknown }>) {
+function createDbUtils(
+  rows: Array<{ path: string; lastScanned?: unknown; sourceId?: string }>,
+  input: { sourceScoped?: boolean } = {}
+) {
+  const sourceScoped = input.sourceScoped ?? false
   const where = vi.fn(async (condition: unknown) => {
     const scopedPaths = extractInArrayValues(condition)
     if (scopedPaths.size === 0) {
@@ -30,15 +39,47 @@ function createDbUtils(rows: Array<{ path: string; lastScanned?: unknown }>) {
   }
   const from = vi.fn(() => query)
   const select = vi.fn(() => ({ from, where }))
+  const all = vi.fn(async (query: unknown) => {
+    const text = queryText(query)
+    if (text.includes('PRAGMA table_info(scan_progress)')) {
+      return sourceScoped
+        ? [{ name: 'source_id' }, { name: 'path' }, { name: 'last_scanned' }]
+        : [{ name: 'path' }, { name: 'last_scanned' }]
+    }
+
+    const scopedPaths = extractSqlParamStrings(query).filter((value) => value.startsWith('/'))
+    return rows.filter((row) => {
+      if (sourceScoped && row.sourceId !== 'file-provider') return false
+      return scopedPaths.length === 0 || scopedPaths.includes(row.path)
+    })
+  })
 
   return {
     dbUtils: {
-      getDb: vi.fn(() => ({ select }))
+      getDb: vi.fn(() => ({ all, select }))
     },
+    all,
     from,
     select,
     where
   }
+}
+
+function queryText(query: unknown): string {
+  return ((query as { queryChunks?: Array<{ value?: string[] }> }).queryChunks ?? [])
+    .flatMap((chunk) => chunk.value ?? [])
+    .join('')
+}
+
+function extractSqlParamStrings(query: unknown): string[] {
+  const chunks = (query as { queryChunks?: unknown[] } | null | undefined)?.queryChunks ?? []
+  return chunks.flatMap((chunk) =>
+    Array.isArray(chunk)
+      ? chunk
+          .map((item) => (item as { value?: unknown }).value)
+          .filter((value): value is string => typeof value === 'string')
+      : []
+  )
 }
 
 function extractInArrayValues(condition: unknown): Set<string> {
@@ -56,10 +97,16 @@ function extractInArrayValues(condition: unknown): Set<string> {
 function createDb() {
   const where = vi.fn(async () => undefined)
   const deleteFrom = vi.fn(() => ({ where }))
+  const run = vi.fn(async () => undefined)
+  const all = vi.fn(async () => [{ name: 'path' }, { name: 'last_scanned' }])
   return {
     db: {
+      all,
+      run,
       delete: deleteFrom
     },
+    all,
+    run,
     deleteFrom,
     where
   }
@@ -443,6 +490,81 @@ describe('file-provider-scan-progress-service', () => {
     )
   })
 
+  it('reads only source-scoped scan progress rows when source_id exists', async () => {
+    const scopedTimestamp = Date.parse('2026-05-30T00:00:00.000Z')
+    const ignoredTimestamp = Date.parse('2026-05-31T00:00:00.000Z')
+    const { dbUtils, all } = createDbUtils(
+      [
+        { sourceId: 'file-provider', path: '/a', lastScanned: scopedTimestamp },
+        { sourceId: 'other-provider', path: '/a', lastScanned: ignoredTimestamp }
+      ],
+      { sourceScoped: true }
+    )
+    const { service } = createService({ dbUtils })
+
+    const summary = await service.getSummary(['/a'])
+
+    expect(all).toHaveBeenCalledWith(expect.objectContaining({ queryChunks: expect.any(Array) }))
+    expect(summary).toEqual({
+      totalRoots: 1,
+      pendingRoots: 0,
+      completedRoots: 1,
+      lastScannedAt: scopedTimestamp
+    })
+  })
+
+  it('deletes source-scoped scan progress rows with source_id when available', async () => {
+    const { db, all, run, deleteFrom } = createDb()
+    all.mockResolvedValueOnce([{ name: 'source_id' }, { name: 'path' }, { name: 'last_scanned' }])
+    const { service } = createService()
+
+    await service.deletePaths(db as never, ['/a'])
+
+    expect(run).toHaveBeenCalled()
+    expect(deleteFrom).not.toHaveBeenCalled()
+  })
+
+  it('keeps source-scoped scan_progress rows isolated on a real sqlite table', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tuff-scan-progress-'))
+    try {
+      const dbPath = join(dir, 'scan-progress.sqlite')
+      const client = createClient({ url: `file:${dbPath}` })
+      const db = drizzle(client)
+      await client.execute(`
+        CREATE TABLE scan_progress (
+          source_id text NOT NULL,
+          path text NOT NULL,
+          last_scanned integer NOT NULL,
+          PRIMARY KEY(source_id, path)
+        )
+      `)
+      await client.execute({
+        sql: 'INSERT INTO scan_progress(source_id, path, last_scanned) VALUES (?, ?, ?), (?, ?, ?)',
+        args: ['file-provider', '/a', 1_780_099_200_000, 'other-provider', '/a', 1_780_185_600_000]
+      })
+      const dbUtils = { getDb: () => db }
+      const { service } = createService({ dbUtils })
+
+      await expect(service.getSummary(['/a'])).resolves.toEqual({
+        totalRoots: 1,
+        pendingRoots: 0,
+        completedRoots: 1,
+        lastScannedAt: 1_780_099_200_000
+      })
+
+      await service.deletePaths(db as never, ['/a'])
+      const rows = await client.execute(
+        'SELECT source_id AS sourceId, path, last_scanned AS lastScanned FROM scan_progress ORDER BY source_id'
+      )
+      expect(rows.rows).toEqual([
+        { sourceId: 'other-provider', path: '/a', lastScanned: 1_780_185_600_000 }
+      ])
+      client.close()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('skips empty raw and normalized scan progress paths during delete', async () => {
     const { db, where } = createDb()
     const { service } = createService({
@@ -468,7 +590,11 @@ describe('file-provider-scan-progress-service', () => {
     })
 
     expect(ensureSearchIndexWorkerReady).toHaveBeenCalledWith('scan-progress.upsert')
-    expect(upsertScanProgress).toHaveBeenCalledWith(['/a'], '2026-05-30T00:00:00.000Z')
+    expect(upsertScanProgress).toHaveBeenCalledWith(
+      ['/a'],
+      '2026-05-30T00:00:00.000Z',
+      'file-provider'
+    )
   })
 
   it('exposes the latest scan progress upsert summary in evidence metadata', async () => {
@@ -520,7 +646,8 @@ describe('file-provider-scan-progress-service', () => {
 
     expect(upsertScanProgress).toHaveBeenCalledWith(
       ['/users/me/documents'],
-      '2026-05-30T00:00:00.000Z'
+      '2026-05-30T00:00:00.000Z',
+      'file-provider'
     )
   })
 
@@ -541,7 +668,8 @@ describe('file-provider-scan-progress-service', () => {
 
     expect(upsertScanProgress).toHaveBeenCalledWith(
       ['/users/me/documents'],
-      '2026-05-30T00:00:00.000Z'
+      '2026-05-30T00:00:00.000Z',
+      'file-provider'
     )
   })
 
