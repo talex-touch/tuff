@@ -46,9 +46,76 @@ describe('clipboardManagerView', () => {
     sdkMocks.box.expand.mockResolvedValue(undefined)
   })
 
-  it('writes copyable detail insight text to the clipboard', async () => {
-    const imageItem: PluginClipboardItem = {
+  it('uses Enter to paste and Cmd/Ctrl+Enter to copy the selected item', async () => {
+    const textItem: PluginClipboardItem = {
       id: 1,
+      type: 'text',
+      content: 'hello keyboard',
+      rawContent: '<b>hello keyboard</b>',
+    }
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [textItem],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, {
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.history.applyToActiveApp).toHaveBeenCalledWith({ item: textItem })
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({
+      text: 'hello keyboard',
+      html: '<b>hello keyboard</b>',
+    })
+
+    wrapper.unmount()
+  })
+
+  it('keeps text split chips visible and copyable in the detail pane', async () => {
+    const textItem: PluginClipboardItem = {
+      id: 2,
+      type: 'text',
+      content: '你好 Tuff',
+    }
+
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [textItem],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, {
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.insight-title').text()).toContain('拆词')
+    expect(wrapper.findAll('.character-chip').map(node => node.text())).toEqual(
+      expect.arrayContaining(['你', '好', 'T', 'u', 'f']),
+    )
+
+    await wrapper.get('.character-chip').trigger('click')
+
+    expect(sdkMocks.clipboard.write).toHaveBeenCalledWith({ text: '你' })
+
+    wrapper.unmount()
+  })
+
+  it('writes copyable image insight text to the clipboard', async () => {
+    const imageItem: PluginClipboardItem = {
+      id: 3,
       type: 'image',
       content: 'data:image/png;base64,thumb',
       thumbnail: 'data:image/png;base64,thumb',

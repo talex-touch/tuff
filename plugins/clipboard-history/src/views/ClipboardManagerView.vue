@@ -183,19 +183,41 @@ function moveSelection(delta: 1 | -1): void {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) {
+  if (event.defaultPrevented || event.altKey || event.isComposing) {
     return
   }
   if (isEditableTarget(event.target)) {
     return
   }
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (event.metaKey || event.ctrlKey) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    moveSelection(event.key === 'ArrowDown' ? 1 : -1)
+    return
+  }
+
+  if (event.key !== 'Enter' || !selectedItem.value) {
     return
   }
 
   event.preventDefault()
   event.stopPropagation()
-  moveSelection(event.key === 'ArrowDown' ? 1 : -1)
+
+  if (event.metaKey || event.ctrlKey) {
+    if (!copyPending.value) {
+      void handleCopy()
+    }
+    return
+  }
+
+  if (!applyPending.value) {
+    void handleApply()
+  }
 }
 
 async function loadHistory(options: { reset?: boolean } = {}): Promise<void> {
