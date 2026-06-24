@@ -752,7 +752,7 @@ async function invokeModel(
     for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex++) {
       const providerAttempt = attemptIndex + 1
       try {
-        await assertIntelligenceProviderQuota(event, governanceProviderId)
+        await assertIntelligenceProviderQuota(event, governanceProviderId, governanceChannel)
         await recordIntelligenceProviderRequest(event, governanceProviderId, governanceChannel)
         const result = await invokeWithResolvedContext(context, payload.messages)
         if (settings.enableAudit) {
@@ -1319,7 +1319,7 @@ export async function invokeIntelligenceCapability(
   if (capabilityId === 'vision.ocr') {
     const provider = await resolveVisionOcrProvider(event, userId, providerId)
     const governanceProviderId = provider.id
-    await assertIntelligenceProviderQuota(event, governanceProviderId)
+    await assertIntelligenceProviderQuota(event, governanceProviderId, capabilityId)
     await recordIntelligenceProviderRequest(event, governanceProviderId, capabilityId)
     const startedAt = now()
     const ocr = await invokeIntelligenceVisionOcr(event, provider, normalizedRequest.payload)

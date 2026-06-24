@@ -358,8 +358,8 @@ function summarizeChecks(checks: PlatformGovernanceD1ReadinessCheck[]): Platform
   })
 }
 
-export async function getPlatformGovernanceD1Readiness(event: H3Event): Promise<PlatformGovernanceD1Readiness> {
-  const db = readCloudflareBindings(event)?.DB ?? null
+export async function getPlatformGovernanceD1Readiness(event: H3Event | undefined): Promise<PlatformGovernanceD1Readiness> {
+  const db = event ? readCloudflareBindings(event)?.DB ?? null : null
   const generatedAt = new Date().toISOString()
 
   if (!db) {

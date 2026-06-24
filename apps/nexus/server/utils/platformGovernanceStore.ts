@@ -6,6 +6,7 @@ import { useRuntimeConfig } from '#imports'
 import { readCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
 import { assertNotificationChannelConfig, resolveNotificationChannelProfile, resolveNotificationChannelReadiness } from './notificationChannelCatalog'
+import { getPlatformGovernanceD1Readiness } from './platformGovernanceD1Readiness'
 import { assertStorageChannelPolicyConfig } from './storageChannelCatalog'
 import { isPlainObject, normalizeNumber, normalizeString } from './telemetrySanitizer'
 import { scheduleTelemetryRetentionMaintenance } from './telemetryRetentionMaintenance'
@@ -57,6 +58,12 @@ export interface RecordPlatformGovernanceEventInput {
   quantity?: unknown
   metadata?: unknown
   occurredAt?: unknown
+}
+
+export interface RecordGovernanceOperatorCockpitViewInput {
+  actorId?: unknown
+  surface?: unknown
+  format?: unknown
 }
 
 export interface PlatformGovernanceConfig {
@@ -130,6 +137,14 @@ export interface StorageChannelAnalyticsOptions extends GovernanceAnalyticsOptio
 export type PlatformGovernanceReportStatus = 'ok' | 'watch' | 'critical'
 export type PlatformGovernanceReportPriority = 'critical' | 'high' | 'medium' | 'low'
 export type PlatformGovernanceReportEvidenceStatus = 'live' | 'd1' | 'r2' | 'local-only' | 'memory' | 'open'
+const GOVERNANCE_REPORT_EVIDENCE_STATUSES = new Set<PlatformGovernanceReportEvidenceStatus>([
+  'live',
+  'd1',
+  'r2',
+  'local-only',
+  'memory',
+  'open',
+])
 
 export interface PlatformGovernanceReportScorecard {
   key: string
@@ -186,6 +201,23 @@ export interface PlatformGovernanceReportSnapshot {
       peakRiskScore: number
     }
   }
+}
+
+interface PlatformGovernanceD1ReportEvidence {
+  status: PlatformGovernanceReportEvidenceStatus
+  evidenceCount: number
+  blocker: string | null
+}
+
+interface GovernanceOperatorCockpitEvidenceItem {
+  environment: string
+  surface: string | null
+  format: string | null
+  evidenceSource: PlatformGovernanceReportEvidenceStatus
+  views: number
+  uniqueActors: number
+  authenticatedActors: number
+  latestAt: string
 }
 
 function formatReportCell(value: unknown): string {
@@ -419,6 +451,7 @@ export interface IntelligenceProviderQuotaSmokeEvidenceItem {
   providerId: string
   channel: string | null
   mode: IntelligenceProviderQuotaSmokeMode
+  evidenceSource: PlatformGovernanceReportEvidenceStatus
   status: IntelligenceProviderQuotaSmokeStatus
   reason: string | null
   requestRecorded: boolean
@@ -625,11 +658,14 @@ interface StorageSmokeEvidenceItem {
   channel: string | null
   provider: string | null
   mode: StorageSmokeEvidenceMode
+  evidenceSource: PlatformGovernanceReportEvidenceStatus
   status: StorageSmokeEvidenceStatus
   reason: string | null
   operations: string[]
   bytesWritten: number
   bytesRead: number
+  storageChannel: string | null
+  storageProvider: string | null
   credentialRequired: boolean | null
   hasCredentialRef: boolean | null
   hasCredential: boolean | null
@@ -788,6 +824,9 @@ interface NotificationDeliveryEvidenceItem {
   provider: string | null
   providerType: string | null
   adapter: string | null
+  credentialRequired: boolean | null
+  hasCredentialRef: boolean | null
+  evidenceSource: PlatformGovernanceReportEvidenceStatus
   status: NotificationDeliveryStatus
   reason: string | null
   durationMs: number | null
@@ -1560,6 +1599,14 @@ function readEventMetadataNumber(event: PlatformGovernanceEvent, key: string): n
 function readEventMetadataBoolean(event: PlatformGovernanceEvent, key: string): boolean | null {
   const value = event.metadata?.[key]
   return typeof value === 'boolean' ? value : null
+}
+
+function readEventEvidenceSource(event: PlatformGovernanceEvent): PlatformGovernanceReportEvidenceStatus {
+  const source = readEventMetadataString(event, 'evidenceSource')
+    ?? readEventMetadataString(event, 'source')
+  return GOVERNANCE_REPORT_EVIDENCE_STATUSES.has(source as PlatformGovernanceReportEvidenceStatus)
+    ? source as PlatformGovernanceReportEvidenceStatus
+    : 'local-only'
 }
 
 function readEventMetadataNumberAny(event: PlatformGovernanceEvent, keys: string[]): number | null {
@@ -2985,6 +3032,9 @@ function createNotificationDeliveryEvidence(
       provider,
       providerType,
       adapter,
+      credentialRequired: readEventMetadataBoolean(event, 'credentialRequired'),
+      hasCredentialRef: readEventMetadataBoolean(event, 'hasCredentialRef'),
+      evidenceSource: readEventEvidenceSource(event),
       status,
       reason: readEventMetadataString(event, 'reason'),
       durationMs: readEventMetadataNumber(event, 'durationMs'),
@@ -3011,6 +3061,9 @@ function createNotificationDeliveryEvidence(
       item.provider = provider
       item.providerType = providerType
       item.adapter = adapter
+      item.credentialRequired = readEventMetadataBoolean(event, 'credentialRequired')
+      item.hasCredentialRef = readEventMetadataBoolean(event, 'hasCredentialRef')
+      item.evidenceSource = readEventEvidenceSource(event)
       item.status = status
       item.reason = readEventMetadataString(event, 'reason')
       item.durationMs = readEventMetadataNumber(event, 'durationMs')
@@ -5585,11 +5638,14 @@ function createStorageSmokeEvidence(events: PlatformGovernanceEvent[], limit: nu
       channel: event.channel,
       provider: readEventMetadataString(event, 'provider'),
       mode,
+      evidenceSource: readEventEvidenceSource(event),
       status,
       reason: readEventMetadataString(event, 'reason'),
       operations: readStringArrayMetadata(event, 'operations'),
       bytesWritten: 0,
       bytesRead: 0,
+      storageChannel: readEventMetadataString(event, 'storageChannel'),
+      storageProvider: readEventMetadataString(event, 'storageProvider'),
       credentialRequired: readEventMetadataBoolean(event, 'credentialRequired'),
       hasCredentialRef: readEventMetadataBoolean(event, 'hasCredentialRef'),
       hasCredential: readEventMetadataBoolean(event, 'hasCredential'),
@@ -5608,9 +5664,12 @@ function createStorageSmokeEvidence(events: PlatformGovernanceEvent[], limit: nu
     if (latestTime >= item.latestTime) {
       item.status = status
       item.reason = readEventMetadataString(event, 'reason')
+      item.evidenceSource = readEventEvidenceSource(event)
       item.operations = readStringArrayMetadata(event, 'operations')
       item.bytesWritten = readEventMetadataNumber(event, 'bytesWritten') ?? 0
       item.bytesRead = readEventMetadataNumber(event, 'bytesRead') ?? 0
+      item.storageChannel = readEventMetadataString(event, 'storageChannel')
+      item.storageProvider = readEventMetadataString(event, 'storageProvider')
       item.credentialRequired = readEventMetadataBoolean(event, 'credentialRequired')
       item.hasCredentialRef = readEventMetadataBoolean(event, 'hasCredentialRef')
       item.hasCredential = readEventMetadataBoolean(event, 'hasCredential')
@@ -6493,6 +6552,7 @@ function createProviderQuotaSmokeEvidence(
       providerId,
       channel,
       mode,
+      evidenceSource: readEventEvidenceSource(event),
       status,
       reason: readEventMetadataString(event, 'reason'),
       requestRecorded: readEventMetadataBoolean(event, 'requestRecorded') ?? false,
@@ -6512,6 +6572,7 @@ function createProviderQuotaSmokeEvidence(
     item[status] += 1
     if (latestTime >= item.latestTime) {
       item.status = status
+      item.evidenceSource = readEventEvidenceSource(event)
       item.reason = readEventMetadataString(event, 'reason')
       item.requestRecorded = readEventMetadataBoolean(event, 'requestRecorded') ?? false
       item.tokensRecorded = readEventMetadataNumber(event, 'tokensRecorded') ?? 0
@@ -7013,6 +7074,65 @@ function createOperationsDashboardSummary(input: {
   }
 }
 
+function createGovernanceOperatorCockpitEvidence(events: PlatformGovernanceEvent[], limit: number): GovernanceOperatorCockpitEvidenceItem[] {
+  const evidence = new Map<string, {
+    environment: string
+    surface: string | null
+    format: string | null
+    evidenceSource: PlatformGovernanceReportEvidenceStatus
+    views: number
+    actors: Set<string>
+    authenticatedActors: Set<string>
+    latestAt: string
+  }>()
+
+  for (const event of events) {
+    if (event.scope !== 'governance' || event.action !== 'governance.operator_cockpit.viewed')
+      continue
+
+    const environment = readEventMetadataString(event, 'environment') ?? event.resourceId ?? 'unknown'
+    const evidenceSource = readEventEvidenceSource(event)
+    const item = evidence.get(environment) ?? {
+      environment,
+      surface: event.channel,
+      format: readEventMetadataString(event, 'format'),
+      evidenceSource,
+      views: 0,
+      actors: new Set<string>(),
+      authenticatedActors: new Set<string>(),
+      latestAt: event.occurredAt,
+    }
+    if (evidenceSource === 'live')
+      item.evidenceSource = 'live'
+    item.views += Math.max(1, event.quantity)
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    if (event.actorHash)
+      item.authenticatedActors.add(event.actorHash)
+    if (event.occurredAt >= item.latestAt) {
+      item.latestAt = event.occurredAt
+      item.surface = event.channel
+      item.format = readEventMetadataString(event, 'format')
+    }
+    evidence.set(environment, item)
+  }
+
+  return Array.from(evidence.values())
+    .map(item => ({
+      environment: item.environment,
+      surface: item.surface,
+      format: item.format,
+      evidenceSource: item.evidenceSource,
+      views: item.views,
+      uniqueActors: item.actors.size,
+      authenticatedActors: item.authenticatedActors.size,
+      latestAt: item.latestAt,
+    }))
+    .sort((left, right) => right.latestAt.localeCompare(left.latestAt) || left.environment.localeCompare(right.environment))
+    .slice(0, limit)
+}
+
 function rankGovernanceReportPriority(priority: PlatformGovernanceReportPriority): number {
   switch (priority) {
     case 'critical':
@@ -7149,42 +7269,76 @@ function createGovernanceReportScorecards(
 
 function createGovernanceReportEvidenceStatus(
   analytics: Awaited<ReturnType<typeof getPlatformGovernanceAnalytics>>,
+  d1Evidence: PlatformGovernanceD1ReportEvidence,
 ): PlatformGovernanceReportEvidenceItem[] {
+  function operatorCockpitEvidence(environment: 'preview' | 'production') {
+    const items = analytics.governance.operatorCockpitEvidence.filter(item => item.environment === environment)
+    const hasLiveEvidence = items.some(item => item.evidenceSource === 'live' && item.authenticatedActors > 0)
+    return {
+      status: hasLiveEvidence ? 'live' : items.length > 0 ? 'local-only' : 'open',
+      evidenceCount: items.reduce((sum, item) => sum + item.views, 0),
+    } satisfies Pick<PlatformGovernanceReportEvidenceItem, 'status' | 'evidenceCount'>
+  }
+
+  const previewCockpit = operatorCockpitEvidence('preview')
+  const productionCockpit = operatorCockpitEvidence('production')
+  const hasLiveNotificationSend = analytics.notifications.deliveryEvidence.some(item =>
+    item.sent > 0
+    && item.credentialRequired === true
+    && item.hasCredentialRef === true
+    && item.adapter !== 'browser'
+    && item.evidenceSource === 'live',
+  )
+  const hasLiveProviderQuotaFailClosed = analytics.providers.quotaSmokeEvidence.some(item =>
+    item.mode === 'consume'
+    && item.status === 'blocked'
+    && item.requestRecorded
+    && item.evidenceSource === 'live',
+  )
+  const notificationEvidenceCount = analytics.notifications.deliveryEvidence.length + analytics.notifications.testEvidence.length
+
   return [
     {
-      key: 'admin-cockpit',
-      label: 'Authenticated admin cockpit',
-      status: 'open',
-      evidenceCount: analytics.overview.totalEvents,
-      blocker: 'authenticated-browser-evidence-required',
+      key: 'preview-admin-cockpit',
+      label: 'Preview authenticated admin cockpit',
+      status: previewCockpit.status,
+      evidenceCount: previewCockpit.evidenceCount,
+      blocker: previewCockpit.status === 'live' ? null : 'preview-authenticated-browser-evidence-required',
+    },
+    {
+      key: 'production-admin-cockpit',
+      label: 'Production authenticated admin cockpit',
+      status: productionCockpit.status,
+      evidenceCount: productionCockpit.evidenceCount,
+      blocker: productionCockpit.status === 'live' ? null : 'production-authenticated-browser-evidence-required',
     },
     {
       key: 'storage-smoke',
       label: 'Storage smoke evidence',
-      status: analytics.storage.smokeEvidence.some(item => item.mode === 'write' && item.channel === 'r2' && item.status === 'sent') ? 'r2' : analytics.storage.smokeEvidence.length > 0 ? 'local-only' : 'open',
+      status: analytics.storage.smokeEvidence.some(item => item.mode === 'write' && item.status === 'sent' && item.storageChannel === 'r2' && item.evidenceSource === 'r2') ? 'r2' : analytics.storage.smokeEvidence.length > 0 ? 'local-only' : 'open',
       evidenceCount: analytics.storage.smokeEvidence.length,
       blocker: 'live-r2-s3-oss-smoke-required',
     },
     {
       key: 'notification-send',
       label: 'Notification live-send evidence',
-      status: analytics.notifications.deliveryEvidence.some(item => item.sent > 0) ? 'live' : analytics.notifications.testEvidence.length > 0 ? 'local-only' : 'open',
-      evidenceCount: analytics.notifications.deliveryEvidence.length + analytics.notifications.testEvidence.length,
+      status: hasLiveNotificationSend ? 'live' : notificationEvidenceCount > 0 ? 'local-only' : 'open',
+      evidenceCount: notificationEvidenceCount,
       blocker: 'real-credential-backed-send-required',
     },
     {
       key: 'provider-quota',
       label: 'Provider quota fail-closed evidence',
-      status: analytics.providers.quotaSmokeEvidence.some(item => item.mode === 'consume' && item.status === 'consumed') ? 'live' : analytics.providers.quotaSmokeEvidence.length > 0 ? 'local-only' : 'open',
+      status: hasLiveProviderQuotaFailClosed ? 'live' : analytics.providers.quotaSmokeEvidence.length > 0 ? 'local-only' : 'open',
       evidenceCount: analytics.providers.quotaSmokeEvidence.length,
       blocker: 'real-provider-call-evidence-required',
     },
     {
       key: 'd1-production',
       label: 'Production D1 migration/backfill',
-      status: 'open',
-      evidenceCount: 0,
-      blocker: 'production-d1-backfill-required',
+      status: d1Evidence.status,
+      evidenceCount: d1Evidence.evidenceCount,
+      blocker: d1Evidence.blocker,
     },
   ]
 }
@@ -7306,6 +7460,7 @@ function createGovernanceReportRiskQueue(
 function createPlatformGovernanceReportSnapshot(
   analytics: Awaited<ReturnType<typeof getPlatformGovernanceAnalytics>>,
   topLimit: number,
+  d1Evidence: PlatformGovernanceD1ReportEvidence,
 ): PlatformGovernanceReportSnapshot {
   const riskQueue = createGovernanceReportRiskQueue(analytics, topLimit)
   const riskScore = riskQueue.reduce((sum, item) => {
@@ -7326,7 +7481,7 @@ function createPlatformGovernanceReportSnapshot(
       status: resolveGovernanceReportStatus(riskScore),
       riskScore,
       scorecards: createGovernanceReportScorecards(analytics),
-      evidenceStatus: createGovernanceReportEvidenceStatus(analytics),
+      evidenceStatus: createGovernanceReportEvidenceStatus(analytics, d1Evidence),
       riskQueue,
       leaderboards: {
         hotPlugins: analytics.dashboard.leaderboards.hotPlugins.slice(0, topLimit),
@@ -7342,6 +7497,56 @@ function createPlatformGovernanceReportSnapshot(
         peakRiskScore: Math.max(0, ...operationsTimeline.map(item => item.riskScore)),
       },
     },
+  }
+}
+
+function mapD1ReadinessToReportEvidence(
+  readiness: Awaited<ReturnType<typeof getPlatformGovernanceD1Readiness>>,
+): PlatformGovernanceD1ReportEvidence {
+  if (readiness.status === 'ready') {
+    return {
+      status: 'd1',
+      evidenceCount: readiness.summary.ready,
+      blocker: null,
+    }
+  }
+
+  if (!readiness.database.present) {
+    return {
+      status: 'open',
+      evidenceCount: 0,
+      blocker: 'production-d1-binding-required',
+    }
+  }
+
+  if (readiness.summary.missingTables > 0) {
+    return {
+      status: 'open',
+      evidenceCount: readiness.summary.ready,
+      blocker: 'production-d1-migration-required',
+    }
+  }
+
+  if (readiness.summary.backfillRequired > 0) {
+    return {
+      status: 'open',
+      evidenceCount: readiness.summary.ready,
+      blocker: 'production-d1-backfill-required',
+    }
+  }
+
+  if (readiness.summary.missingIndexes > 0) {
+    return {
+      status: 'open',
+      evidenceCount: readiness.summary.ready,
+      blocker: 'production-d1-index-required',
+    }
+  }
+
+  return {
+    status: 'open',
+    evidenceCount: readiness.summary.ready,
+    blocker: 'production-d1-readiness-required',
   }
 }
 
@@ -7415,6 +7620,52 @@ export async function recordPlatformGovernanceEvent(
   scheduleTelemetryRetentionMaintenance(event, db)
 
   return record
+}
+
+function resolveGovernanceOperatorEvidenceSource(): PlatformGovernanceReportEvidenceStatus {
+  if (process.env.CF_PAGES_BRANCH)
+    return 'live'
+  return 'local-only'
+}
+
+function readDeploymentId(): string | null {
+  return normalizeString(
+    process.env.CF_PAGES_DEPLOYMENT_ID
+    ?? process.env.VERCEL_GIT_COMMIT_SHA
+    ?? process.env.COMMIT_SHA,
+    180,
+  ) ?? null
+}
+
+function readDeploymentEnvironment(): string {
+  const pagesBranch = normalizeString(process.env.CF_PAGES_BRANCH, 120)
+  const productionBranch = normalizeString(process.env.CF_PAGES_PRODUCTION_BRANCH, 120)
+  if (pagesBranch)
+    return productionBranch && pagesBranch === productionBranch ? 'production' : 'preview'
+  return 'local'
+}
+
+export async function recordGovernanceOperatorCockpitView(
+  event: H3Event | undefined,
+  input: RecordGovernanceOperatorCockpitViewInput = {},
+): Promise<PlatformGovernanceEvent> {
+  const environment = readDeploymentEnvironment()
+  return await recordPlatformGovernanceEvent(event, {
+    scope: 'governance',
+    action: 'governance.operator_cockpit.viewed',
+    actorId: input.actorId,
+    resourceType: 'governance_report',
+    resourceId: environment,
+    channel: normalizeString(input.surface, 80) ?? 'data-governance',
+    unit: 'view',
+    quantity: 1,
+    metadata: {
+      environment,
+      format: normalizeString(input.format, 40) ?? 'json',
+      deploymentId: readDeploymentId(),
+      evidenceSource: resolveGovernanceOperatorEvidenceSource(),
+    },
+  })
 }
 
 export async function listPlatformGovernanceEvents(
@@ -7513,6 +7764,9 @@ export async function getPlatformGovernanceAnalytics(
   const storage = createStorageAnalytics(events, topLimit, storagePolicyEvaluations)
   const providers = createProviderAnalytics(events, days, topLimit)
   const providerQuotaAnalytics = createProviderQuotaAnalytics(providerEvents, providerQuotas, topLimit)
+  const governance = {
+    operatorCockpitEvidence: createGovernanceOperatorCockpitEvidence(events, topLimit),
+  }
   const providerDashboard = {
     ...providers,
     quotaSummary: providerQuotaAnalytics.summary,
@@ -7545,6 +7799,7 @@ export async function getPlatformGovernanceAnalytics(
     uploads,
     notifications,
     storage,
+    governance,
     providers: providerDashboard,
   }
 }
@@ -7554,8 +7809,11 @@ export async function getPlatformGovernanceReportSnapshot(
   options: GovernanceAnalyticsOptions = {},
 ): Promise<PlatformGovernanceReportSnapshot> {
   const topLimit = normalizeAnalyticsTopLimit(options.topLimit)
-  const analytics = await getPlatformGovernanceAnalytics(event, options)
-  return createPlatformGovernanceReportSnapshot(analytics, topLimit)
+  const [analytics, d1Readiness] = await Promise.all([
+    getPlatformGovernanceAnalytics(event, options),
+    getPlatformGovernanceD1Readiness(event),
+  ])
+  return createPlatformGovernanceReportSnapshot(analytics, topLimit, mapD1ReadinessToReportEvidence(d1Readiness))
 }
 
 function matchesStorageProvider(event: PlatformGovernanceEvent, provider: string): boolean {
@@ -8314,6 +8572,9 @@ async function recordProviderQuotaSmokeAudit(
   actorId: unknown,
   result: IntelligenceProviderQuotaSmokeResult,
 ): Promise<void> {
+  const evidenceSource = result.mode === 'consume' && result.status === 'blocked' && result.requestRecorded
+    ? 'live'
+    : 'local-only'
   await recordPlatformGovernanceEvent(event, {
     scope: 'intelligence',
     action: `provider.quota_smoke.${result.status}`,
@@ -8327,6 +8588,7 @@ async function recordProviderQuotaSmokeAudit(
       providerId: result.providerId,
       channel: result.channel,
       mode: result.mode,
+      evidenceSource,
       reason: result.reason,
       requestRecorded: result.requestRecorded,
       tokensRecorded: result.tokensRecorded,

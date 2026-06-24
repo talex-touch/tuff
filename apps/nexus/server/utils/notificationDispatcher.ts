@@ -972,6 +972,13 @@ async function recordDeliveryAudit(
   input: DispatchNotificationInput,
 ) {
   const context = sanitizeDispatchMetadata(input.metadata)
+  const evidenceSource = delivery.status === 'sent'
+    && input.executionMode === 'config'
+    && delivery.credentialRequired
+    && delivery.hasCredentialRef
+    && !SENDABLE_LOCAL_ADAPTERS.has(delivery.adapter)
+    ? 'live'
+    : 'local-only'
   await recordPlatformGovernanceEvent(event, {
     scope: 'notification',
     action: `notification.delivery.${delivery.status}`,
@@ -992,6 +999,7 @@ async function recordDeliveryAudit(
       reason: delivery.reason,
       credentialRequired: delivery.credentialRequired,
       hasCredentialRef: delivery.hasCredentialRef,
+      evidenceSource,
       durationMs: delivery.durationMs,
       statusCode: delivery.statusCode,
       context,

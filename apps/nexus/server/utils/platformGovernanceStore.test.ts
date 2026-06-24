@@ -2237,9 +2237,14 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(report.report.evidenceStatus).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        key: 'admin-cockpit',
+        key: 'preview-admin-cockpit',
         status: 'open',
-        blocker: 'authenticated-browser-evidence-required',
+        blocker: 'preview-authenticated-browser-evidence-required',
+      }),
+      expect.objectContaining({
+        key: 'production-admin-cockpit',
+        status: 'open',
+        blocker: 'production-authenticated-browser-evidence-required',
       }),
       expect.objectContaining({
         key: 'provider-quota',
@@ -2250,7 +2255,7 @@ describe('platformGovernanceStore', () => {
       expect.objectContaining({
         key: 'd1-production',
         status: 'open',
-        blocker: 'production-d1-backfill-required',
+        blocker: 'production-d1-binding-required',
       }),
     ]))
     expect(report.report.riskQueue).toEqual(expect.arrayContaining([
@@ -2273,7 +2278,7 @@ describe('platformGovernanceStore', () => {
     expect(report.report.evidenceStatus).toEqual(expect.arrayContaining([
       expect.objectContaining({
         key: 'storage-smoke',
-        status: 'r2',
+        status: 'open',
       }),
       expect.objectContaining({
         key: 'notification-send',
@@ -3134,6 +3139,9 @@ describe('platformGovernanceStore', () => {
         mode: 'write',
         reason: 'storage-channel-write-read-delete-ok',
         operations: ['resolve', 'write', 'read', 'delete'],
+        storageChannel: 'r2',
+        storageProvider: 'cloudflare-r2',
+        evidenceSource: 'r2',
         credentialRequired: false,
         hasCredentialRef: false,
         hasCredential: null,
@@ -3435,6 +3443,8 @@ describe('platformGovernanceStore', () => {
         provider: `resend-primary-${marker}`,
         providerType: 'resend',
         adapter: 'email/resend',
+        credentialRequired: true,
+        hasCredentialRef: true,
         reason: 'delivery-planned',
         durationMs: 4,
       },
@@ -3453,6 +3463,8 @@ describe('platformGovernanceStore', () => {
         provider: `resend-primary-${marker}`,
         providerType: 'resend',
         adapter: 'email/resend',
+        credentialRequired: true,
+        hasCredentialRef: true,
         reason: 'delivery-sent',
         durationMs: 25,
         statusCode: 202,
@@ -3471,6 +3483,8 @@ describe('platformGovernanceStore', () => {
         provider: 'browser',
         providerType: 'browser',
         adapter: 'browser',
+        credentialRequired: false,
+        hasCredentialRef: false,
         reason: 'event-mismatch',
         durationMs: 2,
       },
@@ -3489,6 +3503,8 @@ describe('platformGovernanceStore', () => {
         provider: `smtp-ops-${marker}`,
         providerType: 'smtp',
         adapter: 'email/smtp',
+        credentialRequired: true,
+        hasCredentialRef: true,
         reason: 'adapter-http-error',
         durationMs: 75,
         statusCode: 502,
@@ -3510,6 +3526,8 @@ describe('platformGovernanceStore', () => {
         provider: `resend-test-${marker}`,
         providerType: 'resend',
         adapter: 'email/resend',
+        credentialRequired: true,
+        hasCredentialRef: true,
         reason: 'delivery-planned',
         durationMs: 3,
         context: {
@@ -3537,6 +3555,8 @@ describe('platformGovernanceStore', () => {
         provider: `resend-test-${marker}`,
         providerType: 'resend',
         adapter: 'email/resend',
+        credentialRequired: true,
+        hasCredentialRef: true,
         reason: 'delivery-sent',
         durationMs: 18,
         statusCode: 202,
@@ -3646,6 +3666,8 @@ describe('platformGovernanceStore', () => {
         provider: `resend-primary-${marker}`,
         providerType: 'resend',
         adapter: 'email/resend',
+        credentialRequired: true,
+        hasCredentialRef: true,
         status: 'sent',
         reason: 'delivery-sent',
         durationMs: 25,

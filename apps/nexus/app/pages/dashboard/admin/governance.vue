@@ -2,6 +2,7 @@
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import type { TxSelectModelValue } from '@talex-touch/tuffex/select'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -303,6 +304,9 @@ interface StorageSmokeEvidenceItem {
   operations: string[]
   bytesWritten: number
   bytesRead: number
+  storageChannel: string | null
+  storageProvider: string | null
+  evidenceSource: PlatformGovernanceReportEvidenceItem['status']
   credentialRequired: boolean | null
   hasCredentialRef: boolean | null
   hasCredential: boolean | null
@@ -555,6 +559,9 @@ interface NotificationTestEvidenceItem {
   provider: string | null
   providerType: string | null
   adapter: string | null
+  credentialRequired: boolean | null
+  hasCredentialRef: boolean | null
+  evidenceSource: PlatformGovernanceReportEvidenceItem['status']
   status: NotificationDeliveryStatus
   reason: string | null
   durationMs: number | null
@@ -2441,7 +2448,11 @@ function stringifyJsonObject(value: Record<string, unknown>): string {
   return JSON.stringify(value, null, 2)
 }
 
-function applyStorageProfile(profileId: string | number): void {
+function applyStorageProfile(profileId: TxSelectModelValue): void {
+  if (Array.isArray(profileId)) {
+    return
+  }
+
   const profile = storageProfiles.value.find(item => item.id === String(profileId))
   if (!profile) {
     return
@@ -2485,7 +2496,11 @@ function createNotificationCredentialTemplate(profile: NotificationChannelProfil
   return null
 }
 
-function applyNotificationProfile(profileId: string | number): void {
+function applyNotificationProfile(profileId: TxSelectModelValue): void {
+  if (Array.isArray(profileId)) {
+    return
+  }
+
   const profile = notificationProfiles.value.find(item => item.id === String(profileId))
   if (!profile) {
     return

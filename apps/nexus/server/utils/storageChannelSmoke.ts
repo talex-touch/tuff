@@ -34,6 +34,8 @@ export interface StorageChannelSmokeResult {
   operations: Array<'resolve' | 'write' | 'read' | 'delete'>
   bytesWritten: number
   bytesRead: number
+  storageChannel: string | null
+  storageProvider: string | null
   credentialRequired: boolean
   hasCredentialRef: boolean
   hasCredential: boolean | null
@@ -98,6 +100,9 @@ async function recordSmokeAudit(
   actorId: unknown,
   result: StorageChannelSmokeResult,
 ): Promise<void> {
+  const evidenceSource = result.mode === 'write' && result.status === 'sent' && result.storageChannel === 'r2'
+    ? 'r2'
+    : 'local-only'
   await recordPlatformGovernanceEvent(event, {
     scope: 'storage',
     action: `storage.channel_smoke.${result.status}`,
@@ -110,6 +115,9 @@ async function recordSmokeAudit(
     metadata: {
       policyName: result.policyName,
       provider: result.provider,
+      storageChannel: result.storageChannel,
+      storageProvider: result.storageProvider,
+      evidenceSource,
       mode: result.mode,
       reason: result.reason,
       operations: result.operations,
@@ -163,6 +171,8 @@ export async function runStorageChannelSmoke(
         operations: ['resolve'],
         bytesWritten: 0,
         bytesRead: 0,
+        storageChannel: null,
+        storageProvider: null,
         hasCredential,
       }
       await recordSmokeAudit(event, input.actorId, failed)
@@ -177,6 +187,8 @@ export async function runStorageChannelSmoke(
         operations: ['resolve'],
         bytesWritten: 0,
         bytesRead: 0,
+        storageChannel: channel === 'r2' && bucket ? 'r2' : externalStorage?.channel ?? null,
+        storageProvider: channel === 'r2' && bucket ? 'cloudflare-r2' : externalStorage?.provider ?? null,
         hasCredential,
       }
       await recordSmokeAudit(event, input.actorId, ready)
@@ -230,6 +242,8 @@ export async function runStorageChannelSmoke(
       operations: ['resolve', 'write', 'read', 'delete'],
       bytesWritten: stored.size,
       bytesRead: loaded?.size ?? 0,
+      storageChannel: stored.storageChannel,
+      storageProvider: stored.storageProvider,
       hasCredential,
     }
     await recordSmokeAudit(event, input.actorId, sent)
@@ -243,6 +257,8 @@ export async function runStorageChannelSmoke(
       operations: ['resolve'],
       bytesWritten: 0,
       bytesRead: 0,
+      storageChannel: null,
+      storageProvider: null,
       hasCredential: null,
     }
     await recordSmokeAudit(event, input.actorId, failed)
