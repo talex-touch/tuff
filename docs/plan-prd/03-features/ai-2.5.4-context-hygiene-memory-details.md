@@ -1,6 +1,6 @@
 # Tuff 2.5.4 ContextHygiene 详细设计附录
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-24
 > 来源：从 `ai-2.5.4-context-hygiene-memory-prd.md` 拆分出的工程细节。
 > 定位：schema、模块职责、状态机、API 合同、策略细则、测试计划与回滚细节。
 
@@ -150,7 +150,7 @@ interface ScopeDecision {
 | 依赖 | 阻塞阶段 | 需要能力 | 降级策略 |
 | --- | --- | --- | --- |
 | Database / Drizzle / LibSQL | P0 | session、turn、checkpoint、tombstone、package log | 迁移失败则轻上下文只读降级 |
-| Typed transport / domain SDK | P0 | renderer 调用 prepare/startNewSession/explain metadata | 不走 raw channel，未就绪则仅 main 内部实验 |
+| Typed transport / domain SDK | P0 | renderer 调用 prepare/startNewSession/explain metadata；`contextListPackageLogs` 已提供 metadata-only package log read 入口，`contextListCheckpoints` 已提供 checkpoint boundary metadata read 入口，并已同步到 `@talex-touch/tuff-intelligence` 镜像 SDK | 不走 raw channel；完整 explain drawer UI 未接入前不能宣称可见闭环 |
 | CoreBox AI Ask | P0 | chip、toast、不带历史、新会话入口 | flag 关闭时维持现有问答 |
 | Intelligence provider runtime | P0 | provider usage/token/trace 回传 | 无 usage 时使用估算并提高 safety margin |
 | Intelligence settings | P0/P1 | feature flags、空闲阈值、context log 开关 | 使用保守默认值 |
@@ -419,12 +419,12 @@ score = relevance * 0.45
 
 | 入口 | ContextHygiene 行为 |
 | --- | --- |
-| CoreBox AI Ask | 默认轻上下文；显式继续时召回旧 session；展示上下文 chip |
+| CoreBox AI Ask | 官方 `touch-intelligence` 已在调用前 fail-soft 准备 ContextPackage metadata；默认轻上下文；显式继续时召回旧 session；展示上下文 chip |
 | OmniPanel Writing Tools | 优先使用选区/剪贴板/OCR capsule，不默认带完整聊天历史 |
 | Workflow `Use Model` | 每个 run 可独立 session；Review Queue 写 checkpoint，不默认写长期记忆 |
 | Assistant | 悬浮球/VoicePanel 默认轻上下文；语音或剪贴板动作仅注入当前动作 capsule |
 | `touch-intelligence` 插件 | 通过 Intelligence SDK 触发，受 `intelligence.basic` 和 memory 权限策略控制 |
-| 2.5.3 Local Knowledge | RetrievalAssembler 可调用 buildContext，但必须保留 citation / permission metadata |
+| 2.5.3 Local Knowledge | RetrievalAssembler 可调用 buildContext；service foundation 已保留 citation / document source / retrieval status / degraded reason 到 ContextPackage metadata，并可通过 `contextListPackageLogs` 读取 metadata-only explain log；Intelligence Audit 已能展示 trace package 摘要，后续继续补 permission metadata 与完整 explain drawer UI |
 | Provider Runtime | 接收 ContextPackage 后调用模型；不得反向修改 MemoryStore |
 
 ## 23. Feature Flags 与 Rollout
@@ -448,6 +448,8 @@ score = relevance * 0.45
 3. P1 beta：Memory suggestions、MemoryPolicy、tombstone、Memory 面板最小 CRUD。
 4. P2 beta：旧 session summary retrieval、2.5.3 knowledge citation、explain drawer。
 5. P3 experimental：多设备 tombstone replay、记忆衰减、Workflow/Agent 长任务 checkpoint。
+
+2026-06-24 status：`contextEvaluateMemory` typed SDK / CoreApp channel 已先落地只读 MemoryPolicy 预览，覆盖显式候选 `suggested`、secret / 用户 opt-out `rejected` 与 sensitive `needs_review`。官方 CoreBox AI Ask 仅在用户显式“记住 / remember”时消费该预览并生成 metadata/widget 摘要。该能力不写 SQLite、不创建 MemoryItem、不替代 Memory 面板的查看后保存 / 忽略 / 编辑后保存确认流。
 
 ### Kill switch 与自动降级
 
@@ -637,10 +639,10 @@ P0 不实现自动长期保存；P1 若启用 suggested memory，必须有“查
 
 ### P2 - Retrieval 增强
 
-- 接入 2.5.3 本地知识检索、FTS5 和 metadata filter。
+- 接入 2.5.3 本地知识检索、FTS5 和 metadata filter；CoreApp service foundation 已接入 `buildContext()` 并记录 citation/status/degraded reason。
 - 可选 embeddings / rerank 增强相关性。
 - 旧 session summary 与知识片段统一进入 RetrievalAssembler。
-- Context explain drawer 展示 retrieval citation、excluded/pruned/policy-blocked source。
+- Context explain drawer 展示 retrieval citation、excluded/pruned/policy-blocked source；当前已具备 metadata-only package log 读取入口、Intelligence Audit 最小摘要 UI 与 CoreBox AI Ask 调用前 ContextPackage metadata，完整 drawer 仍待接入。
 - 接入 OmniPanel / Workflow / Assistant 最近路径。
 
 ### P3 - 衰减与同步
@@ -697,4 +699,3 @@ P0 不实现自动长期保存；P1 若启用 suggested memory，必须有“查
 - 当前执行清单：`../TODO.md`
 - 产品路线图：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 - 质量基线：`../docs/PRD-QUALITY-BASELINE.md`
-

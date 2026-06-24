@@ -334,17 +334,17 @@
 - Group: assistant
 - Required: yes
 - Requires screenshot/recording: yes
-- Status: pending
+- Status: passed
 - Collection steps:
   - Enable Assistant and the floating ball from Settings while keeping voice wake disabled.
   - Capture the floating ball visible above the current desktop or CoreApp surface.
   - Drag the floating ball, reopen the app or settings surface, and capture the persisted position.
   - Click the floating ball and capture the Voice Panel opened next to the ball.
 - Required evidence:
-  - [ ] Settings show Assistant enabled and voice wake disabled
-  - [ ] Floating ball is visible and does not steal focus from the active app
-  - [ ] Dragged floating ball position persists after reopening the Assistant surface
-  - [ ] Clicking the floating ball opens the Voice Panel beside the ball
+  - [x] Settings show Assistant enabled and voice wake disabled
+  - [x] Floating ball is visible and does not steal focus from the active app
+  - [x] Dragged floating ball position persists after reopening the Assistant surface
+  - [x] Clicking the floating ball opens the Voice Panel beside the ball
 - Recommended artifacts:
   - evidence/coreapp-visible/assistant-floating-ball-settings.png
   - evidence/coreapp-visible/assistant-floating-ball-visible.png
@@ -355,8 +355,14 @@
   - The dragged position is lost after reopening or monitor bounds are not respected.
   - Clicking the floating ball does not open a usable text panel.
 - Artifact paths:
-  - _none_
+  - assistant-floating-ball-probe-2026-06-24.json
+  - assistant-floating-ball-settings-2026-06-24.png
+  - assistant-floating-ball-visible-2026-06-24.png
+  - assistant-floating-ball-drag-persist-2026-06-24.png
+  - assistant-voice-panel-open-2026-06-24.png
 - Notes:
+  - 2026-06-24 packaged CoreApp 2.4.13-beta.1 probe used isolated userData, enabled Assistant/floating ball with voice wake disabled, dragged the floating ball from 220/220 to 316/292, restarted the packaged app, confirmed persisted position, and clicked the ball to open the Voice Panel beside it.
+  - Voice Panel evidence shows both `翻译剪贴板图片` and `截图并翻译` entry points; actual screenshot translate result-window evidence remains tracked under `assistant-screenshot-translate`.
 
 ### Assistant clipboard image translation
 

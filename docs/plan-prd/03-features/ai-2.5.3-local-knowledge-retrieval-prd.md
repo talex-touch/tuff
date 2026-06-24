@@ -1,6 +1,6 @@
 # PRD: Tuff 2.5.3 本地知识检索与上下文构建
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-24
 > 状态：Planned / Direction Locked
 > 目标版本：2.5.3
 
@@ -44,7 +44,7 @@
 
 ## 4. 接口方向
 
-文档层面锁定后续实现接口，不在本 PR 直接改代码：
+接口与实现口径如下；CoreApp foundation 已先落地 SQLite / FTS5 / metadata / citation 主路径，后续仍按该合同继续补最近路径和真实数据 evidence：
 
 ```ts
 interface LocalKnowledgeEngine {
@@ -56,6 +56,12 @@ interface LocalKnowledgeEngine {
 ```
 
 MVP `search` 必须支持 query、limit、sourceType、timeRange、permissionScope 与 metadata filters；`buildContext` 必须支持 token budget、dedupe、citation 与 maxChunks。
+
+2026-06-24 进展：
+
+- `LocalKnowledgeEngine` metadata filters 已支持 dotted nested path 与数组 scalar 包含匹配。
+- ContextHygiene `retrieval` scope 已消费 `buildContext()` 返回的 citation，把 citation、document id、source type/uri、retrieval status 与 degraded reason 写入 `ContextPackage.items[].metadata`。
+- `ContextPackage.metadata.retrieval` 记录 status、degradedReason、chunkCount 与 citationCount，metadata-only `contextListPackageLogs` typed SDK / CoreApp channel 可按 session/trace 读取 package log；这不代表 embeddings/rerank 或最近 UI explain drawer 已完成。
 
 ## 5. 质量与安全约束
 

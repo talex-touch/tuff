@@ -12,6 +12,7 @@
 - `docs/plan-prd/TODO-nexus.md` - Nexus 性能收口清单。
 - `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md` - R0-R9 当前 SoT。
 - `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
+- `docs/plan-prd/04-implementation/R8-R9-Next-Stage-Execution-Plan-2026-06-24.md` - R8 i18n/Catalog 2.6.0 与 R9 AI 2.5.x 后续能力分批计划。
 - `docs/plan-prd/04-implementation/Pricing-SoT-2026-06-18.md` - Pioneer 免费阶段与未来定价待决策项 SoT。
 - `docs/plan-prd/01-project/CHANGES.md` - 6 月当前阶段变更索引。
 - `docs/engineering/README.md` - 工程过程资料索引。

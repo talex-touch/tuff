@@ -39,7 +39,7 @@
 2. 接 R1 + R2：发版完整性和 AI Stable 是当前最影响产品可信度的两条。
 3. 再做 R3：Indexing Runtime 是后续 App Data / Everything / Quicklinks 的地基。
 4. R4–R7 并行小切片推进，但不要混提交。
-5. R8/R9 作为下一阶段产品能力，不抢当前稳定化窗口。
+5. R8/R9 作为下一阶段产品能力，不抢当前稳定化窗口；分批计划见 `R8-R9-Next-Stage-Execution-Plan-2026-06-24.md`，先 R8 locale core / localized value，再 R9 2.5.3 local knowledge 与 2.5.4 ContextHygiene。
 
 ## 执行约束
 

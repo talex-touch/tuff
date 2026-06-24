@@ -1,6 +1,6 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-06-21
+> 更新时间：2026-06-24
 > 定位：PRD / 规划主入口。这里只保留当前 SoT、下一动作和高价值导航。
 
 ## 快速入口
@@ -11,6 +11,7 @@
 - [Nexus Performance TODO](./TODO-nexus.md)
 - [Roadmap vNext](./04-implementation/Roadmap-vNext-2026-06-18.md)
 - [当前项目进程与执行计划](./04-implementation/Current-Execution-Plan-2026-06-17.md)
+- [R8 / R9 下一阶段分批执行计划](./04-implementation/R8-R9-Next-Stage-Execution-Plan-2026-06-24.md)
 - [Pricing SoT](./04-implementation/Pricing-SoT-2026-06-18.md)
 - [AI Stable Evidence Matrix](./04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md)
 - [Nexus Governance Evidence Matrix](./04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md)
@@ -24,6 +25,7 @@
 
 - 当前代码版本为 root / CoreApp `2.4.13-beta.1`。
 - 当前主线按 Roadmap vNext 推进 R0-R9，优先 R1 Release Integrity、R2 AI Stable、R3 Indexing Runtime。
+- R8 / R9 已进入下一阶段 planning：先 R8 locale core / localized value，再 R9 2.5.3 local knowledge 与 2.5.4 ContextHygiene，不抢当前稳定化窗口。
 - 公共包发布不再作为独立 Roadmap / blocker / evidence 项；版本变更后以 GitHub 自动发版 workflow 结果为准。
 - owner 已完成的平台人工验证不再作为 Roadmap 待办、平台后续或 release blocker。
 - Nexus 性能线独立跟踪到 `TODO-nexus.md`，不与 CoreApp / AI / R3 工作混批。
@@ -32,7 +34,7 @@
 
 - R1 Release Integrity：Nexus 资产 `sha256`、`signatureUrl`、signature endpoint 与真实自动发版 workflow evidence 仍未闭环。
 - R2 AI Stable：CoreBox AI Ask、CoreBox search states、App Index workbench、browser login recovery 与 OmniPanel writing tools packaged surfaces 已 passed；global visible gate 仍需 Assistant / Workflow / Provider broader visible surfaces。
-- R3 Indexing Runtime：仍需 FileProvider SQLite/FTS runtime-store migration、source-scoped `scan_progress`、durable scheduler evidence。
+- R3 Indexing Runtime：durable job history focused code/test 小切片已完成；仍需 FileProvider SQLite/FTS runtime-store migration、source-scoped `scan_progress`、packaged Settings evidence 与 durable scheduler 长尾。
 - R7 Nexus Governance：production / preview 完成只接受 live/D1/R2 等可复现 evidence；memory/local-only 只能标 partial。
 - Platform Capability：平台 smoke 是非阻塞回归矩阵；要求 degraded/unsupported reason 与 fail-closed。
 - Pricing：当前公开站只承诺 Pioneer 阶段 `0 元 / $0`。
