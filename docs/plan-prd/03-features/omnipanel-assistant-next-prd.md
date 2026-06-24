@@ -1,7 +1,7 @@
 # PRD: OmniPanel 与悬浮助手下一版本
 
 > 更新时间：2026-06-24
-> 状态：Draft / Requirements
+> 状态：MVP implementation slice landed / packaged evidence pending
 > 目标窗口：2.5.x Beta 后续，不能抢 2.5.0 Stable 的 CoreBox 文本 + OCR 收口
 > 关联 Roadmap：`../04-implementation/Roadmap-vNext-2026-06-18.md`
 > 关联 AI PRD：`./ai-2.5.0-plan-prd.md`
@@ -72,10 +72,11 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - 浮球与语音面板跨 workspace / fullscreen always-on-top。
 - VoicePanel 可提交文本到 CoreBox。
 - VoicePanel 可触发剪贴板图片翻译，并打开 pin window。
+- VoicePanel 可触发“截图并翻译”：通过 `NativeScreenshotService.capture({ target: 'cursor-display', output: 'data-url', writeClipboard: false })` 捕获当前光标所在屏幕，再复用 image translate scene 与 pin window。
 
 主要缺口：
 
-- `translateClipboardImage` 与 `translateScreenshot` 当前复用同一个事件字符串，语义上容易混淆。
+- packaged visible evidence 仍需补充 clipboard image translate、screenshot translate、pin window 展示与失败态录屏/截图。
 - 语音识别依赖浏览器 Web Speech，适合作为 Experimental，不能作为核心入口稳定承诺。
 - 悬浮助手视觉偏独立，尚未和 OmniPanel / CoreBox 的动作模型统一。
 - 常驻浮窗有打扰与性能风险，必须继续默认关闭、可解释、可快速退出。
@@ -135,7 +136,7 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 ### P1：适合进入同一产品版本的小步增强
 
 1. 区域截图 overlay：用户可拖拽选择区域，取消不产生副作用。
-2. 截图翻译：capture -> image.translate.e2e -> pin window，失败时给出 provider / permission / unsupported reason。
+2. 截图翻译：MVP 已接通悬浮助手 VoicePanel -> cursor-display capture -> image.translate.e2e -> pin window；下一步补 packaged evidence、区域选择与 OCR fallback。
 3. OCR fallback：当图片翻译 scene 不可用时，允许 capture -> OCR -> text.translate，结果以文本卡片呈现。
 4. OmniPanel 图片上下文：截图后可从 OmniPanel 看到“翻译截图 / OCR / 复制图片 / 贴图”等动作。
 5. 烟花效果 MVP：可通过 CoreBox / OmniPanel command 手动触发，成功任务可 opt-in 触发。
@@ -247,7 +248,7 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 ### 截图到翻译贴图
 
 1. 用户通过悬浮助手或 CoreBox 触发“截图并翻译”。
-2. 系统进入区域选择或默认当前显示器截图。
+2. MVP 默认捕获当前光标所在显示器；后续进入区域选择。
 3. 截图结果进入 image translate scene。
 4. 成功后打开 pin window；失败时保留截图并展示原因。
 5. 用户可复制译文、复制图片或关闭贴图。
@@ -300,4 +301,3 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - Snipaste: https://www.snipaste.com/
 - Apple Live Text in Preview on Mac: https://support.apple.com/guide/preview/interact-with-text-in-a-photo-prvw625a5b2c/mac
 - Apple Translate text on Mac: https://support.apple.com/guide/mac-help/translate-text-on-mac-mchldd8b3c15/mac
-
