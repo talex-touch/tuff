@@ -2,6 +2,7 @@ import type { IntelligenceProviderRecord } from './intelligenceStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   listPlatformGovernanceEvents,
+  recordPlatformGovernanceEvent,
   upsertPlatformGovernanceConfig,
 } from './platformGovernanceStore'
 import { invokeIntelligenceCapability } from './tuffIntelligenceLabService'
@@ -419,6 +420,74 @@ describe('invokeIntelligenceCapability', () => {
       resourceId: registryProviderId,
       limit: 10,
     })).resolves.toHaveLength(0)
+  })
+
+  it('direct invoke 按 capability channel fail-closed 拦截耗尽的 provider quota', async () => {
+    const registryProviderId = `registry_provider_channel_${crypto.randomUUID()}`
+    const event = h3Event(`/test/${registryProviderId}`)
+    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValueOnce([
+      provider({
+        metadata: {
+          providerRegistryId: registryProviderId,
+        },
+      }),
+    ])
+    await upsertPlatformGovernanceConfig(event, {
+      configType: 'intelligence_provider_quota',
+      name: 'Blocked direct invoke text chat quota',
+      targetId: registryProviderId,
+      channel: 'text.chat',
+      limits: {
+        maxRequests: 1,
+        windowDays: 30,
+      },
+    }, 'admin')
+    await upsertPlatformGovernanceConfig(event, {
+      configType: 'intelligence_provider_quota',
+      name: 'Open direct invoke text translate quota',
+      targetId: registryProviderId,
+      channel: 'text.translate',
+      limits: {
+        maxRequests: 10,
+        windowDays: 30,
+      },
+    }, 'admin')
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'intelligence',
+      action: 'provider.request',
+      resourceType: 'provider',
+      resourceId: registryProviderId,
+      channel: 'text.chat',
+      unit: 'request',
+      quantity: 1,
+    })
+
+    await expect(invokeIntelligenceCapability(event, 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })).rejects.toMatchObject({
+      statusCode: 429,
+      data: {
+        code: 'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED',
+        providerId: registryProviderId,
+        channel: 'text.chat',
+      },
+    })
+
+    expect(langchainMocks.invoke).not.toHaveBeenCalled()
+    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(usageLedgerMocks.recordProviderUsageLedger).not.toHaveBeenCalled()
+    const requestEvents = await listPlatformGovernanceEvents(event, {
+      scope: 'intelligence',
+      action: 'provider.request',
+      resourceType: 'provider',
+      resourceId: registryProviderId,
+      limit: 10,
+    })
+    expect(requestEvents.filter(item => item.channel === 'text.chat')).toHaveLength(1)
+    expect(requestEvents.filter(item => item.channel === 'text.translate')).toHaveLength(0)
   })
 
   it('credits 不足时返回明确的 402 错误', async () => {
