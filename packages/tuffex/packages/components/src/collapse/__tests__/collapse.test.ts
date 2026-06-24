@@ -27,8 +27,10 @@ describe('txCollapse', () => {
     const wrapper = mountCollapse({ active: ['first'] })
     const headers = wrapper.findAll('.tx-collapse-item__header')
 
-    expect(headers[0].attributes('role')).toBe('button')
-    expect(headers[0].attributes('tabindex')).toBe('0')
+    expect(headers[0].element.tagName).toBe('BUTTON')
+    expect(headers[0].attributes('type')).toBe('button')
+    expect(headers[0].attributes('role')).toBeUndefined()
+    expect(headers[0].attributes('tabindex')).toBeUndefined()
     expect(headers[0].attributes('aria-expanded')).toBe('true')
     expect(headers[0].attributes('aria-controls')).toBeTruthy()
     expect(wrapper.find(`#${headers[0].attributes('aria-controls')}`).isVisible()).toBe(true)
@@ -80,36 +82,7 @@ describe('txCollapse', () => {
     expect(wrapper.emitted('update:modelValue')?.[1]).toEqual([[]])
   })
 
-  it('supports Enter and Space keyboard toggles', async () => {
-    const enterWrapper = mount(TxCollapse, {
-      slots: {
-        default: '<TxCollapseItem title="First" name="first">First content</TxCollapseItem>',
-      },
-      global: {
-        components: { TxCollapseItem },
-      },
-    })
-
-    await enterWrapper.find('.tx-collapse-item__header').trigger('keydown.enter')
-    expect(enterWrapper.emitted('update:modelValue')?.[0]).toEqual([['first']])
-
-    const spaceWrapper = mount(TxCollapse, {
-      props: {
-        modelValue: ['first'],
-      },
-      slots: {
-        default: '<TxCollapseItem title="First" name="first">First content</TxCollapseItem>',
-      },
-      global: {
-        components: { TxCollapseItem },
-      },
-    })
-
-    await spaceWrapper.find('.tx-collapse-item__header').trigger('keydown.space')
-    expect(spaceWrapper.emitted('update:modelValue')?.[0]).toEqual([[]])
-  })
-
-  it('blocks disabled item pointer and keyboard toggles', async () => {
+  it('blocks disabled item activation', async () => {
     const wrapper = mount(TxCollapse, {
       slots: {
         default: '<TxCollapseItem title="Disabled" name="disabled" disabled>Disabled content</TxCollapseItem>',
@@ -120,10 +93,9 @@ describe('txCollapse', () => {
     })
 
     const header = wrapper.find('.tx-collapse-item__header')
-    expect(header.attributes('aria-disabled')).toBe('true')
+    expect(header.attributes('disabled')).toBeDefined()
 
     await header.trigger('click')
-    await header.trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })

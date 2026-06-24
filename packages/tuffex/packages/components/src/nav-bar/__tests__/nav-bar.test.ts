@@ -37,7 +37,11 @@ describe('txNavBar', () => {
       },
     })
 
-    await wrapper.find('.tx-nav-bar__back').trigger('click')
+    const left = wrapper.find('.tx-nav-bar__left')
+    expect(left.element.tagName).toBe('BUTTON')
+    expect(left.attributes('aria-label')).toBe('Back')
+
+    await left.trigger('click')
 
     expect(wrapper.emitted('back')).toHaveLength(1)
     expect(wrapper.emitted('click-left')).toHaveLength(1)
@@ -54,11 +58,31 @@ describe('txNavBar', () => {
 
     expect(wrapper.text()).toContain('Custom title')
 
-    await wrapper.find('.tx-nav-bar__left').trigger('click')
-    await wrapper.find('.tx-nav-bar__right').trigger('click')
+    const left = wrapper.find('.tx-nav-bar__left')
+    const right = wrapper.find('.tx-nav-bar__right')
+    expect(left.element.tagName).toBe('BUTTON')
+    expect(right.element.tagName).toBe('BUTTON')
+
+    await left.trigger('click')
+    await right.trigger('click')
 
     expect(wrapper.emitted('click-left')).toHaveLength(1)
     expect(wrapper.emitted('click-right')).toHaveLength(1)
+  })
+
+  it('keeps empty action zones disabled and non-emitting', async () => {
+    const wrapper = mount(TxNavBar)
+    const left = wrapper.find('.tx-nav-bar__left')
+    const right = wrapper.find('.tx-nav-bar__right')
+
+    expect(left.attributes('disabled')).toBeDefined()
+    expect(right.attributes('disabled')).toBeDefined()
+
+    await left.trigger('click')
+    await right.trigger('click')
+
+    expect(wrapper.emitted('click-left')).toBeUndefined()
+    expect(wrapper.emitted('click-right')).toBeUndefined()
   })
 
   it('does not emit events when disabled', async () => {
@@ -69,11 +93,11 @@ describe('txNavBar', () => {
       },
     })
 
-    await wrapper.find('.tx-nav-bar__back').trigger('click')
     await wrapper.find('.tx-nav-bar__left').trigger('click')
     await wrapper.find('.tx-nav-bar__right').trigger('click')
 
-    expect(wrapper.find('.tx-nav-bar__back').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.tx-nav-bar__left').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.tx-nav-bar__right').attributes('disabled')).toBeDefined()
     expect(wrapper.emitted('back')).toBeUndefined()
     expect(wrapper.emitted('click-left')).toBeUndefined()
     expect(wrapper.emitted('click-right')).toBeUndefined()

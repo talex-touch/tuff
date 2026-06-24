@@ -23,7 +23,7 @@ function select(song) {
 
 <template>
   <div class="SearchResults-Container cubic-transition" :class="{ active: res }">
-    <span class="SearchResults-Controller" @click="close" />
+    <button type="button" class="SearchResults-Controller" aria-label="Close search results" @click="close" />
     <TxScroll>
       <div v-if="res?.songs" class="SearchResults-Content">
         <SongItem v-for="(song, index) in res.songs" :key="song.id" :shrink="false" :playing="false" :song="song" @click="select(song)" />
@@ -77,6 +77,11 @@ function select(song) {
     width: 100%;
     height: 30px;
 
+    padding: 0;
+    border: 0;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
   }
   &.active {
     opacity: 1;

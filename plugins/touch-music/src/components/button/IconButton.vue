@@ -13,6 +13,10 @@ const props = defineProps({
   icon: {
     type: String,
   },
+  label: {
+    type: String,
+    default: '',
+  },
   plain: {
     type: Boolean,
   },
@@ -28,6 +32,8 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['click'])
+
 const hover = ref(false)
 const select = ref(false)
 
@@ -37,14 +43,17 @@ watchEffect(() => {
     select.value = props.select
 })
 
-// function handleClick() {
-//   props.direct && router.push( props.direct )
-// }
+function handleClick(event) {
+  emit('click', event)
+}
 </script>
 
 <template>
-  <div
-    :class="{ plain, small, select }" role="button"
+  <button
+    type="button"
+    :aria-label="label || icon || 'Icon action'"
+    :aria-pressed="props.hasOwnProperty('select') ? select : undefined"
+    :class="{ plain, small, select }"
     class="IconButton-Container fake-background transition"
     @click="handleClick" @mouseenter="hover = true" @mouseleave="hover = false"
   >
@@ -58,7 +67,7 @@ watchEffect(() => {
     <!--    <div v-if="display !== 'popover'" class="IconButton-Text"> -->
     <!--      <slot name="text" /> -->
     <!--    </div> -->
-  </div>
+  </button>
 </template>
 
 <style lang="scss" scoped>
@@ -103,7 +112,13 @@ watchEffect(() => {
   width: 48px;
   height: 48px;
 
+  padding: 0;
+  border: 0;
+  appearance: none;
   cursor: pointer;
+  color: inherit;
+  font: inherit;
+  background: transparent;
   border-radius: 8px;
   box-shadow: var(--tx-box-shadow);
   --fake-color: var(--tx-fill-color);

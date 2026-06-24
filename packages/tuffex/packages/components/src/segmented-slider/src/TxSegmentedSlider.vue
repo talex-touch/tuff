@@ -55,13 +55,6 @@ function handleSegmentClick(segment: SegmentedSliderSegment) {
   emit('change', segment.value)
 }
 
-function handleKeydown(e: KeyboardEvent, segment: SegmentedSliderSegment) {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault()
-    handleSegmentClick(segment)
-  }
-}
-
 onMounted(() => {
   // Auto select first segment if no value provided and segments exist
   if (props.modelValue == null && props.segments.length > 0) {
@@ -86,26 +79,25 @@ onMounted(() => {
       <div class="tx-segmented-slider__progress" :style="progressStyle" />
 
       <!-- Segments -->
-      <div
+      <button
         v-for="(segment, index) in segments"
         :key="segment.value"
+        type="button"
         class="tx-segmented-slider__segment"
         :class="{
           'is-active': segment.value === modelValue,
           'is-completed': index < currentIndex,
         }"
         :style="segmentStyle(index)"
-        tabindex="0"
-        role="button"
+        :disabled="disabled"
         :aria-pressed="segment.value === modelValue"
         @click="handleSegmentClick(segment)"
-        @keydown="(e) => handleKeydown(e, segment)"
       >
-        <div class="tx-segmented-slider__dot" />
-        <div v-if="showLabels && segment.label" class="tx-segmented-slider__label">
+        <span class="tx-segmented-slider__dot" />
+        <span v-if="showLabels && segment.label" class="tx-segmented-slider__label">
           {{ segment.label }}
-        </div>
-      </div>
+        </span>
+      </button>
     </div>
   </div>
 </template>
@@ -141,12 +133,22 @@ onMounted(() => {
   }
 
   &__segment {
+    appearance: none;
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
     cursor: pointer;
+    font: inherit;
     outline: none;
     transition: all 0.2s ease;
+
+    &:disabled {
+      cursor: not-allowed;
+    }
 
     &:focus {
       .tx-segmented-slider__dot {

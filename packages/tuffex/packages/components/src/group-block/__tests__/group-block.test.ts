@@ -80,6 +80,9 @@ describe('group-block components', () => {
     })
     await plain.trigger('click')
     expect(plain.emitted('click')).toBeUndefined()
+    expect(plain.element.tagName).toBe('DIV')
+    expect(plain.attributes('role')).toBeUndefined()
+    expect(plain.attributes('tabindex')).toBeUndefined()
     expect(plain.find('.tx-block-line__description').text()).toBe('2.4.10')
 
     const link = mount(TxBlockLine, {
@@ -92,9 +95,12 @@ describe('group-block components', () => {
       },
     })
     await link.trigger('click')
-    await link.trigger('keydown.enter')
+    expect(link.element.tagName).toBe('BUTTON')
+    expect(link.attributes('type')).toBe('button')
+    expect(link.attributes('role')).toBeUndefined()
+    expect(link.attributes('tabindex')).toBeUndefined()
     expect(link.classes()).toContain('tx-block-line--link')
-    expect(link.emitted('click')).toHaveLength(2)
+    expect(link.emitted('click')).toHaveLength(1)
   })
 
   it('renders BlockSlot slots and blocks disabled clicks', async () => {
