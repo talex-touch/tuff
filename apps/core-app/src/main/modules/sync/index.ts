@@ -18,6 +18,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, getDeviceId, subscribeAuthState } from '../auth'
+import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import {
   getConfig as getMainStorageConfig,
@@ -1643,6 +1644,7 @@ export class SyncModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('SyncModule')
   name: ModuleKey = SyncModule.key
   private transportDisposers: Array<() => void> = []
+  private networkStatusCleanup: (() => void) | null = null
 
   constructor() {
     super(SyncModule.key)
@@ -1725,6 +1727,16 @@ export class SyncModule extends BaseModule<TalexEvents> {
       )
     }
 
+    if (!this.networkStatusCleanup) {
+      this.networkStatusCleanup = getNetworkService().onStatusChange((status) => {
+        if (!status.online) {
+          return
+        }
+        clearRetryTimer()
+        void triggerManualSync('online')
+      })
+    }
+
     if (!syncEnabledWatcherCleanup) {
       syncEnabledWatcherCleanup = subscribeMainConfig(StorageList.APP_SETTING, (data) => {
         handleSyncEnabledChange(data as AppSetting)
@@ -1746,6 +1758,8 @@ export class SyncModule extends BaseModule<TalexEvents> {
 
   onDestroy(): MaybePromise<void> {
     stopAutoSync('shutdown')
+    this.networkStatusCleanup?.()
+    this.networkStatusCleanup = null
     if (syncEnabledWatcherCleanup) {
       syncEnabledWatcherCleanup()
       syncEnabledWatcherCleanup = null
