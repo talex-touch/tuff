@@ -56,14 +56,18 @@ const {
   formatDate,
   formatRunJson,
   getHealthCheckReason,
+  getHealthCheckActionHint,
   getProviderEditPanel,
   getProviderObservability,
+  getProviderObservabilityActionHint,
   getProviderQuotaList,
   getProviderQuotaPanel,
   getProviderQuotaSummary,
   getSceneEditPanel,
   getSceneObservability,
+  getSceneObservabilityActionHint,
   getSceneRunPanel,
+  getUsageLedgerActionHint,
   getUsageLedgerReference,
   healthCheckEmptyState,
   healthCheckFilter,
@@ -672,14 +676,20 @@ function filterLabel(option: { value: string, label: string }) {
                   </div>
                 </template>
                 <template #cell-health="{ row: provider }">
-                  <div class="space-y-1 whitespace-nowrap">
+                  <div class="space-y-1">
                     <TxStatusBadge
                       :text="valueLabel(getProviderObservability(provider.id).status)"
                       :status="observabilityTone(getProviderObservability(provider.id).status)"
                       size="sm"
                     />
-                    <p class="text-[11px] text-black/45 dark:text-white/45">
+                    <p class="whitespace-nowrap text-[11px] text-black/45 dark:text-white/45">
                       {{ getProviderObservability(provider.id).latestHealth?.latencyMs ?? '-' }}ms
+                    </p>
+                    <p class="line-clamp-2 max-w-[11rem] text-[11px] text-black/55 dark:text-white/55" :title="`${t(getProviderObservabilityActionHint(provider.id).labelKey, getProviderObservabilityActionHint(provider.id).fallback)}${getProviderObservabilityActionHint(provider.id).detail ? ` · ${getProviderObservabilityActionHint(provider.id).detail}` : ''}`">
+                      {{ t(getProviderObservabilityActionHint(provider.id).labelKey, getProviderObservabilityActionHint(provider.id).fallback) }}
+                      <span v-if="getProviderObservabilityActionHint(provider.id).detail">
+                        · {{ getProviderObservabilityActionHint(provider.id).detail }}
+                      </span>
                     </p>
                   </div>
                 </template>
@@ -863,6 +873,12 @@ function filterLabel(option: { value: string, label: string }) {
                     <p class="truncate text-[11px] text-black/45 dark:text-white/45">
                       {{ getSceneObservability(scene.id).latestUsage?.providerId || '-' }}
                     </p>
+                    <p class="line-clamp-2 max-w-[11rem] text-[11px] text-black/55 dark:text-white/55" :title="`${t(getSceneObservabilityActionHint(scene.id).labelKey, getSceneObservabilityActionHint(scene.id).fallback)}${getSceneObservabilityActionHint(scene.id).detail ? ` · ${getSceneObservabilityActionHint(scene.id).detail}` : ''}`">
+                      {{ t(getSceneObservabilityActionHint(scene.id).labelKey, getSceneObservabilityActionHint(scene.id).fallback) }}
+                      <span v-if="getSceneObservabilityActionHint(scene.id).detail">
+                        · {{ getSceneObservabilityActionHint(scene.id).detail }}
+                      </span>
+                    </p>
                   </div>
                 </template>
                 <template #cell-actions="{ row: scene }">
@@ -1031,9 +1047,17 @@ function filterLabel(option: { value: string, label: string }) {
                   </span>
                 </template>
                 <template #cell-reference="{ row: entry }">
-                  <span class="block max-w-[220px] truncate text-xs text-black/55 dark:text-white/55" :title="getUsageLedgerReference(entry)">
-                    {{ getUsageLedgerReference(entry) }}
-                  </span>
+                  <div class="space-y-1">
+                    <span class="block max-w-[220px] truncate text-xs text-black/55 dark:text-white/55" :title="getUsageLedgerReference(entry)">
+                      {{ getUsageLedgerReference(entry) }}
+                    </span>
+                    <p class="line-clamp-2 max-w-[220px] text-[11px] text-black/45 dark:text-white/45" :title="`${t(getUsageLedgerActionHint(entry).labelKey, getUsageLedgerActionHint(entry).fallback)}${getUsageLedgerActionHint(entry).detail ? ` · ${getUsageLedgerActionHint(entry).detail}` : ''}`">
+                      {{ t(getUsageLedgerActionHint(entry).labelKey, getUsageLedgerActionHint(entry).fallback) }}
+                      <span v-if="getUsageLedgerActionHint(entry).detail">
+                        · {{ getUsageLedgerActionHint(entry).detail }}
+                      </span>
+                    </p>
+                  </div>
                 </template>
                 <template #cell-createdAt="{ row: entry }">
                   <span class="text-xs text-black/50 dark:text-white/50">{{ formatDate(entry.createdAt) }}</span>
@@ -1137,9 +1161,17 @@ function filterLabel(option: { value: string, label: string }) {
                   <span class="text-sm text-black/60 dark:text-white/60">{{ entry.latencyMs }}ms</span>
                 </template>
                 <template #cell-reason="{ row: entry }">
-                  <span class="block max-w-[260px] truncate text-xs text-black/55 dark:text-white/55" :title="getHealthCheckReason(entry)">
-                    {{ getHealthCheckReason(entry) }}
-                  </span>
+                  <div class="space-y-1">
+                    <span class="block max-w-[260px] truncate text-xs text-black/55 dark:text-white/55" :title="getHealthCheckReason(entry)">
+                      {{ getHealthCheckReason(entry) }}
+                    </span>
+                    <p class="line-clamp-2 max-w-[260px] text-[11px] text-black/45 dark:text-white/45" :title="`${t(getHealthCheckActionHint(entry).labelKey, getHealthCheckActionHint(entry).fallback)}${getHealthCheckActionHint(entry).detail ? ` · ${getHealthCheckActionHint(entry).detail}` : ''}`">
+                      {{ t(getHealthCheckActionHint(entry).labelKey, getHealthCheckActionHint(entry).fallback) }}
+                      <span v-if="getHealthCheckActionHint(entry).detail">
+                        · {{ getHealthCheckActionHint(entry).detail }}
+                      </span>
+                    </p>
+                  </div>
                 </template>
                 <template #cell-checkedAt="{ row: entry }">
                   <span class="text-xs text-black/50 dark:text-white/50">{{ formatDate(entry.checkedAt) }}</span>

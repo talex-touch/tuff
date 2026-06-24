@@ -1,0 +1,85 @@
+{
+  "schema": "provider-registry-observability-evidence/v1",
+  "checkedAt": "2026-06-24T14:17:02.886Z",
+  "source": "local-only",
+  "seedBacked": true,
+  "productionEvidence": false,
+  "uiSurface": "apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue",
+  "helperSurface": "apps/nexus/app/utils/provider-registry-admin.ts",
+  "artifacts": {
+    "html": "provider-registry-observability-2026-06-24.html",
+    "providerScreenshot": "provider-registry-health-2026-06-24.png",
+    "sceneScreenshot": "provider-registry-scene-run-2026-06-24.png"
+  },
+  "evidenceChecks": {
+    "providerHealthAndLatestUsageVisible": true,
+    "sceneLatestRunAndRecentFailureVisible": true,
+    "attentionHealthyDegradedUnhealthyUnknownFiltersVisible": true,
+    "nextActionHintsVisibleForDegradedUnknown": true,
+    "nonProductionSeedEvidenceMarked": true
+  },
+  "providers": [
+    {
+      "id": "provider-openai-main",
+      "displayName": "OpenAI Compatible AI",
+      "health": "healthy",
+      "latency": "184ms",
+      "latestUsage": "run-corebox-ok · completed · 1 request",
+      "nextAction": "Healthy. Ready for scene dry-run or registry evidence. · chat.completion"
+    },
+    {
+      "id": "provider-ocr-degraded",
+      "displayName": "OCR Vision Provider",
+      "health": "degraded",
+      "latency": "1260ms",
+      "latestUsage": "run-image-translate-planned · planned · estimated",
+      "nextAction": "Review the degraded reason, then rerun the provider check. · LATENCY_HIGH"
+    },
+    {
+      "id": "provider-mt-down",
+      "displayName": "Tencent Machine Translation",
+      "health": "unhealthy",
+      "latency": "0ms",
+      "latestUsage": "run-translate-failed · failed · AUTH_FAILED",
+      "nextAction": "Check credentials, endpoint, and provider health before using this provider. · AUTH_FAILED"
+    },
+    {
+      "id": "provider-custom-unknown",
+      "displayName": "Custom Local Adapter",
+      "health": "unknown",
+      "latency": "-",
+      "latestUsage": "No ledger row",
+      "nextAction": "Run a provider check before relying on this provider."
+    }
+  ],
+  "scenes": [
+    {
+      "id": "corebox.screenshot.translate",
+      "name": "CoreBox Screenshot Translate",
+      "latestRun": "run-screen-ok · completed · provider-openai-main",
+      "recentFailures": "1 failed in latest 25 rows",
+      "nextAction": "Recent failures exist. Dry-run before the next execute. · 1 failed"
+    },
+    {
+      "id": "workflow.use-model.review",
+      "name": "Use Model Review Queue",
+      "latestRun": "run-review-planned · planned · provider-ocr-degraded",
+      "recentFailures": "0 failed",
+      "nextAction": "Only planned usage exists. Execute once with a safe sample input. · run-review-planned"
+    },
+    {
+      "id": "plugin.translation.quick",
+      "name": "Plugin Translation Quick Action",
+      "latestRun": "run-plugin-failed · failed · provider-mt-down",
+      "recentFailures": "2 failed in latest 25 rows",
+      "nextAction": "Inspect the error and fallback trail, then rerun a dry-run. · AUTH_FAILED"
+    },
+    {
+      "id": "custom.route.unseeded",
+      "name": "Custom Unseeded Route",
+      "latestRun": "unknown",
+      "recentFailures": "No usage evidence",
+      "nextAction": "Run a scene dry-run to seed health and usage evidence."
+    }
+  ]
+}

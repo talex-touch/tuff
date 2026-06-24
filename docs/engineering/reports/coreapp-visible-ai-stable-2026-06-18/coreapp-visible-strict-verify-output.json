@@ -288,10 +288,20 @@
     },
     {
       "id": "provider-registry-observability",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": "",
+      "status": "passed",
+      "artifactPaths": [
+        "provider-registry-observability-probe-2026-06-24.json",
+        "provider-registry-health-2026-06-24.png",
+        "provider-registry-scene-run-2026-06-24.png"
+      ],
+      "checkedEvidence": [
+        "Provider health and latest usage summaries are visible",
+        "Scene latest run and recent failure summaries are visible",
+        "Attention/healthy/degraded/unhealthy/unknown filters are visible",
+        "Next-action hints explain degraded or unknown state"
+      ],
+      "notes": "2026-06-24 Nexus Provider Registry observability evidence uses local-only seed-backed non-production data, explicitly labeled in the screenshot and JSON. The Nexus admin panel now renders existing provider, scene, usage ledger, and health next-action hints inline. Artifacts cover provider health/latest usage, attention/healthy/degraded/unhealthy/unknown filters, scene latest run/recent failures, and degraded/unknown recovery hints without claiming production registry readiness.",
+      "checkedAt": "2026-06-24T00:00:00.000Z",
       "evidenceTags": [],
       "evidenceTagArtifacts": {}
     },
@@ -322,14 +332,7 @@
       "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Use Model output enters Review Queue",
       "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Pending/copied/clipboard-replaced/failed filters are visible",
       "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Runtime cost signals are visible",
-      "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Failed copy/replace actions expose retry and clear-failure actions",
-      "Visible experience item is not passed: provider-registry-observability",
-      "Visible experience item has no artifact path: provider-registry-observability",
-      "Visible experience item has no screenshot or recording artifact: provider-registry-observability",
-      "Visible experience item is missing required evidence check: provider-registry-observability -> Provider health and latest usage summaries are visible",
-      "Visible experience item is missing required evidence check: provider-registry-observability -> Scene latest run and recent failure summaries are visible",
-      "Visible experience item is missing required evidence check: provider-registry-observability -> Attention/healthy/degraded/unhealthy/unknown filters are visible",
-      "Visible experience item is missing required evidence check: provider-registry-observability -> Next-action hints explain degraded or unknown state"
+      "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Failed copy/replace actions expose retry and clear-failure actions"
     ]
   }
 }

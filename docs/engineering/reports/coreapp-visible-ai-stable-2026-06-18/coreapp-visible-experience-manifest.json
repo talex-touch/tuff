@@ -268,10 +268,20 @@
     },
     {
       "id": "provider-registry-observability",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": ""
+      "status": "passed",
+      "artifactPaths": [
+        "provider-registry-observability-probe-2026-06-24.json",
+        "provider-registry-health-2026-06-24.png",
+        "provider-registry-scene-run-2026-06-24.png"
+      ],
+      "checkedEvidence": [
+        "Provider health and latest usage summaries are visible",
+        "Scene latest run and recent failure summaries are visible",
+        "Attention/healthy/degraded/unhealthy/unknown filters are visible",
+        "Next-action hints explain degraded or unknown state"
+      ],
+      "notes": "2026-06-24 Nexus Provider Registry observability evidence uses local-only seed-backed non-production data, explicitly labeled in the screenshot and JSON. The Nexus admin panel now renders existing provider, scene, usage ledger, and health next-action hints inline. Artifacts cover provider health/latest usage, attention/healthy/degraded/unhealthy/unknown filters, scene latest run/recent failures, and degraded/unknown recovery hints without claiming production registry readiness.",
+      "checkedAt": "2026-06-24T00:00:00.000Z"
     },
     {
       "id": "provider-migration-evidence",
