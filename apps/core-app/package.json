@@ -59,7 +59,6 @@
     "clipboard:stress:verify": "pnpm exec tsx \"scripts/clipboard-stress-verify.ts\"",
     "app-index:diagnostic:verify": "pnpm exec tsx \"scripts/app-index-diagnostic-verify.ts\"",
     "everything:diagnostic:verify": "pnpm exec tsx \"scripts/everything-diagnostic-verify.ts\"",
-    "search:index-migration:preflight": "pnpm exec tsx \"scripts/search-index-migration-preflight.ts\"",
     "update:diagnostic:verify": "pnpm exec tsx \"scripts/update-diagnostic-verify.ts\"",
     "search:trace:stats": "pnpm exec tsx \"scripts/search-trace-stats.ts\"",
     "search:trace:verify": "pnpm exec tsx \"scripts/search-trace-verify.ts\"",
