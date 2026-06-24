@@ -60,7 +60,7 @@ const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.
       </template>
 
       <template v-else-if="item?.type === 'text'">
-        <pre class="code-preview">{{ item.content }}</pre>
+        <pre class="code-preview text-preview">{{ item.content }}</pre>
       </template>
 
       <template v-else>
@@ -261,6 +261,11 @@ const imagePreview = computed(() => resolveDetailImagePreview(props.item, props.
   word-break: break-word;
   line-height: 1.45;
   color: var(--clipboard-text-primary);
+}
+
+.text-preview {
+  max-height: min(30vh, 260px);
+  overflow: auto;
 }
 
 .file-list {
