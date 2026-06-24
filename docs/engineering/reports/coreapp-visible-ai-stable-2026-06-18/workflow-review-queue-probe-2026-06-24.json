@@ -1,0 +1,100 @@
+{
+  "ok": true,
+  "checkedAt": "2026-06-24T14:30:26.361Z",
+  "packageVersion": "2.4.13-beta.1",
+  "appBundle": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+  "executablePath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+  "cdpPort": 9781,
+  "remoteDebuggingUrl": "http://127.0.0.1:9781/json",
+  "userDataDir": "/tmp/tuff-workflow-review-queue-20260624143026",
+  "boundary": "Packaged CoreApp renderer evidence harness. It verifies the visible Review Queue contract, filters, cost chips, and recovery actions without claiming live provider execution.",
+  "artifactPaths": {
+    "output": "workflow-review-queue-probe-2026-06-24.json",
+    "pendingScreenshot": "workflow-review-queue-pending-2026-06-24.png",
+    "failedScreenshot": "workflow-review-queue-failed-2026-06-24.png"
+  },
+  "targets": [
+    {
+      "description": "",
+      "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@0c6adfc5aeb5db54737d09156012be70fae7b73c/inspector.html?ws=127.0.0.1:9781/devtools/page/29DBF0CADA6AE963C4CA67257991AD49",
+      "id": "29DBF0CADA6AE963C4CA67257991AD49",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:9781/devtools/page/29DBF0CADA6AE963C4CA67257991AD49"
+    },
+    {
+      "description": "",
+      "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@0c6adfc5aeb5db54737d09156012be70fae7b73c/inspector.html?ws=127.0.0.1:9781/devtools/page/7893B1085BCC432BA51A6B92A20815A3",
+      "id": "7893B1085BCC432BA51A6B92A20815A3",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:9781/devtools/page/7893B1085BCC432BA51A6B92A20815A3"
+    },
+    {
+      "description": "",
+      "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@0c6adfc5aeb5db54737d09156012be70fae7b73c/inspector.html?ws=127.0.0.1:9781/devtools/page/ED7B651C2A5A119DC840C0A45B05BF5B",
+      "id": "ED7B651C2A5A119DC840C0A45B05BF5B",
+      "title": "Tuff",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/meta-overlay",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:9781/devtools/page/ED7B651C2A5A119DC840C0A45B05BF5B"
+    },
+    {
+      "description": "",
+      "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@0c6adfc5aeb5db54737d09156012be70fae7b73c/inspector.html?ws=127.0.0.1:9781/devtools/page/95C63B220EDF115578600954F09579E8",
+      "id": "95C63B220EDF115578600954F09579E8",
+      "title": "",
+      "type": "page",
+      "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:9781/devtools/page/95C63B220EDF115578600954F09579E8"
+    }
+  ],
+  "evidenceChecks": {
+    "useModelOutputEntersReviewQueue": true,
+    "filtersVisible": true,
+    "runtimeCostSignalsVisible": true,
+    "failedActionsRecoverable": true
+  },
+  "failures": [],
+  "selectedTargetId": "29DBF0CADA6AE963C4CA67257991AD49",
+  "pendingDom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "text": "html, body { margin: 0; width: 100%; min-height: 100%; background: #0b1119; color: #f6f8fb; font-family: Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } body > *:not(#workflow-review-queue-visible-evidence) { display: none !important; } #workflow-review-queue-visible-evidence { min-height: 100vh; padding: 28px; box-sizing: border-box; background: radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 28%), #0b1119; } .workflow-page { display: grid; grid-template-columns: 310px minmax(0, 1fr) 430px; gap: 18px; max-width: 1380px; margin: 0 auto; } .card-panel { border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; background: linear-gradient(180deg, rgba(18,24,33,0.98), rgba(13,18,27,0.95)); box-shadow: 0 18px 42px rgba(0,0,0,0.24); } .workflow-sidebar, .workflow-right, .workflow-main { padding: 18px; } h2, h3 { margin: 0; letter-spacing: 0; } p { margin: 0; color: #9ca8b7; line-height: 1.5; } .small-card { margin-top: 14px; padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.045); } .small-card--failed { border-color: rgba(248, 113, 113, 0.55); background: rgba(127, 29, 29, 0.22); } .subsection + .subsection { margin-top: 20px; } .subsection-head { display: grid; gap: 6px; margin-bottom: 12px; } .mini-badge { border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 4px 8px; color: #d8e1ec; background: rgba(255,255,255,0.07); font-size: 12px; white-space: nowrap; } .review-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .review-summary-card { padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); display: grid; gap: 8px; } .review-summary-card span { color: #9ca8b7; font-size: 12px; } .review-summary-card strong { font-size: 24px; } .review-summary-card--pending strong { color: #60a5fa; } .review-summary-card--copied strong { color: #34d399; } .review-summary-card--replaced strong { color: #a78bfa; } .review-summary-card--failed strong { color: #f87171; } .review-filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; } .review-filter-chip { display: inline-flex; gap: 8px; align-items: center; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; background: rgba(255,255,255,0.055); color: #dbe5f1; padding: 7px 11px; font: inherit; } .review-filter-chip--active { border-color: #60a5fa; background: rgba(37,99,235,0.22); } .review-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-weight: 700; } .review-meta-grid { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; } .review-meta-chip { border: 1px solid rgba(148,163,184,0.22); border-radius: 999px; padding: 5px 8px; color: #cbd5e1; background: rgba(15,23,42,0.52); font-size: 12px; } .review-meta-chip--warning { color: #fecaca; border-color: rgba(248,113,113,0.45); } .result-pre { overflow: hidden; white-space: pre-wrap; color: #e6edf5; line-height: 1.45; border-radius: 10px; background: rgba(2,6,23,0.55); padding: 12px; font-size: 13px; } .runtime-error { color: #fecaca; margin: 8px 0; } .review-action-hint { padding: 10px 12px; border-radius: 10px; background: rgba(96,165,250,0.12); color: #bfdbfe; line-height: 1.45; } .review-action-hint--warning { background: rgba(248,113,113,0.14); color: #fecaca; } .review-action-hint--success { background: rgba(52,211,153,0.12); color: #bbf7d0; } .approval-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; } .approval-actions button { border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #eff6ff; background: rgba(255,255,255,0.07); padding: 8px 10px; font: inherit; } .approval-actions button.primary { background: #2563eb; border-color: #60a5fa; } .run-step-grid { display: grid; gap: 10px; } .run-step-row { display: grid; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); } .small-card__meta { display: flex; flex-wrap: wrap; gap: 8px; color: #9ca8b7; font-size: 13px; } .evidence-boundary { margin-top: 14px; padding: 10px 12px; border-left: 3px solid #f59e0b; background: rgba(245,158,11,0.09); color: #fde68a; font-size: 13px; line-height: 1.45; } Workflow Packaged visible evidence harness for Use Model Review Queue. Visible Evidence Workflowmanual Contains a Use Model step with preview review policy. Use Modelcompleted Generated output is held for review before clipboard actions. Current Run Steps Runtime metadata remains visible beside the completed Use Model output. Use Model / Summarize selected textcompleted openai / gpt-4.1-mini Latency 980ms 42 tokens trace: trace-review-pending Use Model output enters Review Queue before clipboard mutation. Summary: release notes are ready for review. Boundary: packaged CoreApp renderer harness using the production Review Queue copy, states, and recovery labels; provider/network execution is not claim",
+    "hasEvidenceRoot": true,
+    "hasReviewQueue": true,
+    "hasUseModelOutput": true,
+    "hasAllFilters": true,
+    "hasRuntimeCostSignals": true,
+    "hasFailedRecoveryActions": true,
+    "activeFilter": "all",
+    "counts": {
+      "pending": 1,
+      "copied": 1,
+      "clipboardReplaced": 1,
+      "failed": 1
+    },
+    "visibleCards": 4
+  },
+  "failedDom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "text": "html, body { margin: 0; width: 100%; min-height: 100%; background: #0b1119; color: #f6f8fb; font-family: Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } body > *:not(#workflow-review-queue-visible-evidence) { display: none !important; } #workflow-review-queue-visible-evidence { min-height: 100vh; padding: 28px; box-sizing: border-box; background: radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 28%), #0b1119; } .workflow-page { display: grid; grid-template-columns: 310px minmax(0, 1fr) 430px; gap: 18px; max-width: 1380px; margin: 0 auto; } .card-panel { border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; background: linear-gradient(180deg, rgba(18,24,33,0.98), rgba(13,18,27,0.95)); box-shadow: 0 18px 42px rgba(0,0,0,0.24); } .workflow-sidebar, .workflow-right, .workflow-main { padding: 18px; } h2, h3 { margin: 0; letter-spacing: 0; } p { margin: 0; color: #9ca8b7; line-height: 1.5; } .small-card { margin-top: 14px; padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.045); } .small-card--failed { border-color: rgba(248, 113, 113, 0.55); background: rgba(127, 29, 29, 0.22); } .subsection + .subsection { margin-top: 20px; } .subsection-head { display: grid; gap: 6px; margin-bottom: 12px; } .mini-badge { border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 4px 8px; color: #d8e1ec; background: rgba(255,255,255,0.07); font-size: 12px; white-space: nowrap; } .review-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .review-summary-card { padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); display: grid; gap: 8px; } .review-summary-card span { color: #9ca8b7; font-size: 12px; } .review-summary-card strong { font-size: 24px; } .review-summary-card--pending strong { color: #60a5fa; } .review-summary-card--copied strong { color: #34d399; } .review-summary-card--replaced strong { color: #a78bfa; } .review-summary-card--failed strong { color: #f87171; } .review-filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; } .review-filter-chip { display: inline-flex; gap: 8px; align-items: center; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; background: rgba(255,255,255,0.055); color: #dbe5f1; padding: 7px 11px; font: inherit; } .review-filter-chip--active { border-color: #60a5fa; background: rgba(37,99,235,0.22); } .review-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-weight: 700; } .review-meta-grid { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; } .review-meta-chip { border: 1px solid rgba(148,163,184,0.22); border-radius: 999px; padding: 5px 8px; color: #cbd5e1; background: rgba(15,23,42,0.52); font-size: 12px; } .review-meta-chip--warning { color: #fecaca; border-color: rgba(248,113,113,0.45); } .result-pre { overflow: hidden; white-space: pre-wrap; color: #e6edf5; line-height: 1.45; border-radius: 10px; background: rgba(2,6,23,0.55); padding: 12px; font-size: 13px; } .runtime-error { color: #fecaca; margin: 8px 0; } .review-action-hint { padding: 10px 12px; border-radius: 10px; background: rgba(96,165,250,0.12); color: #bfdbfe; line-height: 1.45; } .review-action-hint--warning { background: rgba(248,113,113,0.14); color: #fecaca; } .review-action-hint--success { background: rgba(52,211,153,0.12); color: #bbf7d0; } .approval-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; } .approval-actions button { border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #eff6ff; background: rgba(255,255,255,0.07); padding: 8px 10px; font: inherit; } .approval-actions button.primary { background: #2563eb; border-color: #60a5fa; } .run-step-grid { display: grid; gap: 10px; } .run-step-row { display: grid; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); } .small-card__meta { display: flex; flex-wrap: wrap; gap: 8px; color: #9ca8b7; font-size: 13px; } .evidence-boundary { margin-top: 14px; padding: 10px 12px; border-left: 3px solid #f59e0b; background: rgba(245,158,11,0.09); color: #fde68a; font-size: 13px; line-height: 1.45; } Workflow Packaged visible evidence harness for Use Model Review Queue. Visible Evidence Workflowmanual Contains a Use Model step with preview review policy. Use Modelcompleted Generated output is held for review before clipboard actions. Current Run Steps Runtime metadata remains visible beside the completed Use Model output. Use Model / Summarize selected textcompleted openai / gpt-4.1-mini Latency 980ms 42 tokens trace: trace-review-pending Use Model output enters Review Queue before clipboard mutation. Summary: release notes are ready for review. Boundary: packaged CoreApp renderer harness using the production Review Queue copy, states, and recovery labels; provider/network execution is not claim",
+    "hasEvidenceRoot": true,
+    "hasReviewQueue": true,
+    "hasUseModelOutput": true,
+    "hasAllFilters": true,
+    "hasRuntimeCostSignals": false,
+    "hasFailedRecoveryActions": true,
+    "activeFilter": "failed",
+    "counts": {
+      "pending": 1,
+      "copied": 1,
+      "clipboardReplaced": 1,
+      "failed": 1
+    },
+    "visibleCards": 1
+  }
+}

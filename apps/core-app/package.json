@@ -54,6 +54,7 @@
     "visible:experience:app-index-workbench-probe": "corepack pnpm exec tsx \"scripts/coreapp-visible-app-index-workbench-probe.ts\"",
     "visible:experience:assistant-floating-ball-probe": "corepack pnpm exec tsx \"scripts/coreapp-visible-assistant-floating-ball-probe.ts\"",
     "visible:experience:assistant-image-translate-probe": "corepack pnpm exec tsx \"scripts/coreapp-visible-assistant-image-translate-probe.ts\"",
+    "visible:experience:workflow-review-queue-probe": "corepack pnpm exec tsx \"scripts/coreapp-visible-workflow-review-queue-probe.ts\"",
     "visible:experience:login-recovery-probe": "corepack pnpm exec tsx \"scripts/coreapp-packaged-login-recovery-probe.ts\"",
     "smoke:assistant": "pnpm exec tsx \"scripts/assistant-floating-ball-smoke.ts\"",
     "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\"",

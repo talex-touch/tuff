@@ -279,10 +279,20 @@
     },
     {
       "id": "workflow-use-model-review-queue",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": "",
+      "status": "passed",
+      "artifactPaths": [
+        "workflow-review-queue-probe-2026-06-24.json",
+        "workflow-review-queue-pending-2026-06-24.png",
+        "workflow-review-queue-failed-2026-06-24.png"
+      ],
+      "checkedEvidence": [
+        "Use Model output enters Review Queue",
+        "Pending/copied/clipboard-replaced/failed filters are visible",
+        "Runtime cost signals are visible",
+        "Failed copy/replace actions expose retry and clear-failure actions"
+      ],
+      "notes": "Packaged 2.4.13-beta.1 renderer evidence harness ran with isolated userData and captured Review Queue pending/all and failed-filter states. The screenshots show Use Model output held in Review Queue, pending/copied/clipboard-replaced/failed summary and filters, provider/model/trace/latency/token cost chips, and failed Retry Copy / Retry Replace / Clear Failure actions. Boundary: this artifact verifies visible Review Queue UX in the packaged renderer and does not claim live provider execution.",
+      "checkedAt": "2026-06-24T00:00:00.000Z",
       "evidenceTags": [],
       "evidenceTagArtifacts": {}
     },
@@ -324,15 +334,7 @@
     }
   ],
   "gate": {
-    "passed": false,
-    "failures": [
-      "Visible experience item is not passed: workflow-use-model-review-queue",
-      "Visible experience item has no artifact path: workflow-use-model-review-queue",
-      "Visible experience item has no screenshot or recording artifact: workflow-use-model-review-queue",
-      "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Use Model output enters Review Queue",
-      "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Pending/copied/clipboard-replaced/failed filters are visible",
-      "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Runtime cost signals are visible",
-      "Visible experience item is missing required evidence check: workflow-use-model-review-queue -> Failed copy/replace actions expose retry and clear-failure actions"
-    ]
+    "passed": true,
+    "failures": []
   }
 }
