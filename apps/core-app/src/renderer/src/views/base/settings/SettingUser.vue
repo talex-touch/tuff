@@ -45,6 +45,8 @@ const loginDialogVisible = ref(false)
 const loginErrorMessage = ref('')
 const syncSubmitting = ref(false)
 const secureStoreHealth = ref<SecureStoreHealthResponse | null>(null)
+const loginLinkCopyState = ref<'idle' | 'pending' | 'success' | 'failed'>('idle')
+const loginCodeCopyState = ref<'idle' | 'pending' | 'success' | 'failed'>('idle')
 
 function ensureSecuritySettings() {
   if (!appSetting.security) {
@@ -277,13 +279,16 @@ async function copyLoginAuthorizeUrl() {
   if (!authLoadingState.loginAuthorizeUrl) {
     return
   }
+  loginLinkCopyState.value = 'pending'
   try {
     await transport.send(ClipboardEvents.write, {
       type: 'text',
       value: authLoadingState.loginAuthorizeUrl
     })
+    loginLinkCopyState.value = 'success'
     toast.success(t('settingUser.loginLinkCopied'))
   } catch {
+    loginLinkCopyState.value = 'failed'
     toast.error(t('settingUser.loginLinkCopyFailed'))
   }
 }
@@ -292,13 +297,16 @@ async function copyLoginUserCode() {
   if (!authLoadingState.loginUserCode) {
     return
   }
+  loginCodeCopyState.value = 'pending'
   try {
     await transport.send(ClipboardEvents.write, {
       type: 'text',
       value: authLoadingState.loginUserCode
     })
+    loginCodeCopyState.value = 'success'
     toast.success(t('settingUser.loginCodeCopied'))
   } catch {
+    loginCodeCopyState.value = 'failed'
     toast.error(t('settingUser.loginCodeCopyFailed'))
   }
 }
@@ -479,7 +487,7 @@ onMounted(() => {
   <CreditsSummaryBlock context="settings" />
 
   <TModal v-model="loginDialogVisible" :title="loginDialogTitle">
-    <div class="login-dialog">
+    <div class="login-dialog" data-testid="login-recovery-dialog">
       <div class="login-dialog__icon" :class="`is-${authLoadingState.loginStage}`">
         <span
           :class="
@@ -491,8 +499,12 @@ onMounted(() => {
           "
         />
       </div>
-      <p>{{ loginDialogDescription }}</p>
-      <p v-if="loginManualHint" class="login-dialog__manual-hint">
+      <p data-testid="login-recovery-description">{{ loginDialogDescription }}</p>
+      <p
+        v-if="loginManualHint"
+        class="login-dialog__manual-hint"
+        data-testid="login-recovery-manual-hint"
+      >
         {{ loginManualHint }}
       </p>
     </div>
@@ -500,16 +512,25 @@ onMounted(() => {
       <TxButton
         v-if="authLoadingState.loginAuthorizeUrl"
         variant="ghost"
+        data-testid="login-recovery-copy-link"
+        :data-copy-state="loginLinkCopyState"
         @click="copyLoginAuthorizeUrl"
       >
         {{ t('settingUser.copyLoginLink') }}
       </TxButton>
-      <TxButton v-if="authLoadingState.loginUserCode" variant="ghost" @click="copyLoginUserCode">
+      <TxButton
+        v-if="authLoadingState.loginUserCode"
+        variant="ghost"
+        data-testid="login-recovery-copy-code"
+        :data-copy-state="loginCodeCopyState"
+        @click="copyLoginUserCode"
+      >
         {{ t('settingUser.copyLoginCode') }}
       </TxButton>
       <TxButton
         v-if="authLoadingState.loginStage === 'waiting'"
         variant="ghost"
+        data-testid="login-recovery-reopen"
         @click="handleReopenLogin"
       >
         {{ t('settingUser.reopenLogin') }}
@@ -518,6 +539,7 @@ onMounted(() => {
         v-if="authLoadingState.loginStage === 'failed'"
         variant="flat"
         type="primary"
+        data-testid="login-recovery-retry"
         @click="handleLogin"
       >
         {{ t('settingUser.retryLogin') }}
@@ -526,6 +548,7 @@ onMounted(() => {
         v-if="authLoadingState.isLoggingIn"
         variant="ghost"
         type="danger"
+        data-testid="login-recovery-cancel"
         @click="handleCancelLogin"
       >
         {{ t('settingUser.cancelLogin') }}

@@ -260,6 +260,15 @@ function finishPendingBrowserLogin(result: LoginResult): void {
   clearBrowserLoginLoading()
 }
 
+function resolvePendingBrowserLogin(result: LoginResult): void {
+  if (!pendingBrowserLogin.value) return
+  const pending = pendingBrowserLogin.value
+  clearTimeout(pending.timeoutId)
+  window.clearInterval(pending.countdownId)
+  pending.resolve(result)
+  pendingBrowserLogin.value = null
+}
+
 function getDisplayName(): string {
   const name = authState.user?.name?.trim()
   if (name) {
@@ -472,9 +481,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       const error = new Error('Missing token')
       toast.error(resolveAuthErrorMessage(error, 'AUTH_ERROR'))
       if (pendingBrowserLogin.value) {
-        clearTimeout(pendingBrowserLogin.value.timeoutId)
-        pendingBrowserLogin.value.resolve({ success: false, error })
-        pendingBrowserLogin.value = null
+        resolvePendingBrowserLogin({ success: false, error })
       }
       return
     }
@@ -498,9 +505,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
     }
 
     if (pendingBrowserLogin.value) {
-      clearTimeout(pendingBrowserLogin.value.timeoutId)
-      pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
-      pendingBrowserLogin.value = null
+      resolvePendingBrowserLogin({ success: true, user: currentUser.value })
     }
     authLoadingState.loginStage = 'success'
     authLoadingState.isLoggingIn = false
@@ -511,9 +516,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
     toast.error(errorMessage)
 
     if (pendingBrowserLogin.value) {
-      clearTimeout(pendingBrowserLogin.value.timeoutId)
-      pendingBrowserLogin.value.resolve({ success: false, error })
-      pendingBrowserLogin.value = null
+      resolvePendingBrowserLogin({ success: false, error })
     }
     authLoadingState.loginStage = 'failed'
   } finally {
@@ -671,7 +674,12 @@ async function retryPendingBrowserLogin(): Promise<void> {
         : '已重新打开登录页面'
     )
   } catch (error) {
-    toast.error(resolveAuthErrorMessage(error, 'BROWSER_OPEN_FAILED'))
+    const errorMessage = resolveAuthErrorMessage(error, 'BROWSER_OPEN_FAILED')
+    authLoadingState.loginStage = 'failed'
+    authLoadingState.isLoggingIn = false
+    authLoadingState.loginProgress = 0
+    authLoadingState.loginTimeRemaining = 0
+    toast.error(errorMessage)
   }
 }
 
