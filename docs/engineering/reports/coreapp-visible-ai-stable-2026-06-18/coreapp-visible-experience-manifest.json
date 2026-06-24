@@ -261,10 +261,20 @@
     },
     {
       "id": "workflow-use-model-review-queue",
-      "status": "pending",
-      "artifactPaths": [],
-      "checkedEvidence": [],
-      "notes": ""
+      "status": "passed",
+      "artifactPaths": [
+        "workflow-review-queue-probe-2026-06-24.json",
+        "workflow-review-queue-pending-2026-06-24.png",
+        "workflow-review-queue-failed-2026-06-24.png"
+      ],
+      "checkedEvidence": [
+        "Use Model output enters Review Queue",
+        "Pending/copied/clipboard-replaced/failed filters are visible",
+        "Runtime cost signals are visible",
+        "Failed copy/replace actions expose retry and clear-failure actions"
+      ],
+      "notes": "Packaged 2.4.13-beta.1 renderer evidence harness ran with isolated userData and captured Review Queue pending/all and failed-filter states. The screenshots show Use Model output held in Review Queue, pending/copied/clipboard-replaced/failed summary and filters, provider/model/trace/latency/token cost chips, and failed Retry Copy / Retry Replace / Clear Failure actions. Boundary: this artifact verifies visible Review Queue UX in the packaged renderer and does not claim live provider execution.",
+      "checkedAt": "2026-06-24T00:00:00.000Z"
     },
     {
       "id": "provider-registry-observability",
@@ -286,9 +296,7 @@
     {
       "id": "provider-migration-evidence",
       "status": "passed",
-      "artifactPaths": [
-        "provider-migration-dry-run-2026-06-24.md"
-      ],
+      "artifactPaths": ["provider-migration-dry-run-2026-06-24.md"],
       "checkedEvidence": [
         "Dry-run or execute migration evidence summary is attached",
         "Readiness, blockers, migrated/skipped/failed counts are visible",
