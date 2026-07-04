@@ -32,7 +32,7 @@ export function resolveRouteLocaleChunks(path: string): RouteLocaleChunkName[] {
   const normalized = normalizeRouteLocalePath(path)
   const chunks: RouteLocaleChunkName[] = []
 
-  if (normalized === '/' || normalized === '/new' || normalized.startsWith('/new/'))
+  if (normalized === '/' || normalized === '/new' || normalized.startsWith('/new/') || normalized === '/next' || normalized.startsWith('/next/'))
     chunks.push('landing')
 
   if (

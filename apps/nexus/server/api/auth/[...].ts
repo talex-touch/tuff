@@ -418,12 +418,12 @@ async function restoreForInteractiveSignIn(authEvent: H3Event, userId: string) {
   return user?.status === 'active' ? user : null
 }
 
-function getAuthOptions(event?: H3Event): AuthOptions {
+function getAuthOptions(): AuthOptions {
   const config = useRuntimeConfig()
   const configuredOrigin = normalizeAuthOrigin(config.auth?.origin)
   const trustForwardedHost = shouldTrustForwardedAuthHost(configuredOrigin)
   applyNextAuthOriginFallback(configuredOrigin, trustForwardedHost)
-  const createRequestAuthEvent = () => createAuthEvent(event?.node.req.headers as AuthRequestHeaders | undefined)
+  const createRequestAuthEvent = () => createAuthEvent()
   const linuxdoIssuer = config.auth?.linuxdo?.issuer || 'https://connect.linux.do'
   const linuxdoClientId = config.auth?.linuxdo?.clientId
   const linuxdoClientSecret = config.auth?.linuxdo?.clientSecret
@@ -781,9 +781,16 @@ function markSessionError(event: H3Event) {
   })
 }
 
+let cachedAuthHandler: ReturnType<typeof NuxtAuthHandler> | null = null
+
+function getCachedAuthHandler() {
+  cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions())
+  return cachedAuthHandler
+}
+
 export default defineEventHandler(async (event) => {
   const baseUrl = resolveAuthBaseUrl(event)
-  const authHandler = NuxtAuthHandler(getAuthOptions(event))
+  const authHandler = getCachedAuthHandler()
   try {
     const result = await authHandler(event)
     return await normalizeAuthResponseResult(result, event, baseUrl)

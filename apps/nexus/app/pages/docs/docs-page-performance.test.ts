@@ -19,6 +19,7 @@ const vortexBackground = readFileSync(new URL('../../components/tuff/VortexBackg
 const headerControls = readFileSync(new URL('../../components/HeaderControls.vue', import.meta.url), 'utf8')
 const globalSearchState = readFileSync(new URL('../../composables/useGlobalSearchState.ts', import.meta.url), 'utf8')
 const globalSearch = readFileSync(new URL('../../composables/useGlobalSearch.ts', import.meta.url), 'utf8')
+const docEngagementTracker = readFileSync(new URL('../../composables/useDocEngagementTracker.ts', import.meta.url), 'utf8')
 const languageToggle = readFileSync(new URL('../../components/LanguageToggle.vue', import.meta.url), 'utf8')
 const languageToggleMenu = readFileSync(new URL('../../components/LanguageToggleMenu.vue', import.meta.url), 'utf8')
 const darkToggle = readFileSync(new URL('../../components/DarkToggle.vue', import.meta.url), 'utf8')
@@ -56,6 +57,7 @@ const routeLocaleMiddleware = readFileSync(new URL('../../middleware/i18n-route-
 const routeLocaleComposable = readFileSync(new URL('../../composables/useRouteLocaleChunks.ts', import.meta.url), 'utf8')
 const localeOrchestrator = readFileSync(new URL('../../composables/useLocaleOrchestrator.ts', import.meta.url), 'utf8')
 const nexusAuth = readFileSync(new URL('../../composables/useNexusAuth.ts', import.meta.url), 'utf8')
+const authApi = readFileSync(new URL('../../../server/api/auth/[...].ts', import.meta.url), 'utf8')
 const vueDevtoolsApiNoop = readFileSync(new URL('../../utils/vue-devtools-api-noop.ts', import.meta.url), 'utf8')
 const docsPageApi = readFileSync(new URL('../../../server/api/docs/page.get.ts', import.meta.url), 'utf8')
 const nuxtConfig = readFileSync(new URL('../../../nuxt.config.ts', import.meta.url), 'utf8')
@@ -182,6 +184,13 @@ describe('docs page performance boundaries', () => {
     expect(nuxtConfig).toContain("const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')")
     expect(nuxtConfig).toMatch(/alias: \{[\s\S]*'next-auth\/core': nextAuthCoreEntry/)
     expect(packageJson).toContain('"#auth": "./node_modules/@sidebase/nuxt-auth/dist/runtime/server/services/index.js"')
+    expect(authApi).toContain('const createRequestAuthEvent = () => createAuthEvent()')
+    expect(authApi).toContain('let cachedAuthHandler')
+    expect(authApi).toContain('function getCachedAuthHandler()')
+    expect(authApi).toContain('cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions())')
+    expect(authApi).toContain('const authHandler = getCachedAuthHandler()')
+    expect(authApi).not.toContain('NuxtAuthHandler(getAuthOptions(event))')
+    expect(authApi).not.toContain('function getAuthOptions(event')
 
     expect(signInPage).toContain('useSignIn()')
     expect(signInCallbackPage).toContain("path: '/sign-in'")
@@ -251,6 +260,12 @@ describe('docs page performance boundaries', () => {
     expect(page).toContain('v-if="shouldMountDocClientPanels"')
     expect(page).toContain('<LazyDocsFeedback v-if="shouldMountDocEngagementPanels"')
     expect(page).toContain('<LazyDocsComments v-if="shouldMountDocEngagementPanels"')
+  })
+
+  it('keeps docs engagement tracking bfcache-friendly', () => {
+    expect(docEngagementTracker).toContain("useEventListener(document, 'visibilitychange'")
+    expect(docEngagementTracker).toContain("useEventListener(window, 'pagehide'")
+    expect(docEngagementTracker).not.toContain('beforeunload')
   })
 
   it('builds docs assistant context only after assistant intent', () => {
@@ -469,7 +484,7 @@ describe('docs page performance boundaries', () => {
     expect(routeLocaleComposable).toContain('mergeLocaleMessage')
     expect(routeLocaleComposable).toContain('[chunk]: messages')
 
-    expect(routeLocaleChunks).toContain("normalized === '/' || normalized === '/new' || normalized.startsWith('/new/')")
+    expect(routeLocaleChunks).toContain("normalized === '/' || normalized === '/new' || normalized.startsWith('/new/') || normalized === '/next' || normalized.startsWith('/next/')")
     expect(routeLocaleChunks).toContain("normalized === '/dashboard'")
     expect(routeLocaleChunks).toContain("normalized.startsWith('/dashboard/')")
     expect(routeLocaleChunks).toContain("normalized === '/store'")
