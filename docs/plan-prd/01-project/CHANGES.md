@@ -1,7 +1,16 @@
 # 变更日志
 
-> 更新时间：2026-06-24
+> 更新时间：2026-06-27
 > 定位：只保留 6 月当前阶段的高信号变更索引。6 月以前流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-06-27
+
+### r9: add manual Memory Review and tombstone list gate
+
+- Intelligence Audit 新增 host-side Memory Review 最小面板：用户手动输入候选后先调用 `contextEvaluateMemory`，只有 `suggested` 且内容未变更时才暴露显式保存按钮并调用 `contextSaveMemory`；`rejected` / `needs_review` 保持 fail-closed，不写库、不走插件侧自动长期记忆。
+- 新增 `contextListMemories` 与 `contextSetMemoryEnabled` typed SDK / CoreApp channel，默认只返回 normal、未 tombstone 的 MemoryItem；Memory Review 面板已能展示已保存记忆、禁用/重新启用记忆，并通过 `contextDeleteMemory` 写 tombstone 删除。
+- 新增 / 更新 focused tests 覆盖先评估后保存、rejected / needs_review 不暴露保存入口、内容变更后必须重新评估、保存后刷新列表、禁用走 `memory:set-enabled`、删除走 tombstone，以及 memory typed event mapping；R9.2 仍需继续补完整 Memory 面板搜索/编辑、OmniPanel/Workflow/Assistant 最近路径与更多真实数据 evidence。
+- `TODO.md` 新增 R9.2 ContextHygiene 剩余 TODO 专项表，`ai-2.5.4-context-hygiene-memory-details.md` 的验收清单改为状态化表格，并同步 README 与 R8/R9 执行计划，明确剩余 CompressionSnapshot、Memory 搜索/编辑/来源审计、entrypoint integration 与真实数据 evidence。
 
 ## 2026-06-24
 
@@ -33,7 +42,7 @@
 - `KnowledgeSearchInput.metadata` 注释补明确切匹配语义：顶层 key、嵌套 path、数组 scalar 包含；便于 2.5.4 ContextHygiene 消费更细粒度 retrieval/citation 来源。
 - ContextHygiene retrieval scope 现在把 2.5.3 `citation`、document id、source type/uri、retrieval status 与 degraded reason 写入 `ContextPackage.items[].metadata`，并把 retrieval summary 写入 package log metadata，补上 2.5.3 -> 2.5.4 的 citation/explain 桥接。
 - 新增 metadata-only `contextListPackageLogs` / `contextListCheckpoints` typed SDK / CoreApp channel，可按 session / trace 读取 package log source id、reason、token estimate、citation/status/degraded metadata，并按 session/type 读取 checkpoint boundary reason/context scope/metadata，不返回 prompt/turn content，为后续 explain drawer 提供真实读取入口。
-- `@talex-touch/tuff-intelligence` 镜像 SDK 已补齐 knowledge/context typed events 与 `contextListPackageLogs` / `contextListCheckpoints`，CoreApp Intelligence Audit 日志展开区可按 trace 懒加载 context package metadata-only 摘要，并按 session 显示 checkpoint boundary type/reason/scope/metadata keys，不展示 prompt/turn content。
+- `@talex-touch/tuff-intelligence` 镜像 SDK 已补齐 knowledge/context typed events 与 `contextListPackageLogs` / `contextListCheckpoints`，CoreApp Intelligence Audit 日志展开区可按 trace 懒加载 context package metadata-only 摘要，并按 session 显示 checkpoint boundary type/reason/scope/metadata keys；ContextPackage metadata-only explain drawer 外壳已展示 included / excluded source id、reason、token estimate 与 citation metadata，覆盖 excluded/pruned/policy-blocked 证据，不展示 prompt/turn/retrieval content。
 - 官方 `touch-intelligence` CoreBox AI Ask 在 text.chat / vision.ocr 调用前 fail-soft 调用 `contextPrepareTurn`，把 ContextPackage 安全摘要写入 invoke metadata、widget payload 与 item meta；ContextPackage 内容不回灌 prompt，ContextHygiene 不可用时继续原 AI Ask 流程。
 - ContextHygiene 新增只读 `contextEvaluateMemory` typed SDK / CoreApp channel，可对显式记忆候选返回 `suggested` / `rejected` / `needs_review`，并在写入前拦截 secret、sensitive review 与用户 opt-out；官方 `touch-intelligence` CoreBox AI Ask 仅在用户显式“记住 / remember”时 fail-soft 生成 memory policy 摘要并写入 metadata/widget payload，该入口不写 SQLite、不自动保存长期记忆。
 - Focused `intelligence-local-knowledge-engine`、`intelligence-context-hygiene`、utils / tuff-intelligence transport SDK 与官方插件 tests 已通过；R9.1/R9.2 仍需继续补完整 explain drawer、OmniPanel/Workflow/Assistant 最近路径与更多真实数据 evidence。
@@ -155,7 +164,7 @@
 ### r3: add read-only search index migration preflight
 
 - 新增 `search:index-migration:preflight` CLI 与纯 report builder，用 `PRAGMA query_only = ON` 只读检查真实 SQLite profile，不执行 schema/data migration，也不清理 FTS 或 `scan_progress`。
-- Preflight report 覆盖 required tables、`scan_progress` path-only/source-scoped shape、blank/invalid progress rows、legacy `file_fts`、`search_index` FTS5 shadow tables、provider row parity、keyword/meta orphan 与 meta coverage，并新增 `migrationDryRun` plan 输出 approval/blocker、预计影响 rows、rollback 与 verification。
+- Preflight report 覆盖 required tables、`scan_progress` path-only/source-scoped shape、blank/invalid progress rows、legacy `file_fts` retain-unchanged policy、`search_index` FTS5 shadow tables、provider row parity、keyword/meta orphan 与 meta coverage，并新增 `migrationDryRun` plan 输出 approval/blocker、预计影响 rows、rollback 与 verification。
 - CLI 支持 `--output <report.json>` 生成可附到迁移审批的只读 evidence artifact；focused tests 覆盖 path-only、blocked、clean source-scoped、unsafe rows report 与文件落盘。该切片只提供 SQLite/FTS durable ownership 与 `scan_progress` source-scoped migration 前置证据，不代表真实迁移已执行。
 
 ### r3: make scan_progress runtime source-scope compatible
@@ -167,8 +176,87 @@
 ### r3: add controlled scan_progress source-scope migration helper
 
 - `planScanProgressSourceScopeMigration()` 只读输出 `scan_progress` source-scoped migration 的 approval、schema/data rewrite、blocker、rollback 与 verification 信息。
-- `runScanProgressSourceScopeMigration()` 仅在显式调用时执行 path-only -> `PRIMARY KEY(source_id, path)` 迁移，使用 staging table、`BEGIN IMMEDIATE`、`scan_progress_path_only_backup` 与 path index。
-- Focused tests 使用真实临时 SQLite 覆盖旧 DB 迁移、新 DB 初始化、unsafe rows blocked 与 post-migration source-scoped shape；该 helper 尚未接入生产 DB migrations，也未执行真实 profile 迁移。
+- 新增 `search:scan-progress-migration` CLI，默认只读输出 plan；只有显式传 `--execute --confirm-source-scope-migration` 才会执行 path-only -> `PRIMARY KEY(source_id, path)` 迁移，使用 staging table、`BEGIN IMMEDIATE`、`scan_progress_path_only_backup` 与 path index。
+- Focused tests 使用真实临时 SQLite 覆盖旧 DB 迁移、新 DB 初始化、unsafe rows blocked、未确认拒绝执行与 post-migration source-scoped shape；该 helper 尚未接入生产 DB migrations，也未执行真实 profile 迁移。
+
+### r3: add Settings indexing diagnostics evidence verifier
+
+- 新增 `settings:indexing-diagnostics:verify` CLI，可读取 CoreBox indexing diagnostics JSON 或 packaged probe envelope，并复用 Settings recent task chip helper 验证 recent task `jobId/time/summary` 与 `duration/trigger/reason/attempt/code` 审计字段可见。
+- Verifier 输出只包含 source/chip/audit gate 摘要，不回显 raw diagnostics/root path；focused tests 覆盖通过、缺字段失败与 `diagnostics.sources` envelope。
+- 该切片只提供 durable job history packaged evidence 的 JSON 门禁，不等同于真实 Settings 截图/录屏已完成，也不新增 SQLite schema 或执行迁移。
+
+### r3: add packaged indexing diagnostics probe entry
+
+- 新增 `visible:experience:indexing-diagnostics-probe` CLI，复用 packaged Electron CDP 采样模式，可 attach 到已运行 packaged profile 或启动 isolated userData，打开 Settings File Index，读取 typed indexed-source diagnostics，并生成 diagnostics JSON、verifier JSON、Settings/source detail DOM 与截图 artifact 路径。
+- Probe 明确只读，不触发 scan/reset/reconcile、FTS rebuild 或 schema migration；focused tests 覆盖 Settings target selection、artifact naming、通过与缺失 evidence failure matrix。
+- 该切片把 durable job history packaged Settings evidence 推进到可采集入口，但尚未对真实 packaged app 运行，不关闭真实截图/录屏 evidence。
+
+### r3: add production migration readiness auditor
+
+- 新增 `search:production-migration-readiness` CLI，只读检查 CoreApp `schema.ts`、资源迁移目录、Drizzle journal 与 `SearchIndexService` FTS runtime creation ownership，不打开 SQLite、不运行 migration、不 rebuild FTS。
+- Report 输出 `scanProgressSchema`、source-scoped `scan_progress` migration、`indexed_source_task_state` schema/migration、`search_index_meta` migration 与 `search_index` FTS durable ownership readiness，并列出 blocker/action/verification。
+- 当前真实仓库 readiness 为 `blocked`：`scan_progress` schema 仍是 path-only，source-scoped `scan_progress` 与 `indexed_source_task_state` 资源迁移缺失，`search_index` FTS5 仍由 runtime 创建；`search_index_meta` 资源迁移已存在。该切片只补生产迁移可审计入口，不执行 schema/data migration。
+
+### r3: add scan_progress source-scope copy simulation
+
+- 新增 `search:scan-progress-simulate` CLI，用 `VACUUM INTO` 从目标 SQLite 生成 simulation copy，并只在副本上执行 `runScanProgressSourceScopeMigration()`。
+- Simulation report 输出源库前后 `scan_progress` snapshot、copy migration 前后 plan/snapshot、migrated rows、backup rows、source-id row counts 与 gate blockers，证明源库未被修改且副本迁移后为 source-scoped shape。
+- Focused tests 覆盖 path-only source 成功仿真、unsafe rows blocked 与 CLI artifact 落盘。该工具不替代生产 DB migration 接入或真实 profile execute approval。
+
+### r3: add FTS ownership copy simulation
+
+- 新增 `search:fts-ownership-simulate` CLI，用 `VACUUM INTO` 从目标 SQLite 生成 simulation copy，并只在副本上应用候选 durable FTS ownership DDL。
+- Simulation report 覆盖 `search_index` required columns、FTS5 shadow tables、`search_index_meta`、keyword mapping indexes、legacy `file_fts` retain-unchanged policy、row discard 与 full-reindex impact，并校验源库前后 snapshot 未变化。
+- Focused tests 覆盖缺失 `search_index` 创建 durable FTS shape、legacy FTS 缺 `content` 列时的 rebuild impact、CLI artifact 落盘。该工具不执行生产 migration，不关闭真实 SQLite/FTS durable ownership blocker。
+
+### r3: harden packaged indexing diagnostics probe targeting
+
+- `visible:experience:indexing-diagnostics-probe` 的 source detail 打开逻辑改为优先匹配目标 source 行，避免在 Settings 搜索源诊断列表中误点第一个 `详情` 按钮。
+- Focused test 覆盖 `file-provider` 行选择，确保 Browser Bookmarks / Applications / File Index 多行同时存在时会打开 File Index。
+- 本机 isolated `dist/mac-arm64/tuff.app` 试采已能打开 File Index detail 并生成 diagnostics / verifier / DOM / screenshot artifact；因 isolated profile 没有 recent task history，verifier 仍正确失败，真实 durable job history evidence 仍需 attach 到已有 recent task 的 packaged profile 或受控 profile。
+
+### r3: add controlled packaged indexing diagnostics seeded evidence
+
+- `visible:experience:indexing-diagnostics-probe` 新增 isolated-only `--seedRecentTaskEvidence`，会在临时 userData 中写入低敏 `indexed_source_task_state` recent task，用于证明 packaged Settings File Index detail、recent task chip 与 verifier gate 链路可通过。
+- Attach-only `--remoteDebuggingUrl` 禁止 seeded evidence，focused test 覆盖 seed/attach 互斥；probe JSON 会标记 `seededRecentTaskEvidence`，避免与自然真实 profile history 混淆。
+- 本机 isolated `dist/mac-arm64/tuff.app` seeded run 已生成 `/tmp/tuff-r3-indexing-diagnostics-seeded` artifact，`ok=true` 且 verifier passed；该证据不替代真实 scan/watch/reconcile/reset recent task 截图/录屏，也不执行 schema/data migration。
+
+### r3: add isolated packaged maintenance reset evidence
+
+- `visible:experience:indexing-diagnostics-probe` 新增 isolated-only `--runMaintenanceAction scan|reconcile|reset`，通过 typed `app:indexed-source:*` maintenance IPC 触发受控运行时任务；该选项禁止与 attach-only `--remoteDebuggingUrl`、`--seedRecentTaskEvidence` 混用，避免修改真实 profile 或把 seeded 与 runtime evidence 混淆。
+- Probe 在 maintenance action 后会刷新 Settings/File Index detail DOM 与截图，verifier 对 reset 结果校验 `duration/trigger/reason` 可见字段；focused tests 覆盖 attach-only 拒绝、action 类型解析和 reset evidence required fields。
+- 本机 isolated `dist/mac-arm64/tuff.app` reset run 已生成 `docs/engineering/reports/r3-indexing-runtime-2026-06-25/indexing-diagnostics-probe-maintenance-reset-2026-06-25.json` 等 artifacts，`ok=true` 且 verifier passed；该证据证明 packaged runtime maintenance recent task 可进入 Settings detail，但仍不替代真实用户 profile 的自然 scan/watch/reconcile/reset history。
+
+### r3: guard isolated scan/reconcile maintenance fixture roots
+
+- FileProvider 新增 `TUFF_FILE_PROVIDER_BASE_WATCH_PATHS` diagnostic override，只在显式环境变量存在时替换默认 base watch roots；正常用户路径仍使用 Electron `app.getPath()` 默认根。
+- `visible:experience:indexing-diagnostics-probe` 新增 isolated-only `--fixtureRoot`，会创建低敏小型 fixture tree，并把 fixture root 传给 packaged 子进程；attach mode 禁止该选项，且必须与 `--runMaintenanceAction` 搭配使用。
+- Probe gate 会校验 diagnostics roots 是否被 fixtureRoot 约束，未生效时直接失败，避免把默认 Home roots 的 scan/reconcile 超时探索误收为受控 evidence。当前 `maintenance-reconcile-2026-06-25` 产物为 `ok=false`，不计入 passing evidence；scan/reconcile 仍需重包后重新采集。
+- Probe 在 `--fixtureRoot` 模式启动前新增 packaged bundle marker preflight，检查 `app.asar` 是否包含 `TUFF_FILE_PROVIDER_BASE_WATCH_PATHS`；当前 `maintenance-reconcile-fixture-preflight-2026-06-25` 产物提前失败并明确要求重包，仍不计入 passing evidence。
+
+### r3: bind isolated scan/reconcile fixture maintenance evidence
+
+- 修复阻塞本地 `build:unpack` 的类型缺口：AI hygiene 测试 fixture 补齐 `KnowledgeDocument.permissionScope`，Assistant screenshot save error map 补齐 permission denied / unsupported 分支；`typecheck:node`、`typecheck:web` 与 `build:unpack` 通过，本地 `dist/mac-arm64/tuff.app` 已刷新且 `app.asar` 包含 `TUFF_FILE_PROVIDER_BASE_WATCH_PATHS` marker。
+- 使用刷新后的 packaged bundle 重新采集 `--runMaintenanceAction reconcile --fixtureRoot /tmp/tuff-r3-indexing-runtime-fixture-reconcile` 与 `--runMaintenanceAction scan --fixtureRoot /tmp/tuff-r3-indexing-runtime-fixture-scan`，生成 `maintenance-reconcile-fixture-2026-06-25` / `maintenance-scan-fixture-2026-06-25` artifacts。
+- 两个 fixture probe 均为 `ok=true`、verifier passed、bundle marker preflight passed，diagnostics roots 被约束在对应 `/tmp` fixture root；该证据证明 controlled packaged runtime scan/reconcile recent task 可进入 Settings detail，但仍不替代真实用户 profile 的自然 history 或真实 SQLite/FTS/`scan_progress` migration evidence。
+
+### r3: add durable runtime-store resource migration
+
+- 新增 `0024_search_index_runtime_store.sql`，通过资源迁移幂等创建 `indexed_source_task_state`、`idx_indexed_source_task_state_updated_at` 与 durable-shape `search_index` FTS5 table。
+- Drizzle migration journal 已登记 `0024_search_index_runtime_store`；`search:production-migration-readiness` 现在能识别 `indexed_source_task_state` 与 `search_index` FTS5 durable ownership，真实仓库 blocker 从 4 项收敛到 `scan_progress` schema path-only / source-scoped migration 缺失。
+- 该切片不执行真实 profile migration、不重建 FTS；legacy `file_fts` 在 R3 本批保留不改，退役另立高风险迁移批；`SearchIndexService` runtime `CREATE IF NOT EXISTS` 仍保留为旧库/repair 兜底。
+
+### r3: decide legacy file_fts retain policy for durable ownership
+
+- R3 durable SQLite/FTS ownership migration 明确保留 legacy `file_fts` 不改、不迁移、不删除；运行时文件搜索继续以 `search_index` provider rows 为 durable SoT。
+- `search:index-migration:preflight` 的 legacy `file_fts` 检查改为 `retain-unchanged` info evidence，`migrationDryRun` 不再把 `file_fts` 计入本批 schema/data rewrite。
+- `search:fts-ownership-simulate` 输出 `legacyFileFtsPolicy`，并说明任何 `file_fts` 退役都必须另起独立高风险迁移批和等价搜索覆盖 evidence。
+
+### r3: wire scan_progress source-scoped production schema
+
+- `schema.ts` 的 `scan_progress` 改为 `PRIMARY KEY(source_id, path)`，并新增 `0025_scan_progress_source_scope.sql` 作为新库 source-scoped resource shape；Drizzle journal 已登记 `0025_scan_progress_source_scope`。
+- DatabaseModule 在正常 Drizzle migrations 后复用 `runScanProgressSourceScopeMigration()` 受控 helper 迁移旧 path-only rows 到 `file-provider` scope；遇到 unsafe rows、残留 staging 或 backup blocker 时记录 warning 并保留 old/new schema 兼容模式。
+- File watch auto-scan eligibility、Tuff dashboard scan progress overview 与 worker path-only fallback 均改为按真实 `scan_progress` 表 shape 分支；`search:production-migration-readiness` 当前 source-read-only readiness 为 `ready`。该切片不执行真实 profile migration，也不关闭真实 preflight / Settings evidence。
 
 ### coreapp: close omnipanel writing tools visible evidence
 
@@ -344,3 +432,9 @@
 - R3：`../TODO-R3.md`
 - Nexus：`../TODO-nexus.md`
 - Evidence Matrix：`../04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`
+
+### r3: bind isolated packaged durable scan evidence
+
+- 2026-06-30 新增 R3 isolated packaged durable scan evidence：plain Node CDP 对本机 `dist/mac-arm64/tuff.app` isolated userData 触发 typed `app:indexed-source:scan`，并落盘 diagnostics、task-state snapshot、Settings verifier、SQLite/FTS preflight、FTS ownership simulation 与 `scan_progress` source-scope simulation。
+- 同一 isolated DB 结果为 `indexed_source_task_state=1`、`scan_progress=1`、`search_index=35`；Settings verifier gate passed，preflight/simulation gate passed。
+- 该证据不替代真实 profile migration execute / natural Settings screenshot evidence；`visible:experience:indexing-diagnostics-probe` npm/tsx cold-start 路径仍需修复 packaged Electron `SIGABRT`，本地 crash report 指向 AppKit/HIServices `_RegisterApplication` / `NSApplication.sharedApplication`，早于 CoreApp main-process JS 日志。

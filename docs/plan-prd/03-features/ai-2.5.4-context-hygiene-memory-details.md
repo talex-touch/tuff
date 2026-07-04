@@ -1,6 +1,6 @@
 # Tuff 2.5.4 ContextHygiene 详细设计附录
 
-> 更新时间：2026-06-24
+> 更新时间：2026-06-27
 > 来源：从 `ai-2.5.4-context-hygiene-memory-prd.md` 拆分出的工程细节。
 > 定位：schema、模块职责、状态机、API 合同、策略细则、测试计划与回滚细节。
 
@@ -424,7 +424,7 @@ score = relevance * 0.45
 | Workflow `Use Model` | 每个 run 可独立 session；Review Queue 写 checkpoint，不默认写长期记忆 |
 | Assistant | 悬浮球/VoicePanel 默认轻上下文；语音或剪贴板动作仅注入当前动作 capsule |
 | `touch-intelligence` 插件 | 通过 Intelligence SDK 触发，受 `intelligence.basic` 和 memory 权限策略控制 |
-| 2.5.3 Local Knowledge | RetrievalAssembler 可调用 buildContext；service foundation 已保留 citation / document source / retrieval status / degraded reason 到 ContextPackage metadata，并可通过 `contextListPackageLogs` 读取 metadata-only explain log；Intelligence Audit 已能展示 trace package 摘要，后续继续补 permission metadata 与完整 explain drawer UI |
+| 2.5.3 Local Knowledge | RetrievalAssembler 可调用 buildContext；service foundation 已保留 citation / document source / retrieval status / degraded reason 到 ContextPackage metadata，并可通过 `contextListPackageLogs` 读取 metadata-only explain log；Intelligence Audit 已能展示 trace package 摘要、metadata-only explain drawer、included/excluded source detail 与 citation metadata，后续继续补 permission metadata 与完整 explain drawer 产品化 |
 | Provider Runtime | 接收 ContextPackage 后调用模型；不得反向修改 MemoryStore |
 
 ## 23. Feature Flags 与 Rollout
@@ -482,6 +482,8 @@ score = relevance * 0.45
 - 记忆保存需可见：展示“已记住 / 建议记住 / 已忽略 / 因敏感信息未保存”。
 - Suggested memory 必须能一键保存、忽略、编辑后保存。
 - 删除 memory 后，UI 应提示“后续回答不会再使用这条记忆”。
+
+2026-06-27 最小进展：Intelligence Audit 已接入 host-side Memory Review 面板，支持手动输入候选、调用 `contextEvaluateMemory` 预检、仅在 `suggested` 且内容未变更时显式 `contextSaveMemory`，并通过 `contextListMemories` 显示 normal / non-tombstoned saved list，通过 `contextSetMemoryEnabled` 禁用/重新启用，通过 `contextDeleteMemory` 写 tombstone 删除；`rejected` / `needs_review` 不写库。该面板只覆盖手动确认保存与查看/禁用/删除最小闭环，不代表完整 Memory 面板的搜索、编辑或来源审计闭环完成。
 
 ### 设置项
 
@@ -593,20 +595,34 @@ P0 不实现自动长期保存；P1 若启用 suggested memory，必须有“查
 
 ## 28. 验收清单
 
-- [ ] 超过空闲阈值后再次提问，会自动创建新 session 与 `session_start` checkpoint。
-- [ ] 新 session 默认不注入旧 session 原文。
-- [ ] 用户显式“继续刚才”时，可以召回旧 session 摘要并展示召回原因。
-- [ ] 长会话 token 不线性增长，能按阈值自动生成结构化 CompressionSnapshot。
-- [ ] 压缩失败不会删除原 turns，并会返回 degraded reason。
-- [ ] 稳定用户偏好可进入长期 MemoryItem；临时上下文不会误存为长期记忆。
-- [ ] 敏感内容不会明文进入普通记忆、localStorage、普通 JSON、日志或同步 payload。
-- [ ] Sensitive / secret turns 不进入 FTS、embedding、context log 或可同步 payload。
-- [ ] ContextPackage 可解释每段历史、记忆和检索片段的来源、reason 与 token 预算。
-- [ ] Context explain drawer 可解释 included、excluded、policy-blocked、tombstone 和 token budget。
-- [ ] 用户可以查看、禁用、删除记忆，删除后不再被注入。
-- [ ] CoreBox / OmniPanel / Workflow / Assistant 至少各有一个最近路径 prepareTurn integration case；P0 可先只要求 CoreBox。
-- [ ] Migration、并发、tombstone、LangChain 外发限制各有 focused evidence。
-- [ ] README/TODO/CHANGES/INDEX/Roadmap/Quality Baseline 按影响同步。
+| 状态 | 验收项 | 当前证据 / 下一步 |
+| --- | --- | --- |
+| partial | 超过空闲阈值后再次提问，会自动创建新 session 与 `session_start` checkpoint。 | Core service foundation 已有，仍需 CoreBox/packaged 最近路径 evidence。 |
+| partial | 新 session 默认不注入旧 session 原文。 | Service 层已有 scope/package 基线，仍需 entrypoint integration。 |
+| partial | 用户显式“继续刚才”时，可以召回旧 session 摘要并展示召回原因。 | 需补 archived session summary retrieval 与 UI reason。 |
+| open | 长会话 token 不线性增长，能按阈值自动生成结构化 CompressionSnapshot。 | P1 CompressionSnapshot 未落地。 |
+| open | 压缩失败不会删除原 turns，并会返回 degraded reason。 | 待 Compression failure focused test。 |
+| partial | 稳定用户偏好可进入长期 MemoryItem；临时上下文不会误存为长期记忆。 | 手动确认 + MemoryPolicy 已有；自动候选提取和编辑后重评估仍缺。 |
+| partial | 敏感内容不会明文进入普通记忆、localStorage、普通 JSON、日志或同步 payload。 | secret/sensitive policy 和 save 拦截已有；仍需 UI/evidence sweep。 |
+| partial | Sensitive / secret turns 不进入 FTS、embedding、context log 或可同步 payload。 | current input policy-blocked metadata 已有；仍需更多 entrypoint evidence。 |
+| partial | ContextPackage 可解释每段历史、记忆和检索片段的来源、reason 与 token 预算。 | package log / Audit explain shell 已有；仍缺完整产品化和真实数据 evidence。 |
+| partial | Context explain drawer 可解释 included、excluded、policy-blocked、tombstone 和 token budget。 | included/excluded/policy-blocked 已可见；tombstone hit 展示仍待补。 |
+| partial | 用户可以查看、禁用、删除记忆，删除后不再被注入。 | Audit Memory Review 已支持 list、enable/disable、tombstone delete；仍需搜索/编辑/来源审计和 prepareTurn 回灌回归。 |
+| partial | CoreBox / OmniPanel / Workflow / Assistant 至少各有一个最近路径 prepareTurn integration case；P0 可先只要求 CoreBox。 | CoreBox AI Ask metadata 已接入；OmniPanel/Workflow/Assistant 仍 open。 |
+| open | Migration、并发、tombstone、LangChain 外发限制各有 focused evidence。 | 需要 focused integration / race tests。 |
+| partial | README/TODO/CHANGES/INDEX/Roadmap/Quality Baseline 按影响同步。 | TODO / PRD / CHANGES / Quality Baseline 已同步；README / R8-R9 execution plan 本轮补入口摘要。 |
+
+## 28.1 当前剩余 TODO 队列
+
+| 优先级 | TODO | 落点 | 验证 |
+| --- | --- | --- | --- |
+| P0 | 补 `prepareTurn` disabled / tombstoned memory 不注入回归。 | `ContextHygieneService` focused test 或 seeded SQLite integration。 | package items 不包含 disabled/tombstoned memory source。 |
+| P0 | Memory Review 编辑保存前重新 evaluate。 | `IntelligenceMemoryReview.vue`。 | 编辑后保存按钮禁用或重新 evaluate；rejected/needs_review fail-closed。 |
+| P1 | Memory saved list 搜索和来源 session/turn 展示。 | Audit Memory Review / 后续 Memory 面板。 | 不展示完整 prompt/turn content，只显示 source id / metadata。 |
+| P1 | Context explain drawer tombstone hit 展示。 | Audit explain summary + drawer。 | tombstone source 只显示 id/reason，不显示原文。 |
+| P1 | OmniPanel / Workflow / Assistant 各接 1 条 `contextPrepareTurn` 最近路径。 | 对应 entrypoint。 | 默认轻上下文，不继承 CoreBox 长会话。 |
+| P1 | CompressionSnapshot schema / CAS / degraded。 | `ContextHygieneService` 后续 compression slice。 | 压缩失败不删 turns；summary CAS 冲突 fail-soft。 |
+| P2 | 真实数据 evidence。 | `docs/engineering/reports/` 或专题 evidence 目录。 | JSON/截图/录屏 artifact 可复核，覆盖 context package、memory、tombstone。 |
 
 ## 29. 分期计划
 
@@ -633,8 +649,8 @@ P0 不实现自动长期保存；P1 若启用 suggested memory，必须有“查
 
 - 实现结构化 CompressionSnapshot、schema 校验和 summary CAS 写入。
 - 实现 MemoryCandidate 提取与 MemoryPolicy 敏感拦截。
-- 支持手动确认 / 可撤销保存；不默认自动长期保存。
-- Memory 面板查看、禁用、删除与 tombstone 本地级联。
+- 支持手动确认 / 可撤销保存；不默认自动长期保存。当前已落 host-side 手动确认保存、saved list、enable/disable 与 tombstone delete 最小面板，仍缺完整 Memory 面板搜索/编辑和可撤销闭环。
+- Memory 面板查看、禁用、删除与 tombstone 本地级联；当前已完成 normal / non-tombstoned list、enable/disable 与 tombstone delete，搜索/编辑仍待补。
 - 用户偏好与项目级记忆的受控检索注入。
 
 ### P2 - Retrieval 增强
@@ -642,7 +658,7 @@ P0 不实现自动长期保存；P1 若启用 suggested memory，必须有“查
 - 接入 2.5.3 本地知识检索、FTS5 和 metadata filter；CoreApp service foundation 已接入 `buildContext()` 并记录 citation/status/degraded reason。
 - 可选 embeddings / rerank 增强相关性。
 - 旧 session summary 与知识片段统一进入 RetrievalAssembler。
-- Context explain drawer 展示 retrieval citation、excluded/pruned/policy-blocked source；当前已具备 metadata-only package log 读取入口、Intelligence Audit 最小摘要 UI 与 CoreBox AI Ask 调用前 ContextPackage metadata，完整 drawer 仍待接入。
+- Context explain drawer 展示 retrieval citation、excluded/pruned/policy-blocked source；当前已具备 metadata-only package log 读取入口、Intelligence Audit explain drawer 最小外壳、included/excluded source detail、citation metadata、excluded/pruned/policy-blocked 证据与 CoreBox AI Ask 调用前 ContextPackage metadata，完整 drawer 产品化仍待接入。
 - 接入 OmniPanel / Workflow / Assistant 最近路径。
 
 ### P3 - 衰减与同步
