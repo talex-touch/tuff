@@ -21,6 +21,10 @@ import { DB_AUX_ENABLED } from '../../db/runtime-flags'
 import { getSqliteBusyRetryCount } from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
 import { fileProvider } from '../box-tool/addon/files/file-provider'
+import {
+  planScanProgressSourceScopeMigration,
+  runScanProgressSourceScopeMigration
+} from '../box-tool/search-engine/scan-progress-schema'
 
 const dbLog = getLogger('database')
 const AUX_MIGRATION_MARKER_KEY = 'db.aux.migration.v1.complete'
@@ -800,6 +804,7 @@ export class DatabaseModule extends BaseModule {
       await this.ensureKeywordMappingsProviderColumn()
       await this.ensureRecommendationTables()
       await this.ensureAnalyticsTables()
+      await this.ensureScanProgressSourceScopeMigration()
 
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
@@ -845,6 +850,53 @@ export class DatabaseModule extends BaseModule {
       )
     } catch (error) {
       dbLog.warn('Failed to set up `provider_id` column pre-migration', { error })
+    }
+  }
+
+  private async ensureScanProgressSourceScopeMigration(): Promise<void> {
+    if (!this.db) return
+
+    try {
+      const plan = await planScanProgressSourceScopeMigration(this.db, {
+        sourceId: 'file-provider'
+      })
+
+      if (plan.status === 'not-needed') {
+        dbLog.debug('scan_progress already source-scoped', {
+          meta: {
+            primaryKeyColumns: plan.primaryKeyColumns,
+            existingRows: plan.existingRows
+          }
+        })
+        return
+      }
+
+      if (plan.status === 'blocked') {
+        dbLog.warn('scan_progress source-scope migration blocked; keeping compatibility mode', {
+          meta: {
+            blockers: plan.blockers,
+            existingRows: plan.existingRows,
+            blankPathRows: plan.blankPathRows,
+            invalidTimestampRows: plan.invalidTimestampRows,
+            duplicatePathRows: plan.duplicatePathRows
+          }
+        })
+        return
+      }
+
+      const result = await runScanProgressSourceScopeMigration(this.db, {
+        sourceId: 'file-provider'
+      })
+      dbLog.info('scan_progress source-scope migration completed', {
+        meta: {
+          executed: result.executed,
+          migratedRows: result.migratedRows,
+          backupTable: result.backupTable,
+          sourceId: result.plan.sourceId
+        }
+      })
+    } catch (error) {
+      dbLog.warn('Failed to migrate scan_progress to source-scoped schema', { error })
     }
   }
 

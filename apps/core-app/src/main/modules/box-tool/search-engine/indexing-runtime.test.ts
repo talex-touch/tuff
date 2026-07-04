@@ -790,6 +790,34 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('records search-index drain timeout as failed durable scan history', async () => {
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          throw new Error('file-index-search-drain-timeout:indexed-source.scan')
+        }
+      })
+    )
+
+    await expect(
+      runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled, {
+        reason: 'manual-rebuild'
+      })
+    ).rejects.toThrow('file-index-search-drain-timeout:indexed-source.scan')
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastScan).toMatchObject({
+      error: 'file-index-search-drain-timeout:indexed-source.scan'
+    })
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'scan',
+      status: 'failed',
+      trigger: 'manual-rebuild',
+      errorCode: 'runtime',
+      error: 'file-index-search-drain-timeout:indexed-source.scan'
+    })
+  })
+
   it('records store-applied indexed item counts in scan diagnostics', async () => {
     const batch: IndexedSourceRecordBatch = {
       sourceId: 'test-source',
@@ -1725,6 +1753,63 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('waits for durable task-state save before returning reset maintenance results', async () => {
+    let resolveSaveStarted!: () => void
+    let resolveSave!: () => void
+    const saveStarted = new Promise<void>((resolve) => {
+      resolveSaveStarted = resolve
+    })
+    const saveReleased = new Promise<void>((resolve) => {
+      resolveSave = resolve
+    })
+    const save = vi.fn(async () => {
+      resolveSaveStarted()
+      await saveReleased
+    })
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => undefined),
+        save,
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    const resetIndex = vi.fn(async () => ({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.IntegrityRepair,
+      clearedSearchIndex: false,
+      clearedScanProgress: true,
+      scanProgressRows: 2,
+      startedAt: 1700000000000,
+      completedAt: 1700000000100
+    }))
+    runtime.registerSource(buildSource({ resetIndex }))
+
+    let returned = false
+    const resultPromise = runtime
+      .resetSourceRuntimeState('test-source', {
+        reason: IndexedSourceResetReasons.IntegrityRepair,
+        clearScanProgress: true
+      })
+      .then((result) => {
+        returned = true
+        return result
+      })
+
+    await saveStarted
+    await Promise.resolve()
+    expect(returned).toBe(false)
+
+    resolveSave()
+    await expect(resultPromise).resolves.toMatchObject({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.IntegrityRepair,
+      clearedScanProgress: true,
+      scanProgressRows: 2
+    })
+  })
+
   it('preserves persisted task history when reset is the first runtime action after hydrate', async () => {
     const save = vi.fn(async () => {})
     const persistedState: IndexedSourceRuntimeTaskState = {
@@ -2086,6 +2171,25 @@ describe('indexingRuntime', () => {
         }
       }
     ])
+  })
+
+  it('keeps durable task-state store when clearing runtime process state', async () => {
+    const clear = vi.fn(async () => {})
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: {
+        load: vi.fn(async () => undefined),
+        save: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+        clear
+      }
+    })
+
+    runtime.clear()
+    expect(clear).not.toHaveBeenCalled()
+
+    runtime.clear({ clearTaskStateStore: true })
+    expect(clear).toHaveBeenCalledTimes(1)
   })
 
   it('keeps bounded recent runtime task history per source', async () => {

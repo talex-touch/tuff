@@ -1,0 +1,199 @@
+{
+  "generatedAt": 1782329708023,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "ready": 1
+    },
+    "ready": 1,
+    "degraded": 0,
+    "unavailable": 0
+  },
+  "sources": [
+    {
+      "descriptor": {
+        "id": "file-provider",
+        "kind": "file",
+        "displayName": "File Index",
+        "platforms": [
+          "darwin",
+          "win32",
+          "linux"
+        ],
+        "priority": "deferred",
+        "storage": "sqlite-index",
+        "privacy": "medium",
+        "capabilities": {
+          "scan": true,
+          "watch": true,
+          "reconcile": true,
+          "clear": true,
+          "open": true
+        },
+        "admission": {
+          "owner": "core",
+          "permissionScopes": [
+            "file-system"
+          ],
+          "defaultState": "enabled",
+          "clearable": true,
+          "rebuildable": true
+        }
+      },
+      "health": {
+        "status": "ready",
+        "permissionState": "granted",
+        "itemCount": 0,
+        "watchState": "active",
+        "reconcileState": "idle"
+      },
+      "roots": [
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Documents",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Downloads",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Desktop",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Music",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Pictures",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Movies",
+          "permissionState": "granted"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "file-provider:scan-progress",
+          "label": "File scan progress",
+          "status": "warming",
+          "itemCount": 0,
+          "rootCount": 6,
+          "roots": [
+            "/Users/talexdreamsoul/Documents",
+            "/Users/talexdreamsoul/Downloads",
+            "/Users/talexdreamsoul/Desktop",
+            "/Users/talexdreamsoul/Music",
+            "/Users/talexdreamsoul/Pictures",
+            "/Users/talexdreamsoul/Movies"
+          ],
+          "lastCheckedAt": 1782329708023,
+          "reason": "file-index-progress-has-pending-roots",
+          "metadata": {
+            "totalFiles": 0,
+            "completedFiles": 0,
+            "failedFiles": 0,
+            "skippedFiles": 0,
+            "embeddingCompletedFiles": 0,
+            "embeddingRows": 0,
+            "configuredRoots": 6,
+            "completedRoots": 0,
+            "scanProgressRows": 0,
+            "lastScannedAt": null,
+            "lastUpsertAttempted": false,
+            "lastUpsertReady": false,
+            "lastUpsertedRows": 0,
+            "lastUpsertReason": null,
+            "lastUpsertCheckedAt": null,
+            "totalRoots": 0,
+            "pendingRoots": 6,
+            "pendingPermissionRoots": 0,
+            "pendingPermissionPaths": []
+          }
+        }
+      ],
+      "progress": {
+        "sourceId": "file-provider",
+        "stage": "idle",
+        "status": "idle",
+        "current": 0,
+        "total": 0,
+        "progress": 0,
+        "startedAt": null,
+        "updatedAt": 1782329708021,
+        "estimatedRemainingMs": 0,
+        "estimatedCompletionAt": null,
+        "averageItemsPerSecond": 0,
+        "speedSampleCount": 0,
+        "estimateBasis": "none"
+      },
+      "admissionIssues": [],
+      "lifecycleIssues": [
+        "open-capability-missing-handler",
+        "handler-provided-without-capability"
+      ],
+      "lastReset": {
+        "startedAt": 1782329701305,
+        "completedAt": 1782329701305,
+        "reason": "user-clear",
+        "jobId": "file-provider:reset:1",
+        "queuedAt": 1782329701305,
+        "clearedSearchIndex": false,
+        "clearedSearchIndexRows": 0,
+        "clearedScanProgress": false,
+        "scanProgressRows": 0
+      },
+      "recentTasks": [
+        {
+          "kind": "reset",
+          "status": "succeeded",
+          "completedAt": 1782329701305,
+          "jobId": "file-provider:reset:1",
+          "queuedAt": 1782329701305,
+          "startedAt": 1782329701305,
+          "durationMs": 0,
+          "reason": "user-clear",
+          "trigger": "user-clear",
+          "summary": {
+            "durationMs": 0,
+            "reason": "user-clear",
+            "trigger": "user-clear",
+            "clearedSearchIndex": false,
+            "clearedSearchIndexRows": 0,
+            "clearedScanProgress": false,
+            "scanProgressRows": 0
+          }
+        }
+      ],
+      "taskRunGate": [
+        {
+          "sourceId": "file-provider",
+          "kind": "reset",
+          "blockedCount": 0,
+          "lastCompletedAt": 1782329701306
+        }
+      ]
+    }
+  ],
+  "taskRunGate": {
+    "generatedAt": 1782329708023,
+    "totalEntries": 1,
+    "runningEntries": 0,
+    "blockedEntries": 0,
+    "entries": [
+      {
+        "sourceId": "file-provider",
+        "kind": "reset",
+        "blockedCount": 0,
+        "lastCompletedAt": 1782329701306
+      }
+    ]
+  }
+}

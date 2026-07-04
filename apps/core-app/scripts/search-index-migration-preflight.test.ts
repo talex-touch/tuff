@@ -55,7 +55,61 @@ describe('search index migration preflight cli', () => {
       expect(fileReport.destructiveActions).toBe(false)
       expect(fileReport.migrationDryRun.destructiveActions).toBe(false)
       expect(fileReport.migrationDryRun.mode).toBe('read-only')
+      expect(fileReport.evidenceSource).toEqual({
+        scope: 'isolated-controlled',
+        detection: 'auto',
+        dbPathClass: 'temporary',
+        realProfileRequired: false
+      })
       expect(fileReport.migrationReadiness.scanProgressSourceScope).toBe('needs-migration')
+      expect(fileReport.snapshot.sqliteRuntime).toMatchObject({
+        journalMode: expect.any(String),
+        busyTimeoutMs: expect.any(Number),
+        pageSize: expect.any(Number),
+        pageCount: expect.any(Number),
+        freelistCount: expect.any(Number),
+        queryOnly: true
+      })
+      expect(fileReport.checks).toContainEqual(
+        expect.objectContaining({
+          id: 'sqlite-runtime-profile',
+          status: 'info'
+        })
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects temporary SQLite paths when real profile evidence is required', async () => {
+    const dir = mkdtempSync(path.join('/tmp', 'search-index-preflight-real-profile-'))
+    try {
+      const dbPath = path.join(dir, 'index.sqlite')
+      mkdirSync(path.dirname(dbPath), { recursive: true })
+      await createMinimalSearchIndexDb(dbPath)
+
+      expect(() =>
+        execFileSync(
+          'corepack',
+          [
+            'pnpm',
+            'exec',
+            'tsx',
+            scriptPath,
+            '--db',
+            dbPath,
+            '--evidenceScope',
+            'real-profile',
+            '--requireRealProfileEvidence',
+            '--compact'
+          ],
+          {
+            cwd: repoRoot,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe']
+          }
+        )
+      ).toThrow(/Temporary SQLite DB paths cannot be marked as real-profile evidence/)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

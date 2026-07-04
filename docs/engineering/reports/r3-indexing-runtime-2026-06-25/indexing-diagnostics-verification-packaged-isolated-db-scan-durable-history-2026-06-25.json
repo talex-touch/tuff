@@ -1,0 +1,44 @@
+{
+  "schema": "settings-indexing-diagnostics-evidence-verification/v1",
+  "gate": {
+    "passed": true,
+    "failures": []
+  },
+  "options": {
+    "sourceId": "file-provider",
+    "minRecentTasks": 1,
+    "requiredAuditFields": [
+      "duration",
+      "trigger",
+      "reason"
+    ]
+  },
+  "summary": {
+    "sourceCount": 1,
+    "checkedSourceCount": 1,
+    "passingSourceCount": 1
+  },
+  "sources": [
+    {
+      "sourceId": "file-provider",
+      "recentTaskChipCount": 2,
+      "visibleRecentTaskChipCount": 2,
+      "visibleAuditFields": {
+        "duration": true,
+        "trigger": true,
+        "reason": true,
+        "attempt": false,
+        "errorCode": false
+      },
+      "missingAuditFields": [],
+      "sampleTaskLabelKeys": [
+        "settings.settingFileIndex.sourceRecentTask.scan.succeeded",
+        "settings.settingFileIndex.sourceRecentTask.reset.succeeded"
+      ],
+      "sampleTaskTones": [
+        "muted",
+        "muted"
+      ]
+    }
+  ]
+}

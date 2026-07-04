@@ -1,0 +1,78 @@
+{
+  "kind": "indexed-source-task-state-snapshot",
+  "generatedAt": "2026-06-29T18:05:54.833Z",
+  "mode": "packaged-isolated-fixture",
+  "dbPath": "/tmp/tuff-r3-packaged-isolated-durable-scan-2026-06-30/tuff/modules/database/database.db",
+  "counts": {
+    "indexed_source_task_state": 1,
+    "search_index": 35,
+    "scan_progress": 1
+  },
+  "rows": [
+    {
+      "sourceId": "file-provider",
+      "updatedAt": 1782756348,
+      "state": {
+        "lastScan": {
+          "startedAt": 1782756348060,
+          "completedAt": 1782756348064,
+          "jobId": "file-provider:scan:1",
+          "queuedAt": 1782756348056,
+          "batches": 0,
+          "records": 0,
+          "indexedRecords": 0
+        },
+        "lastReset": {
+          "startedAt": 1782756348061,
+          "completedAt": 1782756348062,
+          "reason": "manual-rebuild",
+          "jobId": "file-provider:reset:1",
+          "queuedAt": 1782756348061,
+          "clearedSearchIndex": true,
+          "clearedSearchIndexRows": 0,
+          "clearedScanProgress": false,
+          "scanProgressRows": 0
+        },
+        "recentTasks": [
+          {
+            "kind": "scan",
+            "status": "succeeded",
+            "completedAt": 1782756348064,
+            "jobId": "file-provider:scan:1",
+            "queuedAt": 1782756348056,
+            "startedAt": 1782756348060,
+            "durationMs": 4,
+            "trigger": "manual-rebuild",
+            "summary": {
+              "durationMs": 4,
+              "trigger": "manual-rebuild",
+              "batches": 0,
+              "records": 0,
+              "indexedRecords": 0
+            }
+          },
+          {
+            "kind": "reset",
+            "status": "succeeded",
+            "completedAt": 1782756348062,
+            "jobId": "file-provider:reset:1",
+            "queuedAt": 1782756348061,
+            "startedAt": 1782756348061,
+            "durationMs": 1,
+            "reason": "manual-rebuild",
+            "trigger": "manual-rebuild",
+            "summary": {
+              "durationMs": 1,
+              "reason": "manual-rebuild",
+              "trigger": "manual-rebuild",
+              "clearedSearchIndex": true,
+              "clearedSearchIndexRows": 0,
+              "clearedScanProgress": false,
+              "scanProgressRows": 0
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

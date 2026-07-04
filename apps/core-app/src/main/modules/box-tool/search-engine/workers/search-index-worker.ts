@@ -503,18 +503,17 @@ async function handleUpsertScanProgress(
 
   await withWorkerWriteRetry(
     () =>
-      workerDb
-        .insert(schema.scanProgress)
-        .values(
-          normalizedUpsert.paths.map((entryPath) => ({
-            path: entryPath,
-            lastScanned: normalizedUpsert.lastScanned
-          }))
-        )
-        .onConflictDoUpdate({
-          target: schema.scanProgress.path,
-          set: { lastScanned: normalizedUpsert.lastScanned }
-        }),
+      workerDb.run(sql`
+        INSERT INTO scan_progress (path, last_scanned)
+        VALUES ${sql.join(
+          normalizedUpsert.paths.map(
+            (entryPath) => sql`(${entryPath}, ${normalizedUpsert.lastScanned.getTime()})`
+          ),
+          sql`, `
+        )}
+        ON CONFLICT(path) DO UPDATE SET
+          last_scanned = excluded.last_scanned
+      `),
     WORKER_RETRY_LABELS.upsertScanProgress
   )
   return normalizedUpsert.paths.length

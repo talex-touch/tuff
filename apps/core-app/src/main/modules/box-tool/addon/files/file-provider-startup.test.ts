@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
 import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
 import type { FileProviderIndexFlushSnapshot } from './services/file-provider-index-runtime-service'
 import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
@@ -9,6 +10,9 @@ const {
   searchIndexWorkerInit,
   watchServiceInitialize,
   watchServiceEnsure,
+  fileIndexWorkerHasPendingWork,
+  searchIndexWorkerHasPendingWork,
+  indexRuntimeFlush,
   indexRuntimeGetFlushSnapshot
 } = vi.hoisted(() => ({
   transportOn: vi.fn(),
@@ -16,6 +20,9 @@ const {
   searchIndexWorkerInit: vi.fn(async () => undefined),
   watchServiceInitialize: vi.fn(),
   watchServiceEnsure: vi.fn(async () => undefined),
+  fileIndexWorkerHasPendingWork: vi.fn(() => false),
+  searchIndexWorkerHasPendingWork: vi.fn(() => false),
+  indexRuntimeFlush: vi.fn(async () => undefined),
   indexRuntimeGetFlushSnapshot: vi.fn<() => FileProviderIndexFlushSnapshot | null>(() => null)
 }))
 
@@ -113,7 +120,7 @@ vi.mock('./services/file-provider-index-runtime-service', () => ({
   FileProviderIndexRuntimeService: vi.fn(() => ({
     handleIndexWorkerFile: vi.fn(),
     initWorker: vi.fn(async () => undefined),
-    flushPendingIndexResults: vi.fn(async () => undefined),
+    flush: indexRuntimeFlush,
     getFlushSnapshot: indexRuntimeGetFlushSnapshot
   }))
 }))
@@ -121,6 +128,7 @@ vi.mock('./services/file-provider-index-runtime-service', () => ({
 vi.mock('./workers/file-index-worker-client', () => ({
   FileIndexWorkerClient: vi.fn(() => ({
     getStatus: vi.fn(async () => null),
+    hasPendingWork: fileIndexWorkerHasPendingWork,
     shutdown: vi.fn()
   }))
 }))
@@ -158,11 +166,12 @@ vi.mock('../../search-engine/workers/search-index-worker-client', () => ({
   SearchIndexWorkerClient: vi.fn(() => ({
     init: searchIndexWorkerInit,
     getStatus: vi.fn(async () => null),
+    hasPendingWork: searchIndexWorkerHasPendingWork,
     shutdown: vi.fn()
   }))
 }))
 
-import { fileProvider } from './file-provider'
+import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
 
 interface MutableFileProvider {
   onLoad: (context: {
@@ -390,15 +399,35 @@ function resetProviderState(provider: MutableFileProvider): void {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   const provider = fileProvider as unknown as MutableFileProvider
   resetProviderState(provider)
   vi.clearAllMocks()
   appTaskWaitForIdle.mockResolvedValue(true)
   searchIndexWorkerInit.mockResolvedValue(undefined)
+  fileIndexWorkerHasPendingWork.mockReturnValue(false)
+  searchIndexWorkerHasPendingWork.mockReturnValue(false)
+  indexRuntimeFlush.mockResolvedValue(undefined)
   indexRuntimeGetFlushSnapshot.mockReturnValue(null)
 })
 
 describe('file-provider startup readiness', () => {
+  it('can override base watch roots for isolated packaged evidence', () => {
+    const roots = resolveFileProviderBaseWatchPaths({
+      envValue: ['/tmp/tuff-r3-fixture', ' /tmp/tuff-r3-fixture ', '/tmp/tuff-r3-other'].join(
+        path.delimiter
+      ),
+      getPath: vi.fn(() => {
+        throw new Error('default paths should not be read')
+      })
+    })
+
+    expect(roots).toEqual([
+      path.resolve('/tmp/tuff-r3-fixture'),
+      path.resolve('/tmp/tuff-r3-other')
+    ])
+  })
+
   it('registers channels without blocking on search-index worker or filesystem watcher roots', async () => {
     const provider = fileProvider as unknown as MutableFileProvider
     resetProviderState(provider)
@@ -536,6 +565,7 @@ describe('file-provider startup readiness', () => {
           onRecordBatch: expect.any(Function)
         })
       )
+      expect(indexRuntimeFlush).toHaveBeenCalledTimes(1)
     } finally {
       provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
       provider.startIndexing = originalStartIndexing
@@ -571,6 +601,85 @@ describe('file-provider startup readiness', () => {
           }
         ]
       })
+      expect(indexRuntimeFlush).toHaveBeenCalledTimes(1)
+    } finally {
+      provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
+      provider.startIndexing = originalStartIndexing
+    }
+  })
+
+  it('drains file search writes before completing manual indexed source scan', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi & {
+      rebuildIndex: (options: { force: boolean }) => Promise<{ success: boolean; error?: string }>
+      isInitializing: Promise<{
+        added: number
+        changed: number
+        deleted: number
+        skipped: number
+        errors: number
+      }> | null
+    }
+    const originalRebuildIndex = provider.rebuildIndex
+    const originalIsInitializing = provider.isInitializing
+    const indexingRun = Promise.resolve({
+      added: 1,
+      changed: 0,
+      deleted: 0,
+      skipped: 0,
+      errors: 0
+    })
+
+    provider.rebuildIndex = vi.fn(async () => {
+      provider.isInitializing = indexingRun
+      return { success: true }
+    })
+    provider.isInitializing = null
+
+    try {
+      await expect(
+        provider.scanIndexedSource({
+          sourceId: 'file-provider',
+          reason: IndexedSourceScanReasons.ManualRebuild
+        })
+      ).resolves.toBeNull()
+
+      expect(provider.rebuildIndex).toHaveBeenCalledWith({ force: true })
+      expect(indexRuntimeFlush).toHaveBeenCalledTimes(1)
+    } finally {
+      provider.rebuildIndex = originalRebuildIndex
+      provider.isInitializing = originalIsInitializing
+    }
+  })
+
+  it('fails indexed source scan when search index drain times out', async () => {
+    vi.useFakeTimers()
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalEnsureFileSystemWatchers = provider.ensureFileSystemWatchers
+    const originalStartIndexing = provider.startIndexing
+
+    provider.ensureFileSystemWatchers = vi.fn(async () => undefined)
+    provider.startIndexing = vi.fn(async () => ({
+      added: 1,
+      changed: 0,
+      deleted: 0,
+      skipped: 0,
+      errors: 0
+    }))
+    fileIndexWorkerHasPendingWork.mockReturnValue(true)
+
+    try {
+      const scan = provider.scanIndexedSource({
+        sourceId: 'file-provider',
+        reason: IndexedSourceScanReasons.Scheduled
+      })
+      const assertion = expect(scan).rejects.toThrow(
+        'file-index-search-drain-timeout:indexed-source.scan'
+      )
+
+      await vi.advanceTimersByTimeAsync(30_500)
+
+      await assertion
+      expect(indexRuntimeFlush).toHaveBeenCalled()
     } finally {
       provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
       provider.startIndexing = originalStartIndexing

@@ -1,20 +1,33 @@
 #!/usr/bin/env tsx
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import os from 'node:os'
+import { dirname, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { createClient, type Client } from '@libsql/client'
 import {
   buildSearchIndexMigrationPreflightReport,
   type SearchIndexMigrationPreflightSnapshot,
+  type SearchIndexMigrationSqliteRuntimeSnapshot,
   type SearchIndexMigrationTableColumn,
   type SearchIndexMigrationTableSnapshot
 } from '../src/main/modules/box-tool/search-engine/search-index-migration-preflight'
 
 interface CliOptions {
   db?: string
+  evidenceScope?: SearchIndexMigrationEvidenceScope
   output?: string
+  requireRealProfileEvidence: boolean
   sourceId: string
   pretty: boolean
+}
+
+type SearchIndexMigrationEvidenceScope = 'real-profile' | 'isolated-controlled' | 'unclassified'
+
+interface SearchIndexMigrationEvidenceSource {
+  scope: SearchIndexMigrationEvidenceScope
+  detection: 'auto' | 'explicit'
+  dbPathClass: 'temporary' | 'non-temporary'
+  realProfileRequired: boolean
 }
 
 interface SqliteRow {
@@ -41,12 +54,19 @@ const SEARCH_INDEX_SHADOW_TABLES = [
   'search_index_config'
 ]
 
+const TEMPORARY_DB_PATH_ROOTS = Array.from(new Set([os.tmpdir(), '/tmp', '/private/tmp']))
+
 function printUsage(): void {
   console.log(`Usage:
   pnpm -C "apps/core-app" run search:index-migration:preflight -- --db <sqlite.db> [options]
 
 Options:
   --db <path>          SQLite database path to inspect. Required.
+  --evidenceScope <scope>
+                       Evidence scope: real-profile, isolated-controlled, or unclassified.
+                       Paths under OS temp roots such as /tmp are auto-labelled isolated-controlled.
+  --requireRealProfileEvidence
+                       Fail unless --evidenceScope real-profile is set and the DB is not under the OS temp directory.
   --sourceId <id>      Source/provider id to inspect. Default: file-provider.
   --output <file>      Write the JSON report to a file in addition to stdout.
   --compact            Print single-line JSON.
@@ -58,6 +78,7 @@ This command is read-only. It does not run migrations or modify SQLite data.
 
 function parseArgs(argv: string[]): CliOptions | null {
   const options: CliOptions = {
+    requireRealProfileEvidence: false,
     sourceId: 'file-provider',
     pretty: true
   }
@@ -71,6 +92,20 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--db' && argv[index + 1]) {
       options.db = argv[++index]
+      continue
+    }
+    if (arg === '--evidenceScope' && argv[index + 1]) {
+      const scope = argv[++index]
+      if (!isSearchIndexMigrationEvidenceScope(scope)) {
+        throw new Error(
+          '--evidenceScope must be one of: real-profile, isolated-controlled, unclassified'
+        )
+      }
+      options.evidenceScope = scope
+      continue
+    }
+    if (arg === '--requireRealProfileEvidence') {
+      options.requireRealProfileEvidence = true
       continue
     }
     if (arg === '--sourceId' && argv[index + 1]) {
@@ -92,6 +127,51 @@ function parseArgs(argv: string[]): CliOptions | null {
     throw new Error('Missing required --db <sqlite.db>')
   }
   return options
+}
+
+function isSearchIndexMigrationEvidenceScope(
+  value: string
+): value is SearchIndexMigrationEvidenceScope {
+  return value === 'real-profile' || value === 'isolated-controlled' || value === 'unclassified'
+}
+
+function isPathUnderDirectory(filePath: string, directoryPath: string): boolean {
+  const resolvedFilePath = resolve(filePath)
+  const resolvedDirectoryPath = resolve(directoryPath)
+  return (
+    resolvedFilePath === resolvedDirectoryPath ||
+    resolvedFilePath.startsWith(`${resolvedDirectoryPath}${sep}`)
+  )
+}
+
+function buildEvidenceSource(options: CliOptions): SearchIndexMigrationEvidenceSource {
+  const dbPath = options.db
+  if (!dbPath) {
+    throw new Error('Missing required --db <sqlite.db>')
+  }
+
+  const dbPathClass = TEMPORARY_DB_PATH_ROOTS.some((root) => isPathUnderDirectory(dbPath, root))
+    ? 'temporary'
+    : 'non-temporary'
+  const autoScope: SearchIndexMigrationEvidenceScope =
+    dbPathClass === 'temporary' ? 'isolated-controlled' : 'unclassified'
+  const scope = options.evidenceScope ?? autoScope
+
+  if (scope === 'real-profile' && dbPathClass === 'temporary') {
+    throw new Error('Temporary SQLite DB paths cannot be marked as real-profile evidence')
+  }
+  if (options.requireRealProfileEvidence && scope !== 'real-profile') {
+    throw new Error(
+      'Real profile evidence requires --evidenceScope real-profile and a non-temporary SQLite DB path'
+    )
+  }
+
+  return {
+    scope,
+    detection: options.evidenceScope ? 'explicit' : 'auto',
+    dbPathClass,
+    realProfileRequired: options.requireRealProfileEvidence
+  }
 }
 
 function toCount(value: unknown): number {
@@ -164,6 +244,48 @@ async function safeCount(client: Client, sql: string, args?: unknown[]): Promise
   return toCount(rows[0]?.count)
 }
 
+async function readPragmaRawValue(client: Client, pragmaName: string): Promise<unknown> {
+  const rows = await queryRows(client, `PRAGMA ${pragmaName}`)
+  const row = rows[0]
+  if (!row) return null
+  return row[pragmaName] ?? Object.values(row)[0] ?? null
+}
+
+async function readPragmaString(client: Client, pragmaName: string): Promise<string | null> {
+  try {
+    const value = await readPragmaRawValue(client, pragmaName)
+    if (typeof value === 'string') return value
+    if (value === null || value === undefined) return null
+    return String(value)
+  } catch {
+    return null
+  }
+}
+
+async function readPragmaNumber(client: Client, pragmaName: string): Promise<number | null> {
+  try {
+    const value = await readPragmaRawValue(client, pragmaName)
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+async function readSqliteRuntimeSnapshot(
+  client: Client
+): Promise<SearchIndexMigrationSqliteRuntimeSnapshot> {
+  return {
+    journalMode: await readPragmaString(client, 'journal_mode'),
+    synchronous: await readPragmaNumber(client, 'synchronous'),
+    busyTimeoutMs: await readPragmaNumber(client, 'busy_timeout'),
+    pageSize: await readPragmaNumber(client, 'page_size'),
+    pageCount: await readPragmaNumber(client, 'page_count'),
+    freelistCount: await readPragmaNumber(client, 'freelist_count'),
+    queryOnly: (await readPragmaNumber(client, 'query_only')) === 1
+  }
+}
+
 async function countByProvider(
   client: Client,
   tableName: string,
@@ -195,6 +317,7 @@ async function buildSnapshot(
     keywordMappings: await readTableSnapshot(client, TABLE_NAMES.keywordMappings),
     indexedSourceTaskState: await readTableSnapshot(client, TABLE_NAMES.indexedSourceTaskState)
   }
+  const sqliteRuntime = await readSqliteRuntimeSnapshot(client)
 
   const scanProgressSourceIdColumn = hasColumn(tables.scanProgress, 'source_id')
   const scanProgressBlankPathRows = tables.scanProgress.exists
@@ -265,6 +388,7 @@ async function buildSnapshot(
   return {
     generatedAt: new Date().toISOString(),
     sourceId,
+    sqliteRuntime,
     tables,
     scanProgress: {
       sourceIdColumn: scanProgressSourceIdColumn,
@@ -359,12 +483,16 @@ async function main(): Promise<void> {
   if (!existsSync(dbPath)) {
     throw new Error(`SQLite database does not exist: ${dbPath}`)
   }
+  const evidenceSource = buildEvidenceSource(options)
 
   const client = createClient({ url: `file:${dbPath}` })
   try {
     await client.execute('PRAGMA query_only = ON')
     const snapshot = await buildSnapshot(client, options.sourceId)
-    const report = buildSearchIndexMigrationPreflightReport(snapshot)
+    const report = {
+      ...buildSearchIndexMigrationPreflightReport(snapshot),
+      evidenceSource
+    }
     const serializedReport = JSON.stringify(report, null, options.pretty ? 2 : 0)
 
     if (options.output) {

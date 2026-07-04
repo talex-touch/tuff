@@ -1,0 +1,134 @@
+# R3 Indexing Runtime Evidence - 2026-06-25
+
+> 范围：R3 Search / Indexing Runtime SQLite/FTS durable migration readiness、Drizzle migration journal consistency、legacy `file_fts` retain policy、`scan_progress` source-scoped read-only migration plan / copy simulation、controlled seeded / isolated maintenance Settings diagnostics verifier evidence。
+
+## 2026-07-04 Goal Progress
+
+- Overall R3 progress is recorded as approximately `74%`; status remains `active / partial`.
+- This progress snapshot does not change the goal scope. Goal adjustment is deferred to a follow-up discussion.
+- Latest verified movement: strict aggregate evidence now requires Settings verification to match both the probe-declared `artifactPaths.verification` path and the embedded probe `verification` JSON; the isolated blocked verifier artifact was refreshed with the new evidence field.
+- Latest validation: 12 R3 focused test files / 151 tests passed, `typecheck:node` passed, `git diff --check` passed, and query-only plan / isolated-blocked verifier artifact sanity checks passed.
+- Still open: real-profile SQLite/FTS / `scan_progress` preflight, simulation, plan, approved execute and post-migration evidence; attach-only natural Settings recent task screenshots / DOM / verifier evidence; packaged cold-start `SIGABRT` follow-up.
+
+## Artifacts
+
+- `search-production-migration-readiness-2026-06-25.json`
+  - Source-read-only readiness report for current CoreApp schema/resources/journal.
+  - Result: `readiness.status=ready`, `blockers=[]`, latest migration tag `0025_scan_progress_source_scope`.
+- `search-production-migration-readiness-2026-06-30.json`
+  - Source-read-only readiness rerun after the scan completion drain fix and current migration journal state.
+  - Result: `readiness.status=ready`, `blockers=[]`, latest migration tag `0025_scan_progress_source_scope`; this does not open or mutate a profile SQLite DB.
+- `search-production-migration-readiness-2026-07-03.json`
+  - Source-read-only readiness rerun with the legacy `file_fts` migration policy gate.
+  - Result: `readiness.status=ready`, `blockers=[]`, latest migration tag `0025_scan_progress_source_scope`, and `legacyFileFtsMigrationPolicy.status=retained`; this does not open or mutate a profile SQLite DB.
+- `search-production-migration-readiness-2026-07-03-journal-gate.json`
+  - Source-read-only readiness rerun with Drizzle journal / SQL file consistency blockers enabled.
+  - Result: `readiness.status=ready`, `blockers=[]`, latest migration tag `0025_scan_progress_source_scope`, `journalEntriesWithoutSql=[]`, `sqlFilesWithoutJournalEntry=[]`, and `legacyFileFtsMigrationPolicy.status=retained`; this does not open or mutate a profile SQLite DB.
+- `search-index-migration-preflight-old-shape-2026-06-25.json`
+  - Read-only preflight against an isolated temporary old-shape SQLite DB.
+  - Result: `gate.passed=true`, `scanProgressSourceScope=needs-migration`, `sqliteFtsOwnership=needs-confirmation`.
+  - Legacy `file_fts` policy: `retain-unchanged`; no R3 schema/data rewrite is planned for `file_fts`.
+- `search-index-migration-preflight-old-shape-queryonly-2026-07-03.json`
+  - Read-only preflight against an isolated old-shape DB at `/tmp/tuff-r3-preflight-queryonly-evidence-2026-07-03/source.sqlite`.
+  - Result: `gate.passed=true`, `sqliteRuntime.queryOnly=true`, `evidenceSource.scope=isolated-controlled`, `source-index-row-parity` passed, `search-index-meta-coverage` passed, `scanProgressSourceScope=needs-migration`, and `task-history-store` reports `status=warning` / `durable-history-empty`; this does not open or mutate a real profile SQLite DB.
+- `scan-progress-source-scope-migration-plan-queryonly-2026-07-03.json`
+  - Read-only `search:scan-progress-migration` plan against an isolated path-only DB at `/tmp/tuff-r3-scan-progress-plan-queryonly-2026-07-03/source.sqlite`.
+  - Result: `mode=plan`, `executed=false`, `queryOnly=true`, `evidenceSource.scope=isolated-controlled`, `evidenceSource.dbPathClass=temporary`, `plan.status=ready`, `plan.destructiveActions=false`, `requiresApproval=true`, `requiresSchemaChange=true`, `requiresDataRewrite=true`, `primaryKeyColumns=["path"]`, and `rowsToMigrate=2`; this is isolated plan evidence only and does not execute source-scoped schema/data migration.
+- `search-index-migration-evidence-verification-isolated-blocked-2026-07-03.json`
+  - Strict aggregate verifier output over the current isolated preflight / production readiness / FTS simulation / `scan_progress` simulation / read-only plan artifacts.
+  - Result: `gate.passed=false`; the verifier accepts source-read-only production readiness, but blocks final R3 closure because preflight is `evidenceSource.scope=isolated-controlled`, `task-history-store` is `durable-history-empty`, `scanProgressSourceScope=needs-migration`, the FTS / `scan_progress` copy simulations and `scan_progress` plan are isolated-controlled, natural attach-only Settings recent task verification is missing, and Settings/source detail screenshot artifacts are missing.
+  - `nextActions` now explicitly calls for real-profile preflight, real-profile FTS / `scan_progress` copy simulations, real-profile `scan_progress` plan evidence, source-scoped post-migration preflight, and attach-only natural Settings visible evidence.
+- `search-fts-ownership-simulation-old-shape-2026-06-25.json`
+  - Copy-execute simulation against the same isolated old-shape DB.
+  - Result: `gate.passed=true`; simulation copy recreates durable `search_index`, reports full-reindex impact, and retains legacy `file_fts` unchanged.
+- `search-fts-ownership-simulation-old-shape-source-policy-2026-07-03.json`
+  - Copy-execute simulation against an isolated old-shape DB at `/tmp/tuff-r3-source-snapshot-evidence-2026-07-03/source.sqlite`.
+  - Result: `gate.passed=true`, `sourceMutationPolicy=source-not-mutated-copy-execute`, `sourceSnapshotUnchanged=true`, `evidenceSource.scope=isolated-controlled`, and `evidenceSource.dbPathClass=temporary`; simulation copy recreates durable `search_index`, reports full-reindex impact, and retains legacy `file_fts` unchanged.
+- `scan-progress-source-scope-simulation-old-shape-2026-06-25.json`
+  - Copy-execute simulation against the same isolated old-shape DB.
+  - Result: `gate.passed=true`; simulation copy migrates path-only `scan_progress` to `PRIMARY KEY(source_id, path)` and preserves `scan_progress_path_only_backup`.
+- `scan-progress-source-scope-simulation-old-shape-source-policy-2026-07-03.json`
+  - Copy-execute simulation against the same isolated source-policy DB.
+  - Result: `gate.passed=true`, `sourceMutationPolicy=source-not-mutated-copy-execute`, `sourceSnapshotUnchanged=true`, `evidenceSource.scope=isolated-controlled`, and `evidenceSource.dbPathClass=temporary`; simulation copy migrates path-only `scan_progress` to `PRIMARY KEY(source_id, path)` and preserves `scan_progress_path_only_backup`.
+- `indexing-diagnostics-probe-seeded-2026-06-25.json`
+  - Controlled seeded packaged probe envelope copied from `/tmp/tuff-r3-indexing-diagnostics-seeded`.
+  - Result: `ok=true`, `seededRecentTaskEvidence=true`; proves probe wiring can collect packaged Settings/File Index diagnostics artifacts in isolated mode.
+- `indexing-diagnostics-verification-seeded-2026-06-25.json`
+  - Controlled seeded verifier output for recent task chips.
+  - Result: verifier passed for duration / trigger / reason / attempt / code visibility in Settings display helper.
+- `indexing-diagnostics-probe-maintenance-reset-2026-06-25.json`
+  - Isolated packaged `dist/mac-arm64/tuff.app` probe with `--runMaintenanceAction reset`.
+  - Result: `ok=true`, `failures=[]`; source detail DOM shows a natural runtime `reset` recent task produced through typed `app:indexed-source:reset`.
+- `indexing-diagnostics-verification-maintenance-reset-2026-06-25.json`
+  - Verifier output for the isolated maintenance reset probe.
+  - Result: verifier passed for duration / trigger / reason visibility in Settings display helper.
+- `indexing-diagnostics-settings-maintenance-reset-2026-06-25.*` and `indexing-diagnostics-source-detail-maintenance-reset-2026-06-25.*`
+  - Packaged Settings and File Index detail DOM/screenshot artifacts for the isolated maintenance reset run.
+- `indexing-diagnostics-probe-maintenance-reconcile-fixture-2026-06-25.json`
+  - Isolated packaged `dist/mac-arm64/tuff.app` probe with `--runMaintenanceAction reconcile` and `--fixtureRoot /tmp/tuff-r3-indexing-runtime-fixture-reconcile`.
+  - Result: `ok=true`, `failures=[]`, bundle marker preflight passed, diagnostics roots are constrained to the fixture root, and source detail DOM shows a runtime `reconcile` recent task.
+- `indexing-diagnostics-verification-maintenance-reconcile-fixture-2026-06-25.json`
+  - Verifier output for the isolated maintenance reconcile fixture probe.
+  - Result: verifier passed for duration / trigger / reason visibility in Settings display helper.
+- `indexing-diagnostics-probe-maintenance-scan-fixture-2026-06-25.json`
+  - Isolated packaged `dist/mac-arm64/tuff.app` probe with `--runMaintenanceAction scan` and `--fixtureRoot /tmp/tuff-r3-indexing-runtime-fixture-scan`.
+  - Result: `ok=true`, `failures=[]`, bundle marker preflight passed, diagnostics roots are constrained to the fixture root, and source detail DOM shows runtime `scan` / reset recent tasks.
+- `indexing-diagnostics-verification-maintenance-scan-fixture-2026-06-25.json`
+  - Verifier output for the isolated maintenance scan fixture probe.
+  - Result: verifier passed for duration / trigger / reason visibility in Settings display helper.
+- `indexing-diagnostics-settings-maintenance-*-fixture-2026-06-25.*` and `indexing-diagnostics-source-detail-maintenance-*-fixture-2026-06-25.*`
+  - Packaged Settings and File Index detail DOM/screenshot artifacts for the isolated scan/reconcile fixture runs.
+- `indexing-diagnostics-probe-packaged-isolated-durable-scan-2026-06-30.json`
+  - Plain Node CDP evidence against isolated `dist/mac-arm64/tuff.app` userData at `/tmp/tuff-r3-packaged-isolated-durable-scan-2026-06-30`.
+  - Result: `indexed_source_task_state=1`, `scan_progress=1`, `search_index=35`; durable task state includes runtime `scan` and paired `reset` recent tasks from typed `app:indexed-source:scan`.
+- `indexing-task-state-packaged-isolated-durable-scan-2026-06-30.json`
+  - SQLite task-state snapshot for the same isolated DB.
+  - Result: `file-provider` recentTasks persisted in `indexed_source_task_state` after packaged app exit.
+- `indexing-diagnostics-verification-packaged-isolated-durable-scan-2026-06-30.json`
+  - Settings diagnostics verifier output for the same diagnostics payload.
+  - Result: `gate.passed=true` for duration / trigger / reason visible audit fields.
+- `search-index-migration-preflight-packaged-isolated-durable-scan-2026-06-30.json`
+  - Read-only preflight against the same isolated packaged DB.
+  - Result: `scanProgressSourceScope=ready`, `task-history-store` rows `1`, `sqlite-runtime-profile` captured `journalMode=wal`, `pageSize=4096`, `pageCount=221`, and legacy `file_fts` retain-unchanged policy remains in force. The stricter 2026-06-30 preflight now reports `gate.passed=false` / `sqliteFtsOwnership=blocked` because `source-index-row-parity` sees `sourceIndexedRows=0` for `file-provider` while `filesRows=35`; this is isolated evidence of a provider row-parity blocker, not approval to execute migration.
+  - Follow-up: code now drains file-index worker / flush buffer / SearchIndex worker before runtime `scan` completion, but this artifact remains blocking until a rebuilt packaged app regenerates isolated durable scan + preflight evidence.
+- `search-index-fts-ownership-simulation-packaged-isolated-durable-scan-2026-06-30.json`
+  - Copy-execute FTS ownership simulation against the same isolated packaged DB.
+  - Result: `gate.passed=true`; `search_index` durable FTS shape and shadow tables are present, simulation mutates only the copy, and legacy `file_fts` is retained unchanged.
+- `scan-progress-source-scope-simulation-packaged-isolated-durable-scan-2026-06-30.json`
+  - Copy-execute `scan_progress` source-scope simulation against the same isolated packaged DB.
+  - Result: `gate.passed=true`; source DB is already `PRIMARY KEY(source_id, path)` with one `file-provider` progress row.
+- `indexing-diagnostics-probe-packaged-isolated-durable-scan-drain-failure-2026-06-30.json`
+  - Structured failure envelope from a rebuilt packaged isolated rerun attempt after the scan completion drain fix.
+  - Result: `ok=false`; fixture-root bundle preflight passed, but packaged app aborted before CDP and DB initialization. `launchFailure` records `phase=wait-for-cdp`, `signalCode=SIGABRT`, and no replacement SQLite DB/preflight evidence was produced.
+- `indexing-diagnostics-*-maintenance-reconcile-2026-06-25.*`
+  - Failed exploration artifacts only; not counted as passing evidence.
+  - Result: `ok=false`; the existing packaged bundle does not include the fixture-root base watch path override, so reconcile still used default home roots and timed out.
+- `indexing-diagnostics-probe-maintenance-reconcile-fixture-preflight-2026-06-25.json`
+  - Failed fixture-root bundle preflight artifact only; not counted as passing evidence.
+  - Result: `ok=false`; probe stopped before launch because packaged `app.asar` does not contain the `TUFF_FILE_PROVIDER_BASE_WATCH_PATHS` marker required for controlled scan/reconcile fixture roots.
+
+## Boundaries
+
+- These artifacts do not modify a real packaged/user profile.
+- The old-shape SQLite DB was generated under `/tmp/tuff-r3-indexing-runtime-evidence-2026-06-25` for controlled simulation only; DB copies are not committed.
+- The 2026-07-03 query-only preflight DB was generated under `/tmp/tuff-r3-preflight-queryonly-evidence-2026-07-03` for controlled read-only preflight only. It proves the preflight artifact now records `queryOnly=true`, `evidenceSource.scope=isolated-controlled`, and empty durable history warning semantics; it is not real profile preflight/execute evidence. Real profile preflight evidence should run with `--evidenceScope real-profile --requireRealProfileEvidence`, which rejects temporary SQLite paths.
+- The 2026-07-03 query-only `scan_progress` migration plan DB was generated under `/tmp/tuff-r3-scan-progress-plan-queryonly-2026-07-03` for controlled read-only planning only. It proves the source-scope migration CLI records `queryOnly=true`, `evidenceSource.scope=isolated-controlled`, and approval-required plan semantics; it is not real profile schema/data migration evidence. Real profile `scan_progress` plan evidence should run with `--evidenceScope real-profile --requireRealProfileEvidence`, which rejects temporary SQLite paths.
+- The 2026-07-03 source-policy simulation DB was generated under `/tmp/tuff-r3-source-snapshot-evidence-2026-07-03` for controlled simulation only; DB copies are not committed. It is isolated evidence that the simulation CLIs can prove `sourceSnapshotUnchanged=true` and now record `evidenceSource.scope=isolated-controlled`, not real profile migration evidence.
+- The 2026-07-03 strict aggregate verification artifact intentionally fails. It is a guardrail proving the current packet cannot close R3 until real-profile preflight, real-profile FTS / `scan_progress` copy simulation evidence, real-profile `scan_progress` plan evidence, source-scoped post-migration preflight, natural attach-only Settings verification, and Settings/source detail screenshot artifacts are present.
+- The strict aggregate verifier requires real-profile preflight to show `task-history-store` evidence `durable-history-present` with at least one `indexed_source_task_state` row; an existing but empty durable history table cannot close durable job history.
+- The strict aggregate verifier also requires the Settings probe envelope itself to be `ok=true`, `mode=attach-only`, `profileMutationPolicy=read-only`, and `sourceId=file-provider`, and rejects `seededRecentTaskEvidence`, `maintenanceAction`, or `fixtureRoot` markers so controlled probe output cannot be used as natural recent task evidence.
+- The strict aggregate verifier requires `--settingsVerification` to match both the artifact path declared by `--settingsProbe` at `artifactPaths.verification` and the embedded probe `verification` JSON, so a Settings verification JSON from one run cannot be paired with screenshots / DOM from another run.
+- The strict aggregate verifier requires Settings/source detail screenshots to be real PNG files and requires the Settings/source detail DOM artifacts to prove the source diagnostics group, visible detail dialog, and recent task list are present; non-empty placeholder files cannot close visible durable job history.
+- The strict aggregate verifier requires Settings verification to target `sourceId=file-provider`, `minRecentTasks>=1`, and the full audit field set `duration,trigger,reason,attempt,errorCode`; a narrower JSON verifier result cannot close durable job history.
+- Real profile preflight/execute evidence is still open and must go through the high-risk confirmation checklist in `docs/plan-prd/TODO-R3.md`.
+- Natural packaged Settings recent task screenshot/recording evidence is still open; seeded evidence only proves the UI/verifier path and must not be treated as scan/watch/reconcile/reset history from a real profile.
+- The isolated maintenance reset/scan/reconcile evidence is stronger than seeded evidence because recent tasks are produced by the packaged runtime through typed maintenance IPC, but it still uses isolated profiles and does not prove a real user profile scan/watch/reconcile/reset history.
+- Isolated scan/reconcile maintenance evidence now requires and records a packaged bundle marker preflight plus fixture-root root constraint. The current passing fixture evidence proves the controlled packaged runtime path, not production user data migration or natural profile history.
+- The 2026-06-30 durable scan evidence is still isolated packaged evidence. It proves packaged runtime task-state persistence, source-scoped `scan_progress` shape, and read-only SQLite runtime PRAGMA profile capture on a controlled DB; the refreshed preflight also exposes a provider row-parity blocker for SQLite/FTS ownership, so it does not execute or approve real profile schema/data migration.
+- The 2026-06-30 production migration readiness rerun is source-read-only evidence only. It confirms schema/resource migration wiring in the current worktree, not packaged isolated DB row parity or real profile migration execution.
+- The 2026-07-03 production migration readiness reruns remain source-read-only evidence only. They additionally confirm resource migrations do not touch legacy `file_fts` and that Drizzle journal entries match SQL files; real profile execute/preflight evidence is still required.
+- The provider row-parity blocker was traced to the runtime scan completion boundary: durable task history could be recorded before file-provider rows finished flushing into `search_index`. Code-side drain coverage has been added, but the old 2026-06-30 DB must not be hand-edited; only a rebuilt packaged isolated rerun can replace this failed evidence.
+- A rebuilt packaged app was attempted with date suffixes `packaged-isolated-durable-scan-drain-2026-06-30` and `packaged-isolated-durable-scan-drain-failure-2026-06-30`; the latter records a structured failure envelope. The app still aborted before CDP and DB initialization, so no replacement isolated DB/preflight artifact exists; the latest crash signature remains `EXC_CRASH/SIGABRT` in HIServices `_RegisterApplication` / `NSApplication.sharedApplication`.
+- The current `visible:experience:indexing-diagnostics-probe` npm/tsx cold-start path remains under investigation because packaged Electron can abort before CDP is reachable in this environment. Local macOS DiagnosticReports for `tuff-2026-06-30-*` show `EXC_CRASH/SIGABRT` from AppKit/HIServices `_RegisterApplication` / `NSApplication.sharedApplication`, before CoreApp main-process JS logging starts. Use `visible:experience:indexing-diagnostics-attach -- --remoteDebuggingUrl <http://127.0.0.1:port/json/list>` for attach-only real packaged/profile collection so the collector cannot launch the app by accident; the attach URL is restricted to loopback CDP endpoints. The 2026-06-30 artifacts were captured with an equivalent plain Node CDP path and should be treated as evidence, not as proof that the npm/tsx probe is stable.
+- New probe envelopes include `mode` and `profileMutationPolicy`: attach-only evidence is marked `mode=attach-only` / `profileMutationPolicy=read-only`, while isolated launch evidence is marked `mode=isolated-launch` / `profileMutationPolicy=isolated-controlled`. Real profile evidence should use only the attach-only/read-only policy.
+- `settings:indexing-diagnostics:verify -- --requireReadOnlyEnvelope --requireNaturalRecentTaskEvidence` now enforces the attach-only/read-only policy for real packaged/profile evidence and rejects isolated or controlled envelopes, including seeded recent task evidence, maintenance-action probes, and fixture-root probes.

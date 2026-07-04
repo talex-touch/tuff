@@ -269,6 +269,7 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanCheckIntervalMs: 5 * 60 * 1000,
   extraPaths: []
 }
+const FILE_PROVIDER_BASE_WATCH_PATHS_ENV = 'TUFF_FILE_PROVIDER_BASE_WATCH_PATHS'
 
 const fileIndexFailedEvent = defineRawEvent<
   {
@@ -340,6 +341,9 @@ interface FileIndexedSourceScanResult {
   batches: IndexedSourceRecordBatch[]
 }
 
+const FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS = 30_000
+const FILE_INDEX_SEARCH_DRAIN_INTERVAL_MS = 100
+
 type FileIndexedSourceRuntimeResetDelegate = (
   request: IndexedSourceResetRequest
 ) => Promise<IndexedSourceResetResult>
@@ -352,6 +356,42 @@ function createFileIndexSyncStats(): FileIndexSyncStats {
     skipped: 0,
     errors: 0
   }
+}
+
+export function resolveFileProviderBaseWatchPaths(input: {
+  envValue?: string
+  getPath: (name: 'documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos') => string
+  onPathError?: (name: string, error: unknown) => void
+}): string[] {
+  const envPaths =
+    typeof input.envValue === 'string'
+      ? input.envValue
+          .split(path.delimiter)
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .map((value) => path.resolve(value))
+      : []
+  if (envPaths.length > 0) {
+    return [...new Set(envPaths)]
+  }
+
+  const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
+    'documents',
+    'downloads',
+    'desktop',
+    'music',
+    'pictures',
+    'videos'
+  ]
+  const paths = pathNames.map((name) => {
+    try {
+      return input.getPath(name)
+    } catch (error) {
+      input.onPathError?.(name, error)
+      return null
+    }
+  })
+  return [...new Set(paths.filter((p): p is string => !!p))]
 }
 
 class FileProvider implements ISearchProvider<ProviderContext> {
@@ -525,25 +565,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
 
   constructor() {
-    const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
-      'documents',
-      'downloads',
-      'desktop',
-      'music',
-      'pictures',
-      'videos'
-    ]
-    const paths = pathNames.map((name) => {
-      try {
-        return app.getPath(name)
-      } catch (error) {
+    this.baseWatchPaths = resolveFileProviderBaseWatchPaths({
+      envValue: process.env[FILE_PROVIDER_BASE_WATCH_PATHS_ENV],
+      getPath: (name) => app.getPath(name),
+      onPathError: (name, error) => {
         this.logWarn('Could not resolve system path; skipping', error, {
           pathKey: name
         })
-        return null
       }
     })
-    this.baseWatchPaths = [...new Set(paths.filter((p): p is string => !!p))]
     const rootSet = resolveIndexedWatchRootSet({
       basePaths: this.baseWatchPaths,
       normalizePath: (rawPath) => this.normalizePath(rawPath)
@@ -1396,6 +1426,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       if (this.isInitializing) {
         await this.isInitializing
       }
+      await this.waitForSearchIndexDrain('indexed-source.scan.rebuild')
       return null
     }
 
@@ -1406,6 +1437,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         batches.push(batch)
       }
     })
+    await this.waitForSearchIndexDrain('indexed-source.scan')
     batches.push({
       sourceId: this.id,
       records: [],
@@ -3604,10 +3636,31 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   public isSearchIndexWorkerBusy(): boolean {
     return (
+      this.fileIndexWorker.hasPendingWork() ||
       this.pendingIndexWorkerResults.size > 0 ||
       this.inflightIndexWorkerResults.size > 0 ||
       this.searchIndexWorker.hasPendingWork()
     )
+  }
+
+  private async waitForSearchIndexDrain(reason: string): Promise<void> {
+    const startedAt = Date.now()
+    const deadline = startedAt + FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS
+
+    while (Date.now() <= deadline) {
+      await this.indexRuntimeService.flush()
+      if (!this.isSearchIndexWorkerBusy()) {
+        return
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, FILE_INDEX_SEARCH_DRAIN_INTERVAL_MS))
+    }
+
+    this.logWarn('Search index drain timed out after indexed-source scan', undefined, {
+      reason,
+      timeoutMs: FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS,
+      busy: this.isSearchIndexWorkerBusy()
+    })
+    throw new Error(`file-index-search-drain-timeout:${reason}`)
   }
 
   private scheduleSemanticEnrichment(normalizedQuery: string, candidateCount: number): void {

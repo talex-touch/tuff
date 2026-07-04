@@ -1,0 +1,341 @@
+{
+  "kind": "r3-packaged-isolated-durable-scan-evidence",
+  "generatedAt": "2026-06-29T18:05:54.832Z",
+  "destructiveActions": false,
+  "mode": "packaged-isolated-fixture",
+  "userDataDir": "/tmp/tuff-r3-packaged-isolated-durable-scan-2026-06-30",
+  "fixtureRoot": "/tmp/tuff-r3-packaged-fixture-durable-scan-2026-06-30",
+  "dbPath": "/tmp/tuff-r3-packaged-isolated-durable-scan-2026-06-30/tuff/modules/database/database.db",
+  "selectedTarget": {
+    "id": "D9740F78F8C8834FF8B77776F1F1218E",
+    "title": "Tuff",
+    "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html"
+  },
+  "selectedSnapshot": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html",
+    "hasRouter": false,
+    "hasIpcInvoke": true,
+    "text": ""
+  },
+  "maintenanceResult": {
+    "sourceId": "file-provider",
+    "batches": 0,
+    "records": 0,
+    "indexedRecords": 0,
+    "startedAt": 1782756348060,
+    "completedAt": 1782756348064
+  },
+  "diagnostics": {
+    "generatedAt": 1782756351074,
+    "summary": {
+      "total": 1,
+      "byStatus": {
+        "warming": 1
+      },
+      "ready": 0,
+      "degraded": 0,
+      "unavailable": 1
+    },
+    "sources": [
+      {
+        "descriptor": {
+          "id": "file-provider",
+          "kind": "file",
+          "displayName": "File Index",
+          "platforms": [
+            "darwin",
+            "win32",
+            "linux"
+          ],
+          "priority": "deferred",
+          "storage": "sqlite-index",
+          "privacy": "medium",
+          "capabilities": {
+            "scan": true,
+            "watch": true,
+            "reconcile": true,
+            "clear": true,
+            "open": true
+          },
+          "admission": {
+            "owner": "core",
+            "permissionScopes": [
+              "file-system"
+            ],
+            "defaultState": "enabled",
+            "clearable": true,
+            "rebuildable": true
+          }
+        },
+        "health": {
+          "status": "warming",
+          "permissionState": "granted",
+          "itemCount": 0,
+          "watchState": "active",
+          "reconcileState": "idle",
+          "lastScanStartedAt": 1782756348070
+        },
+        "roots": [
+          {
+            "sourceId": "file-provider",
+            "path": "/tmp/tuff-r3-packaged-fixture-durable-scan-2026-06-30",
+            "permissionState": "granted"
+          }
+        ],
+        "evidence": [
+          {
+            "id": "file-provider:scan-progress",
+            "label": "File scan progress",
+            "status": "warming",
+            "itemCount": 0,
+            "rootCount": 1,
+            "roots": [
+              "/tmp/tuff-r3-packaged-fixture-durable-scan-2026-06-30"
+            ],
+            "lastCheckedAt": 1782756351074,
+            "reason": "file-index-progress-has-pending-roots",
+            "metadata": {
+              "totalFiles": 0,
+              "completedFiles": 0,
+              "failedFiles": 0,
+              "skippedFiles": 0,
+              "embeddingCompletedFiles": 0,
+              "embeddingRows": 0,
+              "configuredRoots": 1,
+              "completedRoots": 0,
+              "scanProgressRows": 0,
+              "lastScannedAt": null,
+              "lastUpsertAttempted": false,
+              "lastUpsertReady": false,
+              "lastUpsertedRows": 0,
+              "lastUpsertReason": null,
+              "lastUpsertCheckedAt": null,
+              "totalRoots": 0,
+              "pendingRoots": 1,
+              "pendingPermissionRoots": 0,
+              "pendingPermissionPaths": []
+            }
+          },
+          {
+            "id": "file-provider:integrity",
+            "label": "File index integrity",
+            "status": "ready",
+            "itemCount": 0,
+            "lastCheckedAt": 1782756348068,
+            "reason": "fts-files-count-aligned",
+            "metadata": {
+              "checkedAt": 1782756348068,
+              "needsRebuild": false,
+              "clearedSearchIndex": false,
+              "resetSearchIndexRows": 0,
+              "clearedScanProgress": false,
+              "resetReason": null,
+              "resetScanProgressRows": 0,
+              "durationMs": 0,
+              "ftsRows": 0,
+              "filesRows": 0,
+              "orphanedKeywordsRemoved": 0
+            }
+          }
+        ],
+        "progress": {
+          "sourceId": "file-provider",
+          "stage": "scanning",
+          "status": "running",
+          "current": 0,
+          "total": 1,
+          "progress": 0,
+          "startedAt": 1782756348070,
+          "updatedAt": 1782756351070,
+          "estimatedRemainingMs": null,
+          "estimatedCompletionAt": null,
+          "averageItemsPerSecond": 0,
+          "speedSampleCount": 0,
+          "estimateBasis": "none"
+        },
+        "admissionIssues": [],
+        "lifecycleIssues": [
+          "open-capability-missing-handler",
+          "handler-provided-without-capability"
+        ],
+        "lastScan": {
+          "startedAt": 1782756348060,
+          "completedAt": 1782756348064,
+          "jobId": "file-provider:scan:1",
+          "queuedAt": 1782756348056,
+          "batches": 0,
+          "records": 0,
+          "indexedRecords": 0
+        },
+        "lastReset": {
+          "startedAt": 1782756348061,
+          "completedAt": 1782756348062,
+          "reason": "manual-rebuild",
+          "jobId": "file-provider:reset:1",
+          "queuedAt": 1782756348061,
+          "clearedSearchIndex": true,
+          "clearedSearchIndexRows": 0,
+          "clearedScanProgress": false,
+          "scanProgressRows": 0
+        },
+        "recentTasks": [
+          {
+            "kind": "scan",
+            "status": "succeeded",
+            "completedAt": 1782756348064,
+            "jobId": "file-provider:scan:1",
+            "queuedAt": 1782756348056,
+            "startedAt": 1782756348060,
+            "durationMs": 4,
+            "trigger": "manual-rebuild",
+            "summary": {
+              "durationMs": 4,
+              "trigger": "manual-rebuild",
+              "batches": 0,
+              "records": 0,
+              "indexedRecords": 0
+            }
+          },
+          {
+            "kind": "reset",
+            "status": "succeeded",
+            "completedAt": 1782756348062,
+            "jobId": "file-provider:reset:1",
+            "queuedAt": 1782756348061,
+            "startedAt": 1782756348061,
+            "durationMs": 1,
+            "reason": "manual-rebuild",
+            "trigger": "manual-rebuild",
+            "summary": {
+              "durationMs": 1,
+              "reason": "manual-rebuild",
+              "trigger": "manual-rebuild",
+              "clearedSearchIndex": true,
+              "clearedSearchIndexRows": 0,
+              "clearedScanProgress": false,
+              "scanProgressRows": 0
+            }
+          }
+        ],
+        "taskRunGate": [
+          {
+            "sourceId": "file-provider",
+            "kind": "reset",
+            "blockedCount": 0,
+            "lastCompletedAt": 1782756348063
+          },
+          {
+            "sourceId": "file-provider",
+            "kind": "scan",
+            "blockedCount": 0,
+            "lastCompletedAt": 1782756348064
+          }
+        ]
+      }
+    ],
+    "taskRunGate": {
+      "generatedAt": 1782756351074,
+      "totalEntries": 2,
+      "runningEntries": 0,
+      "blockedEntries": 0,
+      "entries": [
+        {
+          "sourceId": "file-provider",
+          "kind": "reset",
+          "blockedCount": 0,
+          "lastCompletedAt": 1782756348063
+        },
+        {
+          "sourceId": "file-provider",
+          "kind": "scan",
+          "blockedCount": 0,
+          "lastCompletedAt": 1782756348064
+        }
+      ]
+    }
+  },
+  "dom": {
+    "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+    "title": "Tuff",
+    "text": "Tuff\nApp Settings\n\nMAIN\n\nSetting\nIntelligence\nStore\nStyle\nDownload Center\nVERSION\nv2.4.13-beta.1\nTUFF\n\nThe command bar, reimagined for those who build.\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\nAccount\n\nManage your account information and login status.\n\n登录凭证保护\n\n本地加密保护已启用：凭证由本机 root 密钥加密保存，重启后仍可保持登录状态。\n\nNo Account\n\nAccount access is currently unavailable.\n\nLogin\nAI Credits\n\nView personal remaining, used, and quota for Nexus AI credits.\n\nAI Credits\n\nSign in to view remaining credits and usage.\n\nSign-in required\n\nSign in to your Tuff account to read the Nexus credits summary.\n\nLanguage Settings\n\nSelect your preferred language for the application.\n\nFollow System Language\n\nAutomatically match the system language setting.\n\nChoose Language\n\nManually select your preferred display language.\n\n简体中文\nEnglish\nGeneral Settings\n\nConfigure permissions and basic settings\n\nPermissions\n\nManage file access, system assistive permissions, microphone access, and platform-level privileges in one place.\n\n2/4 granted\nManage Permissions\nAuto Start on Boot\n\nAutomatically launch app when system starts\n\nShow Tray Icon\n\nDisplay app icon in system tray\n\nHide Dock Icon\nmacOS only\n\nHide Dock icon after closing main window (macOS only)\n\nSilent Start\n\nLaunch application without showing window, run in background only\n\nAuto-mount OmniPanel feature after install\n\nWhen enabled, the first executable feature from a newly installed plugin is added to OmniPanel automatically.\n\nHide Noisy System Apps\n\nHide less-used helper apps like Simulator and system Helper/Agent entries (only hidden from results, index data is kept)\n\nUtilities\n\nPractical tools provide a unified fast desktop arbitrary promoter for you to use.\n\nCustom Placeholder\n\nCustomize the CoreBox input placeholder text. Leave empty for default.\n\nUsage\n\nGuide you to use app when enter.\n\nShortcuts\n\nManage system-wide shortcut settings in one place.\n\n6 items\nManage\nOmniPanel right-click hold duration\n\nSet the hold threshold used to trigger OmniPanel.\n\nAuto paste\n\nAuto-fill fresh clipboard content when CoreBox is opened after copying.\n\nAuto clear\n\nReset CoreBox on next open after it has been hidden for the selected time. Reopening shortly keeps the current state.\n\nClipboard polling interval\n\nHow often clipboard is checked while idle. Higher frequency uses more power. When CoreBox is visible, polling is boosted to 0.5s.\n\nClipboard low-battery polling policy\n\nAutomatically reduce clipboard polling frequency on battery power to save energy.\n\nClipboard low-battery interval\n\nClipboard polling interval used on battery when the low-battery policy is enabled.\n\nAuto hide\n\nHide searchbar when blur triggered.\n\nSmart Recommendations\n\nEnable smart recommendations based on your usage patterns.\n\nShow Recommendation Reason\n\nDisplay the reason for each recommendation.\n\nMax Recommendations\n\nMaximum number of recommended items to show in search bar.\n\nLocal semantic vectors\n\nCompute a lightweight semantic score from local context features without calling AI services.\n\nAI recommendation rerank\n\nUse a configured AI provider to rerank a small candidate set; failures and timeouts fall back to local ranking.\n\nAI embedding boost\n\nUse embedding capability to improve semantic similarity for a small candidate set. Off by default.\n\nTime context\n\nUse local time slots to rank recommendations without sending data out.\n\nForeground app context\n\nPrefer actions related to the app you are currently using.\n\nClipboard context\n\nUse clipboard type and lightweight content hints for local recommendations.\n\nNetwork context\n\nAdjust recommendations when the device appears offline or on a specific network type.\n\nBluetooth context\n\nUse local Bluetooth availability as a lightweight device context signal.\n\nFocus context\n\nPrefer work-oriented actions when system focus or do-not-disturb is active.\n\nPower context\n\nReduce power-heavy recommendations when the device is on battery.\n\nLocation bucket\n\nUse a hashed local timezone and network bucket instead of raw location data.\n\nAssistant Floating Ball\n\nEnable a desktop floating entry that sends text commands to CoreBox.\n\nEnable Assistant\n\nAssistant entries such as the floating ball and voice panel only respond when this is enabled. It stays off by default.\n\nShow floating ball\n\nShow a draggable desktop entry. Click it to open the text command panel.\n\nAssistant name\n\nName shown at the top of the Assistant panel.\n\nVoice wake\n\nWhen enabled, the floating ball and panel may request speech recognition. When disabled, only text input is used.\n\nWake words\n\nSeparate multiple wake words with commas.\n\nFile Index\n\nManage the file search index\n\nIndex Status\n\nCurrent running state of the file index\n\nInitializing\nIndex Progress\n\nScanning (0/1) 0%\n\nIndex Statistics\n\nDetailed statistics of file indexing\n\nFiles Indexed\n 0\n·\nFailed\n 0\n·\nSkipped\n 0\n·\nContent Indexed\n 0\n·\nFiles with Embeddings\n 0\n·\nEmbedding Rows\n 0\nLast Checked\n\nLast time a status check was performed\n\n2:05:48 AM\nSearch Source Diagnostics\n\nInspect",
+    "hasSourceDiagnosticsGroup": true
+  },
+  "counts": {
+    "indexed_source_task_state": 1,
+    "search_index": 35,
+    "scan_progress": 1
+  },
+  "durableTaskRows": [
+    {
+      "sourceId": "file-provider",
+      "updatedAt": 1782756348,
+      "state": {
+        "lastScan": {
+          "startedAt": 1782756348060,
+          "completedAt": 1782756348064,
+          "jobId": "file-provider:scan:1",
+          "queuedAt": 1782756348056,
+          "batches": 0,
+          "records": 0,
+          "indexedRecords": 0
+        },
+        "lastReset": {
+          "startedAt": 1782756348061,
+          "completedAt": 1782756348062,
+          "reason": "manual-rebuild",
+          "jobId": "file-provider:reset:1",
+          "queuedAt": 1782756348061,
+          "clearedSearchIndex": true,
+          "clearedSearchIndexRows": 0,
+          "clearedScanProgress": false,
+          "scanProgressRows": 0
+        },
+        "recentTasks": [
+          {
+            "kind": "scan",
+            "status": "succeeded",
+            "completedAt": 1782756348064,
+            "jobId": "file-provider:scan:1",
+            "queuedAt": 1782756348056,
+            "startedAt": 1782756348060,
+            "durationMs": 4,
+            "trigger": "manual-rebuild",
+            "summary": {
+              "durationMs": 4,
+              "trigger": "manual-rebuild",
+              "batches": 0,
+              "records": 0,
+              "indexedRecords": 0
+            }
+          },
+          {
+            "kind": "reset",
+            "status": "succeeded",
+            "completedAt": 1782756348062,
+            "jobId": "file-provider:reset:1",
+            "queuedAt": 1782756348061,
+            "startedAt": 1782756348061,
+            "durationMs": 1,
+            "reason": "manual-rebuild",
+            "trigger": "manual-rebuild",
+            "summary": {
+              "durationMs": 1,
+              "reason": "manual-rebuild",
+              "trigger": "manual-rebuild",
+              "clearedSearchIndex": true,
+              "clearedSearchIndexRows": 0,
+              "clearedScanProgress": false,
+              "scanProgressRows": 0
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "child": {
+    "exitCode": 0,
+    "signalCode": null,
+    "stdoutTail": "25 applications\n\u001b[90m[02:05:49.272]\u001b[0m \u001b[34m[app-provider]\u001b[0m \u001b[34mINFO \u001b[0m Startup backfill found 325 missing apps and 0 metadata corrections\n[AppProvider::backfillAddApps] Starting queue for 325 item(s). batchSize=1, estimated=12.00ms\n[AppProvider::backfillAddApps] Yielded after 1/325 item(s); wait 17.9ms\n[AppProvider::backfillAddApps] Yielded after 2/325 item(s); wait 19.5ms\n[AppProvider::backfillAddApps] Yielded after 3/325 item(s); wait 17.8ms\n[AppProvider::backfillAddApps] Yielded after 4/325 item(s); wait 18.8ms\n[AppProvider::backfillAddApps] Yielded after 5/325 item(s); wait 19.5ms\n[AppProvider::backfillAddApps] Yielded after 6/325 item(s); wait 19.5ms\n[AppProvider::backfillAddApps] Yielded after 7/325 item(s); wait 19.5ms\n[AppProvider::backfillAddApps] Yielded after 8/325 item(s); wait 19.6ms\n[AppProvider::backfillAddApps] Yielded after 9/325 item(s); wait 18.8ms\n[AppProvider::backfillAddApps] Yielded after 10/325 item(s); wait 18.8ms\n[AppProvider::backfillAddApps] Yielded after 11/325 item(s); wait 16.8ms\n[AppProvider::backfillAddApps] Yielded after 12/325 item(s); wait 18.4ms\n[AppProvider::backfillAddApps] Yielded after 13/325 item(s); wait 16.6ms\n[AppProvider::backfillAddApps] Yielded after 14/325 item(s); wait 18.5ms\n[AppProvider::backfillAddApps] Yielded after 15/325 item(s); wait 18.8ms\n[AppProvider::backfillAddApps] Yielded after 16/325 item(s); wait 19.5ms\n[02:05:50.991] [INFO] [UpdateService] Update check fetched source=Nexus Releases channel=BETA hasUpdate=true tag=v2.4.13-beta.1\n\u001b[32m[2026-06-30T02:05:50.991] [INFO] default - \u001b[39m[02:05:50.991] [INFO] [UpdateService] Update check fetched source=Nexus Releases channel=BETA hasUpdate=true tag=v2.4.13-beta.1\n[AppProvider::backfillAddApps] Yielded after 17/325 item(s); wait 18.5ms\n[02:05:51.355] [DONE] [UpdateService] Settings saved to: /tmp/tuff-r3-packaged-isolated-durable-scan-2026-06-30/tuff/config/update-settings.json\n\u001b[32m[2026-06-30T02:05:51.355] [INFO] default - \u001b[39m[02:05:51.355] [DONE] [UpdateService] Settings saved to: /tmp/tuff-r3-packaged-isolated-durable-scan-2026-06-30/tuff/config/update-settings.json\n[AppProvider::backfillAddApps] Yielded after 18/325 item(s); wait 19.0ms\n\u001b[90m[02:05:51.382]\u001b[0m \u001b[36m[file-system-watcher]\u001b[0m \u001b[34mINFO \u001b[0m Destroying...\n\u001b[90m[02:05:51.440]\u001b[0m \u001b[36m[file-system-watcher]\u001b[0m \u001b[34mINFO \u001b[0m Watcher with depth 1 stopped.\n\u001b[90m[02:05:51.443]\u001b[0m \u001b[36m[file-system-watcher]\u001b[0m \u001b[34mINFO \u001b[0m Watcher with depth 5 stopped.\n\u001b[90m[02:05:51.444]\u001b[0m \u001b[36m[extension-loader]\u001b[0m \u001b[34mINFO \u001b[0m ExtensionLoaderModule destroyed\n[02:05:51.444] [INFO] [DownloadCenter] Destroyed\n\u001b[32m[2026-06-30T02:05:51.444] [INFO] default - \u001b[39m[02:05:51.444] [INFO] [DownloadCenter] Destroyed\n[02:05:51.444] [INFO] [TerminalManager] Destroyed terminal processes\n\u001b[32m[2026-06-30T02:05:51.444] [INFO] default - \u001b[39m[02:05:51.444] [INFO] [TerminalManager] Destroyed terminal processes\n[02:05:51.444] [INFO] [AddonOpener] AddonOpenerModule destroyed\n\u001b[32m[2026-06-30T02:05:51.444] [INFO] default - \u001b[39m[02:05:51.444] [INFO] [AddonOpener] AddonOpenerModule destroyed\n[02:05:51.445] [DONE] [GlobalShortcon] Successfully registered 3 shortcuts\n\u001b[32m[2026-06-30T02:05:51.445] [INFO] default - \u001b[39m[02:05:51.445] [DONE] [GlobalShortcon] Successfully registered 3 shortcuts\n[02:05:51.445] [DONE] [GlobalShortcon] Successfully registered 3 shortcuts\n\u001b[32m[2026-06-30T02:05:51.445] [INFO] default - \u001b[39m[02:05:51.445] [DONE] [GlobalShortcon] Successfully registered 3 shortcuts\n[02:05:51.445] [DONE] [GlobalShortcon] Successfully registered 2 shortcuts\n\u001b[32m[2026-06-30T02:05:51.445] [INFO] default - \u001b[39m[02:05:51.445] [DONE] [GlobalShortcon] Successfully registered 2 shortcuts\n[02:05:51.446] [DONE] [GlobalShortcon] Successfully registered 2 shortcuts\n\u001b[32m[2026-06-30T02:05:51.446] [INFO] default - \u001b[39m[02:05:51.446] [DONE] [GlobalShortcon] Successfully registered 2 shortcuts\n\u001b[90m[02:05:51.446]\u001b[0m \u001b[34m[app-provider]\u001b[0m \u001b[34mINFO \u001b[0m AppProvider service unloaded\n[02:05:51.446] [INFO] [UsageSummaryService] Usage summary service stopped totalRuns=0 totalSummarized=0 totalCleaned=0 avgDuration=0\n\u001b[32m[2026-06-30T02:05:51.446] [INFO] default - \u001b[39m[02:05:51.446] [INFO] [UsageSummaryService] Usage summary service stopped totalRuns=0 totalSummarized=0 totalCleaned=0 avgDuration=0\n[02:05:51.446] [INFO] [DivisionBox:ShortcutTrigger] Cleared all shortcut mappings\n\u001b[32m[2026-06-30T02:05:51.446] [INFO] default - \u001b[39m[02:05:51.446] [INFO] [DivisionBox:ShortcutTrigger] Cleared all shortcut mappings\n[02:05:51.447] [INFO] [DivisionBoxPool] Pool destroyed\n\u001b[32m[2026-06-30T02:05:51.447] [INFO] default - \u001b[39m[02:05:51.447] [INFO] [DivisionBoxPool] Pool destroyed\n[02:05:51.448] [INFO] [DivisionBox:IPC] All IPC handlers unregistered\n\u001b[32m[2026-06-30T02:05:51.448] [INFO] default - \u001b[39m[02:05:51.448] [INFO] [DivisionBox:IPC] All IPC handlers unregistered\n[02:05:51.448] [INFO] [DivisionBox:Module] Module destroyed\n\u001b[32m[2026-06-30T02:05:51.448] [INFO] default - \u001b[39m[02:05:51.448] [INFO] [DivisionBox:Module] Module destroyed\n[02:05:51.450] [DONE] [GlobalShortcon] Successfully registered 1 shortcuts\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [DONE] [GlobalShortcon] Successfully registered 1 shortcuts\n[02:05:51.450] [DONE] [GlobalShortcon] Successfully registered 0 shortcuts\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [DONE] [GlobalShortcon] Successfully registered 0 shortcuts\n[02:05:51.450] [INFO] [FlowBus:IPC] Transport handlers unregistered\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [FlowBus:IPC] Transport handlers unregistered\n[02:05:51.450] [INFO] [FlowBus:TargetRegistry] Cleared all targets\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [FlowBus:TargetRegistry] Cleared all targets\n[02:05:51.450] [INFO] [FlowBus:Module] Module destroyed\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [FlowBus:Module] Module destroyed\n[02:05:51.450] [INFO] [PluginSystem:LogService] Stopped accepting plugin log stream subscriptions\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [PluginSystem:LogService] Stopped accepting plugin log stream subscriptions\n[02:05:51.450] [INFO] [StoreApiService] Plugin update scheduler stopped\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [StoreApiService] Plugin update scheduler stopped\n[02:05:51.450] [INFO] [Intelligence] Destroying Intelligence module\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [Intelligence] Destroying Intelligence module\n[02:05:51.450] [INFO] [Intelligence:AgentChannels] Unregistered agent IPC channels\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [Intelligence:AgentChannels] Unregistered agent IPC channels\n[02:05:51.450] [INFO] [Intelligence:AgentManager] Shutting down AgentManager\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [Intelligence:AgentManager] Shutting down AgentManager\n[02:05:51.450] [INFO] [Intelligence:AgentScheduler] Cleared 0 queued tasks\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [Intelligence:AgentScheduler] Cleared 0 queued tasks\n[02:05:51.450] [INFO] [Intelligence:AgentRegistry] Cleared all agents\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [Intelligence:AgentRegistry] Cleared all agents\n[02:05:51.450] [INFO] [Intelligence:ToolRegistry] Cleared all tools\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [Intelligence:ToolRegistry] Cleared all tools\n[02:05:51.450] [INFO] [Intelligence:AgentManager] AgentManager shutdown complete\n\u001b[32m[2026-06-30T02:05:51.450] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [Intelligence:AgentManager] AgentManager shutdown complete\n[02:05:51.450] [INFO] [FxRateProvider] FxRateProvider stopped\n\u001b[32m[2026-06-30T02:05:51.451] [INFO] default - \u001b[39m[02:05:51.450] [INFO] [FxRateProvider] FxRateProvider stopped\n[02:05:51.451] [INFO] [UpdateService] Destroying update service\n\u001b[32m[2026-06-30T02:05:51.451] [INFO] default - \u001b[39m[02:05:51.451] [INFO] [UpdateService] Destroying update service\n\u001b[33m[2026-06-30T02:05:51.466] [WARN] default - \u001b[39m[02:05:51.466] [WARN] [TouchWindow] Renderer process gone for degraded window reason=killed exitCode=15\n[AppProvider::backfillAddApps] Yielded after 19/325 item(s); wait 19.1ms\n[AppProvider::backfillAddApps] Yielded after 20/325 item(s); wait 17.1ms\n[AppProvider::backfillAddApps] Yielded after 21/325 item(s); wait 18.2ms\n[AppProvider::backfillAddApps] Yielded after 22/325 item(s); wait 19.2ms\n[AppProvider::backfillAddApps] Yielded after 23/325 item(s); wait 17.2ms\n[AppProvider::backfillAddApps] Yielded after 24/325 item(s); wait 17.4ms\n[AppProvider::backfillAddApps] Yielded after 25/325 item(s); wait 19.1ms\n[AppProvider::backfillAddApps] Yielded after 26/325 item(s); wait 19.0ms\n[AppProvider::backfillAddApps] Yielded after 27/325 item(s); wait 18.2ms\n[AppProvider::backfillAddApps] Yielded after 28/325 item(s); wait 18.5ms\n[AppProvider::backfillAddApps] Yielded after 29/325 item(s); wait 17.8ms\n\u001b[33m[2026-06-30T02:05:52.662] [WARN] default - \u001b[39m[02:05:52.662] [WARN] [SignatureVerifier] Failed to fetch signature payload reason=net::ERR_FAILED\n\u001b[33m[2026-06-30T02:05:52.662] [WARN] default - \u001b[39m[02:05:52.662] [WARN] [BuildVerification] [BuildVerification] Build verification failed. reason=Signature file not available\n[AppProvider::backfillAddApps] Yielded after 30/325 item(s); wait 17.4ms\n[AppProvider::backfillAddApps] Yielded after 31/325 item(s); wait 17.9ms\n[AppProvider::backfillAddApps] Yielded after 32/325 item(s); wait 19.0ms\n[02:05:52.953] [INFO] [SentryService] Sentry shutdown\n\u001b[32m[2026-06-30T02:05:52.953] [INFO] default - \u001b[39m[02:05:52.953] [INFO] [SentryService] Sentry shutdown\n[02:05:52.955] [INFO] [Permission] Permission module destroyed\n\u001b[32m[2026-06-30T02:05:52.955] [INFO] default - \u001b[39m[02:05:52.955] [INFO] [Permission] Permission module destroyed\n\u001b[90m[02:05:52.955]\u001b[0m \u001b[36m[permission-checker]\u001b[0m \u001b[34mINFO \u001b[0m Permission checker module destroyed\n[02:05:52.957] [INFO] [CommonChannel] [CommonChannel] CommonChannelModule destroyed\n\u001b[32m[2026-06-30T02:05:52.957] [INFO] default - \u001b[39m[02:05:52.957] [INFO] [CommonChannel] [CommonChannel] CommonChannelModule destroyed\n[AppProvider::backfillAddApps] Yielded after 33/325 item(s); wait 19.2ms\n[AppProvider::backfillAddApps] Yielded after 34/325 item(s); wait 19.4ms\n[02:05:53.210] [INFO] [Storage:Polling] Force saved dirty configs successCount=1 failCount=0 totalCount=1\n\u001b[32m[2026-06-30T02:05:53.211] [INFO] default - \u001b[39m[02:05:53.210] [INFO] [Storage:Polling] Force saved dirty configs successCount=1 failCount=0 totalCount=1\n[02:05:53.213] [INFO] [ModuleManager] Module unloadAll finished reason=app-quit appClosing=true totalModules=35 unloadedModules=35 failedModules=0 durationMs=1830\n\u001b[32m[2026-06-30T02:05:53.213] [INFO] default - \u001b[39m[02:05:53.213] [INFO] [ModuleManager] Module unloadAll finished reason=app-quit appClosing=true totalModules=35 unloadedModules=35 failedModules=0 durationMs=1830\n[02:05:53.213] [INFO] [PluginSystem] Watchers closed.\n\u001b[32m[2026-06-30T02:05:53.213] [INFO] default - \u001b[39m[02:05:53.213] [INFO] [PluginSystem] Watchers closed.\n[02:05:53.213] [INFO] [TouchApp] App quit requested\n\u001b[32m[2026-06-30T02:05:53.213] [INFO] default - \u001b[39m[02:05:53.213] [INFO] [TouchApp] App quit requested\n[AppProvider::backfillAddApps] Yielded after 35/325 item(s); wait 133.9ms\n[02:05:53.333] [INFO] [CoreBox:MetaOverlay] MetaOverlay destroyed\n\u001b[32m[2026-06-30T02:05:53.333] [INFO] default - \u001b[39m[02:05:53.333] [INFO] [CoreBox:MetaOverlay] MetaOverlay destroyed\n\u001b[90m[02:05:53.363]\u001b[0m \u001b[32m[file-provider]\u001b[0m \u001b[34mINFO \u001b[0m Index process complete { duration: '5.3s' }\n\u001b[90m[02:05:53.364]\u001b[0m \u001b[32m[file-provider]\u001b[0m \u001b[34mINFO \u001b[0m File indexing manual run completed successfully\n",
+    "stderrTail": "re-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151751:26\nError sending from webFrameMain:  Error: Render frame was disposed before WebFrameMain could be accessed\n    at s.send (node:electron/js2c/browser_init:2:104081)\n    at b.send (node:electron/js2c/browser_init:2:88255)\n    at Object.sendFallback (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:53050:27)\n    at Object.end (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:52612:18)\n    at StorageModule.onDestroy (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:55998:16)\n    at async ModuleManager.runLifecyclePhase (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151861:7)\n    at async run (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151718:29)\n    at async /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151751:26\nError sending from webFrameMain:  Error: Render frame was disposed before WebFrameMain could be accessed\n    at s.send (node:electron/js2c/browser_init:2:104081)\n    at b.send (node:electron/js2c/browser_init:2:88255)\n    at Object.sendFallback (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:53050:27)\n    at Object.end (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:52612:18)\n    at StorageModule.onDestroy (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:55998:16)\n    at async ModuleManager.runLifecyclePhase (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151861:7)\n    at async run (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151718:29)\n    at async /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151751:26\nError sending from webFrameMain:  Error: Render frame was disposed before WebFrameMain could be accessed\n    at s.send (node:electron/js2c/browser_init:2:104081)\n    at b.send (node:electron/js2c/browser_init:2:88255)\n    at Object.sendFallback (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:53050:27)\n    at Object.end (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:52612:18)\n    at StorageModule.onDestroy (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:55998:16)\n    at async ModuleManager.runLifecyclePhase (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151861:7)\n    at async run (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151718:29)\n    at async /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151751:26\nError sending from webFrameMain:  Error: Render frame was disposed before WebFrameMain could be accessed\n    at s.send (node:electron/js2c/browser_init:2:104081)\n    at b.send (node:electron/js2c/browser_init:2:88255)\n    at Object.sendFallback (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:53050:27)\n    at Object.end (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:52612:18)\n    at StorageModule.onDestroy (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:55998:16)\n    at async ModuleManager.runLifecyclePhase (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151861:7)\n    at async run (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151718:29)\n    at async /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:151751:26\nError sending from webFrameMain:  Error: Render frame was disposed before WebFrameMain could be accessed\n    at s.send (node:electron/js2c/browser_init:2:104081)\n    at b.send (node:electron/js2c/browser_init:2:88255)\n    at TouchChannel.broadcastTo (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:148608:19)\n    at TouchChannel.broadcast (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:148564:10)\n    at TuffMainTransport.broadcast (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:53226:18)\n    at broadcastBeforeQuit (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:68323:14)\n    at /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:68531:5\n\u001b[90m[02:05:53.330]\u001b[0m \u001b[34m[app-provider]\u001b[0m \u001b[33mWARN \u001b[0m Startup app index health check failed {\n  error: 'Failed query: insert into \"files\" (\"id\", \"path\", \"name\", \"display_name\", \"extension\", \"size\", \"mtime\", \"ctime\", \"last_indexed_at\", \"is_dir\", \"type\", \"content\", \"embedding_status\") values (null, ?, ?, ?, null, null, ?, ?, ?, ?, ?, null, ?) on conflict (\"files\".\"path\") do update set \"name\" = excluded.name, \"display_name\" = excluded.display_name, \"mtime\" = excluded.mtime returning \"id\", \"path\", \"name\", \"display_name\", \"extension\", \"size\", \"mtime\", \"ctime\", \"last_indexed_at\", \"is_dir\", \"type\", \"content\", \"embedding_status\"\\n' +\n    'params: /System/Applications/TV.app,TV,TV,1777577597,1782756353,0,0,app,none'\n}\n\u001b[90m[02:05:53.331]\u001b[0m \u001b[34m[app-provider]\u001b[0m \u001b[33mWARN \u001b[0m Failed to sync app semantic alias catalog {\n  error: 'Failed query: select \"id\", \"path\", \"name\", \"display_name\", \"extension\", \"size\", \"mtime\", \"ctime\", \"last_indexed_at\", \"is_dir\", \"type\", \"content\", \"embedding_status\" from \"files\" where \"files\".\"type\" = ?\\n' +\n    'params: app'\n}\n\u001b[90m[02:05:53.365]\u001b[0m \u001b[32m[file-provider]\u001b[0m \u001b[33mWARN \u001b[0m Deferred thumbnail generation failed DrizzleQueryError: Failed query: select \"files\".\"id\", \"files\".\"path\", \"files\".\"extension\", \"files\".\"size\", \"files\".\"mtime\", \"files\".\"ctime\", \"thumbnail_status_extension\".\"value\" from \"files\" left join \"file_extensions\" \"thumbnail_extension\" on (\"thumbnail_extension\".\"file_id\" = \"files\".\"id\" and \"thumbnail_extension\".\"key\" = ?) left join \"file_extensions\" \"thumbnail_status_extension\" on (\"thumbnail_status_extension\".\"file_id\" = \"files\".\"id\" and \"thumbnail_status_extension\".\"key\" = ?) where (\"thumbnail_extension\".\"value\" is null and \"files\".\"extension\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) limit ?\nparams: thumbnail,thumbnailStatus,.png,.jpg,.jpeg,.gif,.bmp,.webp,.heic,.heif,.tiff,.tif,.mp4,.mov,.m4v,.webm,.mkv,.avi,.wmv,.flv,1000\n    at LibSQLPreparedQuery.queryWithCache (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/sqlite-core/session.cjs:69:15)\n    at async LibSQLPreparedQuery.values (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/libsql/session.cjs:218:12)\n    at async LibSQLPreparedQuery.all (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/libsql/session.cjs:161:18)\n    at async FileProvider.generateMissingThumbnails (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:131009:26) {\n  query: 'select \"files\".\"id\", \"files\".\"path\", \"files\".\"extension\", \"files\".\"size\", \"files\".\"mtime\", \"files\".\"ctime\", \"thumbnail_status_extension\".\"value\" from \"files\" left join \"file_extensions\" \"thumbnail_extension\" on (\"thumbnail_extension\".\"file_id\" = \"files\".\"id\" and \"thumbnail_extension\".\"key\" = ?) left join \"file_extensions\" \"thumbnail_status_extension\" on (\"thumbnail_status_extension\".\"file_id\" = \"files\".\"id\" and \"thumbnail_status_extension\".\"key\" = ?) where (\"thumbnail_extension\".\"value\" is null and \"files\".\"extension\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) limit ?',\n  params: [\n    'thumbnail', 'thumbnailStatus',\n    '.png',      '.jpg',\n    '.jpeg',     '.gif',\n    '.bmp',      '.webp',\n    '.heic',     '.heif',\n    '.tiff',     '.tif',\n    '.mp4',      '.mov',\n    '.m4v',      '.webm',\n    '.mkv',      '.avi',\n    '.wmv',      '.flv',\n    1000\n  ],\n  cause: LibsqlError: CLIENT_CLOSED: The client is closed\n      at #checkNotClosed (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/@libsql/client/lib-cjs/sqlite3.js:222:19)\n      at Sqlite3Client.execute (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/@libsql/client/lib-cjs/sqlite3.js:103:29)\n      at /Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/libsql/session.cjs:220:61\n      at LibSQLPreparedQuery.queryWithCache (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/sqlite-core/session.cjs:67:22)\n      at LibSQLPreparedQuery.values (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/libsql/session.cjs:218:23)\n      at LibSQLPreparedQuery.all (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/libsql/session.cjs:161:29)\n      at SQLiteSelectBase.all (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/sqlite-core/query-builders/select.cjs:664:28)\n      at SQLiteSelectBase.execute (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/sqlite-core/query-builders/select.cjs:673:17)\n      at SQLiteSelectBase.then (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/node_modules/drizzle-orm/query-promise.cjs:44:17)\n      at async FileProvider.generateMissingThumbnails (/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/main/index.js:131009:26) {\n    code: 'CLIENT_CLOSED',\n    extendedCode: undefined,\n    rawCode: undefined,\n    [cause]: undefined\n  }\n}\n"
+  }
+}

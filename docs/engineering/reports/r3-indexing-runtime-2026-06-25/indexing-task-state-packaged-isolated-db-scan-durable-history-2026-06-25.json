@@ -1,0 +1,15 @@
+{
+  "schema": "indexing-task-state-snapshot/v1",
+  "generatedAt": "2026-06-24T20:34:47.294Z",
+  "mode": "packaged-isolated-db-readonly",
+  "destructiveActions": false,
+  "sourceDb": "/tmp/tuff-r3-packaged-isolated-db-scan-durable-history-2026-06-25/tuff/modules/database/database.db",
+  "rowCount": 0,
+  "rows": [],
+  "gate": {
+    "passed": false,
+    "blockers": [
+      "indexed_source_task_state has no rows"
+    ]
+  }
+}

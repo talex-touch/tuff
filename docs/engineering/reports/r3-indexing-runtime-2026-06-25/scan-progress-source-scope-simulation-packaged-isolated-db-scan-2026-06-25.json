@@ -1,0 +1,163 @@
+{
+  "kind": "scan-progress-source-scope-simulation",
+  "generatedAt": "2026-06-24T20:28:02.850Z",
+  "mode": "copy-execute",
+  "destructiveActions": false,
+  "sourceDb": "/tmp/tuff-r3-packaged-isolated-db-scan-2026-06-25/tuff/modules/database/database.db",
+  "simulationDb": "/var/folders/08/xffcl1gn7xx_yhm_10dcwcrh0000gn/T/tuff-scan-progress-sim-cPO9IL/simulation.sqlite",
+  "simulationDbKept": false,
+  "sourceId": "file-provider",
+  "sourceBefore": {
+    "tableExists": true,
+    "sourceScoped": true,
+    "primaryKeyColumns": [
+      "source_id",
+      "path"
+    ],
+    "rowCount": 1,
+    "sourceRows": [
+      {
+        "sourceId": "file-provider",
+        "rows": 1
+      }
+    ],
+    "backupTableExists": true,
+    "backupRows": 0
+  },
+  "sourceAfter": {
+    "tableExists": true,
+    "sourceScoped": true,
+    "primaryKeyColumns": [
+      "source_id",
+      "path"
+    ],
+    "rowCount": 1,
+    "sourceRows": [
+      {
+        "sourceId": "file-provider",
+        "rows": 1
+      }
+    ],
+    "backupTableExists": true,
+    "backupRows": 0
+  },
+  "before": {
+    "plan": {
+      "status": "not-needed",
+      "sourceId": "file-provider",
+      "mode": "read-only",
+      "destructiveActions": false,
+      "requiresApproval": false,
+      "requiresSchemaChange": false,
+      "requiresDataRewrite": false,
+      "tableExists": true,
+      "sourceScoped": true,
+      "primaryKeyColumns": [
+        "source_id",
+        "path"
+      ],
+      "existingRows": 1,
+      "rowsToMigrate": 0,
+      "blankPathRows": 0,
+      "invalidTimestampRows": 0,
+      "duplicatePathRows": 0,
+      "backupTableExists": true,
+      "stagingTableExists": false,
+      "blockers": [],
+      "steps": [
+        "scan_progress already has source_id and PRIMARY KEY(source_id, path)."
+      ],
+      "rollback": "Keep scan_progress_path_only_backup until post-migration preflight, Settings diagnostics, and source-scoped read/write verification pass; rollback can rename the backup back to scan_progress or force provider-scoped full rescan.",
+      "verification": [
+        "Re-run search:index-migration:preflight and expect scanProgressSourceScope=ready.",
+        "Verify scan_progress has PRIMARY KEY(source_id, path).",
+        "Verify source-scoped read/delete/upsert only touches the intended sourceId.",
+        "Verify Settings diagnostics does not report cross-source progress contamination."
+      ]
+    },
+    "snapshot": {
+      "tableExists": true,
+      "sourceScoped": true,
+      "primaryKeyColumns": [
+        "source_id",
+        "path"
+      ],
+      "rowCount": 1,
+      "sourceRows": [
+        {
+          "sourceId": "file-provider",
+          "rows": 1
+        }
+      ],
+      "backupTableExists": true,
+      "backupRows": 0
+    }
+  },
+  "execution": {
+    "executed": false,
+    "migratedRows": 0,
+    "backupTable": null
+  },
+  "after": {
+    "plan": {
+      "status": "not-needed",
+      "sourceId": "file-provider",
+      "mode": "read-only",
+      "destructiveActions": false,
+      "requiresApproval": false,
+      "requiresSchemaChange": false,
+      "requiresDataRewrite": false,
+      "tableExists": true,
+      "sourceScoped": true,
+      "primaryKeyColumns": [
+        "source_id",
+        "path"
+      ],
+      "existingRows": 1,
+      "rowsToMigrate": 0,
+      "blankPathRows": 0,
+      "invalidTimestampRows": 0,
+      "duplicatePathRows": 0,
+      "backupTableExists": true,
+      "stagingTableExists": false,
+      "blockers": [],
+      "steps": [
+        "scan_progress already has source_id and PRIMARY KEY(source_id, path)."
+      ],
+      "rollback": "Keep scan_progress_path_only_backup until post-migration preflight, Settings diagnostics, and source-scoped read/write verification pass; rollback can rename the backup back to scan_progress or force provider-scoped full rescan.",
+      "verification": [
+        "Re-run search:index-migration:preflight and expect scanProgressSourceScope=ready.",
+        "Verify scan_progress has PRIMARY KEY(source_id, path).",
+        "Verify source-scoped read/delete/upsert only touches the intended sourceId.",
+        "Verify Settings diagnostics does not report cross-source progress contamination."
+      ]
+    },
+    "snapshot": {
+      "tableExists": true,
+      "sourceScoped": true,
+      "primaryKeyColumns": [
+        "source_id",
+        "path"
+      ],
+      "rowCount": 1,
+      "sourceRows": [
+        {
+          "sourceId": "file-provider",
+          "rows": 1
+        }
+      ],
+      "backupTableExists": true,
+      "backupRows": 0
+    }
+  },
+  "gate": {
+    "passed": true,
+    "blockers": []
+  },
+  "verification": [
+    "Source --db was copied with VACUUM INTO and was not mutated.",
+    "Migration helper executed only against simulationDb.",
+    "Use search:index-migration:preflight on the original DB before any approved execute-mode migration.",
+    "Use search:scan-progress-migration --execute only after high-risk approval."
+  ]
+}

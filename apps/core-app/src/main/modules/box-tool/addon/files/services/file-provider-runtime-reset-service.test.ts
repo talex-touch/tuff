@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
 import { inArray } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 import { FileProviderRuntimeResetService } from './file-provider-runtime-reset-service'
@@ -276,5 +281,70 @@ describe('file-provider-runtime-reset-service', () => {
       clearedScanProgress: true,
       scanProgressRows: 2
     })
+  })
+
+  it('keeps source-scoped scan progress rows isolated during reset cleanup', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tuff-runtime-reset-scan-progress-'))
+    try {
+      const dbPath = join(dir, 'runtime-reset.sqlite')
+      const client = createClient({ url: `file:${dbPath}` })
+      try {
+        const db = drizzle(client)
+        await client.execute(`
+          CREATE TABLE scan_progress (
+            source_id text NOT NULL,
+            path text NOT NULL,
+            last_scanned integer NOT NULL,
+            PRIMARY KEY(source_id, path)
+          )
+        `)
+        await client.execute({
+          sql: `
+            INSERT INTO scan_progress(source_id, path, last_scanned)
+            VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)
+          `,
+          args: [
+            'file-provider',
+            '/a',
+            1_780_099_200_000,
+            'file-provider',
+            '/b',
+            1_780_099_201_000,
+            'other-provider',
+            '/a',
+            1_780_185_600_000
+          ]
+        })
+        const { service } = createService({
+          dbUtils: { getDb: () => db },
+          scanProgressPaths: ['/a']
+        })
+
+        const result = await service.reset({
+          request: {
+            sourceId: 'file-provider',
+            reason: 'manual-rebuild',
+            clearScanProgress: true
+          },
+          operationReasonPrefix: 'file-index.manual-rebuild'
+        })
+
+        expect(result).toMatchObject({
+          clearedScanProgress: true,
+          scanProgressRows: 1
+        })
+        const rows = await client.execute(
+          'SELECT source_id AS sourceId, path, last_scanned AS lastScanned FROM scan_progress ORDER BY source_id, path'
+        )
+        expect(rows.rows).toEqual([
+          { sourceId: 'file-provider', path: '/b', lastScanned: 1_780_099_201_000 },
+          { sourceId: 'other-provider', path: '/a', lastScanned: 1_780_185_600_000 }
+        ])
+      } finally {
+        client.close()
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

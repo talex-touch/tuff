@@ -20,9 +20,20 @@ export interface SearchIndexMigrationProviderCount {
   rows: number
 }
 
+export interface SearchIndexMigrationSqliteRuntimeSnapshot {
+  journalMode: string | null
+  synchronous: number | null
+  busyTimeoutMs: number | null
+  pageSize: number | null
+  pageCount: number | null
+  freelistCount: number | null
+  queryOnly: boolean | null
+}
+
 export interface SearchIndexMigrationPreflightSnapshot {
   generatedAt: string
   sourceId: string
+  sqliteRuntime?: SearchIndexMigrationSqliteRuntimeSnapshot
   tables: {
     files: SearchIndexMigrationTableSnapshot
     fileExtensions: SearchIndexMigrationTableSnapshot
@@ -152,6 +163,24 @@ export function buildSearchIndexMigrationPreflightReport(
   const checks: SearchIndexMigrationPreflightCheck[] = []
 
   const missingTables = REQUIRED_TABLES.filter((table) => !hasTable(snapshot, table))
+  if (snapshot.sqliteRuntime) {
+    checks.push(
+      createCheck(
+        'sqlite-runtime-profile',
+        'info',
+        'SQLite runtime PRAGMA profile captured for migration risk review.',
+        {
+          journalMode: snapshot.sqliteRuntime.journalMode,
+          synchronous: snapshot.sqliteRuntime.synchronous,
+          busyTimeoutMs: snapshot.sqliteRuntime.busyTimeoutMs,
+          pageSize: snapshot.sqliteRuntime.pageSize,
+          pageCount: snapshot.sqliteRuntime.pageCount,
+          freelistCount: snapshot.sqliteRuntime.freelistCount,
+          queryOnly: snapshot.sqliteRuntime.queryOnly
+        }
+      )
+    )
+  }
   checks.push(
     createCheck(
       'required-tables',
@@ -211,19 +240,18 @@ export function buildSearchIndexMigrationPreflightReport(
   }
 
   const fileFtsStatus =
-    snapshot.tables.fileFts.exists && (snapshot.ftsOwnership.fileFtsRows ?? 0) > 0
-      ? 'warning'
-      : 'info'
+    snapshot.tables.fileFts.exists && (snapshot.ftsOwnership.fileFtsRows ?? 0) > 0 ? 'info' : 'info'
   checks.push(
     createCheck(
       'legacy-file-fts',
       fileFtsStatus,
       snapshot.tables.fileFts.exists
-        ? 'Legacy file_fts table exists and must be explicitly kept, migrated, or retired.'
+        ? 'Legacy file_fts table exists and is retained unchanged by the R3 durable ownership migration.'
         : 'Legacy file_fts table is not present.',
       {
         exists: snapshot.tables.fileFts.exists,
-        rows: snapshot.ftsOwnership.fileFtsRows
+        rows: snapshot.ftsOwnership.fileFtsRows,
+        policy: snapshot.tables.fileFts.exists ? 'retain-unchanged' : 'not-needed'
       }
     )
   )
@@ -247,7 +275,7 @@ export function buildSearchIndexMigrationPreflightReport(
       'source-index-row-parity',
       snapshot.ftsOwnership.sourceIndexedRows === snapshot.ftsOwnership.filesRows
         ? 'passed'
-        : 'warning',
+        : 'failed',
       'Source indexed row count compared with files table row count.',
       {
         sourceId: snapshot.sourceId,
@@ -269,7 +297,7 @@ export function buildSearchIndexMigrationPreflightReport(
   checks.push(
     createCheck(
       'meta-orphans',
-      snapshot.ftsOwnership.orphanMetaRows > 0 ? 'warning' : 'passed',
+      countStatus(snapshot.ftsOwnership.orphanMetaRows),
       'search_index_meta rows should point at search_index rows for the same provider.',
       { orphanMetaRows: snapshot.ftsOwnership.orphanMetaRows }
     )
@@ -280,7 +308,7 @@ export function buildSearchIndexMigrationPreflightReport(
       'search-index-meta-coverage',
       snapshot.ftsOwnership.searchIndexRowsMissingMeta > 0 ||
         snapshot.ftsOwnership.keywordRowsMissingMeta > 0
-        ? 'warning'
+        ? 'failed'
         : 'passed',
       'search_index and keyword_mappings rows should have matching keyword hash metadata.',
       {
@@ -290,14 +318,25 @@ export function buildSearchIndexMigrationPreflightReport(
     )
   )
 
+  const taskHistoryRows = getRowCount(snapshot.tables.indexedSourceTaskState)
+  const taskHistoryStoreStatus = !hasTable(snapshot, 'indexedSourceTaskState')
+    ? 'warning'
+    : taskHistoryRows > 0
+      ? 'passed'
+      : 'warning'
   checks.push(
     createCheck(
       'task-history-store',
-      hasTable(snapshot, 'indexedSourceTaskState') ? 'passed' : 'warning',
-      hasTable(snapshot, 'indexedSourceTaskState')
-        ? 'Indexed source task state table exists for durable diagnostics history.'
-        : 'Indexed source task state table is missing; durable diagnostics history will not survive restart.',
-      { rows: getRowCount(snapshot.tables.indexedSourceTaskState) }
+      taskHistoryStoreStatus,
+      !hasTable(snapshot, 'indexedSourceTaskState')
+        ? 'Indexed source task state table is missing; durable diagnostics history will not survive restart.'
+        : taskHistoryRows > 0
+          ? 'Indexed source task state table has durable diagnostics history rows.'
+          : 'Indexed source task state table exists but has no durable diagnostics history rows yet.',
+      {
+        rows: taskHistoryRows,
+        evidence: taskHistoryRows > 0 ? 'durable-history-present' : 'durable-history-empty'
+      }
     )
   )
 
@@ -308,7 +347,12 @@ export function buildSearchIndexMigrationPreflightReport(
       ? 'ready'
       : 'needs-migration'
   const sqliteFtsOwnership =
-    missingTables.length > 0 || snapshot.ftsOwnership.orphanKeywordRows > 0
+    missingTables.length > 0 ||
+    snapshot.ftsOwnership.sourceIndexedRows !== snapshot.ftsOwnership.filesRows ||
+    snapshot.ftsOwnership.orphanKeywordRows > 0 ||
+    snapshot.ftsOwnership.orphanMetaRows > 0 ||
+    snapshot.ftsOwnership.searchIndexRowsMissingMeta > 0 ||
+    snapshot.ftsOwnership.keywordRowsMissingMeta > 0
       ? 'blocked'
       : 'needs-confirmation'
 
@@ -355,7 +399,6 @@ function buildMigrationDryRun(input: {
   const searchIndexRows = getRowCount(input.snapshot.tables.searchIndex)
   const keywordRows = getRowCount(input.snapshot.tables.keywordMappings)
   const metaRows = getRowCount(input.snapshot.tables.searchIndexMeta)
-  const fileFtsRows = input.snapshot.ftsOwnership.fileFtsRows ?? 0
   const missingRequiredTables = input.missingTables.map(String)
   const scanProgressHygieneBlockers = [
     input.snapshot.scanProgress.blankPathRows > 0 ? 'scan_progress blank path rows' : '',
@@ -367,17 +410,18 @@ function buildMigrationDryRun(input: {
       : ''
   ].filter(Boolean)
   const ownershipBlockers = [
+    input.snapshot.ftsOwnership.sourceIndexedRows !== input.snapshot.ftsOwnership.filesRows
+      ? 'source indexed rows differ from files rows'
+      : '',
     input.snapshot.ftsOwnership.orphanKeywordRows > 0 ? 'orphan keyword_mappings rows' : '',
-    ...missingRequiredTables.map((table) => `missing required table: ${table}`)
-  ].filter(Boolean)
-  const metaWarnings = [
     input.snapshot.ftsOwnership.orphanMetaRows > 0 ? 'orphan search_index_meta rows' : '',
     input.snapshot.ftsOwnership.searchIndexRowsMissingMeta > 0
       ? 'search_index rows missing metadata'
       : '',
     input.snapshot.ftsOwnership.keywordRowsMissingMeta > 0
       ? 'keyword_mappings rows missing metadata'
-      : ''
+      : '',
+    ...missingRequiredTables.map((table) => `missing required table: ${table}`)
   ].filter(Boolean)
 
   const steps: SearchIndexMigrationDryRunStep[] = [
@@ -413,43 +457,46 @@ function buildMigrationDryRun(input: {
         'Would confirm SearchIndexService/SearchIndexWorker/runtime store ownership before changing durable FTS write boundaries.',
       writes: false,
       requiresSchemaChange: false,
-      requiresDataRewrite:
-        input.snapshot.tables.fileFts.exists ||
-        input.snapshot.ftsOwnership.orphanKeywordRows > 0 ||
-        metaWarnings.length > 0,
-      estimatedRows: searchIndexRows + keywordRows + metaRows + fileFtsRows,
+      requiresDataRewrite: ownershipBlockers.length > 0,
+      estimatedRows: searchIndexRows + keywordRows + metaRows,
       rollback:
         'Retain current search_index and keyword_mappings until migration evidence passes; on failure, clear provider-scoped index and schedule full rescan.',
       verification: [
         'Compare provider row parity before and after migration.',
         'Verify keyword_mappings orphan count is zero.',
-        'Verify search_index_meta coverage or schedule provider-scoped reindex evidence.'
+        'Verify search_index_meta coverage or schedule provider-scoped reindex evidence.',
+        'Attach sqlite-runtime-profile PRAGMA evidence to review journal mode, busy timeout, and DB size risk.'
       ],
       ...(ownershipBlockers.length > 0 ? { blockers: ownershipBlockers } : {})
     },
     {
       id: 'legacy-file-fts-decision',
-      status: input.snapshot.tables.fileFts.exists ? 'manual-approval-required' : 'not-needed',
+      status: input.snapshot.tables.fileFts.exists ? 'ready' : 'not-needed',
       summary: input.snapshot.tables.fileFts.exists
-        ? 'Would decide whether legacy file_fts is retained, retired, or rebuilt under the durable ownership plan.'
+        ? 'R3 retains legacy file_fts unchanged for compatibility; migrate/drop/rebuild is out of this migration batch.'
         : 'legacy file_fts is absent; no legacy FTS retirement decision is needed.',
       writes: false,
-      requiresSchemaChange: input.snapshot.tables.fileFts.exists,
-      requiresDataRewrite: input.snapshot.tables.fileFts.exists && fileFtsRows > 0,
-      estimatedRows: fileFtsRows,
-      rollback:
-        'Do not drop legacy file_fts until search_index ownership evidence proves equivalent file search coverage.',
+      requiresSchemaChange: false,
+      requiresDataRewrite: false,
+      estimatedRows: 0,
+      rollback: 'No rollback is needed for file_fts in R3 because the table is not modified.',
       verification: [
         'Verify file search still uses search_index provider rows.',
-        'Verify integrity evidence no longer depends on legacy file_fts rows.'
+        'Verify no R3 migration step drops, rebuilds, or rewrites legacy file_fts rows.'
       ]
     },
     {
       id: 'durable-history-evidence',
-      status: input.snapshot.tables.indexedSourceTaskState.exists ? 'ready' : 'blocked',
-      summary: input.snapshot.tables.indexedSourceTaskState.exists
-        ? 'indexed_source_task_state exists for durable recent task diagnostics evidence.'
-        : 'indexed_source_task_state is missing and must be created by normal app DB migrations before claiming durable history evidence.',
+      status: !input.snapshot.tables.indexedSourceTaskState.exists
+        ? 'blocked'
+        : getRowCount(input.snapshot.tables.indexedSourceTaskState) > 0
+          ? 'ready'
+          : 'manual-approval-required',
+      summary: !input.snapshot.tables.indexedSourceTaskState.exists
+        ? 'indexed_source_task_state is missing and must be created by normal app DB migrations before claiming durable history evidence.'
+        : getRowCount(input.snapshot.tables.indexedSourceTaskState) > 0
+          ? 'indexed_source_task_state has durable recent task diagnostics rows.'
+          : 'indexed_source_task_state exists but has no rows; capture natural recent task evidence before claiming durable history is complete.',
       writes: false,
       requiresSchemaChange: !input.snapshot.tables.indexedSourceTaskState.exists,
       requiresDataRewrite: false,
@@ -458,7 +505,8 @@ function buildMigrationDryRun(input: {
         'Task history is diagnostic-only; preserve current runtime diagnostics and avoid deleting persisted state during rollback.',
       verification: [
         'Run focused task-state store tests.',
-        'Capture packaged Settings diagnostics evidence showing recent task chips after restart.'
+        'Capture packaged Settings diagnostics evidence showing recent task chips after restart.',
+        'Verify indexed_source_task_state row count is greater than zero for the target profile.'
       ],
       ...(!input.snapshot.tables.indexedSourceTaskState.exists
         ? { blockers: ['missing indexed_source_task_state table'] }
@@ -496,6 +544,9 @@ function buildNextActions(input: {
   if (input.snapshot.ftsOwnership.orphanKeywordRows > 0) {
     actions.push('Clean or rebuild orphan keyword_mappings before changing FTS ownership.')
   }
+  if (input.snapshot.ftsOwnership.sourceIndexedRows !== input.snapshot.ftsOwnership.filesRows) {
+    actions.push('Repair provider row parity or schedule provider-scoped reindex evidence.')
+  }
   if (
     input.snapshot.ftsOwnership.orphanMetaRows > 0 ||
     input.snapshot.ftsOwnership.searchIndexRowsMissingMeta > 0 ||
@@ -505,7 +556,15 @@ function buildNextActions(input: {
   }
   if (input.snapshot.tables.fileFts.exists) {
     actions.push(
-      'Decide whether file_fts is retained, migrated, or retired in the durable ownership plan.'
+      'Retain legacy file_fts unchanged in R3; handle any retirement in a separate high-risk migration batch.'
+    )
+  }
+  if (
+    input.snapshot.tables.indexedSourceTaskState.exists &&
+    getRowCount(input.snapshot.tables.indexedSourceTaskState) === 0
+  ) {
+    actions.push(
+      'Capture natural recent task Settings evidence after restart before claiming durable job history is complete.'
     )
   }
   if (input.failedChecks.length === 0) {
