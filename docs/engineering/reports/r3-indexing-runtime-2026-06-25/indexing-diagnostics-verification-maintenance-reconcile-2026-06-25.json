@@ -1,0 +1,46 @@
+{
+  "schema": "settings-indexing-diagnostics-evidence-verification/v1",
+  "gate": {
+    "passed": false,
+    "failures": [
+      "Source file-provider has 0 visible recent task chips; expected at least 1",
+      "Source file-provider is missing visible audit fields: duration, trigger, reason",
+      "No source satisfied the Settings recent task audit evidence gate"
+    ]
+  },
+  "options": {
+    "sourceId": "file-provider",
+    "minRecentTasks": 1,
+    "requiredAuditFields": [
+      "duration",
+      "trigger",
+      "reason"
+    ]
+  },
+  "summary": {
+    "sourceCount": 1,
+    "checkedSourceCount": 1,
+    "passingSourceCount": 0
+  },
+  "sources": [
+    {
+      "sourceId": "file-provider",
+      "recentTaskChipCount": 0,
+      "visibleRecentTaskChipCount": 0,
+      "visibleAuditFields": {
+        "duration": false,
+        "trigger": false,
+        "reason": false,
+        "attempt": false,
+        "errorCode": false
+      },
+      "missingAuditFields": [
+        "duration",
+        "trigger",
+        "reason"
+      ],
+      "sampleTaskLabelKeys": [],
+      "sampleTaskTones": []
+    }
+  ]
+}

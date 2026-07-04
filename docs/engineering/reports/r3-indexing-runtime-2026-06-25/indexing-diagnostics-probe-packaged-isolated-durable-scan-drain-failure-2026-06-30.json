@@ -1,0 +1,41 @@
+{
+  "ok": false,
+  "checkedAt": "2026-06-29T19:52:51.020Z",
+  "packageVersion": "2.4.13-beta.1",
+  "appBundle": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+  "executablePath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+  "cdpPort": 9581,
+  "remoteDebuggingUrl": "http://127.0.0.1:9581/json/list",
+  "userDataDir": "/tmp/tuff-r3-packaged-isolated-durable-scan-drain-failure-2026-06-30",
+  "sourceId": "file-provider",
+  "seededRecentTaskEvidence": false,
+  "fixtureRoot": "/tmp/tuff-r3-packaged-isolated-durable-scan-drain-failure-fixture-2026-06-30",
+  "maintenanceAction": "scan",
+  "artifactPaths": {
+    "output": "indexing-diagnostics-probe-packaged-isolated-durable-scan-drain-failure-2026-06-30.json",
+    "diagnostics": "indexing-diagnostics-packaged-isolated-durable-scan-drain-failure-2026-06-30.json",
+    "verification": "indexing-diagnostics-verification-packaged-isolated-durable-scan-drain-failure-2026-06-30.json",
+    "settingsScreenshot": "indexing-diagnostics-settings-packaged-isolated-durable-scan-drain-failure-2026-06-30.png",
+    "detailScreenshot": "indexing-diagnostics-source-detail-packaged-isolated-durable-scan-drain-failure-2026-06-30.png",
+    "settingsDom": "indexing-diagnostics-settings-packaged-isolated-durable-scan-drain-failure-2026-06-30-dom.json",
+    "detailDom": "indexing-diagnostics-source-detail-packaged-isolated-durable-scan-drain-failure-2026-06-30-dom.json"
+  },
+  "targets": [],
+  "failures": [
+    "Packaged diagnostics probe failed before CDP was available: Timed out waiting for CDP endpoint http://127.0.0.1:9581/json/list: fetch failed"
+  ],
+  "fixtureRootPreflight": {
+    "checkedPath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar",
+    "marker": "TUFF_FILE_PROVIDER_BASE_WATCH_PATHS",
+    "passed": true
+  },
+  "launchFailure": {
+    "phase": "wait-for-cdp",
+    "message": "Timed out waiting for CDP endpoint http://127.0.0.1:9581/json/list: fetch failed",
+    "remoteDebuggingUrl": "http://127.0.0.1:9581/json/list",
+    "attachOnly": false,
+    "childPid": 39153,
+    "exitCode": null,
+    "signalCode": "SIGABRT"
+  }
+}

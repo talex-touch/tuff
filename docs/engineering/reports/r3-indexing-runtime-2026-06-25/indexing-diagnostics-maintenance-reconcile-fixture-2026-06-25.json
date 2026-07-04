@@ -1,0 +1,194 @@
+{
+  "generatedAt": 1782332240414,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "ready": 1
+    },
+    "ready": 1,
+    "degraded": 0,
+    "unavailable": 0
+  },
+  "sources": [
+    {
+      "descriptor": {
+        "id": "file-provider",
+        "kind": "file",
+        "displayName": "File Index",
+        "platforms": [
+          "darwin",
+          "win32",
+          "linux"
+        ],
+        "priority": "deferred",
+        "storage": "sqlite-index",
+        "privacy": "medium",
+        "capabilities": {
+          "scan": true,
+          "watch": true,
+          "reconcile": true,
+          "clear": true,
+          "open": true
+        },
+        "admission": {
+          "owner": "core",
+          "permissionScopes": [
+            "file-system"
+          ],
+          "defaultState": "enabled",
+          "clearable": true,
+          "rebuildable": true
+        }
+      },
+      "health": {
+        "status": "ready",
+        "permissionState": "granted",
+        "itemCount": 0,
+        "watchState": "active",
+        "reconcileState": "idle"
+      },
+      "roots": [
+        {
+          "sourceId": "file-provider",
+          "path": "/tmp/tuff-r3-indexing-runtime-fixture-reconcile",
+          "permissionState": "granted"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "file-provider:scan-progress",
+          "label": "File scan progress",
+          "status": "ready",
+          "itemCount": 0,
+          "rootCount": 1,
+          "roots": [
+            "/tmp/tuff-r3-indexing-runtime-fixture-reconcile"
+          ],
+          "lastCheckedAt": 1782332240408,
+          "reason": "file-index-progress-ready",
+          "metadata": {
+            "totalFiles": 0,
+            "completedFiles": 0,
+            "failedFiles": 0,
+            "skippedFiles": 0,
+            "embeddingCompletedFiles": 0,
+            "embeddingRows": 0,
+            "configuredRoots": 1,
+            "completedRoots": 1,
+            "scanProgressRows": 1,
+            "lastScannedAt": 1782332233654,
+            "lastUpsertAttempted": true,
+            "lastUpsertReady": true,
+            "lastUpsertedRows": 1,
+            "lastUpsertReason": "scan-progress.upsert",
+            "lastUpsertCheckedAt": 1782332233663,
+            "totalRoots": 1,
+            "pendingRoots": 0,
+            "pendingPermissionRoots": 0,
+            "pendingPermissionPaths": []
+          }
+        },
+        {
+          "id": "file-provider:integrity",
+          "label": "File index integrity",
+          "status": "ready",
+          "itemCount": 0,
+          "lastCheckedAt": 1782332201501,
+          "reason": "fts-files-count-aligned",
+          "metadata": {
+            "checkedAt": 1782332201501,
+            "needsRebuild": false,
+            "clearedSearchIndex": false,
+            "resetSearchIndexRows": 0,
+            "clearedScanProgress": false,
+            "resetReason": null,
+            "resetScanProgressRows": 0,
+            "durationMs": 0,
+            "ftsRows": 0,
+            "filesRows": 0,
+            "orphanedKeywordsRemoved": 0
+          }
+        }
+      ],
+      "progress": {
+        "sourceId": "file-provider",
+        "stage": "completed",
+        "status": "complete",
+        "current": 1,
+        "total": 1,
+        "progress": 100,
+        "startedAt": null,
+        "updatedAt": 1782332240401,
+        "estimatedRemainingMs": 0,
+        "estimatedCompletionAt": null,
+        "averageItemsPerSecond": 0,
+        "speedSampleCount": 0,
+        "estimateBasis": "complete"
+      },
+      "admissionIssues": [],
+      "lifecycleIssues": [
+        "open-capability-missing-handler",
+        "handler-provided-without-capability"
+      ],
+      "lastReconcile": {
+        "startedAt": 1782332201496,
+        "completedAt": 1782332233665,
+        "added": 0,
+        "changed": 0,
+        "deleted": 0,
+        "skipped": 0,
+        "errors": 0,
+        "reason": "manual-repair",
+        "jobId": "file-provider:reconcile:1",
+        "queuedAt": 1782332201496,
+        "deltas": 0
+      },
+      "recentTasks": [
+        {
+          "kind": "reconcile",
+          "status": "succeeded",
+          "completedAt": 1782332233665,
+          "jobId": "file-provider:reconcile:1",
+          "queuedAt": 1782332201496,
+          "startedAt": 1782332201496,
+          "durationMs": 32169,
+          "reason": "manual-repair",
+          "trigger": "manual-repair",
+          "summary": {
+            "durationMs": 32169,
+            "reason": "manual-repair",
+            "trigger": "manual-repair",
+            "added": 0,
+            "changed": 0,
+            "deleted": 0,
+            "skipped": 0,
+            "errors": 0,
+            "deltas": 0
+          }
+        }
+      ],
+      "taskRunGate": [
+        {
+          "sourceId": "file-provider",
+          "kind": "reconcile",
+          "blockedCount": 0,
+          "lastCompletedAt": 1782332233665
+        }
+      ]
+    }
+  ],
+  "taskRunGate": {
+    "generatedAt": 1782332240414,
+    "totalEntries": 1,
+    "runningEntries": 0,
+    "blockedEntries": 0,
+    "entries": [
+      {
+        "sourceId": "file-provider",
+        "kind": "reconcile",
+        "blockedCount": 0,
+        "lastCompletedAt": 1782332233665
+      }
+    ]
+  }
+}

@@ -15,6 +15,16 @@ const builtins = new Set(
 const RUNTIME_MODULE_MANIFEST = Object.freeze({
   packaged: [
     'ms',
+    'dayjs',
+    'drizzle-orm',
+    'log4js',
+    'chokidar',
+    'pinyin-pro',
+    'simple-plist',
+    '@electron-toolkit/utils',
+    '@modelcontextprotocol/sdk',
+    'electron-updater',
+    'talex-mica-electron',
     '@sentry/electron',
     'require-in-the-middle',
     '@langchain/core',

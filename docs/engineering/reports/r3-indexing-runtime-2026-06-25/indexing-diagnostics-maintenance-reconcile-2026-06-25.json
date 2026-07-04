@@ -1,0 +1,220 @@
+{
+  "generatedAt": 1782330882831,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "warming": 1
+    },
+    "ready": 0,
+    "degraded": 0,
+    "unavailable": 1
+  },
+  "sources": [
+    {
+      "descriptor": {
+        "id": "file-provider",
+        "kind": "file",
+        "displayName": "File Index",
+        "platforms": [
+          "darwin",
+          "win32",
+          "linux"
+        ],
+        "priority": "deferred",
+        "storage": "sqlite-index",
+        "privacy": "medium",
+        "capabilities": {
+          "scan": true,
+          "watch": true,
+          "reconcile": true,
+          "clear": true,
+          "open": true
+        },
+        "admission": {
+          "owner": "core",
+          "permissionScopes": [
+            "file-system"
+          ],
+          "defaultState": "enabled",
+          "clearable": true,
+          "rebuildable": true
+        }
+      },
+      "health": {
+        "status": "warming",
+        "permissionState": "granted",
+        "itemCount": 963,
+        "watchState": "active",
+        "reconcileState": "idle",
+        "lastScanStartedAt": 1782330831119
+      },
+      "roots": [
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Documents",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Downloads",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Desktop",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Music",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Pictures",
+          "permissionState": "granted"
+        },
+        {
+          "sourceId": "file-provider",
+          "path": "/Users/talexdreamsoul/Movies",
+          "permissionState": "granted"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "file-provider:scan-progress",
+          "label": "File scan progress",
+          "status": "warming",
+          "itemCount": 172,
+          "rootCount": 6,
+          "roots": [
+            "/Users/talexdreamsoul/Documents",
+            "/Users/talexdreamsoul/Downloads",
+            "/Users/talexdreamsoul/Desktop",
+            "/Users/talexdreamsoul/Music",
+            "/Users/talexdreamsoul/Pictures",
+            "/Users/talexdreamsoul/Movies"
+          ],
+          "lastCheckedAt": 1782330882830,
+          "reason": "file-index-progress-has-pending-roots",
+          "metadata": {
+            "totalFiles": 963,
+            "completedFiles": 172,
+            "failedFiles": 0,
+            "skippedFiles": 284,
+            "embeddingCompletedFiles": 0,
+            "embeddingRows": 0,
+            "configuredRoots": 6,
+            "completedRoots": 0,
+            "scanProgressRows": 0,
+            "lastScannedAt": null,
+            "lastUpsertAttempted": false,
+            "lastUpsertReady": false,
+            "lastUpsertedRows": 0,
+            "lastUpsertReason": null,
+            "lastUpsertCheckedAt": null,
+            "totalRoots": 0,
+            "pendingRoots": 6,
+            "pendingPermissionRoots": 0,
+            "pendingPermissionPaths": []
+          }
+        },
+        {
+          "id": "file-provider:integrity",
+          "label": "File index integrity",
+          "status": "ready",
+          "itemCount": 0,
+          "lastCheckedAt": 1782330831118,
+          "reason": "fts-files-count-aligned",
+          "metadata": {
+            "checkedAt": 1782330831118,
+            "needsRebuild": false,
+            "clearedSearchIndex": false,
+            "resetSearchIndexRows": 0,
+            "clearedScanProgress": false,
+            "resetReason": null,
+            "resetScanProgressRows": 0,
+            "durationMs": 0,
+            "ftsRows": 0,
+            "filesRows": 0,
+            "orphanedKeywordsRemoved": 0
+          }
+        },
+        {
+          "id": "file-provider:index-flush",
+          "label": "File index flush",
+          "status": "ready",
+          "itemCount": 6604,
+          "lastCheckedAt": 1782330882584,
+          "reason": "flush-in-progress",
+          "metadata": {
+            "status": "idle",
+            "entries": 0,
+            "pending": 6604,
+            "inflight": 20
+          }
+        },
+        {
+          "id": "file-provider:fts-write",
+          "label": "File FTS write",
+          "status": "ready",
+          "itemCount": 20,
+          "lastCheckedAt": 1782330882762,
+          "reason": "full-scan.upsert",
+          "metadata": {
+            "requestedRows": 20,
+            "persistedRows": 20,
+            "storeBoundary": "fts-write",
+            "status": "flushed",
+            "entries": 20,
+            "pending": 0,
+            "inflight": 0,
+            "durationMs": 1.9452079999973648
+          }
+        }
+      ],
+      "progress": {
+        "sourceId": "file-provider",
+        "stage": "indexing",
+        "status": "estimated",
+        "current": 5945,
+        "total": 8569,
+        "progress": 69,
+        "startedAt": 1782330831119,
+        "updatedAt": 1782330882827,
+        "estimatedRemainingMs": 13522.262063903712,
+        "estimatedCompletionAt": 1782330896349.262,
+        "averageItemsPerSecond": 194.0503731993553,
+        "speedSampleCount": 60,
+        "estimateBasis": "stage-speed"
+      },
+      "admissionIssues": [],
+      "lifecycleIssues": [
+        "open-capability-missing-handler",
+        "handler-provided-without-capability"
+      ],
+      "taskRunGate": [
+        {
+          "sourceId": "file-provider",
+          "kind": "reconcile",
+          "blockedCount": 0,
+          "runningSince": 1782330831115
+        }
+      ]
+    }
+  ],
+  "taskRunGate": {
+    "generatedAt": 1782330882831,
+    "totalEntries": 1,
+    "runningEntries": 1,
+    "blockedEntries": 0,
+    "entries": [
+      {
+        "sourceId": "file-provider",
+        "kind": "reconcile",
+        "blockedCount": 0,
+        "runningSince": 1782330831115
+      }
+    ]
+  }
+}

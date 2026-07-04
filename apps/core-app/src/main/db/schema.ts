@@ -322,10 +322,18 @@ export const wallpaperAssets = sqliteTable(
 /**
  * 记录全量扫描的进度，用于断点续传。
  */
-export const scanProgress = sqliteTable('scan_progress', {
-  path: text('path').primaryKey(), // 已经完成全量扫描的目录路径
-  lastScanned: integer('last_scanned', { mode: 'timestamp' }).notNull().default(new Date(0))
-})
+export const scanProgress = sqliteTable(
+  'scan_progress',
+  {
+    sourceId: text('source_id').notNull().default('file-provider'),
+    path: text('path').notNull(), // 已经完成全量扫描的目录路径
+    lastScanned: integer('last_scanned', { mode: 'timestamp' }).notNull().default(new Date(0))
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.sourceId, table.path] }),
+    pathIdx: index('idx_scan_progress_path').on(table.path)
+  })
+)
 
 /**
  * Indexed Source 运行时任务状态。

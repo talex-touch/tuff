@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { fileProviderBusyMock, dbLogMock } = vi.hoisted(() => ({
+const { fileProviderBusyMock, dbLogMock, scanProgressMigrationMocks } = vi.hoisted(() => ({
   fileProviderBusyMock: vi.fn(() => false),
   dbLogMock: {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn()
+  },
+  scanProgressMigrationMocks: {
+    plan: vi.fn(),
+    run: vi.fn()
   }
 }))
 
@@ -59,6 +63,11 @@ vi.mock('../box-tool/addon/files/file-provider', () => ({
   fileProvider: {
     isSearchIndexWorkerBusy: fileProviderBusyMock
   }
+}))
+
+vi.mock('../box-tool/search-engine/scan-progress-schema', () => ({
+  planScanProgressSourceScopeMigration: scanProgressMigrationMocks.plan,
+  runScanProgressSourceScopeMigration: scanProgressMigrationMocks.run
 }))
 
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
@@ -171,6 +180,93 @@ describe('DatabaseModule WAL checkpoint maintenance', () => {
           mode: 'PASSIVE',
           logFrames: 2,
           checkpointedFrames: 2
+        })
+      })
+    )
+  })
+})
+
+describe('DatabaseModule scan_progress source-scope startup migration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    scanProgressMigrationMocks.plan.mockReset()
+    scanProgressMigrationMocks.run.mockReset()
+  })
+
+  function createMigrationModule() {
+    const module = new DatabaseModule()
+    const db = { id: 'primary-db' }
+    ;(module as unknown as { db: unknown }).db = db
+    return { module, db }
+  }
+
+  it('runs the controlled scan_progress migration when the plan is ready', async () => {
+    const { module, db } = createMigrationModule()
+    scanProgressMigrationMocks.plan.mockResolvedValue({
+      status: 'ready',
+      sourceId: 'file-provider',
+      primaryKeyColumns: ['path'],
+      existingRows: 2,
+      blankPathRows: 0,
+      invalidTimestampRows: 0,
+      duplicatePathRows: 0,
+      blockers: []
+    })
+    scanProgressMigrationMocks.run.mockResolvedValue({
+      executed: true,
+      migratedRows: 2,
+      backupTable: 'scan_progress_path_only_backup',
+      plan: { sourceId: 'file-provider' }
+    })
+
+    await (
+      module as unknown as {
+        ensureScanProgressSourceScopeMigration: () => Promise<void>
+      }
+    ).ensureScanProgressSourceScopeMigration()
+
+    expect(scanProgressMigrationMocks.plan).toHaveBeenCalledWith(db, { sourceId: 'file-provider' })
+    expect(scanProgressMigrationMocks.run).toHaveBeenCalledWith(db, { sourceId: 'file-provider' })
+    expect(dbLogMock.info).toHaveBeenCalledWith(
+      'scan_progress source-scope migration completed',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          executed: true,
+          migratedRows: 2,
+          backupTable: 'scan_progress_path_only_backup',
+          sourceId: 'file-provider'
+        })
+      })
+    )
+  })
+
+  it('keeps compatibility mode when scan_progress migration is blocked', async () => {
+    const { module, db } = createMigrationModule()
+    scanProgressMigrationMocks.plan.mockResolvedValue({
+      status: 'blocked',
+      sourceId: 'file-provider',
+      primaryKeyColumns: ['path'],
+      existingRows: 1,
+      blankPathRows: 1,
+      invalidTimestampRows: 0,
+      duplicatePathRows: 0,
+      blockers: ['scan_progress blank path rows']
+    })
+
+    await (
+      module as unknown as {
+        ensureScanProgressSourceScopeMigration: () => Promise<void>
+      }
+    ).ensureScanProgressSourceScopeMigration()
+
+    expect(scanProgressMigrationMocks.plan).toHaveBeenCalledWith(db, { sourceId: 'file-provider' })
+    expect(scanProgressMigrationMocks.run).not.toHaveBeenCalled()
+    expect(dbLogMock.warn).toHaveBeenCalledWith(
+      'scan_progress source-scope migration blocked; keeping compatibility mode',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          blockers: ['scan_progress blank path rows'],
+          blankPathRows: 1
         })
       })
     )

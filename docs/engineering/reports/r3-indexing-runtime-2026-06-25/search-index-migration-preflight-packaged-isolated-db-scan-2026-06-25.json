@@ -1,0 +1,588 @@
+{
+  "schemaVersion": "search-index-migration-preflight/v1",
+  "generatedAt": "2026-06-24T20:28:02.582Z",
+  "sourceId": "file-provider",
+  "destructiveActions": false,
+  "migrationReadiness": {
+    "sqliteFtsOwnership": "needs-confirmation",
+    "scanProgressSourceScope": "ready"
+  },
+  "gate": {
+    "passed": true,
+    "failedChecks": []
+  },
+  "checks": [
+    {
+      "id": "required-tables",
+      "status": "passed",
+      "summary": "Required search/indexing tables exist.",
+      "evidence": {
+        "missingTables": []
+      }
+    },
+    {
+      "id": "scan-progress-source-scope",
+      "status": "passed",
+      "summary": "scan_progress is source-scoped.",
+      "evidence": {
+        "sourceIdColumn": true,
+        "primaryKeyColumns": [
+          "source_id",
+          "path"
+        ]
+      }
+    },
+    {
+      "id": "scan-progress-data-hygiene",
+      "status": "passed",
+      "summary": "scan_progress path and timestamp hygiene.",
+      "evidence": {
+        "rows": 1,
+        "blankPathRows": 0,
+        "invalidTimestampRows": 0
+      }
+    },
+    {
+      "id": "scan-progress-source-duplicates",
+      "status": "passed",
+      "summary": "source-scoped scan_progress duplicate row check.",
+      "evidence": {
+        "duplicateSourcePathRows": 0,
+        "sharedPathAcrossSourcesRows": 0
+      }
+    },
+    {
+      "id": "legacy-file-fts",
+      "status": "info",
+      "summary": "Legacy file_fts table exists and is retained unchanged by the R3 durable ownership migration.",
+      "evidence": {
+        "exists": true,
+        "rows": 107,
+        "policy": "retain-unchanged"
+      }
+    },
+    {
+      "id": "search-index-shadow-tables",
+      "status": "passed",
+      "summary": "search_index FTS5 shadow tables are visible.",
+      "evidence": {
+        "missingShadowTables": []
+      }
+    },
+    {
+      "id": "source-index-row-parity",
+      "status": "warning",
+      "summary": "Source indexed row count compared with files table row count.",
+      "evidence": {
+        "sourceId": "file-provider",
+        "sourceIndexedRows": 0,
+        "filesRows": 107
+      }
+    },
+    {
+      "id": "keyword-orphans",
+      "status": "passed",
+      "summary": "keyword_mappings rows should point at search_index rows for the same provider.",
+      "evidence": {
+        "orphanKeywordRows": 0
+      }
+    },
+    {
+      "id": "meta-orphans",
+      "status": "passed",
+      "summary": "search_index_meta rows should point at search_index rows for the same provider.",
+      "evidence": {
+        "orphanMetaRows": 0
+      }
+    },
+    {
+      "id": "search-index-meta-coverage",
+      "status": "passed",
+      "summary": "search_index and keyword_mappings rows should have matching keyword hash metadata.",
+      "evidence": {
+        "searchIndexRowsMissingMeta": 0,
+        "keywordRowsMissingMeta": 0
+      }
+    },
+    {
+      "id": "task-history-store",
+      "status": "passed",
+      "summary": "Indexed source task state table exists for durable diagnostics history.",
+      "evidence": {
+        "rows": 0
+      }
+    }
+  ],
+  "migrationDryRun": {
+    "mode": "read-only",
+    "destructiveActions": false,
+    "requiresApproval": true,
+    "estimatedRowsTouched": 2513,
+    "steps": [
+      {
+        "id": "scan-progress-source-scope",
+        "status": "not-needed",
+        "summary": "scan_progress is already source-scoped; no schema rewrite is needed.",
+        "writes": false,
+        "requiresSchemaChange": false,
+        "requiresDataRewrite": false,
+        "estimatedRows": 1,
+        "rollback": "Keep a pre-migration scan_progress snapshot, restore path-only rows or force provider-scoped full rescan if rollback is required.",
+        "verification": [
+          "Run the controlled runScanProgressSourceScopeMigration helper only after approval.",
+          "Re-run preflight and expect scanProgressSourceScope=ready.",
+          "Verify source/path duplicate rows are zero after migration.",
+          "Verify Settings diagnostics does not report cross-source progress contamination."
+        ]
+      },
+      {
+        "id": "sqlite-fts-ownership",
+        "status": "manual-approval-required",
+        "summary": "Would confirm SearchIndexService/SearchIndexWorker/runtime store ownership before changing durable FTS write boundaries.",
+        "writes": false,
+        "requiresSchemaChange": false,
+        "requiresDataRewrite": false,
+        "estimatedRows": 2512,
+        "rollback": "Retain current search_index and keyword_mappings until migration evidence passes; on failure, clear provider-scoped index and schedule full rescan.",
+        "verification": [
+          "Compare provider row parity before and after migration.",
+          "Verify keyword_mappings orphan count is zero.",
+          "Verify search_index_meta coverage or schedule provider-scoped reindex evidence."
+        ]
+      },
+      {
+        "id": "legacy-file-fts-decision",
+        "status": "ready",
+        "summary": "R3 retains legacy file_fts unchanged for compatibility; migrate/drop/rebuild is out of this migration batch.",
+        "writes": false,
+        "requiresSchemaChange": false,
+        "requiresDataRewrite": false,
+        "estimatedRows": 0,
+        "rollback": "No rollback is needed for file_fts in R3 because the table is not modified.",
+        "verification": [
+          "Verify file search still uses search_index provider rows.",
+          "Verify no R3 migration step drops, rebuilds, or rewrites legacy file_fts rows."
+        ]
+      },
+      {
+        "id": "durable-history-evidence",
+        "status": "ready",
+        "summary": "indexed_source_task_state exists for durable recent task diagnostics evidence.",
+        "writes": false,
+        "requiresSchemaChange": false,
+        "requiresDataRewrite": false,
+        "estimatedRows": 0,
+        "rollback": "Task history is diagnostic-only; preserve current runtime diagnostics and avoid deleting persisted state during rollback.",
+        "verification": [
+          "Run focused task-state store tests.",
+          "Capture packaged Settings diagnostics evidence showing recent task chips after restart."
+        ]
+      }
+    ]
+  },
+  "nextActions": [
+    "Retain legacy file_fts unchanged in R3; handle any retirement in a separate high-risk migration batch.",
+    "Attach this preflight report to the SQLite/FTS and scan_progress migration approval request."
+  ],
+  "snapshot": {
+    "generatedAt": "2026-06-24T20:28:02.582Z",
+    "sourceId": "file-provider",
+    "tables": {
+      "files": {
+        "exists": true,
+        "rowCount": 107,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 1
+          },
+          {
+            "name": "path",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "extension",
+            "type": "TEXT",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "size",
+            "type": "INTEGER",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "mtime",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "ctime",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "last_indexed_at",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "is_dir",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "type",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "content",
+            "type": "TEXT",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "embedding_status",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "display_name",
+            "type": "TEXT",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "fileExtensions": {
+        "exists": true,
+        "rowCount": 937,
+        "columns": [
+          {
+            "name": "file_id",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 1
+          },
+          {
+            "name": "key",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 2
+          },
+          {
+            "name": "value",
+            "type": "TEXT",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "fileIndexProgress": {
+        "exists": true,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "file_id",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 1
+          },
+          {
+            "name": "status",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "progress",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "processed_bytes",
+            "type": "INTEGER",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "total_bytes",
+            "type": "INTEGER",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "last_error",
+            "type": "TEXT",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "started_at",
+            "type": "INTEGER",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "updated_at",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "scanProgress": {
+        "exists": true,
+        "rowCount": 1,
+        "columns": [
+          {
+            "name": "source_id",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 1
+          },
+          {
+            "name": "path",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 2
+          },
+          {
+            "name": "last_scanned",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "fileFts": {
+        "exists": true,
+        "rowCount": 107,
+        "columns": [
+          {
+            "name": "name",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "searchIndex": {
+        "exists": true,
+        "rowCount": 107,
+        "columns": [
+          {
+            "name": "item_id",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "provider",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "type",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "title",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "title_compact",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "keywords",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "tags",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "path",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "content",
+            "type": "",
+            "notNull": false,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "searchIndexMeta": {
+        "exists": true,
+        "rowCount": 107,
+        "columns": [
+          {
+            "name": "provider_id",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 1
+          },
+          {
+            "name": "item_id",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 2
+          },
+          {
+            "name": "keyword_hash",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "updated_at",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "keywordMappings": {
+        "exists": true,
+        "rowCount": 2298,
+        "columns": [
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 1
+          },
+          {
+            "name": "keyword",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "item_id",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "priority",
+            "type": "REAL",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "provider_id",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          }
+        ]
+      },
+      "indexedSourceTaskState": {
+        "exists": true,
+        "rowCount": 0,
+        "columns": [
+          {
+            "name": "source_id",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 1
+          },
+          {
+            "name": "state_json",
+            "type": "TEXT",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          },
+          {
+            "name": "updated_at",
+            "type": "INTEGER",
+            "notNull": true,
+            "primaryKeyOrder": 0
+          }
+        ]
+      }
+    },
+    "scanProgress": {
+      "sourceIdColumn": true,
+      "primaryKeyColumns": [
+        "source_id",
+        "path"
+      ],
+      "blankPathRows": 0,
+      "invalidTimestampRows": 0,
+      "duplicateSourcePathRows": 0,
+      "sharedPathAcrossSourcesRows": 0
+    },
+    "ftsOwnership": {
+      "searchIndexShadowTables": {
+        "search_index_data": true,
+        "search_index_idx": true,
+        "search_index_content": true,
+        "search_index_docsize": true,
+        "search_index_config": true
+      },
+      "searchIndexByProvider": [
+        {
+          "providerId": "app-provider",
+          "rows": 107
+        }
+      ],
+      "keywordMappingsByProvider": [
+        {
+          "providerId": "app-provider",
+          "rows": 2298
+        }
+      ],
+      "searchIndexMetaByProvider": [
+        {
+          "providerId": "app-provider",
+          "rows": 107
+        }
+      ],
+      "sourceIndexedRows": 0,
+      "sourceKeywordRows": 0,
+      "sourceMetaRows": 0,
+      "filesRows": 107,
+      "fileFtsRows": 107,
+      "orphanKeywordRows": 0,
+      "orphanMetaRows": 0,
+      "searchIndexRowsMissingMeta": 0,
+      "keywordRowsMissingMeta": 0
+    }
+  }
+}

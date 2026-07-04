@@ -133,6 +133,10 @@ export class FileIndexWorkerClient {
     this.terminateWorker()
   }
 
+  hasPendingWork(): boolean {
+    return this.pending.size > 0
+  }
+
   private ensureWorker(): Worker {
     this.idleShutdown.cancel()
     if (this.worker) {

@@ -1,0 +1,33 @@
+{
+  "ok": false,
+  "checkedAt": "2026-06-24T20:07:10.317Z",
+  "packageVersion": "2.4.13-beta.1",
+  "appBundle": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+  "executablePath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+  "cdpPort": 9581,
+  "remoteDebuggingUrl": "http://127.0.0.1:9581/json/list",
+  "userDataDir": "/tmp/tuff-indexing-diagnostics-20260624200710",
+  "sourceId": "file-provider",
+  "seededRecentTaskEvidence": false,
+  "fixtureRoot": "/tmp/tuff-r3-indexing-runtime-fixture-reconcile",
+  "maintenanceAction": "reconcile",
+  "artifactPaths": {
+    "output": "indexing-diagnostics-probe-maintenance-reconcile-fixture-preflight-2026-06-25.json",
+    "diagnostics": "indexing-diagnostics-maintenance-reconcile-fixture-preflight-2026-06-25.json",
+    "verification": "indexing-diagnostics-verification-maintenance-reconcile-fixture-preflight-2026-06-25.json",
+    "settingsScreenshot": "indexing-diagnostics-settings-maintenance-reconcile-fixture-preflight-2026-06-25.png",
+    "detailScreenshot": "indexing-diagnostics-source-detail-maintenance-reconcile-fixture-preflight-2026-06-25.png",
+    "settingsDom": "indexing-diagnostics-settings-maintenance-reconcile-fixture-preflight-2026-06-25-dom.json",
+    "detailDom": "indexing-diagnostics-source-detail-maintenance-reconcile-fixture-preflight-2026-06-25-dom.json"
+  },
+  "targets": [],
+  "failures": [
+    "Packaged app.asar does not include TUFF_FILE_PROVIDER_BASE_WATCH_PATHS; rebuild the bundle before fixture-root maintenance evidence."
+  ],
+  "fixtureRootPreflight": {
+    "checkedPath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar",
+    "marker": "TUFF_FILE_PROVIDER_BASE_WATCH_PATHS",
+    "passed": false,
+    "reason": "Packaged app.asar does not include TUFF_FILE_PROVIDER_BASE_WATCH_PATHS; rebuild the bundle before fixture-root maintenance evidence."
+  }
+}

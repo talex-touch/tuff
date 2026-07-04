@@ -169,6 +169,20 @@
       "when": 1781654400000,
       "tag": "0023_intelligence_context_knowledge",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1782340800000,
+      "tag": "0024_search_index_runtime_store",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1782344400000,
+      "tag": "0025_scan_progress_source_scope",
+      "breakpoints": true
     }
   ]
 }

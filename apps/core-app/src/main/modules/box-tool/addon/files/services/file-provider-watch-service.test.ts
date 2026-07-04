@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { inArray } from 'drizzle-orm'
 import { FileProviderWatchService } from './file-provider-watch-service'
 import FileSystemWatcher from '../../../file-system-watcher'
-import { scanProgress } from '../../../../../db/schema'
 import { appTaskGate } from '../../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../../service/device-idle-service'
 import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
@@ -69,41 +67,68 @@ vi.mock('../../../search-engine/search-activity', () => ({
   isSearchRecentlyActive: vi.fn(() => false)
 }))
 
-function createDbUtils(rows: Array<{ path: string; lastScanned: unknown }>) {
-  const where = vi.fn(async (condition: unknown) => {
-    const scopedPaths = extractInArrayValues(condition)
+function createDbUtils(
+  rows: Array<{ path: string; lastScanned: unknown }>,
+  options: { sourceScoped?: boolean } = {}
+) {
+  const all = vi.fn(async (query: unknown) => {
+    const text = String(query)
+    if (text.includes('PRAGMA table_info(scan_progress)')) {
+      return options.sourceScoped
+        ? [
+            { name: 'source_id', pk: 1 },
+            { name: 'path', pk: 2 },
+            { name: 'last_scanned', pk: 0 }
+          ]
+        : [
+            { name: 'path', pk: 1 },
+            { name: 'last_scanned', pk: 0 }
+          ]
+    }
+
+    const scopedPaths = extractSqlParamValues(query)
     if (scopedPaths.size === 0) {
       return rows
     }
     return rows.filter((row) => scopedPaths.has(row.path))
   })
-  const query = {
-    where,
-    then: (resolve: (rows: Array<{ path: string; lastScanned: unknown }>) => unknown) =>
-      Promise.resolve(rows).then(resolve)
-  }
-  const from = vi.fn(() => query)
-  const select = vi.fn(() => ({ from }))
 
   return {
     dbUtils: {
-      getDb: vi.fn(() => ({ select }))
+      getDb: vi.fn(() => ({ all }))
     },
-    from,
-    select,
-    where
+    all
   }
 }
 
-function extractInArrayValues(condition: unknown): Set<string> {
-  const queryChunks =
-    (condition as { queryChunks?: unknown[] } | null | undefined)?.queryChunks ?? []
-  const valueChunks = queryChunks.find(Array.isArray) as Array<{ value?: unknown }> | undefined
+function extractSqlParamValues(condition: unknown): Set<string> {
+  const values: string[] = []
+  const visit = (value: unknown) => {
+    if (typeof value === 'string') {
+      values.push(value)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    const record = value as { value?: unknown; queryChunks?: unknown[] }
+    if (typeof record.value === 'string') {
+      values.push(record.value)
+    } else if (Array.isArray(record.value)) {
+      record.value.filter((entry): entry is string => typeof entry === 'string').forEach(visit)
+    }
+    if (Array.isArray(record.queryChunks)) {
+      for (const chunk of record.queryChunks) {
+        if (Array.isArray(chunk)) {
+          chunk.forEach(visit)
+        } else {
+          visit(chunk)
+        }
+      }
+    }
+  }
+  visit(condition)
 
   return new Set(
-    (valueChunks ?? [])
-      .map((chunk) => chunk.value)
-      .filter((value): value is string => typeof value === 'string')
+    values.filter((value) => value !== 'file-provider').filter((value) => value.startsWith('/'))
   )
 }
 
@@ -144,24 +169,34 @@ describe('file-provider-watch-service', () => {
 
   it('reads scan progress through the current watch root scope', async () => {
     const scannedAt = new Date()
-    const { dbUtils, from, where } = createDbUtils([
-      { path: '/tmp/tuff-index-a', lastScanned: scannedAt }
-    ])
+    const { dbUtils, all } = createDbUtils([{ path: '/tmp/tuff-index-a', lastScanned: scannedAt }])
     const service = createService({ dbUtils })
 
     const eligibility = await service.getScanEligibility()
 
-    expect(from).toHaveBeenCalledWith(scanProgress)
-    expect(where).toHaveBeenCalledWith(
-      inArray(scanProgress.path, ['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
+    expect(all).toHaveBeenCalledWith(expect.objectContaining({ queryChunks: expect.any(Array) }))
+    expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-b'])
+    expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
+  })
+
+  it('reads source-scoped scan progress for the file provider source', async () => {
+    const scannedAt = new Date()
+    const { dbUtils, all } = createDbUtils(
+      [{ path: '/tmp/tuff-index-a', lastScanned: scannedAt }],
+      { sourceScoped: true }
     )
+    const service = createService({ dbUtils })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(all).toHaveBeenCalledTimes(2)
     expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-b'])
     expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
   })
 
   it('includes raw and normalized watch roots in the scan progress query', async () => {
     const scannedAt = new Date('2026-06-20T10:00:00.000Z')
-    const { dbUtils, where } = createDbUtils([
+    const { dbUtils, all } = createDbUtils([
       { path: '/users/me/documents', lastScanned: scannedAt }
     ])
     const service = createService({
@@ -172,8 +207,8 @@ describe('file-provider-watch-service', () => {
 
     const eligibility = await service.getScanEligibility()
 
-    expect(where).toHaveBeenCalledWith(
-      inArray(scanProgress.path, ['/Users/me/Documents', '/users/me/documents'])
+    expect(extractSqlParamValues(all.mock.calls[1]?.[0])).toEqual(
+      new Set(['/Users/me/Documents', '/users/me/documents'])
     )
     expect(eligibility.newPaths).toEqual([])
     expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
@@ -181,7 +216,7 @@ describe('file-provider-watch-service', () => {
 
   it('skips watch roots rejected by the normalizer before reading scan progress', async () => {
     const scannedAt = new Date('2026-06-20T10:00:00.000Z')
-    const { dbUtils, where } = createDbUtils([{ path: '/tmp/accepted', lastScanned: scannedAt }])
+    const { dbUtils, all } = createDbUtils([{ path: '/tmp/accepted', lastScanned: scannedAt }])
     const service = createService({
       baseWatchPaths: ['/tmp/rejected', '/tmp/accepted'],
       dbUtils,
@@ -190,7 +225,7 @@ describe('file-provider-watch-service', () => {
 
     const eligibility = await service.getScanEligibility()
 
-    expect(where).toHaveBeenCalledWith(inArray(scanProgress.path, ['/tmp/accepted']))
+    expect(extractSqlParamValues(all.mock.calls[1]?.[0])).toEqual(new Set(['/tmp/accepted']))
     expect(eligibility.newPaths).toEqual([])
     expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
   })
@@ -227,7 +262,7 @@ describe('file-provider-watch-service', () => {
   })
 
   it('does not read scan progress when auto indexing is initializing', async () => {
-    const { dbUtils, from } = createDbUtils([])
+    const { dbUtils, all } = createDbUtils([])
     const service = createService({ dbUtils })
 
     await expect(
@@ -236,7 +271,7 @@ describe('file-provider-watch-service', () => {
         hasInitializationContext: true
       })
     ).resolves.toEqual({ allowed: false, reason: 'initializing' })
-    expect(from).not.toHaveBeenCalled()
+    expect(all).not.toHaveBeenCalled()
     expect(deviceIdleService.canRun).not.toHaveBeenCalled()
   })
 

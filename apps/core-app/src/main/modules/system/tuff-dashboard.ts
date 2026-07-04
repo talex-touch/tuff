@@ -8,14 +8,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { desc, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { app } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
-import { config, scanProgress } from '../../db/schema'
+import { config } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
 import { BaseModule } from '../abstract-base-module'
 import { fileProvider } from '../box-tool/addon/files/file-provider'
+import { resolveScanProgressSchemaShape } from '../box-tool/search-engine/scan-progress-schema'
 import { databaseModule } from '../database'
 import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
@@ -218,13 +219,12 @@ export class TuffDashboardModule extends BaseModule {
 
     const [progress, scanRows] = await Promise.all([
       fileProvider.getIndexingProgress(),
-      db
-        ? db.select().from(scanProgress).orderBy(desc(scanProgress.lastScanned)).limit(limit)
-        : Promise.resolve([])
+      db ? this.loadRecentScanProgressRows(db, limit) : Promise.resolve([])
     ])
 
     const scanOverview = Array.isArray(scanRows)
       ? scanRows.map((row) => ({
+          sourceId: row.sourceId ?? 'file-provider',
           path: row.path ?? '',
           lastScanned: this.toIso(row.lastScanned)
         }))
@@ -261,6 +261,25 @@ export class TuffDashboardModule extends BaseModule {
     })
 
     return section
+  }
+
+  private async loadRecentScanProgressRows(db: LibSQLDatabase<typeof schema>, limit: number) {
+    const shape = await resolveScanProgressSchemaShape(db)
+    if (shape.sourceScoped) {
+      return db.all<{ sourceId: string; path: string; lastScanned: unknown }>(sql`
+        SELECT source_id AS sourceId, path, last_scanned AS lastScanned
+        FROM scan_progress
+        ORDER BY last_scanned DESC
+        LIMIT ${limit}
+      `)
+    }
+
+    return db.all<{ sourceId: string | null; path: string; lastScanned: unknown }>(sql`
+      SELECT NULL AS sourceId, path, last_scanned AS lastScanned
+      FROM scan_progress
+      ORDER BY last_scanned DESC
+      LIMIT ${limit}
+    `)
   }
 
   private async buildOcrSection(limit: number, requestId: string | null) {

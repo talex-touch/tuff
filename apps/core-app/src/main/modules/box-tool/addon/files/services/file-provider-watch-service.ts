@@ -11,7 +11,6 @@ import {
 } from '../../../../../service/background-task-service'
 import { deviceIdleService } from '../../../../../service/device-idle-service'
 import { createFailedFilesCleanupTask } from '../../../../../service/failed-files-cleanup-task'
-import { scanProgress } from '../../../../../db/schema'
 import type * as schema from '../../../../../db/schema'
 import type { DbUtils } from '../../../../../db/utils'
 import { formatDuration } from '../../../../../utils/logger'
@@ -27,7 +26,11 @@ import {
   resolveIndexedScanEligibility,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
-import { inArray } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
+import {
+  buildScanProgressPathInClause,
+  resolveScanProgressSchemaShape
+} from '../../../search-engine/scan-progress-schema'
 
 const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanEnabled: true,
@@ -299,9 +302,21 @@ export class FileProviderWatchService {
 
     const db = dbUtils.getDb()
     const scopedPaths = expandIndexedSourceProgressPaths(this.watchPaths, this.normalizePath)
+    const shape = await resolveScanProgressSchemaShape(db)
     const completedScans =
       scopedPaths.length > 0
-        ? await db.select().from(scanProgress).where(inArray(scanProgress.path, scopedPaths))
+        ? shape.sourceScoped
+          ? await db.all<{ path: string; lastScanned: unknown }>(sql`
+              SELECT path, last_scanned AS lastScanned
+              FROM scan_progress
+              WHERE source_id = ${'file-provider'}
+                AND path IN ${buildScanProgressPathInClause(scopedPaths)}
+            `)
+          : await db.all<{ path: string; lastScanned: unknown }>(sql`
+              SELECT path, last_scanned AS lastScanned
+              FROM scan_progress
+              WHERE path IN ${buildScanProgressPathInClause(scopedPaths)}
+            `)
         : []
     return resolveIndexedScanEligibility({
       watchPaths: this.watchPaths,

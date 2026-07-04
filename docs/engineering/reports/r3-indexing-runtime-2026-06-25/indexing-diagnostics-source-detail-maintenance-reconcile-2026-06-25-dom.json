@@ -1,0 +1,56 @@
+{
+  "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting?section=file-index",
+  "title": "Tuff",
+  "readyState": "complete",
+  "text": "权限体检发现尚未完成：文件访问权限。可在引导页或设置里统一处理。\nTuff\n应用设置\n\n主要\n\n设置\n智能\n市场\n样式\n下载中心\n版本\nv2.4.13-beta.1\nTUFF\n\n为创造者们重新构想的命令栏。\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\n账户\n\n管理您的账户信息和登录状态。\n\n登录凭证保护\n\n本地加密保护已启用：凭证由本机 root 密钥加密保存，重启后仍可保持登录状态。\n\n无账户\n\n当前无法访问账户。\n\n登录\nAI 积分\n\n查看 Nexus AI credits 的个人剩余、已用和额度。\n\nAI 积分\n\n登录后可查看 credits 剩余和消耗。\n\n需要登录\n\n请先登录 Tuff 账户以读取 Nexus credits summary。\n\n语言设置\n\n选择您喜欢的应用程序语言。\n\n跟随系统语言\n\n自动匹配系统语言设置。\n\n选择语言\n\n手动选择您喜欢的显示语言。\n\n简体中文\nEnglish\n通用配置\n\n配置权限和基础设置\n\n权限\n\n统一管理文件访问、系统辅助、麦克风和平台级权限。\n\n已授权 2/4\n管理权限\n开机自动启动\n\n系统启动时自动运行应用\n\n显示托盘图标\n\n在系统托盘显示应用图标\n\n不在 Dock 栏显示\n仅限 macOS\n\n关闭主窗口后不在显示 Dock 图标（macOS only）\n\n静默启动\n\n应用启动时不显示窗口，仅在后台运行\n\n安装后自动装载 OmniPanel Feature\n\n启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。\n\n过滤系统噪音应用\n\n隐藏 Simulator / 系统 Helper/Agent 等不常用辅助应用（仅隐藏结果，不删除索引）\n\n实用工具\n\n实用工具为您提供统一的快速桌面启动器。\n\n自定义占位文本\n\n自定义 CoreBox 输入框的占位提示文本，留空使用默认。\n\n使用\n\n进入时引导您使用应用程序。\n\n快捷方式\n\n集中管理系统级快捷键设置。\n\n共 6 项\n管理\nOmniPanel 右键长按时长\n\n设置触发 OmniPanel 的右键长按阈值。\n\n自动粘贴\n\n复制内容后呼出 CoreBox 时，自动带入新鲜剪贴板内容。\n\n自动清除\n\nCoreBox 隐藏超过指定时间后，下次打开时自动退出上次功能并清空输入。短时间重新打开会保留状态。\n\n剪贴板轮询间隔\n\n空闲状态下检查剪贴板的频率，频率越高越耗电。CoreBox 显示时会自动提速到 0.5 秒。\n\n剪贴板省电轮询策略\n\n电池供电时自动降低剪贴板轮询频率以节省能耗。\n\n剪贴板省电轮询间隔\n\n启用剪贴板省电策略后，电池供电状态下使用的轮询间隔。\n\n自动隐藏\n\n触发模糊时隐藏搜索栏。\n\n智能推荐\n\n启用智能推荐功能，根据使用习惯提供个性化建议。\n\n显示推荐理由\n\n在推荐项目旁显示推荐原因。\n\n推荐数量\n\n搜索栏中显示的最大推荐项目数量。\n\n本地语义向量推荐\n\n在本机用上下文特征生成轻量语义分，不调用 AI 服务。\n\nAI 推荐重排\n\n开启后可用已配置的 AI Provider 对少量候选重排；失败或超时会自动退回本地排序。\n\nAI 向量增强\n\n开启后可用 embedding 能力增强少量候选的语义相似度；默认关闭。\n\n推荐分析：时间\n\n根据小时、工作日和时间段调整推荐。\n\n推荐分析：前台应用\n\n根据当前正在使用的应用补充相关工具推荐。\n\n推荐分析：剪贴板\n\n根据剪贴板内容类型推荐编辑器、浏览器、文件工具等。\n\n推荐分析：网络\n\n纳入联网状态、网络类型和脱敏网络桶，不记录明文网络名。\n\n推荐分析：蓝牙\n\n预留蓝牙可用性与连接数量信号，用于后续设备上下文推荐。\n\n推荐分析：专注状态\n\n纳入 macOS 专注 / 勿扰状态，专注时减少娱乐社交类推荐。\n\n推荐分析：电源与电量\n\n纳入充电、电池供电和电量区间，低电量时降低高耗能应用权重。\n\n推荐分析：位置桶\n\n使用时区和网络脱敏桶生成粗粒度位置桶，不记录具体位置。\n\nAssistant 悬浮球\n\n开启桌面悬浮入口，点击后可把文本指令发送到 CoreBox。\n\n启用 Assistant\n\n启用后才会响应悬浮球、语音面板等 Assistant 入口。默认保持关闭。\n\n显示悬浮球\n\n在桌面上显示可拖动的悬浮入口；点击后打开文本指令面板。\n\n助手名称\n\n显示在 Assistant 面板顶部的名称。\n\n语音唤醒\n\n开启后悬浮球和面板才会请求语音识别；关闭时只保留文本输入。\n\n唤醒词\n\n多个唤醒词用英文逗号分隔。\n\n文件索引\n\n管理文件搜索索引\n\n索引状态\n\n当前文件索引的运行状态\n\n初始化中\n索引进度\n\n索引中 (6265/8569) 73%\n\n预计 12 秒后完成\n索引统计\n\n文件索引的详细统计信息\n\n已索引文件\n 963\n·\n索引失败\n 0\n·\n已跳过文件\n 284\n·\n已完成内容索引\n 172\n·\n已生成向量文件\n 0\n·\n向量记录\n 0\n最后检查\n\n最后一次状态检查的时间\n\n03:54:44\n搜索源诊断\n\n统一查看 App、File、Everything 等索引源的健康状态\n\n源健康总览\n\n共 5 个源，0 个就绪，1 个降级，2 个不可用，5 个需处理\n\n上次 03:54:44\n刷新\nBrowser Bookmarks 官方运行时\n\n已关闭 · 0 项 · 0 个监听根 · 1 条证据 · browser-bookmarks-official-provider-consent-required\n\n详情\nApplications\n\n合同问题：open-capability-missing-handler\n\n详情\nFile Index\n\n合同问题：open-capability-missing-handler\n\n详情\nEverything\n\n合同问题：open-capability-missing-handler\n\n详情\nQuicklinks\n\n原因：quicklinks-empty\n\n详情\nBrowser Bookmarks\n\n合同问题：open-capability-missing-handler\n\n详情\n后台索引策略\n\n控制后台索引在空闲与电量条件下的执行\n\n空闲阈值\n\n系统空闲超过该时长才允许后台索引执行\n\n分钟\n最低电量\n\n低于该电量时暂停后台索引（充电时可忽略）\n\n%\n电量禁区\n\n低于该电量时强制暂停后台索引\n\n%\n充电时允许\n\n连接电源时允许忽略最低电量限制\n\n强制执行间隔\n\n超过该时长未执行时允许跳过空闲判断\n\n小时\n空闲策略诊断\n\n当前空闲 2.6 分钟，低于阈值 1.0 小时，后台任务会继续等待。\n\n已拦截\n空闲\n2.6 分钟\n·\n电量\n-\n状态未知\n上次 03:54:38\n刷新\n应用索引调度\n\n控制启动补漏与周期性全量同步\n\n启动补漏\n\n应用启动后后台补漏应用列表\n\n补漏重试次数\n\n补漏失败后的最大重试次数\n\n次\n补漏重试基础间隔\n\n第一次重试的等待时间\n\n秒\n补漏重试最大间隔\n\n指数退避的最大等待时间\n\n分钟\n周期性全量同步\n\n周期性执行全量比对与同步\n\n全量同步间隔\n\n两次全量同步之间的最小间隔\n\n小时\n全量检查频率\n\n检查是否需要全量同步的频率\n\n分钟\n本地启动区 / 应用索引管理\n\n打开弹窗管理扫描到和手动加入的应用条目，避免设置页被长列表占满。\n\n打开管理\n应用搜索诊断\n\n输入应用路径、appIdentity、bundleId、显示名或搜索词，检查单个应用的索引内容与查询命中阶段\n\n打开\n下载设置\n\n配置下载行为和存储选项\n\n最大并发下载数\n\n同时进行的下载任务数量（1-10）\n\n自动调整并发数\n\n根据网络状况自动调整并发下载数\n\n网络感知\n\n根据网络质量调整下载行为\n\n基于优先级调度\n\n优先处理高优先级任务\n\n切片大小\n\n大文件下载时每个切片的大小\n\n启用断点续传\n\n支持从中断位置继续下载\n\n自动重试\n\n自动重试失败的下载\n\n最大重试次数\n\n失败切片的最大重试次数\n\n历史记录保留\n\n下载历史记录的保留时长\n\n自动清理\n\n下载完成后自动清理临时文件\n\n网络超时\n\n等待网络响应的最长时间\n\n重试延迟\n\n重试失败请求前的等待时间\n\n网络最大重试次数\n\n网络级别的最大重试次数\n\n临时目录\n\n临时下载文件的存储位置\n\n/tmp/tuff-indexing-diagnostics-20260624195345/tuff/modules/download-center/temp\n选择目录\n恢复默认目录\n操作\n\n管理下载设置和临时文件\n\n清理临时文件\n恢复默认设置\n网络与代理\n\n配置 CoreApp 统一网络代理、重试与冷却策略\n\n代理模式\n\n控制统一 Network SDK 使用系统代理、直连或自定义代理\n\nHTTP 代理\n\n用于 HTTP 请求的代理地址\n\nHTTPS 代理\n\n用于 HTTPS 请求的代理地址\n\nSOCKS 代理\n\n可选 SOCKS4 / SOCKS5 代理地址\n\nPAC 地址\n\n可选代理自动配置脚本地址\n\n绕过规则\n\n每行或逗号分隔一个绕过代理的主机规则\n\n代理认证\n\n认证凭据只通过安全存储引用读取，本页不保存明文账号密码\n\n未配置\n网络策略\n\n配置统一网络请求的超时、重试和失败冷却\n\n请求超时\n\n单次网络请求等待响应的最长时间\n\nms\n最大重试次数\n\n网络请求失败后的最大自动重试次数\n\n基础重试延迟\n\n首次重试前等待的时间\n\nms\n最大重试延迟\n\n退避重试允许等待的最长时间\n\nms\n网络错误重试\n\n连接错误、DNS 错误等网络失败后自动重试\n\n超时重试\n\n请求超时后按重试策略再尝试\n\n冷却阈值\n\n连续失败达到该次数后进入短暂冷却\n\n冷却时间\n\n同一网络目标进入冷却后的等待时间\n\nms\n成功后重置冷却\n\n请求成功后清空该目标的失败计数\n\n保存设置\n\n保存统一网络配置，或恢复默认策略\n\n恢复默认\n保存\n应用更新\n\n管理应用更新下载、状态与检查操作。\n\n更新渠道\n\n预览渠道能更早体验新版本，但可能不够稳定。\n\n检查频率\n\n应用启动后按照该频率自动轮询更新。\n\n自动下载更新\n\n发现新版本时自动下载更新包\n\nRenderer Override（实验性）\n\n手动开启实验性 Renderer Override（需设置 TUFF_ENABLE_RENDERER_OVERRIDE=1）。\n\n状态\n\n上次检查：2026/6/25 03:53:55\n\n操作\n\n立即检查当前渠道是否有新版本。\n\n检查更新\n诊断证据\n\n导出当前更新设置、下载就绪状态、缓存版本、目标平台与安装接管模式，供 Windows 真机回归记录使用\n\n复制证据\n保存证据\nNexus 数据分析\n\n默认开启，可手动关闭；帮助改进应用体验和产品决策\n\n启用数据上传\n\n上传脱敏后的性能与错误指标，帮助快速定位问题。关闭后停止写入上传队列。\n\n匿名模式\n\n登录后可切换匿名模式。\n\n刷新统计数据\n\n从本地数据库获取最新状态\n\n刷新\n已记录搜索次数\n0\n提示\n非匿名模式下，登录用户会关联用户 ID；仍不会上传邮箱、搜索明文、文件路径、剪贴板内容或密钥。\nBuffer 大小\n1\n总上传次数\n0\n失败次数\n0\n最近上传\nNever\nAPI 地址\nhttps://tuff.tagzxia.com\n隐私数据管理\n\n在官网管理您的隐私设置和数据\n\n查看数据分析面板\n\n在 Nexus 查看详细的使用统计和趋势\n\n存储\n\n查看应用存储详情\n\n应用程序规范 (Touch)\n\n开发者模式\n\n显示内部插件与高级选项（谨慎使用）\n\n高级设置\n\n启用后显示文件索引、应用索引调度、下载、数据分析与存储设置\n\n详细信息\n\n启用系统详细信息页面，显示索引、应用、日志和OCR状态。\n\n搜索引擎日志\n\n启用搜索引擎操作的详细日志记录，帮助调试搜索问题。\n\n版本\nTalexTouch Master 2.4.13-beta.1 最新\n规格\n26H6 T2\n版本号\n2.4.13-beta.1\n构建 ID\n3b07759\nGit 哈希\nec8",
+  "hasSettingsShell": true,
+  "hasSourceDiagnosticsGroup": true,
+  "sourceRows": [
+    {
+      "title": "详情",
+      "description": "详情",
+      "hasDetailAction": true
+    },
+    {
+      "title": "详情",
+      "description": "详情",
+      "hasDetailAction": true
+    },
+    {
+      "title": "详情",
+      "description": "详情",
+      "hasDetailAction": true
+    },
+    {
+      "title": "详情",
+      "description": "详情",
+      "hasDetailAction": true
+    },
+    {
+      "title": "详情",
+      "description": "详情",
+      "hasDetailAction": true
+    },
+    {
+      "title": "详情",
+      "description": "详情",
+      "hasDetailAction": true
+    }
+  ],
+  "dialog": {
+    "visible": true,
+    "title": "概览",
+    "text": "概览预热中963 项监听：运行中补漏：空闲进度indexing · 剩余 12s · 73% · 6265/8569 · 194/s · stage-speed恢复检查 Source 合同 · lifecycle:open-capability-missing-handler合同声明了打开能力但缺少入口存在入口但未声明对应能力证据File scan progress · warming · 根 0/6 · 失败 0 · 待授权 0 · 最近 -File FTS write · ready · 20 · full-scan.upsert调度reconcile 运行中，自 2026/6/25 03:53:51 · 阻挡 0 次维护操作扫描补漏重置",
+    "sections": [
+      "概览",
+      "进度",
+      "恢复",
+      "合同",
+      "证据",
+      "调度",
+      "维护操作"
+    ],
+    "recentTaskText": "",
+    "hasRecentTasks": false
+  }
+}

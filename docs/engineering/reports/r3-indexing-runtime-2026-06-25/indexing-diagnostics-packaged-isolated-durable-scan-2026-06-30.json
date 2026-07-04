@@ -1,0 +1,229 @@
+{
+  "generatedAt": 1782756351074,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "warming": 1
+    },
+    "ready": 0,
+    "degraded": 0,
+    "unavailable": 1
+  },
+  "sources": [
+    {
+      "descriptor": {
+        "id": "file-provider",
+        "kind": "file",
+        "displayName": "File Index",
+        "platforms": [
+          "darwin",
+          "win32",
+          "linux"
+        ],
+        "priority": "deferred",
+        "storage": "sqlite-index",
+        "privacy": "medium",
+        "capabilities": {
+          "scan": true,
+          "watch": true,
+          "reconcile": true,
+          "clear": true,
+          "open": true
+        },
+        "admission": {
+          "owner": "core",
+          "permissionScopes": [
+            "file-system"
+          ],
+          "defaultState": "enabled",
+          "clearable": true,
+          "rebuildable": true
+        }
+      },
+      "health": {
+        "status": "warming",
+        "permissionState": "granted",
+        "itemCount": 0,
+        "watchState": "active",
+        "reconcileState": "idle",
+        "lastScanStartedAt": 1782756348070
+      },
+      "roots": [
+        {
+          "sourceId": "file-provider",
+          "path": "/tmp/tuff-r3-packaged-fixture-durable-scan-2026-06-30",
+          "permissionState": "granted"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "file-provider:scan-progress",
+          "label": "File scan progress",
+          "status": "warming",
+          "itemCount": 0,
+          "rootCount": 1,
+          "roots": [
+            "/tmp/tuff-r3-packaged-fixture-durable-scan-2026-06-30"
+          ],
+          "lastCheckedAt": 1782756351074,
+          "reason": "file-index-progress-has-pending-roots",
+          "metadata": {
+            "totalFiles": 0,
+            "completedFiles": 0,
+            "failedFiles": 0,
+            "skippedFiles": 0,
+            "embeddingCompletedFiles": 0,
+            "embeddingRows": 0,
+            "configuredRoots": 1,
+            "completedRoots": 0,
+            "scanProgressRows": 0,
+            "lastScannedAt": null,
+            "lastUpsertAttempted": false,
+            "lastUpsertReady": false,
+            "lastUpsertedRows": 0,
+            "lastUpsertReason": null,
+            "lastUpsertCheckedAt": null,
+            "totalRoots": 0,
+            "pendingRoots": 1,
+            "pendingPermissionRoots": 0,
+            "pendingPermissionPaths": []
+          }
+        },
+        {
+          "id": "file-provider:integrity",
+          "label": "File index integrity",
+          "status": "ready",
+          "itemCount": 0,
+          "lastCheckedAt": 1782756348068,
+          "reason": "fts-files-count-aligned",
+          "metadata": {
+            "checkedAt": 1782756348068,
+            "needsRebuild": false,
+            "clearedSearchIndex": false,
+            "resetSearchIndexRows": 0,
+            "clearedScanProgress": false,
+            "resetReason": null,
+            "resetScanProgressRows": 0,
+            "durationMs": 0,
+            "ftsRows": 0,
+            "filesRows": 0,
+            "orphanedKeywordsRemoved": 0
+          }
+        }
+      ],
+      "progress": {
+        "sourceId": "file-provider",
+        "stage": "scanning",
+        "status": "running",
+        "current": 0,
+        "total": 1,
+        "progress": 0,
+        "startedAt": 1782756348070,
+        "updatedAt": 1782756351070,
+        "estimatedRemainingMs": null,
+        "estimatedCompletionAt": null,
+        "averageItemsPerSecond": 0,
+        "speedSampleCount": 0,
+        "estimateBasis": "none"
+      },
+      "admissionIssues": [],
+      "lifecycleIssues": [
+        "open-capability-missing-handler",
+        "handler-provided-without-capability"
+      ],
+      "lastScan": {
+        "startedAt": 1782756348060,
+        "completedAt": 1782756348064,
+        "jobId": "file-provider:scan:1",
+        "queuedAt": 1782756348056,
+        "batches": 0,
+        "records": 0,
+        "indexedRecords": 0
+      },
+      "lastReset": {
+        "startedAt": 1782756348061,
+        "completedAt": 1782756348062,
+        "reason": "manual-rebuild",
+        "jobId": "file-provider:reset:1",
+        "queuedAt": 1782756348061,
+        "clearedSearchIndex": true,
+        "clearedSearchIndexRows": 0,
+        "clearedScanProgress": false,
+        "scanProgressRows": 0
+      },
+      "recentTasks": [
+        {
+          "kind": "scan",
+          "status": "succeeded",
+          "completedAt": 1782756348064,
+          "jobId": "file-provider:scan:1",
+          "queuedAt": 1782756348056,
+          "startedAt": 1782756348060,
+          "durationMs": 4,
+          "trigger": "manual-rebuild",
+          "summary": {
+            "durationMs": 4,
+            "trigger": "manual-rebuild",
+            "batches": 0,
+            "records": 0,
+            "indexedRecords": 0
+          }
+        },
+        {
+          "kind": "reset",
+          "status": "succeeded",
+          "completedAt": 1782756348062,
+          "jobId": "file-provider:reset:1",
+          "queuedAt": 1782756348061,
+          "startedAt": 1782756348061,
+          "durationMs": 1,
+          "reason": "manual-rebuild",
+          "trigger": "manual-rebuild",
+          "summary": {
+            "durationMs": 1,
+            "reason": "manual-rebuild",
+            "trigger": "manual-rebuild",
+            "clearedSearchIndex": true,
+            "clearedSearchIndexRows": 0,
+            "clearedScanProgress": false,
+            "scanProgressRows": 0
+          }
+        }
+      ],
+      "taskRunGate": [
+        {
+          "sourceId": "file-provider",
+          "kind": "reset",
+          "blockedCount": 0,
+          "lastCompletedAt": 1782756348063
+        },
+        {
+          "sourceId": "file-provider",
+          "kind": "scan",
+          "blockedCount": 0,
+          "lastCompletedAt": 1782756348064
+        }
+      ]
+    }
+  ],
+  "taskRunGate": {
+    "generatedAt": 1782756351074,
+    "totalEntries": 2,
+    "runningEntries": 0,
+    "blockedEntries": 0,
+    "entries": [
+      {
+        "sourceId": "file-provider",
+        "kind": "reset",
+        "blockedCount": 0,
+        "lastCompletedAt": 1782756348063
+      },
+      {
+        "sourceId": "file-provider",
+        "kind": "scan",
+        "blockedCount": 0,
+        "lastCompletedAt": 1782756348064
+      }
+    ]
+  }
+}
