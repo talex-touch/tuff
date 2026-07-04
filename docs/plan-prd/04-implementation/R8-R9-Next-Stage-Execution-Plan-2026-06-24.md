@@ -1,7 +1,7 @@
 # R8 / R9 Next Stage Execution Plan
 
-> 更新时间：2026-06-24
-> 状态：Planning / Next-stage batching
+> 更新时间：2026-06-27
+> 状态：In progress / Next-stage batching
 > 范围：R8 i18n / Domain Lexicon / Catalog 2.6.0 与 R9 AI 2.5.x 后续能力。
 
 ## 执行口径
@@ -65,7 +65,7 @@ flowchart TD
 | R9-A | 2.5.3 | 本地知识 schema 与 FTS5 MVP | `documents` / `chunks` / metadata / FTS5 / source permission foundation | 不引入独立向量数据库；embeddings / rerank 只作为增强项。 |
 | R9-B | 2.5.3 | Context Builder | token budget、dedupe、permission/time filters、citation metadata；当前已补 retrieval citation/status/degraded reason 进入 ContextPackage metadata 的桥接 | 未配置 embeddings 时，FTS5 + metadata 可独立召回。 |
 | R9-C | 2.5.4 | Session / Checkpoint / ContextPackage P0 | session/checkpoint/package log/tombstone schema、CoreBox AI Ask flag、metadata-only retrieval explain log | 没有 SQLite SoT 或 package log 不能解释 retrieval 降级时不能宣称完成。 |
-| R9-D | 2.5.4 | Compression / MemoryPolicy P1 | CompressionSnapshot、MemoryCandidate、MemoryPolicy、最小 Memory CRUD | 自动长期记忆默认不开；secret/sensitive 不进入普通 memory。 |
+| R9-D | 2.5.4 | Compression / MemoryPolicy P1 | CompressionSnapshot、MemoryCandidate、MemoryPolicy、最小 Memory CRUD；当前已落 MemoryPolicy 预览、手动保存、list、enable/disable、tombstone delete | 自动长期记忆默认不开；secret/sensitive 不进入普通 memory；Compression/search/edit/source audit 仍未完成。 |
 | R9-E | 2.5.4 | Explain drawer | included / excluded / policy-blocked context 可见 evidence | 只接 embeddings/rerank 但无 permission/citation 不算完成。 |
 | R9-F | 2.5.5 | Local runtime manager | 模型目录、下载/删除/health、Ollama optional detection | 模型权重不进安装包、同步载荷、普通日志。 |
 | R9-G | 2.5.5 | GGUF text inference | 至少 1 个轻量 GGUF 文本模型、provider fallback、audit metadata | 不默认 7B+；失败必须 `unavailable/degraded + reason`。 |
@@ -79,7 +79,16 @@ flowchart TD
 3. R8-C Localized Value：让插件 manifest 和 UI 展示先支持标准 localized shape。
 4. R9-A 2.5.3 Knowledge schema / FTS5：先设计与 focused tests，不接 embeddings。
 5. R9-B Context Builder：为 2.5.4 提供 citation / retrieval 输入；已补 citation/status/degraded reason 到 ContextPackage metadata 的服务层桥接。
-6. R9-C ContextHygiene P0：继续建立可解释 prompt 组装边界，下一步补最近路径 integration 与 explain drawer evidence。
+6. R9-C / R9-D ContextHygiene P0/P1：继续补 disabled/tombstoned memory 不注入回归、Memory 搜索/编辑/来源审计、CompressionSnapshot、OmniPanel/Workflow/Assistant 最近路径与真实数据 evidence。
+
+## 当前进度快照
+
+| 批次 | 状态 | 已完成 | 剩余 TODO |
+| --- | --- | --- | --- |
+| R8-A/B/C | mostly landed | locale core、LocalizedText/List、插件 manifest localized metadata loader / display path | Domain Lexicon 前清理更多 UI/domain scatter。 |
+| R9-A/B | partial landed | SQLite / FTS5 / metadata / citation foundation；retrieval citation/status/degraded reason 进入 ContextPackage metadata | 真实数据 evidence、更多 permission/citation coverage。 |
+| R9-C | partial landed | session/checkpoint/context package logs、metadata-only list APIs、CoreBox AI Ask fail-soft metadata、Audit explain shell | entrypoint integration、tombstone hit explain、真实 package evidence。 |
+| R9-D | partial landed | MemoryPolicy evaluate、manual save、normal / non-tombstoned list、enable/disable、tombstone delete | CompressionSnapshot、Memory 搜索/编辑/来源审计、prepareTurn disabled/tombstoned 回归。 |
 
 ## 非目标
 
