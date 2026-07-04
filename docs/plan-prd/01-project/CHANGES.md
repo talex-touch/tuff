@@ -1,7 +1,15 @@
 # 变更日志
 
-> 更新时间：2026-06-27
-> 定位：只保留 6 月当前阶段的高信号变更索引。6 月以前流水记录已从文档树移除，可从 Git 历史追溯。
+> 更新时间：2026-07-04
+> 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-04
+
+### nexus: record guarded performance status and deployed preview gate
+
+- Nexus performance 当前记录为约 `98%` guarded：local Wrangler runtime smoke、PWA precache trim、Cloudflare root SQL dump retention、bfcache source guard、worker/runtime evidence guard 与 deployed preview collector guard 已闭合。
+- 最终 production 结论仍缺 deployed Cloudflare Pages preview HAR、真实 provider callback smoke、authenticated dashboard runtime smoke 与真实 bfcache hit；完成口径以 `node build/check-runtime-evidence.mjs --require-deployed-preview` 通过为准。
+- `review-wlcb1-new-api-dryrun` 是独立只读运维评估，已归档为完成；不关闭 Nexus performance / Cloudflare production gate。
 
 ## 2026-06-27
 
