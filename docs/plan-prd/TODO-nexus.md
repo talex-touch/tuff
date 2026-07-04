@@ -23,6 +23,7 @@
 - 2026-07-04：当前 Nexus performance separate thread 按既定 goal 约 `98%`。本轮已把 sidebase auth runtime、route matrix、docs production chunk/payload/CSS、PWA precache trim、Cloudflare root SQL dump、bfcache lifecycle blocker 与 local Wrangler runtime smoke 收到 guarded 状态；相关 source guard、runtime evidence checker、deployed preview collector dry-run / non-local / HTTPS guard 与 Nexus-only 复验均已同步。
 - 2026-07-04：该进度不是完成声明。仍缺 deployed Cloudflare Pages preview HAR、真实 provider callback smoke、authenticated dashboard runtime smoke、真实 bfcache hit，以及 pending / aireview 组件继续拆分、首页 warnings 与 dev SSR TTFB / Nuxt macro 后续批次。
 - 2026-07-04：下一次回来先讨论是否修改或拆分 goal；若 goal 继续保持原范围，则 production chunk/CSS 最终结论仍以 `node build/check-runtime-evidence.mjs --require-deployed-preview` 通过为准。
+- 2026-07-04：`review-wlcb1-new-api-dryrun` 是独立 wlcb1 / new-api 只读评估，已归档为完成；不计入 Nexus performance / Cloudflare production gate。当前 Nexus / CF 下一步仍是 deployed preview evidence 采集与 `--require-deployed-preview` gate。
 
 ## 已完成摘要
 
