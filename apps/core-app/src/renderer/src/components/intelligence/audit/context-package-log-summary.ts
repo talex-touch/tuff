@@ -5,6 +5,22 @@ export interface ContextPackageLogSourceSummary {
   count: number
 }
 
+export interface ContextPackageLogCitationSummary {
+  documentId?: string
+  chunkId?: string
+  title?: string
+  sourceType?: string
+  sourceUri?: string
+}
+
+export interface ContextPackageLogExplainItem {
+  sourceType: ContextPackageLog['items'][number]['sourceType'] | 'unknown'
+  sourceId: string
+  reason: string
+  tokenEstimate?: number
+  citation?: ContextPackageLogCitationSummary
+}
+
 export interface ContextPackageLogSafeSummary {
   id: string
   sessionId: string
@@ -21,6 +37,8 @@ export interface ContextPackageLogSafeSummary {
   excludedCount: number
   policyBlockedCount: number
   prunedCount: number
+  includedItems: ContextPackageLogExplainItem[]
+  excludedItems: ContextPackageLogExplainItem[]
 }
 
 export interface ContextCheckpointSafeSummary {
@@ -48,11 +66,40 @@ function getNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function getSourceType(value: unknown): ContextPackageLogExplainItem['sourceType'] {
+  if (
+    value === 'current_input' ||
+    value === 'recent_turn' ||
+    value === 'summary' ||
+    value === 'memory' ||
+    value === 'retrieval'
+  ) {
+    return value
+  }
+  return 'unknown'
+}
+
 function countItemCitations(log: ContextPackageLog): number {
   return log.items.reduce((total, item) => {
     const metadata = getRecord(item.metadata)
     return total + (getRecord(metadata?.citation) ? 1 : 0)
   }, 0)
+}
+
+function getCitationSummary(
+  metadata: Record<string, unknown> | null
+): ContextPackageLogCitationSummary | undefined {
+  const citation = getRecord(metadata?.citation)
+  if (!citation) {
+    return undefined
+  }
+  return {
+    documentId: getString(citation.documentId),
+    chunkId: getString(citation.chunkId),
+    title: getString(citation.title),
+    sourceType: getString(citation.sourceType),
+    sourceUri: getString(citation.sourceUri)
+  }
 }
 
 function getExcludedItems(metadata: Record<string, unknown> | null): Record<string, unknown>[] {
@@ -61,6 +108,28 @@ function getExcludedItems(metadata: Record<string, unknown> | null): Record<stri
     return []
   }
   return excluded.filter((item): item is Record<string, unknown> => Boolean(getRecord(item)))
+}
+
+function summarizeIncludedItem(
+  item: ContextPackageLog['items'][number]
+): ContextPackageLogExplainItem {
+  const metadata = getRecord(item.metadata)
+  return {
+    sourceType: item.sourceType,
+    sourceId: item.sourceId,
+    reason: item.reason,
+    tokenEstimate: item.tokenEstimate,
+    citation: getCitationSummary(metadata)
+  }
+}
+
+function summarizeExcludedItem(item: Record<string, unknown>): ContextPackageLogExplainItem {
+  return {
+    sourceType: getSourceType(item.sourceType),
+    sourceId: getString(item.sourceId) ?? '',
+    reason: getString(item.reason) ?? 'unknown',
+    tokenEstimate: getNumber(item.tokenEstimate)
+  }
 }
 
 export function summarizeContextPackageLog(log: ContextPackageLog): ContextPackageLogSafeSummary {
@@ -93,7 +162,9 @@ export function summarizeContextPackageLog(log: ContextPackageLog): ContextPacka
       getString(item.reason)?.includes('policy-blocked')
     ).length,
     prunedCount: excludedItems.filter((item) => getString(item.reason) === 'token-budget-pruned')
-      .length
+      .length,
+    includedItems: log.items.map(summarizeIncludedItem),
+    excludedItems: excludedItems.map(summarizeExcludedItem)
   }
 }
 

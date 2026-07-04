@@ -31,11 +31,19 @@ export type AssistantClipboardImageTranslateErrorCode =
 
 export type AssistantScreenshotTranslateErrorCode =
   | AssistantClipboardImageTranslateErrorCode
+  | 'SCREENSHOT_PERMISSION_DENIED'
+  | 'SCREENSHOT_UNSUPPORTED'
   | 'SCREENSHOT_UNAVAILABLE'
 
 export type AssistantScreenshotCaptureErrorCode =
   | 'ASSISTANT_DISABLED'
+  | 'SCREENSHOT_PERMISSION_DENIED'
+  | 'SCREENSHOT_UNSUPPORTED'
   | 'SCREENSHOT_UNAVAILABLE'
+
+export type AssistantScreenshotSaveErrorCode =
+  | AssistantScreenshotCaptureErrorCode
+  | 'SAVE_FAILED'
 
 export interface AssistantClipboardImageTranslatePayload {
   targetLang?: string
@@ -56,6 +64,8 @@ export interface AssistantScreenshotCapturePayload {
   target?: 'cursor-display'
 }
 
+export type AssistantScreenshotSavePayload = AssistantScreenshotCapturePayload
+
 export interface AssistantScreenshotTranslateResponse {
   success: boolean
   translatedImageBase64?: string
@@ -75,6 +85,19 @@ export interface AssistantScreenshotCaptureResponse {
   wroteClipboard?: boolean
   error?: string
   code?: AssistantScreenshotCaptureErrorCode
+}
+
+export interface AssistantScreenshotSaveResponse {
+  success: boolean
+  canceled?: boolean
+  path?: string
+  mimeType?: string
+  width?: number
+  height?: number
+  displayName?: string
+  sizeBytes?: number
+  error?: string
+  code?: AssistantScreenshotSaveErrorCode
 }
 
 const translateClipboardImageEvent = defineEvent('assistant')
@@ -115,6 +138,10 @@ export const AssistantEvents = {
       .module('voice-panel')
       .event('capture-screenshot')
       .define<AssistantScreenshotCapturePayload | void, AssistantScreenshotCaptureResponse>(),
+    saveScreenshot: defineEvent('assistant')
+      .module('voice-panel')
+      .event('save-screenshot')
+      .define<AssistantScreenshotSavePayload | void, AssistantScreenshotSaveResponse>(),
     translateScreenshot: defineEvent('assistant')
       .module('voice-panel')
       .event('translate-screenshot')

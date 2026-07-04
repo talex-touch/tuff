@@ -68,7 +68,33 @@ describe('context-package-log-summary', () => {
         { sourceType: 'retrieval', count: 1 }
       ],
       retrievalStatus: 'ok',
-      degradedReason: undefined
+      degradedReason: undefined,
+      excludedCount: 0,
+      policyBlockedCount: 0,
+      prunedCount: 0,
+      includedItems: [
+        {
+          sourceType: 'current_input',
+          sourceId: 'turn-1',
+          reason: 'current input',
+          tokenEstimate: 12,
+          citation: undefined
+        },
+        {
+          sourceType: 'retrieval',
+          sourceId: 'chunk-1',
+          reason: 'local knowledge',
+          tokenEstimate: 68,
+          citation: {
+            documentId: 'doc-1',
+            chunkId: 'chunk-1',
+            title: 'Notes',
+            sourceType: undefined,
+            sourceUri: undefined
+          }
+        }
+      ],
+      excludedItems: []
     })
   })
 
@@ -92,6 +118,119 @@ describe('context-package-log-summary', () => {
       retrievalStatus: 'degraded',
       degradedReason: 'fts_unavailable'
     })
+  })
+
+  it('summarizes excluded package metadata without exposing content', () => {
+    const summary = summarizeContextPackageLog(
+      packageLog({
+        metadata: {
+          excluded: [
+            {
+              sourceType: 'current_input',
+              sourceId: 'turn-secret',
+              reason: 'secret-policy-blocked',
+              tokenEstimate: 10,
+              content: 'api_key = secret'
+            },
+            {
+              sourceType: 'retrieval',
+              sourceId: 'chunk-large',
+              reason: 'token-budget-pruned',
+              tokenEstimate: 500
+            },
+            'invalid'
+          ]
+        }
+      })
+    )
+
+    expect(summary).toMatchObject({
+      excludedCount: 2,
+      policyBlockedCount: 1,
+      prunedCount: 1,
+      excludedItems: [
+        {
+          sourceType: 'current_input',
+          sourceId: 'turn-secret',
+          reason: 'secret-policy-blocked',
+          tokenEstimate: 10
+        },
+        {
+          sourceType: 'retrieval',
+          sourceId: 'chunk-large',
+          reason: 'token-budget-pruned',
+          tokenEstimate: 500
+        }
+      ]
+    })
+    expect(JSON.stringify(summary)).not.toContain('api_key = secret')
+  })
+
+  it('keeps explain details metadata-only', () => {
+    const summary = summarizeContextPackageLog(
+      packageLog({
+        items: [
+          {
+            sourceType: 'retrieval',
+            sourceId: 'chunk-private',
+            reason: 'local knowledge',
+            tokenEstimate: 32,
+            metadata: {
+              citation: {
+                documentId: 'doc-private',
+                chunkId: 'chunk-private',
+                title: 'Private Notes',
+                sourceUri: 'note://private'
+              },
+              content: 'private retrieval content'
+            }
+          }
+        ]
+      })
+    )
+
+    expect(summary.includedItems).toEqual([
+      {
+        sourceType: 'retrieval',
+        sourceId: 'chunk-private',
+        reason: 'local knowledge',
+        tokenEstimate: 32,
+        citation: {
+          documentId: 'doc-private',
+          chunkId: 'chunk-private',
+          title: 'Private Notes',
+          sourceType: undefined,
+          sourceUri: 'note://private'
+        }
+      }
+    ])
+    expect(JSON.stringify(summary)).not.toContain('private retrieval content')
+  })
+
+  it('normalizes unknown excluded source types', () => {
+    const summary = summarizeContextPackageLog(
+      packageLog({
+        metadata: {
+          excluded: [
+            {
+              sourceType: 'raw_prompt',
+              sourceId: 'prompt-1',
+              reason: 'policy-blocked',
+              tokenEstimate: 20
+            }
+          ]
+        }
+      })
+    )
+
+    expect(summary.excludedItems).toEqual([
+      {
+        sourceType: 'unknown',
+        sourceId: 'prompt-1',
+        reason: 'policy-blocked',
+        tokenEstimate: 20
+      }
+    ])
   })
 
   it('summarizes checkpoints without carrying summary content', () => {

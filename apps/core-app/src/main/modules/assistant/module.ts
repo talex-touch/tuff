@@ -12,12 +12,15 @@ import type {
   AssistantClipboardImageTranslateResponse,
   AssistantRuntimeConfig,
   AssistantScreenshotCaptureResponse,
+  AssistantScreenshotSaveResponse,
   AssistantScreenshotTranslateResponse
 } from '@talex-touch/utils/transport/events/assistant'
+import type { NativeScreenshotCaptureResult } from '@talex-touch/utils/transport/events/types'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { screen } from 'electron'
+import fs from 'node:fs/promises'
+import { dialog, screen, type SaveDialogOptions } from 'electron'
 import {
   AssistantFloatingBallWindowOption,
   AssistantVoicePanelWindowOption
@@ -59,6 +62,11 @@ interface VoiceWakeSetting {
   openPanelOnWake: boolean
 }
 
+type ScreenshotUnavailableCode =
+  | 'SCREENSHOT_PERMISSION_DENIED'
+  | 'SCREENSHOT_UNSUPPORTED'
+  | 'SCREENSHOT_UNAVAILABLE'
+
 const assistantLog = createLogger('Assistant')
 const FLOATING_BALL_DEFAULT_SIZE = 56
 const FLOATING_BALL_DEFAULT_PADDING = 24
@@ -79,6 +87,28 @@ function clamp(value: number, min: number, max: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  return isRecord(error) && typeof error.code === 'string' ? error.code : undefined
+}
+
+function mapScreenshotUnavailableCode(error: unknown): ScreenshotUnavailableCode {
+  const code = getErrorCode(error)
+  if (code === 'ERR_NATIVE_SCREENSHOT_UNSUPPORTED') {
+    return 'SCREENSHOT_UNSUPPORTED'
+  }
+
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  if (
+    message.includes('permission') ||
+    message.includes('denied') ||
+    message.includes('not authorized')
+  ) {
+    return 'SCREENSHOT_PERMISSION_DENIED'
+  }
+
+  return 'SCREENSHOT_UNAVAILABLE'
 }
 
 export class AssistantModule extends BaseModule {
@@ -196,6 +226,12 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.captureScreenshot, async () => {
         return await this.handleScreenshotCapture()
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.saveScreenshot, async () => {
+        return await this.handleScreenshotSave()
       })
     )
 
@@ -801,8 +837,83 @@ export class AssistantModule extends BaseModule {
     } catch (error) {
       return {
         success: false,
-        code: 'SCREENSHOT_UNAVAILABLE',
+        code: mapScreenshotUnavailableCode(error),
         error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
+      }
+    } finally {
+      this.releaseVoicePanelAutoHideSuppression()
+    }
+  }
+
+  private async handleScreenshotSave(): Promise<AssistantScreenshotSaveResponse> {
+    const setting = this.readAppSetting()
+    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
+      return {
+        success: false,
+        code: 'ASSISTANT_DISABLED',
+        error: 'Assistant floating ball is disabled.'
+      }
+    }
+
+    this.beginVoicePanelAutoHideSuppression()
+    try {
+      let captureResult: NativeScreenshotCaptureResult
+      try {
+        captureResult = await getNativeScreenshotService().capture({
+          target: 'cursor-display',
+          output: 'tfile',
+          writeClipboard: false
+        })
+      } catch (error) {
+        return {
+          success: false,
+          code: mapScreenshotUnavailableCode(error),
+          error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
+        }
+      }
+
+      if (typeof captureResult.path !== 'string' || !captureResult.path.trim()) {
+        return {
+          success: false,
+          code: 'SCREENSHOT_UNAVAILABLE',
+          error: 'Screenshot image is unavailable.'
+        }
+      }
+
+      const ownerWindow = this.voicePanelWindow?.window.isDestroyed()
+        ? undefined
+        : this.voicePanelWindow?.window
+      const saveOptions: SaveDialogOptions = {
+        title: 'Save Screenshot',
+        defaultPath: `tuff-screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`,
+        filters: [{ name: 'PNG Image', extensions: ['png'] }]
+      }
+      const saveResult = ownerWindow
+        ? await dialog.showSaveDialog(ownerWindow, saveOptions)
+        : await dialog.showSaveDialog(saveOptions)
+      if (saveResult.canceled || !saveResult.filePath) {
+        return {
+          success: false,
+          canceled: true
+        }
+      }
+
+      await fs.copyFile(captureResult.path, saveResult.filePath)
+
+      return {
+        success: true,
+        path: saveResult.filePath,
+        mimeType: captureResult.mimeType,
+        width: captureResult.width,
+        height: captureResult.height,
+        displayName: captureResult.displayName,
+        sizeBytes: captureResult.sizeBytes
+      }
+    } catch (error) {
+      return {
+        success: false,
+        code: 'SAVE_FAILED',
+        error: error instanceof Error ? error.message : 'Screenshot save failed.'
       }
     } finally {
       this.releaseVoicePanelAutoHideSuppression()
@@ -834,7 +945,7 @@ export class AssistantModule extends BaseModule {
       } catch (error) {
         return {
           success: false,
-          code: 'SCREENSHOT_UNAVAILABLE',
+          code: mapScreenshotUnavailableCode(error),
           error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
         }
       }

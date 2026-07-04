@@ -43,6 +43,14 @@ describe('tuff-intelligence transport event builder', () => {
       traceId: 'trace-1',
       limit: 20,
     })
+    await sdk.contextListMemories({
+      scope: 'workspace',
+      limit: 20,
+    })
+    await sdk.contextSetMemoryEnabled({
+      memoryId: 'mem-1',
+      enabled: false,
+    })
     await sdk.contextEvaluateMemory({
       content: 'Use Chinese replies by default',
       type: 'preference',
@@ -67,12 +75,18 @@ describe('tuff-intelligence transport event builder', () => {
       'intelligence:context:package-logs:list',
     )
     expect(sentEvents[4]?.toEventName()).toBe(
-      'intelligence:context:memory:evaluate',
+      'intelligence:context:memory:list',
     )
     expect(sentEvents[5]?.toEventName()).toBe(
-      'intelligence:agent:tool:approve',
+      'intelligence:context:memory:set-enabled',
     )
     expect(sentEvents[6]?.toEventName()).toBe(
+      'intelligence:context:memory:evaluate',
+    )
+    expect(sentEvents[7]?.toEventName()).toBe(
+      'intelligence:agent:tool:approve',
+    )
+    expect(sentEvents[8]?.toEventName()).toBe(
       'intelligence:workflow:get',
     )
   })

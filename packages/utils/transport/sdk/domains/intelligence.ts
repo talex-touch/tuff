@@ -22,11 +22,15 @@ import type {
   ListContextCheckpointsResult,
   ListContextPackageLogsInput,
   ListContextPackageLogsResult,
+  ListMemoriesInput,
+  ListMemoriesResult,
   MemoryItem,
   MemoryTombstone,
   MemoryUpsertInput,
   PrepareContextTurnInput,
   PrepareContextTurnResult,
+  SetMemoryEnabledInput,
+  SetMemoryEnabledResult,
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceApprovalTicket,
@@ -396,8 +400,10 @@ export interface IntelligenceSdk {
   contextPrepareTurn: (payload: PrepareContextTurnInput) => Promise<PrepareContextTurnResult>
   contextListCheckpoints: (payload: ListContextCheckpointsInput) => Promise<ListContextCheckpointsResult>
   contextListPackageLogs: (payload: ListContextPackageLogsInput) => Promise<ListContextPackageLogsResult>
+  contextListMemories: (payload?: ListMemoriesInput) => Promise<ListMemoriesResult>
   contextEvaluateMemory: (payload: EvaluateMemoryInput) => Promise<EvaluateMemoryResult>
   contextSaveMemory: (payload: MemoryUpsertInput) => Promise<MemoryItem>
+  contextSetMemoryEnabled: (payload: SetMemoryEnabledInput) => Promise<SetMemoryEnabledResult>
   contextDeleteMemory: (payload: { memoryId: string, reason?: string }) => Promise<MemoryTombstone>
 
   agentSessionStart: (payload?: IntelligenceAgentSessionStartPayload) => Promise<TuffIntelligenceAgentSession>
@@ -603,6 +609,10 @@ export const intelligenceContextEvents = {
     .module('context')
     .event('package-logs:list')
     .define<ListContextPackageLogsInput, IntelligenceApiResponse<ListContextPackageLogsResult>>(),
+  listMemories: defineEvent('intelligence')
+    .module('context')
+    .event('memory:list')
+    .define<ListMemoriesInput | undefined, IntelligenceApiResponse<ListMemoriesResult>>(),
   evaluateMemory: defineEvent('intelligence')
     .module('context')
     .event('memory:evaluate')
@@ -611,6 +621,10 @@ export const intelligenceContextEvents = {
     .module('context')
     .event('memory:save')
     .define<MemoryUpsertInput, IntelligenceApiResponse<MemoryItem>>(),
+  setMemoryEnabled: defineEvent('intelligence')
+    .module('context')
+    .event('memory:set-enabled')
+    .define<SetMemoryEnabledInput, IntelligenceApiResponse<SetMemoryEnabledResult>>(),
   deleteMemory: defineEvent('intelligence')
     .module('context')
     .event('memory:delete')
@@ -939,6 +953,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       return assertApiResponse(response, 'Failed to list intelligence context package logs')
     },
 
+    async contextListMemories(payload = {}) {
+      const response = await transport.send(intelligenceContextEvents.listMemories, payload)
+      return assertApiResponse(response, 'Failed to list intelligence memories')
+    },
+
     async contextEvaluateMemory(payload) {
       const response = await transport.send(intelligenceContextEvents.evaluateMemory, payload)
       return assertApiResponse(response, 'Failed to evaluate intelligence memory')
@@ -947,6 +966,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async contextSaveMemory(payload) {
       const response = await transport.send(intelligenceContextEvents.saveMemory, payload)
       return assertApiResponse(response, 'Failed to save intelligence memory')
+    },
+
+    async contextSetMemoryEnabled(payload) {
+      const response = await transport.send(intelligenceContextEvents.setMemoryEnabled, payload)
+      return assertApiResponse(response, 'Failed to update intelligence memory state')
     },
 
     async contextDeleteMemory(payload) {

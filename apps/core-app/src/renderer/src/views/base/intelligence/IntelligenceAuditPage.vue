@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
+import IntelligenceMemoryReview from '~/components/intelligence/audit/IntelligenceMemoryReview.vue'
 import IntelligenceUsageChart from '~/components/intelligence/audit/IntelligenceUsageChart.vue'
 import IntelligenceUsageStats from '~/components/intelligence/audit/IntelligenceUsageStats.vue'
 import IntelligenceGlobalSettings from '~/components/intelligence/config/IntelligenceGlobalSettings.vue'
@@ -59,6 +60,18 @@ function handleCacheExpirationBlur() {
           :default-expanded="true"
         >
           <IntelligenceUsageChart :days="14" />
+        </TuffGroupBlock>
+
+        <!-- Memory Review Section -->
+        <TuffGroupBlock
+          :name="t('intelligence.memoryReview.title')"
+          :description="t('intelligence.memoryReview.description')"
+          default-icon="i-carbon-policy"
+          active-icon="i-carbon-policy"
+          memory-name="intelligence-memory-review"
+          :default-expanded="true"
+        >
+          <IntelligenceMemoryReview />
         </TuffGroupBlock>
 
         <!-- Audit Logs Section -->

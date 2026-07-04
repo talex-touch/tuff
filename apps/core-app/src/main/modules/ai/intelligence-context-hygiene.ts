@@ -13,11 +13,14 @@ import type {
   ListContextCheckpointsResult,
   ListContextPackageLogsInput,
   ListContextPackageLogsResult,
+  ListMemoriesInput,
+  ListMemoriesResult,
   MemoryItem,
   MemoryTombstone,
   MemoryUpsertInput,
   PrepareContextTurnInput,
-  PrepareContextTurnResult
+  PrepareContextTurnResult,
+  SetMemoryEnabledResult
 } from '@talex-touch/utils/types/intelligence'
 import crypto from 'node:crypto'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
@@ -777,6 +780,42 @@ export class ContextHygieneService {
     }
   }
 
+  async listMemories(input: ListMemoriesInput = {}): Promise<ListMemoriesResult> {
+    const client = this.requireClient()
+    const limit = Math.min(100, Math.max(1, Math.floor(input.limit ?? 50)))
+    const where = ['m.privacy_level = ?', 't.memory_id IS NULL']
+    const args: Array<string | number> = ['normal']
+
+    if (!input.includeDisabled) {
+      where.push('m.enabled = 1')
+    }
+    if (input.scope) {
+      where.push('m.scope = ?')
+      args.push(input.scope)
+    }
+    if (input.type) {
+      where.push('m.type = ?')
+      args.push(input.type)
+    }
+    args.push(limit)
+
+    const result = await client.execute({
+      sql: `
+        SELECT m.*
+        FROM intelligence_memory_items m
+        LEFT JOIN intelligence_memory_tombstones t ON t.memory_id = m.id
+        WHERE ${where.join(' AND ')}
+        ORDER BY m.updated_at DESC
+        LIMIT ?
+      `,
+      args
+    })
+
+    return {
+      memories: (result.rows as unknown as MemoryRow[]).map(memoryFromRow)
+    }
+  }
+
   async saveMemory(input: MemoryUpsertInput): Promise<MemoryItem> {
     const content = String(input.content || '').trim()
     if (!content) {
@@ -850,6 +889,38 @@ export class ContextHygieneService {
     })
 
     return memory
+  }
+
+  async setMemoryEnabled(memoryId: string, enabled: boolean): Promise<SetMemoryEnabledResult> {
+    const normalizedMemoryId = String(memoryId || '').trim()
+    if (!normalizedMemoryId) {
+      throw new Error('Invalid memory update: memoryId is required')
+    }
+
+    const client = this.requireClient()
+    const updatedAt = Date.now()
+    await this.withDbWrite('intelligence.context.setMemoryEnabled', async () => {
+      await client.execute({
+        sql: `
+          UPDATE intelligence_memory_items
+          SET enabled = ?, updated_at = ?
+          WHERE id = ?
+            AND privacy_level = 'normal'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM intelligence_memory_tombstones t
+              WHERE t.memory_id = intelligence_memory_items.id
+            )
+        `,
+        args: [enabled ? 1 : 0, updatedAt, normalizedMemoryId]
+      })
+    })
+
+    return {
+      memoryId: normalizedMemoryId,
+      enabled,
+      updatedAt
+    }
   }
 
   evaluateMemory(input: EvaluateMemoryInput): EvaluateMemoryResult {
