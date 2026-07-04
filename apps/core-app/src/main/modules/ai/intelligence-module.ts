@@ -1208,6 +1208,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     )
 
     registerProtectedSafe(
+      intelligenceContextEvents.listMemories,
+      'List intelligence memories',
+      'intelligence.basic',
+      async (data) => contextHygieneService.listMemories(data)
+    )
+
+    registerProtectedSafe(
       intelligenceContextEvents.evaluateMemory,
       'Evaluate intelligence memory',
       'intelligence.basic',
@@ -1219,6 +1226,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       'Save intelligence memory',
       'intelligence.basic',
       async (data) => contextHygieneService.saveMemory(data)
+    )
+
+    registerProtectedSafe(
+      intelligenceContextEvents.setMemoryEnabled,
+      'Set intelligence memory enabled state',
+      'intelligence.basic',
+      async (data) => contextHygieneService.setMemoryEnabled(data.memoryId, data.enabled)
     )
 
     registerProtectedSafe(

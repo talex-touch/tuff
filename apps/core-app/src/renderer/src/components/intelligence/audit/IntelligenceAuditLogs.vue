@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref } from 'vue'
@@ -9,6 +10,7 @@ import {
   summarizeContextCheckpoint,
   summarizeContextPackageLog,
   type ContextCheckpointSafeSummary,
+  type ContextPackageLogExplainItem,
   type ContextPackageLogSafeSummary
 } from './context-package-log-summary'
 
@@ -49,6 +51,8 @@ const checkpointsErrorBySessionId = ref<Record<string, string>>({})
 
 const logs = ref<IntelligenceAuditLogEntry[]>([])
 const selectedLog = ref<IntelligenceAuditLogEntry | null>(null)
+const selectedContextPackage = ref<ContextPackageLogSafeSummary | null>(null)
+const showContextExplainDrawer = ref(false)
 const limit = ref(50)
 const hasMore = ref(true)
 
@@ -166,6 +170,16 @@ function handleToggleLog(log: IntelligenceAuditLogEntry) {
   }
 }
 
+function openContextExplainDrawer(summary: ContextPackageLogSafeSummary) {
+  selectedContextPackage.value = summary
+  showContextExplainDrawer.value = true
+}
+
+function closeContextExplainDrawer() {
+  showContextExplainDrawer.value = false
+  selectedContextPackage.value = null
+}
+
 function handleExportCSV() {
   const headers = [
     'Trace ID',
@@ -237,6 +251,30 @@ function formatSourceTypes(summary: ContextPackageLogSafeSummary): string {
     return t('intelligence.audit.contextNoSources')
   }
   return summary.sourceTypes.map((source) => `${source.sourceType} x${source.count}`).join(', ')
+}
+
+function formatExplainItem(item: ContextPackageLogExplainItem): string {
+  const parts = [`${item.sourceType}:${item.sourceId}`, item.reason]
+  if (typeof item.tokenEstimate === 'number') {
+    parts.push(`${item.tokenEstimate} ${t('intelligence.audit.contextTokens')}`)
+  }
+  return parts.filter(Boolean).join(' · ')
+}
+
+function formatCitation(item: ContextPackageLogExplainItem): string {
+  const citation = item.citation
+  if (!citation) {
+    return ''
+  }
+  return [
+    citation.title,
+    citation.documentId,
+    citation.chunkId,
+    citation.sourceType,
+    citation.sourceUri
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function checkpointsForPackage(
@@ -377,6 +415,15 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
                     {{ t('intelligence.audit.contextTokens') }}
                   </span>
                   <span>{{ summary.itemCount }} {{ t('intelligence.audit.contextItems') }}</span>
+                  <TxButton
+                    variant="flat"
+                    size="small"
+                    class="context-explain-button"
+                    @click.stop="openContextExplainDrawer(summary)"
+                  >
+                    <i class="i-carbon-information" />
+                    {{ t('intelligence.audit.contextExplain') }}
+                  </TxButton>
                 </div>
                 <div class="context-package-line secondary">
                   <span
@@ -396,6 +443,52 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
                 </div>
                 <div v-if="summary.degradedReason" class="context-package-line warning">
                   {{ t('intelligence.audit.contextDegradedReason') }}: {{ summary.degradedReason }}
+                </div>
+                <div v-if="summary.excludedCount" class="context-package-line warning">
+                  <span>
+                    {{ t('intelligence.audit.contextExcluded') }}:
+                    {{ summary.excludedCount }}
+                  </span>
+                  <span v-if="summary.policyBlockedCount">
+                    {{ t('intelligence.audit.contextPolicyBlocked') }}:
+                    {{ summary.policyBlockedCount }}
+                  </span>
+                  <span v-if="summary.prunedCount">
+                    {{ t('intelligence.audit.contextPruned') }}: {{ summary.prunedCount }}
+                  </span>
+                </div>
+                <div
+                  v-if="summary.includedItems.length || summary.excludedItems.length"
+                  class="context-explain-summary"
+                >
+                  <div v-if="summary.includedItems.length" class="context-explain-group">
+                    <div class="context-checkpoint-title">
+                      {{ t('intelligence.audit.contextIncludedSources') }}
+                    </div>
+                    <div
+                      v-for="item in summary.includedItems"
+                      :key="`included-${item.sourceType}-${item.sourceId}-${item.reason}`"
+                      class="context-explain-item"
+                    >
+                      <span>{{ formatExplainItem(item) }}</span>
+                      <span v-if="formatCitation(item)" class="context-explain-citation">
+                        {{ t('intelligence.audit.contextCitation') }}:
+                        {{ formatCitation(item) }}
+                      </span>
+                    </div>
+                  </div>
+                  <div v-if="summary.excludedItems.length" class="context-explain-group">
+                    <div class="context-checkpoint-title">
+                      {{ t('intelligence.audit.contextExcludedSources') }}
+                    </div>
+                    <div
+                      v-for="item in summary.excludedItems"
+                      :key="`excluded-${item.sourceType}-${item.sourceId}-${item.reason}`"
+                      class="context-explain-item warning"
+                    >
+                      {{ formatExplainItem(item) }}
+                    </div>
+                  </div>
                 </div>
                 <div class="context-checkpoint-summary">
                   <div class="context-checkpoint-title">
@@ -449,6 +542,103 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
         </TxButton>
       </div>
     </div>
+
+    <TxDrawer
+      v-model:visible="showContextExplainDrawer"
+      :title="t('intelligence.audit.contextExplainTitle')"
+      @close="closeContextExplainDrawer"
+    >
+      <div v-if="selectedContextPackage" class="context-explain-drawer">
+        <div class="context-explain-drawer-section">
+          <h3>{{ t('intelligence.audit.contextPackage') }}</h3>
+          <div class="context-explain-drawer-grid">
+            <span>{{ t('intelligence.audit.contextScope') }}</span>
+            <strong>{{ selectedContextPackage.scope }}</strong>
+            <span>{{ t('intelligence.audit.contextTokens') }}</span>
+            <strong>
+              {{ selectedContextPackage.tokenEstimate }} / {{ selectedContextPackage.tokenBudget }}
+            </strong>
+            <span>{{ t('intelligence.audit.contextItems') }}</span>
+            <strong>{{ selectedContextPackage.itemCount }}</strong>
+            <span v-if="selectedContextPackage.retrievalStatus">
+              {{ t('intelligence.audit.contextRetrievalStatus') }}
+            </span>
+            <strong v-if="selectedContextPackage.retrievalStatus">
+              {{ selectedContextPackage.retrievalStatus }}
+            </strong>
+          </div>
+          <p v-if="selectedContextPackage.degradedReason" class="context-explain-drawer-warning">
+            {{ t('intelligence.audit.contextDegradedReason') }}:
+            {{ selectedContextPackage.degradedReason }}
+          </p>
+        </div>
+
+        <div class="context-explain-drawer-section">
+          <h3>{{ t('intelligence.audit.contextIncludedSources') }}</h3>
+          <div
+            v-if="selectedContextPackage.includedItems.length"
+            class="context-explain-drawer-list"
+          >
+            <div
+              v-for="item in selectedContextPackage.includedItems"
+              :key="`drawer-included-${item.sourceType}-${item.sourceId}-${item.reason}`"
+              class="context-explain-drawer-item"
+            >
+              <span>{{ formatExplainItem(item) }}</span>
+              <span v-if="formatCitation(item)" class="context-explain-citation">
+                {{ t('intelligence.audit.contextCitation') }}: {{ formatCitation(item) }}
+              </span>
+            </div>
+          </div>
+          <p v-else class="context-explain-drawer-empty">
+            {{ t('intelligence.audit.contextNoSources') }}
+          </p>
+        </div>
+
+        <div class="context-explain-drawer-section">
+          <h3>{{ t('intelligence.audit.contextExcludedSources') }}</h3>
+          <div
+            v-if="selectedContextPackage.excludedItems.length"
+            class="context-explain-drawer-list"
+          >
+            <div
+              v-for="item in selectedContextPackage.excludedItems"
+              :key="`drawer-excluded-${item.sourceType}-${item.sourceId}-${item.reason}`"
+              class="context-explain-drawer-item warning"
+            >
+              {{ formatExplainItem(item) }}
+            </div>
+          </div>
+          <p v-else class="context-explain-drawer-empty">
+            {{ t('intelligence.audit.contextExcludedEmpty') }}
+          </p>
+        </div>
+
+        <div class="context-explain-drawer-section">
+          <h3>{{ t('intelligence.audit.contextCheckpoints') }}</h3>
+          <div
+            v-if="checkpointsForPackage(selectedContextPackage).length"
+            class="context-explain-drawer-list"
+          >
+            <div
+              v-for="checkpoint in checkpointsForPackage(selectedContextPackage)"
+              :key="`drawer-checkpoint-${checkpoint.id}`"
+              class="context-explain-drawer-item"
+            >
+              <span>{{ checkpoint.type }} · {{ checkpoint.reason }}</span>
+              <span>{{ checkpoint.contextScope }}</span>
+              <span v-if="checkpoint.metadataKeys.length" class="context-explain-citation">
+                {{ t('intelligence.audit.contextMetadataKeys') }}:
+                {{ checkpoint.metadataKeys.join(', ') }}
+              </span>
+            </div>
+          </div>
+          <p v-else class="context-explain-drawer-empty">
+            {{ t('intelligence.audit.contextCheckpointsEmpty') }}
+          </p>
+        </div>
+      </div>
+    </TxDrawer>
   </div>
 </template>
 
@@ -662,6 +852,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
         .context-package-line {
           display: flex;
           flex-wrap: wrap;
+          align-items: center;
           gap: 8px 12px;
           color: var(--tx-text-color-primary);
           font-size: 12px;
@@ -677,9 +868,47 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           }
         }
 
+        .context-explain-button {
+          margin-left: auto;
+        }
+
         .context-scope {
           color: var(--tx-color-primary);
           font-weight: 600;
+        }
+
+        .context-explain-summary {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 8px;
+          padding-top: 8px;
+          border-top: 1px solid var(--tx-border-color-lighter);
+        }
+
+        .context-explain-group {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .context-explain-item {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          color: var(--tx-text-color-secondary);
+          font-size: 12px;
+          line-height: 1.5;
+          overflow-wrap: anywhere;
+
+          &.warning {
+            color: var(--tx-color-warning);
+          }
+        }
+
+        .context-explain-citation {
+          color: var(--tx-text-color-placeholder);
+          font-size: 11px;
         }
 
         .context-checkpoint-summary {
@@ -716,6 +945,75 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
       justify-content: center;
       padding: 16px;
     }
+  }
+
+  .context-explain-drawer {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 16px;
+  }
+
+  .context-explain-drawer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    h3 {
+      margin: 0;
+      color: var(--tx-text-color-primary);
+      font-size: 14px;
+      font-weight: 600;
+    }
+  }
+
+  .context-explain-drawer-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 6px 12px;
+    color: var(--tx-text-color-secondary);
+    font-size: 12px;
+
+    strong {
+      min-width: 0;
+      color: var(--tx-text-color-primary);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .context-explain-drawer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .context-explain-drawer-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border: 1px solid var(--tx-border-color-lighter);
+    border-radius: 6px;
+    color: var(--tx-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+
+    &.warning {
+      color: var(--tx-color-warning);
+    }
+  }
+
+  .context-explain-drawer-warning,
+  .context-explain-drawer-empty {
+    margin: 0;
+    color: var(--tx-text-color-secondary);
+    font-size: 12px;
+  }
+
+  .context-explain-drawer-warning {
+    color: var(--tx-color-warning);
   }
 }
 </style>

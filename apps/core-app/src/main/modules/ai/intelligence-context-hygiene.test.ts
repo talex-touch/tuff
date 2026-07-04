@@ -218,6 +218,70 @@ describe('ContextHygieneService', () => {
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
 
+  it('lists only normal non-tombstoned memories by default', async () => {
+    dbMock.client.execute.mockResolvedValueOnce(
+      rows([
+        {
+          id: 'mem-1',
+          type: 'preference',
+          scope: 'workspace',
+          content: 'Use Chinese replies',
+          summary: 'Use Chinese replies',
+          tags: JSON.stringify(['language']),
+          confidence: 0.9,
+          source_session_id: 'session-1',
+          source_turn_id: 'turn-1',
+          privacy_level: 'normal',
+          ttl: null,
+          enabled: 1,
+          created_at: 10,
+          updated_at: 20,
+          last_used_at: null,
+          usage_count: 0
+        }
+      ])
+    )
+
+    const service = new ContextHygieneService()
+    const result = await service.listMemories({
+      scope: 'workspace',
+      type: 'preference',
+      limit: 10
+    })
+
+    expect(result.memories).toEqual([
+      {
+        id: 'mem-1',
+        type: 'preference',
+        scope: 'workspace',
+        content: 'Use Chinese replies',
+        summary: 'Use Chinese replies',
+        tags: ['language'],
+        confidence: 0.9,
+        sourceSessionId: 'session-1',
+        sourceTurnId: 'turn-1',
+        privacyLevel: 'normal',
+        ttl: undefined,
+        enabled: true,
+        createdAt: 10,
+        updatedAt: 20,
+        lastUsedAt: undefined,
+        usageCount: 0
+      }
+    ])
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining('m.privacy_level = ?')
+      })
+    )
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining('t.memory_id IS NULL'),
+        args: ['normal', 'workspace', 'preference', 10]
+      })
+    )
+  })
+
   it('redacts secret turns before writing them to SQLite', async () => {
     dbMock.client.execute.mockResolvedValueOnce(rows([])).mockResolvedValue(rows([]))
 
@@ -392,6 +456,7 @@ describe('ContextHygieneService', () => {
             sourceType: 'manual',
             title: 'Large Notes',
             contentHash: 'doc-hash',
+            permissionScope: 'workspace:tuff',
             createdAt: 10,
             updatedAt: 20
           },
@@ -645,6 +710,34 @@ describe('ContextHygieneService', () => {
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         sql: expect.stringContaining('INSERT INTO intelligence_memory_tombstones')
+      })
+    )
+  })
+
+  it('updates normal non-tombstoned memory enabled state', async () => {
+    dbMock.client.execute.mockResolvedValue(rows([]))
+    const service = new ContextHygieneService()
+
+    const result = await service.setMemoryEnabled('memory-1', false)
+
+    expect(result).toMatchObject({
+      memoryId: 'memory-1',
+      enabled: false
+    })
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining('SET enabled = ?'),
+        args: [0, expect.any(Number), 'memory-1']
+      })
+    )
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining("privacy_level = 'normal'")
+      })
+    )
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining('intelligence_memory_tombstones')
       })
     )
   })

@@ -27,12 +27,16 @@ export type {
   ListContextCheckpointsResult,
   ListContextPackageLogsInput,
   ListContextPackageLogsResult,
+  ListMemoriesInput,
+  ListMemoriesResult,
   MemoryItem,
   MemoryPolicyCandidate,
   MemoryTombstone,
   MemoryUpsertInput,
   PrepareContextTurnInput,
   PrepareContextTurnResult,
+  SetMemoryEnabledInput,
+  SetMemoryEnabledResult,
 } from '@talex-touch/utils/types/intelligence'
 
 /**

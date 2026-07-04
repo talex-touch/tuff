@@ -9,6 +9,13 @@ type AssistantHandler = (payload: unknown, context: HandlerContext) => unknown |
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, AssistantHandler>(),
+  copyFile: vi.fn(() => Promise.resolve()),
+  showSaveDialog: vi.fn<() => Promise<{ canceled: boolean; filePath?: string }>>(() =>
+    Promise.resolve({
+      canceled: false,
+      filePath: '/tmp/tuff-screenshot.png'
+    })
+  ),
   createEnabledSetting: (overrides: Partial<AppSetting> = {}): AppSetting =>
     ({
       assistant: {
@@ -80,6 +87,12 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
+vi.mock('node:fs/promises', () => ({
+  default: {
+    copyFile: mocks.copyFile
+  }
+}))
+
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
     on: vi.fn((event, handler) => {
@@ -92,6 +105,9 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 }))
 
 vi.mock('electron', () => ({
+  dialog: {
+    showSaveDialog: mocks.showSaveDialog
+  },
   screen: {
     getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
     getDisplayNearestPoint: vi.fn(() => ({
@@ -237,6 +253,12 @@ describe('AssistantModule screenshot translation', () => {
     vi.clearAllMocks()
     vi.resetModules()
     mocks.handlers.clear()
+    mocks.copyFile.mockClear()
+    mocks.showSaveDialog.mockClear()
+    mocks.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: '/tmp/tuff-screenshot.png'
+    })
     mocks.getMainConfig.mockImplementation(() => mocks.createEnabledSetting())
     mocks.persistMainConfig.mockResolvedValue(undefined)
     mocks.capture.mockResolvedValue(mocks.createCaptureResult())
@@ -295,7 +317,7 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
-  it('maps native screenshot failures to SCREENSHOT_UNAVAILABLE', async () => {
+  it('maps native screenshot permission failures to SCREENSHOT_PERMISSION_DENIED', async () => {
     mocks.capture.mockRejectedValue(new Error('Screen recording permission denied'))
     const { handler, module } = await createInitializedModule()
 
@@ -303,7 +325,7 @@ describe('AssistantModule screenshot translation', () => {
 
     expect(result).toMatchObject({
       success: false,
-      code: 'SCREENSHOT_UNAVAILABLE',
+      code: 'SCREENSHOT_PERMISSION_DENIED',
       error: 'Screen recording permission denied'
     })
     expect(mocks.translateImageBase64).not.toHaveBeenCalled()
@@ -371,7 +393,7 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
-  it('maps screenshot capture failures to SCREENSHOT_UNAVAILABLE', async () => {
+  it('maps screenshot capture permission failures to SCREENSHOT_PERMISSION_DENIED', async () => {
     mocks.capture.mockRejectedValue(new Error('Screen recording permission denied'))
     const { handler, module } = await createInitializedModuleWithHandler(
       AssistantEvents.voice.captureScreenshot.toEventName()
@@ -381,10 +403,116 @@ describe('AssistantModule screenshot translation', () => {
 
     expect(result).toMatchObject({
       success: false,
-      code: 'SCREENSHOT_UNAVAILABLE',
+      code: 'SCREENSHOT_PERMISSION_DENIED',
       error: 'Screen recording permission denied'
     })
     expect(mocks.translateImageBase64).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
+  })
+
+  it('saves a screenshot through the system save dialog without invoking image translate', async () => {
+    mocks.capture.mockResolvedValue(
+      mocks.createCaptureResult({
+        path: '/tmp/source-screenshot.png',
+        dataUrl: undefined,
+        sizeBytes: 128
+      })
+    )
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.saveScreenshot.toEventName()
+    )
+
+    const result = await handler({ target: 'cursor-display' }, {} as HandlerContext)
+
+    expect(result).toMatchObject({
+      success: true,
+      path: '/tmp/tuff-screenshot.png',
+      mimeType: 'image/png',
+      width: 12,
+      height: 8,
+      displayName: 'Display',
+      sizeBytes: 128
+    })
+    expect(mocks.capture).toHaveBeenCalledWith({
+      target: 'cursor-display',
+      output: 'tfile',
+      writeClipboard: false
+    })
+    expect(mocks.showSaveDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Save Screenshot',
+        filters: [{ name: 'PNG Image', extensions: ['png'] }]
+      })
+    )
+    expect(mocks.copyFile).toHaveBeenCalledWith(
+      '/tmp/source-screenshot.png',
+      '/tmp/tuff-screenshot.png'
+    )
+    expect(mocks.translateImageBase64).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
+  })
+
+  it('returns a canceled screenshot save without copying the temporary file', async () => {
+    mocks.capture.mockResolvedValue(
+      mocks.createCaptureResult({
+        path: '/tmp/source-screenshot.png',
+        dataUrl: undefined
+      })
+    )
+    mocks.showSaveDialog.mockResolvedValue({
+      canceled: true
+    })
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.saveScreenshot.toEventName()
+    )
+
+    const result = await handler(undefined, {} as HandlerContext)
+
+    expect(result).toEqual({
+      success: false,
+      canceled: true
+    })
+    expect(mocks.copyFile).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
+  })
+
+  it('maps screenshot save capture permission failures to SCREENSHOT_PERMISSION_DENIED', async () => {
+    mocks.capture.mockRejectedValue(new Error('Screen recording permission denied'))
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.saveScreenshot.toEventName()
+    )
+
+    const result = await handler(undefined, {} as HandlerContext)
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'SCREENSHOT_PERMISSION_DENIED',
+      error: 'Screen recording permission denied'
+    })
+    expect(mocks.showSaveDialog).not.toHaveBeenCalled()
+    expect(mocks.copyFile).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
+  })
+
+  it('maps native screenshot unsupported failures to SCREENSHOT_UNSUPPORTED', async () => {
+    const error = new Error('disabled-by-env') as Error & { code?: string }
+    error.code = 'ERR_NATIVE_SCREENSHOT_UNSUPPORTED'
+    mocks.capture.mockRejectedValue(error)
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.captureScreenshot.toEventName()
+    )
+
+    const result = await handler(undefined, {} as HandlerContext)
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'SCREENSHOT_UNSUPPORTED',
+      error: 'disabled-by-env'
+    })
 
     await module.onDestroy({} as never)
   })

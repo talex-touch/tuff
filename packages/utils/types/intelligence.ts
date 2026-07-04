@@ -1550,6 +1550,28 @@ export interface MemoryTombstone {
   createdAt: number
 }
 
+export interface ListMemoriesInput {
+  scope?: MemoryItem['scope']
+  type?: MemoryItem['type']
+  includeDisabled?: boolean
+  limit?: number
+}
+
+export interface ListMemoriesResult {
+  memories: MemoryItem[]
+}
+
+export interface SetMemoryEnabledInput {
+  memoryId: string
+  enabled: boolean
+}
+
+export interface SetMemoryEnabledResult {
+  memoryId: string
+  enabled: boolean
+  updatedAt: number
+}
+
 export interface EvaluateMemoryInput {
   content: string
   type?: MemoryItem['type']

@@ -3,6 +3,7 @@ import type {
   AssistantClipboardImageTranslateErrorCode,
   AssistantRuntimeConfig,
   AssistantScreenshotCaptureErrorCode,
+  AssistantScreenshotSaveErrorCode,
   AssistantScreenshotTranslateErrorCode
 } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
@@ -41,12 +42,24 @@ const SCREENSHOT_TRANSLATE_ERROR_KEYS: Record<AssistantScreenshotTranslateErrorC
   ASSISTANT_DISABLED: 'assistant.voicePanel.imageTranslateAssistantDisabled',
   IMAGE_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateImageUnavailable',
   SCENE_UNAVAILABLE: 'assistant.voicePanel.imageTranslateProviderUnavailable',
+  SCREENSHOT_PERMISSION_DENIED: 'assistant.voicePanel.screenshotPermissionDenied',
+  SCREENSHOT_UNSUPPORTED: 'assistant.voicePanel.screenshotUnsupported',
   SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateUnavailable'
 }
 
 const SCREENSHOT_CAPTURE_ERROR_KEYS: Record<AssistantScreenshotCaptureErrorCode, string> = {
   ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotCaptureAssistantDisabled',
+  SCREENSHOT_PERMISSION_DENIED: 'assistant.voicePanel.screenshotPermissionDenied',
+  SCREENSHOT_UNSUPPORTED: 'assistant.voicePanel.screenshotUnsupported',
   SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotCaptureUnavailable'
+}
+
+const SCREENSHOT_SAVE_ERROR_KEYS: Record<AssistantScreenshotSaveErrorCode, string> = {
+  ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotCaptureAssistantDisabled',
+  SCREENSHOT_PERMISSION_DENIED: 'assistant.voicePanel.screenshotPermissionDenied',
+  SCREENSHOT_UNSUPPORTED: 'assistant.voicePanel.screenshotUnsupported',
+  SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotCaptureUnavailable',
+  SAVE_FAILED: 'assistant.voicePanel.screenshotSaveFailed'
 }
 
 const transport = useTuffTransport()
@@ -66,6 +79,7 @@ const submitting = ref(false)
 const translatingClipboardImage = ref(false)
 const translatingScreenshot = ref(false)
 const capturingScreenshot = ref(false)
+const savingScreenshot = ref(false)
 const inputText = ref('')
 const interimText = ref('')
 const errorMessage = ref('')
@@ -77,6 +91,7 @@ const screenshotPreview = ref<{
   height: number
   displayName: string
   wroteClipboard: boolean
+  savedPath?: string
 } | null>(null)
 
 let recognition: SpeechRecognitionLike | null = null
@@ -90,6 +105,13 @@ const mergedText = computed(() => {
   return interim ? `${finalText} ${interim}`.trim() : finalText
 })
 const voiceWakeEnabled = computed(() => runtimeConfig.value.enabled)
+const screenshotActionBusy = computed(
+  () =>
+    translatingClipboardImage.value ||
+    translatingScreenshot.value ||
+    capturingScreenshot.value ||
+    savingScreenshot.value
+)
 const panelStatusText = computed(() => {
   if (voiceWakeEnabled.value) {
     return listening.value ? t('assistant.voicePanel.listening') : t('assistant.voicePanel.waiting')
@@ -244,6 +266,16 @@ function formatScreenshotCaptureError(
   return fallback || t('assistant.voicePanel.screenshotCaptureFailed')
 }
 
+function formatScreenshotSaveError(
+  code?: AssistantScreenshotSaveErrorCode,
+  fallback?: string
+): string {
+  if (code) {
+    return t(SCREENSHOT_SAVE_ERROR_KEYS[code])
+  }
+  return fallback || t('assistant.voicePanel.screenshotSaveFailed')
+}
+
 async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   sourceText.value = payload?.source || ''
   inputText.value = ''
@@ -289,8 +321,7 @@ async function submitText(): Promise<void> {
 }
 
 async function translateClipboardImage(): Promise<void> {
-  if (translatingClipboardImage.value || translatingScreenshot.value || capturingScreenshot.value)
-    return
+  if (screenshotActionBusy.value) return
 
   keepListening = false
   stopRecognition()
@@ -317,8 +348,7 @@ async function translateClipboardImage(): Promise<void> {
 }
 
 async function translateScreenshot(): Promise<void> {
-  if (translatingScreenshot.value || translatingClipboardImage.value || capturingScreenshot.value)
-    return
+  if (screenshotActionBusy.value) return
 
   keepListening = false
   stopRecognition()
@@ -346,8 +376,7 @@ async function translateScreenshot(): Promise<void> {
 }
 
 async function captureScreenshot(): Promise<void> {
-  if (capturingScreenshot.value || translatingScreenshot.value || translatingClipboardImage.value)
-    return
+  if (screenshotActionBusy.value) return
 
   keepListening = false
   stopRecognition()
@@ -371,7 +400,8 @@ async function captureScreenshot(): Promise<void> {
       width: response.width ?? 0,
       height: response.height ?? 0,
       displayName: response.displayName || '',
-      wroteClipboard: response.wroteClipboard === true
+      wroteClipboard: response.wroteClipboard === true,
+      savedPath: undefined
     }
     statusMessage.value = t('assistant.voicePanel.screenshotCaptureReady')
   } catch (error) {
@@ -379,6 +409,49 @@ async function captureScreenshot(): Promise<void> {
     errorMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
     capturingScreenshot.value = false
+  }
+}
+
+async function saveScreenshot(): Promise<void> {
+  if (screenshotActionBusy.value) return
+
+  keepListening = false
+  stopRecognition()
+  savingScreenshot.value = true
+  errorMessage.value = ''
+  statusMessage.value = t('assistant.voicePanel.screenshotSaving')
+
+  try {
+    const response = await transport.send(AssistantEvents.voice.saveScreenshot, {
+      target: 'cursor-display'
+    })
+    if (response?.canceled) {
+      statusMessage.value = ''
+      return
+    }
+    if (!response?.success || !response.path) {
+      statusMessage.value = ''
+      errorMessage.value = formatScreenshotSaveError(response?.code, response?.error)
+      return
+    }
+
+    if (screenshotPreview.value) {
+      screenshotPreview.value = {
+        ...screenshotPreview.value,
+        width: response.width ?? screenshotPreview.value.width,
+        height: response.height ?? screenshotPreview.value.height,
+        displayName: response.displayName || screenshotPreview.value.displayName,
+        savedPath: response.path
+      }
+    }
+    statusMessage.value = t('assistant.voicePanel.screenshotSaveReady', {
+      path: response.path
+    })
+  } catch (error) {
+    statusMessage.value = ''
+    errorMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    savingScreenshot.value = false
   }
 }
 
@@ -446,6 +519,11 @@ onBeforeUnmount(() => {
           <p v-if="screenshotPreview.wroteClipboard" class="screenshot-preview-copy">
             {{ t('assistant.voicePanel.screenshotCopied') }}
           </p>
+          <p v-if="screenshotPreview.savedPath" class="screenshot-preview-save">
+            {{
+              t('assistant.voicePanel.screenshotSavedPath', { path: screenshotPreview.savedPath })
+            }}
+          </p>
         </div>
         <p v-if="statusMessage" class="status-text">{{ statusMessage }}</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
@@ -455,7 +533,7 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="translatingClipboardImage || translatingScreenshot || capturingScreenshot"
+          :disabled="screenshotActionBusy"
           @click="translateClipboardImage"
         >
           {{
@@ -467,7 +545,7 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="translatingScreenshot || translatingClipboardImage || capturingScreenshot"
+          :disabled="screenshotActionBusy"
           @click="translateScreenshot"
         >
           {{
@@ -479,13 +557,25 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="capturingScreenshot || translatingScreenshot || translatingClipboardImage"
+          :disabled="screenshotActionBusy"
           @click="captureScreenshot"
         >
           {{
             capturingScreenshot
               ? t('assistant.voicePanel.screenshotCapturingShort')
               : t('assistant.voicePanel.captureScreenshot')
+          }}
+        </button>
+        <button
+          class="secondary-btn"
+          type="button"
+          :disabled="screenshotActionBusy"
+          @click="saveScreenshot"
+        >
+          {{
+            savingScreenshot
+              ? t('assistant.voicePanel.screenshotSavingShort')
+              : t('assistant.voicePanel.saveScreenshot')
           }}
         </button>
         <button
@@ -631,7 +721,8 @@ onBeforeUnmount(() => {
 }
 
 .screenshot-preview-meta,
-.screenshot-preview-copy {
+.screenshot-preview-copy,
+.screenshot-preview-save {
   margin: 6px 0 0;
   font-size: 11px;
   line-height: 1.3;
@@ -640,6 +731,10 @@ onBeforeUnmount(() => {
 
 .screenshot-preview-copy {
   color: #047857;
+}
+
+.screenshot-preview-save {
+  word-break: break-all;
 }
 
 .voice-panel-footer {

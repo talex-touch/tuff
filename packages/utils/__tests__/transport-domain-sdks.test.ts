@@ -194,6 +194,14 @@ describe('transport domain sdk mappings', () => {
       module: 'voice-panel',
       action: 'capture-screenshot',
     })
+    expect(AssistantEvents.voice.saveScreenshot.toEventName()).toBe(
+      'assistant:voice-panel:save-screenshot',
+    )
+    expect(AssistantEvents.voice.saveScreenshot).toMatchObject({
+      namespace: 'assistant',
+      module: 'voice-panel',
+      action: 'save-screenshot',
+    })
     expect(AssistantEvents.voice.translateScreenshot.toEventName()).toBe(
       'assistant:voice-panel:translate-screenshot',
     )
@@ -1254,6 +1262,35 @@ describe('transport domain sdk mappings', () => {
       .mockResolvedValueOnce({
         ok: true,
         result: {
+          memories: [
+            {
+              id: 'mem_1',
+              type: 'preference',
+              scope: 'workspace',
+              content: 'Use Chinese replies by default',
+              summary: 'Use Chinese replies by default',
+              tags: ['language'],
+              confidence: 0.8,
+              privacyLevel: 'normal',
+              enabled: true,
+              createdAt: 1,
+              updatedAt: 2,
+              usageCount: 0
+            }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          memoryId: 'mem_1',
+          enabled: false,
+          updatedAt: 3
+        }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
           status: 'suggested',
           reason: 'explicit_memory_candidate',
           candidate: {
@@ -1290,6 +1327,15 @@ describe('transport domain sdk mappings', () => {
       traceId: 'trace-1',
       limit: 20
     })
+    const memories = await sdk.contextListMemories({
+      scope: 'workspace',
+      type: 'preference',
+      limit: 10
+    })
+    const memoryState = await sdk.contextSetMemoryEnabled({
+      memoryId: 'mem_1',
+      enabled: false
+    })
     const memory = await sdk.contextEvaluateMemory({
       content: 'Use Chinese replies by default',
       type: 'preference',
@@ -1315,6 +1361,16 @@ describe('transport domain sdk mappings', () => {
           chunkId: 'chunk-1'
         }
       }
+    })
+    expect(memories.memories[0]).toMatchObject({
+      id: 'mem_1',
+      type: 'preference',
+      scope: 'workspace',
+      privacyLevel: 'normal'
+    })
+    expect(memoryState).toMatchObject({
+      memoryId: 'mem_1',
+      enabled: false
     })
     expect(checkpoints.checkpoints[0]).toMatchObject({
       id: 'ctxcp_1',
@@ -1366,9 +1422,24 @@ describe('transport domain sdk mappings', () => {
       limit: 20
     })
     expect(transport.send.mock.calls[4]?.[0]?.toEventName?.()).toBe(
-      'intelligence:context:memory:evaluate',
+      'intelligence:context:memory:list',
     )
     expect(transport.send.mock.calls[4]?.[1]).toEqual({
+      scope: 'workspace',
+      type: 'preference',
+      limit: 10
+    })
+    expect(transport.send.mock.calls[5]?.[0]?.toEventName?.()).toBe(
+      'intelligence:context:memory:set-enabled',
+    )
+    expect(transport.send.mock.calls[5]?.[1]).toEqual({
+      memoryId: 'mem_1',
+      enabled: false
+    })
+    expect(transport.send.mock.calls[6]?.[0]?.toEventName?.()).toBe(
+      'intelligence:context:memory:evaluate',
+    )
+    expect(transport.send.mock.calls[6]?.[1]).toEqual({
       content: 'Use Chinese replies by default',
       type: 'preference',
       scope: 'workspace',

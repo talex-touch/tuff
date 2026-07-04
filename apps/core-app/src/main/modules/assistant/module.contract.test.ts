@@ -189,19 +189,26 @@ describe('Assistant module startup contract', () => {
   it('routes clipboard image translation through typed assistant transport events', () => {
     expect(assistantEventsSource).toContain('AssistantClipboardImageTranslateResponse')
     expect(assistantEventsSource).toContain('AssistantScreenshotCaptureResponse')
+    expect(assistantEventsSource).toContain('AssistantScreenshotSaveResponse')
     expect(assistantEventsSource).toContain('translateClipboardImage')
     expect(assistantEventsSource).toContain('captureScreenshot')
+    expect(assistantEventsSource).toContain('saveScreenshot')
     expect(assistantEventsSource).toContain('translateScreenshot')
     expect(assistantEventsSource).toContain("event('translate-clipboard-image')")
     expect(assistantEventsSource).toContain("event('capture-screenshot')")
+    expect(assistantEventsSource).toContain("event('save-screenshot')")
     expect(assistantEventsSource).toContain("event('translate-screenshot')")
     expect(assistantEventsSource).toContain('translateClipboardImage: translateClipboardImageEvent')
+    expect(assistantEventsSource).toContain('SCREENSHOT_PERMISSION_DENIED')
+    expect(assistantEventsSource).toContain('SCREENSHOT_UNSUPPORTED')
     expect(assistantEventsSource).toContain('SCREENSHOT_UNAVAILABLE')
     expect(moduleSource).toContain('AssistantEvents.voice.translateClipboardImage')
     expect(moduleSource).toContain('AssistantEvents.voice.captureScreenshot')
+    expect(moduleSource).toContain('AssistantEvents.voice.saveScreenshot')
     expect(moduleSource).toContain('AssistantEvents.voice.translateScreenshot')
     expect(moduleSource).toContain('handleClipboardImageTranslate')
     expect(moduleSource).toContain('handleScreenshotCapture')
+    expect(moduleSource).toContain('handleScreenshotSave')
     expect(moduleSource).toContain('handleScreenshotTranslate')
     expect(moduleSource).toContain('translateClipboardImage')
     expect(moduleSource).toContain('openPinWindow: true')
@@ -212,15 +219,19 @@ describe('Assistant module startup contract', () => {
     expect(moduleSource).toContain('this.voicePanelAutoHideSuppressionDepth - 1')
     expect(voicePanelSource).toContain('AssistantEvents.voice.translateClipboardImage')
     expect(voicePanelSource).toContain('AssistantEvents.voice.captureScreenshot')
+    expect(voicePanelSource).toContain('AssistantEvents.voice.saveScreenshot')
     expect(voicePanelSource).toContain('AssistantEvents.voice.translateScreenshot')
     expect(voicePanelSource).toContain('translateClipboardImage(): Promise<void>')
     expect(voicePanelSource).toContain('captureScreenshot(): Promise<void>')
+    expect(voicePanelSource).toContain('saveScreenshot(): Promise<void>')
     expect(voicePanelSource).toContain('translateScreenshot(): Promise<void>')
     expect(voicePanelSource).toContain('translatingClipboardImage')
     expect(voicePanelSource).toContain('capturingScreenshot')
+    expect(voicePanelSource).toContain('savingScreenshot')
     expect(voicePanelSource).toContain('screenshotPreview')
     expect(voicePanelSource).toContain('translatingScreenshot')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:capture-screenshot')
+    expect(voicePanelSource).not.toContain('assistant:voice-panel:save-screenshot')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:translate-screenshot')
 
     const clipboardTranslateBlock = moduleSource.match(
@@ -235,9 +246,10 @@ describe('Assistant module startup contract', () => {
     expect(clipboardTranslateBlock).not.toContain('translateImageBase64')
 
     const screenshotCaptureBlock = moduleSource.match(
-      /private async handleScreenshotCapture\([\s\S]*?\n {2}private async handleScreenshotTranslate/
+      /private async handleScreenshotCapture\([\s\S]*?\n {2}private async handleScreenshotSave/
     )?.[0]
     expect(screenshotCaptureBlock).toBeTruthy()
+    expect(screenshotCaptureBlock).toContain('mapScreenshotUnavailableCode')
     expect(screenshotCaptureBlock).toContain('SCREENSHOT_UNAVAILABLE')
     expect(screenshotCaptureBlock).toContain('getNativeScreenshotService')
     expect(screenshotCaptureBlock).toContain("target: 'cursor-display'")
@@ -245,10 +257,26 @@ describe('Assistant module startup contract', () => {
     expect(screenshotCaptureBlock).toContain('writeClipboard: true')
     expect(screenshotCaptureBlock).not.toContain('translateImageBase64')
 
+    const screenshotSaveBlock = moduleSource.match(
+      /private async handleScreenshotSave\([\s\S]*?\n {2}private async handleScreenshotTranslate/
+    )?.[0]
+    expect(screenshotSaveBlock).toBeTruthy()
+    expect(screenshotSaveBlock).toContain('mapScreenshotUnavailableCode')
+    expect(screenshotSaveBlock).toContain('SCREENSHOT_UNAVAILABLE')
+    expect(screenshotSaveBlock).toContain('SAVE_FAILED')
+    expect(screenshotSaveBlock).toContain('getNativeScreenshotService')
+    expect(screenshotSaveBlock).toContain("target: 'cursor-display'")
+    expect(screenshotSaveBlock).toContain("output: 'tfile'")
+    expect(screenshotSaveBlock).toContain('writeClipboard: false')
+    expect(screenshotSaveBlock).toContain('dialog.showSaveDialog')
+    expect(screenshotSaveBlock).toContain('fs.copyFile')
+    expect(screenshotSaveBlock).not.toContain('translateImageBase64')
+
     const screenshotTranslateBlock = moduleSource.match(
       /private async handleScreenshotTranslate\([\s\S]*?\n {2}private destroyFloatingBallWindow/
     )?.[0]
     expect(screenshotTranslateBlock).toBeTruthy()
+    expect(screenshotTranslateBlock).toContain('mapScreenshotUnavailableCode')
     expect(screenshotTranslateBlock).toContain('SCREENSHOT_UNAVAILABLE')
     expect(screenshotTranslateBlock).toContain('getNativeScreenshotService')
     expect(screenshotTranslateBlock).toContain("target: 'cursor-display'")
@@ -277,14 +305,22 @@ describe('Assistant module startup contract', () => {
       'clipboardImageTranslateReady',
       'clipboardImageTranslateFailed',
       'captureScreenshot',
+      'saveScreenshot',
       'screenshotCapturing',
       'screenshotCapturingShort',
+      'screenshotSaving',
+      'screenshotSavingShort',
       'screenshotCaptureReady',
       'screenshotCaptureFailed',
+      'screenshotPermissionDenied',
+      'screenshotUnsupported',
       'screenshotCaptureUnavailable',
+      'screenshotSaveReady',
+      'screenshotSaveFailed',
       'screenshotPreviewAlt',
       'screenshotPreviewMeta',
       'screenshotCopied',
+      'screenshotSavedPath',
       'screenshotTranslateUnavailable',
       'screenshotTranslateImageUnavailable'
     ]) {
