@@ -87,16 +87,14 @@ function handleClick() {
       },
     ]"
     role="listitem"
-    @click="handleClick"
   >
-    <div
+    <component
+      :is="clickable ? 'button' : 'div'"
       class="tx-step__head"
-      :role="clickable && !disabled ? 'button' : undefined"
-      :tabindex="clickable && !disabled ? 0 : undefined"
+      :type="clickable ? 'button' : undefined"
+      :disabled="clickable ? disabled : undefined"
       :aria-current="isActive ? 'step' : undefined"
-      :aria-disabled="disabled ? 'true' : undefined"
-      @keydown.enter.prevent="handleClick"
-      @keydown.space.prevent="handleClick"
+      @click="handleClick"
     >
       <div class="tx-step__icon" :class="`tx-step__icon--${status}`">
         <TxIcon v-if="status === 'completed'" :name="completedIcon" />
@@ -105,7 +103,7 @@ function handleClick() {
       </div>
 
       <div v-if="showLine && !isLast" class="tx-step__line" />
-    </div>
+    </component>
 
     <div class="tx-step__content">
       <div class="tx-step__title">
@@ -148,9 +146,15 @@ function handleClick() {
 }
 
 .tx-step__head {
+  appearance: none;
   display: flex;
   align-items: center;
   position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 
 .tx-step--horizontal .tx-step__head {

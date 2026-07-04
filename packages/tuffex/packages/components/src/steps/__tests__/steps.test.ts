@@ -27,8 +27,13 @@ describe('txSteps', () => {
   it('uses child order as the default step value', () => {
     const wrapper = mountSteps({ active: 1 })
     const steps = wrapper.findAll('.tx-step')
+    const heads = wrapper.findAll('.tx-step__head')
 
     expect(wrapper.attributes('role')).toBe('list')
+    expect(heads.map(head => head.element.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON'])
+    expect(heads[0].attributes('type')).toBe('button')
+    expect(heads[0].attributes('role')).toBeUndefined()
+    expect(heads[0].attributes('tabindex')).toBeUndefined()
     expect(steps[0].classes()).toContain('tx-step--completed')
     expect(steps[1].classes()).toContain('tx-step--active')
     expect(steps[1].find('.tx-step__head').attributes('aria-current')).toBe('step')
@@ -64,17 +69,17 @@ describe('txSteps', () => {
     expect(wrapper.findAll('.tx-step')[1].classes()).toContain('tx-step--active')
   })
 
-  it('updates internal active step through pointer and keyboard interactions', async () => {
+  it('updates internal active step through clickable step buttons', async () => {
     const wrapper = mountSteps({ active: 0 })
     const heads = wrapper.findAll('.tx-step__head')
 
     await heads[2].trigger('click')
     expect(wrapper.findAll('.tx-step')[2].classes()).toContain('tx-step--active')
 
-    await heads[1].trigger('keydown.enter')
+    await heads[1].trigger('click')
     expect(wrapper.findAll('.tx-step')[1].classes()).toContain('tx-step--active')
 
-    await heads[0].trigger('keydown.space')
+    await heads[0].trigger('click')
     expect(wrapper.findAll('.tx-step')[0].classes()).toContain('tx-step--active')
   })
 
@@ -96,12 +101,14 @@ describe('txSteps', () => {
     })
 
     const heads = wrapper.findAll('.tx-step__head')
-    expect(heads[1].attributes('aria-disabled')).toBe('true')
+    expect(heads[1].element.tagName).toBe('BUTTON')
+    expect(heads[1].attributes('disabled')).toBeDefined()
     expect(heads[1].attributes('role')).toBeUndefined()
+    expect(heads[2].element.tagName).toBe('DIV')
     expect(heads[2].attributes('role')).toBeUndefined()
 
     await heads[1].trigger('click')
-    await heads[2].trigger('keydown.enter')
+    await heads[2].trigger('click')
 
     expect(wrapper.findAll('.tx-step')[0].classes()).toContain('tx-step--active')
   })
