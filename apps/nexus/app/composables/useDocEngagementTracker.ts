@@ -789,9 +789,6 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
           markInteraction()
       })
 
-      useEventListener(window, 'beforeunload', () => {
-        void flush('beforeunload')
-      })
       useEventListener(window, 'pagehide', () => {
         void flush('pagehide')
       })

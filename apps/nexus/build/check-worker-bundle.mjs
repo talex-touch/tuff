@@ -10,6 +10,7 @@ const distRoot = join(nexusRoot, 'dist')
 const workerRoot = join(distRoot, '_worker.js')
 const routesJsonPath = join(distRoot, '_routes.json')
 const serviceWorkerPath = join(distRoot, 'sw.js')
+const authHandlerPath = join(nexusRoot, 'server/api/auth/[...].ts')
 const oneMiB = 1024 * 1024
 const distBudget = {
   maxTotalBytes: 60 * oneMiB,
@@ -24,6 +25,16 @@ const expectedStaticRoutes = [
   '/en/docs',
   '/zh/docs',
   ...docsApiPrerenderRoutes,
+]
+const workerOwnedAppRoutes = [
+  '/dashboard',
+  '/dashboard/team',
+  '/dashboard/admin/provider-registry',
+  '/dashboard/admin/governance',
+  '/auth/app-callback',
+  '/auth/stepup-callback',
+  '/auth/admin-bootstrap',
+  '/team/join',
 ]
 
 const suspiciousServerPatterns = [
@@ -47,6 +58,8 @@ const forbiddenRouteChunkPatterns = [
   /(?:^|\/)apitable-/,
 ]
 const forbiddenServiceWorkerPrecachePatterns = [
+  /_nuxt\/(?!builds\/)/,
+  /(?:en|zh)\/docs/,
   /__nuxt_content\//,
   /dump\.[^"']+\.sql/,
   /sqlite3[^"']*/,
@@ -59,10 +72,51 @@ const forbiddenClientAuthRuntimePatterns = [
   /SessionRequired/,
   /@sidebase\/nuxt-auth\/dist\/runtime\/plugin/,
 ]
+const forbiddenDocsInitialLifecyclePatterns = [
+  /addEventListener\(["']beforeunload/,
+  /h\(window,["']beforeunload/,
+  /useEventListener\(window,\s*["']beforeunload/,
+]
 const requiredWorkerRouteChunks = [
   {
     route: '/api/docs/page',
     pattern: /^chunks\/routes\/api\/docs\/page\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/navigation',
+    pattern: /^chunks\/routes\/api\/docs\/navigation\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/sidebar-components',
+    pattern: /^chunks\/routes\/api\/docs\/sidebar-components\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/view:get',
+    pattern: /^chunks\/routes\/api\/docs\/view\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/view:post',
+    pattern: /^chunks\/routes\/api\/docs\/view\.post\.mjs$/,
+  },
+  {
+    route: '/api/docs/feedback:get',
+    pattern: /^chunks\/routes\/api\/docs\/feedback\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/feedback:post',
+    pattern: /^chunks\/routes\/api\/docs\/feedback\.post\.mjs$/,
+  },
+  {
+    route: '/api/docs/comments:get',
+    pattern: /^chunks\/routes\/api\/docs\/comments\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/comments:post',
+    pattern: /^chunks\/routes\/api\/docs\/comments\.post\.mjs$/,
+  },
+  {
+    route: '/api/docs/engagement',
+    pattern: /^chunks\/routes\/api\/docs\/engagement\.post\.mjs$/,
   },
   {
     route: '/api/auth/**',
@@ -84,6 +138,30 @@ const requiredWorkerRouteChunks = [
     route: '/api/app-auth/device/approve',
     pattern: /^chunks\/routes\/api\/app-auth\/device\/approve\.post\.mjs$/,
   },
+  {
+    route: '/api/dashboard/plugins',
+    pattern: /^chunks\/routes\/api\/dashboard\/plugins\.get\.mjs$/,
+  },
+  {
+    route: '/api/dashboard/team',
+    pattern: /^chunks\/routes\/api\/dashboard\/team\.get\.mjs$/,
+  },
+  {
+    route: '/api/dashboard/provider-registry/providers',
+    pattern: /^chunks\/routes\/api\/dashboard\/provider-registry\/providers\.get\.mjs$/,
+  },
+  {
+    route: '/api/dashboard/governance/summary',
+    pattern: /^chunks\/routes\/api\/dashboard\/governance\/summary\.get\.mjs$/,
+  },
+  {
+    route: '/api/dashboard/storage/status',
+    pattern: /^chunks\/routes\/api\/dashboard\/storage\/status\.get\.mjs$/,
+  },
+  {
+    route: '/api/dashboard/telemetry/me',
+    pattern: /^chunks\/routes\/api\/dashboard\/telemetry\/me\.get\.mjs$/,
+  },
 ]
 const htmlBoundaryChecks = [
   {
@@ -98,8 +176,13 @@ const htmlBoundaryChecks = [
   },
   {
     label: 'landing HTML pulled docs/store/dashboard CSS',
-    routePattern: /^(?:index\.html|new\/index\.html)$/,
+    routePattern: /^(?:index\.html|new\/index\.html|next\/index\.html)$/,
     cssPattern: /docs\.|(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|PluginMetaHeader|AuthVisualShell|AuthLegalFooter/i,
+  },
+  {
+    label: 'public info HTML pulled app-surface CSS',
+    routePattern: /^(?:pricing|license|privacy|protocol|updates)\/index\.html$/,
+    cssPattern: /(?:^|\.)store\.|(?:^|\.)dashboard\.|ProviderRegistry|governance|PluginMetaHeader|AuthVisualShell|AuthLegalFooter|TuffLanding|TuffHome|CoreBoxMock|TuffShowcase/i,
   },
   {
     label: 'auth HTML pulled docs/store/dashboard/landing CSS',
@@ -126,11 +209,19 @@ const htmlInitialAssetBudgets = [
   },
   {
     label: 'landing initial assets',
-    routePattern: /^(?:index\.html|new\/index\.html)$/,
+    routePattern: /^(?:index\.html|new\/index\.html|next\/index\.html)$/,
     maxJsCount: 38,
     maxJsBytes: 860 * 1024,
     maxCssCount: 20,
     maxCssBytes: 420 * 1024,
+  },
+  {
+    label: 'public info initial assets',
+    routePattern: /^(?:pricing|license|privacy|protocol|updates)\/index\.html$/,
+    maxJsCount: 20,
+    maxJsBytes: 560 * 1024,
+    maxCssCount: 9,
+    maxCssBytes: 340 * 1024,
   },
   {
     label: 'auth initial assets',
@@ -231,10 +322,33 @@ function checkDuplicateSqliteWasm(distFiles) {
   return duplicateWasmFiles
 }
 
-function checkDuplicateRootSqlDumps(distFiles) {
-  return distFiles
-    .filter(file => /^dump\.[A-Za-z0-9_-]+\.sql$/.test(file.relativePath))
-    .map(file => file.relativePath)
+function checkRequiredRootSqlDumps(distFiles) {
+  const distFileByPath = new Map(distFiles.map(file => [file.relativePath, file]))
+  const contentDumps = distFiles.filter(file => /^__nuxt_content\/[A-Za-z0-9_-]+\/sql_dump\.txt$/.test(file.relativePath))
+  const findings = []
+
+  if (!contentDumps.length) {
+    findings.push('__nuxt_content SQL dumps are missing')
+    return { checked: 0, findings }
+  }
+
+  for (const contentDump of contentDumps) {
+    const collectionName = contentDump.relativePath.match(/^__nuxt_content\/([A-Za-z0-9_-]+)\/sql_dump\.txt$/)?.[1]
+    if (!collectionName)
+      continue
+
+    const rootPath = `dump.${collectionName}.sql`
+    const rootDump = distFileByPath.get(rootPath)
+    if (!rootDump) {
+      findings.push(`${rootPath} missing for ${contentDump.relativePath}`)
+      continue
+    }
+
+    if (rootDump.bytes !== contentDump.bytes || !readFileSync(rootDump.file).equals(readFileSync(contentDump.file)))
+      findings.push(`${rootPath} does not match ${contentDump.relativePath}`)
+  }
+
+  return { checked: contentDumps.length, findings }
 }
 
 function checkSizeBudgets(distFiles, distTotalBytes, workerTotalBytes, workerGzipBytes) {
@@ -286,6 +400,20 @@ function checkStaticRouteFiles() {
       relativePath: routeToDistPath(route),
     }))
     .filter(route => !existsSync(join(distRoot, route.relativePath)))
+}
+
+function checkWorkerOwnedAppRoutes() {
+  const routesJson = readRoutesJson()
+  const excluded = new Set(routesJson && Array.isArray(routesJson.exclude) ? routesJson.exclude : [])
+
+  return workerOwnedAppRoutes
+    .map(route => ({
+      route,
+      relativePath: routeToDistPath(route),
+      isExcludedStaticRoute: excluded.has(route),
+      hasStaticHtml: existsSync(join(distRoot, routeToDistPath(route))),
+    }))
+    .filter(route => route.isExcludedStaticRoute || route.hasStaticHtml)
 }
 
 function checkSuspiciousPatterns(files) {
@@ -369,6 +497,38 @@ function checkClientSidebaseAuthRuntime(distFiles) {
   return findings
 }
 
+function checkAuthHandlerSingleton() {
+  const findings = []
+
+  if (!existsSync(authHandlerPath))
+    return ['server/api/auth/[...].ts is missing']
+
+  const source = readFileSync(authHandlerPath, 'utf8')
+  const requiredSnippets = [
+    'const createRequestAuthEvent = () => createAuthEvent()',
+    'let cachedAuthHandler',
+    'function getCachedAuthHandler()',
+    'cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions())',
+    'const authHandler = getCachedAuthHandler()',
+  ]
+  const forbiddenSnippets = [
+    'NuxtAuthHandler(getAuthOptions(event))',
+    'function getAuthOptions(event',
+  ]
+
+  for (const snippet of requiredSnippets) {
+    if (!source.includes(snippet))
+      findings.push(`missing auth singleton source marker: ${snippet}`)
+  }
+
+  for (const snippet of forbiddenSnippets) {
+    if (source.includes(snippet))
+      findings.push(`forbidden per-request auth handler marker found: ${snippet}`)
+  }
+
+  return findings
+}
+
 function checkRequiredWorkerRouteChunks(files) {
   const routeChunkFiles = files
     .filter(file => file.relativePath.startsWith('chunks/routes/'))
@@ -410,6 +570,46 @@ function checkDocsDetailHtmlPayload(distFiles) {
   }
 
   return findings
+}
+
+function checkDocsInitialLifecycleBlockers(distFiles) {
+  const findings = []
+  const sourceCache = new Map()
+  const docsDetailHtmlFiles = distFiles.filter(file => isDocsDetailHtml(file.relativePath))
+
+  for (const file of docsDetailHtmlFiles) {
+    const htmlSource = readFileSync(file.file, 'utf8')
+    const jsAssets = extractJsAssets(htmlSource)
+
+    for (const asset of jsAssets) {
+      const assetPath = join(distRoot, '_nuxt', asset)
+      if (!existsSync(assetPath))
+        continue
+
+      let source = sourceCache.get(asset)
+      if (!source) {
+        source = readFileSync(assetPath, 'utf8')
+        sourceCache.set(asset, source)
+      }
+
+      const matches = forbiddenDocsInitialLifecyclePatterns
+        .filter(pattern => pattern.test(source))
+        .map(pattern => pattern.source)
+
+      if (matches.length) {
+        findings.push({
+          file: file.relativePath,
+          asset,
+          patterns: matches,
+        })
+      }
+    }
+  }
+
+  return {
+    checkedRoutes: docsDetailHtmlFiles.length,
+    findings,
+  }
 }
 
 function extractCssAssets(source) {
@@ -524,15 +724,18 @@ const workerGzipBytes = getWorkerGzipBytes(executableFiles)
 const { files: distFiles, totalBytes: distTotalBytes } = analyzeDistFiles()
 const routeCheck = checkRoutes()
 const missingStaticRouteFiles = checkStaticRouteFiles()
+const workerOwnedAppRouteFindings = checkWorkerOwnedAppRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
 const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
 const forbiddenRouteChunks = checkForbiddenRouteChunks(executableFiles)
 const forbiddenServiceWorkerPrecache = checkServiceWorkerPrecache()
 const clientSidebaseAuthRuntimeFindings = checkClientSidebaseAuthRuntime(distFiles)
+const authHandlerSingletonFindings = checkAuthHandlerSingleton()
 const missingWorkerRouteChunks = checkRequiredWorkerRouteChunks(executableFiles)
 const duplicateSqliteWasm = checkDuplicateSqliteWasm(distFiles)
-const duplicateRootSqlDumps = checkDuplicateRootSqlDumps(distFiles)
+const rootSqlDumpCheck = checkRequiredRootSqlDumps(distFiles)
 const docsDetailHtmlPayloadFindings = checkDocsDetailHtmlPayload(distFiles)
+const docsInitialLifecycleCheck = checkDocsInitialLifecycleBlockers(distFiles)
 const htmlCssBoundaryFindings = checkHtmlCssBoundaries(distFiles)
 const htmlInitialAssetBudgetFindings = checkHtmlInitialAssetBudgets(distFiles)
 const htmlInitialAssetBudgetRouteCount = countHtmlInitialAssetBudgetRoutes(distFiles)
@@ -551,12 +754,22 @@ for (const file of distFiles.slice(0, 10))
 
 console.log(`[nexus-worker-bundle] ${routeCheck.message}`)
 console.log(`[nexus-dist-budget] Static route files verified: ${expectedStaticRoutes.length - missingStaticRouteFiles.length}/${expectedStaticRoutes.length}`)
+console.log(`[nexus-dist-budget] Worker-owned app routes verified: ${workerOwnedAppRoutes.length - workerOwnedAppRouteFindings.length}/${workerOwnedAppRoutes.length}`)
+console.log('[nexus-dist-budget] Auth handler singleton verified')
+console.log(`[nexus-dist-budget] Cloudflare root SQL dumps verified: ${rootSqlDumpCheck.checked - rootSqlDumpCheck.findings.length}/${rootSqlDumpCheck.checked}`)
+console.log(`[nexus-dist-budget] Docs initial lifecycle blockers verified: ${docsInitialLifecycleCheck.checkedRoutes} routes`)
 console.log(`[nexus-dist-budget] Initial asset budgets verified: ${htmlInitialAssetBudgetRouteCount} routes / ${htmlInitialAssetBudgets.length} families`)
 
 if (missingStaticRouteFiles.length) {
   console.error('[nexus-dist-budget] missing static route files:')
   for (const route of missingStaticRouteFiles)
     console.error(`  ${route.route} -> ${route.relativePath}`)
+}
+
+if (workerOwnedAppRouteFindings.length) {
+  console.error('[nexus-dist-budget] worker-owned app routes were emitted as static routes:')
+  for (const route of workerOwnedAppRouteFindings)
+    console.error(`  ${route.route} -> ${route.relativePath} (excluded=${route.isExcludedStaticRoute}, html=${route.hasStaticHtml})`)
 }
 
 if (suspiciousFindings.length) {
@@ -589,6 +802,12 @@ if (clientSidebaseAuthRuntimeFindings.length) {
     console.error(`  ${finding.file}: ${finding.patterns.join(', ')}`)
 }
 
+if (authHandlerSingletonFindings.length) {
+  console.error('[nexus-dist-budget] auth handler singleton guard failed:')
+  for (const finding of authHandlerSingletonFindings)
+    console.error(`  ${finding}`)
+}
+
 if (missingWorkerRouteChunks.length) {
   console.error('[nexus-worker-bundle] required runtime route chunks are missing:')
   for (const route of missingWorkerRouteChunks)
@@ -601,16 +820,22 @@ if (duplicateSqliteWasm.length) {
     console.error(`  ${file}`)
 }
 
-if (duplicateRootSqlDumps.length) {
-  console.error('[nexus-dist-budget] duplicate root SQL dump files found:')
-  for (const file of duplicateRootSqlDumps)
-    console.error(`  ${file}`)
+if (rootSqlDumpCheck.findings.length) {
+  console.error('[nexus-dist-budget] Cloudflare root SQL dump runtime assets are invalid:')
+  for (const finding of rootSqlDumpCheck.findings)
+    console.error(`  ${finding}`)
 }
 
 if (docsDetailHtmlPayloadFindings.length) {
   console.error('[nexus-dist-budget] docs detail HTML payload violations:')
   for (const finding of docsDetailHtmlPayloadFindings)
     console.error(`  ${finding.file}: ${finding.issues.join(', ')}`)
+}
+
+if (docsInitialLifecycleCheck.findings.length) {
+  console.error('[nexus-dist-budget] docs initial JS lifecycle blockers found:')
+  for (const finding of docsInitialLifecycleCheck.findings)
+    console.error(`  ${finding.file}: ${finding.asset} -> ${finding.patterns.join(', ')}`)
 }
 
 if (htmlCssBoundaryFindings.length) {
@@ -631,5 +856,5 @@ if (sizeFindings.length) {
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || missingStaticRouteFiles.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || missingWorkerRouteChunks.length || duplicateSqliteWasm.length || duplicateRootSqlDumps.length || docsDetailHtmlPayloadFindings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sizeFindings.length)
+if (!routeCheck.ok || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || duplicateSqliteWasm.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sizeFindings.length)
   process.exit(1)

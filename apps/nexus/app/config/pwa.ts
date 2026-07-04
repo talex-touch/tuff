@@ -37,7 +37,7 @@ export const pwa: ModuleOptions = {
     ],
   },
   workbox: {
-    globPatterns: ['**/*.{js,css,html,png,ico,svg}'],
+    globPatterns: ['*.{png,ico,svg}'],
     globIgnores: [
       '**/__nuxt_content/**',
       '**/dump.*.sql',
