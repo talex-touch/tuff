@@ -34,9 +34,13 @@ const shouldRenderIconColorful = computed(() =>
 const recommendationBadge = computed(() => {
   const meta = props.item.meta as Record<string, unknown> | undefined
   const recommendation = meta?.recommendation as
-    | { badge?: { variant?: string; text?: string } }
+    | { badge?: { variant?: string; icon?: string; text?: string } }
     | undefined
   return recommendation?.badge
+})
+const recommendationBadgeIcon = computed(() => {
+  const icon = recommendationBadge.value?.icon?.trim()
+  return icon?.startsWith('i-') ? icon : ''
 })
 </script>
 
@@ -61,6 +65,7 @@ const recommendationBadge = computed(() => {
       class="BoxGridItem-Badge"
       :class="`badge-${recommendationBadge.variant}`"
     >
+      <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
       {{ recommendationBadge.text }}
     </span>
     <span v-if="quickKey" class="BoxGridItem-QuickKey">{{ quickKey }}</span>
@@ -149,6 +154,9 @@ const recommendationBadge = computed(() => {
 }
 
 .BoxGridItem-Badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 12px;

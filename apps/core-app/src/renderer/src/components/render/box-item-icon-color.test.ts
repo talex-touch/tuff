@@ -25,13 +25,19 @@ vi.mock('@talex-touch/tuffex/icon', () => ({
   }
 }))
 
-function createItem(): TuffItem {
+function createItem(meta?: Record<string, unknown>): TuffItem {
   return {
     id: 'item-1',
     source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
     kind: 'feature',
-    meta: { pluginName: 'touch-text-tools' }
-  } as TuffItem
+    render: {
+      mode: 'default',
+      basic: {
+        title: 'Clipboard'
+      }
+    },
+    meta: meta ?? { pluginName: 'touch-text-tools' }
+  }
 }
 
 type BasicRender = NonNullable<TuffRender['basic']>
@@ -96,5 +102,47 @@ describe('CoreBox result icon color rendering', () => {
     expect(normalizeStyle(icon.attributes('style'))).toContain(
       '--icon-color:var(--tx-text-color-primary,#e5e7eb)'
     )
+  })
+
+  it('renders recommendation badge icons as classes in list results', () => {
+    const wrapper = mount(BoxItem, {
+      props: {
+        item: createItem({
+          recommendation: {
+            badge: {
+              variant: 'frequent',
+              icon: 'i-ri-fire-line',
+              text: '常用'
+            }
+          }
+        }),
+        active: false,
+        render: createRender('i-ri-clipboard-line')
+      }
+    })
+
+    expect(wrapper.find('i.i-ri-fire-line').exists()).toBe(true)
+    expect(wrapper.text()).toContain('常用')
+  })
+
+  it('renders recommendation badge icons as classes in grid results', () => {
+    const wrapper = mount(BoxGridItem, {
+      props: {
+        item: createItem({
+          recommendation: {
+            badge: {
+              variant: 'intelligent',
+              icon: 'i-ri-time-line',
+              text: '推荐'
+            }
+          }
+        }),
+        active: false,
+        render: createRender('i-ri-clipboard-line')
+      }
+    })
+
+    expect(wrapper.find('i.i-ri-time-line').exists()).toBe(true)
+    expect(wrapper.text()).toContain('推荐')
   })
 })

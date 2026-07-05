@@ -2,6 +2,7 @@ import type { TuffItem, TuffQuery } from '@talex-touch/utils/core-box'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mapAppsToRecommendationItems, processSearchResults } from './search-processing-service'
 
@@ -103,7 +104,8 @@ describe('search-processing-service', () => {
     expect(item.render.basic?.description).toBe('Fast calculations')
     expect(item.render.basic?.icon).toMatchObject({
       type: 'url',
-      value: 'data:image/png;base64,AA=='
+      value: 'data:image/png;base64,AA==',
+      colorful: true
     })
     expect(getAppMeta(item)?.launchKind).toBe('uwp')
     expect(getAppMeta(item)?.launchTarget).toBe('Microsoft.WindowsCalculator_8wekyb3d8bbwe!App')
@@ -132,11 +134,64 @@ describe('search-processing-service', () => {
     try {
       expect(getBasicIcon(item)).toMatchObject({
         type: 'url',
-        value: `tfile://${iconPath}`
+        value: `tfile://${iconPath}`,
+        colorful: true
       })
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }
+  })
+
+  it('normalizes file URL app icons to tfile URLs', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-search-file-url-icon-'))
+    const iconPath = path.join(tempDir, 'AppIcon.png')
+    fs.writeFileSync(iconPath, 'png')
+    const [item] = mapAppsToRecommendationItems([
+      createAppSearchRow({
+        name: 'Files',
+        displayName: 'Files',
+        path: '/Applications/Files.app',
+        extensions: {
+          appIdentity: '/Applications/Files.app',
+          icon: pathToFileURL(iconPath).toString(),
+          launchKind: 'path',
+          launchTarget: '/Applications/Files.app'
+        }
+      })
+    ])
+
+    try {
+      expect(getBasicIcon(item)).toMatchObject({
+        type: 'url',
+        value: `tfile://${iconPath}`,
+        colorful: true
+      })
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves already-normalized tfile app icon URLs', () => {
+    const iconUrl = 'tfile:///tmp/talex-touch-existing-icon.png'
+    const [item] = mapAppsToRecommendationItems([
+      createAppSearchRow({
+        name: 'Existing',
+        displayName: 'Existing',
+        path: '/Applications/Existing.app',
+        extensions: {
+          appIdentity: '/Applications/Existing.app',
+          icon: iconUrl,
+          launchKind: 'path',
+          launchTarget: '/Applications/Existing.app'
+        }
+      })
+    ])
+
+    expect(getBasicIcon(item)).toMatchObject({
+      type: 'url',
+      value: iconUrl,
+      colorful: true
+    })
   })
 
   it('falls back when local app icon path is missing', () => {
@@ -160,7 +215,7 @@ describe('search-processing-service', () => {
     })
   })
 
-  it('keeps empty app icons on the existing file fallback path', () => {
+  it('uses the app fallback for empty app icons', () => {
     const [item] = mapAppsToRecommendationItems(
       [
         {
@@ -177,8 +232,8 @@ describe('search-processing-service', () => {
     )
 
     expect(item.render.basic?.icon).toMatchObject({
-      type: 'file',
-      value: ''
+      type: 'class',
+      value: 'i-ri-apps-line'
     })
   })
 

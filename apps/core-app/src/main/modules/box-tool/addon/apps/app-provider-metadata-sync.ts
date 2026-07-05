@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { resolveLocalFilePath } from '@talex-touch/utils/network'
 import type { ScannedAppInfo } from './app-types'
 import { parseStringList, serializeStringList } from './app-utils'
 
@@ -37,11 +38,17 @@ export function hasAppIconDrift(
 ): boolean {
   const normalizedCurrentIcon = currentIcon?.trim() || ''
   const normalizedScannedIcon = scannedIcon?.trim() || ''
-  if (normalizedCurrentIcon !== normalizedScannedIcon && normalizedScannedIcon) return true
+  const currentLocalPath = resolveLocalFilePath(normalizedCurrentIcon)
+  const scannedLocalPath = resolveLocalFilePath(normalizedScannedIcon)
+  const currentComparableIcon = currentLocalPath ?? normalizedCurrentIcon
+  const scannedComparableIcon = scannedLocalPath ?? normalizedScannedIcon
+
+  if (currentComparableIcon !== scannedComparableIcon && normalizedScannedIcon) return true
   if (!normalizedCurrentIcon) return false
+  if (!currentLocalPath) return false
 
   try {
-    return !existsSync(normalizedCurrentIcon)
+    return !existsSync(currentLocalPath)
   } catch {
     return true
   }

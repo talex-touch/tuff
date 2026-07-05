@@ -11,7 +11,7 @@ import fs from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { startTiming, timingLogger } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
-import { toTfileUrl } from '@talex-touch/utils/network'
+import { resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
 import { buildAppSearchTokens, matchFeature } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
@@ -27,6 +27,7 @@ const SLOW_PROCESS_THRESHOLD_MS = 300
 const searchProcessingLog = createLogger('AppScanner').child('SearchProcessing')
 const ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
 const APP_FALLBACK_ICON = 'i-ri-apps-line'
+const ADDRESSABLE_ICON_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'tfile:'])
 
 interface ProcessedTuffItem extends TuffItem {
   score: number // 用于排序的内部评分
@@ -110,6 +111,8 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   return { ...tuffItem, score: match.score }
 }
 
+type ResolvedAppIcon = { type: 'url' | 'class'; value: string; colorful?: boolean }
+
 function localFileExists(filePath: string): boolean {
   try {
     return fs.existsSync(filePath)
@@ -118,20 +121,38 @@ function localFileExists(filePath: string): boolean {
   }
 }
 
-function resolveAppIcon(rawIconValue: string): { type: 'url' | 'file' | 'class'; value: string } {
-  if (!rawIconValue) {
-    return { type: 'file', value: '' }
+function isAddressableIconUrl(value: string): boolean {
+  try {
+    return ADDRESSABLE_ICON_PROTOCOLS.has(new URL(value).protocol)
+  } catch {
+    return false
+  }
+}
+
+function resolveAppIcon(rawIconValue: string): ResolvedAppIcon {
+  const iconValue = rawIconValue.trim()
+  if (!iconValue) return { type: 'class', value: APP_FALLBACK_ICON }
+
+  if (iconValue.startsWith('data:')) {
+    return { type: 'url', value: iconValue, colorful: true }
   }
 
-  if (rawIconValue.startsWith('data:')) {
-    return { type: 'url', value: rawIconValue }
+  if (iconValue.startsWith('tfile:')) {
+    return { type: 'url', value: iconValue, colorful: true }
   }
 
-  if (!localFileExists(rawIconValue)) {
-    return { type: 'class', value: APP_FALLBACK_ICON }
+  const localPath = resolveLocalFilePath(iconValue)
+  if (localPath) {
+    return localFileExists(localPath)
+      ? { type: 'url', value: toTfileUrl(localPath), colorful: true }
+      : { type: 'class', value: APP_FALLBACK_ICON }
   }
 
-  return { type: 'url', value: toTfileUrl(rawIconValue) }
+  if (isAddressableIconUrl(iconValue)) {
+    return { type: 'url', value: iconValue, colorful: true }
+  }
+
+  return { type: 'class', value: APP_FALLBACK_ICON }
 }
 
 function getPinyinSyllables(text: string): string[] {
