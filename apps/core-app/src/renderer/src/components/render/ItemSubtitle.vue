@@ -75,6 +75,10 @@ const recommendationBadge = computed(() => {
     | undefined
   return recommendation?.badge
 })
+const recommendationBadgeIcon = computed(() => {
+  const icon = recommendationBadge.value?.icon?.trim()
+  return icon?.startsWith('i-') ? icon : ''
+})
 
 const resolvedSubtitle = computed(() => resolveI18nText(props.render.basic?.subtitle || '', t))
 
@@ -126,7 +130,7 @@ const badgeStyle = computed(() => {
           class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
           :class="badgeStyle"
         >
-          <span v-if="recommendationBadge.icon">{{ recommendationBadge.icon }}</span>
+          <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
           <span>{{ recommendationBadge.text }}</span>
         </div>
 

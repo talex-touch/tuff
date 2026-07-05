@@ -12,11 +12,46 @@ const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuild
 
 type AppRow = Awaited<ReturnType<DbUtils['getFilesByPaths']>>[number]
 type AppWithExtensions = AppRow & { extensions: Record<string, string | null> }
+type TuffBasicIcon = NonNullable<NonNullable<TuffRender['basic']>['icon']>
+
+const DEFAULT_PLUGIN_RECOMMEND_ICON: TuffBasicIcon = {
+  type: 'class',
+  value: 'i-ri-lightbulb-line'
+}
+const SUPPORTED_RECOMMEND_ICON_TYPES = new Set(['emoji', 'url', 'file', 'class', 'builtin'])
 
 const getMetaString = (item: TuffItem, key: string): string | undefined => {
   const meta = item.meta as Record<string, unknown> | undefined
   const value = meta?.[key]
   return typeof value === 'string' ? value : undefined
+}
+
+function normalizePluginRecommendIcon(icon: unknown): TuffBasicIcon {
+  if (!icon || typeof icon !== 'object') return { ...DEFAULT_PLUGIN_RECOMMEND_ICON }
+
+  const raw = icon as Record<string, unknown>
+  if (
+    typeof raw.type !== 'string' ||
+    !SUPPORTED_RECOMMEND_ICON_TYPES.has(raw.type) ||
+    typeof raw.value !== 'string' ||
+    !raw.value.trim()
+  ) {
+    return { ...DEFAULT_PLUGIN_RECOMMEND_ICON }
+  }
+
+  const normalized: TuffBasicIcon = {
+    type: raw.type as TuffBasicIcon['type'],
+    value: raw.value
+  }
+
+  if (typeof raw.color === 'string') normalized.color = raw.color
+  if (typeof raw.colorful === 'boolean') normalized.colorful = raw.colorful
+  if (raw.status === 'normal' || raw.status === 'loading' || raw.status === 'error') {
+    normalized.status = raw.status
+  }
+  if (typeof raw.error === 'string') normalized.error = raw.error
+
+  return normalized
 }
 
 /** Rebuilds TuffItems from ScoredItems by querying DB and applying provider logic */
@@ -376,12 +411,7 @@ export class ItemRebuilder {
           basic: {
             title: candidate.title,
             subtitle: candidate.subtitle,
-            icon: candidate.icon
-              ? {
-                  type: candidate.icon.type as 'emoji' | 'url' | 'file' | 'class' | 'builtin',
-                  value: candidate.icon.value
-                }
-              : { type: 'emoji', value: '💡' }
+            icon: normalizePluginRecommendIcon(candidate.icon)
           }
         },
         actions: isBuiltinUrl
@@ -493,25 +523,31 @@ export class ItemRebuilder {
 
   private getReasonLabel(scored: ScoredItem): string {
     const labels: Record<string, string> = {
-      frequent: '🔥 Frequent',
-      'time-based': '🕐 Popular Now',
-      recent: '⏰ Recent',
-      trending: '📈 Trending',
-      context: '✨ Smart Match',
-      plugin: '🧩 Plugin'
+      frequent: 'Frequent',
+      'time-based': 'Popular Now',
+      recent: 'Recent',
+      trending: 'Trending',
+      context: 'Smart Match',
+      plugin: 'Plugin'
     }
-    return labels[scored.source] || '💡 Recommended'
+    return labels[scored.source] || 'Recommended'
   }
 
   private generateBadge(scored: ScoredItem): { text: string; icon: string; variant: string } {
     const badges: Record<string, { text: string; icon: string; variant: string }> = {
-      frequent: { text: '常用', icon: '🔥', variant: 'frequent' },
-      'time-based': { text: '推荐', icon: '🕐', variant: 'intelligent' },
-      recent: { text: '最近', icon: '⏰', variant: 'recent' },
-      trending: { text: '趋势', icon: '📈', variant: 'trending' },
-      context: { text: '智能推荐', icon: '✨', variant: 'intelligent' },
-      plugin: { text: '插件', icon: '🧩', variant: 'plugin' }
+      frequent: { text: '常用', icon: 'i-ri-fire-line', variant: 'frequent' },
+      'time-based': { text: '推荐', icon: 'i-ri-time-line', variant: 'intelligent' },
+      recent: { text: '最近', icon: 'i-ri-history-line', variant: 'recent' },
+      trending: { text: '趋势', icon: 'i-ri-line-chart-line', variant: 'trending' },
+      context: { text: '智能推荐', icon: 'i-ri-sparkling-line', variant: 'intelligent' },
+      plugin: { text: '插件', icon: 'i-ri-puzzle-line', variant: 'plugin' }
     }
-    return badges[scored.source] || { text: '推荐', icon: '💡', variant: 'intelligent' }
+    return (
+      badges[scored.source] || {
+        text: '推荐',
+        icon: 'i-ri-lightbulb-line',
+        variant: 'intelligent'
+      }
+    )
   }
 }

@@ -104,4 +104,82 @@ describe('ItemRebuilder', () => {
       source: 'frequent'
     })
   })
+
+  it('preserves plugin recommendation icon metadata and class badge icons', async () => {
+    const rebuilder = new ItemRebuilder({} as never)
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'plugin-recommend:demo-provider',
+        itemId: 'open-demo',
+        sourceType: 'plugin-recommend',
+        usageStats,
+        source: 'plugin',
+        score: 0.88,
+        pluginCandidate: {
+          providerId: 'demo-provider',
+          id: 'open-demo',
+          title: 'Open Demo',
+          subtitle: 'Plugin action',
+          icon: {
+            type: 'url',
+            value: 'data:image/svg+xml,<svg></svg>',
+            color: '#22c55e',
+            colorful: true,
+            status: 'loading',
+            error: 'pending'
+          } as never,
+          action: 'open',
+          data: { target: 'demo' }
+        }
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+
+    expect(result).toHaveLength(1)
+    expect(result[0]?.render.basic?.icon).toMatchObject({
+      type: 'url',
+      value: 'data:image/svg+xml,<svg></svg>',
+      color: '#22c55e',
+      colorful: true,
+      status: 'loading',
+      error: 'pending'
+    })
+    expect((result[0]?.meta as Record<string, unknown>).recommendation).toMatchObject({
+      source: 'plugin',
+      reason: 'Plugin',
+      badge: {
+        text: '插件',
+        icon: 'i-ri-puzzle-line',
+        variant: 'plugin'
+      }
+    })
+  })
+
+  it('uses class icons for plugin recommendation fallbacks', async () => {
+    const rebuilder = new ItemRebuilder({} as never)
+    const scoredItems: ScoredItem[] = [
+      {
+        sourceId: 'plugin-recommend:demo-provider',
+        itemId: 'missing-icon',
+        sourceType: 'plugin-recommend',
+        usageStats,
+        source: 'plugin',
+        score: 0.5,
+        pluginCandidate: {
+          providerId: 'demo-provider',
+          id: 'missing-icon',
+          title: 'Missing Icon',
+          action: 'open'
+        }
+      }
+    ]
+
+    const result = await rebuilder.rebuildItems(scoredItems)
+
+    expect(result[0]?.render.basic?.icon).toEqual({
+      type: 'class',
+      value: 'i-ri-lightbulb-line'
+    })
+  })
 })

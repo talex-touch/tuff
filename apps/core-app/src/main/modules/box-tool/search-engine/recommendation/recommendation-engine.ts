@@ -1205,7 +1205,7 @@ export class RecommendationEngine {
           id: `clipboard-url-open:${url}`,
           title: '打开 URL',
           subtitle: url.length > 60 ? `${url.substring(0, 57)}...` : url,
-          icon: { type: 'emoji', value: '🔗' },
+          icon: { type: 'class', value: 'i-ri-links-line' },
           priority: 95,
           action: 'open-url',
           data: { url }
