@@ -10,16 +10,25 @@ function hashCacheKey(cacheKey: string): string {
   return crypto.createHash('sha256').update(cacheKey).digest('hex').slice(0, 32)
 }
 
+function getElectronPath(name: string): string | null {
+  try {
+    const getPath = app?.getPath as ((pathName: string) => string) | undefined
+    return getPath?.(name) || null
+  } catch {
+    return null
+  }
+}
+
 function resolveBaseCacheDirs(): string[] {
   const dirs: string[] = []
 
   try {
-    const cachePath = app?.getPath?.('cache')
+    const cachePath = getElectronPath('cache')
     if (cachePath) {
       dirs.push(path.join(cachePath, 'app-icons'))
     }
 
-    const userDataPath = app?.getPath?.('userData')
+    const userDataPath = getElectronPath('userData')
     if (userDataPath) {
       dirs.push(path.join(userDataPath, ...APP_ICON_CACHE_SUBDIR))
       dirs.push(path.join(userDataPath, '..', ...APP_ICON_CACHE_DIRNAME))
@@ -38,15 +47,15 @@ function resolveBaseCacheDir(): string {
   return resolveBaseCacheDirs()[0]
 }
 
-export function getAppIconCacheDir(platform = process.platform): string {
+export function getAppIconCacheDir(platform: string = process.platform): string {
   return path.join(resolveBaseCacheDir(), platform)
 }
 
-export function getAppIconCacheDirs(platform = process.platform): string[] {
+export function getAppIconCacheDirs(platform: string = process.platform): string[] {
   return resolveBaseCacheDirs().map((dir) => path.join(dir, platform))
 }
 
-export function getAppIconCachePath(cacheKey: string, platform = process.platform): string {
+export function getAppIconCachePath(cacheKey: string, platform: string = process.platform): string {
   return path.join(getAppIconCacheDir(platform), `${hashCacheKey(cacheKey)}.png`)
 }
 
