@@ -8,6 +8,7 @@ import type {
 import type { files as filesSchema } from '../../../../db/schema'
 import type { Range } from './highlighting-service'
 import fs from 'node:fs'
+import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { startTiming, timingLogger } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
@@ -20,6 +21,7 @@ import { formatLog, LogStyle, parseStringList } from './app-utils'
 import { resolveDisplayName } from './display-name-sync-utils'
 import { createLogger } from '../../../../utils/logger'
 import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
+import { getAppIconCacheDirs } from './app-icon-cache'
 import { resolveAppSemanticAliases } from './app-semantic-catalog'
 import { resolveAppToolSourceIds } from './app-tool-source-catalog'
 
@@ -121,6 +123,19 @@ function localFileExists(filePath: string): boolean {
   }
 }
 
+function resolveMigratedAppIconCachePath(filePath: string): string | null {
+  const normalizedPath = filePath.replace(/\\/g, '/')
+  const match = /\/app-icons\/([^/]+)\/([^/]+)$/.exec(normalizedPath)
+  if (!match?.[1] || !match[2]) return null
+
+  for (const cacheDir of getAppIconCacheDirs(match[1])) {
+    const candidatePath = path.join(cacheDir, match[2])
+    if (localFileExists(candidatePath)) return candidatePath
+  }
+
+  return null
+}
+
 function isAddressableIconUrl(value: string): boolean {
   try {
     return ADDRESSABLE_ICON_PROTOCOLS.has(new URL(value).protocol)
@@ -143,8 +158,13 @@ function resolveAppIcon(rawIconValue: string): ResolvedAppIcon {
 
   const localPath = resolveLocalFilePath(iconValue)
   if (localPath) {
-    return localFileExists(localPath)
-      ? { type: 'url', value: toTfileUrl(localPath), colorful: true }
+    if (localFileExists(localPath)) {
+      return { type: 'url', value: toTfileUrl(localPath), colorful: true }
+    }
+
+    const migratedIconPath = resolveMigratedAppIconCachePath(localPath)
+    return migratedIconPath
+      ? { type: 'url', value: toTfileUrl(migratedIconPath), colorful: true }
       : { type: 'class', value: APP_FALLBACK_ICON }
   }
 

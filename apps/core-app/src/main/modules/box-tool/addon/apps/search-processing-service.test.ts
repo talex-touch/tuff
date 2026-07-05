@@ -3,8 +3,18 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mapAppsToRecommendationItems, processSearchResults } from './search-processing-service'
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn((name: string) => {
+      if (name === 'cache') return path.join(os.tmpdir(), 'app-search-cache-root')
+      if (name === 'userData') return path.join(os.tmpdir(), 'app-search-user-data')
+      return os.tmpdir()
+    })
+  }
+}))
 
 type AppSearchTestRow = Parameters<typeof mapAppsToRecommendationItems>[0][number]
 
@@ -54,6 +64,10 @@ function createAppSearchRow(
 }
 
 describe('search-processing-service', () => {
+  beforeEach(() => {
+    fs.rmSync(path.join(os.tmpdir(), 'app-search-cache-root'), { recursive: true, force: true })
+  })
+
   it('falls back to clean app name when displayName contains replacement chars', async () => {
     const items = await processSearchResults(
       [
@@ -212,6 +226,33 @@ describe('search-processing-service', () => {
     expect(getBasicIcon(item)).toMatchObject({
       type: 'class',
       value: 'i-ri-apps-line'
+    })
+  })
+
+  it('resolves migrated app icon cache files by platform and hashed filename', () => {
+    const cacheIconDir = path.join(os.tmpdir(), 'app-search-cache-root', 'app-icons', 'darwin')
+    const migratedIconPath = path.join(cacheIconDir, 'f099cfa4d388cc82bf60d6f90139a291.png')
+    fs.mkdirSync(cacheIconDir, { recursive: true })
+    fs.writeFileSync(migratedIconPath, 'png')
+
+    const [item] = mapAppsToRecommendationItems([
+      createAppSearchRow({
+        name: 'QQ',
+        displayName: 'QQ',
+        path: '/Applications/QQ.app',
+        extensions: {
+          appIdentity: '/Applications/QQ.app',
+          icon: '/Users/example/Library/Application Support/@talex-touch/tuff-dev/cache/app-icons/darwin/f099cfa4d388cc82bf60d6f90139a291.png',
+          launchKind: 'path',
+          launchTarget: '/Applications/QQ.app'
+        }
+      })
+    ])
+
+    expect(getBasicIcon(item)).toMatchObject({
+      type: 'url',
+      value: `tfile://${migratedIconPath}`,
+      colorful: true
     })
   })
 
