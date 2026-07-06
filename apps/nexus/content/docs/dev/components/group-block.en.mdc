@@ -39,11 +39,12 @@ code: |
         active-icon="i-ri-notification-fill"
       />
       <TxBlockSlot title="Language" description="Display language" default-icon="i-carbon-translate">
-        <select v-model="language">
-          <option value="en">English</option>
-          <option value="zh">Chinese</option>
-        </select>
+        <TxSelect v-model="language" placeholder="Select language">
+          <TuffSelectItem value="en" label="English" />
+          <TuffSelectItem value="zh" label="Chinese" />
+        </TxSelect>
       </TxBlockSlot>
+      <TxBlockLine title="Version" description="2.4.13-beta.3" />
     </TxGroupBlock>
   </template>
 ---
@@ -65,7 +66,7 @@ code: |
       active-icon="i-ri-folder-open-line"
       :default-expand="false"
     >
-      <p>Hidden content is still mounted, but the group body starts collapsed.</p>
+      <TxBlockLine title="Hidden content" description="The group body stays mounted" />
     </TxGroupBlock>
   </template>
 ---
@@ -115,9 +116,9 @@ code: |
       :collapsible="false"
     >
       <template #header-extra>
-        <button>Run now</button>
+        <TxButton size="small" variant="secondary">Run now</TxButton>
       </template>
-      <TxBlockLine title="Status" description="Ready" />
+      <TxBlockLine title="Last sync" description="Just now" />
     </TxGroupBlock>
   </template>
 ---
@@ -131,12 +132,15 @@ A simple row item for displaying title and description.
 
 ## Basic Usage
 
-:::TuffCodeBlock{lang="vue"}
+### BlockLine
+:::TuffDemoWrapper{demo="GroupBlockBlockLineBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockLine title="Version" description="1.0.0" />
-    <TxBlockLine title="Updated" description="2026.05.07" />
+    <TxGroupBlock name="Release info" description="Readonly configuration rows" default-icon="i-ri-information-line" :collapsible="false">
+      <TxBlockLine title="Version" description="2.4.13-beta.3" />
+      <TxBlockLine title="Build date" description="2026.07.06" />
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -145,15 +149,25 @@ code: |
 
 Displayed as a clickable link.
 
-:::TuffCodeBlock{lang="vue"}
+### BlockLine (link)
+:::TuffDemoWrapper{demo="GroupBlockBlockLineLinkDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockLine title="Documentation" link @click="openDocs">
-      <template #description>
-        Open developer docs
-      </template>
-    </TxBlockLine>
+    <TxGroupBlock name="Resource links" description="Clickable navigation rows" default-icon="i-ri-links-line" :collapsible="false">
+      <TxBlockLine title="Documentation" link>
+        <template #description>
+          Open developer docs
+          <span class="i-carbon-arrow-up-right" aria-hidden="true" />
+        </template>
+      </TxBlockLine>
+      <TxBlockLine title="Repository" link>
+        <template #description>
+          Browse source examples
+          <span class="i-carbon-code" aria-hidden="true" />
+        </template>
+      </TxBlockLine>
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -166,59 +180,67 @@ A block container with icon, title, description, and a custom control slot.
 
 ## Basic Usage
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSlot
+:::TuffDemoWrapper{demo="GroupBlockBlockSlotDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSlot
-      title="Theme"
-      description="Choose the interface appearance"
-      default-icon="i-ri-palette-line"
-    >
-      <select v-model="theme">
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-        <option value="auto">System</option>
-      </select>
-    </TxBlockSlot>
+    <TxGroupBlock name="Appearance" description="Custom control slot" default-icon="i-ri-palette-line" :collapsible="false">
+      <TxBlockSlot title="Theme" description="Choose the interface appearance" default-icon="i-carbon-color-palette">
+        <TxSelect v-model="theme" placeholder="Select theme">
+          <TuffSelectItem value="light" label="Light" />
+          <TuffSelectItem value="dark" label="Dark" />
+          <TuffSelectItem value="auto" label="System" />
+        </TxSelect>
+      </TxBlockSlot>
+    </TxGroupBlock>
   </template>
 ---
 :::
 
 ## Active State and Labels
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSlot (active)
+:::TuffDemoWrapper{demo="GroupBlockBlockSlotActiveDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSlot
-      title="Pinned workspace"
-      description="Show this workspace first"
-      default-icon="i-ri-star-line"
-      active-icon="i-ri-star-fill"
-      :active="true"
-    >
-      <template #tags>
-        <span style="font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--tx-fill-color);">Active</span>
-      </template>
-    </TxBlockSlot>
+    <TxGroupBlock name="Workspace preferences" description="Active state and labels" default-icon="i-ri-star-line" :collapsible="false">
+      <TxBlockSlot
+        title="Pinned workspace"
+        description="Show this workspace first"
+        default-icon="i-ri-star-line"
+        active-icon="i-ri-star-fill"
+        active
+      >
+        <template #tags>
+          <TxTag label="Active" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
+        </template>
+        <TxButton size="small" variant="secondary">Manage</TxButton>
+      </TxBlockSlot>
+    </TxGroupBlock>
   </template>
 ---
 :::
 
 ## Custom Labels
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSlot (custom label)
+:::TuffDemoWrapper{demo="GroupBlockBlockSlotCustomLabelDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSlot>
-      <template #label>
-        <h3>Profile name <span style="color: red">*</span></h3>
-        <p>Shown in shared workspaces.</p>
-      </template>
-      <input type="text" />
-    </TxBlockSlot>
+    <TxGroupBlock name="Profile fields" description="Custom label content" default-icon="i-ri-user-settings-line" :collapsible="false">
+      <TxBlockSlot default-icon="i-ri-profile-line">
+        <template #label>
+          <div>
+            <strong>Profile name</strong>
+            <p>Shown in shared workspaces.</p>
+          </div>
+        </template>
+        <TuffInput v-model="profileName" placeholder="Enter profile name" />
+      </TxBlockSlot>
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -236,13 +258,15 @@ A block container with an integrated switch control.
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="autoUpdate"
-      title="Auto update"
-      description="Install updates when the app restarts"
-      default-icon="i-ri-refresh-line"
-      active-icon="i-ri-refresh-line"
-    />
+    <TxGroupBlock name="Update policy" description="CoreApp-aligned row rhythm and spacing" default-icon="i-ri-refresh-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="autoUpdate"
+        title="Auto update"
+        description="Install updates when the app restarts"
+        default-icon="i-ri-refresh-line"
+        active-icon="i-ri-refresh-line"
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -254,32 +278,37 @@ code: |
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="loading"
-      title="Sync status"
-      description="Waiting for the latest state"
-      default-icon="i-ri-loader-4-line"
-      active-icon="i-ri-loader-4-line"
-      :loading="true"
-    />
+    <TxGroupBlock name="Sync status" description="Loading freezes the inner control" default-icon="i-ri-refresh-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="loading"
+        title="Sync status"
+        description="Waiting for the latest state"
+        default-icon="i-ri-refresh-line"
+        active-icon="i-ri-refresh-line"
+        loading
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::
 
 ## Disabled State
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSwitch (disabled)
+:::TuffDemoWrapper{demo="GroupBlockBlockSwitchDisabledDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="value"
-      title="Locked setting"
-      description="Managed by your organization"
-      default-icon="i-ri-lock-line"
-      active-icon="i-ri-lock-fill"
-      disabled
-    />
+    <TxGroupBlock name="Managed setting" description="Disabled state keeps the same visual system" default-icon="i-ri-lock-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="locked"
+        title="Locked setting"
+        description="Managed by your organization"
+        default-icon="i-ri-lock-line"
+        active-icon="i-ri-lock-fill"
+        disabled
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -293,14 +322,16 @@ Displayed as a navigation item instead of a switch.
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="dummy"
-      title="Security settings"
-      description="Open the security preferences page"
-      default-icon="i-ri-shield-keyhole-line"
-      guidance
-      @click="handleClick"
-    />
+    <TxGroupBlock name="Security center" description="Guidance mode opens the next settings level" default-icon="i-ri-shield-keyhole-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="dummy"
+        title="Security settings"
+        description="Open the security preferences page"
+        default-icon="i-ri-shield-keyhole-line"
+        guidance
+        @click="handleClick"
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::

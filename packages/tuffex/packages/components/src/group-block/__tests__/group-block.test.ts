@@ -40,7 +40,7 @@ describe('group-block components', () => {
         memoryName: 'settings',
       },
       slots: {
-        default: '<div class="content-row">Notifications</div>',
+        'default': '<div class="content-row">Notifications</div>',
         'header-extra': '<button class="header-action">Action</button>',
       },
     })
@@ -166,6 +166,9 @@ describe('group-block components', () => {
       },
     })
     expect(loading.find('.tx-block-switch__loader').exists()).toBe(true)
+    expect(loading.findComponent({ name: 'TxSpinner' }).exists()).toBe(true)
+    expect(loading.find('.tx-block-switch--loading').exists()).toBe(true)
+    expect(loading.find('.tx-block-switch__loader.i-ri-loader-4-line').exists()).toBe(false)
     await loading.find('.tuff-switch').trigger('click')
     expect(loading.emitted('update:modelValue')).toBeUndefined()
     expect(loading.emitted('change')).toBeUndefined()

@@ -100,16 +100,20 @@ const currentIcon = computed(() => {
 .TBlockSlot-Container {
   position: relative;
   display: flex;
-  justify-content: space-between;
+  gap: 16px;
+  justify-content: flex-start;
   align-items: center;
   padding: 4px 16px;
   width: 100%;
   height: 56px;
   user-select: none;
   box-sizing: border-box;
-  --fake-color: var(--tx-fill-color-darker, #ebeef5);
-  --fake-radius: inherit;
+  --fake-color: var(--tx-fill-color-dark, #e4e7ed);
+  --fake-radius: 12px;
   --fake-opacity: 0.5;
+  transition:
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s ease;
 
   &.disabled,
   &--disabled {
@@ -120,7 +124,9 @@ const currentIcon = computed(() => {
   .tx-block-slot__content {
     display: flex;
     align-items: center;
-    width: 100%;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
     height: 100%;
     box-sizing: border-box;
     cursor: pointer;
@@ -132,6 +138,7 @@ const currentIcon = computed(() => {
 
     > .tx-block-slot__label {
       flex: 1;
+      min-width: 0;
     }
 
     .tx-block-slot__title {
@@ -142,9 +149,10 @@ const currentIcon = computed(() => {
     }
 
     .tx-block-slot__description {
-      margin: 2px 0 0;
+      margin: 4px 0 0;
       font-size: 12px;
       font-weight: 400;
+      line-height: 16px;
       opacity: 0.5;
       color: var(--tx-text-color-secondary, #909399);
     }
@@ -185,6 +193,10 @@ const currentIcon = computed(() => {
   &:hover {
     --fake-color: var(--tx-fill-color, #f0f2f5);
   }
+
+  &:active:not(.disabled):not(.tx-block-slot--disabled) {
+    transform: scale(0.985);
+  }
 }
 
 .touch-blur .tx-block-slot,
@@ -192,7 +204,7 @@ const currentIcon = computed(() => {
   --fake-color: var(--tx-fill-color, #f0f2f5);
 
   &:hover {
-    --fake-color: var(--tx-fill-color-darker, #ebeef5);
+    --fake-color: var(--tx-fill-color-dark, #e4e7ed);
   }
 }
 </style>

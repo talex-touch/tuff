@@ -19,6 +19,7 @@ import type { BlockSwitchEmits, BlockSwitchProps } from './types'
  * @component
  */
 import { computed } from 'vue'
+import { TxSpinner } from '../../spinner'
 import TuffSwitch from '../../switch'
 import TxBlockSlot from './TxBlockSlot.vue'
 
@@ -66,6 +67,7 @@ function handleClick(event: MouseEvent): void {
 <template>
   <TxBlockSlot
     class="tx-block-switch"
+    :class="{ 'tx-block-switch--loading': loading }"
     :title="title"
     :description="description"
     :default-icon="resolvedDefaultIcon"
@@ -79,10 +81,11 @@ function handleClick(event: MouseEvent): void {
     </template>
     <template v-if="!guidance">
       <div class="tx-block-switch__actions">
-        <span
+        <TxSpinner
           v-if="loading"
-          class="tx-block-switch__loader i-ri-loader-4-line animate-spin"
-          aria-hidden="true"
+          class="tx-block-switch__loader"
+          :size="18"
+          :stroke-width="2"
         />
         <TuffSwitch v-model="value" :disabled="disabled || loading" @change="handleChange" />
       </div>
@@ -101,8 +104,44 @@ function handleClick(event: MouseEvent): void {
 }
 
 .tx-block-switch__loader {
-  font-size: 18px;
   color: var(--tx-text-color-secondary, #909399);
+}
+
+.tx-block-switch.tx-block-switch--loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.72;
+  border-radius: var(--fake-radius, 12px);
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 34%,
+    color-mix(in srgb, var(--tx-color-white, #fff) 52%, transparent) 50%,
+    transparent 66%,
+    transparent 100%
+  );
+  background-size: 260% 100%;
+  animation: tx-block-switch-loading-shimmer 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes tx-block-switch-loading-shimmer {
+  0% {
+    background-position: 160% 0;
+    opacity: 0;
+  }
+
+  18%,
+  76% {
+    opacity: 0.72;
+  }
+
+  100% {
+    background-position: -160% 0;
+    opacity: 0;
+  }
 }
 
 .tx-block-switch__guidance {
