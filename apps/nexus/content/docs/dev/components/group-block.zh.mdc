@@ -2,7 +2,8 @@
 title: "GroupBlock 分组块"
 description: "用于组织相关内容的可折叠分组容器，带有平滑动画效果。"
 category: Layout
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # GroupBlock 分组块
 

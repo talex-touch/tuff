@@ -2,7 +2,8 @@
 title: "GroupBlock"
 description: "Collapsible settings groups and block rows for preference surfaces."
 category: Layout
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # GroupBlock
 
