@@ -1,13 +1,13 @@
 # Roadmap vNext
 
-> 更新时间：2026-06-22
+> 更新时间：2026-07-06
 > 定位：当前剩余工作的阶段化执行路线。本文是 R0-R9 的执行 SoT，替代旧的 npm publish / 平台验证 blocker 口径。
 
 ## 决策锁定
 
 - 公共包发布不再作为独立 Roadmap / blocker / evidence 项；后续只跟踪“版本变更后 push 到 GitHub 触发自动发版 workflow”的 CI/CD 结果。
 - 平台验证已由 owner 完成，后续从 Roadmap、P0/P1、平台后续与 evidence 队列中移除。
-- 当前代码版本以 root / CoreApp `2.4.13-beta.1` 为口径；当前分支存在多主题未提交改动，后续仍按 related-only 拆分验证。
+- 当前代码版本以 root / CoreApp `2.4.13-beta.3` 为口径；当前分支存在多主题未提交改动，后续仍按 related-only 拆分验证。
 - GitHub push、tag/release、生产 API/DB 操作仍属于需要明确授权的操作；自动发版只作为版本变更 push 后的流水线结果跟踪。
 
 ## 关联 SoT / Evidence
@@ -22,7 +22,7 @@
 
 | 阶段 | 主线 | 要交付什么 | 完成标准 |
 | --- | --- | --- | --- |
-| R0 | 口径清理 | 移除 npm publish / 平台验证相关 blocker；把当前 `2.4.13-beta.1`、GitHub 自动发版口径写入规划 | 文档无 `包发布凭据`、平台验证作为待办；`git diff --check` 通过 |
+| R0 | 口径清理 | 移除 npm publish / 平台验证相关 blocker；把当前 `2.4.13-beta.3`、GitHub 自动发版口径写入规划 | 文档无 `包发布凭据`、平台验证作为待办；`git diff --check` 通过 |
 | R1 | Release Integrity | Nexus release asset `sha256`、`signatureUrl`、signature endpoint、manifest/download matrix 对齐 | GitHub Release ↔ Nexus release metadata 自动校验通过 |
 | R2 | AI 2.5.0 Stable | 修 provider routing；Local/Ollama 优先；CoreBox AI Ask 文本 + 显式 OCR；失败路径 UI | `Evidence-Matrix-AI-Stable-2026-06-18.md` 的固定 evidence item 关闭；`text.chat` / `vision.ocr -> text.chat` 成功，未登录、provider unavailable、quota/model unsupported、permission denied 与 Local/Ollama routing 都可解释 |
 | R3 | Search / Indexing Runtime | File write/store boundary、SQLite/FTS 写入、`scan_progress`、integrity reset、durable job history | FileProvider 写入/进度/重置都走 runtime task/store；focused tests 覆盖 |
