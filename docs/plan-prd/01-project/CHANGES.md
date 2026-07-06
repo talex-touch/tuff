@@ -1,7 +1,15 @@
 # 变更日志
 
-> 更新时间：2026-07-04
+> 更新时间：2026-07-06
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-06
+
+### docs: refresh P0 roadmap and execution order
+
+- 当前规划入口统一到 root / CoreApp `2.4.13-beta.3`，避免 README / TODO / Roadmap / Quality Baseline 继续停留在 `2.4.13-beta.1` 或旧 HEAD 口径。
+- 首要任务顺序更新为：先拆分并验证当前 dirty worktree，再收尾 Trellis bootstrap，然后推进 R3 attach-only natural evidence、Nexus deployed preview evidence，最后等待 R1 signing materials 闭环。
+- R2 AI Stable 当前按 13/13 visible surfaces passed 处理；后续 Assistant / OmniPanel / screenshot 只作为产品化 follow-up，不反向阻塞 Stable gate。
 
 ## 2026-07-04
 

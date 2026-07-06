@@ -1,15 +1,24 @@
 # Tuff TODO
 
-> 更新时间：2026-07-04
+> 更新时间：2026-07-06
 > 定位：当前 2 周执行清单。细项分别落到 `TODO-AI.md`、`TODO-R3.md`、`TODO-nexus.md`；6 月以前记录已从文档树移除。
 
 ## 当前执行窗口
 
 - 当前主线：按 `04-implementation/Roadmap-vNext-2026-06-18.md` 推进 R0-R9。
-- 当前代码版本：root / CoreApp `2.4.13-beta.1`。
+- 当前代码版本：root / CoreApp `2.4.13-beta.3`。
 - 工作方式：related-only 小切片；不混合 CoreApp、Nexus、AI、docs、packages；不主动 git commit / push。
 - 公共包发布不再作为独立 Roadmap blocker，版本变更后以 GitHub 自动发版 workflow 结果为准。
 - owner 已完成的平台人工验证不再作为待办、平台后续或 release blocker；平台能力只保留 degraded / fail-closed 回归要求。
+
+## 当前首要任务顺序
+
+1. P0：按 related-only 拆分当前 dirty worktree；CoreApp auth / Nexus UI-account-design / Trellis spec 文档分别验证，不混提交。
+2. P0：收尾 Trellis `00-bootstrap-guidelines`；确认 `.trellis/spec/frontend/` 都是当前真实规范后再 finish / archive。
+3. P1：R3 先采 attach-only natural Settings recent task evidence；未完成真实 profile preflight 和用户确认前，不执行 SQLite/FTS 或 `scan_progress` 迁移。
+4. P1：Nexus performance 下一批只补 deployed Cloudflare Pages preview HAR、真实 provider callback、authenticated dashboard smoke 与 bfcache hit，不再用 local-only evidence 关账。
+5. P2：R1 Release Integrity 等 `.sig/.asc`、manifest signature、Nexus `signatureUrl/signatureKey` 与 signing public key 齐备后再闭环。
+
 
 ## 状态快照
 
