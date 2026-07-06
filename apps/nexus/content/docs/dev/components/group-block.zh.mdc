@@ -39,11 +39,12 @@ code: |
         active-icon="i-ri-notification-fill"
       />
       <TxBlockSlot title="语言" description="选择显示语言" default-icon="i-carbon-translate">
-        <select v-model="language">
-          <option value="en">English</option>
-          <option value="zh">中文</option>
-        </select>
+        <TxSelect v-model="language" placeholder="选择语言">
+          <TuffSelectItem value="en" label="English" />
+          <TuffSelectItem value="zh" label="中文" />
+        </TxSelect>
       </TxBlockSlot>
+      <TxBlockLine title="版本" description="2.4.13-beta.3" />
     </TxGroupBlock>
   </template>
 ---
@@ -65,7 +66,7 @@ code: |
       active-icon="i-ri-folder-open-line"
       :default-expand="false"
     >
-      <p>高级内容</p>
+      <TxBlockLine title="展示内容" description="高级内容已保持挂载" />
     </TxGroupBlock>
   </template>
 ---
@@ -115,7 +116,7 @@ code: |
       :collapsible="false"
     >
       <template #header-extra>
-        <button>立即同步</button>
+        <TxButton size="small" variant="secondary">立即同步</TxButton>
       </template>
       <TxBlockLine title="上次同步" description="刚刚" />
     </TxGroupBlock>
@@ -131,12 +132,15 @@ code: |
 
 ## 基础用法
 
-:::TuffCodeBlock{lang="vue"}
+### BlockLine
+:::TuffDemoWrapper{demo="GroupBlockBlockLineBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockLine title="版本" description="1.0.0" />
-    <TxBlockLine title="构建日期" description="2024.01.15" />
+    <TxGroupBlock name="版本信息" description="展示只读配置行" default-icon="i-ri-information-line" :collapsible="false">
+      <TxBlockLine title="版本" description="2.4.13-beta.3" />
+      <TxBlockLine title="构建日期" description="2026.07.06" />
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -145,11 +149,25 @@ code: |
 
 显示为可点击的链接。
 
-:::TuffCodeBlock{lang="vue"}
+### BlockLine (link)
+:::TuffDemoWrapper{demo="GroupBlockBlockLineLinkDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockLine title="查看文档" link @click="openDocs" />
+    <TxGroupBlock name="资源链接" description="可点击的跳转行" default-icon="i-ri-links-line" :collapsible="false">
+      <TxBlockLine title="查看文档" link>
+        <template #description>
+          打开开发者文档
+          <span class="i-carbon-arrow-up-right" aria-hidden="true" />
+        </template>
+      </TxBlockLine>
+      <TxBlockLine title="查看仓库" link>
+        <template #description>
+          浏览源码示例
+          <span class="i-carbon-code" aria-hidden="true" />
+        </template>
+      </TxBlockLine>
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -162,59 +180,67 @@ code: |
 
 ## 基础用法
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSlot
+:::TuffDemoWrapper{demo="GroupBlockBlockSlotDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSlot
-      title="主题"
-      description="选择您偏好的主题"
-      default-icon="i-ri-palette-line"
-    >
-      <select v-model="theme">
-        <option value="light">浅色</option>
-        <option value="dark">深色</option>
-        <option value="auto">自动</option>
-      </select>
-    </TxBlockSlot>
+    <TxGroupBlock name="外观设置" description="自定义控件插槽" default-icon="i-ri-palette-line" :collapsible="false">
+      <TxBlockSlot title="主题" description="选择您偏好的主题" default-icon="i-carbon-color-palette">
+        <TxSelect v-model="theme" placeholder="选择主题">
+          <TuffSelectItem value="light" label="浅色" />
+          <TuffSelectItem value="dark" label="深色" />
+          <TuffSelectItem value="auto" label="跟随系统" />
+        </TxSelect>
+      </TxBlockSlot>
+    </TxGroupBlock>
   </template>
 ---
 :::
 
 ## 激活态与标签
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSlot (active)
+:::TuffDemoWrapper{demo="GroupBlockBlockSlotActiveDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSlot
-      title="常用设置"
-      description="已启用"
-      default-icon="i-ri-star-line"
-      active-icon="i-ri-star-fill"
-      :active="true"
-    >
-      <template #tags>
-        <span style="font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--tx-fill-color);">推荐</span>
-      </template>
-    </TxBlockSlot>
+    <TxGroupBlock name="工作区偏好" description="激活态与标签" default-icon="i-ri-star-line" :collapsible="false">
+      <TxBlockSlot
+        title="置顶工作区"
+        description="优先显示该工作区"
+        default-icon="i-ri-star-line"
+        active-icon="i-ri-star-fill"
+        active
+      >
+        <template #tags>
+          <TxTag label="已启用" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
+        </template>
+        <TxButton size="small" variant="secondary">管理</TxButton>
+      </TxBlockSlot>
+    </TxGroupBlock>
   </template>
 ---
 :::
 
 ## 自定义标签
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSlot (custom label)
+:::TuffDemoWrapper{demo="GroupBlockBlockSlotCustomLabelDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSlot>
-      <template #label>
-        <h3>自定义标题 <span style="color: red">*</span></h3>
-        <p>必填字段</p>
-      </template>
-      <input type="text" />
-    </TxBlockSlot>
+    <TxGroupBlock name="资料字段" description="自定义标签区域" default-icon="i-ri-user-settings-line" :collapsible="false">
+      <TxBlockSlot default-icon="i-ri-profile-line">
+        <template #label>
+          <div>
+            <strong>资料名称</strong>
+            <p>显示在共享工作区。</p>
+          </div>
+        </template>
+        <TuffInput v-model="profileName" placeholder="输入资料名称" />
+      </TxBlockSlot>
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -232,13 +258,15 @@ code: |
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="autoUpdate"
-      title="自动更新"
-      description="启用后台更新"
-      default-icon="i-ri-refresh-line"
-      active-icon="i-ri-refresh-line"
-    />
+    <TxGroupBlock name="更新策略" description="使用 CoreApp 同款行高和间距" default-icon="i-ri-refresh-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="autoUpdate"
+        title="自动更新"
+        description="后台自动检查并下载更新"
+        default-icon="i-ri-refresh-line"
+        active-icon="i-ri-refresh-line"
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -250,32 +278,37 @@ code: |
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="loading"
-      title="正在同步"
-      description="同步过程中暂不可用"
-      default-icon="i-ri-loader-4-line"
-      active-icon="i-ri-loader-4-line"
-      :loading="true"
-    />
+    <TxGroupBlock name="同步状态" description="加载中会冻结内部控件" default-icon="i-ri-refresh-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="loading"
+        title="正在同步"
+        description="等待最新状态返回"
+        default-icon="i-ri-refresh-line"
+        active-icon="i-ri-refresh-line"
+        loading
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::
 
 ## 禁用状态
 
-:::TuffCodeBlock{lang="vue"}
+### BlockSwitch (disabled)
+:::TuffDemoWrapper{demo="GroupBlockBlockSwitchDisabledDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="value"
-      title="高级功能"
-      description="需要订阅"
-      default-icon="i-ri-lock-line"
-      active-icon="i-ri-lock-fill"
-      disabled
-    />
+    <TxGroupBlock name="受管设置" description="禁用态保持同一视觉体系" default-icon="i-ri-lock-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="locked"
+        title="高级功能"
+        description="需要订阅或管理员授权"
+        default-icon="i-ri-lock-line"
+        active-icon="i-ri-lock-fill"
+        disabled
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::
@@ -289,14 +322,16 @@ code: |
 ---
 code: |
   <template>
-    <TxBlockSwitch
-      v-model="dummy"
-      title="隐私设置"
-      description="管理您的隐私选项"
-      default-icon="i-ri-shield-keyhole-line"
-      guidance
-      @click="handleClick"
-    />
+    <TxGroupBlock name="安全中心" description="引导模式用于进入下一层设置" default-icon="i-ri-shield-keyhole-line" :collapsible="false">
+      <TxBlockSwitch
+        v-model="dummy"
+        title="隐私设置"
+        description="管理设备、数据和授权选项"
+        default-icon="i-ri-shield-keyhole-line"
+        guidance
+        @click="handleClick"
+      />
+    </TxGroupBlock>
   </template>
 ---
 :::

@@ -11,7 +11,7 @@ defineOptions({
   name: 'TxBlockLine',
 })
 
-const props = withDefaults(defineProps<BlockLineProps>(), {
+withDefaults(defineProps<BlockLineProps>(), {
   title: '',
   description: '',
   link: false,
@@ -57,30 +57,38 @@ function handleClick(event: MouseEvent): void {
   position: relative;
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   padding: 2px 18px 2px 50px;
-  min-height: 24px;
+  min-height: 30px;
   width: 100%;
   border: 0;
-  border-radius: 12px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   --fake-color: var(--tx-fill-color, #f0f2f5);
   --fake-opacity: 0.45;
+  --fake-radius: 0;
+  transition:
+    background-color 0.2s ease,
+    transform 0.15s ease;
 
   .tx-block-line__title {
     width: 120px;
+    flex: 0 0 120px;
     font-size: 13px;
     font-weight: 600;
     color: var(--tx-text-color-secondary, #909399);
+    transition: color 0.2s ease;
   }
 
   .tx-block-line__description {
     flex: 1;
+    min-width: 0;
+    margin: 0;
     font-size: 13px;
-    line-height: 1.4;
+    line-height: 20px;
     white-space: pre-line;
     color: var(--tx-text-color-secondary, #909399);
   }
@@ -92,6 +100,7 @@ function handleClick(event: MouseEvent): void {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    transition: color 0.2s ease;
   }
 
   &.link,
@@ -107,6 +116,7 @@ function handleClick(event: MouseEvent): void {
       min-width: 120px;
       opacity: 0.7;
       color: var(--tx-text-color-primary, #303133);
+      text-decoration-color: var(--tx-text-color-primary, #303133);
     }
 
     .tx-block-line__link-slot {
@@ -122,6 +132,14 @@ function handleClick(event: MouseEvent): void {
     &:hover {
       text-decoration: underline;
       --fake-inner-opacity: 0.75;
+
+      .tx-block-line__link-slot {
+        color: var(--tx-color-primary-dark-2, var(--tx-color-primary, #409eff));
+      }
+    }
+
+    &:active {
+      transform: scale(0.99);
     }
   }
 }

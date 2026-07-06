@@ -1,68 +1,87 @@
 <script setup lang="ts">
-import { TxBlockLine, TxBlockSlot, TxBlockSwitch, TxGroupBlock } from '@talex-touch/tuffex/group-block'
-import { ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxBlockLine, TxBlockSwitch, TxGroupBlock } from '@talex-touch/tuffex/group-block'
+import { TuffSelectItem, TxSelect } from '@talex-touch/tuffex/select'
+import { computed, ref } from 'vue'
 
+const { locale } = useI18n()
 const notifications = ref(true)
-const autoUpdate = ref(false)
+const language = ref<'en' | 'zh'>('en')
+
+const labels = computed(() => locale.value === 'zh'
+  ? {
+      title: '通用设置',
+      description: '配置基本选项',
+      notifications: '通知',
+      notificationsDesc: '启用推送通知',
+      language: '语言',
+      languageDesc: '选择显示语言',
+      languagePlaceholder: '选择语言',
+      english: 'English',
+      chinese: '中文',
+      version: '版本',
+      versionValue: '2.4.13-beta.3',
+      action: '检查更新',
+    }
+  : {
+      title: 'Preferences',
+      description: 'Application options',
+      notifications: 'Notifications',
+      notificationsDesc: 'Enable desktop notifications',
+      language: 'Language',
+      languageDesc: 'Display language',
+      languagePlaceholder: 'Select language',
+      english: 'English',
+      chinese: 'Chinese',
+      version: 'Version',
+      versionValue: '2.4.13-beta.3',
+      action: 'Check updates',
+    })
 </script>
 
 <template>
-  <div class="demo-group-block">
+  <div class="group-block-showcase">
     <TxGroupBlock
-      name="通用设置"
-      description="配置基本选项"
-      default-icon="i-carbon-settings"
-      active-icon="i-carbon-settings-adjust"
+      :name="labels.title"
+      :description="labels.description"
+      default-icon="i-ri-settings-3-line"
+      active-icon="i-ri-settings-3-fill"
     >
       <TxBlockSwitch
         v-model="notifications"
-        title="通知"
-        description="启用推送通知"
-        default-icon="i-carbon-notification"
+        :title="labels.notifications"
+        :description="labels.notificationsDesc"
+        default-icon="i-ri-notification-line"
+        active-icon="i-ri-notification-fill"
       />
-
       <TxBlockSlot
-        title="语言"
-        description="选择显示语言"
-        default-icon="i-carbon-language"
+        :title="labels.language"
+        :description="labels.languageDesc"
+        default-icon="i-carbon-translate"
       >
-        <TxButton size="small" variant="secondary">
-          English
-        </TxButton>
+        <TxSelect v-model="language" :placeholder="labels.languagePlaceholder" class="group-block-showcase__select">
+          <TuffSelectItem value="en" :label="labels.english" />
+          <TuffSelectItem value="zh" :label="labels.chinese" />
+        </TxSelect>
       </TxBlockSlot>
-
-      <TxBlockLine
-        title="版本"
-        description="1.0.0 (Build 20240315)"
-      />
-
-      <TxBlockLine
-        title="检查更新"
-        link
-        @click="() => {}"
-      />
-    </TxGroupBlock>
-
-    <TxGroupBlock
-      name="高级选项"
-      description="开发者设置"
-      default-icon="i-carbon-code"
-      :default-expand="false"
-    >
-      <TxBlockSwitch
-        v-model="autoUpdate"
-        title="自动更新"
-        description="后台自动下载更新"
-        default-icon="i-carbon-update-now"
-      />
+      <TxBlockLine :title="labels.version" :description="labels.versionValue" />
+      <TxBlockLine :title="labels.action" link>
+        <template #description>
+          <TxButton size="small" variant="secondary">
+            {{ labels.action }}
+          </TxButton>
+        </template>
+      </TxBlockLine>
     </TxGroupBlock>
   </div>
 </template>
 
 <style scoped>
-.demo-group-block {
-  width: 100%;
-  max-width: 600px;
+.group-block-showcase {
+  width: min(100%, 640px);
 }
 
+.group-block-showcase__select {
+  width: 180px;
+}
 </style>

@@ -233,8 +233,8 @@ onMounted(() => {
 
       <div
         v-if="collapsible"
-        class="tx-group-block__toggle TGroupBlock-Mode"
-        :class="expanded ? 'i-carbon-subtract' : 'i-carbon-add'"
+        class="tx-group-block__toggle TGroupBlock-Mode i-carbon-chevron-down"
+        :class="{ 'is-expanded': expanded }"
         aria-hidden="true"
       />
     </div>
@@ -254,6 +254,12 @@ onMounted(() => {
   border-radius: 12px;
   border: 1px solid var(--tx-border-color-lighter, #ebeef5);
   --fake-radius: 0 !important;
+  transition: border-color 0.25s ease;
+
+  &--expanded,
+  &.expand {
+    overflow: visible;
+  }
 
   &__header {
     padding: 4px 22px 4px 12px;
@@ -266,17 +272,28 @@ onMounted(() => {
     user-select: none;
     box-sizing: border-box;
     border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
-    --fake-color: var(--tx-fill-color-darker, #ebeef5);
+    --fake-color: var(--tx-fill-color-dark, #e4e7ed);
     --fake-inner-opacity: 0.5;
-    transition: background-color 0.25s;
+    --fake-radius: 12px 12px 0 0;
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease;
 
-    &--static {
+    &--static,
+    &.is-static {
       cursor: default;
+
+      &:hover {
+        --fake-color: var(--tx-fill-color-dark, #e4e7ed);
+      }
     }
 
-    &:hover {
+    &:not(.is-static):not(.tx-group-block__header--static):hover {
       --fake-color: var(--tx-fill-color, #f0f2f5);
-      transition: all 1s;
+    }
+
+    &:not(.is-static):not(.tx-group-block__header--static):active {
+      --fake-color: var(--tx-fill-color-dark, #e4e7ed);
     }
   }
 
@@ -294,32 +311,40 @@ onMounted(() => {
 
   &__label {
     flex: 1;
+    min-width: 0;
   }
 
-  &__name {
-    margin: 0;
+  & &__name {
+    margin: 0 !important;
     font-size: 14px;
     font-weight: 500;
+    line-height: 18px;
     color: var(--tx-text-color-primary, #303133);
   }
 
-  &__description {
-    margin: 0;
+  & &__description {
+    margin: 4px 0 0 !important;
     font-size: 12px;
     font-weight: 400;
+    line-height: 16px !important;
     opacity: 0.5;
     color: var(--tx-text-color-secondary, #909399);
   }
 
   &__toggle {
     position: relative;
-    font-size: 20px;
+    font-size: 18px;
     color: var(--tx-text-color-secondary, #909399);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &.is-expanded {
+      transform: rotate(180deg);
+    }
   }
 
   &__body {
     padding: 0;
-    // Animation is handled by GSAP in JS
+    overflow: visible;
 
     :deep(.TBlockSelection),
     :deep(.tx-block-slot),
@@ -343,8 +368,16 @@ onMounted(() => {
 .touch-blur .tx-group-block__header {
   --fake-color: var(--tx-fill-color, #f0f2f5);
 
-  &:hover {
+  &:not(.is-static):not(.tx-group-block__header--static):hover {
     --fake-color: var(--tx-fill-color-light, #f5f7fa);
+  }
+}
+
+.touch-blur .tx-group-block__body :deep(.TBlockSelection),
+.touch-blur .tx-group-block__body :deep(.tx-block-slot),
+.touch-blur .tx-group-block__body :deep(.tx-block-switch) {
+  &:hover {
+    --fake-color: var(--tx-fill-color-light, #f5f7fa) !important;
   }
 }
 </style>

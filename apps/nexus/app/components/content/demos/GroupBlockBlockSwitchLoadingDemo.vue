@@ -1,28 +1,47 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { TxBlockSwitch, TxGroupBlock } from '@talex-touch/tuffex/group-block'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
-const loading = ref(false)
+const syncEnabled = ref(false)
+
+const labels = computed(() => locale.value === 'zh'
+  ? {
+      title: '同步状态',
+      description: '加载中会冻结内部控件',
+      item: '正在同步',
+      itemDesc: '等待最新状态返回',
+    }
+  : {
+      title: 'Sync status',
+      description: 'Loading freezes the inner control',
+      item: 'Sync status',
+      itemDesc: 'Waiting for the latest state',
+    })
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TxBlockSwitch
-          v-model="loading"
-          title="正在同步"
-          description="同步过程中暂不可用"
-          default-icon="i-ri-loader-4-line"
-          active-icon="i-ri-loader-4-line"
-          :loading="true"
-        />
-  </div>
-  <div v-else>
-        <TxBlockSwitch
-          v-model="loading"
-          title="正在同步"
-          description="同步过程中暂不可用"
-          default-icon="i-ri-loader-4-line"
-          active-icon="i-ri-loader-4-line"
-          :loading="true"
-        />
+  <div class="group-block-showcase">
+    <TxGroupBlock
+      :name="labels.title"
+      :description="labels.description"
+      default-icon="i-ri-refresh-line"
+      :collapsible="false"
+    >
+      <TxBlockSwitch
+        v-model="syncEnabled"
+        :title="labels.item"
+        :description="labels.itemDesc"
+        default-icon="i-ri-refresh-line"
+        active-icon="i-ri-refresh-line"
+        loading
+      />
+    </TxGroupBlock>
   </div>
 </template>
+
+<style scoped>
+.group-block-showcase {
+  width: min(100%, 640px);
+}
+</style>
