@@ -23,10 +23,11 @@ export function createClipboardFreshnessState(
   context: ClipboardCaptureContext
 ): ClipboardFreshnessState {
   const eligible = AUTO_PASTE_CAPTURE_SOURCES.has(context.source)
-  const freshnessBaseAt =
+  const shouldUseConservativeBase =
     context.source === 'background-poll' || context.source === 'visible-poll'
-      ? Math.min(context.observedAt, context.previousScanAt ?? context.observedAt)
-      : context.observedAt
+  const freshnessBaseAt = shouldUseConservativeBase
+    ? Math.min(context.observedAt, context.previousScanAt ?? context.observedAt)
+    : context.observedAt
 
   return {
     eligible,

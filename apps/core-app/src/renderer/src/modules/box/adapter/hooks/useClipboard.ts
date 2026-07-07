@@ -47,6 +47,21 @@ function resolveFreshnessBaseTimestamp(item: IClipboardItem): number | null {
     : null
 }
 
+function isClipboardFreshForAutoPaste(item: IClipboardItem): boolean {
+  if (!item.timestamp) return false
+  if (!appSetting.tools.autoPaste.enable) return false
+  if (appSetting.tools.autoPaste.time === -1) return false
+  if (item.autoPasteEligible !== true) return false
+
+  const baseTimestamp = resolveFreshnessBaseTimestamp(item)
+  if (baseTimestamp === null) return false
+
+  const clipboardAge = Date.now() - baseTimestamp
+  const limit = appSetting.tools.autoPaste.time
+  const effectiveLimit = limit === 0 ? Number.POSITIVE_INFINITY : limit * 1000
+  return clipboardAge <= effectiveLimit
+}
+
 function hashClipboardIdentityPart(value: string): string {
   let hash = 0x811c9dc5
   for (let index = 0; index < value.length; index += 1) {
@@ -112,23 +127,10 @@ export function useClipboard(
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
   const autoPasteActive = ref(false)
-  let startupClipboardIdentity: string | null = null
-
   function resolveClipboardIdentity(item: IClipboardItem | null | undefined): string | null {
     if (!item) return null
     if (typeof item.id === 'number') return `id:${item.id}`
     return resolveContentIdentity(item)
-  }
-
-  function rememberStartupClipboard(item: IClipboardItem | null | undefined): void {
-    if (startupClipboardIdentity !== null) return
-    startupClipboardIdentity = resolveClipboardIdentity(item)
-  }
-
-  function isStartupClipboard(item: IClipboardItem | null | undefined): boolean {
-    if (startupClipboardIdentity === null) return false
-    const identity = resolveClipboardIdentity(item)
-    return identity !== null && identity === startupClipboardIdentity
   }
 
   function resetAutoPasteStateForSession(): void {
@@ -153,21 +155,11 @@ export function useClipboard(
 
   function canAutoPaste(): boolean {
     const item = clipboardOptions.last
-    if (!item?.timestamp) return false
-    if (!appSetting.tools.autoPaste.enable) return false
-    if (appSetting.tools.autoPaste.time === -1) return false
-    if (item.autoPasteEligible !== true) return false
+    if (!item || !isClipboardFreshForAutoPaste(item)) return false
 
     const identity = resolveClipboardIdentity(item)
     if (!identity) return false
-    if (autoPastedClipboardIdentities.has(identity)) return false
-
-    const baseTimestamp = resolveFreshnessBaseTimestamp(item)
-    if (baseTimestamp === null) return false
-    const clipboardAge = Date.now() - baseTimestamp
-    const limit = appSetting.tools.autoPaste.time
-    const effectiveLimit = limit === 0 ? Number.POSITIVE_INFINITY : limit * 1000
-    return clipboardAge <= effectiveLimit
+    return !autoPastedClipboardIdentities.has(identity)
   }
 
   function markAsAutoPasted(item: IClipboardItem, clear = true): void {
@@ -305,16 +297,7 @@ export function useClipboard(
       return
     }
 
-    if (attemptAutoFill && !overrideDismissed && startupClipboardIdentity === null) {
-      rememberStartupClipboard(clipboard)
-    }
-
-    if (
-      attemptAutoFill &&
-      !overrideDismissed &&
-      clipboard.autoPasteEligible !== true &&
-      isStartupClipboard(clipboard)
-    ) {
+    if (attemptAutoFill && !overrideDismissed && !isClipboardFreshForAutoPaste(clipboard)) {
       clipboardOptions.last = null
       clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = null
@@ -432,13 +415,6 @@ export function useClipboard(
   let cleanup: (() => void) | null = null
   let initAttempted = false
 
-  // Capture startup baseline clipboard to avoid auto-pasting stale content on first show.
-  void getLatestClipboard()
-    .then((item) => {
-      rememberStartupClipboard(item)
-    })
-    .catch(() => {})
-
   // Initialize clipboard channel on next tick to ensure TouchChannel is ready
   const initClipboardChannel = () => {
     if (initAttempted) return
@@ -448,8 +424,6 @@ export function useClipboard(
       cleanup = useClipboardChannel({
         onNewItem: (item) => {
           if (!item?.type) return
-
-          rememberStartupClipboard(item)
 
           const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
 

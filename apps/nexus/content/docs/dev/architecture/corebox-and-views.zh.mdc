@@ -50,10 +50,10 @@ CoreBox 的高度由渲染进程结果列表驱动，并通过主进程应用到
 **AutoPaste**
 
 - 仅在“快捷键唤起 CoreBox”时触发。
-- 新鲜度判断：`autoPaste.time`（秒），`0` 视为 5 分钟，`-1` 关闭。
-- 处理流程：`handlePaste()` 同步剪贴板 → `handleAutoFill()` 自动填充。
-- 文本 <= 80 字会直接填入输入框；超长文本只作为 tag；文件/图片走专用模式。
-- 使用 `autoPastedTimestamps` 去重（TTL 1h），并通过 `clearClipboard(remember)` 避免重复触发。
+- 新鲜度判断：`autoPaste.time` 为秒；`0` 为无限制，`-1` 关闭。`freshnessBaseAt` 优先于 `observedAt`，超过配置窗口不会自动填入。
+- 处理流程：快捷键唤起时刷新剪贴板快照，`handlePaste()` 同步剪贴板并按新鲜度自动填充。
+- 文本 <= 80 字会直接填入输入框；超长文本只作为 tag，重复超长文本再次触发时仍必须通过新鲜度判断；文件/图片走专用模式。
+- 使用 `autoPastedClipboardIdentities` 去重（TTL 1h），并通过 `clearClipboard(remember)` 避免重复触发。
 
 **AutoClear**
 
@@ -104,9 +104,9 @@ Payload:
 
 **2) 超过 autoPaste 时间仍自动粘贴**
 
-- `ClipboardEvents.getLatest` 返回的 `createdAt` 来自 `item.timestamp`，若缺失会回退 `Date.now()`，会被视为“刚复制”。
-- 剪贴板监测可能会重复写入同一内容并刷新 `timestamp`，导致“看似过期但仍新鲜”。
-- 确认配置值是否落地：`appSetting.tools.autoPaste.time` 为秒。
+- `autoPaste.time = 0` 是无限制；若需要时间窗，请选择 1 秒、3 秒、5 秒或更长的显式秒数。
+- `ClipboardEvents.getLatest` 会在快捷键唤起时刷新剪贴板快照；自动粘贴以 `freshnessBaseAt` / `observedAt` 判定新鲜度，不以 `item.timestamp` 作为新鲜度基准。
+- 若旧内容仍被带入，确认配置值是否落地：`appSetting.tools.autoPaste.time` 为秒，`-1` 为关闭。
 
 **3) 激活插件后过久，autoClear 不生效**
 
