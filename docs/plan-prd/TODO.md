@@ -6,7 +6,7 @@
 ## 当前执行窗口
 
 - 当前主线：按 `04-implementation/Roadmap-vNext-2026-06-18.md` 推进 R0-R9。
-- 当前代码版本：root / CoreApp `2.4.13-beta.3`。
+- 当前代码版本：root / CoreApp `2.4.13-beta.4`。
 - 工作方式：related-only 小切片；不混合 CoreApp、Nexus、AI、docs、packages；不主动 git commit / push。
 - 公共包发布不再作为独立 Roadmap blocker，版本变更后以 GitHub 自动发版 workflow 结果为准。
 - owner 已完成的平台人工验证不再作为待办、平台后续或 release blocker；平台能力只保留 degraded / fail-closed 回归要求。
