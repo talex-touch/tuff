@@ -13,6 +13,12 @@
 
 ## 2026-07-04
 
+### docs: add stability and architecture optimization entry
+
+- 新增 `docs/plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md`，把当前文档读取顺序、稳定性优先级、架构代码优化落点、执行切片和最小验证矩阵集中到一个实施入口。
+- 同步 `docs/plan-prd/README.md`、`docs/INDEX.md` 与 `docs/plan-prd/04-implementation/README.md`，让稳定性 / 架构优化入口可从主文档索引进入。
+- 修正 `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` 的当前执行版本口径，移除过期本地 `HEAD` / dirty worktree 描述，避免长期质量基线承载易漂移环境事实。
+
 ### nexus: record guarded performance status and deployed preview gate
 
 - Nexus performance 当前记录为约 `98%` guarded：local Wrangler runtime smoke、PWA precache trim、Cloudflare root SQL dump retention、bfcache source guard、worker/runtime evidence guard 与 deployed preview collector guard 已闭合。
