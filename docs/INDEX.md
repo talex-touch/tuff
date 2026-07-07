@@ -11,10 +11,11 @@
 - `docs/plan-prd/TODO-R3.md` - R3 Search / Indexing Runtime 收口清单。
 - `docs/plan-prd/TODO-nexus.md` - Nexus 性能收口清单。
 - `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md` - R0-R9 当前 SoT。
+- `docs/plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md` - 稳定性与架构优化执行导航。
 - `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
 - `docs/plan-prd/04-implementation/R8-R9-Next-Stage-Execution-Plan-2026-06-24.md` - R8 i18n/Catalog 2.6.0 与 R9 AI 2.5.x 后续能力分批计划。
 - `docs/plan-prd/04-implementation/Pricing-SoT-2026-06-18.md` - Pioneer 免费阶段与未来定价待决策项 SoT。
-- `docs/plan-prd/01-project/CHANGES.md` - 6 月当前阶段变更索引。
+- `docs/plan-prd/01-project/CHANGES.md` - 当前阶段变更索引。
 - `docs/engineering/README.md` - 工程过程资料索引。
 
 ## 验收入口
@@ -45,13 +46,14 @@
 - `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md` - Raycast / uTools 常用能力差距矩阵。
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排 PRD。
 - `docs/plan-prd/04-implementation/performance/WindowsStartupOptimization-2026-06-18.md` - Windows 启动优化 PRD。
+- `docs/plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md` - 稳定性优先级、架构代码落点与最小验证矩阵。
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - Release assets 核对入口。
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 质量基线与门禁约束。
 
 ## 文档维护规则
 
 - 入口文档只保留当前事实、下一动作与高价值导航。
-- 6 月以前记录不再放入文档树，需要时从 Git 历史追溯。
+- 更早过程记录不再放入文档树，需要时从 Git 历史追溯。
 - 行为/接口/架构变更至少同步 `README / TODO / CHANGES / INDEX` 之一。
 - 目标或质量门禁变化必须同步 Roadmap 与 Quality Baseline。
 - reports 只提交 curated 摘要、manifest/checklist 与最终证据；raw/log/user-data 进入本地忽略目录。
