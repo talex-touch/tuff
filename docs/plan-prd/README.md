@@ -1,6 +1,6 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-06-21
+> 更新时间：2026-07-04
 > 定位：PRD / 规划主入口。这里只保留当前 SoT、下一动作和高价值导航。
 
 ## 快速入口
@@ -10,6 +10,7 @@
 - [R3 Search / Indexing Runtime 收口 TODO](./TODO-R3.md)
 - [Nexus Performance TODO](./TODO-nexus.md)
 - [Roadmap vNext](./04-implementation/Roadmap-vNext-2026-06-18.md)
+- [稳定性与架构优化总览](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)
 - [当前项目进程与执行计划](./04-implementation/Current-Execution-Plan-2026-06-17.md)
 - [Pricing SoT](./04-implementation/Pricing-SoT-2026-06-18.md)
 - [AI Stable Evidence Matrix](./04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md)
@@ -53,11 +54,12 @@
 - [Raycast / uTools 能力差距矩阵](./03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md)
 - [Nexus Provider 聚合与 Scene 编排 PRD](./02-architecture/nexus-provider-scene-aggregation-prd.md)
 - [Windows 启动优化 PRD](./04-implementation/performance/WindowsStartupOptimization-2026-06-18.md)
+- [稳定性与架构优化总览](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)
 
 ## 文档治理规则
 
 - 入口文档只保留当前事实、下一动作与高价值导航。
-- 6 月以前过程记录不再放入文档树，需要时从 Git 历史追溯。
+- 更早过程记录不再放入文档树，需要时从 Git 历史追溯。
 - 行为/接口/架构改动至少同步 `README / TODO / CHANGES / INDEX` 之一。
 - 目标或质量门禁变化必须同步 Roadmap 与 Quality Baseline。
 - `TODO.md` 只承载当前 2 周主清单；长期事项进入专题 TODO 或后续单独恢复。

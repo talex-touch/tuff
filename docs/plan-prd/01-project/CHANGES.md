@@ -1,7 +1,15 @@
 # 变更日志
 
-> 更新时间：2026-06-22
-> 定位：只保留 6 月当前阶段的高信号变更索引。6 月以前流水记录已从文档树移除，可从 Git 历史追溯。
+> 更新时间：2026-07-04
+> 定位：只保留当前阶段的高信号变更索引。更早流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-04
+
+### docs: add stability and architecture optimization entry
+
+- 新增 `docs/plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md`，把当前文档读取顺序、稳定性优先级、架构代码优化落点、执行切片和最小验证矩阵集中到一个实施入口。
+- 同步 `docs/plan-prd/README.md`、`docs/INDEX.md` 与 `docs/plan-prd/04-implementation/README.md`，让稳定性 / 架构优化入口可从主文档索引进入。
+- 修正 `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` 的当前执行版本口径，移除过期本地 `HEAD` / dirty worktree 描述，避免长期质量基线承载易漂移环境事实。
 
 ## 2026-06-24
 
