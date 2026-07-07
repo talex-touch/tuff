@@ -196,6 +196,7 @@ describe('docs page performance boundaries', () => {
     expect(signInCallbackPage).toContain("path: '/sign-in'")
     expect(appCallbackPage).toContain('const { status: sessionStatus, getSession } = useNexusAuth()')
     expect(appCallbackPage).toContain('ensureAuthenticatedSession')
+    expect(appCallbackPage).toContain("'x-device-client': 'app'")
 
     expect(dashboardPage).toContain('requiresAuth: true')
     expect(dashboardPage).toContain('const { isAuthenticated } = useAuthUser()')

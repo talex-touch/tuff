@@ -1,6 +1,12 @@
 import { createError } from 'h3'
 import { createAppToken, requireAuth } from './auth'
 
+const LONG_TERM_APP_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30
+const LONG_TERM_APP_TOKEN_OPTIONS = {
+  ttlSeconds: LONG_TERM_APP_TOKEN_TTL_SECONDS,
+  grantType: 'long' as const,
+}
+
 function resolveErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message)
     return error.message
@@ -19,21 +25,17 @@ export async function issueAppSignInToken(event: Parameters<typeof requireAuth>[
     })
   }
 
-  const refreshTokenOptions = authSource === 'app'
-    ? { ttlSeconds: 60 * 60 * 24, grantType: 'short' as const }
-    : {}
-
   let appToken: string | null = null
 
   try {
     if (deviceId !== undefined) {
       appToken = await createAppToken(event, userId, {
         deviceId,
-        ...refreshTokenOptions,
+        ...LONG_TERM_APP_TOKEN_OPTIONS,
       })
     }
     else {
-      appToken = await createAppToken(event, userId, refreshTokenOptions)
+      appToken = await createAppToken(event, userId, LONG_TERM_APP_TOKEN_OPTIONS)
     }
   }
   catch {
@@ -43,7 +45,7 @@ export async function issueAppSignInToken(event: Parameters<typeof requireAuth>[
     try {
       appToken = await createAppToken(event, userId, {
         deviceId: null,
-        ...refreshTokenOptions,
+        ...LONG_TERM_APP_TOKEN_OPTIONS,
       })
     }
     catch (fallbackError) {

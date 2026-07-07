@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runtimeConfig = vi.hoisted(() => ({
@@ -5,6 +6,9 @@ const runtimeConfig = vi.hoisted(() => ({
   auth: {
     secret: undefined as string | undefined,
   },
+}))
+const serverSession = vi.hoisted(() => ({
+  value: null as null | { user?: { id?: string, email?: string, name?: string }, issuedAt?: number },
 }))
 
 const users = vi.hoisted(() => new Map<string, any>())
@@ -15,7 +19,7 @@ vi.mock('#imports', () => ({
 }))
 
 vi.mock('#auth', () => ({
-  getServerSession: vi.fn(async () => null),
+  getServerSession: vi.fn(async () => serverSession.value),
 }))
 
 vi.mock('../authStore', () => ({
@@ -55,6 +59,19 @@ function createEvent(env: Record<string, unknown> = {}) {
   } as any
 }
 
+function readJwtPayload(token: string) {
+  const payload = token.split('.')[1]
+  if (!payload)
+    throw new Error('JWT payload missing')
+  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+  return JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as {
+    gt?: string
+    iat: number
+    exp: number
+  }
+}
+
 describe('app auth token secret resolution', () => {
   const previousNodeEnv = process.env.NODE_ENV
   const previousNitroPreset = process.env.NITRO_PRESET
@@ -62,6 +79,7 @@ describe('app auth token secret resolution', () => {
   beforeEach(() => {
     runtimeConfig.appAuthJwtSecret = undefined
     runtimeConfig.auth.secret = undefined
+    serverSession.value = null
     users.set('user-1', { id: 'user-1', status: 'active' })
     devices.clear()
     delete process.env.APP_AUTH_JWT_SECRET
@@ -101,5 +119,36 @@ describe('app auth token secret resolution', () => {
     await expect(createAppToken(createEvent(), 'user-1')).rejects.toMatchObject({
       statusCode: 500,
     })
+  })
+
+  it('issues long-term tokens for official app sign-in callbacks', async () => {
+    const { issueAppSignInToken } = await import('../appAuthToken')
+    const event = createEvent({ APP_AUTH_JWT_SECRET: 'cloudflare-app-secret-123456' })
+    serverSession.value = { user: { id: 'user-1' }, issuedAt: Math.floor(Date.now() / 1000) }
+    event.node.req.headers['x-device-id'] = 'device-1'
+
+    const { appToken } = await issueAppSignInToken(event)
+    const payload = readJwtPayload(appToken)
+
+    expect(payload.gt).toBe('long')
+    expect(payload.exp - payload.iat).toBe(60 * 60 * 24 * 30)
+  })
+
+  it('refreshes long-term app tokens as long-term tokens', async () => {
+    const { createAppToken } = await import('../auth')
+    const { issueAppSignInToken } = await import('../appAuthToken')
+    const event = createEvent({ APP_AUTH_JWT_SECRET: 'cloudflare-app-secret-123456' })
+    const token = await createAppToken(event, 'user-1', {
+      deviceId: 'device-1',
+      grantType: 'long',
+      ttlSeconds: 60,
+    })
+    event.node.req.headers.authorization = `Bearer ${token}`
+
+    const { appToken } = await issueAppSignInToken(event)
+    const payload = readJwtPayload(appToken)
+
+    expect(payload.gt).toBe('long')
+    expect(payload.exp - payload.iat).toBe(60 * 60 * 24 * 30)
   })
 })

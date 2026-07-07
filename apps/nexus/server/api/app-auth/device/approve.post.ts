@@ -11,7 +11,11 @@ export default defineEventHandler(async (event) => {
   const { userId, sessionIssuedAt } = await requireSessionAuth(event)
   const body = await readBody<ApproveBody>(event)
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
-  const grantType = body?.grantType === 'long' ? 'long' : 'short'
+  const requestedGrantType = body?.grantType === 'long'
+    ? 'long'
+    : body?.grantType === 'short'
+      ? 'short'
+      : null
   if (!code) {
     throw createError({
       statusCode: 400,
@@ -32,6 +36,8 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Device authorization already processed',
     })
   }
+
+  const grantType = requestedGrantType ?? request.grantType
 
   const rateLimit = await evaluateDeviceAuthRateLimit(event, { deviceId: request.deviceId, userId })
   if (!rateLimit.allowed) {

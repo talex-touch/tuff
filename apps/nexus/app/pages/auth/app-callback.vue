@@ -100,7 +100,9 @@ async function handleCallback() {
     const deviceName = typeof route.query.device_name === 'string' ? route.query.device_name : ''
     const devicePlatform = typeof route.query.device_platform === 'string' ? route.query.device_platform : ''
 
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = {
+      'x-device-client': 'app',
+    }
     if (deviceId)
       headers['x-device-id'] = deviceId
     if (deviceName)
