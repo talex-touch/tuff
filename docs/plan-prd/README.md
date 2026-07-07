@@ -24,7 +24,7 @@
 
 ## 当前单一口径
 
-- 当前代码版本为 root / CoreApp `2.4.13-beta.3`。
+- 当前代码版本为 root / CoreApp `2.4.13-beta.4`。
 - 当前主线按 Roadmap vNext 推进 R0-R9；优先级为 R1 Release Integrity 外部签名材料、R3 真实 profile / packaged evidence、Nexus deployed preview evidence，R2 已转产品化 follow-up。
 - R8 / R9 已进入下一阶段执行：R8 locale core / localized value 与 plugin manifest localization foundation 已落；R9 2.5.3 local knowledge SQLite/FTS5/citation foundation 已接入 2.5.4 ContextPackage metadata；R9.2 ContextHygiene 已有 session/checkpoint/package log、Audit explain shell、MemoryPolicy 预览与 Memory Review 最小 list / enable-disable / tombstone delete，剩余 TODO 见 `TODO.md` 的 R9.2 专项表。
 - 公共包发布不再作为独立 Roadmap / blocker / evidence 项；版本变更后以 GitHub 自动发版 workflow 结果为准。
