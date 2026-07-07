@@ -1,7 +1,14 @@
 # 变更日志
 
-> 更新时间：2026-07-04
+> 更新时间：2026-07-07
 > 定位：只保留当前阶段的高信号变更索引。更早流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-07
+
+### corebox: align AutoPaste freshness behavior
+
+- AutoPaste 快捷键唤起时刷新剪贴板快照，并统一以 `freshnessBaseAt` / `observedAt` 判断新鲜度；超过 `autoPaste.time` 的旧内容不会再经由短文本或重复长文本路径自动填入。
+- `autoPaste.time = 0` 明确保留为无限制，`-1` 为关闭；Nexus CoreBox 架构文档同步为当前实际行为。
 
 ## 2026-07-04
 

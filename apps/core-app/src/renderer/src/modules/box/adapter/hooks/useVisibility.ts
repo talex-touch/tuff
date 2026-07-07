@@ -100,7 +100,7 @@ export function useVisibility(options: UseVisibilityOptions) {
     const limit = appSetting.tools.autoPaste.time
     if (limit === -1) return false
 
-    const clipboard = (await getLatestClipboard()) ?? clipboardOptions.last
+    const clipboard = (await getLatestClipboard({ refresh: true })) ?? clipboardOptions.last
     if (!clipboard || clipboard.autoPasteEligible !== true) return false
 
     const baseTime =
