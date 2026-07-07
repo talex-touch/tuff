@@ -1497,6 +1497,7 @@ export async function createDeviceAuthRequest(
 ): Promise<DeviceAuthRequest> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
+  const grantType: DeviceAuthGrantType = payload.clientType === 'app' ? 'long' : 'short'
   const deviceCode = generateToken(16)
   const userCode = generateToken(6)
   const now = new Date().toISOString()
@@ -1536,7 +1537,7 @@ export async function createDeviceAuthRequest(
     payload.clientType ?? null,
     getRequestIp(event),
     'pending',
-    'short',
+    grantType,
     null,
     null,
     null,
@@ -1559,7 +1560,7 @@ export async function createDeviceAuthRequest(
     deviceName: payload.deviceName ?? null,
     devicePlatform: payload.devicePlatform ?? null,
     status: 'pending',
-    grantType: 'short',
+    grantType,
     clientType: payload.clientType ?? null,
     requestIp: getRequestIp(event),
     rejectReason: null,
