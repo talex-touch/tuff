@@ -1,4 +1,8 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { TuffItem } from '@talex-touch/utils'
 import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
 import type { FileProviderIndexFlushSnapshot } from './services/file-provider-index-runtime-service'
 import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
@@ -7,6 +11,7 @@ const {
   transportOn,
   appTaskWaitForIdle,
   searchIndexWorkerInit,
+  searchIndexWorkerRemoveProviderItems,
   watchServiceInitialize,
   watchServiceEnsure,
   indexRuntimeGetFlushSnapshot
@@ -14,6 +19,9 @@ const {
   transportOn: vi.fn(),
   appTaskWaitForIdle: vi.fn(async () => true),
   searchIndexWorkerInit: vi.fn(async () => undefined),
+  searchIndexWorkerRemoveProviderItems: vi.fn<
+    (providerId: string, itemIds: string[]) => Promise<void>
+  >(async () => undefined),
   watchServiceInitialize: vi.fn(),
   watchServiceEnsure: vi.fn(async () => undefined),
   indexRuntimeGetFlushSnapshot: vi.fn<() => FileProviderIndexFlushSnapshot | null>(() => null)
@@ -70,6 +78,7 @@ vi.mock('../../../../db/db-write-scheduler', () => ({
 }))
 
 vi.mock('../../../../db/sqlite-retry', () => ({
+  isSqliteBusyError: vi.fn(() => false),
   withSqliteRetry: vi.fn((operation: () => Promise<unknown>) => operation())
 }))
 
@@ -158,6 +167,8 @@ vi.mock('../../search-engine/workers/search-index-worker-client', () => ({
   SearchIndexWorkerClient: vi.fn(() => ({
     init: searchIndexWorkerInit,
     getStatus: vi.fn(async () => null),
+    removeProviderItems: searchIndexWorkerRemoveProviderItems,
+    hasPendingWork: vi.fn(() => false),
     shutdown: vi.fn()
   }))
 }))
@@ -170,6 +181,10 @@ interface MutableFileProvider {
     databaseManager: { getDb: () => unknown; filePath: string }
     searchIndex: unknown
   }) => Promise<void>
+  onSearch: (
+    query: { text: string; inputs: unknown[] },
+    signal: AbortSignal
+  ) => Promise<{ items: unknown[] }>
   backgroundStartupPromise: Promise<void> | null
   backgroundStartupReady: boolean
   backgroundStartupError: Error | null
@@ -246,6 +261,12 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
     touchApp: { channel: unknown }
   } | null
   dbUtils: unknown | null
+  searchIndex: unknown | null
+  databaseFilePath: string | null
+  embeddingService: { semanticSearch: (query: string, limit: number) => Promise<unknown[]> } | null
+  searchIndexWorker: {
+    removeProviderItems: (providerId: string, itemIds: string[]) => Promise<void>
+  }
   getBatteryLevel: () => Promise<null>
   getIndexedSourceEvidence: () => Promise<
     Array<{
@@ -370,6 +391,39 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
   >
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function createFileSearchRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    path: '/Users/demo/Documents/report.txt',
+    name: 'report.txt',
+    displayName: null,
+    extension: '.txt',
+    size: 128,
+    mtime: new Date('2026-06-18T00:00:00.000Z'),
+    ctime: new Date('2026-06-17T00:00:00.000Z'),
+    lastIndexedAt: new Date('2026-06-18T00:00:00.000Z'),
+    isDir: false,
+    type: 'file',
+    content: null,
+    embeddingStatus: 'none',
+    ...overrides
+  }
+}
+
 function createContext() {
   return {
     touchApp: { channel: {} },
@@ -395,6 +449,7 @@ afterEach(() => {
   vi.clearAllMocks()
   appTaskWaitForIdle.mockResolvedValue(true)
   searchIndexWorkerInit.mockResolvedValue(undefined)
+  searchIndexWorkerRemoveProviderItems.mockResolvedValue(undefined)
   indexRuntimeGetFlushSnapshot.mockReturnValue(null)
 })
 
@@ -972,6 +1027,163 @@ describe('file-provider startup readiness', () => {
         startupError: 'Search index worker initialization failed'
       })
     )
+  })
+
+  it('does not wait for stale search candidate cleanup before returning results', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalSearchIndex = provider.searchIndex
+    const originalSearchIndexWorkerReady = provider.searchIndexWorkerReady
+    const originalSearchIndexWorker = provider.searchIndexWorker
+    const originalEmbeddingService = provider.embeddingService
+
+    const stalePath = '/Users/demo/Documents/stale-report.pdf'
+    const whereMock = vi.fn(async () => [])
+    const leftJoinMock = vi.fn(() => ({ where: whereMock }))
+    const fromMock = vi.fn(() => ({ leftJoin: leftJoinMock }))
+    const selectMock = vi.fn(() => ({ from: fromMock }))
+
+    provider.dbUtils = {
+      getDb: () => ({ select: selectMock })
+    }
+    provider.searchIndex = {
+      lookupByKeywords: vi.fn(
+        async () => new Map([['report', [{ itemId: stalePath, priority: 100 }]]])
+      ),
+      lookupByKeywordPrefix: vi.fn(async () => []),
+      search: vi.fn(async () => [])
+    }
+    provider.searchIndexWorkerReady = Promise.resolve(true)
+    provider.searchIndexWorker = { removeProviderItems: searchIndexWorkerRemoveProviderItems }
+    provider.embeddingService = null
+    searchIndexWorkerRemoveProviderItems.mockReturnValueOnce(new Promise<void>(() => {}))
+
+    try {
+      const resultPromise = provider.onSearch(
+        { text: 'report', inputs: [] },
+        new AbortController().signal
+      )
+
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      const unresolved = Symbol('unresolved')
+      const settled = await Promise.race([resultPromise, Promise.resolve(unresolved)])
+
+      expect(settled).not.toBe(unresolved)
+      if (settled === unresolved) {
+        throw new Error('Expected file search to return without waiting for stale cleanup.')
+      }
+      expect(settled.items).toEqual([])
+
+      await Promise.resolve()
+      expect(searchIndexWorkerRemoveProviderItems).toHaveBeenCalledWith('file-provider', [
+        stalePath
+      ])
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.searchIndex = originalSearchIndex
+      provider.searchIndexWorkerReady = originalSearchIndexWorkerReady
+      provider.searchIndexWorker = originalSearchIndexWorker
+      provider.embeddingService = originalEmbeddingService
+    }
+  })
+
+  it('starts precise, prefix, and FTS file search-index reads in parallel before precise resolves', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalSearchIndex = provider.searchIndex
+    const originalSearchIndexWorkerReady = provider.searchIndexWorkerReady
+    const originalEmbeddingService = provider.embeddingService
+    const originalSearchIndexWorker = provider.searchIndexWorker
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-file-provider-search-'))
+    const precisePath = path.join(tempDir, 'repo.txt')
+    const prefixPath = path.join(tempDir, 'reporter.txt')
+    const ftsPath = path.join(tempDir, 'team-repo.txt')
+    await Promise.all([
+      fs.writeFile(precisePath, 'repo'),
+      fs.writeFile(prefixPath, 'reporter'),
+      fs.writeFile(ftsPath, 'team repo')
+    ])
+
+    const preciseFile = createFileSearchRow({
+      id: 31,
+      path: precisePath,
+      name: 'repo.txt'
+    })
+    const prefixFile = createFileSearchRow({
+      id: 32,
+      path: prefixPath,
+      name: 'reporter.txt'
+    })
+    const ftsFile = createFileSearchRow({
+      id: 33,
+      path: ftsPath,
+      name: 'team-repo.txt'
+    })
+    const rowsByPath = new Map(
+      [preciseFile, prefixFile, ftsFile].map((file) => [file.path, { file, extensions: {} }])
+    )
+    const whereMock = vi.fn(async () => Array.from(rowsByPath.values()))
+    const leftJoinMock = vi.fn(() => ({ where: whereMock }))
+    const fromMock = vi.fn(() => ({ leftJoin: leftJoinMock }))
+    const selectMock = vi.fn(() => ({ from: fromMock }))
+    const preciseDeferred =
+      createDeferred<Map<string, Array<{ itemId: string; priority: number }>>>()
+    const lookupByKeywordsMock = vi.fn(() => preciseDeferred.promise)
+    const lookupByKeywordPrefixMock = vi.fn(async () => [
+      { itemId: prefixFile.path, keyword: 'reporter', priority: 0.9 }
+    ])
+    const ftsSearchMock = vi.fn(async () => [{ itemId: ftsFile.path, score: 0.25 }])
+
+    provider.dbUtils = {
+      getDb: () => ({ select: selectMock })
+    }
+    provider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock
+    }
+    provider.searchIndexWorkerReady = Promise.resolve(true)
+    provider.searchIndexWorker = { removeProviderItems: searchIndexWorkerRemoveProviderItems }
+    provider.embeddingService = null
+
+    try {
+      const resultPromise = provider.onSearch(
+        { text: 'repo', inputs: [] },
+        new AbortController().signal
+      )
+
+      expect(lookupByKeywordsMock).toHaveBeenCalledWith('file-provider', ['repo'], 200)
+      expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('file-provider', 'repo', 200)
+      expect(ftsSearchMock).toHaveBeenCalledWith('file-provider', 'repo', 150)
+      expect(whereMock).not.toHaveBeenCalled()
+
+      preciseDeferred.resolve(new Map([['repo', [{ itemId: preciseFile.path, priority: 1.2 }]]]))
+      const result = await resultPromise
+
+      const resultItems = result.items as TuffItem[]
+      expect(resultItems.map((item) => item.id)).toEqual([
+        preciseFile.path,
+        prefixFile.path,
+        ftsFile.path
+      ])
+      expect(resultItems.map((item) => item.meta?.extension?.search)).toEqual([
+        { keywordMatch: true, ftsScore: 0, semanticScore: 0 },
+        { keywordMatch: true, ftsScore: 0, semanticScore: 0 },
+        { keywordMatch: false, ftsScore: 0.8, semanticScore: 0 }
+      ])
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true })
+      provider.dbUtils = originalDbUtils
+      provider.searchIndex = originalSearchIndex
+      provider.searchIndexWorkerReady = originalSearchIndexWorkerReady
+      provider.embeddingService = originalEmbeddingService
+      provider.searchIndexWorker = originalSearchIndexWorker
+    }
   })
 
   it('does not build a File Index warming result notice while startup is pending', () => {

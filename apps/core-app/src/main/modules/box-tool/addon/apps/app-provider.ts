@@ -67,12 +67,7 @@ import type {
   FileChangedEvent,
   FileUnlinkedEvent
 } from '../../../../core/eventbus/touch-event'
-import {
-  config as configSchema,
-  fileExtensions,
-  files as filesSchema,
-  keywordMappings
-} from '../../../../db/schema'
+import { config as configSchema, fileExtensions, files as filesSchema } from '../../../../db/schema'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 
@@ -2993,51 +2988,52 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
 
     let preciseMatchedItemIds: Set<string> | null = null
-    if (terms.length > 0) {
-      const preciseStart = startTiming()
-      logApp(`Executing precise query: ${chalk.cyan(terms.join(', '))}`, LogStyle.info)
-
-      const preciseResults = await Promise.all(
-        terms.map((term) =>
-          db
-            .select({ itemId: keywordMappings.itemId })
-            .from(keywordMappings)
-            .where(and(eq(keywordMappings.keyword, term), eq(keywordMappings.providerId, this.id)))
-            .limit(200)
-        )
-      )
-
-      const termMatches = preciseResults.map((rows) => new Set(rows.map((entry) => entry.itemId)))
-      if (termMatches.length > 0) {
-        preciseMatchedItemIds = termMatches.reduce<Set<string> | null>((accumulator, current) => {
-          if (!accumulator) return current
-          return new Set([...accumulator].filter((id) => current.has(id)))
-        }, null)
-      }
-      logAppDuration(
-        'PreciseLookup',
-        preciseStart,
-        {
-          label: 'Precise term lookup',
-          style: 'info',
-          unit: 'ms',
-          precision: 0,
-          suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`
-        },
-        { logger: (message) => appProviderLog.debug(message) }
-      )
-    }
-
     const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
+    const preciseLookupTerms = shouldCheckPhrase
+      ? Array.from(new Set([...terms, normalizedQuery]))
+      : terms
+    const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
+    const preciseStart = startTiming()
+    logApp(`Executing precise query: ${chalk.cyan(terms.join(', '))}`, LogStyle.info)
+
+    const shouldLookupPrefix = normalizedQuery.length <= 5
+    const prefixStart = startTiming()
+    const ftsQuery = this.buildFtsQuery(terms)
+    const ftsStart = startTiming()
+
+    const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
+      this.searchIndex.lookupByKeywords(this.id, preciseLookupTerms, preciseSearchLimit),
+      shouldLookupPrefix
+        ? this.searchIndex.lookupByKeywordPrefix(this.id, normalizedQuery, 200)
+        : Promise.resolve([]),
+      ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
+    ])
+
+    const termMatches = terms.map(
+      (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
+    )
+    if (termMatches.length > 0) {
+      preciseMatchedItemIds = termMatches.reduce<Set<string> | null>((accumulator, current) => {
+        if (!accumulator) return current
+        return new Set([...accumulator].filter((id) => current.has(id)))
+      }, null)
+    }
+    logAppDuration(
+      'PreciseLookup',
+      preciseStart,
+      {
+        label: 'Precise term lookup',
+        style: 'info',
+        unit: 'ms',
+        precision: 0,
+        suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`
+      },
+      { logger: (message) => appProviderLog.debug(message) }
+    )
+
     if (shouldCheckPhrase) {
       const phraseStart = startTiming()
-      const phraseMatches = await db
-        .select({ itemId: keywordMappings.itemId })
-        .from(keywordMappings)
-        .where(
-          and(eq(keywordMappings.keyword, normalizedQuery), eq(keywordMappings.providerId, this.id))
-        )
-        .limit(200)
+      const phraseMatches = preciseResultMap.get(normalizedQuery) ?? []
 
       if (phraseMatches.length > 0) {
         const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
@@ -3061,13 +3057,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     // Prefix recall for short queries (e.g. "f" → "feishu", "wind" → "windsurf")
     // Precise lookup uses exact match which misses prefix relationships
-    if (normalizedQuery.length <= 5) {
-      const prefixStart = startTiming()
-      const prefixResults = await this.searchIndex.lookupByKeywordPrefix(
-        this.id,
-        normalizedQuery,
-        200
-      )
+    if (shouldLookupPrefix) {
       if (prefixResults.length > 0) {
         const prefixSet = new Set(prefixResults.map((r) => r.itemId))
         preciseMatchedItemIds = preciseMatchedItemIds
@@ -3088,9 +3078,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     }
 
-    const ftsQuery = this.buildFtsQuery(terms)
-    const ftsStart = startTiming()
-    const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
     if (ftsQuery) {
       logAppDuration(
         'FTSSearch',

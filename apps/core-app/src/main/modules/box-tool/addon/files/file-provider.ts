@@ -194,9 +194,6 @@ import { FileProviderScanStrategyService } from './services/file-provider-scan-s
 import FileSystemWatcher from '../../file-system-watcher'
 
 const fileProviderLog = getLogger('file-provider')
-const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
-const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
-const SEMANTIC_SEARCH_TIMEOUT_MS = 120
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
@@ -964,6 +961,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       throw error
     }
+  }
+
+  private cleanupStaleSearchCandidates(itemIds: string[]): void {
+    if (itemIds.length === 0) return
+
+    void this.removeSearchIndexItems(itemIds, 'search.remove-stale-candidates').catch((error) => {
+      if (isSqliteBusyError(error)) {
+        this.logDebug('Stale search candidate cleanup deferred (db busy)', {
+          count: itemIds.length
+        })
+        return
+      }
+      this.logWarn('Failed to cleanup stale search candidates', error, { count: itemIds.length })
+    })
   }
 
   private cleanupStaleFileResult(file: typeof filesSchema.$inferSelect, reason: string): void {
@@ -3610,24 +3621,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private scheduleSemanticEnrichment(normalizedQuery: string, candidateCount: number): void {
-    const shouldRunSemantic =
-      Boolean(this.embeddingService) &&
-      normalizedQuery.length >= SEMANTIC_TRIGGER_MIN_QUERY_LENGTH &&
-      candidateCount < SEMANTIC_TRIGGER_MAX_CANDIDATES
-
-    if (!shouldRunSemantic || !this.embeddingService) {
-      return
-    }
-
-    setTimeout(() => {
-      void this.embeddingService?.semanticSearch(normalizedQuery, 30).catch((error) => {
-        this.logWarn('Semantic enrichment failed', error)
-        return []
-      })
-    }, SEMANTIC_SEARCH_TIMEOUT_MS)
-  }
-
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
     searchLogger.logProviderSearch('file-provider', query.text, 'File System')
     searchLogger.fileSearchStart(query.text)
@@ -3669,58 +3662,58 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const preciseLookupTerms = shouldCheckPhrase
       ? Array.from(new Set([...terms, normalizedQuery]))
       : terms
-    if (preciseLookupTerms.length > 0) {
-      searchLogger.filePreciseSearch(terms)
-      const preciseStart = performance.now()
-      const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
-      const preciseResultMap = await this.searchIndex.lookupByKeywords(
-        this.id,
-        preciseLookupTerms,
-        preciseSearchLimit
-      )
+    searchLogger.filePreciseSearch(terms)
+    const preciseStart = performance.now()
+    const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
+    const shouldLookupPrefix = normalizedQuery.length <= 5
+    const prefixStart = performance.now()
+    const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
+    searchLogger.fileFtsQuery(ftsQuery || '')
+    const ftsStart = performance.now()
 
-      const termMatches = terms.map(
-        (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
-      )
-      searchLogger.filePreciseQueries(1)
-      searchLogger.filePreciseResults(termMatches.map((s) => s.size))
+    const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
+      this.searchIndex.lookupByKeywords(this.id, preciseLookupTerms, preciseSearchLimit),
+      shouldLookupPrefix
+        ? this.searchIndex.lookupByKeywordPrefix(this.id, normalizedQuery, 200)
+        : Promise.resolve([]),
+      ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
+    ])
 
-      if (termMatches.length > 0) {
-        preciseMatchPaths = termMatches.reduce((accumulator, current) => {
-          if (!accumulator) return current
-          return new Set([...accumulator].filter((id) => current.has(id)))
-        })
-      }
-      this.logDebug('Precise keyword lookup completed', {
-        terms: terms.join(', '),
-        duration: formatDuration(performance.now() - preciseStart)
+    const termMatches = terms.map(
+      (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
+    )
+    searchLogger.filePreciseQueries(1)
+    searchLogger.filePreciseResults(termMatches.map((s) => s.size))
+
+    if (termMatches.length > 0) {
+      preciseMatchPaths = termMatches.reduce((accumulator, current) => {
+        if (!accumulator) return current
+        return new Set([...accumulator].filter((id) => current.has(id)))
       })
+    }
+    this.logDebug('Precise keyword lookup completed', {
+      terms: terms.join(', '),
+      duration: formatDuration(performance.now() - preciseStart)
+    })
 
-      if (shouldCheckPhrase) {
-        const phraseStart = performance.now()
-        const phraseMatches = preciseResultMap.get(normalizedQuery) ?? []
-        if (phraseMatches.length > 0) {
-          const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
-          preciseMatchPaths = preciseMatchPaths
-            ? new Set([...preciseMatchPaths, ...phraseSet])
-            : phraseSet
-        }
-        this.logDebug('Phrase keyword lookup completed', {
-          query: normalizedQuery,
-          matches: preciseMatchPaths?.size ?? 0,
-          duration: formatDuration(performance.now() - phraseStart)
-        })
+    if (shouldCheckPhrase) {
+      const phraseStart = performance.now()
+      const phraseMatches = preciseResultMap.get(normalizedQuery) ?? []
+      if (phraseMatches.length > 0) {
+        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
+        preciseMatchPaths = preciseMatchPaths
+          ? new Set([...preciseMatchPaths, ...phraseSet])
+          : phraseSet
       }
+      this.logDebug('Phrase keyword lookup completed', {
+        query: normalizedQuery,
+        matches: preciseMatchPaths?.size ?? 0,
+        duration: formatDuration(performance.now() - phraseStart)
+      })
     }
 
     // Prefix recall for short queries (e.g. "wind" → "windsurf")
-    if (normalizedQuery.length <= 5) {
-      const prefixStart = performance.now()
-      const prefixResults = await this.searchIndex.lookupByKeywordPrefix(
-        this.id,
-        normalizedQuery,
-        200
-      )
+    if (shouldLookupPrefix) {
       if (prefixResults.length > 0) {
         const prefixSet = new Set(prefixResults.map((r) => r.itemId))
         preciseMatchPaths = preciseMatchPaths
@@ -3734,10 +3727,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
-    const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
-    searchLogger.fileFtsQuery(ftsQuery || '')
-    const ftsStart = performance.now()
-    const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
     searchLogger.fileFtsResults(ftsMatches.length, performance.now() - ftsStart)
     if (ftsQuery) {
       this.logDebug('FTS search completed', {
@@ -3755,9 +3744,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       if (candidateIds.size >= maxCandidateCount) break
       candidateIds.add(match.itemId)
     }
-
-    const semanticScoreMap = new Map<string, number>()
-    this.scheduleSemanticEnrichment(normalizedQuery, candidateIds.size)
 
     if (candidateIds.size === 0) {
       return new TuffSearchResultBuilder(query).build()
@@ -3798,7 +3784,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const staleIds = candidatePaths.filter((path) => !filesMap.has(path))
     if (staleIds.length > 0) {
-      await this.removeSearchIndexItems(staleIds, 'search.remove-stale-candidates')
+      this.cleanupStaleSearchCandidates(staleIds)
     }
 
     if (filesMap.size === 0) {
@@ -3860,7 +3846,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         const frequencyScore = 0
         const keywordScore = preciseMatchPaths?.has(file.path) ? 1 : 0
         const ftsScore = ftsScoreMap.get(file.path) ?? 0
-        const semanticScore = semanticScoreMap.get(file.path) ?? 0
+        const semanticScore = 0
 
         const typeScore = typeFilters.size > 0 ? 1 : 0
 

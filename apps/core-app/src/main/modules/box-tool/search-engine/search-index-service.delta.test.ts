@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SearchIndexItem, SearchIndexKeyword } from './search-index-service'
 import { SearchIndexService } from './search-index-service'
 
-type SearchIndexHarness = Omit<SearchIndexService, 'buildKeywordHash' | 'prepareDocument'> & {
+type SearchIndexHarness = Omit<
+  SearchIndexService,
+  'buildKeywordHash' | 'initialized' | 'prepareDocument'
+> & {
+  initialized: boolean
   buildKeywordHash: (entries: SearchIndexKeyword[]) => string
   prepareDocument: (item: SearchIndexItem) => Promise<{
     keywordEntries: SearchIndexKeyword[]
@@ -16,12 +20,19 @@ function createServiceHarness(): SearchIndexHarness {
   ) as unknown as SearchIndexHarness
 }
 
+function sqlChunkStrings(chunk: unknown): string[] {
+  if (!chunk || typeof chunk !== 'object' || !('value' in chunk)) return []
+  const value = chunk.value
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
 function queryText(query: unknown): string {
-  const chunks = (query as { queryChunks?: Array<{ value?: string[] }> }).queryChunks ?? []
-  return chunks
-    .flatMap((chunk) => chunk.value ?? [])
-    .join('')
-    .trim()
+  if (!query || typeof query !== 'object' || !('queryChunks' in query)) return ''
+  const chunks = query.queryChunks
+  if (!Array.isArray(chunks)) return ''
+  return chunks.flatMap(sqlChunkStrings).join('').trim()
 }
 
 describe('SearchIndexService delta/hash', () => {
@@ -86,6 +97,37 @@ describe('SearchIndexService delta/hash', () => {
     const second = await service.prepareDocument(item)
 
     expect(first.keywordHash).toBe(second.keywordHash)
+  })
+
+  it('lookupBySubsequence 先用 SQLite LIKE 形状预过滤并保持结果排序', async () => {
+    const queryTexts: string[] = []
+    const db = {
+      all: vi.fn(async (query: unknown) => {
+        queryTexts.push(queryText(query))
+        return [
+          { item_id: 'app:netease', keyword: 'netease', priority: 1.1 },
+          { item_id: 'app:note', keyword: 'note', priority: 1.6 },
+          { item_id: 'app:notepad', keyword: 'notepad', priority: 1.2 }
+        ]
+      })
+    }
+    const service = new SearchIndexService(
+      db as unknown as ConstructorParameters<typeof SearchIndexService>[0],
+      { directMode: true }
+    ) as unknown as SearchIndexHarness
+    service.initialized = true
+
+    const results = await service.lookupBySubsequence('app-provider', 'nte', 2, 10_000)
+
+    expect(results.map((item) => item.itemId)).toEqual(['app:note', 'app:notepad'])
+    expect(queryTexts[0]).toContain('keyword LIKE')
+    expect(queryTexts[0]).toContain('ESCAPE')
+    expect(queryTexts[0]).toContain('ORDER BY length(keyword) ASC, priority DESC, keyword ASC')
+    expect(db.all.mock.calls[0]).toMatchObject([
+      expect.objectContaining({
+        queryChunks: expect.arrayContaining(['%n%t%e%', 2000])
+      })
+    ])
   })
 
   it('removeProviderItems 只删除匹配 provider 的索引与关键词元数据', async () => {

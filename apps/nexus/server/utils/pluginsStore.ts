@@ -247,6 +247,65 @@ interface PluginVisibilityOptions {
   statuses?: PluginStatus[]
 }
 
+export interface StorePluginSearchOptions {
+  keyword?: string
+  category?: string
+  limit?: number
+  offset?: number
+}
+
+export interface StorePluginSearchPlugin extends DashboardPlugin {
+  latestVersion: DashboardPluginVersion
+  latestVersionId: string
+  versions: DashboardPluginVersion[]
+}
+
+export interface StorePluginSearchResult {
+  plugins: StorePluginSearchPlugin[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface StorePluginListOptions {
+  compact?: boolean
+  limit?: number
+  offset?: number
+}
+
+export interface StorePluginListResult {
+  plugins: StorePluginSearchPlugin[]
+  total: number
+  limit: number
+  offset: number
+}
+
+interface D1StorePluginSearchRow extends D1PluginRow {
+  selected_version_id: string
+  selected_version_plugin_id: string
+  selected_version_created_by: string
+  selected_version_channel: string
+  selected_version_version: string
+  selected_version_signature: string
+  selected_version_package_key: string
+  selected_version_package_url: string
+  selected_version_package_size: number
+  selected_version_icon_key: string
+  selected_version_icon_url: string
+  selected_version_readme_markdown: string | null
+  selected_version_manifest: string | null
+  selected_version_notes: string | null
+  selected_version_status: string | null
+  selected_version_reviewed_at: string | null
+  selected_version_reject_reason: string | null
+  selected_version_created_at: string
+  selected_version_updated_at: string
+}
+
+interface D1CountRow {
+  total: number
+}
+
 interface CreatePluginInput {
   slug: string
   name: string
@@ -464,6 +523,8 @@ async function ensurePluginSchema(db: D1Database) {
   await addColumnIfMissing('latest_version_id', 'latest_version_id TEXT')
 
   await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_slug ON ${PLUGINS_TABLE}(slug);`).run()
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_created ON ${PLUGINS_TABLE}(status, created_at DESC);`).run()
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_category_created ON ${PLUGINS_TABLE}(status, category, created_at DESC);`).run()
 
   const versionColumns = await db.prepare(`PRAGMA table_info(${PLUGIN_VERSIONS_TABLE});`).all<{ name: string }>()
   const versionColumnNames = new Set((versionColumns.results ?? []).map(col => col.name))
@@ -477,6 +538,8 @@ async function ensurePluginSchema(db: D1Database) {
   await addVersionColumnIfMissing('status', 'status TEXT NOT NULL DEFAULT \'pending\'')
   await addVersionColumnIfMissing('reviewed_at', 'reviewed_at TEXT')
   await addVersionColumnIfMissing('reject_reason', 'reject_reason TEXT')
+
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_store_plugin_status_created ON ${PLUGIN_VERSIONS_TABLE}(plugin_id, status, created_at DESC);`).run()
 
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_plugin_created ON ${PLUGIN_TIMELINE_TABLE}(plugin_id, created_at DESC);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_version_created ON ${PLUGIN_TIMELINE_TABLE}(version_id, created_at DESC);`).run()
@@ -499,6 +562,10 @@ function parseJsonArray(value: string | null): string[] {
 
 function normalizeArtifactType(value: unknown): PluginArtifactType {
   return value === 'layout' || value === 'theme' ? value : 'plugin'
+}
+
+function escapeSqlLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, char => `\\${char}`)
 }
 
 function parseJsonObject<T>(value: string | null): T | null {
@@ -591,6 +658,40 @@ function mapPluginVersionRow(row: D1PluginVersionRow): DashboardPluginVersion {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
+}
+
+function mapStorePluginSearchVersionRow(row: D1StorePluginSearchRow): DashboardPluginVersion {
+  return mapPluginVersionRow({
+    id: row.selected_version_id,
+    plugin_id: row.selected_version_plugin_id,
+    created_by: row.selected_version_created_by,
+    channel: row.selected_version_channel,
+    version: row.selected_version_version,
+    signature: row.selected_version_signature,
+    package_key: row.selected_version_package_key,
+    package_url: row.selected_version_package_url,
+    package_size: row.selected_version_package_size,
+    icon_key: row.selected_version_icon_key,
+    icon_url: row.selected_version_icon_url,
+    readme_markdown: row.selected_version_readme_markdown,
+    manifest: row.selected_version_manifest,
+    notes: row.selected_version_notes,
+    status: row.selected_version_status,
+    reviewed_at: row.selected_version_reviewed_at,
+    reject_reason: row.selected_version_reject_reason,
+    created_at: row.selected_version_created_at,
+    updated_at: row.selected_version_updated_at,
+  })
+}
+
+function mapStorePluginSearchRow(row: D1StorePluginSearchRow): StorePluginSearchPlugin {
+  const latestVersion = mapStorePluginSearchVersionRow(row)
+  return {
+    ...mapPluginRow(row),
+    latestVersion,
+    latestVersionId: latestVersion.id,
+    versions: [latestVersion],
+  }
 }
 
 function mapPluginTimelineRow(row: D1PluginTimelineRow): PluginTimelineEvent {
@@ -1087,6 +1188,7 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
     status: (plugin.status ?? 'draft') as PluginStatus,
   }))
 
+
   const plugins = normalized
     .filter(plugin => (options.ownerId ? plugin.userId === options.ownerId : true))
     .filter(plugin => pluginIsVisible(plugin, options))
@@ -1118,6 +1220,241 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
       ...pendingReviewMeta,
     }
   })
+}
+
+export async function searchStorePlugins(
+  event: H3Event | undefined,
+  options: StorePluginSearchOptions = {},
+): Promise<StorePluginSearchResult> {
+  const limit = Math.min(Math.max(Math.floor(options.limit ?? 50), 1), 100)
+  const offset = Math.max(Math.floor(options.offset ?? 0), 0)
+  const keyword = options.keyword?.trim().toLowerCase() ?? ''
+  const category = options.category?.trim() ?? ''
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensurePluginSchema(db)
+
+    const filters: string[] = [
+      'p.status = ?1',
+      'v.status = ?2',
+    ]
+    const bindings: unknown[] = ['approved', 'approved']
+
+    if (keyword) {
+      const likeIndex = bindings.length + 1
+      filters.push(`(
+        lower(p.name) LIKE ?${likeIndex} ESCAPE '\\'
+        OR lower(p.slug) LIKE ?${likeIndex} ESCAPE '\\'
+        OR lower(p.summary) LIKE ?${likeIndex} ESCAPE '\\'
+        OR lower(coalesce(p.author, '')) LIKE ?${likeIndex} ESCAPE '\\'
+      )`)
+      bindings.push(`%${escapeSqlLikePattern(keyword)}%`)
+    }
+
+    if (category) {
+      const categoryIndex = bindings.length + 1
+      filters.push(`p.category = ?${categoryIndex}`)
+      bindings.push(category)
+    }
+
+    const whereClause = filters.join(' AND ')
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM ${PLUGINS_TABLE} p
+      JOIN ${PLUGIN_VERSIONS_TABLE} v
+        ON v.id = (
+          SELECT vv.id
+          FROM ${PLUGIN_VERSIONS_TABLE} vv
+          WHERE vv.plugin_id = p.id
+            AND vv.status = ?2
+          ORDER BY
+            CASE vv.channel
+              WHEN 'RELEASE' THEN 3
+              WHEN 'SNAPSHOT' THEN 2
+              WHEN 'BETA' THEN 1
+              ELSE 0
+            END DESC,
+            datetime(vv.created_at) DESC
+          LIMIT 1
+        )
+      WHERE ${whereClause};
+    `
+    const countRow = await db.prepare(countQuery).bind(...bindings).first<D1CountRow>()
+    const total = Number(countRow?.total ?? 0)
+
+    if (total === 0) {
+      return { plugins: [], total, limit, offset }
+    }
+
+    const limitIndex = bindings.length + 1
+    const offsetIndex = bindings.length + 2
+    const rowsQuery = `
+      SELECT
+        p.id,
+        p.user_id,
+        p.owner_org_id,
+        p.slug,
+        p.name,
+        p.summary,
+        p.category,
+        p.artifact_type,
+        p.installs,
+        p.homepage,
+        p.is_official,
+        p.badges,
+        p.author,
+        p.status,
+        p.readme_markdown,
+        p.icon,
+        p.icon_key,
+        p.icon_url,
+        p.image_url,
+        p.last_updated,
+        p.version,
+        p.created_at,
+        p.updated_at,
+        p.latest_version_id,
+        v.id AS selected_version_id,
+        v.plugin_id AS selected_version_plugin_id,
+        v.created_by AS selected_version_created_by,
+        v.channel AS selected_version_channel,
+        v.version AS selected_version_version,
+        v.signature AS selected_version_signature,
+        v.package_key AS selected_version_package_key,
+        v.package_url AS selected_version_package_url,
+        v.package_size AS selected_version_package_size,
+        v.icon_key AS selected_version_icon_key,
+        v.icon_url AS selected_version_icon_url,
+        v.readme_markdown AS selected_version_readme_markdown,
+        v.manifest AS selected_version_manifest,
+        v.notes AS selected_version_notes,
+        v.status AS selected_version_status,
+        v.reviewed_at AS selected_version_reviewed_at,
+        v.reject_reason AS selected_version_reject_reason,
+        v.created_at AS selected_version_created_at,
+        v.updated_at AS selected_version_updated_at
+      FROM ${PLUGINS_TABLE} p
+      JOIN ${PLUGIN_VERSIONS_TABLE} v
+        ON v.id = (
+          SELECT vv.id
+          FROM ${PLUGIN_VERSIONS_TABLE} vv
+          WHERE vv.plugin_id = p.id
+            AND vv.status = ?2
+          ORDER BY
+            CASE vv.channel
+              WHEN 'RELEASE' THEN 3
+              WHEN 'SNAPSHOT' THEN 2
+              WHEN 'BETA' THEN 1
+              ELSE 0
+            END DESC,
+            datetime(vv.created_at) DESC
+          LIMIT 1
+        )
+      WHERE ${whereClause}
+      ORDER BY datetime(p.created_at) DESC
+      LIMIT ?${limitIndex} OFFSET ?${offsetIndex};
+    `
+
+    const { results } = await db
+      .prepare(rowsQuery)
+      .bind(...bindings, limit, offset)
+      .all<D1StorePluginSearchRow>()
+
+    return {
+      plugins: (results ?? []).map(mapStorePluginSearchRow),
+      total,
+      limit,
+      offset,
+    }
+  }
+
+  const plugins = await listPlugins(event, {
+    includeVersions: true,
+    forStore: true,
+  })
+
+  const filtered = plugins
+    .map((plugin) => {
+      const versions = plugin.versions ?? []
+      const latestVersion = versions.find(version => version.id === plugin.latestVersionId) ?? versions[0]
+      if (!latestVersion)
+        return null
+      return {
+        ...plugin,
+        latestVersion,
+        latestVersionId: latestVersion.id,
+        versions,
+      }
+    })
+    .filter((plugin): plugin is StorePluginSearchPlugin => Boolean(plugin))
+    .filter((plugin) => {
+      if (category && plugin.category !== category)
+        return false
+      if (!keyword)
+        return true
+      const haystack = [
+        plugin.name,
+        plugin.slug,
+        plugin.summary,
+        plugin.author?.name ?? '',
+      ].join('\n').toLowerCase()
+      return haystack.includes(keyword)
+    })
+
+  return {
+    plugins: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+    limit,
+    offset,
+  }
+}
+
+export async function listStorePlugins(
+  event: H3Event | undefined,
+  options: StorePluginListOptions = {},
+): Promise<StorePluginListResult> {
+  const limit = Math.min(Math.max(Math.floor(options.limit ?? 100), 1), 100)
+  const offset = Math.max(Math.floor(options.offset ?? 0), 0)
+  const result = await searchStorePlugins(event, { limit, offset })
+
+  if (options.compact || result.plugins.length === 0)
+    return result
+
+  const db = getD1Database(event)
+  if (!db)
+    return result
+
+  await ensurePluginSchema(db)
+
+  const pluginIds = result.plugins.map(plugin => plugin.id)
+  const placeholders = pluginIds.map((_, idx) => `?${idx + 1}`).join(', ')
+  const statusIndex = pluginIds.length + 1
+  const { results } = await db.prepare(`
+    SELECT *
+    FROM ${PLUGIN_VERSIONS_TABLE}
+    WHERE plugin_id IN (${placeholders})
+      AND status = ?${statusIndex}
+    ORDER BY datetime(created_at) DESC;
+  `).bind(...pluginIds, 'approved').all<D1PluginVersionRow>()
+
+  const byPlugin = new Map<string, DashboardPluginVersion[]>()
+  for (const version of (results ?? []).map(mapPluginVersionRow)) {
+    if (!byPlugin.has(version.pluginId))
+      byPlugin.set(version.pluginId, [])
+    byPlugin.get(version.pluginId)!.push(version)
+  }
+
+  return {
+    ...result,
+    plugins: result.plugins.map((plugin) => {
+      const versions = byPlugin.get(plugin.id)
+      return {
+        ...plugin,
+        versions: versions?.length ? versions : plugin.versions,
+      }
+    }),
+  }
 }
 
 export async function getPluginById(event: H3Event | undefined, id: string, options: PluginVisibilityOptions = {}) {

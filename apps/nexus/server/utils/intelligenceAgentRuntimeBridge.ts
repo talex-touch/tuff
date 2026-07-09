@@ -24,12 +24,59 @@ export type NexusAgentRuntimePort = Pick<ConversationAgentPort, 'onMessage'>
 
 let testRuntimePort: NexusAgentRuntimePort | null = null
 
+const DEFAULT_RUNTIME_TIMEOUT_MS = 45_000
+const MIN_RUNTIME_TIMEOUT_MS = 1_000
+const MAX_RUNTIME_TIMEOUT_MS = 120_000
+const RUNTIME_TIMEOUT_CODE = 'runtime_timeout'
+
 function now(): number {
   return Date.now()
 }
 
 function createId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function normalizeRuntimeTimeoutMs(timeoutMs?: number): number {
+  if (!Number.isFinite(timeoutMs))
+    return DEFAULT_RUNTIME_TIMEOUT_MS
+  return Math.min(Math.max(Math.floor(timeoutMs as number), MIN_RUNTIME_TIMEOUT_MS), MAX_RUNTIME_TIMEOUT_MS)
+}
+
+function createRuntimeTimeoutError(timeoutMs: number): Error {
+  const error = new Error(`Shared runtime did not finish within ${timeoutMs}ms.`)
+  ;(error as { code?: string }).code = RUNTIME_TIMEOUT_CODE
+  return error
+}
+
+function isRuntimeTimeoutError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && (error as { code?: string }).code === RUNTIME_TIMEOUT_CODE)
+}
+
+async function nextEnvelopeWithTimeout(
+  iterator: AsyncIterator<AgentEnvelope>,
+  remainingMs: number,
+  timeoutMs: number,
+): Promise<IteratorResult<AgentEnvelope>> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      iterator.next(),
+      new Promise<IteratorResult<AgentEnvelope>>((_, reject) => {
+        timer = setTimeout(() => reject(createRuntimeTimeoutError(timeoutMs)), remainingMs)
+      }),
+    ])
+  }
+  finally {
+    if (timer)
+      clearTimeout(timer)
+  }
+}
+
+function closeRuntimeIterator(iterator: AsyncIterator<AgentEnvelope>): void {
+  const close = iterator.return
+  if (typeof close === 'function')
+    void Promise.resolve(close.call(iterator)).catch(() => {})
 }
 
 function envelopeText(envelope: AgentEnvelope): string {
@@ -133,25 +180,104 @@ export async function runNexusAgentRuntimeBridge(
     pauseReason: null,
   })
 
-  for await (const envelope of runtimePort.onMessage(buildInput(userId, payload))) {
-    const streamEvent = toStreamEvent(envelope, runId, streamEventCount + 1)
-    if (!streamEvent)
-      continue
+  const timeoutMs = normalizeRuntimeTimeoutMs(payload.timeoutMs)
+  const deadlineAt = startedAt + timeoutMs
+  const iterator = runtimePort.onMessage(buildInput(userId, payload))[Symbol.asyncIterator]()
+
+  try {
+    while (true) {
+      const remainingMs = deadlineAt - now()
+      if (remainingMs <= 0)
+        throw createRuntimeTimeoutError(timeoutMs)
+
+      const next = await nextEnvelopeWithTimeout(iterator, remainingMs, timeoutMs)
+      if (next.done)
+        break
+
+      const envelope = next.value
+      const streamEvent = toStreamEvent(envelope, runId, streamEventCount + 1)
+      if (!streamEvent)
+        continue
+      const trace = await appendRuntimeTraceEvent(event, {
+        sessionId: payload.sessionId,
+        userId,
+        runId,
+        eventType: streamEvent.type,
+        phase: streamEvent.phase,
+        traceId: envelope.id,
+        payload: streamEvent as unknown as Record<string, unknown>,
+        status: streamEvent.type === 'done' ? 'completed' : 'executing',
+      })
+      streamEvent.seq = trace.seq
+      streamEventCount += 1
+      if (streamEvent.type === 'done')
+        finalMessage = streamEvent.message || finalMessage
+      await options.emit?.(streamEvent)
+    }
+  }
+  catch (error) {
+    if (!isRuntimeTimeoutError(error))
+      throw error
+
+    closeRuntimeIterator(iterator)
+    const timeoutEvent: IntelligenceLabStreamEvent = {
+      contractVersion: 3,
+      engine: 'intelligence',
+      runId,
+      seq: streamEventCount + 1,
+      sessionId: payload.sessionId,
+      timestamp: now(),
+      type: 'error',
+      phase: 'shared-runtime',
+      message: 'shared_runtime_timeout',
+      payload: {
+        i18nKey: 'dashboard.intelligenceLab.system.timeout',
+        i18nParams: { timeoutMs },
+        error: 'shared_runtime_timeout',
+        timeoutMs,
+      },
+    }
     const trace = await appendRuntimeTraceEvent(event, {
       sessionId: payload.sessionId,
       userId,
       runId,
-      eventType: streamEvent.type,
-      phase: streamEvent.phase,
-      traceId: envelope.id,
-      payload: streamEvent as unknown as Record<string, unknown>,
-      status: streamEvent.type === 'done' ? 'completed' : 'executing',
+      eventType: timeoutEvent.type,
+      phase: timeoutEvent.phase,
+      payload: timeoutEvent as unknown as Record<string, unknown>,
+      status: 'failed',
     })
-    streamEvent.seq = trace.seq
+    timeoutEvent.seq = trace.seq
     streamEventCount += 1
-    if (streamEvent.type === 'done')
-      finalMessage = streamEvent.message || finalMessage
-    await options.emit?.(streamEvent)
+    await options.emit?.(timeoutEvent)
+
+    const metrics = buildMetrics(payload.sessionId, startedAt)
+    metrics.status = 'failed'
+    metrics.failedActions = 1
+    metrics.streamEventCount = streamEventCount
+    await upsertRuntimeSession(event, {
+      sessionId: payload.sessionId,
+      userId,
+      runId,
+      status: 'failed',
+      phase: 'shared-runtime',
+      objective: payload.message,
+      state: { finalMessage, metrics, error: 'shared_runtime_timeout', timeoutMs },
+      pauseReason: null,
+    })
+
+    return {
+      sessionId: payload.sessionId,
+      objective: payload.message,
+      actions: [],
+      results: [],
+      reflection: finalMessage,
+      followUp: { summary: '', nextActions: [], revisitInHours: 24 },
+      metrics,
+      providerId: 'shared-runtime',
+      providerName: 'shared-runtime',
+      model: 'shared-runtime',
+      traceId: runId,
+    }
   }
 
   const metrics = buildMetrics(payload.sessionId, startedAt)

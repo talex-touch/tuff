@@ -17,6 +17,8 @@ export interface StorePluginVersion {
   packageSize?: number
   changelog?: string | null
   readmeMarkdown?: string | null
+  status?: string
+  updatedAt?: string
 }
 
 export interface StorePluginSummary {
@@ -25,12 +27,23 @@ export interface StorePluginSummary {
   name: string
   summary: string
   category: string
+  homepage?: string | null
   installs: number
   isOfficial: boolean
   badges: string[]
   iconUrl?: string | null
+  createdAt?: string
+  updatedAt?: string
+  readmeUrl?: string | null
   author?: StorePluginAuthor | null
   latestVersion?: StorePluginVersion | null
+}
+
+export interface StorePluginSearchResponse {
+  plugins: StorePluginSummary[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export interface StorePluginDetail extends StorePluginSummary {

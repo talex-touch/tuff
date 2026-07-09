@@ -5,6 +5,49 @@
 
 ## 2026-07-07
 
+### nexus: bound plugin store APIs
+
+- `/api/store/search` now uses `searchStorePlugins` instead of loading every store plugin/version into the route handler; D1 mode pushes approval/category/keyword filters, latest visible approved version selection, total count, and limit/offset into SQL.
+- `/api/store/plugins` now reuses the bounded store list helper with limit/offset metadata; compact listing returns only latest-version card fields, while non-compact D1 responses hydrate approved versions only for the current bounded page.
+- Added store-search D1 indexes for approved plugin/category listing and approved version lookup, plus focused Nexus tests for D1 binding/mapping, memory fallback pagination/latest-version semantics, route pagination clamps, compact field trimming, and bounded D1 version hydration.
+- Store front page now consumes compact `/api/store/search` directly with remote debounce, server-side category/keyword refresh, and offset-based "load more" pagination, so first paint no longer depends on fetching all store plugins for local filtering.
+- Store front page detail overlay now lazy-loads the dialog, tab shell, metadata header, and shared detail renderers only when a plugin detail is requested, keeping interaction-only plugin detail code out of the initial store page import graph.
+
+### corebox: bound subsequence fallback scans
+
+- SearchIndex subsequence fallback now pushes the subsequence shape into SQLite with an escaped `LIKE` prefilter, deterministic short-keyword ordering, and a hard 2k scan cap before JS scoring, reducing hot-path keyword rows scored in memory while preserving fuzzy recall.
+- Added focused CoreApp coverage for LIKE prefilter generation, scan-limit clamping, and fallback result ordering.
+
+### corebox: parallelize hot search-index reads
+
+- AppProvider 与 FileProvider 搜索首段 now dispatch exact keyword lookup, short-query prefix lookup, and FTS lookup together, so independent SQLite/SearchIndex reads overlap instead of stacking on the user-visible `onSearch` path.
+- Added deterministic CoreApp tests proving prefix/FTS reads start before exact lookup resolves; n-gram/subsequence fallback remains gated after first-pass candidate aggregation.
+
+### nexus: bound intelligence chat and provider probe streams
+
+- `/api/admin/intelligence/chat` and `/api/dashboard/intelligence/providers/:id/probe-stream` now clamp provider/request stream timeouts to 5s–120s and apply them to stream open plus per-chunk waits, so stalled LLM providers produce typed SSE errors and close instead of leaving callers waiting indefinitely.
+- LangChain provider clients now use static imports and pass timeout through OpenAI/Anthropic-supported config paths; added focused fake-timer utility coverage for bounded promises and async iterables.
+
+### intelligence: surface orchestration decisions as AEP events
+
+- `@talex-touch/tuff-intelligence` now dispatches `skillRequests` and `subAgentTasks` from normalized agent decisions as first-class AEP runtime envelopes (`skill.request` / `subagent.task`) instead of silently dropping them.
+- Added focused DecisionDispatcher coverage that preserves request/task payload identity and correlation ids, giving CoreApp/Nexus callers a stable hook for LangChain/DeepAgent-style skill loading and delegated agent execution.
+
+### nexus: bound shared runtime bridge stalls
+
+- Nexus intelligence-agent shared runtime bridge now enforces a bounded AEP stream timeout, emits a `shared_runtime_timeout` error event, and persists failed runtime session state instead of letting `/api/admin/intelligence-agent/session/stream` callers wait indefinitely.
+- Added focused bridge tests covering the successful shared AEP stream path and a fake-timer never-yielding runtime stream, locking the failed metrics/session behavior without sleeping in real time.
+
+### corebox: avoid stale file search cleanup waits
+
+- FileProvider search now schedules stale search-index candidate removal off the user-visible `onSearch` path, so missing DB rows no longer make file search wait on FTS cleanup or worker initialization latency.
+- Added focused CoreApp coverage where stale candidate cleanup never settles; `onSearch` still returns an empty result promptly while scheduling `removeProviderItems` best-effort cleanup.
+
+### corebox: batch app search exact keyword lookup
+
+- AppProvider 多词精确搜索复用现有 `SearchIndexService.lookupByKeywords` 批量查询，一次读取 term / phrase 命中集合，避免按 term 并发打 `keyword_mappings` 查询造成可感知延迟与 SQLite 读放大。
+- 新增 focused AppProvider 测试，锁定多词交集语义、phrase lookup 复用 batch 结果、候选加载仍只返回共同命中应用，并确保旧的 per-term `db.select({ itemId })` 路径会失败。
+
 ### corebox: align AutoPaste freshness behavior
 
 - AutoPaste 快捷键唤起时刷新剪贴板快照，并统一以 `freshnessBaseAt` / `observedAt` 判断新鲜度；超过 `autoPaste.time` 的旧内容不会再经由短文本或重复长文本路径自动填入。
