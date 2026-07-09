@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
-import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TuffSelect, TuffSelectItem, type TxSelectModelValue } from '@talex-touch/tuffex/select'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -2441,8 +2441,14 @@ function stringifyJsonObject(value: Record<string, unknown>): string {
   return JSON.stringify(value, null, 2)
 }
 
-function applyStorageProfile(profileId: string | number): void {
-  const profile = storageProfiles.value.find(item => item.id === String(profileId))
+function readSingleSelectValue(value: TxSelectModelValue): string | null {
+  const selected = Array.isArray(value) ? value[0] : value
+  return selected === undefined ? null : String(selected)
+}
+
+function applyStorageProfile(value: TxSelectModelValue): void {
+  const selectedValue = readSingleSelectValue(value)
+  const profile = storageProfiles.value.find(item => item.id === selectedValue)
   if (!profile) {
     return
   }
@@ -2485,8 +2491,9 @@ function createNotificationCredentialTemplate(profile: NotificationChannelProfil
   return null
 }
 
-function applyNotificationProfile(profileId: string | number): void {
-  const profile = notificationProfiles.value.find(item => item.id === String(profileId))
+function applyNotificationProfile(value: TxSelectModelValue): void {
+  const selectedValue = readSingleSelectValue(value)
+  const profile = notificationProfiles.value.find(item => item.id === selectedValue)
   if (!profile) {
     return
   }

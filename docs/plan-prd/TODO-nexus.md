@@ -1,6 +1,6 @@
 # Nexus Performance TODO
 
-> 更新时间：2026-06-21
+> 更新时间：2026-07-07
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台性能收口。
 
 ## Goal
@@ -34,6 +34,7 @@
   - toast feedback 动态加载
   - public docs auth/profile graph 移出首访
   - legacy sonner CSS 移出首访
+- Store plugin APIs / Store front page 已完成有界查询与首访 import 止血：`/api/store/search` 下推 D1 approval/category/keyword/latest-version/limit/offset 并默认返回 compact 卡片字段；Store 页面首屏改走 `/api/store/search` + 50 条分页、remote debounce、服务端筛选与 offset load-more；`/api/store/plugins` 统一走 bounded list helper，compact 首屏只返回卡片所需 latest-version 字段，非 compact 仅为当前页插件补齐 approved versions；插件详情弹层、tabs、metadata header 与 shared detail renderer 改为按需懒加载，避免首屏同步拉入交互后才需要的详情代码。
 - `/en/docs/dev/components/tabs` 当前关键状态：
   - 页面 200
   - 3.5s HAR 中 Assistant / dompurify / sonner / current-user profile graph 为 0

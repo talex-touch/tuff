@@ -1,5 +1,6 @@
 import type { BaseMessage } from '@langchain/core/messages'
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { ChatOpenAI } from '@langchain/openai'
 import { createError } from 'h3'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence/light'
 import { requireAdmin } from '../../../utils/auth'
@@ -10,6 +11,11 @@ import {
 } from '../../../utils/intelligenceProviderRegistryBridge'
 import { getSettings, type IntelligenceProviderRecord } from '../../../utils/intelligenceStore'
 import { getRuntimeSession, upsertRuntimeSession } from '../../../utils/tuffIntelligenceRuntimeStore'
+import {
+  iterateWithIntelligenceStreamTimeout,
+  resolveIntelligenceStreamTimeoutMs,
+  withIntelligenceStreamTimeout,
+} from '../../../utils/intelligenceStreamTimeout'
 
 interface ChatHistoryItem {
   role: 'user' | 'assistant' | 'system'
@@ -24,6 +30,10 @@ interface ResolvedProviderContext {
   baseUrl: string
   timeoutMs: number
   systemPrompt: string
+}
+
+interface StreamingChatModel {
+  stream: (messages: BaseMessage[]) => Promise<AsyncIterable<unknown>>
 }
 
 const SESSION_PREFIX = 'tuff-intelligence-chat'
@@ -159,19 +169,19 @@ async function resolveProviderContext(event: any, userId: string): Promise<Resol
     model,
     apiKey,
     baseUrl: compatBaseUrl,
-    timeoutMs: Math.max(5000, provider.timeout || DEFAULT_TIMEOUT_MS),
+    timeoutMs: resolveIntelligenceStreamTimeoutMs(provider.timeout || DEFAULT_TIMEOUT_MS),
     systemPrompt: buildSystemPrompt(provider),
   }
 }
 
-async function createLangChainModelWithContext(context: ResolvedProviderContext) {
-  const { ChatOpenAI } = await import('@langchain/openai') as { ChatOpenAI: any }
+function createLangChainModelWithContext(context: ResolvedProviderContext): StreamingChatModel {
   return new ChatOpenAI({
     apiKey: context.apiKey || 'tuff-intelligence',
     model: context.model,
     streaming: true,
+    timeout: context.timeoutMs,
     configuration: context.baseUrl ? { baseURL: context.baseUrl } : undefined,
-  })
+  }) as StreamingChatModel
 }
 
 export default defineEventHandler(async (event) => {
@@ -244,9 +254,13 @@ export default defineEventHandler(async (event) => {
         try {
           const model = await createLangChainModelWithContext(providerContext)
           const messages = toLangChainMessages(nextHistory, providerContext.systemPrompt)
-          const responseStream = await model.stream(messages)
+          const responseStream = await withIntelligenceStreamTimeout(
+            model.stream(messages),
+            providerContext.timeoutMs,
+            'chat.stream.open',
+          )
 
-          for await (const chunk of responseStream) {
+          for await (const chunk of iterateWithIntelligenceStreamTimeout(responseStream, providerContext.timeoutMs, 'chat.stream.delta')) {
             if (aborted)
               break
             const delta = extractChunkText(chunk)

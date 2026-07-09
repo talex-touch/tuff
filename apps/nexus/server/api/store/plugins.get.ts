@@ -1,5 +1,5 @@
 import type { DashboardPlugin, DashboardPluginVersion } from '../../utils/pluginsStore'
-import { listPlugins } from '../../utils/pluginsStore'
+import { listStorePlugins } from '../../utils/pluginsStore'
 
 function buildStoreDownloadUrl(slug: string, version: string): string {
   return `/api/store/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
@@ -7,6 +7,8 @@ function buildStoreDownloadUrl(slug: string, version: string): string {
 
 interface StoreListQuery {
   compact?: string | number | boolean
+  limit?: string | number
+  offset?: string | number
 }
 
 function isCompactEnabled(value: unknown): boolean {
@@ -21,6 +23,13 @@ function isCompactEnabled(value: unknown): boolean {
 
   const normalized = value.trim().toLowerCase()
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+function readBoundedInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed))
+    return fallback
+  return Math.min(Math.max(Math.floor(parsed), min), max)
 }
 
 /**
@@ -98,18 +107,23 @@ function cleanPluginForStore(plugin: DashboardPlugin, options: { compact: boolea
 export default defineEventHandler(async (event) => {
   const query = getQuery(event) as StoreListQuery
   const compact = isCompactEnabled(query.compact)
+  const limit = readBoundedInteger(query.limit, 100, 1, 100)
+  const offset = readBoundedInteger(query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
 
-  const plugins = await listPlugins(event, {
-    includeVersions: true,
-    forStore: true,
+  const result = await listStorePlugins(event, {
+    compact,
+    limit,
+    offset,
   })
 
-  const enriched = plugins
+  const enriched = result.plugins
     .map(plugin => cleanPluginForStore(plugin, { compact }))
     .filter((value): value is NonNullable<typeof value> => Boolean(value))
 
   return {
     plugins: enriched,
-    total: enriched.length,
+    total: result.total,
+    limit: result.limit,
+    offset: result.offset,
   }
 })

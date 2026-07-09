@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxPopover } from '@talex-touch/tuffex/popover'
-import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 import { useToast } from '~/composables/useToast'
 import { requestJson, useTypedFetch } from '~/utils/request'
+
+const LazyGeoLeafletMap = defineAsyncComponent(() => import('~/components/dashboard/GeoLeafletMap.client.vue'))
 
 defineI18nRoute(false)
 
@@ -552,7 +553,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
           </div>
 
           <div v-if="expandedMapDeviceId === device.id && hasCoordinates(device)" class="DashboardDevices-Map">
-            <GeoLeafletMap
+            <LazyGeoLeafletMap
               :height="220"
               :points="[{
                 id: device.id,

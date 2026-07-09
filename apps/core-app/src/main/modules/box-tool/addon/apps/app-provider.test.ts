@@ -60,6 +60,86 @@ function executeItem(overrides: Partial<TuffItem>): TuffItem {
   } as TuffItem
 }
 
+type TestAppSearchRow = TestFileRow & {
+  ctime: Date
+  extensions: Record<string, string>
+  mtime: Date
+  type: 'app'
+}
+
+function createAppSearchRow(id: number, appPath: string, name: string): TestAppSearchRow {
+  return {
+    id,
+    path: appPath,
+    name,
+    displayName: name,
+    type: 'app',
+    mtime: new Date(0),
+    ctime: new Date(0),
+    extensions: {
+      appIdentity: appPath,
+      launchKind: 'path',
+      launchTarget: appPath
+    }
+  }
+}
+
+function extractSqlParamValues(value: unknown, seen = new Set<object>()): unknown[] {
+  if (!value || typeof value !== 'object') return []
+  if (seen.has(value)) return []
+  seen.add(value)
+
+  const record = value as Record<string, unknown>
+  if (value.constructor?.name === 'Param' && 'value' in record) {
+    return [record.value]
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractSqlParamValues(entry, seen))
+  }
+
+  const queryChunks = record.queryChunks
+  if (Array.isArray(queryChunks)) {
+    return queryChunks.flatMap((entry) => extractSqlParamValues(entry, seen))
+  }
+
+  return []
+}
+
+function createAppSearchDb(options: {
+  fileExtensionsTable: unknown
+  filesTable: unknown
+  rows: TestAppSearchRow[]
+}) {
+  const whereMock = vi.fn(async (predicate: unknown) => {
+    const params = extractSqlParamValues(predicate)
+    return options.rows.filter((row) => params.includes(row.path))
+  })
+  const selectMock = vi.fn((selection?: Record<string, unknown>) => {
+    if (selection && 'itemId' in selection) {
+      throw new Error('App search exact lookup must use SearchIndexService.lookupByKeywords')
+    }
+
+    if (selection && 'fileId' in selection) {
+      return {
+        from: vi.fn((table: unknown) => {
+          expect(table).toBe(options.fileExtensionsTable)
+          return { where: vi.fn(() => ({ __candidateSubquery: true })) }
+        })
+      }
+    }
+
+    return {
+      from: vi.fn((table: unknown) => {
+        expect(table).toBe(options.filesTable)
+        return { where: whereMock }
+      })
+    }
+  })
+
+  return { db: { select: selectMock }, selectMock, whereMock }
+}
+
 describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -1210,6 +1290,197 @@ describe('appProvider rebuild maintenance', () => {
 
     expect(removeItemsMock).not.toHaveBeenCalled()
     expect(indexItemsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses one batched keyword lookup for multi-term app search exact matches', async () => {
+    const { appProvider } = await loadSubject()
+    const { fileExtensions, files } = await import('../../../../db/schema')
+    const { processSearchResults } = await import('./search-processing-service')
+    const privateProvider = asPrivateProvider(appProvider)
+    const mutableProvider = privateProvider as typeof privateProvider & {
+      appIndexSettings: { hideNoisySystemApps: boolean }
+      isMac: boolean
+    }
+    mutableProvider.isMac = false
+    mutableProvider.appIndexSettings = { hideNoisySystemApps: false }
+
+    const sharedApp = createAppSearchRow(11, '/Applications/Chat Studio.app', 'Chat Studio')
+    const chatOnlyApp = createAppSearchRow(12, '/Applications/Chat Notes.app', 'Chat Notes')
+    const studioOnlyApp = createAppSearchRow(13, '/Applications/Studio Paint.app', 'Studio Paint')
+    const { db, selectMock } = createAppSearchDb({
+      fileExtensionsTable: fileExtensions,
+      filesTable: files,
+      rows: [sharedApp, chatOnlyApp, studioOnlyApp]
+    })
+    const lookupByKeywordsMock = vi.fn(async () => {
+      return new Map([
+        [
+          'chat',
+          [
+            { itemId: sharedApp.path, priority: 1.1 },
+            { itemId: chatOnlyApp.path, priority: 1 }
+          ]
+        ],
+        [
+          'studio',
+          [
+            { itemId: sharedApp.path, priority: 1.1 },
+            { itemId: studioOnlyApp.path, priority: 1 }
+          ]
+        ],
+        ['chat studio', [{ itemId: sharedApp.path, priority: 1.2 }]]
+      ])
+    })
+    const lookupByKeywordPrefixMock = vi.fn(async () => [])
+    const ftsSearchMock = vi.fn(async () => [])
+    const ngramMock = vi.fn(async () => [])
+    const subsequenceMock = vi.fn(async () => [])
+    vi.mocked(processSearchResults).mockImplementation(async (apps) =>
+      apps.map((app) => ({
+        ...executeItem({
+          id: app.path,
+          render: {
+            mode: 'default',
+            basic: {
+              title: app.displayName ?? app.name ?? app.path
+            }
+          }
+        }),
+        score: 100
+      }))
+    )
+
+    privateProvider.dbUtils = { getDb: () => db }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (apps) => apps)
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const result = await appProvider.onSearch({ text: 'chat studio', inputs: [] })
+
+    expect(lookupByKeywordsMock).toHaveBeenCalledTimes(1)
+    expect(lookupByKeywordsMock).toHaveBeenCalledWith(
+      'app-provider',
+      ['chat', 'studio', 'chat studio'],
+      600
+    )
+    expect(selectMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: expect.anything() })
+    )
+    expect(processSearchResults).toHaveBeenCalledWith(
+      [sharedApp],
+      expect.anything(),
+      false,
+      expect.anything()
+    )
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.id).toBe(sharedApp.path)
+    expect(lookupByKeywordPrefixMock).not.toHaveBeenCalled()
+    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat studio', 150)
+    expect(ngramMock).toHaveBeenCalledWith('app-provider', 'chat studio', 30)
+    expect(subsequenceMock).toHaveBeenCalledWith('app-provider', 'chat studio', 50)
+  })
+
+  it('starts precise, prefix, and FTS app search-index reads in parallel before precise resolves', async () => {
+    const { appProvider } = await loadSubject()
+    // Dynamic imports must run after loadSubject()/vi.resetModules() so test mocks share the isolated module graph.
+    const { fileExtensions, files } = await import('../../../../db/schema')
+    // Dynamic import keeps this mock aligned with vi.resetModules() and loadSubject().
+    const { processSearchResults } = await import('./search-processing-service')
+    const privateProvider = asPrivateProvider(appProvider)
+    const mutableProvider = privateProvider as typeof privateProvider & {
+      appIndexSettings: { hideNoisySystemApps: boolean }
+      isMac: boolean
+    }
+    mutableProvider.isMac = false
+    mutableProvider.appIndexSettings = { hideNoisySystemApps: false }
+
+    const preciseApp = createAppSearchRow(21, '/Applications/Chat.app', 'Chat')
+    const preciseAltApp = createAppSearchRow(22, '/Applications/Chat Classic.app', 'Chat Classic')
+    const prefixApp = createAppSearchRow(23, '/Applications/Chatty.app', 'Chatty')
+    const prefixAltApp = createAppSearchRow(24, '/Applications/Chatter.app', 'Chatter')
+    const ftsApp = createAppSearchRow(25, '/Applications/Team Chat.app', 'Team Chat')
+    const { db, whereMock } = createAppSearchDb({
+      fileExtensionsTable: fileExtensions,
+      filesTable: files,
+      rows: [preciseApp, preciseAltApp, prefixApp, prefixAltApp, ftsApp]
+    })
+    const preciseDeferred =
+      createDeferred<Map<string, Array<{ itemId: string; priority: number }>>>()
+    const lookupByKeywordsMock = vi.fn(() => preciseDeferred.promise)
+    const lookupByKeywordPrefixMock = vi.fn(async () => [
+      { itemId: prefixApp.path, keyword: 'chatty', priority: 0.9 },
+      { itemId: prefixAltApp.path, keyword: 'chatter', priority: 0.8 }
+    ])
+    const ftsSearchMock = vi.fn(async () => [{ itemId: ftsApp.path, score: 0.25 }])
+    const ngramMock = vi.fn(async () => [])
+    const subsequenceMock = vi.fn(async () => [])
+    vi.mocked(processSearchResults).mockImplementation(async (apps) =>
+      apps.map((app) => ({
+        ...executeItem({
+          id: app.path,
+          render: {
+            mode: 'default',
+            basic: {
+              title: app.displayName ?? app.name ?? app.path
+            }
+          }
+        }),
+        score: 100
+      }))
+    )
+
+    privateProvider.dbUtils = { getDb: () => db }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (apps) => apps)
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const resultPromise = appProvider.onSearch({ text: 'chat', inputs: [] })
+
+    expect(lookupByKeywordsMock).toHaveBeenCalledWith('app-provider', ['chat'], 200)
+    expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('app-provider', 'chat', 200)
+    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat', 150)
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
+    expect(whereMock).not.toHaveBeenCalled()
+
+    preciseDeferred.resolve(
+      new Map([
+        [
+          'chat',
+          [
+            { itemId: preciseApp.path, priority: 1.2 },
+            { itemId: preciseAltApp.path, priority: 1.1 }
+          ]
+        ]
+      ])
+    )
+    const result = await resultPromise
+
+    expect(processSearchResults).toHaveBeenCalledWith(
+      [preciseApp, preciseAltApp, prefixApp, prefixAltApp, ftsApp],
+      expect.anything(),
+      false,
+      expect.anything()
+    )
+    expect(result.items.map((item) => item.id)).toEqual([
+      preciseApp.path,
+      preciseAltApp.path,
+      prefixApp.path,
+      prefixAltApp.path,
+      ftsApp.path
+    ])
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
   })
 
   it('diagnoses indexed app keywords and query recall stages', async () => {

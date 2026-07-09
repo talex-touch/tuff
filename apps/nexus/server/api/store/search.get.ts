@@ -1,51 +1,103 @@
-import { listPlugins } from '../../utils/pluginsStore'
+import type { DashboardPluginVersion, StorePluginSearchPlugin } from '../../utils/pluginsStore'
+import { searchStorePlugins } from '../../utils/pluginsStore'
 
-export default defineEventHandler(async (event) => {
-  const query = getQuery(event)
-  const keyword = (query.q as string || '').toLowerCase().trim()
-  const category = query.category as string | undefined
-  const limit = Math.min(Number(query.limit) || 50, 100)
-  const offset = Number(query.offset) || 0
+interface StoreSearchQuery {
+  q?: string
+  category?: string
+  compact?: string | number | boolean
+  limit?: string | number
+  offset?: string | number
+}
 
-  const plugins = await listPlugins(event, {
-    includeVersions: true,
-    forStore: true,
-  })
+function buildStoreDownloadUrl(slug: string, version: string): string {
+  return `/api/store/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+}
 
-  let filtered = plugins
-    .map((plugin) => {
-      const versions = plugin.versions ?? []
-      const latest = versions.find(v => v.id === plugin.latestVersionId) ?? versions[0]
-      if (!latest)
-        return null
+function isCompactEnabled(value: unknown): boolean {
+  if (typeof value === 'boolean')
+    return value
 
-      return {
-        ...plugin,
-        latestVersion: latest,
-      }
-    })
-    .filter((v): v is NonNullable<typeof v> => Boolean(v))
+  if (typeof value === 'number')
+    return value === 1
 
-  if (keyword) {
-    filtered = filtered.filter(plugin =>
-      plugin.name.toLowerCase().includes(keyword)
-      || plugin.slug.toLowerCase().includes(keyword)
-      || plugin.summary.toLowerCase().includes(keyword)
-      || plugin.author?.name?.toLowerCase().includes(keyword),
-    )
+  if (typeof value !== 'string')
+    return true
+
+  const normalized = value.trim().toLowerCase()
+  return normalized === '' || normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+function readBoundedInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed))
+    return fallback
+  return Math.min(Math.max(Math.floor(parsed), min), max)
+}
+
+function cleanVersionForSearch(slug: string, version: DashboardPluginVersion) {
+  return {
+    id: version.id,
+    pluginId: version.pluginId,
+    channel: version.channel,
+    version: version.version,
+    signature: version.signature,
+    packageUrl: buildStoreDownloadUrl(slug, version.version),
+    packageSize: version.packageSize,
+    status: version.status,
+    createdAt: version.createdAt,
+    updatedAt: version.updatedAt,
   }
+}
 
-  if (category) {
-    filtered = filtered.filter(plugin => plugin.category === category)
-  }
-
-  const total = filtered.length
-  const paginated = filtered.slice(offset, offset + limit)
+function cleanPluginForSearch(plugin: StorePluginSearchPlugin) {
+  const latest = plugin.latestVersion ?? plugin.versions.find(version => version.id === plugin.latestVersionId) ?? plugin.versions[0]
+  if (!latest)
+    return null
 
   return {
-    plugins: paginated,
-    total,
+    id: plugin.id,
+    slug: plugin.slug,
+    name: plugin.name,
+    summary: plugin.summary,
+    category: plugin.category,
+    installs: plugin.installs,
+    homepage: plugin.homepage,
+    isOfficial: plugin.isOfficial,
+    badges: plugin.badges,
+    author: plugin.author,
+    iconUrl: plugin.iconUrl,
+    createdAt: plugin.createdAt,
+    updatedAt: plugin.updatedAt,
+    latestVersion: cleanVersionForSearch(plugin.slug, latest),
+    readmeUrl: plugin.readmeMarkdown ? `/api/store/plugins/${plugin.slug}/readme` : null,
+  }
+}
+
+export default defineEventHandler(async (event) => {
+  const query = getQuery(event) as StoreSearchQuery
+  const keyword = typeof query.q === 'string' ? query.q.trim() : ''
+  const category = typeof query.category === 'string' ? query.category.trim() : ''
+  const compact = isCompactEnabled(query.compact)
+  const limit = readBoundedInteger(query.limit, 50, 1, 100)
+  const offset = readBoundedInteger(query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+
+  const result = await searchStorePlugins(event, {
+    keyword,
+    category: category || undefined,
     limit,
     offset,
+  })
+
+  const plugins = compact
+    ? result.plugins
+        .map(cleanPluginForSearch)
+        .filter((value): value is NonNullable<typeof value> => Boolean(value))
+    : result.plugins
+
+  return {
+    plugins,
+    total: result.total,
+    limit: result.limit,
+    offset: result.offset,
   }
 })
