@@ -56,23 +56,23 @@ code: |
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  class AiCapabilityRegistry {
-    register(capability: AiCapabilityDescriptor): void
-    get(capabilityId: string): AiCapabilityDescriptor | undefined
-    getByType(type: IntelligenceCapabilityType): AiCapabilityDescriptor[]
-    getAll(): AiCapabilityDescriptor[]
+  class TuffIntelligenceCapabilityRegistry {
+    register(capability: IntelligenceCapabilityDescriptor): void
+    get(capabilityId: string): IntelligenceCapabilityDescriptor | undefined
+    getByType(type: IntelligenceCapabilityType): IntelligenceCapabilityDescriptor[]
+    getAll(): IntelligenceCapabilityDescriptor[]
   }
 ---
 :::
 
-**已注册能力**:
-- **文本**: chat, translate, summarize, rewrite, grammar-check
-- **代码**: code-generate, code-explain, code-review, code-refactor, code-debug
-- **分析**: intent-detect, sentiment-analyze, content-extract, keywords-extract, classification
-- **视觉**: vision-ocr, image-caption, image-analyze, image-generate
-- **嵌入**: embedding.generate
-- **RAG**: rag-query, semantic-search, rerank
-- **智能体**: agent 执行
+**已注册能力 ID**:
+- **文本**: `text.chat`, `text.translate`, `text.summarize`, `text.rewrite`, `text.grammar`, `text.classify`
+- **代码**: `code.generate`, `code.explain`, `code.review`, `code.refactor`, `code.debug`
+- **分析**: `intent.detect`, `sentiment.analyze`, `content.extract`, `keywords.extract`
+- **视觉 / 图像**: `vision.ocr`, `image.caption`, `image.analyze`, `image.translate.e2e`, `image.generate`, `image.edit`
+- **音频**: `audio.tts`, `audio.stt`, `audio.transcribe`
+- **RAG 与搜索**: `embedding.generate`, `rag.query`, `search.semantic`, `search.rerank`
+- **智能体**: `workflow.execute`, `agent.run`
 
 **2. 提供商管理器**
 
@@ -94,7 +94,7 @@ code: |
 :::
 
 **支持的提供商**:
-- **OpenAI**: GPT-4, GPT-3.5, DALL-E, Whisper, TTS
+- **OpenAI**: GPT 聊天/视觉、OpenAI 图片生成与编辑、Whisper-compatible 转写、TTS
 - **Anthropic**: Claude 3 (Opus, Sonnet, Haiku)
 - **DeepSeek**: DeepSeek-V2, DeepSeek-Coder
 - **SiliconFlow**: 多模型聚合平台
@@ -133,13 +133,19 @@ code: |
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  class AiSDK {
+  class TuffIntelligenceSDK {
     async invoke<T>(
       capabilityId: string,
-      payload: any,
+      payload: unknown,
       options?: IntelligenceInvokeOptions
     ): Promise<IntelligenceInvokeResult<T>>
-    
+
+    stream<T>(
+      capabilityId: string,
+      payload: unknown,
+      options?: IntelligenceInvokeOptions
+    ): AsyncGenerator<IntelligenceStreamEvent<T>>
+
     updateConfig(config: Partial<IntelligenceSDKConfig>): void
     async testProvider(config: IntelligenceProviderConfig): Promise<TestResult>
   }
@@ -173,8 +179,8 @@ code: |
         "priority": 1,
         "apiKey": "sk-...",
         "baseUrl": "https://api.openai.com/v1",
-        "defaultModel": "gpt-4",
-        "models": ["gpt-4", "gpt-3.5-turbo"],
+        "defaultModel": "gpt-4o-mini",
+        "models": ["gpt-4o", "gpt-4o-mini"],
         "timeout": 30000
       }
     ],

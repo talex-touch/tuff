@@ -56,23 +56,23 @@ Manages all available AI capabilities in the system.
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  class AiCapabilityRegistry {
-    register(capability: AiCapabilityDescriptor): void
-    get(capabilityId: string): AiCapabilityDescriptor | undefined
-    getByType(type: IntelligenceCapabilityType): AiCapabilityDescriptor[]
-    getAll(): AiCapabilityDescriptor[]
+  class TuffIntelligenceCapabilityRegistry {
+    register(capability: IntelligenceCapabilityDescriptor): void
+    get(capabilityId: string): IntelligenceCapabilityDescriptor | undefined
+    getByType(type: IntelligenceCapabilityType): IntelligenceCapabilityDescriptor[]
+    getAll(): IntelligenceCapabilityDescriptor[]
   }
 ---
 :::
 
-**Registered Capabilities**:
-- **Text**: chat, translate, summarize, rewrite, grammar-check
-- **Code**: code-generate, code-explain, code-review, code-refactor, code-debug
-- **Analysis**: intent-detect, sentiment-analyze, content-extract, keywords-extract, classification
-- **Vision**: vision-ocr, image-caption, image-analyze, image-generate
-- **Embedding**: embedding.generate
-- **RAG**: rag-query, semantic-search, rerank
-- **Agent**: agent execution
+**Registered Capability IDs**:
+- **Text**: `text.chat`, `text.translate`, `text.summarize`, `text.rewrite`, `text.grammar`, `text.classify`
+- **Code**: `code.generate`, `code.explain`, `code.review`, `code.refactor`, `code.debug`
+- **Analysis**: `intent.detect`, `sentiment.analyze`, `content.extract`, `keywords.extract`
+- **Vision / Image**: `vision.ocr`, `image.caption`, `image.analyze`, `image.translate.e2e`, `image.generate`, `image.edit`
+- **Audio**: `audio.tts`, `audio.stt`, `audio.transcribe`
+- **RAG & Search**: `embedding.generate`, `rag.query`, `search.semantic`, `search.rerank`
+- **Agent**: `workflow.execute`, `agent.run`
 
 **2. Provider Manager**
 
@@ -94,7 +94,7 @@ code: |
 :::
 
 **Supported Providers**:
-- **OpenAI**: GPT-4, GPT-3.5, DALL-E, Whisper, TTS
+- **OpenAI**: GPT chat/vision, OpenAI image generation/editing, Whisper-compatible transcription, TTS
 - **Anthropic**: Claude 3 (Opus, Sonnet, Haiku)
 - **DeepSeek**: DeepSeek-V2, DeepSeek-Coder
 - **SiliconFlow**: Multi-model aggregation platform
@@ -133,13 +133,19 @@ Main entry point for all AI capability invocations.
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  class AiSDK {
+  class TuffIntelligenceSDK {
     async invoke<T>(
       capabilityId: string,
-      payload: any,
+      payload: unknown,
       options?: IntelligenceInvokeOptions
     ): Promise<IntelligenceInvokeResult<T>>
-    
+
+    stream<T>(
+      capabilityId: string,
+      payload: unknown,
+      options?: IntelligenceInvokeOptions
+    ): AsyncGenerator<IntelligenceStreamEvent<T>>
+
     updateConfig(config: Partial<IntelligenceSDKConfig>): void
     async testProvider(config: IntelligenceProviderConfig): Promise<TestResult>
   }
@@ -173,8 +179,8 @@ code: |
         "priority": 1,
         "apiKey": "sk-...",
         "baseUrl": "https://api.openai.com/v1",
-        "defaultModel": "gpt-4",
-        "models": ["gpt-4", "gpt-3.5-turbo"],
+        "defaultModel": "gpt-4o-mini",
+        "models": ["gpt-4o", "gpt-4o-mini"],
         "timeout": 30000
       }
     ],

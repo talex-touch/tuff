@@ -1,13 +1,4 @@
 import type {
-  IntelligenceAgentStreamEvent,
-  IntelligenceInvokeOptions,
-  IntelligenceInvokeResult,
-  IntelligenceMessage,
-  IntelligenceProviderConfig,
-  IntelligenceStreamEvent,
-  IntelligenceStreamOptions,
-  IntelligenceTtsSpeakPayload,
-  IntelligenceTtsSpeakResult,
   BuildContextInput,
   BuildContextResult,
   EvaluateMemoryInput,
@@ -16,6 +7,68 @@ import type {
   IndexChunkResult,
   IndexDocumentInput,
   IndexDocumentResult,
+  IntelligenceAgentPayload,
+  IntelligenceAgentResult,
+  IntelligenceAgentStreamEvent,
+  IntelligenceAudioTranscribePayload,
+  IntelligenceAudioTranscribeResult,
+  IntelligenceChatPayload,
+  IntelligenceClassificationPayload,
+  IntelligenceClassificationResult,
+  IntelligenceCodeDebugPayload,
+  IntelligenceCodeDebugResult,
+  IntelligenceCodeExplainPayload,
+  IntelligenceCodeExplainResult,
+  IntelligenceCodeGeneratePayload,
+  IntelligenceCodeGenerateResult,
+  IntelligenceCodeRefactorPayload,
+  IntelligenceCodeRefactorResult,
+  IntelligenceCodeReviewPayload,
+  IntelligenceCodeReviewResult,
+  IntelligenceContentExtractPayload,
+  IntelligenceContentExtractResult,
+  IntelligenceEmbeddingPayload,
+  IntelligenceGrammarCheckPayload,
+  IntelligenceGrammarCheckResult,
+  IntelligenceImageAnalyzePayload,
+  IntelligenceImageAnalyzeResult,
+  IntelligenceImageCaptionPayload,
+  IntelligenceImageCaptionResult,
+  IntelligenceImageEditPayload,
+  IntelligenceImageEditResult,
+  IntelligenceImageGeneratePayload,
+  IntelligenceImageGenerateResult,
+  IntelligenceImageTranslateE2ePayload,
+  IntelligenceImageTranslateE2eResult,
+  IntelligenceIntentDetectPayload,
+  IntelligenceIntentDetectResult,
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceKeywordsExtractPayload,
+  IntelligenceKeywordsExtractResult,
+  IntelligenceMessage,
+  IntelligenceProviderConfig,
+  IntelligenceRAGQueryPayload,
+  IntelligenceRAGQueryResult,
+  IntelligenceRerankPayload,
+  IntelligenceRerankResult,
+  IntelligenceRewritePayload,
+  IntelligenceSemanticSearchPayload,
+  IntelligenceSemanticSearchResult,
+  IntelligenceSentimentAnalyzePayload,
+  IntelligenceSentimentAnalyzeResult,
+  IntelligenceStreamEvent,
+  IntelligenceStreamOptions,
+  IntelligenceSTTPayload,
+  IntelligenceSTTResult,
+  IntelligenceSummarizePayload,
+  IntelligenceTranslatePayload,
+  IntelligenceTTSPayload,
+  IntelligenceTTSResult,
+  IntelligenceTtsSpeakPayload,
+  IntelligenceTtsSpeakResult,
+  IntelligenceVisionOcrPayload,
+  IntelligenceVisionOcrResult,
   KnowledgeSearchInput,
   KnowledgeSearchResult,
   ListContextCheckpointsInput,
@@ -29,6 +82,7 @@ import type {
   MemoryUpsertInput,
   PrepareContextTurnInput,
   PrepareContextTurnResult,
+  PromptWorkflowExecution,
   SetMemoryEnabledInput,
   SetMemoryEnabledResult,
   TuffIntelligenceAgentSession,
@@ -349,6 +403,78 @@ export type IntelligenceApiResponse<T = undefined>
   = { ok: true, result?: T }
     | { ok: false, error: string }
 
+export interface IntelligenceTextCapabilitySdk {
+  chat: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
+  translate: (payload: IntelligenceTranslatePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
+  summarize: (payload: IntelligenceSummarizePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
+  rewrite: (payload: IntelligenceRewritePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
+  grammar: (payload: IntelligenceGrammarCheckPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceGrammarCheckResult>>
+  classify: (payload: IntelligenceClassificationPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceClassificationResult>>
+}
+
+export interface IntelligenceEmbeddingCapabilitySdk {
+  generate: (payload: IntelligenceEmbeddingPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<number[]>>
+}
+
+export interface IntelligenceCodeCapabilitySdk {
+  generate: (payload: IntelligenceCodeGeneratePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeGenerateResult>>
+  explain: (payload: IntelligenceCodeExplainPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeExplainResult>>
+  review: (payload: IntelligenceCodeReviewPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeReviewResult>>
+  refactor: (payload: IntelligenceCodeRefactorPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeRefactorResult>>
+  debug: (payload: IntelligenceCodeDebugPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeDebugResult>>
+}
+
+export interface IntelligenceIntentCapabilitySdk {
+  detect: (payload: IntelligenceIntentDetectPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceIntentDetectResult>>
+}
+
+export interface IntelligenceSentimentCapabilitySdk {
+  analyze: (payload: IntelligenceSentimentAnalyzePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSentimentAnalyzeResult>>
+}
+
+export interface IntelligenceContentCapabilitySdk {
+  extract: (payload: IntelligenceContentExtractPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceContentExtractResult>>
+}
+
+export interface IntelligenceKeywordsCapabilitySdk {
+  extract: (payload: IntelligenceKeywordsExtractPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>>
+}
+
+export interface IntelligenceVisionCapabilitySdk {
+  ocr: (payload: IntelligenceVisionOcrPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>>
+}
+
+export interface IntelligenceImageCapabilitySdk {
+  caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>
+  analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>
+  generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>
+  translateE2e: (payload: IntelligenceImageTranslateE2ePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>>
+  edit: (payload: IntelligenceImageEditPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>
+}
+
+export interface IntelligenceAudioCapabilitySdk {
+  tts: (payload: IntelligenceTTSPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceTTSResult>>
+  stt: (payload: IntelligenceSTTPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSTTResult>>
+  transcribe: (payload: IntelligenceAudioTranscribePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>>
+}
+
+export interface IntelligenceRagCapabilitySdk {
+  query: (payload: IntelligenceRAGQueryPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceRAGQueryResult>>
+}
+
+export interface IntelligenceSearchCapabilitySdk {
+  semantic: (payload: IntelligenceSemanticSearchPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>>
+  rerank: (payload: IntelligenceRerankPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceRerankResult>>
+}
+
+export interface IntelligenceWorkflowCapabilitySdk {
+  execute: (payload: unknown, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<PromptWorkflowExecution>>
+}
+
+export interface IntelligenceAgentCapabilitySdk {
+  run: (payload: IntelligenceAgentPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>
+}
+
 export interface IntelligenceSdk {
   invoke: <T = unknown>(
     capabilityId: string,
@@ -361,6 +487,20 @@ export interface IntelligenceSdk {
     options: IntelligenceStreamOptions<T>,
     invokeOptions?: IntelligenceInvokeOptions,
   ) => Promise<StreamController>
+  text: IntelligenceTextCapabilitySdk
+  embedding: IntelligenceEmbeddingCapabilitySdk
+  code: IntelligenceCodeCapabilitySdk
+  intent: IntelligenceIntentCapabilitySdk
+  sentiment: IntelligenceSentimentCapabilitySdk
+  content: IntelligenceContentCapabilitySdk
+  keywords: IntelligenceKeywordsCapabilitySdk
+  vision: IntelligenceVisionCapabilitySdk
+  image: IntelligenceImageCapabilitySdk
+  audio: IntelligenceAudioCapabilitySdk
+  rag: IntelligenceRagCapabilitySdk
+  search: IntelligenceSearchCapabilitySdk
+  workflow: IntelligenceWorkflowCapabilitySdk
+  agent: IntelligenceAgentCapabilitySdk
   ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
   chatLangChain: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
   testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
@@ -485,30 +625,30 @@ export const intelligenceApiEvents = {
     .module('api')
     .event('get-capability-test-meta')
     .define<
-      { capabilityId: string },
-      IntelligenceApiResponse<{ requiresUserInput: boolean, inputHint: string }>
-    >(),
+    { capabilityId: string },
+    IntelligenceApiResponse<{ requiresUserInput: boolean, inputHint: string }>
+  >(),
   getCapabilityStatus: defineEvent('intelligence')
     .module('api')
     .event('get-capability-status')
     .define<
-      { capabilityId: string },
-      IntelligenceApiResponse<IntelligenceCapabilityStatus>
-    >(),
+    { capabilityId: string },
+    IntelligenceApiResponse<IntelligenceCapabilityStatus>
+  >(),
   getProviderModelOptions: defineEvent('intelligence')
     .module('api')
     .event('get-provider-model-options')
     .define<
       { capabilityId?: string } | undefined,
       IntelligenceApiResponse<IntelligenceProviderModelOption[]>
-    >(),
+  >(),
   fetchModels: defineEvent('intelligence')
     .module('api')
     .event('fetch-models')
     .define<
-      { provider: IntelligenceProviderConfig },
-      IntelligenceApiResponse<{ success: boolean, models?: string[], message?: string }>
-    >(),
+    { provider: IntelligenceProviderConfig },
+    IntelligenceApiResponse<{ success: boolean, models?: string[], message?: string }>
+  >(),
   getAuditLogs: defineEvent('intelligence')
     .module('api')
     .event('get-audit-logs')
@@ -534,9 +674,9 @@ export const intelligenceApiEvents = {
     .module('api')
     .event('get-quota')
     .define<
-      { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
-      IntelligenceApiResponse<IntelligenceQuotaConfig | null>
-    >(),
+    { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
+    IntelligenceApiResponse<IntelligenceQuotaConfig | null>
+  >(),
   setQuota: defineEvent('intelligence')
     .module('api')
     .event('set-quota')
@@ -545,9 +685,9 @@ export const intelligenceApiEvents = {
     .module('api')
     .event('delete-quota')
     .define<
-      { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
-      IntelligenceApiResponse<void>
-    >(),
+    { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
+    IntelligenceApiResponse<void>
+  >(),
   getAllQuotas: defineEvent('intelligence')
     .module('api')
     .event('get-all-quotas')
@@ -564,9 +704,9 @@ export const intelligenceApiEvents = {
     .module('api')
     .event('get-current-usage')
     .define<
-      { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
-      IntelligenceApiResponse<IntelligenceCurrentUsage>
-    >(),
+    { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
+    IntelligenceApiResponse<IntelligenceCurrentUsage>
+  >(),
   reloadConfig: defineEvent('intelligence')
     .module('api')
     .event('reload-config')
@@ -640,16 +780,16 @@ export const intelligenceAgentEvents = {
     .module('agent')
     .event('session:heartbeat')
     .define<
-      IntelligenceAgentSessionHeartbeatPayload,
-      IntelligenceApiResponse<{ sessionId: string, heartbeatAt: string }>
-    >(),
+    IntelligenceAgentSessionHeartbeatPayload,
+    IntelligenceApiResponse<{ sessionId: string, heartbeatAt: string }>
+  >(),
   sessionPause: defineEvent('intelligence')
     .module('agent')
     .event('session:pause')
     .define<
-      IntelligenceAgentSessionPausePayload,
-      IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
-    >(),
+    IntelligenceAgentSessionPausePayload,
+    IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+  >(),
   sessionRecoverable: defineEvent('intelligence')
     .module('agent')
     .event('session:recoverable')
@@ -658,23 +798,23 @@ export const intelligenceAgentEvents = {
     .module('agent')
     .event('session:resume')
     .define<
-      IntelligenceAgentSessionResumePayload,
-      IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
-    >(),
+    IntelligenceAgentSessionResumePayload,
+    IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+  >(),
   sessionCancel: defineEvent('intelligence')
     .module('agent')
     .event('session:cancel')
     .define<
-      IntelligenceAgentSessionCancelPayload,
-      IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
-    >(),
+    IntelligenceAgentSessionCancelPayload,
+    IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
+  >(),
   sessionGetState: defineEvent('intelligence')
     .module('agent')
     .event('session:get-state')
     .define<
-      IntelligenceAgentSessionStatePayload,
-      IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
-    >(),
+    IntelligenceAgentSessionStatePayload,
+    IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
+  >(),
   plan: defineEvent('intelligence')
     .module('agent')
     .event('plan')
@@ -691,15 +831,15 @@ export const intelligenceAgentEvents = {
     .module('agent')
     .event('tool:call')
     .define<
-      IntelligenceAgentToolCallPayload,
-      IntelligenceApiResponse<{
-        success: boolean
-        output?: unknown
-        error?: string
-        approvalTicket?: TuffIntelligenceApprovalTicket
-        traceEvent: TuffIntelligenceAgentTraceEvent
-      }>
-    >(),
+    IntelligenceAgentToolCallPayload,
+    IntelligenceApiResponse<{
+      success: boolean
+      output?: unknown
+      error?: string
+      approvalTicket?: TuffIntelligenceApprovalTicket
+      traceEvent: TuffIntelligenceAgentTraceEvent
+    }>
+  >(),
   toolResult: defineEvent('intelligence')
     .module('agent')
     .event('tool:result')
@@ -708,16 +848,16 @@ export const intelligenceAgentEvents = {
     .module('agent')
     .event('tool:approve')
     .define<
-      IntelligenceAgentToolApprovePayload,
-      IntelligenceApiResponse<TuffIntelligenceApprovalTicket | null>
-    >(),
+    IntelligenceAgentToolApprovePayload,
+    IntelligenceApiResponse<TuffIntelligenceApprovalTicket | null>
+  >(),
   sessionStream: defineEvent('intelligence')
     .module('agent')
     .event('session:stream')
     .define<
-      IntelligenceAgentTraceQueryPayload,
-      IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
-    >(),
+    IntelligenceAgentTraceQueryPayload,
+    IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
+  >(),
   sessionSubscribe: defineEvent('intelligence')
     .module('agent')
     .event('session:subscribe')
@@ -728,21 +868,21 @@ export const intelligenceAgentEvents = {
     .define<
       IntelligenceAgentSessionHistoryPayload | undefined,
       IntelligenceApiResponse<TuffIntelligenceAgentSession[]>
-    >(),
+  >(),
   sessionTrace: defineEvent('intelligence')
     .module('agent')
     .event('session:trace')
     .define<
-      IntelligenceAgentTraceQueryPayload,
-      IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
-    >(),
+    IntelligenceAgentTraceQueryPayload,
+    IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
+  >(),
   sessionTraceExport: defineEvent('intelligence')
     .module('agent')
     .event('session:trace:export')
     .define<
-      IntelligenceAgentTraceExportPayload,
-      IntelligenceApiResponse<{ format: 'json' | 'jsonl', content: string }>
-    >(),
+    IntelligenceAgentTraceExportPayload,
+    IntelligenceApiResponse<{ format: 'json' | 'jsonl', content: string }>
+  >(),
 } as const
 
 const intelligenceWorkflowEvents = {
@@ -752,7 +892,7 @@ const intelligenceWorkflowEvents = {
     .define<
       IntelligenceWorkflowListPayload | undefined,
       IntelligenceApiResponse<WorkflowDefinition[]>
-    >(),
+  >(),
   get: defineEvent('intelligence')
     .module('workflow')
     .event('get')
@@ -775,7 +915,7 @@ const intelligenceWorkflowEvents = {
     .define<
       IntelligenceWorkflowHistoryPayload | undefined,
       IntelligenceApiResponse<WorkflowRunRecord[]>
-    >(),
+  >(),
   reviewUpdate: defineEvent('intelligence')
     .module('workflow')
     .event('review:update')
@@ -790,15 +930,17 @@ function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMess
 }
 
 export function createIntelligenceSdk(transport: IntelligenceSdkTransport): IntelligenceSdk {
+  const invokeCapability = async <T = unknown>(
+    capabilityId: string,
+    payload: unknown,
+    options?: IntelligenceInvokeOptions,
+  ) => {
+    const response = await transport.send(intelligenceApiEvents.invoke, { capabilityId, payload, options })
+    return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
+  }
+
   return {
-    async invoke<T = unknown>(
-      capabilityId: string,
-      payload: unknown,
-      options?: IntelligenceInvokeOptions,
-    ) {
-      const response = await transport.send(intelligenceApiEvents.invoke, { capabilityId, payload, options })
-      return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
-    },
+    invoke: invokeCapability,
 
     async stream<T = unknown>(
       capabilityId: string,
@@ -807,7 +949,15 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       invokeOptions?: IntelligenceInvokeOptions,
     ) {
       if (typeof transport.stream !== 'function') {
-        throw new Error('Intelligence streaming requires a stream-capable transport')
+        throw new TypeError('Intelligence streaming requires a stream-capable transport')
+      }
+      let streamEnded = false
+      const emitEnd = (event?: IntelligenceStreamEvent<T>) => {
+        if (streamEnded) {
+          return
+        }
+        streamEnded = true
+        options.onEnd?.(event ?? { type: 'end', capabilityId })
       }
       return transport.stream(
         intelligenceApiEvents.stream,
@@ -815,15 +965,27 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
         {
           onData: (event) => {
             const typedEvent = event as IntelligenceStreamEvent<T>
-            if (typedEvent.type === 'start') options.onStart?.(typedEvent)
-            else if (typedEvent.type === 'delta') options.onDelta?.(typedEvent.delta || '', typedEvent)
-            else if (typedEvent.type === 'message' && typedEvent.message) options.onMessage?.(typedEvent.message, typedEvent)
-            else if (typedEvent.type === 'usage' && typedEvent.usage) options.onUsage?.(typedEvent.usage, typedEvent)
-            else if (typedEvent.type === 'metadata' && typedEvent.metadata) options.onMetadata?.(typedEvent.metadata, typedEvent)
-            else if (typedEvent.type === 'end') options.onEnd?.(typedEvent)
+            if (typedEvent.type === 'start') {
+              options.onStart?.(typedEvent)
+            }
+            else if (typedEvent.type === 'delta') {
+              options.onDelta?.(typedEvent.delta || '', typedEvent)
+            }
+            else if (typedEvent.type === 'message' && typedEvent.message) {
+              options.onMessage?.(typedEvent.message, typedEvent)
+            }
+            else if (typedEvent.type === 'usage' && typedEvent.usage) {
+              options.onUsage?.(typedEvent.usage, typedEvent)
+            }
+            else if (typedEvent.type === 'metadata' && typedEvent.metadata) {
+              options.onMetadata?.(typedEvent.metadata, typedEvent)
+            }
+            else if (typedEvent.type === 'end') {
+              emitEnd(typedEvent)
+            }
           },
           onError: options.onError,
-          onEnd: () => options.onEnd?.({ type: 'end', capabilityId }),
+          onEnd: () => emitEnd(),
         },
       )
     },
@@ -1108,6 +1270,77 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async workflowReviewUpdate(payload) {
       const response = await transport.send(intelligenceWorkflowEvents.reviewUpdate, payload)
       return assertApiResponse(response, 'Failed to update workflow review queue')
+    },
+    text: {
+      chat: (payload, options) => invokeCapability<string>('text.chat', payload, options),
+      translate: (payload, options) => invokeCapability<string>('text.translate', payload, options),
+      summarize: (payload, options) => invokeCapability<string>('text.summarize', payload, options),
+      rewrite: (payload, options) => invokeCapability<string>('text.rewrite', payload, options),
+      grammar: (payload, options) => invokeCapability<IntelligenceGrammarCheckResult>('text.grammar', payload, options),
+      classify: (payload, options) => invokeCapability<IntelligenceClassificationResult>('text.classify', payload, options),
+    },
+
+    embedding: {
+      generate: (payload, options) => invokeCapability<number[]>('embedding.generate', payload, options),
+    },
+
+    code: {
+      generate: (payload, options) => invokeCapability<IntelligenceCodeGenerateResult>('code.generate', payload, options),
+      explain: (payload, options) => invokeCapability<IntelligenceCodeExplainResult>('code.explain', payload, options),
+      review: (payload, options) => invokeCapability<IntelligenceCodeReviewResult>('code.review', payload, options),
+      refactor: (payload, options) => invokeCapability<IntelligenceCodeRefactorResult>('code.refactor', payload, options),
+      debug: (payload, options) => invokeCapability<IntelligenceCodeDebugResult>('code.debug', payload, options),
+    },
+
+    intent: {
+      detect: (payload, options) => invokeCapability<IntelligenceIntentDetectResult>('intent.detect', payload, options),
+    },
+
+    sentiment: {
+      analyze: (payload, options) => invokeCapability<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options),
+    },
+
+    content: {
+      extract: (payload, options) => invokeCapability<IntelligenceContentExtractResult>('content.extract', payload, options),
+    },
+
+    keywords: {
+      extract: (payload, options) => invokeCapability<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options),
+    },
+
+    vision: {
+      ocr: (payload, options) => invokeCapability<IntelligenceVisionOcrResult>('vision.ocr', payload, options),
+    },
+
+    image: {
+      caption: (payload, options) => invokeCapability<IntelligenceImageCaptionResult>('image.caption', payload, options),
+      analyze: (payload, options) => invokeCapability<IntelligenceImageAnalyzeResult>('image.analyze', payload, options),
+      generate: (payload, options) => invokeCapability<IntelligenceImageGenerateResult>('image.generate', payload, options),
+      translateE2e: (payload, options) => invokeCapability<IntelligenceImageTranslateE2eResult>('image.translate.e2e', payload, options),
+      edit: (payload, options) => invokeCapability<IntelligenceImageEditResult>('image.edit', payload, options),
+    },
+
+    audio: {
+      tts: (payload, options) => invokeCapability<IntelligenceTTSResult>('audio.tts', payload, options),
+      stt: (payload, options) => invokeCapability<IntelligenceSTTResult>('audio.stt', payload, options),
+      transcribe: (payload, options) => invokeCapability<IntelligenceAudioTranscribeResult>('audio.transcribe', payload, options),
+    },
+
+    rag: {
+      query: (payload, options) => invokeCapability<IntelligenceRAGQueryResult>('rag.query', payload, options),
+    },
+
+    search: {
+      semantic: (payload, options) => invokeCapability<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
+      rerank: (payload, options) => invokeCapability<IntelligenceRerankResult>('search.rerank', payload, options),
+    },
+
+    workflow: {
+      execute: (payload, options) => invokeCapability<PromptWorkflowExecution>('workflow.execute', payload, options),
+    },
+
+    agent: {
+      run: (payload, options) => invokeCapability<IntelligenceAgentResult>('agent.run', payload, options),
     },
   }
 }
