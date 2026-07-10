@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  AccountEvents,
   AgentsEvents,
   AppEvents,
-  AccountEvents,
   AuthEvents,
   ClipboardEvents,
   CoreBoxEvents,
@@ -111,25 +111,25 @@ describe('transport domain sdk mappings', () => {
     await sdk.indexedSource.reset({
       sourceId: 'browser-bookmarks',
       reason: 'user-clear',
-      clearSearchIndex: true
+      clearSearchIndex: true,
     })
     await sdk.indexedSource.reconcile({
       sourceId: 'browser-bookmarks',
-      reason: 'manual-repair'
+      reason: 'manual-repair',
     })
     await sdk.indexedSource.scan({
       sourceId: 'browser-bookmarks',
-      reason: 'manual-rebuild'
+      reason: 'manual-rebuild',
     })
     await sdk.indexedSource.getProviderConfig()
     await sdk.indexedSource.updateProviderConfig({
-      providers: [{ providerId: 'file-provider', enabled: true, order: 20 }]
+      providers: [{ providerId: 'file-provider', enabled: true, order: 20 }],
     })
 
     expect(transport.send).toHaveBeenNthCalledWith(
       1,
       AppEvents.indexedSource.diagnostics,
-      { sourceId: 'browser-bookmarks' }
+      { sourceId: 'browser-bookmarks' },
     )
     expect(transport.send).toHaveBeenNthCalledWith(
       2,
@@ -137,35 +137,35 @@ describe('transport domain sdk mappings', () => {
       {
         sourceId: 'browser-bookmarks',
         reason: 'user-clear',
-        clearSearchIndex: true
-      }
+        clearSearchIndex: true,
+      },
     )
     expect(transport.send).toHaveBeenNthCalledWith(
       3,
       AppEvents.indexedSource.reconcile,
       {
         sourceId: 'browser-bookmarks',
-        reason: 'manual-repair'
-      }
+        reason: 'manual-repair',
+      },
     )
     expect(transport.send).toHaveBeenNthCalledWith(
       4,
       AppEvents.indexedSource.scan,
       {
         sourceId: 'browser-bookmarks',
-        reason: 'manual-rebuild'
-      }
+        reason: 'manual-rebuild',
+      },
     )
     expect(transport.send).toHaveBeenNthCalledWith(
       5,
-      AppEvents.indexedSource.providerConfigGet
+      AppEvents.indexedSource.providerConfigGet,
     )
     expect(transport.send).toHaveBeenNthCalledWith(
       6,
       AppEvents.indexedSource.providerConfigUpdate,
       {
-        providers: [{ providerId: 'file-provider', enabled: true, order: 20 }]
-      }
+        providers: [{ providerId: 'file-provider', enabled: true, order: 20 }],
+      },
     )
   })
 
@@ -1107,6 +1107,230 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('intelligence sdk maps nested capability wrappers through typed invoke events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: null })
+    const sdk = createIntelligenceSdk(transport)
+
+    const cases = [
+      {
+        capabilityId: 'text.chat',
+        payload: { messages: [{ role: 'user', content: 'hello' }] },
+        options: { metadata: { caller: 'nested-text' } },
+        invoke: () => sdk.text.chat(
+          { messages: [{ role: 'user', content: 'hello' }] },
+          { metadata: { caller: 'nested-text' } },
+        ),
+      },
+      {
+        capabilityId: 'embedding.generate',
+        payload: { text: 'semantic query' },
+        options: { metadata: { caller: 'nested-embedding' } },
+        invoke: () => sdk.embedding.generate(
+          { text: 'semantic query' },
+          { metadata: { caller: 'nested-embedding' } },
+        ),
+      },
+      {
+        capabilityId: 'code.review',
+        payload: { code: 'const answer = 42', language: 'ts' },
+        options: { metadata: { caller: 'nested-code' } },
+        invoke: () => sdk.code.review(
+          { code: 'const answer = 42', language: 'ts' },
+          { metadata: { caller: 'nested-code' } },
+        ),
+      },
+      {
+        capabilityId: 'intent.detect',
+        payload: { text: 'book a meeting tomorrow' },
+        options: { metadata: { caller: 'nested-intent' } },
+        invoke: () => sdk.intent.detect(
+          { text: 'book a meeting tomorrow' },
+          { metadata: { caller: 'nested-intent' } },
+        ),
+      },
+      {
+        capabilityId: 'vision.ocr',
+        payload: { source: { type: 'data-url', dataUrl: 'data:image/png;base64,AAAA' } },
+        options: { metadata: { caller: 'nested-vision' } },
+        invoke: () => sdk.vision.ocr(
+          { source: { type: 'data-url', dataUrl: 'data:image/png;base64,AAAA' } },
+          { metadata: { caller: 'nested-vision' } },
+        ),
+      },
+      {
+        capabilityId: 'image.edit',
+        payload: {
+          source: { type: 'data-url', dataUrl: 'data:image/png;base64,source' },
+          prompt: 'Add a red scarf',
+        },
+        options: { metadata: { caller: 'nested-image' } },
+        invoke: () => sdk.image.edit(
+          {
+            source: { type: 'data-url', dataUrl: 'data:image/png;base64,source' },
+            prompt: 'Add a red scarf',
+          },
+          { metadata: { caller: 'nested-image' } },
+        ),
+      },
+      {
+        capabilityId: 'audio.tts',
+        payload: { text: 'Hello', voice: 'alloy', format: 'mp3' },
+        options: { metadata: { caller: 'nested-audio-tts' } },
+        invoke: () => sdk.audio.tts(
+          { text: 'Hello', voice: 'alloy', format: 'mp3' },
+          { metadata: { caller: 'nested-audio-tts' } },
+        ),
+      },
+      {
+        capabilityId: 'audio.stt',
+        payload: { audio: 'data:audio/wav;base64,AAAA', language: 'en' },
+        options: { metadata: { caller: 'nested-audio-stt' } },
+        invoke: () => sdk.audio.stt(
+          { audio: 'data:audio/wav;base64,AAAA', language: 'en' },
+          { metadata: { caller: 'nested-audio-stt' } },
+        ),
+      },
+      {
+        capabilityId: 'audio.transcribe',
+        payload: { audio: 'data:audio/mpeg;base64,BBBB', language: 'fr' },
+        options: { metadata: { caller: 'nested-audio-transcribe' } },
+        invoke: () => sdk.audio.transcribe(
+          { audio: 'data:audio/mpeg;base64,BBBB', language: 'fr' },
+          { metadata: { caller: 'nested-audio-transcribe' } },
+        ),
+      },
+      {
+        capabilityId: 'rag.query',
+        payload: { query: 'release notes' },
+        options: { metadata: { caller: 'nested-rag' } },
+        invoke: () => sdk.rag.query(
+          { query: 'release notes' },
+          { metadata: { caller: 'nested-rag' } },
+        ),
+      },
+      {
+        capabilityId: 'workflow.execute',
+        payload: { workflowId: 'wf_1', inputs: { topic: 'release' } },
+        options: { metadata: { caller: 'nested-workflow' } },
+        invoke: () => sdk.workflow.execute(
+          { workflowId: 'wf_1', inputs: { topic: 'release' } },
+          { metadata: { caller: 'nested-workflow' } },
+        ),
+      },
+      {
+        capabilityId: 'agent.run',
+        payload: { task: 'Summarize release readiness', context: 'ticket:T-1' },
+        options: { metadata: { caller: 'nested-agent' } },
+        invoke: () => sdk.agent.run(
+          { task: 'Summarize release readiness', context: 'ticket:T-1' },
+          { metadata: { caller: 'nested-agent' } },
+        ),
+      },
+    ]
+
+    for (const testCase of cases) {
+      await testCase.invoke()
+    }
+
+    for (const [index, testCase] of cases.entries()) {
+      expect(transport.send.mock.calls[index]?.[0]?.toEventName?.()).toBe(
+        'intelligence:api:invoke',
+      )
+      expect(transport.send).toHaveBeenNthCalledWith(
+        index + 1,
+        expect.objectContaining({
+          namespace: 'intelligence',
+          module: 'api',
+          action: 'invoke',
+        }),
+        {
+          capabilityId: testCase.capabilityId,
+          payload: testCase.payload,
+          options: testCase.options,
+        },
+      )
+    }
+  })
+
+  it('intelligence sdk maps read-only capability discovery through typed api events', async () => {
+    const transport = createTransportMock()
+    transport.send
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          capabilityId: 'text.chat',
+          available: false,
+          providerIds: [],
+          reason: 'no-provider',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: [
+          {
+            providerId: 'local-llm',
+            providerName: 'Local LLM',
+            providerType: 'ollama',
+            models: ['llama3.2'],
+            defaultModel: null,
+            capabilities: ['text.chat'],
+            available: false,
+          },
+        ],
+      })
+    const sdk = createIntelligenceSdk(transport)
+
+    await expect(
+      sdk.getCapabilityStatus({ capabilityId: 'text.chat' }),
+    ).resolves.toEqual({
+      capabilityId: 'text.chat',
+      available: false,
+      providerIds: [],
+      reason: 'no-provider',
+    })
+    await expect(
+      sdk.getProviderModelOptions({ capabilityId: 'text.chat' }),
+    ).resolves.toEqual([
+      {
+        providerId: 'local-llm',
+        providerName: 'Local LLM',
+        providerType: 'ollama',
+        models: ['llama3.2'],
+        defaultModel: null,
+        capabilities: ['text.chat'],
+        available: false,
+      },
+    ])
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:get-capability-status',
+    )
+    expect(transport.send.mock.calls[0]?.[0]).toMatchObject({
+      namespace: 'intelligence',
+      module: 'api',
+      action: 'get-capability-status',
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      { capabilityId: 'text.chat' },
+    )
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:get-provider-model-options',
+    )
+    expect(transport.send.mock.calls[1]?.[0]).toMatchObject({
+      namespace: 'intelligence',
+      module: 'api',
+      action: 'get-provider-model-options',
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      { capabilityId: 'text.chat' },
+    )
+  })
+
   it('intelligence sdk maps capability stream to typed transport stream and callbacks', async () => {
     const transport = createTransportMock()
     const sdk = createIntelligenceSdk(transport as any)
@@ -1138,9 +1362,11 @@ describe('transport domain sdk mappings', () => {
     options.onData({ type: 'start', capabilityId: 'text.chat', traceId: 'trace_1' })
     options.onData({ type: 'delta', capabilityId: 'text.chat', delta: 'he' })
     options.onData({ type: 'end', capabilityId: 'text.chat' })
+    options.onEnd()
     expect(onStart).toHaveBeenCalledWith({ type: 'start', capabilityId: 'text.chat', traceId: 'trace_1' })
     expect(onDelta).toHaveBeenCalledWith('he', { type: 'delta', capabilityId: 'text.chat', delta: 'he' })
     expect(onEnd).toHaveBeenCalledWith({ type: 'end', capabilityId: 'text.chat' })
+    expect(onEnd).toHaveBeenCalledTimes(1)
   })
 
   it('intelligence sdk maps local knowledge and context hygiene calls through typed events', async () => {
@@ -1153,8 +1379,8 @@ describe('transport domain sdk mappings', () => {
           contextText: '[1] Knowledge Notes\ncitation evidence',
           chunks: [],
           tokenEstimate: 0,
-          citations: []
-        }
+          citations: [],
+        },
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -1167,7 +1393,7 @@ describe('transport domain sdk mappings', () => {
             content: 'Use local knowledge',
             privacyLevel: 'normal',
             tokenEstimate: 5,
-            createdAt: 1
+            createdAt: 1,
           },
           package: {
             id: 'ctxpkg_1',
@@ -1188,22 +1414,22 @@ describe('transport domain sdk mappings', () => {
                     chunkId: 'chunk-1',
                     title: 'Knowledge Notes',
                     sourceType: 'manual',
-                    updatedAt: 2
+                    updatedAt: 2,
                   },
-                  status: 'ok'
-                }
-              }
+                  status: 'ok',
+                },
+              },
             ],
             metadata: {
               retrieval: {
                 status: 'ok',
                 chunkCount: 1,
-                citationCount: 1
-              }
+                citationCount: 1,
+              },
             },
-            createdAt: 1
-          }
-        }
+            createdAt: 1,
+          },
+        },
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -1216,10 +1442,10 @@ describe('transport domain sdk mappings', () => {
               reason: 'new-session',
               contextScope: 'retrieval',
               metadata: { source: 'test' },
-              createdAt: 1
-            }
-          ]
-        }
+              createdAt: 1,
+            },
+          ],
+        },
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -1242,22 +1468,22 @@ describe('transport domain sdk mappings', () => {
                     citation: {
                       documentId: 'doc-1',
                       chunkId: 'chunk-1',
-                      title: 'Knowledge Notes'
-                    }
-                  }
-                }
+                      title: 'Knowledge Notes',
+                    },
+                  },
+                },
               ],
               metadata: {
                 retrieval: {
                   status: 'ok',
                   chunkCount: 1,
-                  citationCount: 1
-                }
+                  citationCount: 1,
+                },
               },
-              createdAt: 1
-            }
-          ]
-        }
+              createdAt: 1,
+            },
+          ],
+        },
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -1275,18 +1501,18 @@ describe('transport domain sdk mappings', () => {
               enabled: true,
               createdAt: 1,
               updatedAt: 2,
-              usageCount: 0
-            }
-          ]
-        }
+              usageCount: 0,
+            },
+          ],
+        },
       })
       .mockResolvedValueOnce({
         ok: true,
         result: {
           memoryId: 'mem_1',
           enabled: false,
-          updatedAt: 3
-        }
+          updatedAt: 3,
+        },
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -1299,9 +1525,9 @@ describe('transport domain sdk mappings', () => {
             summary: 'Use Chinese replies by default',
             tags: ['language'],
             confidence: 0.8,
-            privacyLevel: 'normal'
-          }
-        }
+            privacyLevel: 'normal',
+          },
+        },
       })
     const sdk = createIntelligenceSdk(transport as any)
 
@@ -1309,38 +1535,38 @@ describe('transport domain sdk mappings', () => {
       query: 'local knowledge',
       tokenBudget: 120,
       maxChunks: 4,
-      dedupe: true
+      dedupe: true,
     })
     const prepared = await sdk.contextPrepareTurn({
       owner: 'corebox',
       input: 'Use local knowledge',
       explicitScope: 'retrieval',
-      tokenBudget: 120
+      tokenBudget: 120,
     })
     const checkpoints = await sdk.contextListCheckpoints({
       sessionId: 'ctxs_1',
       type: 'session_start',
-      limit: 20
+      limit: 20,
     })
     const logs = await sdk.contextListPackageLogs({
       sessionId: 'ctxs_1',
       traceId: 'trace-1',
-      limit: 20
+      limit: 20,
     })
     const memories = await sdk.contextListMemories({
       scope: 'workspace',
       type: 'preference',
-      limit: 10
+      limit: 10,
     })
     const memoryState = await sdk.contextSetMemoryEnabled({
       memoryId: 'mem_1',
-      enabled: false
+      enabled: false,
     })
     const memory = await sdk.contextEvaluateMemory({
       content: 'Use Chinese replies by default',
       type: 'preference',
       scope: 'workspace',
-      tags: ['language']
+      tags: ['language'],
     })
 
     expect(context.status).toBe('ok')
@@ -1348,9 +1574,9 @@ describe('transport domain sdk mappings', () => {
       citation: {
         documentId: 'doc-1',
         chunkId: 'chunk-1',
-        title: 'Knowledge Notes'
+        title: 'Knowledge Notes',
       },
-      status: 'ok'
+      status: 'ok',
     })
     expect(logs.logs[0]?.items[0]).toMatchObject({
       sourceType: 'retrieval',
@@ -1358,34 +1584,34 @@ describe('transport domain sdk mappings', () => {
       metadata: {
         citation: {
           documentId: 'doc-1',
-          chunkId: 'chunk-1'
-        }
-      }
+          chunkId: 'chunk-1',
+        },
+      },
     })
     expect(memories.memories[0]).toMatchObject({
       id: 'mem_1',
       type: 'preference',
       scope: 'workspace',
-      privacyLevel: 'normal'
+      privacyLevel: 'normal',
     })
     expect(memoryState).toMatchObject({
       memoryId: 'mem_1',
-      enabled: false
+      enabled: false,
     })
     expect(checkpoints.checkpoints[0]).toMatchObject({
       id: 'ctxcp_1',
       sessionId: 'ctxs_1',
       type: 'session_start',
       reason: 'new-session',
-      contextScope: 'retrieval'
+      contextScope: 'retrieval',
     })
     expect(memory).toMatchObject({
       status: 'suggested',
       candidate: {
         type: 'preference',
         scope: 'workspace',
-        privacyLevel: 'normal'
-      }
+        privacyLevel: 'normal',
+      },
     })
     expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
       'intelligence:knowledge:build-context',
@@ -1394,7 +1620,7 @@ describe('transport domain sdk mappings', () => {
       query: 'local knowledge',
       tokenBudget: 120,
       maxChunks: 4,
-      dedupe: true
+      dedupe: true,
     })
     expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
       'intelligence:context:prepare-turn',
@@ -1403,7 +1629,7 @@ describe('transport domain sdk mappings', () => {
       owner: 'corebox',
       input: 'Use local knowledge',
       explicitScope: 'retrieval',
-      tokenBudget: 120
+      tokenBudget: 120,
     })
     expect(transport.send.mock.calls[2]?.[0]?.toEventName?.()).toBe(
       'intelligence:context:checkpoints:list',
@@ -1411,7 +1637,7 @@ describe('transport domain sdk mappings', () => {
     expect(transport.send.mock.calls[2]?.[1]).toEqual({
       sessionId: 'ctxs_1',
       type: 'session_start',
-      limit: 20
+      limit: 20,
     })
     expect(transport.send.mock.calls[3]?.[0]?.toEventName?.()).toBe(
       'intelligence:context:package-logs:list',
@@ -1419,7 +1645,7 @@ describe('transport domain sdk mappings', () => {
     expect(transport.send.mock.calls[3]?.[1]).toEqual({
       sessionId: 'ctxs_1',
       traceId: 'trace-1',
-      limit: 20
+      limit: 20,
     })
     expect(transport.send.mock.calls[4]?.[0]?.toEventName?.()).toBe(
       'intelligence:context:memory:list',
@@ -1427,14 +1653,14 @@ describe('transport domain sdk mappings', () => {
     expect(transport.send.mock.calls[4]?.[1]).toEqual({
       scope: 'workspace',
       type: 'preference',
-      limit: 10
+      limit: 10,
     })
     expect(transport.send.mock.calls[5]?.[0]?.toEventName?.()).toBe(
       'intelligence:context:memory:set-enabled',
     )
     expect(transport.send.mock.calls[5]?.[1]).toEqual({
       memoryId: 'mem_1',
-      enabled: false
+      enabled: false,
     })
     expect(transport.send.mock.calls[6]?.[0]?.toEventName?.()).toBe(
       'intelligence:context:memory:evaluate',
@@ -1443,7 +1669,7 @@ describe('transport domain sdk mappings', () => {
       content: 'Use Chinese replies by default',
       type: 'preference',
       scope: 'workspace',
-      tags: ['language']
+      tags: ['language'],
     })
   })
 
