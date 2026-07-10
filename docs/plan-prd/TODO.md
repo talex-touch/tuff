@@ -18,7 +18,7 @@
 | R0 口径 / docs hygiene | done for current pass | 继续清理死链与超长文档；入口只保留当前 SoT。 |
 | R1 Release Integrity | blocked by release assets | `v2.4.12-beta.8` 真实链路已复采：Nexus latest/assets/download 通过，GitHub manifest 存在；仍缺 `.sig/.asc` sidecar、manifest `signature` 字段、Nexus `signatureUrl/signatureKey` 与 signing public key。 |
 | R2 AI Stable | partial | CoreBox AI Ask、`corebox-search-states`、`app-index-workbench`、`browser-login-recovery` 与 `omnipanel-writing-tools` packaged surfaces 已 passed；继续收 Assistant / Workflow / Provider broader visible surfaces。 |
-| R3 Search / Indexing Runtime | partial | FileProvider incremental DB persist、FTS write/delete 与 index worker flush 已收敛到 runtime/store evidence；剩余 SQLite/FTS durable migration、source-scoped `scan_progress` schema、durable scheduler evidence。 |
+| R3 Search / Indexing Runtime | partial | FileProvider incremental DB persist、FTS write/delete 与 index worker flush 已收敛到 runtime/store evidence；AppProvider/FileProvider 搜索热路径已补 parallel candidate reads 与 abort-aware stale query cutoff；Search gatherer provider timeout 会中止底层 provider signal 且 fast layer 完成后清理 timeout timer；剩余 SQLite/FTS durable migration、source-scoped `scan_progress` schema、durable scheduler evidence。 |
 | R7 Nexus Governance | partial | production / preview operator evidence、D1/R2/live send/live storage、provider quota fail-closed。 |
 | Nexus performance | separate thread | 详见 `TODO-nexus.md`，不要混入 CoreApp/AI/R3 改动。 |
 

@@ -9,7 +9,6 @@ import type {
 } from '@talex-touch/utils'
 import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
-import { withTimeout } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 
 import chalk from 'chalk'
@@ -50,10 +49,66 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
   deferredLayerConcurrency: 2
 }
 
-/**
- * Utility function to create a delay promise
- */
-const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+function delay(ms: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>()
+  setTimeout(resolve, ms)
+  return promise
+}
+
+function createProviderTimeoutError(timeoutMs: number): Error {
+  const error = new Error(`Search provider timed out after ${timeoutMs}ms`)
+  error.name = 'TimeoutError'
+  return error
+}
+
+function createProviderAbortError(): Error {
+  const error = new Error('Search provider aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+async function runProviderSearchWithTimeout(
+  provider: ISearchProvider<ProviderContext>,
+  params: TuffQuery,
+  signal: AbortSignal,
+  timeoutMs: number
+): Promise<TuffSearchResult> {
+  const providerController = new AbortController()
+
+  if (signal.aborted) {
+    providerController.abort()
+    throw createProviderAbortError()
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  let abortListener: (() => void) | null = null
+
+  const timeoutState = Promise.withResolvers<never>()
+  timeout = setTimeout(() => {
+    timeoutState.reject(createProviderTimeoutError(timeoutMs))
+    providerController.abort()
+  }, timeoutMs)
+
+  const abortState = Promise.withResolvers<never>()
+  abortListener = () => {
+    abortState.reject(createProviderAbortError())
+    providerController.abort()
+  }
+  signal.addEventListener('abort', abortListener, { once: true })
+
+  try {
+    return await Promise.race([
+      provider.onSearch(params, providerController.signal),
+      timeoutState.promise,
+      abortState.promise
+    ])
+  } finally {
+    clearTimeout(timeout)
+    if (abortListener) {
+      signal.removeEventListener('abort', abortListener)
+    }
+  }
+}
 
 /**
  * Count total items from search results
@@ -84,9 +139,8 @@ function createGatherController(
   const controller = new AbortController()
   const { signal } = controller
 
-  const promise = new Promise<number>((resolve, reject) => {
-    callback(signal, resolve).catch(reject)
-  })
+  const { promise, resolve, reject } = Promise.withResolvers<number>()
+  callback(signal, resolve).catch(reject)
 
   return {
     promise,
@@ -338,78 +392,77 @@ async function runFastLayer(
   let didTimeout = false
 
   // Create a race between provider execution and overall timeout
-  const providerPromise = new Promise<void>((resolveAll) => {
-    const worker = async () => {
-      while (queue.length > 0 && !signal.aborted) {
-        const provider = queue.shift()
-        if (!provider) continue
+  const providerState = Promise.withResolvers<void>()
+  const worker = async () => {
+    while (queue.length > 0 && !signal.aborted) {
+      const provider = queue.shift()
+      if (!provider) continue
 
-        const startTime = performance.now()
-        let status: ExtendedSourceStat['status'] = 'success'
-        let resultCount = 0
+      const startTime = performance.now()
+      let status: ExtendedSourceStat['status'] = 'success'
+      let resultCount = 0
 
-        try {
-          searchLogger.providerCall(provider.id)
-          const searchPromise = provider.onSearch(params, signal)
-          const result = await withTimeout(searchPromise, taskTimeoutMs)
+      try {
+        searchLogger.providerCall(provider.id)
+        const result = await runProviderSearchWithTimeout(provider, params, signal, taskTimeoutMs)
 
-          resultCount = result.items.length
-          if (didTimeout) {
-            onLateResult(result)
-          } else {
-            results.push(result)
-          }
-          searchLogger.providerResult(provider.id, resultCount)
-        } catch (error) {
-          if (signal.aborted) {
-            status = 'aborted'
-          } else if (error instanceof Error && error.name === 'TimeoutError') {
-            status = 'timeout'
-            searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-          } else {
-            status = 'error'
-            searchLogger.providerError(
-              provider.id,
-              error instanceof Error ? error.message : 'Unknown error'
-            )
-          }
-        } finally {
-          const duration = performance.now() - startTime
-          if (!signal.aborted) {
-            sourceStats.push({
-              providerId: provider.id,
-              providerName: provider.name || provider.id,
-              duration,
-              resultCount,
-              status,
-              layer: 'fast'
-            })
-            logProviderCompletion(provider, duration, resultCount, status, 'fast')
-          }
-          completed++
+        resultCount = result.items.length
+        if (didTimeout) {
+          onLateResult(result)
+        } else {
+          results.push(result)
         }
+        searchLogger.providerResult(provider.id, resultCount)
+      } catch (error) {
+        if (signal.aborted) {
+          status = 'aborted'
+        } else if (error instanceof Error && error.name === 'TimeoutError') {
+          status = 'timeout'
+          searchLogger.providerTimeout(provider.id, taskTimeoutMs)
+        } else {
+          status = 'error'
+          searchLogger.providerError(
+            provider.id,
+            error instanceof Error ? error.message : 'Unknown error'
+          )
+        }
+      } finally {
+        const duration = performance.now() - startTime
+        if (!signal.aborted) {
+          sourceStats.push({
+            providerId: provider.id,
+            providerName: provider.name || provider.id,
+            duration,
+            resultCount,
+            status,
+            layer: 'fast'
+          })
+          logProviderCompletion(provider, duration, resultCount, status, 'fast')
+        }
+        completed++
       }
     }
+  }
 
-    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker())
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker())
+  void Promise.all(workers).then(providerState.resolve, providerState.reject)
+  const providerPromise = providerState.promise
 
-    void Promise.all(workers).then(() => resolveAll())
-  })
-
-  const timeoutPromise = new Promise<'timeout'>((resolveTimeout) => {
-    setTimeout(() => {
-      if (completed < total) {
-        gatherLog.debug(`Fast layer timeout after ${timeoutMs}ms`, { meta: { completed, total } })
-      }
-      resolveTimeout('timeout')
-    }, timeoutMs)
-  })
+  const timeoutState = Promise.withResolvers<'timeout'>()
+  const timeout = setTimeout(() => {
+    if (completed < total) {
+      gatherLog.debug(`Fast layer timeout after ${timeoutMs}ms`, { meta: { completed, total } })
+    }
+    timeoutState.resolve('timeout')
+  }, timeoutMs)
+  const timeoutPromise = timeoutState.promise
 
   // Race: either all providers complete or timeout expires
   const fastLayerState = await Promise.race([
     providerPromise.then(() => 'completed' as const),
     timeoutPromise
   ])
+  clearTimeout(timeout)
 
   didTimeout = fastLayerState === 'timeout'
 
@@ -447,8 +500,7 @@ async function runDeferredLayer(
 
       try {
         searchLogger.providerCall(provider.id)
-        const searchPromise = provider.onSearch(params, signal)
-        result = await withTimeout(searchPromise, taskTimeoutMs)
+        result = await runProviderSearchWithTimeout(provider, params, signal, taskTimeoutMs)
 
         resultCount = result.items.length
         searchLogger.providerResult(provider.id, resultCount)

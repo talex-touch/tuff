@@ -13,6 +13,18 @@
 - Store front page now consumes compact `/api/store/search` directly with remote debounce, server-side category/keyword refresh, and offset-based "load more" pagination, so first paint no longer depends on fetching all store plugins for local filtering.
 - Store front page detail overlay now lazy-loads the dialog, tab shell, metadata header, and shared detail renderers only when a plugin detail is requested, keeping interaction-only plugin detail code out of the initial store page import graph.
 
+### nexus: trim dashboard first-visit imports
+
+- Dashboard devices page now lazy-loads `GeoLeafletMap.client.vue` only when a device map is expanded, keeping Leaflet map code out of the first-visit synchronous import graph; added a focused performance boundary test for the lazy map contract.
+- Dashboard overview page now lazy-loads `DashboardSparklineChart.client.vue` and `GeoLeafletMap.client.vue`, keeping ECharts/Leaflet client widgets behind the chart/map render boundary instead of the page's synchronous imports.
+- Dashboard storage page now lazy-loads the sync details `FlipDialog` and sparkline chart client only when their UI boundaries render, trimming dialog/chart code from the storage route's first-visit synchronous imports.
+- Dashboard team page now lazy-loads team action `FlipDialog` overlays and the credit trend sparkline client at their render boundaries, avoiding modal/chart code in the team route's first-visit synchronous imports.
+- Dashboard account page now lazy-loads the profile edit `FlipDialog` only when the edit overlay opens, keeping dialog code out of the account route's first-visit synchronous imports.
+- Dashboard notifications page now lazy-loads the browser setup `FlipDialog` only when the setup overlay opens, while keeping the setup trigger in the initial page without dialog code.
+- Dashboard OAuth page now lazy-loads the create-app `FlipDialog` only when the create dialog opens, while keeping the primary create trigger in the route's initial UI.
+- Dashboard API keys page now lazy-loads the create-key `FlipDialog` only when a create overlay opens, preserving both populated and empty-state create triggers without dialog code in the initial route graph.
+- Dashboard admin analytics page now lazy-loads the geo `GeoLeafletMap.client.vue` widget behind the geo analytics data boundary, avoiding Leaflet code in the analytics route's initial synchronous imports.
+
 ### corebox: bound subsequence fallback scans
 
 - SearchIndex subsequence fallback now pushes the subsequence shape into SQLite with an escaped `LIKE` prefilter, deterministic short-keyword ordering, and a hard 2k scan cap before JS scoring, reducing hot-path keyword rows scored in memory while preserving fuzzy recall.
@@ -22,6 +34,8 @@
 
 - AppProvider 与 FileProvider 搜索首段 now dispatch exact keyword lookup, short-query prefix lookup, and FTS lookup together, so independent SQLite/SearchIndex reads overlap instead of stacking on the user-visible `onSearch` path.
 - Added deterministic CoreApp tests proving prefix/FTS reads start before exact lookup resolves; n-gram/subsequence fallback remains gated after first-pass candidate aggregation.
+- AppProvider and FileProvider search now observe `AbortSignal` before starting search-index work, after parallel candidate reads, and after candidate DB fetch/processing boundaries, avoiding stale query row loads/scoring when CoreBox supersedes app/file searches.
+- Search gatherer now gives each provider call a per-task `AbortSignal`, aborts it on provider timeout, and clears fast-layer timeout timers once fast providers complete, so timed-out fast/deferred providers stop stale work and completed fast searches do not leave extra pending timers.
 
 ### nexus: bound intelligence chat and provider probe streams
 

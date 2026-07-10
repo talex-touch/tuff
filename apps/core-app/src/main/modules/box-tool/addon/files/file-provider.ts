@@ -3621,7 +3621,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+    if (signal.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
     searchLogger.logProviderSearch('file-provider', query.text, 'File System')
     searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {
@@ -3678,6 +3681,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         : Promise.resolve([]),
       ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
     ])
+
+    if (signal.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
 
     const termMatches = terms.map(
       (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
@@ -3762,6 +3769,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
+    if (signal.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
     searchLogger.fileDataResults(rows.length, performance.now() - dataFetchStart)
     this.logDebug('Loaded candidate rows for scoring', {
       count: rows.length,

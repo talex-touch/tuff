@@ -2968,7 +2968,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return null
   }
 
-  async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
+  async onSearch(query: TuffQuery, signal?: AbortSignal): Promise<TuffSearchResult> {
+    if (signal?.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
     const searchStart = startTiming()
     logApp(`Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
 
@@ -3008,6 +3011,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         : Promise.resolve([]),
       ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
     ])
+
+    if (signal?.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
 
     const termMatches = terms.map(
       (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
@@ -3108,6 +3115,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (candidateIds.size < NGRAM_RECALL_THRESHOLD && normalizedQuery.length >= 3) {
       const ngramStart = startTiming()
       const ngramCandidates = await this.searchIndex.lookupByNgrams(this.id, normalizedQuery, 30)
+      if (signal?.aborted) {
+        return new TuffSearchResultBuilder(query).build()
+      }
 
       for (const candidate of ngramCandidates) {
         if (candidateIds.size >= maxCandidateCount) break
@@ -3134,6 +3144,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (candidateIds.size < SUBSEQ_RECALL_THRESHOLD && normalizedQuery.length >= 2) {
       const subseqStart = startTiming()
       const subseqResults = await this.searchIndex.lookupBySubsequence(this.id, normalizedQuery, 50)
+      if (signal?.aborted) {
+        return new TuffSearchResultBuilder(query).build()
+      }
 
       for (const result of subseqResults) {
         if (candidateIds.size >= maxCandidateCount) break
@@ -3181,6 +3194,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         )
       )
 
+    if (signal?.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
     logAppDuration(
       'LoadCandidates',
       fetchStart,
@@ -3199,6 +3215,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const appsWithExtensions = await this.fetchExtensionsForFiles(files)
+    if (signal?.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
     const searchableAppsWithExtensions = appsWithExtensions.filter(isSearchableAppRow)
     const filteredAppsWithExtensions =
       this.isMac && this.appIndexSettings.hideNoisySystemApps
@@ -3235,6 +3254,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       isFuzzySearch,
       this.aliases
     )
+
+    if (signal?.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
 
     const sortedItems = processedResults.map((item) => {
       const { score: _score, ...rest } = item
