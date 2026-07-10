@@ -4,11 +4,12 @@ import type { TouchPlugin } from '../plugin'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { app } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from '../../box-tool/core-box/manager'
+import { resolveExactLoopbackDevOrigin } from '../runtime/plugin-window-policy'
 
 const viewLog = createLogger('PluginViewLoader')
-const REMOTE_PROTOCOLS = new Set(['http:', 'https:'])
 const HTML_LIKE_FILE_EXT_RE = /\.(html|htm|php|asp|aspx)$/i
 
 function pushViewIssue(
@@ -167,14 +168,19 @@ export class PluginViewLoader {
         return null
       }
 
-      if (!REMOTE_PROTOCOLS.has(devAddress.protocol)) {
-        viewLog.error(`Security: dev protocol blocked for plugin ${plugin.name}`)
+      const allowedDevAddress = resolveExactLoopbackDevOrigin(devAddress.toString(), {
+        appIsPackaged: app.isPackaged,
+        pluginDevEnabled: plugin.dev.enable,
+        pluginDevSource: Boolean(plugin.dev.source)
+      })
+      if (!allowedDevAddress) {
+        viewLog.error(`Security: dev view origin blocked for plugin ${plugin.name}`)
         pushViewIssue(
           plugin,
           feature,
-          'PROTOCOL_NOT_ALLOWED',
-          'Only HTTP(S) protocol is allowed for dev source views.',
-          'Use an HTTP(S) dev.address or disable dev.source in manifest.json.'
+          'DEV_VIEW_NOT_ALLOWED',
+          'Development views require an unpackaged app and an exact loopback HTTP(S) origin.',
+          'Use localhost, 127.0.0.1, or [::1] while the app and plugin are in development mode.'
         )
         return null
       }
@@ -191,7 +197,7 @@ export class PluginViewLoader {
       }
 
       // Dev mode: load from remote dev server
-      viewUrl = new URL(remotePath, devAddress).toString()
+      viewUrl = new URL(remotePath, allowedDevAddress).toString()
     } else {
       // Production mode: load from local file system
       if (hasParentTraversal(interactionPath)) {

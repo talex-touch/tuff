@@ -206,7 +206,16 @@ export default defineConfig({
       })
     ],
     build: {
-      sourcemap: enableSourcemap
+      sourcemap: enableSourcemap,
+      rollupOptions: {
+        input: {
+          index: path.join(basePath, 'preload', 'index.ts'),
+          'plugin-view': path.join(basePath, 'preload', 'plugin-view.ts')
+        },
+        output: {
+          entryFileNames: '[name].js'
+        }
+      }
     }
   },
 

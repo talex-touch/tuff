@@ -695,38 +695,102 @@ export type PluginPerformanceGetMetricsResponse = unknown
 
 export type PluginPerformanceGetPathsResponse = PluginApiGetPathsResponse
 
+export const PLUGIN_WINDOW_ERROR_CODES = {
+  PERMISSION_UNAVAILABLE: 'PLUGIN_WINDOW_PERMISSION_UNAVAILABLE',
+  PERMISSION_DENIED: 'PLUGIN_WINDOW_PERMISSION_DENIED',
+  REMOTE_URL_DENIED: 'PLUGIN_WINDOW_REMOTE_URL_DENIED',
+  PATH_OUTSIDE_ROOT: 'PLUGIN_WINDOW_PATH_OUTSIDE_ROOT',
+  TARGET_INVALID: 'PLUGIN_WINDOW_TARGET_INVALID',
+  OPTIONS_INVALID: 'PLUGIN_WINDOW_OPTIONS_INVALID',
+  COMMAND_REMOVED: 'PLUGIN_WINDOW_COMMAND_REMOVED',
+  NOT_FOUND: 'PLUGIN_WINDOW_NOT_FOUND',
+} as const
+
+export type PluginWindowErrorCode =
+  (typeof PLUGIN_WINDOW_ERROR_CODES)[keyof typeof PLUGIN_WINDOW_ERROR_CODES]
+
+export interface PluginWindowErrorData {
+  code: PluginWindowErrorCode | 'SDKAPI_MISMATCH'
+  message: string
+}
+
+export type PluginWindowResponseError = PluginWindowErrorData | string
+
+export interface PluginWindowOptions {
+  width?: number
+  height?: number
+  x?: number
+  y?: number
+  title?: string
+  resizable?: boolean
+  alwaysOnTop?: boolean
+  visible?: boolean
+}
+
 export interface PluginWindowNewRequest {
-  file?: string
-  url?: string
-  [key: string]: unknown
+  file: string
+  options?: PluginWindowOptions
+  _sdkapi?: number
 }
 
 export interface PluginWindowNewResponse {
   id?: number
-  error?: string
+  error?: PluginWindowResponseError
 }
 
 export interface PluginWindowVisibleRequest {
   id: number
   visible?: boolean
+  _sdkapi?: number
 }
 
 export interface PluginWindowVisibleResponse {
   visible?: boolean
-  error?: string
+  error?: PluginWindowResponseError
+}
+
+export interface PluginWindowBounds {
+  x?: number
+  y?: number
+  width: number
+  height: number
+}
+
+export type PluginWindowCommand =
+  | { type: 'focus' }
+  | { type: 'close' }
+  | { type: 'setBounds'; bounds: PluginWindowBounds }
+  | { type: 'setAlwaysOnTop'; value: boolean }
+
+export interface PluginWindowCommandRequest {
+  id: number
+  command: PluginWindowCommand
+  _sdkapi?: number
+}
+
+export interface PluginWindowCommandResponse {
+  success?: boolean
+  error?: PluginWindowResponseError
+}
+
+export interface LegacyPluginWindowProperties {
+  window?: {
+    focus?: []
+    close?: []
+    setBounds?: [PluginWindowBounds]
+    setAlwaysOnTop?: [boolean]
+  }
 }
 
 export interface PluginWindowPropertyRequest {
   id: number
-  property: {
-    window?: Record<string, unknown>
-    webContents?: Record<string, unknown>
-  }
+  property: LegacyPluginWindowProperties
+  _sdkapi?: number
 }
 
 export interface PluginWindowPropertyResponse {
   success?: boolean
-  error?: string
+  error?: PluginWindowResponseError
 }
 
 export interface PluginServiceRequest {

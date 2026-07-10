@@ -438,6 +438,8 @@ import type {
   PluginSqliteQueryResponse,
   PluginSqliteTransactionRequest,
   PluginSqliteTransactionResponse,
+  PluginWindowCommandRequest,
+  PluginWindowCommandResponse,
   PluginWindowNewRequest,
   PluginWindowNewResponse,
   PluginWindowPropertyRequest,
@@ -1950,6 +1952,10 @@ export const PluginEvents = {
       PluginWindowVisibleRequest,
       PluginWindowVisibleResponse
     >("window:visible"),
+    command: defineRawEvent<
+      PluginWindowCommandRequest,
+      PluginWindowCommandResponse
+    >("window:command"),
     property: defineRawEvent<
       PluginWindowPropertyRequest,
       PluginWindowPropertyResponse
@@ -2068,15 +2074,18 @@ export const NetworkEvents = {
     ),
   },
   lifecycle: {
-    status: defineRawEvent<NetworkLifecycleStatusPayload, void>(
-      "network:lifecycle:status",
-    ),
-    online: defineRawEvent<NetworkLifecycleOnlinePayload | void, void>(
-      "network:lifecycle:online",
-    ),
-    offline: defineRawEvent<NetworkLifecycleOfflinePayload | void, void>(
-      "network:lifecycle:offline",
-    ),
+    status: defineEvent("network")
+      .module("lifecycle")
+      .event("status")
+      .define<NetworkLifecycleStatusPayload, void>(),
+    online: defineEvent("network")
+      .module("lifecycle")
+      .event("online")
+      .define<NetworkLifecycleOnlinePayload | void, void>(),
+    offline: defineEvent("network")
+      .module("lifecycle")
+      .event("offline")
+      .define<NetworkLifecycleOfflinePayload | void, void>(),
   },
 } as const;
 

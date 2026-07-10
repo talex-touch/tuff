@@ -93,6 +93,10 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'storage:sqlite:*', permissions: ['storage.sqlite'] },
 
   // Window APIs
+  { pattern: 'window:new', permissions: ['window.create'] },
+  { pattern: 'window:visible', permissions: ['window.create'] },
+  { pattern: 'window:command', permissions: ['window.create'] },
+  { pattern: 'window:property', permissions: ['window.create'] },
   { pattern: 'window:create', permissions: ['window.create'] },
   { pattern: 'window:open', permissions: ['window.create'] },
   { pattern: 'window:capture', permissions: ['window.capture'] },

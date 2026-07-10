@@ -131,7 +131,7 @@ describe('PluginViewLoader', () => {
     )
   })
 
-  it('keeps dev.source remote route usable in packaged runtime', async () => {
+  it('blocks dev.source remote routes in packaged runtime', async () => {
     appMock.isPackaged = true
     const plugin = createPlugin({
       dev: { enable: true, source: true, address: 'http://localhost:3733/' }
@@ -140,10 +140,11 @@ describe('PluginViewLoader', () => {
 
     const result = await PluginViewLoader.loadPluginView(plugin, feature)
 
-    expect(result).toBeUndefined()
-    expect(enterUIModeMock).toHaveBeenCalledTimes(1)
-    const viewUrl = enterUIModeMock.mock.calls[0]?.[0] as string
-    expect(viewUrl).toBe('http://localhost:3733/multi-translate')
+    expect(result).toBeNull()
+    expect(enterUIModeMock).not.toHaveBeenCalled()
+    expect(plugin.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'DEV_VIEW_NOT_ALLOWED' })])
+    )
   })
 
   it('keeps dev.source remote route usable in unpackaged mode', async () => {
@@ -157,6 +158,21 @@ describe('PluginViewLoader', () => {
     expect(enterUIModeMock).toHaveBeenCalledTimes(1)
     const viewUrl = enterUIModeMock.mock.calls[0]?.[0] as string
     expect(viewUrl).toBe('http://localhost:3733/multi-translate')
+  })
+
+  it('blocks non-loopback dev origins', async () => {
+    const plugin = createPlugin({
+      dev: { enable: true, source: true, address: 'https://example.test/' }
+    })
+    const feature = createFeature('/multi-translate')
+
+    const result = await PluginViewLoader.loadPluginView(plugin, feature)
+
+    expect(result).toBeNull()
+    expect(enterUIModeMock).not.toHaveBeenCalled()
+    expect(plugin.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'DEV_VIEW_NOT_ALLOWED' })])
+    )
   })
 
   it('blocks invalid remote route with scheme when dev.source is enabled', async () => {

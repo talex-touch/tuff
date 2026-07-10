@@ -93,4 +93,20 @@ describe('permissionGuardPerformance', () => {
     expect(result.allowed).toBe(true)
     expect(result.permissionId).toBe('window.create')
   })
+
+  it.each(['window:new', 'window:visible', 'window:command', 'window:property'])(
+    'maps privileged plugin event %s to window.create',
+    async (eventName) => {
+      store.setDeclaredPermissions(TEST_PLUGIN_ID, {
+        required: ['window.create'],
+        optional: []
+      })
+      await store.grant(TEST_PLUGIN_ID, 'window.create', 'user')
+
+      const result = guard.check(TEST_PLUGIN_ID, eventName, SDK_VERSION)
+
+      expect(result.allowed).toBe(true)
+      expect(result.permissionId).toBe('window.create')
+    }
+  )
 })

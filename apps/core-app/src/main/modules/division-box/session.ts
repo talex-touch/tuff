@@ -29,6 +29,11 @@ import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from '../plugin/runtime/plugin-view-security-profile'
+import { buildPluginViewWebPreferences } from '../plugin/runtime/plugin-view-host'
+import {
+  createPluginViewNavigationPolicy,
+  installPluginViewNavigationPolicy
+} from '../plugin/runtime/plugin-window-policy'
 import { getMainConfig } from '../storage'
 import defaultCoreBoxThemeCss from '../box-tool/core-box/theme/tuff-element.css?raw'
 import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds } from './layout'
@@ -495,8 +500,8 @@ export class DivisionBoxSession {
 
     let preloadPath = injections?._.preload
 
-    // Create dynamic preload for plugin channel if available
-    if (plugin && injections?.js) {
+    // Compatibility views retain the legacy composed preload until migration.
+    if (securityProfile.effectiveProfile === 'compat-plugin-view' && plugin && injections?.js) {
       const tempPreloadPath = path.resolve(
         os.tmpdir(),
         `tuff-division-preload-${plugin.name}-${Date.now()}.js`
@@ -504,12 +509,21 @@ export class DivisionBoxSession {
 
       const channelScript = this.generateChannelScript(plugin._uniqueChannelKey)
       const pluginInjectionCode = injections.js.trim()
+      let originalPreloadContent = ''
+      if (injections._.preload && fse.existsSync(injections._.preload)) {
+        try {
+          originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
+        } catch (error) {
+          divisionBoxSessionLog.warn('Failed to read legacy DivisionBox preload', { error })
+        }
+      }
 
       const combinedPreload = `
 // DivisionBox preload for ${plugin.name}
 (function() {
   try { ${pluginInjectionCode}; } catch(e) { console.error('[DivisionBox] Plugin inject failed:', e); }
   try { ${channelScript} } catch(e) { console.error('[DivisionBox] Channel inject failed:', e); }
+  ${originalPreloadContent.trim() ? `try { ${originalPreloadContent} } catch {}` : ''}
 })();
 `
       try {
@@ -522,14 +536,37 @@ export class DivisionBoxSession {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences = buildWindowWebPreferences(securityProfile.effectiveProfile, {
-      preload: preloadPath || undefined,
+    const webPreferenceOverrides: Electron.WebPreferences = {
       scrollBounce: true,
       transparent: true
-    })
+    }
+    const webPreferences = plugin
+      ? buildPluginViewWebPreferences(securityProfile.effectiveProfile, {
+          plugin,
+          themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
+          source: `division-box:${url}`,
+          legacyPreload: preloadPath,
+          overrides: webPreferenceOverrides
+        })
+      : buildWindowWebPreferences('app', webPreferenceOverrides)
+    const navigationPolicy = plugin
+      ? await createPluginViewNavigationPolicy({
+          pluginRoot: plugin.pluginPath,
+          targetUrl: url,
+          securityProfile: securityProfile.effectiveProfile,
+          devAddress: plugin.dev.address,
+          appIsPackaged: app.isPackaged,
+          pluginDevEnabled: plugin.dev.enable,
+          pluginDevSource: Boolean(plugin.dev.source),
+          allowLegacyWebview: securityProfile.reason === 'legacy-webview'
+        })
+      : null
 
     const viewCreateStart = performance.now()
     this.uiView = new WebContentsView({ webPreferences })
+    if (navigationPolicy) {
+      installPluginViewNavigationPolicy(this.uiView.webContents, navigationPolicy)
+    }
     metrics.viewCreate = performance.now() - viewCreateStart
     this.attachedPlugin = plugin ?? null
 
