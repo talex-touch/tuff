@@ -32,6 +32,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [State Management](./state-management.md) | Local state, Pinia, host/server state | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns, verification | Filled |
 | [Type Safety](./type-safety.md) | TypeScript, runtime guards, typed transport | Filled |
+| [Plugin Runtime Security](./plugin-runtime-security.md) | Privileged plugin handlers, views, preload, and Electron policy | Filled |
 
 ---
 
@@ -45,7 +46,8 @@ Before editing frontend code:
 4. Read [Hook Guidelines](./hook-guidelines.md) before adding or changing a `use*` composable or browser lifecycle code.
 5. Read [State Management](./state-management.md) before adding Pinia state, SDK subscriptions, caches, or host/server data mirrors.
 6. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
-7. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
+7. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
+8. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
 
 Also read shared thinking guides when the trigger applies:
 
