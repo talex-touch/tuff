@@ -1483,6 +1483,85 @@ describe('appProvider rebuild maintenance', () => {
     expect(subsequenceMock).not.toHaveBeenCalled()
   })
 
+  it('returns immediately when aborted before app search work starts', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const controller = new AbortController()
+    controller.abort()
+
+    const getDbMock = vi.fn(() => ({ select: vi.fn() }))
+    const lookupByKeywordsMock = vi.fn()
+    const lookupByKeywordPrefixMock = vi.fn()
+    const ftsSearchMock = vi.fn()
+    const ngramMock = vi.fn()
+    const subsequenceMock = vi.fn()
+
+    privateProvider.dbUtils = { getDb: getDbMock }
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const result = await appProvider.onSearch({ text: 'chat', inputs: [] }, controller.signal)
+
+    expect(result.items).toEqual([])
+    expect(getDbMock).not.toHaveBeenCalled()
+    expect(lookupByKeywordsMock).not.toHaveBeenCalled()
+    expect(lookupByKeywordPrefixMock).not.toHaveBeenCalled()
+    expect(ftsSearchMock).not.toHaveBeenCalled()
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fetch app rows when aborted after search-index candidate reads', async () => {
+    const { appProvider } = await loadSubject()
+    const { fileExtensions, files } = await import('../../../../db/schema')
+    const { processSearchResults } = await import('./search-processing-service')
+    const privateProvider = asPrivateProvider(appProvider)
+    const controller = new AbortController()
+    const candidateApp = createAppSearchRow(26, '/Applications/Chat.app', 'Chat')
+    const { db, selectMock, whereMock } = createAppSearchDb({
+      fileExtensionsTable: fileExtensions,
+      filesTable: files,
+      rows: [candidateApp]
+    })
+    const lookupByKeywordsMock = vi.fn(async () => {
+      controller.abort()
+      return new Map([['chat', [{ itemId: candidateApp.path, priority: 1.2 }]]])
+    })
+    const lookupByKeywordPrefixMock = vi.fn(async () => [])
+    const ftsSearchMock = vi.fn(async () => [])
+    const ngramMock = vi.fn(async () => [])
+    const subsequenceMock = vi.fn(async () => [])
+    const fetchExtensionsForFilesMock = vi.fn(async (apps: TestAppSearchRow[]) => apps)
+
+    privateProvider.dbUtils = { getDb: () => db }
+    privateProvider.fetchExtensionsForFiles = fetchExtensionsForFilesMock
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const result = await appProvider.onSearch({ text: 'chat', inputs: [] }, controller.signal)
+
+    expect(result.items).toEqual([])
+    expect(lookupByKeywordsMock).toHaveBeenCalledWith('app-provider', ['chat'], 200)
+    expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('app-provider', 'chat', 200)
+    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat', 150)
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
+    expect(selectMock).not.toHaveBeenCalled()
+    expect(whereMock).not.toHaveBeenCalled()
+    expect(fetchExtensionsForFilesMock).not.toHaveBeenCalled()
+    expect(processSearchResults).not.toHaveBeenCalled()
+  })
+
   it('diagnoses indexed app keywords and query recall stages', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)

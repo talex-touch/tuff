@@ -1186,6 +1186,94 @@ describe('file-provider startup readiness', () => {
     }
   })
 
+  it('returns immediately when aborted before file search work starts', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalSearchIndex = provider.searchIndex
+    const originalSearchIndexWorkerReady = provider.searchIndexWorkerReady
+    const originalEmbeddingService = provider.embeddingService
+
+    const getDbMock = vi.fn(() => ({ select: vi.fn() }))
+    const lookupByKeywordsMock = vi.fn()
+    const lookupByKeywordPrefixMock = vi.fn()
+    const ftsSearchMock = vi.fn()
+    const controller = new AbortController()
+    controller.abort()
+
+    provider.dbUtils = { getDb: getDbMock }
+    provider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock
+    }
+    provider.searchIndexWorkerReady = Promise.resolve(true)
+    provider.embeddingService = null
+
+    try {
+      const result = await provider.onSearch({ text: 'repo', inputs: [] }, controller.signal)
+
+      expect(result.items).toEqual([])
+      expect(getDbMock).not.toHaveBeenCalled()
+      expect(lookupByKeywordsMock).not.toHaveBeenCalled()
+      expect(lookupByKeywordPrefixMock).not.toHaveBeenCalled()
+      expect(ftsSearchMock).not.toHaveBeenCalled()
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.searchIndex = originalSearchIndex
+      provider.searchIndexWorkerReady = originalSearchIndexWorkerReady
+      provider.embeddingService = originalEmbeddingService
+    }
+  })
+
+  it('does not fetch file rows when aborted after search-index candidate reads', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalSearchIndex = provider.searchIndex
+    const originalSearchIndexWorkerReady = provider.searchIndexWorkerReady
+    const originalEmbeddingService = provider.embeddingService
+
+    const controller = new AbortController()
+    const selectMock = vi.fn(() => ({
+      from: vi.fn(() => ({
+        leftJoin: vi.fn(() => ({
+          where: vi.fn(async () => [])
+        }))
+      }))
+    }))
+    const lookupByKeywordsMock = vi.fn(async () => {
+      controller.abort()
+      return new Map([['repo', [{ itemId: '/tmp/repo.txt', priority: 1 }]]])
+    })
+    const lookupByKeywordPrefixMock = vi.fn(async () => [])
+    const ftsSearchMock = vi.fn(async () => [])
+
+    provider.dbUtils = {
+      getDb: () => ({ select: selectMock })
+    }
+    provider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock
+    }
+    provider.searchIndexWorkerReady = Promise.resolve(true)
+    provider.embeddingService = null
+
+    try {
+      const result = await provider.onSearch({ text: 'repo', inputs: [] }, controller.signal)
+
+      expect(result.items).toEqual([])
+      expect(lookupByKeywordsMock).toHaveBeenCalledWith('file-provider', ['repo'], 200)
+      expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('file-provider', 'repo', 200)
+      expect(ftsSearchMock).toHaveBeenCalledWith('file-provider', 'repo', 150)
+      expect(selectMock).not.toHaveBeenCalled()
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.searchIndex = originalSearchIndex
+      provider.searchIndexWorkerReady = originalSearchIndexWorkerReady
+      provider.embeddingService = originalEmbeddingService
+    }
+  })
+
   it('does not build a File Index warming result notice while startup is pending', () => {
     const provider = fileProvider as unknown as MutableFileProvider
     resetProviderState(provider)

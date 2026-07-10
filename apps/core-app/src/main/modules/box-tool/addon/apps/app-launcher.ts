@@ -183,6 +183,7 @@ function observeEarlySpawnFailure(child: ChildProcess): Promise<AppLaunchOutcome
     eventSource.once('error', handleError)
     eventSource.once('exit', handleExit)
     timer = setTimeout(() => finish({ status: 'handedOff' }), EARLY_EXIT_OBSERVATION_MS)
+    timer.unref?.()
   })
 }
 

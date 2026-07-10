@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxRadio, TxRadioGroup, type TxRadioValue } from '@talex-touch/tuffex/radio'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import { hasWindow } from '@talex-touch/utils/env'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { requestJson } from '~/utils/request'
+
+const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
 
 definePageMeta({
   layout: 'dashboard',
@@ -14,6 +15,7 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const browserSetupTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const toast = useToast()
 
 type NotificationStatus = 'unread' | 'read'
@@ -422,25 +424,27 @@ onMounted(() => {
         </p>
       </div>
 
-      <FlipDialog
+      <TxButton
+        ref="browserSetupTriggerRef"
+        size="small"
+        variant="secondary"
+        :loading="browserNotificationBusy || browserPushBusy"
+        icon="i-carbon-send-alt"
+        @click="browserSetupOverlayVisible = true"
+      >
+        {{ browserSetupActionLabel }}
+      </TxButton>
+
+      <LazyFlipDialog
+        v-if="browserSetupOverlayVisible"
         v-model="browserSetupOverlayVisible"
+        :reference="browserSetupTriggerRef?.$el || null"
         size="md"
         width="min(560px, calc(100vw - 32px))"
         max-height="calc(100dvh - 32px)"
         :header="false"
         :closable="false"
       >
-        <template #reference>
-          <TxButton
-            size="small"
-            variant="secondary"
-            :loading="browserNotificationBusy || browserPushBusy"
-            icon="i-carbon-send-alt"
-          >
-            {{ browserSetupActionLabel }}
-          </TxButton>
-        </template>
-
         <template #default>
           <div class="space-y-4 p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -509,7 +513,7 @@ onMounted(() => {
             </div>
           </div>
         </template>
-      </FlipDialog>
+      </LazyFlipDialog>
     </header>
 
     <section class="apple-card-lg p-5">

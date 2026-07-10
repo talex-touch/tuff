@@ -4,9 +4,11 @@ import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
-import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
+import { defineAsyncComponent } from 'vue'
 import type { DocAnalyticsResponse } from '~/types/docs-engagement'
 import { requestJson } from '~/utils/request'
+
+const LazyGeoLeafletMap = defineAsyncComponent(() => import('~/components/dashboard/GeoLeafletMap.client.vue'))
 
 definePageMeta({
   pageTransition: {
@@ -1749,7 +1751,7 @@ Slow
 
         <template v-else-if="geoAnalytics">
           <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <GeoLeafletMap
+            <LazyGeoLeafletMap
               :points="geoMapPoints"
               :height="320"
               @point-click="handleMapPointClick"
