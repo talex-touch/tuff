@@ -1,0 +1,33 @@
+{
+  "id": "contain-plugin-window-boundary",
+  "name": "contain-plugin-window-boundary",
+  "title": "Contain Plugin Window Privilege Boundary",
+  "description": "Hard-cut remote compatibility windows, enforce permissions, activate hardened profiles, and replace reflective window commands.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": "Plugin window SDK, typed transport events, permission enforcement, security profiles, trusted preload bridge, and plugin view call sites",
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-09-audit-search-system-architecture",
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/plugin/plugin-module.ts",
+    "apps/core-app/src/main/modules/plugin/runtime/plugin-view-security-profile.ts",
+    "apps/core-app/src/main/core/window-security-profile.ts",
+    "apps/core-app/src/main/modules/permission/channel-guard.ts",
+    "packages/utils/plugin/sdk/window/index.ts",
+    "packages/utils/transport/events/types/plugin.ts"
+  ],
+  "notes": "No dependencies. Hard safety cut approved on 2026-07-09. Must be reviewed and explicitly started before product edits.",
+  "meta": {}
+}
