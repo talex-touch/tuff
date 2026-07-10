@@ -28,21 +28,57 @@ export interface PluginViewSecurityContext {
 }
 
 interface PluginViewSecurityPlugin {
+  name?: string
   sdkapi?: number
   webViewInit?: boolean
 }
+
+export interface PluginViewSecurityDiagnostic {
+  plugin: string
+  source: string
+  candidateProfile: PluginViewSecurityProfile
+  effectiveProfile: PluginViewSecurityProfile
+  reason: PluginViewSecurityProfileReason
+}
+
+export interface PluginViewSecurityDiagnosticsSnapshot {
+  surfaces: PluginViewSecurityDiagnostic[]
+  compatibilityBlockers: Partial<Record<PluginViewSecurityProfileReason, number>>
+}
+
+const securityDiagnostics = new Map<string, PluginViewSecurityDiagnostic>()
 
 export function resolvePluginViewSecurityProfile(
   plugin: PluginViewSecurityPlugin | null | undefined,
   context: PluginViewSecurityContext
 ): ResolvedPluginViewSecurityProfile {
   const candidateProfile = resolveCandidateProfile(plugin, context)
-
-  return {
+  const resolved = {
     candidateProfile: candidateProfile.profile,
-    effectiveProfile: 'compat-plugin-view',
+    effectiveProfile: candidateProfile.profile,
     reason: candidateProfile.reason
   }
+  const diagnostic: PluginViewSecurityDiagnostic = {
+    plugin: plugin?.name ?? 'unknown',
+    source: context.source,
+    ...resolved
+  }
+  securityDiagnostics.set(`${diagnostic.plugin}:${diagnostic.source}`, diagnostic)
+  return resolved
+}
+
+export function getPluginViewSecurityDiagnostics(): PluginViewSecurityDiagnosticsSnapshot {
+  const surfaces = Array.from(securityDiagnostics.values(), (diagnostic) => ({ ...diagnostic }))
+  const compatibilityBlockers: Partial<Record<PluginViewSecurityProfileReason, number>> = {}
+  for (const diagnostic of surfaces) {
+    if (diagnostic.effectiveProfile !== 'compat-plugin-view') continue
+    compatibilityBlockers[diagnostic.reason] = (compatibilityBlockers[diagnostic.reason] ?? 0) + 1
+  }
+  return { surfaces, compatibilityBlockers }
+}
+
+export function resetPluginViewSecurityDiagnostics(): void {
+  securityDiagnostics.clear()
 }
 
 function isTrustedMarker(sdkapi: number | undefined): boolean {

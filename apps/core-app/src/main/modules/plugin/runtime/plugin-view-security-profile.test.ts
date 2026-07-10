@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { SdkApi } from '@talex-touch/utils/plugin'
-import { resolvePluginViewSecurityProfile } from './plugin-view-security-profile'
+import {
+  getPluginViewSecurityDiagnostics,
+  resetPluginViewSecurityDiagnostics,
+  resolvePluginViewSecurityProfile
+} from './plugin-view-security-profile'
 
 function createPlugin(overrides: { sdkapi?: number; webViewInit?: boolean } = {}) {
   const hasSdkapi = Object.prototype.hasOwnProperty.call(overrides, 'sdkapi')
@@ -21,25 +25,29 @@ function createPlugin(overrides: { sdkapi?: number; webViewInit?: boolean } = {}
 }
 
 describe('resolvePluginViewSecurityProfile', () => {
-  it('marks 260615 plugins without legacy needs as trusted candidates only', () => {
+  beforeEach(() => {
+    resetPluginViewSecurityDiagnostics()
+  })
+
+  it('activates the trusted profile for supported plugins without legacy needs', () => {
     const profile = resolvePluginViewSecurityProfile(createPlugin(), {
       source: 'test'
     })
 
     expect(profile).toEqual({
       candidateProfile: 'trusted-plugin-view',
-      effectiveProfile: 'compat-plugin-view',
+      effectiveProfile: 'trusted-plugin-view',
       reason: 'trusted-candidate'
     })
   })
 
-  it('keeps effective runtime compatible during the observation phase', () => {
+  it('keeps candidate and effective profiles aligned', () => {
     const profile = resolvePluginViewSecurityProfile(createPlugin(), {
       source: 'test'
     })
 
     expect(profile.candidateProfile).toBe('trusted-plugin-view')
-    expect(profile.effectiveProfile).toBe('compat-plugin-view')
+    expect(profile.effectiveProfile).toBe('trusted-plugin-view')
   })
 
   it('retains 260428 plugins on the compatibility candidate path', () => {
@@ -113,5 +121,26 @@ describe('resolvePluginViewSecurityProfile', () => {
 
     expect(profile.reason).toBe('explicit-legacy-runtime')
     expect(profile.candidateProfile).toBe('compat-plugin-view')
+  })
+
+  it('reports per-surface profile state and deduplicated compatibility blockers', () => {
+    const plugin = createPlugin()
+    resolvePluginViewSecurityProfile(plugin, { source: 'core-box' })
+    resolvePluginViewSecurityProfile(plugin, {
+      source: 'division-box',
+      injections: { _: { preload: '/tmp/legacy.js', isWebviewInit: false } }
+    })
+    resolvePluginViewSecurityProfile(plugin, {
+      source: 'division-box',
+      injections: { _: { preload: '/tmp/legacy.js', isWebviewInit: false } }
+    })
+
+    expect(getPluginViewSecurityDiagnostics()).toEqual({
+      surfaces: expect.arrayContaining([
+        expect.objectContaining({ source: 'core-box', effectiveProfile: 'trusted-plugin-view' }),
+        expect.objectContaining({ source: 'division-box', reason: 'legacy-preload' })
+      ]),
+      compatibilityBlockers: { 'legacy-preload': 1 }
+    })
   })
 })

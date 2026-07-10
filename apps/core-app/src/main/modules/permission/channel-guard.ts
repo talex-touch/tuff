@@ -1,13 +1,19 @@
 /**
  * Middleware for adding permission checks to transport handlers.
  */
-import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import type { TuffEvent } from '@talex-touch/utils/transport'
+import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getPermissionModule } from './index'
 
 export interface ProtectedChannelOptions {
   permissionId: string
   errorMessage?: string
+  failClosedForPlugin?: boolean
+  requireVerifiedPlugin?: boolean
+  unavailableCode?: string
+  deniedCode?: string
+  sdkMismatchCode?: string
 }
 
 export type ProtectedHandler<TReq = unknown, TRes = unknown> = (
@@ -20,6 +26,15 @@ interface PayloadWithSdkApi {
 }
 interface PluginLike {
   sdkapi?: number
+}
+
+interface SerializablePermissionError {
+  name: 'Error'
+  message: string
+  code: string
+  permissionId: string
+  pluginId: string
+  showRequest?: boolean
 }
 
 let pluginModuleImport: Promise<{
@@ -45,6 +60,23 @@ async function resolvePluginDeclaredSdkApi(pluginId: string): Promise<number | u
   }
 }
 
+function createSerializablePermissionError(
+  message: string,
+  code: string,
+  permissionId: string,
+  pluginId: string,
+  showRequest?: boolean
+): SerializablePermissionError {
+  return {
+    name: 'Error',
+    message,
+    code,
+    permissionId,
+    pluginId,
+    ...(showRequest === undefined ? {} : { showRequest })
+  }
+}
+
 /**
  * Wrap a transport handler with permission checks.
  */
@@ -52,18 +84,41 @@ export function withPermission<TReq = unknown, TRes = unknown>(
   options: ProtectedChannelOptions,
   callback: ProtectedHandler<TReq, TRes>
 ): ProtectedHandler<TReq, TRes> {
-  const { permissionId, errorMessage } = options
+  const {
+    permissionId,
+    errorMessage,
+    failClosedForPlugin = false,
+    requireVerifiedPlugin = false,
+    unavailableCode = 'PERMISSION_UNAVAILABLE',
+    deniedCode,
+    sdkMismatchCode = 'SDKAPI_MISMATCH'
+  } = options
 
   return async (payload: TReq, context: HandlerContext) => {
+    const pluginId = context.plugin?.name
+    if (requireVerifiedPlugin && (!pluginId || context.plugin?.verified !== true)) {
+      throw createSerializablePermissionError(
+        `Verified plugin context is required for '${permissionId}'`,
+        deniedCode ?? 'PERMISSION_DENIED',
+        permissionId,
+        pluginId ?? 'unknown'
+      )
+    }
     const permModule = getPermissionModule()
 
-    // If permission module not loaded, allow (during startup)
     if (!permModule) {
+      if (pluginId && failClosedForPlugin) {
+        throw createSerializablePermissionError(
+          `Permission runtime is unavailable for '${permissionId}'`,
+          unavailableCode,
+          permissionId,
+          pluginId
+        )
+      }
       return callback(payload, context)
     }
 
     // Get plugin info from transport context
-    const pluginId = context.plugin?.name
     const payloadSdkApi = extractPayloadSdkApi(payload)
 
     // If not from a plugin, allow
@@ -80,6 +135,14 @@ export function withPermission<TReq = unknown, TRes = unknown>(
       typeof payloadSdkApi === 'number' &&
       payloadSdkApi !== declaredSdkApi
     ) {
+      if (failClosedForPlugin) {
+        throw createSerializablePermissionError(
+          `Plugin sdkapi mismatch: payload=${payloadSdkApi}, declared=${declaredSdkApi}`,
+          sdkMismatchCode,
+          permissionId,
+          pluginId
+        )
+      }
       const error = new Error(
         `Plugin sdkapi mismatch: payload=${payloadSdkApi}, declared=${declaredSdkApi}`
       ) as Error & {
@@ -87,7 +150,7 @@ export function withPermission<TReq = unknown, TRes = unknown>(
         permissionId?: string
         pluginId?: string
       }
-      error.code = 'SDKAPI_MISMATCH'
+      error.code = sdkMismatchCode
       error.permissionId = permissionId
       error.pluginId = pluginId
       throw error
@@ -98,13 +161,22 @@ export function withPermission<TReq = unknown, TRes = unknown>(
 
     if (!result.allowed) {
       const message = errorMessage || result.reason || `Permission '${permissionId}' denied`
+      if (failClosedForPlugin) {
+        throw createSerializablePermissionError(
+          message,
+          deniedCode ?? result.code ?? 'PERMISSION_DENIED',
+          permissionId,
+          pluginId,
+          result.showRequest
+        )
+      }
       const error = new Error(message) as Error & {
         code?: string
         permissionId?: string
         pluginId?: string
         showRequest?: boolean
       }
-      error.code = result.code ?? 'PERMISSION_DENIED'
+      error.code = deniedCode ?? result.code ?? 'PERMISSION_DENIED'
       error.permissionId = permissionId
       error.pluginId = pluginId
       error.showRequest = result.showRequest
@@ -118,14 +190,9 @@ export function withPermission<TReq = unknown, TRes = unknown>(
 /**
  * Helper for registering protected transport handlers.
  */
-export function createProtectedRegister(transport: {
-  on: <TReq = unknown, TRes = unknown>(
-    event: unknown,
-    handler: ProtectedHandler<TReq, TRes>
-  ) => () => void
-}) {
+export function createProtectedRegister(transport: ITuffTransportMain) {
   return <TReq = unknown, TRes = unknown>(
-    event: unknown,
+    event: TuffEvent<TReq, TRes>,
     options: ProtectedChannelOptions,
     callback: ProtectedHandler<TReq, TRes>
   ): (() => void) => {

@@ -38,6 +38,11 @@ import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelud
 import { pluginModule } from '../../plugin/plugin-module'
 import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from '../../plugin/runtime/plugin-view-security-profile'
+import { buildPluginViewWebPreferences } from '../../plugin/runtime/plugin-view-host'
+import {
+  createPluginViewNavigationPolicy,
+  installPluginViewNavigationPolicy
+} from '../../plugin/runtime/plugin-window-policy'
 import { getMainConfig, subscribeMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import { coreBoxManager } from './manager'
@@ -1368,9 +1373,9 @@ export class WindowManager {
       }
     })
 
-    // Create dynamic preload script to inject plugin API and channel bridge before page scripts execute
+    // Compatibility views retain the legacy composed preload until the plugin migrates.
     let preloadPath = injections?._.preload
-    if (plugin && injections?.js) {
+    if (securityProfile.effectiveProfile === 'compat-plugin-view' && plugin && injections?.js) {
       const tempPreloadPath = path.resolve(
         os.tmpdir(),
         `talex-plugin-preload-${plugin.name}-${Date.now()}.js`
@@ -1438,14 +1443,37 @@ export class WindowManager {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences = buildWindowWebPreferences(securityProfile.effectiveProfile, {
-      preload: preloadPath || undefined,
+    const webPreferenceOverrides: Electron.WebPreferences = {
       scrollBounce: true,
       transparent: true
-    })
+    }
+    const webPreferences = plugin
+      ? buildPluginViewWebPreferences(securityProfile.effectiveProfile, {
+          plugin,
+          themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
+          source: `core-box:${url}`,
+          legacyPreload: preloadPath,
+          overrides: webPreferenceOverrides
+        })
+      : buildWindowWebPreferences('app', webPreferenceOverrides)
+    const navigationPolicy = plugin
+      ? await createPluginViewNavigationPolicy({
+          pluginRoot: plugin.pluginPath,
+          targetUrl: url,
+          securityProfile: securityProfile.effectiveProfile,
+          devAddress: plugin.dev.address,
+          appIsPackaged: app.isPackaged,
+          pluginDevEnabled: plugin.dev.enable,
+          pluginDevSource: Boolean(plugin.dev.source),
+          allowLegacyWebview: securityProfile.reason === 'legacy-webview'
+        })
+      : null
 
     const viewCreateStart = performance.now()
     const view = (this.uiView = new WebContentsView({ webPreferences }))
+    if (navigationPolicy) {
+      installPluginViewNavigationPolicy(view.webContents, navigationPolicy)
+    }
     metrics.viewCreate = performance.now() - viewCreateStart
     this.attachedPlugin = plugin ?? null
     this.attachedFeature = feature ?? null
@@ -1488,8 +1516,7 @@ export class WindowManager {
       }
     })
 
-    // Plugin API and touch channel bridge are injected via preload script before page scripts execute
-    // Styles will be injected on dom-ready
+    // Plugin bridge is available before page scripts; styles are injected on dom-ready.
 
     this.uiView.webContents.addListener('dom-ready', () => {
       this.applyThemeToUIView(view)
@@ -1536,8 +1563,7 @@ export class WindowManager {
       `AttachUIView metrics: preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`
     )
 
-    // Initial theme is now injected synchronously via preload ($tuffInitialData.theme)
-    // No need to send via channel - data is available immediately when page scripts run
+    // Initial theme is exposed synchronously through the trusted bridge.
 
     // Send initial query directly to plugin after dom-ready (bypasses inputAllowed check)
     if (query && plugin) {

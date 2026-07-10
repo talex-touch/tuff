@@ -1,4 +1,4 @@
-import type { MaybePromise, ModuleInitContext, ModuleKey, TalexTouch } from '@talex-touch/utils'
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { Client, InValue } from '@libsql/client'
 import type {
   IManifest,
@@ -15,15 +15,25 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   PluginApiGetFileTreeResponse,
   PluginInstallSourceResponse,
-  PluginPerformanceGetPathsResponse
+  PluginPerformanceGetPathsResponse,
+  PluginWindowCommandRequest,
+  PluginWindowCommandResponse,
+  PluginWindowErrorCode,
+  PluginWindowNewRequest,
+  PluginWindowNewResponse,
+  PluginWindowPropertyRequest,
+  PluginWindowPropertyResponse,
+  PluginWindowVisibleRequest,
+  PluginWindowVisibleResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { FSWatcher } from 'chokidar'
 import type { PluginWithSource } from '../../service/store-api.service'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
+import { pathToFileURL } from 'node:url'
 import { createClient } from '@libsql/client'
-import { sleep } from '@talex-touch/utils'
+import { sleep, StorageList } from '@talex-touch/utils'
 import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-touch/utils/i18n'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
@@ -35,6 +45,7 @@ import {
   PermissionEvents,
   PluginEvents
 } from '@talex-touch/utils/transport/events'
+import { PLUGIN_WINDOW_ERROR_CODES } from '@talex-touch/utils/transport/events/types'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
 import {
@@ -44,7 +55,6 @@ import {
 } from '../../core/eventbus/touch-event'
 import { registerMainRuntime, resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
-import { buildWindowWebPreferences } from '../../core/window-security-profile'
 import { createDbUtils } from '../../db/utils'
 import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
 import { fileWatchService } from '../../service/file-watch.service'
@@ -63,7 +73,8 @@ import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
-import { getPermissionModule } from '../permission'
+import { createProtectedRegister, getPermissionModule } from '../permission'
+import { getMainConfig } from '../storage'
 import {
   getSecureStoreHealth,
   getSecureStoreValue,
@@ -90,6 +101,20 @@ import { mergePackagedManifestMetadata } from './plugin-runtime-integrity'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from './runtime/plugin-view-security-profile'
+import {
+  buildPluginViewWebPreferences,
+  buildPublicPluginWindowOptions
+} from './runtime/plugin-view-host'
+import {
+  createPluginViewNavigationPolicy,
+  executePluginWindowCommand,
+  installPluginViewNavigationPolicy,
+  normalizePluginWindowCommand,
+  normalizePluginWindowRequest,
+  resolveLocalPluginWindowTarget,
+  toPluginWindowErrorData,
+  translateLegacyWindowProperty
+} from './runtime/plugin-window-policy'
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 import { getPluginSdkHardCutGate } from './sdkapi-hard-cut-gate'
@@ -335,40 +360,9 @@ type IPluginManagerWithInternals = IPluginManager & {
   emitIssueReset?: (plugin: ITouchPlugin) => void
 }
 
-type WindowNewPayload = TalexTouch.TouchWindowConstructorOptions & {
-  file?: string
-  url?: string
-}
-
-interface WindowVisiblePayload {
-  id: number
-  visible?: boolean
-}
-
-interface WindowPropertyPayload {
-  id: number
-  property: {
-    window?: Record<string, unknown>
-    webContents?: Record<string, unknown>
-  }
-}
-
 interface IndexCommunicatePayload {
   key?: string
   info?: unknown
-}
-
-function requiresLegacyWindowRuntime(webPreferences?: Electron.WebPreferences): boolean {
-  if (!webPreferences) return false
-
-  return (
-    webPreferences.nodeIntegration === true ||
-    webPreferences.nodeIntegrationInSubFrames === true ||
-    webPreferences.contextIsolation === false ||
-    webPreferences.sandbox === false ||
-    webPreferences.webSecurity === false ||
-    webPreferences.webviewTag === true
-  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -2066,177 +2060,231 @@ export class PluginModule extends BaseModule {
       })
     )
 
+    const registerProtectedWindowChannel = createProtectedRegister(transport)
+    const protectedWindowOptions = {
+      permissionId: 'window.create',
+      failClosedForPlugin: true,
+      requireVerifiedPlugin: true,
+      unavailableCode: PLUGIN_WINDOW_ERROR_CODES.PERMISSION_UNAVAILABLE,
+      deniedCode: PLUGIN_WINDOW_ERROR_CODES.PERMISSION_DENIED,
+      sdkMismatchCode: 'SDKAPI_MISMATCH'
+    } as const
+    const windowError = (code: PluginWindowErrorCode, message: string) => ({
+      error: { code, message }
+    })
+
     this.transportDisposers.push(
-      transport.on(PluginEvents.window.new, async (data: WindowNewPayload, context) => {
-        const pluginName = context.plugin?.name
-        const touchPlugin = pluginName
-          ? (manager.plugins.get(pluginName) as TouchPlugin)
-          : undefined
-        if (!touchPlugin) {
-          return { error: 'Plugin not found!' }
-        }
-
-        const { file, url, ...windowOptions } = data
-        const obj = usePluginInjections(touchPlugin, 'plugin-module:window:new')
-        if (!obj) {
-          return { error: 'Failed to build plugin injections' }
-        }
-
-        const windowPreload = obj._.preload ?? windowOptions.webPreferences?.preload
-        const securityProfile = resolvePluginViewSecurityProfile(touchPlugin, {
-          source: 'plugin-module:window:new',
-          injections: {
-            _: {
-              ...obj._,
-              preload: windowPreload
-            }
-          },
-          requiresLegacyRuntime: requiresLegacyWindowRuntime(windowOptions.webPreferences)
-        })
-        pluginIpcLog.info('Resolved plugin window security profile', {
-          meta: {
-            plugin: touchPlugin.name,
-            candidateProfile: securityProfile.candidateProfile,
-            effectiveProfile: securityProfile.effectiveProfile,
-            reason: securityProfile.reason
-          }
-        })
-
-        const win = new TouchWindow({
-          ...windowOptions,
-          webPreferences: buildWindowWebPreferences(securityProfile.effectiveProfile, {
-            ...(windowOptions.webPreferences ?? {}),
-            preload: windowPreload
-          })
-        })
-        let webContents: Electron.WebContents
-        if (typeof file === 'string' && file.length > 0) {
-          webContents = await win.loadFile(file)
-        } else if (typeof url === 'string' && url.length > 0) {
-          webContents = await win.loadURL(url)
-        } else {
-          return { error: 'No file or url provided!' }
-        }
-
-        await webContents.insertCSS(obj.styles)
-        await webContents.executeJavaScript(obj.js)
-
-        webContents.send('@loaded', {
-          id: webContents.id,
-          plugin: pluginName,
-          type: 'intend'
-        })
-
-        touchPlugin._windows.set(webContents.id, win)
-        win.window.on('closed', () => {
-          win.window.removeAllListeners()
-          touchPlugin._windows.delete(webContents.id)
-        })
-
-        return { id: webContents.id }
-      }),
-
-      transport.on(PluginEvents.window.visible, async (payload: WindowVisiblePayload, context) => {
-        const pluginName = context.plugin?.name
-        const touchPlugin = pluginName
-          ? (manager.plugins.get(pluginName) as TouchPlugin)
-          : undefined
-        if (!touchPlugin) {
-          return { error: 'Plugin not found!' }
-        }
-
-        const id = payload?.id
-        if (typeof id !== 'number') {
-          return { error: 'Window id is required' }
-        }
-
-        const win = touchPlugin._windows.get(id)
-        const browserWindow = useAliveTarget(win?.window)
-        if (!win || !browserWindow) {
-          return { error: 'Window not found' }
-        }
-
-        if (payload?.visible === undefined) {
-          if (browserWindow.isVisible()) {
-            browserWindow.hide()
-          } else {
-            browserWindow.show()
-          }
-        } else if (payload.visible) {
-          browserWindow.show()
-        } else {
-          browserWindow.hide()
-        }
-
-        return { visible: browserWindow.isVisible() }
-      }),
-
-      transport.on(
-        PluginEvents.window.property,
-        async (payload: WindowPropertyPayload, context) => {
+      registerProtectedWindowChannel<PluginWindowNewRequest, PluginWindowNewResponse>(
+        PluginEvents.window.new,
+        protectedWindowOptions,
+        async (data, context) => {
           const pluginName = context.plugin?.name
           const touchPlugin = pluginName
             ? (manager.plugins.get(pluginName) as TouchPlugin)
             : undefined
           if (!touchPlugin) {
-            return { error: 'Plugin not found!' }
+            return windowError(PLUGIN_WINDOW_ERROR_CODES.NOT_FOUND, 'Plugin not found.')
+          }
+
+          try {
+            const request = normalizePluginWindowRequest(data)
+            const target = await resolveLocalPluginWindowTarget(
+              touchPlugin.pluginPath,
+              request.file
+            )
+            const obj = usePluginInjections(touchPlugin, 'plugin-module:window:new')
+            if (!obj) {
+              return windowError(
+                PLUGIN_WINDOW_ERROR_CODES.TARGET_INVALID,
+                'Plugin window initialization failed.'
+              )
+            }
+
+            const securityProfile = resolvePluginViewSecurityProfile(touchPlugin, {
+              source: 'plugin-module:window:new',
+              injections: obj
+            })
+            pluginIpcLog.info('Resolved plugin window security profile', {
+              meta: {
+                plugin: touchPlugin.name,
+                candidateProfile: securityProfile.candidateProfile,
+                effectiveProfile: securityProfile.effectiveProfile,
+                reason: securityProfile.reason
+              }
+            })
+
+            const webPreferences = buildPluginViewWebPreferences(securityProfile.effectiveProfile, {
+              plugin: touchPlugin,
+              themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
+              source: `public-window:${target}`,
+              legacyPreload: obj._.preload
+            })
+            const navigationPolicy = await createPluginViewNavigationPolicy({
+              pluginRoot: touchPlugin.pluginPath,
+              targetUrl: pathToFileURL(target).href,
+              securityProfile: securityProfile.effectiveProfile,
+              allowLegacyWebview: securityProfile.reason === 'legacy-webview'
+            })
+            const win = new TouchWindow(
+              buildPublicPluginWindowOptions(request.options ?? {}, webPreferences)
+            )
+
+            let webContents: Electron.WebContents
+            try {
+              installPluginViewNavigationPolicy(win.window.webContents, navigationPolicy)
+              webContents = await win.loadFile(target)
+            } catch (error) {
+              win.close()
+              throw error
+            }
+
+            if (obj.styles) {
+              await webContents.insertCSS(obj.styles)
+            }
+            if (securityProfile.effectiveProfile === 'compat-plugin-view' && obj.js) {
+              await webContents.executeJavaScript(obj.js)
+            }
+
+            webContents.send('@loaded', {
+              id: webContents.id,
+              plugin: pluginName,
+              type: 'intend'
+            })
+
+            touchPlugin._windows.set(webContents.id, win)
+            win.window.on('closed', () => {
+              win.window.removeAllListeners()
+              touchPlugin._windows.delete(webContents.id)
+            })
+
+            return { id: webContents.id }
+          } catch (error) {
+            const publicError = toPluginWindowErrorData(error)
+            pluginIpcLog.warn('Blocked plugin window creation', {
+              meta: { plugin: touchPlugin.name, code: publicError.code }
+            })
+            return { error: publicError }
+          }
+        }
+      ),
+
+      registerProtectedWindowChannel<PluginWindowVisibleRequest, PluginWindowVisibleResponse>(
+        PluginEvents.window.visible,
+        protectedWindowOptions,
+        async (payload, context) => {
+          const pluginName = context.plugin?.name
+          const touchPlugin = pluginName
+            ? (manager.plugins.get(pluginName) as TouchPlugin)
+            : undefined
+          if (!touchPlugin) {
+            return windowError(PLUGIN_WINDOW_ERROR_CODES.NOT_FOUND, 'Plugin not found.')
           }
 
           const id = payload?.id
-          const property = payload?.property
-          if (typeof id !== 'number') {
-            return { error: 'Window id is required' }
+          if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
+            return windowError(
+              PLUGIN_WINDOW_ERROR_CODES.TARGET_INVALID,
+              'A valid window id is required.'
+            )
           }
-          if (!property) {
-            return { error: 'Property is required' }
+          if (payload.visible !== undefined && typeof payload.visible !== 'boolean') {
+            return windowError(
+              PLUGIN_WINDOW_ERROR_CODES.OPTIONS_INVALID,
+              'Window visibility must be a boolean.'
+            )
           }
 
           const win = touchPlugin._windows.get(id)
           const browserWindow = useAliveTarget(win?.window)
           if (!win || !browserWindow) {
-            return { error: 'Window not found' }
+            return windowError(PLUGIN_WINDOW_ERROR_CODES.NOT_FOUND, 'Window not found.')
           }
 
-          const applyProps = (target: Record<string, unknown>, props?: Record<string, unknown>) => {
-            if (!props) return { success: true }
-            for (const [key, value] of Object.entries(props)) {
-              if (value === undefined) continue
-              try {
-                const current = target[key]
-                if (typeof current === 'function') {
-                  if (Array.isArray(value)) {
-                    current(...value)
-                  } else {
-                    current(value)
-                  }
-                } else {
-                  target[key] = value
-                }
-              } catch (error) {
-                const message = error instanceof Error ? error.message : String(error)
-                return { success: false, error: `Failed to set ${key}: ${message}` }
-              }
+          if (payload?.visible === undefined) {
+            if (browserWindow.isVisible()) {
+              browserWindow.hide()
+            } else {
+              browserWindow.show()
             }
+          } else if (payload.visible) {
+            browserWindow.show()
+          } else {
+            browserWindow.hide()
+          }
+
+          return { visible: browserWindow.isVisible() }
+        }
+      ),
+
+      registerProtectedWindowChannel<PluginWindowCommandRequest, PluginWindowCommandResponse>(
+        PluginEvents.window.command,
+        protectedWindowOptions,
+        async (payload, context) => {
+          const pluginName = context.plugin?.name
+          const touchPlugin = pluginName
+            ? (manager.plugins.get(pluginName) as TouchPlugin)
+            : undefined
+          if (!touchPlugin) {
+            return windowError(PLUGIN_WINDOW_ERROR_CODES.NOT_FOUND, 'Plugin not found.')
+          }
+
+          const id = payload?.id
+          if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
+            return windowError(
+              PLUGIN_WINDOW_ERROR_CODES.TARGET_INVALID,
+              'A valid window id is required.'
+            )
+          }
+
+          const win = touchPlugin._windows.get(id)
+          const browserWindow = useAliveTarget(win?.window)
+          if (!win || !browserWindow) {
+            return windowError(PLUGIN_WINDOW_ERROR_CODES.NOT_FOUND, 'Window not found.')
+          }
+
+          try {
+            const command = normalizePluginWindowCommand(payload.command)
+            executePluginWindowCommand(browserWindow, command)
             return { success: true }
+          } catch (error) {
+            return { error: toPluginWindowErrorData(error) }
+          }
+        }
+      ),
+
+      registerProtectedWindowChannel<PluginWindowPropertyRequest, PluginWindowPropertyResponse>(
+        PluginEvents.window.property,
+        protectedWindowOptions,
+        async (payload, context) => {
+          const pluginName = context.plugin?.name
+          const touchPlugin = pluginName
+            ? (manager.plugins.get(pluginName) as TouchPlugin)
+            : undefined
+          if (!touchPlugin) {
+            return windowError(PLUGIN_WINDOW_ERROR_CODES.NOT_FOUND, 'Plugin not found.')
           }
 
-          const windowResult = applyProps(
-            browserWindow as unknown as Record<string, unknown>,
-            property.window
-          )
-          if (!windowResult.success) {
-            return windowResult
+          const id = payload?.id
+          if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
+            return windowError(
+              PLUGIN_WINDOW_ERROR_CODES.TARGET_INVALID,
+              'A valid window id is required.'
+            )
           }
 
-          const webContentsResult = applyProps(
-            browserWindow.webContents as unknown as Record<string, unknown>,
-            property.webContents
-          )
-          if (!webContentsResult.success) {
-            return webContentsResult
+          const win = touchPlugin._windows.get(id)
+          const browserWindow = useAliveTarget(win?.window)
+          if (!win || !browserWindow) {
+            return windowError(PLUGIN_WINDOW_ERROR_CODES.NOT_FOUND, 'Window not found.')
           }
 
-          return { success: true }
+          try {
+            const command = translateLegacyWindowProperty(payload?.property)
+            executePluginWindowCommand(browserWindow, command)
+            return { success: true }
+          } catch (error) {
+            return { error: toPluginWindowErrorData(error) }
+          }
         }
       ),
 
