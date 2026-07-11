@@ -71,3 +71,37 @@ Hardened plugin-owned Electron windows with fail-closed permissions, local-only 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Serialize async search gather updates
+
+**Date**: 2026-07-10
+**Task**: Serialize async search gather updates
+**Branch**: `master`
+
+### Summary
+
+Serialized async search gather updates, centralized cancellation completion, added regression coverage, and documented the cross-layer contract.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f40d92698` | (see git log) |
+| `efdcbecee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
