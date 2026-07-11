@@ -1,0 +1,31 @@
+{
+  "id": "serialize-search-gather-updates",
+  "name": "serialize-search-gather-updates",
+  "title": "Serialize Async Search Gather Updates",
+  "description": "Make gather callbacks awaitable and guarantee update-before-completion ordering across fast, deferred, late, final, and cancellation paths.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "Shared gather callback contract and CoreApp layered search update ordering",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-09",
+  "completedAt": "2026-07-10",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-09-audit-search-system-architecture",
+  "relatedFiles": [
+    "packages/utils/common/search/gather.ts",
+    "apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts",
+    "apps/core-app/src/main/modules/box-tool/search-engine/search-gather.test.ts",
+    "apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts"
+  ],
+  "notes": "No prerequisite. Must complete before 07-09-scope-search-sessions-and-streams.",
+  "meta": {}
+}
