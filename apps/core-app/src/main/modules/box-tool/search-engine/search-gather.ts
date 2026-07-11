@@ -5,7 +5,8 @@ import type {
   SearchPriorityLayer,
   TuffAggregatorCallback,
   TuffQuery,
-  TuffSearchResult
+  TuffSearchResult,
+  TuffUpdate
 } from '@talex-touch/utils'
 import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
@@ -35,6 +36,14 @@ interface FastLayerOutcome {
   immediateResults: TuffSearchResult[]
   didTimeout: boolean
   completion: Promise<void>
+  releaseLateResults: () => void
+}
+
+type GatherDispatchResult = 'delivered' | 'skipped'
+type GatherDispatchState = 'open' | 'terminal-pending' | 'terminal-delivered' | 'failed'
+
+interface GatherUpdateDispatcher {
+  emit: (update: TuffUpdate) => Promise<GatherDispatchResult>
 }
 
 /**
@@ -50,6 +59,8 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
   deferredLayerConcurrency: 2
 }
 
+const INTERNAL_GATHER_ABORT_REASON = Symbol('internal-gather-abort')
+
 /**
  * Utility function to create a delay promise
  */
@@ -60,6 +71,73 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
  */
 function countItems(results: TuffSearchResult[]): number {
   return results.reduce((acc, curr) => acc + curr.items.length, 0)
+}
+
+function createGatherUpdateDispatcher(onUpdate: TuffAggregatorCallback): GatherUpdateDispatcher {
+  let state: GatherDispatchState = 'open'
+  let terminalGeneration = 0
+  let failure: unknown
+  let tail: Promise<unknown> = Promise.resolve()
+  let terminalPromise: Promise<'delivered'> | null = null
+
+  const invoke = async (update: TuffUpdate): Promise<'delivered'> => {
+    try {
+      await onUpdate(update)
+      return 'delivered'
+    } catch (error) {
+      if (state !== 'failed') {
+        state = 'failed'
+        failure = error
+      }
+      throw failure
+    }
+  }
+
+  return {
+    emit(update) {
+      if (state === 'failed') {
+        return Promise.reject(failure)
+      }
+
+      if (update.isDone) {
+        if (terminalPromise) {
+          return terminalPromise.then(() => 'skipped')
+        }
+
+        state = 'terminal-pending'
+        terminalGeneration++
+        const task = tail.then(async () => {
+          if (state === 'failed') {
+            throw failure
+          }
+
+          const result = await invoke(update)
+          state = 'terminal-delivered'
+          return result
+        })
+        terminalPromise = task
+        tail = task
+        return task
+      }
+
+      if (state !== 'open') {
+        return Promise.resolve('skipped')
+      }
+
+      const generation = terminalGeneration
+      const task = tail.then(async () => {
+        if (state === 'failed') {
+          throw failure
+        }
+        if (state !== 'open' || generation !== terminalGeneration) {
+          return 'skipped' as const
+        }
+        return invoke(update)
+      })
+      tail = task
+      return task
+    }
+  }
 }
 
 function recordGatherSearchMetrics(totalDuration: number, sourceStats: ExtendedSourceStat[]): void {
@@ -78,20 +156,45 @@ function recordGatherSearchMetrics(totalDuration: number, sourceStats: ExtendedS
 function createGatherController(
   callback: (
     signal: AbortSignal,
-    resolve: (value: number | PromiseLike<number>) => void
+    resolve: (value: number) => void,
+    reject: (reason: unknown) => void
   ) => Promise<number>
 ): IGatherController {
   const controller = new AbortController()
   const { signal } = controller
-
+  let settled = false
+  let resolvePromise!: (value: number) => void
+  let rejectPromise!: (reason: unknown) => void
   const promise = new Promise<number>((resolve, reject) => {
-    callback(signal, resolve).catch(reject)
+    resolvePromise = resolve
+    rejectPromise = reject
   })
+
+  const resolve = (value: number): void => {
+    if (settled) return
+    settled = true
+    resolvePromise(value)
+  }
+
+  const reject = (reason: unknown): void => {
+    if (settled) return
+    settled = true
+    if (!signal.aborted) {
+      controller.abort(INTERNAL_GATHER_ABORT_REASON)
+    }
+    rejectPromise(reason)
+  }
+
+  try {
+    void callback(signal, resolve, reject).catch(reject)
+  } catch (error) {
+    reject(error)
+  }
 
   return {
     promise,
     abort: () => {
-      if (!controller.signal.aborted) {
+      if (!settled && !controller.signal.aborted) {
         gatherLog.debug('Aborting search')
         controller.abort()
       }
@@ -151,20 +254,52 @@ function createLayeredSearchController(
     taskTimeoutMs
   } = config
 
-  return createGatherController(async (signal, resolve) => {
+  return createGatherController(async (signal, resolve, reject) => {
     const startTime = performance.now()
     const allResults: TuffSearchResult[] = []
     const sourceStats: ExtendedSourceStat[] = []
+    const dispatcher = createGatherUpdateDispatcher(onUpdate)
+    let isAborted = signal.aborted
+
+    const emitCancellation = async (): Promise<void> => {
+      const result = await dispatcher.emit({
+        newResults: [],
+        totalCount: countItems(allResults),
+        isDone: true,
+        cancelled: true,
+        sourceStats: sourceStats as TuffSearchResult['sources']
+      })
+      if (result === 'delivered') {
+        resolve(0)
+      }
+    }
+
+    const handleAbort = (): void => {
+      isAborted = true
+      if (signal.reason === INTERNAL_GATHER_ABORT_REASON) {
+        return
+      }
+
+      gatherLog.debug('Layered search cancelled')
+      void emitCancellation().catch(reject)
+    }
+
+    signal.addEventListener('abort', handleAbort, { once: true })
+    if (signal.aborted) {
+      handleAbort()
+    }
 
     if (providers.length === 0) {
       searchLogger.logSearchPhase('Layered Search', 'No providers available')
-      onUpdate({
+      const dispatchResult = await dispatcher.emit({
         newResults: [],
         totalCount: 0,
         isDone: true,
         sourceStats: []
       })
-      resolve(0)
+      if (dispatchResult === 'delivered') {
+        resolve(0)
+      }
       return 0
     }
 
@@ -176,21 +311,6 @@ function createLayeredSearchController(
       'Layered Search',
       `Fast: ${fastProviders.length}, Deferred: ${deferredProviders.length}`
     )
-
-    // Set up abort handler
-    let isAborted = false
-    signal.addEventListener('abort', () => {
-      isAborted = true
-      gatherLog.debug('Layered search cancelled')
-      onUpdate({
-        newResults: [],
-        totalCount: countItems(allResults),
-        isDone: true,
-        cancelled: true,
-        sourceStats: sourceStats as TuffSearchResult['sources']
-      })
-      resolve(0)
-    })
 
     // ==================== FAST LAYER ====================
     let fastLayerOutcome: FastLayerOutcome | null = null
@@ -205,10 +325,10 @@ function createLayeredSearchController(
         fastLayerConcurrency,
         taskTimeoutMs,
         sourceStats,
-        (lateResult) => {
+        async (lateResult) => {
           if (isAborted) return
           allResults.push(lateResult)
-          onUpdate({
+          await dispatcher.emit({
             newResults: [lateResult],
             totalCount: countItems(allResults),
             isDone: false,
@@ -229,13 +349,29 @@ function createLayeredSearchController(
           `${countItems(fastLayerOutcome.immediateResults)} items in ${fastDuration.toFixed(1)}ms`
         )
 
-        onUpdate({
-          newResults: fastLayerOutcome.immediateResults,
-          totalCount: countItems(allResults),
-          isDone: !hasPendingAfterFast,
-          sourceStats: sourceStats as TuffSearchResult['sources'],
-          layer: 'fast'
-        })
+        if (!hasPendingAfterFast) {
+          searchLogger.logSearchPhase('Search Complete', 'No deferred providers')
+          recordGatherSearchMetrics(fastDuration, sourceStats)
+        }
+
+        try {
+          const dispatchResult = await dispatcher.emit({
+            newResults: fastLayerOutcome.immediateResults,
+            totalCount: countItems(allResults),
+            isDone: !hasPendingAfterFast,
+            sourceStats: sourceStats as TuffSearchResult['sources'],
+            layer: 'fast'
+          })
+          if (!hasPendingAfterFast && dispatchResult === 'delivered') {
+            const totalCount = countItems(allResults)
+            resolve(totalCount)
+            return totalCount
+          }
+        } finally {
+          fastLayerOutcome.releaseLateResults()
+        }
+      } else {
+        fastLayerOutcome.releaseLateResults()
       }
     }
 
@@ -268,12 +404,12 @@ function createLayeredSearchController(
           deferredLayerConcurrency,
           taskTimeoutMs,
           sourceStats,
-          (result) => {
+          async (result) => {
             if (isAborted) return
 
             allResults.push(result)
 
-            onUpdate({
+            await dispatcher.emit({
               newResults: [result],
               totalCount: countItems(allResults),
               isDone: false,
@@ -298,21 +434,20 @@ function createLayeredSearchController(
 
         recordGatherSearchMetrics(totalDuration, sourceStats)
 
-        onUpdate({
+        const dispatchResult = await dispatcher.emit({
           newResults: [],
           totalCount: countItems(allResults),
           isDone: true,
           sourceStats: sourceStats as TuffSearchResult['sources'],
           layer: 'deferred'
         })
+        if (dispatchResult === 'delivered') {
+          resolve(countItems(allResults))
+        }
+        return countItems(allResults)
       }
-    } else if (!isAborted && deferredProviders.length === 0) {
-      // No deferred providers, search is already complete
-      searchLogger.logSearchPhase('Search Complete', 'No deferred providers')
-      recordGatherSearchMetrics(performance.now() - startTime, sourceStats)
     }
 
-    resolve(countItems(allResults))
     return countItems(allResults)
   })
 }
@@ -329,76 +464,85 @@ async function runFastLayer(
   concurrency: number,
   taskTimeoutMs: number,
   sourceStats: ExtendedSourceStat[],
-  onLateResult: (result: TuffSearchResult) => void
+  onLateResult: (result: TuffSearchResult) => Promise<void>
 ): Promise<FastLayerOutcome> {
   const results: TuffSearchResult[] = []
   const queue = [...providers]
   let completed = 0
   const total = providers.length
   let didTimeout = false
+  let releaseLateResults!: () => void
+  const lateResultsReady = new Promise<void>((resolve) => {
+    releaseLateResults = resolve
+  })
 
   // Create a race between provider execution and overall timeout
-  const providerPromise = new Promise<void>((resolveAll) => {
-    const worker = async () => {
-      while (queue.length > 0 && !signal.aborted) {
-        const provider = queue.shift()
-        if (!provider) continue
+  const worker = async (): Promise<void> => {
+    while (queue.length > 0 && !signal.aborted) {
+      const provider = queue.shift()
+      if (!provider) continue
 
-        const startTime = performance.now()
-        let status: ExtendedSourceStat['status'] = 'success'
-        let resultCount = 0
+      const startTime = performance.now()
+      let status: ExtendedSourceStat['status'] = 'success'
+      let resultCount = 0
+      let result: TuffSearchResult | null = null
 
-        try {
-          searchLogger.providerCall(provider.id)
-          const searchPromise = provider.onSearch(params, signal)
-          const result = await withTimeout(searchPromise, taskTimeoutMs)
+      try {
+        searchLogger.providerCall(provider.id)
+        const searchPromise = provider.onSearch(params, signal)
+        result = await withTimeout(searchPromise, taskTimeoutMs)
 
-          resultCount = result.items.length
-          if (didTimeout) {
-            onLateResult(result)
-          } else {
-            results.push(result)
-          }
-          searchLogger.providerResult(provider.id, resultCount)
-        } catch (error) {
-          if (signal.aborted) {
-            status = 'aborted'
-          } else if (error instanceof Error && error.name === 'TimeoutError') {
-            status = 'timeout'
-            searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-          } else {
-            status = 'error'
-            searchLogger.providerError(
-              provider.id,
-              error instanceof Error ? error.message : 'Unknown error'
-            )
-          }
-        } finally {
-          const duration = performance.now() - startTime
+        resultCount = result.items.length
+        searchLogger.providerResult(provider.id, resultCount)
+      } catch (error) {
+        if (signal.aborted) {
+          status = 'aborted'
+        } else if (error instanceof Error && error.name === 'TimeoutError') {
+          status = 'timeout'
+          searchLogger.providerTimeout(provider.id, taskTimeoutMs)
+        } else {
+          status = 'error'
+          searchLogger.providerError(
+            provider.id,
+            error instanceof Error ? error.message : 'Unknown error'
+          )
+        }
+      } finally {
+        const duration = performance.now() - startTime
+        if (!signal.aborted) {
+          sourceStats.push({
+            providerId: provider.id,
+            providerName: provider.name || provider.id,
+            duration,
+            resultCount,
+            status,
+            layer: 'fast'
+          })
+          logProviderCompletion(provider, duration, resultCount, status, 'fast')
+        }
+        completed++
+      }
+
+      if (status === 'success' && result && !signal.aborted) {
+        if (didTimeout) {
+          await lateResultsReady
           if (!signal.aborted) {
-            sourceStats.push({
-              providerId: provider.id,
-              providerName: provider.name || provider.id,
-              duration,
-              resultCount,
-              status,
-              layer: 'fast'
-            })
-            logProviderCompletion(provider, duration, resultCount, status, 'fast')
+            await onLateResult(result)
           }
-          completed++
+        } else {
+          results.push(result)
         }
       }
     }
+  }
 
-    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker())
-
-    void Promise.all(workers).then(() => resolveAll())
-  })
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker())
+  const providerPromise = Promise.all(workers).then(() => undefined)
 
   const timeoutPromise = new Promise<'timeout'>((resolveTimeout) => {
     setTimeout(() => {
       if (completed < total) {
+        didTimeout = true
         gatherLog.debug(`Fast layer timeout after ${timeoutMs}ms`, { meta: { completed, total } })
       }
       resolveTimeout('timeout')
@@ -416,7 +560,8 @@ async function runFastLayer(
   return {
     immediateResults: results,
     didTimeout,
-    completion: providerPromise
+    completion: providerPromise,
+    releaseLateResults
   }
 }
 
@@ -430,7 +575,7 @@ async function runDeferredLayer(
   concurrency: number,
   taskTimeoutMs: number,
   sourceStats: ExtendedSourceStat[],
-  onResult: (result: TuffSearchResult) => void
+  onResult: (result: TuffSearchResult) => Promise<void>
 ): Promise<void> {
   const queue = [...providers]
 
@@ -479,10 +624,11 @@ async function runDeferredLayer(
           }
           sourceStats.push(stat)
           logProviderCompletion(provider, duration, resultCount, status, 'deferred')
-          if (status === 'success' && result) {
-            onResult(result)
-          }
         }
+      }
+
+      if (status === 'success' && result && !signal.aborted) {
+        await onResult(result)
       }
     }
   })
