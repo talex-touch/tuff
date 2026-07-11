@@ -81,6 +81,87 @@ function normalizeSource(value: unknown): DocEngagementSource {
 }
 ```
 
+## Scenario: Async Search Gather Update Ownership
+
+### 1. Scope / Trigger
+
+- Trigger: changing search gather callbacks, provider result emission, cancellation,
+  or `search.update` / `search.end` publication in CoreApp.
+- This contract prevents an async merge/rank callback from finishing after the
+  terminal event has already been published.
+
+### 2. Signatures
+
+```ts
+export type TuffAggregatorCallback = (update: TuffUpdate) => void | Promise<void>
+
+export interface IGatherController {
+  abort: () => void
+  promise: Promise<number>
+  signal: AbortSignal
+}
+```
+
+### 3. Contracts
+
+- Every fast, late-fast, deferred, empty, final, and cancellation update uses one
+  ordered dispatcher and observes the callback Promise.
+- Provider searches remain concurrent, but a provider worker that produced a
+  result waits for its update to settle before taking another provider.
+- The first `isDone: true` update wins. It waits for the callback already running,
+  invalidates queued non-terminal callbacks, and prevents later emissions.
+- `IGatherController.promise` settles only after the winning terminal callback.
+- `cancelSearch()` requests abort but does not publish `search.end` directly. The
+  ordered cancellation callback is the only cancellation-completion owner.
+- Callback rejection preserves the original error, aborts remaining provider
+  work internally, and must not be rewritten as a provider error or cancellation.
+
+### 4. Validation & Error Matrix
+
+- Async callback resolves -> deliver the next valid update in FIFO order.
+- External abort during a callback -> finish that callback, skip queued results,
+  deliver one `cancelled: true` terminal, then resolve the controller with `0`.
+- Normal terminal selected before abort -> keep the normal terminal and its count.
+- Callback rejects -> reject the controller with the same error and emit no
+  cancellation terminal.
+- Provider fails or times out -> record provider status and continue; do not treat
+  it as a callback failure.
+
+### 5. Good / Base / Bad Cases
+
+- Good: async merge/rank settles before `search.end`, including cancellation.
+- Base: synchronous callbacks continue to work without an adapter.
+- Bad: fire-and-forget `onUpdate(update)` followed by immediate controller resolve.
+- Bad: both `cancelSearch()` and the gather cancellation callback send
+  `search.end`.
+
+### 6. Tests Required
+
+- Delayed callbacks assert completion order through the final update.
+- Terminal callback tests assert the controller remains pending until settlement.
+- Cancellation tests assert queued updates are skipped and one cancelled end is
+  sent after any running update settles.
+- Callback rejection tests assert original-error identity and provider abort.
+- A provider barrier asserts configured provider concurrency is preserved.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+onUpdate(update)
+resolve(totalCount)
+```
+
+#### Correct
+
+```ts
+const outcome = await dispatcher.emit(update)
+if (update.isDone && outcome === 'delivered') {
+  resolve(totalCount)
+}
+```
+
 ## CoreBox Icon Payload Contracts
 
 Recommendation and search-result icons cross main-process providers, rebuilders, and Vue renderers. Normalize icon inputs at the producer boundary instead of making renderer components infer filesystem semantics.

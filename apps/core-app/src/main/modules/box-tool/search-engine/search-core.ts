@@ -828,20 +828,6 @@ export class SearchEngineCore
       if (this.latestSessionId === searchId) {
         this.latestSessionId = null
       }
-
-      // Notify the frontend that the search was cancelled
-      const coreBoxWindow = windowManager.current?.window
-      if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-        const transport = this.getTransport()
-        void transport
-          .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
-            searchId,
-            cancelled: true,
-            activate: this.getActivationState() ?? undefined,
-            sources: []
-          })
-          .catch(() => {})
-      }
     }
   }
 
@@ -1505,6 +1491,10 @@ export class SearchEngineCore
       searchLogger.searchProviders(providersToSearch.map((p) => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
+        if (gatherController?.signal.aborted || this.latestSessionId !== sessionId) {
+          return
+        }
+
         const coreBoxWindow = windowManager.current?.window
         if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
           const frontendItems = this.limitFrontendItems(itemsToSend)
@@ -1525,6 +1515,61 @@ export class SearchEngineCore
       gatherController = gatherAggregator(providersToSearch, query, async (update) => {
         try {
           searchLogger.searchUpdate(update.isDone, update.newResults.length)
+          if (update.isDone && update.cancelled) {
+            this.updateProviderHealth(update.sourceStats || [])
+            const totalDuration = Date.now() - startTime
+
+            if (!didResolveInitial) {
+              didResolveInitial = true
+              isFirstUpdate = false
+              const cancelledResult = new TuffSearchResultBuilder(query)
+                .setItems([])
+                .setDuration(totalDuration)
+                .setSources(update.sourceStats || [])
+                .build()
+              cancelledResult.sessionId = sessionId
+              cancelledResult.activate = this.getActivationState() ?? undefined
+              resolve(cancelledResult)
+            }
+
+            searchLogger.searchSessionEnd(sessionId, update.totalCount)
+            this.searchFirstResultMetrics.delete(sessionId)
+            this.logSearchTrace({
+              event: 'session.end',
+              sessionId,
+              query,
+              timings: {
+                parseMs: pipelineDurations.parseDuration,
+                providerSelectMs: pipelineDurations.providerAggregationDuration,
+                mergeRankMs: pipelineDurations.mergeRankDuration,
+                totalMs: totalDuration
+              },
+              result: { totalCount: update.totalCount },
+              sourceStats: (update.sourceStats ?? []) as SearchTraceSourceStat[],
+              providerFilter,
+              cancelled: true,
+              includeDetails: totalDuration >= SEARCH_TRACE_SLOW_THRESHOLD_MS
+            })
+
+            const coreBoxWindow = windowManager.current?.window
+            if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+              const transport = this.getTransport()
+              await transport
+                .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
+                  searchId: sessionId,
+                  cancelled: true,
+                  activate: this.getActivationState() ?? undefined,
+                  sources: update.sourceStats ?? []
+                })
+                .catch(() => {})
+            }
+            searchLogger.logSearchPhase(
+              'Search End',
+              `Cancelled with activation state: ${JSON.stringify(this.getActivationState())}`
+            )
+            return
+          }
+
           if (update.isDone) {
             this.updateProviderHealth(update.sourceStats || [])
             if (!didResolveInitial) {
@@ -1677,7 +1722,7 @@ export class SearchEngineCore
             if (coreBoxWindow) {
               const finalActivationState = this.getActivationState() ?? undefined
               const transport = this.getTransport()
-              void transport
+              await transport
                 .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
                   searchId: sessionId,
                   activate: finalActivationState,
@@ -1710,6 +1755,9 @@ export class SearchEngineCore
               includeCompletion: false,
               enrichmentMode: 'base'
             })
+            if (gatherController!.signal.aborted || this.latestSessionId !== sessionId) {
+              return
+            }
             pipelineDurations.mergeRankDuration = mergeRankDuration
             const sortedItems = this.appendCompatibilityNotice(
               rawSortedItems,
@@ -1795,6 +1843,9 @@ export class SearchEngineCore
               includeCompletion: false,
               enrichmentMode: 'base'
             })
+            if (gatherController!.signal.aborted || this.latestSessionId !== sessionId) {
+              return
+            }
             this._updateActivationState(update.newResults)
             sendUpdateToFrontend(sortedItems)
             this.enrichAndPushSearchItems(

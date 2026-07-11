@@ -48,7 +48,7 @@ export interface ITuffGatherOptions {
  * Defines the type signature for the real-time update callback function.
  * @param update - The data object containing update information.
  */
-export type TuffAggregatorCallback = (update: TuffUpdate) => void
+export type TuffAggregatorCallback = (update: TuffUpdate) => void | Promise<void>
 
 export interface IGatherController {
   abort: () => void
