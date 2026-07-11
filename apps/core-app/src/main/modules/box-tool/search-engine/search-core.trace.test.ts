@@ -87,6 +87,7 @@ vi.mock('../../../core/eventbus/touch-event', () => ({
   },
   touchEventBus: {
     on: vi.fn(),
+    once: vi.fn(),
     off: vi.fn(),
     emit: vi.fn()
   },
@@ -143,6 +144,7 @@ vi.mock('../../sentry', () => ({
 vi.mock('../../storage', () => ({
   storageModule: {},
   getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
+  isMainStorageReady: vi.fn(() => false),
   subscribeMainConfig: vi.fn(() => () => {})
 }))
 
@@ -230,6 +232,37 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
     sendToWindow: vi.fn(),
     on: transportOnSpy
   }))
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getLocale: vi.fn(() => 'en-US'),
+    commandLine: {
+      appendSwitch: vi.fn()
+    }
+  },
+  BrowserWindow: class BrowserWindow {},
+  nativeTheme: {},
+  powerSaveBlocker: {
+    start: vi.fn(() => 1),
+    stop: vi.fn(),
+    isStarted: vi.fn(() => false)
+  },
+  screen: {
+    getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
+    getDisplayNearestPoint: vi.fn(() => ({
+      id: 1,
+      bounds: { x: 0, y: 0, width: 100, height: 100 }
+    }))
+  },
+  WebContentsView: class WebContentsView {}
+}))
+
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  WIN10: false,
+  MicaBrowserWindow: class MicaBrowserWindow {},
+  useMicaElectron: vi.fn()
 }))
 
 describe('search-core search-trace', () => {
@@ -473,11 +506,12 @@ describe('search-core search-trace', () => {
 
     const diagnostics = await handler()
 
-    expect(diagnostics.summary.total).toBe(4)
+    expect(diagnostics.summary.total).toBe(5)
     expect(diagnostics.sources.map((source) => source.descriptor.id)).toEqual([
       'app-provider',
       'file-provider',
       'everything-provider',
+      'quicklinks',
       'browser-bookmarks'
     ])
   })
