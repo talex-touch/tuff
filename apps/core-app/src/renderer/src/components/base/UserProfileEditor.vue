@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'
+import { useUserIdentity } from './composables/useUserIdentity'
 
 const props = withDefaults(
   defineProps<{
@@ -16,28 +17,9 @@ const props = withDefaults(
 )
 
 const { t } = useI18n()
-const {
-  isLoggedIn,
-  user,
-  getDisplayName,
-  getPrimaryEmail,
-  getUserBio,
-  updateUserProfile,
-  updateUserAvatar
-} = useAuth()
-
-const displayName = computed(() => {
-  return getDisplayName()
-})
-const displayEmail = computed(() => {
-  return getPrimaryEmail()
-})
-const profileBio = computed(() => getUserBio())
-const avatarUrl = computed(() => user.value?.avatar || '')
-const displayInitial = computed(() => {
-  const seed = displayName.value || displayEmail.value
-  return seed ? seed.trim().charAt(0).toUpperCase() : '?'
-})
+const { updateUserProfile, updateUserAvatar } = useAuth()
+const { isLoggedIn, displayName, displayEmail, profileBio, avatarUrl, displayInitial } =
+  useUserIdentity()
 
 const profileForm = ref({
   displayName: '',

@@ -1,10 +1,13 @@
+import { useI18n, useNexusAuth, useRequestHeaders, useRoute, useState } from '#imports'
+import { watch } from 'vue'
+import { useLocalePreference } from '~/composables/useLocalePreference'
+
 import { ensureRouteLocaleChunk } from '~/composables/useRouteLocaleChunks'
 import { resolveRouteLocaleChunks } from '~/utils/route-locale-chunks'
 
 export type SupportedLocale = 'en' | 'zh'
 type LocaleSource = 'profile' | 'cookie' | 'browser' | 'manual'
 
-const LOCALE_SYNC_STORAGE_KEY = 'tuff_locale_sync'
 const LOG_PREFIX = '[i18n/orchestrator]'
 
 let localeSetQueue: Promise<void> = Promise.resolve()
@@ -92,11 +95,8 @@ export function useLocaleOrchestrator() {
     if (!normalized)
       return null
 
-    if (source !== 'browser') {
+    if (source !== 'browser')
       persistPreferredLocale(normalized)
-      if (import.meta.client)
-        window.localStorage.setItem(LOCALE_SYNC_STORAGE_KEY, normalized)
-    }
     if (source === 'manual') {
       manualPreferenceActive.value = true
       markManualPreferredLocale()
@@ -128,8 +128,8 @@ export function useLocaleOrchestrator() {
     if (!normalized)
       return normalizeLocale(locale.value)
 
-    await setLocaleSerial(normalized, 'manual')
     persistLocale(normalized, 'manual')
+    await setLocaleSerial(normalized, 'manual')
 
     if (options?.syncProfile !== false)
       await updateProfileLocale(normalized)
@@ -190,8 +190,8 @@ export function useLocaleOrchestrator() {
         ? 'profile'
         : 'browser'
 
-    await setLocaleSerial(target, source)
     persistLocale(target, source)
+    await setLocaleSerial(target, source)
     clientInitDone.value = true
     initDone.value = true
 
@@ -231,8 +231,8 @@ export function useLocaleOrchestrator() {
           ? 'profile'
           : 'browser'
 
-      await setLocaleSerial(target, source)
       persistLocale(target, source)
+      await setLocaleSerial(target, source)
       initDone.value = true
       if (import.meta.client)
         clientInitDone.value = true
@@ -293,8 +293,8 @@ export function useLocaleOrchestrator() {
       }
 
       if (nextLocale) {
-        await setLocaleSerial(nextLocale, 'profile')
         persistLocale(nextLocale, 'profile')
+        await setLocaleSerial(nextLocale, 'profile')
       }
 
       console.info(`${LOG_PREFIX} profile sync`, {
@@ -311,6 +311,38 @@ export function useLocaleOrchestrator() {
     }
   }
 
+  const getSavedLocale = (): string | null => getPreferredLocale()
+
+  const saveUserLocale = async (input: unknown) => {
+    const normalized = normalizeLocaleWithMetrics(input, 'manual')
+    if (!normalized)
+      return null
+
+    persistLocale(normalized, 'manual')
+    await updateProfileLocale(normalized)
+    return normalized
+  }
+
+  const syncLocaleChanges = () => {
+    if (import.meta.server)
+      return
+
+    watch(
+      () => status.value,
+      (currentStatus) => {
+        void syncFromProfileOnAuth({ status: currentStatus })
+      },
+      { immediate: true },
+    )
+
+    watch(locale, (newLocale) => {
+      const normalized = normalizeLocale(newLocale)
+      if (!normalized || normalized === getSavedLocale())
+        return
+      void saveUserLocale(normalized)
+    })
+  }
+
   return {
     normalizeLocale,
     initLocale,
@@ -318,6 +350,9 @@ export function useLocaleOrchestrator() {
     persistLocale,
     setLocaleSerial,
     setManualLocale,
+    getSavedLocale,
+    saveUserLocale,
+    syncLocaleChanges,
     syncFromProfileOnAuth,
   }
 }

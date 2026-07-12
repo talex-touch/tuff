@@ -2,6 +2,7 @@
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { TxSplitButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -13,8 +14,6 @@ import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginFab from '~/components/plugin/PluginFab.vue'
 import StatusIcon from '~/components/base/StatusIcon.vue'
-import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
-import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
 import { usePluginExternalLinks } from '~/composables/plugin/usePluginExternalLinks'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
@@ -43,7 +42,7 @@ const { nexusPublishUrl } = usePluginExternalLinks(pluginRef)
 const pluginInfoLog = createRendererLogger('PluginInfo')
 
 // Tabs state
-const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
+const tabsModel = ref('Overview')
 
 // Loading states
 const loadingStates = ref({
@@ -444,39 +443,46 @@ async function handlePrimaryAction(): Promise<void> {
 
       <!-- Tabs Section -->
       <div class="PluginInfo-TabsShell">
-        <TvTabs v-model="tabsModel" :show-indicator="false" :show-blur="false">
-          <TvTabItem icon="dashboard-line" name="Overview" :label="t('plugin.tabs.overview')">
+        <TxTabs
+          v-model="tabsModel"
+          placement="top"
+          :show-indicator="false"
+          :content-padding="0"
+          borderless
+        >
+          <TxTabItem icon-class="i-ri-dashboard-line" name="Overview">
+            <template #name>{{ t('plugin.tabs.overview') }}</template>
             <PluginOverview :plugin="plugin" />
-          </TvTabItem>
-          <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
+          </TxTabItem>
+          <TxTabItem icon-class="i-ri-function-line" name="Features">
+            <template #name>{{ t('plugin.tabs.features') }}</template>
             <PluginFeatures :plugin="plugin" />
-          </TvTabItem>
-          <TvTabItem
-            icon="shield-keyhole-line"
-            name="Permissions"
-            :label="t('plugin.tabs.permissions')"
-          >
+          </TxTabItem>
+          <TxTabItem icon-class="i-ri-shield-keyhole-line" name="Permissions">
+            <template #name>{{ t('plugin.tabs.permissions') }}</template>
             <PluginPermissions :plugin="plugin" />
-          </TvTabItem>
-          <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
+          </TxTabItem>
+          <TxTabItem icon-class="i-ri-database-2-line" name="Storage">
+            <template #name>{{ t('plugin.tabs.storage') }}</template>
             <PluginStorage :plugin="plugin" />
-          </TvTabItem>
-          <TvTabItem
+          </TxTabItem>
+          <TxTabItem
             v-if="plugin.dev?.enable || isAppDev"
-            icon="folder-chart-line"
+            icon-class="i-ri-folder-chart-line"
             name="Structure"
-            :label="t('plugin.tabs.structure')"
-            fill
           >
+            <template #name>{{ t('plugin.tabs.structure') }}</template>
             <PluginStructure :plugin="plugin" />
-          </TvTabItem>
-          <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')" fill>
+          </TxTabItem>
+          <TxTabItem icon-class="i-ri-file-text-line" name="Logs">
+            <template #name>{{ t('plugin.tabs.logs') }}</template>
             <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
-          </TvTabItem>
-          <TvTabItem icon="information-line" name="Details" :label="t('plugin.tabs.details')">
+          </TxTabItem>
+          <TxTabItem icon-class="i-ri-information-line" name="Details">
+            <template #name>{{ t('plugin.tabs.details') }}</template>
             <PluginDetails :plugin="plugin" />
-          </TvTabItem>
-        </TvTabs>
+          </TxTabItem>
+        </TxTabs>
       </div>
     </div>
 

@@ -5,7 +5,12 @@ import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { defineAsyncComponent } from 'vue'
-import type { DocAnalyticsResponse } from '~/types/docs-engagement'
+import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
+import type { GeoAnalyticsData, GeoMapPoint } from '~/types/admin-analytics'
+import {
+  formatAnalyticsCategoryKey, formatAnalyticsCategoryLabel, formatAnalyticsDateTime, formatAnalyticsDuration,
+  formatAnalyticsNumber, formatExchangeRate, formatPayloadPreview, toSortedAnalyticsList,
+} from '~/utils/admin-analytics'
 import { requestJson } from '~/utils/request'
 
 const LazyGeoLeafletMap = defineAsyncComponent(() => import('~/components/dashboard/GeoLeafletMap.client.vue'))
@@ -34,217 +39,22 @@ watch(isAdmin, (admin) => {
   }
 }, { immediate: true })
 
-interface AnalyticsData {
-  summary: {
-    totalEvents: number
-    totalUsers: number
-    totalSearches: number
-    avgSearchDuration: number
-    avgQueryLength: number
-    avgSortingDuration: number
-    avgResultCount: number
-    avgFirstResultMs: number
-    searchSlowCount: number
-    avgExecuteLatency: number
-    performance: {
-      longTaskCount: number
-      longTaskTotalMs: number
-      longTaskMaxMs: number
-      longTaskAvgMs: number
-      rafJankCount: number
-      rafJankTotalMs: number
-      rafJankMaxMs: number
-      rafJankAvgMs: number
-      eventLoopDelayP95AvgMs: number
-      eventLoopDelayMaxMs: number
-      unresponsiveCount: number
-      unresponsiveTotalMs: number
-      unresponsiveMaxMs: number
-      unresponsiveAvgMs: number
-    }
-    dailyStats: Array<{
-      date: string
-      visits: number
-      searches: number
-      avgDuration: number
-    }>
-    deviceDistribution: Record<string, number>
-    regionDistribution: Record<string, number>
-    hourlyDistribution: Record<string, number>
-    searchSceneDistribution: Record<string, number>
-    searchInputTypeDistribution: Record<string, number>
-    searchProviderDistribution: Record<string, number>
-    searchProviderResultDistribution: Record<string, number>
-    searchResultCategoryDistribution: Record<string, number>
-    providerMetrics: Array<{
-      provider: string
-      calls: number
-      avgDuration: number
-      p95Duration: number
-      maxDuration: number
-      resultCount: number
-      errorCount: number
-      timeoutCount: number
-      slowCount: number
-      slowRate: number
-    }>
-    featureUseSourceTypeDistribution: Record<string, number>
-    featureUseItemKindDistribution: Record<string, number>
-    featureUsePluginDistribution: Record<string, number>
-    featureUseCategoryDistribution: Record<string, number>
-    updateActionDistribution: Record<string, number>
-    updateStageDistribution: Record<string, number>
-    updateResultDistribution: Record<string, number>
-    updateChannelDistribution: Record<string, number>
-    updateSourceDistribution: Record<string, number>
-    updateTagDistribution: Record<string, number>
-    updateItemKindDistribution: Record<string, number>
-    versionDistribution: Record<string, number>
-    moduleLoadMetrics: Array<{
-      module: string
-      avgDuration: number
-      maxDuration: number
-      minDuration: number
-      ratio: number
-    }>
-  }
-  realtime: {
-    searchesLast24h: number
-    visitsLast24h: number
-    activeUsers: number
-    avgLatency: number
-  }
-}
 
-interface GeoAnalyticsData {
-  summary: {
-    totalSearches: number
-    uniqueIps: number
-    countryCount: number
-    subdivisionCount: number
-  }
-  countries: Array<{
-    countryCode: string
-    count: number
-    latitude: number | null
-    longitude: number | null
-  }>
-  subdivisions: Array<{
-    countryCode: string
-    regionCode: string | null
-    regionName: string | null
-    count: number
-    latitude: number | null
-    longitude: number | null
-  }>
-  topIps: Array<{
-    ip: string
-    count: number
-    lastSeenAt: string
-    countryCode: string | null
-    regionCode: string | null
-    city: string | null
-  }>
-  generatedAt: string
-}
-
-interface ExchangeRateHistoryItem {
-  baseCurrency: string
-  targetCurrency: string
-  rate: number
-  fetchedAt: number
-  providerUpdatedAt?: number | null
-}
-
-interface ExchangeRateSnapshotSummary {
-  id: string
-  baseCurrency: string
-  fetchedAt: number
-  providerUpdatedAt?: number | null
-  providerNextUpdateAt?: number | null
-  payload?: Record<string, unknown>
-}
-
-interface GeoMapPoint {
-  id: string
-  label: string
-  latitude: number | null
-  longitude: number | null
-  value: number
-}
-
-interface TelemetryMessage {
-  id: string
-  source: string
-  severity: 'info' | 'warn' | 'error'
-  title: string
-  message: string
-  status: string
-  createdAt: string
-}
-
-interface IntelligenceAnalyticsData {
-  summary: {
-    days: number
-    totalRuns: number
-    successRuns: number
-    failureRuns: number
-    successRate: number
-    fallbackRate: number
-    approvalHitRate: number
-    recoveryRate: number
-    streamCoverageRate: number
-    retryRunRate: number
-    disconnectPauseRate: number
-    checkpointLossRate: number
-    totalActions: number
-    completedActions: number
-    failedActions: number
-    waitingApprovals: number
-    avgDurationMs: number
-    p95DurationMs: number
-  }
-  statusDistribution: Record<string, number>
-  toolFailureDistribution: Array<{ toolId: string, count: number }>
-  recentRuns: Array<{
-    sessionId: string
-    status: string
-    providerName: string | null
-    model: string
-    fallbackCount: number
-    approvalHitCount: number
-    durationMs: number
-    createdAt: string
-  }>
-}
-
-const analytics = ref<AnalyticsData | null>(null)
-const loading = ref(true)
-const error = ref<string | null>(null)
 const selectedDays = ref(30)
-const geoAnalytics = ref<GeoAnalyticsData | null>(null)
-const geoLoading = ref(false)
-const geoError = ref<string | null>(null)
 const selectedGeoCountry = ref<string | null>(null)
-const messages = ref<TelemetryMessage[]>([])
-const messagesLoading = ref(false)
-const messagesError = ref<string | null>(null)
-const docsAnalytics = ref<DocAnalyticsResponse | null>(null)
-const docsLoading = ref(false)
-const docsError = ref<string | null>(null)
-const intelligenceAnalytics = ref<IntelligenceAnalyticsData | null>(null)
-const intelligenceLoading = ref(false)
-const intelligenceError = ref<string | null>(null)
-const exchangeHistory = ref<ExchangeRateHistoryItem[]>([])
-const exchangeSnapshots = ref<ExchangeRateSnapshotSummary[]>([])
-const exchangeLoading = ref(false)
-const exchangeError = ref<string | null>(null)
 const exchangeTarget = ref('CNY')
 const exchangeLimit = ref(20)
 const exchangeView = ref<'history' | 'snapshots'>('history')
 const exchangeIncludePayload = ref(false)
 const docsPath = ref('')
 const docsSource = ref<'all' | 'docs_page' | 'doc_comments_admin'>('all')
+const {
+  analytics, loading, error, geoAnalytics, geoLoading, geoError, messages, messagesLoading, messagesError,
+  docsAnalytics, docsLoading, docsError, intelligenceAnalytics, intelligenceLoading, intelligenceError,
+  exchangeHistory, exchangeSnapshots, exchangeLoading, exchangeError,
+  fetchAnalytics: loadAnalytics, fetchGeoAnalytics: loadGeoAnalytics, fetchDocsAnalytics: loadDocsAnalytics,
+  fetchIntelligenceAnalytics: loadIntelligenceAnalytics, fetchMessages: loadMessages, fetchExchangeHistory: loadExchangeHistory,
+} = useAdminAnalyticsData({ request: requestJson })
 const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'intelligence' | 'docs' | 'geo' | 'messages' | 'exchange'>('overview')
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
@@ -457,137 +267,28 @@ function resolveSubdivisionLabel(item: GeoAnalyticsData['subdivisions'][number])
   return item.regionName || item.regionCode || 'Unknown'
 }
 
-async function fetchAnalytics() {
-  loading.value = true
-  error.value = null
-  try {
-    const data = await requestJson<AnalyticsData>(`/api/admin/analytics?days=${selectedDays.value}`)
-    analytics.value = data
-  }
-  catch (e: any) {
-    error.value = e.data?.message || e.message || 'Failed to load analytics'
-  }
-  finally {
-    loading.value = false
-  }
+async function fetchAnalytics(): Promise<void> {
+  await loadAnalytics(selectedDays.value)
 }
 
-async function fetchGeoAnalytics() {
-  geoLoading.value = true
-  geoError.value = null
-  try {
-    const data = await requestJson<GeoAnalyticsData>('/api/admin/analytics/geo', {
-      query: {
-        days: selectedDays.value,
-        country: selectedGeoCountry.value || undefined,
-        limit: 240,
-      },
-    })
-    geoAnalytics.value = data
-  }
-  catch (e: any) {
-    geoError.value = e.data?.message || e.message || 'Failed to load geo analytics'
-  }
-  finally {
-    geoLoading.value = false
-  }
+async function fetchGeoAnalytics(): Promise<void> {
+  await loadGeoAnalytics(selectedDays.value, selectedGeoCountry.value)
 }
 
-async function fetchDocsAnalytics() {
-  docsLoading.value = true
-  docsError.value = null
-  try {
-    const data = await requestJson<DocAnalyticsResponse>('/api/admin/analytics/docs', {
-      query: {
-        days: selectedDays.value,
-        path: docsPath.value.trim() || undefined,
-        source: docsSource.value !== 'all' ? docsSource.value : undefined,
-      },
-    })
-    docsAnalytics.value = data
-  }
-  catch (e: any) {
-    docsError.value = e.data?.message || e.message || 'Failed to load docs analytics'
-    docsAnalytics.value = null
-  }
-  finally {
-    docsLoading.value = false
-  }
+async function fetchDocsAnalytics(): Promise<void> {
+  await loadDocsAnalytics(selectedDays.value, docsPath.value, docsSource.value)
 }
 
-async function fetchIntelligenceAnalytics() {
-  intelligenceLoading.value = true
-  intelligenceError.value = null
-  try {
-    const data = await requestJson<IntelligenceAnalyticsData>('/api/admin/analytics/intelligence', {
-      query: {
-        days: selectedDays.value,
-      },
-    })
-    intelligenceAnalytics.value = data
-  }
-  catch (e: any) {
-    intelligenceError.value = e.data?.message || e.message || 'Failed to load intelligence analytics'
-    intelligenceAnalytics.value = null
-  }
-  finally {
-    intelligenceLoading.value = false
-  }
+async function fetchIntelligenceAnalytics(): Promise<void> {
+  await loadIntelligenceAnalytics(selectedDays.value)
 }
 
-async function fetchMessages() {
-  messagesLoading.value = true
-  messagesError.value = null
-  try {
-    const data = await requestJson<{ messages: TelemetryMessage[] }>('/api/telemetry/messages?limit=12')
-    messages.value = data.messages ?? []
-  }
-  catch (e: any) {
-    messagesError.value = e.data?.message || e.message || 'Failed to load messages'
-    messages.value = []
-  }
-  finally {
-    messagesLoading.value = false
-  }
+async function fetchMessages(): Promise<void> {
+  await loadMessages()
 }
 
-async function fetchExchangeHistory() {
-  exchangeLoading.value = true
-  exchangeError.value = null
-  try {
-    if (exchangeView.value === 'history') {
-      const normalizedTarget = exchangeTarget.value.trim().toUpperCase()
-      if (!/^[A-Z]{3}$/.test(normalizedTarget)) {
-        throw new Error('Invalid target currency code.')
-      }
-      const data = await requestJson<{ items?: ExchangeRateHistoryItem[] }>('/api/exchange/history', {
-        query: {
-          target: normalizedTarget,
-          limit: exchangeLimit.value,
-        },
-      })
-      exchangeHistory.value = data.items ?? []
-      exchangeSnapshots.value = []
-    }
-    else {
-      const data = await requestJson<{ items?: ExchangeRateSnapshotSummary[] }>('/api/exchange/history', {
-        query: {
-          limit: exchangeLimit.value,
-          includePayload: exchangeIncludePayload.value ? 'true' : undefined,
-        },
-      })
-      exchangeSnapshots.value = data.items ?? []
-      exchangeHistory.value = []
-    }
-  }
-  catch (e: any) {
-    exchangeError.value = e.data?.message || e.message || 'Failed to load exchange history'
-    exchangeHistory.value = []
-    exchangeSnapshots.value = []
-  }
-  finally {
-    exchangeLoading.value = false
-  }
+async function fetchExchangeHistory(): Promise<void> {
+  await loadExchangeHistory(exchangeView.value, exchangeTarget.value, exchangeLimit.value, exchangeIncludePayload.value)
 }
 
 onMounted(() => {
@@ -649,61 +350,15 @@ onBeforeUnmount(() => {
   if (docsQueryTimer)
     clearTimeout(docsQueryTimer)
 })
+const formatNumber = formatAnalyticsNumber
+const toSortedList = toSortedAnalyticsList
+const formatCategoryLabel = formatAnalyticsCategoryLabel
+const formatCategoryKey = formatAnalyticsCategoryKey
+const formatMessageTime = (value: string) => formatAnalyticsDateTime(value, locale.value, value)
+const formatExchangeTime = (value: number | null | undefined) => value ? formatAnalyticsDateTime(value, locale.value) : '-'
+const formatRate = formatExchangeRate
+const formatDuration = formatAnalyticsDuration
 
-function formatNumber(num: number): string {
-  if (num >= 1000000)
-    return `${(num / 1000000).toFixed(1)}M`
-  if (num >= 1000)
-    return `${(num / 1000).toFixed(1)}K`
-  return num.toString()
-}
-
-function toSortedList(source?: Record<string, number>, limit = 6) {
-  return Object.entries(source || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-}
-
-function formatCategoryLabel(value: string) {
-  return value
-    .split('_')
-    .filter(Boolean)
-    .map(part => part[0] ? part[0].toUpperCase() + part.slice(1) : part)
-    .join(' ')
-}
-
-function formatCategoryKey(key: string) {
-  const [level1, level2] = key.split(':')
-  return {
-    level1: formatCategoryLabel(level1 || 'others'),
-    level2: formatCategoryLabel(level2 || 'others'),
-  }
-}
-
-function formatMessageTime(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
-function formatExchangeTime(value: number | null | undefined) {
-  if (!value)
-    return '-'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
-}
-
-function formatRate(value: number) {
-  if (!Number.isFinite(value))
-    return '-'
-  return value >= 1 ? value.toFixed(4) : value.toFixed(6)
-}
-
-function formatPayloadPreview(payload?: Record<string, unknown>) {
-  if (!payload)
-    return ''
-  const raw = JSON.stringify(payload)
-  return raw.length > 180 ? `${raw.slice(0, 180)}...` : raw
-}
 
 function drilldownCountry(countryCode: string) {
   if (!countryCode || countryCode === 'Unknown') {
@@ -722,16 +377,6 @@ function handleMapPointClick(point: { id: string }) {
   }
 }
 
-function formatDuration(ms: number) {
-  if (!ms)
-    return '0s'
-  const totalSeconds = Math.floor(ms / 1000)
-  if (totalSeconds < 60)
-    return `${totalSeconds}s`
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}m ${seconds}s`
-}
 
 function openDocAnalyticsPath(path: string) {
   docsPath.value = path

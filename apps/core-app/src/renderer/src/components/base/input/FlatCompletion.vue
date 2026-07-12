@@ -30,54 +30,38 @@ const value = ref('')
 const inputPlaceholder = computed(() => resolveFlatCompletionPlaceholder(props.placeholder))
 
 watch(
-  () => value.value,
+  value,
   () => {
     nextTick(refreshCompletion)
   },
-  { deep: true, immediate: true }
+  { immediate: true }
 )
 
-watch(
-  () => res.value,
-  async () => {
-    const el = completionWrapper.value
-    if (!el) return
+async function refreshCompletionItems() {
+  const el = completionWrapper.value
+  if (!el) return
 
-    for (const item of [...el.children].reverse()) {
-      setTimeout(async () => {
-        item.classList.add('remove')
-        // // opacity: 0 !important;
-        // // filter: blur(10px) !important;
-        // // transform: translateY(10px) scaleY(1.1) !important;
-        //
-        // Object.assign(item.style, {
-        //   // opacity: 0,
-        //   // filter: "blur(10px)",
-        //   // transform: "translateY(10px) scaleY(1.1)",
-        //   // reverse the animation
-        //   animationDirection: "reverse",
-        //   // remove animation forwards
-        //   animationFillMode: "none",
-        // })
-
-        await sleep(500)
-        item?.remove()
-      })
-      await sleep(125)
-    }
-
-    await sleep(600)
-
-    _res.value = res.value
+  for (const item of [...el.children].reverse()) {
+    setTimeout(async () => {
+      item.classList.add('remove')
+      await sleep(500)
+      item.remove()
+    })
+    await sleep(125)
   }
-)
+
+  await sleep(600)
+  _res.value = res.value
+}
 
 function refreshCompletion() {
   const nextState = createFlatCompletionUpdate(value.value, props.fetch)
   value.value = nextState.query
   emit('search', nextState.query)
-  res.value = nextState.results
-
+  if (res.value !== nextState.results) {
+    res.value = nextState.results
+    void refreshCompletionItems()
+  }
   nextTick(async () => {
     if (!completionInput.value || !completionWrapper.value) return
 

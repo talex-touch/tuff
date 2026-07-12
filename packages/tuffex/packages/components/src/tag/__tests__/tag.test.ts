@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest'
 import TxTag from '../src/TxTag.vue'
 
 describe('txTag', () => {
-  it('renders label, icon, default size, and style variables', () => {
+  it('renders label, icon, configured small size, and style variables', () => {
     const wrapper = mount(TxTag, {
       props: {
         label: 'Beta',
         icon: 'i-carbon-star',
         color: '#2563eb',
+        size: 'sm',
       },
     })
 
@@ -17,6 +18,18 @@ describe('txTag', () => {
     expect(wrapper.find('.tx-tag__content').text()).toBe('Beta')
     expect(wrapper.find('.tx-tag__icon').classes()).toContain('i-carbon-star')
     expect(wrapper.attributes('style')).toContain('--tx-tag-color: #2563eb')
+  })
+
+  it('renders the shared pill treatment when requested', () => {
+    const wrapper = mount(TxTag, {
+      props: {
+        label: 'Release',
+        pill: true,
+        size: 'md',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('pill')
   })
 
   it('uses default slot instead of label', () => {

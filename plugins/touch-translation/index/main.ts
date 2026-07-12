@@ -10,13 +10,14 @@ import {
   NO_INPUT_SCREENSHOT_MESSAGE,
   NO_INPUT_TEXT_MESSAGE,
   normalizeCallFailureMessage,
+  parseImageDataUrl,
   PERMISSION_DENIED_MESSAGE,
   resolveTargetLanguage,
+  toImageDataUrl,
 } from '@talex-touch/utils/plugin'
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import { AccountEvents } from '@talex-touch/utils/transport/events'
 import { GoogleProvider, TuffIntelligenceProvider } from './providers'
-import { parseImageDataUrl, toImageDataUrl } from './utils'
 
 const { plugin, clipboard, logger, permission, TuffItemBuilder, touchChannel } = globalThis as any
 

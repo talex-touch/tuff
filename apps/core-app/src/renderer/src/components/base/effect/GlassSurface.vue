@@ -86,7 +86,7 @@ const greenChannelRef = useTemplateRef<SVGSVGElement>('greenChannelRef')
 const blueChannelRef = useTemplateRef<SVGSVGElement>('blueChannelRef')
 const gaussianBlurRef = useTemplateRef<SVGSVGElement>('gaussianBlurRef')
 
-let resizeObserver: ResizeObserver | null = null
+let resizeObserver: ResizeObserver | undefined
 
 function generateDisplacementMap() {
   const rect = containerRef.value?.getBoundingClientRect()
@@ -120,6 +120,17 @@ function updateDisplacementMap() {
   if (feImageRef.value) {
     feImageRef.value.setAttribute('href', generateDisplacementMap())
   }
+}
+
+let displacementMapTimer: ReturnType<typeof setTimeout> | undefined
+
+function scheduleDisplacementMapUpdate() {
+  if (displacementMapTimer !== undefined) return
+
+  displacementMapTimer = setTimeout(() => {
+    displacementMapTimer = undefined
+    updateDisplacementMap()
+  })
 }
 
 function supportsSVGFilters() {
@@ -256,13 +267,12 @@ function updateFilterElements() {
 }
 
 function setupResizeObserver() {
-  if (!containerRef.value || typeof ResizeObserver === 'undefined') return
+  const container = containerRef.value
+  if (!container || typeof ResizeObserver === 'undefined') return
 
-  resizeObserver = new ResizeObserver(() => {
-    setTimeout(updateDisplacementMap, 0)
-  })
-
-  resizeObserver.observe(containerRef.value)
+  resizeObserver?.disconnect()
+  resizeObserver = new ResizeObserver(scheduleDisplacementMapUpdate)
+  resizeObserver.observe(container)
 }
 
 watch(
@@ -283,15 +293,15 @@ watch(
     () => props.yChannel,
     () => props.mixBlendMode
   ],
-  () => {
+  ([width, height], [previousWidth, previousHeight]) => {
     updateDisplacementMap()
     updateFilterElements()
+
+    if (width !== previousWidth || height !== previousHeight) {
+      scheduleDisplacementMapUpdate()
+    }
   }
 )
-
-watch([() => props.width, () => props.height], () => {
-  setTimeout(updateDisplacementMap, 0)
-})
 
 onMounted(() => {
   nextTick(() => {
@@ -299,12 +309,14 @@ onMounted(() => {
     updateFilterElements()
     setupResizeObserver()
   })
+})
 
-  onUnmounted(() => {
-    if (resizeObserver) {
-      resizeObserver.disconnect()
-    }
-  })
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+  if (displacementMapTimer !== undefined) {
+    clearTimeout(displacementMapTimer)
+    displacementMapTimer = undefined
+  }
 })
 </script>
 

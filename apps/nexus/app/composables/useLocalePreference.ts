@@ -1,3 +1,5 @@
+import { useCookie } from '#imports'
+
 type SupportedLocale = 'en' | 'zh'
 
 const LOCALE_STORAGE_KEY = 'tuff_locale_preference'

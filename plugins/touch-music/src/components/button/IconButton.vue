@@ -1,113 +1,67 @@
-<script>
-</script>
-
-<script setup>
+<script setup lang="ts">
 import RemixIcon from '@comp/icon/RemixIcon.vue'
-import { ref, watchEffect } from 'vue'
+import { TxIconButton } from '@talex-touch/tuffex/icon-button'
 
 defineOptions({
   name: 'IconButton',
+  inheritAttrs: false,
 })
 
-const props = defineProps({
-  icon: {
-    type: String,
-  },
-  plain: {
-    type: Boolean,
-  },
-  small: {
-    type: Boolean,
-  },
-  select: {
-    type: Boolean,
-  },
-  activeIcon: {
-    type: String,
-    required: false,
-  },
+const props = withDefaults(defineProps<{
+  icon?: string
+  plain?: boolean
+  small?: boolean
+  select?: boolean
+  activeIcon?: string
+}>(), {
+  icon: '',
+  plain: false,
+  small: false,
+  select: false,
+  activeIcon: '',
 })
-
-const hover = ref(false)
-const select = ref(false)
-
-watchEffect(() => {
-  // if (props.direct) select.value = (route.path === props.direct)
-  if (props.hasOwnProperty('select'))
-    select.value = props.select
-})
-
-// function handleClick() {
-//   props.direct && router.push( props.direct )
-// }
 </script>
 
 <template>
-  <div
-    :class="{ plain, small, select }" role="button"
-    class="IconButton-Container fake-background transition"
-    @click="handleClick" @mouseenter="hover = true" @mouseleave="hover = false"
+  <TxIconButton
+    class="IconButton-Container transition"
+    :class="{ plain: props.plain, small: props.small, select: props.select }"
+    :size="props.small ? 'xs' : 'lg'"
+    :pressed="props.select"
+    v-bind="$attrs"
   >
-    <div class="IconButton-Icon">
-      <RemixIcon v-if="activeIcon && icon && select" :name="activeIcon" />
-      <RemixIcon v-else-if="activeIcon && icon" :name="icon" />
-      <RemixIcon v-else-if="icon" :name="icon" :style="select || hover ? 'fill' : 'line'" />
-      <slot v-else name="icon" :hover="hover" :select="select" />
-    </div>
-
-    <!--    <div v-if="display !== 'popover'" class="IconButton-Text"> -->
-    <!--      <slot name="text" /> -->
-    <!--    </div> -->
-  </div>
+    <template #default="{ hover }">
+      <RemixIcon v-if="props.activeIcon && props.icon && props.select" :name="props.activeIcon" />
+      <RemixIcon v-else-if="props.activeIcon && props.icon" :name="props.icon" />
+      <RemixIcon v-else-if="props.icon" :name="props.icon" :style="props.select || hover ? 'fill' : 'line'" />
+      <slot v-else name="icon" :hover="hover" :select="props.select" />
+    </template>
+  </TxIconButton>
 </template>
 
 <style lang="scss" scoped>
 .IconButton-Container {
+  --tx-icon-button-radius: 8px;
+  --tx-icon-button-bg-hover: var(--tx-fill-color-lighter);
+
+  box-shadow: var(--tx-box-shadow);
+
   &.plain {
-    background-color: transparent;
-    border: none;
+    --tx-icon-button-bg-hover: transparent;
+
     box-shadow: none;
   }
+
   &.small {
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
-    .IconButton-Icon {
-      line-height: 24px;
+    --tx-icon-button-radius: 4px;
+
+    :deep(.remix) {
       font-size: 14px;
     }
   }
+
   &.select {
     box-shadow: var(--tx-box-shadow-lighter);
   }
-  &:hover {
-    --fake-color: var(--tx-fill-color-lighter);
-  }
-  .IconButton-Icon {
-    &:hover {
-      opacity: .9;
-    }
-    padding: 5px;
-
-    font-size: 20px;
-  }
-  &:active {
-    transform: scale(.75)
-  }
-  display: flex;
-  //margin: 10px 0;
-
-  justify-content: center;
-  align-items: center;
-
-  width: 48px;
-  height: 48px;
-
-  cursor: pointer;
-  border-radius: 8px;
-  box-shadow: var(--tx-box-shadow);
-  --fake-color: var(--tx-fill-color);
-  --fake-radius: 8px;
-  --fake-opacity: .5;
 }
 </style>
