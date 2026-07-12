@@ -49,10 +49,11 @@ CoreBox 的高度由渲染进程结果列表驱动，并通过主进程应用到
 
 **AutoPaste**
 
-- 仅在“快捷键唤起 CoreBox”时触发。
-- 新鲜度判断：`autoPaste.time` 为秒；`0` 为无限制，`-1` 关闭。`freshnessBaseAt` 优先于 `observedAt`，超过配置窗口不会自动填入。
-- 处理流程：快捷键唤起时刷新剪贴板快照，`handlePaste()` 同步剪贴板并按新鲜度自动填充。
-- 文本 <= 80 字会直接填入输入框；超长文本只作为 tag，重复超长文本再次触发时仍必须通过新鲜度判断；文件/图片走专用模式。
+- 仅在“快捷键唤起 CoreBox”时自动触发；显式粘贴与用户主动执行插件动作保留 manual 语义。
+- 新鲜度判断：`autoPaste.time`（秒），`0` 为无限制，`-1` 关闭；隐式输入填充、clipboard tag 与 query input 统一经过同一门禁。
+- 主进程提供 `autoPasteEligible`、`observedAt` 与 `freshnessBaseAt`；renderer 的 visibility、clipboard、search hooks 复用同一判定函数。
+- CoreBox 隐藏期间只在主进程记录最新剪贴板，不直接激活 renderer 状态；重新显示时再按新鲜度决定是否带入。
+- 文本 <= 80 字会直接填入输入框；超长文本只作为 tag；文件/图片走专用模式。
 - 使用 `autoPastedClipboardIdentities` 去重（TTL 1h），并通过 `clearClipboard(remember)` 避免重复触发。
 
 **AutoClear**

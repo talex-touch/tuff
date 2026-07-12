@@ -7,6 +7,9 @@
   "license": "MPL-2.0 license",
   "homepage": "https://tuff.tagzxia.com",
   "main": "./out/main/index.js",
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && vue-tsc --noEmit -p tsconfig.node.json"
+  },
   "dependencies": {
     "@arrow-js/core": "1.0.6",
     "@electron-toolkit/preload": "^3.0.2",

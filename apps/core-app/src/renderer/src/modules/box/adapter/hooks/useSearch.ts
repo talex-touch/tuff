@@ -30,6 +30,11 @@ import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './deta
 import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { isBackgroundAppLaunchItem } from './app-launch-item'
 import { buildClipboardQueryInputs } from './clipboard-query-inputs'
+import {
+  clearImplicitClipboardState,
+  isClipboardFreshForAutoPaste,
+  normalizeClipboardTimestamp
+} from './clipboard-autopaste'
 import { getLatestClipboard } from './useClipboardChannel'
 import { useResize } from './useResize'
 
@@ -59,12 +64,6 @@ function ensureBoxData(boxOptions: IBoxOptions): BoxData {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
-}
-
-function normalizeClipboardTimestamp(value: string | Date | null | undefined): number | null {
-  if (value == null) return null
-  const time = value instanceof Date ? value.getTime() : Date.parse(value)
-  return Number.isFinite(time) ? time : null
 }
 
 interface DetachedDivisionPayload {
@@ -578,11 +577,24 @@ export function useSearch(
     return inputs
   }
 
-  async function refreshClipboardBeforeInputBuild(): Promise<void> {
+  async function refreshClipboardBeforeInputBuild(
+    intent: 'implicit' | 'explicit' = 'implicit'
+  ): Promise<void> {
     if (!clipboardOptions) return
+    if (
+      clipboardOptions.activeClipboardSource &&
+      (clipboardOptions.last || clipboardOptions.pendingAutoFillItem)
+    ) {
+      return
+    }
+
     try {
       const latest = await getLatestClipboard({ refresh: true })
-      if (!latest) return
+      if (!latest) {
+        clearImplicitClipboardState(clipboardOptions)
+        return
+      }
+
       const latestTimestamp = normalizeClipboardTimestamp(latest.timestamp)
       const dismissedTimestamp = normalizeClipboardTimestamp(clipboardOptions.lastClearedTimestamp)
       if (
@@ -590,11 +602,22 @@ export function useSearch(
         dismissedTimestamp !== null &&
         latestTimestamp === dismissedTimestamp
       ) {
+        clearImplicitClipboardState(clipboardOptions)
         return
       }
+
+      if (
+        intent === 'implicit' &&
+        !isClipboardFreshForAutoPaste(latest, appSetting.tools.autoPaste)
+      ) {
+        clearImplicitClipboardState(clipboardOptions)
+        return
+      }
+
       clipboardOptions.last = latest
       clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = Date.now()
+      clipboardOptions.activeClipboardSource = intent === 'explicit' ? 'manual' : 'auto'
     } catch {
       // Keep existing clipboard state when the typed transport is unavailable.
     }
@@ -1031,7 +1054,7 @@ export function useSearch(
       : typeof searchResult.value?.query?.text === 'string'
         ? searchResult.value.query.text
         : searchVal.value
-    await refreshClipboardBeforeInputBuild()
+    await refreshClipboardBeforeInputBuild('explicit')
     const currentInputs = buildQueryInputs({
       queryText: currentQueryText,
       allowPendingTextClipboard: isPluginFeature
@@ -1092,6 +1115,7 @@ export function useSearch(
         clipboardOptions.last = null
         clipboardOptions.pendingAutoFillItem = null
         clipboardOptions.detectedAt = null
+        clipboardOptions.activeClipboardSource = null
       } else if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
         if (clipboardOptions.last?.timestamp) {
           clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
@@ -1101,6 +1125,7 @@ export function useSearch(
         clipboardOptions.last = null
         clipboardOptions.pendingAutoFillItem = null
         clipboardOptions.detectedAt = null
+        clipboardOptions.activeClipboardSource = null
       }
     } catch (error) {
       devLog('Execute failed:', error)
