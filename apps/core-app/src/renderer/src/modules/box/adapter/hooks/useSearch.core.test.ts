@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
     recommendation: { enabled: true },
     tools: {
       autoHide: true,
-      autoPaste: { time: 5 }
+      autoPaste: { enable: true, time: 5 }
     }
   },
   windowState: {
@@ -138,6 +138,7 @@ function createClipboardOptions(): IClipboardOptions {
     pendingAutoFillItem: null,
     detectedAt: null,
     lastClearedTimestamp: null,
+    activeClipboardSource: null,
     lastTextAttachmentIdentity: null,
     lastTextAttachmentSource: null
   }
@@ -257,17 +258,19 @@ describe('useSearch CoreBox reopen behavior', () => {
     )
   })
 
-  it('does not attach stale clipboard image input to plain text search', async () => {
+  it('does not activate expired clipboard input during implicit search refresh', async () => {
     state.latestClipboard = {
       id: 92,
       type: 'image',
       content: 'tfile:///tmp/tuff/clipboard/images/original.png',
       thumbnail: 'data:image/png;base64,thumb',
       timestamp: new Date().toISOString(),
-      captureSource: 'corebox-show-baseline',
-      autoPasteEligible: false
+      captureSource: 'native-watch',
+      freshnessBaseAt: Date.now() - 6000,
+      autoPasteEligible: true
     }
-    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    const clipboardOptions = createClipboardOptions()
+    const hook = useSearch(createBoxOptions(), clipboardOptions)
     await flushPromises()
 
     state.send.mockClear()
@@ -280,6 +283,19 @@ describe('useSearch CoreBox reopen behavior', () => {
 
     expect(queryPayload?.query?.text).toBe('calculator')
     expect(queryPayload?.query?.inputs).toEqual([])
+    expect(clipboardOptions.last).toBeNull()
+    expect(clipboardOptions.activeClipboardSource).toBeNull()
+
+    state.latestClipboard = {
+      ...state.latestClipboard,
+      id: 94,
+      freshnessBaseAt: Date.now()
+    }
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    expect(clipboardOptions.last?.id).toBe(94)
+    expect(clipboardOptions.activeClipboardSource).toBe('auto')
   })
 
   it('does not restore a dismissed clipboard image during search refresh', async () => {

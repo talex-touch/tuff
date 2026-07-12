@@ -71,7 +71,8 @@ const clipboardOptions = reactive<IClipboardOptions>({
   last: null,
   pendingAutoFillItem: null,
   detectedAt: null,
-  lastClearedTimestamp: null
+  lastClearedTimestamp: null,
+  activeClipboardSource: null
 })
 
 const {
