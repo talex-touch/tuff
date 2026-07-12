@@ -68,10 +68,6 @@ export function getPlatform() {
   return Platform.UNKNOWN
 }
 
-export async function sleep(time: number) {
-  return new Promise((resolve) => setTimeout(() => resolve(time), time))
-}
-
 export function checkDirWithCreate(url: string, abs = true): true {
   const p = abs ? url : path.join(process.cwd(), url)
   fse.mkdirSync(p, { recursive: true })

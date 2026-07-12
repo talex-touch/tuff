@@ -43,7 +43,6 @@ import type {
   TraySettingsUpdateResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { Locale } from '../utils/i18n-helper'
-import { execFile } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
@@ -52,7 +51,6 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 import { StorageList, isLocalhostUrl } from '@talex-touch/utils'
 import { isSupportedWallpaperImagePath } from '@talex-touch/utils/common/wallpaper'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
@@ -108,6 +106,7 @@ import {
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
 import { activeAppService } from '../modules/system/active-app'
+import { wallpaperAdapter } from '../modules/system/wallpaper-adapter'
 import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { getNetworkService } from '../modules/network'
 import { deviceIdleService } from '../service/device-idle-service'
@@ -128,7 +127,6 @@ import { registerSystemShellHandlers } from './system-shell-handlers'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
-const execFileAsync = promisify(execFile)
 const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
@@ -369,59 +367,6 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-async function execFileOutput(command: string, args: string[]): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(command, args)
-    return typeof stdout === 'string' ? stdout.trim() : null
-  } catch {
-    return null
-  }
-}
-
-async function getDesktopWallpaperPath(): Promise<string | null> {
-  if (process.platform === 'win32') {
-    const output = await execFileOutput('reg', [
-      'query',
-      'HKCU\\Control Panel\\Desktop',
-      '/v',
-      'WallPaper'
-    ])
-    if (!output) return null
-    const line = output
-      .split(/\r?\n/)
-      .map((item) => item.trim())
-      .find((item) => item.toLowerCase().startsWith('wallpaper'))
-    if (!line) return null
-    const parts = line.split(/\s{2,}/)
-    return parts[parts.length - 1] || null
-  }
-
-  if (process.platform === 'darwin') {
-    const output = await execFileOutput('osascript', [
-      '-e',
-      'tell application "System Events" to get POSIX path of (get picture of item 1 of desktops)'
-    ])
-    return output || null
-  }
-
-  if (process.platform === 'linux') {
-    const output = await execFileOutput('gsettings', [
-      'get',
-      'org.gnome.desktop.background',
-      'picture-uri'
-    ])
-    if (!output) return null
-    const cleaned = output.replace(/^'+|'+$/g, '')
-    if (!cleaned || cleaned === 'none') return null
-    if (cleaned.startsWith('file://')) {
-      return decodeURI(cleaned.replace('file://', ''))
-    }
-    return cleaned
-  }
-
-  return null
 }
 
 async function copyWallpaperFileToLibrary(
@@ -989,7 +934,7 @@ export class CommonChannelModule extends BaseModule {
       }),
       transport.on(wallpaperGetDesktopEvent, async () => {
         try {
-          const desktopPath = await getDesktopWallpaperPath()
+          const desktopPath = await wallpaperAdapter.getDesktopWallpaperPath()
           if (desktopPath) {
             return { path: desktopPath }
           }

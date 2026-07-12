@@ -1,7 +1,6 @@
 import type { AgentPermission } from '@talex-touch/utils'
+import type { ClipboardWriteRequest } from '@talex-touch/utils/transport/events/types'
 import { network } from '@talex-touch/utils/network'
-import { clipboard } from 'electron'
-import { shell } from 'electron'
 import { openValidatedExternalUrl } from '../../../../utils/external-url-policy'
 import { activeAppService } from '../../../system/active-app'
 import { clipboardModule } from '../../../clipboard'
@@ -17,7 +16,20 @@ function stripHtml(html: string): string {
     .trim()
 }
 
-export function registerWorkflowTools(): void {
+export interface WorkflowClipboardCapability {
+  write(request: ClipboardWriteRequest): Promise<void>
+}
+
+export interface WorkflowSystemShellCapability {
+  openExternal: (url: string) => Promise<void>
+}
+
+export interface WorkflowToolCapabilities {
+  clipboard: WorkflowClipboardCapability
+  systemShell: WorkflowSystemShellCapability
+}
+
+export function registerWorkflowTools(capabilities: WorkflowToolCapabilities): void {
   toolRegistry.registerTool(
     {
       id: 'clipboard.readRecent',
@@ -64,7 +76,7 @@ export function registerWorkflowTools(): void {
     },
     async (input: unknown) => {
       const payload = input as { text: string; html?: string }
-      clipboard.write({
+      await capabilities.clipboard.write({
         text: payload.text ?? '',
         html: payload.html
       })
@@ -142,7 +154,9 @@ export function registerWorkflowTools(): void {
     },
     async (input: unknown) => {
       const { url } = input as { url: string }
-      const decision = await openValidatedExternalUrl(url, { opener: shell.openExternal })
+      const decision = await openValidatedExternalUrl(url, {
+        opener: capabilities.systemShell.openExternal
+      })
       return decision.allowed
         ? { success: true, url: decision.url }
         : { success: false, url, error: decision.reason, protocol: decision.protocol }
@@ -181,7 +195,9 @@ export function registerWorkflowTools(): void {
           ? `https://www.bing.com/search?q=${encodeURIComponent(query)}`
           : `https://www.google.com/search?q=${encodeURIComponent(query)}`
       if (open) {
-        await openValidatedExternalUrl(url, { opener: shell.openExternal })
+        await openValidatedExternalUrl(url, {
+          opener: capabilities.systemShell.openExternal
+        })
       }
       return { provider, query, url, opened: open }
     }

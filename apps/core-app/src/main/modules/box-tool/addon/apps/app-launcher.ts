@@ -1,18 +1,10 @@
-import type { ChildProcess } from 'node:child_process'
 import type { AppLaunchKind } from './app-types'
-import path from 'node:path'
-import process from 'node:process'
-import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
-import { shell } from 'electron'
+import { launchWithAppLaunchAdapter, type AppLaunchOutcome } from './app-launch-adapter'
 import { notificationModule } from '../../../notification'
 import { t } from '../../../../utils/i18n-helper'
 import { getLogger } from '@talex-touch/utils/common/logger'
 
 const appLauncherLog = getLogger('app-launcher')
-const EARLY_EXIT_OBSERVATION_MS = 2500
-const WINDOWS_DIRECT_EXECUTABLE_EXTENSIONS = new Set(['.exe', '.com'])
-const WINDOWS_BATCH_EXTENSIONS = new Set(['.cmd', '.bat'])
-const WINDOWS_POWERSHELL_EXTENSIONS = new Set(['.ps1'])
 
 export interface AppLaunchRequest {
   name?: string
@@ -24,10 +16,7 @@ export interface AppLaunchRequest {
   sourceItemId?: string
 }
 
-export interface AppLaunchOutcome {
-  status: 'success' | 'failed' | 'handedOff'
-  error?: string
-}
+export type { AppLaunchOutcome }
 
 export function splitLaunchArgs(rawArgs?: string): string[] {
   if (!rawArgs) return []
@@ -67,54 +56,8 @@ function getAppDisplayName(request: AppLaunchRequest): string {
   return request.name || request.launchTarget || request.path
 }
 
-function getWindowsExtension(target: string): string {
-  return path.win32.extname(target).toLowerCase()
-}
-
-function isWindowsDirectExecutable(target: string): boolean {
-  return (
-    process.platform === 'win32' &&
-    WINDOWS_DIRECT_EXECUTABLE_EXTENSIONS.has(getWindowsExtension(target))
-  )
-}
-
-function isWindowsShortcutFile(target: string): boolean {
-  return process.platform === 'win32' && getWindowsExtension(target) === '.lnk'
-}
-
-function isWindowsBatchFile(target: string): boolean {
-  return process.platform === 'win32' && WINDOWS_BATCH_EXTENSIONS.has(getWindowsExtension(target))
-}
-
-function isWindowsPowerShellFile(target: string): boolean {
-  return (
-    process.platform === 'win32' && WINDOWS_POWERSHELL_EXTENSIONS.has(getWindowsExtension(target))
-  )
-}
-
-function resolveWindowsShortcutShellPaths(request: AppLaunchRequest): string[] {
-  const candidates = [request.path, request.launchTarget].filter(isWindowsShortcutFile)
-  return Array.from(new Set(candidates))
-}
-
 function isAllowedProtocolLaunch(target: string): boolean {
   return /^steam:\/\/rungameid\/\d+$/i.test(target.trim())
-}
-
-function getWindowsExecutableDirectory(target: string): string | undefined {
-  const directory = path.win32.dirname(target)
-  return directory && directory !== '.' && directory !== target ? directory : undefined
-}
-
-function resolveSpawnWorkingDirectory(request: AppLaunchRequest): string | undefined {
-  return (
-    request.workingDirectory ||
-    (isWindowsDirectExecutable(request.launchTarget) ||
-    isWindowsBatchFile(request.launchTarget) ||
-    isWindowsPowerShellFile(request.launchTarget)
-      ? getWindowsExecutableDirectory(request.launchTarget)
-      : undefined)
-  )
 }
 
 function notifyLaunchFailure(request: AppLaunchRequest, error: string): void {
@@ -127,204 +70,25 @@ function notifyLaunchFailure(request: AppLaunchRequest, error: string): void {
   })
 }
 
-function observeEarlySpawnFailure(child: ChildProcess): Promise<AppLaunchOutcome> {
-  const eventSource = child as ChildProcess & {
-    once?: (event: string, listener: (...args: unknown[]) => void) => ChildProcess
-    removeListener?: (event: string, listener: (...args: unknown[]) => void) => ChildProcess
-  }
-
-  if (typeof eventSource.once !== 'function') {
-    return Promise.resolve({ status: 'handedOff' })
-  }
-
-  return new Promise((resolve) => {
-    let settled = false
-    let timer: NodeJS.Timeout | null = null
-
-    const cleanup = () => {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
-      if (typeof eventSource.removeListener === 'function') {
-        eventSource.removeListener('error', handleError)
-        eventSource.removeListener('exit', handleExit)
-      }
-    }
-
-    const finish = (outcome: AppLaunchOutcome) => {
-      if (settled) return
-      settled = true
-      cleanup()
-      resolve(outcome)
-    }
-
-    const handleError = (error: unknown) => {
-      finish({ status: 'failed', error: toErrorMessage(error) })
-    }
-
-    const handleExit = (code: unknown, signal: unknown) => {
-      if (code === 0) {
-        finish({ status: 'handedOff' })
-        return
-      }
-      if ((code === null || code === undefined) && signal) {
-        finish({ status: 'failed', error: `process exited early with signal ${String(signal)}` })
-        return
-      }
-      if (code === null || code === undefined) {
-        finish({ status: 'handedOff' })
-        return
-      }
-      const suffix = signal ? `, signal ${String(signal)}` : ''
-      finish({ status: 'failed', error: `process exited early with code ${String(code)}${suffix}` })
-    }
-
-    eventSource.once('error', handleError)
-    eventSource.once('exit', handleExit)
-    timer = setTimeout(() => finish({ status: 'handedOff' }), EARLY_EXIT_OBSERVATION_MS)
-    timer.unref?.()
-  })
-}
-
-async function launchShellPath(target: string): Promise<AppLaunchOutcome> {
-  const errorMessage = await shell.openPath(target)
-  if (errorMessage) {
-    return { status: 'failed', error: errorMessage }
-  }
-  return { status: 'success' }
-}
-
-async function launchSpawnCommand(
-  command: string,
-  args: string[],
-  options?: { cwd?: string; observeEarlyExit?: boolean }
-): Promise<AppLaunchOutcome> {
-  const child = spawnSafe(command, args, {
-    cwd: options?.cwd,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true
-  })
-  const shouldObserveEarlyExit = options?.observeEarlyExit !== false
-  const outcome = shouldObserveEarlyExit
-    ? observeEarlySpawnFailure(child)
-    : Promise.resolve<AppLaunchOutcome>({ status: 'handedOff' })
-  child.unref()
-  return await outcome
-}
-
 export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOutcome> {
   try {
-    if (request.launchKind === 'shortcut') {
-      const shortcutShellPaths = resolveWindowsShortcutShellPaths(request)
-      if (shortcutShellPaths.length > 0) {
-        let lastShellOutcome: AppLaunchOutcome | null = null
-        for (const shortcutShellPath of shortcutShellPaths) {
-          appLauncherLog.info(`Opening Windows shortcut via shell: ${shortcutShellPath}`)
-          lastShellOutcome = await launchShellPath(shortcutShellPath)
-          if (lastShellOutcome.status !== 'failed') {
-            return lastShellOutcome
-          }
-        }
-        if (isWindowsShortcutFile(request.launchTarget)) {
-          const failedOutcome = lastShellOutcome || {
-            status: 'failed' as const,
-            error: 'shell shortcut launch failed'
-          }
-          notifyLaunchFailure(request, failedOutcome.error || 'shell shortcut launch failed')
-          return failedOutcome
-        }
-        appLauncherLog.warn(
-          `Shell shortcut launch failed, falling back to target: ${request.launchTarget}`
-        )
-      }
-
-      if (isWindowsBatchFile(request.launchTarget)) {
-        appLauncherLog.info(`Launching Windows command script: ${request.launchTarget}`)
-        const outcome = await launchSpawnCommand(
-          'cmd.exe',
-          ['/d', '/s', '/c', request.launchTarget, ...splitLaunchArgs(request.launchArgs)],
-          { cwd: resolveSpawnWorkingDirectory(request) }
-        )
-        if (outcome.status === 'failed' && outcome.error) {
-          notifyLaunchFailure(request, outcome.error)
-        }
-        return outcome
-      }
-
-      if (isWindowsPowerShellFile(request.launchTarget)) {
-        appLauncherLog.info(`Launching Windows PowerShell script: ${request.launchTarget}`)
-        const outcome = await launchSpawnCommand(
-          'powershell.exe',
-          [
-            '-NoProfile',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            request.launchTarget,
-            ...splitLaunchArgs(request.launchArgs)
-          ],
-          { cwd: resolveSpawnWorkingDirectory(request) }
-        )
-        if (outcome.status === 'failed' && outcome.error) {
-          notifyLaunchFailure(request, outcome.error)
-        }
-        return outcome
-      }
-
-      appLauncherLog.info(`Launching shortcut app: ${request.launchTarget}`)
-      const outcome = await launchSpawnCommand(
-        request.launchTarget,
-        splitLaunchArgs(request.launchArgs),
-        { cwd: resolveSpawnWorkingDirectory(request) }
-      )
-      if (outcome.status === 'failed' && outcome.error) {
-        notifyLaunchFailure(request, outcome.error)
-      }
-      return outcome
+    if (request.launchKind === 'protocol' && !isAllowedProtocolLaunch(request.launchTarget)) {
+      const error = `Protocol launch is not allowed: ${request.launchTarget}`
+      appLauncherLog.warn(error)
+      notifyLaunchFailure(request, error)
+      return { status: 'failed', error }
     }
 
-    if (request.launchKind === 'uwp') {
-      const explorerTarget = `shell:AppsFolder\\${request.launchTarget}`
-      appLauncherLog.info(`Launching Windows Store app: ${explorerTarget}`)
-      return await launchSpawnCommand('explorer.exe', [explorerTarget], {
-        observeEarlyExit: false
-      })
-    }
-
-    if (request.launchKind === 'protocol') {
-      if (!isAllowedProtocolLaunch(request.launchTarget)) {
-        const error = `Protocol launch is not allowed: ${request.launchTarget}`
-        appLauncherLog.warn(error)
-        notifyLaunchFailure(request, error)
-        return { status: 'failed', error }
-      }
-
-      appLauncherLog.info(`Launching protocol app: ${request.launchTarget}`)
-      await shell.openExternal(request.launchTarget)
-      return { status: 'success' }
-    }
-
-    if (isWindowsDirectExecutable(request.launchTarget)) {
-      appLauncherLog.info(`Launching Windows executable app: ${request.launchTarget}`)
-      const outcome = await launchSpawnCommand(
-        request.launchTarget,
-        splitLaunchArgs(request.launchArgs),
-        { cwd: resolveSpawnWorkingDirectory(request) }
-      )
-      if (outcome.status === 'failed' && outcome.error) {
-        notifyLaunchFailure(request, outcome.error)
-      }
-      return outcome
-    }
-
-    appLauncherLog.info(`Opening app: ${request.launchTarget}`)
-    const outcome = await launchShellPath(request.launchTarget)
+    const outcome = await launchWithAppLaunchAdapter({
+      path: request.path,
+      launchKind: request.launchKind,
+      launchTarget: request.launchTarget,
+      launchArgs: splitLaunchArgs(request.launchArgs),
+      workingDirectory: request.workingDirectory
+    })
     if (outcome.status === 'failed' && outcome.error) {
       notifyLaunchFailure(request, outcome.error)
     }
-
     return outcome
   } catch (error) {
     const message = toErrorMessage(error)
