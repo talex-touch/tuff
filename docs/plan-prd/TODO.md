@@ -1,6 +1,6 @@
 # Tuff TODO
 
-> 更新时间：2026-07-06
+> 更新时间：2026-07-11
 > 定位：当前 2 周执行清单。细项分别落到 `TODO-AI.md`、`TODO-R3.md`、`TODO-nexus.md`；6 月以前记录已从文档树移除。
 
 ## 当前执行窗口
@@ -18,6 +18,7 @@
 3. P1：R3 先采 attach-only natural Settings recent task evidence；未完成真实 profile preflight 和用户确认前，不执行 SQLite/FTS 或 `scan_progress` 迁移。
 4. P1：Nexus performance 下一批只补 deployed Cloudflare Pages preview HAR、真实 provider callback、authenticated dashboard smoke 与 bfcache hit，不再用 local-only evidence 关账。
 5. P2：R1 Release Integrity 等 `.sig/.asc`、manifest signature、Nexus `signatureUrl/signatureKey` 与 signing public key 齐备后再闭环。
+6. P2：Launcher / TuffIntelligence / QuickReview 首批 QR-01 / QR-02 / LP-01 已落地并通过 focused tests、manifest validation 与 plugin build；后续仍按 roadmap 独立拆片，不与 R3 schema migration、Nexus performance、R2 follow-up 混批。
 
 
 ## 状态快照

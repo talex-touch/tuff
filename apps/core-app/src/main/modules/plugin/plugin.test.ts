@@ -567,12 +567,13 @@ describe('TouchPlugin.triggerFeature', () => {
     )
   })
 
-  it('routes multi-provider push items by feature id and filters only disabled providers', async () => {
+  it('exposes current provider consent through plugin.feature and filters disabled pushes', async () => {
     appSettingsMock.value = {
       searchProviders: {
         providers: [
           { providerId: 'test-plugin.search', enabled: true, order: 10 },
-          { providerId: 'test-plugin.manage', enabled: false, order: 20 }
+          { providerId: 'test-plugin.manage', enabled: false, order: 20 },
+          { providerId: 'foreign-plugin.search', enabled: true, order: 30 }
         ]
       }
     }
@@ -640,6 +641,37 @@ describe('TouchPlugin.triggerFeature', () => {
       }
     ]
     plugin.status = PluginStatus.ENABLED
+
+    const feature = plugin.getFeatureUtil().plugin.feature
+
+    expect(feature.isSearchProviderEnabled('test-plugin.search')).toBe(true)
+    expect(feature.isSearchProviderEnabled('test-plugin.manage')).toBe(false)
+    expect(feature.isSearchProviderEnabled('foreign-plugin.search')).toBe(false)
+
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [
+          { providerId: 'test-plugin.search', enabled: false, order: 10 },
+          { providerId: 'test-plugin.manage', enabled: true, order: 20 },
+          { providerId: 'foreign-plugin.search', enabled: true, order: 30 }
+        ]
+      }
+    }
+
+    expect(feature.isSearchProviderEnabled('test-plugin.search')).toBe(false)
+    expect(feature.isSearchProviderEnabled('test-plugin.manage')).toBe(true)
+    expect(feature.isSearchProviderEnabled('foreign-plugin.search')).toBe(false)
+
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [
+          { providerId: 'test-plugin.search', enabled: true, order: 10 },
+          { providerId: 'test-plugin.manage', enabled: false, order: 20 },
+          { providerId: 'foreign-plugin.search', enabled: true, order: 30 }
+        ]
+      }
+    }
+    feature.dispose()
 
     await plugin.getFeatureUtil().boxItems.pushItems([
       {

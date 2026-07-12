@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
@@ -37,7 +38,7 @@ interface LoadedManifest {
   manifest: PluginManifest
 }
 
-const pluginsRoot = new URL('../../../../plugins/', import.meta.url)
+const pluginsRoot = fileURLToPath(new URL('../../../../plugins/', import.meta.url))
 
 function loadOfficialManifests(): LoadedManifest[] {
   return readdirSync(pluginsRoot, { withFileTypes: true })
@@ -45,10 +46,10 @@ function loadOfficialManifests(): LoadedManifest[] {
       if (!entry.isDirectory()) {
         return false
       }
-      return existsSync(join(pluginsRoot.pathname, entry.name, 'manifest.json'))
+      return existsSync(join(pluginsRoot, entry.name, 'manifest.json'))
     })
     .map((entry) => {
-      const manifestPath = join(pluginsRoot.pathname, entry.name, 'manifest.json')
+      const manifestPath = join(pluginsRoot, entry.name, 'manifest.json')
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PluginManifest
       return {
         dirName: entry.name,
@@ -154,6 +155,7 @@ describe('official plugin manifest trust boundary', () => {
     expect(fullHeightSurfaces.sort()).toEqual([
       'clipboard-history:clipboard-history',
       'touch-intelligence:intelligence-ask',
+      'touch-intelligence:quick-review',
       'touch-translation:screenshot-translate',
       'touch-translation:touch-translate',
     ])
@@ -206,16 +208,28 @@ describe('official plugin manifest trust boundary', () => {
       })
 
       expect(indexedSourceResolution.issues, `${manifest.name} indexed source issues`).toEqual([])
-      expect(indexedSourceResolution.descriptors).toHaveLength(1)
-      expect(indexedSourceResolution.descriptors[0]).toMatchObject({
-        id: 'browser-bookmarks',
-        admission: {
-          owner: 'official-plugin',
-          permissionScopes: ['browser-data', 'file-system'],
-          defaultState: 'disabled',
-          requiresUserConsent: true,
-        },
-      })
+      expect(indexedSourceResolution.descriptors).toHaveLength(2)
+      expect(indexedSourceResolution.descriptors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'browser-bookmarks',
+            admission: expect.objectContaining({
+              owner: 'official-plugin',
+              permissionScopes: ['browser-data', 'file-system'],
+              defaultState: 'disabled',
+              requiresUserConsent: true,
+            }),
+          }),
+          expect.objectContaining({
+            id: 'browser-history',
+            storage: 'ephemeral',
+            admission: expect.objectContaining({
+              defaultState: 'disabled',
+              requiresUserConsent: true,
+            }),
+          }),
+        ]),
+      )
     }
   })
 })

@@ -31,9 +31,9 @@
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
-    "intelligence.basic": "调用智能能力完成问答",
-    "clipboard.write": "复制回答到剪贴板",
-    "search.root-results": "将智能问答入口与回答状态推送到 CoreBox 根搜索结果"
+    "intelligence.basic": "调用智能能力完成问答与代码审查",
+    "clipboard.write": "复制问答或代码审查结果到剪贴板",
+    "search.root-results": "将智能问答、代码审查入口与处理状态推送到 CoreBox 根搜索结果"
   },
   "searchProviders": [
     {
@@ -45,6 +45,20 @@
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 106,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-intelligence.quick-review",
+      "displayName": "QuickReview",
+      "featureId": "quick-review",
+      "kind": "ai",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 107,
       "permissionScopes": ["root-results"],
       "defaultState": "ask",
       "requiresUserConsent": true,
@@ -81,6 +95,38 @@
         {
           "type": "over",
           "value": ["ai", "@ai", "/ai", "智能", "问答"]
+        }
+      ]
+    },
+    {
+      "id": "quick-review",
+      "name": "QuickReview",
+      "desc": "在 CoreBox 中审查文本代码，聚焦缺陷、最佳实践与安全问题",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["review", "quickreview", "quick review", "代码审查", "评审"],
+      "push": true,
+      "priority": 201,
+      "acceptedInputTypes": ["text"],
+      "interaction": {
+        "type": "widget",
+        "path": "ask-panel",
+        "showInput": true,
+        "allowInput": true,
+        "sendMode": true,
+        "forceMax": true
+      },
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["review", "quickreview", "quick review", "代码审查", "评审"]
         }
       ]
     }

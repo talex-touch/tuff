@@ -1,265 +1,359 @@
-const { plugin, clipboard, logger, TuffItemBuilder, permission, touchChannel, intelligence } = globalThis
-const crypto = require('node:crypto')
+const {
+  plugin,
+  clipboard,
+  logger,
+  TuffItemBuilder,
+  permission,
+  touchChannel,
+  intelligence,
+} = globalThis;
+const crypto = require("node:crypto");
 
-const AUTH_SESSION_GET_STATE_EVENT = resolveAuthSessionGetStateEvent()
+const AUTH_SESSION_GET_STATE_EVENT = resolveAuthSessionGetStateEvent();
 
-let makeWidgetIdLoader = null
+let makeWidgetIdLoader = null;
 
 function getMakeWidgetId() {
   if (!makeWidgetIdLoader) {
     try {
-      ;({ makeWidgetId: makeWidgetIdLoader } = require('@talex-touch/utils/plugin/widget'))
-    }
-    catch {
-      makeWidgetIdLoader = (pluginName, featureId) => `${pluginName}::${featureId}`
+      ({
+        makeWidgetId: makeWidgetIdLoader,
+      } = require("@talex-touch/utils/plugin/widget"));
+    } catch {
+      makeWidgetIdLoader = (pluginName, featureId) =>
+        `${pluginName}::${featureId}`;
     }
   }
-  return makeWidgetIdLoader
+  return makeWidgetIdLoader;
 }
 
-const PLUGIN_NAME = 'touch-intelligence'
-const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
-const ACTION_ID = 'intelligence-action'
-const DEFAULT_FEATURE_ID = 'intelligence-ask'
-const MAX_HISTORY_MESSAGES = 10
-const MAX_DRAFTS = 20
-const MAX_OCR_CONTEXT_CHARS = 4000
-const CALLER_ID = `plugin:${PLUGIN_NAME}`
-const ENTRY_ID = 'corebox.ai-ask'
-const WIDGET_ITEM_ID = 'intelligence-widget'
-const HANDOFF_SOURCE = 'corebox.touch-intelligence'
-const HANDOFF_SESSION_PREFIX = 'corebox_ai_ask'
-const CONTEXT_TRACE_PREFIX = 'corebox_ai_ask'
-const INPUT_TYPE_TEXT = 'text'
-const INPUT_TYPE_IMAGE = 'image'
-const HISTORY_FILE = 'conversation-history.json'
-const AUTO_MODEL_SELECTION = '__auto__'
+const PLUGIN_NAME = "touch-intelligence";
+const SOURCE_ID = "plugin-features";
+const ICON = { type: "file", value: "assets/logo.svg" };
+const ACTION_ID = "intelligence-action";
+const DEFAULT_FEATURE_ID = "intelligence-ask";
+const QUICK_REVIEW_FEATURE_ID = "quick-review";
+const QUICK_REVIEW_FOCUS_AREAS = ["bugs", "best-practices", "security"];
+const QUICK_REVIEW_COMMAND_PATTERN =
+  /^(?:quickreview|quick\s+review|review|代码审查|评审)(?:(?:[:：，,。?？][ \t]*(?:\r?\n)?)|[ \t]+|\r?\n|$)/i;
+const MAX_HISTORY_MESSAGES = 10;
+const MAX_DRAFTS = 20;
+const MAX_OCR_CONTEXT_CHARS = 4000;
+const CALLER_ID = `plugin:${PLUGIN_NAME}`;
+const ENTRY_ID = "corebox.ai-ask";
+const WIDGET_ITEM_ID = "intelligence-widget";
+const HANDOFF_SOURCE = "corebox.touch-intelligence";
+const HANDOFF_SESSION_PREFIX = "corebox_ai_ask";
+const CONTEXT_TRACE_PREFIX = "corebox_ai_ask";
+const INPUT_TYPE_TEXT = "text";
+const INPUT_TYPE_IMAGE = "image";
+const HISTORY_FILE = "conversation-history.json";
+const AUTO_MODEL_SELECTION = "__auto__";
 
 function resolveAuthSessionGetStateEvent() {
   try {
-    const { AuthEvents } = require('@talex-touch/utils/transport/events')
-    return AuthEvents.session.getState.toEventName()
-  }
-  catch {
-    return 'auth:session:get-state'
+    const { AuthEvents } = require("@talex-touch/utils/transport/events");
+    return AuthEvents.session.getState.toEventName();
+  } catch {
+    return "auth:session:get-state";
   }
 }
 
 const AI_ERROR_MESSAGES = {
-  AUTH_REQUIRED: '未登录，请先登录后重试；可在登录恢复后再次发送',
-  PERMISSION_DENIED: '权限已拒绝，请在插件权限中授予 intelligence.basic',
-  OCR_EMPTY: 'OCR 未识别到可用文字',
-  PROVIDER_UNAVAILABLE: 'Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试',
-  QUOTA_EXCEEDED: 'AI 配额不足，请稍后重试或调整用量',
-  MODEL_UNSUPPORTED: '当前模型不支持该能力，请切换支持 text.chat / vision.ocr 的模型',
-  EMPTY_RESPONSE: 'AI 未返回可用内容',
-  UNKNOWN: 'AI 调用失败',
-}
+  AUTH_REQUIRED: "未登录，请先登录后重试；可在登录恢复后再次发送",
+  PERMISSION_DENIED: "权限已拒绝，请在插件权限中授予 intelligence.basic",
+  OCR_EMPTY: "OCR 未识别到可用文字",
+  PROVIDER_UNAVAILABLE:
+    "Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试",
+  QUOTA_EXCEEDED: "AI 配额不足，请稍后重试或调整用量",
+  MODEL_UNSUPPORTED: "当前模型不支持该能力，请切换支持所需能力的模型",
+  EMPTY_RESPONSE: "AI 未返回可用内容",
+  EMPTY_CODE: "请输入需要审查的代码",
+  TEXT_ONLY_INPUT: "QuickReview 仅接受文本代码输入",
+  UNKNOWN: "AI 调用失败",
+};
 
-const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
-const conversationSessions = new Map()
+const AI_SYSTEM_PROMPT =
+  "你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。";
+const conversationSessions = new Map();
+let activeFeatureId = "";
+let activeFeatureGeneration = 0;
 
 function resolveIntelligenceClient() {
   if (intelligence?.invoke) {
-    return intelligence
+    return intelligence;
   }
 
-  const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence/client')
-  return createIntelligenceClient(touchChannel)
+  const {
+    createIntelligenceClient,
+  } = require("@talex-touch/tuff-intelligence/client");
+  return createIntelligenceClient(touchChannel);
 }
 
 function normalizeText(value) {
-  return String(value ?? '').trim()
+  return String(value ?? "").trim();
 }
 
 function truncateText(value, max = 88) {
-  const text = normalizeText(value)
-  if (!text)
-    return ''
-  if (text.length <= max)
-    return text
-  return `${text.slice(0, max - 1)}…`
+  const text = normalizeText(value);
+  if (!text) return "";
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
 }
 
 function getQueryText(query) {
-  if (typeof query === 'string')
-    return query
-  return query?.text ?? ''
+  if (typeof query === "string") return query;
+  return query?.text ?? "";
 }
 
 function hasAiPrefix(raw) {
-  return /^(?:@?ai|\/ai|智能|问答)(?:[\s:：，,。?？]|$)/i.test(normalizeText(raw))
+  return /^(?:@?ai|\/ai|智能|问答)(?:[\s:：，,。?？]|$)/i.test(
+    normalizeText(raw),
+  );
 }
 
 function normalizePrompt(raw) {
-  const input = normalizeText(raw)
-  if (!input)
-    return ''
+  const input = normalizeText(raw);
+  if (!input) return "";
 
-  const withoutPrefix = input.replace(/^(?:@?ai|\/ai|智能|问答)[\s:：，,。?？]*/i, '')
-  if (withoutPrefix !== input)
-    return normalizeText(withoutPrefix)
-  return input
+  const withoutPrefix = input.replace(
+    /^(?:@?ai|\/ai|智能|问答)[\s:：，,。?？]*/i,
+    "",
+  );
+  if (withoutPrefix !== input) return normalizeText(withoutPrefix);
+  return input;
+}
+
+function isQuickReviewFeature(featureId) {
+  return normalizeText(featureId) === QUICK_REVIEW_FEATURE_ID;
+}
+
+function getFeatureCapabilityId(featureId) {
+  return isQuickReviewFeature(featureId) ? "code.review" : "text.chat";
+}
+
+function getFeaturePermissionReason(featureId) {
+  return isQuickReviewFeature(featureId)
+    ? "需要 AI 权限以执行代码审查"
+    : "需要 AI 权限以执行智能问答";
+}
+
+function normalizeQuickReviewCode(raw, stripCommand = false) {
+  const input = typeof raw === "string" ? raw : String(raw ?? "");
+  if (!input.trim()) return "";
+
+  if (!stripCommand) return input;
+
+  const commandInput = input.trimStart();
+  return QUICK_REVIEW_COMMAND_PATTERN.test(commandInput)
+    ? commandInput.replace(QUICK_REVIEW_COMMAND_PATTERN, "")
+    : input;
 }
 
 function resolveFeatureId(featureId) {
-  return normalizeText(featureId) || DEFAULT_FEATURE_ID
+  return normalizeText(featureId) || DEFAULT_FEATURE_ID;
 }
 
 function toSessionIdPart(value) {
-  return normalizeText(value).replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '')
+  return normalizeText(value)
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function buildHandoffSessionId(featureId) {
-  const resolvedFeatureId = resolveFeatureId(featureId)
-  const slug = toSessionIdPart(resolvedFeatureId) || DEFAULT_FEATURE_ID
+  const resolvedFeatureId = resolveFeatureId(featureId);
+  const slug = toSessionIdPart(resolvedFeatureId) || DEFAULT_FEATURE_ID;
   const digest = crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(resolvedFeatureId)
-    .digest('hex')
-    .slice(0, 8)
-  return `${HANDOFF_SESSION_PREFIX}_${slug}_${digest}`
+    .digest("hex")
+    .slice(0, 8);
+  return `${HANDOFF_SESSION_PREFIX}_${slug}_${digest}`;
 }
 
 function buildContextTraceId(featureId, requestId) {
-  const slug = toSessionIdPart(featureId) || DEFAULT_FEATURE_ID
-  const id = normalizeText(requestId) || crypto.randomUUID()
-  return `${CONTEXT_TRACE_PREFIX}_${slug}_${id}`
+  const slug = toSessionIdPart(featureId) || DEFAULT_FEATURE_ID;
+  const id = normalizeText(requestId) || crypto.randomUUID();
+  return `${CONTEXT_TRACE_PREFIX}_${slug}_${id}`;
 }
 
 function shouldSkipOptionalHandoff(error) {
-  const message = toErrorMessage(error).toLowerCase()
+  const message = toErrorMessage(error).toLowerCase();
   return (
-    message.includes('not authenticated')
-    || message.includes('auth required')
-    || message.includes('nexus_auth_required')
-    || message.includes('permission')
-    || message.includes('denied')
-    || message.includes('intelligence.basic')
-    || message.includes('未登录')
-    || message.includes('需要登录')
-  )
+    message.includes("not authenticated") ||
+    message.includes("auth required") ||
+    message.includes("nexus_auth_required") ||
+    message.includes("permission") ||
+    message.includes("denied") ||
+    message.includes("intelligence.basic") ||
+    message.includes("未登录") ||
+    message.includes("需要登录")
+  );
 }
 
 function shouldFallbackFromStream(error) {
-  const message = toErrorMessage(error).toLowerCase()
+  const message = toErrorMessage(error).toLowerCase();
   return (
-    message.includes('stream-capable transport')
-    || message.includes('transport.stream')
-    || message.includes('not authenticated')
-    || message.includes('auth required')
-    || message.includes('nexus_auth_required')
-    || message.includes('permission')
-    || message.includes('denied')
-    || message.includes('intelligence.basic')
-    || message.includes('未登录')
-    || message.includes('需要登录')
-  )
+    message.includes("stream-capable transport") ||
+    message.includes("transport.stream") ||
+    message.includes("not authenticated") ||
+    message.includes("auth required") ||
+    message.includes("nexus_auth_required") ||
+    message.includes("permission") ||
+    message.includes("denied") ||
+    message.includes("intelligence.basic") ||
+    message.includes("未登录") ||
+    message.includes("需要登录")
+  );
 }
 
 function normalizeHistory(messages) {
-  if (!Array.isArray(messages))
-    return []
+  if (!Array.isArray(messages)) return [];
 
   return messages
     .map((message) => {
-      const role = normalizeText(message?.role)
-      const content = normalizeText(message?.content)
-      if (!content)
-        return null
-      if (role !== 'user' && role !== 'assistant')
-        return null
-      return { role, content }
+      const role = normalizeText(message?.role);
+      const content = normalizeText(message?.content);
+      if (!content) return null;
+      if (role !== "user" && role !== "assistant") return null;
+      return { role, content };
     })
-    .filter(Boolean)
+    .filter(Boolean);
 }
 
 function cloneHistory(messages) {
-  return normalizeHistory(messages).map(message => ({ ...message }))
+  return normalizeHistory(messages).map((message) => ({ ...message }));
 }
 
 function keepNewestBusinessMessages(messages) {
-  const normalized = cloneHistory(messages)
-  if (normalized.length <= MAX_HISTORY_MESSAGES)
-    return normalized
-  return normalized.slice(normalized.length - MAX_HISTORY_MESSAGES)
+  const normalized = cloneHistory(messages);
+  if (normalized.length <= MAX_HISTORY_MESSAGES) return normalized;
+  return normalized.slice(normalized.length - MAX_HISTORY_MESSAGES);
 }
 
 async function loadStoredHistory(featureId) {
   try {
-    const raw = await plugin?.storage?.getFile?.(HISTORY_FILE)
-    const byFeature = raw && typeof raw === 'object' ? raw[resolveFeatureId(featureId)] : null
-    return keepNewestBusinessMessages(byFeature?.messages || [])
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to load conversation history', error)
-    return []
+    const raw = await plugin?.storage?.getFile?.(HISTORY_FILE);
+    const byFeature =
+      raw && typeof raw === "object" ? raw[resolveFeatureId(featureId)] : null;
+    return keepNewestBusinessMessages(byFeature?.messages || []);
+  } catch (error) {
+    logger?.warn?.(
+      "[touch-intelligence] failed to load conversation history",
+      error,
+    );
+    return [];
   }
 }
 
 async function saveStoredHistory(featureId, messages) {
   try {
-    const raw = await plugin?.storage?.getFile?.(HISTORY_FILE)
-    const next = raw && typeof raw === 'object' ? { ...raw } : {}
+    const raw = await plugin?.storage?.getFile?.(HISTORY_FILE);
+    const next = raw && typeof raw === "object" ? { ...raw } : {};
     next[resolveFeatureId(featureId)] = {
       messages: keepNewestBusinessMessages(messages),
       updatedAt: Date.now(),
-    }
-    await plugin?.storage?.setFile?.(HISTORY_FILE, next)
+    };
+    await plugin?.storage?.setFile?.(HISTORY_FILE, next);
+  } catch (error) {
+    logger?.warn?.(
+      "[touch-intelligence] failed to save conversation history",
+      error,
+    );
   }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to save conversation history', error)
-  }
+}
+
+function isFeatureInteractionCurrent(featureId, featureGeneration) {
+  return (
+    featureGeneration > 0 &&
+    resolveFeatureId(featureId) === activeFeatureId &&
+    featureGeneration === activeFeatureGeneration
+  );
 }
 
 function canCommitResponse(session, requestId) {
-  return session.activeRequestId === requestId && session.uiRequestId === requestId
+  return (
+    session.activeRequestId === requestId &&
+    session.uiRequestId === requestId &&
+    session.activeRequestGeneration === session.featureGeneration &&
+    isFeatureInteractionCurrent(
+      session.featureId,
+      session.activeRequestGeneration,
+    )
+  );
 }
 
-function markPendingRequest(session, requestId) {
-  session.activeRequestId = requestId
-  session.uiRequestId = requestId
+function markPendingRequest(session, requestId, featureGeneration) {
+  if (!isFeatureInteractionCurrent(session.featureId, featureGeneration))
+    return false;
+
+  session.activeRequestId = requestId;
+  session.uiRequestId = requestId;
+  session.activeRequestGeneration = featureGeneration;
+  return true;
 }
 
 function getSession(featureId) {
-  const resolvedFeatureId = resolveFeatureId(featureId)
+  const resolvedFeatureId = resolveFeatureId(featureId);
   if (!conversationSessions.has(resolvedFeatureId)) {
     conversationSessions.set(resolvedFeatureId, {
+      featureId: resolvedFeatureId,
+      featureGeneration: 0,
+      activeRequestGeneration: 0,
       history: [],
-      activeRequestId: '',
-      uiRequestId: '',
+      activeRequestId: "",
+      uiRequestId: "",
       handoffSessionId: buildHandoffSessionId(resolvedFeatureId),
       drafts: new Map(),
-      lastReadyDraftId: '',
-      lastReadyPromptKey: '',
+      lastReadyDraftId: "",
+      lastReadyPromptKey: "",
       modelOptions: [],
-      selectedProviderId: '',
-      selectedModel: '',
-    })
+      selectedProviderId: "",
+      selectedModel: "",
+    });
   }
 
-  return conversationSessions.get(resolvedFeatureId)
+  return conversationSessions.get(resolvedFeatureId);
 }
 
-function buildHandoffContext({ featureId, prompt, history, answer, requestId, inputKinds = [] }) {
+function activateFeatureSession(featureId) {
+  const resolvedFeatureId = resolveFeatureId(featureId);
+  const session = getSession(resolvedFeatureId);
+  activeFeatureId = resolvedFeatureId;
+  activeFeatureGeneration += 1;
+  session.featureGeneration = activeFeatureGeneration;
+  session.activeRequestId = "";
+  session.uiRequestId = "";
+  session.activeRequestGeneration = 0;
+  return session;
+}
+
+function buildHandoffContext({
+  featureId,
+  prompt,
+  history,
+  answer,
+  requestId,
+  inputKinds = [],
+}) {
   const messages = keepNewestBusinessMessages([
     ...cloneHistory(history),
     ...(answer
       ? [
-          { role: 'user', content: normalizeText(prompt) },
-          { role: 'assistant', content: normalizeText(answer) },
+          { role: "user", content: normalizeText(prompt) },
+          { role: "assistant", content: normalizeText(answer) },
         ]
       : []),
-  ])
-  const conversation = messages.length > 0
-    ? {
-        conversation: {
-          messages,
-          updatedAt: Date.now(),
-        },
-      }
-    : {}
+  ]);
+  const conversation =
+    messages.length > 0
+      ? {
+          conversation: {
+            messages,
+            updatedAt: Date.now(),
+          },
+        }
+      : {};
 
   return {
     source: HANDOFF_SOURCE,
@@ -270,15 +364,15 @@ function buildHandoffContext({ featureId, prompt, history, answer, requestId, in
     lastPrompt: normalizeText(prompt),
     ...(answer ? { lastAnswer: normalizeText(answer) } : {}),
     ...conversation,
-  }
+  };
 }
 
 async function ensureHandoffSession(client, session, params) {
-  const handoffSessionId = normalizeText(session.handoffSessionId)
-    || buildHandoffSessionId(params.featureId)
+  const handoffSessionId =
+    normalizeText(session.handoffSessionId) ||
+    buildHandoffSessionId(params.featureId);
 
-  if (!client?.agentSessionStart)
-    return ''
+  if (!client?.agentSessionStart) return "";
 
   try {
     const handoff = await client.agentSessionStart({
@@ -291,26 +385,25 @@ async function ensureHandoffSession(client, session, params) {
         featureId: resolveFeatureId(params.featureId),
         source: HANDOFF_SOURCE,
       },
-    })
-    const restoredMessages = normalizeHistory(handoff?.context?.conversation?.messages)
+    });
+    const restoredMessages = normalizeHistory(
+      handoff?.context?.conversation?.messages,
+    );
     if (restoredMessages.length > session.history.length) {
-      session.history = keepNewestBusinessMessages(restoredMessages)
+      session.history = keepNewestBusinessMessages(restoredMessages);
     }
-    session.handoffSessionId = handoffSessionId
-    return handoffSessionId
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] handoff session unavailable', error)
-    if (shouldSkipOptionalHandoff(error))
-      session.handoffSessionId = ''
+    session.handoffSessionId = handoffSessionId;
+    return handoffSessionId;
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] handoff session unavailable", error);
+    if (shouldSkipOptionalHandoff(error)) session.handoffSessionId = "";
   }
 
-  return ''
+  return "";
 }
 
 async function updateHandoffSession(client, session, params) {
-  if (!client?.agentSessionStart || !session.handoffSessionId)
-    return
+  if (!client?.agentSessionStart || !session.handoffSessionId) return;
 
   try {
     await client.agentSessionStart({
@@ -324,36 +417,37 @@ async function updateHandoffSession(client, session, params) {
         source: HANDOFF_SOURCE,
         lastRequestId: params.requestId,
       },
-    })
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to update handoff session', error)
+    });
+  } catch (error) {
+    logger?.warn?.(
+      "[touch-intelligence] failed to update handoff session",
+      error,
+    );
   }
 }
 
 function summarizeContextPackage(contextPackage) {
-  if (!contextPackage || typeof contextPackage !== 'object')
-    return null
+  if (!contextPackage || typeof contextPackage !== "object") return null;
 
-  const items = Array.isArray(contextPackage.items) ? contextPackage.items : []
-  const sourceTypes = {}
-  let citationCount = 0
-  let retrievalItemCount = 0
+  const items = Array.isArray(contextPackage.items) ? contextPackage.items : [];
+  const sourceTypes = {};
+  let citationCount = 0;
+  let retrievalItemCount = 0;
 
   for (const item of items) {
-    const sourceType = normalizeText(item?.sourceType) || 'unknown'
-    sourceTypes[sourceType] = (sourceTypes[sourceType] || 0) + 1
-    if (sourceType === 'retrieval')
-      retrievalItemCount += 1
-    if (item?.metadata?.citation && typeof item.metadata.citation === 'object')
-      citationCount += 1
+    const sourceType = normalizeText(item?.sourceType) || "unknown";
+    sourceTypes[sourceType] = (sourceTypes[sourceType] || 0) + 1;
+    if (sourceType === "retrieval") retrievalItemCount += 1;
+    if (item?.metadata?.citation && typeof item.metadata.citation === "object")
+      citationCount += 1;
   }
 
-  const retrieval = contextPackage.metadata?.retrieval
-    && typeof contextPackage.metadata.retrieval === 'object'
-    ? contextPackage.metadata.retrieval
-    : null
-  const metadataCitationCount = Number(retrieval?.citationCount)
+  const retrieval =
+    contextPackage.metadata?.retrieval &&
+    typeof contextPackage.metadata.retrieval === "object"
+      ? contextPackage.metadata.retrieval
+      : null;
+  const metadataCitationCount = Number(retrieval?.citationCount);
 
   return {
     id: normalizeText(contextPackage.id),
@@ -364,31 +458,33 @@ function summarizeContextPackage(contextPackage) {
     tokenEstimate: Number(contextPackage.tokenEstimate) || 0,
     itemCount: items.length,
     retrievalItemCount,
-    citationCount: Number.isFinite(metadataCitationCount) ? metadataCitationCount : citationCount,
+    citationCount: Number.isFinite(metadataCitationCount)
+      ? metadataCitationCount
+      : citationCount,
     sourceTypes,
     retrievalStatus: normalizeText(retrieval?.status),
     degradedReason: normalizeText(retrieval?.degradedReason),
-  }
+  };
 }
 
 function hasExplicitMemoryIntent(prompt) {
   return [
     /\b(remember this|remember that|save this as memory|save this memory)\b/i,
     /(请)?记住|帮我记住|保存为记忆|加入记忆|记到记忆/,
-  ].some(pattern => pattern.test(normalizeText(prompt)))
+  ].some((pattern) => pattern.test(normalizeText(prompt)));
 }
 
 function summarizeMemoryPolicy(result) {
-  if (!result || typeof result !== 'object')
-    return null
+  if (!result || typeof result !== "object") return null;
 
-  const candidate = result.candidate && typeof result.candidate === 'object'
-    ? result.candidate
-    : null
+  const candidate =
+    result.candidate && typeof result.candidate === "object"
+      ? result.candidate
+      : null;
   const summary = {
     status: normalizeText(result.status),
     reason: normalizeText(result.reason),
-  }
+  };
   if (candidate) {
     summary.candidate = {
       type: normalizeText(candidate.type),
@@ -397,71 +493,70 @@ function summarizeMemoryPolicy(result) {
       tags: normalizeStringList(candidate.tags),
       confidence: Number(candidate.confidence) || 0,
       privacyLevel: normalizeText(candidate.privacyLevel),
-      ...(candidate.sourceSessionId ? { sourceSessionId: normalizeText(candidate.sourceSessionId) } : {}),
-      ...(candidate.sourceTurnId ? { sourceTurnId: normalizeText(candidate.sourceTurnId) } : {}),
-    }
+      ...(candidate.sourceSessionId
+        ? { sourceSessionId: normalizeText(candidate.sourceSessionId) }
+        : {}),
+      ...(candidate.sourceTurnId
+        ? { sourceTurnId: normalizeText(candidate.sourceTurnId) }
+        : {}),
+    };
   }
-  return summary
+  return summary;
 }
 
-async function evaluateMemoryPolicyForAsk(client, {
-  prompt,
-  contextState,
-}) {
-  if (typeof client?.contextEvaluateMemory !== 'function')
-    return null
+async function evaluateMemoryPolicyForAsk(client, { prompt, contextState }) {
+  if (typeof client?.contextEvaluateMemory !== "function") return null;
 
-  const content = normalizeText(prompt)
-  if (!content || !hasExplicitMemoryIntent(content))
-    return null
+  const content = normalizeText(prompt);
+  if (!content || !hasExplicitMemoryIntent(content)) return null;
 
   try {
     const result = await client.contextEvaluateMemory({
       content,
-      type: 'preference',
-      scope: 'session',
-      tags: ['corebox-ai-ask'],
+      type: "preference",
+      scope: "session",
+      tags: ["corebox-ai-ask"],
       sourceSessionId: normalizeText(contextState?.sessionId),
       sourceTurnId: normalizeText(contextState?.turnId),
-      privacyLevel: 'normal',
+      privacyLevel: "normal",
       metadata: {
         caller: CALLER_ID,
         entry: ENTRY_ID,
         source: HANDOFF_SOURCE,
       },
-    })
-    return summarizeMemoryPolicy(result)
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] memory policy unavailable', error)
-    return null
+    });
+    return summarizeMemoryPolicy(result);
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] memory policy unavailable", error);
+    return null;
   }
 }
 
-async function prepareContextTurnForAsk(client, {
-  featureId,
-  prompt,
-  requestId,
-  inputKinds = [],
-  handoffSessionId = '',
-  selectedProviderId = '',
-  selectedModel = '',
-}) {
-  if (typeof client?.contextPrepareTurn !== 'function')
-    return null
+async function prepareContextTurnForAsk(
+  client,
+  {
+    featureId,
+    prompt,
+    requestId,
+    inputKinds = [],
+    handoffSessionId = "",
+    selectedProviderId = "",
+    selectedModel = "",
+  },
+) {
+  if (typeof client?.contextPrepareTurn !== "function") return null;
 
-  const displayPrompt = normalizeText(prompt)
-  if (!displayPrompt)
-    return null
+  const displayPrompt = normalizeText(prompt);
+  if (!displayPrompt) return null;
 
-  const contextTraceId = buildContextTraceId(featureId, requestId)
+  const contextTraceId = buildContextTraceId(featureId, requestId);
 
   try {
     const prepared = await client.contextPrepareTurn({
-      owner: 'corebox',
+      owner: "corebox",
       input: displayPrompt,
       objective: displayPrompt,
-      explicitScope: 'retrieval',
+      explicitScope: "retrieval",
       continueSession: Boolean(handoffSessionId),
       traceId: contextTraceId,
       tokenBudget: 1200,
@@ -476,60 +571,57 @@ async function prepareContextTurnForAsk(client, {
         ...(selectedProviderId ? { selectedProviderId } : {}),
         ...(selectedModel ? { selectedModel } : {}),
       },
-    })
+    });
     return {
       traceId: contextTraceId,
       sessionId: normalizeText(prepared?.session?.id),
       turnId: normalizeText(prepared?.turn?.id),
       checkpointId: normalizeText(prepared?.checkpoint?.id),
       package: summarizeContextPackage(prepared?.package),
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] context hygiene unavailable', error)
-    return null
+    };
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] context hygiene unavailable", error);
+    return null;
   }
 }
 
 function truncateForContext(value, max = MAX_OCR_CONTEXT_CHARS) {
-  const text = normalizeText(value)
-  if (text.length <= max)
-    return text
-  return text.slice(0, max)
+  const text = normalizeText(value);
+  if (text.length <= max) return text;
+  return text.slice(0, max);
 }
 
 function buildUserMessageContent(prompt, context = {}) {
-  const normalizedPrompt = normalizeText(prompt)
-  const ocrText = truncateForContext(context.ocrText)
+  const normalizedPrompt = normalizeText(prompt);
+  const ocrText = truncateForContext(context.ocrText);
 
-  if (!ocrText)
-    return normalizedPrompt
+  if (!ocrText) return normalizedPrompt;
 
-  const task = normalizedPrompt || '请总结剪贴板图片中的文字。'
-  return `${task}\n\n以下是剪贴板图片的 OCR 文本，请只基于这些文字回答：\n${ocrText}`
+  const task = normalizedPrompt || "请总结剪贴板图片中的文字。";
+  return `${task}\n\n以下是剪贴板图片的 OCR 文本，请只基于这些文字回答：\n${ocrText}`;
 }
 
 function buildInvokePayload(prompt, history = [], context = {}) {
-  const normalizedHistory = normalizeHistory(history)
+  const normalizedHistory = normalizeHistory(history);
   return {
     messages: [
-      { role: 'system', content: AI_SYSTEM_PROMPT },
+      { role: "system", content: AI_SYSTEM_PROMPT },
       ...normalizedHistory,
-      { role: 'user', content: buildUserMessageContent(prompt, context) },
+      { role: "user", content: buildUserMessageContent(prompt, context) },
     ],
-  }
+  };
 }
 
 function buildOcrPayload(imageDataUrl) {
   return {
     source: {
-      type: 'data-url',
+      type: "data-url",
       dataUrl: imageDataUrl,
     },
-    language: 'zh-CN',
+    language: "zh-CN",
     includeLayout: false,
     includeKeywords: false,
-  }
+  };
 }
 
 function buildInvokeOptions({
@@ -541,12 +633,12 @@ function buildInvokeOptions({
   contextPackage,
   memoryPolicy,
 }) {
-  const contextSummary = contextPackage && typeof contextPackage === 'object'
-    ? contextPackage
-    : null
-  const memoryPolicySummary = memoryPolicy && typeof memoryPolicy === 'object'
-    ? memoryPolicy
-    : null
+  const contextSummary =
+    contextPackage && typeof contextPackage === "object"
+      ? contextPackage
+      : null;
+  const memoryPolicySummary =
+    memoryPolicy && typeof memoryPolicy === "object" ? memoryPolicy : null;
   return {
     metadata: {
       caller: CALLER_ID,
@@ -579,25 +671,30 @@ function buildInvokeOptions({
           }
         : {}),
     },
-  }
+  };
 }
 
 function normalizeModelSelection(selection = {}) {
-  const providerId = normalizeText(selection.providerId)
-  const model = normalizeText(selection.model)
-  if (!providerId || !model || providerId === AUTO_MODEL_SELECTION || model === AUTO_MODEL_SELECTION) {
+  const providerId = normalizeText(selection.providerId);
+  const model = normalizeText(selection.model);
+  if (
+    !providerId ||
+    !model ||
+    providerId === AUTO_MODEL_SELECTION ||
+    model === AUTO_MODEL_SELECTION
+  ) {
     return {
-      providerId: '',
-      model: '',
-    }
+      providerId: "",
+      model: "",
+    };
   }
-  return { providerId, model }
+  return { providerId, model };
 }
 
 function buildModelSelectionInvokeOptions(baseOptions, selection = {}) {
-  const normalized = normalizeModelSelection(selection)
+  const normalized = normalizeModelSelection(selection);
   if (!normalized.providerId || !normalized.model) {
-    return baseOptions
+    return baseOptions;
   }
   return {
     ...baseOptions,
@@ -608,40 +705,38 @@ function buildModelSelectionInvokeOptions(baseOptions, selection = {}) {
       selectedProviderId: normalized.providerId,
       selectedModel: normalized.model,
     },
-  }
+  };
 }
 
 function normalizeStringList(values) {
-  if (!Array.isArray(values))
-    return []
-  return Array.from(new Set(values.map(value => normalizeText(value)).filter(Boolean)))
+  if (!Array.isArray(values)) return [];
+  return Array.from(
+    new Set(values.map((value) => normalizeText(value)).filter(Boolean)),
+  );
 }
 
 function normalizeLatency(value) {
-  const latency = Number(value)
-  if (!Number.isFinite(latency) || latency < 0)
-    return undefined
-  return Math.round(latency)
+  const latency = Number(value);
+  if (!Number.isFinite(latency) || latency < 0) return undefined;
+  return Math.round(latency);
 }
 
 function formatLatency(latency) {
-  const normalized = normalizeLatency(latency)
-  if (normalized === undefined)
-    return ''
-  if (normalized < 1000)
-    return `${normalized}ms`
-  return `${(normalized / 1000).toFixed(normalized >= 10000 ? 0 : 1)}s`
+  const normalized = normalizeLatency(latency);
+  if (normalized === undefined) return "";
+  if (normalized < 1000) return `${normalized}ms`;
+  return `${(normalized / 1000).toFixed(normalized >= 10000 ? 0 : 1)}s`;
 }
 
 function buildCapabilitySummary(values) {
-  return normalizeStringList(values).join(' + ')
+  return normalizeStringList(values).join(" + ");
 }
 
 function mapInvokeResult(
   result,
   prompt,
   requestId,
-  handoffSessionId = '',
+  handoffSessionId = "",
   inputKinds = [],
   contextPackage = null,
   memoryPolicy = null,
@@ -658,7 +753,108 @@ function mapInvokeResult(
     inputKinds: normalizeStringList(inputKinds),
     contextPackage,
     memoryPolicy,
+  };
+}
+
+function isIntelligenceCodeReviewResult(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const review = value;
+  if (
+    !normalizeText(review.summary) ||
+    !Number.isFinite(review.score) ||
+    review.score < 0 ||
+    review.score > 100 ||
+    !Array.isArray(review.issues) ||
+    !Array.isArray(review.improvements)
+  ) {
+    return false;
   }
+
+  return (
+    review.issues.every(
+      (issue) =>
+        issue &&
+        typeof issue === "object" &&
+        ["critical", "warning", "info", "suggestion"].includes(
+          issue.severity,
+        ) &&
+        normalizeText(issue.type) &&
+        normalizeText(issue.message) &&
+        (issue.line === undefined ||
+          (Number.isInteger(issue.line) && issue.line >= 0)) &&
+        (issue.suggestion === undefined ||
+          typeof issue.suggestion === "string"),
+    ) &&
+    review.improvements.every((improvement) => typeof improvement === "string")
+  );
+}
+
+function serializeRawReviewResponse(value) {
+  if (typeof value === "string") return value;
+
+  try {
+    const serialized = JSON.stringify(value, null, 2);
+    if (typeof serialized === "string") return serialized;
+  } catch {
+    // Fall through to the generic string representation.
+  }
+
+  return normalizeText(value);
+}
+
+function formatDegradedCodeReview(rawResult) {
+  const raw = truncateText(serializeRawReviewResponse(rawResult), 12000);
+  const response = raw
+    ? raw
+        .split("\n")
+        .map((line) => `    ${line}`)
+        .join("\n")
+    : "    （空响应）";
+
+  return `## 审查结果（降级显示）\n\n提供方返回了非标准的结构化审查结果，以下为原始响应：\n\n${response}`;
+}
+
+function formatCodeReviewResult(review) {
+  const issues =
+    review.issues.length > 0
+      ? review.issues
+          .map((issue, index) => {
+            const line =
+              Number.isInteger(issue.line) && issue.line > 0
+                ? ` · 第 ${issue.line} 行`
+                : "";
+            const suggestion = normalizeText(issue.suggestion)
+              ? `\n\n建议：${issue.suggestion}`
+              : "";
+            return `### ${index + 1}. ${issue.severity.toUpperCase()} · ${issue.type}${line}\n\n${issue.message}${suggestion}`;
+          })
+          .join("\n\n")
+      : "未发现需要报告的问题。";
+  const improvements =
+    review.improvements.length > 0
+      ? review.improvements.map((improvement) => `- ${improvement}`).join("\n")
+      : "- 暂无额外改进建议。";
+
+  return `## 审查摘要\n\n${review.summary}\n\n**评分：${review.score}/100**\n\n## 问题\n\n${issues}\n\n## 改进建议\n\n${improvements}`;
+}
+
+function mapCodeReviewResult(result, prompt, requestId, inputKinds = []) {
+  const mapped = mapInvokeResult(result, prompt, requestId, "", inputKinds);
+  const review = result?.result;
+  if (!isIntelligenceCodeReviewResult(review)) {
+    return {
+      ...mapped,
+      answer: formatDegradedCodeReview(review),
+      degraded: true,
+    };
+  }
+
+  return {
+    ...mapped,
+    answer: formatCodeReviewResult(review),
+    degraded: false,
+  };
 }
 
 async function streamChatAnswer({
@@ -680,84 +876,97 @@ async function streamChatAnswer({
   contextPackage,
   memoryPolicy,
 }) {
-  if (typeof client?.stream !== 'function')
-    return null
+  if (typeof client?.stream !== "function") return null;
 
-  let answer = ''
-  let provider = ''
-  let model = ''
-  let traceId = ''
-  let latency = 0
-  const startedAt = Date.now()
+  let answer = "";
+  let provider = "";
+  let model = "";
+  let traceId = "";
+  let latency = 0;
+  const startedAt = Date.now();
 
   try {
     await new Promise((resolve, reject) => {
-      client.stream('text.chat', payload, {
-        onStart(event) {
-          provider = normalizeText(event?.provider) || provider
-          model = normalizeText(event?.model) || model
-          traceId = normalizeText(event?.traceId) || traceId
-        },
-        onDelta(delta, event) {
-          if (!canCommitResponse(session, requestId))
-            return
-          answer = normalizeText(event?.content) || `${answer}${normalizeText(delta)}`
-          provider = normalizeText(event?.provider) || provider
-          model = normalizeText(event?.model) || model
-          traceId = normalizeText(event?.traceId) || traceId
-          void pushWidgetState(featureId, {
-            requestId,
-            prompt: displayPrompt,
-            answer,
-            provider,
-            model,
-            traceId,
-            latency: Date.now() - startedAt,
-            handoffSessionId,
-            status: 'chat-pending',
-            stage: 'chat',
-            capabilityId: 'text.chat',
-            inputKinds,
-            imageDataUrl,
-            ocrText,
-            history,
-            selectedProviderId,
-            selectedModel,
-            modelOptions,
-            contextPackage,
-            memoryPolicy,
-          })
-        },
-        onUsage(eventUsage, event) {
-          provider = normalizeText(event?.provider) || provider
-          model = normalizeText(event?.model) || model
-          traceId = normalizeText(event?.traceId) || traceId
-          void eventUsage
-        },
-        onEnd(event) {
-          answer = normalizeText(event?.content) || normalizeText(event?.result) || answer
-          provider = normalizeText(event?.provider) || provider
-          model = normalizeText(event?.model) || model
-          traceId = normalizeText(event?.traceId) || traceId
-          latency = normalizeLatency(event?.metadata?.latency) || Date.now() - startedAt
-          resolve()
-        },
-        onError(error) {
-          reject(error)
-        },
-      }, invokeOptions).catch(reject)
-    })
-  }
-  catch (error) {
+      client
+        .stream(
+          "text.chat",
+          payload,
+          {
+            onStart(event) {
+              provider = normalizeText(event?.provider) || provider;
+              model = normalizeText(event?.model) || model;
+              traceId = normalizeText(event?.traceId) || traceId;
+            },
+            onDelta(delta, event) {
+              if (!canCommitResponse(session, requestId)) return;
+              answer =
+                normalizeText(event?.content) ||
+                `${answer}${normalizeText(delta)}`;
+              provider = normalizeText(event?.provider) || provider;
+              model = normalizeText(event?.model) || model;
+              traceId = normalizeText(event?.traceId) || traceId;
+              void pushWidgetState(featureId, {
+                requestId,
+                prompt: displayPrompt,
+                answer,
+                provider,
+                model,
+                traceId,
+                latency: Date.now() - startedAt,
+                handoffSessionId,
+                status: "chat-pending",
+                stage: "chat",
+                capabilityId: "text.chat",
+                inputKinds,
+                imageDataUrl,
+                ocrText,
+                history,
+                selectedProviderId,
+                selectedModel,
+                modelOptions,
+                contextPackage,
+                memoryPolicy,
+              });
+            },
+            onUsage(eventUsage, event) {
+              provider = normalizeText(event?.provider) || provider;
+              model = normalizeText(event?.model) || model;
+              traceId = normalizeText(event?.traceId) || traceId;
+              void eventUsage;
+            },
+            onEnd(event) {
+              answer =
+                normalizeText(event?.content) ||
+                normalizeText(event?.result) ||
+                answer;
+              provider = normalizeText(event?.provider) || provider;
+              model = normalizeText(event?.model) || model;
+              traceId = normalizeText(event?.traceId) || traceId;
+              latency =
+                normalizeLatency(event?.metadata?.latency) ||
+                Date.now() - startedAt;
+              resolve();
+            },
+            onError(error) {
+              reject(error);
+            },
+          },
+          invokeOptions,
+        )
+        .catch(reject);
+    });
+  } catch (error) {
     if (shouldFallbackFromStream(error)) {
-      logger?.warn?.('[touch-intelligence] stream unavailable, falling back to invoke', error)
-      return null
+      logger?.warn?.(
+        "[touch-intelligence] stream unavailable, falling back to invoke",
+        error,
+      );
+      return null;
     }
-    throw error
+    throw error;
   }
 
-  if (!answer)
-    throw createPluginError('EMPTY_RESPONSE')
+  if (!answer) throw createPluginError("EMPTY_RESPONSE");
 
   return {
     requestId,
@@ -773,113 +982,121 @@ async function streamChatAnswer({
     selectedModel: normalizeText(selectedModel),
     contextPackage,
     memoryPolicy,
-  }
+  };
 }
 
 function toErrorMessage(error) {
-  if (!error)
-    return ''
-  if (typeof error === 'string')
-    return error
-  return normalizeText(error.message || String(error))
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  return normalizeText(error.message || String(error));
 }
 
 function createPluginError(code, message) {
-  const error = new Error(message || AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN)
-  error.code = code
-  return error
+  const error = new Error(
+    message || AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN,
+  );
+  error.code = code;
+  return error;
 }
 
 async function getAuthState() {
-  if (!touchChannel?.send)
-    return null
+  if (!touchChannel?.send) return null;
 
   try {
-    return await touchChannel.send(AUTH_SESSION_GET_STATE_EVENT)
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to resolve auth state', error)
-    return null
+    return await touchChannel.send(AUTH_SESSION_GET_STATE_EVENT);
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] failed to resolve auth state", error);
+    return null;
   }
 }
 
 async function ensureSignedIn() {
-  const state = await getAuthState()
-  return state?.isSignedIn === true
+  const state = await getAuthState();
+  return state?.isSignedIn === true;
 }
 
 function normalizeInvokeError(error) {
-  const rawCode = normalizeText(error?.code).toUpperCase()
-  const rawMessage = toErrorMessage(error)
-  const lower = rawMessage.toLowerCase()
+  const rawCode = normalizeText(error?.code).toUpperCase();
+  const rawMessage = toErrorMessage(error);
+  const lower = rawMessage.toLowerCase();
 
-  let code = AI_ERROR_MESSAGES[rawCode] ? rawCode : 'UNKNOWN'
-  if (code === 'UNKNOWN') {
+  let code = AI_ERROR_MESSAGES[rawCode] ? rawCode : "UNKNOWN";
+  if (code === "UNKNOWN") {
     if (
-      lower.includes('not authenticated')
-      || lower.includes('auth required')
-      || lower.includes('nexus_auth_required')
-      || lower.includes('未登录')
-      || lower.includes('需要登录')
+      lower.includes("not authenticated") ||
+      lower.includes("auth required") ||
+      lower.includes("nexus_auth_required") ||
+      lower.includes("未登录") ||
+      lower.includes("需要登录")
     ) {
-      code = 'AUTH_REQUIRED'
-    }
-    else if (
-      lower.includes('permission')
-      || lower.includes('denied')
-      || lower.includes('intelligence.basic')
+      code = "AUTH_REQUIRED";
+    } else if (
+      lower.includes("permission") ||
+      lower.includes("denied") ||
+      lower.includes("intelligence.basic")
     ) {
-      code = 'PERMISSION_DENIED'
-    }
-    else if (lower.includes('quota') || lower.includes('rate limit') || lower.includes('too many')) {
-      code = 'QUOTA_EXCEEDED'
-    }
-    else if (
-      lower.includes('provider')
-      || lower.includes('api key')
-      || lower.includes('not configured')
-      || lower.includes('provider_config_unavailable')
-      || lower.includes('no enabled providers')
-      || lower.includes('no providers available')
+      code = "PERMISSION_DENIED";
+    } else if (
+      lower.includes("quota") ||
+      lower.includes("rate limit") ||
+      lower.includes("too many")
     ) {
-      code = 'PROVIDER_UNAVAILABLE'
-    }
-    else if (
-      lower.includes('unsupported')
-      || lower.includes('not supported')
-      || lower.includes('capability not supported')
-      || lower.includes('model does not support')
+      code = "QUOTA_EXCEEDED";
+    } else if (
+      lower.includes("provider") ||
+      lower.includes("api key") ||
+      lower.includes("not configured") ||
+      lower.includes("provider_config_unavailable") ||
+      lower.includes("no enabled providers") ||
+      lower.includes("no providers available")
     ) {
-      code = 'MODEL_UNSUPPORTED'
-    }
-    else if (lower.includes('empty response') || lower.includes('未返回可用内容')) {
-      code = 'EMPTY_RESPONSE'
+      code = "PROVIDER_UNAVAILABLE";
+    } else if (
+      lower.includes("unsupported") ||
+      lower.includes("not supported") ||
+      lower.includes("capability not supported") ||
+      lower.includes("model does not support")
+    ) {
+      code = "MODEL_UNSUPPORTED";
+    } else if (
+      lower.includes("empty response") ||
+      lower.includes("未返回可用内容")
+    ) {
+      code = "EMPTY_RESPONSE";
     }
   }
 
-  const fallback = AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN
-  const detail = rawMessage && rawMessage !== fallback ? `：${truncateText(rawMessage, 120)}` : ''
+  const fallback = AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN;
+  const detail =
+    rawMessage && rawMessage !== fallback
+      ? `：${truncateText(rawMessage, 120)}`
+      : "";
   return {
     code,
     message: `${fallback}${detail}`,
-  }
+  };
+}
+
+function normalizeQuickReviewError(error) {
+  const normalized = normalizeInvokeError(error);
+  return {
+    code: normalized.code,
+    message: AI_ERROR_MESSAGES[normalized.code] || AI_ERROR_MESSAGES.UNKNOWN,
+  };
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request)
-    return false
+  if (!permission?.check || !permission?.request) return false;
 
   try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission)
-      return true
+    const hasPermission = await permission.check(permissionId);
+    if (hasPermission) return true;
 
-    const granted = await permission.request(permissionId, reason)
-    return Boolean(granted)
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] Failed to request permission', error)
-    return false
+    const granted = await permission.request(permissionId, reason);
+    return Boolean(granted);
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] Failed to request permission", error);
+    return false;
   }
 }
 
@@ -887,73 +1104,59 @@ function buildIntelligenceMeta(details = {}) {
   const meta = {
     entry: ENTRY_ID,
     source: HANDOFF_SOURCE,
-  }
-  const status = normalizeText(details.status)
-  const stage = normalizeText(details.stage)
-  const requestId = normalizeText(details.requestId)
-  const capabilityId = normalizeText(details.capabilityId)
-  const provider = normalizeText(details.provider)
-  const model = normalizeText(details.model)
-  const traceId = normalizeText(details.traceId)
-  const handoffSessionId = normalizeText(details.handoffSessionId)
-  const errorCode = normalizeText(details.errorCode)
-  const errorMessage = normalizeText(details.errorMessage)
-  const inputKinds = normalizeStringList(details.inputKinds)
-  const capabilities = normalizeStringList(details.capabilities)
-  const contextPackage = details.contextPackage && typeof details.contextPackage === 'object'
-    ? details.contextPackage
-    : null
-  const memoryPolicy = details.memoryPolicy && typeof details.memoryPolicy === 'object'
-    ? details.memoryPolicy
-    : null
-  const latency = normalizeLatency(details.latency)
+  };
+  const status = normalizeText(details.status);
+  const stage = normalizeText(details.stage);
+  const requestId = normalizeText(details.requestId);
+  const capabilityId = normalizeText(details.capabilityId);
+  const provider = normalizeText(details.provider);
+  const model = normalizeText(details.model);
+  const traceId = normalizeText(details.traceId);
+  const handoffSessionId = normalizeText(details.handoffSessionId);
+  const errorCode = normalizeText(details.errorCode);
+  const errorMessage = normalizeText(details.errorMessage);
+  const inputKinds = normalizeStringList(details.inputKinds);
+  const capabilities = normalizeStringList(details.capabilities);
+  const contextPackage =
+    details.contextPackage && typeof details.contextPackage === "object"
+      ? details.contextPackage
+      : null;
+  const memoryPolicy =
+    details.memoryPolicy && typeof details.memoryPolicy === "object"
+      ? details.memoryPolicy
+      : null;
+  const latency = normalizeLatency(details.latency);
 
-  if (status)
-    meta.status = status
-  if (stage)
-    meta.stage = stage
-  if (requestId)
-    meta.requestId = requestId
-  if (capabilityId)
-    meta.capabilityId = capabilityId
-  if (capabilities.length > 0)
-    meta.capabilities = capabilities
-  if (provider)
-    meta.provider = provider
-  if (model)
-    meta.model = model
-  if (traceId)
-    meta.traceId = traceId
-  if (latency !== undefined)
-    meta.latency = latency
-  if (inputKinds.length > 0)
-    meta.inputKinds = inputKinds
-  if (errorCode)
-    meta.errorCode = errorCode
-  if (errorMessage)
-    meta.errorMessage = errorMessage
+  if (status) meta.status = status;
+  if (stage) meta.stage = stage;
+  if (requestId) meta.requestId = requestId;
+  if (capabilityId) meta.capabilityId = capabilityId;
+  if (capabilities.length > 0) meta.capabilities = capabilities;
+  if (provider) meta.provider = provider;
+  if (model) meta.model = model;
+  if (traceId) meta.traceId = traceId;
+  if (latency !== undefined) meta.latency = latency;
+  if (inputKinds.length > 0) meta.inputKinds = inputKinds;
+  if (errorCode) meta.errorCode = errorCode;
+  if (errorMessage) meta.errorMessage = errorMessage;
   if (handoffSessionId) {
-    meta.handoffSessionId = handoffSessionId
-    meta.sessionId = handoffSessionId
+    meta.handoffSessionId = handoffSessionId;
+    meta.sessionId = handoffSessionId;
   }
   if (contextPackage) {
-    meta.contextPackage = contextPackage
-    if (contextPackage.traceId)
-      meta.contextTraceId = contextPackage.traceId
+    meta.contextPackage = contextPackage;
+    if (contextPackage.traceId) meta.contextTraceId = contextPackage.traceId;
     if (contextPackage.sessionId)
-      meta.contextSessionId = contextPackage.sessionId
-    if (contextPackage.id)
-      meta.contextPackageId = contextPackage.id
+      meta.contextSessionId = contextPackage.sessionId;
+    if (contextPackage.id) meta.contextPackageId = contextPackage.id;
   }
   if (memoryPolicy) {
-    meta.memoryPolicy = memoryPolicy
-    if (memoryPolicy.status)
-      meta.memoryPolicyStatus = memoryPolicy.status
-    if (memoryPolicy.reason)
-      meta.memoryPolicyReason = memoryPolicy.reason
+    meta.memoryPolicy = memoryPolicy;
+    if (memoryPolicy.status) meta.memoryPolicyStatus = memoryPolicy.status;
+    if (memoryPolicy.reason) meta.memoryPolicyReason = memoryPolicy.reason;
   }
 
-  return meta
+  return meta;
 }
 
 function buildInfoItem({
@@ -970,15 +1173,13 @@ function buildInfoItem({
   intelligence,
 }) {
   const builder = new TuffItemBuilder(id)
-    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+    .setSource("plugin", SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
-    .setIcon(ICON)
+    .setIcon(ICON);
 
-  if (description)
-    builder.setDescription(description)
-  if (accessory)
-    builder.setAccessory(accessory)
+  if (description) builder.setDescription(description);
+  if (accessory) builder.setAccessory(accessory);
 
   const meta = {
     pluginName: PLUGIN_NAME,
@@ -990,104 +1191,110 @@ function buildInfoItem({
       status,
       handoffSessionId,
     }),
-  }
+  };
 
   if (actionId) {
-    meta.defaultAction = ACTION_ID
-    meta.actionId = actionId
-    meta.payload = payload
+    meta.defaultAction = ACTION_ID;
+    meta.actionId = actionId;
+    meta.payload = payload;
   }
 
-  return builder.setMeta(meta).build()
+  return builder.setMeta(meta).build();
 }
 
 function resolveDisplayPrompt(prompt, hasImage) {
-  const normalizedPrompt = normalizePrompt(prompt)
-  if (normalizedPrompt)
-    return normalizedPrompt
-  return hasImage ? '分析剪贴板图片' : ''
+  const normalizedPrompt = normalizePrompt(prompt);
+  if (normalizedPrompt) return normalizedPrompt;
+  return hasImage ? "分析剪贴板图片" : "";
 }
 
 function buildWidgetMessages(state = {}) {
   const messages = cloneHistory(state.history).map((message, index) => ({
-    id: `${normalizeText(state.requestId) || 'history'}-${index}`,
+    id: `${normalizeText(state.requestId) || "history"}-${index}`,
     role: message.role,
     content: message.content,
-    status: 'complete',
-  }))
-  const prompt = normalizeText(state.prompt)
-  const answer = normalizeText(state.answer)
+    status: "complete",
+  }));
+  const prompt = normalizeText(state.prompt);
+  const answer = normalizeText(state.answer);
   if (prompt) {
     messages.push({
-      id: `${normalizeText(state.requestId) || 'draft'}-user`,
-      role: 'user',
+      id: `${normalizeText(state.requestId) || "draft"}-user`,
+      role: "user",
       content: prompt,
-      status: 'complete',
+      status: "complete",
       attachments: state.imageDataUrl
         ? [
             {
-              type: 'image',
-              title: '剪贴板图片',
-              detail: state.ocrText ? '已作为 OCR 上下文引用' : '作为图片上下文引用',
+              type: "image",
+              title: "剪贴板图片",
+              detail: state.ocrText
+                ? "已作为 OCR 上下文引用"
+                : "作为图片上下文引用",
               preview: state.imageDataUrl,
             },
           ]
         : [],
-    })
+    });
   }
   if (answer) {
     messages.push({
-      id: `${normalizeText(state.requestId) || 'draft'}-assistant`,
-      role: 'assistant',
+      id: `${normalizeText(state.requestId) || "draft"}-assistant`,
+      role: "assistant",
       content: answer,
-      status: state.status === 'chat-pending' ? 'streaming' : 'complete',
-    })
-  }
-  else if (state.status === 'error') {
+      status: state.status === "chat-pending" ? "streaming" : "complete",
+    });
+  } else if (state.status === "error") {
     messages.push({
-      id: `${normalizeText(state.requestId) || 'draft'}-assistant-error`,
-      role: 'assistant',
+      id: `${normalizeText(state.requestId) || "draft"}-assistant-error`,
+      role: "assistant",
       content: normalizeText(state.errorMessage) || AI_ERROR_MESSAGES.UNKNOWN,
-      status: 'error',
-    })
-  }
-  else if (state.status === 'ocr-pending' || state.status === 'chat-pending') {
+      status: "error",
+    });
+  } else if (
+    state.status === "ocr-pending" ||
+    state.status === "chat-pending"
+  ) {
     messages.push({
-      id: `${normalizeText(state.requestId) || 'draft'}-assistant-pending`,
-      role: 'assistant',
-      content: '',
-      status: 'streaming',
-    })
+      id: `${normalizeText(state.requestId) || "draft"}-assistant-pending`,
+      role: "assistant",
+      content: "",
+      status: "streaming",
+    });
   }
-  return messages
+  return messages;
 }
 
 function buildImageContext(state = {}) {
-  const hasImage = Boolean(state.imageDataUrl || state.ocrText || normalizeStringList(state.inputKinds).includes(INPUT_TYPE_IMAGE))
-  if (!hasImage)
-    return null
+  const hasImage = Boolean(
+    state.imageDataUrl ||
+    state.ocrText ||
+    normalizeStringList(state.inputKinds).includes(INPUT_TYPE_IMAGE),
+  );
+  if (!hasImage) return null;
 
-  const errorCode = normalizeText(state.errorCode)
-  const unsupported = errorCode === 'MODEL_UNSUPPORTED' || errorCode === 'PROVIDER_UNAVAILABLE'
+  const errorCode = normalizeText(state.errorCode);
+  const unsupported =
+    errorCode === "MODEL_UNSUPPORTED" || errorCode === "PROVIDER_UNAVAILABLE";
   return {
-    type: 'image',
-    title: '剪贴板图片上下文',
+    type: "image",
+    title: "剪贴板图片上下文",
     preview: normalizeText(state.imageDataUrl),
     ocrText: normalizeText(state.ocrText),
-    status: unsupported ? 'unsupported' : state.ocrText ? 'ready' : 'attached',
+    status: unsupported ? "unsupported" : state.ocrText ? "ready" : "attached",
     note: unsupported
-      ? '当前默认模型或 Provider 不支持图片/OCR，请切换支持 vision.ocr 的模型后重试。'
+      ? "当前默认模型或 Provider 不支持图片/OCR，请切换支持 vision.ocr 的模型后重试。"
       : state.ocrText
-        ? '图片已识别为文字上下文并参与回答。'
-        : '图片将作为上下文参与本次提问。',
-  }
+        ? "图片已识别为文字上下文并参与回答。"
+        : "图片将作为上下文参与本次提问。",
+  };
 }
 
 function buildWidgetPayload(state = {}) {
   const selected = normalizeModelSelection({
     providerId: state.selectedProviderId,
     model: state.selectedModel,
-  })
+  });
   return {
     requestId: normalizeText(state.requestId),
     prompt: normalizeText(state.prompt),
@@ -1097,7 +1304,7 @@ function buildWidgetPayload(state = {}) {
     traceId: normalizeText(state.traceId),
     latency: normalizeLatency(state.latency),
     handoffSessionId: normalizeText(state.handoffSessionId),
-    status: normalizeText(state.status) || 'idle',
+    status: normalizeText(state.status) || "idle",
     stage: normalizeText(state.stage),
     capabilityId: normalizeText(state.capabilityId),
     inputKinds: normalizeStringList(state.inputKinds),
@@ -1106,27 +1313,29 @@ function buildWidgetPayload(state = {}) {
     copyStatus: normalizeText(state.copyStatus),
     copyError: normalizeText(state.copyError),
     copyRecovery: normalizeText(state.copyRecovery),
-    contextPackage: state.contextPackage && typeof state.contextPackage === 'object'
-      ? state.contextPackage
-      : null,
-    memoryPolicy: state.memoryPolicy && typeof state.memoryPolicy === 'object'
-      ? state.memoryPolicy
-      : null,
+    contextPackage:
+      state.contextPackage && typeof state.contextPackage === "object"
+        ? state.contextPackage
+        : null,
+    memoryPolicy:
+      state.memoryPolicy && typeof state.memoryPolicy === "object"
+        ? state.memoryPolicy
+        : null,
     modelOptions: normalizeModelOptions(state.modelOptions),
     selectedProviderId: selected.providerId,
     selectedModel: selected.model,
     messages: buildWidgetMessages(state),
     imageContext: buildImageContext(state),
-    streamMode: 'visual-reveal',
+    streamMode: "visual-reveal",
     updatedAt: Date.now(),
-  }
+  };
 }
 
 function resolveWidgetAction(state = {}) {
-  const status = normalizeText(state.status)
-  if (status === 'ready-to-send') {
+  const status = normalizeText(state.status);
+  if (status === "ready-to-send") {
     return {
-      actionId: 'send',
+      actionId: "send",
       payload: {
         prompt: state.prompt,
         draftId: state.draftId,
@@ -1134,14 +1343,17 @@ function resolveWidgetAction(state = {}) {
         selectedProviderId: state.selectedProviderId,
         selectedModel: state.selectedModel,
       },
-    }
+    };
   }
-  if (status === 'ready') {
+  if (status === "ready" || status === "degraded") {
     return {
-      actionId: 'copy-answer',
+      actionId: "copy-answer",
       payload: {
         prompt: state.prompt,
         requestId: state.requestId,
+        status,
+        stage: state.stage,
+        capabilityId: state.capabilityId,
         answer: state.answer,
         provider: state.provider,
         model: state.model,
@@ -1154,11 +1366,11 @@ function resolveWidgetAction(state = {}) {
         selectedProviderId: state.selectedProviderId,
         selectedModel: state.selectedModel,
       },
-    }
+    };
   }
-  if (status === 'error') {
+  if (status === "error") {
     return {
-      actionId: 'retry',
+      actionId: "retry",
       payload: {
         prompt: state.prompt,
         history: cloneHistory(state.history),
@@ -1172,38 +1384,62 @@ function resolveWidgetAction(state = {}) {
         selectedProviderId: state.selectedProviderId,
         selectedModel: state.selectedModel,
       },
-    }
+    };
   }
-  return null
+  return null;
 }
 
 function buildWidgetItem(featureId, state = {}) {
-  const session = getSession(featureId)
-  const status = normalizeText(state.status) || 'idle'
-  const prompt = resolveDisplayPrompt(state.prompt, Boolean(state.imageDataUrl || state.ocrText))
-  const title = prompt ? `智能问答：${truncateText(prompt, 48)}` : '智能问答'
-  const action = resolveWidgetAction({ ...state, prompt: prompt || state.prompt })
-  const subtitleMap = {
-    'idle': '等待 AI 输入',
-    'ready-to-send': '按回车发送到 AI',
-    'ocr-pending': '正在识别剪贴板图片…',
-    'chat-pending': 'AI 正在思考…',
-    'ready': '回答已生成',
-    'error': 'AI 请求失败',
-  }
+  const session = getSession(featureId);
+  const status = normalizeText(state.status) || "idle";
+  const quickReview = isQuickReviewFeature(featureId);
+  const prompt = quickReview
+    ? normalizeQuickReviewCode(state.prompt)
+    : resolveDisplayPrompt(
+        state.prompt,
+        Boolean(state.imageDataUrl || state.ocrText),
+      );
+  const label = quickReview ? "QuickReview" : "智能问答";
+  const title = prompt ? `${label}：${truncateText(prompt, 48)}` : label;
+  const action = resolveWidgetAction({
+    ...state,
+    prompt: prompt || state.prompt,
+  });
+  const subtitleMap = quickReview
+    ? {
+        idle: "等待代码输入",
+        "ready-to-send": "按回车开始代码审查",
+        "chat-pending": "正在审查代码…",
+        ready: "审查已生成",
+        degraded: "审查结果已降级显示",
+        error: "代码审查失败",
+      }
+    : {
+        idle: "等待 AI 输入",
+        "ready-to-send": "按回车发送到 AI",
+        "ocr-pending": "正在识别剪贴板图片…",
+        "chat-pending": "AI 正在思考…",
+        ready: "回答已生成",
+        error: "AI 请求失败",
+      };
 
   return new TuffItemBuilder(WIDGET_ITEM_ID)
-    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+    .setSource("plugin", SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
-    .setSubtitle(subtitleMap[status] || '智能问答')
+    .setSubtitle(subtitleMap[status] || label)
     .setIcon(ICON)
-    .setCustomRender('vue', getMakeWidgetId()(PLUGIN_NAME, featureId), buildWidgetPayload({
-      modelOptions: state.modelOptions ?? session.modelOptions,
-      selectedProviderId: state.selectedProviderId ?? session.selectedProviderId,
-      selectedModel: state.selectedModel ?? session.selectedModel,
-      ...state,
-      prompt: prompt || state.prompt,
-    }))
+    .setCustomRender(
+      "vue",
+      getMakeWidgetId()(PLUGIN_NAME, featureId),
+      buildWidgetPayload({
+        modelOptions: state.modelOptions ?? session.modelOptions,
+        selectedProviderId:
+          state.selectedProviderId ?? session.selectedProviderId,
+        selectedModel: state.selectedModel ?? session.selectedModel,
+        ...state,
+        prompt: prompt || state.prompt,
+      }),
+    )
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
@@ -1235,37 +1471,45 @@ function buildWidgetItem(featureId, state = {}) {
         selectedModel: state.selectedModel,
       }),
     })
-    .build()
+    .build();
 }
 
 async function pushWidgetState(featureId, state = {}) {
   try {
-    plugin.feature.clearItems()
-    const item = buildWidgetItem(featureId, state)
-    await plugin.feature.pushItems([item])
-    return item
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to push widget state', error)
-    return null
+    plugin.feature.clearItems();
+    const item = buildWidgetItem(featureId, state);
+    await plugin.feature.pushItems([item]);
+    return item;
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] failed to push widget state", error);
+    return null;
   }
 }
 
+async function pushWidgetStateIfCurrent(
+  featureId,
+  featureGeneration,
+  state = {},
+) {
+  if (!isFeatureInteractionCurrent(featureId, featureGeneration)) return null;
+  return pushWidgetState(featureId, state);
+}
+
 function buildSendItem(featureId, draft) {
-  const hasImage = Boolean(draft.imageDataUrl || draft.ocrText)
-  const prompt = resolveDisplayPrompt(draft.prompt, hasImage)
-  const subtitle = hasImage
-    ? '按回车先 OCR，再发送到 AI'
-    : '按回车发送到 AI'
+  const hasImage = Boolean(draft.imageDataUrl || draft.ocrText);
+  const prompt = resolveDisplayPrompt(draft.prompt, hasImage);
+  const subtitle = hasImage ? "按回车先 OCR，再发送到 AI" : "按回车发送到 AI";
 
   return buildInfoItem({
     id: `${featureId}-send`,
     featureId,
     title: prompt,
     subtitle,
-    description: buildCapabilitySummary(hasImage ? ['vision.ocr', 'text.chat'] : ['text.chat']),
-    accessory: hasImage ? 'OCR + AI' : 'AI Ask',
-    actionId: 'send',
+    description: buildCapabilitySummary(
+      hasImage ? ["vision.ocr", "text.chat"] : ["text.chat"],
+    ),
+    accessory: hasImage ? "OCR + AI" : "AI Ask",
+    actionId: "send",
     payload: {
       prompt: draft.prompt,
       draftId: draft.draftId,
@@ -1273,33 +1517,35 @@ function buildSendItem(featureId, draft) {
       selectedProviderId: draft.selectedProviderId,
       selectedModel: draft.selectedModel,
     },
-    status: 'ready-to-send',
+    status: "ready-to-send",
     intelligence: {
-      stage: hasImage ? 'ocr' : 'chat',
-      capabilities: hasImage ? ['vision.ocr', 'text.chat'] : ['text.chat'],
+      stage: hasImage ? "ocr" : "chat",
+      capabilities: hasImage ? ["vision.ocr", "text.chat"] : ["text.chat"],
       inputKinds: draft.inputKinds,
     },
-  })
+  });
 }
 
 function buildPendingItem(
   featureId,
   prompt,
   requestId,
-  stage = 'chat',
-  handoffSessionId = '',
+  stage = "chat",
+  handoffSessionId = "",
   context = {},
 ) {
-  const isOcr = stage === 'ocr'
-  const capabilityId = isOcr ? 'vision.ocr' : 'text.chat'
+  const isOcr = stage === "ocr";
+  const capabilityId = isOcr ? "vision.ocr" : "text.chat";
   return buildInfoItem({
-    id: `${featureId}-${isOcr ? 'ocr-pending' : 'chat-pending'}-${requestId}`,
+    id: `${featureId}-${isOcr ? "ocr-pending" : "chat-pending"}-${requestId}`,
     featureId,
     title: prompt,
-    subtitle: isOcr ? '正在识别剪贴板图片…' : 'AI 正在思考…',
-    description: isOcr ? '正在调用 vision.ocr，完成后继续 text.chat。' : '正在调用 text.chat。',
+    subtitle: isOcr ? "正在识别剪贴板图片…" : "AI 正在思考…",
+    description: isOcr
+      ? "正在调用 vision.ocr，完成后继续 text.chat。"
+      : "正在调用 text.chat。",
     accessory: capabilityId,
-    status: isOcr ? 'ocr-pending' : 'chat-pending',
+    status: isOcr ? "ocr-pending" : "chat-pending",
     handoffSessionId,
     intelligence: {
       requestId,
@@ -1307,27 +1553,27 @@ function buildPendingItem(
       capabilityId,
       inputKinds: context.inputKinds,
     },
-  })
+  });
 }
 
 function buildReadyItem(featureId, state) {
-  const modelInfo = [state.provider, state.model].filter(Boolean).join(' / ')
-  const latencyText = formatLatency(state.latency)
-  const handoffText = state.handoffSessionId ? '已接入交接会话' : ''
-  const traceText = state.traceId ? `Trace ${state.traceId}` : ''
+  const modelInfo = [state.provider, state.model].filter(Boolean).join(" / ");
+  const latencyText = formatLatency(state.latency);
+  const handoffText = state.handoffSessionId ? "已接入交接会话" : "";
+  const traceText = state.traceId ? `Trace ${state.traceId}` : "";
   const subtitle = [truncateText(state.answer, 72), modelInfo, latencyText]
     .filter(Boolean)
-    .join(' · ')
-  const description = [traceText, handoffText].filter(Boolean).join(' · ')
+    .join(" · ");
+  const description = [traceText, handoffText].filter(Boolean).join(" · ");
 
   return buildInfoItem({
     id: `${featureId}-ready-${state.requestId}`,
     featureId,
-    title: state.prompt || 'AI 回答',
-    subtitle: subtitle || '回答已生成',
+    title: state.prompt || "AI 回答",
+    subtitle: subtitle || "回答已生成",
     description,
-    accessory: modelInfo || 'text.chat',
-    actionId: 'copy-answer',
+    accessory: modelInfo || "text.chat",
+    actionId: "copy-answer",
     payload: {
       prompt: state.prompt,
       requestId: state.requestId,
@@ -1339,36 +1585,43 @@ function buildReadyItem(featureId, state) {
       handoffSessionId: state.handoffSessionId,
       inputKinds: state.inputKinds,
     },
-    status: 'ready',
+    status: "ready",
     handoffSessionId: state.handoffSessionId,
     intelligence: {
       requestId: state.requestId,
-      capabilityId: 'text.chat',
+      capabilityId: "text.chat",
       provider: state.provider,
       model: state.model,
       traceId: state.traceId,
       latency: state.latency,
       inputKinds: state.inputKinds,
     },
-  })
+  });
 }
 
-function buildErrorItem(featureId, prompt, error, history = [], retryContext = {}) {
-  const normalizedError = typeof error === 'object' && error?.code && error?.message
-    ? error
-    : normalizeInvokeError(error)
+function buildErrorItem(
+  featureId,
+  prompt,
+  error,
+  history = [],
+  retryContext = {},
+) {
+  const normalizedError =
+    typeof error === "object" && error?.code && error?.message
+      ? error
+      : normalizeInvokeError(error);
 
   return buildInfoItem({
     id: `${featureId}-error-${Date.now()}`,
     featureId,
-    title: prompt ? `AI 请求失败：${truncateText(prompt, 48)}` : 'AI 请求失败',
+    title: prompt ? `AI 请求失败：${truncateText(prompt, 48)}` : "AI 请求失败",
     subtitle: truncateText(normalizedError.message, 120),
     description: buildCapabilitySummary([
-      retryContext.capabilityId || 'text.chat',
+      retryContext.capabilityId || "text.chat",
       normalizedError.code,
     ]),
     accessory: normalizedError.code,
-    actionId: 'retry',
+    actionId: "retry",
     payload: {
       prompt,
       history: cloneHistory(history),
@@ -1380,118 +1633,157 @@ function buildErrorItem(featureId, prompt, error, history = [], retryContext = {
       selectedProviderId: retryContext.selectedProviderId,
       selectedModel: retryContext.selectedModel,
     },
-    status: 'error',
+    status: "error",
     handoffSessionId: retryContext.handoffSessionId,
     intelligence: {
-      stage: 'error',
-      capabilityId: retryContext.capabilityId || 'text.chat',
+      stage: "error",
+      capabilityId: retryContext.capabilityId || "text.chat",
       inputKinds: retryContext.inputKinds,
       errorCode: normalizedError.code,
       errorMessage: normalizedError.message,
     },
-  })
+  });
 }
 
 function getQueryInputs(query) {
-  if (!query || typeof query !== 'object' || !Array.isArray(query.inputs))
-    return []
-  return query.inputs
+  if (!query || typeof query !== "object" || !Array.isArray(query.inputs))
+    return [];
+  return query.inputs;
 }
 
 function extractImageDataUrl(query) {
   const imageInput = getQueryInputs(query).find((input) => {
-    return input?.type === INPUT_TYPE_IMAGE
-      && typeof input?.content === 'string'
-      && input.content.startsWith('data:image/')
-  })
-  return imageInput?.content || ''
+    return (
+      input?.type === INPUT_TYPE_IMAGE &&
+      typeof input?.content === "string" &&
+      input.content.startsWith("data:image/")
+    );
+  });
+  return imageInput?.content || "";
+}
+
+function extractTextInputContent(query) {
+  const textInput = getQueryInputs(query).find((input) => {
+    return (
+      normalizeText(input?.type).toLowerCase() === INPUT_TYPE_TEXT &&
+      typeof input?.content === "string" &&
+      Boolean(input.content.trim())
+    );
+  });
+  return textInput?.content || "";
 }
 
 function extractInputKinds(query) {
-  const inputKinds = new Set()
-  if (normalizeText(getQueryText(query)))
-    inputKinds.add(INPUT_TYPE_TEXT)
+  const inputKinds = new Set();
+  if (normalizeText(getQueryText(query))) inputKinds.add(INPUT_TYPE_TEXT);
 
   for (const input of getQueryInputs(query)) {
-    if (typeof input?.type === 'string' && input.type.trim()) {
-      inputKinds.add(input.type.trim())
+    if (typeof input?.type === "string" && input.type.trim()) {
+      inputKinds.add(input.type.trim());
     }
   }
 
-  return Array.from(inputKinds)
+  return Array.from(inputKinds);
 }
 
-function extractQueryContext(query, options = {}) {
-  const rawText = getQueryText(query)
-  const prompt = normalizePrompt(rawText)
-  const imageDataUrl = extractImageDataUrl(query)
-  const isExplicitAiQuery = hasAiPrefix(rawText)
-  const forceImageOcr = options?.forceImageOcr === true
-  const shouldUseOcr = Boolean(imageDataUrl && prompt && (isExplicitAiQuery || forceImageOcr))
-  const shouldShowEntry = Boolean(prompt || shouldUseOcr)
+function extractQuickReviewQueryContext(query) {
+  const rawText = getQueryText(query);
+  const inputKinds = extractInputKinds(query);
+  const unsupportedInput = inputKinds.some((kind) => kind !== INPUT_TYPE_TEXT);
+  const prompt =
+    normalizeQuickReviewCode(rawText, true) ||
+    normalizeQuickReviewCode(extractTextInputContent(query));
 
   return {
     rawText,
     prompt,
-    imageDataUrl: shouldUseOcr ? imageDataUrl : '',
-    inputKinds: extractInputKinds(query),
-    shouldShowEntry,
-  }
+    imageDataUrl: "",
+    ocrText: "",
+    inputKinds: unsupportedInput ? inputKinds : [INPUT_TYPE_TEXT],
+    shouldShowEntry: Boolean(normalizeText(rawText)) || inputKinds.length > 0,
+    unsupportedInput,
+  };
 }
 
-function storeDraft(session, draft) {
+function extractQueryContext(query, options = {}) {
+  const rawText = getQueryText(query);
+  const prompt = normalizePrompt(rawText);
+  const imageDataUrl = extractImageDataUrl(query);
+  const isExplicitAiQuery = hasAiPrefix(rawText);
+  const forceImageOcr = options?.forceImageOcr === true;
+  const shouldUseOcr = Boolean(
+    imageDataUrl && prompt && (isExplicitAiQuery || forceImageOcr),
+  );
+  const shouldShowEntry = Boolean(prompt || shouldUseOcr);
+
+  return {
+    rawText,
+    prompt,
+    imageDataUrl: shouldUseOcr ? imageDataUrl : "",
+    inputKinds: extractInputKinds(query),
+    shouldShowEntry,
+  };
+}
+
+function storeDraft(session, draft, preservePrompt = false) {
   const selected = normalizeModelSelection({
     providerId: draft.selectedProviderId ?? session.selectedProviderId,
     model: draft.selectedModel ?? session.selectedModel,
-  })
-  const draftId = draft.draftId || crypto.randomUUID()
+  });
+  const draftId = draft.draftId || crypto.randomUUID();
   const normalizedDraft = {
     draftId,
-    prompt: normalizePrompt(draft.prompt),
+    prompt: preservePrompt
+      ? normalizeQuickReviewCode(draft.prompt)
+      : normalizePrompt(draft.prompt),
     imageDataUrl: normalizeText(draft.imageDataUrl),
     ocrText: normalizeText(draft.ocrText),
-    inputKinds: Array.isArray(draft.inputKinds) ? draft.inputKinds.filter(Boolean) : [],
+    inputKinds: Array.isArray(draft.inputKinds)
+      ? draft.inputKinds.filter(Boolean)
+      : [],
     selectedProviderId: selected.providerId,
     selectedModel: selected.model,
-  }
-  session.drafts.set(draftId, normalizedDraft)
+  };
+  session.drafts.set(draftId, normalizedDraft);
 
   while (session.drafts.size > MAX_DRAFTS) {
-    const firstKey = session.drafts.keys().next().value
-    session.drafts.delete(firstKey)
+    const firstKey = session.drafts.keys().next().value;
+    session.drafts.delete(firstKey);
   }
 
-  return normalizedDraft
+  return normalizedDraft;
 }
 
-function resolveDraft(session, payload, prompt) {
-  const draftId = normalizeText(payload?.draftId)
+function resolveDraft(session, payload, prompt, preservePrompt = false) {
+  const draftId = normalizeText(payload?.draftId);
   if (draftId && session.drafts.has(draftId)) {
-    return session.drafts.get(draftId)
+    return session.drafts.get(draftId);
   }
 
-  return storeDraft(session, {
-    draftId,
-    prompt,
-    inputKinds: Array.isArray(payload?.inputKinds) ? payload.inputKinds : [],
-    selectedProviderId: payload?.selectedProviderId,
-    selectedModel: payload?.selectedModel,
-  })
+  return storeDraft(
+    session,
+    {
+      draftId,
+      prompt,
+      inputKinds: Array.isArray(payload?.inputKinds) ? payload.inputKinds : [],
+      selectedProviderId: payload?.selectedProviderId,
+      selectedModel: payload?.selectedModel,
+    },
+    preservePrompt,
+  );
 }
 
 function normalizeModelOptions(values) {
-  if (!Array.isArray(values))
-    return []
+  if (!Array.isArray(values)) return [];
 
   return values
     .map((option) => {
-      const providerId = normalizeText(option?.providerId)
-      const providerName = normalizeText(option?.providerName) || providerId
-      const providerType = normalizeText(option?.providerType)
-      const defaultModel = normalizeText(option?.defaultModel)
-      const models = normalizeStringList(option?.models)
-      if (!providerId || !models.length)
-        return null
+      const providerId = normalizeText(option?.providerId);
+      const providerName = normalizeText(option?.providerName) || providerId;
+      const providerType = normalizeText(option?.providerType);
+      const defaultModel = normalizeText(option?.defaultModel);
+      const models = normalizeStringList(option?.models);
+      if (!providerId || !models.length) return null;
       return {
         providerId,
         providerName,
@@ -1500,29 +1792,37 @@ function normalizeModelOptions(values) {
         defaultModel,
         capabilities: normalizeStringList(option?.capabilities),
         available: option?.available !== false,
-      }
+      };
     })
-    .filter(Boolean)
+    .filter(Boolean);
 }
 
-async function resolveModelOptions(client) {
-  if (!client?.getProviderModelOptions)
-    return []
+async function resolveModelOptions(client, capabilityId = "text.chat") {
+  if (!client?.getProviderModelOptions) return [];
   try {
-    return normalizeModelOptions(await client.getProviderModelOptions({ capabilityId: 'text.chat' }))
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to load model options', error)
-    return []
+    return normalizeModelOptions(
+      await client.getProviderModelOptions({ capabilityId }),
+    );
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] failed to load model options", error);
+    return [];
   }
 }
 
-async function refreshSessionModelOptions(session, client) {
-  const options = await resolveModelOptions(client)
-  if (options.length) {
-    session.modelOptions = options
-  }
-  return session.modelOptions
+async function refreshSessionModelOptions(
+  session,
+  client,
+  capabilityId = "text.chat",
+  featureGeneration = 0,
+) {
+  const options = await resolveModelOptions(client, capabilityId);
+  if (
+    featureGeneration &&
+    !isFeatureInteractionCurrent(session.featureId, featureGeneration)
+  )
+    return session.modelOptions;
+  if (options.length) session.modelOptions = options;
+  return session.modelOptions;
 }
 
 async function dispatchPrompt({
@@ -1537,34 +1837,44 @@ async function dispatchPrompt({
   selectedProviderId,
   selectedModel,
 }) {
-  const resolvedFeatureId = resolveFeatureId(featureId)
-  const normalizedPrompt = normalizePrompt(prompt)
-  const session = getSession(resolvedFeatureId)
-  let resolvedHistory = cloneHistory(historySnapshot)
-  let resolvedOcrText = normalizeText(ocrText)
-  const selected = normalizeModelSelection({ providerId: selectedProviderId, model: selectedModel })
+  const resolvedFeatureId = resolveFeatureId(featureId);
+  const normalizedPrompt = normalizePrompt(prompt);
+  const session = getSession(resolvedFeatureId);
+  const requestGeneration = session.activeRequestGeneration;
+  let resolvedHistory = cloneHistory(historySnapshot);
+  let resolvedOcrText = normalizeText(ocrText);
+  const selected = normalizeModelSelection({
+    providerId: selectedProviderId,
+    model: selectedModel,
+  });
   const displayPrompt = resolveDisplayPrompt(
     normalizedPrompt,
     Boolean(imageDataUrl || resolvedOcrText),
-  )
-  let contextPackage = null
-  let memoryPolicy = null
+  );
+  let contextPackage = null;
+  let memoryPolicy = null;
 
-  if (!displayPrompt)
-    return
+  if (!displayPrompt) return;
 
   try {
-    const client = resolveIntelligenceClient()
-    const modelOptions = await refreshSessionModelOptions(session, client)
+    const client = resolveIntelligenceClient();
+    const modelOptions = await refreshSessionModelOptions(
+      session,
+      client,
+      "text.chat",
+      requestGeneration,
+    );
+    if (!canCommitResponse(session, requestId)) return;
     const handoffSessionId = await ensureHandoffSession(client, session, {
       featureId: resolvedFeatureId,
       prompt: displayPrompt,
       history: resolvedHistory,
       requestId,
       inputKinds,
-    })
+    });
+    if (!canCommitResponse(session, requestId)) return;
     if (session.history.length > resolvedHistory.length) {
-      resolvedHistory = cloneHistory(session.history)
+      resolvedHistory = cloneHistory(session.history);
     }
     const contextState = await prepareContextTurnForAsk(client, {
       featureId: resolvedFeatureId,
@@ -1574,36 +1884,37 @@ async function dispatchPrompt({
       handoffSessionId,
       selectedProviderId: selected.providerId,
       selectedModel: selected.model,
-    })
-    contextPackage = contextState?.package || null
+    });
+    if (!canCommitResponse(session, requestId)) return;
+    contextPackage = contextState?.package || null;
     memoryPolicy = await evaluateMemoryPolicyForAsk(client, {
       prompt: displayPrompt,
       contextState,
-    })
+    });
+    if (!canCommitResponse(session, requestId)) return;
 
     if (imageDataUrl && !resolvedOcrText) {
-      const ocrPayload = buildOcrPayload(imageDataUrl)
+      const ocrPayload = buildOcrPayload(imageDataUrl);
       const ocrResult = await client.invoke(
-        'vision.ocr',
+        "vision.ocr",
         ocrPayload,
         buildInvokeOptions({
           featureId: resolvedFeatureId,
           requestId,
-          capabilityId: 'vision.ocr',
+          capabilityId: "vision.ocr",
           inputKinds,
           sessionId: handoffSessionId,
           contextPackage,
           memoryPolicy,
         }),
-      )
-      resolvedOcrText = normalizeText(ocrResult?.result?.text)
+      );
+      resolvedOcrText = normalizeText(ocrResult?.result?.text);
 
       if (!resolvedOcrText) {
-        throw createPluginError('OCR_EMPTY')
+        throw createPluginError("OCR_EMPTY");
       }
 
-      if (!canCommitResponse(session, requestId))
-        return
+      if (!canCommitResponse(session, requestId)) return;
 
       if (draftId && session.drafts.has(draftId)) {
         storeDraft(session, {
@@ -1613,15 +1924,15 @@ async function dispatchPrompt({
           inputKinds,
           selectedProviderId: selected.providerId,
           selectedModel: selected.model,
-        })
+        });
       }
 
       await pushWidgetState(resolvedFeatureId, {
         prompt: displayPrompt,
         requestId,
-        status: 'chat-pending',
-        stage: 'chat',
-        capabilityId: 'text.chat',
+        status: "chat-pending",
+        stage: "chat",
+        capabilityId: "text.chat",
         handoffSessionId,
         inputKinds,
         imageDataUrl,
@@ -1632,23 +1943,26 @@ async function dispatchPrompt({
         selectedModel: selected.model,
         contextPackage,
         memoryPolicy,
-      })
+      });
+      if (!canCommitResponse(session, requestId)) return;
     }
 
-    const chatPrompt = normalizedPrompt || '请总结剪贴板图片中的文字。'
-    const payload = buildInvokePayload(chatPrompt, resolvedHistory, { ocrText: resolvedOcrText })
+    const chatPrompt = normalizedPrompt || "请总结剪贴板图片中的文字。";
+    const payload = buildInvokePayload(chatPrompt, resolvedHistory, {
+      ocrText: resolvedOcrText,
+    });
     const invokeOptions = buildModelSelectionInvokeOptions(
       buildInvokeOptions({
         featureId: resolvedFeatureId,
         requestId,
-        capabilityId: 'text.chat',
+        capabilityId: "text.chat",
         inputKinds,
         sessionId: handoffSessionId,
         contextPackage,
         memoryPolicy,
       }),
       selected,
-    )
+    );
     const streamed = await streamChatAnswer({
       client,
       featureId: resolvedFeatureId,
@@ -1667,30 +1981,31 @@ async function dispatchPrompt({
       modelOptions,
       contextPackage,
       memoryPolicy,
-    })
-    const mapped = streamed || mapInvokeResult(
-      await client.invoke('text.chat', payload, invokeOptions),
-      displayPrompt,
-      requestId,
-      handoffSessionId,
-      inputKinds,
-      contextPackage,
-      memoryPolicy,
-    )
+    });
+    const mapped =
+      streamed ||
+      mapInvokeResult(
+        await client.invoke("text.chat", payload, invokeOptions),
+        displayPrompt,
+        requestId,
+        handoffSessionId,
+        inputKinds,
+        contextPackage,
+        memoryPolicy,
+      );
 
     if (!mapped.answer) {
-      throw createPluginError('EMPTY_RESPONSE')
+      throw createPluginError("EMPTY_RESPONSE");
     }
 
-    if (!canCommitResponse(session, requestId))
-      return
+    if (!canCommitResponse(session, requestId)) return;
 
     session.history = keepNewestBusinessMessages([
       ...resolvedHistory,
-      { role: 'user', content: displayPrompt },
-      { role: 'assistant', content: mapped.answer },
-    ])
-    await saveStoredHistory(resolvedFeatureId, session.history)
+      { role: "user", content: displayPrompt },
+      { role: "assistant", content: mapped.answer },
+    ]);
+    await saveStoredHistory(resolvedFeatureId, session.history);
     await updateHandoffSession(client, session, {
       featureId: resolvedFeatureId,
       prompt: displayPrompt,
@@ -1698,17 +2013,17 @@ async function dispatchPrompt({
       answer: mapped.answer,
       requestId,
       inputKinds,
-    })
-    session.activeRequestId = ''
-    session.uiRequestId = requestId
-    session.lastReadyDraftId = ''
-    session.lastReadyPromptKey = ''
+    });
+    session.activeRequestId = "";
+    session.uiRequestId = requestId;
+    session.lastReadyDraftId = "";
+    session.lastReadyPromptKey = "";
 
     await pushWidgetState(resolvedFeatureId, {
       ...mapped,
-      status: 'ready',
-      stage: 'chat',
-      capabilityId: 'text.chat',
+      status: "ready",
+      stage: "chat",
+      capabilityId: "text.chat",
       imageDataUrl,
       ocrText: resolvedOcrText,
       history: resolvedHistory,
@@ -1717,24 +2032,23 @@ async function dispatchPrompt({
       selectedModel: selected.model,
       contextPackage,
       memoryPolicy,
-    })
-  }
-  catch (error) {
-    if (!canCommitResponse(session, requestId))
-      return
+    });
+  } catch (error) {
+    if (!canCommitResponse(session, requestId)) return;
 
-    session.activeRequestId = ''
-    session.uiRequestId = requestId
-    session.lastReadyDraftId = ''
-    session.lastReadyPromptKey = ''
-    const normalizedError = normalizeInvokeError(error)
-    logger?.error?.('[touch-intelligence] invoke failed', error)
+    session.activeRequestId = "";
+    session.uiRequestId = requestId;
+    session.lastReadyDraftId = "";
+    session.lastReadyPromptKey = "";
+    const normalizedError = normalizeInvokeError(error);
+    logger?.error?.("[touch-intelligence] invoke failed", error);
     await pushWidgetState(resolvedFeatureId, {
       prompt: displayPrompt,
       requestId,
-      status: 'error',
-      stage: 'error',
-      capabilityId: imageDataUrl && !resolvedOcrText ? 'vision.ocr' : 'text.chat',
+      status: "error",
+      stage: "error",
+      capabilityId:
+        imageDataUrl && !resolvedOcrText ? "vision.ocr" : "text.chat",
       inputKinds,
       imageDataUrl,
       ocrText: resolvedOcrText,
@@ -1747,164 +2061,423 @@ async function dispatchPrompt({
       selectedModel: selected.model,
       contextPackage: contextPackage ?? null,
       memoryPolicy: memoryPolicy ?? null,
-    })
+    });
   }
 }
 
 async function copyAnswer(answer) {
-  if (!clipboard?.writeText)
-    return false
+  if (!clipboard?.writeText) return false;
 
-  const canCopy = await ensurePermission('clipboard.write', '需要剪贴板权限以复制 AI 回答')
-  if (!canCopy)
-    return false
+  const canCopy = await ensurePermission(
+    "clipboard.write",
+    "需要剪贴板权限以复制 AI 回答",
+  );
+  if (!canCopy) return false;
 
   try {
-    await clipboard.writeText(answer)
-    return true
+    await clipboard.writeText(answer);
+    return true;
+  } catch (error) {
+    logger?.warn?.("[touch-intelligence] failed to copy answer", error);
+    return false;
   }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to copy answer', error)
-    return false
+}
+
+async function dispatchQuickReview({
+  featureId,
+  code,
+  requestId,
+  draftId,
+  selectedProviderId,
+  selectedModel,
+}) {
+  const resolvedFeatureId = resolveFeatureId(featureId);
+  const session = getSession(resolvedFeatureId);
+  const requestGeneration = session.activeRequestGeneration;
+  const normalizedCode = normalizeQuickReviewCode(code);
+  const selected = normalizeModelSelection({
+    providerId: selectedProviderId,
+    model: selectedModel,
+  });
+
+  if (!normalizedCode) {
+    if (!canCommitResponse(session, requestId)) return;
+
+    session.activeRequestId = "";
+    session.uiRequestId = requestId;
+    const normalizedError = normalizeQuickReviewError(
+      createPluginError("EMPTY_CODE"),
+    );
+    await pushWidgetState(resolvedFeatureId, {
+      prompt: "",
+      requestId,
+      draftId,
+      status: "error",
+      stage: "review",
+      capabilityId: "code.review",
+      inputKinds: [INPUT_TYPE_TEXT],
+      errorCode: normalizedError.code,
+      errorMessage: normalizedError.message,
+      modelOptions: session.modelOptions,
+      selectedProviderId: selected.providerId,
+      selectedModel: selected.model,
+    });
+    return;
+  }
+
+  try {
+    const client = resolveIntelligenceClient();
+    const modelOptions = await refreshSessionModelOptions(
+      session,
+      client,
+      "code.review",
+      requestGeneration,
+    );
+    if (!canCommitResponse(session, requestId)) return;
+    const invokeOptions = buildModelSelectionInvokeOptions(
+      buildInvokeOptions({
+        featureId: resolvedFeatureId,
+        requestId,
+        capabilityId: "code.review",
+        inputKinds: [INPUT_TYPE_TEXT],
+      }),
+      selected,
+    );
+    const mapped = mapCodeReviewResult(
+      await client.invoke(
+        "code.review",
+        {
+          code: normalizedCode,
+          focusAreas: [...QUICK_REVIEW_FOCUS_AREAS],
+        },
+        invokeOptions,
+      ),
+      normalizedCode,
+      requestId,
+      [INPUT_TYPE_TEXT],
+    );
+
+    if (!canCommitResponse(session, requestId)) return;
+
+    session.activeRequestId = "";
+    session.uiRequestId = requestId;
+    session.lastReadyDraftId = "";
+    session.lastReadyPromptKey = "";
+
+    await pushWidgetState(resolvedFeatureId, {
+      ...mapped,
+      draftId,
+      status: mapped.degraded ? "degraded" : "ready",
+      stage: mapped.degraded ? "review-degraded" : "review",
+      capabilityId: "code.review",
+      inputKinds: [INPUT_TYPE_TEXT],
+      modelOptions,
+      selectedProviderId: selected.providerId,
+      selectedModel: selected.model,
+    });
+  } catch (error) {
+    if (!canCommitResponse(session, requestId)) return;
+
+    session.activeRequestId = "";
+    session.uiRequestId = requestId;
+    session.lastReadyDraftId = "";
+    session.lastReadyPromptKey = "";
+    const normalizedError = normalizeQuickReviewError(error);
+    await pushWidgetState(resolvedFeatureId, {
+      prompt: normalizedCode,
+      requestId,
+      draftId,
+      status: "error",
+      stage: "review",
+      capabilityId: "code.review",
+      inputKinds: [INPUT_TYPE_TEXT],
+      errorCode: normalizedError.code,
+      errorMessage: normalizedError.message,
+      modelOptions: session.modelOptions,
+      selectedProviderId: selected.providerId,
+      selectedModel: selected.model,
+    });
   }
 }
 
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
+    const resolvedFeatureId = resolveFeatureId(featureId);
+    const quickReview = isQuickReviewFeature(resolvedFeatureId);
+    let featureGeneration = 0;
     try {
-      const resolvedFeatureId = resolveFeatureId(featureId)
-      const session = getSession(resolvedFeatureId)
-      const queryContext = extractQueryContext(query, {
-        forceImageOcr: resolvedFeatureId === DEFAULT_FEATURE_ID,
-      })
-      const storedHistory = await loadStoredHistory(resolvedFeatureId)
-      if (storedHistory.length > session.history.length) {
-        session.history = storedHistory
+      const session = activateFeatureSession(resolvedFeatureId);
+      featureGeneration = session.featureGeneration;
+      const capabilityId = getFeatureCapabilityId(resolvedFeatureId);
+      const queryContext = quickReview
+        ? extractQuickReviewQueryContext(query)
+        : extractQueryContext(query, {
+            forceImageOcr: resolvedFeatureId === DEFAULT_FEATURE_ID,
+          });
+
+      if (!quickReview) {
+        const storedHistory = await loadStoredHistory(resolvedFeatureId);
+        if (!isFeatureInteractionCurrent(resolvedFeatureId, featureGeneration))
+          return true;
+        if (storedHistory.length > session.history.length) {
+          session.history = storedHistory;
+        }
       }
 
       if (!queryContext.shouldShowEntry) {
-        const client = resolveIntelligenceClient()
-        await refreshSessionModelOptions(session, client)
-        session.lastReadyDraftId = ''
-        session.lastReadyPromptKey = ''
-        await pushWidgetState(resolvedFeatureId, {
-          status: 'idle',
-          stage: 'chat',
-          capabilityId: 'text.chat',
-          history: cloneHistory(session.history),
-          handoffSessionId: session.handoffSessionId,
+        const client = resolveIntelligenceClient();
+        await refreshSessionModelOptions(
+          session,
+          client,
+          capabilityId,
+          featureGeneration,
+        );
+        if (!isFeatureInteractionCurrent(resolvedFeatureId, featureGeneration))
+          return true;
+        session.lastReadyDraftId = "";
+        session.lastReadyPromptKey = "";
+        await pushWidgetStateIfCurrent(resolvedFeatureId, featureGeneration, {
+          status: "idle",
+          stage: quickReview ? "review" : "chat",
+          capabilityId,
+          inputKinds: quickReview ? [INPUT_TYPE_TEXT] : [],
+          ...(quickReview
+            ? {}
+            : {
+                history: cloneHistory(session.history),
+                handoffSessionId: session.handoffSessionId,
+              }),
           modelOptions: session.modelOptions,
           selectedProviderId: session.selectedProviderId,
           selectedModel: session.selectedModel,
-        })
-        return true
+        });
+        return true;
       }
 
-      const draft = storeDraft(session, queryContext)
-      const displayPrompt = resolveDisplayPrompt(draft.prompt, Boolean(draft.imageDataUrl || draft.ocrText))
-      if (!displayPrompt)
-        return true
-
-      const hasPermission = await ensurePermission(
-        'intelligence.basic',
-        '需要 AI 权限以执行智能问答',
-      )
-      if (!hasPermission) {
-        const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
-        await pushWidgetState(resolvedFeatureId, {
-          ...draft,
-          prompt: displayPrompt,
-          status: 'error',
-          stage: 'error',
+      if (quickReview && queryContext.unsupportedInput) {
+        const normalizedError = normalizeQuickReviewError(
+          createPluginError("TEXT_ONLY_INPUT"),
+        );
+        await pushWidgetStateIfCurrent(resolvedFeatureId, featureGeneration, {
+          status: "error",
+          stage: "review",
+          capabilityId,
+          inputKinds: queryContext.inputKinds,
           errorCode: normalizedError.code,
           errorMessage: normalizedError.message,
-          handoffSessionId: session.handoffSessionId,
-          history: cloneHistory(session.history),
-        })
-        return true
+          modelOptions: session.modelOptions,
+          selectedProviderId: session.selectedProviderId,
+          selectedModel: session.selectedModel,
+        });
+        return true;
       }
 
-      const requestId = crypto.randomUUID()
-      markPendingRequest(session, requestId)
-      session.lastReadyDraftId = ''
-      session.lastReadyPromptKey = ''
-      await pushWidgetState(resolvedFeatureId, {
+      const displayPrompt = quickReview
+        ? normalizeQuickReviewCode(queryContext.prompt)
+        : resolveDisplayPrompt(
+            queryContext.prompt,
+            Boolean(queryContext.imageDataUrl || queryContext.ocrText),
+          );
+      if (!displayPrompt) {
+        if (quickReview) {
+          const normalizedError = normalizeQuickReviewError(
+            createPluginError("EMPTY_CODE"),
+          );
+          await pushWidgetStateIfCurrent(resolvedFeatureId, featureGeneration, {
+            status: "error",
+            stage: "review",
+            capabilityId,
+            inputKinds: [INPUT_TYPE_TEXT],
+            errorCode: normalizedError.code,
+            errorMessage: normalizedError.message,
+            modelOptions: session.modelOptions,
+            selectedProviderId: session.selectedProviderId,
+            selectedModel: session.selectedModel,
+          });
+        }
+        return true;
+      }
+
+      const draft = storeDraft(
+        session,
+        {
+          ...queryContext,
+          prompt: displayPrompt,
+          inputKinds: quickReview ? [INPUT_TYPE_TEXT] : queryContext.inputKinds,
+        },
+        quickReview,
+      );
+      const hasPermission = await ensurePermission(
+        "intelligence.basic",
+        getFeaturePermissionReason(resolvedFeatureId),
+      );
+      if (!isFeatureInteractionCurrent(resolvedFeatureId, featureGeneration))
+        return true;
+      if (!hasPermission) {
+        const normalizedError = quickReview
+          ? normalizeQuickReviewError(createPluginError("PERMISSION_DENIED"))
+          : normalizeInvokeError(createPluginError("PERMISSION_DENIED"));
+        await pushWidgetStateIfCurrent(resolvedFeatureId, featureGeneration, {
+          ...draft,
+          prompt: displayPrompt,
+          status: "error",
+          stage: quickReview ? "review" : "error",
+          capabilityId,
+          inputKinds: quickReview ? [INPUT_TYPE_TEXT] : draft.inputKinds,
+          errorCode: normalizedError.code,
+          errorMessage: normalizedError.message,
+          ...(quickReview
+            ? {}
+            : {
+                handoffSessionId: session.handoffSessionId,
+                history: cloneHistory(session.history),
+              }),
+          modelOptions: session.modelOptions,
+          selectedProviderId: draft.selectedProviderId,
+          selectedModel: draft.selectedModel,
+        });
+        return true;
+      }
+
+      const requestId = crypto.randomUUID();
+      if (!markPendingRequest(session, requestId, featureGeneration))
+        return true;
+      session.lastReadyDraftId = "";
+      session.lastReadyPromptKey = "";
+      await pushWidgetStateIfCurrent(resolvedFeatureId, featureGeneration, {
         ...draft,
         prompt: displayPrompt,
         requestId,
-        status: draft.imageDataUrl ? 'ocr-pending' : 'chat-pending',
-        stage: draft.imageDataUrl ? 'ocr' : 'chat',
-        capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
-        handoffSessionId: session.handoffSessionId,
-        history: cloneHistory(session.history),
+        status:
+          quickReview || !draft.imageDataUrl ? "chat-pending" : "ocr-pending",
+        stage: quickReview ? "review" : draft.imageDataUrl ? "ocr" : "chat",
+        capabilityId: quickReview
+          ? "code.review"
+          : draft.imageDataUrl
+            ? "vision.ocr"
+            : "text.chat",
+        inputKinds: quickReview ? [INPUT_TYPE_TEXT] : draft.inputKinds,
+        ...(quickReview
+          ? {}
+          : {
+              handoffSessionId: session.handoffSessionId,
+              history: cloneHistory(session.history),
+            }),
         modelOptions: session.modelOptions,
-      })
-      void dispatchPrompt({
-        featureId: resolvedFeatureId,
-        prompt: draft.prompt,
-        requestId,
-        historySnapshot: cloneHistory(session.history),
-        imageDataUrl: draft.imageDataUrl,
-        ocrText: draft.ocrText,
-        inputKinds: draft.inputKinds,
-        draftId: draft.draftId,
         selectedProviderId: draft.selectedProviderId,
         selectedModel: draft.selectedModel,
-      })
-      return true
-    }
-    catch (error) {
-      const normalizedError = normalizeInvokeError(error)
-      logger?.error?.('[touch-intelligence] Failed to handle feature', error)
-      await pushWidgetState(featureId, {
-        status: 'error',
-        stage: 'error',
+      });
+      if (!canCommitResponse(session, requestId)) return true;
+
+      if (quickReview) {
+        void dispatchQuickReview({
+          featureId: resolvedFeatureId,
+          code: draft.prompt,
+          requestId,
+          draftId: draft.draftId,
+          selectedProviderId: draft.selectedProviderId,
+          selectedModel: draft.selectedModel,
+        });
+      } else {
+        void dispatchPrompt({
+          featureId: resolvedFeatureId,
+          prompt: draft.prompt,
+          requestId,
+          historySnapshot: cloneHistory(session.history),
+          imageDataUrl: draft.imageDataUrl,
+          ocrText: draft.ocrText,
+          inputKinds: draft.inputKinds,
+          draftId: draft.draftId,
+          selectedProviderId: draft.selectedProviderId,
+          selectedModel: draft.selectedModel,
+        });
+      }
+      return true;
+    } catch (error) {
+      if (!isFeatureInteractionCurrent(resolvedFeatureId, featureGeneration))
+        return true;
+      const normalizedError = quickReview
+        ? normalizeQuickReviewError(error)
+        : normalizeInvokeError(error);
+      if (quickReview) {
+        logger?.error?.(
+          "[touch-intelligence] Failed to handle QuickReview feature",
+        );
+      } else {
+        logger?.error?.("[touch-intelligence] Failed to handle feature", error);
+      }
+      await pushWidgetStateIfCurrent(resolvedFeatureId, featureGeneration, {
+        status: "error",
+        stage: quickReview ? "review" : "error",
+        capabilityId: quickReview ? "code.review" : "text.chat",
+        inputKinds: quickReview ? [INPUT_TYPE_TEXT] : [],
         errorCode: normalizedError.code,
         errorMessage: normalizedError.message,
-      })
-      return true
+      });
+      return true;
     }
   },
 
   async onItemAction(item, context = {}) {
+    let actionFeatureId = "";
     try {
-      if (item?.meta?.defaultAction !== ACTION_ID)
-        return
+      if (item?.meta?.defaultAction !== ACTION_ID) return;
 
-      const actionId = context?.actionId || item.meta?.actionId
-      const payload = item.meta?.payload || {}
-      const prompt = normalizePrompt(payload.prompt)
-      const featureId = resolveFeatureId(item.meta?.featureId)
-      const session = getSession(featureId)
+      const actionId = context?.actionId || item.meta?.actionId;
+      const payload = item.meta?.payload || {};
+      const featureId = resolveFeatureId(item.meta?.featureId);
+      actionFeatureId = featureId;
+      const quickReview = isQuickReviewFeature(featureId);
+      const capabilityId = getFeatureCapabilityId(featureId);
+      const prompt = quickReview
+        ? normalizeQuickReviewCode(payload.prompt)
+        : normalizePrompt(payload.prompt);
+      const session = activateFeatureSession(featureId);
+      const featureGeneration = session.featureGeneration;
 
-      if (actionId === 'copy-answer') {
-        const answer = normalizeText(payload.answer)
-        if (!answer)
-          return
+      if (actionId === "copy-answer") {
+        const answer = normalizeText(payload.answer);
+        if (!answer) return;
 
-        const copied = await copyAnswer(answer)
+        const copied = await copyAnswer(answer);
+        if (!isFeatureInteractionCurrent(featureId, featureGeneration))
+          return { externalAction: true };
         if (!copied) {
-          const failedItem = await pushWidgetState(featureId, {
-            prompt,
-            answer,
-            provider: payload.provider,
-            model: payload.model,
-            traceId: payload.traceId,
-            latency: payload.latency,
-            handoffSessionId: payload.handoffSessionId,
-            inputKinds: payload.inputKinds,
-            status: 'ready',
-            stage: 'chat',
-            capabilityId: 'text.chat',
-            copyStatus: 'failed',
-            copyError: '复制失败：缺少 clipboard.write 权限',
-            copyRecovery: '请在插件权限中允许 clipboard.write 后重试。',
-            history: cloneHistory(session.history),
-            modelOptions: session.modelOptions,
-            selectedProviderId: payload.selectedProviderId,
-            selectedModel: payload.selectedModel,
-            contextPackage: payload.contextPackage,
-          })
+          const failedItem = await pushWidgetStateIfCurrent(
+            featureId,
+            featureGeneration,
+            {
+              prompt,
+              answer,
+              provider: payload.provider,
+              model: payload.model,
+              traceId: payload.traceId,
+              latency: payload.latency,
+              status:
+                quickReview && payload.status === "degraded"
+                  ? "degraded"
+                  : "ready",
+              stage:
+                normalizeText(payload.stage) ||
+                (quickReview ? "review" : "chat"),
+              capabilityId: normalizeText(payload.capabilityId) || capabilityId,
+              inputKinds: quickReview ? [INPUT_TYPE_TEXT] : payload.inputKinds,
+              ...(quickReview
+                ? {}
+                : {
+                    handoffSessionId: payload.handoffSessionId,
+                    history: cloneHistory(session.history),
+                    contextPackage: payload.contextPackage,
+                    memoryPolicy: payload.memoryPolicy,
+                  }),
+              copyStatus: "failed",
+              copyError: "复制失败：缺少 clipboard.write 权限",
+              copyRecovery: "请在插件权限中允许 clipboard.write 后重试。",
+              modelOptions: session.modelOptions,
+              selectedProviderId: payload.selectedProviderId,
+              selectedModel: payload.selectedModel,
+            },
+          );
           return {
             externalAction: true,
             success: false,
@@ -1922,27 +2495,34 @@ const pluginLifecycle = {
                   forceMax: true,
                 }
               : undefined,
-            status: 'blocked',
-            reason: 'permission-denied',
-            message: '复制失败：缺少 clipboard.write 权限',
-          }
+            status: "blocked",
+            reason: "permission-denied",
+            message: "复制失败：缺少 clipboard.write 权限",
+          };
         }
 
-        return { externalAction: true, status: 'started' }
+        return { externalAction: true, status: "started" };
       }
 
-      if (actionId === 'select-model') {
+      if (actionId === "select-model") {
         const selected = normalizeModelSelection({
           providerId: payload.selectedProviderId,
           model: payload.selectedModel,
-        })
-        session.selectedProviderId = selected.providerId
-        session.selectedModel = selected.model
+        });
+        session.selectedProviderId = selected.providerId;
+        session.selectedModel = selected.model;
 
-        const client = resolveIntelligenceClient()
-        await refreshSessionModelOptions(session, client)
+        const client = resolveIntelligenceClient();
+        await refreshSessionModelOptions(
+          session,
+          client,
+          capabilityId,
+          featureGeneration,
+        );
+        if (!isFeatureInteractionCurrent(featureId, featureGeneration))
+          return { externalAction: true };
 
-        await pushWidgetState(featureId, {
+        await pushWidgetStateIfCurrent(featureId, featureGeneration, {
           prompt,
           requestId: payload.requestId,
           answer: payload.answer,
@@ -1950,96 +2530,171 @@ const pluginLifecycle = {
           model: payload.model,
           traceId: payload.traceId,
           latency: payload.latency,
-          status: normalizeText(payload.status) || 'idle',
-          stage: normalizeText(payload.stage) || 'chat',
-          capabilityId: normalizeText(payload.capabilityId) || 'text.chat',
+          status: normalizeText(payload.status) || "idle",
+          stage:
+            normalizeText(payload.stage) || (quickReview ? "review" : "chat"),
+          capabilityId: normalizeText(payload.capabilityId) || capabilityId,
           errorCode: payload.errorCode,
           errorMessage: payload.errorMessage,
           copyStatus: payload.copyStatus,
           copyError: payload.copyError,
           copyRecovery: payload.copyRecovery,
-          handoffSessionId: session.handoffSessionId,
-          inputKinds: Array.isArray(payload.inputKinds) ? payload.inputKinds : [],
-          imageDataUrl: payload.imageDataUrl,
-          ocrText: payload.ocrText,
-          history: cloneHistory(session.history),
+          inputKinds: quickReview
+            ? [INPUT_TYPE_TEXT]
+            : Array.isArray(payload.inputKinds)
+              ? payload.inputKinds
+              : [],
+          imageDataUrl: quickReview ? "" : payload.imageDataUrl,
+          ocrText: quickReview ? "" : payload.ocrText,
+          ...(quickReview
+            ? {}
+            : {
+                handoffSessionId: session.handoffSessionId,
+                history: cloneHistory(session.history),
+                contextPackage: payload.contextPackage,
+                memoryPolicy: payload.memoryPolicy,
+              }),
           modelOptions: session.modelOptions,
           selectedProviderId: session.selectedProviderId,
           selectedModel: session.selectedModel,
-          contextPackage: payload.contextPackage,
-        })
+        });
 
-        return { externalAction: true }
+        return { externalAction: true };
       }
 
-      if (actionId === 'send' || actionId === 'retry') {
-        const draft = resolveDraft(session, payload, prompt)
-        const hasImageContext = Boolean(draft.imageDataUrl || draft.ocrText)
-        const displayPrompt = resolveDisplayPrompt(draft.prompt, hasImageContext)
+      if (actionId === "send" || actionId === "retry") {
+        const draft = resolveDraft(session, payload, prompt, quickReview);
+        const displayPrompt = quickReview
+          ? normalizeQuickReviewCode(draft.prompt)
+          : resolveDisplayPrompt(
+              draft.prompt,
+              Boolean(draft.imageDataUrl || draft.ocrText),
+            );
 
-        if (!displayPrompt)
-          return
+        if (!displayPrompt) {
+          if (!quickReview) return;
 
-        const hasPermission = await ensurePermission(
-          'intelligence.basic',
-          '需要 AI 权限以执行智能问答',
-        )
-        if (!hasPermission) {
-          const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
-          await pushWidgetState(featureId, {
-            prompt: displayPrompt,
-            status: 'error',
-            stage: 'error',
-            inputKinds: draft.inputKinds,
+          const normalizedError = normalizeQuickReviewError(
+            createPluginError("EMPTY_CODE"),
+          );
+          await pushWidgetStateIfCurrent(featureId, featureGeneration, {
+            status: "error",
+            stage: "review",
+            capabilityId,
+            inputKinds: [INPUT_TYPE_TEXT],
             errorCode: normalizedError.code,
             errorMessage: normalizedError.message,
-            handoffSessionId: session.handoffSessionId,
-          })
+            modelOptions: session.modelOptions,
+            selectedProviderId: draft.selectedProviderId,
+            selectedModel: draft.selectedModel,
+          });
           return {
             externalAction: true,
             success: false,
             message: normalizedError.message,
-          }
+          };
         }
 
-        const historySnapshot = actionId === 'retry' && Array.isArray(payload.history)
-          ? cloneHistory(payload.history)
-          : cloneHistory(session.history)
+        const hasPermission = await ensurePermission(
+          "intelligence.basic",
+          getFeaturePermissionReason(featureId),
+        );
+        if (!isFeatureInteractionCurrent(featureId, featureGeneration))
+          return { externalAction: true };
+        if (!hasPermission) {
+          const normalizedError = quickReview
+            ? normalizeQuickReviewError(createPluginError("PERMISSION_DENIED"))
+            : normalizeInvokeError(createPluginError("PERMISSION_DENIED"));
+          await pushWidgetStateIfCurrent(featureId, featureGeneration, {
+            prompt: displayPrompt,
+            status: "error",
+            stage: quickReview ? "review" : "error",
+            capabilityId,
+            inputKinds: quickReview ? [INPUT_TYPE_TEXT] : draft.inputKinds,
+            errorCode: normalizedError.code,
+            errorMessage: normalizedError.message,
+            ...(quickReview
+              ? {}
+              : {
+                  handoffSessionId: session.handoffSessionId,
+                  history: cloneHistory(session.history),
+                }),
+            modelOptions: session.modelOptions,
+            selectedProviderId: draft.selectedProviderId,
+            selectedModel: draft.selectedModel,
+          });
+          return {
+            externalAction: true,
+            success: false,
+            message: normalizedError.message,
+          };
+        }
 
-        const requestId = crypto.randomUUID()
-        markPendingRequest(session, requestId)
-        await pushWidgetState(featureId, {
+        const historySnapshot = quickReview
+          ? []
+          : actionId === "retry" && Array.isArray(payload.history)
+            ? cloneHistory(payload.history)
+            : cloneHistory(session.history);
+        const requestId = crypto.randomUUID();
+        if (!markPendingRequest(session, requestId, featureGeneration))
+          return { externalAction: true };
+        await pushWidgetStateIfCurrent(featureId, featureGeneration, {
           prompt: displayPrompt,
           requestId,
-          status: draft.imageDataUrl ? 'ocr-pending' : 'chat-pending',
-          stage: draft.imageDataUrl ? 'ocr' : 'chat',
-          capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
-          handoffSessionId: session.handoffSessionId,
-          inputKinds: draft.inputKinds,
+          status:
+            quickReview || !draft.imageDataUrl ? "chat-pending" : "ocr-pending",
+          stage: quickReview ? "review" : draft.imageDataUrl ? "ocr" : "chat",
+          capabilityId: quickReview
+            ? "code.review"
+            : draft.imageDataUrl
+              ? "vision.ocr"
+              : "text.chat",
+          inputKinds: quickReview ? [INPUT_TYPE_TEXT] : draft.inputKinds,
+          ...(quickReview
+            ? {}
+            : {
+                handoffSessionId: session.handoffSessionId,
+              }),
           modelOptions: session.modelOptions,
           selectedProviderId: draft.selectedProviderId,
           selectedModel: draft.selectedModel,
-        })
-        void dispatchPrompt({
-          featureId,
-          prompt: draft.prompt,
-          requestId,
-          historySnapshot,
-          imageDataUrl: draft.imageDataUrl,
-          ocrText: draft.ocrText,
-          inputKinds: draft.inputKinds,
-          draftId: draft.draftId,
-          selectedProviderId: draft.selectedProviderId,
-          selectedModel: draft.selectedModel,
-        })
-        return { externalAction: true }
+        });
+        if (!canCommitResponse(session, requestId))
+          return { externalAction: true };
+
+        if (quickReview) {
+          void dispatchQuickReview({
+            featureId,
+            code: draft.prompt,
+            requestId,
+            selectedProviderId: draft.selectedProviderId,
+            selectedModel: draft.selectedModel,
+          });
+        } else {
+          void dispatchPrompt({
+            featureId,
+            prompt: draft.prompt,
+            requestId,
+            historySnapshot,
+            imageDataUrl: draft.imageDataUrl,
+            ocrText: draft.ocrText,
+            inputKinds: draft.inputKinds,
+            draftId: draft.draftId,
+            selectedProviderId: draft.selectedProviderId,
+            selectedModel: draft.selectedModel,
+          });
+        }
+        return { externalAction: true };
+      }
+    } catch (error) {
+      if (isQuickReviewFeature(actionFeatureId)) {
+        logger?.error?.("[touch-intelligence] QuickReview action failed");
+      } else {
+        logger?.error?.("[touch-intelligence] Action failed", error);
       }
     }
-    catch (error) {
-      logger?.error?.('[touch-intelligence] Action failed', error)
-    }
   },
-}
+};
 
 module.exports = {
   ...pluginLifecycle,
@@ -2071,4 +2726,4 @@ module.exports = {
     buildModelSelectionInvokeOptions,
     resolveIntelligenceClient,
   },
-}
+};

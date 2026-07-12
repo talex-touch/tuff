@@ -1,6 +1,6 @@
 # Implementation Docs
 
-> 更新时间：2026-07-04
+> 更新时间：2026-07-11
 > 定位：当前实施文档入口。更早实施记录已从文档树移除，需要时从 Git 历史追溯。
 
 ## 当前 SoT
@@ -10,6 +10,7 @@
 - `Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
 - `R8-R9-Next-Stage-Execution-Plan-2026-06-24.md` - R8 i18n/Catalog 2.6.0 与 R9 AI 2.5.x 后续能力分批计划。
 - `Project-Roadmap-Audit-2026-06-18.md` - Roadmap / release / pricing / docs hygiene 审计记录。
+- `Launcher-TuffIntelligence-QuickReview-Roadmap-2026-07-07.md` - 启动器对标、TuffIntelligence 产品化与 QuickReview 分批路线。
 - `Pricing-SoT-2026-06-18.md` - Pricing 当前单一事实源。
 
 ## Evidence Matrix

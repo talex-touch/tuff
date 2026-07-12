@@ -9,7 +9,7 @@
     "type": "file",
     "value": "assets/logo.svg"
   },
-  "description": "浏览器收藏：收藏网址、最近访问、快速打开",
+  "description": "快速链接：手动收藏、置顶链接、最近使用与快速打开",
   "main": "index.js",
   "permissions": {
     "required": ["search.root-results"],
@@ -23,7 +23,7 @@
   "searchProviders": [
     {
       "id": "touch-browser-bookmarks.quicklinks",
-      "displayName": "浏览器收藏",
+      "displayName": "手动快速链接",
       "kind": "quicklink",
       "owner": "official-plugin",
       "mode": "push",
@@ -39,13 +39,13 @@
   "features": [
     {
       "id": "browser-bookmarks",
-      "name": "浏览器收藏",
-      "desc": "收藏网址与最近访问",
+      "name": "手动快速链接",
+      "desc": "手动收藏、置顶链接、最近使用与快速打开；不读取浏览器书签或历史",
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
       },
-      "keywords": ["bookmark", "bookmarks", "收藏", "网址", "链接", "link", "url"],
+      "keywords": ["bookmark", "bookmarks", "quicklink", "quicklinks", "pinned", "收藏", "置顶", "快速链接", "网址", "链接", "link", "url"],
       "push": true,
       "priority": 7,
       "acceptedInputTypes": ["text"],
@@ -57,7 +57,7 @@
       "commands": [
         {
           "type": "over",
-          "value": ["bookmark", "bookmarks", "收藏", "网址"]
+          "value": ["bookmark", "bookmarks", "quicklink", "quicklinks", "收藏", "快速链接", "网址"]
         }
       ]
     }

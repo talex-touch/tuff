@@ -941,6 +941,23 @@ export class TouchPlugin implements ITouchPlugin {
     )
   }
 
+  private isRootResultsProviderIdEnabled(providerId: string): boolean {
+    const normalizedProviderId = typeof providerId === 'string' ? providerId.trim() : ''
+    if (!normalizedProviderId) return false
+
+    const providers =
+      this.searchProviders?.filter(
+        (provider) => provider.mode === 'push' && provider.policy.pushesToRootResults
+      ) ?? []
+    if (!providers.some((provider) => provider.id === normalizedProviderId)) return false
+
+    return isSearchProviderEnabledByConfig(
+      normalizedProviderId,
+      providers,
+      getSearchProviderUserConfigs()
+    )
+  }
+
   private ensureRootResultsProviderEnabled(method: string, item?: TuffItem): boolean {
     if (this.isRootResultsProviderEnabled(item)) return true
 
@@ -2150,6 +2167,10 @@ export class TouchPlugin implements ITouchPlugin {
 
     // BoxItem SDK 工具对象
     const boxItems = {
+      isSearchProviderEnabled: (providerId: string): boolean => {
+        return this.isRootResultsProviderIdEnabled(providerId)
+      },
+
       /**
        * 推送单个 item（创建或更新）
        * @param item - 要推送的 item
