@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>优化审计规则手册 | 2026-07-11 dry-run</title>
+  <style>
+    :root {
+      --ink: #17222f;
+      --muted: #566575;
+      --paper: #f7f8f6;
+      --panel: #ffffff;
+      --rule: #d5dce2;
+      --accent: #006d77;
+      --accent-soft: #dceff0;
+      --warn: #855600;
+      --warn-soft: #fff2cf;
+      --danger: #9a2c2c;
+      --danger-soft: #fae8e7;
+      --radius: 10px;
+      --content: 76rem;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--paper); color: var(--ink); line-height: 1.62; }
+    a { color: #005e69; text-decoration-thickness: .08em; text-underline-offset: .16em; }
+    a:hover { color: #003f47; }
+    a:focus-visible { outline: 3px solid #f0a202; outline-offset: 3px; }
+    code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; overflow-wrap: anywhere; }
+    code { border-radius: 4px; background: #edf1f3; padding: .08em .28em; color: #243642; }
+    .skip-link { position: absolute; left: 1rem; top: -5rem; z-index: 10; background: var(--ink); color: #fff; padding: .7rem 1rem; border-radius: 0 0 var(--radius) var(--radius); }
+    .skip-link:focus { top: 0; }
+    .masthead { border-bottom: 1px solid var(--rule); background: #edf3f2; }
+    .masthead-inner { max-width: var(--content); margin: 0 auto; padding: 2.6rem 1.5rem 2.1rem; }
+    .eyebrow { margin: 0 0 .45rem; color: var(--accent); font-weight: 750; font-size: .76rem; letter-spacing: .1em; text-transform: uppercase; }
+    h1, h2, h3 { line-height: 1.18; letter-spacing: -.025em; }
+    h1 { max-width: 24ch; margin: 0; font-size: clamp(2rem, 5vw, 4.25rem); }
+    h2 { margin: 0; font-size: clamp(1.5rem, 3vw, 2.2rem); }
+    h3 { margin: 1.7rem 0 .55rem; font-size: 1.15rem; }
+    p { margin: .65rem 0; }
+    .lede { max-width: 70ch; margin: 1rem 0 0; color: #40515d; font-size: 1.07rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: .6rem 1.25rem; margin: 1.15rem 0 0; color: var(--muted); font-size: .92rem; }
+    .status { display: inline-block; border: 1px solid #ba7b00; border-radius: 999px; background: var(--warn-soft); color: #604100; padding: .18rem .6rem; font-weight: 750; }
+    .shell { max-width: var(--content); margin: 0 auto; padding: 1.5rem; display: grid; grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr); gap: clamp(1.5rem, 4vw, 4rem); align-items: start; }
+    .toc { position: sticky; top: 1rem; border-left: 3px solid var(--accent); padding: .2rem 0 .2rem 1rem; }
+    .toc h2 { font-size: .94rem; letter-spacing: .04em; text-transform: uppercase; }
+    .toc ol { margin: .65rem 0 0; padding-left: 1.15rem; font-size: .9rem; }
+    .toc li { margin: .32rem 0; }
+    main { min-width: 0; }
+    section { scroll-margin-top: 1rem; margin-bottom: 1.6rem; padding: 1.45rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); box-shadow: 0 1px 0 rgb(23 34 47 / .035); }
+    section > :first-child { margin-top: 0; }
+    .callout { margin: 1rem 0; padding: 1rem 1.05rem; border-left: 4px solid var(--accent); background: var(--accent-soft); }
+    .callout strong { display: block; margin-bottom: .2rem; }
+    .block { border-left-color: var(--danger); background: var(--danger-soft); }
+    .block strong { color: #682020; }
+    .ambiguity { border-left-color: var(--warn); background: var(--warn-soft); }
+    .ambiguity strong { color: #604100; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .rule { padding: 1rem; border: 1px solid var(--rule); border-radius: 8px; background: #fcfdfd; }
+    .rule h3 { margin-top: 0; }
+    .rule-id { color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; font-weight: 800; }
+    ul, ol { padding-left: 1.25rem; }
+    li + li { margin-top: .38rem; }
+    .keywords { font-weight: 800; letter-spacing: .02em; }
+    .must { color: #7b2525; }
+    .should { color: #725100; }
+    .never { color: #7b2525; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .94rem; }
+    caption { padding-bottom: .45rem; text-align: left; font-weight: 750; color: #40515d; }
+    th, td { padding: .7rem; vertical-align: top; border: 1px solid var(--rule); text-align: left; }
+    th { background: #eef3f4; font-weight: 750; }
+    .table-wrap { overflow-x: auto; }
+    .decision-tree { margin: 1rem 0; padding: 1rem 1rem 1rem 1.2rem; border: 1px solid var(--rule); border-radius: 8px; background: #f9fbfb; }
+    .decision-tree ol { margin: 0; }
+    .outcome { display: inline-block; margin-left: .35rem; padding: .1rem .38rem; border-radius: 4px; background: #e6eff0; color: #1f5158; font-weight: 750; font-size: .85em; }
+    .reject { background: #f7dfdd; color: #7b2525; }
+    .defer { background: #fff0ca; color: #725100; }
+    .wave { display: grid; grid-template-columns: 5.1rem minmax(0, 1fr); gap: .8rem; padding: .7rem 0; border-top: 1px solid var(--rule); }
+    .wave:first-of-type { border-top: 0; }
+    .wave strong { color: var(--accent); }
+    .footnote { color: var(--muted); font-size: .9rem; }
+    .external-link { display: inline-flex; margin-top: .5rem; padding: .55rem .8rem; border: 1px solid var(--accent); border-radius: 7px; color: #004d56; font-weight: 750; text-decoration: none; }
+    .external-link:hover { background: var(--accent-soft); }
+    footer { max-width: var(--content); margin: 0 auto; padding: 0 1.5rem 2rem; color: var(--muted); font-size: .9rem; }
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .toc { position: static; border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; background: var(--panel); padding: 1rem; }
+      .toc ol { columns: 2; column-gap: 2rem; }
+      .grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .masthead-inner, .shell { padding-left: 1rem; padding-right: 1rem; }
+      section { padding: 1rem; }
+      .toc ol { columns: 1; }
+      th, td { min-width: 10rem; }
+      .wave { grid-template-columns: 1fr; gap: .15rem; }
+    }
+    @media print {
+      @page { margin: 14mm; }
+      body { background: #fff; color: #000; font-size: 10pt; }
+      .skip-link, .toc, .external-link { display: none; }
+      .masthead { border: 0; background: #fff; }
+      .masthead-inner, .shell, footer { max-width: none; padding-left: 0; padding-right: 0; }
+      .shell { display: block; }
+      section { break-inside: avoid; box-shadow: none; border-color: #9aa3aa; }
+      a { color: #000; text-decoration: none; }
+      a[href]::after { content: " (" attr(href) ")"; font-size: 8pt; }
+      .external-link::after { content: none; }
+      .callout { border: 1px solid #777; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">跳至正文</a>
+  <header class="masthead">
+    <div class="masthead-inner">
+      <p class="eyebrow">Engineering standards / dry-run rulebook</p>
+      <h1>优化审计规则手册</h1>
+      <p class="lede">将 2026-07-11 审计简报中的规范性解释、证据门槛与决策门转为可执行的评审规则。它规定何时可以迁移，何时必须保持本地，以及何时必须停止等待批准。</p>
+      <div class="meta">
+        <span><strong>审计日期：</strong>2026-07-11</span>
+        <span class="status">Dry-run only / 不执行删除</span>
+        <span><strong>状态：</strong>实施在决策门批准前被阻止</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="toc" aria-label="本页目录">
+      <h2>目录</h2>
+      <ol>
+        <li><a href="#status">适用范围与状态</a></li>
+        <li><a href="#language">规范性用语与置信度</a></li>
+        <li><a href="#r1">R1 Renderer/Vue 提取</a></li>
+        <li><a href="#r2">R2 Tuffex 整合</a></li>
+        <li><a href="#r3">R3 utils 边界</a></li>
+        <li><a href="#r4">R4 KISS/YAGNI</a></li>
+        <li><a href="#r5">R5 结构、命名、清理</a></li>
+        <li><a href="#r6">R6 跨平台编排</a></li>
+        <li><a href="#r7">R7 扫描与证据</a></li>
+        <li><a href="#cutover">清洁切换与删除契约</a></li>
+        <li><a href="#waves">迁移波次</a></li>
+        <li><a href="#gates">DG-01 至 DG-07</a></li>
+        <li><a href="#defaults">推荐默认值</a></li>
+      </ol>
+    </nav>
+
+    <main id="content">
+      <section id="status" aria-labelledby="status-title">
+        <p class="eyebrow">Scope and non-action</p>
+        <h2 id="status-title">适用范围、覆盖边界与当前阻止状态</h2>
+        <div class="callout block">
+          <strong>实施阻止声明</strong>
+          本页不是迁移授权。当前阶段只产出规则与证据报告，不迁移、不删除、不重命名、不修改源代码。任何实现工作必须先通过适用的 <a href="#gates">DG-01 至 DG-07</a>，并完成对应证据。
+        </div>
+        <p>本次结构扫描覆盖 <strong>3,664</strong> 个 TS/TSX/JS/JSX/Vue/MJS/CJS/CSS 源文件，共 <strong>742,869</strong> 行。依赖、构建/缓存/生成输出、fixtures/fixture-data、锁文件与二进制文件被排除。测试文件被透明计数，但当“文件大”是唯一信号时，不作为行动对象。</p>
+        <div class="grid">
+          <div class="rule">
+            <h3>已知覆盖</h3>
+            <ul>
+              <li>核心 renderer：328 个 tracked Vue 与 330 个 tracked TS；发现 290+ 个 computed/watch/lifecycle 匹配。</li>
+              <li>插件聚焦扫描：touch-music 20 个文件、touch-translation 28、touch-image 7、touch-intelligence 4、clipboard-history 23+。</li>
+              <li>Tuffex 清单：约 100 个组件族、130 个 <code>Tx*.vue</code> 组件。</li>
+              <li>命名/结构：apps/packages/plugins/scripts/examples 下 5,129 条 tracked path。</li>
+            </ul>
+          </div>
+          <div class="rule">
+            <h3>明确限制</h3>
+            <ul>
+              <li>没有 runtime dependency graph、视觉一致性套件、平台矩阵或行为迁移测试。</li>
+              <li>若干范围的单个 glob 输出上限为 200；多次搜索与定向读取降低遗漏，但不能证明每个本地组件 API。</li>
+              <li>当前用户工作被排除：<code>apps/core-app/src/renderer/src/views/box/CoreBox.vue</code>，以及 <code>apps/core-app/src/renderer/src/modules/box/adapter/hooks</code> 下 27 个文件。</li>
+              <li>必须保留既有用户改动：<code>types.ts</code>、<code>useClipboard.ts</code>、<code>useSearch.core.test.ts</code>、<code>useSearch.ts</code>、<code>useVisibility.ts</code> 与未跟踪的 <code>clipboard-autopaste.ts</code>。</li>
+            </ul>
+          </div>
+        </div>
+        <p>包级 ESLint 正式扫过 25 个 workspace package，其中 24 个通过；<code>apps/tuff-analyse</code> 失败，计 <strong>12 errors + 10 warnings</strong>。其中 10 个 errors 与全部 10 个 warnings 可自动修复。根 lint 会在首个递归失败处停止，因此另做了 no-bail 包扫描。此结果是独立修复项，不构成迁移许可。</p>
+        <a class="external-link" href="index.html">打开证据报告：index.html</a>
+      </section>
+
+      <section id="language" aria-labelledby="language-title">
+        <p class="eyebrow">Interpretation protocol</p>
+        <h2 id="language-title">规范性用语、严重度与置信度</h2>
+        <div class="table-wrap">
+          <table>
+            <caption>本手册的用语解释</caption>
+            <thead><tr><th>用语</th><th>执行含义</th></tr></thead>
+            <tbody>
+              <tr><td class="keywords must">MUST / 必须</td><td>没有例外的前置条件。条件未满足，迁移不得开始或不得合并。</td></tr>
+              <tr><td class="keywords should">SHOULD / 应当</td><td>默认方向。若偏离，变更提案必须记录具体理由、替代措施与剩余风险。</td></tr>
+              <tr><td class="keywords never">MUST NOT / 不得</td><td>禁止的实施方式。它不能以“方便”“行数多”或“语法相似”作为例外理由。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="grid">
+          <div class="rule">
+            <h3>严重度</h3>
+            <ul>
+              <li><strong>Critical：</strong>存在数据、安全或 API 破坏风险，必须立即阻止。本审计未确认 Critical。</li>
+              <li><strong>High：</strong>重复行为或混合职责，且边界清晰；迁移会触及多个调用方或平台契约。</li>
+              <li><strong>Medium：</strong>可信的整合候选，但仍需 parity、调用图或 runtime 证明。</li>
+              <li><strong>Low：</strong>局部简化或观察，不得被扩展成架构项目。</li>
+            </ul>
+          </div>
+          <div class="rule">
+            <h3>置信度的受限含义</h3>
+            <p>置信度只表示已收集证据对某项建议的支撑程度，不表示行为、视觉或跨平台 parity 已被证明。简报要求报告 confidence，但没有定义数值或高/中/低标签。</p>
+            <div class="callout ambiguity">
+              <strong>显式歧义</strong>
+              在未另行批准量表前，不得把“高置信度”解释为可直接迁移，也不得把任何置信度解释为删除授权。缺失的 runtime graph、视觉套件、平台矩阵与行为测试仍然是阻塞事实。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="r1" aria-labelledby="r1-title">
+        <p class="eyebrow">R1</p>
+        <h2 id="r1-title">Renderer/Vue 提取规则</h2>
+        <p>Vue SFC <span class="keywords should">应当</span>保留渲染、props/emits 与视图专属交互。包含多个 computed/watch/watchEffect/lifecycle/event/transport 职责的连贯 state/effect/orchestration，<span class="keywords should">应当</span>移动到 composable 或 app-local module。</p>
+        <div class="decision-tree" aria-label="提取资格决策树">
+          <h3>提取资格决策树</h3>
+          <ol>
+            <li>是否存在可命名的单一职责，而非仅仅“文件很长”？<span class="outcome reject">否：不得提取</span></li>
+            <li>该职责能否定义稳定的输入/输出契约？<span class="outcome reject">否：保留本地并降低耦合</span></li>
+            <li>是否有可观察的测试 seam？<span class="outcome reject">否：先建立验证 seam，不迁移</span></li>
+            <li>抽出后是否保留渲染、props/emits、视图交互在 SFC？<span class="outcome reject">否：重新划分边界</span></li>
+            <li>候选是否携带 app state 或 SDK/transport coupling？<span class="outcome">是：保持 app-local</span></li>
+            <li>候选 composable 是否仅因语法类似而被合并？<span class="outcome reject">是：不得合并</span></li>
+            <li>语义、lifecycle ownership、error behavior 是否都一致？<span class="outcome">是：可作为受证据约束的提取候选</span></li>
+          </ol>
+        </div>
+        <ul>
+          <li><span class="keywords must">MUST：</span>只提取具名职责、稳定 input/output contract 与可观察测试 seam。</li>
+          <li><span class="keywords must">MUST：</span>只有语义、lifecycle ownership 和 error behavior 都相同，才能合并相似 composable。</li>
+          <li><span class="keywords must not">MUST NOT：</span>只按行数提取，或仅因语法相似合并。</li>
+          <li><span class="keywords must not">MUST NOT：</span>为缩短文件而把 app-specific state、SDK 或 transport coupling 升格到公共包。</li>
+        </ul>
+        <p><strong>审计解释：</strong><code>TuffUserInfo.vue</code> 的身份/账户网络/格式化/对话框动作混杂约 330 script 行，但只允许先处理 CR-01/CR-02，拒绝任意进一步切分。<code>FlipDialog.vue</code> 的 visibility/focus 候选不得在行为 parity 前与通用 dialog focus 合并。<code>FlatCompletion.vue</code> 的两个 watcher 可合并为 <code>watch([value,res], ...)</code>，无需 composable；<code>AgreementTemplate.vue</code> 与 <code>TTabItem.vue</code> 分别适用 computed/direct prop 替换，而不是抽象化。</p>
+      </section>
+
+      <section id="r2" aria-labelledby="r2-title">
+        <p class="eyebrow">R2</p>
+        <h2 id="r2-title">Tuffex 组件整合规则</h2>
+        <ul>
+          <li><span class="keywords should">SHOULD：</span>若 Tuffex 已有行为等价 primitive，消费者应直接委派给 Tuffex。</li>
+          <li><span class="keywords must">MUST：</span>若本地组件是可复用生态 primitive 且 Tuffex 缺失，迁移 implementation/API/styles/tests/export 到 <code>packages/tuffex</code>，迁移每个 caller，然后删除 legacy local file。</li>
+          <li><span class="keywords must not">MUST NOT：</span>内部 clean cutover 后保留 wrapper、shim、alias、compatibility-only helper 或 duplicate export。</li>
+          <li><span class="keywords must not">MUST NOT：</span>仅因组件渲染 UI 就把 domain component 移出 app/plugin。它可组合 Tuffex primitive，仍应留在所属域。</li>
+        </ul>
+        <div class="table-wrap">
+          <table>
+            <caption>Tuffex 与 app-domain 的裁决矩阵</caption>
+            <thead><tr><th>对象类型</th><th>判定</th><th>必须证明</th><th>示例</th></tr></thead>
+            <tbody>
+              <tr><td>行为等价的 Tuffex primitive</td><td>直接委派到 Tuffex</td><td>API、事件、slot、CSS/theme injection、Vue peer、bundle、视觉与键盘/可访问性 parity</td><td><code>core components/base/tuff/TButton.vue</code> 是纯 <code>TxButton</code> legacy adaptor。所有 caller 迁移后删除。</td></tr>
+              <tr><td>可复用生态 primitive，Tuffex 尚缺失</td><td>先把完整 implementation/API/styles/tests/export 迁到 <code>packages/tuffex</code></td><td>同上，且所有 caller 完成 clean cutover</td><td><code>TTag.vue</code> 与 <code>TxTag</code> 存在 size/pill/uppercase/color API 差异，先做 parity design。</td></tr>
+              <tr><td>有真实领域语义的 app/plugin 组件</td><td>保留 domain，允许组合 primitive</td><td>领域语义确实存在，且共享 primitive 不能无损表达</td><td><code>IconButton.vue</code> 的 route selection/icon/states，或 music 的 <code>activeIcon</code>/size 行为。</td></tr>
+              <tr><td>仅委派的 app wrapper</td><td>仅当 app API 没有价值且 parity 已证明时移除</td><td>每个 prop/event 行为及调用方迁移</td><td>Nexus 的 <code>app/components/ui/{Input,Switch,Modal,Drawer,Tag,StatusBadge,ToastHost,FlatButton}.vue</code> 不可盲移。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>不可自动替换的例外：</strong><code>TCheckBox.vue</code> 有 custom role/click/SVG/label，必须先证明 disabled/keyboard parity；<code>TTabs.vue</code> 有 VNode filtering/pointer/default/group semantics，属于 substantial parity gap；<code>ProgressBar.vue</code> 若 status classes/message/animation 为领域状态 banner 则保持本地；<code>TBlockSwitch</code>/<code>TBlockInput</code>/<code>TBlockLine</code>/<code>TBlockSlot</code> 已是 domain block-layout composition，应保留。</p>
+      </section>
+
+      <section id="r3" aria-labelledby="r3-title">
+        <p class="eyebrow">R3</p>
+        <h2 id="r3-title">@talex-touch/utils 依赖边界</h2>
+        <p>稳定、非 UI、环境正确的 common logic、types、essential adapters 与 base composables，只有在至少两个稳定 consumer 或构成 foundational domain boundary 时，才<span class="keywords should">应当</span>移至 <code>packages/utils</code>。新增前<span class="keywords must">必须</span>复用或合并既有 utils API。</p>
+        <div class="table-wrap">
+          <table>
+            <caption>utils 边界矩阵</caption>
+            <thead><tr><th>候选</th><th>包化条件</th><th>禁止或延后条件</th><th>当前规则结论</th></tr></thead>
+            <tbody>
+              <tr><td>通用纯逻辑、types、essential adapter、base composable</td><td>至少两个稳定 consumer，或 foundational domain ownership；Browser/Node/Electron 兼容、无循环依赖、export surface 与 caller migration 已证明</td><td>环境语义不一致或 API 尚不稳定</td><td>可进入证据阶段</td></tr>
+              <tr><td>app state、Nuxt request/toast/i18n coupling、Electron renderer globals</td><td>仅在有 dependency-inversion contract 时评估</td><td>无该 contract 时不得越界</td><td>保持 app-local</td></tr>
+              <tr><td>plugin permission logic、secrets、provider signing semantics、domain UI engine</td><td>先证明跨域 contract</td><td>权限、协议、签名或领域 UI 语义不同</td><td>不得仅为复用而迁移</td></tr>
+              <tr><td>canonical sleep</td><td>已有 canonical API，生产 caller 可迁移</td><td>必须处理 <code>Promise&lt;number&gt;</code> 与 <code>Promise&lt;void&gt;</code> typing；test-local sleep 可保留</td><td><code>packages/utils/common/utils/index.ts:14-16</code> 是 canonical；核对 <code>apps/core-app/src/utils/common-util.ts:71-73</code> 与 private app copies</td></tr>
+              <tr><td>translation image data URL</td><td>仅纯 parse/build，且为稳定 export</td><td>translation item/snippet 留本地；hash API 需先定义 cross-runtime contract</td><td><code>touch-translation index/utils.ts:3-50</code> 与 <code>index.js:79-97</code> 的 parseImageDataUrl/toImageDataUrl 可评估</td></tr>
+              <tr><td>music throttleRef/debounceRef</td><td>需跨插件 evidence 与明确依赖策略</td><td>plugin 当前没有 utils dependency</td><td>YAGNI 默认保持 <code>touch-music modules/utils.ts</code> 本地</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout ambiguity">
+          <strong>边界歧义必须显式处理</strong>
+          一次性 clamp/formatBytes 变体已有领域语义，拒绝公共提取。intelligence OCR data:image 与 clipboard data/blob/tfile/file utilities 的 permission/protocol contract 不同，至多在 contract proof 后共享纯 MIME predicate。没有 contract proof 时，不能把“代码相似”当作公共边界。
+        </div>
+      </section>
+
+      <section id="r4" aria-labelledby="r4-title">
+        <p class="eyebrow">R4</p>
+        <h2 id="r4-title">KISS/YAGNI 拒绝测试</h2>
+        <p>每次 extraction <span class="keywords must">必须</span>减少重复行为，或隔离真实职责。只移动行而不减少 coupling 的提案<span class="keywords must not">不得</span>通过。</p>
+        <div class="table-wrap">
+          <table>
+            <caption>提案至少要通过的拒绝测试</caption>
+            <thead><tr><th>测试</th><th>通过条件</th><th>失败时的裁决</th></tr></thead>
+            <tbody>
+              <tr><td>真实职责</td><td>能说出独立名称、输入输出与测试 seam</td><td>拒绝仅按行数、目录形状或“看起来整洁”进行的拆分。</td></tr>
+              <tr><td>耦合减少</td><td>抽取后重复行为减少，或依赖方向更清晰</td><td>若只是移动行，拒绝。</td></tr>
+              <tr><td>最小抽象</td><td>一个 local composable 已足够，或 package API 有稳定语义和已证明 consumer</td><td>拒绝为未来可能性创建 generic framework 或 package API。</td></tr>
+              <tr><td>目录/测试目录完整性</td><td>catalog 的 domain ownership 或 import coupling 需要分割</td><td>拒绝 cosmetic split tests/type catalogs/event catalogs。</td></tr>
+              <tr><td>结束状态</td><td>所有 caller 完成迁移，obsolete code 可删除</td><td>拒绝 aliases、deprecated wrappers、compatibility-only helpers、duplicate exports。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="r5" aria-labelledby="r5-title">
+        <p class="eyebrow">R5</p>
+        <h2 id="r5-title">结构、命名与清理</h2>
+        <ul>
+          <li><span class="keywords should">SHOULD：</span>把 generated/rebuildable ignored output 作为 cleanup candidate，而非 source finding。</li>
+          <li><span class="keywords must">MUST：</span>在删除 tracked examples、fixtures、release evidence、backups 前证明其用途。</li>
+          <li><span class="keywords must">MUST：</span>在 rename/move 前完成 import/manifest/registry/CI/runtime-ID migration。</li>
+          <li><span class="keywords must not">MUST NOT：</span>把 public/historical package name 当作单纯 style defect。</li>
+          <li><span class="keywords should">SHOULD：</span>只在观察到独立职责簇和 dependency seam 时，将长文件列为候选。</li>
+        </ul>
+        <p><strong>已界定的清理决策：</strong><code>apps/core-app/dist</code> 是 ignored/untracked rebuildable output，1.0G/3323 entries，但可能支持 local packaged debugging；<code>apps/core-app/out</code> 为 24M/199 entries 且 package main 指向它；<code>apps/nexus/.nuxt</code> 为 932K/83 entries；<code>packages/tuff-intelligence/dist</code> 为 304K/4 entries；<code>packages/tuffex/dist</code> 为 9.9M/2034 entries。它们都是候选，不是批准删除。</p>
+        <p><code>examples/tuff-builder.example.ts</code> 是正式的中文 TUFF Builder 示例，已保留为 <code>.ts</code> 示例。保留 <code>packages/tuff-cli</code>、<code>tuff-cli-core</code>、<code>tuff-business</code>、历史公共名 <code>@talex-touch/utils</code>、根 examples 及策略排除的 archived/prototype <code>apps/g-*</code>/<code>apps/quota-*</code>。</p>
+      </section>
+
+      <section id="r6" aria-labelledby="r6-title">
+        <p class="eyebrow">R6</p>
+        <h2 id="r6-title">跨平台编排与 OSAdapter</h2>
+        <p>跨平台行为<span class="keywords should">应当</span>通过 <code>OSAdapter</code> 或 typed domain SDK/transport capability 表达，而非 caller 中散落的 <code>process.platform</code> 加 shell/registry/osascript/gsettings 逻辑。迁移<span class="keywords must">必须</span>保留 sync timing、module loading、permissions、command allowlists、error mapping，以及 win32/darwin/linux 行为。</p>
+        <div class="table-wrap">
+          <table>
+            <caption>OSAdapter 合法实现与绕过矩阵</caption>
+            <thead><tr><th>类别</th><th>判定</th><th>路径与约束</th></tr></thead>
+            <tbody>
+              <tr><td>直接平台绕过</td><td>High，必须转入 typed capability</td><td><code>apps/core-app/src/main/channel/common.ts:getDesktopWallpaperPath:383-421</code> 直接分支 <code>process.platform</code> 并执行 reg/osascript/gsettings。需要 <code>WallpaperAdapter</code>，经 <code>withOSAdapter</code>/domain transport，保留 OS permissions 与 null/error mapping。</td></tr>
+              <tr><td>直接 app launch 平台操作</td><td>High，必须转入 domain service</td><td><code>apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts:74-92,190-306</code> 使用 shell.openPath/openExternal/cmd/powershell/explorer。需要 <code>AppLaunchAdapter</code>，保留 shortcut/script/UWP/protocol security allowlists 与 spawn permissions。</td></tr>
+              <tr><td>AI tool 直连 Electron</td><td>High，必须经 permission/audit transport</td><td><code>apps/core-app/src/main/modules/ai/agents/tools/workflow-tools.ts:67,145,184</code> 直接使用 Electron clipboard.write 与 shell.openExternal。移至 clipboard/system domain transport。</td></tr>
+              <tr><td>平台分支在 adapter/backend 内</td><td>合法</td><td>adapter implementation、telemetry labels、module-load guards、不可避免的 native backends 可以包含 platform branch。</td></tr>
+              <tr><td>已有 adapter 边界</td><td>合法，不得重复迁移</td><td><code>startup-version-guard.ts:134-216</code>、<code>app-scanner.ts:38-54/115-201</code>、<code>active-app.ts:442-455</code> 已用 <code>withOSAdapter</code>。<code>system-shell-handlers.ts</code> 是 backend boundary，不是 bypass。</td></tr>
+              <tr><td>待逐项复核</td><td>Medium，不能因出现 <code>process.platform</code> 自动定罪</td><td><code>precore.ts:200-223</code>、<code>touch-window.ts:20/83-87</code>、<code>auth/index.ts:539-543</code>。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="r7" aria-labelledby="r7-title">
+        <p class="eyebrow">R7</p>
+        <h2 id="r7-title">扫描输出与证据要求</h2>
+        <p>每一条候选记录<span class="keywords must">必须</span>包含 exact path/anchor、severity、evidence、destination、dependencies、legacy deletion implication、confidence 与 exclusions。destructive change 和 public package/runtime naming change<span class="keywords must">必须</span>作为 decision gate，而非自动 cleanup。</p>
+        <div class="table-wrap">
+          <table>
+            <caption>迁移前证据清单</caption>
+            <thead><tr><th>证据类别</th><th>必须回答的问题</th><th>适用范围</th></tr></thead>
+            <tbody>
+              <tr><td>调用与契约</td><td>全部 caller 是谁？input/output、events、slots、exports 与 runtime IDs 是否完整迁移？</td><td>所有 extraction、rename、package move、Tuffex migration</td></tr>
+              <tr><td>行为与可访问性</td><td>行为、keyboard/a11y、error behavior、lifecycle ownership、visual parity 是否保持？</td><td>组件、dialog、Tuffex、Vue composable</td></tr>
+              <tr><td>依赖与环境</td><td>是否形成 circular dependency？Browser/Node/Electron 是否正确？是否保留 module loading、permissions、allowlists、error mapping？</td><td>utils、OSAdapter、transport</td></tr>
+              <tr><td>删除后状态</td><td>legacy 是否真正无 caller？是否删除 legacy，而非留下 wrapper/shim/alias？</td><td>内部 clean cutover</td></tr>
+              <tr><td>覆盖限制</td><td>是否把 dry-run 缺失的 runtime graph、视觉套件、平台矩阵、行为测试明确写为限制？</td><td>每份证据与批准请求</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>证据报告中的文件级发现、锚点、排除项与诊断列表见 <a href="index.html">index.html</a>。本规则页不将扫描信号升级为已验证运行时事实。</p>
+      </section>
+
+      <section id="cutover" aria-labelledby="cutover-title">
+        <p class="eyebrow">End-state contract</p>
+        <h2 id="cutover-title">清洁切换与 legacy 删除契约</h2>
+        <div class="callout">
+          <strong>内部 clean cutover 的完成定义</strong>
+          当且仅当每个内部 caller 已迁移、目标 API parity 已证明、所有 required evidence 已记录后，legacy implementation 才必须在同一 green phase 删除。完成不等于“新旧同时可用”。
+        </div>
+        <ol>
+          <li>先盘点 caller、导入、exports、registries、manifests、runtime IDs 与测试 seam。</li>
+          <li>完成目标实现或直接委派，并证明 API、keyboard/a11y、event、slot、CSS/theme injection、Vue peer、bundle、visual parity。</li>
+          <li>迁移<strong>所有</strong>内部 caller，并验证没有 legacy call graph。</li>
+          <li>删除 legacy file、obsolete code、alias、deprecated wrapper、compatibility-only helper 与 duplicate export。</li>
+          <li>仅 public Tuffex/utils export 适用 DG-01 的 additive 默认，不得把它误用于内部 app 文件。</li>
+        </ol>
+        <div class="callout ambiguity">
+          <strong>公开兼容性的边界</strong>
+          简报只授权“内部 app files clean cutover”和“public Tuffex/utils exports additive unless major-version breaking change approved”的默认。任何特定 export 是否公开、是否允许 breaking change，仍需 DG-01 明确批准，不能在本页自行判断。
+        </div>
+      </section>
+
+      <section id="waves" aria-labelledby="waves-title">
+        <p class="eyebrow">Sequencing</p>
+        <h2 id="waves-title">迁移波次纲要</h2>
+        <div class="wave"><strong>Wave 0</strong><span>对每个 candidate 做 contract inventory 与 focused tests，不移动源。捕获 call graphs、behavior、visual/a11y parity、package exports、platform matrix。</span></div>
+        <div class="wave"><strong>Wave 1</strong><span>低风险 local simplification 与已确认 app-local duplicate composables：CR-01/02/04/05/10/11/12、NX-09/10、PL-01。不得改变 public package。</span></div>
+        <div class="wave"><strong>Wave 2</strong><span>Tuffex parity migrations：先 <code>TButton</code>/<code>TuffIcon</code> thin adapters，再 <code>TTag</code>/<code>TCheckBox</code>；tabs/progress/plugin controls 必须先完成明确 parity 工作。所有 caller 在同一 green phase 迁移，且删除 legacy。</span></div>
+        <div class="wave"><strong>Wave 3</strong><span>utils consolidation：canonical sleep、translation pure data URL helper；延期 music utils 与 hash/signing generalization。</span></div>
+        <div class="wave"><strong>Wave 4</strong><span>typed OSAdapter/domain capabilities：wallpaper、app launch、AI clipboard/openExternal。每个 capability 单独一个 phase，并有 win/darwin/linux tests。</span></div>
+        <div class="wave"><strong>Wave 5</strong><span>大型 monolith 按一个 domain 一次拆分：governance、providers、plugin module、quick-ops、search、update。不得 mass rewrite。</span></div>
+        <div class="wave"><strong>Wave 6</strong><span>功能波次后再处理 cleanup/naming：选择性清除 ignored output、决定 tracked <code>.bak</code>、另行计划 package/plugin rename。</span></div>
+      </section>
+
+      <section id="gates" aria-labelledby="gates-title">
+        <p class="eyebrow">Approval required</p>
+        <h2 id="gates-title">决策门 DG-01 至 DG-07</h2>
+        <div class="callout block">
+          <strong>禁止默认通过</strong>
+          每个门都是显式决策门。没有对应批准，涉及它的实现保持阻止状态。建议默认值不是批准记录。
+        </div>
+        <div class="table-wrap">
+          <table>
+            <caption>规范性决策门与推荐默认值</caption>
+            <thead><tr><th>门</th><th>需要决策</th><th>推荐默认值</th><th>未批准时</th></tr></thead>
+            <tbody>
+              <tr><td><strong>DG-01</strong><br>Public compatibility</td><td>内部 clean cutover 与 public Tuffex/utils compatibility 的边界；是否批准 major-version breaking change。</td><td>内部 app files clean cutover 并删除 wrappers；public Tuffex/utils exports 保持 additive，除非显式批准 major-version breaking change。</td><td>不得破坏公开 export，也不得把公共兼容策略套用到内部 legacy wrapper。</td></tr>
+              <tr><td><strong>DG-02</strong><br>Cleanup</td><td>是否删除 1.0G CoreApp dist 及其他 local build outputs。</td><td>先确认没有 running/debug workflow 依赖，再删除。</td><td>保留 build outputs。</td></tr>
+              <tr><td><strong>DG-03</strong><br>Tracked backup</td><td>如何处理原 tracked TUFF Builder backup。</td><td>已重命名为正式 <code>examples/tuff-builder.example.ts</code> 示例。</td><td>不保留 <code>.bak</code> 路径。</td></tr>
+              <tr><td><strong>DG-04</strong><br>Plugin package naming</td><td>是否处理 plugin package name 不一致。</td><td>延期；作为 registry/manifest/package migration，而非 hygiene cleanup。</td><td>不重命名。</td></tr>
+              <tr><td><strong>DG-05</strong><br>tuff-analyse placement</td><td>将 private <code>apps/tuff-analyse</code> 作为独立 workspace app 管理。</td><td>已按批准的 deployment/product ownership 决策完成迁移；保留 package identity 与 deployment behavior。</td><td>移动到 apps/tuff-analyse，不保留 shim。</td></tr>
+              <tr><td><strong>DG-06</strong><br>Utils threshold</td><td>何时允许新增 package API。</td><td>仅 stable、environment-correct API，且有 &gt;=2 consumer 或 foundational adapter/domain ownership；否则保留本地。</td><td>拒绝 package promotion。</td></tr>
+              <tr><td><strong>DG-07</strong><br>Implementation order</td><td>先批准哪些波次，以及何时重新审计。</td><td>先批准 Waves 0-1；public package/platform changes 前重新审计 evidence。</td><td>不得进入 public package 或 platform change 波次。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="defaults" aria-labelledby="defaults-title">
+        <p class="eyebrow">Recommended defaults</p>
+        <h2 id="defaults-title">评审与实施推荐默认值</h2>
+        <ul>
+          <li>默认<span class="keywords should">应当</span>从 Wave 0 的 contract inventory 开始，而不是从代码移动开始。</li>
+          <li>默认<span class="keywords should">应当</span>优先 local composable 与 local pure engine，直到存在稳定第二 consumer 或 foundational domain ownership。</li>
+          <li>默认<span class="keywords should">应当</span>先处理低风险 local simplification、已确认 app-local duplication 与 thin adapter parity，再处理 public package 或 platform capability。</li>
+          <li>默认<span class="keywords should">应当</span>对 public export 采取 additive 策略，对内部 app file 采取完整 clean cutover。</li>
+          <li>默认<span class="keywords should">应当</span>把 generated/rebuildable ignored outputs 作为确认后的 cleanup，不把它们当 source defect。</li>
+          <li>默认<span class="keywords must not">MUST NOT</span>把名称不一致、文件很长、组件外形相近或出现 <code>process.platform</code> 作为自动迁移/删除理由。</li>
+          <li>默认<span class="keywords must">MUST</span>在每个 destructive、public compatibility、runtime naming 与 platform 行为变更前，记录适用 DG、证据、限制与批准结论。</li>
+        </ul>
+        <a class="external-link" href="index.html">返回完整证据报告：index.html</a>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <p>审计日期：2026-07-11。此为 standalone file:// 规则手册，无外部依赖、遥测或网络请求。当前为 dry-run，未授权删除。</p>
+  </footer>
+</body>
+</html>
