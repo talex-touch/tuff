@@ -7,30 +7,23 @@ import type {
 } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import type { UpdateRecordRow } from './update-repository'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
   AppPreviewChannel,
-  DownloadModule,
-  DownloadStatus,
   UpdateProviderType,
-  UPDATE_GITHUB_RELEASES_API,
   UPDATE_GITHUB_REPO,
   resolveUpdateChannelLabel,
   splitUpdateTag
 } from '@talex-touch/utils'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
-import { and, desc, eq } from 'drizzle-orm'
-import { app, Notification } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import { app } from 'electron'
 import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
-import { downloadChunks, downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
-import { shouldDowngradeRemoteFailure } from '../../utils/network-log-noise'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getSentryService } from '../sentry'
@@ -39,18 +32,16 @@ import { getSentryService } from '../sentry'
  */
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
-import { getNetworkService } from '../network'
 import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
 } from '../../../shared/update/channel'
-import {
-  compareUpdateVersions,
-  parseComparableUpdateVersion,
-  selectLatestUpdateRelease
-} from '../../../shared/update/version'
+import { compareUpdateVersions, parseComparableUpdateVersion } from '../../../shared/update/version'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
+import { MacAutoUpdaterAdapter } from './services/mac-auto-updater-adapter'
+import { ReleaseFetchService } from './services/release-fetch-service'
 import { UpdateActionController } from './services/update-action-controller'
+import { UpdateDownloadAdapter } from './services/update-download-adapter'
 import { UpdateSystem } from './update-system'
 import type { DownloadCenterModule } from '../download/download-center'
 
@@ -76,57 +67,6 @@ type UpdateSettings = SharedUpdateSettings & {
   pendingInstallVersion: string | null
 }
 
-interface ReleaseCacheRateLimit {
-  remaining?: number
-  resetAt?: number
-}
-
-interface ReleaseCacheEntry {
-  releases: GitHubRelease[]
-  fetchedAt: number
-  ttlMinutes: number
-  etag?: string
-  lastModified?: string
-  rateLimit?: ReleaseCacheRateLimit
-  cooldownUntil?: number
-  failureCount?: number
-}
-
-interface ReleaseCacheStore {
-  version: 1
-  providerType?: UpdateProviderType
-  providerKey?: string
-  entries: Partial<Record<AppPreviewChannel, ReleaseCacheEntry>>
-}
-
-interface UpdateFetchResult {
-  result: UpdateCheckResult
-  usedNetwork: boolean
-}
-
-interface OfficialReleaseAsset {
-  filename: string
-  downloadUrl: string
-  size: number
-  platform: 'darwin' | 'win32' | 'linux'
-  arch: 'x64' | 'arm64' | 'universal'
-  sha256?: string | null
-  signatureUrl?: string | null
-}
-
-interface OfficialRelease {
-  tag: string
-  name: string
-  channel: AppPreviewChannel
-  version: string
-  notes: { zh: string; en: string }
-  notesHtml?: { zh: string; en: string } | null
-  status: string
-  publishedAt?: string | null
-  createdAt: string
-  assets?: OfficialReleaseAsset[]
-}
-
 /**
  * Update service module
  */
@@ -143,55 +83,23 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private initContext?: ModuleInitContext<TalexEvents>
   private updateSystem?: UpdateSystem
   private updateRepository: UpdateRepository | null = null
-  private releaseCacheStore: ReleaseCacheStore = { version: 1, entries: {} }
+  private releaseFetchService: ReleaseFetchService
   private releaseCacheLoadPromise: Promise<void> | null = null
   private startupBackgroundTimer: NodeJS.Timeout | null = null
   private startupAutoCheckTimer: NodeJS.Timeout | null = null
   private startupBackgroundListener: (() => void) | null = null
   private updateSystemInitListener: (() => void) | null = null
   private autoDownloadTasks: Map<string, string> = new Map()
-  private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
-  private macAutoUpdaterInitialized = false
-  private macAutoUpdaterDownloadInFlight = false
-  private macUpdateDownloadedVersion: string | null = null
-  private macUpdateReadyNotifiedVersion: string | null = null
-  private macAutoUpdaterConfigMissingLogged = false
+  private macAutoUpdater: MacAutoUpdaterAdapter
+  private downloadAdapter: UpdateDownloadAdapter
   private actionController: UpdateActionController | null = null
   private readonly messageStore = getAnalyticsMessageStore()
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
     [AppPreviewChannel.SNAPSHOT]: 1
-  }
-  private readonly onMacUpdateDownloaded = (info: { version?: string }): void => {
-    const version = (info?.version || '').trim()
-    if (!version) {
-      updateLog.warn('macOS update downloaded without version info')
-      return
-    }
-    if (!this.isUpdateCandidate(version)) {
-      updateLog.warn('macOS update ignored (version/channel mismatch)', {
-        meta: {
-          version,
-          current: this.currentVersion,
-          channel: this.getEffectiveChannel()
-        }
-      })
-      this.macUpdateDownloadedVersion = null
-      this.macUpdateReadyNotifiedVersion = null
-      this.settings.pendingInstallVersion = null
-      this.saveSettings()
-      return
-    }
-    this.macUpdateDownloadedVersion = version
-    this.macUpdateReadyNotifiedVersion = null
-    this.settings.pendingInstallVersion = version
-    this.saveSettings()
-    this.showMacUpdateReadyNotification(version)
-  }
-  private readonly onMacUpdaterError = (error: unknown): void => {
-    updateLog.error('Mac autoUpdater error', { error })
   }
 
   constructor() {
@@ -200,7 +108,40 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.currentVersion = this.getCurrentVersion()
     this.currentChannel = this.getCurrentChannel()
     this.settings = this.getDefaultSettings()
-    this.releaseCacheStore = this.buildReleaseCacheStore()
+    this.releaseFetchService = new ReleaseFetchService({
+      getSettings: () => this.settings,
+      log: { warn: (message, details) => updateLog.warn(message, details) }
+    })
+    this.macAutoUpdater = new MacAutoUpdaterAdapter({
+      getChannel: () => this.getEffectiveChannel(),
+      isUpdateCandidate: (version) => this.isUpdateCandidate(version),
+      getPendingInstallVersion: () => this.settings.pendingInstallVersion,
+      setPendingInstallVersion: (version) => {
+        this.settings.pendingInstallVersion = version
+      },
+      saveSettings: () => this.saveSettings(),
+      flushSettings: () => this.flushSettingsToDisk(),
+      log: {
+        info: (message, details) => updateLog.info(message, details),
+        warn: (message, details) => updateLog.warn(message, details),
+        error: (message, details) => updateLog.error(message, details)
+      }
+    })
+    this.downloadAdapter = new UpdateDownloadAdapter({
+      isPackaged: () => app.isPackaged,
+      isMacAutoUpdaterEnabled: () => this.macAutoUpdater.isEnabled(),
+      downloadMacUpdate: (release) => this.macAutoUpdater.download(release),
+      getUpdateSystem: () => this.updateSystem,
+      getEffectiveChannel: () => this.getEffectiveChannel(),
+      getSourceName: () => this.settings.source?.name ?? 'Unknown',
+      shouldAutoInstall: () => this.shouldAutoInstallDownloadedUpdate(),
+      isUpdateCandidate: (version) => this.isUpdateCandidate(version),
+      reportTelemetry: (action, meta) => this.reportUpdateTelemetry(action, meta),
+      log: {
+        info: (message, details) => updateLog.info(message, details),
+        warn: (message, details) => updateLog.warn(message, details)
+      }
+    })
   }
 
   private tryInitUpdateSystem(ctx: ModuleInitContext<TalexEvents>): boolean {
@@ -248,8 +189,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
   private runStartupBackgroundTasks(): void {
     this.scheduleReleaseCacheLoad()
-    this.setupMacAutoUpdater()
-    this.restoreMacPendingInstallVersion()
+    this.macAutoUpdater.setup()
+    this.macAutoUpdater.restorePendingInstallVersion()
 
     if (!app.isPackaged) {
       updateLog.info('Development mode detected, skipping automatic update checks')
@@ -360,11 +301,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.transportDisposers = []
     this.transport = null
     this.actionController = null
-    if (this.macAutoUpdaterInitialized) {
-      autoUpdater.removeListener('update-downloaded', this.onMacUpdateDownloaded)
-      autoUpdater.removeListener('error', this.onMacUpdaterError)
-      this.macAutoUpdaterInitialized = false
-    }
+    this.macAutoUpdater.dispose()
 
     // Clear cache if needed
     if (!this.settings.cacheEnabled) {
@@ -383,27 +320,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       getQuickUpdateCheckResult: (channel) => this.getQuickUpdateCheckResult(channel),
       queueBackgroundUpdateCheck: () => this.queueBackgroundUpdateCheck(),
       checkForUpdates: (force) => this.checkForUpdates(force),
-      isMacAutoUpdaterEnabled: () => this.isMacAutoUpdaterEnabled(),
-      withDownloadCenterDownload: async (release) => {
-        if (!this.updateSystem) {
-          throw new Error('UpdateSystem not initialized')
-        }
-        const taskId = await this.updateSystem.downloadUpdate(release)
-        return { taskId }
-      },
-      withMacDownload: async (release) => {
-        if (this.updateSystem) {
-          await this.updateSystem.scheduleRendererOverride(release)
-        }
-        await this.downloadMacUpdate(release)
-      },
-      withDownloadCenterInstall: async (taskId) => {
-        if (!this.updateSystem) {
-          throw new Error('UpdateSystem not initialized')
-        }
-        await this.updateSystem.installUpdate(taskId)
-      },
-      withMacInstall: async () => this.installMacUpdate(),
+      isMacAutoUpdaterEnabled: () => this.macAutoUpdater.isEnabled(),
+      withDownloadCenterDownload: (release) => this.downloadAdapter.downloadWithCenter(release),
+      withMacDownload: (release) => this.downloadAdapter.downloadWithMacAutoUpdater(release),
+      withDownloadCenterInstall: (taskId) => this.downloadAdapter.installWithCenter(taskId),
+      withMacInstall: () => this.macAutoUpdater.install(),
       reportUpdateMessage: (level, title, message, meta) =>
         this.reportUpdateMessage(level, title, message, meta),
       reportUpdateTelemetry: (action, meta) => this.reportUpdateTelemetry(action, meta),
@@ -440,7 +361,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         async (payload: { settings?: Partial<UpdateSettings> }) => {
           const newSettings = payload?.settings ?? {}
           try {
-            const previousProvider = this.resolveReleaseCacheProvider(this.settings.source)
+            const previousSource = this.settings.source
             const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
 
             if ('updateChannel' in sanitizedSettings) {
@@ -459,7 +380,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
             this.settings = { ...this.settings, ...sanitizedSettings }
             this.saveSettings()
-            this.setupMacAutoUpdater()
+            this.macAutoUpdater.setup()
 
             if (this.updateSystem) {
               if (typeof sanitizedSettings.autoDownload === 'boolean') {
@@ -480,7 +401,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               }
               if (sanitizedSettings.updateChannel) {
                 this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
-                this.syncMacAutoUpdaterChannel()
+                this.macAutoUpdater.syncChannel()
               }
               if (typeof sanitizedSettings.rendererOverrideEnabled === 'boolean') {
                 const enabled = sanitizedSettings.rendererOverrideEnabled
@@ -506,10 +427,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               this.startPolling()
             }
 
-            const nextProvider = this.resolveReleaseCacheProvider(this.settings.source)
             if (
-              previousProvider.type !== nextProvider.type ||
-              previousProvider.key !== nextProvider.key
+              previousSource?.type !== this.settings.source?.type ||
+              previousSource?.url !== this.settings.source?.url
             ) {
               this.cache.clear()
               this.clearReleaseCache()
@@ -527,7 +447,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       ),
 
       tx.on(UpdateEvents.getStatus, async () => {
-        const readyStatus = await this.resolveReadyUpdateStatus()
+        const readyStatus = await this.downloadAdapter.resolveReadyUpdateStatus(
+          this.macAutoUpdater.getReadyVersion()
+        )
 
         return {
           success: true,
@@ -551,9 +473,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           this.cache.clear()
           this.clearReleaseCache()
           await this.updateRepository?.clearAllRecords()
-          this.macUpdateDownloadedVersion = null
-          this.macUpdateReadyNotifiedVersion = null
-          this.settings.pendingInstallVersion = null
+          this.macAutoUpdater.clearPendingInstallVersion()
           this.saveSettings()
           return { success: true }
         } catch (error) {
@@ -692,134 +612,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     )
   }
 
-  private getMacAutoUpdaterConfigPath(): string {
-    return path.join(process.resourcesPath, 'app-update.yml')
-  }
-
-  private isMacAutoUpdaterEnabled(): boolean {
-    if (!app.isPackaged || process.platform !== 'darwin') {
-      return false
-    }
-
-    const configPath = this.getMacAutoUpdaterConfigPath()
-    if (fs.existsSync(configPath)) {
-      return true
-    }
-
-    if (!this.macAutoUpdaterConfigMissingLogged) {
-      this.macAutoUpdaterConfigMissingLogged = true
-      updateLog.warn('macOS autoUpdater disabled because app-update.yml is missing', {
-        meta: { configPath }
-      })
-    }
-
-    return false
-  }
-
-  private setupMacAutoUpdater(): void {
-    if (this.macAutoUpdaterInitialized || !this.isMacAutoUpdaterEnabled()) {
-      return
-    }
-    this.macAutoUpdaterInitialized = true
-    autoUpdater.autoDownload = false
-    autoUpdater.autoInstallOnAppQuit = false
-    autoUpdater.allowPrerelease = this.getEffectiveChannel() !== AppPreviewChannel.RELEASE
-    autoUpdater.on('update-downloaded', this.onMacUpdateDownloaded)
-    autoUpdater.on('error', this.onMacUpdaterError)
-  }
-
-  private syncMacAutoUpdaterChannel(): void {
-    if (!this.isMacAutoUpdaterEnabled() || !this.macAutoUpdaterInitialized) {
-      return
-    }
-    autoUpdater.allowPrerelease = this.getEffectiveChannel() !== AppPreviewChannel.RELEASE
-  }
-
-  private restoreMacPendingInstallVersion(): void {
-    if (!this.macAutoUpdaterInitialized) {
-      return
-    }
-
-    const pendingVersion = (this.settings.pendingInstallVersion ?? '').trim()
-    if (!pendingVersion || !this.isUpdateCandidate(pendingVersion)) {
-      return
-    }
-
-    this.macUpdateDownloadedVersion = pendingVersion
-  }
-
-  private async downloadMacUpdate(release: GitHubRelease): Promise<void> {
-    this.setupMacAutoUpdater()
-    if (this.macUpdateDownloadedVersion) {
-      updateLog.info('macOS update already downloaded', {
-        meta: { version: this.macUpdateDownloadedVersion }
-      })
-      return
-    }
-    if (this.macAutoUpdaterDownloadInFlight) {
-      return
-    }
-    this.macAutoUpdaterDownloadInFlight = true
-    try {
-      this.syncMacAutoUpdaterChannel()
-      updateLog.info('macOS autoUpdater checking for updates', {
-        meta: { tag: release.tag_name }
-      })
-      await autoUpdater.checkForUpdates()
-      await autoUpdater.downloadUpdate()
-      updateLog.info('macOS autoUpdater download started', {
-        meta: { tag: release.tag_name }
-      })
-    } catch (error) {
-      updateLog.error('macOS autoUpdater download failed', { error })
-      throw error
-    } finally {
-      this.macAutoUpdaterDownloadInFlight = false
-    }
-  }
-
-  private async installMacUpdate(): Promise<void> {
-    const pendingVersion = this.macUpdateDownloadedVersion
-    if (!pendingVersion) {
-      throw new Error('macOS update has not been downloaded')
-    }
-
-    this.macUpdateDownloadedVersion = null
-    this.macUpdateReadyNotifiedVersion = null
-    this.settings.pendingInstallVersion = null
-
-    try {
-      await this.flushSettingsToDisk()
-    } catch (error) {
-      updateLog.warn('Failed to persist macOS pending update state before install', { error })
-    }
-
-    autoUpdater.quitAndInstall()
-  }
-
-  private showMacUpdateReadyNotification(version: string): void {
-    if (!this.isMacAutoUpdaterEnabled()) {
-      return
-    }
-    if (this.macUpdateReadyNotifiedVersion === version) {
-      return
-    }
-    this.macUpdateReadyNotifiedVersion = version
-    const notification = new Notification({
-      title: 'Update Ready',
-      body: `Version ${version} is ready. Click to restart and finish updating.`,
-      silent: false,
-      urgency: 'critical',
-      timeoutType: 'never'
-    })
-    notification.on('click', () => {
-      void this.installMacUpdate().catch((error) => {
-        updateLog.error('Failed to install macOS update', { error })
-      })
-    })
-    notification.show()
-  }
-
   /**
    * Start polling service based on frequency settings
    */
@@ -900,7 +692,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     try {
-      const { result, usedNetwork } = await this.fetchLatestRelease(targetChannel, { force })
+      await this.waitForReleaseCacheLoad()
+      const { result, usedNetwork } = await this.releaseFetchService.fetch(targetChannel, force)
+      this.scheduleReleaseCacheSave()
       if (usedNetwork) {
         this.recordCheckTimestamp()
       }
@@ -966,7 +760,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           }
 
           this.notifyRendererAboutUpdate(result, targetChannel)
-          void this.maybeAutoDownload(result.release)
+          void this.downloadAdapter.maybeAutoDownload(result.release, this.autoDownloadTasks)
 
           return result
         }
@@ -984,7 +778,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return noUpdateResult
     } catch (error) {
       this.recordCheckTimestamp()
-      const expectedFailure = this.describeExpectedUpdateCheckFailure(error)
+      this.scheduleReleaseCacheSave()
+      const expectedFailure = this.releaseFetchService.describeExpectedFailure(error)
       if (expectedFailure) {
         updateLog.warn(expectedFailure.message, { meta: expectedFailure.meta })
         this.reportUpdateTelemetry('check_deferred', {
@@ -1018,120 +813,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
   }
 
-  private async maybeAutoDownload(release: GitHubRelease): Promise<void> {
-    if (!this.settings.autoDownload) {
-      return
-    }
-    if (!app.isPackaged) {
-      return
-    }
-
-    const tag = release.tag_name
-    if (this.autoDownloadTasks.has(tag)) {
-      return
-    }
-
-    if (this.isMacAutoUpdaterEnabled()) {
-      try {
-        if (this.updateSystem) {
-          await this.updateSystem.scheduleRendererOverride(release)
-        }
-        await this.downloadMacUpdate(release)
-        this.autoDownloadTasks.set(tag, 'macos-auto-updater')
-        updateLog.info(`Auto download started for ${tag} (macOS autoUpdater)`)
-        this.reportUpdateTelemetry('download_started', {
-          channel: this.getEffectiveChannel(),
-          source: 'mac-auto-updater',
-          tag,
-          itemKind: 'auto'
-        })
-      } catch (error) {
-        updateLog.warn('Auto download failed (macOS autoUpdater)', { error, meta: { tag } })
-        this.reportUpdateTelemetry('download_error', {
-          channel: this.getEffectiveChannel(),
-          source: 'mac-auto-updater',
-          tag,
-          itemKind: 'auto'
-        })
-      }
-      return
-    }
-
-    if (!this.updateSystem) {
-      return
-    }
-
-    const existingTaskId = await this.getExistingDownloadedUpdateTaskId(tag)
-    if (existingTaskId) {
-      this.autoDownloadTasks.set(tag, existingTaskId)
-      updateLog.info(`Update ${tag} already downloaded, skipping auto download`, {
-        meta: { taskId: existingTaskId }
-      })
-      return
-    }
-
-    try {
-      const taskId = await this.updateSystem.downloadUpdate(release, {
-        autoInstallOnComplete: this.shouldAutoInstallDownloadedUpdate()
-      })
-      this.autoDownloadTasks.set(tag, taskId)
-      updateLog.info(`Auto download started for ${tag}`, { meta: { taskId } })
-      this.reportUpdateTelemetry('download_started', {
-        channel: this.getEffectiveChannel(),
-        source: this.settings.source?.name ?? 'Unknown',
-        tag,
-        taskId,
-        itemKind: 'auto'
-      })
-    } catch (error) {
-      updateLog.warn('Auto download failed', { error, meta: { tag } })
-      this.reportUpdateTelemetry('download_error', {
-        channel: this.getEffectiveChannel(),
-        source: this.settings.source?.name ?? 'Unknown',
-        tag,
-        itemKind: 'auto'
-      })
-    }
-  }
-
-  private async getExistingDownloadedUpdateTaskId(tag: string): Promise<string | null> {
-    try {
-      const db = databaseModule.getDb()
-      const tasks = await db
-        .select({
-          id: downloadTasks.id,
-          destination: downloadTasks.destination,
-          filename: downloadTasks.filename,
-          metadata: downloadTasks.metadata
-        })
-        .from(downloadTasks)
-        .where(
-          and(
-            eq(downloadTasks.module, DownloadModule.APP_UPDATE),
-            eq(downloadTasks.status, DownloadStatus.COMPLETED)
-          )
-        )
-        .orderBy(desc(downloadTasks.completedAt))
-        .limit(20)
-
-      for (const task of tasks) {
-        const metadata = this.parseDownloadTaskMetadata(task.metadata)
-        if (metadata?.version !== tag) {
-          continue
-        }
-
-        const filePath = path.join(task.destination, task.filename)
-        if (await this.fileExists(filePath)) {
-          return task.id
-        }
-      }
-    } catch (error) {
-      updateLog.warn('Failed to check existing update downloads', { error, meta: { tag } })
-    }
-
-    return null
-  }
-
   private shouldAutoInstallDownloadedUpdate(): boolean {
     return (
       app.isPackaged &&
@@ -1139,130 +820,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       this.settings.autoDownload === true &&
       this.settings.autoInstallDownloadedUpdates === true
     )
-  }
-
-  private async resolveReadyUpdateStatus(): Promise<{
-    downloadReady: boolean
-    version: string | null
-    taskId: string | null
-  }> {
-    if (this.isMacAutoUpdaterEnabled() && this.macUpdateDownloadedVersion) {
-      const pendingVersion = this.macUpdateDownloadedVersion
-      if (!this.isUpdateCandidate(pendingVersion)) {
-        updateLog.warn('Ignoring stale macOS pending update', {
-          meta: { version: pendingVersion, channel: this.getEffectiveChannel() }
-        })
-        this.macUpdateDownloadedVersion = null
-        this.macUpdateReadyNotifiedVersion = null
-        this.settings.pendingInstallVersion = null
-        this.saveSettings()
-      } else {
-        return {
-          downloadReady: true,
-          version: pendingVersion,
-          taskId: null
-        }
-      }
-    }
-
-    try {
-      const db = databaseModule.getDb()
-      const tasks = await db
-        .select({
-          id: downloadTasks.id,
-          destination: downloadTasks.destination,
-          filename: downloadTasks.filename,
-          metadata: downloadTasks.metadata
-        })
-        .from(downloadTasks)
-        .where(
-          and(
-            eq(downloadTasks.module, DownloadModule.APP_UPDATE),
-            eq(downloadTasks.status, DownloadStatus.COMPLETED)
-          )
-        )
-        .orderBy(desc(downloadTasks.completedAt))
-        .limit(20)
-
-      for (const task of tasks) {
-        const filePath = path.join(task.destination, task.filename)
-        if (!(await this.fileExists(filePath))) {
-          continue
-        }
-
-        const metadata = this.parseDownloadTaskMetadata(task.metadata)
-        const version = typeof metadata?.version === 'string' ? metadata.version : null
-
-        if (version && !this.isUpdateCandidate(version)) {
-          await this.cleanupOutdatedUpdateTask(task.id, filePath, version)
-          continue
-        }
-
-        return {
-          downloadReady: true,
-          version,
-          taskId: task.id
-        }
-      }
-    } catch (error) {
-      updateLog.warn('Failed to resolve ready update status', { error })
-    }
-
-    return {
-      downloadReady: false,
-      version: null,
-      taskId: null
-    }
-  }
-
-  private async cleanupOutdatedUpdateTask(
-    taskId: string,
-    filePath: string,
-    version: string
-  ): Promise<void> {
-    try {
-      await fs.promises.unlink(filePath)
-    } catch (error) {
-      updateLog.warn('Failed to delete outdated update file', {
-        error,
-        meta: { taskId, filePath, version }
-      })
-    }
-
-    try {
-      const db = databaseModule.getDb()
-      await db.delete(downloadChunks).where(eq(downloadChunks.taskId, taskId))
-      await db.delete(downloadTasks).where(eq(downloadTasks.id, taskId))
-      updateLog.info('Outdated update package cleaned', {
-        meta: { taskId, version }
-      })
-    } catch (error) {
-      updateLog.warn('Failed to delete outdated update task record', {
-        error,
-        meta: { taskId, version }
-      })
-    }
-  }
-
-  private parseDownloadTaskMetadata(metadata?: string | null): Record<string, unknown> | null {
-    if (!metadata) {
-      return null
-    }
-    try {
-      return JSON.parse(metadata) as Record<string, unknown>
-    } catch (error) {
-      updateLog.warn('Failed to parse download task metadata', { error })
-      return null
-    }
-  }
-
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.promises.stat(filePath)
-      return true
-    } catch {
-      return false
-    }
   }
 
   /**
@@ -1420,50 +977,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       ttl
     })
   }
-
-  /**
-   * Get cache key for current configuration
-   */
   private getCacheKey(channel: AppPreviewChannel): string {
     const providerType = this.settings.source?.type ?? UpdateProviderType.GITHUB
     const providerKey =
-      providerType === UpdateProviderType.OFFICIAL
-        ? this.resolveOfficialBaseUrl()
-        : (this.settings.source?.url ?? UPDATE_GITHUB_REPO)
+      this.settings.source?.url ??
+      (providerType === UpdateProviderType.OFFICIAL ? NEXUS_BASE_URL : UPDATE_GITHUB_REPO)
     return `releases:${providerType}:${providerKey}:${channel}`
-  }
-
-  private resolveReleaseCacheProvider(source: UpdateSettings['source'] | undefined): {
-    type: UpdateProviderType
-    key: string
-  } {
-    const providerType = source?.type ?? UpdateProviderType.GITHUB
-    const providerKey =
-      providerType === UpdateProviderType.OFFICIAL
-        ? this.resolveOfficialBaseUrl()
-        : (source?.url ?? UPDATE_GITHUB_REPO)
-    return { type: providerType, key: providerKey }
-  }
-
-  private buildReleaseCacheStore(entries: ReleaseCacheStore['entries'] = {}): ReleaseCacheStore {
-    const provider = this.resolveReleaseCacheProvider(this.settings.source)
-    return {
-      version: 1,
-      entries,
-      providerType: provider.type,
-      providerKey: provider.key
-    }
-  }
-
-  private isReleaseCacheCompatible(store: ReleaseCacheStore): boolean {
-    const provider = this.resolveReleaseCacheProvider(this.settings.source)
-    if (!store.providerType && !store.providerKey) {
-      return (
-        provider.type === UpdateProviderType.GITHUB &&
-        provider.key === (this.settings.source?.url ?? UPDATE_GITHUB_REPO)
-      )
-    }
-    return store.providerType === provider.type && store.providerKey === provider.key
   }
 
   private async handleUserAction(tag: string, action: UpdateUserAction): Promise<void> {
@@ -1491,421 +1010,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         await this.updateRepository.markStatus(tag, UpdateRecordStatus.ACKNOWLEDGED)
         break
     }
-  }
-
-  /**
-   * Fetch latest release from GitHub API
-   */
-  private async fetchLatestRelease(
-    channel: AppPreviewChannel,
-    options?: { force?: boolean }
-  ): Promise<UpdateFetchResult> {
-    await this.waitForReleaseCacheLoad()
-
-    if (this.settings.source?.type === UpdateProviderType.OFFICIAL) {
-      return this.fetchLatestReleaseFromOfficial(channel, options)
-    }
-
-    return this.fetchLatestReleaseFromGitHub(channel, options)
-  }
-
-  private async fetchLatestReleaseFromGitHub(
-    channel: AppPreviewChannel,
-    options?: { force?: boolean }
-  ): Promise<UpdateFetchResult> {
-    const source =
-      this.settings.source?.type === UpdateProviderType.GITHUB
-        ? (this.settings.source?.name ?? 'GitHub')
-        : 'GitHub'
-    const force = options?.force ?? false
-    const cacheEntry = this.getReleaseCacheEntry(channel)
-    const now = Date.now()
-    const resolveCachedRelease = (): GitHubRelease | null =>
-      selectLatestUpdateRelease(cacheEntry?.releases ?? [])
-
-    if (!force && this.settings.cacheEnabled && cacheEntry?.releases?.length) {
-      const ttlMs = this.settings.cacheTTL * 60 * 1000
-      if (now - cacheEntry.fetchedAt <= ttlMs) {
-        const cachedRelease = resolveCachedRelease()
-        if (!cachedRelease) {
-          return {
-            usedNetwork: false,
-            result: {
-              hasUpdate: false,
-              error: 'No cached release available',
-              source
-            }
-          }
-        }
-        return {
-          usedNetwork: false,
-          result: {
-            hasUpdate: true,
-            release: cachedRelease,
-            source
-          }
-        }
-      }
-    }
-
-    if (
-      this.settings.rateLimitEnabled &&
-      cacheEntry?.cooldownUntil &&
-      now < cacheEntry.cooldownUntil
-    ) {
-      if (cacheEntry.releases?.length) {
-        const cachedRelease = resolveCachedRelease()
-        if (!cachedRelease) {
-          return {
-            usedNetwork: false,
-            result: {
-              hasUpdate: false,
-              error: 'No cached release available',
-              source
-            }
-          }
-        }
-        return {
-          usedNetwork: false,
-          result: {
-            hasUpdate: true,
-            release: cachedRelease,
-            source
-          }
-        }
-      }
-      return {
-        usedNetwork: false,
-        result: {
-          hasUpdate: false,
-          error: 'Rate limit cooldown in effect',
-          source
-        }
-      }
-    }
-
-    const maxRetries = Math.max(1, this.settings.maxRetries || 1)
-    const baseDelay = this.settings.retryDelay || 2000
-    const ttlMinutes = this.settings.cacheTTL
-
-    let lastError: unknown
-    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
-      try {
-        const headers: Record<string, string> = {
-          Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'TalexTouch-Updater/1.0'
-        }
-
-        if (this.settings.cacheEnabled && cacheEntry?.etag) {
-          headers['If-None-Match'] = cacheEntry.etag
-        }
-        if (this.settings.cacheEnabled && cacheEntry?.lastModified) {
-          headers['If-Modified-Since'] = cacheEntry.lastModified
-        }
-
-        const response = await getNetworkService().request<GitHubRelease[]>({
-          method: 'GET',
-          url: UPDATE_GITHUB_RELEASES_API,
-          timeoutMs: 8000,
-          headers,
-          responseType: 'json',
-          validateStatus: [200, 304, 403, 429]
-        })
-
-        if (response.status === 403 || response.status === 429) {
-          const statusError = new Error(`NETWORK_HTTP_STATUS_${response.status}`) as Error & {
-            headers?: Record<string, string>
-          }
-          statusError.headers = response.headers
-          throw statusError
-        }
-
-        const rateLimit = this.extractRateLimitInfo(response.headers)
-        const etag = this.getHeaderValue(response.headers, 'etag')
-        const lastModified = this.getHeaderValue(response.headers, 'last-modified')
-
-        if (response.status === 304) {
-          if (cacheEntry?.releases?.length) {
-            const cachedRelease = resolveCachedRelease()
-            if (!cachedRelease) {
-              return {
-                usedNetwork: true,
-                result: {
-                  hasUpdate: false,
-                  error: 'No cached release available',
-                  source
-                }
-              }
-            }
-            this.setReleaseCacheEntry(channel, {
-              ...cacheEntry,
-              fetchedAt: now,
-              ttlMinutes,
-              rateLimit: rateLimit ?? cacheEntry.rateLimit,
-              etag: etag ?? cacheEntry.etag,
-              lastModified: lastModified ?? cacheEntry.lastModified,
-              cooldownUntil: this.resolveCooldownUntil(rateLimit),
-              failureCount: 0
-            })
-            return {
-              usedNetwork: true,
-              result: {
-                hasUpdate: true,
-                release: cachedRelease,
-                source
-              }
-            }
-          }
-          return {
-            usedNetwork: true,
-            result: {
-              hasUpdate: false,
-              error: 'No cached release available',
-              source
-            }
-          }
-        }
-
-        const releases: GitHubRelease[] = response.data
-
-        if (!releases || !Array.isArray(releases)) {
-          return {
-            usedNetwork: true,
-            result: {
-              hasUpdate: false,
-              error: 'Invalid response format from GitHub API',
-              source
-            }
-          }
-        }
-
-        const channelReleases = releases.filter((release) => {
-          const version = this.parseVersion(release.tag_name)
-          return version.channel === channel
-        })
-
-        if (channelReleases.length === 0) {
-          return {
-            usedNetwork: true,
-            result: {
-              hasUpdate: false,
-              error: `No releases found for channel: ${channel}`,
-              source
-            }
-          }
-        }
-
-        channelReleases.sort((a, b) => compareUpdateVersions(b.tag_name, a.tag_name))
-        const latestRelease = channelReleases[0]
-
-        const updatedEntry: ReleaseCacheEntry = {
-          releases: channelReleases,
-          fetchedAt: now,
-          ttlMinutes,
-          etag: etag ?? cacheEntry?.etag,
-          lastModified: lastModified ?? cacheEntry?.lastModified,
-          rateLimit,
-          cooldownUntil: this.resolveCooldownUntil(rateLimit),
-          failureCount: 0
-        }
-
-        this.setReleaseCacheEntry(channel, updatedEntry)
-
-        return {
-          usedNetwork: true,
-          result: {
-            hasUpdate: true,
-            release: latestRelease,
-            source
-          }
-        }
-      } catch (error) {
-        lastError = error
-
-        if (!this.isRetryableError(error) || attempt >= maxRetries - 1) {
-          break
-        }
-
-        const delay = this.calculateRetryDelay(attempt, baseDelay)
-        await this.sleep(delay)
-      }
-    }
-
-    if (lastError) {
-      this.recordFetchFailure(channel, lastError)
-    }
-
-    if (cacheEntry?.releases?.length) {
-      const cachedRelease = resolveCachedRelease()
-      if (!cachedRelease) {
-        throw new Error('Failed to fetch latest release')
-      }
-      return {
-        usedNetwork: false,
-        result: {
-          hasUpdate: true,
-          release: cachedRelease,
-          source
-        }
-      }
-    }
-
-    if (lastError instanceof Error) {
-      throw lastError
-    }
-
-    throw new Error('Failed to fetch latest release')
-  }
-
-  private async fetchLatestReleaseFromOfficial(
-    channel: AppPreviewChannel,
-    options?: { force?: boolean }
-  ): Promise<UpdateFetchResult> {
-    const source = this.settings.source?.name ?? 'Official Releases'
-    const force = options?.force ?? false
-    const cacheEntry = this.getReleaseCacheEntry(channel)
-    const now = Date.now()
-    const resolveCachedRelease = (): GitHubRelease | null =>
-      selectLatestUpdateRelease(cacheEntry?.releases ?? [])
-
-    if (!force && this.settings.cacheEnabled && cacheEntry?.releases?.length) {
-      const ttlMs = this.settings.cacheTTL * 60 * 1000
-      if (now - cacheEntry.fetchedAt <= ttlMs) {
-        const cachedRelease = resolveCachedRelease()
-        if (!cachedRelease) {
-          return {
-            usedNetwork: false,
-            result: {
-              hasUpdate: false,
-              error: 'No cached release available',
-              source
-            }
-          }
-        }
-        return {
-          usedNetwork: false,
-          result: {
-            hasUpdate: true,
-            release: cachedRelease,
-            source
-          }
-        }
-      }
-    }
-
-    try {
-      const url = new URL('/api/releases/latest', this.resolveOfficialBaseUrl())
-      url.searchParams.set('channel', channel)
-      const response = await getNetworkService().request<{
-        release?: OfficialRelease | null
-        message?: string
-      }>({
-        method: 'GET',
-        url: url.toString(),
-        timeoutMs: 8000,
-        responseType: 'json'
-      })
-      const release = response.data?.release as OfficialRelease | null
-
-      if (!release) {
-        return {
-          usedNetwork: true,
-          result: {
-            hasUpdate: false,
-            error: response.data?.message ?? 'No official release available',
-            source
-          }
-        }
-      }
-
-      const mapped = this.mapOfficialRelease(release)
-      const updatedEntry: ReleaseCacheEntry = {
-        releases: [mapped],
-        fetchedAt: now,
-        ttlMinutes: this.settings.cacheTTL,
-        failureCount: 0
-      }
-
-      this.setReleaseCacheEntry(channel, updatedEntry)
-
-      return {
-        usedNetwork: true,
-        result: {
-          hasUpdate: true,
-          release: mapped,
-          source
-        }
-      }
-    } catch (error) {
-      this.recordFetchFailure(channel, error)
-
-      if (cacheEntry?.releases?.length) {
-        const cachedRelease = resolveCachedRelease()
-        if (!cachedRelease) {
-          throw new Error('Failed to fetch official release')
-        }
-        return {
-          usedNetwork: false,
-          result: {
-            hasUpdate: true,
-            release: cachedRelease,
-            source
-          }
-        }
-      }
-
-      if (error instanceof Error) {
-        throw error
-      }
-
-      throw new Error('Failed to fetch official release')
-    }
-  }
-
-  private mapOfficialRelease(release: OfficialRelease): GitHubRelease {
-    const notesHtml = release.notesHtml
-    const body = notesHtml?.en || release.notes?.en || notesHtml?.zh || release.notes?.zh || ''
-
-    const assets = (release.assets ?? [])
-      .map((asset) => {
-        const downloadUrl = this.resolveOfficialAssetUrl(asset.downloadUrl)
-        if (!downloadUrl) return null
-        const signatureUrl = this.resolveOfficialAssetUrl(asset.signatureUrl ?? undefined)
-        const arch = asset.arch === 'arm64' ? 'arm64' : 'x64'
-        return {
-          name: asset.filename,
-          url: downloadUrl,
-          size: asset.size,
-          platform: asset.platform,
-          arch,
-          checksum: asset.sha256 ?? undefined,
-          signatureUrl
-        } as GitHubRelease['assets'][number]
-      })
-      .filter(Boolean) as GitHubRelease['assets']
-
-    return {
-      tag_name: release.tag,
-      name: release.name || release.tag,
-      published_at: release.publishedAt ?? release.createdAt,
-      body,
-      assets
-    }
-  }
-
-  private resolveOfficialAssetUrl(path?: string | null): string | null {
-    if (!path) return null
-    if (/^https?:\/\//i.test(path)) return path
-    const normalized = path.startsWith('/') ? path : `/${path}`
-    return `${this.resolveOfficialBaseUrl()}${normalized}`
-  }
-
-  private resolveOfficialBaseUrl(): string {
-    const configured = this.settings.source?.url
-    if (configured) {
-      return configured.replace(/\/$/, '')
-    }
-    return NEXUS_BASE_URL
   }
 
   private async persistRelease(
@@ -2182,45 +1286,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
   }
 
-  private getReleaseCacheFilePath(): string | null {
-    if (!this.initContext) {
-      return null
-    }
-    return path.join(this.initContext.app.rootPath, 'config', 'update-cache.json')
-  }
-
   private async loadReleaseCache(): Promise<void> {
-    const cacheFile = this.getReleaseCacheFilePath()
-    if (!cacheFile) {
-      return
-    }
-    try {
-      if (!fs.existsSync(cacheFile)) {
-        return
-      }
-      const raw = await fs.promises.readFile(cacheFile, 'utf8')
-      const parsed = JSON.parse(raw)
-      if (
-        parsed &&
-        typeof parsed === 'object' &&
-        parsed.entries &&
-        typeof parsed.entries === 'object'
-      ) {
-        const parsedStore: ReleaseCacheStore = {
-          version: 1,
-          entries: parsed.entries as ReleaseCacheStore['entries'],
-          providerType: (parsed as ReleaseCacheStore).providerType,
-          providerKey: (parsed as ReleaseCacheStore).providerKey
-        }
-
-        if (this.isReleaseCacheCompatible(parsedStore)) {
-          this.releaseCacheStore = this.buildReleaseCacheStore(parsedStore.entries)
-        } else {
-          this.releaseCacheStore = this.buildReleaseCacheStore()
-        }
-      }
-    } catch (error) {
-      updateLog.warn('Failed to load update cache', { error })
+    if (this.initContext) {
+      await this.releaseFetchService.load(this.initContext.app.rootPath)
     }
   }
 
@@ -2255,197 +1323,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private async flushReleaseCacheToDisk(): Promise<void> {
-    const cacheFile = this.getReleaseCacheFilePath()
-    if (!cacheFile) {
-      return
-    }
-    try {
-      await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true })
-      await fs.promises.writeFile(cacheFile, JSON.stringify(this.releaseCacheStore, null, 2))
-    } catch (error) {
-      updateLog.warn('Failed to save update cache', { error })
+    if (this.initContext) {
+      await this.releaseFetchService.flush(this.initContext.app.rootPath)
     }
   }
 
   private clearReleaseCache(): void {
-    this.releaseCacheStore = this.buildReleaseCacheStore()
+    this.releaseFetchService.clear()
     this.scheduleReleaseCacheSave()
-  }
-
-  private getReleaseCacheEntry(channel: AppPreviewChannel): ReleaseCacheEntry | null {
-    return this.releaseCacheStore.entries[channel] ?? null
-  }
-
-  private setReleaseCacheEntry(channel: AppPreviewChannel, entry: ReleaseCacheEntry): void {
-    if (!this.isReleaseCacheCompatible(this.releaseCacheStore)) {
-      this.releaseCacheStore = this.buildReleaseCacheStore()
-    }
-    this.releaseCacheStore.entries[channel] = entry
-    this.scheduleReleaseCacheSave()
-  }
-
-  private resolveCooldownUntil(rateLimit?: ReleaseCacheRateLimit): number | undefined {
-    if (!this.settings.rateLimitEnabled) {
-      return undefined
-    }
-    if (rateLimit?.remaining !== undefined && rateLimit.remaining <= 0 && rateLimit.resetAt) {
-      return rateLimit.resetAt
-    }
-    return undefined
-  }
-
-  private extractRateLimitInfo(
-    headers: Record<string, unknown>
-  ): ReleaseCacheRateLimit | undefined {
-    const remaining = this.getHeaderNumber(headers, 'x-ratelimit-remaining')
-    const resetRaw = this.getHeaderNumber(headers, 'x-ratelimit-reset')
-    if (remaining === undefined && resetRaw === undefined) {
-      return undefined
-    }
-    return {
-      remaining,
-      resetAt: resetRaw ? resetRaw * 1000 : undefined
-    }
-  }
-
-  private getHeaderValue(headers: Record<string, unknown>, key: string): string | undefined {
-    const value = headers[key.toLowerCase()]
-    if (Array.isArray(value)) {
-      return typeof value[0] === 'string' ? value[0] : undefined
-    }
-    return typeof value === 'string' ? value : undefined
-  }
-
-  private getHeaderNumber(headers: Record<string, unknown>, key: string): number | undefined {
-    const value = this.getHeaderValue(headers, key)
-    if (!value) {
-      return undefined
-    }
-    const parsed = Number.parseInt(value, 10)
-    return Number.isNaN(parsed) ? undefined : parsed
-  }
-
-  private getErrorStatus(error: unknown): number | undefined {
-    if (!(error instanceof Error)) {
-      return undefined
-    }
-    const matched = error.message.match(/NETWORK_HTTP_STATUS_(\d{3})/)
-    if (!matched) {
-      return undefined
-    }
-    const status = Number.parseInt(matched[1], 10)
-    return Number.isInteger(status) ? status : undefined
-  }
-
-  private getErrorHeaders(error: unknown): Record<string, unknown> | undefined {
-    if (!error || typeof error !== 'object') {
-      return undefined
-    }
-    const headers = (error as { headers?: unknown }).headers
-    if (!headers || typeof headers !== 'object') {
-      return undefined
-    }
-    return headers as Record<string, unknown>
-  }
-
-  private describeExpectedUpdateCheckFailure(error: unknown): {
-    message: string
-    meta: Record<string, string | number | boolean | null | undefined>
-  } | null {
-    const status = this.getErrorStatus(error)
-    const headers = this.getErrorHeaders(error)
-    const rateLimit = headers ? this.extractRateLimitInfo(headers) : undefined
-    const retryAt = rateLimit?.resetAt ? new Date(rateLimit.resetAt).toISOString() : undefined
-
-    if (status === 403 || status === 429) {
-      return {
-        message: 'Update check deferred by upstream rate limit',
-        meta: {
-          status,
-          remaining: rateLimit?.remaining,
-          retryAt
-        }
-      }
-    }
-
-    if (!(error instanceof Error) || !shouldDowngradeRemoteFailure(error.message)) {
-      return null
-    }
-
-    return {
-      message: 'Update check deferred by remote service availability',
-      meta: {
-        error: error.message
-      }
-    }
-  }
-
-  private isRetryableError(error: unknown): boolean {
-    const status = this.getErrorStatus(error)
-    if (status && (status >= 500 || status === 403 || status === 429)) {
-      return true
-    }
-
-    if (!(error instanceof Error)) {
-      return false
-    }
-
-    if (/NETWORK_TIMEOUT|timeout|etimedout/i.test(error.message)) {
-      return true
-    }
-
-    if (/enotfound|econnreset|eai_again|network/i.test(error.message)) {
-      return true
-    }
-
-    return false
-  }
-
-  private calculateRetryDelay(attempt: number, baseDelay: number): number {
-    const delay = Math.min(baseDelay * 2 ** attempt, 60000)
-    const jitter = Math.random() * 0.1 * delay
-    return delay + jitter
-  }
-
-  private async sleep(delay: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, delay))
-  }
-
-  private recordFetchFailure(channel: AppPreviewChannel, error: unknown): void {
-    if (this.settings.rateLimitEnabled) {
-      const status = this.getErrorStatus(error)
-      const headers = this.getErrorHeaders(error)
-      if (status === 403 || status === 429) {
-        const rateLimit = headers ? this.extractRateLimitInfo(headers) : undefined
-        const cooldownUntil = rateLimit?.resetAt ?? Date.now() + 60 * 60 * 1000
-        const fallbackEntry = this.getReleaseCacheEntry(channel) ?? {
-          releases: [],
-          fetchedAt: 0,
-          ttlMinutes: this.settings.cacheTTL
-        }
-        this.setReleaseCacheEntry(channel, {
-          ...fallbackEntry,
-          rateLimit: rateLimit ?? fallbackEntry.rateLimit,
-          cooldownUntil,
-          failureCount: (fallbackEntry.failureCount ?? 0) + 1
-        })
-        return
-      }
-    }
-
-    const fallbackEntry = this.getReleaseCacheEntry(channel) ?? {
-      releases: [],
-      fetchedAt: 0,
-      ttlMinutes: this.settings.cacheTTL
-    }
-    const nextCount = Math.min((fallbackEntry.failureCount ?? 0) + 1, 4)
-    const delays = [60_000, 300_000, 900_000, 3_600_000]
-    const cooldownUntil = Date.now() + delays[nextCount - 1]
-    this.setReleaseCacheEntry(channel, {
-      ...fallbackEntry,
-      failureCount: nextCount,
-      cooldownUntil
-    })
   }
 
   private async getQuickUpdateCheckResult(channel: AppPreviewChannel): Promise<UpdateCheckResult> {
@@ -2545,7 +1430,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           this.settings.pendingInstallVersion = defaults.pendingInstallVersion
         }
 
-        this.macUpdateDownloadedVersion = null
         let shouldSaveSettings = persisted.updateChannel !== normalizedChannel
 
         const pendingVersion = (this.settings.pendingInstallVersion ?? '').trim()

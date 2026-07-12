@@ -445,7 +445,7 @@ async function runFastLayer(
   }
 
   const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker())
-  void Promise.all(workers).then(providerState.resolve, providerState.reject)
+  void Promise.all(workers).then(() => providerState.resolve(), providerState.reject)
   const providerPromise = providerState.promise
 
   const timeoutState = Promise.withResolvers<'timeout'>()

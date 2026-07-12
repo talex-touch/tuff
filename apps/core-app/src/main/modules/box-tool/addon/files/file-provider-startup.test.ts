@@ -159,7 +159,8 @@ vi.mock('./workers/icon-worker-client', () => ({
 vi.mock('./workers/thumbnail-worker-client', () => ({
   ThumbnailWorkerClient: vi.fn(() => ({
     getStatus: vi.fn(async () => null),
-    shutdown: vi.fn()
+    shutdown: vi.fn(),
+    generate: vi.fn(async () => ({ status: 'unsupported', reason: 'test', durationMs: 0 }))
   }))
 }))
 

@@ -3,26 +3,17 @@ import type {
   IProviderActivate,
   ISearchEngine,
   ISearchProvider,
-  ITouchEvent,
   TalexTouch,
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ModuleInitContext } from 'packages/utils/types/modules'
 import type { TouchApp } from '../../../core/touch-app'
 import type { DbUtils } from '../../../db/utils'
 import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
-import {
-  IndexedSourceReconcileReasons,
-  StorageList,
-  TuffInputType,
-  TuffSearchResultBuilder,
-  getSearchProviderUserConfigSignature,
-  type TuffItem
-} from '@talex-touch/utils'
+import { TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -40,11 +31,9 @@ import { perfMonitor } from '../../../utils/perf-monitor'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
-import { getMainConfig, storageModule, subscribeMainConfig } from '../../storage'
 import { appProvider } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
-import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
 import { FILE_INDEXED_SOURCE_ID } from './file-indexed-source'
 import {
   linuxNativeFileProvider,
@@ -54,7 +43,6 @@ import { previewProvider } from '../addon/preview'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
-import { resolveClipboardInputs } from './utils/resolve-clipboard-inputs'
 import { windowManager } from '../core-box/window'
 import { indexingRuntime, type IndexingRuntime } from './indexing-runtime'
 import { registerCoreIndexedSources } from './indexing-runtime-sources'
@@ -64,31 +52,27 @@ import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
-import { getSearchProviderUserConfigs } from './search-provider-config'
 import { SearchIndexService } from './search-index-service'
 import { searchLogger } from './search-logger'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
 import { TimeStatsAggregator } from './time-stats-aggregator'
-import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
-import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
+import { IndexedSourceEventRouter } from './indexed-source-event-router'
+import { SearchProviderRegistry } from './search-provider-registry'
+import { SearchQueryOrchestrator } from './search-query-orchestrator'
+import { ProviderHealthService } from './provider-health-service'
+import { SearchUsageService } from './search-usage-service'
 import {
   buildProviderSummary,
   buildProviderTelemetry,
   buildSearchCacheKey,
-  getActivationKey,
-  isExplicitEverythingProviderFilter,
-  isExplicitFileCategoryFilter,
-  isExplicitFileProviderFilter,
-  matchesProviderFilter,
-  parseProviderFilter,
   roundDuration,
   resolveProviderCategory,
   resolveSearchScene,
   toQueryHash
 } from './search-core-utils'
-import type { ExtendedProviderStatus, SearchTraceSourceStat } from './search-core-utils'
+import type { SearchTraceSourceStat } from './search-core-utils'
 
 interface SearchCacheEntry {
   result: TuffSearchResult
@@ -104,10 +88,6 @@ const SEARCH_TRACE_SLOW_THRESHOLD_MS = 800
 const searchEngineLog = getLogger('search-engine')
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
-const PROVIDER_REFRACTORY_THRESHOLD = 2
-const PROVIDER_REFRACTORY_BASE_MS = 30_000
-const PROVIDER_REFRACTORY_MAX_MS = 5 * 60 * 1000
-const PROVIDER_HEALTH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_JITTER_MS = 10 * 60 * 1000
 
@@ -137,18 +117,6 @@ interface SearchFirstResultMetrics {
   stageDurations: SearchPipelineStageDurations
 }
 
-interface ProviderHealth {
-  failureCount: number
-  timeoutCount: number
-  lastSeenAt: number
-  lastStatus?: ExtendedProviderStatus
-  lastDurationMs?: number
-  lastResultCount?: number
-  lastFailureAt?: number
-  lastSuccessAt?: number
-  blockedUntil?: number
-}
-
 export class SearchEngineCore
   implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents>
 {
@@ -156,38 +124,31 @@ export class SearchEngineCore
 
   readonly name = Symbol('search-engine-core')
 
-  private providers: Map<string, ISearchProvider<ProviderContext>> = new Map()
-  private providersToLoad: ISearchProvider<ProviderContext>[] = []
   private sorter: Sorter
-  private activatedProviders: Map<string, IProviderActivate> | null = null
+  private readonly providerRegistry: SearchProviderRegistry
+  private readonly indexedSourceEventRouter: IndexedSourceEventRouter
+  private readonly queryOrchestrator: SearchQueryOrchestrator
+  private readonly searchUsageService: SearchUsageService
   private currentGatherController: IGatherController | null = null
   private dbUtils: DbUtils | null = null
   private searchIndexService: SearchIndexService | null = null
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
-  private usageStatsCache: UsageStatsCache | null = null
-  private usageStatsQueue: UsageStatsQueue | null = null
   private recommendationEngine: RecommendationEngine | null = null
   private timeStatsAggregator: TimeStatsAggregator | null = null
   private indexingRuntime: IndexingRuntime | null = null
   private latestSessionId: string | null = null // 跟踪最新的搜索 session，防止竞态条件
   private searchSessionStartTimes = new Map<string, number>()
-  private pinnedCache: { fetchedAt: number; pinnedSet: Set<string> } | null = null
-  private readonly pinnedCacheTtlMs = 10_000
   private readonly pollingService = PollingService.getInstance()
   private readonly maintenanceTaskId = 'search-engine.maintenance'
-  private providerHealth = new Map<string, ProviderHealth>()
+  private readonly providerHealthService = new ProviderHealthService()
   private searchCache = new Map<string, SearchCacheEntry>()
   private searchFirstResultMetrics = new Map<string, SearchFirstResultMetrics>()
 
   private touchApp: TouchApp | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
-  private providersLoaded = false
-  private providerLoadPromise: Promise<void> | null = null
   private startupServicesStarted = false
-  private onboardingReadyUnsubscribe: (() => void) | null = null
-  private indexedSourceFsBridgeSubscribed = false
 
   private cacheSearchResult(
     query: TuffQuery,
@@ -195,9 +156,12 @@ export class SearchEngineCore
     result: TuffSearchResult,
     providerConfigSignature = this.getSearchProviderConfigSignature()
   ): void {
-    const cacheKey = buildSearchCacheKey(query, providerFilter, this.activatedProviders, {
-      providerConfigSignature
-    })
+    const cacheKey = buildSearchCacheKey(
+      query,
+      providerFilter,
+      this.providerRegistry.getActivationMap(),
+      { providerConfigSignature }
+    )
 
     // Evict oldest entries if cache is full
     if (this.searchCache.size >= SEARCH_CACHE_MAX_SIZE) {
@@ -221,189 +185,9 @@ export class SearchEngineCore
       : items
   }
 
-  private getSearchProviderUserConfigs() {
-    const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
-    return getSearchProviderUserConfigs(appSettings)
-  }
-
   private getSearchProviderConfigSignature(): string {
-    return getSearchProviderUserConfigSignature(this.getSearchProviderUserConfigs())
+    return this.providerRegistry.getConfigSignature()
   }
-
-  private applySearchProviderUserConfig(
-    providers: ISearchProvider<ProviderContext>[]
-  ): ISearchProvider<ProviderContext>[] {
-    if (this.activatedProviders?.size) {
-      return providers
-    }
-
-    const configs = this.getSearchProviderUserConfigs()
-    if (configs.length === 0) {
-      return providers
-    }
-
-    const configById = new Map(configs.map((config) => [config.providerId, config]))
-    return providers
-      .filter((provider) => configById.get(provider.id)?.enabled !== false)
-      .sort((left, right) => {
-        const leftOrder = configById.get(left.id)?.order ?? Number.MAX_SAFE_INTEGER
-        const rightOrder = configById.get(right.id)?.order ?? Number.MAX_SAFE_INTEGER
-        return leftOrder - rightOrder
-      })
-  }
-
-  private subscribeIndexedSourceFsBridge(): void {
-    if (this.indexedSourceFsBridgeSubscribed) {
-      return
-    }
-
-    touchEventBus.on(TalexEvents.FILE_ADDED, this.handleIndexedSourceFileAddedOrChanged)
-    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleIndexedSourceFileAddedOrChanged)
-    touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceFileUnlinked)
-    touchEventBus.on(
-      TalexEvents.FILE_WATCH_ROOT_RECOVERED,
-      this.handleIndexedSourceFileWatchRootRecovered
-    )
-    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleIndexedSourceAppAddedOrChanged)
-    touchEventBus.on(TalexEvents.FILE_ADDED, this.handleIndexedSourceAppAddedOrChanged)
-    touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceAppUnlinked)
-
-    if (process.platform === 'darwin') {
-      touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleIndexedSourceAppAddedOrChanged)
-      touchEventBus.on(TalexEvents.DIRECTORY_UNLINKED, this.handleIndexedSourceAppUnlinked)
-    }
-
-    this.indexedSourceFsBridgeSubscribed = true
-  }
-
-  private unsubscribeIndexedSourceFsBridge(): void {
-    if (!this.indexedSourceFsBridgeSubscribed) {
-      return
-    }
-
-    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleIndexedSourceFileAddedOrChanged)
-    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleIndexedSourceFileAddedOrChanged)
-    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceFileUnlinked)
-    touchEventBus.off(
-      TalexEvents.FILE_WATCH_ROOT_RECOVERED,
-      this.handleIndexedSourceFileWatchRootRecovered
-    )
-    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleIndexedSourceAppAddedOrChanged)
-    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleIndexedSourceAppAddedOrChanged)
-    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceAppUnlinked)
-    touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleIndexedSourceAppAddedOrChanged)
-    touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleIndexedSourceAppUnlinked)
-    this.indexedSourceFsBridgeSubscribed = false
-  }
-
-  private readonly handleIndexedSourceFileAddedOrChanged = (event: ITouchEvent): void => {
-    const filePath = this.resolveFsEventPath(event)
-    if (!filePath) return
-
-    const action = event.name === TalexEvents.FILE_ADDED ? 'add' : 'change'
-    void this.routeIndexedSourceFsEvent(FILE_INDEXED_SOURCE_ID, filePath, action)
-  }
-
-  private readonly handleIndexedSourceFileUnlinked = (event: ITouchEvent): void => {
-    const filePath = this.resolveFsEventPath(event)
-    if (!filePath) return
-
-    void this.routeIndexedSourceFsEvent(FILE_INDEXED_SOURCE_ID, filePath, 'delete')
-  }
-
-  private readonly handleIndexedSourceFileWatchRootRecovered = (event: ITouchEvent): void => {
-    const filePath = this.resolveFsEventPath(event)
-    if (!filePath) return
-
-    void this.reconcileRecoveredFileWatchRoot(filePath)
-  }
-
-  private readonly handleIndexedSourceAppAddedOrChanged = (event: ITouchEvent): void => {
-    const filePath = this.resolveFsEventPath(event)
-    if (!filePath) return
-
-    const action =
-      event.name === TalexEvents.FILE_ADDED || event.name === TalexEvents.DIRECTORY_ADDED
-        ? 'add'
-        : 'change'
-    void this.routeIndexedSourceFsEvent(APP_INDEXED_SOURCE_ID, filePath, action)
-  }
-
-  private readonly handleIndexedSourceAppUnlinked = (event: ITouchEvent): void => {
-    const filePath = this.resolveFsEventPath(event)
-    if (!filePath) return
-
-    void this.routeIndexedSourceFsEvent(APP_INDEXED_SOURCE_ID, filePath, 'delete')
-  }
-
-  private resolveFsEventPath(event: ITouchEvent): string | null {
-    const filePath = (event as ITouchEvent & { filePath?: unknown }).filePath
-    return typeof filePath === 'string' && filePath.length > 0 ? filePath : null
-  }
-
-  private async routeIndexedSourceFsEvent(
-    sourceId: string,
-    filePath: string,
-    action: 'add' | 'change' | 'delete'
-  ): Promise<void> {
-    if (!this.indexingRuntime) {
-      return
-    }
-
-    try {
-      await this.indexingRuntime.routeWatchEventWithResult({
-        sourceId,
-        action,
-        path: filePath,
-        occurredAt: Date.now()
-      })
-    } catch (error) {
-      searchEngineLog.warn('Indexed source fs event route failed', {
-        error,
-        sourceId,
-        path: filePath,
-        action
-      })
-    }
-  }
-
-  private async reconcileRecoveredFileWatchRoot(filePath: string): Promise<void> {
-    if (!this.indexingRuntime) {
-      return
-    }
-
-    const source = this.indexingRuntime.getSource(FILE_INDEXED_SOURCE_ID)
-    const event = {
-      sourceId: FILE_INDEXED_SOURCE_ID,
-      action: 'change' as const,
-      path: filePath,
-      rootPath: filePath,
-      occurredAt: Date.now()
-    }
-    if (source?.shouldHandleWatchEvent && !source.shouldHandleWatchEvent(event)) {
-      return
-    }
-
-    try {
-      await this.indexingRuntime.reconcileSource(FILE_INDEXED_SOURCE_ID, {
-        reason: IndexedSourceReconcileReasons.WatchRootRecovered,
-        roots: [
-          {
-            sourceId: FILE_INDEXED_SOURCE_ID,
-            path: filePath,
-            permissionState: 'granted',
-            reason: IndexedSourceReconcileReasons.WatchRootRecovered
-          }
-        ]
-      })
-    } catch (error) {
-      searchEngineLog.warn('Recovered file watch root reconcile failed', {
-        error,
-        path: filePath
-      })
-    }
-  }
-
   constructor() {
     if (SearchEngineCore._instance) {
       throw new Error('[SearchEngineCore] Singleton class cannot be instantiated more than once.')
@@ -411,6 +195,26 @@ export class SearchEngineCore
 
     SearchEngineCore._instance = this
     this.sorter = new Sorter()
+    this.providerRegistry = new SearchProviderRegistry({
+      getTouchApp: () => this.touchApp,
+      getSearchIndexService: () => this.searchIndexService,
+      onProvidersReady: () => this.startRuntimeServicesOnce(),
+      onProviderDeactivated: (key, isPluginFeature, allDeactivated) => {
+        touchEventBus.emit(
+          TalexEvents.PROVIDER_DEACTIVATED,
+          new ProviderDeactivatedEvent(key, isPluginFeature, allDeactivated)
+        )
+      }
+    })
+    this.indexedSourceEventRouter = new IndexedSourceEventRouter(() => this.indexingRuntime)
+    this.queryOrchestrator = new SearchQueryOrchestrator({
+      getProviderConfigSignature: () => this.getSearchProviderConfigSignature(),
+      getActivations: () => this.providerRegistry.getActivationMap(),
+      shouldSkipProvider: (providerId) => this.shouldSkipProvider(providerId)
+    })
+    this.searchUsageService = new SearchUsageService({
+      getDbUtils: () => this.dbUtils
+    })
   }
 
   private getTransport(): ReturnType<typeof getTuffTransportMain> {
@@ -447,107 +251,15 @@ export class SearchEngineCore
     this.registerProvider(previewProvider)
   }
 
-  private hasCompletedOnboarding(setting?: AppSetting | null): boolean {
-    const source =
-      setting ??
-      (() => {
-        try {
-          return getMainConfig(StorageList.APP_SETTING) as AppSetting
-        } catch (error) {
-          searchEngineLog.warn(
-            'Failed to read app setting while checking onboarding state, fallback to ready',
-            {
-              error
-            }
-          )
-          return { beginner: { init: true } } as AppSetting
-        }
-      })()
-
-    if (!source?.beginner) {
-      return false
-    }
-
-    return source.beginner.init === true
-  }
-
   private startRuntimeServicesOnce(): void {
-    if (this.startupServicesStarted) {
-      return
-    }
+    if (this.startupServicesStarted) return
     this.startupServicesStarted = true
     this.usageSummaryService?.start()
     this.startMaintenance()
   }
 
-  private clearOnboardingSubscription(): void {
-    if (!this.onboardingReadyUnsubscribe) {
-      return
-    }
-    this.onboardingReadyUnsubscribe()
-    this.onboardingReadyUnsubscribe = null
-  }
-
-  private async ensureProvidersLoaded(reason: string): Promise<void> {
-    if (this.providersLoaded) {
-      this.startRuntimeServicesOnce()
-      return
-    }
-
-    if (!this.providerLoadPromise) {
-      this.providerLoadPromise = (async () => {
-        const dispose = enterPerfContext('SearchEngine.loadProviders')
-        try {
-          // Load providers sequentially to avoid database lock contention
-          // 串行加载 providers 以避免数据库锁竞争
-          searchEngineLog.debug(
-            `Loading ${this.providersToLoad.length} providers sequentially (reason: ${reason})...`
-          )
-          for (const provider of this.providersToLoad) {
-            await this.loadProvider(provider)
-            // 每加载一个 provider 后让出事件循环
-            await new Promise<void>((resolve) => setImmediate(resolve))
-          }
-          this.providersToLoad = []
-          this.providersLoaded = true
-          searchEngineLog.info('All providers loaded successfully')
-        } finally {
-          dispose()
-          this.providerLoadPromise = null
-        }
-      })()
-    }
-
-    await this.providerLoadPromise
-    this.startRuntimeServicesOnce()
-  }
-
-  private deferProviderLoadingUntilOnboardingReady(): void {
-    if (this.onboardingReadyUnsubscribe) {
-      return
-    }
-
-    searchEngineLog.info('Onboarding not completed, deferring provider loading and index tasks')
-
-    this.onboardingReadyUnsubscribe = subscribeMainConfig(
-      StorageList.APP_SETTING,
-      (nextSetting) => {
-        if (!this.hasCompletedOnboarding(nextSetting as AppSetting)) {
-          return
-        }
-
-        this.clearOnboardingSubscription()
-        searchEngineLog.info('Onboarding completed, resuming provider loading')
-        void this.ensureProvidersLoaded('onboarding-complete')
-      }
-    )
-  }
-
   static getInstance(): SearchEngineCore {
-    if (!this._instance) {
-      this._instance = new SearchEngineCore()
-    }
-
+    if (!this._instance) this._instance = new SearchEngineCore()
     return this._instance
   }
 
@@ -557,149 +269,36 @@ export class SearchEngineCore
   }
 
   registerProvider(provider: ISearchProvider<ProviderContext>): void {
-    if (this.providers.has(provider.id)) {
-      searchEngineLog.warn(`Search provider '${provider.id}' is already registered`)
-      return
-    }
-    this.providers.set(provider.id, provider)
-    searchEngineLog.info(`Search provider '${provider.id}' registered`)
-
-    if (provider.onLoad) {
-      this.providersToLoad.push(provider)
-    }
-  }
-
-  private async loadProvider(provider: ISearchProvider<ProviderContext>): Promise<void> {
-    if (!this.touchApp) {
-      searchEngineLog.error('Core modules not available to load provider')
-      return
-    }
-    if (!this.searchIndexService) {
-      searchEngineLog.error('SearchIndexService not initialized')
-      return
-    }
-    const startTime = Date.now()
-    try {
-      await provider.onLoad?.({
-        touchApp: this.touchApp,
-        databaseManager: databaseModule,
-        storageManager: storageModule,
-        searchIndex: this.searchIndexService
-      })
-      const duration = Date.now() - startTime
-      searchEngineLog.info(`Provider '${provider.id}' loaded in ${duration}ms`)
-    } catch (error) {
-      const duration = Date.now() - startTime
-      searchEngineLog.error(`Failed to load provider '${provider.id}' after ${duration}ms`, {
-        error
-      })
-    }
+    this.providerRegistry.register(provider)
   }
 
   unregisterProvider(providerId: string): void {
-    if (!this.providers.has(providerId)) {
-      searchEngineLog.warn(`Search provider '${providerId}' is not registered`)
-      return
-    }
-    const provider = this.providers.get(providerId)
-    provider?.onDeactivate?.()
-    this.providers.delete(providerId)
-    searchEngineLog.info(`Search provider '${providerId}' unregistered`)
+    this.providerRegistry.unregister(providerId)
   }
 
   activateProviders(activations: IProviderActivate[] | null): void {
-    if (activations && activations.length > 0) {
-      const uniqueProviders = new Map<string, IProviderActivate>()
-      for (const activation of activations) {
-        const key = getActivationKey(activation)
-        if (!uniqueProviders.has(key)) {
-          uniqueProviders.set(key, activation)
-        }
-      }
-      this.activatedProviders = uniqueProviders.size > 0 ? uniqueProviders : null
-      if (searchLogger.isEnabled()) {
-        searchLogger.logSearchPhase(
-          'Activate Providers',
-          `SET: ${this.activatedProviders ? JSON.stringify(Array.from(this.activatedProviders.values())) : 'null'}`
-        )
-      }
-    } else {
-      this.deactivateProviders()
-    }
+    this.providerRegistry.activate(activations)
   }
 
   deactivateProvider(uniqueKey: string): void {
-    if (searchLogger.isEnabled()) {
-      searchLogger.logSearchPhase('Deactivate Provider', `Called for key: ${uniqueKey}`)
-    }
-    if (this.activatedProviders && this.activatedProviders.has(uniqueKey)) {
-      const deactivatedActivation = this.activatedProviders.get(uniqueKey)
-      this.activatedProviders.delete(uniqueKey)
-      if (searchLogger.isEnabled()) {
-        searchLogger.logSearchPhase('Deactivate Provider', `Deactivated: ${uniqueKey}`)
-      }
-
-      // Emit event for provider deactivation
-      const isPluginFeature = deactivatedActivation?.id === 'plugin-features'
-      const allProvidersDeactivated = this.activatedProviders.size === 0
-      touchEventBus.emit(
-        TalexEvents.PROVIDER_DEACTIVATED,
-        new ProviderDeactivatedEvent(uniqueKey, isPluginFeature, allProvidersDeactivated)
-      )
-
-      if (this.activatedProviders.size === 0) {
-        this.activatedProviders = null
-        if (searchLogger.isEnabled()) {
-          searchLogger.logSearchPhase('Deactivate Provider', 'All providers deactivated')
-        }
-      }
-    } else {
-      if (searchLogger.isEnabled()) {
-        searchLogger.logSearchPhase(
-          'Deactivate Provider',
-          `Provider with key ${uniqueKey} not found`
-        )
-      }
-    }
+    this.providerRegistry.deactivate(uniqueKey)
   }
 
   deactivateProviders(): void {
-    this.activatedProviders = null
-
-    // Emit event to notify that all providers have been deactivated
-    touchEventBus.emit(
-      TalexEvents.PROVIDER_DEACTIVATED,
-      new ProviderDeactivatedEvent('*', false, true)
-    )
+    this.providerRegistry.deactivateAll()
   }
 
   getActiveProviders(): ISearchProvider<ProviderContext>[] {
-    if (!this.activatedProviders) {
-      return this.applySearchProviderUserConfig(Array.from(this.providers.values()))
-    }
-    // Get unique provider IDs from the activation keys
-    const providerIds = new Set(
-      Array.from(this.activatedProviders.values()).map((activation) => activation.id)
-    )
-
-    return Array.from(providerIds)
-      .map((id) => this.providers.get(id))
-      .filter((p): p is ISearchProvider<ProviderContext> => !!p)
+    return this.providerRegistry.getActive()
   }
 
   public getActivationState(): IProviderActivate[] | null {
-    if (!this.activatedProviders) {
-      return null
-    }
-    return Array.from(this.activatedProviders.values())
+    return this.providerRegistry.getActivationState()
   }
 
   public getProvidersByIds(ids: string[]): ISearchProvider<ProviderContext>[] {
-    return ids
-      .map((id) => this.providers.get(id))
-      .filter((p): p is ISearchProvider<ProviderContext> => !!p)
+    return this.providerRegistry.getByIds(ids)
   }
-
   private logSearchTrace(params: {
     event:
       | 'ipc.query.received'
@@ -793,16 +392,7 @@ export class SearchEngineCore
   }
 
   private _updateActivationState(newResults: TuffSearchResult[]): void {
-    const allNewActivations = newResults.flatMap((res) => res.activate || [])
-
-    if (allNewActivations.length > 0) {
-      const merged = new Map<string, IProviderActivate>(this.activatedProviders || [])
-      allNewActivations.forEach((activation) => {
-        const key = getActivationKey(activation)
-        merged.set(key, activation)
-      })
-      this.activatedProviders = merged
-    }
+    this.providerRegistry.mergeActivations(newResults)
   }
 
   public getCurrentGatherController(): IGatherController | null {
@@ -848,46 +438,7 @@ export class SearchEngineCore
   private async orchestrateSearchQuery(
     query: TuffQuery
   ): Promise<QueryOrchestrationResult & { durationMs: number }> {
-    const startedAt = performance.now()
-    const parseContext = enterPerfContext('Search.pipeline.parse', {
-      queryLength: (query.text || '').length,
-      inputCount: query.inputs?.length || 0
-    })
-
-    try {
-      if (query.text) {
-        query.text = query.text.trim()
-      }
-
-      const parsedQuery = parseProviderFilter(query.text || '')
-      const providerFilter = parsedQuery.providerFilter
-
-      if (providerFilter) {
-        query.text = parsedQuery.text
-        searchEngineLog.debug(
-          `Provider filter detected: @${providerFilter}, query.len=${query.text?.length ?? 0}, query.hash=${toQueryHash(query.text || '')}`
-        )
-      }
-
-      const resolved = await resolveClipboardInputs(query.inputs)
-      if (resolved.resolvedCount > 0) {
-        searchEngineLog.debug('Resolved clipboard inputs', {
-          meta: { resolvedCount: resolved.resolvedCount, clipboardIds: resolved.clipboardIds }
-        })
-      }
-
-      const providerConfigSignature = this.getSearchProviderConfigSignature()
-      return {
-        providerFilter,
-        providerConfigSignature,
-        cacheKey: buildSearchCacheKey(query, providerFilter, this.activatedProviders, {
-          providerConfigSignature
-        }),
-        durationMs: performance.now() - startedAt
-      }
-    } finally {
-      parseContext()
-    }
+    return await this.queryOrchestrator.orchestrate(query)
   }
 
   private aggregateProvidersForQuery(
@@ -895,147 +446,7 @@ export class SearchEngineCore
     query: TuffQuery,
     options: { providerFilter?: string }
   ): { providers: ISearchProvider<ProviderContext>[]; durationMs: number } {
-    const startedAt = performance.now()
-    const providerContext = enterPerfContext('Search.pipeline.providers', {
-      providerCount: providers.length,
-      inputCount: query.inputs?.length || 0,
-      providerFilter: options.providerFilter || undefined
-    })
-
-    let providersToSearch = providers
-
-    try {
-      if (query.inputs && query.inputs.length > 0) {
-        const inputTypes = query.inputs.map((i) => i.type)
-        const hasNonTextInput = inputTypes.some((t) => t !== TuffInputType.Text)
-
-        if (hasNonTextInput) {
-          searchLogger.logSearchPhase(
-            'Provider Filtering',
-            `Non-text inputs detected: ${inputTypes.join(', ')}`
-          )
-
-          providersToSearch = providersToSearch.filter((provider) => {
-            if (provider.id === 'plugin-features') {
-              return true
-            }
-
-            if (!provider.supportedInputTypes) {
-              return false
-            }
-
-            return inputTypes.some((type) => provider.supportedInputTypes?.includes(type))
-          })
-
-          searchLogger.logSearchPhase(
-            'Provider Filtered',
-            `Active providers: ${providersToSearch.map((p) => p.id).join(', ')}`
-          )
-        }
-      }
-
-      const providerFilter = options.providerFilter
-      if (providerFilter) {
-        const beforeCount = providersToSearch.length
-        providersToSearch = providersToSearch.filter((provider) =>
-          matchesProviderFilter(provider.id, providerFilter)
-        )
-
-        searchLogger.logSearchPhase(
-          '@Provider Filter',
-          `Filter: @${providerFilter}, matched ${providersToSearch.length}/${beforeCount} providers: ${providersToSearch.map((p) => p.id).join(', ') || 'none'}`
-        )
-
-        if (providersToSearch.length === 0) {
-          searchEngineLog.warn(`No providers match filter @${providerFilter}`)
-        }
-      }
-
-      const shouldApplyRefractory = !options.providerFilter && !this.activatedProviders?.size
-      if (shouldApplyRefractory && providersToSearch.length > 0) {
-        const refractoryIds = new Set<string>()
-        providersToSearch = providersToSearch.filter((provider) => {
-          const shouldSkip = this.shouldSkipProvider(provider.id)
-          if (shouldSkip) {
-            refractoryIds.add(provider.id)
-          }
-          return !shouldSkip
-        })
-
-        if (refractoryIds.size > 0) {
-          searchEngineLog.debug(
-            `Provider refractory active, skipping: ${Array.from(refractoryIds).join(', ')}`
-          )
-        }
-      }
-
-      providersToSearch = this.routeWindowsFileProviders(
-        providersToSearch,
-        query,
-        options.providerFilter
-      )
-
-      return {
-        providers: providersToSearch,
-        durationMs: performance.now() - startedAt
-      }
-    } finally {
-      providerContext()
-    }
-  }
-
-  private routeWindowsFileProviders(
-    providers: ISearchProvider<ProviderContext>[],
-    query: TuffQuery,
-    providerFilter?: string
-  ): ISearchProvider<ProviderContext>[] {
-    if (process.platform !== 'win32') {
-      return providers
-    }
-
-    const everything = providers.find((provider) => provider.id === 'everything-provider')
-    const file = providers.find((provider) => provider.id === 'file-provider')
-    const windowsShellFile = providers.find(
-      (provider) => provider.id === 'windows-shell-file-provider'
-    )
-    if (!everything && !file) {
-      return providers
-    }
-
-    let selectedFileProviderId: 'everything-provider' | 'file-provider' | null = null
-
-    if (isExplicitEverythingProviderFilter(providerFilter)) {
-      selectedFileProviderId = everything ? 'everything-provider' : null
-    } else if (isExplicitFileProviderFilter(providerFilter)) {
-      selectedFileProviderId = file ? 'file-provider' : null
-    } else if (isExplicitFileCategoryFilter(providerFilter)) {
-      if (fileProvider.hasSearchFilters(query.text || '')) {
-        selectedFileProviderId = file ? 'file-provider' : null
-      } else if (everythingProvider.isSearchReady()) {
-        selectedFileProviderId = everything ? 'everything-provider' : null
-      } else {
-        selectedFileProviderId = file ? 'file-provider' : null
-      }
-    } else if (fileProvider.hasSearchFilters(query.text || '')) {
-      selectedFileProviderId = file ? 'file-provider' : null
-    } else if (everythingProvider.isSearchReady()) {
-      selectedFileProviderId = everything ? 'everything-provider' : null
-    } else {
-      selectedFileProviderId = file ? 'file-provider' : null
-    }
-
-    const shouldKeepWindowsShellFileProvider =
-      providerFilter === undefined || isExplicitFileCategoryFilter(providerFilter)
-
-    return providers.filter((provider) => {
-      if (provider.id === 'windows-shell-file-provider') {
-        return Boolean(windowsShellFile && shouldKeepWindowsShellFileProvider)
-      }
-      if (provider.id !== 'everything-provider' && provider.id !== 'file-provider') {
-        return true
-      }
-      return provider.id === selectedFileProviderId
-    })
+    return this.queryOrchestrator.aggregate(providers, query, options)
   }
 
   private appendCompatibilityNotice(
@@ -1043,20 +454,7 @@ export class SearchEngineCore
     query: TuffQuery,
     providerFilter?: string
   ): TuffItem[] {
-    if (
-      items.length > 0 ||
-      process.platform !== 'win32' ||
-      !(
-        isExplicitEverythingProviderFilter(providerFilter) ||
-        isExplicitFileProviderFilter(providerFilter) ||
-        isExplicitFileCategoryFilter(providerFilter)
-      )
-    ) {
-      return items
-    }
-
-    const notice = everythingProvider.buildUnavailableNotice(query)
-    return notice ? [notice] : items
+    return this.queryOrchestrator.appendCompatibilityNotice(items, query, providerFilter)
   }
 
   private async mergeAndRankItems({
@@ -1823,188 +1221,23 @@ export class SearchEngineCore
   }
 
   private async _recordSearchUsage(sessionId: string, query: TuffQuery): Promise<void> {
-    if (!this.dbUtils) return
-
-    try {
-      await this.dbUtils.addUsageLog({
-        sessionId,
-        itemId: 'search_session', // Special ID for the search event itself
-        source: 'system',
-        action: 'search',
-        keyword: query.text,
-        timestamp: new Date(),
-        context: JSON.stringify(query.context || {})
-      })
-      if (searchLogger.isEnabled()) {
-        searchLogger.logSearchPhase('Usage Recording', `Recorded search session ${sessionId}`)
-      }
-    } catch (error) {
-      searchEngineLog.error('Failed to record search usage', { error })
-    }
+    await this.searchUsageService.recordSearch(sessionId, query)
   }
 
-  /** Batch fetch usage stats and inject into items metadata before sorting */
   private async _injectUsageStats(items: TuffItem[]): Promise<void> {
-    if (!this.dbUtils || items.length === 0) return
-
-    const start = performance.now()
-
-    try {
-      const keys = items.map((item) => ({
-        sourceId: item.source.id,
-        itemId: item.id
-      }))
-
-      // Use cached batch query
-      const stats = this.usageStatsCache
-        ? await getUsageStatsBatchCached(this.dbUtils, this.usageStatsCache, keys)
-        : await this.dbUtils.getUsageStatsBatch(keys)
-
-      const statsMap = new Map(stats.map((s) => [`${s.sourceId}:${s.itemId}`, s]))
-
-      let injectedCount = 0
-      for (const item of items) {
-        const key = `${item.source.id}:${item.id}`
-        const stat = statsMap.get(key)
-
-        if (stat) {
-          if (!item.meta) item.meta = {}
-          item.meta.usageStats = {
-            executeCount: stat.executeCount,
-            searchCount: stat.searchCount,
-            cancelCount: stat.cancelCount,
-            lastExecuted: stat.lastExecuted ? stat.lastExecuted.toISOString() : null,
-            lastSearched: stat.lastSearched ? stat.lastSearched.toISOString() : null,
-            lastCancelled: stat.lastCancelled ? stat.lastCancelled.toISOString() : null
-          }
-          injectedCount++
-        }
-      }
-
-      if (searchLogger.isEnabled()) {
-        const duration = performance.now() - start
-        searchLogger.logSearchPhase(
-          'Usage Stats Injection',
-          `Injected ${injectedCount}/${items.length} stats in ${duration.toFixed(2)}ms`
-        )
-      }
-    } catch (error) {
-      searchEngineLog.error('Failed to inject usage stats', { error })
-    }
+    await this.searchUsageService.injectUsageStats(items)
   }
 
-  /** Batch fetch pinned state and inject into items metadata before sorting */
   private async _injectPinnedState(items: TuffItem[]): Promise<void> {
-    if (!this.dbUtils || items.length === 0) return
-
-    const start = performance.now()
-
-    try {
-      const pinnedSet = await this.getPinnedSet()
-      if (pinnedSet.size === 0) return
-
-      let injectedCount = 0
-      for (const item of items) {
-        const meta = item.meta as Record<string, unknown> | undefined
-        const sourceId =
-          typeof meta?._originalSourceId === 'string' ? meta._originalSourceId : item.source.id
-        const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : item.id
-        const key = `${sourceId}:${itemId}`
-        const isPinned = pinnedSet.has(key)
-
-        if (isPinned) {
-          if (!item.meta) item.meta = {}
-          item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
-          injectedCount++
-        } else {
-          const pinnedMeta = meta?.pinned
-          if (pinnedMeta && typeof pinnedMeta === 'object') {
-            const pinned = pinnedMeta as { isPinned?: boolean }
-            if (pinned.isPinned) {
-              pinned.isPinned = false
-            }
-          }
-        }
-      }
-
-      if (searchLogger.isEnabled()) {
-        const duration = performance.now() - start
-        searchLogger.logSearchPhase(
-          'Pinned Injection',
-          `Injected ${injectedCount}/${items.length} pinned flags in ${duration.toFixed(2)}ms`
-        )
-      }
-    } catch (error) {
-      searchEngineLog.error('Failed to inject pinned state', { error })
-    }
+    await this.searchUsageService.injectPinnedState(items)
   }
 
   private invalidatePinnedCache(): void {
-    this.pinnedCache = null
+    this.searchUsageService.invalidatePinnedCache()
   }
 
-  private async getPinnedSet(): Promise<Set<string>> {
-    if (!this.dbUtils) return new Set()
-
-    const now = Date.now()
-    if (this.pinnedCache && now - this.pinnedCache.fetchedAt < this.pinnedCacheTtlMs) {
-      return this.pinnedCache.pinnedSet
-    }
-
-    const pinnedRecords = await this.dbUtils.getAllPinnedItems()
-    const pinnedSet = new Set(pinnedRecords.map((p) => `${p.sourceId}:${p.itemId}`))
-
-    this.pinnedCache = {
-      fetchedAt: now,
-      pinnedSet
-    }
-
-    return pinnedSet
-  }
-
-  /** Record search result display stats for top 10 items */
-  private async _recordSearchResults(sessionId: string, items: TuffItem[]): Promise<void> {
-    if (!this.dbUtils || items.length === 0) return
-
-    const start = performance.now()
-
-    try {
-      const topItems = items.slice(0, 10)
-
-      // Use queue for batch writes instead of direct database calls
-      if (this.usageStatsQueue) {
-        for (const item of topItems) {
-          this.usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'search')
-        }
-      } else {
-        // Fallback to direct database calls if queue is not available
-        const updatePromises = topItems.map((item) =>
-          this.dbUtils!.incrementUsageStats(
-            item.source.id,
-            item.id,
-            item.source.type,
-            'search'
-          ).catch((error) => {
-            searchEngineLog.error(`Failed to update search stats for item ${item.id}`, {
-              error
-            })
-            return null
-          })
-        )
-
-        await Promise.allSettled(updatePromises)
-      }
-
-      if (searchLogger.isEnabled()) {
-        const duration = performance.now() - start
-        searchLogger.logSearchPhase(
-          'Usage Recording',
-          `Recorded ${topItems.length} items in ${duration.toFixed(2)}ms (session: ${sessionId})`
-        )
-      }
-    } catch (error) {
-      searchEngineLog.error('Failed to record search results', { error })
-    }
+  private async _recordSearchResults(_sessionId: string, items: TuffItem[]): Promise<void> {
+    await this.searchUsageService.recordDisplayedResults(items)
   }
 
   /**
@@ -2152,36 +1385,7 @@ export class SearchEngineCore
     const itemId = this._getItemId(item)
 
     try {
-      const now = new Date()
-      await this.dbUtils.addUsageLog({
-        sessionId,
-        itemId,
-        source: item.source.type,
-        action: 'execute',
-        keyword: '', // Keyword is not relevant for an execute action
-        timestamp: now,
-        context: JSON.stringify({
-          scoring: item.scoring
-        })
-      })
-
-      // 保持原有的 usageSummary 更新（向后兼容）
-      await this.dbUtils.incrementUsageSummary(itemId)
-
-      // 新增：更新基于 source + id 的组合键统计（使用队列批量写入）
-      if (this.usageStatsQueue) {
-        this.usageStatsQueue.enqueue(item.source.id, itemId, item.source.type, 'execute')
-      } else {
-        // Fallback to direct database call
-        await this.dbUtils.incrementUsageStats(item.source.id, itemId, item.source.type, 'execute')
-      }
-
-      void this.dbUtils.incrementUsageTrendDaily(item.source.id, itemId, now).catch((error) => {
-        searchEngineLog.warn(`Failed to update trend stats for item ${itemId}`, { error })
-      })
-
-      // Invalidate cache for this item
-      this.usageStatsCache?.invalidate(item.source.id, itemId)
+      await this.searchUsageService.recordExecute(sessionId, item, itemId)
 
       // 记录查询完成（如果有最后的搜索查询）
       if (this.lastSearchQuery && this.queryCompletionService) {
@@ -2381,7 +1585,7 @@ export class SearchEngineCore
   }
 
   maintain(): void {
-    this.pruneProviderHealth()
+    this.providerHealthService.prune()
 
     if (this.queryCompletionService) {
       void this.queryCompletionService.cleanupOldCompletions().catch((error) => {
@@ -2416,104 +1620,12 @@ export class SearchEngineCore
     }
   }
 
-  private pruneProviderHealth(): void {
-    if (this.providerHealth.size === 0) return
-    const now = Date.now()
-    for (const [providerId, health] of this.providerHealth) {
-      if (now - health.lastSeenAt > PROVIDER_HEALTH_TTL_MS) {
-        this.providerHealth.delete(providerId)
-      }
-    }
-  }
-
   private shouldSkipProvider(providerId: string): boolean {
-    const health = this.providerHealth.get(providerId)
-    if (!health?.blockedUntil) {
-      return false
-    }
-
-    const now = Date.now()
-    if (now < health.blockedUntil) {
-      return true
-    }
-
-    health.blockedUntil = undefined
-    health.failureCount = 0
-    health.timeoutCount = 0
-    return false
+    return this.providerHealthService.shouldSkip(providerId)
   }
 
-  private updateProviderHealth(
-    sourceStats: Array<{
-      providerId?: string
-      status?: ExtendedProviderStatus
-      duration?: number
-      resultCount?: number
-    }>
-  ): void {
-    if (sourceStats.length === 0) return
-    const now = Date.now()
-
-    for (const stat of sourceStats) {
-      const providerId = stat.providerId
-      if (!providerId) continue
-
-      const status = stat.status
-      if (!status || status === 'aborted') {
-        const existing = this.providerHealth.get(providerId)
-        if (existing) {
-          existing.lastSeenAt = now
-        }
-        continue
-      }
-
-      const entry =
-        this.providerHealth.get(providerId) ??
-        ({
-          failureCount: 0,
-          timeoutCount: 0,
-          lastSeenAt: now
-        } satisfies ProviderHealth)
-
-      entry.lastSeenAt = now
-      entry.lastStatus = status
-      if (typeof stat.duration === 'number') {
-        entry.lastDurationMs = stat.duration
-      }
-      if (typeof stat.resultCount === 'number') {
-        entry.lastResultCount = stat.resultCount
-      }
-
-      if (status === 'success') {
-        entry.failureCount = 0
-        entry.timeoutCount = 0
-        entry.blockedUntil = undefined
-        entry.lastSuccessAt = now
-      } else {
-        entry.failureCount += 1
-        entry.lastFailureAt = now
-        if (status === 'timeout') {
-          entry.timeoutCount += 1
-        }
-
-        if (entry.failureCount >= PROVIDER_REFRACTORY_THRESHOLD) {
-          const backoffPower = Math.max(0, entry.failureCount - PROVIDER_REFRACTORY_THRESHOLD)
-          const cooldownMs = Math.min(
-            PROVIDER_REFRACTORY_MAX_MS,
-            PROVIDER_REFRACTORY_BASE_MS * 2 ** backoffPower
-          )
-          const nextBlockedUntil = now + cooldownMs
-          if (!entry.blockedUntil || nextBlockedUntil > entry.blockedUntil) {
-            entry.blockedUntil = nextBlockedUntil
-            searchEngineLog.warn(
-              `Provider '${providerId}' entering refractory for ${Math.round(cooldownMs / 1000)}s`
-            )
-          }
-        }
-      }
-
-      this.providerHealth.set(providerId, entry)
-    }
+  private updateProviderHealth(sourceStats: SearchTraceSourceStat[]): void {
+    this.providerHealthService.update(sourceStats)
   }
 
   init(ctx: ModuleInitContext<TalexEvents>): void {
@@ -2533,13 +1645,7 @@ export class SearchEngineCore
     indexingRuntime.setStore(new SearchIndexStoreAdapter(instance.searchIndexService))
     indexingRuntime.setTaskStateStore(new SqliteIndexingTaskStateStore(db))
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
-    instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
-    instance.usageStatsQueue = new UsageStatsQueue(db, {
-      searchFlushIntervalMs: 30 * 60 * 1000,
-      actionFlushIntervalMs: 10 * 60 * 1000,
-      searchFlushEventThreshold: 2000,
-      actionFlushEventThreshold: 300
-    })
+    instance.searchUsageService.initialize(db)
     searchEngineLog.debug('Initializing RecommendationEngine')
     instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
@@ -2549,7 +1655,7 @@ export class SearchEngineCore
       async (request) =>
         await instance.indexingRuntime!.resetSourceRuntimeState(FILE_INDEXED_SOURCE_ID, request)
     )
-    instance.subscribeIndexedSourceFsBridge()
+    instance.indexedSourceEventRouter.subscribe()
 
     // 初始化并启动使用统计汇总服务
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
@@ -2559,12 +1665,11 @@ export class SearchEngineCore
     })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, async () => {
-      if (instance.hasCompletedOnboarding()) {
-        await instance.ensureProvidersLoaded('all-modules-loaded')
+      if (instance.providerRegistry.hasCompletedOnboarding()) {
+        await instance.providerRegistry.ensureLoaded('all-modules-loaded')
         return
       }
-
-      instance.deferProviderLoadingUntilOnboardingReady()
+      instance.providerRegistry.deferUntilOnboardingReady()
     })
 
     // Register IPC handlers
@@ -2582,7 +1687,7 @@ export class SearchEngineCore
         searchResult?: TuffSearchResult
         actionId?: string
       }
-      const provider = instance.providers.get(item.source.id)
+      const provider = instance.providerRegistry.get(item.source.id)
       if (!provider || !provider.onExecute) {
         return instance.getActivationState()
       }
@@ -2705,39 +1810,19 @@ export class SearchEngineCore
       )
     }
     this.currentGatherController?.abort()
-    this.clearOnboardingSubscription()
-    this.destroyProviders()
+    this.providerRegistry.destroy()
 
     // 停止汇总服务
     this.usageSummaryService?.stop()
     this.stopMaintenance()
-    this.unsubscribeIndexedSourceFsBridge()
+    this.indexedSourceEventRouter.unsubscribe()
     fileProvider.setIndexedSourceRuntimeResetDelegate(null)
     this.indexingRuntime?.clear()
     this.indexingRuntime = null
 
-    // 强制刷新队列
-    this.usageStatsQueue?.forceFlush().catch((error) => {
+    void this.searchUsageService.flush().catch((error) => {
       searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
     })
-  }
-
-  private destroyProviders(): void {
-    for (const provider of this.providers.values()) {
-      try {
-        if ('onDestroy' in provider && typeof provider.onDestroy === 'function') {
-          provider.onDestroy()
-        } else {
-          provider.onDeactivate?.()
-        }
-      } catch (error) {
-        searchEngineLog.warn(`Provider '${provider.id}' cleanup failed`, { error })
-      }
-    }
-    this.providers.clear()
-    this.providersToLoad = []
-    this.activatedProviders = null
-    this.providersLoaded = false
   }
 }
 
