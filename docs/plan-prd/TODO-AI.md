@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-06-24
+> 更新时间：2026-07-11
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准。
 
 ## 当前口径
@@ -75,6 +75,7 @@
 4. 截图功能逐步引入：已落地 Voice Panel `capture + preview + copy/save` 基础切片，并区分截图权限拒绝 / 平台 unsupported / 通用 unavailable 文案；下一步补系统设置恢复入口、provider unavailable 采证与 translate 产品化。
 5. 保留 R2D idle、searching/warm-up、no-result 与 R2I result pills 作为最终 CoreBox Search evidence，避免旧 r2/r2b/r2c 或 `corebox-search-result-reasons.png` 被误用。
 6. 后续每次产品化变更仍同步 `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/`、Evidence Matrix、TODO 与 CHANGES；不使用旧 raw blocker artifact 冒充最终 evidence。
+7. QuickReview QR-01 / QR-02 已落地并通过 focused verification；继续只复用 `code.review` 与现有 Review Queue，不提升 AI Stable 范围。
 
 ## R2 visible gate 执行梯队
 

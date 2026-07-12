@@ -1,9 +1,35 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import {
+  createPluginGlobals,
+  loadPluginModule,
+  withoutGlobal,
+} from './plugin-loader'
 
-const intelligencePlugin = loadPluginModule(new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url))
+const intelligencePlugin = loadPluginModule(
+  new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+)
 const { __test: intelligenceTest } = intelligencePlugin
-const intelligencePluginUrl = new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url)
+const intelligencePluginUrl = new URL(
+  '../../../../plugins/touch-intelligence/index.js',
+  import.meta.url,
+)
+
+interface WidgetState {
+  status?: string
+  stage?: string
+  capabilityId?: string
+  errorCode?: string
+  answer?: string
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
 
 class FakeBuilder {
   item: Record<string, unknown>
@@ -43,7 +69,11 @@ class FakeBuilder {
     return this
   }
 
-  setCustomRender(type: string, content: string, data?: Record<string, unknown>) {
+  setCustomRender(
+    type: string,
+    content: string,
+    data?: Record<string, unknown>,
+  ) {
     this.item.render = {
       mode: 'custom',
       custom: { type, content, data },
@@ -70,8 +100,12 @@ class FakeBuilder {
 
 describe('intelligence plugin', () => {
   it('normalizes prompt with ai prefix', () => {
-    expect(intelligenceTest.normalizePrompt('ai 帮我写总结')).toBe('帮我写总结')
-    expect(intelligenceTest.normalizePrompt('/ai: explain this code')).toBe('explain this code')
+    expect(intelligenceTest.normalizePrompt('ai 帮我写总结')).toBe(
+      '帮我写总结',
+    )
+    expect(intelligenceTest.normalizePrompt('/ai: explain this code')).toBe(
+      'explain this code',
+    )
     expect(intelligenceTest.normalizePrompt('智能，今天做啥')).toBe('今天做啥')
     expect(intelligenceTest.normalizePrompt('ai')).toBe('')
   })
@@ -90,7 +124,10 @@ describe('intelligence plugin', () => {
       },
     }))
     const pluginWithChannel = loadPluginModule(
-      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      new URL(
+        '../../../../plugins/touch-intelligence/index.js',
+        import.meta.url,
+      ),
       createPluginGlobals({
         touchChannel: { send },
       }),
@@ -112,7 +149,10 @@ describe('intelligence plugin', () => {
       invoke: vi.fn(async () => ({ result: 'injected' })),
     }
     const pluginWithInjectedSdk = loadPluginModule(
-      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      new URL(
+        '../../../../plugins/touch-intelligence/index.js',
+        import.meta.url,
+      ),
       createPluginGlobals({
         intelligence: injectedIntelligence,
         touchChannel: {
@@ -127,7 +167,9 @@ describe('intelligence plugin', () => {
     const result = await client.invoke('text.chat', { messages: [] })
 
     expect(result).toEqual({ result: 'injected' })
-    expect(injectedIntelligence.invoke).toHaveBeenCalledWith('text.chat', { messages: [] })
+    expect(injectedIntelligence.invoke).toHaveBeenCalledWith('text.chat', {
+      messages: [],
+    })
   })
 
   it('builds chat payload with OCR context', () => {
@@ -149,8 +191,14 @@ describe('intelligence plugin', () => {
       ],
     }
 
-    expect(intelligenceTest.extractImageDataUrl(query)).toBe('data:image/png;base64,abc')
-    expect(intelligenceTest.extractInputKinds(query)).toEqual(['text', 'image', 'files'])
+    expect(intelligenceTest.extractImageDataUrl(query)).toBe(
+      'data:image/png;base64,abc',
+    )
+    expect(intelligenceTest.extractInputKinds(query)).toEqual([
+      'text',
+      'image',
+      'files',
+    ])
     expect(intelligenceTest.extractQueryContext(query)).toMatchObject({
       prompt: '总结这张图',
       imageDataUrl: 'data:image/png;base64,abc',
@@ -359,7 +407,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await pluginWithFeatureMocks.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 写一段总结',
+    )
 
     expect(pushItems).toHaveBeenCalled()
     expect(pushItems.mock.calls[0][0][0].render).toMatchObject({
@@ -403,14 +454,20 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', 'ai 旧问题')
+    await pluginWithFeatureMocks.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 旧问题',
+    )
     pushItems.mockClear()
 
-    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', '新问题')
+    await pluginWithFeatureMocks.onFeatureTriggered(
+      'intelligence-ask',
+      '新问题',
+    )
 
     expect(pushItems).toHaveBeenCalled()
-    const newPromptCall = pushItems.mock.calls.find(call =>
-      call[0][0].render.custom.data.prompt === '新问题',
+    const newPromptCall = pushItems.mock.calls.find(
+      call => call[0][0].render.custom.data.prompt === '新问题',
     )
     expect(newPromptCall?.[0][0].render.custom.data).toMatchObject({
       prompt: '新问题',
@@ -425,7 +482,9 @@ describe('intelligence plugin', () => {
   })
 
   it('builds OCR payload', () => {
-    expect(intelligenceTest.buildOcrPayload('data:image/png;base64,abc')).toEqual({
+    expect(
+      intelligenceTest.buildOcrPayload('data:image/png;base64,abc'),
+    ).toEqual({
       source: {
         type: 'data-url',
         dataUrl: 'data:image/png;base64,abc',
@@ -457,7 +516,8 @@ describe('intelligence plugin', () => {
   })
 
   it('builds handoff-aware invoke metadata', () => {
-    const sessionId = intelligenceTest.buildHandoffSessionId('intelligence-ask')
+    const sessionId
+      = intelligenceTest.buildHandoffSessionId('intelligence-ask')
 
     expect(
       intelligenceTest.buildInvokeOptions({
@@ -562,24 +622,32 @@ describe('intelligence plugin', () => {
 
   it('normalizes visible invoke errors', () => {
     expect(
-      intelligenceTest.normalizeInvokeError(new Error('No enabled providers for text.chat')),
-    ).toMatchObject({
-      code: 'PROVIDER_UNAVAILABLE',
-    })
-    expect(
       intelligenceTest.normalizeInvokeError(
-        new Error('[Intelligence] No enabled providers for text.chat: capability not supported'),
+        new Error('No enabled providers for text.chat'),
       ),
     ).toMatchObject({
       code: 'PROVIDER_UNAVAILABLE',
     })
     expect(
-      intelligenceTest.normalizeInvokeError(new Error('Quota exceeded: daily limit')),
+      intelligenceTest.normalizeInvokeError(
+        new Error(
+          '[Intelligence] No enabled providers for text.chat: capability not supported',
+        ),
+      ),
+    ).toMatchObject({
+      code: 'PROVIDER_UNAVAILABLE',
+    })
+    expect(
+      intelligenceTest.normalizeInvokeError(
+        new Error('Quota exceeded: daily limit'),
+      ),
     ).toMatchObject({
       code: 'QUOTA_EXCEEDED',
     })
     expect(
-      intelligenceTest.normalizeInvokeError(new Error('capability not supported')),
+      intelligenceTest.normalizeInvokeError(
+        new Error('capability not supported'),
+      ),
     ).toMatchObject({
       code: 'MODEL_UNSUPPORTED',
     })
@@ -845,7 +913,9 @@ describe('intelligence plugin', () => {
       },
     })
 
-    expect(getProviderModelOptions).toHaveBeenCalledWith({ capabilityId: 'text.chat' })
+    expect(getProviderModelOptions).toHaveBeenCalledWith({
+      capabilityId: 'text.chat',
+    })
     expect(pushItems).toHaveBeenCalledOnce()
     expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
       requestId: 'req-1',
@@ -942,7 +1012,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithDeniedAi.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await pluginWithDeniedAi.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 写一段总结',
+    )
     const sendItem = pushItems.mock.calls[0][0][0]
     pushItems.mockClear()
 
@@ -1013,7 +1086,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithLoggedOutAuth.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await pluginWithLoggedOutAuth.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 写一段总结',
+    )
     const sendItem = pushItems.mock.calls[0][0][0]
     pushItems.mockClear()
 
@@ -1026,14 +1102,19 @@ describe('intelligence plugin', () => {
       )
     })
 
-    expect(touchChannel.send).not.toHaveBeenCalledWith('auth:session:get-state')
+    expect(touchChannel.send).not.toHaveBeenCalledWith(
+      'auth:session:get-state',
+    )
     expect(permission.check).toHaveBeenCalledWith('intelligence.basic')
     expect(clearItems).toHaveBeenCalled()
-    expect(pushItems.mock.calls.some(call =>
-      call[0][0].render?.custom?.data?.status === 'ready'
-      && call[0][0].render.custom.data.answer === 'local answer'
-      && call[0][0].render.custom.data.provider === 'local-default',
-    )).toBe(true)
+    expect(
+      pushItems.mock.calls.some(
+        call =>
+          call[0][0].render?.custom?.data?.status === 'ready'
+          && call[0][0].render.custom.data.answer === 'local answer'
+          && call[0][0].render.custom.data.provider === 'local-default',
+      ),
+    ).toBe(true)
   })
 
   it('prepares ContextHygiene package metadata before CoreBox AI Ask invocation', async () => {
@@ -1129,22 +1210,27 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithContextHygiene.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await pluginWithContextHygiene.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 写一段总结',
+    )
 
     await vi.waitFor(() => {
-      expect(contextPrepareTurn).toHaveBeenCalledWith(expect.objectContaining({
-        owner: 'corebox',
-        input: '写一段总结',
-        explicitScope: 'retrieval',
-        tokenBudget: 1200,
-        metadata: expect.objectContaining({
-          caller: 'plugin:touch-intelligence',
-          entry: 'corebox.ai-ask',
-          featureId: 'intelligence-ask',
-          requestId: expect.any(String),
-          inputKinds: ['text'],
+      expect(contextPrepareTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'corebox',
+          input: '写一段总结',
+          explicitScope: 'retrieval',
+          tokenBudget: 1200,
+          metadata: expect.objectContaining({
+            caller: 'plugin:touch-intelligence',
+            entry: 'corebox.ai-ask',
+            featureId: 'intelligence-ask',
+            requestId: expect.any(String),
+            inputKinds: ['text'],
+          }),
         }),
-      }))
+      )
       expect(invoke).toHaveBeenCalledWith(
         'text.chat',
         expect.objectContaining({ messages: expect.any(Array) }),
@@ -1161,8 +1247,8 @@ describe('intelligence plugin', () => {
       )
     })
 
-    const readyCall = pushItems.mock.calls.find(call =>
-      call[0][0].render?.custom?.data?.status === 'ready',
+    const readyCall = pushItems.mock.calls.find(
+      call => call[0][0].render?.custom?.data?.status === 'ready',
     )
     expect(readyCall?.[0][0].render.custom.data.contextPackage).toMatchObject({
       id: 'ctxpkg_1',
@@ -1173,7 +1259,9 @@ describe('intelligence plugin', () => {
       retrievalItemCount: 1,
       retrievalStatus: 'ok',
     })
-    expect(readyCall?.[0][0].render.custom.data.contextPackage).not.toHaveProperty('items')
+    expect(
+      readyCall?.[0][0].render.custom.data.contextPackage,
+    ).not.toHaveProperty('items')
     expect(readyCall?.[0][0].meta.intelligence).toMatchObject({
       contextPackageId: 'ctxpkg_1',
       contextSessionId: 'ctxs_1',
@@ -1246,7 +1334,13 @@ describe('intelligence plugin', () => {
       intelligencePluginUrl,
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
-        intelligence: { contextPrepareTurn, contextEvaluateMemory, contextSaveMemory, stream, invoke },
+        intelligence: {
+          contextPrepareTurn,
+          contextEvaluateMemory,
+          contextSaveMemory,
+          stream,
+          invoke,
+        },
         permission,
         plugin: {
           feature: { clearItems, pushItems },
@@ -1261,16 +1355,21 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithMemoryPolicy.onFeatureTriggered('intelligence-ask', 'ai 记住我喜欢中文回复')
+    await pluginWithMemoryPolicy.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 记住我喜欢中文回复',
+    )
 
     await vi.waitFor(() => {
-      expect(contextEvaluateMemory).toHaveBeenCalledWith(expect.objectContaining({
-        content: '记住我喜欢中文回复',
-        type: 'preference',
-        scope: 'session',
-        sourceSessionId: 'ctxs_memory',
-        sourceTurnId: 'turn_memory',
-      }))
+      expect(contextEvaluateMemory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: '记住我喜欢中文回复',
+          type: 'preference',
+          scope: 'session',
+          sourceSessionId: 'ctxs_memory',
+          sourceTurnId: 'turn_memory',
+        }),
+      )
       expect(invoke).toHaveBeenCalledWith(
         'text.chat',
         expect.objectContaining({ messages: expect.any(Array) }),
@@ -1283,8 +1382,8 @@ describe('intelligence plugin', () => {
       )
     })
 
-    const readyCall = pushItems.mock.calls.find(call =>
-      call[0][0].render?.custom?.data?.status === 'ready',
+    const readyCall = pushItems.mock.calls.find(
+      call => call[0][0].render?.custom?.data?.status === 'ready',
     )
     expect(readyCall?.[0][0].render.custom.data.memoryPolicy).toMatchObject({
       status: 'suggested',
@@ -1297,7 +1396,9 @@ describe('intelligence plugin', () => {
         privacyLevel: 'normal',
       },
     })
-    expect(readyCall?.[0][0].render.custom.data.memoryPolicy.candidate).not.toHaveProperty('content')
+    expect(
+      readyCall?.[0][0].render.custom.data.memoryPolicy.candidate,
+    ).not.toHaveProperty('content')
     expect(readyCall?.[0][0].meta.intelligence).toMatchObject({
       memoryPolicyStatus: 'suggested',
       memoryPolicyReason: 'explicit_memory_candidate',
@@ -1359,7 +1460,12 @@ describe('intelligence plugin', () => {
       intelligencePluginUrl,
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
-        intelligence: { contextPrepareTurn, contextEvaluateMemory, stream, invoke },
+        intelligence: {
+          contextPrepareTurn,
+          contextEvaluateMemory,
+          stream,
+          invoke,
+        },
         permission,
         plugin: {
           feature: { clearItems, pushItems },
@@ -1374,7 +1480,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithUnavailableMemoryPolicy.onFeatureTriggered('intelligence-ask', 'ai 记住我喜欢中文回复')
+    await pluginWithUnavailableMemoryPolicy.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 记住我喜欢中文回复',
+    )
 
     await vi.waitFor(() => {
       expect(contextEvaluateMemory).toHaveBeenCalled()
@@ -1388,10 +1497,13 @@ describe('intelligence plugin', () => {
         }),
       )
     })
-    expect(pushItems.mock.calls.some(call =>
-      call[0][0].render?.custom?.data?.status === 'ready'
-      && call[0][0].render.custom.data.memoryPolicy === null,
-    )).toBe(true)
+    expect(
+      pushItems.mock.calls.some(
+        call =>
+          call[0][0].render?.custom?.data?.status === 'ready'
+          && call[0][0].render.custom.data.memoryPolicy === null,
+      ),
+    ).toBe(true)
   })
 
   it('continues CoreBox AI Ask when ContextHygiene prepareTurn is unavailable', async () => {
@@ -1434,7 +1546,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithUnavailableContext.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await pluginWithUnavailableContext.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 写一段总结',
+    )
 
     await vi.waitFor(() => {
       expect(contextPrepareTurn).toHaveBeenCalled()
@@ -1448,10 +1563,14 @@ describe('intelligence plugin', () => {
         }),
       )
     })
-    expect(pushItems.mock.calls.some(call =>
-      call[0][0].render?.custom?.data?.status === 'ready'
-      && call[0][0].render.custom.data.answer === 'local answer without context',
-    )).toBe(true)
+    expect(
+      pushItems.mock.calls.some(
+        call =>
+          call[0][0].render?.custom?.data?.status === 'ready'
+          && call[0][0].render.custom.data.answer
+          === 'local answer without context',
+      ),
+    ).toBe(true)
   })
 
   it('falls back to invoke when stream auth fails for local/BYOK chat', async () => {
@@ -1491,7 +1610,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithStreamAuthFailure.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await pluginWithStreamAuthFailure.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 写一段总结',
+    )
     await vi.waitFor(() => {
       expect(stream).toHaveBeenCalledWith(
         'text.chat',
@@ -1515,11 +1637,15 @@ describe('intelligence plugin', () => {
       )
     })
 
-    expect(pushItems.mock.calls.some(call =>
-      call[0][0].render?.custom?.data?.status === 'ready'
-      && call[0][0].render.custom.data.answer === 'local answer after stream fallback'
-      && call[0][0].render.custom.data.provider === 'local-default',
-    )).toBe(true)
+    expect(
+      pushItems.mock.calls.some(
+        call =>
+          call[0][0].render?.custom?.data?.status === 'ready'
+          && call[0][0].render.custom.data.answer
+          === 'local answer after stream fallback'
+          && call[0][0].render.custom.data.provider === 'local-default',
+      ),
+    ).toBe(true)
   })
 
   it('blocks AI send when permission sdk is unavailable', async () => {
@@ -1545,7 +1671,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithoutPermissionSdk.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+    await pluginWithoutPermissionSdk.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 写一段总结',
+    )
     const sendItem = pushItems.mock.calls[0][0][0]
     pushItems.mockClear()
 
@@ -1577,7 +1706,10 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => false),
     }
     const pluginWithDeniedClipboard = loadPluginModule(
-      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      new URL(
+        '../../../../plugins/touch-intelligence/index.js',
+        import.meta.url,
+      ),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { writeText },
@@ -1595,23 +1727,26 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    const result = await pluginWithDeniedClipboard.onItemAction({
-      meta: {
-        defaultAction: 'intelligence-action',
-        featureId: 'intelligence-ask',
-        payload: {
-          prompt: 'question',
-          answer: 'hello',
-          provider: 'local-default',
-          model: 'qwen2.5:3b',
-          traceId: 'trace-copy',
-          latency: 12,
-          inputKinds: ['text'],
+    const result = await pluginWithDeniedClipboard.onItemAction(
+      {
+        meta: {
+          defaultAction: 'intelligence-action',
+          featureId: 'intelligence-ask',
+          payload: {
+            prompt: 'question',
+            answer: 'hello',
+            provider: 'local-default',
+            model: 'qwen2.5:3b',
+            traceId: 'trace-copy',
+            latency: 12,
+            inputKinds: ['text'],
+          },
         },
       },
-    }, {
-      actionId: 'copy-answer',
-    })
+      {
+        actionId: 'copy-answer',
+      },
+    )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
     expect(permission.request).toHaveBeenCalledWith(
@@ -1663,7 +1798,10 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => false),
     }
     const pluginWithDeniedClipboard = loadPluginModule(
-      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      new URL(
+        '../../../../plugins/touch-intelligence/index.js',
+        import.meta.url,
+      ),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { writeText },
@@ -1681,24 +1819,27 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    const result = await pluginWithDeniedClipboard.onItemAction({
-      meta: {
-        defaultAction: 'intelligence-action',
-        actionId: 'send',
-        featureId: 'intelligence-ask',
-        payload: {
-          prompt: 'question',
-          answer: 'hello',
-          provider: 'local-default',
-          model: 'qwen2.5:3b',
-          traceId: 'trace-copy',
-          latency: 12,
-          inputKinds: ['text'],
+    const result = await pluginWithDeniedClipboard.onItemAction(
+      {
+        meta: {
+          defaultAction: 'intelligence-action',
+          actionId: 'send',
+          featureId: 'intelligence-ask',
+          payload: {
+            prompt: 'question',
+            answer: 'hello',
+            provider: 'local-default',
+            model: 'qwen2.5:3b',
+            traceId: 'trace-copy',
+            latency: 12,
+            inputKinds: ['text'],
+          },
         },
       },
-    }, {
-      actionId: 'copy-answer',
-    })
+      {
+        actionId: 'copy-answer',
+      },
+    )
 
     expect(writeText).not.toHaveBeenCalled()
     expect(clearItems).toHaveBeenCalled()
@@ -1721,7 +1862,10 @@ describe('intelligence plugin', () => {
   it('blocks answer copy when permission sdk is unavailable', async () => {
     const writeText = vi.fn()
     const pluginWithoutPermissionSdk = loadPluginModule(
-      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      new URL(
+        '../../../../plugins/touch-intelligence/index.js',
+        import.meta.url,
+      ),
       createPluginGlobals({
         clipboard: { writeText },
         permission: withoutGlobal(),
@@ -1757,7 +1901,10 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => true),
     }
     const pluginWithRejectedClipboard = loadPluginModule(
-      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      new URL(
+        '../../../../plugins/touch-intelligence/index.js',
+        import.meta.url,
+      ),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { writeText },
@@ -1820,7 +1967,10 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => true),
     }
     const pluginWithGrantedClipboard = loadPluginModule(
-      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      new URL(
+        '../../../../plugins/touch-intelligence/index.js',
+        import.meta.url,
+      ),
       createPluginGlobals({
         clipboard: { writeText },
         permission,
@@ -1846,5 +1996,927 @@ describe('intelligence plugin', () => {
       externalAction: true,
       status: 'started',
     })
+  })
+  it('declares the QuickReview provider, text-only feature, and command vocabulary', () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        new URL(
+          '../../../../plugins/touch-intelligence/manifest.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    )
+
+    expect(manifest.searchProviders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'touch-intelligence.quick-review',
+          featureId: 'quick-review',
+          kind: 'ai',
+          mode: 'push',
+        }),
+      ]),
+    )
+
+    const feature = manifest.features.find(
+      (entry: { id?: string }) => entry.id === 'quick-review',
+    )
+    expect(feature).toMatchObject({
+      id: 'quick-review',
+      acceptedInputTypes: ['text'],
+    })
+    expect(feature.commands).toEqual([
+      {
+        type: 'over',
+        value: ['review', 'quickreview', 'quick review', '代码审查', '评审'],
+      },
+    ])
+
+    expect(manifest.permissionReasons['intelligence.basic']).toContain(
+      '代码审查',
+    )
+    expect(manifest.permissionReasons['clipboard.write']).toContain(
+      '代码审查结果',
+    )
+    expect(manifest.permissionReasons['search.root-results']).toContain(
+      '代码审查',
+    )
+  })
+
+  it.each([
+    [
+      'attached text when the command has no body',
+      {
+        text: 'review',
+        inputs: [{ type: 'text', content: '  const attached = ai: input\n' }],
+      },
+      '  const attached = ai: input\n',
+    ],
+    [
+      'an ai: Ask prefix in code',
+      'review ai: const result = run(input)',
+      'ai: const result = run(input)',
+    ],
+    [
+      'an @ai: Ask prefix in code',
+      'review @ai: const result = run(input)',
+      '@ai: const result = run(input)',
+    ],
+    [
+      'a /ai: Ask prefix in code',
+      'review /ai: const result = run(input)',
+      '/ai: const result = run(input)',
+    ],
+  ])(
+    'sends %s to code.review without rewriting source',
+    async (_caseName, query, expectedCode) => {
+      const clearItems = vi.fn()
+      const pushItems = vi.fn()
+      const invokeStarted = createDeferred<{
+        capabilityId: string
+        payload: Record<string, unknown>
+      }>()
+      const invoke = vi.fn(
+        async (capabilityId: string, payload: Record<string, unknown>) => {
+          invokeStarted.resolve({ capabilityId, payload })
+          return {
+            result: {
+              summary: '审查完成。',
+              score: 100,
+              issues: [],
+              improvements: [],
+            },
+          }
+        },
+      )
+      const pluginWithQuickReview = loadPluginModule(
+        intelligencePluginUrl,
+        createPluginGlobals({
+          TuffItemBuilder: FakeBuilder,
+          intelligence: { invoke },
+          permission: {
+            check: vi.fn(async () => true),
+            request: vi.fn(async () => true),
+          },
+          plugin: {
+            feature: { clearItems, pushItems },
+            storage: {
+              async getFile() {
+                return null
+              },
+              async setFile() {},
+            },
+            box: { hide() {} },
+          },
+        }),
+      )
+
+      await pluginWithQuickReview.onFeatureTriggered('quick-review', query)
+
+      const invocation = await invokeStarted.promise
+      expect(invocation.capabilityId).toBe('code.review')
+      expect(invocation.payload.code).toBe(expectedCode)
+      expect(invocation.payload.focusAreas).toEqual([
+        'bugs',
+        'best-practices',
+        'security',
+      ])
+    },
+  )
+
+  it('keeps valid line-zero QuickReview findings structured without a line-zero label', async () => {
+    const clearItems = vi.fn()
+    const readyState = createDeferred<WidgetState>()
+    const pushItems = vi.fn(
+      (items: Array<{ render?: { custom?: { data?: WidgetState } } }>) => {
+        const state = items[0]?.render?.custom?.data
+        if (state?.status === 'ready')
+          readyState.resolve(state)
+      },
+    )
+    const pluginWithLineZeroReview = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: {
+          invoke: vi.fn(async () => ({
+            result: {
+              summary: '入口条件需要明确。',
+              score: 91,
+              issues: [
+                {
+                  severity: 'warning',
+                  type: 'security',
+                  line: 0,
+                  message: '入口参数缺少约束。',
+                },
+              ],
+              improvements: [],
+            },
+          })),
+        },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithLineZeroReview.onFeatureTriggered(
+      'quick-review',
+      'review const value = input',
+    )
+
+    const state = await readyState.promise
+    expect(state).toMatchObject({
+      status: 'ready',
+      stage: 'review',
+      capabilityId: 'code.review',
+    })
+    expect(state.answer).toContain('### 1. WARNING · security')
+    expect(state.answer).not.toContain('第 0 行')
+  })
+
+  it.each([
+    ['empty-code recovery', 'review', 'EMPTY_CODE'],
+    [
+      'text-only-input recovery',
+      {
+        text: 'review const replacement = true',
+        inputs: [{ type: 'image', content: 'data:image/png;base64,abc' }],
+      },
+      'TEXT_ONLY_INPUT',
+    ],
+  ])(
+    'does not let a deferred review replace newer QuickReview %s',
+    async (_scenario, nextQuery, errorCode) => {
+      const clearItems = vi.fn()
+      const pushItems = vi.fn()
+      const oldReview = createDeferred<Record<string, unknown>>()
+      const oldReviewStarted = createDeferred<void>()
+      const invoke = vi.fn((capabilityId: string) => {
+        if (capabilityId === 'code.review') {
+          oldReviewStarted.resolve()
+          return oldReview.promise
+        }
+        return Promise.resolve({ result: 'unexpected capability' })
+      })
+      const pluginWithDeferredReview = loadPluginModule(
+        intelligencePluginUrl,
+        createPluginGlobals({
+          TuffItemBuilder: FakeBuilder,
+          intelligence: { invoke },
+          permission: {
+            check: vi.fn(async () => true),
+            request: vi.fn(async () => true),
+          },
+          plugin: {
+            feature: { clearItems, pushItems },
+            storage: {
+              async getFile() {
+                return null
+              },
+              async setFile() {},
+            },
+            box: { hide() {} },
+          },
+        }),
+      )
+
+      await pluginWithDeferredReview.onFeatureTriggered(
+        'quick-review',
+        'review const stale = true',
+      )
+      await oldReviewStarted.promise
+      await pluginWithDeferredReview.onFeatureTriggered(
+        'quick-review',
+        nextQuery,
+      )
+
+      expect(
+        pushItems.mock.calls.at(-1)?.[0][0].render?.custom?.data,
+      ).toMatchObject({
+        status: 'error',
+        stage: 'review',
+        errorCode,
+      })
+      pushItems.mockClear()
+      oldReview.resolve({
+        result: {
+          summary: '过期审查结果。',
+          score: 100,
+          issues: [],
+          improvements: [],
+        },
+      })
+      await oldReview.promise
+
+      expect(pushItems).not.toHaveBeenCalled()
+    },
+  )
+
+  it('does not let a deferred review overwrite a newer AI Ask result', async () => {
+    const clearItems = vi.fn()
+    const oldReview = createDeferred<Record<string, unknown>>()
+    const oldReviewStarted = createDeferred<void>()
+    const newerAskReady = createDeferred<WidgetState>()
+    const pushItems = vi.fn(
+      (items: Array<{ render?: { custom?: { data?: WidgetState } } }>) => {
+        const state = items[0]?.render?.custom?.data
+        if (state?.status === 'ready' && state.capabilityId === 'text.chat')
+          newerAskReady.resolve(state)
+      },
+    )
+    const invoke = vi.fn((capabilityId: string) => {
+      if (capabilityId === 'code.review') {
+        oldReviewStarted.resolve()
+        return oldReview.promise
+      }
+      return Promise.resolve({ result: 'newer AI answer' })
+    })
+    const pluginWithDeferredReview = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithDeferredReview.onFeatureTriggered(
+      'quick-review',
+      'review const stale = true',
+    )
+    await oldReviewStarted.promise
+    await pluginWithDeferredReview.onFeatureTriggered(
+      'intelligence-ask',
+      'ai answer the new question',
+    )
+
+    const newerAsk = await newerAskReady.promise
+    expect(newerAsk).toMatchObject({
+      status: 'ready',
+      stage: 'chat',
+      capabilityId: 'text.chat',
+      answer: 'newer AI answer',
+    })
+    pushItems.mockClear()
+    oldReview.resolve({
+      result: {
+        summary: '过期审查结果。',
+        score: 100,
+        issues: [],
+        improvements: [],
+      },
+    })
+    await oldReview.promise
+
+    expect(pushItems).not.toHaveBeenCalled()
+  })
+
+  it('reviews stripped quickreview code with structured output and runtime metadata', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const invoke = vi.fn(async () => ({
+      result: {
+        summary: '权限检查顺序正确，但缺少对象保护。',
+        score: 82,
+        issues: [
+          {
+            severity: 'warning',
+            type: 'security',
+            line: 7,
+            message: '不可信值直接参与查询。',
+            suggestion: '先验证输入。',
+          },
+        ],
+        improvements: ['为权限边界补充回归测试。'],
+      },
+      provider: 'local-reviewer',
+      model: 'qwen-review',
+      latency: 84,
+      traceId: 'trace-quick-review',
+    }))
+    const pluginWithQuickReview = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithQuickReview.onFeatureTriggered(
+      'quick-review',
+      'quickreview: const isAdmin = user?.role === "admin"',
+    )
+
+    await vi.waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        'code.review',
+        {
+          code: 'const isAdmin = user?.role === "admin"',
+          focusAreas: ['bugs', 'best-practices', 'security'],
+        },
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            featureId: 'quick-review',
+            capabilityId: 'code.review',
+            inputKinds: ['text'],
+          }),
+        }),
+      )
+    })
+    await vi.waitFor(() => {
+      expect(
+        pushItems.mock.calls.some(
+          call => call[0][0].render?.custom?.data?.status === 'ready',
+        ),
+      ).toBe(true)
+    })
+
+    const readyCall = pushItems.mock.calls.find(
+      call => call[0][0].render?.custom?.data?.status === 'ready',
+    )
+    expect(readyCall?.[0][0].render.custom.data).toMatchObject({
+      status: 'ready',
+      stage: 'review',
+      provider: 'local-reviewer',
+      model: 'qwen-review',
+      latency: 84,
+      traceId: 'trace-quick-review',
+      capabilityId: 'code.review',
+      inputKinds: ['text'],
+    })
+    expect(readyCall?.[0][0].render.custom.data.answer).toContain(
+      '## 审查摘要',
+    )
+    expect(readyCall?.[0][0].render.custom.data.answer).toContain(
+      '权限检查顺序正确，但缺少对象保护。',
+    )
+    expect(readyCall?.[0][0].render.custom.data.answer).toContain(
+      '**评分：82/100**',
+    )
+    expect(readyCall?.[0][0].render.custom.data.answer).toContain(
+      '### 1. WARNING · security · 第 7 行',
+    )
+    expect(readyCall?.[0][0].render.custom.data.answer).toContain(
+      '建议：先验证输入。',
+    )
+    expect(readyCall?.[0][0].render.custom.data.answer).toContain(
+      '- 为权限边界补充回归测试。',
+    )
+  })
+
+  it('does not let a stale QuickReview permission request dispatch after a newer terminal review state', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const permissionRequestStarted = createDeferred<void>()
+    const pendingPermission = createDeferred<boolean>()
+    const invoke = vi.fn()
+    const pluginWithDeferredPermission = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission: {
+          check: vi.fn(async () => false),
+          request: vi.fn(() => {
+            permissionRequestStarted.resolve()
+            return pendingPermission.promise
+          }),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    const staleTrigger = pluginWithDeferredPermission.onFeatureTriggered(
+      'quick-review',
+      'review const stale = true',
+    )
+    await permissionRequestStarted.promise
+
+    await pluginWithDeferredPermission.onFeatureTriggered(
+      'quick-review',
+      'review',
+    )
+    expect(
+      pushItems.mock.calls.at(-1)?.[0][0].render?.custom?.data,
+    ).toMatchObject({
+      status: 'error',
+      stage: 'review',
+      errorCode: 'EMPTY_CODE',
+    })
+
+    const callsBeforePermissionResolves = pushItems.mock.calls.length
+    pendingPermission.resolve(true)
+    await staleTrigger
+
+    expect(invoke).not.toHaveBeenCalled()
+    expect(pushItems.mock.calls.slice(callsBeforePermissionResolves)).toEqual(
+      [],
+    )
+  })
+
+  it('does not let a stale QuickReview copy failure replace a newer AI Ask result', async () => {
+    const clearItems = vi.fn()
+    const copyStarted = createDeferred<void>()
+    const pendingClipboardWrite = createDeferred<void>()
+    const newerAskReady = createDeferred<void>()
+    const pushItems = vi.fn(
+      (
+        items: Array<{
+          render?: { custom?: { data?: Record<string, unknown> } }
+          meta?: { featureId?: string }
+        }>,
+      ) => {
+        const item = items[0]
+        const data = item?.render?.custom?.data
+        if (
+          item?.meta?.featureId === 'intelligence-ask'
+          && data?.status === 'ready'
+          && data.answer === 'newer AI answer'
+        ) {
+          newerAskReady.resolve()
+        }
+      },
+    )
+    const pluginWithDeferredCopy = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: {
+          invoke: vi.fn(async () => ({ result: 'newer AI answer' })),
+        },
+        clipboard: {
+          writeText: vi.fn(async () => {
+            copyStarted.resolve()
+            await pendingClipboardWrite.promise
+            throw new Error('clipboard unavailable')
+          }),
+        },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    const staleCopy = pluginWithDeferredCopy.onItemAction({
+      meta: {
+        defaultAction: 'intelligence-action',
+        actionId: 'copy-answer',
+        featureId: 'quick-review',
+        payload: {
+          prompt: 'const stale = true',
+          answer: '旧审查结果',
+          status: 'ready',
+          stage: 'review',
+          capabilityId: 'code.review',
+          inputKinds: ['text'],
+        },
+      },
+    })
+    await copyStarted.promise
+
+    await pluginWithDeferredCopy.onFeatureTriggered(
+      'intelligence-ask',
+      'ai newer question',
+    )
+    await newerAskReady.promise
+    pushItems.mockClear()
+
+    pendingClipboardWrite.resolve()
+    expect(await staleCopy).toEqual({ externalAction: true })
+    expect(pushItems).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'ai:',
+      'review ai: const result = run(input)',
+      'ai: const result = run(input)',
+    ],
+    [
+      '@ai:',
+      'review @ai: const result = run(input)',
+      '@ai: const result = run(input)',
+    ],
+    [
+      '/ai:',
+      'review /ai: const result = run(input)',
+      '/ai: const result = run(input)',
+    ],
+  ])(
+    'preserves %s source in QuickReview widget state and copy/retry action payloads',
+    async (_prefix, query, expectedCode) => {
+      const readyItem = createDeferred<{
+        render?: { custom?: { data?: Record<string, unknown> } }
+        meta?: { actionId?: string, payload?: Record<string, unknown> }
+      }>()
+      const retryItem = createDeferred<{
+        render?: { custom?: { data?: Record<string, unknown> } }
+        meta?: { actionId?: string, payload?: Record<string, unknown> }
+      }>()
+      let rejectReview = false
+      const pushItems = vi.fn(
+        (
+          items: Array<{
+            render?: { custom?: { data?: Record<string, unknown> } }
+            meta?: { actionId?: string, payload?: Record<string, unknown> }
+          }>,
+        ) => {
+          const item = items[0]
+          const status = item?.render?.custom?.data?.status
+          if (status === 'ready')
+            readyItem.resolve(item)
+          if (status === 'error')
+            retryItem.resolve(item)
+        },
+      )
+      const pluginWithPrefixedQuickReview = loadPluginModule(
+        intelligencePluginUrl,
+        createPluginGlobals({
+          TuffItemBuilder: FakeBuilder,
+          intelligence: {
+            invoke: vi.fn(async () => {
+              if (rejectReview)
+                throw new Error('review failed')
+              return {
+                result: {
+                  summary: '审查完成。',
+                  score: 100,
+                  issues: [],
+                  improvements: [],
+                },
+              }
+            }),
+          },
+          permission: {
+            check: vi.fn(async () => true),
+            request: vi.fn(async () => true),
+          },
+          plugin: {
+            feature: { clearItems: vi.fn(), pushItems },
+            storage: {
+              async getFile() {
+                return null
+              },
+              async setFile() {},
+            },
+            box: { hide() {} },
+          },
+        }),
+      )
+
+      await pluginWithPrefixedQuickReview.onFeatureTriggered(
+        'quick-review',
+        query,
+      )
+      const copyItem = await readyItem.promise
+      expect(copyItem.render?.custom?.data?.prompt).toBe(expectedCode)
+      expect(copyItem.meta?.actionId).toBe('copy-answer')
+      expect(copyItem.meta?.payload?.prompt).toBe(expectedCode)
+
+      rejectReview = true
+      await pluginWithPrefixedQuickReview.onFeatureTriggered(
+        'quick-review',
+        query,
+      )
+      const failedItem = await retryItem.promise
+      expect(failedItem.render?.custom?.data?.prompt).toBe(expectedCode)
+      expect(failedItem.meta?.actionId).toBe('retry')
+      expect(failedItem.meta?.payload?.prompt).toBe(expectedCode)
+    },
+  )
+
+  it('shows explicit recovery when a QuickReview command contains no code', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const invoke = vi.fn()
+    const pluginWithEmptyQuickReview = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithEmptyQuickReview.onFeatureTriggered(
+      'quick-review',
+      'quickreview',
+    )
+
+    expect(invoke).not.toHaveBeenCalled()
+    expect(pushItems).toHaveBeenCalledOnce()
+    expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
+      status: 'error',
+      stage: 'review',
+      capabilityId: 'code.review',
+      errorCode: 'EMPTY_CODE',
+      errorMessage: '请输入需要审查的代码',
+    })
+    expect(pushItems.mock.calls[0][0][0].meta).toMatchObject({
+      status: 'error',
+      actionId: 'retry',
+      intelligence: {
+        status: 'error',
+        capabilityId: 'code.review',
+        errorCode: 'EMPTY_CODE',
+      },
+    })
+  })
+
+  it.each([
+    [
+      'is denied',
+      {
+        check: vi.fn(async () => false),
+        request: vi.fn(async () => false),
+      },
+    ],
+    ['is unavailable', withoutGlobal()],
+  ])(
+    'does not invoke QuickReview when intelligence.basic %s',
+    async (_state, permission) => {
+      const clearItems = vi.fn()
+      const pushItems = vi.fn()
+      const invoke = vi.fn()
+      const pluginWithBlockedQuickReview = loadPluginModule(
+        intelligencePluginUrl,
+        createPluginGlobals({
+          TuffItemBuilder: FakeBuilder,
+          intelligence: { invoke },
+          permission,
+          plugin: {
+            feature: { clearItems, pushItems },
+            storage: {
+              async getFile() {
+                return null
+              },
+              async setFile() {},
+            },
+            box: { hide() {} },
+          },
+        }),
+      )
+
+      await pluginWithBlockedQuickReview.onFeatureTriggered(
+        'quick-review',
+        'const secret = input',
+      )
+
+      expect(invoke).not.toHaveBeenCalled()
+      expect(
+        pushItems.mock.calls.at(-1)?.[0][0].render.custom.data,
+      ).toMatchObject({
+        status: 'error',
+        stage: 'review',
+        capabilityId: 'code.review',
+        errorCode: 'PERMISSION_DENIED',
+        errorMessage: '权限已拒绝，请在插件权限中授予 intelligence.basic',
+      })
+    },
+  )
+
+  it('keeps QuickReview transient and out of storage, history, context, and memory APIs', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const storageGetFile = vi.fn()
+    const storageSetFile = vi.fn()
+    const agentSessionStart = vi.fn()
+    const contextPrepareTurn = vi.fn()
+    const contextEvaluateMemory = vi.fn()
+    const invoke = vi.fn(async () => ({
+      result: {
+        summary: '没有阻塞问题。',
+        score: 100,
+        issues: [],
+        improvements: [],
+      },
+    }))
+    const pluginWithPrivateQuickReview = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: {
+          invoke,
+          agentSessionStart,
+          contextPrepareTurn,
+          contextEvaluateMemory,
+        },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            getFile: storageGetFile,
+            setFile: storageSetFile,
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithPrivateQuickReview.onFeatureTriggered(
+      'quick-review',
+      'const safe = true',
+    )
+
+    await vi.waitFor(() => {
+      expect(
+        pushItems.mock.calls.some(
+          call => call[0][0].render?.custom?.data?.status === 'ready',
+        ),
+      ).toBe(true)
+    })
+
+    expect(storageGetFile).not.toHaveBeenCalled()
+    expect(storageSetFile).not.toHaveBeenCalled()
+    expect(agentSessionStart).not.toHaveBeenCalled()
+    expect(contextPrepareTurn).not.toHaveBeenCalled()
+    expect(contextEvaluateMemory).not.toHaveBeenCalled()
+  })
+
+  it('renders nonconforming QuickReview output as a readable degraded result', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const invoke = vi.fn(async () => ({
+      result: {
+        summary: '提供方省略了必需的评分和问题数组',
+      },
+      provider: 'fallback-reviewer',
+      model: 'fallback-model',
+      latencyMs: 37,
+      traceId: 'trace-degraded-review',
+    }))
+    const pluginWithDegradedQuickReview = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithDegradedQuickReview.onFeatureTriggered(
+      'quick-review',
+      'const value = parse(input)',
+    )
+
+    await vi.waitFor(() => {
+      expect(
+        pushItems.mock.calls.some(
+          call => call[0][0].render?.custom?.data?.status === 'degraded',
+        ),
+      ).toBe(true)
+    })
+
+    const degradedCall = pushItems.mock.calls.find(
+      call => call[0][0].render?.custom?.data?.status === 'degraded',
+    )
+    expect(degradedCall?.[0][0].render.custom.data).toMatchObject({
+      status: 'degraded',
+      stage: 'review-degraded',
+      provider: 'fallback-reviewer',
+      model: 'fallback-model',
+      latency: 37,
+      traceId: 'trace-degraded-review',
+      capabilityId: 'code.review',
+    })
+    expect(degradedCall?.[0][0].render.custom.data.answer).toContain(
+      '## 审查结果（降级显示）',
+    )
+    expect(degradedCall?.[0][0].render.custom.data.answer).toContain(
+      '提供方返回了非标准的结构化审查结果',
+    )
+    expect(degradedCall?.[0][0].render.custom.data.answer).toContain(
+      '提供方省略了必需的评分和问题数组',
+    )
   })
 })
