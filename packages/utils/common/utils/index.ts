@@ -11,8 +11,10 @@ import { hasDocument } from '../../env'
  * await sleep(1000); // Waits for 1 second
  * ```
  */
-export async function sleep(time: number): Promise<number> {
-  return new Promise(resolve => setTimeout(() => resolve(time), time))
+export function sleep(time: number): Promise<number> {
+  return new Promise<number>((resolve) => {
+    setTimeout(() => resolve(time), time)
+  })
 }
 
 /**

@@ -4,6 +4,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import type { OSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
+import { sleep } from '@talex-touch/utils/common/utils'
 import { app, dialog } from 'electron'
 import { mainLog } from '../utils/logger'
 
@@ -215,12 +216,6 @@ export function isPidAlive(pid: number): boolean {
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'EPERM'
   }
-}
-
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
 }
 
 export async function terminateReleasePids(pids: number[]): Promise<boolean> {

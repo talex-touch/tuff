@@ -4,6 +4,8 @@
  * Built-in tools for agents to use.
  */
 
+import { systemShellCapabilities } from '../../../../channel/system-shell-handlers'
+import { clipboardModule } from '../../../clipboard'
 import { registerFileTools } from './file-tools'
 import { registerWorkflowTools } from './workflow-tools'
 
@@ -16,5 +18,8 @@ export { registerWorkflowTools }
 export function registerBuiltinTools(): void {
   // Import and register all tool categories
   registerFileTools()
-  registerWorkflowTools()
+  registerWorkflowTools({
+    clipboard: clipboardModule,
+    systemShell: systemShellCapabilities
+  })
 }
