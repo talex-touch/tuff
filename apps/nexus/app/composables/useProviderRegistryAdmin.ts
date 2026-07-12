@@ -1,4 +1,5 @@
-import { $fetch as rawFetch } from 'ofetch'
+import { createProviderRegistryCrudService } from '~/composables/provider-registry/provider-registry-crud-service'
+import { createProviderRegistrySceneObservabilityService } from '~/composables/provider-registry/provider-registry-scene-observability-service'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useToast } from '~/composables/useToast'
 import {
@@ -19,11 +20,16 @@ import {
   formatDate,
   formatJson,
   formatRunJson,
+  extractFailedSceneRun,
+  mergeJsonObjects,
   normalizeError,
-  ownerScopeOptions,
-  providerServiceCategoryOptions,
+  parseBoundedNumber,
   parseCommaList,
   parseJsonObjectField,
+  parseOptionalJson,
+  parseOptionalNonNegativeNumber,
+  ownerScopeOptions,
+  providerServiceCategoryOptions,
   providerStatusOptions,
   providerObservabilityFilters,
   providerRegistryTemplates,
@@ -75,23 +81,17 @@ import {
   type SceneOwner,
   type SceneRegistryRecord,
   type SceneRunPanelState,
-  type SceneRunResult,
   type SceneStrategyMode,
   type UsageLedgerFilter,
 } from '~/utils/provider-registry-admin'
 
-function providerCapabilityCollectionUrl(providerId: string): string {
-  return `/api/dashboard/provider-registry/providers/${providerId}/capabilities`
-}
-
-function providerCapabilityUrl(providerId: string, capabilityId: string): string {
-  return `${providerCapabilityCollectionUrl(providerId)}/${capabilityId}`
-}
 
 export function useProviderRegistryAdmin() {
   const { t } = useI18n()
   const { user } = useAuthUser()
   const toast = useToast()
+  const providerService = createProviderRegistryCrudService()
+  const sceneObservabilityService = createProviderRegistrySceneObservabilityService()
 
   const isAdmin = computed(() => user.value?.role === 'admin')
 
@@ -414,31 +414,6 @@ export function useProviderRegistryAdmin() {
     return parseCommaList(sceneForm.requiredCapabilitiesText)
   }
 
-  function mergeJsonObjects(
-    base: Record<string, unknown> | null,
-    patch: Record<string, unknown>,
-  ): Record<string, unknown> | null {
-    const next = { ...(base ?? {}) }
-
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === undefined || value === null || value === '')
-        delete next[key]
-      else
-        next[key] = value
-    }
-
-    return Object.keys(next).length > 0 ? next : null
-  }
-
-  function parseOptionalNumber(value: string, field: string): number | null {
-    const trimmed = value.trim()
-    if (!trimmed)
-      return null
-    const parsed = Number(trimmed)
-    if (!Number.isFinite(parsed) || parsed < 0)
-      throw new Error(`${field} must be a non-negative number.`)
-    return parsed
-  }
 
   async function syncProviderCapabilities(provider: ProviderRegistryRecord, panel: ProviderEditPanelState) {
     const blankedExistingCapabilityIds = panel.capabilities
@@ -457,7 +432,7 @@ export function useProviderRegistryAdmin() {
         constraints: mergeJsonObjects(
           parseJsonObjectField(row.constraintsText, `capabilities[${index}].constraints`),
           {
-            maxImageBytes: parseOptionalNumber(
+            maxImageBytes: parseOptionalNonNegativeNumber(
               row.maxImageBytes,
               `capabilities[${index}].maxImageBytes`,
             ),
@@ -471,39 +446,31 @@ export function useProviderRegistryAdmin() {
 
     ensureUniqueCapabilities(capabilityInputs)
 
-    for (const capabilityId of new Set([...panel.removedCapabilityIds, ...blankedExistingCapabilityIds])) {
-      await rawFetch(providerCapabilityUrl(provider.id, capabilityId), {
-        method: 'DELETE',
-      })
-    }
+    for (const capabilityId of new Set([...panel.removedCapabilityIds, ...blankedExistingCapabilityIds]))
+      await providerService.deleteCapability(provider.id, capabilityId)
 
     for (const capability of capabilityInputs) {
       if (capability.id) {
-        await rawFetch(providerCapabilityUrl(provider.id, capability.id), {
-          method: 'PATCH',
-          body: {
-            capability: capability.capability,
-            schemaRef: capability.schemaRef,
-            metering: capability.metering,
-            constraints: capability.constraints,
-            metadata: capability.metadata,
-          },
-        })
-        continue
-      }
-
-      await rawFetch(providerCapabilityCollectionUrl(provider.id), {
-        method: 'POST',
-        body: {
+        await providerService.updateCapability(provider.id, capability.id, {
           capability: capability.capability,
           schemaRef: capability.schemaRef,
           metering: capability.metering,
           constraints: capability.constraints,
           metadata: capability.metadata,
-        },
+        })
+        continue
+      }
+
+      await providerService.createCapability(provider.id, {
+        capability: capability.capability,
+        schemaRef: capability.schemaRef,
+        metering: capability.metering,
+        constraints: capability.constraints,
+        metadata: capability.metadata,
       })
     }
   }
+
 
   function toggleProviderEdit(provider: ProviderRegistryRecord) {
     const current = providerEditPanels[provider.id]
@@ -559,12 +526,6 @@ export function useProviderRegistryAdmin() {
     panel.error = null
   }
 
-  function parseSceneRunInput(inputText: string) {
-    const trimmed = inputText.trim()
-    if (!trimmed)
-      return undefined
-    return JSON.parse(trimmed)
-  }
 
   function getProviderCheckResult(providerId: string): ProviderCheckResult | null {
     return providerCheckResults.value[providerId] ?? null
@@ -586,17 +547,6 @@ export function useProviderRegistryAdmin() {
     return providerQuotaLists.value[providerId] ?? (providerQuotas.value[providerId] ? [providerQuotas.value[providerId]!] : [])
   }
 
-  function parseQuotaNumber(value: string, field: string, min = 0, max?: number): number | undefined {
-    const trimmed = value.trim()
-    if (!trimmed)
-      return undefined
-    const parsed = Number(trimmed)
-    if (!Number.isFinite(parsed) || parsed < min || (max !== undefined && parsed > max)) {
-      const range = max === undefined ? `greater than or equal to ${min}` : `between ${min} and ${max}`
-      throw new Error(`${field} must be a number ${range}.`)
-    }
-    return parsed
-  }
 
   function getUsageLedgerActionHint(entry: ProviderUsageLedgerEntry) {
     return resolveUsageLedgerActionHint(entry)
@@ -626,25 +576,18 @@ export function useProviderRegistryAdmin() {
     loading.value = true
     error.value = null
     try {
-      await rawFetch('/api/dashboard/provider-registry/seed', { method: 'POST' })
-      const [providerResult, capabilityResult, sceneResult, usageResult, healthResult] = await Promise.all([
-        rawFetch<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers'),
-        rawFetch<{ capabilities: ProviderCapabilityRecord[] }>('/api/dashboard/provider-registry/capabilities'),
-        rawFetch<{ scenes: SceneRegistryRecord[] }>('/api/dashboard/provider-registry/scenes'),
-        rawFetch<{ entries: ProviderUsageLedgerEntry[] }>('/api/dashboard/provider-registry/usage', {
-          query: { limit: 25 },
-        }),
-        rawFetch<{ entries: ProviderHealthCheckEntry[] }>('/api/dashboard/provider-registry/health', {
-          query: { limit: 25 },
-        }),
+      await sceneObservabilityService.seedRegistry()
+      const [providerResult, registryData] = await Promise.all([
+        providerService.listProviders(),
+        sceneObservabilityService.loadRegistryCollections(),
       ])
       providers.value = providerResult.providers ?? []
-      capabilities.value = capabilityResult.capabilities ?? []
-      scenes.value = sceneResult.scenes ?? []
-      usageEntries.value = usageResult.entries ?? []
-      healthEntries.value = healthResult.entries ?? []
+      capabilities.value = registryData.capabilities
+      scenes.value = registryData.scenes
+      usageEntries.value = registryData.usageEntries
+      healthEntries.value = registryData.healthEntries
       const quotaEntries = await Promise.all(providers.value.map(async provider => {
-        const result = await rawFetch<{ quota: ProviderQuotaRecord | null, quotas?: ProviderQuotaRecord[] }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/quota`)
+        const result = await providerService.fetchProviderQuota(provider.id)
         return [provider.id, result] as const
       }))
       providerQuotas.value = Object.fromEntries(quotaEntries.map(([providerId, result]) => [providerId, result.quota]))
@@ -652,11 +595,10 @@ export function useProviderRegistryAdmin() {
 
       const firstBinding = bindingRows.value[0]
       const firstProvider = providers.value[0]
-      if (firstBinding && !firstBinding.providerId && firstProvider) {
+      if (firstBinding && !firstBinding.providerId && firstProvider)
         firstBinding.providerId = firstProvider.id
-      }
     }
-    catch (err: any) {
+    catch (err) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.loadFailed', 'Failed to load provider registry.'))
     }
     finally {
@@ -703,48 +645,36 @@ export function useProviderRegistryAdmin() {
           })),
       }
 
-      await rawFetch('/api/dashboard/provider-registry/providers', {
-        method: 'POST',
-        body,
-      })
+      await providerService.createProvider(body)
 
       if (hasCredentialInput) {
-        await rawFetch('/api/dashboard/provider-registry/credentials', {
-          method: 'POST',
-          body: {
-            authRef,
-            authType: providerForm.authType,
-            credentials: hasSecretPairInput
-              ? {
-                  secretId: providerForm.secretId.trim(),
-                  secretKey: providerForm.secretKey,
-                }
-              : {
-                  apiKey: providerForm.apiKey.trim(),
-                },
-          },
+        await providerService.createCredential({
+          authRef,
+          authType: providerForm.authType,
+          credentials: hasSecretPairInput
+            ? {
+                secretId: providerForm.secretId.trim(),
+                secretKey: providerForm.secretKey,
+              }
+            : {
+                apiKey: providerForm.apiKey.trim(),
+              },
         })
         providerForm.apiKey = ''
         providerForm.secretId = ''
         providerForm.secretKey = ''
 
         if (targetStatus !== 'disabled') {
-          const providerResult = await rawFetch<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers', {
-            query: { vendor: providerForm.vendor },
-          })
+          const providerResult = await providerService.listProviders(providerForm.vendor)
           const provider = (providerResult.providers ?? []).find(item => item.authRef === authRef)
-          if (provider) {
-            await rawFetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
-              method: 'PATCH',
-              body: { status: targetStatus },
-            })
-          }
+          if (provider)
+            await providerService.updateProvider(provider.id, { status: targetStatus })
         }
       }
       toast.success(t('dashboard.providerRegistry.providers.created', 'Provider created.'))
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.createProviderFailed', 'Failed to create provider.'))
       toast.warning(error.value || t('dashboard.providerRegistry.errors.createProviderFailed', 'Failed to create provider.'))
     }
@@ -758,10 +688,7 @@ export function useProviderRegistryAdmin() {
     error.value = null
     const targetCapability = capability?.trim() || provider.capabilities[0]?.capability || 'text.translate'
     try {
-      const result = await rawFetch<ProviderCheckResult>(`/api/dashboard/provider-registry/providers/${provider.id}/check`, {
-        method: 'POST',
-        body: { capability: targetCapability },
-      })
+      const result = await providerService.checkProvider(provider.id, targetCapability)
       providerCheckResults.value = {
         ...providerCheckResults.value,
         [provider.id]: result,
@@ -773,7 +700,7 @@ export function useProviderRegistryAdmin() {
         toast.warning(result.message || t('dashboard.providerRegistry.providers.checkFailed', 'Provider check failed.'))
       }
     }
-    catch (err: any) {
+    catch (err) {
       const message = normalizeError(err, t('dashboard.providerRegistry.errors.checkProviderFailed', 'Failed to check provider.'))
       error.value = message
       providerCheckResults.value = {
@@ -799,13 +726,10 @@ export function useProviderRegistryAdmin() {
     actionPending.value = `provider:${provider.id}:${status}`
     error.value = null
     try {
-      await rawFetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
-        method: 'PATCH',
-        body: { status },
-      })
+      await providerService.updateProvider(provider.id, { status })
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
       toast.warning(error.value || t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
     }
@@ -820,9 +744,7 @@ export function useProviderRegistryAdmin() {
     panel.error = null
     error.value = null
     try {
-      const result = await rawFetch<{ models: string[] }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/models`, {
-        method: 'POST',
-      })
+      const result = await providerService.fetchProviderModels(provider.id)
       const models = Array.from(new Set(
         (result.models ?? [])
           .map(model => model.trim())
@@ -833,7 +755,7 @@ export function useProviderRegistryAdmin() {
         panel.defaultModel = models[0]
       toast.success(t('dashboard.providerRegistry.providers.modelsFetched', { count: models.length }, `Fetched ${models.length} model(s).`))
     }
-    catch (err: any) {
+    catch (err) {
       const message = normalizeError(err, t('dashboard.providerRegistry.errors.fetchModelsFailed', 'Failed to fetch provider models.'))
       panel.error = message
       error.value = message
@@ -871,16 +793,13 @@ export function useProviderRegistryAdmin() {
         ),
       }
 
-      await rawFetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
-        method: 'PATCH',
-        body,
-      })
+      await providerService.updateProvider(provider.id, body)
       await syncProviderCapabilities(provider, panel)
       toast.success(t('dashboard.providerRegistry.providers.updated', 'Provider updated.'))
       delete providerEditPanels[provider.id]
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       const message = normalizeError(err, t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
       panel.error = message
       error.value = message
@@ -897,26 +816,23 @@ export function useProviderRegistryAdmin() {
     panel.error = null
     error.value = null
     try {
-      const windowDays = parseQuotaNumber(panel.windowDays, 'windowDays', 1) ?? 30
-      const maxRequests = parseQuotaNumber(panel.maxRequests, 'maxRequests')
-      const maxTokens = parseQuotaNumber(panel.maxTokens, 'maxTokens')
-      const warningThreshold = parseQuotaNumber(panel.warningThreshold, 'warningThreshold', 0, 100)
+      const windowDays = parseBoundedNumber(panel.windowDays, 'windowDays', 1) ?? 30
+      const maxRequests = parseBoundedNumber(panel.maxRequests, 'maxRequests')
+      const maxTokens = parseBoundedNumber(panel.maxTokens, 'maxTokens')
+      const warningThreshold = parseBoundedNumber(panel.warningThreshold, 'warningThreshold', 0, 100)
       const limits: Record<string, number> = { windowDays }
       if (maxRequests !== undefined)
         limits.maxRequests = maxRequests
       if (maxTokens !== undefined)
         limits.maxTokens = maxTokens
 
-      const result = await rawFetch<{ quota: ProviderQuotaRecord }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/quota`, {
-        method: 'POST',
-        body: {
-          name: panel.name.trim() || `${provider.displayName} quota`,
-          enabled: panel.enabled === 'enabled',
-          limits,
-          warningThreshold,
-          config: {
-            source: 'provider-registry-panel',
-          },
+      const result = await providerService.saveProviderQuota(provider.id, {
+        name: panel.name.trim() || `${provider.displayName} quota`,
+        enabled: panel.enabled === 'enabled',
+        limits,
+        warningThreshold,
+        config: {
+          source: 'provider-registry-panel',
         },
       })
       providerQuotas.value = {
@@ -929,7 +845,7 @@ export function useProviderRegistryAdmin() {
       }
       toast.success(t('dashboard.providerRegistry.quota.saved', 'Provider quota saved.'))
     }
-    catch (err: any) {
+    catch (err) {
       const message = normalizeError(err, t('dashboard.providerRegistry.errors.saveQuotaFailed', 'Failed to save provider quota.'))
       panel.error = message
       error.value = message
@@ -944,12 +860,10 @@ export function useProviderRegistryAdmin() {
     actionPending.value = `provider:${provider.id}:delete`
     error.value = null
     try {
-      await rawFetch(`/api/dashboard/provider-registry/providers/${provider.id}`, {
-        method: 'DELETE',
-      })
+      await providerService.deleteProvider(provider.id)
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
       toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
     }
@@ -984,14 +898,11 @@ export function useProviderRegistryAdmin() {
           })),
       }
 
-      await rawFetch('/api/dashboard/provider-registry/scenes', {
-        method: 'POST',
-        body,
-      })
+      await sceneObservabilityService.createScene(body)
       toast.success(t('dashboard.providerRegistry.scenes.created', 'Scene created.'))
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.createSceneFailed', 'Failed to create scene.'))
       toast.warning(error.value || t('dashboard.providerRegistry.errors.createSceneFailed', 'Failed to create scene.'))
     }
@@ -1004,13 +915,10 @@ export function useProviderRegistryAdmin() {
     actionPending.value = `scene:${scene.id}:${status}`
     error.value = null
     try {
-      await rawFetch(`/api/dashboard/provider-registry/scenes/${scene.id}`, {
-        method: 'PATCH',
-        body: { status },
-      })
+      await sceneObservabilityService.updateScene(scene.id, { status })
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
       toast.warning(error.value || t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
     }
@@ -1050,15 +958,12 @@ export function useProviderRegistryAdmin() {
           })),
       }
 
-      await rawFetch(`/api/dashboard/provider-registry/scenes/${encodeURIComponent(scene.id)}`, {
-        method: 'PATCH',
-        body,
-      })
+      await sceneObservabilityService.updateScene(scene.id, body)
       toast.success(t('dashboard.providerRegistry.scenes.updated', 'Scene updated.'))
       delete sceneEditPanels[scene.id]
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       const message = normalizeError(err, t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
       panel.error = message
       error.value = message
@@ -1076,15 +981,12 @@ export function useProviderRegistryAdmin() {
     error.value = null
     panel.error = null
     try {
-      const input = parseSceneRunInput(panel.inputText)
-      const result = await rawFetch<{ run: SceneRunResult }>(`/api/dashboard/provider-registry/scenes/${encodeURIComponent(scene.id)}/run`, {
-        method: 'POST',
-        body: {
-          input,
-          capability: panel.capability.trim() || undefined,
-          providerId: panel.providerId || undefined,
-          dryRun,
-        },
+      const input = parseOptionalJson(panel.inputText)
+      const result = await sceneObservabilityService.runScene(scene.id, {
+        input,
+        capability: panel.capability.trim() || undefined,
+        providerId: panel.providerId || undefined,
+        dryRun,
       })
       panel.result = result.run
       if (result.run.status === 'failed') {
@@ -1099,9 +1001,9 @@ export function useProviderRegistryAdmin() {
       }
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       const message = normalizeError(err, t('dashboard.providerRegistry.errors.runSceneFailed', 'Failed to run scene.'))
-      const failedRun = err?.data?.data?.run || err?.data?.run
+      const failedRun = extractFailedSceneRun(err)
       if (failedRun)
         panel.result = failedRun
       panel.error = message
@@ -1117,12 +1019,10 @@ export function useProviderRegistryAdmin() {
     actionPending.value = `scene:${scene.id}:delete`
     error.value = null
     try {
-      await rawFetch(`/api/dashboard/provider-registry/scenes/${scene.id}`, {
-        method: 'DELETE',
-      })
+      await sceneObservabilityService.deleteScene(scene.id)
       await fetchRegistry()
     }
-    catch (err: any) {
+    catch (err) {
       error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteSceneFailed', 'Failed to delete scene.'))
       toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteSceneFailed', 'Failed to delete scene.'))
     }

@@ -44,6 +44,12 @@ export interface TagProps {
    * @default 'sm'
    */
   size?: 'sm' | 'md'
+  /**
+   * Whether the tag uses a fully rounded pill shape.
+   * @default false
+   */
+  pill?: boolean
+
 
   /**
    * Whether the tag can be closed/removed.

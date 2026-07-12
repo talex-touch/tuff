@@ -6,6 +6,8 @@ import routes from './router'
 import '@unocss/reset/tailwind.css'
 import './styles/main.css'
 import 'uno.css'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/input/style.css'
 
 const app = createApp(App)
 

@@ -1,39 +1,14 @@
 <script lang="ts" name="TBottomDialog" setup>
 import { TxButton, type TxButtonProps } from '@talex-touch/tuffex/button'
 import { sleep } from '@talex-touch/utils/common/utils'
-import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
-
-/**
- * Button interface for defining button properties
- */
-interface Button {
-  /** Button text content */
-  content: string
-  /** Button type for styling */
-  type?: 'info' | 'warning' | 'error' | 'success'
-  /** Auto-click timer in seconds */
-  time?: number
-  /** Click handler function */
-  onClick: () => Promise<boolean> | boolean
-  /** Loading callback function */
-  loading?: (done: () => void) => void
-}
-
-/**
- * Button state interface for internal button management
- */
-interface ButtonState {
-  /** Button text content */
-  content: string
-  /** Button type for styling */
-  type?: 'info' | 'warning' | 'error' | 'success'
-  /** Auto-click timer in seconds */
-  time?: number
-  /** Click handler function */
-  onClick: () => Promise<boolean> | boolean
-  /** Loading state */
-  loading?: boolean
-}
+import { ref } from 'vue'
+import {
+  type DialogButton,
+  type DialogButtonEntry,
+  type DialogButtonState,
+  useDialogButtons
+} from './useDialogButtons'
+import { useDialogFocus } from './useDialogFocus'
 
 /**
  * Component props interface
@@ -48,7 +23,7 @@ interface Props {
   /** Close callback function */
   close: () => void
   /** Array of buttons */
-  btns?: Button[]
+  btns?: DialogButton[]
   /** Icon name */
   icon?: string
   /** Z-index value */
@@ -69,131 +44,18 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Refs
 const wholeDom = ref<HTMLElement | null>(null)
-const btnArray = ref<Array<{ value: ButtonState }>>([])
+const { buttonStates: btnArray, runButtonAction } = useDialogButtons(() => props.btns, forClose)
 
-function getButtonType(type?: ButtonState['type']): TxButtonProps['type'] {
+useDialogFocus({ target: wholeDom, scrollLock: true })
+
+function getButtonType(type?: DialogButtonState['type']): TxButtonProps['type'] {
   if (type === 'error') return 'danger'
   return type || 'info'
 }
 
-// Store previously focused element for focus restoration
-let previouslyFocusedElement: HTMLElement | null = null
-
-/**
- * Handle button click event
- * @param btn Button object
- */
-async function clickBtn(btn: { value: ButtonState }): Promise<void> {
-  // Set loading state
-  btn.value.loading = true
-
-  await sleep(200)
-
-  // Call onClick handler
-  if (await btn.value.onClick()) {
-    await forClose()
-  }
-
-  // Reset loading state
-  btn.value.loading = false
+function clickBtn(button: DialogButtonEntry): Promise<void> {
+  return runButtonAction(button)
 }
-
-/**
- * Watch for button changes and initialize button states
- */
-watchEffect(() => {
-  const array: Array<{ value: ButtonState }> = []
-
-  ;[...props.btns].forEach((btn) => {
-    // Create button state object
-    const buttonState: ButtonState = {
-      content: btn.content,
-      type: btn.type,
-      time: btn.time,
-      onClick: btn.onClick,
-      loading: false // Initialize loading as false
-    }
-
-    // Create reactive object
-    const obj = {
-      value: buttonState
-    }
-
-    // Handle loading callback
-    if (btn.loading) {
-      obj.value.loading = true
-
-      btn.loading(() => {
-        obj.value.loading = false
-      })
-    }
-
-    // Handle auto-click timer
-    if (btn.time && btn.time > 0) {
-      const _clickBtn = clickBtn
-
-      /**
-       * Refresh timer function
-       */
-      function refresh(): void {
-        setTimeout(() => {
-          if (obj.value.time && obj.value.time > 0) {
-            obj.value.time -= 1
-
-            if (obj.value.time <= 0) {
-              _clickBtn(obj)
-              return
-            }
-
-            refresh()
-          }
-        }, 1000)
-      }
-
-      refresh()
-    }
-
-    array.push(obj)
-  })
-
-  btnArray.value = array
-})
-
-/**
- * Scroll listener to prevent scrolling when dialog is open
- */
-function listener(): void {
-  window.scrollTo({
-    top: 0
-  })
-}
-
-/**
- * Lifecycle hook when component is mounted
- */
-onMounted(() => {
-  // Save the currently focused element
-  previouslyFocusedElement = document.activeElement as HTMLElement
-
-  // Set focus to the dialog
-  if (wholeDom.value) {
-    wholeDom.value.focus()
-  }
-
-  window.addEventListener('scroll', listener)
-})
-
-/**
- * Lifecycle hook when component is unmounted
- */
-onUnmounted(() => {
-  window.removeEventListener('scroll', listener)
-
-  // Restore focus to the previously focused element
-  if (previouslyFocusedElement) {
-    previouslyFocusedElement.focus()
-  }
-})
 
 /**
  * Close dialog function

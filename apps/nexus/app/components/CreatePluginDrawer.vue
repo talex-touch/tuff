@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
-import { hasWindow } from '@talex-touch/utils/env'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
 import { requestJson } from '~/utils/request'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { useDialogAutoSizer } from '~/composables/useDialogAutoSizer'
 
 interface Props {
   isOpen: boolean
@@ -74,50 +74,45 @@ const iconPreviewUrl = ref<string | null>(null)
 const packageHasIcon = ref(false)
 const iconFiles = ref<FileUploaderFile[]>([])
 const formContentRef = ref<HTMLElement | null>(null)
-const scrollAreaHeight = ref(420)
-const maxScrollableHeight = ref(620)
-let formResizeObserver: ResizeObserver | null = null
-let viewportResizeHandler: (() => void) | null = null
+const { maxScrollableHeight, scheduleMeasure, scrollAreaHeight } = useDialogAutoSizer({
+  isOpen: computed(() => props.isOpen),
+  contentRef: formContentRef,
+  minScrollableHeight: 220,
+  minViewportScrollableHeight: 280,
+  maxViewportScrollableHeight: 680,
+  reset: resetForm,
+})
 
 const PACKAGE_PREVIEW_ENDPOINT = '/api/dashboard/plugins/package/preview'
 
-watch(() => props.isOpen, async (isOpen) => {
-  if (isOpen) {
-    formData.value = {
-      slug: '',
-      name: '',
-      summary: '',
-      category: PLUGIN_CATEGORIES[0]?.id ?? '',
-      artifactType: 'plugin',
-      homepage: '',
-      isOfficial: false,
-      badges: '',
-      readme: '',
-      iconFile: null,
-      packageFile: null,
-      initialVersion: null,
-      initialChannel: null,
-      initialChangelog: null,
-    }
-    packageFile.value = null
-    packageFiles.value = []
-    packageLoading.value = false
-    packageError.value = null
-    manifestPreview.value = null
-    readmePreview.value = ''
-    iconPreviewUrl.value = null
-    packageHasIcon.value = false
-    iconFiles.value = []
-    inputMode.value = 'upload'
-    maxScrollableHeight.value = resolveMaxScrollableHeight()
-    await nextTick()
-    setupFormObserver()
-    scheduleLayoutMeasure()
-    return
+function resetForm() {
+  formData.value = {
+    slug: '',
+    name: '',
+    summary: '',
+    category: PLUGIN_CATEGORIES[0]?.id ?? '',
+    artifactType: 'plugin',
+    homepage: '',
+    isOfficial: false,
+    badges: '',
+    readme: '',
+    iconFile: null,
+    packageFile: null,
+    initialVersion: null,
+    initialChannel: null,
+    initialChangelog: null,
   }
-
-  cleanupFormObserver()
-})
+  packageFile.value = null
+  packageFiles.value = []
+  packageLoading.value = false
+  packageError.value = null
+  manifestPreview.value = null
+  readmePreview.value = ''
+  iconPreviewUrl.value = null
+  packageHasIcon.value = false
+  iconFiles.value = []
+  inputMode.value = 'upload'
+}
 
 const PLUGIN_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/
 
@@ -291,81 +286,15 @@ const scrollWrapStyle = computed(() => ({
   '--plugin-form-scroll-max-height': `${maxScrollableHeight.value}px`,
 }))
 
-function resolveMaxScrollableHeight() {
-  if (!hasWindow())
-    return 620
-
-  const viewportLimitedHeight = Math.floor(window.innerHeight * 0.68)
-  return Math.max(280, Math.min(viewportLimitedHeight, 680))
-}
-
-function scheduleLayoutMeasure() {
-  if (!props.isOpen)
-    return
-
-  nextTick(() => {
-    const contentEl = formContentRef.value
-    if (!contentEl)
-      return
-
-    const measuredHeight = Math.ceil(contentEl.scrollHeight)
-    if (measuredHeight <= 0)
-      return
-
-    const minHeight = 220
-    scrollAreaHeight.value = Math.max(minHeight, Math.min(measuredHeight, maxScrollableHeight.value))
-  })
-}
-
-function cleanupFormObserver() {
-  if (!formResizeObserver)
-    return
-
-  formResizeObserver.disconnect()
-  formResizeObserver = null
-}
-
-function setupFormObserver() {
-  cleanupFormObserver()
-  if (typeof ResizeObserver === 'undefined')
-    return
-  if (!formContentRef.value)
-    return
-
-  formResizeObserver = new ResizeObserver(() => {
-    scheduleLayoutMeasure()
-  })
-  formResizeObserver.observe(formContentRef.value)
-}
 
 watch(inputMode, () => {
-  scheduleLayoutMeasure()
+  scheduleMeasure()
 })
 
 watch([manifestPreview, packageLoading, packageError], () => {
-  scheduleLayoutMeasure()
+  scheduleMeasure()
 })
 
-onMounted(() => {
-  if (!hasWindow())
-    return
-
-  viewportResizeHandler = () => {
-    maxScrollableHeight.value = resolveMaxScrollableHeight()
-    scheduleLayoutMeasure()
-  }
-  window.addEventListener('resize', viewportResizeHandler, { passive: true })
-})
-
-onBeforeUnmount(() => {
-  cleanupFormObserver()
-  if (!hasWindow())
-    return
-  if (!viewportResizeHandler)
-    return
-  window.removeEventListener('resize', viewportResizeHandler)
-  viewportResizeHandler = null
-})
 
 function onSubmit() {
   if (!canSubmit.value)

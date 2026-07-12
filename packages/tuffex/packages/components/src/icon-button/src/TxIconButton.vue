@@ -10,7 +10,7 @@ defineOptions({
 const props = withDefaults(defineProps<{
   icon?: string
   label?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   shape?: 'square' | 'circle' | 'pill'
   pressed?: boolean
   disabled?: boolean
@@ -127,6 +127,11 @@ function handleMouseleave() {
 .tx-icon-button.is-disabled {
   cursor: not-allowed;
   opacity: 0.56;
+}
+
+.tx-icon-button--xs {
+  --tx-icon-button-size: 24px;
+  --tx-icon-button-radius: 4px;
 }
 
 .tx-icon-button--sm {

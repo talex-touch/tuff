@@ -30,6 +30,7 @@ const props = withDefaults(defineProps<TagProps>(), {
   size: 'sm',
   closable: false,
   disabled: false,
+  pill: false,
 })
 
 const emit = defineEmits<TagEmits>()
@@ -106,6 +107,7 @@ function handleClose(event: MouseEvent): void {
     :class="[
       `tx-tag--${size}`,
       {
+        pill,
         'tx-tag--closable': closable,
         'tx-tag--disabled': disabled,
       },
@@ -190,6 +192,10 @@ function handleClose(event: MouseEvent): void {
       cursor: not-allowed;
       opacity: 0.4;
     }
+  }
+
+  &.pill {
+    border-radius: 999px;
   }
 
   &--sm {
