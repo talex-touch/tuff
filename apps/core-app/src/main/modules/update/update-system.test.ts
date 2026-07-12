@@ -267,4 +267,36 @@ describe('UpdateSystem automatic installer handoff', () => {
       downloadCenter.notificationService.showUpdateDownloadCompleteNotification
     ).not.toHaveBeenCalled()
   })
+
+  it('removes the completion watcher when a download is cancelled', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const downloadCenter = createDownloadCenterMock()
+    const updateSystem = new UpdateSystem(downloadCenter as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await updateSystem.downloadUpdate({
+      tag_name: 'v2.4.10',
+      name: 'Tuff 2.4.10',
+      published_at: '2026-05-10T08:00:00.000Z',
+      body: '',
+      assets: [
+        {
+          name: 'Tuff-2.4.10-setup.exe',
+          url: 'https://example.test/Tuff-2.4.10-setup.exe',
+          size: 100,
+          platform: 'win32',
+          arch: 'x64'
+        }
+      ]
+    })
+
+    downloadCenter.task.status = DownloadStatus.CANCELLED
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(PollingService.getInstance().isRegistered('update-system.download.task-1')).toBe(false)
+    expect(
+      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
+    ).not.toHaveBeenCalled()
+  })
 })

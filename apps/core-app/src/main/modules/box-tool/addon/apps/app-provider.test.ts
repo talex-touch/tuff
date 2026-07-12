@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -13,18 +12,24 @@ import {
   getAppsBySourceMock,
   getAppsMock,
   getMainConfigMock,
-  getWatchPathsMock,
   loadSubject,
+  getWatchPathsMock,
   pinyinMock,
   removeByProviderMock,
   runMdlsUpdateScanMock,
-  shellOpenPathMock,
-  showInternalSystemNotificationMock,
-  spawnSafeMock,
+  searchRecordExecuteMock,
   upsertExtensionRows,
   withPlatform
 } from './app-provider-test-harness'
 import { buildAppExtensions } from './app-index-metadata'
+
+const { scheduleAppLaunchMock } = vi.hoisted(() => ({
+  scheduleAppLaunchMock: vi.fn()
+}))
+
+vi.mock('./app-launcher', () => ({
+  scheduleAppLaunch: scheduleAppLaunchMock
+}))
 
 type TestFileRow = {
   id: number
@@ -60,11 +65,21 @@ function executeItem(overrides: Partial<TuffItem>): TuffItem {
   } as TuffItem
 }
 
-type TestAppSearchRow = TestFileRow & {
-  ctime: Date
-  extensions: Record<string, string>
+type TestAppSearchRow = {
+  id: number
+  path: string
+  name: string
+  displayName: string | null
+  extension: string | null
+  size: number | null
   mtime: Date
-  type: 'app'
+  ctime: Date
+  lastIndexedAt: Date
+  isDir: boolean
+  type: string
+  content: string | null
+  embeddingStatus: 'none' | 'pending' | 'completed'
+  extensions: Record<string, string | null>
 }
 
 function createAppSearchRow(id: number, appPath: string, name: string): TestAppSearchRow {
@@ -73,9 +88,15 @@ function createAppSearchRow(id: number, appPath: string, name: string): TestAppS
     path: appPath,
     name,
     displayName: name,
-    type: 'app',
+    extension: null,
+    size: null,
     mtime: new Date(0),
     ctime: new Date(0),
+    lastIndexedAt: new Date(0),
+    isDir: false,
+    type: 'app',
+    content: null,
+    embeddingStatus: 'none',
     extensions: {
       appIdentity: appPath,
       launchKind: 'path',
@@ -148,7 +169,6 @@ describe('appProvider rebuild maintenance', () => {
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
     getAppsBySourceMock.mockResolvedValue(null)
-    spawnSafeMock.mockReturnValue({ unref: vi.fn() })
     runMdlsUpdateScanMock.mockResolvedValue({
       updatedApps: [],
       updatedCount: 0,
@@ -593,129 +613,36 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
-  it('returns immediately while path launch is still pending in the background', async () => {
+  it('records a session-scoped usage event before handing the app to the launch boundary', async () => {
     const { appProvider } = await loadSubject()
-    const launchDeferred = createDeferred<string>()
-    shellOpenPathMock.mockReturnValueOnce(launchDeferred.promise)
-
-    await appProvider.onExecute({
-      item: executeItem({
-        id: 'path-app',
-        render: { mode: 'default', basic: { title: 'Slow App' } },
-        meta: {
-          app: {
-            path: '/Applications/Slow.app',
-            launchKind: 'path',
-            launchTarget: '/Applications/Slow.app'
-          }
+    searchRecordExecuteMock.mockResolvedValueOnce(undefined)
+    const item = executeItem({
+      id: 'recorded-app',
+      render: { mode: 'default', basic: { title: 'Recorded App' } },
+      meta: {
+        app: {
+          path: '/Applications/Recorded.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/Recorded.app'
         }
-      })
-    } satisfies IExecuteArgs)
-
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
-
-    await flushPromises()
-
-    expect(shellOpenPathMock).toHaveBeenCalledWith('/Applications/Slow.app')
-    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
-
-    launchDeferred.resolve('')
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
-  })
-
-  it('notifies when a background path launch fails', async () => {
-    const { appProvider } = await loadSubject()
-    shellOpenPathMock.mockResolvedValueOnce('access denied')
-
-    await appProvider.onExecute({
-      item: executeItem({
-        id: 'path-app-failed',
-        render: { mode: 'default', basic: { title: 'Blocked App' } },
-        meta: {
-          app: {
-            path: '/Applications/Blocked.app',
-            launchKind: 'path',
-            launchTarget: '/Applications/Blocked.app'
-          }
-        }
-      })
-    } satisfies IExecuteArgs)
-
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'App Launch Failed',
-        message: 'Failed to launch Blocked App\naccess denied',
-        level: 'error'
-      })
-    )
-  })
-
-  it('notifies when shortcut spawn fails before handoff', async () => {
-    const { appProvider } = await loadSubject()
-    spawnSafeMock.mockImplementationOnce(() => {
-      throw new Error('spawn failed')
+      }
     })
 
     await appProvider.onExecute({
-      item: executeItem({
-        id: 'shortcut-app-failed',
-        render: { mode: 'default', basic: { title: 'Shortcut App' } },
-        meta: {
-          app: {
-            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
-            launchKind: 'shortcut',
-            launchTarget: 'C:\\Program Files\\Foo\\Foo.exe'
-          }
-        }
-      })
-    } satisfies IExecuteArgs)
+      item,
+      searchResult: { sessionId: 'search-session-42' }
+    } as IExecuteArgs)
 
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'App Launch Failed',
-        message: 'Failed to launch Shortcut App\nspawn failed',
-        level: 'error'
-      })
-    )
-  })
-
-  it('notifies when shortcut exits non-zero before handoff', async () => {
-    const { appProvider } = await loadSubject()
-    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
-    child.unref = vi.fn()
-    spawnSafeMock.mockReturnValueOnce(child)
-
-    await appProvider.onExecute({
-      item: executeItem({
-        id: 'shortcut-app-exit',
-        render: { mode: 'default', basic: { title: 'Crashing Shortcut' } },
-        meta: {
-          app: {
-            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Crash.lnk',
-            launchKind: 'shortcut',
-            launchTarget: 'C:\\Program Files\\Crash\\Crash.exe'
-          }
-        }
-      })
-    } satisfies IExecuteArgs)
-
-    await flushPromises()
-    child.emit('exit', 1, null)
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'App Launch Failed',
-        message: 'Failed to launch Crashing Shortcut\nprocess exited early with code 1',
-        level: 'error'
-      })
-    )
+    expect(searchRecordExecuteMock).toHaveBeenCalledWith('search-session-42', item)
+    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+      name: 'Recorded App',
+      path: '/Applications/Recorded.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/Recorded.app',
+      launchArgs: undefined,
+      workingDirectory: undefined,
+      sourceItemId: 'recorded-app'
+    })
   })
 
   it('rebuild only clears app records and preserves file records', async () => {
@@ -935,7 +862,7 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
-  it('launches shortcut apps with spawn and preserved args', async () => {
+  it('hands shortcut launch arguments to the app-launch adapter boundary', async () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
@@ -953,28 +880,18 @@ describe('appProvider rebuild maintenance', () => {
       })
     } satisfies IExecuteArgs)
 
-    await flushPromises()
-
-    expect(spawnSafeMock).toHaveBeenCalledWith(
-      'C:\\Program Files\\Foo\\Foo.exe',
-      ['--profile', 'work', '--flag'],
-      {
-        cwd: 'C:\\Program Files\\Foo',
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      }
-    )
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
+    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+      name: 'Test App',
+      path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+      launchKind: 'shortcut',
+      launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+      launchArgs: '--profile work --flag',
+      workingDirectory: 'C:\\Program Files\\Foo',
+      sourceItemId: 'shortcut-app'
+    })
   })
 
-  it('launches Windows Store apps through explorer shell handoff', async () => {
-    const child = {
-      once: vi.fn(),
-      removeListener: vi.fn(),
-      unref: vi.fn()
-    }
-    spawnSafeMock.mockReturnValue(child)
+  it('hands normalized Windows Store identity to the app-launch adapter', async () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
@@ -990,19 +907,15 @@ describe('appProvider rebuild maintenance', () => {
       })
     } satisfies IExecuteArgs)
 
-    await flushPromises()
-
-    expect(spawnSafeMock).toHaveBeenCalledWith(
-      'explorer.exe',
-      ['shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'],
-      {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      }
-    )
-    expect(child.once).not.toHaveBeenCalled()
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
+    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+      name: 'Test App',
+      path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      launchKind: 'uwp',
+      launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      launchArgs: undefined,
+      workingDirectory: undefined,
+      sourceItemId: 'uwp-app'
+    })
   })
 
   it('persists and restores app description through extensions', async () => {
@@ -1536,7 +1449,7 @@ describe('appProvider rebuild maintenance', () => {
     const ftsSearchMock = vi.fn(async () => [])
     const ngramMock = vi.fn(async () => [])
     const subsequenceMock = vi.fn(async () => [])
-    const fetchExtensionsForFilesMock = vi.fn(async (apps: TestAppSearchRow[]) => apps)
+    const fetchExtensionsForFilesMock = vi.fn(async (apps: unknown[]) => apps as TestAppSearchRow[])
 
     privateProvider.dbUtils = { getDb: () => db }
     privateProvider.fetchExtensionsForFiles = fetchExtensionsForFilesMock

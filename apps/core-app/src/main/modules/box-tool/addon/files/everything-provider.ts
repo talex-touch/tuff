@@ -10,10 +10,9 @@ import type {
 } from '@talex-touch/utils'
 import type { FileSearchContextCandidate } from '@talex-touch/utils/transport/events/types/core-box'
 import type { ProviderContext } from '../../search-engine/types'
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
@@ -53,7 +52,6 @@ import { appTaskGate } from '../../../../service/app-task-gate'
 import { searchLogger } from '../../search-engine/search-logger'
 import { EverythingDiagnosticsTracker, toEverythingResultSample } from './everything-diagnostics'
 import {
-  createAbortPromise,
   EverythingSearchFallbackError,
   getErrorCode,
   getErrorMessage,
@@ -63,21 +61,20 @@ import {
   throwIfAborted
 } from './everything-errors'
 import { EverythingIconCache } from './everything-icon-cache'
+import { buildEverythingQuery, type EverythingSearchResult } from './everything-parser'
+import { EverythingBackendService, type EverythingSdkAddon } from './everything-backend-service'
+import { EverythingInstallService } from './everything-install-service'
 import { fileProvider } from './file-provider'
 import { expandWindowsEnvironmentVariables } from '../apps/app-provider-path-utils'
 import { mapFileToTuffItem } from './utils'
 
 const execFileAsync = promisify(execFile)
-const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
 const EVERYTHING_ICON_WARMUP_LIMIT = 12
 const EVERYTHING_STARTUP_READY_WAIT_MS = 3_000
-const EVERYTHING_CLI_IPC_RETRY_WAIT_MS = 1_200
-const EVERYTHING_PORTABLE_RESTART_WAIT_MS = 1_500
 const EVERYTHING_CLI_EMPTY_DB_THRESHOLD = 1
 const EVERYTHING_INSTALL_POLL_MS = 500
 const EVERYTHING_INSTALL_SOURCE = 'everything-install'
-const EVERYTHING_PORTABLE_CONFIG_NAME = 'Everything.ini'
 
 type EverythingInstallAssetType = 'everything' | 'cli'
 
@@ -144,26 +141,6 @@ function uniqueCandidates(candidates: Array<string | null | undefined>): string[
   return unique
 }
 
-function usesWindowsSeparators(filePath: string): boolean {
-  return filePath.includes('\\')
-}
-
-function basenameForResult(filePath: string): string {
-  return usesWindowsSeparators(filePath) ? path.win32.basename(filePath) : path.basename(filePath)
-}
-
-function extnameForResult(filePath: string): string {
-  return usesWindowsSeparators(filePath) ? path.win32.extname(filePath) : path.extname(filePath)
-}
-
-function joinForResult(dirPath: string, name: string): string {
-  return usesWindowsSeparators(dirPath) ? path.win32.join(dirPath, name) : path.join(dirPath, name)
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 function resolveWindowsNativeArch(): 'x64' | 'x86' | 'ARM64' {
   const nativeArch = process.env.PROCESSOR_ARCHITEW6432 || process.env.PROCESSOR_ARCHITECTURE
   if (nativeArch === 'ARM64') return 'ARM64'
@@ -202,28 +179,7 @@ function buildEverythingInstallAssets(): EverythingInstallAssetSpec[] {
   ]
 }
 
-interface EverythingSearchResult {
-  path: string
-  name: string
-  extension: string
-  size: number
-  mtime: Date
-  ctime: Date
-  isDir: boolean
-}
-
-interface EverythingSdkAddon {
-  search?: (query: string, options?: { maxResults?: number }) => unknown
-  query?: (query: string, options?: { maxResults?: number }) => unknown
-  getVersion?: () => string
-}
-
 const EVERYTHING_TEST_QUERY = '*.txt'
-
-type WindowsRegistryPathRecord = {
-  Path?: string
-  path?: string
-}
 
 type EverythingFileSearchMeta = TuffMeta & {
   fileSearchContext?: FileSearchContextCandidate
@@ -280,6 +236,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private readonly diagnosticsTracker = new EverythingDiagnosticsTracker()
   private readonly iconCache = new EverythingIconCache()
   private installJob: EverythingInstallJobState | null = null
+  private readonly backendService = new EverythingBackendService()
+  private readonly installService = new EverythingInstallService()
   readonly iconExtractions = { clear: () => this.iconCache.clear() }
 
   get diagnostics() {
@@ -436,39 +394,6 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     ])
   }
 
-  private async findExistingPath(candidates: string[]): Promise<string | null> {
-    for (const candidate of candidates) {
-      if (candidate.toLowerCase() === 'es.exe') continue
-      try {
-        await fs.access(candidate)
-        return candidate
-      } catch {
-        const resolvedCaseInsensitive = await this.findCaseInsensitiveWindowsPath(candidate)
-        if (resolvedCaseInsensitive) {
-          return resolvedCaseInsensitive
-        }
-      }
-    }
-
-    return null
-  }
-
-  private async findCaseInsensitiveWindowsPath(candidate: string): Promise<string | null> {
-    if (process.platform !== 'win32') return null
-
-    const dir = path.win32.dirname(candidate)
-    const filename = path.win32.basename(candidate).toLowerCase()
-    if (!dir || !filename || dir === candidate) return null
-
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-      const matched = entries.find((entry) => entry.name.toLowerCase() === filename)
-      return matched ? path.win32.join(dir, matched.name) : null
-    } catch {
-      return null
-    }
-  }
-
   private async isEverythingProcessRunning(): Promise<boolean | null> {
     try {
       const { stdout } = await execFileAsync(
@@ -529,7 +454,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
 
     const [appPath, processRunning, serviceStatus] = await Promise.all([
-      this.findExistingPath(EVERYTHING_APP_CANDIDATES),
+      this.installService.findExistingPath(EVERYTHING_APP_CANDIDATES),
       this.isEverythingProcessRunning(),
       this.getEverythingServiceStatus()
     ])
@@ -743,120 +668,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     return trimmed || null
   }
 
-  private resolveInstallPaths(): {
-    downloadDir: string
-    installDir: string
-    cliDir: string
-    cliPath: string
-    everythingExe: string
-    configPath: string
-  } {
-    const localAppData =
-      process.env.LOCALAPPDATA ||
-      (process.env.USERPROFILE
-        ? path.join(process.env.USERPROFILE, 'AppData', 'Local')
-        : process.cwd())
-    const root = path.join(localAppData, 'Tuff')
-    const cliDir = path.join(root, 'EverythingCLI')
-    const installDir = path.join(root, 'Everything')
-
-    return {
-      downloadDir: path.join(root, 'Downloads', 'dependencies', 'everything'),
-      installDir,
-      cliDir,
-      cliPath: path.join(cliDir, 'es.exe'),
-      everythingExe: path.join(installDir, 'Everything.exe'),
-      configPath: path.join(installDir, EVERYTHING_PORTABLE_CONFIG_NAME)
-    }
-  }
-
-  private getPortableEverythingConfigPath(everythingExe: string): string {
-    return path.join(path.win32.dirname(everythingExe), EVERYTHING_PORTABLE_CONFIG_NAME)
-  }
-
-  private normalizePortableFolderIndexRoot(root: string): string | null {
-    const trimmed = root.trim()
-    if (!trimmed) return null
-    const normalized = path.win32.normalize(trimmed).replace(/[\\/]+$/, '')
-    return normalized || null
-  }
-
-  private getDefaultPortableFolderIndexRoots(): string[] {
-    const roots: string[] = []
-    const homeDir = process.env.USERPROFILE || process.env.HOME
-    if (homeDir) {
-      roots.push(path.win32.join(homeDir, 'Desktop'))
-      roots.push(path.win32.join(homeDir, 'Documents'))
-      roots.push(path.win32.join(homeDir, 'Downloads'))
-    }
-
-    const seen = new Set<string>()
-    return roots
-      .map((root) => this.normalizePortableFolderIndexRoot(root))
-      .filter((root): root is string => Boolean(root))
-      .filter((root) => {
-        const key = root.toLowerCase()
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-  }
-
-  private buildPortableEverythingConfig(folderRoots: string[]): string {
-    const folders = folderRoots.join(',')
-    const values = folderRoots.map(() => '1').join(',')
-    const bufferSizes = folderRoots.map(() => '65536').join(',')
-    const zeros = folderRoots.map(() => '0').join(',')
-
-    return [
-      '[Everything]',
-      'app_data=0',
-      'run_as_admin=0',
-      'allow_multiple_instances=0',
-      'run_in_background=1',
-      'show_tray_icon=0',
-      'check_for_updates_on_startup=0',
-      'ipc=1',
-      'auto_include_fixed_volumes=0',
-      'auto_include_removable_volumes=0',
-      'auto_include_fixed_refs_volumes=0',
-      'auto_include_removable_refs_volumes=0',
-      `folders=${folders}`,
-      `folder_monitor_changes=${values}`,
-      `folder_buffer_size_list=${bufferSizes}`,
-      `folder_rescan_if_full_list=${values}`,
-      `folder_update_types=${zeros}`,
-      `folder_update_days=${zeros}`,
-      `folder_update_ats=${zeros}`,
-      `folder_update_intervals=${zeros}`,
-      `folder_update_interval_types=${zeros}`,
-      'index_size=1',
-      'index_date_modified=1',
-      'index_date_created=1',
-      'fast_path_sort=1',
-      'exclude_folders="?:\\\\$Recycle.Bin","C:\\\\Windows\\\\Prefetch"',
-      ''
-    ].join('\n')
-  }
-
-  private async writePortableEverythingConfig(configPath: string): Promise<string[]> {
-    const roots = this.getDefaultPortableFolderIndexRoots()
-    if (roots.length === 0) {
-      throw new Error('No local folder roots are available for portable Everything indexing')
-    }
-
-    await fs.mkdir(path.win32.dirname(configPath), { recursive: true })
-    await fs.writeFile(configPath, this.buildPortableEverythingConfig(roots), 'utf8')
-    return roots
-  }
-
   private getDownloadCenter(): DownloadCenterRuntime {
     return downloadCenterModule
   }
 
   private createInstallAssetDetails(
     assets: EverythingInstallAssetSpec[],
-    paths = this.resolveInstallPaths()
+    paths = this.installService.resolvePaths()
   ): EverythingInstallAssetDetail[] {
     return assets.map((asset) => ({
       type: asset.type,
@@ -870,7 +688,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private createInstallJob(): EverythingInstallJobState {
     const now = Date.now()
-    const paths = this.resolveInstallPaths()
+    const paths = this.installService.resolvePaths()
     const assets = this.createInstallAssetDetails(buildEverythingInstallAssets(), paths)
 
     return {
@@ -895,7 +713,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   private createIdleInstallStatus(): EverythingInstallStatusResponse {
-    const paths = this.resolveInstallPaths()
+    const paths = this.installService.resolvePaths()
     return {
       jobId: null,
       phase: process.platform === 'win32' ? 'idle' : 'unsupported',
@@ -1015,7 +833,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async runEverythingInstallJob(job: EverythingInstallJobState): Promise<void> {
-    const paths = this.resolveInstallPaths()
+    const paths = this.installService.resolvePaths()
     const downloadCenter = this.getDownloadCenter()
 
     await fs.mkdir(paths.downloadDir, { recursive: true })
@@ -1080,14 +898,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       progress: 86,
       message: 'Verifying es.exe.'
     })
-    await this.probeEverythingCli(paths.cliPath)
+    await this.backendService.probeCli(paths.cliPath)
 
     this.updateInstallJob(job, {
       phase: 'configuring-path',
       progress: 88,
       message: 'Configuring Everything CLI path.'
     })
-    await this.ensureUserPathContains(paths.cliDir)
+    await this.installService.ensureUserPathContains(paths.cliDir)
     job.pathConfigured = true
 
     this.updateInstallJob(job, {
@@ -1097,13 +915,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     })
     this.configuredCliPath = paths.cliPath
     this.saveSettings()
-    await this.writePortableEverythingConfig(paths.configPath)
+    await this.installService.writePortableConfig(paths.configPath)
     const installedEverythingExe =
-      (await this.findExistingPath([
+      (await this.installService.findExistingPath([
         paths.everythingExe,
         path.join(paths.installDir, 'everything.exe')
       ])) || paths.everythingExe
-    await this.startEverythingPortableAndWait(installedEverythingExe)
+    await this.installService.startPortableAndWait(installedEverythingExe)
 
     if (this.isEnabled) {
       await this.refreshBackendState('manual-check')
@@ -1172,128 +990,12 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private async verifyInstallAssets(job: EverythingInstallJobState): Promise<void> {
     for (const asset of job.assets) {
       const filePath = path.join(asset.destination, asset.filename)
-      const actualHash = await this.calculateFileSha256(filePath)
+      const actualHash = await this.installService.calculateSha256(filePath)
       if (actualHash.toLowerCase() !== asset.sha256.toLowerCase()) {
         throw new Error(
           `Checksum mismatch for ${asset.filename}: expected ${asset.sha256}, got ${actualHash}`
         )
       }
-    }
-  }
-
-  private async calculateFileSha256(filePath: string): Promise<string> {
-    const buffer = await fs.readFile(filePath)
-    return createHash('sha256').update(buffer).digest('hex')
-  }
-
-  private async ensureUserPathContains(cliDir: string): Promise<void> {
-    const script = [
-      "$ErrorActionPreference='Stop'",
-      '$cliDir=$env:TUFF_EVERYTHING_CLI_DIR',
-      "if(-not $cliDir){throw 'Missing Everything CLI directory'}",
-      "$userPath=[Environment]::GetEnvironmentVariable('Path','User')",
-      '$parts=@()',
-      "if($userPath){$parts=$userPath -split ';' | Where-Object { $_ -and $_.Trim() }}",
-      '$normalizedCli=$cliDir.Trim().TrimEnd("\\")',
-      '$already=$false',
-      'foreach($part in $parts){',
-      '  if([string]::Equals($part.Trim().TrimEnd("\\"), $normalizedCli, [System.StringComparison]::OrdinalIgnoreCase)){',
-      '    $already=$true',
-      '    break',
-      '  }',
-      '}',
-      'if(-not $already){',
-      "  [Environment]::SetEnvironmentVariable('Path', (($parts + $cliDir) -join ';'), 'User')",
-      '}',
-      "if($already){'already'}else{'added'}"
-    ].join('\n')
-
-    await execFileAsync(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      {
-        timeout: 5000,
-        windowsHide: true,
-        env: {
-          ...process.env,
-          TUFF_EVERYTHING_CLI_DIR: cliDir
-        }
-      }
-    )
-
-    const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'Path'
-    const currentPath = process.env[pathKey] || ''
-    const currentParts = currentPath.split(';').filter(Boolean)
-    const hasCliDir = currentParts.some((part) => {
-      return (
-        part
-          .trim()
-          .replace(/[\\/]+$/, '')
-          .toLowerCase() ===
-        cliDir
-          .trim()
-          .replace(/[\\/]+$/, '')
-          .toLowerCase()
-      )
-    })
-    if (!hasCliDir) {
-      process.env[pathKey] = [...currentParts, cliDir].join(';')
-    }
-  }
-
-  private isManagedPortableEverythingAppPath(everythingExe: string): boolean {
-    const paths = this.resolveInstallPaths()
-    const normalizedExe = this.normalizeWindowsPathForFilter(everythingExe)
-    return [paths.everythingExe, path.join(paths.installDir, 'everything.exe')].some(
-      (candidate) => normalizedExe === this.normalizeWindowsPathForFilter(candidate)
-    )
-  }
-
-  private launchEverythingPortable(
-    everythingExe: string,
-    warningMessage: string,
-    onError?: (error: Error) => void
-  ): ChildProcess {
-    const args = this.isManagedPortableEverythingAppPath(everythingExe)
-      ? ['-config', this.getPortableEverythingConfigPath(everythingExe), '-startup']
-      : ['-startup']
-    const child = spawn(everythingExe, args, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-      cwd: path.win32.dirname(everythingExe)
-    })
-    child.once('error', (error) => {
-      onError?.(error)
-      this.logWarn(warningMessage, error, { everythingExe })
-    })
-    child.unref()
-    return child
-  }
-
-  private startEverythingPortable(everythingExe: string): void {
-    try {
-      this.launchEverythingPortable(
-        everythingExe,
-        'Failed to start Everything portable after install'
-      )
-    } catch (error) {
-      this.logWarn('Failed to start Everything portable after install', error, { everythingExe })
-    }
-  }
-
-  private async startEverythingPortableAndWait(everythingExe: string): Promise<void> {
-    let launchError: Error | null = null
-    this.launchEverythingPortable(
-      everythingExe,
-      'Everything startup command returned an error',
-      (error) => {
-        launchError = error
-      }
-    )
-    await delay(EVERYTHING_CLI_IPC_RETRY_WAIT_MS)
-    if (launchError) {
-      throw launchError
     }
   }
 
@@ -1305,13 +1007,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return true
     }
 
-    const appPath = await this.findExistingPath(EVERYTHING_APP_CANDIDATES)
+    const appPath = await this.installService.findExistingPath(EVERYTHING_APP_CANDIDATES)
     if (!appPath) {
       return false
     }
 
     try {
-      await this.startEverythingPortableAndWait(appPath)
+      await this.installService.startPortableAndWait(appPath)
       await this.refreshInstallationStatusSafe()
       this.logInfo('Started Everything app for CLI IPC search', { appPath })
       return true
@@ -1323,7 +1025,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private isManagedPortableCliPath(esPath: string | null): boolean {
     if (!esPath) return false
-    const paths = this.resolveInstallPaths()
+    const paths = this.installService.resolvePaths()
     return (
       this.normalizeWindowsPathForFilter(esPath) ===
       this.normalizeWindowsPathForFilter(paths.cliPath)
@@ -1335,7 +1037,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     if (this.portableIndexRepairAttempted) return false
     if (!this.isManagedPortableCliPath(this.esPath)) return false
 
-    if (await this.isPortableEverythingConfigStale()) {
+    if (await this.installService.isPortableConfigStale()) {
       return true
     }
 
@@ -1357,102 +1059,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async isPortableEverythingConfigStale(): Promise<boolean> {
-    const paths = this.resolveInstallPaths()
-    let content: string
-
-    try {
-      content = String(await fs.readFile(paths.configPath, 'utf8'))
-    } catch {
-      return true
-    }
-
-    const foldersLine = content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find((line) => line.toLowerCase().startsWith('folders='))
-
-    if (!foldersLine || /^folders="/i.test(foldersLine)) {
-      return true
-    }
-
-    const configuredRoots = foldersLine
-      .slice(foldersLine.indexOf('=') + 1)
-      .split(',')
-      .map((root) => this.normalizePortableFolderIndexRoot(root))
-      .filter((root): root is string => Boolean(root))
-
-    const configuredRootSet = new Set(configuredRoots.map((root) => root.toLowerCase()))
-    return this.getDefaultPortableFolderIndexRoots().some((root) => {
-      return !configuredRootSet.has(root.toLowerCase())
-    })
-  }
-
   private async repairPortableEverythingIndexForCli(signal?: AbortSignal): Promise<boolean> {
     this.portableIndexRepairAttempted = true
-    const paths = this.resolveInstallPaths()
-
-    try {
-      const appPath = await this.findExistingPath([paths.everythingExe])
-      if (!appPath) return false
-
-      const configPath = this.getPortableEverythingConfigPath(appPath)
-      const roots = await this.writePortableEverythingConfig(configPath)
-      await this.stopPortableEverything(appPath)
-      this.startEverythingPortable(appPath)
-      await delay(EVERYTHING_PORTABLE_RESTART_WAIT_MS)
-
-      await execFileAsync(appPath, ['-config', configPath, '-rescan-all'], {
-        timeout: 10_000,
-        signal,
-        windowsHide: true
-      }).catch((error) => {
-        this.logDebug('Everything portable folder rescan command failed', {
-          error: getErrorMessage(error)
-        })
-      })
-      await delay(EVERYTHING_CLI_IPC_RETRY_WAIT_MS)
-      this.logInfo('Repaired portable Everything folder index configuration', {
-        rootCount: roots.length
-      })
-      return true
-    } catch (error) {
-      this.logWarn('Failed to repair portable Everything folder index configuration', error)
-      return false
-    }
-  }
-
-  private async stopPortableEverything(everythingExe: string): Promise<void> {
-    const normalizedExe = this.normalizeWindowsPathForFilter(everythingExe)
-    try {
-      await execFileAsync(
-        'powershell',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          [
-            '$ErrorActionPreference = "SilentlyContinue"',
-            '$target = $env:TUFF_EVERYTHING_EXE',
-            'Get-Process -Name Everything,everything | Where-Object {',
-            '  try { [string]::Equals($_.Path, $target, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }',
-            '} | Stop-Process -Force'
-          ].join('\n')
-        ],
-        {
-          timeout: 3000,
-          windowsHide: true,
-          env: {
-            ...process.env,
-            TUFF_EVERYTHING_EXE: normalizedExe
-          }
-        }
-      )
-    } catch (error) {
-      this.logDebug('Stopping portable Everything process failed', {
-        error: getErrorMessage(error)
-      })
-    }
+    return await this.installService.repairPortableIndex({
+      signal,
+      findExistingPath: (candidates) => this.installService.findExistingPath(candidates),
+      onDebug: (message, meta) => this.logDebug(message, meta),
+      onInfo: (message, meta) => this.logInfo(message, meta)
+    })
   }
 
   private getHealthStatus(): {
@@ -1602,7 +1216,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       }
 
       if (nextCliPath) {
-        await this.probeEverythingCli(nextCliPath)
+        await this.backendService.probeCli(nextCliPath)
       }
 
       this.configuredCliPath = nextCliPath
@@ -1697,17 +1311,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private async tryInitializeSdkBackend(): Promise<boolean> {
     const startedAt = performance.now()
-    const envPath = process.env.TALEX_EVERYTHING_SDK_PATH?.trim()
-    const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
-    const candidates = [
-      envPath,
-      resourcesPath ? path.join(resourcesPath, 'native', 'everything.node') : null,
-      resourcesPath ? path.join(resourcesPath, 'everything', 'everything.node') : null,
-      path.join(process.cwd(), 'resources', 'native', 'everything.node'),
-      path.join(process.cwd(), 'resources', 'everything.node'),
-      '@talex-touch/tuff-native/everything',
-      '@talex-touch/everything-sdk'
-    ].filter((candidate): candidate is string => Boolean(candidate))
+    const candidates = this.backendService.sdkCandidates()
 
     for (const candidate of candidates) {
       const addon = await this.loadSdkAddon(candidate)
@@ -1768,36 +1372,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async loadSdkAddon(candidate: string): Promise<EverythingSdkAddon | null> {
-    const isPathLike =
-      candidate.includes('\\') || candidate.includes('/') || candidate.endsWith('.node')
-
-    if (isPathLike) {
-      try {
-        await fs.access(candidate)
-      } catch {
-        return null
-      }
+    const addon = await this.backendService.loadSdkAddon(candidate)
+    if (!addon) {
+      this.backendAttemptErrors[candidate] = 'Unable to load Everything SDK candidate'
     }
-
-    try {
-      const loaded = requireFromCurrentModule(candidate) as unknown
-      if (isRecord(loaded) && isRecord(loaded.default)) {
-        return loaded.default as unknown as EverythingSdkAddon
-      }
-      if (isRecord(loaded)) {
-        return loaded as EverythingSdkAddon
-      }
-      return null
-    } catch (error) {
-      this.lastBackendError = getErrorMessage(error)
-      this.lastBackendErrorCode = getErrorCode(error) ?? null
-      this.backendAttemptErrors[candidate] = this.lastBackendError
-      this.logDebug('Everything SDK candidate load failed', {
-        candidate,
-        error: getErrorMessage(error)
-      })
-      return null
-    }
+    return addon
   }
 
   private async tryInitializeCliBackend(): Promise<boolean> {
@@ -1836,38 +1415,20 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
    * Detect Everything Command-line Interface (es.exe)
    */
   private async detectEverything(): Promise<void> {
-    const configuredPath = this.configuredCliPath?.trim()
-    if (configuredPath) {
-      const configuredResolved = await this.tryProbeEverythingCli(configuredPath)
-      if (configuredResolved) return
-    }
-
-    const candidates = await this.getCliCandidates()
-
-    for (const esPath of candidates) {
-      const resolved = await this.tryProbeEverythingCli(esPath)
-      if (resolved) return
-    }
-
-    throw new Error(
-      'Everything Command-line Interface (es.exe) not found. Install Everything manually, then install or select es.exe from the Everything CLI package.'
-    )
-  }
-
-  private async tryProbeEverythingCli(esPath: string): Promise<boolean> {
-    try {
-      const { version } = await this.probeEverythingCli(esPath)
-      this.esPath = esPath
-      this.everythingVersion = version
-      this.logInfo('Found Everything CLI', {
-        path: esPath,
-        version: this.everythingVersion
-      })
-      return true
-    } catch (error) {
-      this.backendAttemptErrors[esPath] = getErrorMessage(error)
-      return false
-    }
+    const discovered = await this.backendService.discoverCli({
+      configuredPath: this.configuredCliPath?.trim() || null,
+      candidates: () => this.getCliCandidates(),
+      probe: (candidate) => this.backendService.probeCli(candidate),
+      onCandidateFailure: (candidate, error) => {
+        this.backendAttemptErrors[candidate] = getErrorMessage(error)
+      }
+    })
+    this.esPath = discovered.path
+    this.everythingVersion = discovered.version
+    this.logInfo('Found Everything CLI', {
+      path: discovered.path,
+      version: discovered.version
+    })
   }
 
   private dedupeCliCandidates(candidates: string[]): string[] {
@@ -1889,7 +1450,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   ): Promise<string[]> {
     if (process.platform !== 'win32') return []
 
-    const pathValues = await this.readWindowsRegistryPathValues()
+    const pathValues = await this.backendService.readRegistryPathValues((error) => {
+      this.backendAttemptErrors['registry:PATH'] = getErrorMessage(error)
+      this.logWarn('Failed to read Windows PATH registry entries', error)
+    })
     const candidates: string[] = []
 
     for (const pathValue of pathValues) {
@@ -1901,82 +1465,6 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
 
     return this.dedupeCliCandidates(candidates)
-  }
-
-  private async readWindowsRegistryPathValues(): Promise<string[]> {
-    try {
-      const script = [
-        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-        '$values = @()',
-        "$machine = (Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
-        "$user = (Get-ItemProperty -Path 'HKCU:\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
-        'foreach ($value in @($machine, $user)) {',
-        '  if ($value) { $values += [PSCustomObject]@{ Path = [string]$value } }',
-        '}',
-        '$values | ConvertTo-Json -Compress'
-      ].join('\n')
-
-      const { stdout } = await execFileAsync(
-        'powershell',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-        { timeout: 3000, windowsHide: true }
-      )
-      const raw = stdout.trim()
-      if (!raw) return []
-
-      const parsed = JSON.parse(raw) as WindowsRegistryPathRecord | WindowsRegistryPathRecord[]
-      const records = Array.isArray(parsed) ? parsed : [parsed]
-      return records
-        .map((record) => record.Path || record.path || '')
-        .filter((value): value is string => value.trim().length > 0)
-    } catch (error) {
-      this.backendAttemptErrors['registry:PATH'] = getErrorMessage(error)
-      this.logWarn('Failed to read Windows PATH registry entries', error)
-      return []
-    }
-  }
-
-  private async probeEverythingCli(esPath: string): Promise<{ version: string | null }> {
-    const output = await this.readEverythingCliVersion(esPath)
-    const version = this.parseVersion(output)
-
-    if (!this.isEverythingCliProbeOutput(esPath, output, version)) {
-      throw new Error('Selected file is not Everything CLI (es.exe)')
-    }
-
-    return { version }
-  }
-
-  private async readEverythingCliVersion(esPath: string): Promise<string> {
-    const result = await execFileAsync(esPath, ['-version'], {
-      timeout: 3000,
-      windowsHide: true
-    })
-
-    return this.normalizeExecFileOutput(result)
-  }
-
-  private normalizeExecFileOutput(result: unknown): string {
-    if (typeof result === 'string') return result
-    if (!isRecord(result)) return ''
-
-    const stdout = typeof result.stdout === 'string' ? result.stdout : ''
-    const stderr = typeof result.stderr === 'string' ? result.stderr : ''
-    return [stdout, stderr].filter(Boolean).join('\n')
-  }
-
-  private isEverythingCliProbeOutput(
-    esPath: string,
-    output: string,
-    version: string | null
-  ): boolean {
-    if (path.basename(esPath).toLowerCase() !== 'es.exe') return false
-    return Boolean(version) || /\bES\b/i.test(output) || /Everything/i.test(output)
-  }
-
-  private parseVersion(versionOutput: string): string | null {
-    const match = versionOutput.match(/(\d+\.)+\d+/)
-    return match ? match[0] : null
   }
 
   /**
@@ -2038,23 +1526,22 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     throwIfAborted(signal)
 
     const searchStart = performance.now()
-    const searchFn = this.sdkAddon.search ?? this.sdkAddon.query
-
-    if (typeof searchFn !== 'function') {
-      throw new TypeError('Everything SDK search method is not available')
-    }
-
-    let rawResults: unknown
     try {
-      const searchPromise = Promise.resolve(
-        searchFn.call(this.sdkAddon, query, {
-          maxResults
-        })
-      )
-      const abortPromise = createAbortPromise<unknown>(signal)
-      rawResults = await (abortPromise
-        ? Promise.race([searchPromise, abortPromise])
-        : searchPromise)
+      const results = await this.backendService.searchSdk(this.sdkAddon, query, maxResults, signal)
+      throwIfAborted(signal)
+      this.diagnosticsTracker.record({
+        stage: 'sdk-query',
+        status: 'success',
+        backend: 'sdk-napi',
+        startedAt: searchStart,
+        target: query
+      })
+      this.logDebug('Everything SDK search completed', {
+        query,
+        results: results.length,
+        duration: formatDuration(performance.now() - searchStart)
+      })
+      return results
     } catch (error) {
       if (!isAbortError(error)) {
         this.diagnosticsTracker.record({
@@ -2069,119 +1556,6 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       }
       throw error
     }
-
-    throwIfAborted(signal)
-
-    const results = this.parseEverythingSdkOutput(rawResults)
-
-    this.diagnosticsTracker.record({
-      stage: 'sdk-query',
-      status: 'success',
-      backend: 'sdk-napi',
-      startedAt: searchStart,
-      target: query
-    })
-    this.logDebug('Everything SDK search completed', {
-      query,
-      results: results.length,
-      duration: formatDuration(performance.now() - searchStart)
-    })
-
-    return results
-  }
-
-  private parseEverythingSdkOutput(rawResults: unknown): EverythingSearchResult[] {
-    if (!Array.isArray(rawResults)) {
-      return []
-    }
-
-    const normalized: EverythingSearchResult[] = []
-
-    for (const entry of rawResults) {
-      if (!isRecord(entry)) {
-        continue
-      }
-
-      const pathValue =
-        typeof entry.fullPath === 'string'
-          ? entry.fullPath
-          : typeof entry.path === 'string'
-            ? entry.path
-            : ''
-      const nameValue =
-        typeof entry.name === 'string'
-          ? entry.name
-          : typeof entry.filename === 'string'
-            ? entry.filename
-            : ''
-
-      const filePath = pathValue
-        ? nameValue && basenameForResult(pathValue).toLowerCase() !== nameValue.toLowerCase()
-          ? joinForResult(pathValue, nameValue)
-          : pathValue
-        : nameValue
-
-      if (!filePath) {
-        continue
-      }
-
-      const name = nameValue || basenameForResult(filePath)
-      const extensionValue =
-        typeof entry.extension === 'string' ? entry.extension : extnameForResult(name)
-      const sizeValue =
-        typeof entry.size === 'number'
-          ? entry.size
-          : typeof entry.fileSize === 'number'
-            ? entry.fileSize
-            : 0
-      const isDir =
-        entry.isFolder === true ||
-        entry.isDirectory === true ||
-        entry.type === 'folder' ||
-        entry.kind === 'folder'
-
-      normalized.push({
-        path: filePath,
-        name,
-        extension: extensionValue.toLowerCase().replace(/^\./, ''),
-        size: sizeValue,
-        mtime: this.toResultDate(entry.mtime ?? entry.dateModified ?? entry.modifiedAt),
-        ctime: this.toResultDate(entry.ctime ?? entry.dateCreated ?? entry.createdAt),
-        isDir
-      })
-    }
-
-    return normalized
-  }
-
-  private toResultDate(value: unknown): Date {
-    if (value instanceof Date && !Number.isNaN(value.getTime())) {
-      return value
-    }
-
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      const timestamp = value > 1_000_000_000_000 ? value : value * 1000
-      const date = new Date(timestamp)
-      return Number.isNaN(date.getTime()) ? new Date(0) : date
-    }
-
-    if (typeof value === 'string') {
-      const numericValue = Number(value)
-      if (Number.isFinite(numericValue)) {
-        const timestamp = numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000
-        const numericDate = new Date(timestamp)
-        if (!Number.isNaN(numericDate.getTime())) {
-          return numericDate
-        }
-      }
-
-      const parsed = new Date(value)
-      if (!Number.isNaN(parsed.getTime())) {
-        return parsed
-      }
-    }
-
-    return new Date(0)
   }
 
   private async searchEverythingWithCli(
@@ -2196,37 +1570,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
     const searchStart = performance.now()
 
-    // Everything search options:
-    // -n <num>: Maximum number of results
-    // -sort path: Sort by path
-    // -full-path-and-name: Show full path and filename
-    // -size: Show file size
-    // -dm: Show date modified
-    // -dc: Show date created
-    // -csv -no-header: Keep parsing stable for paths with commas.
-    const args = [
-      query,
-      '-n',
-      maxResults.toString(),
-      '-sort',
-      'path',
-      '-full-path-and-name',
-      '-size',
-      '-dm',
-      '-dc',
-      '-csv',
-      '-no-header'
-    ]
     const runCliSearch = async (): Promise<EverythingSearchResult[]> => {
-      const { stdout } = await execFileAsync(this.esPath!, args, {
-        timeout: 5000,
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        signal,
-        windowsHide: true
-      })
-
+      const results = await this.backendService.searchCli(this.esPath!, query, maxResults, signal)
       throwIfAborted(signal)
-      return this.parseEverythingOutput(stdout)
+      return results
     }
 
     try {
@@ -2234,7 +1581,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       try {
         results = await runCliSearch()
       } catch (error) {
-        if (isAbortError(error) || !this.isEverythingIpcUnavailableError(error)) {
+        if (isAbortError(error) || !this.backendService.isIpcUnavailable(error)) {
           throw error
         }
 
@@ -2252,7 +1599,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         try {
           results = await runCliSearch()
         } catch (retryError) {
-          if (!this.isEverythingIpcUnavailableError(retryError)) {
+          if (!this.backendService.isIpcUnavailable(retryError)) {
             throw retryError
           }
           throw Object.assign(
@@ -2315,111 +1662,6 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private isEverythingIpcUnavailableError(error: unknown): boolean {
-    const message = getErrorMessage(error)
-    if (/Everything IPC window not found/i.test(message)) return true
-    if (/\bError\s+8\b/i.test(message)) return true
-    if (!isRecord(error)) return false
-
-    const output = [error.stdout, error.stderr]
-      .filter((value): value is string => typeof value === 'string')
-      .join('\n')
-    return /Everything IPC window not found/i.test(output) || /\bError\s+8\b/i.test(output)
-  }
-
-  /**
-   * Parse Everything CLI output
-   * Format: path,size,date_modified,date_created
-   */
-  private parseEverythingOutput(output: string): EverythingSearchResult[] {
-    const lines = output
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    const results: EverythingSearchResult[] = []
-
-    for (const line of lines) {
-      try {
-        const parts = this.parseCsvLine(line)
-
-        if (parts.length < 4) {
-          continue
-        }
-
-        const [filePath, sizeStr, mtimeStr, ctimeStr] = parts
-
-        if (!filePath) {
-          continue
-        }
-
-        const name = basenameForResult(filePath)
-        const extension = extnameForResult(filePath).toLowerCase().replace(/^\./, '')
-        const size = Number.parseInt(sizeStr, 10) || 0
-        const mtime = this.toResultDate(mtimeStr)
-        const ctime = this.toResultDate(ctimeStr)
-
-        results.push({
-          path: filePath,
-          name,
-          extension,
-          size,
-          mtime,
-          ctime,
-          isDir: false
-        })
-      } catch (error) {
-        this.logWarn('Failed to parse Everything result line', error, { line })
-      }
-    }
-
-    return results
-  }
-
-  private parseCsvLine(line: string): string[] {
-    const parts: string[] = []
-    let current = ''
-    let inQuotes = false
-
-    for (let index = 0; index < line.length; index++) {
-      const char = line[index]
-      if (char === '"') {
-        const next = line[index + 1]
-        if (inQuotes && next === '"') {
-          current += '"'
-          index++
-        } else {
-          inQuotes = !inQuotes
-        }
-        continue
-      }
-
-      if (char === ',' && !inQuotes) {
-        parts.push(current.trim())
-        current = ''
-        continue
-      }
-
-      current += char
-    }
-
-    parts.push(current.trim())
-    return parts
-  }
-
-  /**
-   * Build Everything search query with filters
-   */
-  private buildEverythingQuery(searchText: string): string {
-    // Everything search syntax:
-    // - Use quotes for exact phrases
-    // - Use wildcards: * (any characters), ? (single character)
-    // - Use operators: AND, OR, NOT
-    // - Use filters: ext:, size:, dm:, dc:, etc.
-
-    const trimmed = searchText.trim()
-    return trimmed
-  }
-
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     if (process.platform !== 'win32') {
       return new TuffSearchResultBuilder(query).build()
@@ -2450,7 +1692,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
 
     const searchStart = performance.now()
-    const everythingQuery = this.buildEverythingQuery(searchText)
+    const everythingQuery = buildEverythingQuery(searchText)
 
     try {
       const results = await this.searchEverything(everythingQuery, 50, signal)

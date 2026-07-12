@@ -18,11 +18,7 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils/core-box'
-import type {
-  SearchIndexItem,
-  SearchIndexKeyword,
-  SearchIndexService
-} from '../../search-engine/search-index-service'
+import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
@@ -71,7 +67,7 @@ import { config as configSchema, fileExtensions, files as filesSchema } from '..
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 
-import { createDbUtils } from '../../../../db/utils'
+import { createDbUtils, type DbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
@@ -80,6 +76,9 @@ import searchEngineCore from '../../search-engine/search-core'
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
+import { AppIndexRecordSyncService } from './services/app-index-record-sync-service'
+import { AppIndexMaintenanceService } from './services/app-index-maintenance-service'
+import { AppManagedEntryService } from './services/app-managed-entry-service'
 import {
   isProbablyCorruptedDisplayName,
   normalizeDisplayName,
@@ -91,7 +90,6 @@ import {
   APP_DISPLAY_PATH_EXTENSION_KEY,
   APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY,
   APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY,
-  APP_ENTRY_ENABLED_EXTENSION_KEY,
   APP_ENTRY_SOURCE_EXTENSION_KEY,
   APP_ENTRY_SOURCE_MANUAL,
   APP_IDENTIFIER_EXTENSION_KEYS,
@@ -103,7 +101,6 @@ import {
   buildManagedEntryExtensions,
   isAppIdentifierExtensionKey,
   isAppEntryEnabledExtensionMap,
-  isManagedEntryEnabledExtensionMap,
   isManagedEntryExtensionMap,
   normalizeAppDisplayNameQuality,
   readAlternateNames,
@@ -122,10 +119,8 @@ import {
 } from './app-provider-metadata-sync'
 import {
   expandWindowsEnvironmentVariables,
-  inferManagedEntryLaunchKind,
   isWindowsUwpAppId,
-  isWindowsUwpShellPath,
-  normalizeOptionalString
+  isWindowsUwpShellPath
 } from './app-provider-path-utils'
 import { formatLog, LogStyle, normalizeStringList } from './app-utils'
 import {
@@ -398,7 +393,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   readonly priority = 'fast' as const
   readonly expectedDuration = 50
 
-  private dbUtils: ReturnType<typeof createDbUtils> | null = null
+  private dbUtils: DbUtils | null = null
   private context: ProviderContext | null = null
   private isInitializing: Promise<void> | null = null
   private readonly isMac = process.platform === 'darwin'
@@ -407,11 +402,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private searchIndex: SearchIndexService | null = null
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
-  private fullSyncRegistered = false
   private startupIndexHealthCheckStarted = false
   private volatileLastFullSyncTime: number | null = null
-  private maintenanceTaskQueue: Promise<void> = Promise.resolve()
-  private maintenanceTaskMap = new Map<string, Promise<unknown>>()
   private readonly runtimeEmitter = new IndexedWriteRuntimeEmitterService<ScannedAppInfo>({
     sourceId: this.id,
     mapRecord: (record) => this.mapScannedAppToIndexedSourceRecord(this.id, record),
@@ -427,6 +419,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     saveKnownMissingIconApps: async (knownMissingIconApps) => {
       await this._saveKnownMissingIconApps(knownMissingIconApps)
     }
+  })
+  private readonly recordSync = new AppIndexRecordSyncService({
+    providerId: this.id,
+    providerType: this.type,
+    getSearchIndex: () => this.searchIndex,
+    generateKeywords: (app) => this._generateKeywordsForApp(app),
+    getAliases: (app) => this._getAliasesForApp(app),
+    resolveToolSourceIds: (app) => this.resolveScannedAppToolSourceIds(app)
+  })
+  private readonly managedEntries = new AppManagedEntryService({
+    getDbUtils: () => this.dbUtils,
+    fetchExtensions: (apps) => this.fetchExtensionsForFiles(apps),
+    mapDbAppToScannedInfo: (app) => this._mapDbAppToScannedInfo(app),
+    toExtensionMap: (records) => this.toExtensionMap(records),
+    syncKeywords: (app) => this._syncKeywordsForApp(app),
+    removeIndexedItems: (itemIds) => this.removeIndexedAppItems(itemIds),
+    syncIndexedState: (app, extensions) => this.syncIndexedAppState(app, extensions)
+  })
+  private readonly maintenance = new AppIndexMaintenanceService({
+    runFullSyncIfDue: async () => await this._runFullSyncIfDue()
   })
 
   constructor() {
@@ -607,7 +619,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       permissionState: 'not-required',
       itemCount: health.appCount,
       watchState: 'active',
-      reconcileState: this.fullSyncRegistered ? 'scheduled' : 'idle',
+      reconcileState: this.maintenance.isFullSyncRegistered() ? 'scheduled' : 'idle',
       reason: health.healthy
         ? undefined
         : `App index rows=${health.appCount}, searchIndexRows=${health.indexedItemCount}`,
@@ -819,204 +831,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   public async listManagedEntries(): Promise<AppIndexManagedEntry[]> {
-    if (!this.dbUtils) return []
-
-    const allApps = await this.dbUtils.getFilesByType('app')
-    const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
-
-    return appsWithExtensions
-      .map((app) => this.mapManagedEntry(app))
-      .sort((left, right) =>
-        resolveDisplayName(left.displayName, left.name).localeCompare(
-          resolveDisplayName(right.displayName, right.name)
-        )
-      )
+    return await this.managedEntries.list()
   }
 
   public async upsertManagedEntry(
     input: AppIndexUpsertEntryRequest
   ): Promise<AppIndexEntryMutationResult> {
-    if (!this.dbUtils) {
-      return { success: false, status: 'error', reason: 'db-not-ready' }
-    }
-
-    const normalized = this.normalizeManagedEntryInput(input)
-    if ('reason' in normalized) {
-      return { success: false, status: 'invalid', reason: normalized.reason }
-    }
-
-    const { appInfo, enabled } = normalized
-    const cleanDisplayName = resolveScannedDisplayName(appInfo)
-    const existingFile = await this.dbUtils.getFileByPath(appInfo.path)
-    const db = this.dbUtils.getDb()
-
-    if (existingFile) {
-      const existingExtensions = this.toExtensionMap(
-        await this.dbUtils.getFileExtensions(existingFile.id)
-      )
-      if (!isManagedEntryExtensionMap(existingExtensions)) {
-        return {
-          success: false,
-          status: 'invalid',
-          reason: 'path-conflicts-with-scanned-app'
-        }
-      }
-
-      await db
-        .update(filesSchema)
-        .set({
-          name: appInfo.name,
-          displayName: cleanDisplayName,
-          mtime: appInfo.lastModified
-        })
-        .where(eq(filesSchema.id, existingFile.id))
-
-      const nextExtensions = buildManagedEntryExtensions(existingFile.id, appInfo, enabled)
-      await this.dbUtils.addFileExtensions(nextExtensions)
-
-      if (enabled) {
-        await this._syncKeywordsForApp(appInfo)
-      } else {
-        await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
-      }
-
-      return {
-        success: true,
-        status: 'updated',
-        entry: this.mapManagedEntry({
-          ...existingFile,
-          name: appInfo.name,
-          displayName: cleanDisplayName,
-          mtime: appInfo.lastModified,
-          extensions: {
-            ...existingExtensions,
-            ...this.toExtensionMap(nextExtensions)
-          }
-        })
-      }
-    }
-
-    const [insertedFile] = await db
-      .insert(filesSchema)
-      .values({
-        path: appInfo.path,
-        name: appInfo.name,
-        displayName: cleanDisplayName,
-        type: 'app' as const,
-        mtime: appInfo.lastModified,
-        ctime: new Date()
-      })
-      .returning()
-
-    if (!insertedFile) {
-      return { success: false, status: 'error', reason: 'insert-failed' }
-    }
-
-    const nextExtensions = buildManagedEntryExtensions(insertedFile.id, appInfo, enabled)
-    await this.dbUtils.addFileExtensions(nextExtensions)
-
-    if (enabled) {
-      await this._syncKeywordsForApp(appInfo)
-    }
-
-    return {
-      success: true,
-      status: 'added',
-      entry: this.mapManagedEntry({
-        ...insertedFile,
-        extensions: this.toExtensionMap(nextExtensions)
-      })
-    }
+    return await this.managedEntries.upsert(input)
   }
 
   public async removeManagedEntry(pathValue: string): Promise<AppIndexEntryMutationResult> {
-    const normalizedPath = normalizeOptionalString(pathValue)
-    if (!normalizedPath) {
-      return { success: false, status: 'invalid', reason: 'path-empty' }
-    }
-    if (!this.dbUtils) {
-      return { success: false, status: 'error', reason: 'db-not-ready' }
-    }
-
-    const existingFile = await this.dbUtils.getFileByPath(normalizedPath)
-    if (!existingFile) {
-      return { success: false, status: 'not-found', reason: 'entry-not-found' }
-    }
-
-    const existingExtensions = this.toExtensionMap(
-      await this.dbUtils.getFileExtensions(existingFile.id)
-    )
-    if (!isManagedEntryExtensionMap(existingExtensions)) {
-      return { success: false, status: 'invalid', reason: 'not-user-managed' }
-    }
-
-    const db = this.dbUtils.getDb()
-    await db.transaction(async (tx) => {
-      await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, existingFile.id))
-      await tx.delete(filesSchema).where(eq(filesSchema.id, existingFile.id))
-    })
-
-    await this.removeIndexedAppItems(
-      resolveAppItemIds({
-        bundleId: existingExtensions.bundleId,
-        appIdentity: existingExtensions.appIdentity,
-        path: existingFile.path
-      })
-    )
-
-    return {
-      success: true,
-      status: 'removed',
-      entry: this.mapManagedEntry({ ...existingFile, extensions: existingExtensions })
-    }
+    return await this.managedEntries.remove(pathValue)
   }
 
   public async setManagedEntryEnabled(
     pathValue: string,
     enabled: boolean
   ): Promise<AppIndexEntryMutationResult> {
-    const normalizedPath = normalizeOptionalString(pathValue)
-    if (!normalizedPath) {
-      return { success: false, status: 'invalid', reason: 'path-empty' }
-    }
-    if (!this.dbUtils) {
-      return { success: false, status: 'error', reason: 'db-not-ready' }
-    }
-
-    const existingFile = await this.dbUtils.getFileByPath(normalizedPath)
-    if (!existingFile) {
-      return { success: false, status: 'not-found', reason: 'entry-not-found' }
-    }
-
-    const existingExtensions = this.toExtensionMap(
-      await this.dbUtils.getFileExtensions(existingFile.id)
-    )
-    const nextExtensions = {
-      ...existingExtensions,
-      [APP_ENTRY_ENABLED_EXTENSION_KEY]: enabled ? '1' : '0'
-    }
-
-    await this.dbUtils.addFileExtension(
-      existingFile.id,
-      APP_ENTRY_ENABLED_EXTENSION_KEY,
-      enabled ? '1' : '0'
-    )
-
-    const appInfo = this._mapDbAppToScannedInfo({
-      ...existingFile,
-      extensions: nextExtensions
-    })
-
-    await this.syncIndexedAppState(appInfo, nextExtensions)
-
-    return {
-      success: true,
-      status: 'updated',
-      entry: this.mapManagedEntry({
-        ...existingFile,
-        extensions: nextExtensions
-      })
-    }
+    return await this.managedEntries.setEnabled(pathValue, enabled)
   }
 
   public async setAliases(aliases: Record<string, string[]>): Promise<void> {
@@ -1144,98 +976,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private mapManagedEntry(app: DbAppWithExtensions): AppIndexManagedEntry {
-    const appInfo = this._mapDbAppToScannedInfo(app)
-    const isManualEntry = isManagedEntryExtensionMap(app.extensions)
-    return {
-      path: app.path,
-      name: appInfo.name,
-      displayName: appInfo.displayName,
-      icon: appInfo.icon || undefined,
-      enabled: isManagedEntryEnabledExtensionMap(app.extensions),
-      source: isManualEntry ? APP_ENTRY_SOURCE_MANUAL : 'scanned',
-      removable: isManualEntry,
-      bundleId: appInfo.bundleId || undefined,
-      identityKind: appInfo.identityKind,
-      launchKind: appInfo.launchKind,
-      launchTarget: appInfo.launchTarget,
-      launchArgs: appInfo.launchArgs,
-      workingDirectory: appInfo.workingDirectory,
-      displayPath: appInfo.displayPath,
-      description: appInfo.description
-    }
-  }
-
-  private normalizeManagedEntryInput(
-    input: AppIndexUpsertEntryRequest
-  ): { reason: string } | { appInfo: ScannedAppInfo; enabled: boolean } {
-    const normalizedPath = normalizeOptionalString(input.path)
-    if (!normalizedPath) {
-      return { reason: 'path-empty' }
-    }
-
-    const launchTarget = normalizeOptionalString(input.launchTarget) || normalizedPath
-    const launchKind = input.launchKind || inferManagedEntryLaunchKind(launchTarget)
-    if (launchKind === 'uwp' && process.platform !== 'win32') {
-      return { reason: 'launch-kind-unsupported' }
-    }
-
-    if (launchKind !== 'uwp') {
-      if (launchKind === 'protocol') {
-        if (!/^steam:\/\/rungameid\/\d+$/i.test(launchTarget)) {
-          return { reason: 'protocol-not-allowed' }
-        }
-      } else {
-        if (!path.isAbsolute(normalizedPath)) {
-          return { reason: 'path-not-absolute' }
-        }
-        if (!existsSync(normalizedPath)) {
-          return { reason: 'path-not-found' }
-        }
-        if (!path.isAbsolute(launchTarget)) {
-          return { reason: 'launch-target-not-absolute' }
-        }
-        if (!existsSync(launchTarget)) {
-          return { reason: 'launch-target-not-found' }
-        }
-      }
-    }
-
-    const displayPath = normalizeOptionalString(input.displayPath) || normalizedPath
-    const fileName = path.basename(displayPath)
-    const derivedName =
-      path.basename(displayPath, path.extname(displayPath) || undefined) ||
-      path.basename(normalizedPath) ||
-      normalizedPath
-    const displayName = normalizeOptionalString(input.displayName) || derivedName
-    const workingDirectory =
-      normalizeOptionalString(input.workingDirectory) ||
-      (launchKind === 'shortcut' && path.isAbsolute(launchTarget)
-        ? path.dirname(launchTarget)
-        : undefined)
-
-    return {
-      enabled: input.enabled !== false,
-      appInfo: {
-        name: derivedName,
-        displayName,
-        fileName,
-        path: normalizedPath,
-        icon: normalizeOptionalString(input.icon) || '',
-        bundleId: '',
-        uniqueId: normalizedPath,
-        stableId: normalizedPath,
-        launchKind,
-        launchTarget,
-        launchArgs: normalizeOptionalString(input.launchArgs),
-        workingDirectory,
-        displayPath,
-        description: normalizeOptionalString(input.description),
-        lastModified: new Date()
-      }
-    }
-  }
-
   private buildScannedAppsMap(scannedApps: ScannedAppInfo[]): Map<string, ScannedAppInfo> {
     return this.sourceScanner.buildScannedAppsMap(scannedApps)
   }
@@ -1245,27 +985,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private runMaintenanceTask<T>(taskKey: string, task: () => Promise<T>): Promise<T> {
-    const existing = this.maintenanceTaskMap.get(taskKey)
-    if (existing) {
-      return existing as Promise<T>
-    }
-
-    const label = `AppProvider.${taskKey}`
-    const startTask = () => appTaskGate.runAppTask(task, label)
-    const basePromise = this.maintenanceTaskQueue.then(startTask, startTask)
-    const trackedPromise = basePromise.finally(() => {
-      if (this.maintenanceTaskMap.get(taskKey) === trackedPromise) {
-        this.maintenanceTaskMap.delete(taskKey)
-      }
-    })
-
-    this.maintenanceTaskMap.set(taskKey, trackedPromise)
-    this.maintenanceTaskQueue = trackedPromise.then(
-      () => undefined,
-      () => undefined
-    )
-
-    return trackedPromise
+    return this.maintenance.run(taskKey, task)
   }
 
   private async getAppSearchIndexHealth(): Promise<{
@@ -1965,34 +1685,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp('Full sync disabled, skipping schedule', LogStyle.info)
       return
     }
-    if (this.fullSyncRegistered) return
-    this.fullSyncRegistered = true
 
     const intervalMs = this.appIndexSettings.fullSyncCheckIntervalMs
+    if (!this.maintenance.registerFullSync(intervalMs)) return
     logApp(
       `Registering app full sync polling service (${Math.round(intervalMs / 60000)} min interval)`,
       LogStyle.info
     )
-    pollingService.register(
-      'app_provider_full_sync',
-      async () => {
-        await this._runFullSyncIfDue()
-      },
-      {
-        interval: intervalMs,
-        unit: 'milliseconds',
-        lane: 'maintenance',
-        backpressure: 'latest_wins',
-        dedupeKey: 'app_provider_full_sync',
-        maxInFlight: 1
-      }
-    )
   }
 
   private _refreshFullSyncSchedule(): void {
-    pollingService.unregister('app_provider_full_sync')
-    this.fullSyncRegistered = false
-    this._scheduleFullSync()
+    this.maintenance.refreshFullSync(
+      this.appIndexSettings.fullSyncCheckIntervalMs,
+      this.appIndexSettings.fullSyncEnabled
+    )
   }
 
   private async _runFullSyncIfDue(): Promise<void> {
@@ -2100,110 +1806,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async removeIndexedAppItems(itemIds: string[]): Promise<void> {
-    const normalizedItemIds = normalizeStringList(itemIds)
-    if (!this.searchIndex || normalizedItemIds.length === 0) return
-
-    const removeItems = (this.searchIndex as Partial<SearchIndexService>).removeItems
-    if (typeof removeItems !== 'function') return
-
-    await removeItems.call(this.searchIndex, normalizedItemIds)
+    await this.recordSync.remove(itemIds)
   }
 
-  private resolveLegacyAppItemIds(appInfo: ScannedAppInfo): string[] {
-    return normalizeStringList([
-      resolveAppItemId(appInfo),
-      appInfo.uniqueId,
-      appInfo.stableId,
-      appInfo.path,
-      appInfo.bundleId,
-      appInfo.launchTarget
-    ])
-  }
-
-  private resolveSearchAliasesForApp(appInfo: ScannedAppInfo): string[] {
-    return normalizeStringList([
-      appInfo.displayName,
-      appInfo.name,
-      appInfo.fileName,
-      ...(appInfo.alternateNames ?? []),
-      appInfo.bundleId,
-      appInfo.uniqueId,
-      appInfo.stableId,
-      appInfo.path,
-      appInfo.launchTarget,
-      appInfo.displayPath,
-      path.basename(appInfo.path, path.extname(appInfo.path) || undefined),
-      path.basename(
-        appInfo.launchTarget || '',
-        path.extname(appInfo.launchTarget || '') || undefined
-      )
-    ])
-  }
-
-  /**
-   * 为应用同步关键词
-   */
   private async _syncKeywordsForApp(appInfo: ScannedAppInfo): Promise<void> {
-    if (!this.searchIndex) return
-
-    const normalizedAppInfo: ScannedAppInfo = {
-      ...appInfo,
-      displayName: resolveScannedDisplayName(appInfo)
-    }
-    const keywordsSet = await this._generateKeywordsForApp(normalizedAppInfo)
-    const itemId = resolveAppItemId(normalizedAppInfo)
-    await this.removeIndexedAppItems(
-      this.resolveLegacyAppItemIds(normalizedAppInfo).filter(
-        (legacyItemId) => legacyItemId !== itemId
-      )
-    )
-
-    const keywordEntries: SearchIndexKeyword[] = Array.from(keywordsSet).map((keyword) => ({
-      value: keyword,
-      priority:
-        this._isAcronymForApp(keyword, normalizedAppInfo) ||
-        this._isAliasForApp(keyword, normalizedAppInfo)
-          ? 1.5
-          : 1.1
-    }))
-
-    const aliasList = normalizeStringList([
-      ...this._getAliasesForApp(normalizedAppInfo),
-      ...this.resolveSearchAliasesForApp(normalizedAppInfo)
-    ])
-    const aliasEntries: SearchIndexKeyword[] = aliasList.map((alias) => ({
-      value: alias,
-      priority: 1.5
-    }))
-    const toolSourceIds = this.resolveScannedAppToolSourceIds(normalizedAppInfo)
-
-    const indexItem: SearchIndexItem = {
-      itemId,
-      providerId: this.id,
-      type: this.type,
-      name: normalizedAppInfo.name,
-      displayName: normalizedAppInfo.displayName || undefined,
-      description: normalizedAppInfo.description || undefined,
-      path: normalizedAppInfo.path,
-      extension:
-        normalizedAppInfo.launchKind === 'uwp'
-          ? '.uwp'
-          : normalizedAppInfo.launchKind === 'protocol'
-            ? '.protocol'
-            : path.extname(normalizedAppInfo.launchTarget || normalizedAppInfo.path).toLowerCase(),
-      aliases: aliasEntries,
-      keywords: keywordEntries,
-      tags: normalizeStringList([
-        normalizedAppInfo.bundleId,
-        normalizedAppInfo.stableId,
-        normalizedAppInfo.uniqueId,
-        normalizedAppInfo.path,
-        normalizedAppInfo.launchTarget,
-        ...toolSourceIds.map((sourceId) => `tool-source:${sourceId}`)
-      ])
-    }
-
-    await this.searchIndex.indexItems([indexItem])
+    await this.recordSync.sync(appInfo)
   }
 
   private resolveScannedAppToolSourceIds(appInfo: ScannedAppInfo): string[] {
@@ -2226,36 +1833,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     appInfo: ScannedAppInfo,
     extensions: Record<string, string | null> | undefined
   ): Promise<void> {
-    if (isAppEntryEnabledExtensionMap(extensions)) {
-      await this._syncKeywordsForApp(appInfo)
-      return
-    }
-
-    await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
-  }
-
-  private _isAcronymForApp(keyword: string, appInfo: ScannedAppInfo): boolean {
-    const names = [
-      appInfo.name,
-      appInfo.displayName,
-      appInfo.fileName,
-      ...(appInfo.alternateNames ?? [])
-    ].filter(Boolean) as string[]
-    return names.some((name) => {
-      if (!name || !name.includes(' ')) return false
-      const acronym = name
-        .split(' ')
-        .filter((word) => word)
-        .map((word) => word.charAt(0))
-        .join('')
-        .toLowerCase()
-      return acronym === keyword
-    })
-  }
-
-  private _isAliasForApp(keyword: string, appInfo: ScannedAppInfo): boolean {
-    const aliasList = this.resolveAliasesForApp(appInfo)
-    return aliasList.includes(keyword)
+    await this.recordSync.syncState(appInfo, extensions)
   }
 
   private resolveAliasesForApp(appInfo: ScannedAppInfo): string[] {
@@ -2951,7 +2529,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const launchKind = appMeta.launchKind || 'path'
-    const launchTarget = appMeta.launchTarget || appPath
+    const launchTarget =
+      launchKind === 'uwp' && isWindowsUwpShellPath(appMeta.launchTarget || appPath)
+        ? (appMeta.launchTarget || appPath).replace(/^shell:AppsFolder\\/i, '')
+        : appMeta.launchTarget || appPath
     const launchArgs = appMeta.launchArgs
     const workingDirectory = appMeta.workingDirectory
 

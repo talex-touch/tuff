@@ -32,24 +32,17 @@ import type {
   IndexedWriteFlushSnapshot
 } from '@talex-touch/utils/search'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { Buffer } from 'node:buffer'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
-import type { FileTypeTag } from './constants'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
-import {
-  StorageList,
-  timingLogger,
-  TuffInputType,
-  TuffSearchResultBuilder
-} from '@talex-touch/utils'
+import { StorageList, timingLogger, TuffInputType } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -69,8 +62,7 @@ import {
   mapIndexedFileSourceRecord,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
-import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
-import { alias } from 'drizzle-orm/sqlite-core/alias'
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import { notificationModule } from '../../../notification'
 import { t } from '../../../../utils/i18n-helper'
@@ -78,7 +70,6 @@ import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlace
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import {
   embeddings as embeddingsSchema,
-  fileExtensions,
   fileIndexProgress,
   files as filesSchema
 } from '../../../../db/schema'
@@ -95,28 +86,13 @@ import {
 import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
-import { searchLogger } from '../../search-engine/search-logger'
-import {
-  BLACKLISTED_EXTENSIONS,
-  getTypeTagsForExtension,
-  KEYWORD_MAP,
-  WHITELISTED_EXTENSIONS
-} from './constants'
+import { BLACKLISTED_EXTENSIONS, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
-import {
-  THUMBNAIL_EXTENSIONS,
-  getThumbnailUnsupportedReason,
-  isThumbnailCandidate
-} from './thumbnail-config'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
-import { EmbeddingService } from './embedding-service'
 import { IconWorkerClient } from './workers/icon-worker-client'
-import {
-  ThumbnailWorkerClient,
-  type ThumbnailGenerationResult
-} from './workers/thumbnail-worker-client'
+import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   IndexedWriteDeleteExecutorService,
@@ -144,16 +120,6 @@ import {
   getWatchDepthForPath as resolveWatchDepthForPath,
   normalizeWatchPath
 } from './services/file-provider-path-service'
-import {
-  buildFtsQuery as buildFileProviderFtsQuery,
-  resolveExtensionsForTypeFilters as resolveFileProviderExtensionsForTypeFilters,
-  resolveTypeTag as resolveFileProviderTypeTag
-} from './services/file-provider-search-service'
-import {
-  FILE_ICON_META_EXTENSION_KEY,
-  persistFileIconCache,
-  type FileIconCacheMeta
-} from './services/file-provider-icon-cache-service'
 import { FileProviderWatchService } from './services/file-provider-watch-service'
 import {
   FileProviderOpenerService,
@@ -191,12 +157,13 @@ import {
 } from './services/file-provider-reconciliation-run-service'
 import { FileProviderReconciliationUpdateService } from './services/file-provider-reconciliation-update-service'
 import { FileProviderScanStrategyService } from './services/file-provider-scan-strategy-service'
+import { FileProviderAssetService } from './services/file-provider-asset-service'
+import { FileProviderSearchResultService } from './services/file-provider-search-result-service'
 import FileSystemWatcher from '../../file-system-watcher'
 
 const fileProviderLog = getLogger('file-provider')
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
-const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
 const FILE_ICON_WRITE_MAX_QUEUE = 24
@@ -224,20 +191,6 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   return chunks
 }
 
-interface IconCacheEntry {
-  icon?: string | null
-  meta?: FileIconCacheMeta
-}
-
-interface ThumbnailStatusPayload {
-  status: 'failed' | 'unsupported'
-  reason: string
-  mtime: number | null
-  size: number | null
-  at: number
-}
-
-type ThumbnailFileSnapshot = Pick<typeof filesSchema.$inferSelect, 'mtime' | 'size'>
 type FileProviderRuntimeWriteSnapshot = Omit<IndexedWriteFlushSnapshot, 'status'> & {
   status: 'flushed' | 'failed'
 }
@@ -369,7 +322,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private normalizedWatchPaths: string[]
   private databaseFilePath: string | null = null
   private searchIndex: SearchIndexService | null = null
-  private embeddingService: EmbeddingService | null = null
   /** AIMD adaptive batch scheduler for flush operations — persists across flushes. */
   private readonly flushBatchScheduler = new AdaptiveBatchScheduler({
     initialSize: 5,
@@ -397,12 +349,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private lastProgressStreamEmitAt = 0
   private pendingProgressStreamPayload: FileIndexProgressPayload | null = null
   private progressStreamFlushTimer: NodeJS.Timeout | null = null
-  private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
   private readonly fileIndexWorker: FileIndexWorkerClient
-
   private readonly iconWorker = new IconWorkerClient()
+  private readonly thumbnailWorker = new ThumbnailWorkerClient()
+
   private readonly searchIndexWorker = new SearchIndexWorkerClient()
   private searchIndexWorkerReady: Promise<boolean> | null = null
   private backgroundStartupPromise: Promise<void> | null = null
@@ -514,6 +466,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   >
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
   private readonly indexPersistEntryMapper: FileProviderIndexPersistEntryMapperService
+  private readonly assetService: FileProviderAssetService
+  private readonly searchResultService: FileProviderSearchResultService
   private readonly watchRuntimeEmitter =
     new IndexedWriteRuntimeEmitterService<IndexedFileSourceRecordRow>({
       sourceId: this.id,
@@ -559,6 +513,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       logWarn: (message, error, meta) => this.logWarn(message, error, meta),
       logError: (message, error, meta) => this.logError(message, error, meta)
     })
+    this.assetService = new FileProviderAssetService({
+      getDbUtils: () => this.dbUtils,
+      withDbWrite: (label, operation) => this.withDbWrite(label, operation),
+      waitForWriteCapacity: (maxQueued, label) => this.waitForCacheWriteCapacity(maxQueued, label),
+      waitForIdle: async () => {
+        await appTaskGate.waitForIdle()
+      },
+      yieldToEventLoop: async () => await new Promise<void>((resolve) => setImmediate(resolve)),
+      toTimestamp: (value) => this.toTimestamp(value),
+      isValidBase64DataUrl,
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta),
+      iconWorker: this.iconWorker,
+      thumbnailWorker: this.thumbnailWorker,
+      enableIconExtraction: this.enableFileIconExtraction,
+      iconWriteMaxQueue: FILE_ICON_WRITE_MAX_QUEUE
+    })
     this.openerService = new FileProviderOpenerService({
       emptyLogo: EMPTY_OPENER_LOGO,
       enableFileIconExtraction: this.enableFileIconExtraction,
@@ -571,7 +542,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           : {}
       },
       saveStoredOpeners: (next) => saveMainConfig(StorageList.OPENERS, next),
-      extractFileIconQueued: (filePath) => this.extractFileIconQueued(filePath),
+      extractFileIconQueued: (filePath) => this.assetService.extractIconQueued(filePath),
       isValidBase64DataUrl,
       logWarn: (message, error, meta) => this.logWarn(message, error, meta),
       logError: (message, error, meta) => this.logError(message, error, meta)
@@ -843,6 +814,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.fileIndexWorker = new FileIndexWorkerClient((payload) =>
       this.indexRuntimeService.handleIndexWorkerFile(payload)
     )
+    this.searchResultService = new FileProviderSearchResultService({
+      providerId: this.id,
+      getDbUtils: () => this.dbUtils,
+      getSearchIndex: () => this.searchIndex,
+      buildItem: (file, extensions) => this.createFileSearchItem(file, extensions),
+      normalizeItem: (item, file, extensions, reason) =>
+        this.normalizeFileSearchItem(item, file, extensions, { reason }),
+      sanitizeExtensions: (extensions) => this.sanitizeFileExtensions(extensions),
+      cleanupStaleCandidates: (paths) => this.cleanupStaleSearchCandidates(paths),
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      formatDuration,
+      now: () => performance.now()
+    })
     this.logDebug('Watching paths', {
       count: this.watchPaths.length
     })
@@ -1095,12 +1079,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const staleKeys = this.inferAssetCacheKeys(extensions, normalized.missingPaths)
       this.cleanupStaleFileAsset(file, staleKeys, options.reason)
       if (staleKeys.includes('thumbnail') && typeof file.id === 'number') {
-        void this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
+        void this.assetService.ensureThumbnail(file.id, file.path, file).catch((error) => {
           this.logWarn('Failed to regenerate stale thumbnail', error, { path: file.path })
         })
       }
       if (staleKeys.includes('icon') && typeof file.id === 'number') {
-        void this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+        void this.assetService.ensureIcon(file.id, file.path, file).catch((error) => {
           this.logWarn('Failed to regenerate stale icon', error, { path: file.path })
         })
       }
@@ -1497,73 +1481,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return Number.isNaN(time) ? null : time
   }
 
-  private buildThumbnailStatus(
-    file: ThumbnailFileSnapshot | undefined,
-    result: Extract<ThumbnailGenerationResult, { status: 'failed' | 'unsupported' }>
-  ): string {
-    const payload: ThumbnailStatusPayload = {
-      status: result.status,
-      reason: result.reason,
-      mtime: file ? this.toTimestamp(file.mtime) : null,
-      size: file && typeof file.size === 'number' ? file.size : null,
-      at: Date.now()
-    }
-    return JSON.stringify(payload)
-  }
-
-  private parseThumbnailStatus(value: string | undefined): ThumbnailStatusPayload | null {
-    if (!value) return null
-    try {
-      const parsed = JSON.parse(value) as Partial<ThumbnailStatusPayload>
-      if (
-        (parsed.status !== 'failed' && parsed.status !== 'unsupported') ||
-        typeof parsed.reason !== 'string'
-      ) {
-        return null
-      }
-      return {
-        status: parsed.status,
-        reason: parsed.reason,
-        mtime: typeof parsed.mtime === 'number' ? parsed.mtime : null,
-        size: typeof parsed.size === 'number' ? parsed.size : null,
-        at: typeof parsed.at === 'number' ? parsed.at : 0
-      }
-    } catch {
-      return null
-    }
-  }
-
-  private matchesThumbnailStatus(
-    file: ThumbnailFileSnapshot,
-    status: ThumbnailStatusPayload | null
-  ): boolean {
-    if (!status) return false
-    const fileMtime = this.toTimestamp(file.mtime)
-    const fileSize = typeof file.size === 'number' ? file.size : null
-    return status.mtime === fileMtime && status.size === fileSize
-  }
-
-  private shouldSkipThumbnailGeneration(
-    file: ThumbnailFileSnapshot,
-    extensions?: Record<string, string>
-  ): boolean {
-    const status = this.parseThumbnailStatus(extensions?.[THUMBNAIL_STATUS_KEY])
-    return this.matchesThumbnailStatus(file, status)
-  }
-
-  private async persistThumbnailStatus(
-    fileId: number,
-    file: ThumbnailFileSnapshot | undefined,
-    result: Extract<ThumbnailGenerationResult, { status: 'failed' | 'unsupported' }>
-  ): Promise<void> {
-    if (!this.dbUtils) return
-    await this.withDbWrite('thumbnail.status', () =>
-      this.dbUtils!.addFileExtensions([
-        { fileId, key: THUMBNAIL_STATUS_KEY, value: this.buildThumbnailStatus(file, result) }
-      ])
-    )
-  }
-
   async onLoad(context: ProviderContext): Promise<void> {
     // 最先赋值 initializationContext，确保即使后续任何步骤失败，rebuildIndex 也能使用
     this.initializationContext = context
@@ -1574,12 +1491,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
 
-    // EmbeddingService is best-effort; failures must not block the rest of onLoad
-    try {
-      this.embeddingService = new EmbeddingService(context.databaseManager.getDb())
-    } catch (error) {
-      this.logWarn('EmbeddingService init failed, semantic search disabled', error)
-    }
     // Store the database file path to exclude it from scanning
     // Prefer database module path when available.
     const databaseDir = context.databaseManager.filePath
@@ -2273,279 +2184,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.indexSchedulerService.schedule(files, reason)
   }
 
-  private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
-    const existing = this.iconExtractionPending.get(filePath)
-    if (existing) {
-      return existing
-    }
-
-    const task = (async () => {
-      await appTaskGate.waitForIdle()
-      try {
-        return await this.iconWorker.extract(filePath)
-      } catch (error) {
-        // Do NOT fall back to sync extractFileIcon — it blocks the event loop.
-        // The worker is the only safe extraction path; if it fails, skip the icon.
-        this.logWarn('Icon worker extraction failed; skipping icon', error, {
-          path: filePath
-        })
-        return null
-      }
-    })()
-
-    this.iconExtractionPending.set(filePath, task)
-    task.finally(() => {
-      this.iconExtractionPending.delete(filePath)
-    })
-
-    return task
-  }
-
   private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
     return this.openerService.getOpenerForExtension(rawExtension)
-  }
-
-  private readonly pendingIconExtractions = new Set<number>()
-  private readonly pendingThumbnailExtractions = new Set<number>()
-  private _thumbnailTaskRunning = false
-
-  private async ensureFileIcon(
-    fileId: number,
-    filePath: string,
-    file?: typeof filesSchema.$inferSelect
-  ): Promise<void> {
-    if (this.pendingIconExtractions.has(fileId)) {
-      return
-    }
-
-    this.pendingIconExtractions.add(fileId)
-    try {
-      const hasCapacity = await this.waitForCacheWriteCapacity(
-        FILE_ICON_WRITE_MAX_QUEUE,
-        'file-icon.persist'
-      )
-      if (!hasCapacity) {
-        return
-      }
-
-      const icon = await this.extractFileIconQueued(filePath)
-      if (!icon || icon.length === 0) {
-        return
-      }
-      const iconBuffer = Buffer.isBuffer(icon) ? icon : Buffer.from(icon)
-      const iconValue = `data:image/png;base64,${iconBuffer.toString('base64')}`
-      if (!isValidBase64DataUrl(iconValue)) {
-        this.logWarn('Invalid base64 icon generated, skipping persist', {
-          fileId,
-          path: filePath
-        })
-        return
-      }
-
-      const meta: FileIconCacheMeta = {
-        mtime: file ? this.toTimestamp(file.mtime) : Date.now(),
-        size: file && typeof file.size === 'number' ? file.size : null
-      }
-
-      if (this.dbUtils) {
-        await persistFileIconCache(
-          {
-            dbUtils: this.dbUtils,
-            withDbWrite: (label, operation) => this.withDbWrite(label, operation)
-          },
-          fileId,
-          iconValue,
-          meta
-        )
-      }
-    } catch (error) {
-      this.logWarn('Failed to extract icon', error, { path: filePath })
-    } finally {
-      this.pendingIconExtractions.delete(fileId)
-    }
-  }
-
-  private readonly thumbnailWorker = new ThumbnailWorkerClient()
-
-  private async ensureFileThumbnail(
-    fileId: number,
-    filePath: string,
-    file?: typeof filesSchema.$inferSelect,
-    extensions?: Record<string, string>
-  ): Promise<void> {
-    if (this.pendingThumbnailExtractions.has(fileId)) {
-      return
-    }
-    if (file && this.shouldSkipThumbnailGeneration(file, extensions)) {
-      return
-    }
-    if (file && !isThumbnailCandidate(file.extension, file.size)) {
-      const reason = getThumbnailUnsupportedReason(file.extension, file.size)
-      if (reason) {
-        await this.persistThumbnailStatus(fileId, file, {
-          status: 'unsupported',
-          reason,
-          durationMs: 0
-        })
-      }
-      return
-    }
-
-    this.pendingThumbnailExtractions.add(fileId)
-    try {
-      const thumbnail = await this.thumbnailWorker.generate(filePath, {
-        extension: file?.extension,
-        sizeBytes: file?.size
-      })
-      if (!this.dbUtils) {
-        return
-      }
-      if (thumbnail.status === 'generated') {
-        await this.withDbWrite('thumbnail.worker', () =>
-          this.dbUtils!.addFileExtensions([
-            { fileId, key: 'thumbnail', value: thumbnail.path },
-            {
-              fileId,
-              key: THUMBNAIL_STATUS_KEY,
-              value: JSON.stringify({ status: 'generated', at: Date.now() })
-            }
-          ])
-        )
-        return
-      }
-      await this.persistThumbnailStatus(fileId, file, thumbnail)
-      this.logDebug('Thumbnail generation skipped', {
-        path: filePath,
-        status: thumbnail.status,
-        reason: thumbnail.reason
-      })
-    } catch (error) {
-      this.logWarn('Failed to generate thumbnail', error, { path: filePath })
-    } finally {
-      this.pendingThumbnailExtractions.delete(fileId)
-    }
-  }
-
-  /**
-   * Background thumbnail generation — runs after scan completes.
-   * Processes one file at a time with setImmediate yields to avoid blocking the event loop.
-   */
-  private async generateMissingThumbnails(): Promise<void> {
-    if (this._thumbnailTaskRunning || !this.dbUtils) return
-    this._thumbnailTaskRunning = true
-
-    try {
-      const db = this.dbUtils.getDb()
-
-      const thumbnailExtensions = [...THUMBNAIL_EXTENSIONS].map((e) => `.${e}`)
-      const thumbnailExtension = alias(fileExtensions, 'thumbnail_extension')
-      const thumbnailStatusExtension = alias(fileExtensions, 'thumbnail_status_extension')
-
-      // Find image files that don't have a thumbnail extension yet
-      const candidates = await db
-        .select({
-          id: filesSchema.id,
-          path: filesSchema.path,
-          extension: filesSchema.extension,
-          size: filesSchema.size,
-          mtime: filesSchema.mtime,
-          ctime: filesSchema.ctime,
-          statusValue: thumbnailStatusExtension.value
-        })
-        .from(filesSchema)
-        .leftJoin(
-          thumbnailExtension,
-          and(
-            eq(thumbnailExtension.fileId, filesSchema.id),
-            eq(thumbnailExtension.key, 'thumbnail')
-          )
-        )
-        .leftJoin(
-          thumbnailStatusExtension,
-          and(
-            eq(thumbnailStatusExtension.fileId, filesSchema.id),
-            eq(thumbnailStatusExtension.key, THUMBNAIL_STATUS_KEY)
-          )
-        )
-        .where(
-          and(isNull(thumbnailExtension.value), inArray(filesSchema.extension, thumbnailExtensions))
-        )
-        .limit(1000)
-
-      if (candidates.length === 0) return
-
-      this.logDebug('Starting deferred thumbnail generation', { count: candidates.length })
-      let generated = 0
-      let skipped = 0
-
-      for (const file of candidates) {
-        if (!this._thumbnailTaskRunning) break // allow cancellation
-
-        if (
-          this.shouldSkipThumbnailGeneration(file, {
-            [THUMBNAIL_STATUS_KEY]: file.statusValue ?? ''
-          })
-        ) {
-          skipped++
-          continue
-        }
-
-        if (!isThumbnailCandidate(file.extension, file.size)) {
-          const reason = getThumbnailUnsupportedReason(file.extension, file.size)
-          if (typeof file.id === 'number' && reason) {
-            await this.persistThumbnailStatus(file.id, file, {
-              status: 'unsupported',
-              reason,
-              durationMs: 0
-            })
-          }
-          skipped++
-          continue
-        }
-
-        // Yield to event loop before each thumbnail
-        await new Promise<void>((resolve) => setImmediate(resolve))
-        await appTaskGate.waitForIdle()
-
-        let thumbnail: ThumbnailGenerationResult | null = null
-        try {
-          thumbnail = await this.thumbnailWorker.generate(file.path, {
-            extension: file.extension,
-            sizeBytes: file.size
-          })
-        } catch (error) {
-          this.logWarn('Thumbnail worker failed', error, { path: file.path })
-        }
-        if (thumbnail && typeof file.id === 'number') {
-          if (thumbnail.status === 'generated') {
-            await this.withDbWrite('thumbnail.deferred', () =>
-              this.dbUtils!.addFileExtensions([
-                { fileId: file.id, key: 'thumbnail', value: thumbnail.path },
-                {
-                  fileId: file.id,
-                  key: THUMBNAIL_STATUS_KEY,
-                  value: JSON.stringify({ status: 'generated', at: Date.now() })
-                }
-              ])
-            )
-            generated++
-          } else {
-            await this.persistThumbnailStatus(file.id, file, thumbnail)
-            skipped++
-          }
-        }
-      }
-
-      this.logDebug('Deferred thumbnail generation completed', {
-        generated,
-        skipped,
-        total: candidates.length
-      })
-    } catch (error) {
-      this.logWarn('Deferred thumbnail generation failed', error)
-    } finally {
-      this._thumbnailTaskRunning = false
-    }
   }
 
   private getWatchDepthForPath(watchPath: string): number {
@@ -2998,7 +2638,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
 
     // Schedule deferred thumbnail generation (low-priority, non-blocking)
-    void this.generateMissingThumbnails()
+    void this.assetService.generateMissingThumbnails()
     return stats
   }
   private async _processFileUpdates(
@@ -3037,17 +2677,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return await this.dbUtils.getDb().select().from(filesSchema).where(inArray(filesSchema.id, ids))
   }
 
-  private buildFtsQuery(terms: string[]): string {
-    return buildFileProviderFtsQuery(terms)
-  }
-
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
     if (!this.dbUtils) return
     if (files.length === 0) return
 
     const iconCache = this.enableFileIconExtraction
-      ? await this.buildIconCache(files)
-      : new Map<number, IconCacheEntry>()
+      ? await this.assetService.buildIconCache(files)
+      : undefined
 
     const timingToken = timingLogger.start(
       'FileProvider:ProcessExtensions',
@@ -3071,15 +2707,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           const fileId = typeof file.id === 'number' ? file.id : null
 
           if (fileId && this.enableFileIconExtraction) {
-            const cached = iconCache.get(fileId)
-            if (this.needsIconExtraction(file, cached)) {
-              try {
-                // Always fire-and-forget — icon extraction goes through the worker thread
-                // and should never block the scan/index pipeline
-                void this.ensureFileIcon(fileId, file.path, file)
-              } catch {
-                /* ignore icon failures */
-              }
+            const cached = iconCache?.get(fileId)
+            if (this.assetService.needsIconExtraction(file, cached)) {
+              void this.assetService.ensureIcon(fileId, file.path, file)
             }
           }
 
@@ -3151,60 +2781,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async buildIconCache(
-    files: (typeof filesSchema.$inferSelect)[]
-  ): Promise<Map<number, IconCacheEntry>> {
-    const cache = new Map<number, IconCacheEntry>()
-    if (!this.dbUtils) {
-      return cache
-    }
-
-    const fileIds = files
-      .map((file) => file.id)
-      .filter((id): id is number => typeof id === 'number')
-
-    if (fileIds.length === 0) {
-      return cache
-    }
-
-    const rows = await this.dbUtils.getFileExtensionsByFileIds(fileIds, [
-      'icon',
-      FILE_ICON_META_EXTENSION_KEY
-    ])
-    const invalidIconFileIds: number[] = []
-
-    for (const row of rows) {
-      const entry = cache.get(row.fileId) ?? {}
-      if (row.key === 'icon') {
-        if (row.value && !isValidBase64DataUrl(row.value)) {
-          invalidIconFileIds.push(row.fileId)
-        } else {
-          entry.icon = row.value
-        }
-      } else if (row.key === FILE_ICON_META_EXTENSION_KEY && row.value) {
-        try {
-          const parsed = JSON.parse(row.value) as FileIconCacheMeta
-          entry.meta = {
-            mtime: typeof parsed?.mtime === 'number' ? parsed.mtime : null,
-            size: typeof parsed?.size === 'number' ? parsed.size : null
-          }
-        } catch {
-          entry.meta = undefined
-        }
-      }
-      cache.set(row.fileId, entry)
-    }
-
-    if (invalidIconFileIds.length > 0) {
-      this.logWarn('Invalid icon cache detected, will re-extract', {
-        count: invalidIconFileIds.length,
-        sample: invalidIconFileIds.slice(0, 3)
-      })
-    }
-
-    return cache
-  }
-
   private sanitizeFileExtensions(extensions: Record<string, string>): Record<string, string> {
     const sanitized = { ...extensions }
     for (const key of ['icon', 'thumbnail'] as const) {
@@ -3224,28 +2800,34 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
     return sanitized
   }
-
-  private needsIconExtraction(
+  private createFileSearchItem(
     file: typeof filesSchema.$inferSelect,
-    cached?: IconCacheEntry
-  ): boolean {
-    if (!this.enableFileIconExtraction) {
-      return false
-    }
-    if (!cached || !cached.icon) {
-      return true
-    }
-    if (!cached.meta) {
-      return true
-    }
-    const fileMtime = this.toTimestamp(file.mtime)
-    const cachedMtime = typeof cached.meta.mtime === 'number' ? cached.meta.mtime : null
-    if (cachedMtime !== fileMtime) {
-      return true
-    }
-    const fileSize = typeof file.size === 'number' ? file.size : null
-    const cachedSize = typeof cached.meta.size === 'number' ? cached.meta.size : null
-    return cachedSize !== fileSize
+    extensions: Record<string, string>
+  ): TuffItem {
+    return mapFileToTuffItem(
+      file,
+      extensions,
+      this.id,
+      this.name,
+      (indexedFile) => {
+        if (typeof indexedFile.id === 'number') {
+          void this.assetService
+            .ensureIcon(indexedFile.id, indexedFile.path, indexedFile)
+            .catch((error) => {
+              this.logWarn('Failed to lazy load icon', error, { path: indexedFile.path })
+            })
+        }
+      },
+      (indexedFile) => {
+        if (typeof indexedFile.id === 'number') {
+          void this.assetService
+            .ensureThumbnail(indexedFile.id, indexedFile.path, indexedFile, extensions)
+            .catch((error) => {
+              this.logWarn('Failed to lazy load thumbnail', error, { path: indexedFile.path })
+            })
+        }
+      }
+    )
   }
 
   private async deleteEmbeddingsByFileIds(
@@ -3259,279 +2841,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .where(
         and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
       )
-  }
-
-  private extractSearchFilters(rawText: string): {
-    text: string
-    typeFilters: Set<FileTypeTag>
-    extensionFilters: string[]
-  } {
-    const tokens = rawText.split(/\s+/).filter(Boolean)
-    const retained: string[] = []
-    const typeFilters = new Set<FileTypeTag>()
-    const extensionFilters: string[] = []
-
-    for (const token of tokens) {
-      const trimmed = token.trim()
-      if (!trimmed) continue
-      const normalized = trimmed.toLowerCase()
-
-      // *.txt or *.{mp4,mov} glob pattern
-      if (/^\*\.\w+$/.test(normalized) || /^\*\.\{[\w,]+\}$/.test(normalized)) {
-        const extensions = this.parseExtensionGlob(normalized)
-        if (extensions.length > 0) {
-          extensionFilters.push(...extensions)
-          continue
-        }
-      }
-
-      // ext:pdf pattern
-      if (normalized.startsWith('ext:')) {
-        const ext = '.' + normalized.slice(4)
-        if (WHITELISTED_EXTENSIONS.has(ext)) {
-          extensionFilters.push(ext)
-          continue
-        }
-      }
-
-      if (normalized.startsWith('type:')) {
-        const resolved = this.resolveTypeTag(normalized.slice(5))
-        if (resolved) {
-          typeFilters.add(resolved)
-          continue
-        }
-      }
-
-      const aliasTag = this.resolveTypeTag(normalized)
-      if (aliasTag) {
-        typeFilters.add(aliasTag)
-      }
-
-      retained.push(trimmed)
-    }
-
-    return { text: retained.join(' ').trim(), typeFilters, extensionFilters }
-  }
-
-  public hasSearchFilters(rawText: string): boolean {
-    const { typeFilters, extensionFilters, text } = this.extractSearchFilters(rawText)
-    return typeFilters.size > 0 || extensionFilters.length > 0 || text !== rawText.trim()
-  }
-
-  private resolveTypeTag(raw: string): FileTypeTag | null {
-    return resolveFileProviderTypeTag(raw)
-  }
-
-  private parseExtensionGlob(pattern: string): string[] {
-    // *.txt → ['.txt']
-    const simpleMatch = pattern.match(/^\*\.(\w+)$/)
-    if (simpleMatch) {
-      const ext = '.' + simpleMatch[1]
-      return WHITELISTED_EXTENSIONS.has(ext) ? [ext] : []
-    }
-    // *.{mp4,mov} → ['.mp4', '.mov']
-    const braceMatch = pattern.match(/^\*\.\{([\w,]+)\}$/)
-    if (braceMatch) {
-      return braceMatch[1]
-        .split(',')
-        .map((e) => '.' + e.trim())
-        .filter((ext) => WHITELISTED_EXTENSIONS.has(ext))
-    }
-    return []
-  }
-
-  private resolveExtensionsForTypeFilters(typeFilters: Set<FileTypeTag>): string[] {
-    return resolveFileProviderExtensionsForTypeFilters(typeFilters)
-  }
-
-  private matchesTypeFilters(
-    file: typeof filesSchema.$inferSelect,
-    typeFilters: Set<FileTypeTag>
-  ): boolean {
-    if (typeFilters.size === 0) return true
-    const extension = (file.extension || '').toLowerCase()
-    const tags = new Set(getTypeTagsForExtension(extension))
-    for (const tag of typeFilters) {
-      if (tags.has(tag)) return true
-    }
-    return false
-  }
-
-  private async buildTypeOnlySearchResult(
-    query: TuffQuery,
-    typeFilters: Set<FileTypeTag>
-  ): Promise<TuffSearchResult> {
-    if (!this.dbUtils) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    const extensions = this.resolveExtensionsForTypeFilters(typeFilters)
-    if (extensions.length === 0) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    const db = this.dbUtils.getDb()
-    const rows = await db
-      .select({
-        file: filesSchema,
-        extensionKey: fileExtensions.key,
-        extensionValue: fileExtensions.value
-      })
-      .from(filesSchema)
-      .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.extension, extensions)))
-      .orderBy(desc(filesSchema.mtime))
-      .limit(50)
-
-    const filesMap = new Map<
-      string,
-      { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
-    >()
-
-    for (const row of rows) {
-      if (!this.matchesTypeFilters(row.file, typeFilters)) {
-        continue
-      }
-      if (!filesMap.has(row.file.path)) {
-        filesMap.set(row.file.path, { file: row.file, extensions: {} })
-      }
-      if (row.extensionKey && row.extensionValue) {
-        filesMap.get(row.file.path)!.extensions[row.extensionKey] = row.extensionValue
-      }
-    }
-
-    const items = Array.from(filesMap.values()).flatMap(({ file, extensions }) => {
-      const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
-      const tuffItem = mapFileToTuffItem(
-        file,
-        sanitizedExtensions,
-        this.id,
-        this.name,
-        (file) => {
-          if (typeof file.id === 'number') {
-            this.ensureFileIcon(file.id, file.path, file).catch((error) => {
-              this.logWarn('Failed to lazy load icon', error, { path: file.path })
-            })
-          }
-        },
-        (file) => {
-          if (typeof file.id === 'number') {
-            this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
-              (error) => {
-                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-              }
-            )
-          }
-        }
-      )
-      tuffItem.scoring = {
-        final: 0.4,
-        match: 0.4,
-        recency: 0,
-        frequency: 0,
-        base: 0
-      }
-      tuffItem.meta = {
-        ...tuffItem.meta,
-        file: {
-          path: tuffItem.meta?.file?.path || '',
-          ...tuffItem.meta?.file
-        }
-      }
-      const normalizedItem = this.normalizeFileSearchItem(tuffItem, file, sanitizedExtensions, {
-        reason: 'type-only-result',
-        fallbackKind: file.isDir ? 'folder' : 'file'
-      })
-      if (!normalizedItem) return []
-      return [normalizedItem]
-    })
-
-    return new TuffSearchResultBuilder(query).setItems(items).build()
-  }
-
-  private async buildExtensionOnlySearchResult(
-    query: TuffQuery,
-    extensionFilters: string[]
-  ): Promise<TuffSearchResult> {
-    if (!this.dbUtils || extensionFilters.length === 0) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    const db = this.dbUtils.getDb()
-    const normalizedExts = extensionFilters.map((e) => e.toLowerCase())
-    const rows = await db
-      .select({
-        file: filesSchema,
-        extensionKey: fileExtensions.key,
-        extensionValue: fileExtensions.value
-      })
-      .from(filesSchema)
-      .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.extension, normalizedExts)))
-      .orderBy(desc(filesSchema.mtime))
-      .limit(50)
-
-    const filesMap = new Map<
-      string,
-      { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
-    >()
-
-    for (const row of rows) {
-      if (!filesMap.has(row.file.path)) {
-        filesMap.set(row.file.path, { file: row.file, extensions: {} })
-      }
-      if (row.extensionKey && row.extensionValue) {
-        filesMap.get(row.file.path)!.extensions[row.extensionKey] = row.extensionValue
-      }
-    }
-
-    const items = Array.from(filesMap.values()).flatMap(({ file, extensions }) => {
-      const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
-      const tuffItem = mapFileToTuffItem(
-        file,
-        sanitizedExtensions,
-        this.id,
-        this.name,
-        (file) => {
-          if (typeof file.id === 'number') {
-            this.ensureFileIcon(file.id, file.path, file).catch((error) => {
-              this.logWarn('Failed to lazy load icon', error, { path: file.path })
-            })
-          }
-        },
-        (file) => {
-          if (typeof file.id === 'number') {
-            this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
-              (error) => {
-                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-              }
-            )
-          }
-        }
-      )
-      tuffItem.scoring = {
-        final: 0.4,
-        match: 0.4,
-        recency: 0,
-        frequency: 0,
-        base: 0
-      }
-      tuffItem.meta = {
-        ...tuffItem.meta,
-        file: {
-          path: tuffItem.meta?.file?.path || '',
-          ...tuffItem.meta?.file
-        }
-      }
-      const normalizedItem = this.normalizeFileSearchItem(tuffItem, file, sanitizedExtensions, {
-        reason: 'extension-only-result',
-        fallbackKind: file.isDir ? 'folder' : 'file'
-      })
-      if (!normalizedItem) return []
-      return [normalizedItem]
-    })
-
-    return new TuffSearchResultBuilder(query).setItems(items).build()
   }
 
   public async getIndexingProgress(paths?: string[]): Promise<{
@@ -3606,8 +2915,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.fileScanWorker.getStatus(),
         this.fileIndexWorker.getStatus(),
         this.reconcileWorker.getStatus(),
-        this.iconWorker.getStatus(),
-        this.thumbnailWorker.getStatus(),
+        ...this.assetService.getWorkerStatuses(),
         this.searchIndexWorker.getStatus()
       ])
     )
@@ -3620,333 +2928,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.searchIndexWorker.hasPendingWork()
     )
   }
+  public hasSearchFilters(rawText: string): boolean {
+    return this.searchResultService.hasFilters(rawText)
+  }
 
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
-    if (signal.aborted) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-    searchLogger.logProviderSearch('file-provider', query.text, 'File System')
-    searchLogger.fileSearchStart(query.text)
-    if (!this.dbUtils || !this.searchIndex) {
-      searchLogger.fileSearchNotInitialized()
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    const searchStart = performance.now()
-    const rawText = query.text.trim()
-    const { text: searchText, typeFilters, extensionFilters } = this.extractSearchFilters(rawText)
-    searchLogger.fileSearchText(searchText, typeFilters.size)
-
-    const logTerms = searchText
-      .toLowerCase()
-      .split(/[\s/]+/)
-      .filter(Boolean)
-    searchLogger.logKeywordAnalysis(searchText, logTerms, typeFilters.size)
-
-    if (!searchText && typeFilters.size === 0 && extensionFilters.length === 0) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    if (!searchText && typeFilters.size > 0) {
-      return this.buildTypeOnlySearchResult(query, typeFilters)
-    }
-
-    if (!searchText && extensionFilters.length > 0) {
-      return this.buildExtensionOnlySearchResult(query, extensionFilters)
-    }
-
-    const db = this.dbUtils.getDb()
-    const normalizedQuery = searchText.toLowerCase()
-    const baseTerms = normalizedQuery.split(/[\s/]+/).filter(Boolean)
-    const terms = baseTerms.length > 0 ? baseTerms : [normalizedQuery]
-    const shouldCheckPhrase = baseTerms.length > 1 || baseTerms.length === 0
-
-    let preciseMatchPaths: Set<string> | null = null
-    const preciseLookupTerms = shouldCheckPhrase
-      ? Array.from(new Set([...terms, normalizedQuery]))
-      : terms
-    searchLogger.filePreciseSearch(terms)
-    const preciseStart = performance.now()
-    const preciseSearchLimit = Math.max(200, preciseLookupTerms.length * 200)
-    const shouldLookupPrefix = normalizedQuery.length <= 5
-    const prefixStart = performance.now()
-    const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
-    searchLogger.fileFtsQuery(ftsQuery || '')
-    const ftsStart = performance.now()
-
-    const [preciseResultMap, prefixResults, ftsMatches] = await Promise.all([
-      this.searchIndex.lookupByKeywords(this.id, preciseLookupTerms, preciseSearchLimit),
-      shouldLookupPrefix
-        ? this.searchIndex.lookupByKeywordPrefix(this.id, normalizedQuery, 200)
-        : Promise.resolve([]),
-      ftsQuery ? this.searchIndex.search(this.id, ftsQuery, 150) : Promise.resolve([])
-    ])
-
-    if (signal.aborted) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    const termMatches = terms.map(
-      (term) => new Set((preciseResultMap.get(term) ?? []).map((entry) => entry.itemId))
-    )
-    searchLogger.filePreciseQueries(1)
-    searchLogger.filePreciseResults(termMatches.map((s) => s.size))
-
-    if (termMatches.length > 0) {
-      preciseMatchPaths = termMatches.reduce((accumulator, current) => {
-        if (!accumulator) return current
-        return new Set([...accumulator].filter((id) => current.has(id)))
-      })
-    }
-    this.logDebug('Precise keyword lookup completed', {
-      terms: terms.join(', '),
-      duration: formatDuration(performance.now() - preciseStart)
-    })
-
-    if (shouldCheckPhrase) {
-      const phraseStart = performance.now()
-      const phraseMatches = preciseResultMap.get(normalizedQuery) ?? []
-      if (phraseMatches.length > 0) {
-        const phraseSet = new Set(phraseMatches.map((entry) => entry.itemId))
-        preciseMatchPaths = preciseMatchPaths
-          ? new Set([...preciseMatchPaths, ...phraseSet])
-          : phraseSet
-      }
-      this.logDebug('Phrase keyword lookup completed', {
-        query: normalizedQuery,
-        matches: preciseMatchPaths?.size ?? 0,
-        duration: formatDuration(performance.now() - phraseStart)
-      })
-    }
-
-    // Prefix recall for short queries (e.g. "wind" → "windsurf")
-    if (shouldLookupPrefix) {
-      if (prefixResults.length > 0) {
-        const prefixSet = new Set(prefixResults.map((r) => r.itemId))
-        preciseMatchPaths = preciseMatchPaths
-          ? new Set([...preciseMatchPaths, ...prefixSet])
-          : prefixSet
-      }
-      this.logDebug('Prefix keyword lookup completed', {
-        query: normalizedQuery,
-        matches: prefixResults.length,
-        duration: formatDuration(performance.now() - prefixStart)
-      })
-    }
-
-    searchLogger.fileFtsResults(ftsMatches.length, performance.now() - ftsStart)
-    if (ftsQuery) {
-      this.logDebug('FTS search completed', {
-        query: ftsQuery,
-        matches: ftsMatches.length,
-        duration: formatDuration(performance.now() - ftsStart)
-      })
-    }
-
-    const preciseCandidates = preciseMatchPaths ? Array.from(preciseMatchPaths) : []
-    const maxCandidateCount = 120
-    const candidateIds = new Set<string>(preciseCandidates)
-
-    for (const match of ftsMatches) {
-      if (candidateIds.size >= maxCandidateCount) break
-      candidateIds.add(match.itemId)
-    }
-
-    if (candidateIds.size === 0) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    const candidatePaths = Array.from(candidateIds).slice(0, maxCandidateCount)
-
-    searchLogger.fileDataFetch(candidatePaths.length)
-    const dataFetchStart = performance.now()
-    const rows = await db
-      .select({
-        file: filesSchema,
-        extensionKey: fileExtensions.key,
-        extensionValue: fileExtensions.value
-      })
-      .from(filesSchema)
-      .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
-    if (signal.aborted) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-    searchLogger.fileDataResults(rows.length, performance.now() - dataFetchStart)
-    this.logDebug('Loaded candidate rows for scoring', {
-      count: rows.length,
-      duration: formatDuration(performance.now() - dataFetchStart)
-    })
-
-    const filesMap = new Map<
-      string,
-      { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
-    >()
-
-    for (const row of rows) {
-      if (!filesMap.has(row.file.path)) {
-        filesMap.set(row.file.path, { file: row.file, extensions: {} })
-      }
-      if (row.extensionKey && row.extensionValue) {
-        filesMap.get(row.file.path)!.extensions[row.extensionKey] = row.extensionValue
-      }
-    }
-
-    const staleIds = candidatePaths.filter((path) => !filesMap.has(path))
-    if (staleIds.length > 0) {
-      this.cleanupStaleSearchCandidates(staleIds)
-    }
-
-    if (filesMap.size === 0) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-
-    if (typeFilters.size > 0) {
-      for (const [path, entry] of Array.from(filesMap.entries())) {
-        if (!this.matchesTypeFilters(entry.file, typeFilters)) {
-          filesMap.delete(path)
-        }
-      }
-
-      if (filesMap.size === 0) {
-        return new TuffSearchResultBuilder(query).build()
-      }
-    }
-
-    if (extensionFilters.length > 0) {
-      const extSet = new Set(extensionFilters.map((e) => e.toLowerCase()))
-      for (const [path, entry] of Array.from(filesMap.entries())) {
-        const fileExt = (entry.file.extension || '').toLowerCase()
-        if (!extSet.has(fileExt)) {
-          filesMap.delete(path)
-        }
-      }
-
-      if (filesMap.size === 0) {
-        return new TuffSearchResultBuilder(query).build()
-      }
-    }
-
-    const ftsScoreMap = new Map<string, number>()
-    for (const match of ftsMatches) {
-      const normalizedScore = match.score > 0 ? 1 / (match.score + 1) : 1
-      const previous = ftsScoreMap.get(match.itemId) ?? 0
-      if (normalizedScore > previous) {
-        ftsScoreMap.set(match.itemId, normalizedScore)
-      }
-    }
-
-    const now = Date.now()
-    const weights = {
-      keyword: 0.45,
-      fts: 0.35,
-      lastUsed: 0.1,
-      frequency: 0.05,
-      lastModified: 0.05
-    }
-
-    const scoredItems = Array.from(filesMap.values())
-      .map(({ file, extensions }) => {
-        const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
-        const lastModified = new Date(file.mtime).getTime()
-        const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
-        const lastModifiedScore = Math.exp(-0.05 * daysSinceLastModified)
-
-        const lastUsedScore = 0
-        const frequencyScore = 0
-        const keywordScore = preciseMatchPaths?.has(file.path) ? 1 : 0
-        const ftsScore = ftsScoreMap.get(file.path) ?? 0
-        const semanticScore = 0
-
-        const typeScore = typeFilters.size > 0 ? 1 : 0
-
-        const finalScore =
-          weights.keyword * keywordScore +
-          weights.fts * ftsScore +
-          weights.lastUsed * lastUsedScore +
-          weights.frequency * frequencyScore +
-          weights.lastModified * lastModifiedScore +
-          (typeFilters.size > 0 ? 0.15 * typeScore : 0) +
-          0.25 * semanticScore
-
-        const tuffItem = mapFileToTuffItem(
-          file,
-          sanitizedExtensions,
-          this.id,
-          this.name,
-          (file) => {
-            if (typeof file.id === 'number') {
-              this.ensureFileIcon(file.id, file.path, file).catch((error) => {
-                this.logWarn('Failed to lazy load icon', error, { path: file.path })
-              })
-            }
-          },
-          (file) => {
-            if (typeof file.id === 'number') {
-              this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
-                (error) => {
-                  this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-                }
-              )
-            }
-          }
-        )
-        const matchScore = Math.max(keywordScore, ftsScore, semanticScore)
-        tuffItem.scoring = {
-          final: finalScore,
-          match: matchScore,
-          recency: lastUsedScore,
-          frequency: frequencyScore,
-          base: lastModifiedScore,
-          match_details:
-            keywordScore > 0
-              ? { type: 'exact', query: rawText }
-              : ftsScore > 0
-                ? { type: 'semantic', query: rawText, confidence: ftsScore }
-                : semanticScore > 0
-                  ? { type: 'semantic', query: rawText, confidence: semanticScore }
-                  : undefined
-        }
-
-        if (!tuffItem.meta) {
-          tuffItem.meta = {}
-        }
-
-        tuffItem.meta.usage = { clickCount: 0 }
-
-        const extensionMeta = tuffItem.meta.extension ?? {}
-        tuffItem.meta.extension = {
-          ...extensionMeta,
-          search: {
-            keywordMatch: keywordScore > 0,
-            ftsScore,
-            semanticScore
-          }
-        }
-
-        if (typeFilters.size > 0) {
-          // tuffItem.meta.file = {
-          //   ...(tuffItem.meta.file as Record<string, unknown> | undefined),
-          //   fileTypes: Array.from(typeFilters)
-          // }
-        }
-
-        return this.normalizeFileSearchItem(tuffItem, file, sanitizedExtensions, {
-          reason: 'search-result',
-          fallbackKind: file.isDir ? 'folder' : 'file'
-        })
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null)
-      .sort((a, b) => (b.scoring?.final || 0) - (a.scoring?.final || 0))
-      .slice(0, 50)
-
-    const result = new TuffSearchResultBuilder(query).setItems(scoredItems).build()
-    this.logDebug('Search completed', {
-      query: rawText,
-      items: scoredItems.length,
-      duration: formatDuration(performance.now() - searchStart)
-    })
-    return result
+    return await this.searchResultService.search(query, signal)
   }
 
   private async ensureKeywordIndexes(db: LibSQLDatabase<typeof schema>): Promise<void> {

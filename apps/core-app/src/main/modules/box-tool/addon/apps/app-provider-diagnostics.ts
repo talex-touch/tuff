@@ -11,7 +11,7 @@ import type {
   AppIndexReindexResult
 } from '@talex-touch/utils/transport/events/types'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
-import type { createDbUtils } from '../../../../db/utils'
+import type { DbUtils } from '../../../../db/utils'
 import { files as filesSchema, keywordMappings } from '../../../../db/schema'
 import type { ScannedAppInfo } from './app-types'
 import { normalizeStringList } from './app-utils'
@@ -31,7 +31,7 @@ type DiagnosticAppMatch = {
 
 export interface AppProviderDiagnosticsContext {
   id: string
-  dbUtils: ReturnType<typeof createDbUtils> | null
+  dbUtils: DbUtils | null
   searchIndex: SearchIndexService | null
   fetchExtensionsForFiles(files: DbAppRecord[]): Promise<DbAppWithExtensions[]>
   mapDbAppToScannedInfo(app: DbAppWithExtensions): ScannedAppInfo

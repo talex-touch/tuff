@@ -2854,4 +2854,17 @@ describe('indexingRuntime', () => {
       deleted: 0
     })
   })
+  it('clears registered sources and persisted task state during runtime cleanup', () => {
+    const clearTaskState = vi.fn(async () => undefined)
+    runtime = new IndexingRuntime({
+      store: store as IndexStoreAdapter,
+      taskStateStore: { clear: clearTaskState } as never
+    })
+    runtime.registerSource(buildSource())
+
+    runtime.clear()
+
+    expect(runtime.listDescriptors()).toEqual([])
+    expect(clearTaskState).toHaveBeenCalledTimes(1)
+  })
 })

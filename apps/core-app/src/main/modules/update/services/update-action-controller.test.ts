@@ -65,4 +65,47 @@ describe('update-action-controller', () => {
       itemKind: 'manual'
     })
   })
+
+  it('uses the macOS handoff without inventing a download-center task id', async () => {
+    const { controller, deps } = createController({
+      isMacAutoUpdaterEnabled: vi.fn(() => true)
+    })
+
+    const result = await controller.handleDownload({ tag_name: 'v1.2.0' } as GitHubRelease)
+
+    expect(result).toEqual({ success: true })
+    expect(deps.withMacDownload).toHaveBeenCalledWith({ tag_name: 'v1.2.0' })
+    expect(deps.withDownloadCenterDownload).not.toHaveBeenCalled()
+  })
+
+  it('uses the macOS installer handoff without requiring a task id', async () => {
+    const { controller, deps } = createController({
+      isMacAutoUpdaterEnabled: vi.fn(() => true)
+    })
+
+    const result = await controller.handleInstall()
+
+    expect(result).toEqual({ success: true })
+    expect(deps.withMacInstall).toHaveBeenCalledTimes(1)
+    expect(deps.withDownloadCenterInstall).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a failed macOS download handoff to the renderer', async () => {
+    const { controller, deps } = createController({
+      isMacAutoUpdaterEnabled: vi.fn(() => true),
+      withMacDownload: vi.fn(async () => {
+        throw new Error('updater unavailable')
+      })
+    })
+
+    const result = await controller.handleDownload({ tag_name: 'v1.2.0' } as GitHubRelease)
+
+    expect(result).toEqual({ success: false, error: 'updater unavailable' })
+    expect(deps.reportUpdateTelemetry).toHaveBeenCalledWith('download_error', {
+      channel: AppPreviewChannel.RELEASE,
+      source: 'mac-auto-updater',
+      tag: 'v1.2.0',
+      itemKind: 'manual'
+    })
+  })
 })

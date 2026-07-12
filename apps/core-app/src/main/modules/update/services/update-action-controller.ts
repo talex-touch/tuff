@@ -1,4 +1,5 @@
 import type { AppPreviewChannel, GitHubRelease, UpdateCheckResult } from '@talex-touch/utils'
+import type { UpdateTelemetryMeta } from './update-telemetry'
 
 export interface UpdateActionControllerDeps {
   isPackaged: () => boolean
@@ -17,7 +18,7 @@ export interface UpdateActionControllerDeps {
     message: string,
     meta?: Record<string, unknown>
   ) => void
-  reportUpdateTelemetry: (action: string, meta: Record<string, unknown>) => void
+  reportUpdateTelemetry: (action: string, meta: UpdateTelemetryMeta) => void
   reportUpdateError: (action: string, error: unknown, meta?: Record<string, unknown>) => void
   getSourceName: () => string
   logError: (message: string, error: unknown) => void
