@@ -33,6 +33,14 @@ interface LoadedManifest {
   manifest: PluginManifest
 }
 
+interface PluginPackageJson {
+  name?: string
+}
+
+interface LoadedPluginPackage {
+  dirName: string
+  packageJson: PluginPackageJson
+}
 const pluginsRoot = new URL('../../../../plugins/', import.meta.url)
 
 function loadOfficialManifests(): LoadedManifest[] {
@@ -54,6 +62,25 @@ function loadOfficialManifests(): LoadedManifest[] {
     .sort((a, b) => a.dirName.localeCompare(b.dirName))
 }
 
+function loadOfficialPluginPackages(): LoadedPluginPackage[] {
+  return readdirSync(pluginsRoot, { withFileTypes: true })
+    .filter((entry) => {
+      if (!entry.isDirectory()) {
+        return false
+      }
+      return existsSync(join(pluginsRoot.pathname, entry.name, 'package.json'))
+    })
+    .map((entry) => {
+      const packagePath = join(pluginsRoot.pathname, entry.name, 'package.json')
+      const packageJson = JSON.parse(readFileSync(packagePath, 'utf8')) as PluginPackageJson
+      return {
+        dirName: entry.name,
+        packageJson,
+      }
+    })
+    .sort((a, b) => a.dirName.localeCompare(b.dirName))
+}
+
 function declaredPermissionIds(manifest: PluginManifest): string[] {
   return [
     ...(manifest.permissions?.required ?? []),
@@ -69,6 +96,15 @@ function pushFeatureIds(manifest: PluginManifest): string[] {
 
 describe('official plugin manifest trust boundary', () => {
   const manifests = loadOfficialManifests()
+  const pluginPackages = loadOfficialPluginPackages()
+
+  it('keeps every package-backed plugin on the official npm package-name convention', () => {
+    expect(pluginPackages.length).toBeGreaterThan(0)
+
+    for (const { dirName, packageJson } of pluginPackages) {
+      expect(packageJson.name, `${dirName} package name`).toBe(`@talex-touch/${dirName}-plugin`)
+    }
+  })
 
   it('keeps every repository plugin on an explicitly supported sdkapi marker', () => {
     expect(manifests.length).toBeGreaterThan(0)

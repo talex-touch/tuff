@@ -46,6 +46,8 @@
     "src/preload/**/*",
     "src/shared/**/*",
     "generator-information.ts",
+    "../../packages/utils/renderer/shared/components/**/*.vue",
+    "../../packages/tuffex/packages/script/build/on-demand-style-plugin.ts",
     "../../packages/utils/**/*.d.ts",
     "../../packages/utils/**/*.ts",
     "../../packages/utils/**/*.json",

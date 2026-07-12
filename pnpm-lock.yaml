@@ -629,11 +629,11 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.13)(@types/node@24.1.0)(jiti@2.6.1)(jsdom@26.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
 
-  packages/tuff-analyse:
+  apps/tuff-analyse:
     dependencies:
       '@talex-touch/tuffex':
         specifier: workspace:*
-        version: link:../tuffex
+        version: link:../../packages/tuffex
       '@vueuse/core':
         specifier: catalog:frontend
         version: 14.2.1(vue@3.5.33(typescript@5.9.3))
@@ -1161,6 +1161,9 @@ importers:
 
   plugins/touch-music:
     dependencies:
+      '@talex-touch/tuffex':
+        specifier: workspace:^
+        version: link:../../packages/tuffex
       '@milkdown/theme-nord':
         specifier: ^7.20.0
         version: 7.20.0
@@ -1217,6 +1220,9 @@ importers:
       '@talex-touch/tuff-intelligence':
         specifier: workspace:^
         version: link:../../packages/tuff-intelligence
+      '@talex-touch/tuffex':
+        specifier: workspace:^
+        version: link:../../packages/tuffex
       '@talex-touch/unplugin-export-plugin':
         specifier: workspace:^
         version: link:../../packages/unplugin-export-plugin

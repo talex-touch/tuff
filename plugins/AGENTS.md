@@ -8,6 +8,11 @@
 - 新插件优先使用当前 DevKit / SDK 推荐结构；不要新增 ad-hoc runtime bridge。
 - 示例插件也必须保持真实用途说明，不保留 Vite starter 文案、favicon、无关 asset 或模板 README。
 
+## npm 包名
+
+- 包含 `package.json` 的插件必须使用 `@talex-touch/<runtime-plugin-id>-plugin`；`runtime-plugin-id` 始终等于插件目录名，不能借此重命名目录或 manifest runtime ID。
+- 仅含 `manifest.json` 的运行时插件是有意不发布 npm 包的 manifest-only 插件，不应补充占位 `package.json`。
+
 ## Manifest / SDK
 
 - `sdkapi` 当前值和支持列表以 `packages/utils/plugin/sdk-version.ts` 为准，不在 AGENTS 写死。

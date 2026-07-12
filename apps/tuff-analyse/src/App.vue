@@ -1,20 +1,19 @@
 <script setup lang="ts">
+import type { AnalysisArea, AnalysisItem, AnalysisStatus, RiskLevel, SecurityAlert } from './data/tuff-cleanup-analysis'
 import { computed, ref } from 'vue'
 import {
+
   analysisItems,
+
   baseline,
   frequencyLabels,
   needLabels,
   riskLabels,
+
   securityAlerts,
   statusLabels,
   trends,
   upgradeGroups,
-  type AnalysisArea,
-  type AnalysisItem,
-  type AnalysisStatus,
-  type RiskLevel,
-  type SecurityAlert,
 } from './data/tuff-cleanup-analysis'
 
 const statusFilters = ref<AnalysisStatus[]>([])
@@ -46,15 +45,6 @@ const statusCounts = computed(() => {
     counts.set(status, 0)
   for (const item of analysisItems)
     counts.set(item.status, (counts.get(item.status) ?? 0) + 1)
-  return counts
-})
-
-const riskCounts = computed(() => {
-  const counts = new Map<RiskLevel, number>()
-  for (const risk of riskOrder)
-    counts.set(risk, 0)
-  for (const item of analysisItems)
-    counts.set(item.risk, (counts.get(item.risk) ?? 0) + 1)
   return counts
 })
 
@@ -172,7 +162,9 @@ function selectSecurityAlert(alert: SecurityAlert) {
   <main class="analyse-shell">
     <section class="topbar">
       <div>
-        <p class="eyebrow">Tuff Analyse / Static Expert Report</p>
+        <p class="eyebrow">
+          Tuff Analyse / Static Expert Report
+        </p>
         <h1>版本升级、清理与安全治理分析台</h1>
         <p class="topbar__summary">
           基线 {{ baseline.version }}，Node {{ baseline.node }}，pnpm {{ baseline.pnpm }}。本页是可复用清单，不执行删除、升级、提交或发布动作。
@@ -229,7 +221,9 @@ function selectSecurityAlert(alert: SecurityAlert) {
         <div class="filter-block">
           <label for="area">领域</label>
           <select id="area" v-model="areaFilter">
-            <option value="all">全部领域</option>
+            <option value="all">
+              全部领域
+            </option>
             <option v-for="area in allAreas" :key="area" :value="area">
               {{ area }}
             </option>
@@ -239,7 +233,9 @@ function selectSecurityAlert(alert: SecurityAlert) {
         <div class="filter-block">
           <label for="risk">风险</label>
           <select id="risk" v-model="riskFilter">
-            <option value="all">全部风险</option>
+            <option value="all">
+              全部风险
+            </option>
             <option v-for="risk in riskOrder" :key="risk" :value="risk">
               {{ riskLabels[risk] }}
             </option>
@@ -336,7 +332,9 @@ function selectSecurityAlert(alert: SecurityAlert) {
           </div>
 
           <aside class="detail-panel">
-            <p class="eyebrow">{{ selectedItem.area }} / {{ statusLabels[selectedItem.status] }}</p>
+            <p class="eyebrow">
+              {{ selectedItem.area }} / {{ statusLabels[selectedItem.status] }}
+            </p>
             <h2>{{ selectedItem.item }}</h2>
             <p>{{ selectedItem.recommendation }}</p>
 
@@ -439,7 +437,9 @@ function selectSecurityAlert(alert: SecurityAlert) {
           </div>
 
           <aside v-if="selectedSecurityAlert" class="detail-panel detail-panel--wide">
-            <p class="eyebrow">{{ selectedSecurityAlert.source }} / {{ selectedSecurityAlert.scope }}</p>
+            <p class="eyebrow">
+              {{ selectedSecurityAlert.source }} / {{ selectedSecurityAlert.scope }}
+            </p>
             <h2>{{ selectedSecurityAlert.packageName }}</h2>
             <p>{{ selectedSecurityAlert.impact }}</p>
             <dl class="detail-grid">
