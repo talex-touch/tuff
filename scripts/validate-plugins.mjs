@@ -99,14 +99,32 @@ console.log(`\nValidating ${pluginDirs.length} plugins in plugins/\n`)
 for (const pluginName of pluginDirs) {
   totalPlugins++
   const pluginPath = path.join(pluginsDir, pluginName)
+  const packageJsonPath = path.join(pluginPath, 'package.json')
   const manifestPath = path.join(pluginPath, 'manifest.json')
+  const hasPackageJson = fs.existsSync(packageJsonPath)
   let pluginHasError = false
 
-  // 1. Check manifest.json exists and is valid JSON
+  // 1. Package-backed plugins use the scoped runtime-id package convention.
+  if (hasPackageJson) {
+    try {
+      const packageManifest = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+      const expectedPackageName = `@talex-touch/${pluginName}-plugin`
+      if (packageManifest.name !== expectedPackageName) {
+        logError(pluginName, `package.json name must be "${expectedPackageName}" (received "${packageManifest.name || '<missing>'}")`)
+        pluginHasError = true
+      }
+    }
+    catch (e) {
+      logError(pluginName, `package.json parse error: ${e.message}`)
+      pluginHasError = true
+    }
+  }
+
+  // 2. Check manifest.json exists and is valid JSON
   if (!fs.existsSync(manifestPath)) {
-    // Skip directories that are not manifest-based plugins (e.g., Vite-based Surface plugins)
-    logWarn(pluginName, 'manifest.json not found — skipping (may be a Surface-only plugin)')
-    passedPlugins++
+    // Package-backed directories may be Surface-only; manifest-only runtime plugins intentionally have no npm package.
+    logWarn(pluginName, hasPackageJson ? 'manifest.json not found — skipping Surface-only plugin' : 'manifest.json not found — skipping')
+    if (!pluginHasError) passedPlugins++
     continue
   }
 

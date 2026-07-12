@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@talex-touch/tuff-intelligence": "workspace:^",
+    "@talex-touch/tuffex": "workspace:^",
     "@talex-touch/unplugin-export-plugin": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "@vueuse/core": "^14.2.1",

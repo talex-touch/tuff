@@ -1,6 +1,6 @@
+import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
-import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -18,7 +18,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@talex-touch/tuffex/base.css': fileURLToPath(new URL('../tuffex/dist/es/base.css', import.meta.url)),
+      '@talex-touch/tuffex/base.css': fileURLToPath(
+        new URL('../../packages/tuffex/packages/components/style/index.scss', import.meta.url),
+      ),
     },
   },
 })

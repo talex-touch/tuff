@@ -1,27 +1,27 @@
-export type AnalysisStatus =
-  | 'keep'
-  | 'cleanup'
-  | 'replace'
-  | 'upgrade'
-  | 'defer'
-  | 'removeCandidate'
-  | 'dangerConfirm'
-  | 'monitor'
+export type AnalysisStatus
+  = | 'keep'
+    | 'cleanup'
+    | 'replace'
+    | 'upgrade'
+    | 'defer'
+    | 'removeCandidate'
+    | 'dangerConfirm'
+    | 'monitor'
 
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low'
 export type NeedLevel = 'required' | 'valuable' | 'optional' | 'questionable'
 export type FrequencyLevel = 'high' | 'medium' | 'low' | 'unknown'
-export type AnalysisArea =
-  | 'CoreApp'
-  | 'Nexus'
-  | 'TuffEx'
-  | 'Packages'
-  | 'Plugins'
-  | 'Dependencies'
-  | 'Security'
-  | 'Size'
-  | 'Quality'
-  | 'Migration'
+export type AnalysisArea
+  = | 'CoreApp'
+    | 'Nexus'
+    | 'TuffEx'
+    | 'Packages'
+    | 'Plugins'
+    | 'Dependencies'
+    | 'Security'
+    | 'Size'
+    | 'Quality'
+    | 'Migration'
 
 export interface AnalysisItem {
   id: string
