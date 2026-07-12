@@ -1,7 +1,23 @@
 # 变更日志
 
-> 更新时间：2026-07-07
+> 更新时间：2026-07-11
 > 定位：只保留当前阶段的高信号变更索引。更早流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-11
+
+### workspace: complete renderer and package optimization wave
+
+- Added the repository-wide HTML dry-run audit at `docs/engineering/reports/optimization-dry-run-2026-07-11/index.html`, covering renderer complexity, Tuffex delegation, shared-utils candidates, OSAdapter bypasses, monolith boundaries, package naming, and generated artifacts.
+- Extracted stateful renderer logic into focused CoreApp/Nexus/plugin composables, including user identity, dialog interaction/autosizing, locale orchestration, provider-registry administration, analytics data, and word-lyric runtime behavior.
+- Migrated duplicated UI primitives to `@talex-touch/tuffex`, removed legacy wrapper files/callers, and added parity contracts for button, checkbox, icon, tag, tabs, and progress behavior.
+- Consolidated canonical sleep, plugin image-data URL handling, indexing snapshot cloning, and environment/OSAdapter capabilities in `@talex-touch/utils`; system actions and app launching now route through typed adapters instead of local platform branching.
+- Split the plugin transport, app provider, QuickOps, search/indexing, updater, governance, analytics, and provider-registry monoliths by runtime responsibility while preserving public behavior through focused contracts.
+- Normalized package-backed plugin names, moved the internal analysis app to `apps/tuff-analyse`, promoted the builder example to `examples/tuff-builder.example.ts`, and removed approved generated outputs; CoreApp now exposes the documented package typecheck script.
+
+### corebox: unify AutoPaste freshness gating
+
+- CoreBox renderer hooks now share one clipboard freshness predicate and track whether active clipboard state came from implicit AutoPaste or an explicit user action.
+- Hidden clipboard changes no longer populate active renderer state directly; shortcut reopen and implicit search refresh both reject ineligible or expired clipboard items, while explicit paste and plugin execution retain manual clipboard semantics.
 
 ## 2026-07-07
 
