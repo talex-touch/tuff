@@ -26,6 +26,7 @@ import type {
   ProviderDetail,
   SetInputRequest,
   SetInputVisibilityRequest,
+  SetQueryRequest,
   SetInputResponse,
 } from './types/core-box'
 import { defineEvent, defineRawEvent } from '../event/builder'
@@ -114,7 +115,7 @@ export const CoreBoxRetainedEvents = {
     setQuery: defineEvent('core-box')
       .module('input')
       .event('set-query')
-      .define<SetInputRequest, void>(),
+      .define<SetQueryRequest, void>(),
     setVisibility: defineEvent('core-box')
       .module('input')
       .event('set-visibility')
@@ -286,7 +287,7 @@ export const CoreBoxRetainedEvents = {
     getInput: defineRawEvent<void, GetInputResponse>('core-box:get-input'),
     setInput: defineRawEvent<SetInputRequest, SetInputResponse>('core-box:set-input'),
     clearInput: defineRawEvent<void, ClearInputResponse>('core-box:clear-input'),
-    setQuery: defineRawEvent<SetInputRequest, void>('core-box:set-query'),
+    setQuery: defineRawEvent<SetQueryRequest, void>('core-box:set-query'),
     setInputVisibility: defineRawEvent<SetInputVisibilityRequest, void>(
       'core-box:set-input-visibility',
     ),
