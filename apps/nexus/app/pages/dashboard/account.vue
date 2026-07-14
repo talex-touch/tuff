@@ -6,7 +6,7 @@ import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { TxTimeline, TxTimelineItem } from '@talex-touch/tuffex/timeline'
 import { hasWindow } from '@talex-touch/utils/env'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import DashboardAccountProfilePlanCard from '~/components/dashboard/AccountProfilePlanCard.vue'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import {
@@ -14,11 +14,12 @@ import {
   persistOauthContext,
   type OauthProvider,
 } from '~/composables/useOauthContext'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { formatCompactAccountLabel, formatCompactEmail } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
+
+const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
 
 defineI18nRoute(false)
 
@@ -800,7 +801,8 @@ function formatHistoryTime(value: string) {
       </TxAutoSizer>
     </section>
 
-    <FlipDialog
+    <LazyFlipDialog
+      v-if="profileEditOverlayVisible"
       v-model="profileEditOverlayVisible"
       :reference="profileEditOverlaySource"
       :header="false"
@@ -848,7 +850,7 @@ function formatHistoryTime(value: string) {
           </div>
         </div>
       </template>
-    </FlipDialog>
+    </LazyFlipDialog>
   </div>
 </template>
 

@@ -20,12 +20,6 @@ const props = defineProps({
 
 const { t } = useI18n()
 
-const content = ref('')
-
-watchEffect(() => {
-  content.value = props.agreement
-})
-
 async function dispose(agree: boolean): Promise<void> {
   props.agree(agree)
 }
@@ -39,7 +33,7 @@ async function dispose(agree: boolean): Promise<void> {
     <span mb-2> {{ t('agreement.description') }} </span>
     <div class="AgreeTemplate-Content">
       <TxScroll>
-        <FlatMarkdown v-model="content" :readonly="true" />
+        <FlatMarkdown :model-value="agreement" :readonly="true" />
       </TxScroll>
     </div>
 

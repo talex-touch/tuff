@@ -9,6 +9,7 @@ import { nextTick, ref, watch } from 'vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { BoxMode } from '..'
 import { getLatestClipboard } from './useClipboardChannel'
+import { clearImplicitClipboardState, isClipboardFreshForAutoPaste } from './clipboard-autopaste'
 
 interface UseVisibilityOptions {
   boxOptions: IBoxOptions
@@ -68,6 +69,7 @@ export function useVisibility(options: UseVisibilityOptions) {
   function onHide(): void {
     boxOptions.lastHidden = Date.now()
     wasTriggeredByShortcut.value = false
+    clearImplicitClipboardState(clipboardOptions)
   }
 
   function checkAutoClear(lastHiddenOverride?: number): void {
@@ -89,38 +91,23 @@ export function useVisibility(options: UseVisibilityOptions) {
       clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = null
       clipboardOptions.lastClearedTimestamp = null
+      clipboardOptions.activeClipboardSource = null
+      clipboardOptions.lastTextAttachmentIdentity = null
+      clipboardOptions.lastTextAttachmentSource = null
       void transport.send(MetaOverlayEvents.ui.hide).catch(() => {})
       deactivateAllProviders().catch(() => {})
     }
   }
 
-  async function isClipboardFreshForAutoPaste(): Promise<boolean> {
-    if (!appSetting.tools.autoPaste.enable) return false
-
-    const limit = appSetting.tools.autoPaste.time
-    if (limit === -1) return false
-
-    const clipboard = (await getLatestClipboard()) ?? clipboardOptions.last
-    if (!clipboard || clipboard.autoPasteEligible !== true) return false
-
-    const baseTime =
-      typeof clipboard.freshnessBaseAt === 'number' && Number.isFinite(clipboard.freshnessBaseAt)
-        ? clipboard.freshnessBaseAt
-        : typeof clipboard.observedAt === 'number' && Number.isFinite(clipboard.observedAt)
-          ? clipboard.observedAt
-          : null
-    if (baseTime === null) return false
-
-    const clipboardAge = Date.now() - baseTime
-    const effectiveLimit = limit === 0 ? Number.POSITIVE_INFINITY : limit * 1000
-    return clipboardAge <= effectiveLimit
-  }
-
   async function onShow(): Promise<void> {
     checkAutoClear()
 
-    if (wasTriggeredByShortcut.value && (await isClipboardFreshForAutoPaste())) {
-      handlePaste({ triggerSearch: true, attemptAutoFill: true })
+    if (wasTriggeredByShortcut.value && clipboardOptions.activeClipboardSource !== 'manual') {
+      clearImplicitClipboardState(clipboardOptions)
+      const clipboard = await getLatestClipboard({ refresh: true })
+      if (isClipboardFreshForAutoPaste(clipboard, appSetting.tools.autoPaste)) {
+        handlePaste({ triggerSearch: true, attemptAutoFill: true })
+      }
     }
     wasTriggeredByShortcut.value = false
 

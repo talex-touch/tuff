@@ -310,6 +310,49 @@ describe('app launcher', () => {
     expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
   })
 
+  it('keeps non-Windows shortcut launches on the safe spawn transport', async () => {
+    vi.useFakeTimers()
+    spawnSafeMock.mockReturnValue(createDetachedChildProcessMock())
+
+    const launchPromise = withPlatform('darwin', () =>
+      launchApp({
+        name: 'macOS shortcut',
+        path: '/Applications/Foo.app',
+        launchKind: 'shortcut',
+        launchTarget: '/Applications/Foo.app/Contents/MacOS/Foo',
+        launchArgs: '--profile work',
+        workingDirectory: '/Applications/Foo.app/Contents/MacOS'
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(2500)
+    await expect(launchPromise).resolves.toEqual({ status: 'handedOff' })
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      '/Applications/Foo.app/Contents/MacOS/Foo',
+      ['--profile', 'work'],
+      expect.objectContaining({ cwd: '/Applications/Foo.app/Contents/MacOS' })
+    )
+  })
+
+  it('returns a visible unsupported response for UWP launches outside Windows', async () => {
+    await expect(
+      withPlatform('linux', () =>
+        launchApp({
+          name: 'Windows Store App',
+          path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+          launchKind: 'uwp',
+          launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App'
+        })
+      )
+    ).resolves.toEqual({
+      status: 'failed',
+      error: 'UWP app launch is only supported on Windows'
+    })
+
+    expect(spawnSafeMock).not.toHaveBeenCalled()
+    expect(showInternalSystemNotificationMock).toHaveBeenCalled()
+  })
+
   it('launches allowed Steam protocol URLs through shell.openExternal', async () => {
     shellOpenExternalMock.mockResolvedValue(undefined)
 
@@ -339,5 +382,25 @@ describe('app launcher', () => {
 
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
     expect(showInternalSystemNotificationMock).toHaveBeenCalled()
+  })
+
+  it('maps allowed protocol launcher errors to a user-visible failure', async () => {
+    shellOpenExternalMock.mockRejectedValue(new Error('Steam client is unavailable'))
+
+    await expect(
+      launchApp({
+        name: 'Steam Game',
+        path: 'steam://rungameid/12345',
+        launchKind: 'protocol',
+        launchTarget: 'steam://rungameid/12345'
+      })
+    ).resolves.toEqual({ status: 'failed', error: 'Steam client is unavailable' })
+
+    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'error',
+        message: 'Failed to launch Steam Game\nSteam client is unavailable'
+      })
+    )
   })
 })

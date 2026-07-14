@@ -7,6 +7,7 @@ const {
   execFileMock,
   spawnMock,
   accessMock,
+  shellOpenPathMock,
   mkdirMock,
   readFileMock,
   readdirMock,
@@ -25,6 +26,7 @@ const {
     unref: vi.fn()
   })),
   accessMock: vi.fn(),
+  shellOpenPathMock: vi.fn(),
   mkdirMock: vi.fn(() => Promise.resolve()),
   readFileMock: vi.fn(() => Promise.resolve(Buffer.from('fixture'))),
   readdirMock: vi.fn(),
@@ -37,7 +39,7 @@ const {
 
 vi.mock('electron', () => ({
   shell: {
-    openPath: vi.fn()
+    openPath: shellOpenPathMock
   }
 }))
 
@@ -123,6 +125,13 @@ vi.mock('./file-provider', () => ({
 }))
 
 import { everythingProvider } from './everything-provider'
+import { EverythingBackendService } from './everything-backend-service'
+import { EverythingInstallService } from './everything-install-service'
+import {
+  buildEverythingQuery,
+  parseEverythingCliOutput,
+  parseEverythingSdkOutput
+} from './everything-parser'
 import { DownloadStatus } from '@talex-touch/utils'
 import {
   everythingSetCliPathEvent,
@@ -167,6 +176,8 @@ interface MutableEverythingProvider {
   sdkAddon: unknown
   esPath: string | null
   configuredCliPath: string | null
+  backendService: EverythingBackendService
+  installService: EverythingInstallService
   installJob: unknown
   portableIndexRepairAttempted: boolean
   iconCache: Map<string, string>
@@ -185,26 +196,11 @@ interface MutableEverythingProvider {
   ) => Promise<unknown[]>
   tryInitializeCliBackend: () => Promise<boolean>
   detectEverything: () => Promise<void>
-  probeEverythingCli: (esPath: string) => Promise<{ version: string | null }>
   buildUnavailableNotice: (query: { text: string; inputs: unknown[] }) => unknown
-  buildEverythingQuery: (searchText: string) => string
-  parseEverythingOutput: (output: string) => Array<{ path: string; name: string; size: number }>
-  parseEverythingSdkOutput: (output: unknown) => Array<{ path: string; isDir: boolean }>
-  readWindowsRegistryPathValues: () => Promise<string[]>
-  findExistingPath: (candidates: string[]) => Promise<string | null>
   isEverythingProcessRunning: () => Promise<boolean | null>
-  calculateFileSha256: (filePath: string) => Promise<string>
-  ensureUserPathContains: (cliDir: string) => Promise<void>
-  buildPortableEverythingConfig: (folderRoots: string[]) => string
-  writePortableEverythingConfig: (configPath: string) => Promise<string[]>
-  startEverythingPortable: (everythingExe: string) => void
-  startEverythingPortableAndWait: (everythingExe: string) => Promise<void>
-  isManagedPortableEverythingAppPath: (everythingExe: string) => boolean
   ensureEverythingAppRunning: () => Promise<boolean>
-  isEverythingIpcUnavailableError: (error: unknown) => boolean
   shouldRepairPortableEmptyDatabase: () => Promise<boolean>
   repairPortableEverythingIndexForCli: () => Promise<boolean>
-  isPortableEverythingConfigStale: () => Promise<boolean>
   runEverythingInstallJob: (job: unknown) => Promise<void>
   getStatusSnapshot: () => {
     pathFiltering: MutableEverythingProvider['pathFilteringStatus']
@@ -336,6 +332,8 @@ afterEach(() => {
   readFileMock.mockReset()
   readFileMock.mockResolvedValue(Buffer.from('fixture'))
   readdirMock.mockReset()
+  shellOpenPathMock.mockReset()
+  shellOpenPathMock.mockResolvedValue('')
   writeFileMock.mockReset()
   writeFileMock.mockResolvedValue(undefined)
   fileProviderOnSearch.mockReset()
@@ -397,11 +395,11 @@ describe('everything-provider fallback chain', () => {
       provider.esPath = 'C:\\Users\\demo\\AppData\\Local\\Tuff\\EverythingCLI\\es.exe'
 
       vi.spyOn(provider, 'isEverythingProcessRunning').mockResolvedValue(false)
-      vi.spyOn(provider, 'findExistingPath').mockResolvedValue(
+      vi.spyOn(provider.installService, 'findExistingPath').mockResolvedValue(
         'C:\\Users\\demo\\AppData\\Local\\Tuff\\Everything\\Everything.exe'
       )
       const startSpy = vi
-        .spyOn(provider, 'startEverythingPortableAndWait')
+        .spyOn(provider.installService, 'startPortableAndWait')
         .mockResolvedValue(undefined)
       vi.spyOn(provider, 'refreshInstallationStatus').mockResolvedValue(undefined)
 
@@ -458,7 +456,7 @@ describe('everything-provider fallback chain', () => {
 
   it('resolves the portable Everything executable case-insensitively', async () => {
     await withPlatform('win32', async () => {
-      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const installService = new EverythingInstallService({ platform: 'win32' })
 
       accessMock.mockRejectedValue(new Error('ENOENT'))
       readdirMock.mockImplementation(async (dir: string) => {
@@ -469,7 +467,7 @@ describe('everything-provider fallback chain', () => {
       })
 
       await expect(
-        provider.findExistingPath([
+        installService.findExistingPath([
           'C:\\Users\\demo\\AppData\\Local\\Tuff\\Everything\\Everything.exe'
         ])
       ).resolves.toBe('C:\\Users\\demo\\AppData\\Local\\Tuff\\Everything\\everything.exe')
@@ -478,17 +476,16 @@ describe('everything-provider fallback chain', () => {
 
   it('starts only managed portable Everything with the Tuff config file', async () => {
     await withPlatform('win32', async () => {
-      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const installService = new EverythingInstallService({ platform: 'win32' })
+      const paths = installService.resolvePaths()
 
-      provider.startEverythingPortable(
-        `${process.env.LOCALAPPDATA || 'C:\\Users\\demo\\AppData\\Local'}\\Tuff\\Everything\\everything.exe`
-      )
-      provider.startEverythingPortable('C:\\Program Files\\Everything\\Everything.exe')
+      installService.startPortable(paths.everythingExe)
+      installService.startPortable('C:\\Program Files\\Everything\\Everything.exe')
 
       expect(spawnMock).toHaveBeenNthCalledWith(
         1,
-        expect.stringContaining('Tuff\\Everything\\everything.exe'),
-        ['-config', expect.stringContaining('Tuff\\Everything\\Everything.ini'), '-startup'],
+        paths.everythingExe,
+        ['-config', paths.configPath, '-startup'],
         expect.objectContaining({
           detached: true,
           windowsHide: true
@@ -508,12 +505,9 @@ describe('everything-provider fallback chain', () => {
 
   it('writes portable Everything folder index config without quoting Windows roots', async () => {
     await withPlatform('win32', async () => {
-      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const installService = new EverythingInstallService({ platform: 'win32' })
 
-      const config = provider.buildPortableEverythingConfig([
-        'C:\\Users\\demo\\Desktop',
-        'D:\\Work'
-      ])
+      const config = installService.buildPortableConfig(['C:\\Users\\demo\\Desktop', 'D:\\Work'])
 
       expect(config).toContain('folders=C:\\Users\\demo\\Desktop,D:\\Work')
       expect(config).toContain('folder_monitor_changes=1,1')
@@ -529,13 +523,11 @@ describe('everything-provider fallback chain', () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
       provider.backend = 'cli'
       provider.isAvailable = true
-      provider.esPath = `${
-        process.env.LOCALAPPDATA || 'C:\\Users\\demo\\AppData\\Local'
-      }\\Tuff\\EverythingCLI\\es.exe`
+      provider.esPath = provider.installService.resolvePaths().cliPath
 
-      vi.spyOn(provider, 'isPortableEverythingConfigStale').mockResolvedValue(false)
+      vi.spyOn(provider.installService, 'isPortableConfigStale').mockResolvedValue(false)
       const repairSpy = vi
-        .spyOn(provider, 'repairPortableEverythingIndexForCli')
+        .spyOn(provider.installService, 'repairPortableIndex')
         .mockResolvedValue(true)
 
       execFileMock
@@ -572,13 +564,11 @@ describe('everything-provider fallback chain', () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
       provider.backend = 'cli'
       provider.isAvailable = true
-      provider.esPath = `${
-        process.env.LOCALAPPDATA || 'C:\\Users\\demo\\AppData\\Local'
-      }\\Tuff\\EverythingCLI\\es.exe`
+      provider.esPath = provider.installService.resolvePaths().cliPath
 
-      vi.spyOn(provider, 'isPortableEverythingConfigStale').mockResolvedValue(true)
+      vi.spyOn(provider.installService, 'isPortableConfigStale').mockResolvedValue(true)
       const repairSpy = vi
-        .spyOn(provider, 'repairPortableEverythingIndexForCli')
+        .spyOn(provider.installService, 'repairPortableIndex')
         .mockResolvedValue(true)
 
       execFileMock
@@ -653,17 +643,13 @@ describe('everything-provider fallback chain', () => {
   })
 
   it('keeps multi-word queries unquoted unless the user provided quotes', () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
-
-    expect(provider.buildEverythingQuery('quarterly report')).toBe('quarterly report')
-    expect(provider.buildEverythingQuery('"quarterly report"')).toBe('"quarterly report"')
-    expect(provider.buildEverythingQuery(' ext:pdf report ')).toBe('ext:pdf report')
+    expect(buildEverythingQuery('quarterly report')).toBe('quarterly report')
+    expect(buildEverythingQuery('"quarterly report"')).toBe('"quarterly report"')
+    expect(buildEverythingQuery(' ext:pdf report ')).toBe('ext:pdf report')
   })
 
   it('parses CLI CSV output with commas, quotes and non-ASCII paths', () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
-
-    const rows = provider.parseEverythingOutput(
+    const rows = parseEverythingCliOutput(
       [
         String.raw`"C:\Reports, FY26\roadmap ""final"".txt","42","2026-01-02T03:04:05.000Z","2026-01-01T00:00:00.000Z"`,
         String.raw`"C:\用户\计划,草案.md","","bad-date",""`
@@ -679,9 +665,7 @@ describe('everything-provider fallback chain', () => {
   })
 
   it('preserves folder metadata from SDK results', () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
-
-    const rows = provider.parseEverythingSdkOutput([
+    const rows = parseEverythingSdkOutput([
       {
         fullPath: 'C:\\Projects\\Tuff',
         name: 'Tuff',
@@ -840,19 +824,21 @@ describe('everything-provider fallback chain', () => {
   })
 
   it('refreshes backend state when status request asks for manual recheck', async () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
-    const refreshSpy = vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const refreshSpy = vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
 
-    provider.registerChannels({ touchApp: { channel: {} } })
+      provider.registerChannels({ touchApp: { channel: {} } })
 
-    const statusHandler =
-      getTransportHandler<(payload?: { refresh?: boolean }) => Promise<unknown>>(
-        everythingStatusEvent
-      )
+      const statusHandler =
+        getTransportHandler<(payload?: { refresh?: boolean }) => Promise<unknown>>(
+          everythingStatusEvent
+        )
 
-    await statusHandler?.({ refresh: true })
+      await statusHandler?.({ refresh: true })
 
-    expect(refreshSpy).toHaveBeenCalledWith('manual-check')
+      expect(refreshSpy).toHaveBeenCalledWith('manual-check')
+    })
   })
 
   it('rechecks backend when enabling Everything from settings', async () => {
@@ -876,15 +862,15 @@ describe('everything-provider fallback chain', () => {
   it('queues Everything install downloads through Download Center on Windows', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
-      vi.spyOn(provider, 'calculateFileSha256').mockImplementation(async (filePath) => {
+      vi.spyOn(provider.installService, 'calculateSha256').mockImplementation(async (filePath) => {
         if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
           return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
         }
         return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
       })
-      vi.spyOn(provider, 'ensureUserPathContains').mockResolvedValue(undefined)
+      vi.spyOn(provider.installService, 'ensureUserPathContains').mockResolvedValue(undefined)
       const startSpy = vi
-        .spyOn(provider, 'startEverythingPortableAndWait')
+        .spyOn(provider.installService, 'startPortableAndWait')
         .mockResolvedValue(undefined)
       vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
 
@@ -960,16 +946,16 @@ describe('everything-provider fallback chain', () => {
   })
 
   it('probes Everything CLI with -version instead of unsupported -v', async () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
+    const backendService = new EverythingBackendService()
     execFileMock.mockImplementation((_file, _args, _options, callback) => {
       callback(null, { stdout: '1.1.0.30' })
     })
 
-    const result = await provider.probeEverythingCli('C:\\Tools\\EverythingCLI\\es.exe')
+    const result = await backendService.probeCli('C:/Tools/EverythingCLI/es.exe')
 
     expect(result.version).toBe('1.1.0.30')
     expect(execFileMock).toHaveBeenCalledWith(
-      'C:\\Tools\\EverythingCLI\\es.exe',
+      'C:/Tools/EverythingCLI/es.exe',
       ['-version'],
       expect.objectContaining({
         timeout: 3000,
@@ -980,14 +966,14 @@ describe('everything-provider fallback chain', () => {
   })
 
   it('rejects a version-reporting executable when the selected file is not es.exe', async () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
+    const backendService = new EverythingBackendService()
     execFileMock.mockImplementation((_file, _args, _options, callback) => {
       callback(null, { stdout: '1.1.0.30' })
     })
 
-    await expect(
-      provider.probeEverythingCli('C:\\Tools\\EverythingCLI\\not-es.exe')
-    ).rejects.toThrow('Selected file is not Everything CLI (es.exe)')
+    await expect(backendService.probeCli('C:\\Tools\\EverythingCLI\\not-es.exe')).rejects.toThrow(
+      'Selected file is not Everything CLI (es.exe)'
+    )
   })
 
   it('returns unsupported install status outside Windows', async () => {
@@ -1060,8 +1046,7 @@ describe('everything-provider fallback chain', () => {
   it('marks Everything install failed when a downloaded asset hash mismatches', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
-      vi.spyOn(provider, 'calculateFileSha256').mockResolvedValue('bad-hash')
-      vi.spyOn(provider, 'ensureUserPathContains').mockResolvedValue(undefined)
+      vi.spyOn(provider.installService, 'calculateSha256').mockResolvedValue('bad-hash')
       downloadCenterAddTaskMock
         .mockResolvedValueOnce('everything-task')
         .mockResolvedValueOnce('cli-task')
@@ -1125,7 +1110,7 @@ describe('everything-provider fallback chain', () => {
   it('marks Everything install failed when extraction fails', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
-      vi.spyOn(provider, 'calculateFileSha256').mockImplementation(async (filePath) => {
+      vi.spyOn(provider.installService, 'calculateSha256').mockImplementation(async (filePath) => {
         if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
           return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
         }
@@ -1162,16 +1147,16 @@ describe('everything-provider fallback chain', () => {
   it('marks Everything install failed when es.exe probing fails', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
-      vi.spyOn(provider, 'calculateFileSha256').mockImplementation(async (filePath) => {
+      vi.spyOn(provider.installService, 'calculateSha256').mockImplementation(async (filePath) => {
         if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
           return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
         }
         return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
       })
       const ensurePathSpy = vi
-        .spyOn(provider, 'ensureUserPathContains')
+        .spyOn(provider.installService, 'ensureUserPathContains')
         .mockResolvedValue(undefined)
-      vi.spyOn(provider, 'probeEverythingCli').mockRejectedValue(new Error('probe failed'))
+      vi.spyOn(provider.backendService, 'probeCli').mockRejectedValue(new Error('probe failed'))
       downloadCenterAddTaskMock
         .mockResolvedValueOnce('everything-task')
         .mockResolvedValueOnce('cli-task')
@@ -1201,7 +1186,7 @@ describe('everything-provider fallback chain', () => {
   })
 
   it('does not duplicate the CLI directory in the current process PATH', async () => {
-    const provider = everythingProvider as unknown as MutableEverythingProvider
+    const installService = new EverythingInstallService()
     const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'Path'
     const originalPath = process.env[pathKey]
     const cliDir = 'C:\\Users\\demo\\AppData\\Local\\Tuff\\EverythingCLI'
@@ -1213,7 +1198,7 @@ describe('everything-provider fallback chain', () => {
     try {
       process.env[pathKey] = `C:\\Tools;${cliDir}\\`
 
-      await provider.ensureUserPathContains(cliDir)
+      await installService.ensureUserPathContains(cliDir)
 
       const normalizedParts = (process.env[pathKey] || '')
         .split(';')
@@ -1250,10 +1235,10 @@ describe('everything-provider fallback chain', () => {
         }>
       >(everythingSetCliPathEvent)
 
-      const result = await setCliPathHandler({ path: '  D:\\Tools\\Everything\\es.exe  ' })
+      const result = await setCliPathHandler({ path: '  D:/Tools/Everything/es.exe  ' })
 
       expect(execFileMock).toHaveBeenCalledWith(
-        'D:\\Tools\\Everything\\es.exe',
+        'D:/Tools/Everything/es.exe',
         ['-version'],
         expect.objectContaining({
           timeout: 3000,
@@ -1265,20 +1250,20 @@ describe('everything-provider fallback chain', () => {
       expect(result).toEqual(
         expect.objectContaining({
           success: true,
-          cliPath: 'D:\\Tools\\Everything\\es.exe',
+          cliPath: 'D:/Tools/Everything/es.exe',
           status: expect.objectContaining({
-            configuredCliPath: 'D:\\Tools\\Everything\\es.exe'
+            configuredCliPath: 'D:/Tools/Everything/es.exe'
           })
         })
       )
-      expect(provider.configuredCliPath).toBe('D:\\Tools\\Everything\\es.exe')
+      expect(provider.configuredCliPath).toBe('D:/Tools/Everything/es.exe')
     })
   })
 
   it('detects Everything CLI from the configured path before fallback locations', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
-      provider.configuredCliPath = 'D:\\Tools\\Everything\\es.exe'
+      provider.configuredCliPath = 'D:/Tools/Everything/es.exe'
 
       execFileMock.mockImplementation((_file, _args, _options, callback) => {
         callback(null, { stdout: 'Everything ES 1.1.0' })
@@ -1287,8 +1272,8 @@ describe('everything-provider fallback chain', () => {
       await provider.detectEverything()
 
       expect(execFileMock).toHaveBeenCalledTimes(1)
-      expect(execFileMock.mock.calls[0]?.[0]).toBe('D:\\Tools\\Everything\\es.exe')
-      expect(provider.esPath).toBe('D:\\Tools\\Everything\\es.exe')
+      expect(execFileMock.mock.calls[0]?.[0]).toBe('D:/Tools/Everything/es.exe')
+      expect(provider.esPath).toBe('D:/Tools/Everything/es.exe')
     })
   })
 
@@ -1296,21 +1281,19 @@ describe('everything-provider fallback chain', () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
       const registryPathSpy = vi
-        .spyOn(provider, 'readWindowsRegistryPathValues')
+        .spyOn(provider.backendService, 'readRegistryPathValues')
         .mockResolvedValue(['C:\\Tools\\Everything;C:\\Other'])
-
-      execFileMock.mockImplementation((file, _args, _options, callback) => {
-        if (file === 'C:\\Tools\\Everything\\es.exe') {
-          callback(null, { stdout: 'Everything ES 1.1.0' })
-          return
-        }
-        callback(new Error(`not found: ${String(file)}`), { stdout: '' })
-      })
+      const probeSpy = vi
+        .spyOn(provider.backendService, 'probeCli')
+        .mockImplementation(async (file) => {
+          if (file === 'C:\\Tools\\Everything\\es.exe') return { version: '1.1.0' }
+          throw new Error(`not found: ${file}`)
+        })
 
       await provider.detectEverything()
 
       expect(registryPathSpy).toHaveBeenCalledTimes(1)
-      expect(execFileMock.mock.calls.map(([file]) => file)).toEqual(
+      expect(probeSpy.mock.calls.map(([file]) => file)).toEqual(
         expect.arrayContaining(['es.exe', 'C:\\Tools\\Everything\\es.exe'])
       )
       expect(provider.esPath).toBe('C:\\Tools\\Everything\\es.exe')
@@ -1324,7 +1307,7 @@ describe('everything-provider fallback chain', () => {
       provider.isAvailable = false
       provider.backend = 'unavailable'
       provider.esPath = null
-      vi.spyOn(provider, 'findExistingPath').mockResolvedValue(null)
+      vi.spyOn(provider.installService, 'findExistingPath').mockResolvedValue(null)
 
       execFileMock.mockImplementation((file, _args, _options, callback) => {
         const error = Object.assign(new Error(`${file} failed`), {
@@ -1634,5 +1617,20 @@ describe('everything-provider fallback chain', () => {
         })
       })
     )
+  })
+  it('opens an existing Everything result but never delegates a missing path to the shell', async () => {
+    const item = {
+      meta: { file: { path: 'C:\\Reports\\monthly.txt' } }
+    }
+
+    accessMock.mockResolvedValueOnce(undefined)
+    await everythingProvider.onExecute({ item } as never)
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('C:\\Reports\\monthly.txt')
+
+    accessMock.mockRejectedValueOnce(Object.assign(new Error('not found'), { code: 'ENOENT' }))
+    await everythingProvider.onExecute({ item } as never)
+
+    expect(shellOpenPathMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-touch/utils/plugin/providers'
-import { hasWindow } from '@talex-touch/utils/env'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
@@ -10,6 +9,7 @@ import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { requestJson } from '~/utils/request'
+import { useDialogAutoSizer } from '~/composables/useDialogAutoSizer'
 
 interface Props {
   isOpen: boolean
@@ -58,33 +58,28 @@ const step = ref<Step>('form')
 const licenseAgreed = ref(false)
 
 const formContentRef = ref<HTMLElement | null>(null)
-const scrollAreaHeight = ref(420)
-const maxScrollableHeight = ref(620)
-let formResizeObserver: ResizeObserver | null = null
-let viewportResizeHandler: (() => void) | null = null
-
-watch(() => props.isOpen, async (isOpen) => {
-  if (isOpen) {
-    formData.value = {
-      version: props.initialVersion ?? '',
-      channel: props.initialChannel ?? 'SNAPSHOT',
-      changelog: props.initialChangelog ?? '',
-      packageFile: null as any,
-    }
-    packageFiles.value = []
-    step.value = 'form'
-    packageError.value = null
-    manifestPreview.value = null
-    licenseAgreed.value = false
-    maxScrollableHeight.value = resolveMaxScrollableHeight()
-    await nextTick()
-    setupFormObserver()
-    scheduleLayoutMeasure()
-    return
-  }
-
-  cleanupFormObserver()
+const { maxScrollableHeight, scheduleMeasure, scrollAreaHeight } = useDialogAutoSizer({
+  isOpen: computed(() => props.isOpen),
+  contentRef: formContentRef,
+  minScrollableHeight: 220,
+  minViewportScrollableHeight: 240,
+  maxViewportScrollableHeight: 680,
+  reset: resetForm,
 })
+
+function resetForm() {
+  formData.value = {
+    version: props.initialVersion ?? '',
+    channel: props.initialChannel ?? 'SNAPSHOT',
+    changelog: props.initialChangelog ?? '',
+    packageFile: null as any,
+  }
+  packageFiles.value = []
+  step.value = 'form'
+  packageError.value = null
+  manifestPreview.value = null
+  licenseAgreed.value = false
+}
 
 async function handlePackageChange(files: FileUploaderFile[]) {
   packageFiles.value = files
@@ -211,81 +206,15 @@ const scrollWrapStyle = computed(() => ({
   '--version-form-scroll-max-height': `${maxScrollableHeight.value}px`,
 }))
 
-function resolveMaxScrollableHeight() {
-  if (!hasWindow())
-    return 620
-
-  const viewportLimitedHeight = Math.floor(window.innerHeight * 0.68)
-  return Math.max(240, Math.min(viewportLimitedHeight, 680))
-}
-
-function scheduleLayoutMeasure() {
-  if (!props.isOpen)
-    return
-
-  nextTick(() => {
-    const contentEl = formContentRef.value
-    if (!contentEl)
-      return
-
-    const measuredHeight = Math.ceil(contentEl.scrollHeight)
-    if (measuredHeight <= 0)
-      return
-
-    const minHeight = 220
-    scrollAreaHeight.value = Math.max(minHeight, Math.min(measuredHeight, maxScrollableHeight.value))
-  })
-}
-
-function cleanupFormObserver() {
-  if (!formResizeObserver)
-    return
-
-  formResizeObserver.disconnect()
-  formResizeObserver = null
-}
-
-function setupFormObserver() {
-  cleanupFormObserver()
-  if (typeof ResizeObserver === 'undefined')
-    return
-  if (!formContentRef.value)
-    return
-
-  formResizeObserver = new ResizeObserver(() => {
-    scheduleLayoutMeasure()
-  })
-  formResizeObserver.observe(formContentRef.value)
-}
 
 watch(step, () => {
-  scheduleLayoutMeasure()
+  scheduleMeasure()
 })
 
 watch([manifestPreview, packageLoading, packageError], () => {
-  scheduleLayoutMeasure()
+  scheduleMeasure()
 })
 
-onMounted(() => {
-  if (!hasWindow())
-    return
-
-  viewportResizeHandler = () => {
-    maxScrollableHeight.value = resolveMaxScrollableHeight()
-    scheduleLayoutMeasure()
-  }
-  window.addEventListener('resize', viewportResizeHandler, { passive: true })
-})
-
-onBeforeUnmount(() => {
-  cleanupFormObserver()
-  if (!hasWindow())
-    return
-  if (!viewportResizeHandler)
-    return
-  window.removeEventListener('resize', viewportResizeHandler)
-  viewportResizeHandler = null
-})
 </script>
 
 <template>

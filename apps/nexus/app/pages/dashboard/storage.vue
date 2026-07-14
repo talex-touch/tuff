@@ -2,10 +2,11 @@
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
-import { computed, ref, watch } from 'vue'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { requestJson } from '~/utils/request'
+
+const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
+const LazyDashboardSparklineChart = defineAsyncComponent(() => import('~/components/dashboard/DashboardSparklineChart.client.vue'))
 
 definePageMeta({
   layout: 'dashboard',
@@ -505,7 +506,7 @@ watch(showDetailsOverlay, (open) => {
             <span>{{ t('dashboard.storage.activity7Day', '7-Day Activity') }}</span>
             <span class="StorageMiniChart-Trend">{{ storageSparkline.trend }}</span>
           </div>
-          <DashboardSparklineChart
+          <LazyDashboardSparklineChart
             :values="storageSparkline.values"
             :labels="storageSparkline.days"
             :height="70"
@@ -546,7 +547,7 @@ watch(showDetailsOverlay, (open) => {
             <span>{{ t('dashboard.storage.activeConnections', 'Active Connections') }}</span>
             <span class="StorageMiniChart-Trend">{{ connectionSparkline.healthLabel }}</span>
           </div>
-          <DashboardSparklineChart
+          <LazyDashboardSparklineChart
             :values="connectionSparkline.values"
             :height="62"
             color="#a855f7"
@@ -662,7 +663,8 @@ watch(showDetailsOverlay, (open) => {
       </ul>
     </section>
 
-    <FlipDialog
+    <LazyFlipDialog
+        v-if="showDetailsOverlay"
         v-model="showDetailsOverlay"
         :reference="detailsOverlaySource"
         size="lg"
@@ -799,7 +801,7 @@ watch(showDetailsOverlay, (open) => {
             </div>
           </div>
         </template>
-      </FlipDialog>
+      </LazyFlipDialog>
   </div>
 </template>
 

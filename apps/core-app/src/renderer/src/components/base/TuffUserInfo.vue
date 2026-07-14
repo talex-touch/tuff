@@ -8,48 +8,31 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
+import { useAccountOverview } from './composables/useAccountOverview'
+import { useUserIdentity } from './composables/useUserIdentity'
 import { computeSubscriptionActive } from '~/components/base/user-subscription'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
-import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 
 const { t } = useI18n()
-const {
-  isLoggedIn,
-  user,
-  getDisplayName,
-  getPrimaryEmail,
-  getUserBio,
-  openLoginSettings,
-  requestStepUp
-} = useAuth()
+const { openLoginSettings, requestStepUp } = useAuth()
+const { isLoggedIn, displayId, displayName, displayEmail, profileBio, avatarUrl, displayInitial } =
+  useUserIdentity()
 
-const profileVisible = ref(false)
 const profileEditing = ref(false)
 const profileTab = ref<'overview' | 'security'>('overview')
 const profileTriggerRef = ref<HTMLElement | null>(null)
-const accountLoading = ref(false)
-const accountLoaded = ref(false)
-const accountError = ref('')
-const subscriptionStatus = ref<SubscriptionStatus | null>(null)
-const teamSummary = ref<TeamSummary | null>(null)
-const deviceCount = ref<number | null>(null)
-const lastFetchedAt = ref(0)
+const {
+  profileVisible,
+  accountLoading,
+  accountError,
+  subscriptionStatus,
+  teamSummary,
+  deviceCount,
+  openAccountOverview
+} = useAccountOverview()
 const appSdk = useAppSdk()
 
-const displayName = computed(() => {
-  return getDisplayName()
-})
-const displayEmail = computed(() => {
-  return getPrimaryEmail()
-})
-const displayId = computed(() => user.value?.id || '')
-const avatarUrl = computed(() => user.value?.avatar || '')
-const displayInitial = computed(() => {
-  const seed = displayName.value || displayEmail.value
-  return seed ? seed.trim().charAt(0).toUpperCase() : '?'
-})
-const profileBio = computed(() => getUserBio())
 const planLabel = computed(() =>
   subscriptionStatus.value ? formatPlan(subscriptionStatus.value.plan) : '-'
 )
@@ -94,42 +77,6 @@ const statusBadgeLabel = computed(() =>
     ? t('userProfile.statusSignedIn', 'Signed in')
     : t('userProfile.statusSignedOut', 'Signed out')
 )
-
-interface SubscriptionStatus {
-  plan: string
-  expiresAt: string | null
-  activatedAt: string | null
-  isActive?: boolean
-  status?: string | null
-  features: {
-    aiRequests: { limit: number; used: number }
-    aiTokens: { limit: number; used: number }
-    customModels: boolean
-    prioritySupport: boolean
-    apiAccess: boolean
-  }
-  team?: TeamSummary
-}
-
-interface TeamSummary {
-  id: string
-  name: string
-  type: 'personal' | 'organization'
-  role: 'owner' | 'admin' | 'member'
-  collaborationEnabled: boolean
-  seats: { total: number; used: number }
-  permissions: {
-    canInvite: boolean
-    canManageMembers: boolean
-    canDisband: boolean
-    canCreateTeam: boolean
-  }
-  upgrade: {
-    required: boolean
-    targetPlan: 'TEAM' | null
-  }
-  manageUrl?: string
-}
 
 function openUserProfile() {
   const profileUrl = `${getAuthBaseUrl()}/dashboard/account`
@@ -180,67 +127,8 @@ function openSyncSecurity() {
 }
 
 function openProfileDialog() {
-  if (!isLoggedIn.value) {
-    return
-  }
   profileTab.value = 'overview'
-  profileVisible.value = true
-}
-
-function resetAccountSnapshot() {
-  accountLoaded.value = false
-  accountError.value = ''
-  subscriptionStatus.value = null
-  teamSummary.value = null
-  deviceCount.value = null
-}
-
-async function fetchNexusJson<T>(path: string): Promise<T> {
-  const response = await fetchNexusWithAuth(path, {}, `user-profile:${path}`)
-  if (!response) {
-    throw new Error(t('userProfile.authRequired', '登录后才能获取账户信息'))
-  }
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`)
-  }
-  return response.json() as Promise<T>
-}
-
-async function loadDeviceSummary() {
-  try {
-    const devices = await fetchNexusJson<Array<{ id: string }>>('/api/devices')
-    deviceCount.value = Array.isArray(devices) ? devices.length : 0
-  } catch {
-    deviceCount.value = null
-  }
-}
-
-async function loadAccountOverview() {
-  if (!isLoggedIn.value || accountLoading.value) {
-    return
-  }
-  const now = Date.now()
-  if (accountLoaded.value && now - lastFetchedAt.value < 60000) {
-    return
-  }
-  accountLoading.value = true
-  accountError.value = ''
-  try {
-    const subscription = await fetchNexusJson<SubscriptionStatus>('/api/subscription/status')
-    subscriptionStatus.value = subscription
-    teamSummary.value = subscription.team || null
-
-    await loadDeviceSummary()
-    accountLoaded.value = true
-    lastFetchedAt.value = now
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : ''
-    accountError.value = /^401\b/.test(errorMessage)
-      ? t('userProfile.authRequired', '登录后才能获取账户信息')
-      : errorMessage || t('userProfile.loadFailed', '加载账户信息失败')
-  } finally {
-    accountLoading.value = false
-  }
+  openAccountOverview()
 }
 
 function formatPlan(plan?: string): string {
@@ -282,20 +170,8 @@ function formatQuota(used?: number, limit?: number): string {
 }
 
 watch(profileVisible, (visible) => {
-  if (visible) {
-    loadAccountOverview()
-  } else {
+  if (!visible) {
     profileEditing.value = false
-  }
-})
-
-watch(isLoggedIn, (loggedIn) => {
-  if (!loggedIn) {
-    resetAccountSnapshot()
-    profileEditing.value = false
-    if (profileVisible.value) {
-      profileVisible.value = false
-    }
   }
 })
 </script>

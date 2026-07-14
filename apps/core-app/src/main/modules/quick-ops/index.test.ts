@@ -1923,6 +1923,41 @@ describe('QuickOpsModule', () => {
     expect(quickOpsDnsQueryResultMock).not.toHaveBeenCalled()
   })
 
+  it('preserves read-only DNS and file permission failures through typed transport', async () => {
+    quickOpsDnsQueryResultMock.mockResolvedValueOnce({
+      degradedReason: 'dns-query-no-records',
+      message: '未解析到 A / AAAA / CNAME / MX 记录'
+    })
+    quickOpsFileHashResultMock.mockResolvedValueOnce({
+      degradedReason: 'file-hash-permission-denied',
+      message: '没有权限读取文件'
+    })
+    const module = new QuickOpsModule()
+
+    module.onInit({} as ModuleInitContext<TalexEvents>)
+
+    const dnsHandler = getQuickOpsTransportHandler<
+      (request: { hostname?: string; text?: string; deep?: boolean }) => Promise<unknown>
+    >(QuickOpsEvents.dnsQuery.get)
+    const fileHashHandler = getQuickOpsTransportHandler<
+      (request: { path?: string; filePath?: string; text?: string }) => Promise<unknown>
+    >(QuickOpsEvents.fileHash.get)
+
+    await expect(dnsHandler({ hostname: 'Example.com' })).resolves.toEqual({
+      state: 'degraded',
+      hostname: 'example.com',
+      deep: false,
+      degradedReason: 'dns-query-no-records',
+      message: '未解析到 A / AAAA / CNAME / MX 记录'
+    })
+    await expect(fileHashHandler({ path: '/restricted/notes.txt' })).resolves.toEqual({
+      state: 'degraded',
+      path: '/restricted/notes.txt',
+      degradedReason: 'file-hash-permission-denied',
+      message: '没有权限读取文件'
+    })
+  })
+
   it('exposes file hash through the read-only typed transport handler', async () => {
     const module = new QuickOpsModule()
 
@@ -4288,6 +4323,20 @@ describe('QuickOpsModule', () => {
     }
     expect(quickOpsRuntimeMock.cleanup).toHaveBeenNthCalledWith(1, 'module-stop:app-quit')
     expect(quickOpsRuntimeMock.cleanup).toHaveBeenNthCalledWith(2, 'module-destroy')
+  })
+
+  it('cleans shared runtime sessions once and detaches quit listeners on module destroy', () => {
+    const module = new QuickOpsModule()
+    const context = createQuickOpsModuleContext()
+
+    module.onInit(context)
+    module.onDestroy({} as ModuleDestroyContext<TalexEvents>)
+    context.emit(TalexEvents.BEFORE_APP_QUIT)
+    context.emit(TalexEvents.WILL_QUIT)
+
+    expect(context.eventHandlers.size).toBe(0)
+    expect(quickOpsRuntimeMock.cleanup).toHaveBeenCalledTimes(1)
+    expect(quickOpsRuntimeMock.cleanup).toHaveBeenCalledWith('module-destroy')
   })
 
   it('cleans QuickOps sessions on app quit lifecycle events and unregisters handlers', () => {

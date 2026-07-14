@@ -17,7 +17,6 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     TheCounter: typeof import('./src/components/TheCounter.vue')['default']
     TheFooter: typeof import('./src/components/TheFooter.vue')['default']
-    TheInput: typeof import('./src/components/TheInput.vue')['default']
     TranslationCard: typeof import('./src/components/TranslationCard.vue')['default']
   }
 }
@@ -29,6 +28,5 @@ declare global {
   const RouterView: typeof import('vue-router')['RouterView']
   const TheCounter: typeof import('./src/components/TheCounter.vue')['default']
   const TheFooter: typeof import('./src/components/TheFooter.vue')['default']
-  const TheInput: typeof import('./src/components/TheInput.vue')['default']
   const TranslationCard: typeof import('./src/components/TranslationCard.vue')['default']
 }

@@ -6,10 +6,11 @@ import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
-import { computed, reactive, ref, watch } from 'vue'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
+import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
+
+const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
+const LazyDashboardSparklineChart = defineAsyncComponent(() => import('~/components/dashboard/DashboardSparklineChart.client.vue'))
 
 defineI18nRoute(false)
 
@@ -760,7 +761,7 @@ watch(() => creditTab.value, (value) => {
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
                   {{ t('dashboard.credits.usage.consumed', { n: formatCreditAmount(creditTrend?.totalUsed ?? 0) }) }}
                 </p>
-                <DashboardSparklineChart
+                <LazyDashboardSparklineChart
                   class="mt-3"
                   :values="creditTrend.values"
                   :labels="creditTrend.days"
@@ -882,7 +883,8 @@ watch(() => creditTab.value, (value) => {
       </p>
     </template>
 
-    <FlipDialog
+    <LazyFlipDialog
+        v-if="createOverlayVisible"
         v-model="createOverlayVisible"
         :reference="createTriggerRef?.$el || null"
         size="md"
@@ -912,9 +914,10 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </FlipDialog>
+      </LazyFlipDialog>
 
-    <FlipDialog
+    <LazyFlipDialog
+        v-if="inviteOverlayVisible"
         v-model="inviteOverlayVisible"
         :reference="inviteTriggerRef?.$el || null"
         size="md"
@@ -952,9 +955,10 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </FlipDialog>
+      </LazyFlipDialog>
 
-    <FlipDialog
+    <LazyFlipDialog
+        v-if="activationOverlayVisible"
         v-model="activationOverlayVisible"
         :reference="activationTriggerRef?.$el || null"
         size="md"
@@ -989,9 +993,10 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </FlipDialog>
+      </LazyFlipDialog>
 
-    <FlipDialog
+    <LazyFlipDialog
+        v-if="disbandOverlayVisible"
         v-model="disbandOverlayVisible"
         :reference="disbandTriggerRef?.$el || null"
         size="md"
@@ -1015,7 +1020,7 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </FlipDialog>
+      </LazyFlipDialog>
   </div>
 </template>
 

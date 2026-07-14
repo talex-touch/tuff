@@ -10,7 +10,6 @@ import type {
 } from '@talex-touch/utils'
 import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
-import { withTimeout } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 
 import chalk from 'chalk'
@@ -65,6 +64,61 @@ const INTERNAL_GATHER_ABORT_REASON = Symbol('internal-gather-abort')
  * Utility function to create a delay promise
  */
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+function createProviderTimeoutError(timeoutMs: number): Error {
+  const error = new Error(`Search provider timed out after ${timeoutMs}ms`)
+  error.name = 'TimeoutError'
+  return error
+}
+
+function createProviderAbortError(): Error {
+  const error = new Error('Search provider aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+async function runProviderSearchWithTimeout(
+  provider: ISearchProvider<ProviderContext>,
+  params: TuffQuery,
+  signal: AbortSignal,
+  timeoutMs: number
+): Promise<TuffSearchResult> {
+  const providerController = new AbortController()
+
+  if (signal.aborted) {
+    providerController.abort()
+    throw createProviderAbortError()
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  let abortListener: (() => void) | null = null
+  const timeoutState = Promise.withResolvers<never>()
+  const abortState = Promise.withResolvers<never>()
+
+  timeout = setTimeout(() => {
+    timeoutState.reject(createProviderTimeoutError(timeoutMs))
+    providerController.abort()
+  }, timeoutMs)
+
+  abortListener = () => {
+    abortState.reject(createProviderAbortError())
+    providerController.abort()
+  }
+  signal.addEventListener('abort', abortListener, { once: true })
+
+  try {
+    return await Promise.race([
+      provider.onSearch(params, providerController.signal),
+      timeoutState.promise,
+      abortState.promise
+    ])
+  } finally {
+    clearTimeout(timeout)
+    if (abortListener) {
+      signal.removeEventListener('abort', abortListener)
+    }
+  }
+}
 
 /**
  * Count total items from search results
@@ -489,8 +543,7 @@ async function runFastLayer(
 
       try {
         searchLogger.providerCall(provider.id)
-        const searchPromise = provider.onSearch(params, signal)
-        result = await withTimeout(searchPromise, taskTimeoutMs)
+        result = await runProviderSearchWithTimeout(provider, params, signal, taskTimeoutMs)
 
         resultCount = result.items.length
         searchLogger.providerResult(provider.id, resultCount)
@@ -539,8 +592,9 @@ async function runFastLayer(
   const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker())
   const providerPromise = Promise.all(workers).then(() => undefined)
 
+  let timeout: ReturnType<typeof setTimeout> | undefined
   const timeoutPromise = new Promise<'timeout'>((resolveTimeout) => {
-    setTimeout(() => {
+    timeout = setTimeout(() => {
       if (completed < total) {
         didTimeout = true
         gatherLog.debug(`Fast layer timeout after ${timeoutMs}ms`, { meta: { completed, total } })
@@ -554,6 +608,7 @@ async function runFastLayer(
     providerPromise.then(() => 'completed' as const),
     timeoutPromise
   ])
+  clearTimeout(timeout)
 
   didTimeout = fastLayerState === 'timeout'
 
@@ -592,8 +647,7 @@ async function runDeferredLayer(
 
       try {
         searchLogger.providerCall(provider.id)
-        const searchPromise = provider.onSearch(params, signal)
-        result = await withTimeout(searchPromise, taskTimeoutMs)
+        result = await runProviderSearchWithTimeout(provider, params, signal, taskTimeoutMs)
 
         resultCount = result.items.length
         searchLogger.providerResult(provider.id, resultCount)

@@ -1,80 +1,114 @@
-import type {
-  IntelligenceInvokeOptions,
-  IntelligenceInvokeResult,
-  IntelligenceStreamOptions,
-  IntelligenceTtsSpeakPayload,
-  IntelligenceTtsSpeakResult,
-} from '../../types/intelligence'
-import { createIntelligenceClient } from '../../intelligence/client'
+import type { IntelligenceSdk } from '../../transport/sdk/domains/intelligence'
+import type { PluginChannelClient } from './channel-client'
+import { createPluginTuffTransport } from '../../transport'
+import { createIntelligenceSdk } from '../../transport/sdk/domains/intelligence'
 import { ensureRendererChannel } from './channel'
 import { tryGetPluginSdkApi } from './plugin-info'
 
-export interface IntelligenceSDK {
-  invoke: <T = any>(
-    capabilityId: string,
-    payload: any,
-    options?: IntelligenceInvokeOptions,
-  ) => Promise<IntelligenceInvokeResult<T>>
-  stream: <T = any>(
-    capabilityId: string,
-    payload: any,
-    options: IntelligenceStreamOptions<T>,
-    invokeOptions?: IntelligenceInvokeOptions,
-  ) => Promise<unknown>
-  ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
+type PluginChannelWithMain = PluginChannelClient & {
+  sendToMain?: (eventName: string, payload?: unknown) => Promise<unknown>
+  onMain?: (eventName: string, handler: (event: unknown) => unknown) => () => void
 }
 
-function resolveSdkApi(): number | undefined {
-  return tryGetPluginSdkApi()
+type HostOnlyIntelligenceMethod
+  = | 'contextPrepareTurn'
+    | 'contextCreateCompressionSnapshot'
+    | 'contextListCompressionSnapshots'
+    | 'contextGetLatestCompressionSnapshot'
+    | 'contextSaveMemory'
+    | 'contextReplaceMemory'
+    | 'contextSetMemoryEnabled'
+    | 'contextDeleteMemory'
+
+const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> = {
+  contextPrepareTurn: true,
+  contextCreateCompressionSnapshot: true,
+  contextListCompressionSnapshots: true,
+  contextGetLatestCompressionSnapshot: true,
+  contextSaveMemory: true,
+  contextReplaceMemory: true,
+  contextSetMemoryEnabled: true,
+  contextDeleteMemory: true,
 }
 
-function createPluginIntelligenceClient() {
-  return createIntelligenceClient({
-    send: (eventName, payload) => {
-      const channel = ensureRendererChannel()
-      if (payload && typeof payload === 'object') {
-        return channel.send(eventName, {
-          ...(payload as Record<string, unknown>),
-          _sdkapi: resolveSdkApi(),
-        })
-      }
-      return channel.send(eventName, payload)
-    },
-  })
+function isHostOnlyMethod(property: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(HOST_ONLY_INTELLIGENCE_METHODS, property)
 }
 
-let cachedClient: ReturnType<typeof createPluginIntelligenceClient> | null = null
+export type IntelligenceSDK = Omit<IntelligenceSdk, HostOnlyIntelligenceMethod>
 
-function getClient() {
+function withSdkApiPayload(payload: unknown): unknown {
+  const sdkapi = tryGetPluginSdkApi()
+  if (typeof sdkapi !== 'number' || !payload || typeof payload !== 'object') {
+    return payload
+  }
+
+  return {
+    ...(payload as Record<string, unknown>),
+    _sdkapi: sdkapi,
+  }
+}
+
+function createSdkApiChannel(channel: PluginChannelClient): PluginChannelWithMain {
+  const channelWithMain = channel as PluginChannelWithMain
+  const sdkApiChannel: PluginChannelWithMain = {
+    regChannel: (eventName, callback) => channel.regChannel(eventName, callback),
+    unRegChannel: (eventName, callback) => channel.unRegChannel(eventName, callback),
+    send: (eventName, payload) => channel.send(eventName, withSdkApiPayload(payload)),
+  }
+
+  if (typeof channelWithMain.sendToMain === 'function') {
+    const sendToMain = channelWithMain.sendToMain.bind(channelWithMain)
+    sdkApiChannel.sendToMain = (eventName, payload) => sendToMain(eventName, withSdkApiPayload(payload))
+  }
+
+  if (typeof channelWithMain.onMain === 'function') {
+    const onMain = channelWithMain.onMain.bind(channelWithMain)
+    sdkApiChannel.onMain = (eventName, handler) => onMain(eventName, handler)
+  }
+
+  return sdkApiChannel
+}
+
+function createPluginIntelligenceClient(): IntelligenceSdk {
+  const channel = createSdkApiChannel(ensureRendererChannel())
+  const transport = createPluginTuffTransport(channel)
+  return createIntelligenceSdk(transport)
+}
+
+let cachedClient: IntelligenceSdk | null = null
+
+function getClient(): IntelligenceSdk {
   if (!cachedClient) {
     cachedClient = createPluginIntelligenceClient()
   }
   return cachedClient
 }
 
-async function invokeCapability<T = any>(
-  capabilityId: string,
-  payload: any,
-  options?: IntelligenceInvokeOptions,
-): Promise<IntelligenceInvokeResult<T>> {
-  return getClient().invoke<T>(capabilityId, payload, options)
-}
-
-async function streamCapability<T = any>(
-  capabilityId: string,
-  payload: any,
-  options: IntelligenceStreamOptions<T>,
-  invokeOptions?: IntelligenceInvokeOptions,
-): Promise<unknown> {
-  return getClient().stream<T>(capabilityId, payload, options, invokeOptions)
-}
-
-async function ttsSpeak(payload: IntelligenceTtsSpeakPayload): Promise<IntelligenceTtsSpeakResult> {
-  return getClient().ttsSpeak(payload)
-}
-
-export const intelligence: IntelligenceSDK = {
-  invoke: invokeCapability,
-  stream: streamCapability,
-  ttsSpeak,
-}
+export const intelligence: IntelligenceSDK = new Proxy({} as IntelligenceSDK, {
+  get(_target, property, receiver) {
+    if (isHostOnlyMethod(property)) {
+      return undefined
+    }
+    return Reflect.get(getClient(), property, receiver)
+  },
+  has(_target, property) {
+    return !isHostOnlyMethod(property) && property in getClient()
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getClient()).filter(property => !isHostOnlyMethod(property))
+  },
+  getOwnPropertyDescriptor(_target, property) {
+    if (isHostOnlyMethod(property)) {
+      return undefined
+    }
+    const descriptor = Reflect.getOwnPropertyDescriptor(getClient(), property)
+    if (!descriptor) {
+      return undefined
+    }
+    return {
+      ...descriptor,
+      configurable: true,
+    }
+  },
+})

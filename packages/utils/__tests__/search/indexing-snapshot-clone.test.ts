@@ -79,36 +79,67 @@ describe('cloneIndexingSnapshotValue', () => {
     expect(clone.matcher.lastIndex).toBe(3)
   })
 
-  it('clones Error and AggregateError diagnostics in fallback mode', () => {
+  it('recursively clones structural aggregate-like and ordinary Error diagnostics in fallback mode', () => {
     vi.stubGlobal('structuredClone', undefined)
     const cause = new Error('sqlite busy')
     const input = {
-      error: Object.assign(new TypeError('snapshot failed', { cause }), {
+      error: Object.assign(new Error('snapshot failed', { cause }), {
         code: 'SQLITE_BUSY',
         context: {
           retryable: true
         }
       }),
-      aggregate: new AggregateError([{ path: '/tmp/a' }, cause], 'multiple failures')
+      ownAggregate: Object.assign(new Error('multiple failures'), {
+        errors: [
+          Object.assign(new TypeError('file unavailable'), {
+            context: {
+              path: '/tmp/a'
+            }
+          })
+        ]
+      })
     }
+    const inheritedErrors = [
+      Object.assign(new RangeError('scan exhausted'), {
+        context: {
+          path: '/tmp/b'
+        }
+      })
+    ]
+    const inheritedAggregate = new Error('inherited failures') as Error & {
+      errors: typeof inheritedErrors
+    }
+    Object.setPrototypeOf(
+      inheritedAggregate,
+      Object.assign(Object.create(Error.prototype), { errors: inheritedErrors })
+    )
 
-    const clone = cloneIndexingSnapshotValue(input)
+    const clone = cloneIndexingSnapshotValue({ ...input, inheritedAggregate })
     input.error.context.retryable = false
-    ;(input.aggregate.errors[0] as { path: string }).path = '/tmp/b'
+    input.ownAggregate.errors[0].context.path = '/tmp/changed-a'
+    inheritedErrors[0].context.path = '/tmp/changed-b'
 
     expect(clone.error).toBeInstanceOf(Error)
-    expect(clone.error).toBeInstanceOf(TypeError)
     expect(clone.error.message).toBe('snapshot failed')
-    expect(clone.error.name).toBe('TypeError')
+    expect(clone.error.name).toBe('Error')
     expect(clone.error.cause).toBeInstanceOf(Error)
     expect((clone.error.cause as Error).message).toBe('sqlite busy')
     expect(clone.error.code).toBe('SQLITE_BUSY')
     expect(clone.error.context.retryable).toBe(true)
-    expect(clone.aggregate).toBeInstanceOf(AggregateError)
-    expect(clone.aggregate.message).toBe('multiple failures')
-    expect(clone.aggregate.errors[0]).toEqual({ path: '/tmp/a' })
-    expect(clone.aggregate.errors[1]).toBeInstanceOf(Error)
-    expect((clone.aggregate.errors[1] as Error).message).toBe('sqlite busy')
+    expect(clone.ownAggregate.message).toBe('multiple failures')
+    expect(clone.ownAggregate.name).toBe('Error')
+    expect(clone.ownAggregate.errors).not.toBe(input.ownAggregate.errors)
+    expect(clone.ownAggregate.errors[0]).toBeInstanceOf(TypeError)
+    expect(clone.ownAggregate.errors[0].message).toBe('file unavailable')
+    expect(clone.ownAggregate.errors[0].name).toBe('TypeError')
+    expect(clone.ownAggregate.errors[0].context.path).toBe('/tmp/a')
+    expect(clone.inheritedAggregate.message).toBe('inherited failures')
+    expect(clone.inheritedAggregate.name).toBe('Error')
+    expect(clone.inheritedAggregate.errors).not.toBe(inheritedErrors)
+    expect(clone.inheritedAggregate.errors[0]).toBeInstanceOf(RangeError)
+    expect(clone.inheritedAggregate.errors[0].message).toBe('scan exhausted')
+    expect(clone.inheritedAggregate.errors[0].name).toBe('RangeError')
+    expect(clone.inheritedAggregate.errors[0].context.path).toBe('/tmp/b')
   })
 
   it('uses fallback cloning when structuredClone rejects adapter payloads', () => {

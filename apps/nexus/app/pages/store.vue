@@ -10,17 +10,11 @@ import type {
   StorePluginReview,
   StorePluginReviewListResponse,
   StorePluginReviewSubmitResponse,
+  StorePluginSearchResponse,
   StorePluginSummary,
 } from '~/types/store'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
-import {
-  SharedPluginDetailReadme,
-  SharedPluginDetailVersions,
-} from '@talex-touch/utils/renderer/shared/components'
-import { computed, reactive, ref, watch } from 'vue'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import PluginMetaHeader from '~/components/plugin/PluginMetaHeader.vue'
+import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
 import StoreItem from '~/components/store/StoreItem.vue'
 import StoreSearch from '~/components/store/StoreSearch.vue'
 import Input from '~/components/ui/Input.vue'
@@ -30,6 +24,13 @@ import { useStoreCategories } from '~/composables/useStoreCategories'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
 import { requestJson } from '~/utils/request'
+
+const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
+const LazyPluginMetaHeader = defineAsyncComponent(() => import('~/components/plugin/PluginMetaHeader.vue'))
+const LazyTxTabs = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs').then(module => module.TxTabs))
+const LazyTxTabItem = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs').then(module => module.TxTabItem))
+const LazySharedPluginDetailReadme = defineAsyncComponent(() => import('@talex-touch/utils/renderer/shared/components').then(module => module.SharedPluginDetailReadme))
+const LazySharedPluginDetailVersions = defineAsyncComponent(() => import('@talex-touch/utils/renderer/shared/components').then(module => module.SharedPluginDetailVersions))
 
 definePageMeta({
   layout: 'store',
@@ -79,10 +80,21 @@ const requestedDetailTab = computed<'overview' | 'versions' | 'content' | 'revie
   return 'overview'
 })
 
+const activeSearch = ref(searchQuery.value.trim())
+const activeCategory = ref<FilterCategory>(filters.category)
+
 watch(searchQuery, (value) => {
+  const normalized = value.trim()
   if (value !== filters.search)
     filters.search = value
+  if (normalized !== activeSearch.value)
+    activeSearch.value = normalized
 }, { immediate: true })
+
+watch(() => filters.category, (category) => {
+  if (category !== activeCategory.value)
+    activeCategory.value = category
+})
 
 const selectedSlug = ref<string | null>(null)
 const selectedPlugin = ref<StorePluginDetail | null>(null)
@@ -113,22 +125,80 @@ const reviewForm = reactive({
 
 const handleSignIn = () => navigateTo('/sign-in')
 
+const STORE_PLUGIN_PAGE_SIZE = 50
+
+function resolveStoreSearchQuery(offset = 0) {
+  return {
+    compact: 1,
+    q: activeSearch.value || undefined,
+    category: activeCategory.value === 'all' ? undefined : activeCategory.value,
+    limit: STORE_PLUGIN_PAGE_SIZE,
+    offset,
+  }
+}
+
+const storeSearchQuery = computed(() => resolveStoreSearchQuery(0))
+
+function applyStoreSearch(value: string) {
+  const normalized = value.trim()
+  if (normalized !== activeSearch.value)
+    activeSearch.value = normalized
+}
+
 const {
   data: pluginsPayload,
   pending: pluginsPending,
 } = await useAsyncData('store-plugins', () =>
-  requestJson<{ plugins: StorePluginSummary[] }>('/api/store/plugins', {
-    query: { compact: 1 },
-  }))
+  requestJson<StorePluginSearchResponse>('/api/store/search', {
+    query: storeSearchQuery.value,
+  }),
+{
+  watch: [storeSearchQuery],
+})
 
-const { resolveCategoryLabel, matchesCategory } = useStoreCategories()
+const pluginsLoadingMore = ref(false)
+
+const { resolveCategoryLabel } = useStoreCategories()
 const { formatDate, formatPackageSize } = useStoreFormatters()
 
 const allPlugins = computed(() => (pluginsPayload.value?.plugins ?? []).filter(plugin => plugin.latestVersion))
+const displayedPluginCount = computed(() => allPlugins.value.length)
+const totalPlugins = computed(() => pluginsPayload.value?.total ?? displayedPluginCount.value)
+const hasActiveStoreFilter = computed(() => Boolean(activeSearch.value) || activeCategory.value !== 'all')
+const canLoadMorePlugins = computed(() => displayedPluginCount.value < totalPlugins.value)
 
-const totalPlugins = computed(() => allPlugins.value.length)
+async function loadMorePlugins() {
+  if (pluginsPending.value || pluginsLoadingMore.value || !canLoadMorePlugins.value)
+    return
 
-const normalizedSearch = computed(() => filters.search.trim().toLowerCase())
+  const requestedSearch = activeSearch.value
+  const requestedCategory = activeCategory.value
+
+  pluginsLoadingMore.value = true
+  try {
+    const response = await requestJson<StorePluginSearchResponse>('/api/store/search', {
+      query: resolveStoreSearchQuery(displayedPluginCount.value),
+    })
+    if (requestedSearch !== activeSearch.value || requestedCategory !== activeCategory.value)
+      return
+    const currentPlugins = pluginsPayload.value?.plugins ?? []
+    const seen = new Set(currentPlugins.map(plugin => plugin.id))
+    const nextPlugins = response.plugins.filter(plugin => plugin.latestVersion && !seen.has(plugin.id))
+    pluginsPayload.value = {
+      plugins: [...currentPlugins, ...nextPlugins],
+      total: response.total,
+      limit: response.limit,
+      offset: response.offset,
+    }
+  }
+  catch (error: unknown) {
+    const fallback = t('store.results.loadMoreFailed')
+    toast.warning(error instanceof Error ? error.message : fallback)
+  }
+  finally {
+    pluginsLoadingMore.value = false
+  }
+}
 const ratingAverageText = computed(() => (ratingSummary.value ? ratingSummary.value.average.toFixed(1) : '0.0'))
 const ratingCount = computed(() => ratingSummary.value?.count ?? 0)
 const ratingValue = computed(() => Math.round(ratingSummary.value?.average ?? 0))
@@ -313,8 +383,8 @@ async function submitReview() {
   }
 }
 
-async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement | null = null) {
-  selectedSlug.value = plugin.slug
+async function openPluginDetailBySlug(slug: string, source: HTMLElement | null = null) {
+  selectedSlug.value = slug
   detailOverlaySource.value = source
   selectedPlugin.value = null
   detailPending.value = true
@@ -323,9 +393,9 @@ async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement 
   resetReviewState()
   resetContentPackageState()
   try {
-    const response = await requestJson<{ plugin: StorePluginDetail }>(`/api/store/plugins/${plugin.slug}`)
+    const response = await requestJson<{ plugin: StorePluginDetail }>(`/api/store/plugins/${slug}`)
     selectedPlugin.value = response.plugin
-    void loadPluginCommunity(plugin.slug)
+    void loadPluginCommunity(slug)
     void loadPluginContentPackages(response.plugin)
   }
   catch (error: unknown) {
@@ -336,6 +406,10 @@ async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement 
   }
 }
 
+async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement | null = null) {
+  await openPluginDetailBySlug(plugin.slug, source)
+}
+
 watch(
   [requestedPluginSlug, requestedDetailTab, allPlugins],
   ([slug, _tab, plugins]) => {
@@ -343,10 +417,12 @@ watch(
       return
 
     const plugin = plugins.find(item => item.slug === slug || item.id === slug)
-    if (!plugin)
+    if (plugin) {
+      void openPluginDetail(plugin)
       return
+    }
 
-    void openPluginDetail(plugin)
+    void openPluginDetailBySlug(slug)
   },
   { immediate: true },
 )
@@ -366,47 +442,20 @@ function closePluginDetail() {
   resetContentPackageState()
 }
 
-const filteredPlugins = computed(() => {
-  const query = normalizedSearch.value
+const filteredPlugins = computed(() => allPlugins.value)
 
-  return allPlugins.value.filter((plugin) => {
-    if (!matchesCategory(plugin.category, filters.category))
-      return false
-
-    if (!query.length)
-      return true
-
-    const categoryLabel = resolveCategoryLabel(plugin.category)
-    const haystack = [
-      plugin.name,
-      plugin.summary,
-      plugin.slug,
-      plugin.id,
-      plugin.latestVersion?.version ?? '',
-      plugin.latestVersion?.channel ?? '',
-      plugin.author?.name ?? '',
-      categoryLabel,
-      plugin.badges.join(' '),
-    ]
-      .join(' ')
-      .toLowerCase()
-
-    return haystack.includes(query)
-  })
-})
-
-const hasResults = computed(() => filteredPlugins.value.length > 0)
-const hasPlugins = computed(() => totalPlugins.value > 0)
+const hasResults = computed(() => displayedPluginCount.value > 0)
+const hasPlugins = computed(() => hasActiveStoreFilter.value || totalPlugins.value > 0)
 
 const resultSummary = computed(() => {
   const total = totalPlugins.value
-  const count = filteredPlugins.value.length
+  const count = displayedPluginCount.value
 
   if (!total)
-    return t('store.results.none')
+    return hasActiveStoreFilter.value ? t('store.results.empty') : t('store.results.none')
 
-  if (count === total)
-    return t('store.results.count', { count })
+  if (count >= total)
+    return t('store.results.count', { count: total })
 
   return t('store.results.filtered', { count, total })
 })
@@ -424,7 +473,7 @@ useSeoMeta({
 
 <template>
   <section class="relative mx-auto max-w-6xl w-full flex flex-col gap-8 px-24 py-20 lg:px-12 sm:px-6">
-    <StoreSearch v-model:filter="filters.category" v-model="filters.search" class="w-full">
+    <StoreSearch v-model:filter="filters.category" v-model="filters.search" remote :search-debounce="180" class="w-full" @search="applyStoreSearch">
       <template #result>
         {{ resultSummary }}
       </template>
@@ -462,8 +511,14 @@ useSeoMeta({
           @view-detail="openPluginDetail"
         />
       </div>
+      <div v-if="canLoadMorePlugins" class="mt-6 flex justify-center">
+        <TxButton size="small" :loading="pluginsLoadingMore" @click="loadMorePlugins">
+          {{ t('store.results.loadMore') }}
+        </TxButton>
+      </div>
     </div>
-    <FlipDialog
+    <LazyFlipDialog
+      v-if="selectedSlug || detailPending"
       :model-value="Boolean(selectedSlug)"
       :reference="detailOverlaySource"
       size="xl"
@@ -473,7 +528,7 @@ useSeoMeta({
       }"
     >
       <template #header-display>
-        <PluginMetaHeader
+        <LazyPluginMetaHeader
           v-if="selectedPlugin"
           :plugin="selectedPlugin"
           :category-label="resolveCategoryLabel(selectedPlugin.category)"
@@ -499,7 +554,7 @@ useSeoMeta({
             </div>
             <div v-else-if="selectedPlugin && sharedDetail" class="StoreDetailPlugin">
               <section class="StoreDetailPlugin-Content">
-                <TxTabs
+                <LazyTxTabs
                   v-model="detailTab"
                   placement="top"
                   borderless
@@ -507,28 +562,28 @@ useSeoMeta({
                   :content-scrollable="false"
                   indicator-variant="pill"
                 >
-                  <TxTabItem name="overview" icon-class="i-carbon-document">
+                  <LazyTxTabItem name="overview" icon-class="i-carbon-document">
                     <template #name>
                       {{ t('store.detail.tabs.overview', 'Overview') }}
                     </template>
                     <div class="space-y-4 py-1">
                       <div class="StoreDetailPanel p-5">
-                        <SharedPluginDetailReadme
+                        <LazySharedPluginDetailReadme
                           :readme="sharedDetail.readme"
                           :title="t('store.detail.readme')"
                           :empty-text="t('store.detail.noReadme')"
                         />
                       </div>
                     </div>
-                  </TxTabItem>
+                  </LazyTxTabItem>
 
-                  <TxTabItem name="versions" icon-class="i-carbon-data-table">
+                  <LazyTxTabItem name="versions" icon-class="i-carbon-data-table">
                     <template #name>
                       {{ t('store.detail.tabs.versions', 'Versions') }}
                     </template>
                     <div class="space-y-4 py-1">
                       <div class="StoreDetailPanel p-5">
-                        <SharedPluginDetailVersions
+                        <LazySharedPluginDetailVersions
                           :versions="sharedDetail.versions"
                           :title="t('store.detail.versions')"
                           :empty-text="t('store.detail.noVersions')"
@@ -538,9 +593,9 @@ useSeoMeta({
                         />
                       </div>
                     </div>
-                  </TxTabItem>
+                  </LazyTxTabItem>
 
-                  <TxTabItem name="content" icon-class="i-carbon-package">
+                  <LazyTxTabItem name="content" icon-class="i-carbon-package">
                     <template #name>
                       {{ t('store.detail.tabs.content', 'Content') }}
                     </template>
@@ -580,9 +635,9 @@ useSeoMeta({
                         </article>
                       </div>
                     </section>
-                  </TxTabItem>
+                  </LazyTxTabItem>
 
-                  <TxTabItem name="reviews" icon-class="i-carbon-chat">
+                  <LazyTxTabItem name="reviews" icon-class="i-carbon-chat">
                     <template #name>
                       {{ t('store.detail.tabs.reviews', 'Reviews') }}
                     </template>
@@ -728,14 +783,14 @@ useSeoMeta({
                         </div>
                       </div>
                     </section>
-                  </TxTabItem>
-                </TxTabs>
+                  </LazyTxTabItem>
+                </LazyTxTabs>
               </section>
             </div>
           </div>
         </div>
       </template>
-    </FlipDialog>
+    </LazyFlipDialog>
   </section>
 </template>
 

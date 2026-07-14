@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -13,18 +12,24 @@ import {
   getAppsBySourceMock,
   getAppsMock,
   getMainConfigMock,
-  getWatchPathsMock,
   loadSubject,
+  getWatchPathsMock,
   pinyinMock,
   removeByProviderMock,
   runMdlsUpdateScanMock,
-  shellOpenPathMock,
-  showInternalSystemNotificationMock,
-  spawnSafeMock,
+  searchRecordExecuteMock,
   upsertExtensionRows,
   withPlatform
 } from './app-provider-test-harness'
 import { buildAppExtensions } from './app-index-metadata'
+
+const { scheduleAppLaunchMock } = vi.hoisted(() => ({
+  scheduleAppLaunchMock: vi.fn()
+}))
+
+vi.mock('./app-launcher', () => ({
+  scheduleAppLaunch: scheduleAppLaunchMock
+}))
 
 type TestFileRow = {
   id: number
@@ -60,6 +65,102 @@ function executeItem(overrides: Partial<TuffItem>): TuffItem {
   } as TuffItem
 }
 
+type TestAppSearchRow = {
+  id: number
+  path: string
+  name: string
+  displayName: string | null
+  extension: string | null
+  size: number | null
+  mtime: Date
+  ctime: Date
+  lastIndexedAt: Date
+  isDir: boolean
+  type: string
+  content: string | null
+  embeddingStatus: 'none' | 'pending' | 'completed'
+  extensions: Record<string, string | null>
+}
+
+function createAppSearchRow(id: number, appPath: string, name: string): TestAppSearchRow {
+  return {
+    id,
+    path: appPath,
+    name,
+    displayName: name,
+    extension: null,
+    size: null,
+    mtime: new Date(0),
+    ctime: new Date(0),
+    lastIndexedAt: new Date(0),
+    isDir: false,
+    type: 'app',
+    content: null,
+    embeddingStatus: 'none',
+    extensions: {
+      appIdentity: appPath,
+      launchKind: 'path',
+      launchTarget: appPath
+    }
+  }
+}
+
+function extractSqlParamValues(value: unknown, seen = new Set<object>()): unknown[] {
+  if (!value || typeof value !== 'object') return []
+  if (seen.has(value)) return []
+  seen.add(value)
+
+  const record = value as Record<string, unknown>
+  if (value.constructor?.name === 'Param' && 'value' in record) {
+    return [record.value]
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractSqlParamValues(entry, seen))
+  }
+
+  const queryChunks = record.queryChunks
+  if (Array.isArray(queryChunks)) {
+    return queryChunks.flatMap((entry) => extractSqlParamValues(entry, seen))
+  }
+
+  return []
+}
+
+function createAppSearchDb(options: {
+  fileExtensionsTable: unknown
+  filesTable: unknown
+  rows: TestAppSearchRow[]
+}) {
+  const whereMock = vi.fn(async (predicate: unknown) => {
+    const params = extractSqlParamValues(predicate)
+    return options.rows.filter((row) => params.includes(row.path))
+  })
+  const selectMock = vi.fn((selection?: Record<string, unknown>) => {
+    if (selection && 'itemId' in selection) {
+      throw new Error('App search exact lookup must use SearchIndexService.lookupByKeywords')
+    }
+
+    if (selection && 'fileId' in selection) {
+      return {
+        from: vi.fn((table: unknown) => {
+          expect(table).toBe(options.fileExtensionsTable)
+          return { where: vi.fn(() => ({ __candidateSubquery: true })) }
+        })
+      }
+    }
+
+    return {
+      from: vi.fn((table: unknown) => {
+        expect(table).toBe(options.filesTable)
+        return { where: whereMock }
+      })
+    }
+  })
+
+  return { db: { select: selectMock }, selectMock, whereMock }
+}
+
 describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -68,7 +169,6 @@ describe('appProvider rebuild maintenance', () => {
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
     getAppsBySourceMock.mockResolvedValue(null)
-    spawnSafeMock.mockReturnValue({ unref: vi.fn() })
     runMdlsUpdateScanMock.mockResolvedValue({
       updatedApps: [],
       updatedCount: 0,
@@ -513,129 +613,36 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
-  it('returns immediately while path launch is still pending in the background', async () => {
+  it('records a session-scoped usage event before handing the app to the launch boundary', async () => {
     const { appProvider } = await loadSubject()
-    const launchDeferred = createDeferred<string>()
-    shellOpenPathMock.mockReturnValueOnce(launchDeferred.promise)
-
-    await appProvider.onExecute({
-      item: executeItem({
-        id: 'path-app',
-        render: { mode: 'default', basic: { title: 'Slow App' } },
-        meta: {
-          app: {
-            path: '/Applications/Slow.app',
-            launchKind: 'path',
-            launchTarget: '/Applications/Slow.app'
-          }
+    searchRecordExecuteMock.mockResolvedValueOnce(undefined)
+    const item = executeItem({
+      id: 'recorded-app',
+      render: { mode: 'default', basic: { title: 'Recorded App' } },
+      meta: {
+        app: {
+          path: '/Applications/Recorded.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/Recorded.app'
         }
-      })
-    } satisfies IExecuteArgs)
-
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
-
-    await flushPromises()
-
-    expect(shellOpenPathMock).toHaveBeenCalledWith('/Applications/Slow.app')
-    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
-
-    launchDeferred.resolve('')
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
-  })
-
-  it('notifies when a background path launch fails', async () => {
-    const { appProvider } = await loadSubject()
-    shellOpenPathMock.mockResolvedValueOnce('access denied')
-
-    await appProvider.onExecute({
-      item: executeItem({
-        id: 'path-app-failed',
-        render: { mode: 'default', basic: { title: 'Blocked App' } },
-        meta: {
-          app: {
-            path: '/Applications/Blocked.app',
-            launchKind: 'path',
-            launchTarget: '/Applications/Blocked.app'
-          }
-        }
-      })
-    } satisfies IExecuteArgs)
-
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'App Launch Failed',
-        message: 'Failed to launch Blocked App\naccess denied',
-        level: 'error'
-      })
-    )
-  })
-
-  it('notifies when shortcut spawn fails before handoff', async () => {
-    const { appProvider } = await loadSubject()
-    spawnSafeMock.mockImplementationOnce(() => {
-      throw new Error('spawn failed')
+      }
     })
 
     await appProvider.onExecute({
-      item: executeItem({
-        id: 'shortcut-app-failed',
-        render: { mode: 'default', basic: { title: 'Shortcut App' } },
-        meta: {
-          app: {
-            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
-            launchKind: 'shortcut',
-            launchTarget: 'C:\\Program Files\\Foo\\Foo.exe'
-          }
-        }
-      })
-    } satisfies IExecuteArgs)
+      item,
+      searchResult: { sessionId: 'search-session-42' }
+    } as IExecuteArgs)
 
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'App Launch Failed',
-        message: 'Failed to launch Shortcut App\nspawn failed',
-        level: 'error'
-      })
-    )
-  })
-
-  it('notifies when shortcut exits non-zero before handoff', async () => {
-    const { appProvider } = await loadSubject()
-    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
-    child.unref = vi.fn()
-    spawnSafeMock.mockReturnValueOnce(child)
-
-    await appProvider.onExecute({
-      item: executeItem({
-        id: 'shortcut-app-exit',
-        render: { mode: 'default', basic: { title: 'Crashing Shortcut' } },
-        meta: {
-          app: {
-            path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Crash.lnk',
-            launchKind: 'shortcut',
-            launchTarget: 'C:\\Program Files\\Crash\\Crash.exe'
-          }
-        }
-      })
-    } satisfies IExecuteArgs)
-
-    await flushPromises()
-    child.emit('exit', 1, null)
-    await flushPromises()
-
-    expect(showInternalSystemNotificationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'App Launch Failed',
-        message: 'Failed to launch Crashing Shortcut\nprocess exited early with code 1',
-        level: 'error'
-      })
-    )
+    expect(searchRecordExecuteMock).toHaveBeenCalledWith('search-session-42', item)
+    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+      name: 'Recorded App',
+      path: '/Applications/Recorded.app',
+      launchKind: 'path',
+      launchTarget: '/Applications/Recorded.app',
+      launchArgs: undefined,
+      workingDirectory: undefined,
+      sourceItemId: 'recorded-app'
+    })
   })
 
   it('rebuild only clears app records and preserves file records', async () => {
@@ -855,7 +862,7 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
-  it('launches shortcut apps with spawn and preserved args', async () => {
+  it('hands shortcut launch arguments to the app-launch adapter boundary', async () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
@@ -873,28 +880,18 @@ describe('appProvider rebuild maintenance', () => {
       })
     } satisfies IExecuteArgs)
 
-    await flushPromises()
-
-    expect(spawnSafeMock).toHaveBeenCalledWith(
-      'C:\\Program Files\\Foo\\Foo.exe',
-      ['--profile', 'work', '--flag'],
-      {
-        cwd: 'C:\\Program Files\\Foo',
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      }
-    )
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
+    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+      name: 'Test App',
+      path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+      launchKind: 'shortcut',
+      launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+      launchArgs: '--profile work --flag',
+      workingDirectory: 'C:\\Program Files\\Foo',
+      sourceItemId: 'shortcut-app'
+    })
   })
 
-  it('launches Windows Store apps through explorer shell handoff', async () => {
-    const child = {
-      once: vi.fn(),
-      removeListener: vi.fn(),
-      unref: vi.fn()
-    }
-    spawnSafeMock.mockReturnValue(child)
+  it('hands normalized Windows Store identity to the app-launch adapter', async () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
@@ -910,19 +907,15 @@ describe('appProvider rebuild maintenance', () => {
       })
     } satisfies IExecuteArgs)
 
-    await flushPromises()
-
-    expect(spawnSafeMock).toHaveBeenCalledWith(
-      'explorer.exe',
-      ['shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'],
-      {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      }
-    )
-    expect(child.once).not.toHaveBeenCalled()
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
+    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+      name: 'Test App',
+      path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      launchKind: 'uwp',
+      launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+      launchArgs: undefined,
+      workingDirectory: undefined,
+      sourceItemId: 'uwp-app'
+    })
   })
 
   it('persists and restores app description through extensions', async () => {
@@ -1210,6 +1203,276 @@ describe('appProvider rebuild maintenance', () => {
 
     expect(removeItemsMock).not.toHaveBeenCalled()
     expect(indexItemsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses one batched keyword lookup for multi-term app search exact matches', async () => {
+    const { appProvider } = await loadSubject()
+    const { fileExtensions, files } = await import('../../../../db/schema')
+    const { processSearchResults } = await import('./search-processing-service')
+    const privateProvider = asPrivateProvider(appProvider)
+    const mutableProvider = privateProvider as typeof privateProvider & {
+      appIndexSettings: { hideNoisySystemApps: boolean }
+      isMac: boolean
+    }
+    mutableProvider.isMac = false
+    mutableProvider.appIndexSettings = { hideNoisySystemApps: false }
+
+    const sharedApp = createAppSearchRow(11, '/Applications/Chat Studio.app', 'Chat Studio')
+    const chatOnlyApp = createAppSearchRow(12, '/Applications/Chat Notes.app', 'Chat Notes')
+    const studioOnlyApp = createAppSearchRow(13, '/Applications/Studio Paint.app', 'Studio Paint')
+    const { db, selectMock } = createAppSearchDb({
+      fileExtensionsTable: fileExtensions,
+      filesTable: files,
+      rows: [sharedApp, chatOnlyApp, studioOnlyApp]
+    })
+    const lookupByKeywordsMock = vi.fn(async () => {
+      return new Map([
+        [
+          'chat',
+          [
+            { itemId: sharedApp.path, priority: 1.1 },
+            { itemId: chatOnlyApp.path, priority: 1 }
+          ]
+        ],
+        [
+          'studio',
+          [
+            { itemId: sharedApp.path, priority: 1.1 },
+            { itemId: studioOnlyApp.path, priority: 1 }
+          ]
+        ],
+        ['chat studio', [{ itemId: sharedApp.path, priority: 1.2 }]]
+      ])
+    })
+    const lookupByKeywordPrefixMock = vi.fn(async () => [])
+    const ftsSearchMock = vi.fn(async () => [])
+    const ngramMock = vi.fn(async () => [])
+    const subsequenceMock = vi.fn(async () => [])
+    vi.mocked(processSearchResults).mockImplementation(async (apps) =>
+      apps.map((app) => ({
+        ...executeItem({
+          id: app.path,
+          render: {
+            mode: 'default',
+            basic: {
+              title: app.displayName ?? app.name ?? app.path
+            }
+          }
+        }),
+        score: 100
+      }))
+    )
+
+    privateProvider.dbUtils = { getDb: () => db }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (apps) => apps)
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const result = await appProvider.onSearch({ text: 'chat studio', inputs: [] })
+
+    expect(lookupByKeywordsMock).toHaveBeenCalledTimes(1)
+    expect(lookupByKeywordsMock).toHaveBeenCalledWith(
+      'app-provider',
+      ['chat', 'studio', 'chat studio'],
+      600
+    )
+    expect(selectMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: expect.anything() })
+    )
+    expect(processSearchResults).toHaveBeenCalledWith(
+      [sharedApp],
+      expect.anything(),
+      false,
+      expect.anything()
+    )
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.id).toBe(sharedApp.path)
+    expect(lookupByKeywordPrefixMock).not.toHaveBeenCalled()
+    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat studio', 150)
+    expect(ngramMock).toHaveBeenCalledWith('app-provider', 'chat studio', 30)
+    expect(subsequenceMock).toHaveBeenCalledWith('app-provider', 'chat studio', 50)
+  })
+
+  it('starts precise, prefix, and FTS app search-index reads in parallel before precise resolves', async () => {
+    const { appProvider } = await loadSubject()
+    // Dynamic imports must run after loadSubject()/vi.resetModules() so test mocks share the isolated module graph.
+    const { fileExtensions, files } = await import('../../../../db/schema')
+    // Dynamic import keeps this mock aligned with vi.resetModules() and loadSubject().
+    const { processSearchResults } = await import('./search-processing-service')
+    const privateProvider = asPrivateProvider(appProvider)
+    const mutableProvider = privateProvider as typeof privateProvider & {
+      appIndexSettings: { hideNoisySystemApps: boolean }
+      isMac: boolean
+    }
+    mutableProvider.isMac = false
+    mutableProvider.appIndexSettings = { hideNoisySystemApps: false }
+
+    const preciseApp = createAppSearchRow(21, '/Applications/Chat.app', 'Chat')
+    const preciseAltApp = createAppSearchRow(22, '/Applications/Chat Classic.app', 'Chat Classic')
+    const prefixApp = createAppSearchRow(23, '/Applications/Chatty.app', 'Chatty')
+    const prefixAltApp = createAppSearchRow(24, '/Applications/Chatter.app', 'Chatter')
+    const ftsApp = createAppSearchRow(25, '/Applications/Team Chat.app', 'Team Chat')
+    const { db, whereMock } = createAppSearchDb({
+      fileExtensionsTable: fileExtensions,
+      filesTable: files,
+      rows: [preciseApp, preciseAltApp, prefixApp, prefixAltApp, ftsApp]
+    })
+    const preciseDeferred =
+      createDeferred<Map<string, Array<{ itemId: string; priority: number }>>>()
+    const lookupByKeywordsMock = vi.fn(() => preciseDeferred.promise)
+    const lookupByKeywordPrefixMock = vi.fn(async () => [
+      { itemId: prefixApp.path, keyword: 'chatty', priority: 0.9 },
+      { itemId: prefixAltApp.path, keyword: 'chatter', priority: 0.8 }
+    ])
+    const ftsSearchMock = vi.fn(async () => [{ itemId: ftsApp.path, score: 0.25 }])
+    const ngramMock = vi.fn(async () => [])
+    const subsequenceMock = vi.fn(async () => [])
+    vi.mocked(processSearchResults).mockImplementation(async (apps) =>
+      apps.map((app) => ({
+        ...executeItem({
+          id: app.path,
+          render: {
+            mode: 'default',
+            basic: {
+              title: app.displayName ?? app.name ?? app.path
+            }
+          }
+        }),
+        score: 100
+      }))
+    )
+
+    privateProvider.dbUtils = { getDb: () => db }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (apps) => apps)
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const resultPromise = appProvider.onSearch({ text: 'chat', inputs: [] })
+
+    expect(lookupByKeywordsMock).toHaveBeenCalledWith('app-provider', ['chat'], 200)
+    expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('app-provider', 'chat', 200)
+    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat', 150)
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
+    expect(whereMock).not.toHaveBeenCalled()
+
+    preciseDeferred.resolve(
+      new Map([
+        [
+          'chat',
+          [
+            { itemId: preciseApp.path, priority: 1.2 },
+            { itemId: preciseAltApp.path, priority: 1.1 }
+          ]
+        ]
+      ])
+    )
+    const result = await resultPromise
+
+    expect(processSearchResults).toHaveBeenCalledWith(
+      [preciseApp, preciseAltApp, prefixApp, prefixAltApp, ftsApp],
+      expect.anything(),
+      false,
+      expect.anything()
+    )
+    expect(result.items.map((item) => item.id)).toEqual([
+      preciseApp.path,
+      preciseAltApp.path,
+      prefixApp.path,
+      prefixAltApp.path,
+      ftsApp.path
+    ])
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
+  })
+
+  it('returns immediately when aborted before app search work starts', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const controller = new AbortController()
+    controller.abort()
+
+    const getDbMock = vi.fn(() => ({ select: vi.fn() }))
+    const lookupByKeywordsMock = vi.fn()
+    const lookupByKeywordPrefixMock = vi.fn()
+    const ftsSearchMock = vi.fn()
+    const ngramMock = vi.fn()
+    const subsequenceMock = vi.fn()
+
+    privateProvider.dbUtils = { getDb: getDbMock }
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const result = await appProvider.onSearch({ text: 'chat', inputs: [] }, controller.signal)
+
+    expect(result.items).toEqual([])
+    expect(getDbMock).not.toHaveBeenCalled()
+    expect(lookupByKeywordsMock).not.toHaveBeenCalled()
+    expect(lookupByKeywordPrefixMock).not.toHaveBeenCalled()
+    expect(ftsSearchMock).not.toHaveBeenCalled()
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fetch app rows when aborted after search-index candidate reads', async () => {
+    const { appProvider } = await loadSubject()
+    const { fileExtensions, files } = await import('../../../../db/schema')
+    const { processSearchResults } = await import('./search-processing-service')
+    const privateProvider = asPrivateProvider(appProvider)
+    const controller = new AbortController()
+    const candidateApp = createAppSearchRow(26, '/Applications/Chat.app', 'Chat')
+    const { db, selectMock, whereMock } = createAppSearchDb({
+      fileExtensionsTable: fileExtensions,
+      filesTable: files,
+      rows: [candidateApp]
+    })
+    const lookupByKeywordsMock = vi.fn(async () => {
+      controller.abort()
+      return new Map([['chat', [{ itemId: candidateApp.path, priority: 1.2 }]]])
+    })
+    const lookupByKeywordPrefixMock = vi.fn(async () => [])
+    const ftsSearchMock = vi.fn(async () => [])
+    const ngramMock = vi.fn(async () => [])
+    const subsequenceMock = vi.fn(async () => [])
+    const fetchExtensionsForFilesMock = vi.fn(async (apps: unknown[]) => apps as TestAppSearchRow[])
+
+    privateProvider.dbUtils = { getDb: () => db }
+    privateProvider.fetchExtensionsForFiles = fetchExtensionsForFilesMock
+    privateProvider.searchIndex = {
+      lookupByKeywords: lookupByKeywordsMock,
+      lookupByKeywordPrefix: lookupByKeywordPrefixMock,
+      search: ftsSearchMock,
+      lookupByNgrams: ngramMock,
+      lookupBySubsequence: subsequenceMock
+    }
+
+    const result = await appProvider.onSearch({ text: 'chat', inputs: [] }, controller.signal)
+
+    expect(result.items).toEqual([])
+    expect(lookupByKeywordsMock).toHaveBeenCalledWith('app-provider', ['chat'], 200)
+    expect(lookupByKeywordPrefixMock).toHaveBeenCalledWith('app-provider', 'chat', 200)
+    expect(ftsSearchMock).toHaveBeenCalledWith('app-provider', 'chat', 150)
+    expect(ngramMock).not.toHaveBeenCalled()
+    expect(subsequenceMock).not.toHaveBeenCalled()
+    expect(selectMock).not.toHaveBeenCalled()
+    expect(whereMock).not.toHaveBeenCalled()
+    expect(fetchExtensionsForFilesMock).not.toHaveBeenCalled()
+    expect(processSearchResults).not.toHaveBeenCalled()
   })
 
   it('diagnoses indexed app keywords and query recall stages', async () => {

@@ -47,17 +47,3 @@ export function throwIfAborted(signal?: AbortSignal): void {
     throw new EverythingSearchAbortedError()
   }
 }
-
-export function createAbortPromise<T = never>(signal?: AbortSignal): Promise<T> | null {
-  if (!signal) {
-    return null
-  }
-  if (signal.aborted) {
-    return Promise.reject(new EverythingSearchAbortedError())
-  }
-  return new Promise<T>((_, reject) => {
-    signal.addEventListener('abort', () => reject(new EverythingSearchAbortedError()), {
-      once: true
-    })
-  })
-}

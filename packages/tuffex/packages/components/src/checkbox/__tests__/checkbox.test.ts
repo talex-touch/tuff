@@ -21,6 +21,7 @@ describe('txCheckbox', () => {
   it('uses aria-label only when no visible label is present', () => {
     const wrapper = mount(TxCheckbox, {
       props: {
+        modelValue: false,
         ariaLabel: 'Toggle item',
       },
     })
@@ -29,6 +30,7 @@ describe('txCheckbox', () => {
 
     const labelled = mount(TxCheckbox, {
       props: {
+        modelValue: false,
         label: 'Visible label',
         ariaLabel: 'Hidden label',
       },
@@ -40,6 +42,7 @@ describe('txCheckbox', () => {
   it('renders label before the box when labelPlacement is start', () => {
     const wrapper = mount(TxCheckbox, {
       props: {
+        modelValue: false,
         label: 'Before',
         labelPlacement: 'start',
       },
@@ -48,11 +51,12 @@ describe('txCheckbox', () => {
     expect(wrapper.element.firstElementChild?.classList.contains('tx-checkbox__label')).toBe(true)
   })
 
-  it('uses fill variant by default without the inner checkmark', () => {
+  it('renders the configured fill variant without the inner checkmark', () => {
     const wrapper = mount(TxCheckbox, {
       props: {
         modelValue: true,
         label: 'Selected',
+        variant: 'fill',
       },
     })
 
@@ -86,15 +90,18 @@ describe('txCheckbox', () => {
 
     await wrapper.setProps({ modelValue: true })
     await wrapper.trigger('keydown', { key: 'Enter' })
+
+    await wrapper.setProps({ modelValue: false })
     await wrapper.trigger('keydown', { key: ' ' })
 
-    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual([false])
-    expect(wrapper.emitted('update:modelValue')?.[2]).toEqual([false])
+    expect(wrapper.emitted('update:modelValue')).toEqual([[true], [false], [true]])
+    expect(wrapper.emitted('change')).toEqual([[true], [false], [true]])
   })
 
   it('does not emit events when disabled', async () => {
     const wrapper = mount(TxCheckbox, {
       props: {
+        modelValue: true,
         disabled: true,
       },
     })

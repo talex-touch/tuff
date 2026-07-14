@@ -50,6 +50,7 @@
 - `scan_progress` source-scoped runtime compatibility 已落地：`FileProviderScanProgressService`、runtime reset cleanup 与 SearchIndex worker upsert 会检测 `scan_progress` 表是否存在 `source_id`，source-scoped 表只读写当前 `file-provider` rows；旧 path-only 表保持现有 Drizzle 路径。真实 SQLite focused tests 覆盖 source-scoped read/delete/upsert isolation，以及 manual rebuild / integrity repair reset cleanup 不误删其它 source rows。
 - `scan_progress` source-scoped controlled helper 与 CLI 已落地：migration plan 会阻塞空 path、非法 timestamp、重复 path、残留 staging/backup table，并显式标记 `queryOnly=true`、requiresApproval / requiresSchemaChange / requiresDataRewrite；2026-07-03 isolated plan artifact 已证明默认 plan 模式 `executed=false` 且不会修改 source DB；execute path 需要 `--confirm-source-scope-migration`，使用 `BEGIN IMMEDIATE`、staging table、backup table 与 path index，在真实临时 SQLite 中覆盖旧 DB 迁移、新 DB 初始化、unsafe rows blocked、未确认拒绝执行与 post-migration source-scoped shape。
 - `scan_progress` source-scope 副本仿真已落地：`search:scan-progress-simulate` 用 `VACUUM INTO` 复制目标 SQLite，再只对 simulation DB 执行受控 helper，并校验源库前后 snapshot 未变化、post-migration 副本变为 `PRIMARY KEY(source_id, path)`、path-only backup rows 保留，artifact 直接输出 `sourceSnapshotUnchanged=true` 与 `evidenceSource`。该 gate 比只读 plan 更接近真实执行，但 isolated artifact 只证明 copy-mutates-copy 策略，strict 关闭仍要求 real-profile simulation evidence。
+- AppProvider 多词 app 搜索精确命中已从 per-term `keyword_mappings` 查询切换为 `SearchIndexService.lookupByKeywords` 批量读取，保持 term intersection / phrase recall / FTS fallback 语义，降低 CoreBox app 搜索短路径 SQLite 往返。
 
 ## 未完成
 

@@ -54,6 +54,27 @@ describe('txIcon', () => {
     expect(mount(TxIcon, { props: { icon: { type: 'class', value: 'i-ri-home-line', status: 'error' } } }).find('.tuff-icon__error').exists()).toBe(true)
   })
 
+  it('lets a named empty slot replace the image fallback while retaining caller attrs', () => {
+    const wrapper = mount(TxIcon, {
+      props: {
+        alt: 'Missing logo',
+        empty: '/fallback-logo.png',
+      },
+      attrs: {
+        class: 'caller-icon',
+        'aria-label': 'Plugin logo unavailable',
+      },
+      slots: {
+        empty: '<strong data-testid="custom-empty">No logo</strong>',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('caller-icon')
+    expect(wrapper.attributes('aria-label')).toBe('Plugin logo unavailable')
+    expect(wrapper.get('[data-testid="custom-empty"]').text()).toBe('No logo')
+    expect(wrapper.find('img').exists()).toBe(false)
+  })
+
   it('resolves file and local url values through injected config', () => {
     const wrapper = mount(TxIcon, {
       props: {

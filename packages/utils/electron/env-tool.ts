@@ -1,5 +1,5 @@
 import type { ExecException } from 'node:child_process'
-import { platform } from 'node:process'
+import process from 'node:process'
 import { execFileSafe } from '../common/utils/safe-shell'
 
 type ExecError = { error?: unknown }
@@ -81,7 +81,7 @@ export function withOSAdapter<R, T>(options: OSAdapter<R, T>): T | undefined {
 
   const arg = payload as R
 
-  switch (platform) {
+  switch (process.platform) {
     case 'win32':
       return options.win32?.(arg)
     case 'darwin':

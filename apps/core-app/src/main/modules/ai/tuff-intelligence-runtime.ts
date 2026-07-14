@@ -10,6 +10,7 @@ import type {
   TuffIntelligenceTraceEvent,
   TuffIntelligenceTurn
 } from '@talex-touch/tuff-intelligence'
+import { sleep } from '@talex-touch/utils/common/utils'
 import type { ToolExecutionContext } from './agents/tool-registry'
 import { eq, like } from 'drizzle-orm'
 import { config } from '../../db/schema'
@@ -165,10 +166,6 @@ function safeParseJson<T>(value: string | null | undefined, fallback: T): T {
   } catch {
     return fallback
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function buildStorageKey(sessionId: string): string {

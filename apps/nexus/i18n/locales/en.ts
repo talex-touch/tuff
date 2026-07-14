@@ -382,6 +382,8 @@ export default {
       filtered: '{count} of {total} official plugins',
       empty: 'No official plugins match your filters.',
       none: 'No official plugins are available yet.',
+      loadMore: 'Load more plugins',
+      loadMoreFailed: 'Failed to load more plugins.',
     },
     badges: {
       official: 'Official',

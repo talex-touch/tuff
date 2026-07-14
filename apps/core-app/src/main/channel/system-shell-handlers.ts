@@ -7,6 +7,14 @@ import path from 'node:path'
 import { validateExternalUrl } from '../utils/external-url-policy'
 import type { LogOptions } from '../utils/logger'
 
+export interface SystemShellCapabilities {
+  openExternal: (url: string) => Promise<void>
+}
+
+export const systemShellCapabilities: SystemShellCapabilities = {
+  openExternal: async (url) => await shell.openExternal(url)
+}
+
 export interface SystemShellHandlerOptions {
   configRootPath: () => string | null | undefined
   logger: { warn: (message: unknown, options?: LogOptions) => void }
@@ -32,7 +40,7 @@ export function registerSystemShellHandlers(
         })
         return undefined
       }
-      return shell.openExternal(decision.url)
+      return systemShellCapabilities.openExternal(decision.url)
     }),
     transport.on(AppEvents.system.showInFolder, (payload) => {
       const target = typeof payload?.path === 'string' ? payload.path : ''

@@ -49,3 +49,61 @@ describe('decisionDispatcher approval events', () => {
     ])
   })
 })
+
+describe('decisionDispatcher orchestration events', () => {
+  it('emits skill request envelopes', async () => {
+    const dispatcher = new DecisionDispatcher({
+      capabilityRegistry: new CapabilityRegistry(),
+    })
+
+    const skillRequest = {
+      id: 'skill-1',
+      skillId: 'code-review',
+      reason: 'Inspect the generated patch.',
+    }
+    const events: AgentEnvelope[] = []
+    for await (const event of dispatcher.dispatch({
+      done: false,
+      skillRequests: [skillRequest],
+    }, createState())) {
+      events.push(event)
+    }
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toEqual(expect.objectContaining({
+      correlationId: 'skill-1',
+      source: 'runtime',
+      type: 'skill.request',
+    }))
+    expect(events[0]?.payload).toBe(skillRequest)
+  })
+
+  it('emits sub-agent task envelopes', async () => {
+    const dispatcher = new DecisionDispatcher({
+      capabilityRegistry: new CapabilityRegistry(),
+    })
+
+    const subAgentTask = {
+      id: 'task-1',
+      objective: 'Verify search cleanup behavior.',
+      input: {
+        package: '@talex-touch/core-app',
+      },
+    }
+    const events: AgentEnvelope[] = []
+    for await (const event of dispatcher.dispatch({
+      done: false,
+      subAgentTasks: [subAgentTask],
+    }, createState())) {
+      events.push(event)
+    }
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toEqual(expect.objectContaining({
+      correlationId: 'task-1',
+      source: 'runtime',
+      type: 'subagent.task',
+    }))
+    expect(events[0]?.payload).toBe(subAgentTask)
+  })
+})

@@ -4,9 +4,10 @@ import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxPopperDialog } from '@talex-touch/tuffex/dialog'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem, type TxSelectValue } from '@talex-touch/tuffex/select'
-import { defineComponent, h, inject } from 'vue'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { defineAsyncComponent, defineComponent, h, inject } from 'vue'
 import { requestJson } from '~/utils/request'
+
+const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
 
 definePageMeta({
   layout: 'dashboard',
@@ -443,17 +444,18 @@ const expiryOptions = computed(() => [
       </TxButton>
     </div>
 
-    <FlipDialog
-        v-model="showCreateModal"
-        :reference="createOverlaySource"
-        size="md"
-        :mask-closable="false"
-        :prevent-accidental-close="true"
-        :header-title="t('dashboard.sections.apiKeys.overlay.title')"
-        :header-desc="t('dashboard.sections.apiKeys.overlay.description')"
-        :close-aria-label="t('dashboard.sections.apiKeys.actions.close')"
-        mask-class="ApiKeyOverlay-Mask"
-      >
+    <LazyFlipDialog
+      v-if="showCreateModal"
+      v-model="showCreateModal"
+      :reference="createOverlaySource"
+      size="md"
+      :mask-closable="false"
+      :prevent-accidental-close="true"
+      :header-title="t('dashboard.sections.apiKeys.overlay.title')"
+      :header-desc="t('dashboard.sections.apiKeys.overlay.description')"
+      :close-aria-label="t('dashboard.sections.apiKeys.actions.close')"
+      mask-class="ApiKeyOverlay-Mask"
+    >
         <template #default="{ close }">
           <div class="ApiKeyOverlay-Inner">
             <div class="space-y-4">
@@ -562,7 +564,7 @@ const expiryOptions = computed(() => [
             </div>
           </div>
         </template>
-      </FlipDialog>
+    </LazyFlipDialog>
 
     <!-- Delete Confirmation Dialog -->
     <TxPopperDialog

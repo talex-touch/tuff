@@ -1066,13 +1066,49 @@ export class ClipboardModule extends BaseModule {
     return await this.autopasteAutomation.handleCopyAndPasteRequest(request, context)
   }
 
-  private async handleWriteRequest(
-    request: ClipboardWriteRequest,
-    writePayload: (payload: ClipboardWritePayload) => Promise<void>
-  ): Promise<void> {
+  public async write(request: ClipboardWriteRequest): Promise<void> {
     const payload = normalizeClipboardWritePayload(request)
     if (!payload) return
-    await writePayload(payload)
+    await this.writePayload(payload)
+  }
+
+  private async writePayload(payload: ClipboardWritePayload): Promise<void> {
+    const { text, html, image, files } = payload ?? {}
+
+    if (image) {
+      const img = this.createNativeImageFromSource(image)
+      if (!img.isEmpty()) {
+        clipboard.writeImage(img)
+        this.clipboardHelper?.primeImage(img)
+        this.lastSuccessfulClipboardScanAt = Date.now()
+      }
+      return
+    }
+
+    if (files && files.length > 0) {
+      const resolvedPaths = files.map((filePath) => {
+        try {
+          return path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
+        } catch {
+          return filePath
+        }
+      })
+      const fileUrlContent = resolvedPaths
+        .map((filePath) => pathToFileURL(filePath).toString())
+        .join('\n')
+      const buffer = Buffer.from(fileUrlContent, 'utf8')
+      for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
+        clipboard.writeBuffer(format, buffer)
+      }
+      clipboard.write({ text: resolvedPaths[0] ?? '' })
+      this.clipboardHelper?.primeFiles(resolvedPaths)
+      this.lastSuccessfulClipboardScanAt = Date.now()
+      return
+    }
+
+    clipboard.write({ text: text ?? '', html: html ?? undefined })
+    this.clipboardHelper?.markText(text ?? '')
+    this.lastSuccessfulClipboardScanAt = Date.now()
   }
 
   private registerTransportHandlers(): void {
@@ -1080,45 +1116,6 @@ export class ClipboardModule extends BaseModule {
     if (!channel) {
       clipboardLog.warn('Clipboard transport channel unavailable during init')
       return
-    }
-
-    const writePayload = async (payload: ClipboardWritePayload): Promise<void> => {
-      const { text, html, image, files } = payload ?? {}
-
-      if (image) {
-        const img = this.createNativeImageFromSource(image)
-        if (!img.isEmpty()) {
-          clipboard.writeImage(img)
-          this.clipboardHelper?.primeImage(img)
-          this.lastSuccessfulClipboardScanAt = Date.now()
-        }
-        return
-      }
-
-      if (files && files.length > 0) {
-        const resolvedPaths = files.map((filePath) => {
-          try {
-            return path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
-          } catch {
-            return filePath
-          }
-        })
-        const fileUrlContent = resolvedPaths
-          .map((filePath) => pathToFileURL(filePath).toString())
-          .join('\n')
-        const buffer = Buffer.from(fileUrlContent, 'utf8')
-        for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
-          clipboard.writeBuffer(format, buffer)
-        }
-        clipboard.write({ text: resolvedPaths[0] ?? '' })
-        this.clipboardHelper?.primeFiles(resolvedPaths)
-        this.lastSuccessfulClipboardScanAt = Date.now()
-        return
-      }
-
-      clipboard.write({ text: text ?? '', html: html ?? undefined })
-      this.clipboardHelper?.markText(text ?? '')
-      this.lastSuccessfulClipboardScanAt = Date.now()
     }
 
     this.transport = this.transportHandlers.register(channel, {
@@ -1147,7 +1144,7 @@ export class ClipboardModule extends BaseModule {
         await this.cleanupHistory({ type: 'all' })
       },
       write: async (request) => {
-        await this.handleWriteRequest(request, writePayload)
+        await this.write(request)
       },
       clearClipboard: () => {
         clipboard.clear()

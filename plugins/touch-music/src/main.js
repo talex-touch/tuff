@@ -6,6 +6,7 @@ import App from './App.vue'
 
 import './style.css'
 import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/icon-button/style.css'
 import '@talex-touch/tuffex/input/style.css'
 import '@talex-touch/tuffex/scroll/style.css'
 import '@talex-touch/tuffex/slider/style.css'
