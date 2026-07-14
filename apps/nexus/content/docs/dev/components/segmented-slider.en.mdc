@@ -178,8 +178,27 @@ code: |
 | `update:modelValue` | `(value: number \| string)` | Emitted when an enabled segment requests a new value. |
 | `change` | `(value: number \| string)` | Emitted with the same selected value for change listeners. |
 
+### Slots
+
+`TxSegmentedSlider` does not expose public slots. Labels come from `segments[].label` so keyboard, pointer, and vertical rendering stay deterministic.
+
+## Best Practices
+
+- Use three to seven stable segments; long or dynamic option lists should use `TxSelect` or `TxSearchSelect` instead.
+- Keep segment values primitive and unique. Duplicate values make selection state ambiguous.
+- Disable labels only when nearby copy already names each stop; otherwise labels are the user's map of the discrete choices.
+- Prefer `TxSlider` for continuous values and `TxSegmentedSlider` for ordinal policy states.
+
 ## Review Notes
 
 - Source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
 - Screenshot: `.codex-screenshots/nexus-segmented-slider-release-policy-demo-playwright-2026-05-28.png`.
 - Recommendation: use it only when values are naturally discrete and stable; risk tiers, plan tiers, and release gates are better fits than continuous numeric tuning.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
+- Types: `packages/tuffex/packages/components/src/segmented-slider/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/segmented-slider/__tests__/segmented-slider.test.ts` verifies horizontal progress and segment positions, button semantics, active/completed state, vertical rendering, model/change emits, disabled guards, label hiding, and null-model first-segment selection.
+
+<TuffDocSourceLink />

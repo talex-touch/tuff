@@ -19,14 +19,47 @@ verified: true
 ---
 code: |
   <template>
-    <TxSearchEmpty description="Try another keyword or filter." />
+    <TxSearchEmpty title="No matches found" description="Try another keyword, clear filters, or broaden the search scope." />
   </template>
 ---
 :::
 
 ## API
 
-`TxSearchEmpty` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+`TxSearchEmpty` inherits `TxEmptyState` props, slots, and events except `variant`; the wrapper always supplies `variant="search-empty"`.
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `title` | `string` | `No results` | Overrides the preset search-empty title. |
+| `description` | `string` | `Try a different keyword or filter.` | Overrides recovery guidance. |
+| `icon` | `TxIconSource \| string \| null` | - | Replaces the search illustration, or `null` to hide the icon area. |
+| `iconSize` | `number` | - | Sets custom icon size in pixels. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Controls icon/content direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Aligns icon, copy, and actions. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Adjusts spacing, text scale, and illustration size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Adds bordered containment for filtered result panels. |
+| `primaryAction` | `EmptyStateAction` | - | Renders the primary recovery action and emits `primary`. |
+| `secondaryAction` | `EmptyStateAction` | - | Renders a secondary recovery action and emits `secondary`. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Default generated action size. |
+| `loading` | `boolean` | `false` | Shows a spinner when no custom icon slot or icon prop is provided. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `icon` | Replaces the preset search-empty illustration. |
+| `title` | Replaces the resolved title content. |
+| `description` | Replaces the resolved description content. |
+| `actions` | Replaces generated primary and secondary action buttons. |
+
+### Events
+
+| Event | Description |
+|------|------|
+| `primary` | Emitted when the generated primary action button is clicked. |
+| `secondary` | Emitted when the generated secondary action button is clicked. |
 
 ## Dashboard Filter Toolbar
 
@@ -52,8 +85,25 @@ code: |
 - The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
 - `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
 
+## Best Practices
+
+- Use `TxSearchEmpty` only after a query or filter has produced no matches; use `TxNoData` for an unfiltered empty dataset.
+- Echo the failed query or active filter near the component when possible so users know what was searched.
+- Provide a reset or broaden-scope action when the filter state is recoverable.
+- Keep it inside the same container as the filtered results, not in a global toast or detached banner.
+- Use `surface="card"` when replacing a whole result panel; keep `surface="plain"` for inline filter rows.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue`.
+- Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
+- Types: `packages/tuffex/packages/components/src/search-empty/src/types.ts` exports `SearchEmptyProps = Omit<EmptyStateProps, 'variant'>`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/search-empty/__tests__/search-empty.test.ts` verifies search-empty variant locking, explicit prop/action forwarding, named slots, and install behavior.
+
+<TuffDocSourceLink />
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue`
-- Recommendation: use `TxSearchEmpty` for no-match search results; keep `TxEmptyState` or `TxNoData` for ordinary empty datasets.
-- Accessibility: the title should state that no matches were found, and actions should point to a recovery path such as reset filters, adjust scope, or search again.
+- **Wrapper contract:** `TxSearchEmpty` always forwards `variant="search-empty"` and leaves result copy, reset actions, surface, icon, and slots to the host.
+- **Recommendation:** Use `TxSearchEmpty` for no-match search results; keep `TxEmptyState` or `TxNoData` for ordinary empty datasets.
+- **Accessibility:** The title should state that no matches were found, and actions should point to a recovery path such as reset filters, adjust scope, or search again.

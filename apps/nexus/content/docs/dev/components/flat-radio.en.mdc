@@ -5,7 +5,8 @@ category: Form
 status: beta
 since: 2.4.7
 tags: [select, flat, form, selection, inline]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # FlatRadio
 
@@ -225,24 +226,24 @@ When the container is focused:
 
 | Prop | Description | Type | Default |
 |------|-------------|------|---------|
-| modelValue / v-model | Selected value in single mode, or selected value array in `multiple` mode. | `string \| number \| (string \| number)[]` | - |
-| multiple | Enables checkbox-like multi-select behavior. The sliding single-select indicator is hidden in this mode. | `boolean` | `false` |
-| disabled | Disables the entire group, removes focusability, and blocks keyboard changes. | `boolean` | `false` |
-| size | Size variant | `'sm' \| 'md' \| 'lg'` | `'md'` |
-| bordered | Adds an outer border around the selector. | `boolean` | `false` |
+| `modelValue` / `v-model` | Selected value in single mode, or selected value array in `multiple` mode. | `string \| number \| (string \| number)[]` | - |
+| `multiple` | Enables checkbox-like multi-select behavior. The sliding single-select indicator is hidden in this mode. | `boolean` | `false` |
+| `disabled` | Disables the entire group, removes focusability, and blocks click / keyboard changes. | `boolean` | `false` |
+| `size` | Size variant. | `'sm' \| 'md' \| 'lg'` | `'md'` |
+| `bordered` | Adds an outer border around the selector. | `boolean` | `false` |
 
 #### Events
 
 | Event | Description | Params |
 |-------|-------------|--------|
-| update:modelValue | Emitted with the next selected value or selected value array. | `(value: string \| number \| (string \| number)[]) => void` |
-| change | Emitted with the same payload after a selection change. | `(value: string \| number \| (string \| number)[]) => void` |
+| `update:modelValue` | Emitted with the next selected value or selected value array. | `(value: string \| number \| (string \| number)[]) => void` |
+| `change` | Emitted with the same payload after a selection change. | `(value: string \| number \| (string \| number)[]) => void` |
 
 #### Slots
 
 | Slot | Description |
 |------|-------------|
-| default | `TxFlatRadioItem` children |
+| `default` | `TxFlatRadioItem` children. |
 
 ### TxFlatRadioItem
 
@@ -250,14 +251,45 @@ When the container is focused:
 
 | Prop | Description | Type | Default |
 |------|-------------|------|---------|
-| value | Item value used by the parent model. | `string \| number` | - |
-| label | Fallback visible text when no default slot is provided. | `string` | - |
-| icon | Fallback icon CSS class when no `icon` slot is provided. | `string` | - |
-| disabled | Disables this item and skips it during keyboard navigation. | `boolean` | `false` |
+| `value` | Item value registered with the parent selector. | `string \| number` | *required* |
+| `label` | Fallback visible text when no default slot is provided. | `string` | - |
+| `icon` | Fallback icon CSS class when no `icon` slot is provided. | `string` | - |
+| `disabled` | Disables this item and skips it during keyboard navigation. | `boolean` | `false` |
 
 #### Slots
 
 | Slot | Description |
 |------|-------------|
-| default | Custom visible item content, replacing `label`. |
-| icon | Custom icon content, replacing the `icon` class. |
+| `default` | Custom visible item content, replacing `label`. |
+| `icon` | Custom icon content, replacing the `icon` class. |
+
+## Interaction Contract
+
+- Single-select mode uses `role="radiogroup"` on `TxFlatRadio` and `role="radio"` on each item.
+- Multiple mode uses `role="group"` on the container and `role="checkbox"` on each item; the sliding indicator is hidden.
+- Item buttons keep `tabindex="-1"`; focus stays on the container so arrow keys can drive the whole group.
+- Arrow keys, Home, and End skip disabled items and wrap across enabled items.
+- In multiple mode, arrow keys move the focused value and Enter / Space toggles it. In single mode, arrow keys immediately select the next value.
+- Group-level `disabled` sets container `tabindex="-1"`, marks all items disabled, and blocks click / keyboard changes.
+
+## Best Practices
+
+- Use FlatRadio for two to five short options where immediate comparison matters. Prefer `TxSelect` for longer option lists.
+- Keep labels short enough to stay on one line; the item layout intentionally uses `white-space: nowrap`.
+- Avoid mixing long custom slot content with icons in compact `sm` size.
+- Use `multiple` only when the selected values are independent toggles; otherwise use separate switches or checkboxes with clearer labels.
+- Keep `value` stable across renders because the parent registers item DOM by value for indicator and keyboard ordering.
+
+## Review Notes
+
+- **Accessibility note:** The group is the only tabbable element; item buttons are kept at `tabindex="-1"` so arrow-key handling stays centralized. Use nearby field text or an external label to name the group.
+- **Verified coverage:** `flat-radio.test.ts` covers single-select `radiogroup`/`radio` semantics, item disabled state, disabled group focus removal, arrow-key wrapping while skipping disabled items, Home/End selection, and Enter/Space toggling in `multiple` mode.
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue` and `TxFlatRadioItem.vue`.
+- Types: `packages/tuffex/packages/components/src/flat-radio/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, and Enter / Space toggles in multiple mode.
+
+<TuffDocSourceLink />
+

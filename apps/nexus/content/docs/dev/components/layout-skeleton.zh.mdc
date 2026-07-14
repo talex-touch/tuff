@@ -45,7 +45,9 @@ code: |
 - 适合页面级加载，占位期间保持节奏感。
 - 内容区行宽使用固定序列，保证 SSR、hydration 与测试输出稳定。
 
-## API（简版）
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -55,6 +57,14 @@ rows:
     description: '无额外 props，尺寸由容器决定'
 ---
 ::
+
+### Events
+
+`TxLayoutSkeleton` 不会 emit 自定义事件。
+
+### Slots
+
+`TxLayoutSkeleton` 不暴露插槽。组件始终渲染下方记录的固定布局骨架。
 
 ## 交互契约
 
@@ -91,8 +101,25 @@ code: |
 ---
 :::
 
+## 最佳实践
+
+- 外层容器必须给出明确高度；组件只填满 `width: 100%` 与 `height: 100%`，不会替页面决定尺寸。
+- 页面、面板、侧边摘要和详情栏加载时，如果最终布局形状稳定，可以使用它保持结构预期。
+- 不要把它当作表格行占位。表格主体应使用 `TxSkeleton`、行级占位或 `TxDataTable loading`。
+- 保持文档、SSR、hydration 与视觉测试的确定性；内容行宽度刻意使用固定序列，而不是运行时随机数。
+
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`
-- 建议：外层容器必须给出明确高度；页面级加载用它，列表行加载仍优先用 `TxSkeleton` 或表格 loading。
-- 稳定性：内容行宽度为固定序列，不依赖随机数，适合文档截图与 SSR 输出。
+- 已对照 `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue` 与 `layout-skeleton.test.ts` 核对。
+- **实测覆盖:** 固定骨架结构、6 个 sidebar item、8 条内容行、确定性内容宽度和 install 注册。
+- API 说明：该组件有意不提供 props。尺寸、比例和位置必须由父容器决定。
+- 渲染说明：内容行宽度是固定值，不使用随机数，因此 SSR、hydration、文档快照和视觉测试保持稳定。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`.
+- Types: `packages/tuffex/packages/components/src/layout-skeleton/index.ts` exports `TxLayoutSkeletonInstance`.
+- Coverage: `packages/tuffex/packages/components/src/layout-skeleton/__tests__/layout-skeleton.test.ts` verifies fixed scaffold counts, deterministic content widths, and install registration.
+
+<TuffDocSourceLink />
+

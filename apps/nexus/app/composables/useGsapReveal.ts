@@ -35,13 +35,18 @@ export function useGsapReveal(
   options: UseGsapRevealOptions = {},
 ) {
   let ctx: GsapContext | undefined
+  let disposed = false
 
   onMounted(async () => {
-    if (!container.value)
+    const scope = container.value
+    if (!scope)
       return
 
     const { default: gsap } = await import('gsap')
     const { ScrollTrigger } = await import('gsap/ScrollTrigger')
+
+    if (disposed)
+      return
 
     if (!scrollTriggerRegistered) {
       gsap.registerPlugin(ScrollTrigger)
@@ -72,16 +77,18 @@ export function useGsapReveal(
         clearProps,
         stagger: options.stagger ?? 0.12,
         scrollTrigger: {
-          trigger: container.value,
+          trigger: scope,
           start: 'top 82%',
           once: options.once ?? true,
           ...options.scrollTrigger,
         },
       })
-    }, container)
+    }, scope)
   })
 
   onBeforeUnmount(() => {
+    disposed = true
     ctx?.revert()
+    ctx = undefined
   })
 }

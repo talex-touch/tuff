@@ -166,9 +166,45 @@ code: |
 |------|------|------|
 | `select` | - | Emitted when an enabled item is clicked. |
 
+## Slots
+
+### TxDropdownMenu
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `trigger` | - | Trigger content forwarded to the Popover reference slot. |
+| `default` | - | Menu rows, usually `TxDropdownItem` children, rendered inside the menu panel. |
+
+### TxDropdownItem
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Main menu item label. |
+| `right` | - | Replaces the generated trailing chevron used by `arrow`. |
+
 ## Interaction Contract
 
 - `TxDropdownMenu` is for short action lists; use `TxPopover` / `TxDrawer` when content includes explanations, forms, or complex state.
+- `TxDropdownMenu` wraps `TxPopover`, so `placement`, `offset`, height limiting, panel card props, and animation follow the same anchor behavior.
 - `closeOnSelect` closes the parent menu after enabled items emit `select`; disabled items do not select or close.
-- The panel is backed by `TxPopover`, so `placement`, `offset`, and `panelBackground` should follow Popover behavior.
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue`
+- The menu panel uses `role="menu"`, and each item uses `role="menuitem"` through `TxDropdownItem`.
+- `TxDropdownItem` emits `select` with no payload; attach business context in the handler that renders the item.
+
+## Best Practices
+
+- Keep dropdowns to a short command list. If the panel needs paragraphs, forms, or multiple interaction steps, use `TxPopover`, `TxDrawer`, or `TxContextMenuPanel` composition instead.
+- Use `danger` only for destructive commands and keep those commands visually separated from neutral actions when the list grows.
+- Use `arrow` for navigation/submenu rows; use the `right` slot for external-link icons, keyboard hints, or status badges.
+- Leave `closeOnSelect=true` for normal commands. Set it to `false` only when the row opens another surface or starts a multi-step flow.
+- Prefer `panelBackground="refraction"` / default panel styling unless a surrounding surface already provides strong contrast.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` forwards Popover placement, sizing, animation, panel visual props, and trigger/default slots.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow props, `right` slot behavior, `role="menuitem"`, and close-on-select injection.
+- Type contracts: `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` exports `DropdownMenuProps`, `DropdownItemProps`, and the supported placement union.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, enabled selection, disabled item no-op behavior, and `closeOnSelect=false`.
+
+## Source
+<TuffDocSourceLink />
+

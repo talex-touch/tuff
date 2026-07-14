@@ -30,6 +30,22 @@ function getQueryText(query) {
   return query?.text ?? ''
 }
 
+function normalizeExternalUrl(value) {
+  const text = normalizeText(value)
+  if (!text)
+    return ''
+
+  try {
+    const url = new URL(text)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:')
+      return ''
+    return url.toString()
+  }
+  catch {
+    return ''
+  }
+}
+
 function parseToolboxConfig(raw) {
   if (!raw)
     return { ...DEFAULT_CONFIG }
@@ -173,7 +189,7 @@ const pluginLifecycle = {
       const linkItems = []
       links.forEach((link, index) => {
         const title = typeof link.title === 'string' ? link.title : `链接 ${index + 1}`
-        const url = typeof link.url === 'string' ? link.url : ''
+        const url = normalizeExternalUrl(link.url)
         if (!url)
           return
 
@@ -235,31 +251,51 @@ const pluginLifecycle = {
       }
 
       if (actionId === 'open-link') {
-        const url = item.meta?.payload?.url
-        if (typeof url === 'string' && url) {
-          const permissionResult = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开开发工具箱链接')
-          if (!permissionResult.granted) {
-            return {
-              externalAction: true,
-              success: false,
-              status: 'blocked',
-              reason: permissionResult.reason || 'permission-denied',
-              message: '缺少 network.internet 权限',
-            }
+        const url = normalizeExternalUrl(item.meta?.payload?.url)
+        if (!url) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'invalid-url',
+            message: '链接地址无效，仅支持 HTTP/HTTPS',
           }
+        }
 
-          if (!openUrl) {
-            return {
-              externalAction: true,
-              success: false,
-              status: 'blocked',
-              reason: 'open-url-unavailable',
-              message: '当前运行时不支持打开外部链接',
-            }
+        const permissionResult = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开开发工具箱链接')
+        if (!permissionResult.granted) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: permissionResult.reason || 'permission-denied',
+            message: '缺少 network.internet 权限',
           }
+        }
 
+        if (!openUrl) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'open-url-unavailable',
+            message: '当前运行时不支持打开外部链接',
+          }
+        }
+
+        try {
           await openUrl(url)
           return { externalAction: true, status: 'started' }
+        }
+        catch (error) {
+          logger?.error?.('[touch-dev-toolbox] Failed to open external URL', error)
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'open-url-failed',
+            message: '打开外部链接失败',
+          }
         }
       }
     }
@@ -272,6 +308,7 @@ const pluginLifecycle = {
 module.exports = {
   ...pluginLifecycle,
   __test: {
+    normalizeExternalUrl,
     parseToolboxConfig,
   },
 }

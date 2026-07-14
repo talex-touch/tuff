@@ -2,7 +2,11 @@
 title: "Card"
 description: "Surface container with slots, material backgrounds, loading, clickable, inertial, and refraction modes."
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [card, surface, layout]
+syncStatus: reviewed
+verified: true
 ---
 # Card
 
@@ -1641,7 +1645,7 @@ code: |
 - Use `TxBaseSurface` when you need low-level material tuning, especially refraction/filter parameters (`displace`, `distortionScale`, `redOffset/greenOffset/blueOffset`, `filterSaturation/filterContrast/filterBrightness`, `refractionHaloOpacity`).
 - Convention: keep `TxCard` as a stable, out-of-the-box API; do material experiments and brand-level rendering in `TxBaseSurface`.
 
-## API Reference
+## API
 
 ### Props
 
@@ -1654,10 +1658,12 @@ code: |
 | radius | `number` | `18` | Border radius in px, forwarded to the visual surface and root CSS variable. |
 | padding | `number` | - | Explicit padding in px. Defaults to `10`, `12`, or `16` by size. |
 | glassBlur | `boolean` | `true` | Applies when `background='glass' \| 'refraction'`: enables blur. |
-| glassBlurAmount | `number` | `22` | Applies when `background='glass' \| 'refraction'`: blur strength (px). |
+| glassBlurAmount | `number` | `22` | Applies when `background='glass' \| 'refraction'`: blur strength in px. |
 | glassOverlay | `boolean` | `true` | Applies when `background='glass' \| 'refraction'`: enables highlight overlay. |
 | glassOverlayOpacity | `number` | `0.18` | Applies when `background='glass' \| 'refraction'`: overlay opacity. |
+| maskOpacity | `number` | `0.75` | Applies when `background='mask'`: opacity forwarded to `TxBaseSurface`, clamped to `0..1`. |
 | fallbackMaskOpacity | `number` | `0.26` | Mask opacity (0-1) while motion fallback is active. |
+| surfaceMoving | `boolean` | `false` | External moving flag merged with internal inertial motion before forwarding to `TxBaseSurface`. |
 | refractionStrength | `number` | `62` | Applies when `background='refraction'`: refraction strength (0-100), controlling dispersion and distortion. |
 | refractionProfile | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | Applies when `background='refraction'`: refraction style preset. |
 | refractionTone | `'mist' \| 'balanced' \| 'vivid'` | `'vivid'` | Applies when `background='refraction'`: refraction tone preset (`vivid` by default to avoid gray haze). |
@@ -1679,56 +1685,61 @@ code: |
 
 | Event | Params | Description |
 |--------|------|------|
-| click | `(event: MouseEvent)` | Emitted only when `clickable=true` and `disabled=false`. |
+| `click` | `(event: MouseEvent)` | Emitted only when `clickable=true` and `disabled=false`. |
 
 ### Slots
 
-| Column | Description |
-|--------|------|
-| default | Main card body content. |
-| header | Optional header region rendered above the body. |
-| footer | Optional footer region rendered below the body. |
-| cover | Optional cover region rendered before the header and body. |
+| Slot | Props | Description |
+|--------|-------|------|
+| `default` | - | Main card body content. |
+| `header` | - | Optional header region rendered above the body. |
+| `footer` | - | Optional footer region rendered below the body. |
+| `cover` | - | Optional cover region rendered before the header and body. |
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+## Interaction Contract
+
+- The root is a non-semantic `div`. Use `clickable` only for card-level selection/navigation patterns and keep real buttons or links inside slots when the action needs native semantics.
+- `click` emits only when `clickable=true` and `disabled=false`; disabled cards keep visual content rendered but block click emission and pointer-driven motion updates.
+- `loading=true` overlays `TxSpinner` with `aria-hidden="true"`; callers still own any live-region or form-busy announcement.
+- `background` is forwarded to `TxBaseSurface` as the surface mode. `mask` forwards `maskOpacity`; `glass` and `refraction` forward blur / overlay props.
+- Refraction profile, tone, strength, angle, and light-follow props affect only `background="refraction"`.
+- `refractionStrength`, light-follow intensity, spring stiffness, spring damping, and inertial rebound are clamped before being used for derived visual state.
+- `inertial=true` writes pointer-follow transform variables and schedules RAF until motion settles; disabling inertial resets motion state.
 
 ## Style Customization
 
 ### CSS Variables
 
-:::TuffCodeBlock{lang="css"}
+`TxCard` exposes a small set of runtime variables on the root node. Most visual tuning should use props first; use variables only when a wrapper needs to coordinate with projected content or the underlying `TxBaseSurface` mask color.
+
+::::TuffCodeBlock{lang="css"}
 ---
 code: |
   .custom-card {
-    --tx-card-fake-background: rgba(255, 255, 255, 0.8);
-    --tx-card-padding: 24px;
+    /* Used by mask / refraction fallback surfaces. */
+    --tx-card-fake-background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent);
   }
 ---
-:::
+::::
 
-### Theme Customization
+| Variable | Written by | Purpose |
+|----------|------------|---------|
+| `--tx-card-radius` | `radius` prop | Root, surface, cover, and loading overlay radius. |
+| `--tx-card-padding` | `padding` prop or `size` preset | Root padding, cover negative margin, and cover bottom spacing. |
+| `--tx-card-dx` / `--tx-card-dy` | internal inertial motion | Root `translate3d(...)` offset; callers should not set these manually. |
+| `--tx-card-fake-background` | caller / theme | Background color sampled by mask and refraction fallback surfaces. |
+| `--tx-surface-refraction-mask-color` | card root inline style | Forwards `--tx-card-fake-background` to `TxBaseSurface`; callers normally override `--tx-card-fake-background` instead. |
 
-:::TuffCodeBlock{lang="css"}
----
-code: |
-  :root {
-    /* text */
-    --tx-card-background-default: rgba(255, 255, 255, 0.8);
-    --tx-card-background-glass: rgba(255, 255, 255, 0.1);
-    
-    /* text */
-    --tx-card-border-default: 1px solid rgba(0, 0, 0, 0.1);
-    --tx-card-border-outlined: 1px solid var(--tx-color-border);
-    
-    /* text */
-    --tx-card-shadow-default: 0 2px 8px rgba(0, 0, 0, 0.1);
-    --tx-card-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.15);
-    
-    /* textSize */
-    --tx-card-padding-small: 16px;
-    --tx-card-padding-medium: 20px;
-    --tx-card-padding-large: 24px;
-  }
----
-:::
+### Theme Notes
+
+- There are no `--tx-card-background-*`, `--tx-card-border-*`, `--tx-card-shadow-*`, or `--tx-card-padding-*` theme tokens in the component source.
+- Use `variant`, `shadow`, `size`, `radius`, `padding`, and surface props for supported customization.
+- Override global TuffEx tokens such as `--tx-bg-color-overlay`, `--tx-border-color-light`, and `--tx-color-primary` when the card should follow an app-wide theme.
+
 
 ## Best Practices
 
@@ -1769,3 +1780,21 @@ code: |
   </template>
 ---
 :::
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/card/src/types.ts`, `TxCard.vue`, and `card.test.ts`.
+- Props table includes all source props, including `maskOpacity` and `surfaceMoving` which were previously missing from the docs.
+- Corrected style customization to document only source-backed CSS variables; removed obsolete `--tx-card-background-*`, border, shadow, and padding theme-token examples.
+- Verified behavior from tests: default mode is `pure`, size-derived padding is `10/12/16`, clicks emit only for enabled clickable cards, loading renders a spinner overlay, and disabled cards block pointer-driven updates.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts` covers default classes/surface props, structural slots, clickable gating, loading overlay, mask/glass mapping, and refraction light-follow mapping.
+- The `TxBaseSurface` comparison is intentional: low-level refraction and filter controls remain on `TxBaseSurface`, while `TxCard` exposes the stable container API.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/card/src/TxCard.vue`
+- Types: `packages/tuffex/packages/components/src/card/src/types.ts`
+- Tests: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts`
+
+<TuffDocSourceLink />

@@ -19,6 +19,8 @@ const vortexBackground = readFileSync(new URL('../../components/tuff/VortexBackg
 const headerControls = readFileSync(new URL('../../components/HeaderControls.vue', import.meta.url), 'utf8')
 const globalSearchState = readFileSync(new URL('../../composables/useGlobalSearchState.ts', import.meta.url), 'utf8')
 const globalSearch = readFileSync(new URL('../../composables/useGlobalSearch.ts', import.meta.url), 'utf8')
+const policyMarkdown = readFileSync(new URL('../../composables/usePolicyMarkdown.ts', import.meta.url), 'utf8')
+const legacySearch = readFileSync(new URL('../../components/Search.vue', import.meta.url), 'utf8')
 const docEngagementTracker = readFileSync(new URL('../../composables/useDocEngagementTracker.ts', import.meta.url), 'utf8')
 const languageToggle = readFileSync(new URL('../../components/LanguageToggle.vue', import.meta.url), 'utf8')
 const languageToggleMenu = readFileSync(new URL('../../components/LanguageToggleMenu.vue', import.meta.url), 'utf8')
@@ -531,6 +533,17 @@ describe('docs page performance boundaries', () => {
     expect(globalSearch).toContain("import('@talex-touch/utils/search/feature-matcher')")
     expect(globalSearch).toContain("import('~/data/search/featureIndex')")
     expect(globalSearch).toContain("import('~/data/search/pageIndex')")
+    expect(globalSearch).toMatch(/fetchContentApi<DocsSearchResponse>\(`\/api\/docs\/search\/\$\{locale\}`/)
+    expect(globalSearch).toMatch(/fetchContentApi<SidebarComponentItem\[]>\(`\/api\/docs\/sidebar-components\/\$\{locale\}`/)
+    expect(globalSearch).not.toContain('queryCollection(')
+    expect(globalSearch).not.toContain('searchContent(')
+    expect(legacySearch).toMatch(/fetchContentApi<DocsSearchResponse>\(`\/api\/docs\/search\/\$\{normalizedLocale\}`/)
+    expect(legacySearch).not.toContain('searchContent(')
+  })
+
+  it('loads policy Markdown through the server content boundary', () => {
+    expect(policyMarkdown).toContain("fetchContentApi<PolicyContentResponse>('/api/content/policy'")
+    expect(policyMarkdown).not.toContain('queryCollection(')
   })
 
   it('keeps the global toast host out of first-paint docs modules', () => {
@@ -613,10 +626,10 @@ describe('docs page performance boundaries', () => {
     expect(nexusPwaManifest).not.toContain("from '@vite-pwa/nuxt")
   })
 
-  it('requests component sidebar metadata by locale instead of downloading both languages', () => {
-    expect(docsSidebar).toContain("'/api/docs/sidebar-components'")
+  it('requests prerenderable locale-specific component sidebar metadata', () => {
+    expect(docsSidebar).toMatch(/const sidebarComponentsEndpoint = computed\(\(\) => `\/api\/docs\/sidebar-components\/\$\{docsLocale\.value\}`\)/)
     expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-components-meta:\$\{docsLocale\.value\}`\)/)
-    expect(docsSidebar).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)\)/)
+    expect(docsSidebar).toContain('sidebarComponentsEndpoint,')
     expect(docsSidebar).toContain('immediate: false')
     expect(docsSidebar).toContain('COMPONENT_DOCS_METADATA_DELAY_MS = 360')
     expect(docsSidebar).toContain('COMPONENT_DOCS_METADATA_INTENT_DELAY_MS = 180')
@@ -627,22 +640,18 @@ describe('docs page performance boundaries', () => {
     expect(docsSidebar).toContain('@pointerenter="requestComponentDocsMetadataOnIntent"')
     expect(docsSidebar).toContain('@focusin="requestComponentDocsMetadataOnIntent"')
     expect(docsSidebar).toContain('@touchstart.passive="requestComponentDocsMetadataOnIntent"')
-    expect(docsSidebar).toContain('const componentItems = computed(() => coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[])')
+    expect(docsSidebar).toMatch(/const componentItems = computed\(\(\) => coerceJsonArray<SidebarComponentDoc>\(componentDocsPayload\.value\)[\s\S]*\.filter\(item => item\.locale === docsLocale\.value\)/)
   })
 
-  it('requests scoped docs navigation for component pages instead of hydrating the full docs tree', () => {
-    expect(page).toContain("'/api/docs/navigation'")
-    expect(docsSidebar).toContain("'/api/docs/navigation'")
+  it('requests prerenderable locale and scope-specific docs navigation', () => {
     expect(page).toContain("const docsNavigationScope = computed(() => (docPath.value.includes('/docs/dev/components') ? 'components' : undefined))")
     expect(docsSidebar).toContain("const docsNavigationScope = computed(() => (isComponentDocsRoute.value ? 'components' : undefined))")
+    expect(page).toMatch(/const docsNavigationEndpoint = computed\(\(\) => `\/api\/docs\/navigation\/\$\{docsLocale\.value\}\/\$\{docsNavigationScope\.value \?\? 'all'\}`\)/)
+    expect(docsSidebar).toMatch(/const docsNavigationEndpoint = computed\(\(\) => `\/api\/docs\/navigation\/\$\{docsLocale\.value\}\/\$\{docsNavigationScope\.value \?\? 'all'\}`\)/)
     expect(page).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}:\$\{docsNavigationScope\.value \?\? 'all'\}`\)/)
     expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:\$\{docsLocale\.value\}:\$\{docsNavigationScope\.value \?\? 'all'\}`\)/)
-    expect(page).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)/)
-    expect(docsSidebar).toMatch(/query: computed\(\(\) => \(\{[\s\S]*locale: docsLocale\.value,[\s\S]*\}\)/)
-    expect(page).toContain("...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {})")
-    expect(docsSidebar).toContain("...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {})")
-    expect(page).toMatch(/key: computed\(\(\) => `docs-navigation:[\s\S]*server: false,[\s\S]*lazy: true,[\s\S]*responseType: 'json'/)
-    expect(docsSidebar).toMatch(/key: computed\(\(\) => `docs-navigation:[\s\S]*server: false,[\s\S]*lazy: true,[\s\S]*responseType: 'json'/)
+    expect(page).toMatch(/useTypedFetch<unknown>\([\s\S]*docsNavigationEndpoint,[\s\S]*server: false,[\s\S]*lazy: true,[\s\S]*responseType: 'json'/)
+    expect(docsSidebar).toMatch(/useTypedFetch<unknown>\([\s\S]*docsNavigationEndpoint,[\s\S]*server: false,[\s\S]*lazy: true,[\s\S]*responseType: 'json'/)
   })
 
   it('warms component docs links on sidebar intent without enabling bulk NuxtLink prefetch', () => {

@@ -239,8 +239,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@700&display=swap');
-
 .hero-wordmark {
   position: relative;
   display: inline-flex;

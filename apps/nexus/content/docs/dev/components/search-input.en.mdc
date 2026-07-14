@@ -186,9 +186,28 @@ code: |
 | `setValue(v)` | `(v: string) => void` | Sets the current input value. |
 | `getValue()` | `() => string` | Returns the current input value. |
 
+### Slots
+
+`TxSearchInput` does not expose public slots. The prefix search icon is owned by the component; use `TuffInput` directly when a custom prefix or suffix is required.
+
+## Best Practices
+
+- Use `TxSearchInput` for keyword and Enter workflows; prefer `TxSearchSelect` when results need a dropdown panel or selected-value refill.
+- `remote` emits `search` after `searchDebounce` on input changes, while Enter emits `search` immediately. Keep API callers idempotent because both paths can produce the same query.
+- Do not rely on placeholder text as the only business label; provide an external label, section heading, or surrounding context in dense toolbars.
+- Set `searchDebounce` to `0` only for local or fully cached searches. Network-backed search should keep a debounce to avoid request storms.
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`
-- Recommendation: use `TxSearchInput` for keyword and Enter workflows; prefer `TxSearchSelect` when results need a dropdown panel or selected-value refill.
-- Interaction: `remote` emits `search` after `searchDebounce` on input changes, while Enter emits `search` immediately.
-- Accessibility: do not rely on placeholder text as the only business label; provide an external label, section heading, or surrounding context in dense toolbars.
+- **Search contract:** Enter emits `search` immediately. `remote=true` also emits debounced `search` on input changes, unless the component is disabled.
+- **Clear contract:** the component forwards `TuffInput` clear behavior, emits `clear`, and exposes the same focus/blur/value helpers for wrapper-level integrations.
+- **Composition contract:** the search icon is owned by `TxSearchInput`; use `TuffInput` directly when the field needs custom prefix/suffix slots.
+- **Verified coverage:** `search-input.test.ts` covers input/search emits, remote debounce, disabled remote blocking, clear forwarding, and `getValue()` / `setValue()` helper exposure.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`.
+- Types: `packages/tuffex/packages/components/src/search-input/src/types.ts` exports `SearchInputProps` and `SearchInputEmits`.
+- Coverage: `packages/tuffex/packages/components/src/search-input/__tests__/search-input.test.ts` verifies input/search emits, remote debounce, disabled remote blocking, clear forwarding, and `getValue()` / `setValue()` helper exposure.
+
+<TuffDocSourceLink />

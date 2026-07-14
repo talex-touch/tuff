@@ -8,33 +8,27 @@ Intelligence SDK 提供插件访问 AI 能力的统一接口，支持多种 AI P
 
 **快速开始**
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-  
-  const { text, vision } = useIntelligence()
-  
-  // AI 对话
-  const chatRes = await text.chat({
-    messages: [{ role: 'user', content: 'Hello!' }]
-  })
-  console.log(chatRes.result)
-  
-  // 翻译
-  const translateRes = await text.translate({
-    text: 'Hello World',
-    targetLang: 'zh-CN'
-  })
-  console.log(translateRes.result)
-  
-  // OCR 识别
-  const ocrRes = await vision.ocr({
-    source: { type: 'data-url', dataUrl: imageDataUrl }
-  })
-  console.log(ocrRes.result.text)
+import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+const providers = await intelligence.getProviderModelOptions({ capabilityId: 'text.chat' })
+
+if (status.available) {
+const chatRes = await intelligence.text.chat({
+messages: [{ role: 'user', content: 'Hello!' }]
+}, {
+allowedProviderIds: providers.filter(provider => provider.available).map(provider => provider.providerId)
+})
+console.log(chatRes.result)
+}
+
 ---
-:::
+
+:::::
+插件运行时 handler 也可以通过 `context.utils.intelligence` 或 `context.utils.plugin.intelligence` 使用同一套能力发现与调用接口，再决定是否渲染 AI 动作。
 
 ## 延伸阅读
 
@@ -47,781 +41,469 @@ code: |
 
 ## API 参考
 
-**useIntelligence()**
+**Plugin intelligence SDK**
 
-获取 Intelligence SDK 实例（Vue Composable）。
+插件 UI 与生命周期代码应使用 plugin SDK 导出的 `intelligence`，或运行时注入的 `context.utils.intelligence`。两者都会解析到 typed Intelligence domain SDK，并在权限检查调用里携带当前插件的 `sdkapi` marker。
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-  
-  const intelligence = useIntelligence()
-  void intelligence
----
-:::
+import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+## void intelligence
+
+:::::
+
+仅 CoreApp renderer 内部代码可以从 `@talex-touch/utils/renderer` 使用 `useIntelligenceSdk()`，通过 TuffTransport 获取同一套 typed domain SDK。
 
 返回值包含以下属性和方法：
 
-| 属性/方法 | 说明 |
-|-----------|------|
-| `invoke` | 通用调用接口 |
-| `text` | 文本处理能力 |
-| `code` | 代码处理能力 |
-| `analysis` | 分析能力 |
-| `vision` | 视觉处理能力 |
-| `embedding` | 向量嵌入能力 |
-| `rag` | RAG 检索能力 |
-| `agent` | Agent 能力 |
-| `isLoading` | 加载状态（Ref） |
-| `lastError` | 最后错误信息（Ref） |
+| 属性/方法                                                       | 说明                                                                                               |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `invoke` / `stream`                                             | 自定义或新注册 Capability ID 的通用能力调用                                                        |
+| `contextInvoke` / `contextStream`                               | 宿主组装的 `text.chat` 执行，接收 new/continue/stateless intent，只返回 metadata-only context 摘要 |
+| `text` / `embedding` / `code`                                   | 文本、向量、代码能力的类型化 wrapper                                                               |
+| `intent` / `sentiment` / `content` / `keywords`                 | 分析类能力的类型化 wrapper                                                                         |
+| `vision` / `image` / `audio`                                    | OCR、图片、音频能力的类型化 wrapper                                                                |
+| `rag` / `search`                                                | RAG、语义搜索、重排序 wrapper                                                                      |
+| `workflow` / `agent`                                            | Workflow 执行与 Agent 运行 wrapper                                                                 |
+| `getCapabilityStatus`                                           | 只读能力可用性检查                                                                                 |
+| `getProviderModelOptions`                                       | 只读 provider/model 发现                                                                           |
+| `ttsSpeak` / `workflow*` / `agent*` / `knowledge*` / `context*` | CoreApp renderer 宿主使用的播放、workflow、agent session、知识库与受治理上下文管理 runtime API     |
+
+CoreApp renderer 宿主 SDK 保留完整上下文管理面。插件 facade 会隐藏 raw `contextPrepareTurn()`，以及 Memory list/save/edit/enable/delete。插件改用 `contextInvoke()` / `contextStream()`：宿主在主进程内完成 ContextPackage prepare、最终复核、预算与 provider message 组装，插件只收到 metadata-only 摘要。`contextEvaluateMemory()` 与 metadata-only checkpoint/package-log 查询仍可使用。插件来源调用被隐藏的 host-only event 会得到 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。
+
+在 workspace/project memory 获得稳定 `scopeRef` 前，宿主管理 UI 仍可查看它们，但它们不会注入 `ContextPackage`。当前只允许 global memory，以及 `sourceSessionId` 精确匹配的 session memory；`ttl` 表示从最近一次保存（`updatedAt`）开始计算的正数毫秒生命周期。
+
+`useIntelligence()` 与 `useIntelligenceStats()` 仍从 renderer barrel 导出，作为 loading/error 状态与统计 helper 的兼容壳。
+
+`getProviderModelOptions` 与实际调用使用同一套 runtime method 检查。Capability binding 优先；未启用 binding 时，内置 OpenAI-compatible provider 会暴露能力专属默认模型，不会把聊天模型泄漏到图片、音频或 embedding-backed 搜索选择器。
 
 ---
 
-## 文本处理 (text)
+## 能力调用
 
-**`text.chat(payload, options?)`**
+Plugin intelligence SDK 暴露 typed domain 方法，不会恢复已裁切的 `chat` 旧别名，也不会暴露 host-only Memory 管理方法。插件入口应先用发现接口判断能力是否可用，再调用对应 wrapper，例如 `intelligence.text.chat(payload, options)`；自定义能力则继续使用 `intelligence.invoke<Result>(capabilityId, payload, options)`。
 
-AI 对话。
+CoreBox 类对话入口应优先使用 `contextInvoke()` 或 `contextStream()`。当前 contract 只支持 `text.chat`，不会信任调用方提供的 user/assistant history。宿主只保留调用方 system message，再按有界顺序加入已验证的 summary、recent turns、Memory、retrieval context 与当前输入。`mode` 可取 `new`、`continue` 或 `stateless`；继续会话必须携带上一轮安全 context 摘要返回的 `sessionId`。
 
-:::TuffCodeBlock{lang="typescript"}
----
+```typescript
+let contextSessionId: string | undefined;
+
+const execution = await intelligence.contextInvoke({
+  capabilityId: "text.chat",
+  input: "总结当前选中文本",
+  payload: {
+    messages: [{ role: "system", content: "请简洁回答。" }],
+  },
+  context: {
+    mode: contextSessionId ? "continue" : "new",
+    sessionId: contextSessionId,
+    scope: "retrieval",
+    tokenBudget: 1200,
+  },
+});
+
+console.log(execution.invocation.result);
+console.log(execution.context.packageId); // 仅安全 metadata，不含 ContextPackage items
+contextSessionId = execution.context.sessionId;
+```
+
+### Capability ID
+
+| 领域     | Capability ID         | Domain wrapper         | 返回值             |
+| -------- | --------------------- | ---------------------- | ------------------ |
+| 文本     | `text.chat`           | `text.chat()`          | 对话文本           |
+| 文本     | `text.translate`      | `text.translate()`     | 翻译文本           |
+| 文本     | `text.summarize`      | `text.summarize()`     | 摘要文本           |
+| 文本     | `text.rewrite`        | `text.rewrite()`       | 改写文本           |
+| 文本     | `text.grammar`        | `text.grammar()`       | 语法检查结果       |
+| 文本     | `text.classify`       | `text.classify()`      | 分类结果           |
+| 向量     | `embedding.generate`  | `embedding.generate()` | 数字向量           |
+| 代码     | `code.generate`       | `code.generate()`      | 代码生成结果       |
+| 代码     | `code.explain`        | `code.explain()`       | 代码解释结果       |
+| 代码     | `code.review`         | `code.review()`        | 代码审查结果       |
+| 代码     | `code.refactor`       | `code.refactor()`      | 重构结果           |
+| 代码     | `code.debug`          | `code.debug()`         | 调试结果           |
+| 分析     | `intent.detect`       | `intent.detect()`      | 意图识别结果       |
+| 分析     | `sentiment.analyze`   | `sentiment.analyze()`  | 情感分析结果       |
+| 分析     | `content.extract`     | `content.extract()`    | 内容/实体提取结果  |
+| 分析     | `keywords.extract`    | `keywords.extract()`   | 关键词提取结果     |
+| 视觉     | `vision.ocr`          | `vision.ocr()`         | OCR 结果           |
+| 视觉     | `image.caption`       | `image.caption()`      | 图片描述结果       |
+| 视觉     | `image.analyze`       | `image.analyze()`      | 图片分析结果       |
+| 视觉     | `image.translate.e2e` | `image.translateE2e()` | 端到端图片翻译结果 |
+| 视觉     | `image.generate`      | `image.generate()`     | 图片生成结果       |
+| 视觉     | `image.edit`          | `image.edit()`         | 图片编辑结果       |
+| 音频     | `audio.tts`           | `audio.tts()`          | TTS 结果           |
+| 音频     | `audio.stt`           | `audio.stt()`          | 语音转文字结果     |
+| 音频     | `audio.transcribe`    | `audio.transcribe()`   | 音频转写结果       |
+| RAG      | `rag.query`           | `rag.query()`          | RAG 查询结果       |
+| RAG      | `search.semantic`     | `search.semantic()`    | 语义搜索结果       |
+| RAG      | `search.rerank`       | `search.rerank()`      | 重排序结果         |
+| Workflow | `workflow.execute`    | `workflow.execute()`   | Workflow 执行结果  |
+| Agent    | `agent.run`           | `agent.run()`          | Agent 运行结果     |
+
+Workflow 执行与 Agent 运行是内部编排能力。声明 `text.chat` 的 provider 即可参与运行，无需重复声明 `workflow.execute` 或 `agent.run`；若这两个能力没有已启用的专用 binding，provider 发现和模型选择会继承已启用的 `text.chat` binding。
+
+`useIntelligence()` 的旧 renderer wrapper 仍可用于 loading/error 状态与旧调用点，但新的插件和 renderer 代码应优先使用 typed domain SDK wrapper 与能力发现。
+
+### AI 对话
+
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await text.chat({
-    messages: [
-      { role: 'system', content: '你是一个翻译助手' },
-      { role: 'user', content: '翻译：Hello World' }
-    ],
-    temperature: 0.7,
-    maxTokens: 1000
-  })
-  
-  console.log(result.result) // 翻译结果
-  console.log(result.usage) // { promptTokens, completionTokens, totalTokens }
----
-:::
+import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 
-**Payload 参数**：
+const intelligence = useIntelligenceSdk()
+const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+const providers = await intelligence.getProviderModelOptions({ capabilityId: 'text.chat' })
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `messages` | `IntelligenceMessage[]` | 对话消息列表 |
-| `temperature` | `number` | 采样温度 (0-2) |
-| `maxTokens` | `number` | 最大生成 token 数 |
-| `topP` | `number` | Top-p 采样参数 |
-| `stop` | `string[]` | 停止序列 |
+if (status.available) {
+const result = await intelligence.text.chat({
+messages: [
+{ role: 'system', content: '你是一个翻译助手' },
+{ role: 'user', content: '翻译：Hello World' }
+],
+temperature: 0.7,
+maxTokens: 1000
+}, {
+allowedProviderIds: providers.filter(provider => provider.available).map(provider => provider.providerId)
+})
 
-**`text.translate(payload, options?)`**
+    console.log(result.result)
+    console.log(result.usage)
 
-文本翻译。
+## }
 
-:::TuffCodeBlock{lang="typescript"}
----
+::::
+
+### OCR 文字识别
+
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await text.translate({
-    text: 'Hello World',
-    sourceLang: 'en', // 可选，自动检测
-    targetLang: 'zh-CN'
-  })
-  
-  console.log(result.result) // "你好世界"
----
-:::
+const result = await intelligence.vision.ocr({
+source: {
+type: 'data-url',
+dataUrl: 'data:image/png;base64,...'
+},
+language: 'zh-CN',
+includeLayout: true,
+includeKeywords: true
+})
 
-**`text.summarize(payload, options?)`**
+## console.log(result.result.text)
 
-文本摘要。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await text.summarize({
-    text: longArticle,
-    maxLength: 200,
-    style: 'bullet-points' // 'concise' | 'detailed' | 'bullet-points'
-  })
-  
-  console.log(result.result)
----
-:::
-
-**`text.rewrite(payload, options?)`**
-
-文本改写。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await text.rewrite({
-    text: '这个产品很好用',
-    style: 'formal', // 'formal' | 'casual' | 'professional' | 'creative'
-    tone: 'authoritative' // 'neutral' | 'friendly' | 'authoritative'
-  })
-  
-  console.log(result.result)
----
-:::
-
-**`text.grammarCheck(payload, options?)`**
-
-语法检查。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await text.grammarCheck({
-    text: 'I has a apple',
-    language: 'en',
-    checkTypes: ['spelling', 'grammar', 'punctuation']
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   correctedText: 'I have an apple',
-  //   issues: [{ type: 'grammar', original: 'has', suggestion: 'have', ... }],
-  //   score: 85
-  // }
----
-:::
-
----
-
-## 代码处理 (code)
-
-**`code.generate(payload, options?)`**
-
-代码生成。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await code.generate({
-    description: '实现一个快速排序算法',
-    language: 'typescript',
-    includeTests: true,
-    includeComments: true
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   code: '...',
-  //   explanation: '...',
-  //   dependencies: [],
-  //   tests: '...'
-  // }
----
-:::
-
-**`code.explain(payload, options?)`**
-
-代码解释。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await code.explain({
-    code: 'const [a, b] = [b, a]',
-    language: 'javascript',
-    depth: 'detailed',
-    targetAudience: 'beginner'
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   explanation: '...',
-  //   summary: '...',
-  //   keyPoints: ['...'],
-  //   complexity: 'simple'
-  // }
----
-:::
-
-**`code.review(payload, options?)`**
-
-代码审查。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await code.review({
-    code: myCode,
-    language: 'typescript',
-    focusAreas: ['security', 'performance', 'best-practices']
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   summary: '...',
-  //   score: 75,
-  //   issues: [{ severity: 'warning', type: 'security', message: '...' }],
-  //   improvements: ['...']
-  // }
----
-:::
-
-**`code.refactor(payload, options?)`**
-
-代码重构。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await code.refactor({
-    code: legacyCode,
-    language: 'javascript',
-    goals: ['readability', 'maintainability']
-  })
-  
-  console.log(result.result)
----
-:::
-
-**`code.debug(payload, options?)`**
-
-代码调试。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await code.debug({
-    code: buggyCode,
-    error: 'TypeError: Cannot read property...',
-    stackTrace: '...'
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   diagnosis: '...',
-  //   rootCause: '...',
-  //   fixedCode: '...',
-  //   preventionTips: ['...']
-  // }
----
-:::
-
----
-
-## 分析能力 (analysis)
-
-**`analysis.detectIntent(payload, options?)`**
-
-意图检测。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await analysis.detectIntent({
-    text: '帮我订一张明天去北京的机票',
-    possibleIntents: ['book_flight', 'book_hotel', 'query_weather']
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   intent: 'book_flight',
-  //   confidence: 0.95,
-  //   entities: [
-  //     { type: 'destination', value: '北京' },
-  //     { type: 'date', value: '明天' }
-  //   ]
-  // }
----
-:::
-
-**`analysis.analyzeSentiment(payload, options?)`**
-
-情感分析。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await analysis.analyzeSentiment({
-    text: '这个产品太棒了，强烈推荐！',
-    granularity: 'document'
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   sentiment: 'positive',
-  //   score: 0.9,
-  //   confidence: 0.95,
-  //   emotions: [{ emotion: 'joy', score: 0.8 }]
-  // }
----
-:::
-
-**`analysis.extractContent(payload, options?)`**
-
-内容提取。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await analysis.extractContent({
-    text: '请联系张三，电话：13800138000，邮箱：zhangsan@example.com',
-    extractTypes: ['people', 'phones', 'emails']
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   entities: {
-  //     people: [{ value: '张三', confidence: 0.98 }],
-  //     phones: [{ value: '13800138000', confidence: 0.99 }],
-  //     emails: [{ value: 'zhangsan@example.com', confidence: 0.99 }]
-  //   }
-  // }
----
-:::
-
-**`analysis.extractKeywords(payload, options?)`**
-
-关键词提取。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await analysis.extractKeywords({
-    text: articleContent,
-    maxKeywords: 10,
-    includeScores: true
-  })
-  
-  console.log(result.result)
----
-:::
-
-**`analysis.classify(payload, options?)`**
-
-文本分类。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await analysis.classify({
-    text: '苹果发布了新款 iPhone',
-    categories: ['科技', '体育', '娱乐', '财经'],
-    multiLabel: false
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   predictions: [{ category: '科技', confidence: 0.95 }]
-  // }
----
-:::
-
----
-
-## 视觉处理 (vision)
-
-**`vision.ocr(payload, options?)`**
-
-OCR 文字识别。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await vision.ocr({
-    source: {
-      type: 'data-url',
-      dataUrl: 'data:image/png;base64,...'
-    },
-    language: 'zh-CN',
-    includeLayout: true,
-    includeKeywords: true
-  })
-  
-  console.log(result.result.text)
-  
-  // result.result: {
-  //   text: '识别的文字...',
-  //   confidence: 0.95,
-  //   language: 'zh-CN',
-  //   keywords: ['关键词1', '关键词2'],
-  //   blocks: [{ text: '...', boundingBox: [...] }]
-  // }
----
-:::
+::::
 
 **Image Source 类型**：
 
-:::TuffCodeBlock{lang="typescript"}
----
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  // Data URL
-  const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
-  
-  // 文件路径
-  const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
-  
-  // Base64
-  const sourceBase64 = { type: 'base64', base64: '...' } as const
-  
-  console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
----
-:::
+const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
+const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
+const sourceBase64 = { type: 'base64', base64: '...' } as const
 
-**`vision.caption(payload, options?)`**
+## console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
 
-图片描述生成。
+::::
 
-:::TuffCodeBlock{lang="typescript"}
----
+### RAG 重排序
+
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await vision.caption({
-    source: { type: 'data-url', dataUrl: imageUrl },
-    style: 'detailed',
-    language: 'zh-CN'
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   caption: '图片描述...',
-  //   tags: ['标签1', '标签2']
-  // }
----
-:::
+const result = await intelligence.search.rerank({
+query: '搜索查询',
+documents: searchResults,
+topK: 5
+})
 
-**`vision.analyze(payload, options?)`**
+## console.log(result.result)
 
-图片分析。
+::::
 
-:::TuffCodeBlock{lang="typescript"}
----
+### 通用调用
+
+自定义能力或尚未提供 domain wrapper 的新注册 Capability ID，仍可直接使用 `invoke`：
+
+## :::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await vision.analyze({
-    source: { type: 'data-url', dataUrl: imageUrl },
-    analysisTypes: ['objects', 'faces', 'colors', 'scene']
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   description: '...',
-  //   objects: [{ name: 'person', confidence: 0.95 }],
-  //   faces: [{ age: 25, emotion: 'happy' }],
-  //   colors: [{ color: 'blue', percentage: 0.3 }],
-  //   scene: { type: 'outdoor', confidence: 0.9 }
-  // }
----
-:::
+const result = await intelligence.invoke('custom.extract-json', {
+text: 'name: Ada Lovelace'
+})
 
-**`vision.generate(payload, options?)`**
+## console.log(result.result)
 
-图片生成。
+::::
 
-:::TuffCodeBlock{lang="typescript"}
----
+### 调用选项
+
+`invoke(capabilityId, payload, options)` 的第三个参数使用下列对象；`text.chat(payload, options)` 等类型化 wrapper 的第二个参数复用同一对象：
+
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await vision.generate({
-    prompt: '一只可爱的猫咪坐在沙发上',
-    width: 1024,
-    height: 1024,
-    quality: 'hd',
-    count: 1
-  })
-  
-  console.log(result.result)
-  
-  // result.result: {
-  //   images: [{ url: '...', revisedPrompt: '...' }]
-  // }
----
-:::
+interface IntelligenceInvokeOptions {
+strategy?: string // 策略 ID
+modelPreference?: string[] // 优先模型列表
+costCeiling?: number // 成本上限
+latencyTarget?: number // 目标延迟 (ms)
+timeout?: number // 超时时间 (ms)
+stream?: boolean // 是否流式输出
+preferredProviderId?: string // 优先 Provider
+allowedProviderIds?: string[] // 允许的 Provider 列表
+promptTemplate?: string // text.chat 的显式 system prompt 模板
+promptVariables?: Record<string, unknown> // 模板 Mustache 变量
+}
+
+const \_invokeOptions: IntelligenceInvokeOptions = {}
+void \_invokeOptions
 
 ---
 
-## 向量嵌入 (embedding)
+::::
+`strategy` 的优先级低于显式 `preferredProviderId` 和 `modelPreference`。支持 `adaptive-default`（默认）、`rule-based-default`、`round-robin`：前两个目前都按 capability binding / provider 的稳定 priority 顺序路由，不是基于延迟或成本的优化器；`round-robin` 会按每个 capability 的已排序可用 provider 轮换，并按同一循环顺序尝试后备 provider。旧值 `adaptive`、`priority` 会分别归一化为前两个值；未知策略会安全回退到稳定的 priority 路由。
 
-**`embedding.generate(payload, options?)`**
+### AI Command Prompt 模板
 
-生成文本向量。
+插件定义 AI Command 时，可将 `promptTemplate` 和 `promptVariables` 作为一等调用选项传入。显式模板优先于 legacy metadata 形式和 capability 已配置 binding；宿主只渲染一次，并在路由切换到后备 provider 时保留同一模板。
 
-:::TuffCodeBlock{lang="typescript"}
----
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await embedding.generate({
-    text: '这是一段文本',
-    model: 'text-embedding-3-small'
-  })
-  
-  // result.result: [0.123, -0.456, ...] // 向量数组
-  console.log(result.result.length)
----
-:::
+const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+if (!status.available) throw new Error(status.reason || 'AI 不可用')
 
----
+const selectedText = '为最新变更编写发布说明。'
+const response = await intelligence.text.chat(
+{ messages: [{ role: 'user', content: selectedText }] },
+{
+promptTemplate: '请面向{{audience}}，以{{tone}}语气改写输入。',
+promptVariables: { audience: '开发者', tone: '简洁' },
+},
+)
 
-## RAG 检索 (rag)
+## console.log(response.result)
 
-**`rag.query(payload, options?)`**
+::::
 
-RAG 查询。
+插件 manifest 必须声明 `intelligence.basic`，并在展示动作前执行 capability discovery。模板变量会进入 provider 输入，禁止放入凭证或 secret；审计只保留 prompt hash，不保留原始模板。
 
-:::TuffCodeBlock{lang="typescript"}
----
+### 响应结构
+
+所有 `invoke` 调用都返回统一的响应结构：
+
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await rag.query({
-    query: '如何配置插件？',
-    documents: [],
-    topK: 5
-  })
-  
-  console.log(result.result)
+interface IntelligenceInvokeResult<T> {
+result: T // 结果数据
+usage: {
+promptTokens: number
+completionTokens: number
+totalTokens: number
+cost?: number
+}
+model: string // 使用的模型
+latency: number // 请求延迟 (ms)
+traceId: string // 追踪 ID
+provider: string // 使用的 Provider
+}
+
+const \_invokeResult = {} as IntelligenceInvokeResult<string>
+void \_invokeResult
+
 ---
-:::
 
-**`rag.semanticSearch(payload, options?)`**
+::::
 
-语义搜索。
+### Stream 事件
 
-:::TuffCodeBlock{lang="typescript"}
----
+`stream()` 与 `contextStream()` 使用 callback，并返回 `Promise<StreamController>`；当前 runtime 只允许 chat capability 进入 stream。controller 暴露 `streamId`、`cancelled` 与 `cancel()`。
+
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const result = await rag.semanticSearch({
-    query: '用户界面设计',
-    corpus: 'documentation',
-    limit: 10
-  })
-  
-  console.log(result.result)
----
-:::
+let answer = ''
+let finalRoute: { traceId?: string; provider?: string; model?: string } = {}
 
-**`rag.rerank(payload, options?)`**
+const controller = await intelligence.stream<string>(
+'text.chat',
+{
+messages: [{ role: 'user', content: '请总结这段文本。' }]
+},
+{
+onDelta(delta, event) {
+answer += delta
+finalRoute = {
+traceId: event.traceId,
+provider: event.provider,
+model: event.model
+}
+},
+onUsage(usage, event) {
+finalRoute = {
+traceId: event.traceId,
+provider: event.provider,
+model: event.model
+}
+console.log(usage.totalTokens)
+},
+onEnd(event) {
+finalRoute = {
+traceId: event.traceId,
+provider: event.provider,
+model: event.model
+}
+console.log(answer, finalRoute, event.metadata?.latency)
+},
+onError(error) {
+console.error(error)
+}
+}
+)
 
-结果重排序。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await rag.rerank({
-    query: '搜索查询',
-    documents: searchResults,
-    topK: 5
-  })
-  
-  console.log(result.result)
----
-:::
-
----
-
-## Agent 能力 (agent)
-
-**`agent.run(payload, options?)`**
-
-运行 Agent。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await agent.run({
-    task: '帮我分析这份数据',
-    tools: ['calculator', 'web_search'],
-    context: { data: [] }
-  })
-  
-  console.log(result.result)
----
-:::
+// owning UI 销毁时调用 controller.cancel()。
+void controller
 
 ---
 
-## 通用调用
+::::
 
-**`invoke(capabilityId, payload, options?)`**
+调用方必须把 event 边界视为 transport 细节：
 
-直接调用任意能力。
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const result = await invoke('text.chat', {
-    messages: [{ role: 'user', content: 'Hello' }]
-  })
-  
-  console.log(result.result)
----
-:::
-
----
-
-## 调用选项
-
-所有方法都支持第二个参数 `options`：
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  interface IntelligenceInvokeOptions {
-    strategy?: string // 策略 ID
-    modelPreference?: string[] // 优先模型列表
-    costCeiling?: number // 成本上限
-    latencyTarget?: number // 目标延迟 (ms)
-    timeout?: number // 超时时间 (ms)
-    stream?: boolean // 是否流式输出
-    preferredProviderId?: string // 优先 Provider
-    allowedProviderIds?: string[] // 允许的 Provider 列表
-  }
-  
-  const _invokeOptions: IntelligenceInvokeOptions = {}
-  void _invokeOptions
----
-:::
-
----
-
-## 响应结构
-
-所有 API 返回统一的响应结构：
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  interface IntelligenceInvokeResult<T> {
-    result: T // 结果数据
-    usage: {
-      promptTokens: number
-      completionTokens: number
-      totalTokens: number
-      cost?: number
-    }
-    model: string // 使用的模型
-    latency: number // 请求延迟 (ms)
-    traceId: string // 追踪 ID
-    provider: string // 使用的 Provider
-  }
-  
-  const _invokeResult = {} as IntelligenceInvokeResult<string>
-  void _invokeResult
----
-:::
-
----
-
-## 状态管理
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  const { isLoading, lastError } = useIntelligence()
-  
-  watch(isLoading, loading => console.log('loading', loading))
-  watch(lastError, error => console.log('error', error))
----
-:::
-
----
+- `start` 可能先携带客户端 provisional routing metadata；最终后端路由应取 `delta`、`usage` 或 `end` 中最近的非空 `traceId`、`provider`、`model`。
+- 最终 usage 通过 `onUsage` 交付；最终 latency 位于 `end.metadata.latency`。
+- provider 可以在没有文本 delta 时结束；UI 必须独立消费 `usage` / `end`，不能把空 delta 当作失败。
+- 默认 Nexus provider 使用已认证 `/api/v1/intelligence/stream` SSE，逐步透传真实 provider token delta、后端路由 metadata 与 terminal usage。只允许在首个可见 delta 前 retry/fallback；已输出 delta 后的失败直接上抛，避免回放重复文本。不能依赖 delta 数量或切分粒度。
+- 未上报后端 metadata 的 provider 继续兼容，因此 route 字段都是可选值。
 
 ## 完整示例
 
 **翻译插件**
 
-:::TuffCodeBlock{lang="typescript"}
----
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import { useClipboard } from '@talex-touch/utils/plugin/sdk'
-  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-  
-  const { text, isLoading } = useIntelligence()
-  const clipboard = useClipboard()
-  
-  void isLoading
-  
-  async function translateAndPaste(content: string, targetLang: string) {
-    const result = await text.translate({
+import { intelligence, useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+const clipboard = useClipboard()
+
+async function translateAndPaste(content: string, targetLang: string) {
+const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.translate' })
+if (!status.available) return
+
+    const result = await intelligence.text.translate({
       text: content,
       targetLang
     })
-  
+
     await clipboard.copyAndPaste({ text: result.result })
-  }
-  
-  void translateAndPaste
----
-:::
+
+}
+
+## void translateAndPaste
+
+::::
 
 **OCR 识别插件**
 
-:::TuffCodeBlock{lang="typescript"}
----
+## ::::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-  
-  const { vision } = useIntelligence()
-  
-  async function recognizeText(imageDataUrl: string) {
-    const result = await vision.ocr({
-      source: { type: 'data-url', dataUrl: imageDataUrl },
-      includeKeywords: true
-    })
-  
+import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+async function recognizeText(imageDataUrl: string) {
+const result = await intelligence.vision.ocr({
+source: { type: 'data-url', dataUrl: imageDataUrl },
+includeKeywords: true
+})
+
     return {
       text: result.result.text,
       keywords: result.result.keywords
     }
-  }
-  
-  void recognizeText
+
+}
+
+## void recognizeText
+
+::::
+
 ---
+
+## 状态管理
+
+## :::TuffCodeBlock{lang="typescript"}
+
+code: |
+import { watch } from 'vue'
+import { useIntelligence } from '@talex-touch/utils/renderer'
+
+const { isLoading, lastError } = useIntelligence()
+
+watch(isLoading, loading => console.log('loading', loading))
+watch(lastError, error => console.log('error', error))
+
+---
+
 :::
 
 ---
 
 ## Provider 类型
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  enum IntelligenceProviderType {
-    OPENAI = 'openai',
-    ANTHROPIC = 'anthropic',
-    DEEPSEEK = 'deepseek',
-    SILICONFLOW = 'siliconflow',
-    LOCAL = 'local',
-    CUSTOM = 'custom'
-  }
-  
-  void IntelligenceProviderType.OPENAI
----
+enum IntelligenceProviderType {
+OPENAI = 'openai',
+ANTHROPIC = 'anthropic',
+DEEPSEEK = 'deepseek',
+SILICONFLOW = 'siliconflow',
+LOCAL = 'local',
+CUSTOM = 'custom'
+}
+
+## void IntelligenceProviderType.OPENAI
+
 :::
 
 ---
 
 ## 能力类型
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  enum IntelligenceCapabilityType {
-    // 文本
-    CHAT, COMPLETION, EMBEDDING, SUMMARIZE, TRANSLATE, REWRITE, GRAMMAR_CHECK,
-    // 代码
-    CODE_GENERATE, CODE_EXPLAIN, CODE_REVIEW, CODE_REFACTOR, CODE_DEBUG,
-    // 分析
-    INTENT_DETECT, SENTIMENT_ANALYZE, CONTENT_EXTRACT, KEYWORDS_EXTRACT, CLASSIFICATION,
-    // 音频
-    TTS, STT, AUDIO_TRANSCRIBE,
-    // 视觉
-    VISION, VISION_OCR, IMAGE_CAPTION, IMAGE_ANALYZE, IMAGE_GENERATE, IMAGE_EDIT,
-    // RAG
-    RAG_QUERY, SEMANTIC_SEARCH, RERANK,
-    // 工作流
-    WORKFLOW, AGENT
-  }
-  
-  void IntelligenceCapabilityType.CHAT
+import { IntelligenceCapabilityType } from '@talex-touch/utils/types/intelligence'
+
+// 文本
+void IntelligenceCapabilityType.CHAT // 'chat'
+void IntelligenceCapabilityType.GRAMMAR_CHECK // 'grammar-check'
+
+// 代码
+void IntelligenceCapabilityType.CODE_GENERATE // 'code-generate'
+void IntelligenceCapabilityType.CODE_DEBUG // 'code-debug'
+
+// 分析
+void IntelligenceCapabilityType.INTENT_DETECT // 'intent-detect'
+void IntelligenceCapabilityType.SENTIMENT_ANALYZE // 'sentiment-analyze'
+
+// 视觉
+void IntelligenceCapabilityType.VISION_OCR // 'vision-ocr'
+void IntelligenceCapabilityType.IMAGE_TRANSLATE_E2E // 'image-translate-e2e'
+
+// RAG / Workflow
+void IntelligenceCapabilityType.SEMANTIC_SEARCH // 'semantic-search'
+void IntelligenceCapabilityType.AGENT // 'agent'
+
 ---
+
 :::
 
 ## 最佳实践

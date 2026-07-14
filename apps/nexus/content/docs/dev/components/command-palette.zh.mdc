@@ -2,7 +2,11 @@
 title: "CommandPalette 命令面板"
 description: "用于全局快捷指令、插件入口和搜索动作的命令面板。"
 category: Navigation
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [command, palette, launcher, shortcut]
+syncStatus: reviewed
+verified: true
 ---
 # CommandPalette 命令面板
 
@@ -105,7 +109,7 @@ code: |
 
 ## API
 
-### TxCommandPalette Props
+### Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|------|------|
@@ -147,3 +151,32 @@ code: |
 |------|------|------|
 | `empty` | `{ query, emptyText }` | 自定义空状态 |
 | `footer` | `{ query, visibleCount }` | 自定义底部区域 |
+
+## 交互契约
+
+- `modelValue` 是显示状态的唯一来源；面板显示时触发 `open`，从已打开状态关闭时触发 `close`。
+- 搜索只在本地对 `title`、`description` 和每个 `keywords` 做包含匹配；组件不负责排序、节流或远程请求。
+- `ArrowDown` / `ArrowUp` 在当前可见命令中循环移动；`Enter` 选择当前未禁用命令；`Escape` 关闭面板。
+- 输入法组合态（`isComposing`、keyCode `229` 或正在 composition）会阻止键盘选择，避免中文/日文/韩文输入被提前提交。
+- `select` 会返回原始 `CommandPaletteItem`；禁用命令保持可见但不会触发 `select`；`closeOnSelect=false` 会在选择后保持面板打开。
+
+## 最佳实践
+
+- `id` 需要跨版本稳定；埋点、持久化和权限判断都应使用 `id`，不要依赖本地化后的标题。
+- 将同义词、英文别名、插件名和本地化搜索词放进 `keywords`，不要为了搜索变体复制多条命令。
+- 全局快捷键应在应用外壳注册，再驱动 `v-model` 打开面板；`shortcut` 只负责展示键盘提示。
+- `footer` 适合放数据来源、结果数量或键盘帮助；`empty` 适合展示当前 query 和恢复动作。
+- 命令较多时限制 `maxHeight`，保持面板可键盘浏览，并避免超出视口。
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/command-palette/src/types.ts`、`TxCommandPalette.vue` 与 `command-palette.test.ts`。
+- 现有测试覆盖本地过滤与选择、输入法组合态保护、命中文本高亮，以及自定义 `empty` / `footer` 插槽。
+- 可访问性说明:叠层渲染 `role="dialog"` 与 `aria-modal="true"`;触发按钮文案和 placeholder 应说明当前命令域,不要把展示用 `shortcut` 当作实际快捷键注册。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue`。
+- Types: `packages/tuffex/packages/components/src/command-palette/src/types.ts` 导出 `CommandPaletteProps`、`CommandPaletteEmits`、`CommandPaletteItem` 与 `CommandPaletteClassValue`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` 覆盖过滤、选择事件、输入法保护、命中高亮与插槽。
+<TuffDocSourceLink />

@@ -13,6 +13,7 @@ function mountMenu(props: Record<string, unknown> = {}) {
       trigger: '<button class="trigger">Open</button>',
       menu: `
         <TxContextMenuItem class="copy-item">Copy</TxContextMenuItem>
+        <TxContextMenuItem class="disabled-item" disabled>Disabled</TxContextMenuItem>
         <TxContextMenuItem class="delete-item" danger>Delete</TxContextMenuItem>
       `,
     },
@@ -63,6 +64,35 @@ describe('txContextMenu', () => {
 
     expect(document.body.querySelector('.tx-context-menu')).not.toBeNull()
     expect(wrapper.emitted('open')).toBeUndefined()
+  })
+
+  it('focuses the first item and navigates enabled items with menu keys', async () => {
+    mountMenu({ modelValue: true })
+    await nextTick()
+
+    const copyItem = document.body.querySelector<HTMLElement>('.copy-item')
+    const disabledItem = document.body.querySelector<HTMLElement>('.disabled-item')
+    const deleteItem = document.body.querySelector<HTMLElement>('.delete-item')
+
+    expect(document.activeElement).toBe(copyItem)
+    expect(disabledItem?.getAttribute('role')).toBe('menuitem')
+    expect(disabledItem?.getAttribute('aria-disabled')).toBe('true')
+    expect(disabledItem?.getAttribute('tabindex')).toBeNull()
+
+    copyItem?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    expect(document.activeElement).toBe(deleteItem)
+
+    deleteItem?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    expect(document.activeElement).toBe(copyItem)
+
+    copyItem?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+    expect(document.activeElement).toBe(deleteItem)
+
+    deleteItem?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    expect(document.activeElement).toBe(copyItem)
+
+    copyItem?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+    expect(document.activeElement).toBe(deleteItem)
   })
 
   it('closes on escape when enabled', async () => {
@@ -186,6 +216,25 @@ describe('txContextMenu', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
+  it('activates enabled menu items with Space', async () => {
+    const close = vi.fn()
+    const wrapper = mount(TxContextMenuItem, {
+      slots: {
+        default: 'Copy',
+      },
+      global: {
+        provide: {
+          txContextMenu: { close, closeOnSelect: true },
+        },
+      },
+    })
+
+    await wrapper.trigger('keydown', { key: ' ' })
+
+    expect(wrapper.emitted('select')).toHaveLength(1)
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
   it('does not select or close disabled items', async () => {
     const close = vi.fn()
     const wrapper = mount(TxContextMenuItem, {
@@ -205,6 +254,9 @@ describe('txContextMenu', () => {
     expect(wrapper.emitted('select')).toBeUndefined()
     expect(close).not.toHaveBeenCalled()
     expect(wrapper.classes()).toContain('is-disabled')
+    expect(wrapper.attributes('role')).toBe('menuitem')
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
   })
 
   it('renders shortcuts, custom colors, and submenu arrows', () => {

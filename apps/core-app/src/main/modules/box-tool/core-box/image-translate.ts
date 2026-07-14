@@ -1,11 +1,17 @@
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { CoreBoxImageTranslateResponse } from '../../../../shared/events/corebox-scenes'
+import type {
+  CoreBoxImageTranslateRouteMetadata,
+  CoreBoxImageTranslateRouteStage
+} from '@talex-touch/utils/transport/events/types'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { resolveLocalFilePath } from '@talex-touch/utils/network'
 import { clipboard, nativeImage } from 'electron'
 import { COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID } from '../../../../shared/events/corebox-scenes'
+import type { NexusSceneRunResult } from '../../nexus/scene-client'
 import { extractTranslatedImageFromSceneRun, runNexusScene } from '../../nexus/scene-client'
+import { normalizeIntelligenceError } from '../../ai/intelligence-error-normalizer'
 import { openImageTranslatePinWindow } from './image-translate-pin-window'
 
 const VISIBLE_EVIDENCE_IMAGE_TRANSLATE_FLAG = 'TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE'
@@ -52,6 +58,82 @@ async function readVisibleEvidenceClipboardImageBase64(): Promise<string | null>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function readOptionalLatency(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+function toRouteStageKey(providerId: string, capability: string): string {
+  return `${providerId}\u0000${capability}`
+}
+
+function extractImageTranslateRouteMetadata(
+  run: NexusSceneRunResult | null,
+  durationMs: number
+): CoreBoxImageTranslateRouteMetadata | undefined {
+  const runId = readOptionalString(run?.runId)
+  const sceneId = readOptionalString(run?.sceneId)
+  if (!run || run.status !== 'completed' || !runId || !sceneId) return undefined
+
+  const modelByStage = new Map<string, string>()
+  for (const value of run.usage ?? []) {
+    if (!isRecord(value)) continue
+    const providerId = readOptionalString(value.providerId)
+    const capability = readOptionalString(value.capability)
+    const model = readOptionalString(value.model)
+    if (providerId && capability && model) {
+      modelByStage.set(toRouteStageKey(providerId, capability), model)
+    }
+  }
+
+  const latencyByStage = new Map<string, number>()
+  for (const value of run.trace ?? []) {
+    if (!isRecord(value) || value.phase !== 'adapter.dispatch' || value.status !== 'success') {
+      continue
+    }
+    const metadata = isRecord(value.metadata) ? value.metadata : null
+    const providerId = readOptionalString(metadata?.providerId)
+    const capability = readOptionalString(metadata?.capability)
+    const latencyMs = readOptionalLatency(metadata?.latencyMs)
+    if (providerId && capability && latencyMs !== undefined) {
+      latencyByStage.set(toRouteStageKey(providerId, capability), latencyMs)
+    }
+  }
+
+  const stages: CoreBoxImageTranslateRouteStage[] = []
+  const seenStages = new Set<string>()
+  for (const value of run.selected ?? []) {
+    if (!isRecord(value)) continue
+    const providerId = readOptionalString(value.providerId)
+    const capability = readOptionalString(value.capability)
+    if (!providerId || !capability) continue
+
+    const stageKey = toRouteStageKey(providerId, capability)
+    if (seenStages.has(stageKey)) continue
+    seenStages.add(stageKey)
+    const providerName = readOptionalString(value.providerName)
+    const model = modelByStage.get(stageKey)
+    const latencyMs = latencyByStage.get(stageKey)
+    stages.push({
+      capability,
+      providerId,
+      ...(providerName ? { providerName } : {}),
+      ...(model ? { model } : {}),
+      ...(latencyMs !== undefined ? { latencyMs } : {})
+    })
+  }
+
+  return {
+    runId,
+    sceneId,
+    durationMs: Math.max(0, Math.round(durationMs)),
+    stages
+  }
 }
 
 function getMetaRecord(item: TuffItem): Record<string, unknown> | null {
@@ -178,6 +260,7 @@ export async function translateImageBase64(
     }
   }
 
+  const sceneStartedAt = Date.now()
   let run: Awaited<ReturnType<typeof runNexusScene>>
   try {
     run = await runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
@@ -188,12 +271,26 @@ export async function translateImageBase64(
       capability: options.openPinWindow ? undefined : 'image.translate.e2e'
     })
   } catch (error) {
+    const normalized = normalizeIntelligenceError(error, {
+      capabilityId: 'image.translate.e2e'
+    })
+    if (normalized.code === 'UNKNOWN') {
+      return {
+        success: false,
+        code: 'SCENE_UNAVAILABLE',
+        error: normalized.message
+      }
+    }
+
     return {
       success: false,
-      code: 'SCENE_UNAVAILABLE',
-      error: error instanceof Error ? error.message : 'Nexus image translate scene is unavailable.'
+      code: normalized.code,
+      error: normalized.reason,
+      reason: normalized.reason,
+      recovery: normalized.recovery
     }
   }
+  const sceneDurationMs = Date.now() - sceneStartedAt
   const translated = extractTranslatedImageFromSceneRun(run)
   if (!translated) {
     return {
@@ -203,6 +300,7 @@ export async function translateImageBase64(
     }
   }
 
+  const metadata = extractImageTranslateRouteMetadata(run, sceneDurationMs)
   const image = nativeImage.createFromBuffer(
     Buffer.from(translated.translatedImageBase64, 'base64')
   )
@@ -230,6 +328,7 @@ export async function translateImageBase64(
     success: true,
     translatedImageBase64: translated.translatedImageBase64,
     sourceText: translated.sourceText,
-    targetText: translated.targetText
+    targetText: translated.targetText,
+    metadata
   }
 }

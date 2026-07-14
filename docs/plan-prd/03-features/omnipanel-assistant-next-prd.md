@@ -1,6 +1,6 @@
 # PRD: OmniPanel 与悬浮助手下一版本
 
-> 更新时间：2026-06-24
+> 更新时间：2026-07-13
 > 状态：MVP implementation slice landed / packaged evidence pending
 > 目标窗口：2.5.x Beta 后续，不能抢 2.5.0 Stable 的 CoreBox 文本 + OCR 收口
 > 关联 Roadmap：`../04-implementation/Roadmap-vNext-2026-06-18.md`
@@ -20,13 +20,13 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 
 ## 2. 市场情况与适配度
 
-| 产品 / 能力 | 市场信号 | 对 Tuff 的启发 | Tuff 适配度 |
-| --- | --- | --- | --- |
-| Raycast AI Commands / Quick Fix | 命令面板与选中文本 AI 改写、解释、命令化动作结合，强调快速执行与可自定义命令。 | OmniPanel 应强化“选区优先、动作可搜索、结果可复制/替换/重试”的写作工具闭环。 | 高：现有 OmniPanel 已有选区捕获、AI preview、metadata chips 与内置 AI actions。 |
-| PopClip | 选中文本后出现动作菜单，翻译、搜索、复制与扩展动作是主体验。 | OmniPanel 的触发方式和轻量动作密度要对标 PopClip，但要保留 Tuff 的插件和 AI 上下文优势。 | 高：现有右键长按、快捷键、插件 auto-mount 与 feature registry 已具备基础。 |
-| PowerToys Text Extractor / Advanced Paste | OCR、剪贴板转换、AI opt-in、本地能力逐步成为桌面效率工具标配。 | 截图功能要先做好 capture / clipboard / OCR / transform 的基础闭环，再逐步上 AI 翻译。 | 高：已有 NativeScreenshotService、clipboard image translate 与 Nexus image scene。 |
-| Snipaste | 截图 + 贴图是稳定心智，截图结果驻留在屏幕上比单纯复制更适合对照和翻译。 | 截图翻译结果应优先支持 pin window，不只写剪贴板。 | 中高：已有 image-translate pin window，缺主动截图入口与区域选择前台。 |
-| Apple Live Text / macOS Translate | 图片中文字可复制、搜索、翻译，用户已期待图像文本可交互。 | Tuff 不必替代系统能力，但要在跨应用、插件动作和 provider fallback 上补足系统能力边界。 | 中高：macOS 可借助系统文本选择，跨平台仍需 Tuff 自有 OCR/截图链路。 |
+| 产品 / 能力                               | 市场信号                                                                       | 对 Tuff 的启发                                                                           | Tuff 适配度                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Raycast AI Commands / Quick Fix           | 命令面板与选中文本 AI 改写、解释、命令化动作结合，强调快速执行与可自定义命令。 | OmniPanel 应强化“选区优先、动作可搜索、结果可复制/替换/重试”的写作工具闭环。             | 高：OmniPanel 已有选区捕获、AI preview、metadata chips 与内置 AI actions；Plugin Intelligence SDK 已补 first-class prompt options，`touch-intelligence@1.1.0` 提供 stateless Rewrite/Summarize/Explain，`1.2.0` 提供 bounded 本地自定义 command registry、动态 text/html feature、原子 reload 与 create/update/delete/import/export editor；输入按“显式命令后缀 > 附带 text/html 剪贴板输入”取值。模板变量预览、preset 分发与 current-version 采证仍开放。 |
+| PopClip                                   | 选中文本后出现动作菜单，翻译、搜索、复制与扩展动作是主体验。                   | OmniPanel 的触发方式和轻量动作密度要对标 PopClip，但要保留 Tuff 的插件和 AI 上下文优势。 | 高：现有右键长按、快捷键、插件 auto-mount 与 feature registry 已具备基础。                                                                                                                                                                                                                                                                                                                                                                                 |
+| PowerToys Text Extractor / Advanced Paste | OCR、剪贴板转换、AI opt-in、本地能力逐步成为桌面效率工具标配。                 | 截图功能要先做好 capture / clipboard / OCR / transform 的基础闭环，再逐步上 AI 翻译。    | 高：已有 NativeScreenshotService、clipboard image translate 与 Nexus image scene。                                                                                                                                                                                                                                                                                                                                                                         |
+| Snipaste                                  | 截图 + 贴图是稳定心智，截图结果驻留在屏幕上比单纯复制更适合对照和翻译。        | 截图翻译结果应优先支持 pin window，不只写剪贴板。                                        | 中高：已有主动截图、区域选择、image-translate pin window、host copy/close、work-area 限界、缩放与透明度 controls；待 current-version 可见采证。                                                                                                                                                                                                                                                                                                              |
+| Apple Live Text / macOS Translate         | 图片中文字可复制、搜索、翻译，用户已期待图像文本可交互。                       | Tuff 不必替代系统能力，但要在跨应用、插件动作和 provider fallback 上补足系统能力边界。   | 中高：macOS 可借助系统文本选择，跨平台仍需 Tuff 自有 OCR/截图链路。                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## 3. 当前项目基础
 
@@ -72,11 +72,11 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - 浮球与语音面板跨 workspace / fullscreen always-on-top。
 - VoicePanel 可提交文本到 CoreBox。
 - VoicePanel 可触发剪贴板图片翻译，并打开 pin window。
-- VoicePanel 可触发“截图并翻译”：通过 `NativeScreenshotService.capture({ target: 'cursor-display', output: 'data-url', writeClipboard: false })` 捕获当前光标所在屏幕，再复用 image translate scene 与 pin window。
+- VoicePanel 已通过 typed Assistant events 提供显示器列表、截图复制、保存和“截图并翻译”；默认捕获指针所在显示器，也可选择 `NativeScreenshotService.listDisplays()` 返回的指定显示器，三条截图动作共用同一 target payload，翻译结果继续复用 image translate scene 与 pin window。
 
 主要缺口：
 
-- packaged visible evidence 仍需补充 clipboard image translate、screenshot translate、pin window 展示与失败态录屏/截图。
+- historical packaged evidence 已覆盖 clipboard image translate、screenshot translate 与 pin window；当前版本仍需复采显示器选择、copy/save、permission-denied 恢复、provider fallback 等可见路径。
 - 语音识别依赖浏览器 Web Speech，适合作为 Experimental，不能作为核心入口稳定承诺。
 - 悬浮助手视觉偏独立，尚未和 OmniPanel / CoreBox 的动作模型统一。
 - 常驻浮窗有打扰与性能风险，必须继续默认关闭、可解释、可快速退出。
@@ -95,15 +95,14 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - Native screenshot addon 基于 `xcap`，支持 macOS / Windows / Linux。
 - 支持 display / cursor-display / region capture。
 - 支持 DIP 到物理像素转换、多显示器映射、写剪贴板、临时 tfile、data-url。
-- 图片翻译支持 clipboard image、base64、CoreBox image item，并可打开 pin window。
+- 图片翻译支持 clipboard image、base64、CoreBox image item，并可打开置顶 pin window；pin window 按指针显示器 work area 居中限界，通过 host-owned context menu 复制译图/原文/译文、缩放、重置缩放、切换透明度或关闭，Esc、`Cmd/Ctrl+Shift+C` 与 `Cmd/Ctrl +/-/0` 提供键盘路径。
 - 原生截图 Rust 测试与 JS contract 已有基础证据。
 
 主要缺口：
 
-- 缺用户可见的主动截图入口和区域选择 overlay。
-- 缺“截图后翻译”的独立 assistant event / command contract。
-- 缺 capture -> OCR -> text.translate 与 capture -> image.translate.e2e 的 fallback 策略。
-- 缺尺寸、耗时、provider、degraded reason 的可见反馈。
+- 主动截图与独立 typed capture / save / translate event 已覆盖 cursor-display / display / region；区域模式按指针或指定显示器懒加载透明 overlay，反向拖拽归一化到全局 DIP，Esc/右键/取消/超时均不触发截图。仍缺 current-version packaged 多显示器与取消路径 evidence。
+- image translate scene 不可用时，Assistant 已降级到本地/系统 `vision.ocr` -> `text.translate`，在 VoicePanel 展示原文、译文与两阶段 provider/model；scene、OCR 或文本翻译不可用时会展示语义化恢复动作，通过 typed Assistant event 唤回主窗口并直达 Intelligence Channels，失败则保留可重试错误。仍缺 current-version packaged 成功/失败证据。
+- capture 结果已展示显示器、尺寸、剪贴板和保存路径，OCR fallback 已展示 degraded reason 与 provider/model；image translate 成功路径已新增 scene run ID、总耗时和逐阶段 capability/provider/model/latency 可见反馈，provider 失败路径已具备一键渠道设置恢复，但仍缺 current-version packaged 证据。
 
 ## 4. 下一版本定位
 
@@ -129,15 +128,15 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 
 1. OmniPanel packaged evidence：真实选中文本、AI preview、copy / retry / replace clipboard、失败恢复。
 2. 悬浮助手入口收敛：浮球默认关闭、状态可解释、点击打开 VoicePanel、提交文本到 CoreBox 可见。
-3. 截图底座入口：提供主动截图命令，至少支持 cursor-display / display capture，写剪贴板或 tfile。
-4. 剪贴板图片翻译语义拆分：明确 `translateClipboardImage` 与 `translateScreenshot` 的事件和 UI 文案边界。
+3. 截图底座入口：cursor-display / display / region capture、写剪贴板或 tfile 的 code path 已完成；当前版本 packaged evidence 仍开放。
+4. 剪贴板图片翻译语义拆分：`translateClipboardImage`、`translateScreenshot`、`captureScreenshot` 与 `saveScreenshot` 已形成独立 typed events 和 UI 文案。
 5. 性能 guardrail：全局 hook、浮球窗口、语音识别、截图服务均需 lazy / opt-in / debounce。
 
 ### P1：适合进入同一产品版本的小步增强
 
-1. 区域截图 overlay：用户可拖拽选择区域，取消不产生副作用。
-2. 截图翻译：MVP 已接通悬浮助手 VoicePanel -> cursor-display capture -> image.translate.e2e -> pin window；下一步补 packaged evidence、区域选择与 OCR fallback。
-3. OCR fallback：当图片翻译 scene 不可用时，允许 capture -> OCR -> text.translate，结果以文本卡片呈现。
+1. 区域截图 overlay：code path 已完成单显示器透明框选、typed submit/cancel、sender 校验、全局 DIP 映射与无副作用取消；仍需 packaged 多显示器/HiDPI 采证。
+2. 截图翻译：MVP 已接通悬浮助手 VoicePanel -> cursor-display / selected display / region capture -> image.translate.e2e -> pin window；成功时展示 scene route metadata，pin window 提供 host-owned copy/close/zoom/opacity actions，scene 不可用时降级到 OCR 文本翻译卡片。下一步补 current-version packaged evidence。
+3. OCR fallback：code path 已完成 capture -> `vision.ocr` -> `text.translate`、空文本/能力不可用 fail-closed、source/target/provider metadata 展示；真实 provider 与系统 OCR 组合仍需 packaged 采证。
 4. OmniPanel 图片上下文：截图后可从 OmniPanel 看到“翻译截图 / OCR / 复制图片 / 贴图”等动作。
 5. 烟花效果 MVP：可通过 CoreBox / OmniPanel command 手动触发，成功任务可 opt-in 触发。
 
@@ -172,8 +171,8 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 1. WHEN assistant 或 floatingBall 设置关闭 THEN 系统 SHALL 不创建或保留浮球窗口。
 2. WHEN 用户拖动浮球 THEN 系统 SHALL 限制在当前显示器工作区内，并 debounce 保存位置。
 3. WHEN 用户点击浮球 THEN 系统 SHALL 打开 VoicePanel 且不抢占无关窗口状态。
-4. IF Web Speech 不可用或麦克风权限拒绝 THEN 系统 SHALL 展示 unsupported / permission denied，不得循环重试打扰用户。
-5. WHEN 用户提交文本 THEN 系统 SHALL 打开 CoreBox 并填入文本查询。
+4. IF Web Speech 不可用 THEN 系统 SHALL 展示 unsupported；IF 麦克风权限拒绝 THEN 系统 SHALL 停止自动重试、提供系统权限设置入口，并允许用户授权后显式重试语音输入。
+5. WHEN VoicePanel 打开 THEN 系统 SHALL 自动聚焦文本框；WHEN 用户按 Enter 且不处于 IME composition THEN 系统 SHALL 单次提交并打开 CoreBox，Shift+Enter 保留换行，重复 Enter 不得并发提交；WHEN 用户按 Escape 且不处于 IME composition THEN 系统 SHALL 单次关闭面板。
 
 ### FR-3：基础截图能力
 
@@ -186,6 +185,7 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 3. WHEN 平台截图能力不可用 THEN 系统 SHALL 展示 unsupported reason，不得伪造成功结果。
 4. WHEN 截图输出为 tfile THEN 系统 SHALL 使用临时命名空间与保留期清理，不把截图写入普通业务 JSON。
 5. IF 多显示器或 HiDPI THEN 系统 SHALL 使用 DIP 到物理像素映射，避免区域偏移。
+6. WHEN 用户选择 region 模式 THEN 系统 SHALL 在目标显示器打开按需 overlay，并把有效拖拽转换为全局 DIP region；Esc、右键、取消、过小选区、超时或窗口销毁不得触发 capture/translate/save。
 
 ### FR-4：截图翻译逐步引入
 
@@ -198,6 +198,8 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 3. WHEN 翻译成功 THEN 系统 SHALL 打开 pin window 展示译图，并提供 sourceText / targetText（若 provider 返回）。
 4. IF image translate scene 不可用 THEN 系统 MAY fallback 到 OCR -> text.translate，并 SHALL 明确告知用户结果是文本翻译而非图像替换。
 5. IF 截图权限、provider、网络或模型不可用 THEN 系统 SHALL 展示对应 degraded reason，并保留截图基础结果。
+6. WHEN image translate scene 成功 THEN 系统 SHALL 展示低敏 run ID、总耗时和逐阶段 capability/provider/model/latency；不得暴露 authRef、endpoint 或 provider credential。
+7. WHEN pin window 打开 THEN 系统 SHALL 限界在当前 work area，并提供 host-owned 译图/原文/译文复制、关闭、缩放/重置与受支持平台透明度预设；不得使用 raw IPC 或 renderer browser clipboard fallback。
 
 ### FR-5：桌面烟花效果
 
@@ -248,10 +250,10 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 ### 截图到翻译贴图
 
 1. 用户通过悬浮助手或 CoreBox 触发“截图并翻译”。
-2. MVP 默认捕获当前光标所在显示器；后续进入区域选择。
+2. 用户可选择指针显示器、指定显示器或临时区域 overlay；区域取消不产生截图、保存或 AI 调用。
 3. 截图结果进入 image translate scene。
-4. 成功后打开 pin window；失败时保留截图并展示原因。
-5. 用户可复制译文、复制图片或关闭贴图。
+4. 成功后打开当前显示器内的 pin window；失败时保留截图并展示原因。
+5. 用户可通过右键菜单复制译文、原文或译图，缩放/重置、切换透明度并关闭贴图；也可按 Esc 关闭、按 `Cmd/Ctrl+Shift+C` 快速复制译文、按 `Cmd/Ctrl +/-/0` 调整或重置缩放。
 
 ### 手动桌面烟花
 
@@ -261,25 +263,25 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 
 ## 8. 性能预算
 
-| 场景 | 目标 | 说明 |
-| --- | --- | --- |
-| App idle，Assistant/OmniPanel 关闭 | 不创建相关窗口、不启动 hook / recognition | 默认关闭是第一性能优化。 |
-| 浮球拖动 | 渲染更新不超过 60Hz，位置保存 debounce >= 200ms | 现有实现已有 16ms throttle 与 220ms debounce，应保留。 |
-| OmniPanel warm open | P50 <= 150ms，P95 <= 300ms | 需要 packaged evidence，冷启动单独标注。 |
-| 截图 capture | 记录 duration，P95 目标 <= 800ms | 受平台和屏幕尺寸影响，先做观测再收紧。 |
-| 图片翻译 | 大图进入 scene 前需尺寸上限或压缩策略 | 防止 base64 巨图造成内存尖峰。 |
-| 烟花 overlay | 默认 <= 3s，自动销毁；动效帧率可降级 | 尊重 reduce motion。 |
+| 场景                               | 目标                                            | 说明                                                   |
+| ---------------------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| App idle，Assistant/OmniPanel 关闭 | 不创建相关窗口、不启动 hook / recognition       | 默认关闭是第一性能优化。                               |
+| 浮球拖动                           | 渲染更新不超过 60Hz，位置保存 debounce >= 200ms | 现有实现已有 16ms throttle 与 220ms debounce，应保留。 |
+| OmniPanel warm open                | P50 <= 150ms，P95 <= 300ms                      | 需要 packaged evidence，冷启动单独标注。               |
+| 截图 capture                       | 记录 duration，P95 目标 <= 800ms                | 受平台和屏幕尺寸影响，先做观测再收紧。                 |
+| 图片翻译                           | 大图进入 scene 前需尺寸上限或压缩策略           | 防止 base64 巨图造成内存尖峰。                         |
+| 烟花 overlay                       | 默认 <= 3s，自动销毁；动效帧率可降级            | 尊重 reduce motion。                                   |
 
 ## 9. 风险与缓解
 
-| 风险 | 影响 | 缓解 |
-| --- | --- | --- |
-| 常驻浮窗打扰用户 | 降低产品接受度 | 默认关闭、设置开关、快速关闭、透明度和位置可控。 |
-| 全局 hook 或语音识别增加资源占用 | 影响长期运行稳定性 | 仅在功能启用时加载；关闭时 cleanup；日志记录生命周期。 |
-| 截图权限或平台能力不稳定 | 跨平台体验割裂 | 平台能力统一 unsupported/degraded reason，保留基础失败 UI。 |
-| 事件命名混淆 | 后续维护和插件接入困难 | 先拆 `clipboard-image-translate` 与 `screenshot-translate` contract。 |
-| 图片/文本隐私泄漏 | 高风险 | 禁止 base64 / OCR / prompt 明文日志和 ordinary JSON 存储。 |
-| 烟花效果变成主流程依赖 | 偏离生产力主线 | 只作为 opt-in visual feedback，不能阻塞任何任务。 |
+| 风险                             | 影响                   | 缓解                                                                  |
+| -------------------------------- | ---------------------- | --------------------------------------------------------------------- |
+| 常驻浮窗打扰用户                 | 降低产品接受度         | 默认关闭、设置开关、快速关闭、透明度和位置可控。                      |
+| 全局 hook 或语音识别增加资源占用 | 影响长期运行稳定性     | 仅在功能启用时加载；关闭时 cleanup；日志记录生命周期。                |
+| 截图权限或平台能力不稳定         | 跨平台体验割裂         | 平台能力统一 unsupported/degraded reason，保留基础失败 UI。           |
+| 事件命名混淆                     | 后续维护和插件接入困难 | 先拆 `clipboard-image-translate` 与 `screenshot-translate` contract。 |
+| 图片/文本隐私泄漏                | 高风险                 | 禁止 base64 / OCR / prompt 明文日志和 ordinary JSON 存储。            |
+| 烟花效果变成主流程依赖           | 偏离生产力主线         | 只作为 opt-in visual feedback，不能阻塞任何任务。                     |
 
 ## 10. 验收证据
 
@@ -288,7 +290,7 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - OmniPanel 真实选中文本 packaged 截图/录屏：AI translate / rewrite 成功、copy、retry、replace clipboard 二次确认、失败恢复。
 - Assistant 浮球 packaged 截图/录屏：默认关闭、启用后显示、拖动持久化、VoicePanel 打开、文本发送 CoreBox。
 - 截图 packaged evidence：cursor-display capture、region capture、write clipboard、tfile 输出、多显示器/HiDPI 至少一组。
-- 截图翻译 packaged evidence：clipboard image translate、screenshot translate、pin window 展示、provider unavailable 失败态。
+- 截图翻译 packaged evidence：clipboard image translate、screenshot translate、pin window 展示与 copy/close/zoom/opacity、provider unavailable 失败态。
 - 性能 evidence：idle、open OmniPanel、drag floating ball、capture screenshot、translate image 的耗时摘要。
 - 安全 evidence：日志中无截图 base64、OCR 原文、provider secret、token、完整 prompt/response。
 

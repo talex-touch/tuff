@@ -14,22 +14,22 @@
 
 ## 2. 严重问题分级
 
-| 严重度 | 问题 | 当前风险 | 立即动作 |
-| --- | --- | --- | --- |
-| P0 | 文档版本与 HEAD 口径漂移 | Roadmap、README、Quality Baseline 曾混用 `2.4.11-beta.8`、`2.4.12-beta.6` 与不同 HEAD，影响决策可信度 | 入口统一指向本文与 `Current-Execution-Plan`；不再把历史 HEAD 写成当前事实 |
-| P0 | release integrity 未闭环 | GitHub/Nexus release 可用不等于资产完整性、签名 URL 与 signature endpoint 完成 | `sha256`、`signatureUrl`、signature endpoint、manifest/download matrix 必须有真实链路证据 |
-| Resolved | 公共包发布 blocker | 公共包发布不再作为独立 Roadmap / blocker / evidence 项 | 版本变更后只跟踪 GitHub 自动发版 workflow 结果；pack/preflight 仅保留为 CI hygiene |
-| P0 | AI 体验闭环缺证 | CoreApp AI 架构已存在，但 Stable 仍缺 packaged Electron 文本/OCR成功、固定失败路径与 routing evidence | 优先补 CoreBox `text.chat`、显式 `vision.ocr -> text.chat`、未登录、provider unavailable、quota exhausted、model/capability unsupported、permission denied、Local/Ollama routing 八项 evidence |
-| P1 | Search / Indexing 真实写入边界未完成 | SDK/diagnostics 已推进，但 File write/store、Everything 运行证据、Quicklinks feed/UI 仍可能被误判完成 | 下一批按 File write/store → Everything/Windows runtime evidence → Quicklinks feed/UI 执行 |
-| P1 | 文档入口过载 | README/INDEX/TODO 承载过多历史流水账，弱化当前 SoT | 活跃入口只保留当前事实、P0/P1 与高价值专题；审计长文迁入 archive 或索引化 |
-| P1 | AGENTS.md 过长且有漂移风险 | 技术栈、模块顺序、SDK marker 等易过期信息写死，后续代理可能按旧事实执行 | 拆为根硬规则 + 子目录 AGENTS；易漂移事实改为链接到源码或当前执行计划 |
+| 严重度   | 问题                                 | 当前风险                                                                                              | 立即动作                                                                                                                                                                                       |
+| -------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0       | 文档版本与 HEAD 口径漂移             | Roadmap、README、Quality Baseline 曾混用 `2.4.11-beta.8`、`2.4.12-beta.6` 与不同 HEAD，影响决策可信度 | 入口统一指向本文与 `Current-Execution-Plan`；不再把历史 HEAD 写成当前事实                                                                                                                      |
+| P0       | release integrity 未闭环             | GitHub/Nexus release 可用不等于资产完整性、签名 URL 与 signature endpoint 完成                        | `sha256`、`signatureUrl`、signature endpoint、manifest/download matrix 必须有真实链路证据                                                                                                      |
+| Resolved | 公共包发布 blocker                   | 公共包发布不再作为独立 Roadmap / blocker / evidence 项                                                | 版本变更后只跟踪 GitHub 自动发版 workflow 结果；pack/preflight 仅保留为 CI hygiene                                                                                                             |
+| P0       | AI 体验闭环缺证                      | CoreApp AI 架构已存在，但 Stable 仍缺 packaged Electron 文本/OCR成功、固定失败路径与 routing evidence | 优先补 CoreBox `text.chat`、显式 `vision.ocr -> text.chat`、未登录、provider unavailable、quota exhausted、model/capability unsupported、permission denied、Local/Ollama routing 八项 evidence |
+| P1       | Search / Indexing 真实写入边界未完成 | SDK/diagnostics 已推进，但 File write/store、Everything 运行证据、Quicklinks feed/UI 仍可能被误判完成 | 下一批按 File write/store → Everything/Windows runtime evidence → Quicklinks feed/UI 执行                                                                                                      |
+| P1       | 文档入口过载                         | README/INDEX/TODO 承载过多历史流水账，弱化当前 SoT                                                    | 活跃入口只保留当前事实、P0/P1 与高价值专题；审计长文迁入 archive 或索引化                                                                                                                      |
+| P1       | AGENTS.md 过长且有漂移风险           | 技术栈、模块顺序、SDK marker 等易过期信息写死，后续代理可能按旧事实执行                               | 拆为根硬规则 + 子目录 AGENTS；易漂移事实改为链接到源码或当前执行计划                                                                                                                           |
 
 ## 3. 未推进或推进不足区域
 
 - `Flow / DivisionBox / Automation / Skills`：仍是长期目标，近期没有形成可对外承诺的闭环证据。
 - `Nexus production governance evidence`：本地 Wrangler / Miniflare 证据不等于 production / preview operator evidence；live send、object storage、production D1 migration/backfill、真实 provider quota 仍未闭环；固定矩阵见 `Evidence-Matrix-Nexus-Governance-2026-06-18.md`。
 - 平台能力：owner 已完成平台验证，后续不再作为 Roadmap 待办或平台后续；实现仍必须保留可见 degraded/unsupported reason 与 fail-closed 行为；非阻塞 smoke 矩阵见 `Evidence-Matrix-Platform-2026-06-18.md`。
-- `2.6.0 i18n / Domain Lexicon / Cloud Catalog`：当前是 PRD 与质量约束，不是运行时完成。
+- `2.6.0 i18n / Domain Lexicon / Cloud Catalog`：Phase 0-4 已有运行时实现，包含 locale/localized value、plugin manifest localization、unit Domain Lexicon V1 与 permission-gated Plugin SDK facade；CatalogService、签名/SQLite import/activate/rollback 与质量门禁仍未完成。
 - `订阅/定价产品化`：订阅旧 PRD 已标注历史待重写，不能作为当前定价 SoT；当前 pricing SoT 为 `Pricing-SoT-2026-06-18.md`。
 
 ## 4. 当前定价口径

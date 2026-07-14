@@ -1,0 +1,135 @@
+# Screenshot SDK
+
+## Overview
+
+The Screenshot SDK exposes native screen capture through the canonical plugin lifecycle context:
+
+- `context.utils.screenshot`
+- `context.utils.plugin.screenshot` (the same facade)
+
+It reuses typed `NativeEvents.screenshot.*` transport and the host `NativeScreenshotService`. Plugins must not construct raw event names or import Core App internals.
+
+`window.capture` is a high-risk permission. The host requires a verified plugin context, a valid supported `sdkapi`, a manifest declaration, and a current grant before support checks, display discovery, or capture reaches the native service.
+
+## Manifest
+
+## ::::TuffCodeBlock{lang="json"}
+
+code: |
+{
+"sdkapi": 260713,
+"permissions": {
+"required": ["window.capture"],
+"optional": ["intelligence.basic"]
+},
+"permissionReasons": {
+"window.capture": "Capture a user-selected screen area for the plugin action",
+"intelligence.basic": "Recognize text in a captured image when the user requests OCR"
+}
+}
+
+::::
+
+Declare `intelligence.basic` only when the plugin also invokes OCR or another Intelligence capability. Screenshot permission does not grant AI access, and Intelligence permission does not grant screen capture.
+
+## API
+
+```typescript
+interface PluginScreenshotSDK {
+  getSupport(): Promise<NativeScreenshotSupport>;
+  listDisplays(): Promise<NativeScreenshotDisplay[]>;
+  capture(
+    request?: NativeScreenshotCaptureRequest,
+  ): Promise<PluginScreenshotCaptureResult>;
+}
+```
+
+| Method             | Contract                                                                                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getSupport()`     | Returns platform support, engine, and an optional unsupported reason.                                                                                                        |
+| `listDisplays()`   | Returns stable capture IDs plus friendly name, global DIP bounds, scale, rotation, and primary-display state. Returns `[]` when capture is unsupported or enumeration fails. |
+| `capture(request)` | Captures the cursor display, one listed display, or a positive global-DIP region.                                                                                            |
+
+### Capture targets
+
+| `target`         | Required fields                   | Behavior                                                                                                                         |
+| ---------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `cursor-display` | none                              | Captures the display under the current pointer. Optional `cursorPoint` uses global desktop DIP coordinates. This is the default. |
+| `display`        | `displayId` recommended           | Captures one ID returned by `listDisplays()`. Pass the ID explicitly for deterministic behavior.                                 |
+| `region`         | `region: { x, y, width, height }` | Captures a positive rectangle in global desktop DIP coordinates. Optional `displayId` constrains display resolution.             |
+
+`output` is `tfile` by default and may be `data-url`. Set `writeClipboard: true` only after an explicit user action. The result includes display, dimensions, scale, duration, byte size, and clipboard status. The plugin facade intentionally removes the raw temporary filesystem `path`; consume `tfileUrl` or `dataUrl` instead.
+
+## Capture a selected display
+
+## ::::TuffCodeBlock{lang="typescript"}
+
+code: |
+export default {
+async onInit(context) {
+const { screenshot } = context.utils
+const support = await screenshot.getSupport()
+if (!support.supported) {
+context.utils.logger.warn(`Screenshot unavailable: ${support.reason ?? 'unsupported'}`)
+return
+}
+
+      const displays = await screenshot.listDisplays()
+      const display = displays.find(item => item.isPrimary) ?? displays[0]
+      if (!display) return
+
+      const capture = await screenshot.capture({
+        target: 'display',
+        displayId: display.id,
+        output: 'tfile',
+        writeClipboard: false
+      })
+
+      context.utils.logger.info(
+        `Captured ${capture.displayName}: ${capture.width}x${capture.height}`
+      )
+      // Render or pass capture.tfileUrl. Do not log image payloads.
+    }
+
+}
+
+::::
+
+## Capture to OCR
+
+Use `data-url` only when the next typed capability needs inline image data. OCR remains separately permissioned through `context.utils.intelligence`.
+
+## ::::TuffCodeBlock{lang="typescript"}
+
+code: |
+const capture = await context.utils.screenshot.capture({
+target: 'cursor-display',
+output: 'data-url',
+writeClipboard: false
+})
+
+if (!capture.dataUrl) throw new Error('SCREENSHOT_DATA_URL_UNAVAILABLE')
+
+const ocr = await context.utils.intelligence.vision.ocr({
+source: { type: 'data-url', dataUrl: capture.dataUrl },
+language: 'en',
+includeLayout: true
+})
+
+context.utils.logger.info(`OCR completed: ${ocr.result.text.length} characters`)
+
+::::
+
+Do not write the screenshot data URL, OCR text, prompts, or model output to normal logs, plugin metadata, or sync payloads.
+
+## Failure behavior
+
+- `ERR_NATIVE_PLUGIN_UNVERIFIED`: the call did not carry a verified host-owned plugin context.
+- `ERR_NATIVE_PERMISSION_UNAVAILABLE`: the permission runtime is not ready.
+- `PERMISSION_DENIED` / `SDKAPI_BLOCKED`: permission declaration, grant, or SDK hard-cut failed.
+- `ERR_NATIVE_SCREENSHOT_UNSUPPORTED`: native capture is unavailable on this runtime.
+- `ERR_NATIVE_SCREENSHOT_INVALID_REGION`: the region is missing or non-positive.
+- `ERR_NATIVE_SCREENSHOT_DISPLAY_NOT_FOUND`: the requested display or region cannot be resolved.
+- `ERR_NATIVE_SCREENSHOT_CAPTURE_FAILED`: the native capture operation failed.
+
+Treat every failure as a real unavailable state. Do not fabricate a successful image or silently fall back to another display after the user selected one.

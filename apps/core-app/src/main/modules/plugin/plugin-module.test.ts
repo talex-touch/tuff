@@ -134,13 +134,7 @@ vi.mock('../../service/official-plugin.service', () => ({ getOfficialPlugins: vi
 vi.mock('../../utils/common-util', () => ({ debounce: (callback: unknown) => callback }))
 vi.mock('../../utils/logger', () => ({
   createLogger: () => ({
-    child: () => ({
-      debug: vi.fn(),
-      error: vi.fn(),
-      info: vi.fn(),
-      success: vi.fn(),
-      warn: vi.fn()
-    }),
+    child: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), success: vi.fn(), warn: vi.fn() }),
     debug: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
@@ -158,13 +152,15 @@ vi.mock('../database', () => ({ databaseModule: { getDb: mocks.databaseGetDb } }
 vi.mock('../network', () => ({ getNetworkService: mocks.getNetworkService }))
 vi.mock('../permission', () => ({
   createProtectedRegister:
-    () =>
+    (transport: {
+      on: (event: unknown, handler: (payload: unknown, context: unknown) => unknown) => () => void
+    }) =>
     (
-      channel: unknown,
+      event: unknown,
       _options: unknown,
-      handler: (payload: unknown, context: unknown) => unknown
+      callback: (payload: unknown, context: unknown) => unknown
     ) =>
-      mocks.transportOn(channel, handler),
+      transport.on(event, callback),
   getPermissionModule: () => ({ checkPermission: mocks.checkPermission })
 }))
 vi.mock('./dev-server-monitor', () => ({ DevServerHealthMonitor: class {} }))
@@ -303,10 +299,7 @@ describe('PluginModule facade', () => {
       { plugin: { name: 'missing' } }
     )
     expect(missingWindow).toEqual({
-      error: {
-        code: 'PLUGIN_WINDOW_NOT_FOUND',
-        message: 'Plugin not found.'
-      }
+      error: { code: 'PLUGIN_WINDOW_NOT_FOUND', message: 'Plugin not found.' }
     })
 
     mocks.checkPermission.mockReturnValue({

@@ -2,11 +2,15 @@
 title: "ChatComposer"
 description: "Message composer for AI chat input, attachments, keyboard send, and custom toolbars."
 category: Form
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [chat, composer, input]
+syncStatus: reviewed
+verified: true
 ---
 # ChatComposer
 
-Message composer for AI chat input, attachments, keyboard send, and custom toolbars.
+`TxChatComposer` renders a controlled chat textarea with attachment chips, guarded send behavior, keyboard shortcuts, and customizable action rows. It is intentionally transport-agnostic: hosts own message persistence, upload state, and submit side effects.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -82,3 +86,23 @@ code: |
 - Attachment actions are blocked while submitting unless `allowAttachmentWhileSubmitting=true`.
 - With `sendOnMetaEnter=true`, keyboard send requires Meta/Ctrl+Enter; with it disabled, Enter sends and Shift+Enter inserts a newline.
 - Custom `toolbar` receives callable `send` and `attachmentClick` functions and replaces the default action row.
+
+
+## Best Practices
+
+- Keep `modelValue` controlled in the host and clear it only after the send handler accepts the payload.
+- Treat `send` as an intent event, not a delivery guarantee; failed API calls should keep enough host state to retry.
+- Use `submitting` to prevent duplicate sends while a request is in flight.
+- Prefer Meta/Ctrl+Enter for dense chat inputs where Enter should remain available for line breaks.
+- Use `attachments` for status chips only; upload progress, removal, and retry behavior should stay in the host or a custom `attachments` slot.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue` confirms controlled textarea updates, trimmed send payloads, attachment-only guard, attachment-button gating, keyboard send modes, scoped toolbar functions, and forwarded native textarea events.
+- Type contracts: `packages/tuffex/packages/components/src/chat/src/types.ts` defines `ChatComposerProps`, `ChatComposerAttachment`, and `ChatComposerEmits`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts` covers default rendering, model updates, trimmed sends, keyboard modes, blocked sends, attachment-only sends, attachment guards, scoped slots, native events, and install registration.
+- Export: `packages/tuffex/packages/components/src/chat/index.ts` exports `ChatComposer`, `TxChatComposer`, and public composer types.
+
+## Source
+
+<TuffDocSourceLink />

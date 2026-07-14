@@ -2,7 +2,7 @@
 title: "DatePicker"
 description: "Date selector built on TxPicker with a YYYY-MM-DD model."
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # DatePicker
@@ -86,7 +86,7 @@ code: |
 - Empty or invalid `modelValue` initializes from the current local date, then clamps to `min` / `max` when present.
 - `min` and `max` use `YYYY-MM-DD`; invalid bounds are ignored.
 - `variant="picker"` keeps the wheel picker, `variant="field"` renders an input-like calendar grid, and `variant="adaptive"` uses the field calendar on desktop width while keeping the wheel picker on narrow screens.
-- Popup mode uses `v-model:visible`; inline mode renders immediately when `popup` is `false`. The field calendar also syncs `update:visible`, `open`, and `close`.
+- With the `picker` surface, popup mode uses `v-model:visible`; `popup="false"` renders that surface inline. The `field` surface always uses `TxPopover` and syncs `update:visible`, `open`, and `close`.
 - `confirm` emits the formatted date and then closes through the underlying picker. Live column changes emit both `update:modelValue` and `change`.
 
 ## API
@@ -97,7 +97,7 @@ code: |
 |------|------|---------|------|
 | `modelValue` | `string` | `''` | Selected date in `YYYY-MM-DD` format. Invalid or empty values initialize from today and are clamped by `min` / `max` when provided. |
 | `visible` | `boolean` | `false` | Controls popup visibility via `v-model:visible`. |
-| `popup` | `boolean` | `true` | Renders through the picker popup surface when true; renders inline when false. |
+| `popup` | `boolean` | `true` | Controls only the picker surface: `true` renders the `TxPicker` popup and `false` renders it inline. The field surface renders through `TxPopover`. |
 | `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | Selects the surface. `picker` is the wheel picker, `field` is the calendar field, and `adaptive` switches by viewport width. |
 | `title` | `string` | `'Select date'` | Toolbar title forwarded to `TxPicker`. |
 | `placeholder` | `string` | `'Select date'` | Placeholder shown by the field calendar when the model is empty. |
@@ -123,5 +123,29 @@ code: |
 | `open` | - | Forwarded when the picker opens. |
 | `close` | - | Forwarded when the picker closes. |
 
+### Slots
+
+`TxDatePicker` does not expose custom slots. Use surrounding form layout for labels, helper text, validation messages, or trigger buttons that open the popup via `v-model:visible`.
+
+## Best Practices
+
+- Store dates as `YYYY-MM-DD` strings only. The component does not carry time zone or time-of-day semantics.
+- Use `variant="field"` for dense desktop forms, `variant="picker"` for mobile-first flows, and `variant="adaptive"` only when both surfaces have been reviewed in the same layout.
+- Keep `min` and `max` valid `YYYY-MM-DD` values; invalid bounds are ignored, which can make unavailable dates appear selectable.
+- Use `variant="picker"` with `popup="false"` for inline settings panels where the surrounding card already owns disclosure and spacing; the field surface is popover-based.
+- Set `weekStartsOn` explicitly when locale expectations matter; the default grid starts on Sunday.
+
+## Review Notes
+
+- **Source:** `TxDatePicker` parses `YYYY-MM-DD`, initializes missing or invalid values from the local date, clamps against parsable `min` / `max`, and resolves `adaptive` at `adaptiveBreakpoint`.
+- **Types:** `DatePickerProps` declares the documented selection and presentation props; `DatePickerEmits` declares formatted model/change, visibility, confirmation, cancellation, and lifecycle emissions.
+- **Accessibility note:** The field trigger, month navigation, and date cells are disabled native buttons as needed; the calendar exposes `grid` / `gridcell` roles with `aria-selected`, while the picker surface forwards its popup props to `TxPicker`.
+- **Verified coverage:** `date-picker.test.ts` covers model-to-column normalization and presentation-prop forwarding, bound clamping and disabled options, formatted value emits, visibility and lifecycle forwarding, field-calendar selection, and adaptive desktop rendering.
+
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/date-picker/src/TxDatePicker.vue`.
+- Types: `packages/tuffex/packages/components/src/date-picker/src/types.ts` exports `DatePickerProps`, `DatePickerEmits`, and `DatePickerVariant`.
+- Coverage: `packages/tuffex/packages/components/src/date-picker/__tests__/date-picker.test.ts` verifies prop forwarding, bounds clamping, disabled date options, formatted emits, visibility events, field calendar behavior, and adaptive desktop rendering.
+
 <TuffDocSourceLink />

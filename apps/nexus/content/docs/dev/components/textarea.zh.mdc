@@ -1,0 +1,100 @@
+---
+title: Textarea
+description: 带字数统计、resize 与状态样式的独立多行输入。
+category: Form
+status: beta
+since: 1.0.0
+tags: [textarea, form, multiline]
+syncStatus: reviewed
+verified: true
+---
+# Textarea
+
+`TxTextarea` 是独立多行输入。相比 `TuffInput type="textarea"`，它更适合需要直接控制 textarea 属性、字数统计、resize 行为或暴露聚焦方法的场景。
+
+已人工核对 `packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue` 与 `textarea.test.ts`。
+
+## 基础用法
+
+### Textarea
+::::TuffDemoWrapper{demo="TextareaTextareaDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('')
+  </script>
+
+  <template>
+    <TxTextarea
+      v-model="value"
+      placeholder="记录这次发布审阅结论..."
+      :max-length="160"
+      show-count
+      :status="value.trim() ? 'success' : 'error'"
+    />
+  </template>
+---
+::::
+
+## 交互契约
+
+- `v-model` 持有字符串，并在原生输入时同时发出 `update:modelValue` 和 `input`。
+- 外部 `class` 和 `style` 保留在根节点，其余 attrs 透传给内部 `<textarea>`。
+- `showCount` 显示当前长度；存在 `maxLength` 时格式是 `current/max`。
+- `status` 只改变视觉状态，校验文案应放在宿主表单项中。
+- 暴露 `focus()` 与 `blur()`，用于表单流程和编辑器快捷键。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string` | `''` | 多行输入值。 |
+| `placeholder` | `string` | `''` | 占位文本。 |
+| `rows` | `number` | `4` | 原生 textarea 行数。 |
+| `disabled` | `boolean` | `false` | 原生禁用态。 |
+| `readonly` | `boolean` | `false` | 原生只读态。 |
+| `maxLength` | `number` | - | 原生最大长度与计数分母。 |
+| `showCount` | `boolean` | `false` | 是否显示字数统计。 |
+| `resize` | `'none' \| 'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | CSS resize 行为。 |
+| `status` | `'default' \| 'success' \| 'error'` | `'default'` | 视觉校验状态。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string)` | v-model 更新。 |
+| `input` | `(value: string)` | 镜像值更新。 |
+| `focus` | `(event: FocusEvent)` | 原生 focus 事件。 |
+| `blur` | `(event: FocusEvent)` | 原生 blur 事件。 |
+
+### Exposed Methods
+
+| 方法 | 说明 |
+|------|------|
+| `focus()` | 聚焦原生 textarea。 |
+| `blur()` | 让原生 textarea 失焦。 |
+| `textareaRef` | 原生 textarea ref。 |
+
+## Slots
+
+`TxTextarea` 不暴露插槽。标签、帮助文本、`showCount` 以外的计数展示和校验文案应放在外层表单项中。
+
+## 最佳实践
+
+- 有长度上限的备注、摘要、Prompt 建议配合 `maxLength` 与 `showCount`。
+- 普通表单保持 `resize="vertical"`；只有外层布局已经控制高度时才用 `none`。
+- `status` 只做视觉提示，可访问校验信息应由外层表单承载。
+- `id`、`name` 与表单相关 attrs 可直接传入，组件会透传给 textarea。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue` 确认 attrs 透传、`class` / `style` 放置、计数格式、resize class、状态 class、焦点状态和暴露方法。
+- **实测覆盖:** `packages/tuffex/packages/components/src/textarea/__tests__/textarea.test.ts` 覆盖值/占位/行数、attrs 透传、`input` / `update:modelValue`、计数文本、状态/resize class 和 focus/blur helper 暴露。
+- 导出入口:`packages/tuffex/packages/components/src/textarea/index.ts` 使用 `withInstall` 包装组件并导出 `TxTextareaInstance`。
+
+## Source
+<TuffDocSourceLink />

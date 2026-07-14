@@ -2,7 +2,11 @@
 title: "CommandPalette"
 description: "Command palette for global shortcuts, plugin entries, and search actions."
 category: Navigation
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [command, palette, launcher, shortcut]
+syncStatus: reviewed
+verified: true
 ---
 # CommandPalette
 
@@ -105,7 +109,7 @@ code: |
 
 ## API
 
-### TxCommandPalette Props
+### Props
 
 | Name | Type | Default | Description |
 |------|------|------|------|
@@ -147,3 +151,32 @@ code: |
 |------|------|------|
 | `empty` | `{ query, emptyText }` | Custom empty state |
 | `footer` | `{ query, visibleCount }` | Custom footer area |
+
+## Interaction Contract
+
+- `modelValue` is the single source of truth for visibility. The palette emits `open` when it becomes visible and `close` when an existing open state is dismissed.
+- Search is local substring matching across `title`, `description`, and every `keywords` entry. The component does not rank, debounce, or fetch remote results.
+- `ArrowDown` / `ArrowUp` cycle through the currently visible commands; `Enter` selects the active non-disabled command; `Escape` closes the overlay.
+- IME composition (`isComposing`, keyCode `229`, or an active composition session) suppresses keyboard selection so Chinese/Japanese/Korean input is not submitted early.
+- `select` emits the original `CommandPaletteItem`. Disabled commands stay visible but never emit `select`; `closeOnSelect=false` keeps the palette open after selection.
+
+## Best Practices
+
+- Keep `id` stable across releases; use it for analytics, persistence, and permission checks instead of localized titles.
+- Put synonyms, aliases, plugin names, and localized search terms in `keywords`; do not duplicate commands just to cover search variants.
+- Register global shortcuts in the app shell, then drive `v-model`; `shortcut` is only a visible keyboard hint.
+- Use `footer` for source labels, result counts, or keyboard help. Use `empty` to show the current query and suggest recovery actions.
+- Cap `maxHeight` for dense command sets so the overlay stays keyboard-scannable and does not push below the viewport.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/command-palette/src/types.ts`, `TxCommandPalette.vue`, and `command-palette.test.ts`.
+- Existing tests cover local filtering and selection, IME composition guarding, matched text highlighting, and custom `empty` / `footer` slots.
+- Accessibility note: the overlay renders `role="dialog"` with `aria-modal="true"`; keep the trigger label and placeholder specific enough for the current command domain, and do not treat the displayed `shortcut` as actual shortcut registration.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue`.
+- Types: `packages/tuffex/packages/components/src/command-palette/src/types.ts` exports `CommandPaletteProps`, `CommandPaletteEmits`, `CommandPaletteItem`, and `CommandPaletteClassValue`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` verifies filtering, select emits, IME guarding, match highlighting, and slots.
+<TuffDocSourceLink />

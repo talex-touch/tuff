@@ -1,23 +1,24 @@
 ---
 title: Progress 进度
-description: 线性进度与状态反馈
+description: 围绕 TxProgressBar 的轻量封装，用于标准线性进度行。
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [progress, status, loading]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
-
 # Progress 进度
 
-> 线性进度用于呈现任务阶段与节奏变化。  
-> **状态**：Beta
+`TuffProgress` 是标准线性进度行的轻量兼容入口。它把较小的 prop 集转发给 `TxProgressBar`，固定使用外部文本、plain mask 样式，并把 `strokeWidth` 映射为进度条高度。
 
+已人工核对 `packages/tuffex/packages/components/src/progress/src/TxProgress.vue`、`progress.test.ts` 与 `index.ts`。
 
 ## Demo
-### Progress States
-基础进度 + 状态色
-:::TuffDemoWrapper{demo="ProgressProgressStatesDemo" code-lang="vue"}
+
+### 进度状态
+
+::::TuffDemoWrapper{demo="ProgressProgressStatesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -26,53 +27,11 @@ code: |
     <TuffProgress :percentage="100" status="success" />
   </template>
 ---
-:::
-## 基础用法
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TuffProgress :percentage="60" />
-    <TuffProgress :percentage="60" :show-text="false" />
-  </template>
----
-::
+::::
 
-## 交互契约
-
-`TuffProgress` 是标准进度行的轻量入口，会把 percentage、status、stroke width、不确定进度和文本格式透传到当前 `TxProgressBar` 实现。确定进度会暴露 `role="progressbar"` 与 `aria-valuenow`；不确定进度不会暴露 `aria-valuenow`。
-
-## API（简版）
-::TuffPropsTable
----
-rows:
-  - name: percentage
-    type: 'number'
-    default: '0'
-    description: '进度百分比'
-  - name: status
-    type: "'success' | 'warning' | 'error'"
-    default: '-'
-    description: '状态色'
-  - name: indeterminate
-    type: 'boolean'
-    default: 'false'
-    description: '不确定进度'
-  - name: strokeWidth
-    type: 'number'
-    default: '6'
-    description: '进度条高度 px'
-  - name: showText
-    type: 'boolean'
-    default: 'true'
-    description: '显示外部百分比文本'
----
-::
-
-## 组合示例
 ### 进度行
-进度条配合状态提示使用。
-:::TuffDemoWrapper{demo="ProgressProgressRowDemo" code-lang="vue"}
+
+::::TuffDemoWrapper{demo="ProgressProgressRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -80,4 +39,73 @@ code: |
     <TxStatusBadge text="进行中" status="warning" />
   </template>
 ---
-:::
+::::
+
+## 组合示例
+
+### 自定义文本格式
+
+```vue
+<template>
+  <TuffProgress :percentage="42" :format="value => `完成 ${value}%`" />
+</template>
+```
+
+### 不确定进度
+
+```vue
+<template>
+  <TuffProgress indeterminate :percentage="60" :show-text="false" />
+</template>
+```
+
+未知时长任务应使用不确定状态，而不是展示虚假的百分比。
+
+## 交互契约
+
+- `TuffProgress` 渲染 `TxProgressBar`，自身不增加额外 wrapper DOM。
+- `percentage`、`status`、`indeterminate`、`showText` 和 `format` 会直接转发。
+- `strokeWidth` 会转换为类似 `"6px"` 的 CSS 高度字符串，并作为 `height` 传入。
+- 文本位置固定为 `outside`。
+- 底层进度条固定使用 `maskVariant="plain"` 和 `maskBackground="mask"`。
+- 确定进度通过 `TxProgressBar` 暴露 `role="progressbar"` 和 `aria-valuenow`。
+- 不确定进度会省略 `aria-valuenow`，并应用进度条的不确定状态类。
+- 安装入口注册组件名 `TuffProgress`。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `percentage` | `number` | `0` | 转发给 `TxProgressBar` 的确定进度值。 |
+| `status` | `'success' \| 'error' \| 'warning' \| ''` | `''` | 转发给 `TxProgressBar` 的视觉状态色。 |
+| `strokeWidth` | `number` | `6` | 进度条像素高度。 |
+| `showText` | `boolean` | `true` | 显示外部进度文本。 |
+| `indeterminate` | `boolean` | `false` | 启用不确定进度模式。 |
+| `format` | `(percentage: number) => string` | - | 自定义确定进度显示文本。 |
+
+### Events
+
+`TuffProgress` 不派发组件事件。请监听宿主任务状态变化，并通过 props 更新进度。
+
+## Slots
+
+`TuffProgress` 不暴露插槽。文本定制使用 `format`；布局需要自定义内容时直接使用 `TxProgressBar`。
+
+## 最佳实践
+
+- 简单行级进度且需要旧公共名称和紧凑 API 时使用 `TuffProgress`。
+- 需要分段、tooltip、message、loading/success/error 布尔状态、动效或自定义文本位置时，直接使用 `TxProgressBar`。
+- `strokeWidth` 保持克制；该封装适合行级进度，不适合英雄指标。
+- 不要为未知工作展示过期百分比。使用 `indeterminate`，除非有可信数值，否则隐藏文本。
+- 周围 UI 需要操作上下文时，把进度条与简短状态标签组合使用。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/progress/src/TxProgress.vue` 确认封装直接渲染 `TxProgressBar`，并把 `strokeWidth` 映射为 `height`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/progress/__tests__/progress.test.ts` 覆盖状态透传、自定义格式化、`strokeWidth`、隐藏文本和不确定进度 ARIA 行为。
+- 导出入口:`packages/tuffex/packages/components/src/progress/index.ts` 注册公共组件名 `TuffProgress`。
+
+## Source
+<TuffDocSourceLink />

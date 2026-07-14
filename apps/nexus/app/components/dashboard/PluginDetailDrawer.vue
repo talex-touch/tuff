@@ -1041,7 +1041,7 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
               </div>
 
               <div v-if="analyticsLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                <span class="i-carbon-circle-dash animate-spin" />
+                <span class="i-ri-loader-4-line animate-spin" />
                 {{ t('dashboard.sections.plugins.analytics.loading') }}
               </div>
               <p v-else-if="analyticsError" class="text-xs text-rose-600 dark:text-rose-300">
@@ -1896,7 +1896,7 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
               </p>
 
               <div v-if="timelineLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                <span class="i-carbon-circle-dash animate-spin" />
+                <span class="i-ri-loader-4-line animate-spin" />
                 {{ t('dashboard.sections.plugins.timelineLoading') }}
               </div>
               <p v-else-if="timelineError" class="text-xs text-rose-600 dark:text-rose-300">

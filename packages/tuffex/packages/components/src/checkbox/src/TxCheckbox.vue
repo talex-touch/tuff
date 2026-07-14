@@ -51,12 +51,13 @@ function toggle() {
 </script>
 
 <template>
-  <div
+  <button
+    type="button"
     role="checkbox"
     :aria-checked="isChecked"
     :aria-disabled="disabled"
     :aria-label="effectiveAriaLabel"
-    :tabindex="disabled ? -1 : 0"
+    :disabled="disabled"
     class="tx-checkbox" :class="[
       {
         'is-checked': isChecked,
@@ -65,8 +66,6 @@ function toggle() {
       `tx-checkbox--${variant || 'fill'}`,
     ]"
     @click="toggle"
-    @keydown.enter.prevent="toggle"
-    @keydown.space.prevent="toggle"
   >
     <span
       v-if="(label || $slots.default) && labelPlacement === 'start'"
@@ -91,14 +90,21 @@ function toggle() {
     <span v-if="(label || $slots.default) && labelPlacement === 'end'" class="tx-checkbox__label">
       <slot>{{ label }}</slot>
     </span>
-  </div>
+  </button>
 </template>
 
 <style lang="scss" scoped>
 .tx-checkbox {
+  appearance: none;
   display: inline-flex;
   align-items: center;
+  padding: 0;
+  border: 0;
   cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  background: transparent;
   user-select: none;
   gap: 8px;
   outline: none;

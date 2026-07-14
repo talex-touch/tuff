@@ -27,22 +27,24 @@ code: |
   </template>
 ---
 :::
-## API (Lite)
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
   - name: loading
     type: 'boolean'
     default: 'true'
-    description: 'Show skeleton'
+    description: 'Whether to show the skeleton. `false` renders the default slot instead.'
   - name: lines
     type: 'number'
-    default: '3'
-    description: 'Text lines'
+    default: '1'
+    description: 'Number of placeholder items; clamped to at least 1.'
   - name: variant
     type: "'text' | 'rect' | 'circle'"
     default: 'text'
-    description: 'Shape variant'
+    description: 'Shape variant for each generated placeholder item.'
   - name: width
     type: 'string | number'
     default: '100%'
@@ -51,12 +53,36 @@ rows:
     type: 'string | number'
     default: '12'
     description: 'Height; numbers are converted to px'
+  - name: radius
+    type: 'string | number'
+    default: '8'
+    description: 'Corner radius for non-circle items; numbers are converted to px.'
   - name: gap
     type: 'string | number'
     default: '10'
     description: 'Gap between multiple lines; numbers are converted to px'
 ---
 ::
+
+### Events
+
+`TxSkeleton`, `TxCardSkeleton`, and `TxListItemSkeleton` do not emit custom events.
+
+### Slots
+
+| Component | Slot | Props | Description |
+|-----------|------|-------|-------------|
+| `TxSkeleton` | `default` | - | Final content rendered only when `loading=false`. |
+| `TxCardSkeleton` | - | - | Fixed card placeholder; no slots. |
+| `TxListItemSkeleton` | - | - | Fixed list-row placeholder; no slots. |
+
+### Preset Components
+
+| Export | Purpose |
+|--------|---------|
+| `TxSkeleton` / `Skeleton` | Configurable line, rectangle, or circle placeholder. |
+| `TxCardSkeleton` / `CardSkeleton` | Fixed card/feed placeholder with icon, title, badge, and description blocks. |
+| `TxListItemSkeleton` / `ListItemSkeleton` | Fixed list-row placeholder with icon, name, meta, and trailing badge blocks. |
 
 ## Interaction Contract
 
@@ -94,8 +120,26 @@ code: |
 ---
 :::
 
+## Best Practices
+
+- Match skeleton width, height, line count, and radius to the final content so loading does not create a second layout.
+- Use `TxSkeleton` for configurable text, rectangle, and avatar placeholders; use `TxCardSkeleton` or `TxListItemSkeleton` when their fixed structure matches the final surface.
+- Keep `loading=false` as the handoff point to real content instead of rendering skeleton and content in separate branches.
+- Do not use skeletons as decorative gray chrome. If the final content is unknown, prefer a neutral empty or loading state with copy.
+- Use `TxDataTable loading` for short table waits; use skeletons for longer waits where preserving surrounding rhythm matters.
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`
-- Recommendation: match skeleton width and height to the final content; do not use `TxSkeleton` as decorative gray chrome.
-- Interaction: `loading=false` renders the default slot, so the same wrapper can cover placeholder and final content without extra branching.
+- Reviewed against `packages/tuffex/packages/components/src/skeleton/src/types.ts`, `TxSkeleton.vue`, `TxCardSkeleton.vue`, `TxListItemSkeleton.vue`, and `skeleton.test.ts`.
+- Existing tests cover CSS-variable emission, numeric-to-px conversion, line count clamping, circle radius normalization, `loading=false` slot handoff, fixed preset rendering, and install registration.
+- API note: `TxSkeleton` is the configurable primitive; `TxCardSkeleton` and `TxListItemSkeleton` are fixed-shape presets with no props, events, or slots.
+- Rendering note: `variant="circle"` forces `--tx-skeleton-radius: 999px`; callers should set matching `width` and `height` for a true circle.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`, `TxCardSkeleton.vue`, and `TxListItemSkeleton.vue`.
+- Types: `packages/tuffex/packages/components/src/skeleton/src/types.ts` exports `SkeletonProps` and `SkeletonVariant`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/skeleton/__tests__/skeleton.test.ts` verifies CSS variable output, numeric-to-px conversion, line clamping, circle radius, `loading=false` slot handoff, preset rendering, and install registration.
+
+<TuffDocSourceLink />
+

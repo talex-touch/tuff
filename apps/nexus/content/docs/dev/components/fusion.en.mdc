@@ -2,7 +2,11 @@
 title: "Fusion"
 description: "Gooey two-slot fusion effect with hover, click, or manual active control."
 category: Basic
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [fusion, gooey, motion]
+syncStatus: reviewed
+verified: true
 ---
 # Fusion
 
@@ -1461,3 +1465,49 @@ code: |
 |------|------|------|
 | `change` | `(v: boolean)` | Emitted whenever a non-disabled trigger requests a new active state. |
 | `update:modelValue` | `(v: boolean)` | Emitted for `v-model` updates; controlled consumers must write the value back. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `a` | - | First blob layer. It starts at the negative side of the configured `direction` while inactive. |
+| `b` | - | Second blob layer. It starts at the positive side of the configured `direction` while inactive. |
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+## Interaction Contract
+
+- `modelValue` makes the component controlled when it is a boolean. When omitted, `TxFusion` stores internal active state.
+- `trigger="hover"` sets active on mouse enter and inactive on mouse leave.
+- `trigger="click"` toggles active on root click; controlled consumers must write the emitted value back before the visual state changes.
+- `trigger="manual"` ignores hover, leave, and click. Use it when external controls own the entire state machine.
+- `disabled=true` blocks pointer-triggered state writes, emits no updates from those interactions, applies `is-disabled`, and sets root `pointer-events: none`.
+- `duration` is clamped to `0ms` when negative; `gap` and `blur` are written as pixel CSS variables.
+- Non-finite `alpha` and `alphaOffset` fall back to safe color-matrix values before rendering the SVG filter.
+- Slots render inside a filtered SVG gooey layer; slotted controls remain responsible for their own labels, focus states, and keyboard semantics.
+
+## Best Practices
+
+- Use `TxFusion` for decorative motion moments, paired chips, compact action affordances, and status accents; avoid using it as the only way to expose critical state.
+- Prefer `trigger="manual"` when a parent state machine, form, route state, or analytics flow needs deterministic control.
+- Keep the two slotted shapes similar enough in scale for the SVG filter to read as a merge instead of a collision.
+- Tune `gap`, `blur`, `alpha`, and `alphaOffset` together; large gaps usually need higher blur / alpha and a calmer duration.
+- Avoid fast motion around dense text or form controls. Respect reduced-motion preferences by driving `disabled` or a manual inactive state from the host.
+- If slot content is interactive, ensure the root trigger mode does not conflict with child button or link behavior.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/fusion/src/types.ts`, `TxFusion.vue`, and `fusion.test.ts`.
+- The component emits from the computed setter even in uncontrolled mode, so docs should describe both `change` and `update:modelValue` as state requests.
+- `manual` is event-free by design; examples that use an external toggle should prefer it when hover / click should not also mutate state.
+- The root is a `div` with click / hover listeners, so semantic interactivity belongs in the slotted controls or surrounding UI, not the Fusion root itself.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/fusion/src/TxFusion.vue`.
+- Types: `packages/tuffex/packages/components/src/fusion/src/types.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/fusion/__tests__/fusion.test.ts` verifies slot rendering, visual prop CSS variables, SVG filter wiring, duration clamping, hover state emits, controlled click requests, manual trigger no-op behavior, and disabled interaction guards.
+
+<TuffDocSourceLink />

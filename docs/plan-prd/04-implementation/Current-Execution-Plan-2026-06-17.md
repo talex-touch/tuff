@@ -1,12 +1,12 @@
 # 当前项目进程与执行计划
 
-> 更新时间：2026-07-06
+> 更新时间：2026-07-13
 > 定位：当前项目进程的短期执行 SoT。阶段化路线以 `Roadmap-vNext-2026-06-18.md` 为准，历史事实仍以 `../01-project/CHANGES.md` 为准，具体任务状态仍以 `../TODO.md` 为准。
 
 ## 1. 当前事实
 
 - 当前稳定基线：`2.4.10`。
-- 当前代码版本：root / CoreApp `2.4.13-beta.3`。
+- 当前代码版本：root / CoreApp `2.4.13-beta.6`。
 - 当前分支：`master`。
 - 最近完整发布链路证据：`v2.4.11-beta.6` GitHub prerelease、Nexus BETA latest sync 与 Gate D strict 复核。
 - `2.4.11` release checklist 已有完成记录：`quality:pr`、`publish:check`、`publish:check:pack`、`typecheck:all`、`quality:release` 与 `git diff --check` 均已通过。
@@ -17,25 +17,25 @@
 
 1. **R0 口径清理**：保持 README / TODO / Roadmap / Quality Baseline 的版本、任务状态和 evidence 边界一致；入口只保留当前 SoT。
 2. **R1 Release Integrity**：等待并接入 Nexus release asset `sha256`、`signatureUrl`、signature endpoint、manifest signature 与 signing public key；外部签名材料未齐前不宣称闭环。
-3. **R2 AI 2.5.0 Stable**：13/13 visible surfaces 已 passed；后续只做 Assistant / OmniPanel / screenshot 产品化 follow-up，不反向阻塞 Stable gate。
+3. **R2 AI 2.5.0 Stable**：historical 13/13 visible surfaces 已 passed；当前 `2.4.13-beta.6` 相对 manifest baseline `2.4.12-beta.8` 的 recapture 仍开放，并由 `--requireCurrentVersion` fail-closed。Assistant / OmniPanel / screenshot 继续产品化 follow-up，不得反向把历史 evidence 冒充当前版本。
 4. **R3 Search / Indexing Runtime**：优先补 attach-only natural Settings recent task evidence 与真实 profile preflight / simulation；未确认影响范围前不执行 SQLite/FTS 或 `scan_progress` 迁移。
 5. **R4-R7 并行小切片**：QuickOps、Plugin Trust Boundary、UI/TuffEx、Nexus Governance 按 related-only 推进，production / preview evidence 不用 local-only 代替。
-6. **R8-R9 后续能力**：i18n / Domain Lexicon / Catalog 2.6.0 与 AI 2.5.x 后续不抢 R1/R3/Nexus evidence 窗口。
+6. **R8-R9 后续能力**：R8 Phase 0-4 与 R9.2 P0/P1 closure 已落；R8 下一批推进 CatalogService MVP，R9 real-profile/GGUF/ASR follow-up 继续不抢 R1/R3/Nexus evidence 窗口。
 
 ## 3. vNext Roadmap 摘要
 
-| 阶段 | 主线 | 下一动作 | 验收证据 |
-| --- | --- | --- | --- |
-| R0 | 口径清理 | 同步 README / TODO / Roadmap / Quality Baseline / CHANGES | 活跃文档版本口径一致；`git diff --check` 通过 |
-| R1 | Release Integrity | 等待签名 sidecar、manifest signature、Nexus signature metadata 与 public key 后再跑真实矩阵 | GitHub Release ↔ Nexus release metadata / signature 自动校验通过 |
-| R2 | AI 2.5.0 Stable | 产品化 follow-up：Assistant screenshot translate、OmniPanel / Assistant performance、桌面烟花 MVP、截图 capture 渐进引入 | 不回退 13/13 visible surfaces；每批有专项 tests / evidence |
-| R3 | Search / Indexing Runtime | 采 attach-only natural Settings evidence；真实 profile preflight / simulation 后再决定 migration execute | FileProvider 写入/进度/重置走 runtime task/store；真实 profile evidence 可复核 |
-| R4 | QuickOps 产品化 | 清洁屏幕 visual evidence、Pomodoro 高级循环 runtime、app quit cleanup | runtime 可持续清理；无系统副作用；测试覆盖 |
-| R5 | Plugin Trust Boundary | 补剩余 shell/OS/network/fs/clipboard surface、secret cleanup UX、Widget sandbox 长尾 | 权限缺失 fail-closed；不写明文 secret；focused tests 覆盖 |
-| R6 | UI / TuffEx | 主路径语义控件、keyboard/focus、legacy Tabs/Menu/Drawer、visual smoke | scoped ESLint + UI focused tests；减少 `div/span @click` 债务 |
-| R7 | Nexus Governance | Provider Registry / Intelligence Admin、production / preview browser evidence、D1/R2/live send/provider quota | 生产/preview runbook 和 API/UI evidence 可复现 |
-| R8 | i18n / Domain Lexicon / Catalog 2.6.0 | Domain Lexicon、插件 i18n facade、CatalogService | 禁止新增中文 fallback / 双语三元；catalog 进入 SQLite SoT |
-| R9 | AI 2.5.x 后续 | 2.5.3 真实数据 evidence、2.5.4 Compression / Memory 搜索编辑来源审计、后续 GGUF / ASR | 不抢 Stable；按独立 PRD 分阶段落地 |
+| 阶段 | 主线                                  | 下一动作                                                                                                                                                     | 验收证据                                                                                             |
+| ---- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| R0   | 口径清理                              | 同步 README / TODO / Roadmap / Quality Baseline / CHANGES                                                                                                    | 活跃文档版本口径一致；`git diff --check` 通过                                                        |
+| R1   | Release Integrity                     | 等待签名 sidecar、manifest signature、Nexus signature metadata 与 public key 后再跑真实矩阵                                                                  | GitHub Release ↔ Nexus release metadata / signature 自动校验通过                                     |
+| R2   | AI 2.5.0 Stable                       | 产品化 follow-up：Assistant screenshot translate、OmniPanel / Assistant performance、桌面烟花 MVP、截图 capture 渐进引入                                     | 不回退 13/13 visible surfaces；每批有专项 tests / evidence                                           |
+| R3   | Search / Indexing Runtime             | 采 attach-only natural Settings evidence；真实 profile preflight / simulation 后再决定 migration execute                                                     | FileProvider 写入/进度/重置走 runtime task/store；真实 profile evidence 可复核                       |
+| R4   | QuickOps 产品化                       | 清洁屏幕 visual evidence、Pomodoro advanced loop 产品路径 evidence、packaged app quit cleanup evidence；runtime / diagnostics / lifecycle focused tests 已落 | runtime 可持续清理；无系统副作用；测试覆盖                                                           |
+| R5   | Plugin Trust Boundary                 | 补剩余 shell/OS/network/fs/clipboard surface、secret cleanup UX、Widget sandbox 长尾                                                                         | 权限缺失 fail-closed；不写明文 secret；focused tests 覆盖                                            |
+| R6   | UI / TuffEx                           | 主路径语义控件、keyboard/focus、legacy Tabs/Menu/Drawer、visual smoke                                                                                        | scoped ESLint + UI focused tests；减少 `div/span @click` 债务                                        |
+| R7   | Nexus Governance                      | Provider Registry / Intelligence Admin、production / preview browser evidence、D1/R2/live send/provider quota                                                | 生产/preview runbook 和 API/UI evidence 可复现                                                       |
+| R8   | i18n / Domain Lexicon / Catalog 2.6.0 | Domain Lexicon V1 与 Plugin SDK facade 已完成；下一步 CatalogService MVP                                                                                     | signature/hash/schema fail-closed、SQLite import/activate/rollback；禁止新增中文 fallback / 双语三元 |
+| R9   | AI 2.5.x 后续                         | 2.5.3 真实数据 evidence、2.5.4 Compression / Memory 搜索编辑来源审计、后续 GGUF / ASR                                                                        | 不抢 Stable；按独立 PRD 分阶段落地                                                                   |
 
 ## 4. 明确非阻塞项
 

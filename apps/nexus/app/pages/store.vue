@@ -483,7 +483,7 @@ useSeoMeta({
       v-if="pluginsPending"
       class="flex items-center justify-center gap-3 border border-primary/20 rounded-3xl border-dashed bg-dark/5 px-6 py-12 text-sm text-black/70 dark:border-light/20 dark:bg-light/5 dark:text-light/70"
     >
-      <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
+      <span class="i-ri-loader-4-line animate-spin text-base" aria-hidden="true" />
       <span>{{ t('dashboard.sections.plugins.loading') }}</span>
     </div>
 
@@ -546,7 +546,7 @@ useSeoMeta({
         <div class="StoreDetailOverlay-Inner">
           <div class="StoreDetailOverlay-Body">
             <div v-if="detailPending" class="StoreDetailStateText flex items-center justify-center gap-3 py-16 text-sm">
-              <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
+              <span class="i-ri-loader-4-line animate-spin text-base" aria-hidden="true" />
               <span>{{ t('store.detail.loading') }}</span>
             </div>
             <div v-else-if="detailError" class="StoreDetailError mt-4 rounded-xl p-4 text-sm">
@@ -601,7 +601,7 @@ useSeoMeta({
                     </template>
                     <section class="space-y-4 py-1">
                       <div v-if="contentPackagesPending" class="StoreDetailTextSubtle flex items-center gap-2 py-6 text-sm">
-                        <span class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                        <span class="i-ri-loader-4-line animate-spin text-sm" aria-hidden="true" />
                         <span>{{ t('store.detail.content.loading', 'Loading shared content...') }}</span>
                       </div>
                       <div v-else-if="contentPackagesError" class="StoreDetailError rounded-xl p-4 text-sm">
@@ -706,7 +706,7 @@ useSeoMeta({
                                 {{ t('store.detail.reviews.submitHint') }}
                               </p>
                               <TxButton size="small" :disabled="reviewSubmitting" @click="submitReview">
-                                <span v-if="reviewSubmitting" class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                                <span v-if="reviewSubmitting" class="i-ri-loader-4-line animate-spin text-sm" aria-hidden="true" />
                                 {{ t('store.detail.reviews.submit') }}
                               </TxButton>
                             </div>
@@ -716,7 +716,7 @@ useSeoMeta({
 
                       <div class="space-y-3">
                         <div v-if="reviewsPending" class="StoreDetailTextSubtle flex items-center gap-2 text-sm">
-                          <span class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                          <span class="i-ri-loader-4-line animate-spin text-sm" aria-hidden="true" />
                           <span>{{ t('store.detail.reviews.loading') }}</span>
                         </div>
                         <div v-else-if="reviewsError" class="StoreDetailError rounded-xl p-4 text-sm">

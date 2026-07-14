@@ -51,12 +51,31 @@ code: |
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
+|------|------|---------|-------------|
 | `loading` | `boolean` | `false` | Shows or hides the overlay. |
 | `fullscreen` | `boolean` | `false` | Teleports the overlay to `body` and covers the viewport. |
 | `text` | `string` | `''` | Optional message displayed below the spinner. |
 | `spinnerSize` | `number` | `18` | Spinner size in pixels. |
-| `background` | `string` | - | CSS background used for the overlay mask. |
+| `background` | `string` | `'color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent)'` | CSS background used for the overlay mask. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | No component-specific emits. Control visibility with the `loading` prop. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Content rendered below the local overlay when `fullscreen=false`. The fullscreen branch does not render slot content. |
+
+## Interaction Contract
+
+- Local mode wraps the default slot in a `position: relative` container and renders an absolute overlay above it only while `loading=true`.
+- Fullscreen mode teleports the overlay to `body`, covers the viewport, and receives a fresh shared z-index every time it opens.
+- `background` is written to `--tx-loading-overlay-bg`; the overlay also applies blur and saturation through `backdrop-filter`.
+- `text` is optional. When omitted, only the spinner is rendered inside the overlay card.
 
 ## Dashboard Task Overlay
 
@@ -74,10 +93,24 @@ code: |
     </TxLoadingOverlay>
   </template>
 ---
-::
+:::
+
+## Best Practices
+
+- Prefer local overlays for refresh, save, and recalculation flows where the previous content should remain visible.
+- Reserve `fullscreen` for blocking global transitions such as bootstrapping, workspace switching, or destructive flows that cannot continue in parallel.
+- Keep overlay text action-specific: “Refreshing task queue…” is more useful than a generic “Loading…”.
+- Do not place first-load empty screens behind `TxLoadingOverlay`; use `TxLoadingState` or skeleton components before content exists.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/loading-overlay/src/TxLoadingOverlay.vue`.
-- Screenshot: `.codex-screenshots/nexus-loading-overlay-feedback-task-center-demo-playwright-2026-05-28.png`.
-- Recommendation: use container overlays for local async refreshes; reserve fullscreen overlays for flows that must block global interaction.
+- **Accessibility note:** `TxLoadingOverlay` blocks pointer interaction visually but does not expose `role="status"`, `aria-live`, focus trapping, or modal semantics. Keep it for short blocking waits and announce long-running async work with surrounding page copy when necessary.
+- **Verified coverage:** `loading-overlay.test.ts` checks local overlay rendering, custom background/spinner size/text, closed-state slot preservation, fullscreen teleport, and absence of the local container in fullscreen mode.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/loading-overlay/src/TxLoadingOverlay.vue`.
+- Types/export: `packages/tuffex/packages/components/src/loading-overlay/index.ts` exports `LoadingOverlayProps`, `LoadingOverlay`, `TxLoadingOverlay`, and `TxLoadingOverlayInstance`.
+- Coverage: `packages/tuffex/packages/components/src/loading-overlay/__tests__/loading-overlay.test.ts` verifies local and fullscreen branches.
+
+<TuffDocSourceLink />

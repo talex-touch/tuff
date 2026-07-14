@@ -2,6 +2,9 @@
 title: Pagination
 description: Page navigation for long lists
 category: Data
+status: beta
+since: 1.0.0
+tags: [pagination, pages, navigation]
 syncStatus: reviewed
 verified: true
 ---
@@ -39,7 +42,8 @@ code: |
   </template>
 ---
 :::
-## API (Lite)
+## API
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -110,6 +114,15 @@ rows:
 - `showFirstLast` renders first/last page jump buttons, and boundary pages disable first/previous or next/last controls.
 - The active page button exposes `aria-current="page"`; previous/next/first/last controls expose readable `aria-label` values.
 
+## Best Practices
+
+- Prefer `total + pageSize` so the UI can reflect item counts; use `totalPages` only when the backend cannot return totals.
+- Keep `currentPage` one-based. Initialize the model to `1`, not `0`.
+- Reset `currentPage` to `1` when filters or search terms change and the old page may be out of range.
+- Keep pagination adjacent to the list or table it controls.
+- Use the `info` slot for localized range copy such as “Viewing 21–40 of 120 items”.
+
+
 ## Dashboard Data Operations
 
 Place pagination directly below the table and bind it to the same reactive model as filtering and selection; avoid floating pagination away from the list container.
@@ -131,9 +144,10 @@ code: |
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/pagination/src/TxPagination.vue`
+- Source: `packages/tuffex/packages/components/src/pagination/src/TxPagination.vue` confirms total/page-size page calculation, ellipsis window generation, boundary guards, first/last controls, info slot props, `aria-current`, and readable pagination button labels.
+- Type contracts: `packages/tuffex/packages/components/src/pagination/src/types.ts` defines `PaginationProps` and `PaginationEmits`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` covers total-derived pages, ellipsis rendering, active page semantics, blocked out-of-range navigation, first/last controls, boundary disabled states, custom info slot props, and prose-list style isolation.
 - Recommendation: prefer `total + pageSize`; use `totalPages` only when the backend returns a page count without total items.
-- Accessibility: the active page uses `aria-current="page"`; previous, next, first, and last controls include readable `aria-label` values.
 
 ## Source
 <TuffDocSourceLink />

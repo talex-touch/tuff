@@ -215,6 +215,7 @@
   - Capture provider/model/latency/trace/input metadata in the preview footer for both success paths.
   - Capture recoverable failure states for logged-out, provider unavailable, quota exhausted, and model unsupported cases.
   - Capture permission denied and Local/Ollama routing cases; local preferred routing must not reach a disabled Nexus provider.
+  - Capture the current packaged AI Command editor selecting a starter preset, resolving its System Prompt preview, saving the command, opening CoreBox through the native shortcut, verifying the expanded dynamic result and resolved feature icon, and opening the shared packaged widget renderer.
 - Required evidence:
   - [x] CoreBox AI Ask text.chat success preview is visible
   - [x] CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible
@@ -227,6 +228,10 @@
   - [x] Model unsupported failure shows a supported model or capability recovery hint
   - [x] Permission denied failure does not call Intelligence SDK and shows a permission recovery hint
   - [x] Local/Ollama preferred routing does not call disabled Nexus provider and shows routing trace or provider metadata
+  - [x] Current-version packaged AI Command editor saves a canonical registry and exposes the custom command as a CoreBox feature
+  - [x] Starter presets produce editable drafts with a fully resolved System Prompt preview
+  - [x] Runtime-added feature file icons resolve to an owning-plugin asset before CoreBox renders the dynamic result
+  - [x] Saved dynamic AI Commands open the packaged shared renderer in no-history mode
 - Required evidence tags:
   - [x] AI-STABLE-01
     - packaged-ai-ask-text-success-probe.json
@@ -291,9 +296,14 @@
   - raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait.png
   - packaged-ai-ask-copy-failure-probe.json
   - packaged-ai-ask-copy-failure.png
+  - packaged-ai-command-editor-2026-07-13-probe.json
+  - packaged-ai-command-editor-2026-07-13.png
+  - packaged-ai-command-dynamic-feature-2026-07-13.png
+  - packaged-ai-command-dynamic-widget-2026-07-13.png
 - Notes:
   - 2026-06-21 packaged OCR handoff evidence is accepted under `raw/` because it is the latest AI-STABLE-02 capture: the UI shows OCR response, text.chat capability, provider/model/latency/trace metadata, input kind `text, image`, and image-to-text context copy without failure counter-signals.
   - 2026-06-21 copy failure packaged evidence is closed by `packaged-ai-ask-copy-failure-probe.json` and `packaged-ai-ask-copy-failure.png`: the DOM contains `.AiChatbot__copyFailureNotice`, `复制失败：缺少 clipboard.write 权限`, and the permission recovery hint inside the answer preview. Historical raw copy-failure captures remain blocker diagnostics only.
+  - 2026-07-13 `2.4.13-beta.4` unpacked packaged partial capture binds `touch-intelligence@1.2.0` editor ready/create/save state and dynamic CoreBox exact/suffix command results. It also proves missing-registry initialization, sandbox-safe variable byte validation, and prefix-scoped command matching; it does not invoke a provider or close the global 13-surface current-version gate.
 
 ### OmniPanel Writing Tools
 

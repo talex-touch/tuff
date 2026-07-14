@@ -1,6 +1,6 @@
 ---
 title: ProgressBar
-description: Multi-state progress bar with loading feedback
+description: Determinate, indeterminate, segmented, and stateful progress feedback.
 category: Feedback
 status: beta
 since: 1.0.0
@@ -8,16 +8,16 @@ tags: [progress, bar, loading]
 syncStatus: reviewed
 verified: true
 ---
-
 # ProgressBar
 
-> Finer-grained progress feedback with loading / success / error states.  
-> **Status**: Beta
+`TxProgressBar` covers known percentages, unknown-duration loading, success/error completion labels, segmented progress, tooltip labels, and optional motion effects.
 
+Reviewed against `packages/tuffex/packages/components/src/progress-bar/src/types.ts`, `TxProgressBar.vue`, and `progress-bar.test.ts`.
 
 ## Demo
+
 ### Stateful Progress
-Loading, warning, and success in one panel.
+
 :::TuffDemoWrapper{demo="ProgressBarStatefulProgressDemo" code-lang="vue"}
 ---
 code: |
@@ -30,8 +30,27 @@ code: |
 ---
 :::
 
+### Segments
+
+:::TuffDemoWrapper{demo="ProgressBarSegmentsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const segments = [
+    { value: 25, color: 'linear-gradient(90deg, #60a5fa, #34d399)' },
+    { value: 18, color: 'linear-gradient(90deg, #a78bfa, #f472b6)' },
+    { value: 12, color: 'linear-gradient(90deg, #fb7185, #f59e0b)' },
+  ]
+  </script>
+
+  <template>
+    <TxProgressBar :segments="segments" :segments-total="100" height="14px" show-text tooltip tooltip-content="Multi-segment progress" />
+  </template>
+---
+:::
+
 ### Dashboard Operations Progress
-Multiple bars can represent release batches, quality checks, and capacity waterlines.
+
 :::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="Progress bars combine with metric cards and status badges to express dashboard health."}
 ---
 code: |
@@ -44,77 +63,9 @@ code: |
   </template>
 ---
 :::
-## Basic Usage
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxProgressBar :percentage="45" show-text />
-    <TxProgressBar loading />
-  </template>
----
-::
 
-## API (Brief)
-::TuffPropsTable
----
-rows:
-  - name: percentage
-    type: 'number'
-    default: '0'
-    description: 'Progress percentage'
-  - name: loading
-    type: 'boolean'
-    default: 'false'
-    description: 'Indeterminate loading state'
-  - name: status
-    type: "'success' | 'error' | 'warning'"
-    default: '-'
-    description: 'Status tone'
-  - name: message
-    type: 'string'
-    default: '-'
-    description: 'Custom label'
-  - name: showText
-    type: 'boolean'
-    default: 'false'
-    description: 'Show percentage text'
-  - name: maskVariant
-    type: "'solid' | 'dashed' | 'plain'"
-    default: 'solid'
-    description: 'Track style'
-  - name: flowEffect
-    type: "'none' | 'shimmer' | 'wave' | 'particles'"
-    default: 'none'
-    description: 'Flow overlay effect'
-  - name: height
-    type: 'string'
-    default: "'5px'"
-    description: 'Bar height'
-  - name: textPlacement
-    type: "'inside' | 'outside'"
-    default: 'inside'
-    description: 'Text placement'
-  - name: indicatorEffect
-    type: "'none' | 'sparkle'"
-    default: 'none'
-    description: 'Endpoint indicator effect'
-  - name: maskBackground
-    type: "'blur' | 'glass' | 'mask'"
-    default: 'blur'
-    description: 'Track background style'
----
-::
-
-## Review Notes
-
-- Source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`
-- Recommendation: use `percentage` for known page-level progress; use `loading` or `indeterminate` for unknown-duration work instead of faking a percentage.
-- Accessibility: the component renders `role="progressbar"`; `message` is used as both helper label and visible text.
-
-## Composite Patterns
 ### Status Panel
-Progress bars paired with status text.
+
 :::TuffDemoWrapper{demo="ProgressBarStatusPanelDemo" code-lang="vue"}
 ---
 code: |
@@ -124,3 +75,90 @@ code: |
   </template>
 ---
 :::
+
+## Interaction Contract
+
+- The track renders `role="progressbar"` with `aria-valuemin="0"` and `aria-valuemax="100"`.
+- Determinate progress clamps `percentage` to `0..100` and exposes it as `aria-valuenow`.
+- `loading` and `indeterminate` omit `aria-valuenow`; use `message` to describe the work.
+- `error` and `success` boolean props take precedence over `status`.
+- When `success` or `error` has a `message` and `percentage` is `0`, the visual width resolves to `100%` for completion-style labels.
+- `message` wins over `format`, and `format` wins over the default rounded percentage text.
+- Text renders only when `message` is present or `showText=true`; loading/indeterminate states only show text when `message` is present.
+- `segments` ignore non-positive values. The filled width uses `segmentsTotal`; segment widths inside the fill normalize by the sum of positive segment values.
+- `complete` emits once when resolved progress reaches `100`, and can emit again after progress drops below `100` and completes again.
+- `tooltip` or `tooltipContent` wraps the bar in `TxTooltip`; `tooltipProps` are forwarded to that tooltip.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `loading` | `boolean` | `false` | Indeterminate loading mode. |
+| `indeterminate` | `boolean` | `false` | Indeterminate progress mode without implying loading. |
+| `indeterminateVariant` | `'classic' \| 'sweep' \| 'bounce' \| 'elastic' \| 'split'` | `'sweep'` | Animation variant for loading/indeterminate states. |
+| `error` | `boolean` | `false` | Error state. Overrides `status`. |
+| `success` | `boolean` | `false` | Success state. Overrides `status`. |
+| `status` | `'success' \| 'error' \| 'warning' \| ''` | `''` | Visual status tone. |
+| `message` | `string` | `''` | Visible/accessible text label. |
+| `percentage` | `number` | `0` | Determinate progress value before clamping. |
+| `segments` | `ProgressSegment[]` | - | Multi-segment progress data. |
+| `segmentsTotal` | `number` | `100` | Total used to compute filled width when segments are present. |
+| `height` | `string` | `'5px'` | Progress bar height. |
+| `showText` | `boolean` | `false` | Show percentage text for determinate progress. |
+| `textPlacement` | `'inside' \| 'outside'` | `'inside'` | Location for message/percentage text. |
+| `format` | `(percentage: number) => string` | - | Custom percentage formatter. |
+| `flowEffect` | `'none' \| 'shimmer' \| 'wave' \| 'particles'` | `'none'` | Determinate fill overlay effect. |
+| `indicatorEffect` | `'none' \| 'sparkle'` | `'none'` | Endpoint indicator effect when progress is greater than zero. |
+| `hoverEffect` | `'none' \| 'glow'` | `'none'` | Wrapper hover effect. |
+| `color` | `string` | - | Custom fill color. Overrides state color. |
+| `maskVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Track mask style. |
+| `maskBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | Track background effect. |
+| `tooltip` | `boolean` | `false` | Enable tooltip using resolved text. |
+| `tooltipContent` | `string` | - | Tooltip content override. |
+| `tooltipProps` | `Partial<TooltipProps>` | - | Extra props forwarded to `TxTooltip`. |
+
+### ProgressSegment
+
+| Field | Type | Description |
+|------|------|-------------|
+| `value` | `number` | Segment value. Only positive finite values render. |
+| `color` | `string` | Segment fill color. Falls back to progress fill color. |
+| `label` | `string` | Reserved segment label metadata. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `complete` | - | Emitted once per completion cycle when resolved progress reaches `100`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| - | - | `TxProgressBar` does not expose slots. Use `message`, `format`, `tooltipContent`, and `tooltipProps` for labels and tooltip content. |
+
+## Best Practices
+
+- Use `percentage` only for known progress. Use `loading` or `indeterminate` when duration is unknown.
+- Do not fake 100% for success states; pass `success` with a message when the operation is complete.
+- Keep `message` short because it is also used for the progressbar accessible label.
+- Use `segmentsTotal` to keep segmented bars honest when segments represent a partial total.
+- Reserve animated effects for high-value progress moments; excessive shimmer/wave usage makes dashboards noisy.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/progress-bar/src/types.ts`, `TxProgressBar.vue`, and `progress-bar.test.ts`.
+- Existing tests cover determinate clamping, progressbar ARIA state, indeterminate `aria-valuenow` omission, `complete` once-per-cycle emission, and segment normalization by positive segment sum.
+- API note: `segments` use positive values only. The outer fill width is based on `segmentsTotal`, while widths inside the fill normalize by the positive segment sum.
+- Accessibility note: keep `message` short and status-specific because it is used as the accessible progress label.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
+- Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` verifies determinate clamping and ARIA state, indeterminate `aria-valuenow` omission, once-per-cycle `complete` emits, and segment normalization by positive segment sum.
+
+<TuffDocSourceLink />
+

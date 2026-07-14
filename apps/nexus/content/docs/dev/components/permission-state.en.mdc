@@ -1,15 +1,18 @@
 ---
 title: "PermissionState"
-description: "Shortcut empty-state component for missing permission or unauthorized states, based on TxEmptyState with `variant=\"permission\"`."
+description: "Shortcut empty-state component for missing permissions, unauthorized access, and gated workspaces."
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [permission, state, access]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # PermissionState
 
-`TxPermissionState` is a shortcut wrapper around `TxEmptyState` with `variant="permission"` pre-set. Use it when a user lacks permission, authorization, or required access.
+`TxPermissionState` is a thin `TxEmptyState` wrapper with `variant="permission"` fixed. Use it when the current user lacks permission, authorization, workspace membership, or a required entitlement for the requested content.
+
+Reviewed against `packages/tuffex/packages/components/src/permission-state/src/TxPermissionState.vue`, `types.ts`, and `permission-state.test.ts`.
 
 ## Basic Usage
 
@@ -19,19 +22,77 @@ syncStatus: migrated
 code: |
   <template>
     <TxPermissionState
-      description="Request access to continue."
+      surface="card"
+      title="Permission required"
+      description="Your account cannot view this workspace yet. Request access from an admin."
       :primary-action="{ label: 'Request access', type: 'primary' }"
     />
   </template>
 ---
 :::
 
-## API
-
-`TxPermissionState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
-
 ## Interaction Contract
 
-- `TxPermissionState` always forwards `variant="permission"` to `TxEmptyState`.
-- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
-- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
+- Always forwards `variant="permission"` to `TxEmptyState`.
+- Does not rewrite explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
+- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
+- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+
+## API
+
+### Props
+
+`TxPermissionState` accepts every `EmptyStateProps` field except `variant`.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | preset title | Overrides the permission-state title. |
+| `description` | `string` | preset description | Explains the access requirement and next step. |
+| `icon` | `TxIconSource \| string \| null` | preset illustration | Custom icon source/class, or `null` to hide the icon area. |
+| `iconSize` | `number` | size preset | Custom icon size in pixels. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Empty-state layout. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment within the wrapper. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Density and illustration scale. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Adds card containment when needed. |
+| `primaryAction` | `EmptyStateAction` | - | Generated primary action. |
+| `secondaryAction` | `EmptyStateAction` | - | Generated secondary action. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Default generated action size. |
+| `loading` | `boolean` | `false` | Uses spinner when no custom icon is supplied. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `primary` | - | Forwarded from the generated primary action. |
+| `secondary` | - | Forwarded from the generated secondary action. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `icon` | - | Replaces the preset illustration or custom icon. |
+| `title` | - | Replaces resolved title content. |
+| `description` | - | Replaces resolved description content. |
+| `actions` | - | Replaces generated primary/secondary action buttons. |
+
+## Best Practices
+
+- Use it only after the host has already determined access is denied; the component does not perform permission checks.
+- Explain which resource is gated and who can grant access.
+- Prefer a request-access primary action when a workflow exists; otherwise point to workspace switching or documentation.
+- Do not reveal sensitive resource details in the title or description when the user is not authorized.
+
+## Review Notes
+
+- **Wrapper contract:** `TxPermissionState` locks `variant="permission"` and forwards all other empty-state props and slots without performing access checks.
+- **Security note:** The host must decide authorization before rendering this component. Keep copy generic enough to avoid disclosing restricted resource details.
+- **Verified coverage:** `permission-state.test.ts` verifies variant locking, action prop forwarding, slot forwarding, and install registration.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/permission-state/src/TxPermissionState.vue`.
+- Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
+- Types: `packages/tuffex/packages/components/src/permission-state/src/types.ts` exports `PermissionStateProps = Omit<EmptyStateProps, 'variant'>`.
+- Coverage: `packages/tuffex/packages/components/src/permission-state/__tests__/permission-state.test.ts` verifies wrapper forwarding and install behavior.
+
+<TuffDocSourceLink />

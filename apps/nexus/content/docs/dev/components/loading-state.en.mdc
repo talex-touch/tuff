@@ -19,7 +19,7 @@ verified: true
 ---
 code: |
   <template>
-    <TxLoadingState description="Loading official plugins..." />
+    <TxLoadingState title="Loading plugins" description="Syncing official plugins and permissions..." />
   </template>
 ---
 :::
@@ -44,7 +44,40 @@ code: |
 
 ## API
 
-`TxLoadingState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+`TxLoadingState` inherits `TxEmptyState` props, slots, and events except `variant`; the wrapper always supplies `variant="loading"`.
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `title` | `string` | `Loading` | Overrides the preset loading title. |
+| `description` | `string` | `Please wait a moment.` | Overrides the loading supporting text. |
+| `icon` | `TxIconSource \| string \| null` | - | Replaces the loading illustration, or `null` to hide the icon area. |
+| `iconSize` | `number` | - | Sets custom icon/spinner size in pixels. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Controls icon/content direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Aligns icon, copy, and actions. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Adjusts spacing, text scale, and illustration size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Adds bordered containment for panels that need reserved space. |
+| `primaryAction` | `EmptyStateAction` | - | Renders the primary action and emits `primary`. |
+| `secondaryAction` | `EmptyStateAction` | - | Renders the secondary action before the primary action and emits `secondary`. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Default size for generated action buttons. |
+| `loading` | `boolean` | `false` | Shows a spinner when no custom icon slot or icon prop is provided. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `icon` | Replaces the preset loading illustration or spinner. |
+| `title` | Replaces the resolved title content. |
+| `description` | Replaces the resolved description content. |
+| `actions` | Replaces generated primary and secondary action buttons. |
+
+### Events
+
+| Event | Description |
+|------|------|
+| `primary` | Emitted when the generated primary action button is clicked. |
+| `secondary` | Emitted when the generated secondary action button is clicked. |
 
 ## Interaction Contract
 
@@ -52,8 +85,25 @@ code: |
 - The wrapper does not rewrite `title`, `description`, `loading`, or action config; explicit props are forwarded as-is.
 - `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
 
+## Best Practices
+
+- Use `TxLoadingState` for full-panel first loads where the final empty/error/success panel will occupy the same area.
+- Keep copy specific: name the resource being fetched, for example “Loading rules” or “Syncing plugins”.
+- Prefer `surface="card"` when the surrounding layout would otherwise collapse during loading.
+- Pass `loading` only when you want a spinner instead of the preset loading illustration.
+- Use actions sparingly. A cancel or retry action is useful only when the underlying request can actually be interrupted or restarted.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/loading-state/src/TxLoadingState.vue`.
+- Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
+- Types: `packages/tuffex/packages/components/src/loading-state/src/types.ts` exports `LoadingStateProps = Omit<EmptyStateProps, 'variant'>`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/loading-state/__tests__/loading-state.test.ts` verifies loading variant locking, explicit prop/action forwarding, named slots, and install behavior.
+
+<TuffDocSourceLink />
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/loading-state/src/TxLoadingState.vue`
-- Recommendation: use `TxLoadingState` for full-panel first-load states; use `TxSpinner` or `TxProgressBar loading` for inline/local waiting.
-- Accessibility: loading copy should name what is being loaded, for example “Loading rules”, not only “Loading”.
+- **Wrapper contract:** `TxLoadingState` locks `variant="loading"`; pass `loading` only when the base spinner illustration should replace the default loading illustration.
+- **Recommendation:** Use `TxLoadingState` for full-panel first-load states; use `TxSpinner` or `TxProgressBar loading` for inline/local waiting.
+- **Accessibility:** Loading copy should name what is being loaded, for example “Loading rules”, not only “Loading”.

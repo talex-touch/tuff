@@ -192,8 +192,8 @@ function handleTouchEnd() {
         </svg>
       </div>
       <div class="absolute left-0 top-1/3 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(44,96,200,0.28),_transparent_65%)] blur-3xl -translate-x-1/2" />
-      <div class="absolute inset-x-0 top-[-240px] h-[520px] w-[720px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(125,211,252,0.16),_transparent_70%)] blur-3xl mx-auto" />
-      <div class="absolute inset-y-0 right-[-240px] h-[640px] w-[640px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(30,120,110,0.24),_transparent_70%)] blur-3xl" />
+      <div class="absolute inset-x-0 top-[-240px] h-[520px] w-full max-w-[720px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(125,211,252,0.16),_transparent_70%)] blur-3xl mx-auto" />
+      <div class="absolute inset-y-0 right-0 h-[640px] w-[640px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(30,120,110,0.24),_transparent_70%)] blur-3xl sm:right-[-240px]" />
     </template>
 
     <div

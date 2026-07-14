@@ -94,7 +94,7 @@ rows:
 ---
 ::
 
-### Slots
+## Slots
 
 ::TuffPropsTable
 ---
@@ -106,6 +106,10 @@ rows:
 ---
 ::
 
+### Events
+
+`TxDivider` does not emit component events.
+
 ## Interaction Contract
 
 - The root node uses `role="separator"` and sets `aria-orientation` from `direction`.
@@ -114,8 +118,19 @@ rows:
 - Vertical gradient uses vertical fade and works well in toolbars or metadata rows.
 - Prefer `TxDivider` inside Drawer / Card / Form surfaces instead of duplicating border styles.
 
+## Best Practices
+
+- Use horizontal dividers to separate semantic sections, not every row. Dense tables and lists should use row spacing or table borders instead.
+- Keep text labels short and only use them for section transitions; long labels become visual headings and should be rendered as headings instead.
+- Use vertical dividers only in inline metadata or toolbar rows where surrounding text already provides context.
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/divider/src/TxDivider.vue`
-- Export: `packages/tuffex/packages/components/src/divider/index.ts`
-- Component index: `packages/tuffex/packages/components/src/components.ts`
+- Source: `packages/tuffex/packages/components/src/divider/src/TxDivider.vue` confirms `role="separator"`, `aria-orientation`, horizontal-only text slot rendering, dashed styling, and gradient modes.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/divider/__tests__/divider.test.ts` covers horizontal text, vertical text suppression, and gradient class modes.
+- Export: `packages/tuffex/packages/components/src/divider/index.ts` wraps the component with `withInstall` and exports `TxDividerInstance`.
+
+
+## Source
+
+<TuffDocSourceLink />

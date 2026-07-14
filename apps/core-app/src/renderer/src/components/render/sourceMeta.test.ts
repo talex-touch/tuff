@@ -333,4 +333,98 @@ describe('CoreBox source metadata', () => {
     expect(resolveSignalActionHint('opaque failure', 'danger', readable)).toBe('Inspect failure')
     expect(resolveSignalActionHint(undefined, 'warning', readable)).toBe('Review requirement')
   })
+  it.each([
+    {
+      code: 'QUOTA_EXHAUSTED',
+      tone: 'danger',
+      label: 'Failed',
+      reason: 'Quota exceeded',
+      actionHint: 'Check credits or quota before retrying.',
+      reasonKey: 'coreBox.resultSignalReasons.quotaExceeded',
+      actionKey: 'coreBox.resultSignalActions.checkQuota'
+    },
+    {
+      code: 'QUOTA_CHECK_UNAVAILABLE',
+      tone: 'danger',
+      label: 'Failed',
+      reason: 'Quota verification unavailable',
+      actionHint: 'Inspect Intelligence quota storage and configuration, then retry.',
+      reasonKey: 'coreBox.resultSignalReasons.quotaCheckUnavailable',
+      actionKey: 'coreBox.resultSignalActions.inspectQuota'
+    },
+    {
+      code: 'NETWORK_FAILURE',
+      tone: 'danger',
+      label: 'Failed',
+      reason: 'Network request failed',
+      actionHint: 'Check the network or provider endpoint, then retry.',
+      reasonKey: 'coreBox.resultSignalReasons.networkFailure',
+      actionKey: 'coreBox.resultSignalActions.retryNetwork'
+    },
+    {
+      code: 'INVALID_REQUEST',
+      tone: 'danger',
+      label: 'Failed',
+      reason: 'Invalid AI request',
+      actionHint: 'Review the request input and parameters before retrying.',
+      reasonKey: 'coreBox.resultSignalReasons.invalidRequest',
+      actionKey: 'coreBox.resultSignalActions.fixRequest'
+    },
+    {
+      code: 'UNKNOWN',
+      tone: 'danger',
+      label: 'Failed',
+      reason: 'AI request failed',
+      actionHint: 'Inspect the failure detail, then retry.',
+      reasonKey: 'coreBox.resultSignalReasons.unknownFailure',
+      actionKey: 'coreBox.resultSignalActions.inspectFailure'
+    },
+    {
+      code: 'CAPABILITY_UNSUPPORTED',
+      tone: 'warning',
+      label: 'Degraded',
+      reason: 'Capability unsupported',
+      actionHint: 'Switch to a provider or model that supports this capability.',
+      reasonKey: 'coreBox.resultSignalReasons.capabilityUnsupported',
+      actionKey: 'coreBox.resultSignalActions.switchCapability'
+    },
+    {
+      code: 'NEXUS_AUTH_REQUIRED',
+      tone: 'danger',
+      label: 'Failed',
+      reason: 'Sign-in required',
+      actionHint: 'Sign in to Nexus, then run the action again.',
+      reasonKey: 'coreBox.resultSignalReasons.authRequired',
+      actionKey: 'coreBox.resultSignalActions.signIn'
+    }
+  ] as const)(
+    'infers the canonical $code signal with localized recovery guidance',
+    ({ code, tone, label, reason, actionHint, reasonKey, actionKey }) => {
+      const readable = ((key: string, fallback?: string) => {
+        const translations: Record<string, string> = {
+          'coreBox.resultSignals.failed': 'Failed',
+          'coreBox.resultSignals.degraded': 'Degraded',
+          [reasonKey]: reason,
+          [actionKey]: actionHint
+        }
+        return translations[key] ?? fallback ?? key
+      }) as ComposerTranslation
+      const item = baseItem(withMeta({ errorCode: code }))
+
+      expect(resolveResultSignal(item, t)).toEqual({
+        label,
+        tone,
+        reason: code,
+        actionHint: code
+      })
+      expect(resolveResultSignal(item, readable)).toEqual({
+        label,
+        tone,
+        reason,
+        actionHint
+      })
+    }
+  )
+
+
 })

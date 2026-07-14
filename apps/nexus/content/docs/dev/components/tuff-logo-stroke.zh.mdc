@@ -1,44 +1,35 @@
 ---
 title: "TuffLogoStroke Logo 描边"
-description: "基于当前 Tuff Logo SVG 的描边动画组件，支持一次、呼吸与 hover 触发模式。"
+description: "Tuff Logo 的 SVG 描边动画组件，支持 once、breathe、hover 和 loop 模式。"
 category: Basic
-syncStatus: migrated
+tags: [logo, svg, animation]
+syncStatus: reviewed
+verified: true
 ---
 # TuffLogoStroke Logo 描边
 
-基于当前 Tuff Logo SVG 的描边动画组件，支持一次、呼吸与 hover 触发模式。
+`TxTuffLogoStroke` 以动画 SVG 方式渲染当前 Tuff Logo。适合品牌露出、空态点缀和 onboarding 场景，让静态 logo 之外多一层轻量动态反馈。
 
 ## 动画模式
 
-### Modes
-:::TuffDemoWrapper{demo="TuffLogoStrokeModesDemo" code-lang="vue"}
+`once` 在挂载时播放一次描边入场；`breathe` 和 `loop` 会在入场后保持轻微呼吸；`hover` 等用户悬停时才触发动画。
+
+::::TuffDemoWrapper{demo="TuffLogoStrokeModesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center;">
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-        <TxTuffLogoStroke :size="84" mode="once" />
-        <span style="font-size: 12px; opacity: 0.72;">once</span>
-      </div>
-
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-        <TxTuffLogoStroke :size="84" mode="breathe" />
-        <span style="font-size: 12px; opacity: 0.72;">breathe</span>
-      </div>
-
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-        <TxTuffLogoStroke :size="84" mode="hover" />
-        <span style="font-size: 12px; opacity: 0.72;">hover me</span>
-      </div>
-    </div>
+    <TxTuffLogoStroke :size="84" mode="once" />
+    <TxTuffLogoStroke :size="84" mode="breathe" />
+    <TxTuffLogoStroke :size="84" mode="hover" />
   </template>
 ---
-:::
+::::
 
-## 颜色与时长定制
+## 颜色与时长
 
-### Palette
-:::TuffDemoWrapper{demo="TuffLogoStrokePaletteDemo" code-lang="vue"}
+当 Logo 位于特定主题表面时，可以定制描边、核心渐变、外圈光晕和动画时长。
+
+::::TuffDemoWrapper{demo="TuffLogoStrokePaletteDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -54,7 +45,7 @@ code: |
     />
   </template>
 ---
-:::
+::::
 
 ## API
 
@@ -62,18 +53,50 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `size` | `string \| number` | `120` | 图标宽高 |
-| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | 动画模式（`loop` 为 `breathe` 别名） |
-| `durationMs` | `number` | `2200` | 动画时长(ms) |
-| `strokeColor` | `string` | `#4C4CFF` | 外框描边颜色 |
-| `fillStartColor` | `string` | `#199FFE` | 中心图形渐变起始色 |
-| `fillEndColor` | `string` | `#810DC6` | 中心图形渐变结束色 |
-| `outerStartColor` | `string` | `#D73E4D` | 外圈渐变起始色 |
-| `outerEndColor` | `string` | `#7F007F` | 外圈渐变结束色 |
+| `size` | `string \| number` | `120` | SVG 宽高。数字会转换为 px。 |
+| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | 动画触发模式。`loop` 会规范化为 `breathe`。 |
+| `durationMs` | `number` | `2200` | 基础动画时长，单位毫秒。 |
+| `strokeColor` | `string` | `'#4C4CFF'` | 外框描边颜色。 |
+| `fillStartColor` | `string` | `'#199FFE'` | 核心填充渐变起始色。 |
+| `fillEndColor` | `string` | `'#810DC6'` | 核心填充渐变结束色。 |
+| `outerStartColor` | `string` | `'#D73E4D'` | 外圈径向渐变起始色。 |
+| `outerEndColor` | `string` | `'#7F007F'` | 外圈径向渐变结束色。 |
+
+### Slots
+
+无插槽。
+
+### Events
+
+无组件事件。
 
 ## 交互契约
 
-- 组件渲染一个 `role="img"` 的 SVG，默认可访问名称为 `Tuff logo stroke animation`。
-- `size` 为 number 时会同时转换为宽高 px；string 会原样作为宽高。
-- `mode="loop"` 会映射为 `breathe` class；`once`、`breathe`、`hover` 分别输出对应状态 class。
-- 渐变和滤镜 id 使用组件实例级前缀，多个 logo 同屏渲染时不会互相冲突。
+- 组件渲染一个 SVG，带 `role="img"` 和默认可访问名称 `Tuff logo stroke animation`。
+- `mode="loop"` 是 `mode="breathe"` 的别名；两者都会输出 breathe 状态 class。
+- 渐变和滤镜 id 通过 `useId()` 生成组件实例级前缀，同屏多个 Logo 不会发生 SVG id 冲突。
+- `durationMs` 会写入 `--tx-tuff-logo-duration`；breathe 模式会基于该值派生呼吸动画时长。
+- 组件包含 `prefers-reduced-motion: reduce` CSS，减少动态偏好下会停止动画并展示最终描边状态。
+
+## 最佳实践
+
+- 闪屏、加载完成或首屏品牌露出使用 `once`。
+- Logo 靠近交互入口、但不应持续吸引注意力时使用 `hover`。
+- 谨慎使用 `breathe` / `loop`；重复品牌动效容易和主要 UI 反馈抢注意力。
+- 自定义颜色保持贴近当前表面配色。高饱和渐变更适合安静背景。
+- 不要再把 SVG 包进额外动效，除非已经验证组合后的 reduced-motion 表现。
+
+## 审阅说明 / Review Notes
+
+- **动效说明:** `breathe` 与 `loop` 归一化后视觉一致。只有兼容旧调用时使用 `loop`；新增示例优先写 `breathe`，因为它对应真实 class 状态。
+- **SVG 说明:** 渐变和滤镜 id 通过 `useId()` 按实例生成。同屏重复 Logo 不会冲突，但快照测试应断言存在性/唯一性，不要断言具体 id 字符串。
+- **实测覆盖:** `tuff-logo-stroke.test.ts` 覆盖 SVG 可访问语义、数字/字符串尺寸、CSS 时长变量、`loop` 到 `breathe` 映射、调色板透传、实例级 SVG id 与 install 注册。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tuff-logo-stroke/src/TxTuffLogoStroke.vue`。
+- Types: `packages/tuffex/packages/components/src/tuff-logo-stroke/src/types.ts` 导出 `TuffLogoStrokeProps`。
+- Export alias: `packages/tuffex/packages/components/src/tuff-logo-stroke/index.ts` 导出 `TuffLogoStroke`、`TxTuffLogoStroke`、`TuffLogoStrokeProps` 与 `TxTuffLogoStrokeInstance`。
+- Coverage: `packages/tuffex/packages/components/src/tuff-logo-stroke/__tests__/tuff-logo-stroke.test.ts` 覆盖模式、尺寸、调色板 props、SVG id、可访问性与 install 行为。
+
+<TuffDocSourceLink />

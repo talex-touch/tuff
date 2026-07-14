@@ -178,8 +178,27 @@ code: |
 | `update:modelValue` | `(value: number \| string)` | 值变化时触发 |
 | `change` | `(value: number \| string)` | 值变化时触发 |
 
+### 插槽
+
+`TxSegmentedSlider` 不暴露公共插槽。标签来自 `segments[].label`，这样可以保持键盘、指针与垂直布局渲染的确定性。
+
+## 最佳实践
+
+- 使用 3 到 7 个稳定分段；长列表或动态选项应改用 `TxSelect` 或 `TxSearchSelect`。
+- 分段值保持 primitive 且唯一；重复 value 会让选中状态变得不明确。
+- 只有在相邻文案已经清楚解释每个刻度时才关闭标签；否则标签就是用户理解离散选择的地图。
+- 连续值用 `TxSlider`，有序策略状态用 `TxSegmentedSlider`。
+
 ## 审阅说明
 
 - 源码：`packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`。
 - 截图：`.codex-screenshots/nexus-segmented-slider-release-policy-demo-playwright-2026-05-28.png`。
 - 建议：只在选项天然离散且数量稳定时使用；风险档位、套餐档位和质量门禁比连续数值更适合分段滑块。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
+- Types: `packages/tuffex/packages/components/src/segmented-slider/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/segmented-slider/__tests__/segmented-slider.test.ts` 验证横向进度与分段位置、按钮语义、active/completed 状态、垂直渲染、model/change 事件、禁用拦截、隐藏标签，以及 null model 时自动选择第一段。
+
+<TuffDocSourceLink />

@@ -1,17 +1,22 @@
 ---
 title: "EdgeFadeMask"
-description: "Add edge fade with `mask-image` to avoid hard clipping in scroll containers."
+description: "Scroll-container wrapper that applies a leading/trailing CSS mask only when hidden overflow exists."
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [scroll, mask, fade]
+syncStatus: reviewed
+verified: true
 ---
 # EdgeFadeMask
 
-Add edge fade with `mask-image` to avoid hard clipping in scroll containers.
+`TxEdgeFadeMask` wraps scrollable content and adds a CSS `mask-image` fade at the leading and trailing edges only when more content is hidden. Use it to soften scroll containers without adding extra controls or fake shadows.
 
-## Basic Usage (Vertical)
+## Vertical Fade
 
-### Vertical fade
-:::TuffDemoWrapper{demo="EdgeFadeMaskVerticalDemo" code-lang="vue"}
+Keep borders and radius on an outer wrapper; the component owns the internal scroll viewport and mask.
+
+::::TuffDemoWrapper{demo="EdgeFadeMaskVerticalDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -24,12 +29,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::::
 
-## Horizontal Scrolling
+## Horizontal Fade
 
-### Horizontal fade
-:::TuffDemoWrapper{demo="EdgeFadeMaskHorizontalDemo" code-lang="vue"}
+For horizontal mode, give the inner content a width larger than the viewport.
+
+::::TuffDemoWrapper{demo="EdgeFadeMaskHorizontalDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -42,30 +48,57 @@ code: |
     </div>
   </template>
 ---
-:::
+::::
 
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `as` | `string` | `'div'` | Root tag |
-| `axis` | `'vertical' \| 'horizontal'` | `'vertical'` | Fade direction |
-| `size` | `string \| number` | `24` | One-side fade distance |
-| `threshold` | `number` | `1` | Scroll-edge threshold in px |
-| `disabled` | `boolean` | `false` | Disable fade effect |
-| `observeResize` | `boolean` | `true` | Recompute when container size changes |
+|------|------|---------|-------------|
+| `as` | `string` | `'div'` | Root element tag rendered by the outer component. |
+| `axis` | `'vertical' \| 'horizontal'` | `'vertical'` | Scroll and fade direction. |
+| `size` | `string \| number` | `24` | Fade distance on each edge. Numbers are converted to px; strings are used as-is. |
+| `threshold` | `number` | `1` | Pixel threshold used to decide whether the viewport is at a scroll boundary. Negative values are clamped to `0`. |
+| `disabled` | `boolean` | `false` | Disables scroll-state masking. |
+| `observeResize` | `boolean` | `true` | Watches the viewport and first child with `ResizeObserver` when available. |
 
-## Tips
+### Events
 
-- Keep border/radius styles on the wrapper; `TxEdgeFadeMask` handles scroll and mask.
-- For horizontal mode, prefer inner content with `display: flex` and `width: max-content`.
+No events are emitted.
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Scrollable content rendered inside the internal viewport. |
 
 ## Interaction Contract
 
-- `as` controls the root element tag. Default slot content is rendered inside the internal viewport.
-- No `mask-image` is emitted when content is not scrollable, `disabled=true`, or the scroll range is less than or equal to `threshold`.
-- Vertical mode switches top/bottom fades from `scrollTop`; horizontal mode switches left/right fades from `scrollLeft`.
-- Numeric `size` values are converted to px. String `size` values are used as-is in gradient stops.
-- With `observeResize=true`, the component observes the viewport and first child. It disconnects the observer when disabled by prop or unmounted.
+- The root renders the configured `as` tag and one viewport element inside it.
+- Vertical mode sets `overflow-y: auto` and hides horizontal overflow; horizontal mode sets `overflow-x: auto` and hides vertical overflow.
+- No mask is emitted when the component is disabled, content is not scrollable, or scroll range is within `threshold`.
+- Scroll events update leading/trailing fades from `scrollTop` or `scrollLeft`.
+- The generated mask uses `linear-gradient(to bottom, ...)` for vertical mode and `linear-gradient(to right, ...)` for horizontal mode.
+- With `observeResize=true`, the component observes the viewport and first child; it disconnects observers when the prop changes or the component unmounts.
+
+## Best Practices
+
+- Put visual frame styles such as border, radius, and background on the parent wrapper so the mask only affects scroll content.
+- Use `width: max-content` or fixed item widths for horizontal strips; otherwise no hidden overflow exists and no fade appears.
+- Keep `threshold` small. It is for boundary rounding differences, not for hiding large amounts of content.
+- Disable the mask for print/export surfaces where CSS masks may not render consistently.
+- Avoid relying on the fade as the only cue that content continues; pair it with visible scroll position, clipped items, or copy when discovery matters.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/edge-fade-mask/src/TxEdgeFadeMask.vue`, `types.ts`, and `edge-fade-mask.test.ts`.
+- **Verified coverage:** configured root-tag rendering, axis class and slot content, no-mask behavior when content cannot scroll, vertical boundary mask stops, horizontal string fade size, disabled mask removal/restoration, and `ResizeObserver` setup/disconnect behavior.
+- Accessibility note: the component adds only a neutral scroll viewport and CSS mask; keep semantic landmarks/headings in the slotted content and do not use the fade as the only indication that content continues.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/edge-fade-mask/src/TxEdgeFadeMask.vue`.
+- Types: `packages/tuffex/packages/components/src/edge-fade-mask/src/types.ts` exports `EdgeFadeMaskProps` and `EdgeFadeMaskAxis`.
+- Coverage: `packages/tuffex/packages/components/src/edge-fade-mask/__tests__/edge-fade-mask.test.ts` verifies root tag, axis classes, slot rendering, mask-state updates, disabled behavior, string sizes, and resize observer cleanup.
+<TuffDocSourceLink />

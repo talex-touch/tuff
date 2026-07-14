@@ -13,8 +13,7 @@ import type {
   WorkflowTriggerType
 } from '@talex-touch/tuff-intelligence'
 import type { AgentDescriptor } from '@talex-touch/utils'
-import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
-import { useIntelligenceSdk } from '@talex-touch/utils/renderer/hooks/use-intelligence-sdk'
+import { useAgentsSdk, useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import type { Translate } from '~/modules/lang/useI18nText'
 import { useI18nText } from '~/modules/lang/useI18nText'
@@ -951,6 +950,18 @@ export function useWorkflowEditor() {
       config: parseJson(source.config, 'context_config_json')
     }))
 
+    const workflowId = draft.id.trim()
+    const shouldCloneBuiltin = draft.isBuiltin || workflowId.startsWith('builtin.')
+    const shouldRegenerateStepIds = shouldCloneBuiltin || !workflowId
+    const resolvedWorkflowId = shouldRegenerateStepIds ? `workflow_${Date.now()}` : workflowId
+    const sourceStepIds = draft.steps.map((step, index) => step.id.trim() || `step-${index + 1}`)
+    const resolvedStepIds = sourceStepIds.map((stepId, index) =>
+      shouldRegenerateStepIds ? `${resolvedWorkflowId}_step_${index + 1}` : stepId
+    )
+    const stepIdMap = new Map(
+      sourceStepIds.map((stepId, index) => [stepId, resolvedStepIds[index]!] as const)
+    )
+
     const steps: WorkflowDefinitionStep[] = draft.steps.map((step, index) => {
       const stepName = step.name.trim()
       if (!stepName) {
@@ -962,10 +973,17 @@ export function useWorkflowEditor() {
       }
 
       const input = parseJson(step.input, 'input_json', step.uid)
-      const inputSources =
+      const parsedInputSources =
         step.kind === 'model'
           ? parseJsonArray<WorkflowModelInputSource>(step.inputSources, 'input_json', step.uid)
           : undefined
+      const inputSources = parsedInputSources?.map((source) => {
+        if (!shouldRegenerateStepIds || source.type !== 'previousStep' || !source.stepId) {
+          return source
+        }
+        const remappedStepId = stepIdMap.get(source.stepId.trim())
+        return remappedStepId ? { ...source, stepId: remappedStepId } : source
+      })
       const output =
         step.kind === 'model'
           ? (parseJson(step.outputContract, 'input_json', step.uid) as WorkflowModelOutputContract)
@@ -986,7 +1004,7 @@ export function useWorkflowEditor() {
       }
 
       return {
-        id: step.id.trim() || `step-${index + 1}`,
+        id: resolvedStepIds[index],
         name: stepName,
         kind: step.kind,
         description: step.instruction.trim() || undefined,
@@ -1005,18 +1023,15 @@ export function useWorkflowEditor() {
       }
     })
 
-    const workflowId = draft.id.trim()
-    const shouldCloneBuiltin = draft.isBuiltin || workflowId.startsWith('builtin.')
-
     return {
-      id: shouldCloneBuiltin ? `workflow_${Date.now()}` : workflowId || `workflow_${Date.now()}`,
+      id: resolvedWorkflowId,
       name,
       description: draft.description.trim() || undefined,
       version: '1',
       enabled: draft.enabled,
       triggers,
       contextSources,
-      toolSources: draft.toolSources.length > 0 ? draft.toolSources : ['builtin'],
+      toolSources: draft.toolSources.length > 0 ? [...draft.toolSources] : ['builtin'],
       approvalPolicy: {
         requireApprovalAtOrAbove: draft.approvalThreshold,
         autoApproveReadOnly: draft.autoApproveReadOnly

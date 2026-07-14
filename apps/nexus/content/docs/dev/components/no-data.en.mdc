@@ -1,15 +1,18 @@
 ---
 title: "NoData"
-description: "Shortcut empty-state component for empty datasets, based on TxEmptyState with `variant=\"no-data\"`."
+description: "Shortcut empty-state component for empty datasets, tables, charts, and metrics panels."
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [empty, data, table]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # NoData
 
-`TxNoData` is a shortcut wrapper around `TxEmptyState` with `variant="no-data"` pre-set. Use it for empty lists, tables, charts, or other dataset views.
+`TxNoData` is a thin `TxEmptyState` wrapper with `variant="no-data"` fixed. Use it when a list, table, chart, metric panel, or query result has no records to render.
+
+Reviewed against `packages/tuffex/packages/components/src/no-data/src/TxNoData.vue`, `types.ts`, and `no-data.test.ts`.
 
 ## Basic Usage
 
@@ -19,19 +22,88 @@ syncStatus: migrated
 code: |
   <template>
     <TxNoData
-      description="No records yet."
-      :primary-action="{ label: 'Create', type: 'primary' }"
+      surface="card"
+      title="No records yet"
+      description="Create the first record to populate this table."
+      :primary-action="{ label: 'Create record', type: 'primary' }"
     />
   </template>
 ---
 :::
 
-## API
-
-`TxNoData` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
-
 ## Interaction Contract
 
-- `TxNoData` always forwards `variant="no-data"` to `TxEmptyState`.
-- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
-- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
+- Always forwards `variant="no-data"` to `TxEmptyState`.
+- Does not rewrite explicit `title`, `description`, `surface`, `layout`, `align`, `size`, `icon`, or action props.
+- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
+- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+
+## API
+
+### Props
+
+`TxNoData` accepts every `EmptyStateProps` field except `variant`.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | preset title | Overrides the no-data title. |
+| `description` | `string` | preset description | Explains why the dataset is empty or how to populate it. |
+| `icon` | `TxIconSource \| string \| null` | preset illustration | Custom icon source/class, or `null` to hide the icon area. |
+| `iconSize` | `number` | size preset | Custom icon size in pixels. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Empty-state layout. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment within the wrapper. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Density and illustration scale. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Adds card containment when needed. |
+| `primaryAction` | `EmptyStateAction` | - | Generated primary action. |
+| `secondaryAction` | `EmptyStateAction` | - | Generated secondary action. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Default generated action size. |
+| `loading` | `boolean` | `false` | Uses spinner when no custom icon is supplied. |
+
+### EmptyStateAction
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `label` | `string` | required | Button label. |
+| `type` | `TxButtonProps['type']` | - | Button semantic type, for example `primary`. |
+| `variant` | `TxButtonProps['variant']` | - | Button visual variant. |
+| `size` | `TxButtonProps['size']` | `actionSize` | Per-button size override. |
+| `disabled` | `boolean` | `false` | Disables the generated button. |
+| `icon` | `string` | - | Button icon class. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `primary` | - | Forwarded from the generated primary action. |
+| `secondary` | - | Forwarded from the generated secondary action. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `icon` | - | Replaces the preset illustration or custom icon. |
+| `title` | - | Replaces resolved title content. |
+| `description` | - | Replaces resolved description content. |
+| `actions` | - | Replaces generated primary/secondary action buttons. |
+
+## Best Practices
+
+- Use it when a data source is valid and returned zero records; use `TxOfflineState` or `TxPermissionState` for transport and access failures.
+- Keep copy data-specific: “No invoices yet” is more useful than “Nothing here”.
+- Offer a creation or import action only when the current user can actually populate the dataset.
+- Use `surface="card"` inside dashboards and table panels so the empty region occupies the same container as loaded data.
+
+## Review Notes
+
+- **Wrapper contract:** `TxNoData` is a thin `TxEmptyState` wrapper that always supplies `variant="no-data"`; every other `EmptyStateProps` field is forwarded unchanged.
+- **State choice:** Use this only for valid, loaded datasets with zero records. Connectivity, access, loading, and filtered-result states have dedicated wrappers so copy and recovery actions stay precise.
+- **Verified coverage:** `no-data.test.ts` covers forced variant forwarding, explicit props/actions, named slots, and install registration; base rendering and action events are inherited from `TxEmptyState`.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/no-data/src/TxNoData.vue`.
+- Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
+- Types: `packages/tuffex/packages/components/src/no-data/src/types.ts` exports `NoDataProps = Omit<EmptyStateProps, 'variant'>`.
+- Coverage: `packages/tuffex/packages/components/src/no-data/__tests__/no-data.test.ts` verifies variant locking, prop forwarding, slot forwarding, and install behavior.
+
+<TuffDocSourceLink />

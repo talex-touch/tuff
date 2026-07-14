@@ -825,6 +825,14 @@ function buildPomodoroTemplateSummary(diagnostics = {}) {
   }
 }
 
+function resolvePomodoroAdvancedLoopState(diagnostics = {}) {
+  if (diagnostics.pomodoroAdvancedLoopSupported === true)
+    return 'supported'
+  if (diagnostics.pomodoroAdvancedLoopSupported === false)
+    return 'unsupported'
+  return 'unknown-host-capability'
+}
+
 function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) {
   const diagnostics = diagnosticsResponse?.diagnostics
   const entries = Array.isArray(capabilityResponse?.entries) ? capabilityResponse.entries : []
@@ -862,6 +870,11 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
 
   if (diagnostics) {
     const pomodoroTemplate = buildPomodoroTemplateSummary(diagnostics)
+    const pomodoroAdvancedLoopState = resolvePomodoroAdvancedLoopState(diagnostics)
+    const pomodoroCustomTemplateCount = Math.max(
+      0,
+      Math.trunc(Number(diagnostics.pomodoroCustomTemplateCount) || 0),
+    )
     items.push(buildInfoItem({
       featureId,
       id: 'settings-defaults',
@@ -870,6 +883,7 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
         `keepAwake ${formatDurationMs(diagnostics.defaultKeepAwakeDurationMs)}`,
         `timer ${formatDurationMs(diagnostics.defaultTimerDurationMs)}`,
         `pomodoro ${formatDurationMs(diagnostics.defaultPomodoroFocusMs)}/${formatDurationMs(diagnostics.defaultPomodoroBreakMs)}`,
+        `pomodoroLoop ${pomodoroAdvancedLoopState}`,
         `screenClean ${formatDurationMs(diagnostics.defaultScreenCleanDurationMs)}`,
       ].join(' · '),
       meta: {
@@ -881,10 +895,11 @@ function buildSettingsItems(featureId, capabilityResponse, diagnosticsResponse) 
           pomodoroBreakMs: diagnostics.defaultPomodoroBreakMs,
           screenCleanMs: diagnostics.defaultScreenCleanDurationMs,
         },
+        pomodoroAdvancedLoopState,
+        pomodoroCustomTemplateCount,
         ...(pomodoroTemplate
           ? {
               pomodoroTemplates: [pomodoroTemplate],
-              pomodoroAdvancedLoopState: 'pending-host-capability',
             }
           : {}),
       },
@@ -1709,6 +1724,7 @@ module.exports = {
     resolveSafeFlowAction,
     resolveConfirmationFlowAction,
     resolveHighRiskFlowAction,
+    resolvePomodoroAdvancedLoopState,
     resolveMode,
   },
 }

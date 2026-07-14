@@ -1,13 +1,6 @@
-export type IntelligenceErrorCode =
-  | 'NEXUS_AUTH_REQUIRED'
-  | 'PROVIDER_UNAVAILABLE'
-  | 'QUOTA_EXHAUSTED'
-  | 'MODEL_UNSUPPORTED'
-  | 'PERMISSION_DENIED'
-  | 'NETWORK_FAILURE'
-  | 'CAPABILITY_UNSUPPORTED'
-  | 'INVALID_REQUEST'
-  | 'UNKNOWN'
+import type { IntelligenceErrorCode as SharedIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
+
+export type IntelligenceErrorCode = SharedIntelligenceErrorCode
 
 export interface NormalizedIntelligenceError {
   code: IntelligenceErrorCode
@@ -39,6 +32,20 @@ export function normalizeIntelligenceError(
       message,
       reason: 'Nexus provider requires a signed-in account.',
       recovery: 'Sign in to Nexus or switch to another enabled provider.',
+      capabilityId: options.capabilityId
+    }
+  }
+
+  if (
+    explicitCode === 'QUOTA_CHECK_UNAVAILABLE' ||
+    lower.includes('quota_check_unavailable') ||
+    lower.includes('quota verification is unavailable')
+  ) {
+    return {
+      code: 'QUOTA_CHECK_UNAVAILABLE',
+      message,
+      reason: 'Quota verification is unavailable, so the request was blocked.',
+      recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.',
       capabilityId: options.capabilityId
     }
   }

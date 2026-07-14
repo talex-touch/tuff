@@ -14,6 +14,7 @@ import type {
 interface CliOptions extends CoreAppVisibleExperienceGateOptions {
   input?: string
   requireExistingArtifacts?: boolean
+  requireCurrentVersion?: boolean
   requireNonEmptyArtifacts?: boolean
   pretty: boolean
 }
@@ -29,6 +30,7 @@ Options:
   --requireVisualArtifacts    Require screenshot/recording artifacts for visual surfaces.
   --requireCheckedEvidence    Require every required evidence checklist item to be checked.
   --requireEvidenceTags       Require every required evidence tag, such as AI-STABLE ids, to be checked.
+  --requireCurrentVersion     Require manifest baselineVersion to match this CoreApp package.
   --requireExistingArtifacts  Require every referenced artifact path to exist on disk.
   --requireNonEmptyArtifacts  Require referenced artifact paths to be non-empty files.
   --compact                   Print single-line JSON.
@@ -72,6 +74,10 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireEvidenceTags') {
       options.requireEvidenceTags = true
+      continue
+    }
+    if (arg === '--requireCurrentVersion') {
+      options.requireCurrentVersion = true
       continue
     }
     if (arg === '--requireExistingArtifacts') {
@@ -175,12 +181,33 @@ async function validateArtifactFiles(
   return failures
 }
 
+async function validateCurrentVersion(
+  manifest: CoreAppVisibleExperienceManifest,
+  options: CliOptions
+): Promise<string[]> {
+  if (!options.requireCurrentVersion) return []
+
+  const packageJson = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8')
+  ) as { version?: unknown }
+  const currentVersion = typeof packageJson.version === 'string' ? packageJson.version.trim() : ''
+  if (!currentVersion) {
+    return ['Current CoreApp package version is unavailable']
+  }
+  if (manifest.baselineVersion === currentVersion) return []
+
+  return [
+    `Visible experience baseline version mismatch: manifest=${manifest.baselineVersion}, current=${currentVersion}`
+  ]
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2))
   if (!options) return
 
   const manifest = parseManifest(await readInput(options))
   const gate = verifyCoreAppVisibleExperienceManifest(manifest, options)
+  gate.failures.push(...(await validateCurrentVersion(manifest, options)))
   gate.failures.push(...(await validateArtifactFiles(manifest, options)))
   gate.passed = gate.failures.length === 0
 

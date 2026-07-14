@@ -103,15 +103,19 @@ code: |
 
 ## Preset Components
 
-- `TxBlankSlate`: large blank state (default `size="large"`)
-- `TxLoadingState`: loading placeholder (default `variant="loading"`)
-- `TxNoSelection`: no-selection placeholder (default `variant="no-selection"`)
-- `TxNoData`: no-data placeholder (default `variant="no-data"`)
-- `TxSearchEmpty`: empty search state (default `variant="search-empty"`)
-- `TxOfflineState`: offline hint (default `variant="offline"`)
-- `TxPermissionState`: permission denied (default `variant="permission"`)
-- `TxErrorState`: error state (default `variant="error"`), see [ErrorState](./error-state.en.md)
-- `TxGuideState`: guide state (default `variant="guide"`), see [GuideState](./guide-state.en.md)
+All preset components render `TxEmptyState` with a fixed `variant` and forward the same props and slots.
+
+| Component | Forced variant | Notes |
+|------|------|------|
+| `TxBlankSlate` | `blank-slate` | Defaults to `size="large"`, `layout="vertical"`, and `surface="plain"`. |
+| `TxLoadingState` | `loading` | Loading placeholder wrapper. |
+| `TxNoSelection` | `no-selection` | Detail panes before a list item is selected. |
+| `TxNoData` | `no-data` | Empty datasets after a successful load. |
+| `TxSearchEmpty` | `search-empty` | Empty search or filtered results. |
+| `TxOfflineState` | `offline` | Network unavailable state. |
+| `TxPermissionState` | `permission` | Access denied state. |
+| `TxErrorState` | `error` | Error state; see [ErrorState](./error-state.en.md). |
+| `TxGuideState` | `guide` | Guided onboarding state; see [GuideState](./guide-state.en.md). |
 
 ## API
 
@@ -119,19 +123,35 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `variant` | `EmptyStateVariant` | `'empty'` | Selects the preset title, description, and illustration for common states. |
-| `title` | `string` | - | Overrides the preset title. |
-| `description` | `string` | - | Overrides the preset supporting text. |
-| `icon` | `TxIconSource \| string \| null` | - | Replaces the preset illustration with a Tuff icon source, icon class/name, or `null` to hide the icon area. |
-| `iconSize` | `number` | - | Sets the custom icon or spinner size in pixels; presets use the size scale when omitted. |
+| `variant` | `EmptyStateVariant` | `'empty'` | Selects preset title, description, and illustration for common states. |
+| `title` | `string` | - | Overrides the preset title. Pass an empty string to hide generated title text when no `title` slot is present. |
+| `description` | `string` | - | Overrides the preset supporting text. Pass an empty string to hide generated description text when no `description` slot is present. |
+| `icon` | `TxIconSource \| string \| null` | - | Replaces the preset illustration with a Tuff icon source or icon class/name. Pass `null` to hide the icon area. |
+| `iconSize` | `number` | size preset | Sets custom icon or spinner size in pixels; default is `28`, `36`, or `44` for small/medium/large. |
 | `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Controls whether icon and content stack vertically or sit side by side. |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Aligns the icon, copy, and actions within the empty-state panel. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Aligns icon, copy, and actions within the empty-state panel. |
 | `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Adjusts spacing, text scale, and preset illustration size. |
 | `surface` | `'plain' \| 'card'` | `'plain'` | Adds a bordered card surface when the empty state needs visual containment. |
 | `primaryAction` | `EmptyStateAction` | - | Renders the primary action button and emits `primary` when clicked. |
 | `secondaryAction` | `EmptyStateAction` | - | Renders the secondary action button before the primary action and emits `secondary` when clicked. |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | Default button size used by actions that do not set their own size. |
-| `loading` | `boolean` | `false` | Shows a spinner when no custom icon slot or icon prop is provided. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Default button size used by generated actions that do not set their own size. |
+| `loading` | `boolean` | `false` | Shows `TxSpinner` when no `icon` slot and no non-empty `icon` prop are provided. |
+
+### EmptyStateVariant Defaults
+
+| Variant | Default title | Default description | Illustration source |
+|------|------|------|------|
+| `empty` | `Nothing here` | `There is nothing to show yet.` | Built-in SVG illustration. |
+| `blank-slate` | `Start from scratch` | `Create your first item to get started.` | Built-in SVG illustration. |
+| `no-data` | `No data` | `No data available yet.` | Built-in SVG illustration. |
+| `no-selection` | `Nothing selected` | `Select an item to see details.` | Built-in SVG illustration. |
+| `search-empty` | `No results` | `Try a different keyword or filter.` | Built-in SVG illustration. |
+| `loading` | `Loading` | `Please wait a moment.` | Built-in skeleton illustration, or spinner when `loading=true`. |
+| `offline` | `You are offline` | `Check your connection and retry.` | Built-in SVG illustration. |
+| `permission` | `Access denied` | `You do not have permission to view this content.` | Built-in SVG illustration. |
+| `error` | `Something went wrong` | `Please try again later.` | Built-in SVG illustration. |
+| `guide` | `Start here` | `Follow the steps to get started.` | Built-in SVG illustration. |
+| `custom` | empty | empty | None unless `icon` or `icon` slot is provided. |
 
 ### EmptyStateAction
 
@@ -140,28 +160,57 @@ code: |
 | `label` | `string` | - | Button text. |
 | `type` | `TxButtonProps['type']` | - | Button tone shortcut forwarded to `TxButton`. |
 | `variant` | `TxButtonProps['variant']` | - | Explicit `TxButton` visual variant. |
-| `size` | `TxButtonProps['size']` | - | Per-action size override. |
-| `disabled` | `boolean` | `false` | Disables the action button and suppresses its event. |
-| `icon` | `string` | - | Optional icon class rendered inside the action button. |
+| `size` | `TxButtonProps['size']` | - | Per-action size override; falls back to `actionSize`. |
+| `disabled` | `boolean` | `false` | Disables the generated action button; native disabled buttons do not emit the action event. |
+| `icon` | `string` | - | Optional icon class forwarded to `TxButton`. |
 
 ### Slots
 
-| Name | Description |
-|------|------|
-| `icon` | Replaces the preset illustration, spinner, or icon prop. |
-| `title` | Replaces the resolved title content. |
-| `description` | Replaces the resolved description content. |
-| `actions` | Replaces generated primary and secondary action buttons. |
+| Slot | Props | Description |
+|------|------|------|
+| `icon` | - | Replaces preset illustration, spinner, or `icon` prop. |
+| `title` | - | Replaces the resolved title content. |
+| `description` | - | Replaces the resolved description content. |
+| `actions` | - | Replaces generated primary and secondary action buttons. |
 
 ### Events
 
-| Event | Description |
-|------|------|
-| `primary` | Emitted when the generated primary action button is clicked. |
-| `secondary` | Emitted when the generated secondary action button is clicked. |
+| Event | Payload | Description |
+|------|------|------|
+| `primary` | - | Emitted when the generated primary action button is clicked. |
+| `secondary` | - | Emitted when the generated secondary action button is clicked. |
+
+## Interaction Contract
+
+- Preset `variant` values resolve title, description, and illustration before explicit props or slots are applied.
+- Slot content wins over generated content for the same region. An `actions` slot replaces both generated action buttons.
+- `icon=null` hides the entire icon region. `loading=true` shows `TxSpinner` only when there is no icon slot and no non-empty `icon` prop.
+- Generated actions render secondary before primary; disabled generated buttons do not emit their event.
+- `surface="card"` adds visual containment only. It does not change semantics or button behavior.
+- Wrapper components forward props and slots to `TxEmptyState`; they only fix `variant`, except `TxBlankSlate` also supplies large blank-slate defaults.
+
+## Best Practices
+
+- Use the most specific preset before overriding copy: `search-empty` for filters, `no-selection` for split panes, `permission` for access control, and `offline` for network failures.
+- Keep title copy situational and actionable, not generic. Prefer “No automation rules yet” over “Empty”.
+- Render loading, empty, and error states inside the same data container to prevent layout jumps.
+- Use generated `primaryAction` / `secondaryAction` for standard flows; switch to the `actions` slot only when the action layout needs custom composition.
+- Do not show both a custom icon and `loading=true`; a provided icon intentionally suppresses the spinner.
+- Prefer `surface="card"` inside dashboards and panels; keep `plain` for already-contained tables, drawers, and cards.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`
+- Reviewed against `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`, `types.ts`, preset wrapper components, and empty-state tests.
+- **Verified coverage:** variant defaults, layout classes, explicit title/description overrides, slot replacement, generated action events, disabled action suppression, spinner precedence, `icon=null`, and SSR wrapper slot forwarding.
 - Recommendation: use `variant` for data-container states; override `title`, `description`, or `icon` only when business context needs specific copy.
 - Accessibility: titles should explain the current user situation, and action labels should describe the next step. Avoid vague “empty” copy.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
+- Types: `packages/tuffex/packages/components/src/empty-state/src/types.ts`.
+- Preset wrappers: `packages/tuffex/packages/components/src/{blank-slate,loading-state,no-selection,no-data,search-empty,offline-state,permission-state,error-state,guide-state}/src/*.vue`.
+- Coverage: `packages/tuffex/packages/components/src/empty-state/__tests__/empty-state.test.ts` and `empty-state-wrappers.test.ts`.
+
+<TuffDocSourceLink />
+

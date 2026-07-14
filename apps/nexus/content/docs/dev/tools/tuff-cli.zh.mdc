@@ -53,6 +53,16 @@ code: |
 ---
 :::
 
+## 构建输出约定
+
+使用默认 `outDir` 时，builder 管理三类生成产物：
+
+- `dist/out/`：作为打包输入的 Vite 暂存产物；
+- `dist/build/`：可直接安装的未压缩插件运行时；
+- `dist/<name>-<version>.tpex`：用于发布的插件归档。
+
+`outDir` 顶层的 `out`、`build` 和 `*.tpex` 都是保留的生成产物。`tuff builder` 重新暂存时会排除它们，因此重复构建不会把旧归档嵌套进新包，也不会把旧归档写入 `manifest._files`。插件自有资源不得放入这些保留项。
+
 **`tuff dev`**
 
 启动插件开发用的 Vite dev server。

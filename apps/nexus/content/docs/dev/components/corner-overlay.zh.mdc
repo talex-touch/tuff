@@ -1,46 +1,120 @@
 ---
-title: "CornerOverlay 角标容器"
-description: "`TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。"
-category: Basic
-syncStatus: migrated
+title: "CornerOverlay 角标覆盖层"
+description: "用于头像、缩略图和状态标记的角落绝对定位覆盖层。"
+category: Layout
+status: beta
+since: 1.0.0
+tags: [overlay, badge, corner]
+syncStatus: reviewed
+verified: true
 ---
-# CornerOverlay 角标容器
+# CornerOverlay 角标覆盖层
 
-`TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。
+`TxCornerOverlay` 包裹一段行内内容，并在角落渲染可选覆盖层。它适合头像状态点、认证标记、未读角标和缩略图注记。
 
 ## 基础用法
 
-### Basic
-:::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+      <span class="avatar">TD</span>
       <template #overlay>
-        <span style="width:12px;height:12px;border-radius:999px;background:#22c55e;border:2px solid var(--tx-bg-color);" />
-      </template>
-    </TxCornerOverlay>
-
-    <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
-      <template #overlay>
-        <span style="background:var(--tx-bg-color);border-radius:999px;padding:2px;box-shadow:0 1px 6px rgba(0,0,0,.12);">
-          <TxIcon name="i-carbon-checkmark-filled" style="font-size:18px;color:var(--tx-color-primary);" />
-        </span>
+        <span class="status-dot" />
       </template>
     </TxCornerOverlay>
   </template>
 ---
-:::
+::::
+
+## 组合示例
+
+### 可点击覆盖层
+
+覆盖层默认是 `pointer-events: none`。只有覆盖层本身需要接收指针输入时，才设置 `overlayPointerEvents="auto"`。
+
+```vue
+<template>
+  <TxCornerOverlay overlay-pointer-events="auto" :offset-x="-4" :offset-y="-4">
+    <TxAvatar :src="avatarUrl" />
+    <template #overlay>
+      <button type="button" aria-label="打开资料操作">•••</button>
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+### CSS 偏移值
+
+```vue
+<template>
+  <TxCornerOverlay offset-x="calc(100% - 12px)" offset-y="-0.25rem">
+    <span>基础内容</span>
+    <template #overlay>
+      <TxBadge value="New" />
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+字符串偏移值会原样保留。数字偏移值会转换为像素。
+
+## 交互契约
+
+- 根节点渲染为 `position: relative` 的行内块 `span`。
+- 只有存在 `overlay` 插槽时才渲染覆盖层。
+- 覆盖层使用绝对定位，并标记 `aria-hidden="true"`。
+- `placement` 决定写入 top/left、top/right、bottom/left 或 bottom/right 这一组 x/y inset。
+- `offsetX` 控制 `left` 或 `right`；`offsetY` 控制 `top` 或 `bottom`。
+- 数字偏移会转为 px，字符串偏移会原样传入样式。
+- `overlayPointerEvents` 直接映射为覆盖层的 CSS `pointer-events`。
+- 组件本身不添加 click、focus 或键盘行为。
 
 ## API
 
 ### Props
 
-| 属性 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| placement | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `bottom-right` | 角标位置 |
-| offsetX | `string \| number` | `0` | X 偏移 |
-| offsetY | `string \| number` | `0` | Y 偏移 |
-| overlayPointerEvents | `'none' \| 'auto'` | `none` | overlay 的 pointer-events |
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `placement` | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `'bottom-right'` | 覆盖层所在角落。 |
+| `offsetX` | `string \| number` | `0` | 水平偏移；数字会转为 px。 |
+| `offsetY` | `string \| number` | `0` | 垂直偏移；数字会转为 px。 |
+| `overlayPointerEvents` | `'none' \| 'auto'` | `'none'` | 覆盖层的 CSS `pointer-events` 值。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | 无 | 基础行内内容。 |
+| `overlay` | 无 | 角落覆盖层内容。未提供时不会渲染覆盖层节点。 |
+
+### Events
+
+不发出公开事件。
+
+### Exposed Methods
+
+不暴露公开实例方法。
+
+## 最佳实践
+
+- 默认把覆盖层当作装饰内容；由于它是 `aria-hidden`，重要状态还应在附近文本或标签中表达。
+- 需要角标部分超出头像或缩略图时使用负偏移。
+- 只有明确需要交互覆盖层时才设置 `overlayPointerEvents="auto"`，并在插槽内提供语义化控件。
+- 避免放入大块覆盖内容。该组件适合小标记，不适合弹层或菜单。
+- 保持基础内容尺寸稳定；覆盖层绝对定位，不会预留布局空间。
+
+## 审阅说明
+
+- 已人工核对 `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`、`TxCornerOverlay.vue` 与 `corner-overlay.test.ts`。
+- `overlay` 插槽按需渲染且始终 `aria-hidden`；业务关键状态仍需要附近文本或外部有标签控件表达。
+- `overlayPointerEvents="auto"` 只转发 CSS 指针行为；插槽内控件自行负责键盘、焦点和标签语义。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/corner-overlay/src/TxCornerOverlay.vue`。
+- Types: `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/corner-overlay/__tests__/corner-overlay.test.ts` 验证无覆盖层渲染、`aria-hidden` 覆盖层输出、默认位置、位置到 inset 样式映射、字符串偏移和 pointer-events 转发。
+
+<TuffDocSourceLink />

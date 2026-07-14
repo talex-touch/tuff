@@ -54,13 +54,23 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
   let lastSectionHash = ''
   let scrollListener: (() => void) | null = null
   let resizeListener: (() => void) | null = null
+  let wheelListener: (() => void) | null = null
+  let touchStartListener: (() => void) | null = null
   let heroSectionElement: HTMLElement | null = null
   let heroVisibleLast = true
+  let disposed = false
 
   // Snap-after-scroll-idle state
   let snapTimer: ReturnType<typeof setTimeout> | null = null
   let userScrolling = false
   const SNAP_DELAY = 100 // ms after last scroll event to snap
+
+  function cancelSnap() {
+    if (snapTimer) {
+      clearTimeout(snapTimer)
+      snapTimer = null
+    }
+  }
 
   function collectSectionElements() {
     sectionElements = []
@@ -148,7 +158,7 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
   onMounted(async () => {
     await nextTick()
 
-    if (!hasWindow())
+    if (disposed || !hasWindow())
       return
 
     heroSectionElement = document.querySelector<HTMLElement>(heroSelector)
@@ -185,6 +195,9 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
       import('gsap'),
       import('gsap/ScrollToPlugin'),
     ])
+
+    if (disposed)
+      return
 
     if (!smoothScrollPluginsRegistered) {
       gsap.registerPlugin(ScrollToPlugin)
@@ -233,10 +246,10 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
         scrollTo: {
           y: target,
           offsetY: 0,
+          autoKill: false,
         },
         duration,
         ease: 'back.out(1.1)',
-        autoKill: false,
         overwrite: 'auto',
         onComplete: () => {
           const hash = sectionHashes[closestIndex]
@@ -248,13 +261,6 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
       })
     }
 
-    const cancelSnap = () => {
-      if (snapTimer) {
-        clearTimeout(snapTimer)
-        snapTimer = null
-      }
-    }
-
     const scheduleSnap = () => {
       cancelSnap()
       snapTimer = setTimeout(() => {
@@ -264,7 +270,7 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     }
 
     // User-initiated scroll: cancel any active snap animation and reschedule
-    const onUserScroll = () => {
+    wheelListener = () => {
       userScrolling = true
       if (smoothScrollActive) {
         smoothScrollTween?.kill()
@@ -284,8 +290,9 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
       }
     }
 
-    window.addEventListener('wheel', onUserScroll, { passive: true })
-    window.addEventListener('touchstart', onUserScroll, { passive: true })
+    touchStartListener = wheelListener
+    window.addEventListener('wheel', wheelListener, { passive: true })
+    window.addEventListener('touchstart', touchStartListener, { passive: true })
     window.addEventListener('scroll', scrollListener, { passive: true })
 
     resizeListener = () => {
@@ -296,40 +303,34 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     window.addEventListener('resize', resizeListener)
 
     refreshCurrentSectionIndex()
-
-    // Store references for cleanup
-    const _wheelHandler = onUserScroll
-    const _touchHandler = onUserScroll
-
-    onBeforeUnmount(() => {
-      window.removeEventListener('wheel', _wheelHandler)
-      window.removeEventListener('touchstart', _touchHandler)
-      if (scrollListener)
-        window.removeEventListener('scroll', scrollListener)
-      if (resizeListener)
-        window.removeEventListener('resize', resizeListener)
-
-      scrollListener = null
-      resizeListener = null
-      sectionElements = []
-      currentSectionIndex = -1
-      heroSectionElement = null
-      heroVisibleLast = true
-
-      cancelSnap()
-
-      smoothScrollTween?.kill()
-      smoothScrollTween = null
-      smoothScrollActive = false
-    })
   })
 
-  // Fallback cleanup for non-smooth-scroll mode
   onBeforeUnmount(() => {
+    disposed = true
+    if (wheelListener)
+      window.removeEventListener('wheel', wheelListener)
+    if (touchStartListener)
+      window.removeEventListener('touchstart', touchStartListener)
     if (scrollListener)
       window.removeEventListener('scroll', scrollListener)
     if (resizeListener)
       window.removeEventListener('resize', resizeListener)
+
+    wheelListener = null
+    touchStartListener = null
+    scrollListener = null
+    resizeListener = null
+    sectionElements = []
+    sectionHashes = []
+    currentSectionIndex = -1
+    heroSectionElement = null
+    heroVisibleLast = true
+
+    cancelSnap()
+
+    smoothScrollTween?.kill()
+    smoothScrollTween = null
+    smoothScrollActive = false
   })
 
   return {

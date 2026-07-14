@@ -1,7 +1,7 @@
 ---
 title: Tuffex Components
 description: Component documentation hub for Tuffex
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -311,6 +311,7 @@ code: |
 ## Design Patterns
 
 - [Foundations](./foundations.en.md)
+- [BaseSurface](./base-surface.en.md)
 - [GlassSurface](./glass-surface.en.md)
 - [GradientBorder](./gradient-border.en.md)
 - [OutlineBorder](./outline-border.en.md)
@@ -331,6 +332,7 @@ code: |
 
 - [Agents](./agents.en.md)
 - [Chat](./chat.en.md)
+- [AI Elements](./ai-elements.en.md)
 - [ChatComposer](./chat-composer.en.md)
 - [MarkdownView](./markdown-view.en.md)
 - [ImageGallery](./image-gallery.en.md)
@@ -354,13 +356,23 @@ code: |
 - [Tag](./tag.en.md)
 - [Divider](./divider.en.md)
 - [StatCard](./stat-card.en.md)
+- [IconButton](./icon-button.en.md)
+- [CopyButton](./copy-button.en.md)
+- [Kbd](./kbd.en.md)
+- [OS Icon](./os-icon.en.md)
+- [Badge](./badge.en.md)
 
 ## Forms & Input
 
 - [Input](./input.en.md)
 - [CodeEditor](./code-editor.en.md)
+- [Textarea](./textarea.en.md)
+- [NumberInput](./number-input.en.md)
+- [FlatInput](./flat-input.en.md)
 - [Select](./select.en.md)
+- [MarkdownEditor](./markdown-editor.en.md)
 - [FlatRadio](./flat-radio.en.md)
+- [FlatSelect](./flat-select.en.md)
 - [SearchInput](./search-input.en.md)
 - [SearchSelect](./search-select.en.md)
 - [Checkbox](./checkbox.en.md)
@@ -379,8 +391,10 @@ code: |
 ## Feedback & States
 
 - [Dialog](./dialog.en.md)
+- [Alert](./alert.en.md)
 - [Drawer](./drawer.en.md)
 - [FlipOverlay](./flip-overlay.en.md)
+- [Modal](./modal.en.md)
 - [Toast](./toast.en.md)
 - [Tooltip](./tooltip.en.md)
 - [Popover](./popover.en.md)
@@ -396,6 +410,7 @@ code: |
 - [PermissionState](./permission-state.en.md)
 - [SearchEmpty](./search-empty.en.md)
 - [Skeleton](./skeleton.en.md)
+- [Collapse](./collapse.en.md)
 - [LayoutSkeleton](./layout-skeleton.en.md)
 - [NoData](./no-data.en.md)
 - [NoSelection](./no-selection.en.md)
@@ -404,6 +419,7 @@ code: |
 ## Layout & Navigation
 
 - [Grid](./grid.en.md)
+- [CardItem](./card-item.en.md)
 - [GridLayout](./grid-layout.en.md)
 - [Flex](./flex.en.md)
 - [Stack](./stack.en.md)
@@ -414,6 +430,7 @@ code: |
 - [NavBar](./nav-bar.en.md)
 - [TabBar](./tab-bar.en.md)
 - [Tabs](./tabs.en.md)
+- [Breadcrumb](./breadcrumb.en.md)
 - [DropdownMenu](./dropdown-menu.en.md)
 - [CommandPalette](./command-palette.en.md)
 - [ContextMenu](./context-menu.en.md)
@@ -427,6 +444,7 @@ code: |
 - [SortableList](./sortable-list.en.md)
 - [VirtualList](./virtual-list.en.md)
 - [Steps](./steps.en.md)
+- [Rating](./rating.en.md)
 - [Timeline](./timeline.en.md)
 - [Transfer](./transfer.en.md)
 
@@ -437,3 +455,11 @@ code: |
 - [TypingIndicator](./typing-indicator.en.md)
 - [MarkdownView](./markdown-view.en.md)
 - [ImageGallery](./image-gallery.en.md)
+
+## Review Notes
+
+- Hub scope: this page is a component documentation index and composed-demo guide; per-component API / props / best-practice details live in the linked component pages.
+- Source registry: `packages/tuffex/packages/components/src/components.ts` defines the exported component slug set used by docs coverage.
+- Demo registry: `apps/nexus/app/components/content/demo-registry.ts` maps each `TuffDemoWrapper` demo on this page to a standalone Vue demo file.
+- **Verified coverage:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies exported components have English and Chinese docs, localized hubs link documented components, and all demo references resolve to registered Vue files.
+

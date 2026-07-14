@@ -1,21 +1,22 @@
 ---
 title: Modal
-description: Lightweight modal dialog
+description: Lightweight Teleport-backed dialog for short blocking tasks, with focus restore, Escape/backdrop dismissal, and header/footer slots.
 category: Feedback
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [modal, dialog, overlay]
+syncStatus: reviewed
+verified: true
 ---
-
 # Modal
 
-Centered modal for short tasks or confirmations.
+`TxModal` renders a centered dialog in `body` through `Teleport`. Use it for short confirmations, compact forms, or decisions that must temporarily block the page behind it. `TModal` is a lightweight compatibility wrapper around the same implementation.
 
 ## Basic Usage
 
-### Modal Dialog
+Open the dialog from a button, keep the body concise, and close it by updating the bound model.
 
-Trigger a lightweight modal.
-
-::TuffDemoWrapper{demo="ModalBasicDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="ModalBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -25,77 +26,72 @@ code: |
   </script>
 
   <template>
-    <TxButton variant="primary" @click="open = true">Open Modal</TxButton>
-    <TxModal v-model="open" title="Quick Action">
-      <p>Give the user a short task or decision.</p>
+    <TxButton variant="primary" @click="open = true">
+      Open Modal
+    </TxButton>
+
+    <TxModal v-model="open" title="Confirm sync settings" width="min(92vw, 520px)">
+      <p>Use a modal for short confirmations or compact forms.</p>
       <template #footer>
         <TxButton variant="ghost" @click="open = false">Cancel</TxButton>
-        <TxButton variant="primary" @click="open = false">Confirm</TxButton>
+        <TxButton variant="primary" @click="open = false">Confirm sync</TxButton>
       </template>
     </TxModal>
   </template>
 ---
-::
+::::
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: boolean
-    default: 'false'
-    description: Visible state
-  - name: title
-    type: string
-    default: "''"
-    description: Modal title
-  - name: width
-    type: string
-    default: "'480px'"
-    description: Content width
----
-:::
+## API
 
-## Events
-::TuffPropsTable
----
-rows:
-  - name: update:modelValue
-    type: '(value: boolean) => void'
-    default: '-'
-    description: Visible state update
-  - name: close
-    type: '() => void'
-    default: '-'
-    description: Triggered by backdrop, Escape, or close button dismissal
----
-::
+### Props
 
-## Slots
-::TuffPropsTable
----
-rows:
-  - name: default
-    type: '-'
-    default: '-'
-    description: Main content
-  - name: header
-    type: '-'
-    default: '-'
-    description: Custom header, replacing title rendering
-  - name: footer
-    type: '-'
-    default: '-'
-    description: Footer actions
----
-::
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | required | Controls whether the dialog is visible. Used by `v-model`. |
+| `title` | `string` | `''` | Default header title. When present, the generated heading is linked with `aria-labelledby`. |
+| `width` | `string` | `'480px'` | Inline width applied to the content panel. Prefer responsive values such as `min(92vw, 520px)`. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `(value: boolean)` | Emitted when the component requests visibility changes. |
+| `close` | `()` | Emitted after backdrop click, Escape, or close-button dismissal. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Main dialog body. |
+| `header` | - | Replaces the generated title area while keeping the built-in close button. |
+| `footer` | - | Footer action row. Hidden when omitted. |
 
 ## Interaction Contract
 
-- The modal overlay exposes `role="dialog"` and `aria-modal="true"`; when `title` is provided, an instance-scoped `aria-labelledby` links to the title.
-- Opening focuses the overlay root; hiding or unmounting restores the previously focused element.
-- Backdrop click, Escape, and close button dismissal emit `update:modelValue(false)` and `close`.
-- `TModal` is the lightweight current entry backed by `TxModal`; when no `header/footer` slot is provided it does not override title or footer behavior.
+- The overlay is mounted under `body`, receives a fresh z-index from the shared z-index manager on open, and is removed with `v-if` when closed.
+- The overlay exposes `role="dialog"`, `aria-modal="true"`, and `tabindex="-1"`.
+- With the default header and non-empty `title`, the dialog links `aria-labelledby` to the generated heading.
+- Opening focuses the overlay root. Closing or unmounting restores the element focused before opening.
+- Backdrop click, Escape, and the close button all emit `update:modelValue(false)` followed by `close`.
+- `TModal` forwards props, attrs, `update:modelValue`, `close`, and `default/header/footer` slots to `TxModal`.
+
+## Best Practices
+
+- Keep modal work narrow: confirmation, one-step input, or a short decision. Use a drawer/page when content needs navigation, filtering, or long forms.
+- Prefer the default `title` header for accessible labeling. If you replace `header`, keep the title visible and avoid passing a stale `title` that no longer matches the custom header markup.
+- Put destructive or final actions in the `footer`; keep secondary actions visually quieter than the primary action.
+- Use responsive `width` values for docs and app surfaces because the content panel also has internal padding.
+- Do not store long-running async state only inside modal content. If closing cancels work, model that cancellation in the parent.
+
+## Review Notes
+
+- **Accessibility note:** `aria-labelledby` is generated only from the default `title` heading. If you provide a custom `header`, keep `title` empty unless that slot also renders an element with the generated id; otherwise the dialog can point at a missing label.
+- **Verified coverage:** `modal.test.ts` checks dialog semantics, title linkage, inline width, body/footer slots, focus restore on close/unmount, backdrop/Escape/close-button dismissal, custom header without title linkage, and `TModal` title forwarding.
 
 ## Source
+
+- Component sources: `packages/tuffex/packages/components/src/modal/src/TxModal.vue` and `TModal.vue`.
+- Export alias: `packages/tuffex/packages/components/src/modal/index.ts` exports installable `TxModal` and `TModal`; default export is `TxModal`.
+- Coverage: `packages/tuffex/packages/components/src/modal/__tests__/modal.test.ts` verifies dialog semantics, focus behavior, dismissal events, slots, and wrapper forwarding.
+
 <TuffDocSourceLink />

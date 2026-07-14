@@ -1,3 +1,4 @@
+import type { IntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import type { DocAnalyticsResponse } from '~/types/docs-engagement'
 
 export interface AnalyticsData {
@@ -172,9 +173,11 @@ export interface IntelligenceAnalyticsData {
   }
   statusDistribution: Record<string, number>
   toolFailureDistribution: Array<{ toolId: string, count: number }>
+  errorCodeDistribution: Array<{ code: IntelligenceErrorCode, count: number }>
   recentRuns: Array<{
     sessionId: string
     status: string
+    errorCode?: IntelligenceErrorCode
     providerName: string | null
     model: string
     fallbackCount: number

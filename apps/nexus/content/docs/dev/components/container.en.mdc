@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [container, layout, grid]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Container
 
@@ -281,9 +282,9 @@ code: |
 ---
 :::
 
-## API Reference
+## API
 
-### Container Props
+### Props
 
 | Prop | Type | Default | Description |
 |------|------|--------|------|
@@ -314,6 +315,26 @@ code: |
 | lg | `number` | - | Span used from 1024px to 1279px. |
 | xl | `number` | - | Span used at 1280px and above. |
 
+### Slots
+
+| Component | Slot | Props | Description |
+|-----------|------|------|------|
+| `TxContainer` | `default` | - | Page or panel content constrained by the container. |
+| `TxRow` | `default` | - | `TxCol` children or other flex items. |
+| `TxCol` | `default` | - | Column content. |
+
+### Events
+
+`TxContainer`, `TxRow`, and `TxCol` do not emit events.
+
+
+## Interaction Contract
+
+- `TxContainer` always renders a block-level wrapper with `width: 100%`; `fluid` removes the max-width cap.
+- `padding` presets map to 12 / 16 / 24 px and numeric padding is clamped at zero.
+- `margin="auto"` centers the container; string or numeric margins are applied horizontally as `0 <value>`.
+- `TxRow` computes one gutter per active breakpoint and exposes it as `--tx-row-gutter`; columns split that gutter into left/right padding.
+- `TxCol` clamps `span` and `offset` to the 0–24 grid, falling back to `span` when a breakpoint-specific prop is not provided.
 ## Responsive Breakpoints
 
 TouchX UI uses the following breakpoints:
@@ -355,13 +376,11 @@ code: |
 
 ## Best Practices
 
-### Usage Tips
-
-1. **Responsive first**: prefer the responsive grid system
-2. **Semantic layout**: use semantic HTML tags
-3. **Consistent spacing**: keep spacing rules consistent
-4. **Performance**: avoid excessive container nesting
-
+- Prefer one `TxContainer` per page section. Repeated nested containers make width and padding hard to reason about.
+- Use responsive `xs` / `sm` / `md` / `lg` / `xl` spans for layout changes instead of hiding duplicate markup per breakpoint.
+- Keep `gutter` values aligned with the page spacing scale; avoid mixing large gutters with tiny column padding inside the same row.
+- Use semantic elements inside the layout primitives (`main`, `aside`, `nav`, `section`) because the primitives render neutral `div` wrappers.
+- Set `wrap=false` only for horizontally scrolling or fixed-width toolbars; normal content grids should wrap.
 ### Common Layout Patterns
 
 :::TuffCodeBlock{lang="vue"}
@@ -394,3 +413,16 @@ code: |
 :::
 
 TouchX UI containers provide flexible layouts to quickly build responsive page structures.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/container/src/TxContainer.vue`, `TxRow.vue`, `TxCol.vue`, and `container.test.ts`.
+- Existing tests cover container CSS variables, padding clamp, fluid/responsive classes, custom margin, row gutter/alignment/justification/wrap styles, responsive gutter selection, and column span/offset/responsive styles.
+- Accessibility note: all three primitives render neutral `div` elements; add semantic landmarks and headings in the slotted content instead of expecting the layout primitive to supply document structure.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/container/src/TxContainer.vue`, `TxRow.vue`, and `TxCol.vue`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/container/__tests__/container.test.ts` verifies spacing variables, clamping, responsive classes, row flex styles, responsive gutter, and column sizing.
+<TuffDocSourceLink />

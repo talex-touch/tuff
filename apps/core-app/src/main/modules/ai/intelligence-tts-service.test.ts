@@ -83,4 +83,31 @@ describe('intelligenceTtsService', () => {
     expect(second.audio).toBe(first.audio)
     expect(second.traceId).toBe(first.traceId)
   })
+
+  it('isolates equivalent speech cache entries by caller', async () => {
+    invokeMock
+      .mockResolvedValueOnce(createTtsResult({ provider: 'provider-a', traceId: 'trace-a' }))
+      .mockResolvedValueOnce(createTtsResult({ provider: 'provider-b', traceId: 'trace-b' }))
+
+    const callerA = await intelligenceTtsService.speak({
+      text: 'Caller-isolated speech',
+      language: 'en',
+      metadata: { caller: 'plugin.caller-a' }
+    })
+    const callerB = await intelligenceTtsService.speak({
+      text: ' Caller-isolated speech ',
+      language: 'en',
+      metadata: { caller: 'plugin.caller-b' }
+    })
+    const callerBRepeat = await intelligenceTtsService.speak({
+      text: 'Caller-isolated speech',
+      language: 'en',
+      metadata: { caller: 'plugin.caller-b' }
+    })
+
+    expect(invokeMock).toHaveBeenCalledTimes(2)
+    expect(callerA).toMatchObject({ provider: 'provider-a', traceId: 'trace-a', cacheHit: false })
+    expect(callerB).toMatchObject({ provider: 'provider-b', traceId: 'trace-b', cacheHit: false })
+    expect(callerBRepeat).toMatchObject({ provider: 'provider-b', traceId: 'trace-b', cacheHit: true })
+  })
 })

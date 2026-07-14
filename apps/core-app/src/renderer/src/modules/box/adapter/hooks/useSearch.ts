@@ -542,17 +542,8 @@ export function useSearch(
     return (
       activations?.some((activation) => {
         if (activation.id !== 'plugin-features') return false
-        const feature = (
-          activation.meta as
-            | {
-                feature?: {
-                  meta?: { interaction?: { type?: string; sendMode?: boolean } }
-                  interaction?: { type?: string; sendMode?: boolean }
-                }
-              }
-            | undefined
-        )?.feature
-        const interaction = feature?.meta?.interaction || feature?.interaction
+        const feature = getActivationSubmitFeature(activation)
+        const interaction = getPluginFeatureInteraction(feature)
         if (!interaction) return false
         if (interaction.sendMode === false) return false
         return interaction.sendMode === true || interaction.type === 'widget'

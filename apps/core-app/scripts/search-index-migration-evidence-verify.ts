@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { isSearchIndexDatabaseIdentity } from './search-index-evidence-source'
 
 export const SEARCH_INDEX_MIGRATION_EVIDENCE_VERIFICATION_SCHEMA =
   'search-index-migration-evidence-verification/v1'
@@ -17,6 +18,7 @@ export interface SearchIndexMigrationEvidenceRequirements {
   requireFtsSimulation?: boolean
   requireScanProgressSimulation?: boolean
   requireScanProgressPlan?: boolean
+  requireDatabaseEvidenceCorrelation?: boolean
   requireNaturalSettingsEvidence?: boolean
   requireSettingsVisibleArtifacts?: boolean
 }
@@ -109,6 +111,8 @@ Options:
   --requireFtsSimulation           Require FTS copy simulation source snapshot unchanged.
   --requireScanProgressSimulation  Require scan_progress copy simulation source snapshot unchanged.
   --requireScanProgressPlan        Require read-only scan_progress migration plan evidence.
+  --requireDatabaseEvidenceCorrelation
+                                  Require DB evidence artifacts to share one dbIdentity.
   --requireNaturalSettingsEvidence Require attach-only/read-only natural Settings verification.
   --requireSettingsVisibleArtifacts
                                   Require attach-only Settings/source detail screenshot artifacts.
@@ -128,6 +132,7 @@ function defaultRequirements(): Required<SearchIndexMigrationEvidenceRequirement
     requireFtsSimulation: false,
     requireScanProgressSimulation: false,
     requireScanProgressPlan: false,
+    requireDatabaseEvidenceCorrelation: false,
     requireNaturalSettingsEvidence: false,
     requireSettingsVisibleArtifacts: false
   }
@@ -148,6 +153,8 @@ function normalizeRequirements(
     requireScanProgressSimulation:
       input.requireScanProgressSimulation ?? defaults.requireScanProgressSimulation,
     requireScanProgressPlan: input.requireScanProgressPlan ?? defaults.requireScanProgressPlan,
+    requireDatabaseEvidenceCorrelation:
+      input.requireDatabaseEvidenceCorrelation ?? defaults.requireDatabaseEvidenceCorrelation,
     requireNaturalSettingsEvidence:
       input.requireNaturalSettingsEvidence ?? defaults.requireNaturalSettingsEvidence,
     requireSettingsVisibleArtifacts:
@@ -204,6 +211,7 @@ function parseArgs(argv: string[]): CliOptions | null {
         requireFtsSimulation: true,
         requireScanProgressSimulation: true,
         requireScanProgressPlan: true,
+        requireDatabaseEvidenceCorrelation: true,
         requireNaturalSettingsEvidence: true,
         requireSettingsVisibleArtifacts: true
       })
@@ -231,6 +239,10 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireScanProgressPlan') {
       options.requireScanProgressPlan = true
+      continue
+    }
+    if (arg === '--requireDatabaseEvidenceCorrelation') {
+      options.requireDatabaseEvidenceCorrelation = true
       continue
     }
     if (arg === '--requireNaturalSettingsEvidence') {
@@ -560,6 +572,37 @@ function verifyScanProgressPlan(artifact: unknown, requireRealProfileEvidence: b
   return failures
 }
 
+function verifyDatabaseEvidenceCorrelation(inputs: SearchIndexMigrationEvidenceInputs): string[] {
+  const identities = [
+    ['preflight', readString(inputs.preflight, ['evidenceSource', 'dbIdentity'])],
+    ['fts-simulation', readString(inputs.ftsSimulation, ['evidenceSource', 'dbIdentity'])],
+    [
+      'scan-progress-simulation',
+      readString(inputs.scanProgressSimulation, ['evidenceSource', 'dbIdentity'])
+    ],
+    ['scan-progress-plan', readString(inputs.scanProgressPlan, ['evidenceSource', 'dbIdentity'])]
+  ] as const
+  const invalid = identities
+    .filter(([, identity]) => !isSearchIndexDatabaseIdentity(identity))
+    .map(([id]) => id)
+  const failures: string[] = []
+
+  if (invalid.length > 0) {
+    failures.push(
+      `Database evidence correlation requires valid evidenceSource.dbIdentity for: ${invalid.join(', ')}`
+    )
+  }
+
+  const validIdentities = identities
+    .map(([, identity]) => identity)
+    .filter(isSearchIndexDatabaseIdentity)
+  if (new Set(validIdentities).size > 1) {
+    failures.push('Database evidence artifacts must share the same evidenceSource.dbIdentity')
+  }
+
+  return failures
+}
+
 function verifySettingsVerification(artifact: unknown): string[] {
   const failures: string[] = []
   const requiredAuditFields = readStringArray(artifact, ['options', 'requiredAuditFields']) ?? []
@@ -761,6 +804,27 @@ export function verifySearchIndexMigrationEvidence(
       }
     ),
     createCheck(
+      'database-evidence-correlation',
+      requirements.requireDatabaseEvidenceCorrelation ? inputs : undefined,
+      requirements.requireDatabaseEvidenceCorrelation,
+      () => verifyDatabaseEvidenceCorrelation(inputs),
+      {
+        preflightDbIdentity: readString(inputs.preflight, ['evidenceSource', 'dbIdentity']),
+        ftsSimulationDbIdentity: readString(inputs.ftsSimulation, [
+          'evidenceSource',
+          'dbIdentity'
+        ]),
+        scanProgressSimulationDbIdentity: readString(inputs.scanProgressSimulation, [
+          'evidenceSource',
+          'dbIdentity'
+        ]),
+        scanProgressPlanDbIdentity: readString(inputs.scanProgressPlan, [
+          'evidenceSource',
+          'dbIdentity'
+        ])
+      }
+    ),
+    createCheck(
       'settings-natural-recent-task',
       inputs.settingsVerification,
       requirements.requireNaturalSettingsEvidence,
@@ -830,6 +894,7 @@ export function verifySearchIndexMigrationEvidence(
             'Collect real-profile FTS copy simulation with --evidenceScope real-profile --requireRealProfileEvidence.',
             'Collect real-profile scan_progress copy simulation with --evidenceScope real-profile --requireRealProfileEvidence.',
             'Collect real-profile scan_progress plan with --evidenceScope real-profile --requireRealProfileEvidence.',
+            'Collect preflight, FTS simulation, scan_progress simulation, and scan_progress plan from the same source DB so evidenceSource.dbIdentity matches.',
             'Collect source-scoped post-migration preflight before closing scan_progress migration.',
             'Collect attach-only natural Settings recent task verification plus Settings/source detail screenshots before closing durable job history.'
           ]

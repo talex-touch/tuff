@@ -18,7 +18,7 @@ const router = useRouter()
 const capabilityKeys = ['notion', 'figma', 'github', 'vscode', 'calendar', 'spotify'] as const
 const capabilityIcons = {
   notion: 'i-carbon-logo-notion',
-  figma: 'i-carbon-logo-figma',
+  figma: 'i-ri-figma-fill',
   github: 'i-carbon-logo-github',
   vscode: 'i-carbon-logo-vscode',
   calendar: 'i-carbon-calendar',

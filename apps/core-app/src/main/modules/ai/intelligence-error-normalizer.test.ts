@@ -59,6 +59,22 @@ describe('intelligence error normalization', () => {
     })
   })
 
+  it('preserves stable failure semantics for explicit quota-check unavailability', () => {
+    expect(
+      normalizeIntelligenceError(
+        Object.assign(new Error('quota storage read failed'), {
+          code: 'QUOTA_CHECK_UNAVAILABLE'
+        }),
+        { capabilityId: 'text.chat' }
+      )
+    ).toMatchObject({
+      code: 'QUOTA_CHECK_UNAVAILABLE',
+      reason: 'Quota verification is unavailable, so the request was blocked.',
+      recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.',
+      capabilityId: 'text.chat'
+    })
+  })
+
   it('wraps errors with a stable prefix for safe API transport', () => {
     const error = toNormalizedIntelligenceError(new Error('model does not support images'), {
       capabilityId: 'vision.ocr'

@@ -72,7 +72,7 @@ function handleHostAction(payload: { actionId: string; payload?: Record<string, 
       <BoxItem :item="item" :active="active" :render="render" :quick-key="quickKey" />
     </template>
     <template v-else-if="render?.mode === 'custom' && customRendererId">
-      <div class="CoreBoxRender-Custom" :class="{ active }">
+      <div class="CoreBoxRender-Custom" :class="{ active }" @click.stop>
         <WidgetFrame
           :renderer-id="customRendererId!"
           :item="item"

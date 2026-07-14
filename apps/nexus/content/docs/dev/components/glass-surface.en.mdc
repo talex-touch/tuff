@@ -2,7 +2,7 @@
 title: "GlassSurface"
 description: "Refractive glass container with SVG displacement, backdrop-filter, and solid fallback rendering paths."
 category: Layout
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # GlassSurface
@@ -454,6 +454,16 @@ rows:
 ---
 ::
 
+### Events
+
+`TxGlassSurface` does not emit custom events. Put interactive controls inside the default slot and handle their native events there.
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Panel content rendered above the generated SVG filter layer and centered by `.tx-glass-surface__content`. |
+
 ## Fallback degradation
 
 `TxGlassSurface` selects the rendering path in this order:
@@ -463,3 +473,27 @@ rows:
 3. **solid translucent path**: when `backdrop-filter` is also unavailable, it falls back to a translucent background plus border. Real blur and refraction are disabled, but width, height, radius, and baseline readability are preserved.
 
 Safari and Firefox currently skip the SVG filter refraction path and enter the latter fallback paths first.
+
+## Best Practices
+
+- Use this component only when the surrounding artwork benefits from visible refraction. For regular cards, prefer `TxBaseSurface` or `TxCard` so the UI keeps predictable contrast.
+- Keep `width`, `height`, and `borderRadius` explicit when the glass layer sits above scrollable or image-heavy content; the displacement map is regenerated from the measured container bounds.
+- Tune `blur`, `backgroundOpacity`, and `saturation` against the actual background. Heavy blur on low-contrast content can make text behind the panel unreadable.
+- Treat `distortionScale` and RGB offsets as art-direction controls. Large negative values or wide channel offsets should be reserved for hero / preview surfaces, not dense forms.
+- Account for the fallback paths in Safari, Firefox, SSR, tests, and other environments without `CSS.supports`; those paths preserve layout and readability but remove RGB refraction.
+- Keep important controls inside the default slot; the generated SVG is decorative, non-interactive, and sits behind `.tx-glass-surface__content`.
+
+## Review Notes
+
+- **Rendering contract:** numeric `width` / `height` become px strings, string dimensions pass through, and measured bounds feed the generated displacement map.
+- **Fallback contract:** SVG displacement is the high-fidelity path; unsupported browsers fall back to native `backdrop-filter`, then to a solid translucent surface that preserves layout and readability but drops RGB refraction.
+- **Interaction contract:** the generated SVG/filter layers are decorative. Interactive controls belong in the default slot above `.tx-glass-surface__content`.
+- **Verified coverage:** `glass-surface.test.ts` covers dimension normalization, slot rendering, solid fallback styling, and RGB displacement channel forwarding.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/glass-surface/src/TxGlassSurface.vue`.
+- Types: `packages/tuffex/packages/components/src/glass-surface/index.ts` exports `GlassSurfaceProps` and `TxGlassSurfaceInstance`.
+- Coverage: `packages/tuffex/packages/components/src/glass-surface/__tests__/glass-surface.test.ts` verifies numeric dimension normalization, slot rendering, solid fallback styling, and SVG displacement channel forwarding.
+
+<TuffDocSourceLink />

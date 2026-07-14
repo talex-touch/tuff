@@ -1,24 +1,26 @@
 ---
 title: "TabBar"
-description: "Bottom tab navigation with icons, badges, and safe-area support."
+description: "Bottom tab navigation with icons, badges, fixed positioning, and safe-area support."
 category: Layout
-syncStatus: migrated
+tags: [navigation, tabs, mobile]
+syncStatus: reviewed
+verified: true
 ---
 # TabBar
 
-`TxTabBar` renders app-style bottom navigation. It manages a `v-model` value, exposes tab semantics for each item, supports badges, and can reserve the device safe-area inset when it is fixed to the viewport bottom.
+`TxTabBar` renders app-style bottom navigation from an `items` array. It owns no router integration; callers bind `v-model`, react to `change`, and decide whether the selected value drives routing, filtering, or local view state.
 
 ## Basic Usage
 
-### TabBar
-:::TuffDemoWrapper{demo="TabBarTabBarDemo" code-lang="vue"}
+Disable `fixed` when the tab bar is rendered inside a preview frame, modal, or custom shell instead of the viewport.
+
+::::TuffDemoWrapper{demo="TabBarTabBarDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
   const value = ref('home')
-
   const items = [
     { value: 'home', label: 'Home', iconClass: 'i-carbon-home' },
     { value: 'search', label: 'Search', iconClass: 'i-carbon-search', badge: 3 },
@@ -27,43 +29,72 @@ code: |
   </script>
 
   <template>
-    <div style="width: 360px; height: 220px; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden; position: relative;">
-      <div style="padding: 16px; color: var(--tx-text-color-secondary);">
-        Active: {{ value }}
-      </div>
-
-      <TxTabBar v-model="value" :items="items" />
-    </div>
+    <TxTabBar v-model="value" :items="items" :fixed="false" />
   </template>
 ---
-:::
+::::
 
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
+|------|------|---------|-------------|
 | `modelValue` | `string \| number` | `''` | Active tab value used by `v-model`. |
 | `items` | `TabBarItem[]` | `[]` | Tabs rendered from left to right. |
-| `fixed` | `boolean` | `true` | Fixes the bar to the bottom of the viewport. Disable it when the bar lives inside a framed preview or custom layout. |
-| `safeAreaBottom` | `boolean` | `true` | Adds an `env(safe-area-inset-bottom)` spacer below the tab row. |
+| `fixed` | `boolean` | `true` | Fixes the bar to the viewport bottom with `position: fixed`. |
+| `safeAreaBottom` | `boolean` | `true` | Renders an `env(safe-area-inset-bottom)` spacer below the tab row. |
 | `disabled` | `boolean` | `false` | Disables all tab buttons and suppresses value updates. |
 | `zIndex` | `number` | `2000` | CSS z-index written to `--tx-tab-bar-z-index`. |
 
 ### TabBarItem
 
 | Field | Type | Description |
-|------|------|------|
+|------|------|-------------|
 | `value` | `string \| number` | Value emitted when the tab is selected. |
 | `label` | `string` | Visible tab label. |
 | `iconClass` | `string` | Optional icon class rendered above the label. |
-| `badge` | `string \| number` | Optional badge displayed on the icon area. Empty values are hidden. |
+| `badge` | `string \| number` | Optional badge shown on the icon area. `null`, `undefined`, and empty string are hidden. |
 | `disabled` | `boolean` | Disables only this tab item. |
+
+### Slots
+
+No slots. Render tabs through `items`.
 
 ### Events
 
-| Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(value)` | Emitted with the picked item value. |
-| `change` | `(value)` | Mirrors the picked value for change listeners. |
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `TabBarValue` | Emitted with the picked item value. |
+| `change` | `TabBarValue` | Emitted with the same value after a non-disabled item is picked. |
+
+## Interaction Contract
+
+- The root is a `nav` with `role="tablist"`; each item is a `button` with `role="tab"` and `aria-selected` derived from `modelValue`.
+- Selecting a disabled item, or selecting any item while `disabled=true`, emits nothing.
+- Selecting the already-active item still emits `update:modelValue` and `change`; debounce duplicate handling in the caller if needed.
+- `safeAreaBottom` only controls the spacer node. It can be used with both fixed and non-fixed layouts.
+- `zIndex` is written as a CSS custom property so app shells can override stacking without deep selectors.
+
+## Best Practices
+
+- Keep item count small enough for thumb navigation, usually three to five primary destinations.
+- Use stable primitive `value` fields that map cleanly to routes or view keys.
+- Set `fixed=false` in embedded previews, drawers, and custom app shells to avoid pinning the bar to the real viewport.
+- Keep `badge` short. Use numbers or compact status text; long copy will crowd the icon area.
+- Do not nest interactive controls inside labels. `TxTabBar` already renders each item as a button.
+
+## Review Notes
+
+- **Model contract:** `TxTabBar` emits `update:modelValue` and `change` only when an enabled item is picked while the bar itself is enabled. Disabled items render native disabled buttons.
+- **Layout note:** `fixed=true` pins the bar to the viewport and `safeAreaBottom=true` adds an `env(safe-area-inset-bottom)` spacer. Turn both off inside previews, modals, and embedded shells.
+- **Verified coverage:** `tab-bar.test.ts` covers tablist semantics, selected item state, icons, badges, z-index CSS variable, fixed/safe-area toggles, enabled emissions, and disabled bar/item blocking.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue`.
+- Types: `packages/tuffex/packages/components/src/tab-bar/src/types.ts` exports `TabBarItem`, `TabBarProps`, `TabBarEmits`, and `TabBarValue`.
+- Export entry: `packages/tuffex/packages/components/src/tab-bar/index.ts` exports `TabBar`, `TxTabBar`, props/emits/item types, and `TxTabBarInstance`.
+- Coverage: `packages/tuffex/packages/components/src/tab-bar/__tests__/tab-bar.test.ts` verifies rendering semantics, badges/icons, layout toggles, emissions, and disabled behavior.
+
+<TuffDocSourceLink />

@@ -1,8 +1,10 @@
 ---
 title: "Transition"
-description: "Preset transition wrapper for content switches, list motion, and smooth size changes."
+description: "Preset transition wrapper for keyed content switches, list motion, and smooth size changes."
 category: Layout
-syncStatus: migrated
+tags: [transition, motion, list, auto-size]
+syncStatus: reviewed
+verified: true
 ---
 # Transition
 
@@ -177,20 +179,74 @@ code: |
 ### TxTransition Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Selects the transition name. `smooth-size` uses `TxTransitionSmoothSize` when `group=false`. |
-| `group` | `boolean` | `false` | Uses Vue `TransitionGroup` for keyed lists. |
+|------|------|---------|-------------|
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Selects the transition class name. `smooth-size` delegates to `TxTransitionSmoothSize` only when `group=false`. |
+| `group` | `boolean` | `false` | Uses Vue `TransitionGroup` for keyed lists. Prefer `fade`, `slide-fade`, or `rebound` in list mode. |
 | `tag` | `string` | `'div'` | Root tag forwarded to `TransitionGroup` when `group=true`. |
 | `appear` | `boolean` | `true` | Enables enter motion on initial render. |
 | `mode` | `'in-out' \| 'out-in'` | `'out-in'` | Vue `Transition` mode for single-child transitions; ignored by `TransitionGroup`. |
 | `duration` | `number` | `180` | Motion duration in milliseconds, written to `--tx-transition-duration`. |
 | `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | CSS timing function written to `--tx-transition-easing`. |
 
+### TxTransitionSmoothSize Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `appear` | `boolean` | `true` | Enables enter motion on initial render. |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | Vue `Transition` mode for the keyed child inside `TxAutoSizer`. |
+| `duration` | `number` | `220` | Shared duration for the size measurement transition and inner motion. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Shared easing for size and content motion. |
+| `width` | `boolean` | `false` | Animates width changes through `TxAutoSizer`. |
+| `height` | `boolean` | `true` | Animates height changes through `TxAutoSizer`. |
+| `motion` | `'fade' \| 'slide-fade' \| 'rebound'` | `'fade'` | Inner content motion while the wrapper animates size. |
+
 ### Semantic Components
 
-- `TxTransitionFade`
-- `TxTransitionSlideFade`
-- `TxTransitionRebound`
-- `TxTransitionSmoothSize`
+| Component | Preset |
+|-----------|--------|
+| `TxTransitionFade` | `fade` |
+| `TxTransitionSlideFade` | `slide-fade` |
+| `TxTransitionRebound` | `rebound` |
+| `TxTransitionSmoothSize` | size-aware wrapper with configurable inner `motion` |
 
-These components are presets of `TxTransition` for more semantic usage.
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | No component-specific emits. Non-smooth `TxTransition` forwards Vue transition listener attributes to the underlying `Transition` / `TransitionGroup`; smooth-size mode forwards attrs to `TxAutoSizer`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Single keyed child for `Transition`, or keyed children when `group=true`. |
+
+## Interaction Contract
+
+- `class` and `style` are merged onto the outer `.tx-transition` wrapper; other attrs are forwarded to `Transition` / `TransitionGroup` in non-smooth mode.
+- `smooth-size` is a single-child mode. It wraps the child with `TxAutoSizer`, defaults to height animation, and keeps overflow hidden during measurement.
+- `group=true` switches to `TransitionGroup`; `mode` no longer applies and each rendered item must have a stable key.
+- Presets share the `--tx-transition-duration` and `--tx-transition-easing` CSS variables, except rebound enter easing uses its spring curve intentionally.
+
+## Best Practices
+
+- Use `mode="out-in"` for keyed panel switches so leaving content finishes before the new panel enters.
+- Use `smooth-size` when content height changes; use normal `fade` / `slide-fade` / `rebound` for lists and repeated rows.
+- Keep list keys stable business ids. `Date.now()` is fine for docs demos, but production reorderable lists should use persisted ids.
+- Keep durations short for repeated UI motion; reserve rebound for small affordances where overshoot is intentional.
+
+## Review Notes
+
+- **Attribute note:** `class` and `style` land on the `.tx-transition` wrapper; non-style attrs are forwarded to Vue `Transition` / `TransitionGroup`, so they are not visible on the wrapper in tests.
+- **Smooth-size note:** `preset="smooth-size"` delegates to `TxTransitionSmoothSize` only when `group=false`. In grouped lists, it still renders a transition name and should be avoided because the size-aware wrapper is single-child oriented.
+- **Verified coverage:** `transition.test.ts` checks preset-to-name mapping, timing CSS variables, group tags, smooth-size delegation, `TxAutoSizer` sizing prop forwarding, semantic wrapper presets, forwarded attrs, and slot rendering.
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/transition/src/TxTransition.vue`, `TxTransitionSmoothSize.vue`, `TxTransitionFade.vue`, `TxTransitionSlideFade.vue`, and `TxTransitionRebound.vue`.
+- Types: `packages/tuffex/packages/components/src/transition/src/types.ts` exports `TransitionPreset`, `TxTransitionProps`, and `TxTransitionSmoothSizeProps`.
+- Export alias: `packages/tuffex/packages/components/src/transition/index.ts` exports installable transition aliases, raw `Tx*` components, prop types, and instance types.
+- Coverage: `packages/tuffex/packages/components/src/transition/__tests__/transition.test.ts` verifies preset mapping, smooth-size behavior, semantic components, attrs, styles, and slots.
+
+<TuffDocSourceLink />
+

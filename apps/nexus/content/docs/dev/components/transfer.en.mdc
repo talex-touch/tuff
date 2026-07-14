@@ -80,7 +80,9 @@ code: |
 ---
 :::
 
-## API (Lite)
+## API
+
+### Props
 
 ::TuffPropsTable
 ---
@@ -131,12 +133,27 @@ rows:
 | `update:modelValue` | `Array<string \| number>` | Selected keys update |
 | `change` | `Array<string \| number>` | Selected keys changed |
 
+## Slots
+
+`TxTransfer` does not expose custom slots. Render labels through `data[].label`, localize panel headings through `titles`, and localize empty/filter/action copy through props.
+
+## Best Practices
+
+- Keep `modelValue` controlled by the host and store only item keys, not full item objects.
+- Keep every `data[].key` unique and stable across filtering; duplicate keys make source/target membership ambiguous.
+- Use `targetOrder="original"` when the target list should mirror source data order, and `targetOrder="push"` when selection order is part of the workflow.
+- Keep disabled rows in `data` instead of filtering them out, so users can distinguish unavailable resources from missing resources.
+- Provide explicit `addAriaLabel` and `removeAriaLabel` whenever the action buttons are icon-only.
+- Use `filterable` only for medium or large lists; short permission lists are faster to scan without two filter inputs.
+
 ## Source
 
 <TuffDocSourceLink label="View source" />
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue`.
+- Source: `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue` confirms source/target derivation, filter matching, disabled item checks, `targetOrder`, and icon-only action labels.
+- Type contracts: `packages/tuffex/packages/components/src/transfer/src/types.ts` exports `TransferItem`, `TransferProps`, and `TransferEmits`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` covers checked item movement, custom empty text, and accessible action labels.
 - Screenshot: `.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`.
-- Recommendation: keep `modelValue` controlled by the host; show disabled items in place instead of filtering them out so users can distinguish unavailable resources from missing resources.
+

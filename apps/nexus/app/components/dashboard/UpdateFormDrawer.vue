@@ -314,7 +314,7 @@ async function submit() {
           {{ t('dashboard.sections.updates.closeButton') }}
         </TxButton>
         <TxButton :disabled="saving" @click="submit">
-          <span v-if="saving" class="i-carbon-circle-dash mr-1 animate-spin" />
+          <span v-if="saving" class="i-ri-loader-4-line mr-1 animate-spin" />
           {{ mode === 'create' ? t('dashboard.sections.updates.createSubmit') : t('dashboard.sections.updates.updateSubmit') }}
         </TxButton>
       </div>

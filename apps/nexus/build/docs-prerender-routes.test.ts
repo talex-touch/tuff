@@ -89,6 +89,10 @@ describe('docs prerender routes', () => {
     expect(routes).toEqual(expect.arrayContaining([
       ...publicPrerenderRoutes,
       ...docsApiPrerenderRoutes,
+      '/api/docs/search/en',
+      '/api/docs/search/zh',
+      '/api/docs/navigation/en/components',
+      '/api/docs/sidebar-components/en',
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
     ]))

@@ -179,8 +179,28 @@ code: |
 |------|-------------|
 | default | Custom content (overrides label) |
 
+## Best Practices
+
+- Use `TxFlatSelect` for short, stable option sets where the selected value should stay visually anchored during expansion.
+- Keep item labels concise. The trigger and items both use single-line truncation, so long labels should move to `TxSelect` or a custom popover.
+- Prefer three to six options. Use `TxSelect` when the list needs search, remote data, grouping, virtualization, or rich option metadata.
+- Keep `value` stable and unique per item. The parent registry matches by `value`; duplicate values make selection labels and keyboard navigation ambiguous.
+- Do not mount interactive controls inside `TxFlatSelectItem`; the item itself is a button with `role="option"`.
+- Preserve disabled item props instead of filtering them out when options are unavailable. Keyboard navigation intentionally skips disabled items.
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`.
+- Reviewed against `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`, `TxFlatSelectItem.vue`, `types.ts`, and `flat-select.test.ts`.
+- **Verified coverage:** placeholder display, selected-label synchronization, enabled item selection, group/item disabled blocking, ArrowUp/ArrowDown navigation over disabled items, and combobox/listbox ARIA state.
 - Screenshot: `.codex-screenshots/nexus-flat-select-release-policy-demo-playwright-2026-05-28.png`.
 - Recommendation: use `TxFlatSelect` for three to six simple options; prefer `TxSelect` when search, remote data, or rich option rendering is required.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`.
+- Item source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelectItem.vue`.
+- Types: `packages/tuffex/packages/components/src/flat-select/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/flat-select/__tests__/flat-select.test.ts`.
+
+<TuffDocSourceLink />
+

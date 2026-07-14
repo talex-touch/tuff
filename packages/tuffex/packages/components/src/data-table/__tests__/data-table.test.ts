@@ -20,37 +20,44 @@ describe('txDataTable', () => {
 
     const headers = wrapper.findAll('thead th')
     expect(headers.length).toBe(2)
+    expect(headers[0].find('button').exists()).toBe(false)
+    expect(headers[1].find('.tx-data-table__sort-button').element.tagName).toBe('BUTTON')
     expect(wrapper.text()).toContain('Alice')
     expect(wrapper.text()).toContain('Bob')
   })
 
-  it('sorts rows on header click', async () => {
+  it('sorts rows on header button click', async () => {
     const wrapper = mount(TxDataTable, {
       props: { columns, data },
     })
 
-    const header = wrapper.findAll('thead th')[1]
-    await header.trigger('click')
+    const sortButton = wrapper.findAll('thead th')[1].find('.tx-data-table__sort-button')
+    await sortButton.trigger('click')
 
     const rows = wrapper.findAll('tbody tr')
     const firstRowText = rows[0].findAll('td')[0].text()
     expect(firstRowText).toBe('Bob')
   })
 
-  it('exposes sortable headers to keyboard users', async () => {
+  it('exposes sortable headers through a native button', async () => {
     const wrapper = mount(TxDataTable, {
       props: { columns, data },
     })
 
     const header = wrapper.findAll('thead th')[1]
-    expect(header.attributes('tabindex')).toBe('0')
-    expect(header.attributes('aria-sort')).toBe('none')
+    const sortButton = header.find('.tx-data-table__sort-button')
 
-    await header.trigger('keydown', { key: 'Enter' })
+    expect(header.attributes('tabindex')).toBeUndefined()
+    expect(header.attributes('aria-sort')).toBe('none')
+    expect(sortButton.element.tagName).toBe('BUTTON')
+    expect(sortButton.attributes('type')).toBe('button')
+    expect(sortButton.attributes('tabindex')).toBeUndefined()
+
+    await sortButton.trigger('click')
     expect(header.attributes('aria-sort')).toBe('ascending')
     expect(wrapper.findAll('tbody tr')[0].findAll('td')[0].text()).toBe('Bob')
 
-    await header.trigger('keydown', { key: ' ' })
+    await sortButton.trigger('click')
     expect(header.attributes('aria-sort')).toBe('descending')
     expect(wrapper.findAll('tbody tr')[0].findAll('td')[0].text()).toBe('Alice')
   })
@@ -71,6 +78,45 @@ describe('txDataTable', () => {
 
     const emitted = wrapper.emitted('update:selectedKeys')
     expect(emitted?.[0][0]).toEqual([1])
+  })
+
+  it('keeps read-only rows out of the keyboard tab sequence', async () => {
+    const wrapper = mount(TxDataTable, {
+      props: { columns, data },
+    })
+    const row = wrapper.find('tbody .tx-data-table__row')
+
+    expect(row.attributes('tabindex')).toBeUndefined()
+    expect(row.classes()).not.toContain('is-interactive')
+
+    await row.trigger('keydown', { key: 'Enter' })
+    await row.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('rowClick')).toBeUndefined()
+  })
+
+  it('activates opted-in interactive rows with Enter and Space only from the row itself', async () => {
+    const wrapper = mount(TxDataTable, {
+      props: {
+        columns: [{ key: 'name', title: 'Name' }],
+        data,
+        interactiveRows: true,
+      },
+      slots: {
+        'cell-name': '<button class="inner-action">Open</button>',
+      },
+    })
+    const row = wrapper.find('tbody .tx-data-table__row')
+
+    expect(row.attributes('tabindex')).toBe('0')
+    expect(row.classes()).toContain('is-interactive')
+
+    await row.trigger('keydown', { key: 'Enter' })
+    await row.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('rowClick')).toHaveLength(2)
+    expect(wrapper.emitted('rowClick')?.[0]?.[0]).toEqual({ row: data[0], index: 0 })
+
+    await wrapper.find('.inner-action').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('rowClick')).toHaveLength(2)
   })
 
   it('applies layout, nowrap, auto width, and fixed column styles', () => {

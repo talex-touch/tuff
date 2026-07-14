@@ -34,7 +34,7 @@ const featureCards = computed(() => [
   {
     title: t("landing.os.aiOverview.cards.workflow.title"),
     copy: t("landing.os.aiOverview.cards.workflow.copy"),
-    icon: "i-carbon-tool-kit",
+    icon: "i-carbon-tools",
     scenario: "workflow" as const,
   },
 ]);

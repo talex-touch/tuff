@@ -25,7 +25,9 @@ function signal(): AbortSignal {
 }
 
 function decodeSvgDataUrl(value: string): string {
-  return decodeURIComponent(value.replace("data:image/svg+xml;charset=utf-8,", ""));
+  return decodeURIComponent(
+    value.replace("data:image/svg+xml;charset=utf-8,", ""),
+  );
 }
 
 describe("PreviewSDK", () => {
@@ -89,6 +91,18 @@ describe("PreviewSDK", () => {
 
     expect(result?.abilityId).toBe("preview.unit");
     expect(result?.payload.primaryValue).toBe("1");
+  });
+
+  it("forwards requested locale to unit preview labels", async () => {
+    const sdk = createPreviewSdk({ abilities: [new UnitConversionAbility()] });
+
+    const result = await sdk.resolve({
+      query: { text: "1 km to m", inputs: [] },
+      signal: signal(),
+      locale: "en-US",
+    });
+
+    expect(result?.payload.primaryLabel).toBe("kilometer → meter");
   });
 
   it("resolves advanced expression, constants and time abilities inside PreviewSDK", async () => {
@@ -213,8 +227,7 @@ describe("PreviewSDK", () => {
     });
     const jwt = await sdk.resolve({
       query: {
-        text:
-          "jwt decode eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJib3NzIiwiaWF0IjoxNzEwMDAwMDAwfQ.signature",
+        text: "jwt decode eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJib3NzIiwiaWF0IjoxNzEwMDAwMDAwfQ.signature",
         inputs: [],
       },
       signal: signal(),
@@ -228,7 +241,10 @@ describe("PreviewSDK", () => {
       signal: signal(),
     });
     const markdownToCsv = await sdk.resolve({
-      query: { text: "markdown to csv | name | role |\n| --- | --- |\n| Boss | Developer |", inputs: [] },
+      query: {
+        text: "markdown to csv | name | role |\n| --- | --- |\n| Boss | Developer |",
+        inputs: [],
+      },
       signal: signal(),
     });
     const snakeCase = await sdk.resolve({
@@ -244,7 +260,9 @@ describe("PreviewSDK", () => {
     expect(formattedJson?.payload.primaryValue).toBe('{\n  "ok": true\n}');
     expect(encodedUrl?.payload.primaryValue).toBe("hello%20world");
     expect(timestamp?.payload.secondaryValue).toBe("2024-03-09T16:00:00.000Z");
-    expect(timezone?.payload.primaryValue).toBe("2024-03-10 00:00:00 UTC+08:00");
+    expect(timezone?.payload.primaryValue).toBe(
+      "2024-03-10 00:00:00 UTC+08:00",
+    );
     expect(timezone?.payload.meta?.quickOps).toEqual(
       expect.objectContaining({
         operation: "date-convert",
@@ -270,7 +288,9 @@ describe("PreviewSDK", () => {
         inputSource: "query",
       }),
     );
-    expect(qrCode?.payload.primaryValue).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+    expect(qrCode?.payload.primaryValue).toMatch(
+      /^data:image\/svg\+xml;charset=utf-8,/,
+    );
     expect(qrCode?.payload.secondaryValue).toBe("v2-L");
     const qrSvg = decodeSvgDataUrl(qrCode?.payload.primaryValue ?? "");
     expect(qrSvg).toContain('viewBox="0 0 33 33"');
@@ -291,10 +311,13 @@ describe("PreviewSDK", () => {
         dataUrl: qrCode?.payload.primaryValue,
       }),
     );
-    expect(qrCode?.payload.sections?.[0]?.rows.find((row) => row.label === "SVG")?.value).toContain(
-      "<svg",
+    expect(
+      qrCode?.payload.sections?.[0]?.rows.find((row) => row.label === "SVG")
+        ?.value,
+    ).toContain("<svg");
+    expect(jwt?.payload.primaryValue).toBe(
+      '{\n  "sub": "boss",\n  "iat": 1710000000\n}',
     );
-    expect(jwt?.payload.primaryValue).toBe('{\n  "sub": "boss",\n  "iat": 1710000000\n}');
     expect(jwt?.payload.sections?.[0]?.rows[0]?.value).toBe(
       '{\n  "alg": "HS256",\n  "typ": "JWT"\n}',
     );
@@ -326,7 +349,9 @@ describe("PreviewSDK", () => {
         inputSource: "query",
       }),
     );
-    expect(markdownToCsv?.payload.primaryValue).toBe("name,role\nBoss,Developer");
+    expect(markdownToCsv?.payload.primaryValue).toBe(
+      "name,role\nBoss,Developer",
+    );
     expect(markdownToCsv?.payload.meta?.quickOps).toEqual(
       expect.objectContaining({
         operation: "markdown-to-csv",
@@ -381,8 +406,7 @@ describe("PreviewSDK", () => {
         inputs: [
           {
             type: TuffInputType.Text,
-            content:
-              "eyJhbGciOiJub25lIn0.eyJyb2xlIjoiZGV2ZWxvcGVyIn0.",
+            content: "eyJhbGciOiJub25lIn0.eyJyb2xlIjoiZGV2ZWxvcGVyIn0.",
           },
         ],
       },
@@ -421,14 +445,18 @@ describe("PreviewSDK", () => {
     const quotedCsvTable = await sdk.resolve({
       query: {
         text: "csv to markdown",
-        inputs: [{ type: TuffInputType.Text, content: 'name,note\nBoss,"a,b"' }],
+        inputs: [
+          { type: TuffInputType.Text, content: 'name,note\nBoss,"a,b"' },
+        ],
       },
       signal: signal(),
     });
     const invalidCsvTable = await sdk.resolve({
       query: {
         text: "csv to markdown",
-        inputs: [{ type: TuffInputType.Text, content: 'name,note\nBoss,"broken' }],
+        inputs: [
+          { type: TuffInputType.Text, content: 'name,note\nBoss,"broken' },
+        ],
       },
       signal: signal(),
     });
@@ -475,7 +503,9 @@ describe("PreviewSDK", () => {
         inputSource: "clipboard",
       }),
     );
-    expect(jwtFromClipboard?.payload.primaryValue).toBe('{\n  "role": "developer"\n}');
+    expect(jwtFromClipboard?.payload.primaryValue).toBe(
+      '{\n  "role": "developer"\n}',
+    );
     expect(jwtFromClipboard?.payload.secondaryValue).toBe("无签名段");
     expect(jwtFromClipboard?.payload.meta?.quickOps).toEqual(
       expect.objectContaining({
@@ -513,7 +543,9 @@ describe("PreviewSDK", () => {
     );
     expect(invalidCsvTable?.payload.primaryLabel).toBe("错误");
     expect(invalidCsvTable?.payload.warnings?.[0]).toContain("CSV");
-    expect(timezoneFromClipboard?.payload.primaryValue).toBe("2024-03-09 11:00:00 UTC-05:00");
+    expect(timezoneFromClipboard?.payload.primaryValue).toBe(
+      "2024-03-09 11:00:00 UTC-05:00",
+    );
     expect(timezoneFromClipboard?.payload.meta?.quickOps).toEqual(
       expect.objectContaining({
         operation: "date-convert",
@@ -523,7 +555,9 @@ describe("PreviewSDK", () => {
     );
     expect(invalidTimezone?.payload.primaryLabel).toBe("错误");
     expect(invalidTimezone?.payload.warnings?.[0]).toContain("date/timezone");
-    expect(qrFromClipboard?.payload.primaryValue).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+    expect(qrFromClipboard?.payload.primaryValue).toMatch(
+      /^data:image\/svg\+xml;charset=utf-8,/,
+    );
     expect(qrFromClipboard?.payload.meta?.quickOps).toEqual(
       expect.objectContaining({
         operation: "qr-code",

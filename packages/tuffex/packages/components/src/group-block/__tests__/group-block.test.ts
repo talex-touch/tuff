@@ -50,9 +50,24 @@ describe('group-block components', () => {
     expect(wrapper.find('.content-row').exists()).toBe(true)
     expect(wrapper.classes()).not.toContain('tx-group-block--expanded')
 
-    await wrapper.find('.tx-group-block__header').trigger('click')
+    const trigger = wrapper.find<HTMLButtonElement>('.tx-group-block__trigger')
+    const body = wrapper.find<HTMLElement>('.tx-group-block__body')
+    const headerAction = wrapper.find<HTMLButtonElement>('.header-action')
+
+    expect(trigger.element.tagName).toBe('BUTTON')
+    expect(trigger.attributes('type')).toBe('button')
+    expect(trigger.attributes('aria-label')).toBe('Settings')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(trigger.attributes('aria-controls')).toBe(body.attributes('id'))
+    expect(trigger.element.contains(headerAction.element)).toBe(false)
+
+    await headerAction.trigger('click')
+    expect(wrapper.emitted('toggle')).toBeUndefined()
+
+    await trigger.trigger('click')
     expect(wrapper.emitted('update:expanded')?.[0]).toEqual([true])
     expect(wrapper.emitted('toggle')?.[0]).toEqual([true])
+    expect(trigger.attributes('aria-expanded')).toBe('true')
     expect(JSON.parse(window.localStorage.getItem('tuff-block-storage-settings') || '{}')).toEqual({ expand: true })
   })
 
@@ -67,6 +82,7 @@ describe('group-block components', () => {
     await wrapper.find('.tx-group-block__header').trigger('click')
 
     expect(wrapper.find('.tx-group-block__header').classes()).toContain('tx-group-block__header--static')
+    expect(wrapper.find('.tx-group-block__trigger').exists()).toBe(false)
     expect(wrapper.emitted('update:expanded')).toBeUndefined()
     expect(wrapper.emitted('toggle')).toBeUndefined()
   })

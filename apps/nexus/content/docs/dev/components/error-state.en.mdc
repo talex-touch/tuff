@@ -69,31 +69,62 @@ code: |
 
 ## API
 
-`TxErrorState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+`TxErrorState` inherits all props from `TxEmptyState` except `variant`, which is always forced to `error`. See [EmptyState](./empty-state.en.md) for the full base component contract.
 
 ### Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| title | `string` | `'Something went wrong'` | Title (overridable) |
-| description | `string` | `'Please try again later.'` | Description (overridable) |
-| layout | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction |
-| align | `'start' \| 'center' \| 'end'` | `'center'` | Alignment |
-| size | `'small' \| 'medium' \| 'large'` | `'medium'` | Size tier |
-| surface | `'plain' \| 'card'` | `'plain'` | Surface style |
-| primaryAction | `EmptyStateAction` | - | Primary action config |
-| secondaryAction | `EmptyStateAction` | - | Secondary action config |
+| `title` | `string` | `'Something went wrong'` | Error title. Override it with the failed object or operation. |
+| `description` | `string` | `'Please try again later.'` | Supporting recovery guidance. |
+| `icon` | `TxIconSource \| string \| null` | variant default | Custom icon source; set to `null` to suppress the inherited icon. |
+| `iconSize` | `number` | inherited | Icon size forwarded to `TxEmptyState`. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Size tier. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Surface style. |
+| `primaryAction` | `EmptyStateAction` | - | Primary recovery action config. |
+| `secondaryAction` | `EmptyStateAction` | - | Secondary action config. |
+| `actionSize` | `TxButtonProps['size']` | inherited | Button size for generated action buttons. |
+| `loading` | `boolean` | `false` | Loading state forwarded to generated actions. |
 
-> Full Props reference: [EmptyState API](./empty-state.en.md#api)
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `primary` | - | Forwarded from `TxEmptyState` when the primary generated action is clicked. |
+| `secondary` | - | Forwarded from `TxEmptyState` when the secondary generated action is clicked. |
+
+## Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `icon` | - | Replaces the inherited error icon. |
+| `title` | - | Replaces the title prop rendering. |
+| `description` | - | Replaces the description prop rendering. |
+| `actions` | - | Replaces generated primary/secondary action buttons. |
 
 ## Interaction Contract
 
 - `TxErrorState` always forwards `variant="error"` to `TxEmptyState`.
-- The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
-- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
+- The wrapper does not rewrite `title`, `description`, `surface`, action config, or slots; explicit props and slots are forwarded as-is.
+- The component does not own retry logic. It emits inherited action events or renders custom action slots for the host to handle.
+
+## Best Practices
+
+- Name the failed object in `title`, for example “Rules failed to load”, instead of a generic “Something went wrong”.
+- Always provide a recovery path: retry, go back, open logs, or contact support.
+- Use `surface="card"` when the error replaces a data panel; use the default plain surface inside an already framed container.
+- Keep technical details in logs or expandable diagnostics. The default description should tell users what they can do next.
+- Use the `actions` slot only when generated `primaryAction` / `secondaryAction` buttons cannot express the recovery flow.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue`
-- Recommendation: error states must provide a recovery path, such as retry, go back, or open logs. Do not show error text only.
-- Accessibility: the title should name the failed object, for example “Rules failed to load”, not only “Something went wrong”.
+- Source: `packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue` confirms the component only binds props to `TxEmptyState` and forces `variant="error"`.
+- Type contracts: `packages/tuffex/packages/components/src/error-state/src/types.ts` defines `ErrorStateProps = Omit<EmptyStateProps, 'variant'>`.
+- Base props/events: `packages/tuffex/packages/components/src/empty-state/src/types.ts` defines inherited props, action shape, and `primary` / `secondary` events.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/error-state/__tests__/error-state.test.ts` covers forced error variant, prop forwarding, named slot forwarding, and install registration.
+
+## Source
+<TuffDocSourceLink />
+

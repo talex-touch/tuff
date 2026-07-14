@@ -2,7 +2,11 @@
 title: "AutoSizer"
 description: "Automatically follows content width and height changes with resize and FLIP transitions."
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [auto-size, layout, animation]
+syncStatus: reviewed
+verified: true
 ---
 # AutoSizer
 
@@ -423,6 +427,17 @@ code: |
 | `rounding` | `'none' \| 'round' \| 'floor' \| 'ceil'` | `ceil` | Rounding strategy for measured width and height values. |
 | `immediate` | `boolean` | `true` | Measures immediately after mount when enabled. |
 | `rafBatch` | `boolean` | `true` | Batches resize measurement through requestAnimationFrame when available. |
+| `observeTarget` | `'inner' \| 'outer' \| 'both'` | `inner` | Element target watched for automatic resize changes. |
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Measured content rendered inside the inner wrapper. |
+
+### Events
+
+`TxAutoSizer` does not emit component-level Vue events. Use the exposed `action()`, `flip()`, or `refresh()` methods when a parent needs to coordinate explicit mutations.
 
 ### Expose
 
@@ -432,6 +447,8 @@ code: |
 | `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | Runs an action while auto-resize is paused, then performs a size FLIP transition and remeasures. |
 | `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | Runs a mutation against the inner or outer element and returns before / after snapshots with changed keys. |
 | `size` | `Ref<{ width: number; height: number } \| null>` | Latest measured size from the auto-resize utility. |
+| `focus()` | `() => void` | Focuses the outer wrapper when it is focusable. |
+| `outerEl` | `Ref<HTMLElement \| null>` | Outer wrapper element ref for advanced integration. |
 
 ## Interaction Contract
 
@@ -440,3 +457,26 @@ code: |
 - `flip(action)` pauses auto-resize while the action runs, performs a size FLIP transition, then re-enables measurement.
 - `action(fn, options?)` snapshots the selected target before and after mutation and returns detected change keys.
 - `observeTarget`, `rounding`, `immediate`, `rafBatch`, `durationMs`, and `easing` are forwarded to the underlying resize/FLIP utilities.
+
+## Best Practices
+
+- Use `height=true` and `width=false` for tab panels, accordions, and dropdown bodies where the surrounding layout should keep its width.
+- Use `width=true` and `height=false` for buttons, inline labels, and number transitions; this mode becomes shrink-to-content by default.
+- Keep `outerClass="overflow-hidden"` when content animates with blur, scale, or FLIP so intermediate frames do not bleed outside the wrapper.
+- Wrap explicit state mutations in `action()` or `flip()` instead of toggling state and calling `refresh()` manually; this preserves the before/after snapshot used by the transition.
+- Set `observeTarget="both"` only when both wrapper and content can resize independently; observing only `inner` avoids unnecessary refresh work for ordinary content changes.
+- Use `rounding="ceil"` for text and button labels to avoid clipped sub-pixel content; switch to `floor` only when a parent layout requires tighter bounds.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`, `TxAutoSizer.vue`, and `auto-sizer.test.ts`.
+- The public contract is mostly exposed methods, not emitted events; docs should keep examples focused on `action()` / `flip()` coordination.
+- `observeTarget="both"` is intentionally advanced; ordinary content transitions should observe `inner` only.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/auto-sizer/src/TxAutoSizer.vue`.
+- Types: `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/auto-sizer/__tests__/auto-sizer.test.ts` verifies wrapper / inner tag rendering, forwarded sizing options, automatic width-only inline layout, exposed `refresh` / `focus` / `outerEl`, and `action()` snapshot detection.
+
+<TuffDocSourceLink />

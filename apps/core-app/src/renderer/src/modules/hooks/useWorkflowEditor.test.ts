@@ -81,11 +81,8 @@ async function loadTarget() {
     agentToolApprove: vi.fn()
   }
 
-  vi.doMock('@talex-touch/utils/renderer/hooks/use-agents-sdk', () => ({
-    useAgentsSdk: () => agentsSdk
-  }))
-
-  vi.doMock('@talex-touch/utils/renderer/hooks/use-intelligence-sdk', () => ({
+  vi.doMock('@talex-touch/utils/renderer', () => ({
+    useAgentsSdk: () => agentsSdk,
     useIntelligenceSdk: () => intelligenceSdk
   }))
 
@@ -173,6 +170,7 @@ describe('useWorkflowEditor', () => {
 
     const editor = useWorkflowEditor()
     editor.workflowDraft.value.name = 'Mixed Workflow'
+    editor.workflowDraft.value.toolSources = ['builtin', 'mcp']
     editor.workflowDraft.value.steps[0]!.kind = 'prompt'
     editor.workflowDraft.value.steps[0]!.name = 'Summarize'
     editor.workflowDraft.value.steps[0]!.instruction = 'Summarize the input'
@@ -188,6 +186,7 @@ describe('useWorkflowEditor', () => {
     const workflow = intelligenceSdk.workflowSave.mock.calls[0]?.[0] as
       | WorkflowDefinition
       | undefined
+    expect(structuredClone(workflow)).toMatchObject({ toolSources: ['builtin', 'mcp'] })
     expect(workflow?.steps).toMatchObject([
       {
         kind: 'prompt',
@@ -246,6 +245,44 @@ describe('useWorkflowEditor', () => {
         toolId: undefined
       }
     ])
+  })
+
+  it('regenerates built-in workflow step IDs and remaps previous model inputs', async () => {
+    const { intelligenceSdk, useWorkflowEditor } = await loadTarget()
+    const sourceWorkflowId = 'builtin.source-workflow'
+    const sourcePredecessorStepId = 'source-predecessor-step'
+    const sourceModelStepId = 'source-model-step'
+
+    const editor = useWorkflowEditor()
+    editor.workflowDraft.value.id = sourceWorkflowId
+    editor.workflowDraft.value.isBuiltin = true
+    editor.workflowDraft.value.name = 'Built-in Workflow Clone'
+    editor.workflowDraft.value.steps[0]!.id = sourcePredecessorStepId
+    editor.workflowDraft.value.steps[0]!.kind = 'prompt'
+    editor.workflowDraft.value.steps[0]!.name = 'Prepare Source'
+    editor.workflowDraft.value.steps[0]!.instruction = 'Prepare the source input'
+    editor.workflowDraft.value.steps[0]!.input = '{}'
+    editor.addStep('model')
+    editor.workflowDraft.value.steps[1]!.id = sourceModelStepId
+    editor.workflowDraft.value.steps[1]!.name = 'Use Previous Result'
+    editor.workflowDraft.value.steps[1]!.instruction = 'Use the previous result'
+    editor.workflowDraft.value.steps[1]!.input = '{"capabilityId":"text.summarize"}'
+    editor.workflowDraft.value.steps[1]!.inputSources = JSON.stringify([
+      { type: 'previousStep', stepId: sourcePredecessorStepId }
+    ])
+    editor.workflowDraft.value.steps[1]!.outputContract = '{}'
+
+    await editor.saveWorkflow()
+
+    const workflow = intelligenceSdk.workflowSave.mock.calls[0]?.[0] as WorkflowDefinition
+    const [predecessor, model] = workflow.steps
+
+    expect(workflow.id).not.toBe(sourceWorkflowId)
+    expect(predecessor?.id).toBe(`${workflow.id}_step_1`)
+    expect(model?.id).toBe(`${workflow.id}_step_2`)
+    expect(predecessor?.id).not.toBe(sourcePredecessorStepId)
+    expect(model?.id).not.toBe(sourceModelStepId)
+    expect(model?.inputSources).toEqual([{ type: 'previousStep', stepId: predecessor?.id }])
   })
 
   it('builds a page-local review queue from completed model output and gates clipboard replacement', async () => {

@@ -94,7 +94,7 @@ rows:
 ---
 ::
 
-### 插槽
+## Slots
 
 ::TuffPropsTable
 ---
@@ -106,6 +106,10 @@ rows:
 ---
 ::
 
+### Events
+
+`TxDivider` 不派发组件事件。
+
 ## 交互契约
 
 - 根节点使用 `role="separator"`，并根据 `direction` 设置 `aria-orientation`。
@@ -114,8 +118,19 @@ rows:
 - 垂直渐变使用纵向透明衰减，适合工具栏或元信息行。
 - 需要 Drawer / Card / Form 内部分隔时优先使用 `TxDivider`，避免重复硬编码边框样式。
 
-## 审阅要点
+## 最佳实践
 
-- 源码：`packages/tuffex/packages/components/src/divider/src/TxDivider.vue`
-- 导出：`packages/tuffex/packages/components/src/divider/index.ts`
-- 组件索引：`packages/tuffex/packages/components/src/components.ts`
+- 水平分割线用于分隔语义区块，不要给每一行都加分割线；密集表格和列表应使用行距或表格边框。
+- 文字标签保持短句，只用于区块过渡；长文本应该改成真实标题而不是塞进分割线。
+- 垂直分割线只用于行内元信息或工具栏，且周围文本必须已经提供上下文。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/divider/src/TxDivider.vue` 确认 `role="separator"`、`aria-orientation`、仅水平模式渲染默认插槽文本、虚线样式和渐变模式。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/divider/__tests__/divider.test.ts` 覆盖水平文字、垂直模式忽略文字和渐变 class 模式。
+- 导出入口:`packages/tuffex/packages/components/src/divider/index.ts` 使用 `withInstall` 包装组件并导出 `TxDividerInstance`。
+
+
+## Source
+
+<TuffDocSourceLink />

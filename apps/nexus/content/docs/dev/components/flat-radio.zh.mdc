@@ -5,7 +5,8 @@ category: Form
 status: beta
 since: 2.4.7
 tags: [select, flat, form, selection, inline]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # FlatRadio 平铺选择器
 
@@ -215,6 +216,7 @@ code: |
 | `←` / `↑` | 选中上一个非禁用项（循环） |
 | `Home` | 选中第一个非禁用项 |
 | `End` | 选中最后一个非禁用项 |
+| `Enter` / `Space` | 多选模式下切换当前聚焦项 |
 
 ## API
 
@@ -224,24 +226,24 @@ code: |
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |--------|------|------|--------|
-| modelValue / v-model | 单选时为单值，多选时为值数组 | `string \| number \| (string \| number)[]` | - |
-| multiple | 是否启用多选模式（开启后隐藏滑动指示器） | `boolean` | `false` |
-| disabled | 是否禁用（整组） | `boolean` | `false` |
-| size | 尺寸 | `'sm' \| 'md' \| 'lg'` | `'md'` |
-| bordered | 是否显示外边框 | `boolean` | `false` |
+| `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \| number \| (string \| number)[]` | - |
+| `multiple` | 启用类似复选框的多选行为；开启后隐藏单选滑动指示器。 | `boolean` | `false` |
+| `disabled` | 禁用整组，移除容器焦点并阻止点击/键盘变化。 | `boolean` | `false` |
+| `size` | 尺寸变体。 | `'sm' \| 'md' \| 'lg'` | `'md'` |
+| `bordered` | 为选择器添加外边框。 | `boolean` | `false` |
 
 #### Events
 
 | 事件名 | 说明 | 回调参数 |
 |--------|------|----------|
-| update:modelValue | 值更新时触发 | `(value: string \| number \| (string \| number)[]) => void` |
-| change | 值变化时触发 | `(value: string \| number \| (string \| number)[]) => void` |
+| `update:modelValue` | 以新的单选值或多选值数组触发。 | `(value: string \| number \| (string \| number)[]) => void` |
+| `change` | 选择变化后以相同载荷触发。 | `(value: string \| number \| (string \| number)[]) => void` |
 
 #### Slots
 
 | 插槽名 | 说明 |
 |--------|------|
-| default | `TxFlatRadioItem` 子组件 |
+| `default` | `TxFlatRadioItem` 子组件。 |
 
 ### TxFlatRadioItem
 
@@ -249,14 +251,45 @@ code: |
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |--------|------|------|--------|
-| value | 当前项的值 | `string \| number` | - |
-| label | 显示文本 | `string` | - |
-| icon | 图标 CSS class | `string` | - |
-| disabled | 是否禁用（单项） | `boolean` | `false` |
+| `value` | 注册到父选择器的当前项值。 | `string \| number` | *必填* |
+| `label` | 未提供默认插槽时的可见文本。 | `string` | - |
+| `icon` | 未提供 `icon` 插槽时使用的图标 CSS class。 | `string` | - |
+| `disabled` | 禁用当前项，并在键盘导航中跳过。 | `boolean` | `false` |
 
 #### Slots
 
 | 插槽名 | 说明 |
 |--------|------|
-| default | 自定义内容（覆盖 label） |
-| icon | 自定义图标 |
+| `default` | 自定义可见内容，替代 `label`。 |
+| `icon` | 自定义图标内容，替代 `icon` class。 |
+
+## 交互契约
+
+- 单选模式下 `TxFlatRadio` 使用 `role="radiogroup"`，每个 item 使用 `role="radio"`。
+- 多选模式下容器使用 `role="group"`，每个 item 使用 `role="checkbox"`，并隐藏滑动指示器。
+- item 按钮保持 `tabindex="-1"`；焦点停留在容器上，由方向键驱动整组选择。
+- 方向键、Home、End 会跳过禁用项，并在可用项之间循环。
+- 多选模式下方向键移动当前聚焦值，Enter / Space 切换该值；单选模式下方向键会立即选中下一个值。
+- 整组 `disabled` 会把容器 `tabindex` 设为 `-1`，让所有 item 进入禁用态，并阻止点击/键盘变化。
+
+## 最佳实践
+
+- FlatRadio 适合 2 到 5 个短选项，且用户需要直接比较选项的场景；更长列表使用 `TxSelect`。
+- 标签尽量保持单行；item 布局有意使用 `white-space: nowrap`。
+- 在紧凑 `sm` 尺寸中避免混用过长自定义插槽内容和图标。
+- 只有当多个值是彼此独立的开关项时才使用 `multiple`；否则用独立开关或复选框表达更清晰。
+- `value` 应在渲染间保持稳定，因为父级会按 value 注册 item DOM，用于指示器和键盘顺序。
+
+## 审阅说明
+
+- **可访问性说明：** 整组只有容器进入 Tab 顺序；item 按钮保持 `tabindex="-1"`，从而集中处理方向键。需要用邻近字段文案或外部 label 为整组命名。
+- **实测覆盖:** `flat-radio.test.ts` 覆盖单选 `radiogroup`/`radio` 语义、item 禁用态、禁用整组时移除焦点、方向键循环并跳过禁用项、Home/End 选择，以及 `multiple` 模式下 Enter/Space 切换。
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue` and `TxFlatRadioItem.vue`.
+- Types: `packages/tuffex/packages/components/src/flat-radio/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, and Enter / Space toggles in multiple mode.
+
+<TuffDocSourceLink />
+

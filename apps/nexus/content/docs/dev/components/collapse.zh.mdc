@@ -1,21 +1,22 @@
 ---
 title: Collapse 折叠面板
-description: 可展开内容区域
+description: 可展开内容面板，支持受控展开项、手风琴模式、语义化标题按钮和键盘友好交互。
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [collapse, disclosure, layout]
+syncStatus: reviewed
+verified: true
 ---
-
 # Collapse 折叠面板
 
-用于收纳可折叠的内容块。
+`TxCollapse` 通过 `v-model` 管理展开面板名称。`TxCollapseItem` 渲染语义化按钮标题和带过渡的内容区域。
+
+已人工核对 `packages/tuffex/packages/components/src/collapse/src/types.ts`、`TxCollapse.vue`、`TxCollapseItem.vue` 与 `collapse.test.ts`。
 
 ## 基础用法
 
-### 折叠面板
-
-点击展开详细内容。
-
-::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -35,67 +36,112 @@ code: |
     </TxCollapse>
   </template>
 ---
-::
+::::
 
-## API（Lite）
-### TxCollapse Props
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: "string | string[]"
-    default: '[]'
-    description: 当前展开项
-  - name: accordion
-    type: boolean
-    default: 'false'
-    description: 是否手风琴模式
----
-:::
+## 组合示例
 
-### TxCollapse Events
-::TuffPropsTable
----
-rows:
-  - name: update:modelValue
-    type: "(value: string | string[]) => void"
-    default: '-'
-    description: v-model 展开项更新
-  - name: change
-    type: "(value: string | string[]) => void"
-    default: '-'
-    description: 展开项变化
----
-:::
+### 手风琴模式
 
-### TxCollapseItem Props
-::TuffPropsTable
+::::TuffDemoWrapper{demo="CollapseAccordionDemo" code-lang="vue"}
 ---
-rows:
-  - name: title
-    type: string
-    default: '-'
-    description: 标题文本
-  - name: name
-    type: string
-    default: '-'
-    description: 面板唯一标识
-  - name: disabled
-    type: boolean
-    default: 'false'
-    description: 禁用面板切换
-  - name: arrowIcon
-    type: string
-    default: "'chevron-down'"
-    description: 展开箭头图标
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('first')
+  </script>
+
+  <template>
+    <TxCollapse v-model="active" accordion>
+      <TxCollapseItem title="快速开始" name="first">基础内容。</TxCollapseItem>
+      <TxCollapseItem title="高级选项" name="second">高级内容。</TxCollapseItem>
+    </TxCollapse>
+  </template>
 ---
-:::
+::::
+
+### 自定义标题内容
+
+```vue
+<template>
+  <TxCollapseItem name="security">
+    <template #title>
+      <span class="inline-flex items-center gap-2">
+        <TxIcon name="i-carbon-security" />
+        安全设置
+      </span>
+    </template>
+    特权操作需要通行密钥。
+  </TxCollapseItem>
+</template>
+```
 
 ## 交互契约
 
-- 面板标题暴露 `role="button"`、`tabindex="0"`、`aria-expanded` 与 `aria-controls`。
-- 点击、Enter 与 Space 共用同一切换逻辑。
-- `disabled` 面板带 `aria-disabled="true"`，不会响应鼠标或键盘切换。
+- `TxCollapse` 通过 Vue provide/inject 向 item 提供展开状态和点击处理。
+- `modelValue` 接受字符串或字符串数组；内部会归一化为 `string[]`。
+- 普通模式下，切换面板会发出展开名称数组。
+- 手风琴模式下，切换到其它面板会发出该面板名称字符串。
+- 手风琴模式下，再次点击已展开面板会发出 `[]`。
+- `TxCollapseItem` 用 `name` 作为身份，回退到 `title`，再回退到 `''`。
+- 面板标题是原生 `button type="button"`，带有 `aria-expanded` 和 `aria-controls`。
+- 禁用面板标题会设置原生 `disabled`，添加禁用类，并忽略切换。
+- `arrowIcon` 控制前置 `TxIcon`；展开时箭头会旋转。
+- 内容保留在 DOM 中并通过 `v-show` 隐藏；过渡类负责高度动画。
+- item 放在 `TxCollapse` 外部时仍会渲染，但点击标题不会生效。
+
+## API
+
+### TxCollapse Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string \| string[]` | `undefined` | 当前展开面板名称。多开模式使用数组。 |
+| `accordion` | `boolean` | `false` | 启用单面板模式。 |
+
+### TxCollapse Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `string \| string[]` | 面板切换后发出。 |
+| `change` | `string \| string[]` | 面板切换后发出同一份值。 |
+
+### TxCollapseItem Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `title` | `string` | `undefined` | 未提供 `title` 插槽时的标题文本，也会作为身份回退。 |
+| `name` | `string` | `undefined` | 面板唯一身份。建议显式提供。 |
+| `disabled` | `boolean` | `false` | 禁用标题切换。 |
+| `arrowIcon` | `string` | `'chevron-down'` | 切换箭头的前置图标名称。 |
+
+### Slots
+
+| 组件 | 插槽名 | Props | 说明 |
+|------|------|-------|------|
+| `TxCollapse` | `default` | 无 | 折叠面板项。 |
+| `TxCollapseItem` | `title` | 无 | 箭头图标后的自定义标题内容。 |
+| `TxCollapseItem` | `default` | 无 | 面板正文内容。 |
+
+## 最佳实践
+
+- 提供明确稳定的 `name`。依赖 `title` 回退会在文案本地化或改名时破坏状态。
+- 普通模式使用数组 `v-model`，手风琴模式使用字符串 `v-model`。
+- 不要把主要危险操作放在标题中；整个标题按钮都会切换面板。
+- 禁用面板用于不可用区块，而不是用于当前已展开区块。
+- 面板正文保持适中；内容很长时在正文内部增加结构，不要层层嵌套折叠面板。
+- 内容通过 `v-show` 保持挂载，因此不要在未展开面板里直接放昂贵的常驻任务。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/collapse/src/types.ts`、`TxCollapse.vue`、`TxCollapseItem.vue` 与 `collapse.test.ts`。
+- 现有测试覆盖原生按钮语义、`aria-expanded` / `aria-controls`、多面板数组事件、手风琴字符串事件、手风琴关闭时发出 `[]`、以及禁用项阻断。
+- 可访问性说明:面板标题是原生按钮,不是自定义 role;标题内容应短且可描述,复杂控件应放入面板正文,不要塞进切换标题。
 
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/collapse/src/TxCollapse.vue` 与 `TxCollapseItem.vue`。
+- Types: `packages/tuffex/packages/components/src/collapse/src/types.ts` 导出 `CollapseProps`、`CollapseEmits`、`CollapseItemProps` 与 `CollapseContext`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/collapse/__tests__/collapse.test.ts` 覆盖按钮语义、ARIA 状态关联、多开事件、手风琴事件与禁用项阻断。
 <TuffDocSourceLink />

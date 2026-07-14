@@ -1,12 +1,16 @@
 ---
 title: "TypingIndicator 打字中"
-description: "用于展示 AI 正在回复的状态。"
+description: "用于聊天界面的内联打字中与加载状态。"
 category: Feedback
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [typing, loading, chat]
+syncStatus: reviewed
+verified: true
 ---
 # TypingIndicator 打字中
 
-用于展示 AI 正在回复的状态。
+`TxTypingIndicator` 渲染带 `aria-live="polite"` 的状态区域和紧凑动画指示器。通过 `variant` 匹配聊天界面密度；只有周边 UI 已经说明等待状态时才设置 `showText=false`。
 
 ### TypingIndicator
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
@@ -94,3 +98,30 @@ code: |
 | `circleDashDashDeg` | `number` | `12` | circle-dash 模式 dash 角度(deg) |
 | `circleDashGapDeg` | `number` | `12` | circle-dash 模式 gap 角度(deg) |
 | `barsSize` | `number` | `12` | bars 模式高度(px) |
+
+## Events
+
+`TxTypingIndicator` 不派发组件事件。它是被动的 `role="status"` 状态指示器。
+
+## Slots
+
+`TxTypingIndicator` 不暴露插槽。可访问状态文案使用 `text`；只有相邻 UI 已经说明等待状态时才使用 `showText=false`。
+
+## 最佳实践
+
+- 内联聊天行和紧凑 assistant 占位优先使用默认 `dots` 变体。
+- 需要品牌化生成状态且空间充足时使用 `ai`。
+- 工具栏、消息元信息行或骨架屏旁的加载状态可使用 `pure`、`ring`、`circle-dash` 或 `bars`。
+- 除非其它可见标签已经描述等待操作，否则保持 `showText=true`。
+- 数字尺寸 prop 都按 px 调整；同一聊天 transcript 中避免混用过多变体。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue` 确认 `role="status"`、`aria-live="polite"`、装饰性 loader 的 `aria-hidden`、变体 CSS 变量、AI mask 作用域 id 和可选文本渲染。
+- 类型契约:`packages/tuffex/packages/components/src/chat/src/types.ts` 定义 `TypingIndicatorProps` 和所有变体尺寸 prop。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts` 覆盖状态语义、dot 尺寸、隐藏文本、AI mask 尺寸、spinner 变体和 bars 渲染。
+- 导出入口:`packages/tuffex/packages/components/src/chat/index.ts` 导出 `TypingIndicator`、`TxTypingIndicator` 和 `TypingIndicatorProps`。
+
+## Source
+
+<TuffDocSourceLink />

@@ -1,4 +1,4 @@
-import type { LocalizedTextValue } from '../i18n'
+import type { LocalizedTextValue } from "../i18n";
 
 /**
  * Permission System Types
@@ -10,24 +10,25 @@ import type { LocalizedTextValue } from '../i18n'
  * Permission category
  */
 export enum PermissionCategory {
-  FILESYSTEM = 'fs',
-  CLIPBOARD = 'clipboard',
-  NETWORK = 'network',
-  SYSTEM = 'system',
-  INTELLIGENCE = 'intelligence',
-  STORAGE = 'storage',
-  WINDOW = 'window',
-  MEDIA = 'media',
-  SEARCH = 'search',
+  FILESYSTEM = "fs",
+  CLIPBOARD = "clipboard",
+  NETWORK = "network",
+  SYSTEM = "system",
+  INTELLIGENCE = "intelligence",
+  STORAGE = "storage",
+  WINDOW = "window",
+  MEDIA = "media",
+  SEARCH = "search",
+  LOCALIZATION = "localization",
 }
 
 /**
  * Risk level for permissions
  */
 export enum PermissionRiskLevel {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
+  LOW = "low",
+  MEDIUM = "medium",
+  HIGH = "high",
 }
 
 /**
@@ -35,17 +36,17 @@ export enum PermissionRiskLevel {
  */
 export interface PermissionDefinition {
   /** Permission ID (e.g., 'fs.read') */
-  id: string
+  id: string;
   /** Category */
-  category: PermissionCategory
+  category: PermissionCategory;
   /** Risk level */
-  risk: PermissionRiskLevel
+  risk: PermissionRiskLevel;
   /** i18n key for display name */
-  nameKey: string
+  nameKey: string;
   /** i18n key for description */
-  descKey: string
+  descKey: string;
   /** Icon name (lucide icon) */
-  icon?: string
+  icon?: string;
 }
 
 /**
@@ -53,15 +54,15 @@ export interface PermissionDefinition {
  */
 export interface PermissionGrant {
   /** Plugin ID */
-  pluginId: string
+  pluginId: string;
   /** Permission ID */
-  permissionId: string
+  permissionId: string;
   /** Grant timestamp */
-  grantedAt: number
+  grantedAt: number;
   /** How it was granted */
-  grantedBy: 'user' | 'auto' | 'trust'
+  grantedBy: "user" | "auto" | "trust";
   /** Expiration timestamp (optional) */
-  expiresAt?: number
+  expiresAt?: number;
 }
 
 /**
@@ -69,13 +70,13 @@ export interface PermissionGrant {
  */
 export interface PermissionDenial {
   /** Plugin ID */
-  pluginId: string
+  pluginId: string;
   /** Permission ID */
-  permissionId: string
+  permissionId: string;
   /** Denial timestamp */
-  deniedAt: number
+  deniedAt: number;
   /** Reason for denial */
-  reason?: string
+  reason?: string;
 }
 
 /**
@@ -83,15 +84,15 @@ export interface PermissionDenial {
  */
 export interface PermissionCheckResult {
   /** Permission ID */
-  permissionId: string
+  permissionId: string;
   /** Whether permission is granted */
-  granted: boolean
+  granted: boolean;
   /** Grant details if granted */
-  grant?: PermissionGrant
+  grant?: PermissionGrant;
   /** Whether enforcement is active (sdkapi check) */
-  enforced: boolean
+  enforced: boolean;
   /** Warning message if any */
-  warning?: string
+  warning?: string;
 }
 
 /**
@@ -99,29 +100,29 @@ export interface PermissionCheckResult {
  */
 export interface PluginPermissionStatus {
   /** Plugin ID */
-  pluginId: string
+  pluginId: string;
   /** SDK API version */
-  sdkapi?: number
+  sdkapi?: number;
   /** Whether permission enforcement is active */
-  enforcePermissions: boolean
+  enforcePermissions: boolean;
   /** Required permissions from manifest */
-  required: string[]
+  required: string[];
   /** Optional permissions from manifest */
-  optional: string[]
+  optional: string[];
   /** Effective declared permissions that are currently granted */
-  granted: string[]
+  granted: string[];
   /** Historically granted permissions that are now inactive (union of all outdated reasons) */
-  deprecatedGranted: string[]
+  deprecatedGranted: string[];
   /** Historically granted permissions that became outdated because app-side permission definitions changed */
-  outdatedByAppUpdate: string[]
+  outdatedByAppUpdate: string[];
   /** Historically granted permissions that are still defined but no longer declared by current plugin manifest */
-  outdatedByPluginChange: string[]
+  outdatedByPluginChange: string[];
   /** Denied permissions */
-  denied: string[]
+  denied: string[];
   /** Missing required permissions */
-  missingRequired: string[]
+  missingRequired: string[];
   /** Compatibility warning */
-  warning?: string
+  warning?: string;
 }
 
 /**
@@ -129,15 +130,15 @@ export interface PluginPermissionStatus {
  */
 export interface PermissionRequest {
   /** Plugin ID */
-  pluginId: string
+  pluginId: string;
   /** Plugin display name */
-  pluginName: string
+  pluginName: string;
   /** Permission ID */
-  permissionId: string
+  permissionId: string;
   /** Reason from manifest */
-  reason?: string
+  reason?: string;
   /** Context of the request */
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>;
 }
 
 /**
@@ -145,17 +146,17 @@ export interface PermissionRequest {
  */
 export interface PermissionAuditLog {
   /** Log ID */
-  id: string
+  id: string;
   /** Timestamp */
-  timestamp: number
+  timestamp: number;
   /** Plugin ID */
-  pluginId: string
+  pluginId: string;
   /** Permission ID */
-  permissionId: string
+  permissionId: string;
   /** Action type */
-  action: 'granted' | 'denied' | 'revoked' | 'used' | 'blocked'
+  action: "granted" | "denied" | "revoked" | "used" | "blocked";
   /** Additional context */
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>;
 }
 
 /**
@@ -163,12 +164,12 @@ export interface PermissionAuditLog {
  */
 export interface ManifestPermissions {
   /** Required permissions - plugin won't work without these */
-  required?: string[]
+  required?: string[];
   /** Optional permissions - can be granted later */
-  optional?: string[]
+  optional?: string[];
 }
 
 /**
  * Permission reasons in manifest
  */
-export type ManifestPermissionReasons = Record<string, LocalizedTextValue>
+export type ManifestPermissionReasons = Record<string, LocalizedTextValue>;

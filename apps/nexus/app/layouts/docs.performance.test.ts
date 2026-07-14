@@ -3,8 +3,19 @@ import { describe, expect, it } from 'vitest'
 
 const layout = readFileSync(new URL('./docs.vue', import.meta.url), 'utf8')
 
+function extractTopLevelFunction(source: string, name: string) {
+  const marker = `function ${name}(`
+  const start = source.indexOf(marker)
+  expect(start, `${name} should exist`).toBeGreaterThanOrEqual(0)
+
+  const nextFunction = source.indexOf('\nfunction ', start + marker.length)
+  return source.slice(start, nextFunction < 0 ? source.length : nextFunction)
+}
+
 describe('docs layout performance boundaries', () => {
   it('keeps the decorative TuffEx hero background off the SSR critical path', () => {
+    const scheduleTuffexBackground = extractTopLevelFunction(layout, 'scheduleTuffexBackground')
+
     expect(layout).toContain('defineAsyncComponent')
     expect(layout).toContain("import('~/components/docs/TuffexDocsHeroBackground.vue')")
     expect(layout).toContain('TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200')
@@ -16,7 +27,9 @@ describe('docs layout performance boundaries', () => {
     expect(layout).toContain('watch(isTuffexDocs')
     expect(layout).toMatch(/if \(active\) \{[\s\S]*bindTuffexBackgroundIntentListeners\(\)/)
     expect(layout).toMatch(/clearTuffexBackgroundSchedule\(\)[\s\S]*shouldMountTuffexBackground\.value = false/)
-    expect(layout).not.toContain('setTimeout(() =>')
+    expect(scheduleTuffexBackground).not.toContain('setTimeout')
+    expect(scheduleTuffexBackground).toContain('requestIdleCallback')
+    expect(scheduleTuffexBackground).toContain('requestAnimationFrame')
     expect(layout).toContain('<ClientOnly>')
     expect(layout).toContain('<TuffexDocsHeroBackground v-if="shouldMountTuffexBackground"')
     expect(layout).not.toContain("import TuffexDocsHeroBackground from '~/components/docs/TuffexDocsHeroBackground.vue'")

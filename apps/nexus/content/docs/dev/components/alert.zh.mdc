@@ -1,58 +1,133 @@
 ---
 title: Alert 警告
-description: 用于展示提示或状态信息
+description: 用于上下文反馈、语义提示和可关闭通知的内联状态横幅。
 category: Feedback
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [alert, feedback, status]
+syncStatus: reviewed
+verified: true
 ---
 
 # Alert 警告
 
-用于展示提示或状态信息，强调当前状态的可见性。
+`TxAlert` 渲染内联 `role="alert"` 横幅，支持语义颜色、可选前置图标、标题/正文插槽，以及可选关闭按钮。
+
+已人工核对 `packages/tuffex/packages/components/src/alert/src/types.ts`、`TxAlert.vue` 与 `alert.test.ts`。
 
 ## 基础用法
+
 ### 提示类型
-信息 / 成功 / 警告 / 错误。
+
 :::TuffDemoWrapper{demo="AlertAlertVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxAlert title="提示" message="检查一下配置项。" type="info" />
-    <TxAlert title="成功" message="已保存。" type="success" />
-    <TxAlert title="注意" message="有需要处理的内容。" type="warning" />
-    <TxAlert title="失败" message="保存失败。" type="error" />
+    <div class="tuff-demo-stack">
+      <TxAlert title="提示" message="检查一下配置项。" type="info" />
+      <TxAlert title="成功" message="已保存。" type="success" />
+      <TxAlert title="注意" message="有需要处理的内容。" type="warning" />
+      <TxAlert title="失败" message="保存失败。" type="error" />
+    </div>
   </template>
 ---
 :::
+
+## 组合示例
+
+### 常驻提示
+
+当消息属于页面状态、不应在本地消失时，使用 `closable=false`。
+
+```vue
+<template>
+  <TxAlert
+    type="warning"
+    title="需要人工复核"
+    message="此发布包含未签名产物。"
+    :closable="false"
+  />
+</template>
+```
+
+### 自定义标题与正文
+
+```vue
+<template>
+  <TxAlert type="success" @close="dismissed = true">
+    <template #title>
+      运行时证据已收集
+    </template>
+
+    <p>
+      Preview 检查通过。可在 evidence 面板查看截图和 trace。
+    </p>
+  </TxAlert>
+</template>
+```
+
+### 纯文本横幅
+
+```vue
+<template>
+  <TxAlert :show-icon="false" message="此页面展示本地 demo 数据。" />
+</template>
+```
+
 ## 交互契约
 
-Alert 会渲染 `role="alert"`，语义图标统一走共享 `TxIcon` 渲染器，并且只在点击关闭按钮时触发 `close`。需要常驻提示时设置 `closable=false`；需要纯文本提示时设置 `showIcon=false`。
+- 根节点渲染 `role="alert"`，并带类型 class（`tx-alert--info`、`--success`、`--warning` 或 `--error`）。
+- `type` 决定默认前置图标名：`info`、`check-circle`、`alert-triangle` 或 `x-circle`。
+- `showIcon=false` 会移除前置图标容器。
+- 只有存在 `title` 或 `title` 插槽时才渲染标题行。
+- 默认插槽会替换 `.tx-alert__message` 内的 `message`。
+- `closable=true` 会渲染关闭按钮，添加 `tx-alert--closable`，并预留右侧 padding。
+- 点击关闭按钮会发出 `close`；组件不会自动隐藏自己。
+- 关闭按钮只有图标文本，并使用 `aria-label="Close"`。
 
-## API（Lite）
-::TuffPropsTable
----
-rows:
-  - name: type
-    type: "'info' | 'success' | 'warning' | 'error'"
-    default: "'info'"
-    description: 类型
-  - name: title
-    type: string
-    default: "''"
-    description: 标题
-  - name: message
-    type: string
-    default: "''"
-    description: 描述信息
-  - name: closable
-    type: boolean
-    default: 'true'
-    description: 是否可关闭
-  - name: showIcon
-    type: boolean
-    default: 'true'
-    description: 是否显示图标
----
-:::
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `type` | `'info' \| 'success' \| 'warning' \| 'error'` | `'info'` | 视觉意图与默认图标映射。 |
+| `title` | `string` | - | 可选标题文本。不存在且无 `title` 插槽时隐藏标题行。 |
+| `message` | `string` | - | 未提供默认插槽时使用的正文消息。 |
+| `closable` | `boolean` | `true` | 渲染关闭按钮和关闭区域 padding。 |
+| `showIcon` | `boolean` | `true` | 渲染语义前置图标。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `close` | - | 点击关闭按钮时触发。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `title` | - | 自定义标题内容。 |
+| `default` | - | 自定义正文内容，会替换 `message`。 |
+
+## 最佳实践
+
+- Alert 用于页面上下文反馈，不要替代 toast。
+- `type` 应符合用户影响：失败动作用 `error`，风险提示用 `warning`，中性引导用 `info`。
+- 在宿主中处理 `close`，通过移除 alert 或持久化关闭状态来完成隐藏。
+- 合规、阻塞或始终相关的提示使用 `closable=false`。
+- 不要把主流程塞进 alert 正文；操作按钮放在 alert 后方，布局和语义更清晰。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`、`types.ts` 与 `alert.test.ts`。
+- **实测覆盖:** `alert.test.ts` 覆盖语义 alert role、type class、标题/消息渲染、图标可见性、标题/默认插槽、关闭按钮隐藏与 `close` 事件行为。
+- 可访问性说明：`role="alert"` 会强提示读屏器。文案应短、可执行，并避免一次性挂载多个新 alert。
 
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`.
+- Types: `packages/tuffex/packages/components/src/alert/src/types.ts` exports `AlertProps`, `AlertEmits`, and `AlertType`.
+- Coverage: `packages/tuffex/packages/components/src/alert/__tests__/alert.test.ts` verifies role/class rendering, slots, close controls, and close events.
 <TuffDocSourceLink />

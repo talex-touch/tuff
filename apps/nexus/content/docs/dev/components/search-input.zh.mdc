@@ -186,9 +186,28 @@ code: |
 | `setValue(v)` | `(v: string) => void` | 设置值 |
 | `getValue()` | `() => string` | 获取值 |
 
+### Slots
+
+`TxSearchInput` 不暴露公共插槽。前缀搜索图标由组件内置；需要自定义前缀或后缀时应直接使用 `TuffInput`。
+
+## 最佳实践
+
+- 仅需要关键词和 Enter 触发时使用 `TxSearchInput`；需要结果面板或选项回填时优先使用 `TxSearchSelect`。
+- `remote` 模式会在输入变化后按 `searchDebounce` 触发 `search`，Enter 会立即触发 `search`。API 调用方应保持幂等，因为两条路径可能产生同一个查询。
+- 不要只依赖 placeholder 表达业务语义；密集工具栏里应提供外部标签、分组标题或上下文说明。
+- 只有本地或完整缓存搜索才把 `searchDebounce` 设为 `0`；网络搜索应保留防抖，避免请求风暴。
+
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`
-- 建议：仅需要关键词与回车触发时使用 `TxSearchInput`；需要结果面板或选项回填时优先使用 `TxSearchSelect`。
-- 交互：`remote` 模式会在输入变化后按 `searchDebounce` 触发 `search`，Enter 会立即触发 `search`。
-- 可访问性：不要只依赖 placeholder 表达业务语义；在表单或复杂工具栏中应提供外部标签、分组标题或上下文说明。
+- **搜索契约：** Enter 会立即触发 `search`。`remote=true` 时，输入变化还会按防抖触发 `search`，但禁用状态不会发起远程搜索。
+- **清空契约：** 组件转发 `TuffInput` 的清空行为，触发 `clear`，并暴露同一组 focus/blur/value helpers 方便外层集成。
+- **组合契约：** 搜索图标由 `TxSearchInput` 内置管理；需要自定义前后缀插槽时应直接使用 `TuffInput`。
+- **实测覆盖:** `search-input.test.ts` 覆盖输入/搜索事件、远程防抖、禁用远程阻断、清空转发，以及 `getValue()` / `setValue()` helper 暴露。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`.
+- Types: `packages/tuffex/packages/components/src/search-input/src/types.ts` exports `SearchInputProps` and `SearchInputEmits`.
+- Coverage: `packages/tuffex/packages/components/src/search-input/__tests__/search-input.test.ts` verifies input/search emits, remote debounce, disabled remote blocking, clear forwarding, and `getValue()` / `setValue()` helper exposure.
+
+<TuffDocSourceLink />

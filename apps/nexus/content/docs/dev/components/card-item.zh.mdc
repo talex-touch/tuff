@@ -1,27 +1,30 @@
 ---
 title: "CardItem 卡片项"
-description: "用于列表/设置页等场景的通用条目：左侧头像/图标，右侧标题信息，支持右侧操作区。"
+description: "紧凑列表行，支持可选头像媒体、文本、右侧操作、激活态和显式点击行为。"
 category: Layout
-syncStatus: migrated
+tags: [card, list, settings]
+syncStatus: reviewed
+verified: true
 ---
 # CardItem 卡片项
 
-用于列表/设置页等场景的通用条目：左侧头像/图标，右侧标题信息，支持右侧操作区。
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const enabled = ref(true)
-</script>
+`TxCardItem` 是设置页、命令列表和轻量导航常用的紧凑行组件。它可以渲染左侧媒体、中间标题/副标题/描述，以及右侧操作区；整行交互需要通过 `clickable` 显式开启。
 
 ## 基础用法
 
-### CardItem
-:::TuffDemoWrapper{demo="CardItemCardItemDemo" code-lang="vue"}
+`right` 插槽适合放开关、箭头、元信息或状态文本。默认情况下，整行不会派发点击事件。
+
+::::TuffDemoWrapper{demo="CardItemCardItemDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const enabled = ref(true)
+  </script>
+
   <template>
-    <TxCardItem title="Enable feature" description="Right area supports actions" icon-class="i-carbon-settings">
+    <TxCardItem title="启用同步" description="右侧插槽可以组合控件。" icon-class="i-carbon-settings">
       <template #right>
         <TxSwitch v-model="enabled" />
         <i class="i-carbon-chevron-right" />
@@ -29,7 +32,7 @@ code: |
     </TxCardItem>
   </template>
 ---
-:::
+::::
 
 ## API
 
@@ -37,31 +40,62 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `role` | `string` | `'button'` | ARIA role（用于 menuitem / option 等语义） |
-| `title` | `string` | `''` | 标题 |
-| `subtitle` | `string` | `''` | 副标题 |
-| `description` | `string` | `''` | 描述 |
-| `iconClass` | `string` | `''` | 头像区域图标 class |
-| `avatarText` | `string` | `''` | 头像文本 |
-| `avatarUrl` | `string` | `''` | 头像图片 URL |
-| `avatarSize` | `number` | `36` | 头像尺寸 |
-| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | 头像形状 |
-| `clickable` | `boolean` | `false` | 可点击 |
-| `active` | `boolean` | `false` | 激活态 |
-| `disabled` | `boolean` | `false` | 禁用 |
+| `role` | `string` | `undefined` | 仅在 `clickable=true` 时应用到根节点的 ARIA role。需要明确语义时传入 `button`、`menuitem` 或 `option`。 |
+| `title` | `string` | `''` | 未使用 `title` 插槽时的主标题，单行显示。 |
+| `subtitle` | `string` | `''` | 标题下方的副标题，单行显示。 |
+| `description` | `string` | `''` | 顶部行下方的辅助描述。 |
+| `iconClass` | `string` | `''` | 未提供头像图片时渲染到头像区域的图标 class。 |
+| `avatarText` | `string` | `''` | 未提供图片或图标时渲染到头像区域的文本。 |
+| `avatarUrl` | `string` | `''` | 头像图片 URL，优先级高于图标和文本头像。 |
+| `avatarSize` | `number` | `36` | 头像盒子的像素尺寸。 |
+| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | 头像圆角样式。`rounded` 使用 12px 圆角。 |
+| `clickable` | `boolean` | `false` | 开启指针样式、焦点能力，以及鼠标 / Enter 激活。 |
+| `active` | `boolean` | `false` | 应用选中视觉态。 |
+| `disabled` | `boolean` | `false` | 禁用焦点和点击 / 键盘激活。 |
 
 ### Slots
 
-| 名称 | 说明 |
-|------|------|
-| `avatar` | 自定义左侧头像区域 |
-| `title` | 自定义标题 |
-| `subtitle` | 自定义副标题 |
-| `description` | 自定义描述 |
-| `right` | 右侧操作区 |
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `avatar` | - | 替换生成的图片 / 图标 / 文本头像区域。 |
+| `title` | - | 替换主标题内容。 |
+| `subtitle` | - | 替换副标题内容。 |
+| `description` | - | 替换辅助描述内容。 |
+| `right` | - | 在顶部行右侧渲染操作或尾随元信息。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `click` | `MouseEvent` | 点击触发（需 `clickable` 且非 `disabled`） |
+| `click` | `MouseEvent` | `clickable=true` 且未禁用时由鼠标点击派发。Enter 激活在运行时复用同一事件通道。 |
+
+## 交互契约
+
+- 未提供 `avatar` 插槽、`avatarUrl`、`iconClass`、`avatarText` 时，左侧媒体列会被省略。
+- 生成头像优先级为 `avatarUrl`、`iconClass`、`avatarText`。
+- 只有 `clickable=true` 且 `disabled=false` 时才会应用 `tabindex="0"`。
+- `role` 也只会在 `clickable=true` 时应用；组件没有隐式默认 role。
+- `disabled=true` 会添加禁用 class、移除焦点能力，并阻止鼠标和 Enter 激活。
+- `title` 与 `subtitle` 使用单行省略；`description` 可以换行。
+
+## 最佳实践
+
+- 只有整行本身会执行操作时才设置 `clickable=true`。如果只有右侧插槽可交互，整行保持非 clickable。
+- 可点击行不在语义化列表或菜单内部时，显式传入合适的 `role`。
+- 复杂媒体使用 `avatar` 插槽；简单媒体使用 `avatarUrl`、`iconClass` 或 `avatarText`。
+- `right` 插槽保持紧凑，过长控件会挤压标题区域。
+- 避免把行导航和开关切换绑定到同一个点击目标。行点击和右侧控件应保持职责分离。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`、`types.ts` 与 `card-item.test.ts`。
+- **实测覆盖:** `card-item.test.ts` 覆盖文本和图标渲染、头像 CSS 变量、图片优先于图标/文本、命名插槽、可点击行的鼠标/Enter 事件、禁用阻断与无左侧媒体布局。
+- 可访问性说明：可点击行具备焦点能力，但没有隐式 role。应按外层交互模式传入对应语义 role，并让 `right` 中的交互控件避开整行点击目标。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`.
+- Types: `packages/tuffex/packages/components/src/card-item/src/types.ts` exports `CardItemProps` and `CardItemAvatarShape`.
+- Coverage: `packages/tuffex/packages/components/src/card-item/__tests__/card-item.test.ts` verifies generated media, slots, keyboard activation, disabled state, and layout fallbacks.
+<TuffDocSourceLink />

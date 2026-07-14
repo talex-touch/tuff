@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [switch, toggle, state]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -149,54 +149,41 @@ code: |
 ---
 :::
 
-## States
-::TuffPropsTable
----
-rows:
-  - name: disabled
-    description: 'Removes focusability and blocks click, Enter, and Space toggles.'
-  - name: size
-    values: ['small', 'default', 'large']
-    description: 'Visual size variant. The default size does not add a size modifier class.'
----
-::
+## API
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: 'boolean'
-    default: 'false'
-    description: 'Checked state controlled by v-model.'
-  - name: size
-    type: "'small' | 'default' | 'large'"
-    default: "'default'"
-    description: 'Visual size variant.'
-  - name: disabled
-    type: 'boolean'
-    default: 'false'
-    description: 'Disables focus and prevents pointer or keyboard toggles.'
----
-::
+### Props
 
-## Events
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | `false` | Checked state controlled by `v-model`. |
+| `size` | `'small' \| 'default' \| 'large'` | `'default'` | Visual size variant. The default size does not add a modifier class. |
+| `disabled` | `boolean` | `false` | Removes focusability and blocks click, Enter, and Space toggles. |
+
+### Events
 
 | Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(value: boolean) => void` | v-model update emitted after an enabled click, Enter, or Space toggle. |
-| `change` | `(value: boolean) => void` | Emitted with the next checked state after an enabled toggle. |
+|------|--------|-------------|
+| `update:modelValue` | `(value: boolean) => void` | Emitted with the next checked state after an enabled click, Enter, or Space toggle. |
+| `change` | `(value: boolean) => void` | Emitted with the same next checked state after an enabled user toggle. |
 
-## Design Notes
-- Movement and color should sync.
-- Use smaller size for dense lists, larger for settings.
-- Keep labels vertically centered when placed before or after the switch.
-- Prefer overriding only the active color so disabled and focus states remain intact.
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| - | - | `TuffSwitch` has no slots. Pair it with external labels or setting-row copy. |
+
+## Interaction Contract
+
+- The root renders `role="switch"`, `aria-checked`, `aria-disabled`, and `tabindex="0"` while enabled.
+- `disabled=true` sets `tabindex="-1"`, adds `is-disabled`, and prevents click, Enter, and Space from emitting events.
+- Enabled toggles emit both `update:modelValue` and `change`; the component does not mutate external state without `v-model` update handling.
+- `size="small"` and `size="large"` add modifier classes; `size="default"` intentionally leaves the base class only.
 
 ## Composite Patterns
+
 ### Settings Row
 Switch paired with labels, helper copy, and live state text for settings lists.
-:::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -243,4 +230,27 @@ code: |
   }
   </style>
 ---
-:::
+::::
+
+## Best Practices
+
+- Use switches for immediate boolean settings. Use checkboxes when the value is part of a submitted form or multi-select group.
+- Place a readable text label next to the switch; the component itself intentionally renders only the control.
+- Keep labels vertically centered and leave enough hit area around dense settings rows.
+- Override active colors with local classes only; preserve disabled, focus, and size classes from the base component.
+
+## Review Notes
+
+- **Model contract:** `TxSwitch` is controlled by `modelValue`. User interaction emits both `update:modelValue` and `change` with the next boolean; the visual state updates after the parent writes the new prop back.
+- **Keyboard contract:** Enabled switches respond to click, Enter, and Space. Disabled switches set `tabindex="-1"`, keep `aria-disabled="true"`, and emit nothing.
+- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click and keyboard emissions, disabled blocking, and disabled tabindex/aria state.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/switch/src/TxSwitch.vue`.
+- Style source: `packages/tuffex/packages/components/src/switch/style/index.scss`.
+- Export entry: `packages/tuffex/packages/components/src/switch/index.ts` exports `TuffSwitch`, aliases `TxSwitch`, and installs the component under its `TuffSwitch` name.
+- Coverage: `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts` verifies semantics, size classing, click/keyboard updates, and disabled behavior.
+
+<TuffDocSourceLink />
+

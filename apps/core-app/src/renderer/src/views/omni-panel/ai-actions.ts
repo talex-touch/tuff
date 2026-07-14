@@ -1,7 +1,11 @@
 import type {
+  IntelligenceChatPayload,
+  IntelligenceContextExecutionRequest,
+  IntelligenceContextExecutionResult,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult
 } from '@talex-touch/tuff-intelligence'
+import { createIntelligenceContextExecutionRequest } from '@talex-touch/utils/intelligence'
 import type {
   OmniPanelContextSource,
   OmniPanelDesktopContextCapsule
@@ -22,6 +26,17 @@ export interface OmniPanelAiInvokeRequest {
   capabilityId: string
   payload: unknown
   options: IntelligenceInvokeOptions
+}
+
+export interface OmniPanelAiClient {
+  invoke(
+    capabilityId: string,
+    payload: unknown,
+    options?: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<unknown>>
+  contextInvoke?(
+    request: IntelligenceContextExecutionRequest
+  ): Promise<IntelligenceContextExecutionResult<unknown>>
 }
 
 export interface OmniPanelAiPreviewResult {
@@ -169,6 +184,47 @@ export function buildOmniPanelAiInvokeRequest(params: {
     },
     options: { metadata }
   }
+}
+
+export async function executeOmniPanelAiInvoke(
+  client: OmniPanelAiClient,
+  request: OmniPanelAiInvokeRequest,
+  actionId: OmniPanelAiActionId
+): Promise<IntelligenceInvokeResult<unknown>> {
+  if (request.capabilityId !== 'text.chat' || typeof client.contextInvoke !== 'function') {
+    return await client.invoke(request.capabilityId, request.payload, request.options)
+  }
+
+  const payload = request.payload as IntelligenceChatPayload
+  const messages = Array.isArray(payload.messages) ? payload.messages : []
+  let currentInput = ''
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role === 'user' && typeof message.content === 'string' && message.content.trim()) {
+      currentInput = message.content.trim()
+      break
+    }
+  }
+  if (!currentInput) {
+    throw new Error('OMNI_PANEL_CONTEXT_INPUT_REQUIRED')
+  }
+
+  const execution = await client.contextInvoke(
+    createIntelligenceContextExecutionRequest({
+      capabilityId: request.capabilityId,
+      input: currentInput,
+      payload,
+      options: request.options,
+      policy: {
+        entrypointId: 'omni-panel.ai-action',
+        owner: 'omni-panel',
+        mode: 'new',
+        scope: 'light',
+        objective: actionId
+      }
+    })
+  )
+  return execution.invocation
 }
 
 export function normalizeOmniPanelAiResult(

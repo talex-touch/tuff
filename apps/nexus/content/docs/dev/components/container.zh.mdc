@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [container, layout, grid]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Container 容器
 
@@ -281,9 +282,9 @@ code: |
 ---
 :::
 
-## API 参考
+## API
 
-### Container Props
+### Props
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -314,6 +315,26 @@ code: |
 | lg | `number` | - | 1024px 到 1279px 使用的列数 |
 | xl | `number` | - | 1280px 及以上使用的列数 |
 
+### Slots
+
+| 组件 | 插槽 | 参数 | 说明 |
+|------|------|------|------|
+| `TxContainer` | `default` | - | 受容器宽度和左右留白约束的页面或面板内容。 |
+| `TxRow` | `default` | - | `TxCol` 子项或其他 flex 子项。 |
+| `TxCol` | `default` | - | 列内容。 |
+
+### Events
+
+`TxContainer`、`TxRow` 和 `TxCol` 不触发事件。
+
+
+## 交互契约
+
+- `TxContainer` 始终渲染 `width: 100%` 的块级包裹；`fluid` 会移除最大宽度限制。
+- `padding` 预设分别映射为 12 / 16 / 24 px，数字 padding 会被限制为不小于 0。
+- `margin="auto"` 会水平居中；字符串或数字 margin 会按 `0 <value>` 应用到左右两侧。
+- `TxRow` 会按当前断点计算单一 gutter，并通过 `--tx-row-gutter` 暴露；列组件会把 gutter 均分到左右 padding。
+- `TxCol` 会把 `span` 和 `offset` 限制在 0–24 栅格内，断点 prop 未提供时回退到 `span`。
 ## 响应式断点
 
 TouchX UI 使用以下断点：
@@ -355,13 +376,11 @@ code: |
 
 ## 最佳实践
 
-### 使用建议
-
-1. **响应式优先**：优先使用响应式栅格系统
-2. **语义化布局**：使用语义化的HTML标签
-3. **合理间距**：保持一致的间距规范
-4. **性能考虑**：避免过度嵌套容器
-
+- 每个页面区块优先只使用一个 `TxContainer`；多层嵌套会让宽度和留白难以判断。
+- 使用响应式 `xs` / `sm` / `md` / `lg` / `xl` span 切换布局，不要为不同断点复制多份 DOM。
+- `gutter` 应和页面间距尺度保持一致；避免同一行里混用过大的 gutter 和过小的列内边距。
+- 在布局原语内部放置语义元素（`main`、`aside`、`nav`、`section`），因为这些原语自身只渲染中性 `div`。
+- 只有横向滚动或固定宽度工具栏才设置 `wrap=false`；普通内容栅格应允许换行。
 ### 常见布局模式
 
 :::TuffCodeBlock{lang="vue"}
@@ -394,3 +413,16 @@ code: |
 :::
 
 TouchX UI 的容器组件提供了灵活强大的布局能力，帮助您快速构建响应式的页面结构。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue`、`TxCol.vue` 与 `container.test.ts`。
+- 现有测试覆盖容器 CSS 变量、padding 限制、fluid/responsive 类、自定义 margin、行 gutter/对齐/分布/换行样式、响应式 gutter 选择，以及列 span/offset/响应式样式。
+- 可访问性说明:三个原语都渲染中性 `div`;请在插槽内容里补充语义地标和标题,不要期待布局原语提供文档结构。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/container/src/TxContainer.vue`、`TxRow.vue` 与 `TxCol.vue`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/container/__tests__/container.test.ts` 覆盖间距变量、数值限制、响应式类、行 flex 样式、响应式 gutter 与列尺寸。
+<TuffDocSourceLink />

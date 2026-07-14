@@ -41,7 +41,7 @@ const labels = computed(() => locale.value === 'zh'
       <TxBlockSlot
         :title="labels.theme"
         :description="labels.themeDesc"
-        default-icon="i-carbon-color-palette"
+        default-icon="i-ri-palette-line"
       >
         <TxSelect v-model="theme" :placeholder="labels.placeholder" class="group-block-showcase__select">
           <TuffSelectItem value="light" :label="labels.light" />

@@ -186,6 +186,67 @@ describe('txDrawer', () => {
     expect(document.activeElement).toBe(drawer)
   })
 
+  it('traps Tab focus inside the visible drawer', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        title: 'Settings',
+      },
+      slots: {
+        default: '<button class="drawer-action">Action</button>',
+        footer: '<button class="drawer-footer">Save</button>',
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    const drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    const closeButton = document.body.querySelector<HTMLButtonElement>('.tx-drawer__close')
+    const footerButton = document.body.querySelector<HTMLButtonElement>('.drawer-footer')
+
+    const enterEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    document.dispatchEvent(enterEvent)
+    expect(enterEvent.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(closeButton)
+
+    footerButton?.focus()
+    const wrapEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    document.dispatchEvent(wrapEvent)
+    expect(wrapEvent.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(closeButton)
+
+    closeButton?.focus()
+    const reverseEvent = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+    document.dispatchEvent(reverseEvent)
+    expect(reverseEvent.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(footerButton)
+
+    wrapper.unmount()
+    expect(document.activeElement).toBe(document.getElementById('before'))
+    expect(drawer?.isConnected).toBe(false)
+  })
+
+  it('keeps focus on the dialog when no child control is focusable', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        showClose: false,
+        showFooter: false,
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    const drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    document.dispatchEvent(tabEvent)
+
+    expect(tabEvent.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(drawer)
+
+    wrapper.unmount()
+  })
+
   it('closes from close button, mask click, and Escape', async () => {
     const wrapper = mount(TxDrawer, {
       props: {

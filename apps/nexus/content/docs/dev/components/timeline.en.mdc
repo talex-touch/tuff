@@ -51,8 +51,8 @@ code: |
   </template>
 ---
 ::
-## API (Lite)
-### TxTimeline Props
+## API
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -90,17 +90,40 @@ rows:
 ---
 :::
 
+### Slots
+
+| Component | Slot | Props | Description |
+|-----------|------|------|------|
+| `TxTimeline` | `default` | - | Timeline items. |
+| `TxTimelineItem` | `default` | - | Optional event description rendered below the title/time row. |
+
+### Events
+
+`TxTimeline` and `TxTimelineItem` do not emit events.
+
 ## Interaction Contract
 
 - `TxTimeline` exposes `role="list"` and each `TxTimelineItem` exposes `role="listitem"`.
 - `active` applies to both the item and dot, highlighting the current event.
 - `layout="horizontal"` is provided to child items through context, switching the event stream to a horizontal layout.
 
-## Source
-<TuffDocSourceLink />
+
+## Best Practices
+
+- Put the durable status in `title` or slot text; use `color` only as a visual reinforcement.
+- Mark exactly one current event with `active` in step-by-step flows.
+- Use `layout="horizontal"` for short milestone sequences; keep audit logs and long histories vertical.
+- Keep `time` concise and consistently formatted across items.
+- Use `icon` sparingly. Dense timelines are more readable when only exceptional states get icons.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue` and `packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue`.
+- Source: `packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue` confirms `role="list"`, vertical/horizontal layout class resolution, and context provided to child items.
+- Item source: `packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue` confirms `role="listitem"`, title/time/default-slot rendering, optional icon rendering, semantic dot color classes, active item/dot classes, and injected layout classes.
+- Type contracts: `packages/tuffex/packages/components/src/timeline/src/types.ts` defines layout and item color unions plus component prop contracts.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/timeline/__tests__/timeline.test.ts` covers list semantics, default vertical layout, horizontal layout injection, title/time/default slot/icon rendering, semantic color class, and active item/dot state.
 - Screenshot: `.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`.
 - Recommendation: mark the current event with `active`; keep `color` within `'default' | 'primary' | 'success' | 'warning' | 'error'` and avoid undefined semantic tones.
+
+## Source
+<TuffDocSourceLink />

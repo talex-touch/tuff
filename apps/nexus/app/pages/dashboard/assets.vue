@@ -1135,6 +1135,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           :columns="pendingReviewColumns"
           :data="pendingReviewItems"
           :row-key="resolvePendingReviewKey"
+          interactive-rows
           class="min-w-[860px]"
           @row-click="handlePendingReviewRowClick"
         >
@@ -1305,6 +1306,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
             :data="myPlugins"
             row-key="id"
             table-layout="fixed"
+            interactive-rows
             class="DashboardAssetsTable min-w-[1040px]"
             @row-click="handlePluginRowClick"
           >

@@ -1,83 +1,80 @@
 ---
 title: Tag
-description: Categories and labels
+description: Compact labels for categories, filters, semantic states, and removable metadata.
 category: Basic
 status: beta
 since: 1.0.0
 tags: [tag, label, badge]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
-
 # Tag
 
+`TxTag` renders a compact status-style label with optional icon, custom color tokens, removable close affordance, and click events for lightweight state toggles.
+
+Reviewed against `packages/tuffex/packages/components/src/tag/src/types.ts`, `TxTag.vue`, and `tag.test.ts`.
+
 ## Demo
+
 ### Tags
-Color and size variations
+
 :::TuffDemoWrapper{demo="TagTagsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxTag label="Default" size="sm" />
-    <TxTag label="Success" size="md" color="var(--tx-color-success)" />
-    <TxTag label="Warning" size="sm" color="var(--tx-color-warning)" />
-    <TxTag label="Danger" size="md" color="var(--tx-color-danger)" />
+    <div class="tuff-demo-row">
+      <TxTag label="Default" size="sm" />
+      <TxTag label="Success" size="md" color="var(--tx-color-success)" />
+      <TxTag label="Warning" size="sm" color="var(--tx-color-warning)" />
+      <TxTag label="Danger" size="md" color="var(--tx-color-danger)" />
+    </div>
   </template>
 ---
 :::
 
 ### Closable
+
 Use closable tags for removable filters or user-defined labels.
+
 :::TuffDemoWrapper{demo="TagClosableDemo" code-lang="vue"}
 ---
 code: |
-  <script setup>
+  <script setup lang="ts">
   import { ref } from 'vue'
 
   const tags = ref(['Design', 'Docs', 'Pending'])
-
-  function removeTag(tag) {
+  function removeTag(tag: string) {
     tags.value = tags.value.filter(item => item !== tag)
   }
   </script>
 
   <template>
-    <TxTag
-      v-for="tag in tags"
-      :key="tag"
-      :label="tag"
-      closable
-      @close="removeTag(tag)"
-    />
+    <TxTag v-for="tag in tags" :key="tag" :label="tag" closable @close="removeTag(tag)" />
   </template>
 ---
 :::
 
 ### Icon and Custom Color
-Combine `icon`, `color`, `background`, and `border` for semantic tags.
+
 :::TuffDemoWrapper{demo="TagIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxTag label="AI Pick" icon="i-carbon-ai" color="#8b5cf6" />
-    <TxTag label="Synced" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
-    <TxTag
-      label="Protected"
-      icon="i-carbon-locked"
-      color="#f59e0b"
-      background="rgba(245, 158, 11, 0.14)"
-      border="rgba(245, 158, 11, 0.36)"
-    />
+    <div class="tuff-demo-row">
+      <TxTag label="AI Pick" icon="i-carbon-ai" color="#8b5cf6" />
+      <TxTag label="Synced" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
+      <TxTag label="Protected" icon="i-carbon-locked" color="#f59e0b" background="rgba(245, 158, 11, 0.14)" border="rgba(245, 158, 11, 0.36)" />
+    </div>
   </template>
 ---
 :::
 
 ### Interaction and Disabled
-Clickable tags can toggle lightweight state. Disabled tags block both `click` and `close`.
+
 :::TuffDemoWrapper{demo="TagStateDemo" code-lang="vue"}
 ---
 code: |
-  <script setup>
+  <script setup lang="ts">
   import { ref } from 'vue'
 
   const active = ref(false)
@@ -94,65 +91,76 @@ code: |
 ---
 :::
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: label
-    type: 'string'
-    default: '-'
-    description: 'Label text'
-  - name: color
-    type: 'string'
-    default: '-'
-    description: 'Primary text/icon color'
-  - name: background
-    type: 'string'
-    default: "''"
-    description: 'Custom background color'
-  - name: border
-    type: 'string'
-    default: "''"
-    description: 'Custom border color'
-  - name: icon
-    type: 'string'
-    default: "''"
-    description: 'Leading icon class'
-  - name: size
-    type: "'sm' | 'md'"
-    default: 'sm'
-    description: 'Size'
-  - name: closable
-    type: 'boolean'
-    default: 'false'
-    description: 'Show close button'
-  - name: disabled
-    type: 'boolean'
-    default: 'false'
-    description: 'Disable click and close events'
----
-::
-
-## Contract
-
-Tag renders with `role="status"`. The default slot replaces `label`. The close button stops propagation, so closing a tag does not also emit the tag `click` event. Disabled tags block both `click` and `close`.
-
-## Composite Patterns
 ### Tag + Button
-Tags paired with actions.
+
 :::TuffDemoWrapper{demo="TagTagButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxTag class="tag-action-demo__tag" label="Beta" size="md" />
-    <TxButton size="sm">Upgrade</TxButton>
+    <div class="tuff-demo-row">
+      <TxTag label="Beta" size="md" />
+      <TxButton size="sm">Upgrade</TxButton>
+    </div>
   </template>
-
-  <style scoped>
-  .tag-action-demo__tag {
-    box-sizing: border-box;
-    height: 26px;
-  }
-  </style>
 ---
 :::
+
+## Interaction Contract
+
+- The root renders `role="status"`; tag text must be meaningful without relying on color.
+- `label` defaults to an empty string; `null` is normalized to an empty string.
+- The default slot replaces `label` content but keeps the icon and close affordance.
+- `color` defaults to `var(--tx-color-primary)`. Missing `background` and `border` are derived from `color` with `color-mix`.
+- The close affordance is a native `button type="button"` with `aria-label="Remove tag"`.
+- Close clicks stop propagation, so `close` does not also emit the tag-level `click` event.
+- `disabled` reduces opacity, disables the close button, and blocks both `click` and `close` emits.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `label` | `string \| null` | `''` | Text content when the default slot is not provided. |
+| `icon` | `string` | `''` | Leading icon class. |
+| `color` | `string` | `'var(--tx-color-primary)'` | Main text/icon color and base color for derived background/border. |
+| `background` | `string` | `''` | Custom background color. Defaults to a translucent mix of `color`. |
+| `border` | `string` | `''` | Custom border color. Defaults to a translucent mix of `color`. |
+| `size` | `'sm' \| 'md'` | `'sm'` | Tag density. |
+| `closable` | `boolean` | `false` | Render the close button. |
+| `disabled` | `boolean` | `false` | Disable tag click and close interactions. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `click` | `MouseEvent` | Emitted when the tag root is clicked and `disabled=false`. |
+| `close` | - | Emitted when the close button is clicked and `disabled=false`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Replaces the `label` text inside the tag content area. |
+
+## Best Practices
+
+- Use tags for metadata and state hints, not as a replacement for primary buttons.
+- Keep `label` concise; long strings break the compact rhythm of tables and filter rows.
+- Use `closable` for filters, user labels, and temporary scopes where removal is expected.
+- Provide explicit `background`/`border` when using custom raw colors that need stronger contrast.
+- For destructive removal, confirm in the host before mutating data; `TxTag` only emits intent.
+
+## Review Notes
+
+- **Accessibility note:** The close affordance is a real `button`, but the tag-level `click` handler lives on a non-focusable `span`. Use `click` only for optional pointer affordances; choose a button or checkbox pattern when the tag action must be keyboard reachable.
+- **Verified coverage:** `tag.test.ts` checks label/icon/style rendering, default-slot override, click and close emission separation, disabled blocking, and disabled close-button state.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tag/src/TxTag.vue`.
+- Types: `packages/tuffex/packages/components/src/tag/src/types.ts` exports `TagProps` and `TagEmits`.
+- Export alias: `packages/tuffex/packages/components/src/tag/index.ts` exports `Tag`, `TxTag`, `TagProps`, `TagEmits`, and `TxTagInstance`.
+- Coverage: `packages/tuffex/packages/components/src/tag/__tests__/tag.test.ts` verifies rendering, slots, events, and disabled behavior.
+
+<TuffDocSourceLink />

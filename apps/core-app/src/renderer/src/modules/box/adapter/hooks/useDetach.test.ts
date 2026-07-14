@@ -1,7 +1,11 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
 import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './detached-division'
-import { buildDetachedFeatureConfig } from './useDetach'
+import {
+  buildCoreBoxFlowPayload,
+  buildDetachedFeatureConfig,
+  resolveCoreBoxFlowActorPluginId
+} from './useDetach'
 
 function createFeatureItem(overrides: Partial<TuffItem> = {}): TuffItem {
   return {
@@ -149,6 +153,40 @@ describe('buildDetachedFeatureConfig', () => {
     )
 
     expect(detached).toBeNull()
+  })
+})
+
+describe('CoreBox Flow payload', () => {
+  it('preserves the query and uses the real plugin identity instead of plugin-features', () => {
+    const item = createFeatureItem({
+      meta: {
+        pluginName: 'touch-quickops',
+        featureId: 'quickops'
+      }
+    })
+    const payload = buildCoreBoxFlowPayload(item, 'start writing sprint')
+
+    expect(payload).toEqual({
+      type: 'json',
+      data: { item, query: 'start writing sprint' },
+      context: {
+        sourcePluginId: 'touch-quickops',
+        sourceFeatureId: 'quickops'
+      }
+    })
+    expect(resolveCoreBoxFlowActorPluginId(payload)).toBe('touch-quickops')
+  })
+
+  it('fails closed when a plugin-features item has no owning plugin identity', () => {
+    const payload = buildCoreBoxFlowPayload(
+      createFeatureItem({
+        meta: { featureId: 'quickops' }
+      }),
+      'start writing sprint'
+    )
+
+    expect(payload.context?.sourcePluginId).toBe('corebox')
+    expect(resolveCoreBoxFlowActorPluginId(payload)).toBeUndefined()
   })
 })
 

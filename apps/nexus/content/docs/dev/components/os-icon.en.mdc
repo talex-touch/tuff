@@ -1,0 +1,71 @@
+---
+title: OS Icon
+description: Inline operating-system icon for platform labels.
+category: Basic
+status: beta
+since: 1.0.0
+tags: [platform, os, icon]
+syncStatus: reviewed
+verified: true
+---
+# OS Icon
+
+`TxOsIcon` renders a macOS, Windows, or Linux glyph from `platform` / `os` strings. It is useful in release matrices, device lists, and platform-specific settings.
+
+Reviewed against `packages/tuffex/packages/components/src/os-icon/src/TxOsIcon.vue`.
+
+## Basic Usage
+
+### OS Icon
+::::TuffDemoWrapper{demo="OsIconOsIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxOsIcon platform="darwin" os="macOS 15" />
+    <TxOsIcon platform="win32" os="Windows 11" />
+    <TxOsIcon platform="linux" os="Ubuntu 24.04" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- `platform` and `os` are concatenated and lowercased before detection.
+- macOS is selected for strings containing `darwin`, `mac`, or `os x`.
+- Windows is selected for `windows`, `win32`, or `win64`.
+- Linux is selected for `linux`, `ubuntu`, `debian`, `fedora`, or `arch`.
+- Unknown values fall back to the macOS glyph. Wrap the icon with visible text when the platform must be explicit.
+- The SVGs are `aria-hidden`, so the surrounding label owns the accessible name.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `platform` | `string` | `''` | Runtime/platform identifier such as `darwin`, `win32`, or `linux`. |
+| `os` | `string` | `''` | Human-readable OS string used as an additional detection source. |
+
+### Events
+
+`TxOsIcon` does not emit component events.
+
+## Slots
+
+`TxOsIcon` does not expose slots. Pair it with adjacent visible text instead of relying on the decorative SVG for meaning.
+
+## Best Practices
+
+- Always pair `TxOsIcon` with visible platform text in tables or lists.
+- Normalize platform identifiers in your data source instead of relying on ambiguous display names.
+- Use CSS font-size or text utility classes to size the icon; the component uses `1em`.
+- Treat the fallback as a visual default, not a validation signal.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/os-icon/src/TxOsIcon.vue` confirms string normalization, platform detection order, macOS fallback, `aria-hidden` SVGs, and `1em` sizing.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/os-icon/__tests__/os-icon.test.ts` covers Windows aliases, Linux distro aliases, macOS aliases/default fallback, and decorative SVG accessibility/class shape.
+- Export: `packages/tuffex/packages/components/src/os-icon/index.ts` wraps the component with `withInstall` and exports `TxOsIconInstance`.
+
+## Source
+<TuffDocSourceLink />

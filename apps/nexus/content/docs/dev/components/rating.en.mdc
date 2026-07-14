@@ -2,7 +2,7 @@
 title: Rating
 description: Star rating input
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -114,22 +114,24 @@ code: |
 
 Rating exposes the star group as a radio group. `disabled` and `readonly` both block updates; `readonly` is display-only and removes star button interaction while keeping the rating visible.
 
-## API (Lite)
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
   - name: modelValue
     type: number
     default: '0'
-    description: Current score
+    description: Current score passed by `v-model`.
   - name: maxStars
     type: number
     default: '5'
-    description: Total stars
+    description: Number of rendered star buttons.
   - name: precision
     type: "number | 0.5"
     default: '1'
-    description: Step size
+    description: Step size. `0.5` enables half-star toggling; other numeric values only affect score text precision.
   - name: showText
     type: boolean
     default: 'false'
@@ -137,57 +139,91 @@ rows:
   - name: disabled
     type: boolean
     default: 'false'
-    description: Disable interaction
+    description: Disables star buttons and marks the root as aria-disabled.
   - name: readonly
     type: boolean
     default: 'false'
-    description: Display-only mode
+    description: Display-only mode. Star buttons are disabled and the root is marked aria-readonly.
   - name: icon
     type: "string | TxIconSource"
     default: '-'
-    description: Shared rating icon
+    description: Shared icon used by filled and empty layers when state-specific icons are not provided.
   - name: filledIcon
     type: "string | TxIconSource"
     default: 'star'
-    description: Filled icon
+    description: Filled icon. Falls back to `icon`, then `star`.
   - name: emptyIcon
     type: "string | TxIconSource"
     default: 'star'
-    description: Empty icon
+    description: Empty icon. Falls back to `icon`, then `star`.
   - name: halfIcon
     type: "string | TxIconSource"
     default: '-'
-    description: Half icon; when omitted, Rating clips the filled layer from the left
+    description: Half icon. When omitted, Rating clips the filled layer from the left.
   - name: filledColor
     type: string
     default: '#fbbf24'
-    description: Filled color
+    description: Filled icon color; CSS fallback is `#fbbf24`.
   - name: emptyColor
     type: string
     default: '#d1d5db'
-    description: Empty color
+    description: Empty icon color; CSS fallback is `#d1d5db`.
   - name: hoverColor
     type: string
     default: 'filledColor'
-    description: Hover color
+    description: Hover color for the filled layer; falls back to `filledColor` / `#fbbf24`.
   - name: textColor
     type: string
     default: '#6b7280'
-    description: Score text color
+    description: Score text color; CSS fallback is `#6b7280`.
   - name: size
     type: "number | string"
     default: '20px'
-    description: Star icon size
+    description: Star icon size. Numbers are converted to px; CSS fallback is `20px`.
   - name: gap
     type: "number | string"
     default: '2px'
-    description: Gap between stars
+    description: Gap between stars. Numbers are converted to px; CSS fallback is `2px`.
   - name: animated
     type: boolean
     default: 'true'
-    description: Play the click pop animation
+    description: Play the click pop / ripple animation after selection.
 ---
 :::
 
+### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `update:modelValue` | `(value: number)` | Emitted after an interactive star click with the next rating value. |
+| `change` | `(value: number)` | Mirrors `update:modelValue` for consumers that use change handlers. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `text` | `{ value: number, max: number }` | Replaces the default `value / max` label when `showText` is true. |
+
+## Best Practices
+
+- Use `precision="0.5"` only when half-step feedback is meaningful. For yes/no confidence or coarse satisfaction, full stars are easier to scan.
+- Keep `disabled` for unavailable input and `readonly` for display-only historical scores; both block updates, but they communicate different intent.
+- Provide `showText` or a custom `#text` slot when exact numeric value matters, especially for half-star values.
+- Prefer state-specific `filledIcon` / `emptyIcon` / `halfIcon` only when the icon set has clear contrast. Otherwise use one shared `icon` and tune colors.
+- Disable `animated` in dense forms, tables, or reduced-motion-heavy contexts where click pop animation distracts from the data entry flow.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/rating/src/types.ts`, `TxRating.vue`, and `rating.test.ts`.
+- Existing tests cover half-star clipping, full-star and half-star reselection, model/change emission, readonly/disabled blocking, custom colors/icons/sizing, disabled animation, radio semantics, and `text` slot props.
+- API note: `precision="0.5"` enables half-star toggling when clicking the currently selected full star; other numeric precision values affect score text precision only.
+- Accessibility note: the star row is a radio group. Use `readonly` for historical display and `disabled` for unavailable input.
+
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/rating/src/TxRating.vue`.
+- Types: `packages/tuffex/packages/components/src/rating/src/types.ts` exports `RatingProps`, `RatingEmits`, and `RatingIcon`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/rating/__tests__/rating.test.ts` verifies half-star clipping, model/change emits, half-star reselection, readonly/disabled blocking, custom style/icons, disabled animation, radio semantics, and `text` slot props.
+
 <TuffDocSourceLink />
+

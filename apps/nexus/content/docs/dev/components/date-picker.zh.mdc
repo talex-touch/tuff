@@ -2,7 +2,7 @@
 title: "DatePicker 日期选择"
 description: "基于 TxPicker 的日期选择器，使用 YYYY-MM-DD 模型。"
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # DatePicker 日期选择
@@ -86,7 +86,7 @@ code: |
 - 空值或非法 `modelValue` 会先使用本地当前日期初始化，再按 `min` / `max` 进行 clamp。
 - `min` 与 `max` 使用 `YYYY-MM-DD`；非法边界会被忽略。
 - 默认 `variant="picker"` 保持滚轮选择器；`variant="field"` 使用输入框 + 日历网格；`variant="adaptive"` 在桌面宽度切到字段日历，窄屏保留滚轮选择器。
-- 弹层模式通过 `v-model:visible` 控制显示；`popup` 为 `false` 时以内联选择器渲染。字段日历内部也会同步 `update:visible`、`open` 与 `close`。
+- `picker` 形态的弹层模式通过 `v-model:visible` 控制；`popup="false"` 会将该形态以内联方式渲染。`field` 形态始终通过 `TxPopover` 渲染，并同步 `update:visible`、`open` 与 `close`。
 - `confirm` 会输出当前格式化日期，并沿用底层 Picker 的关闭行为。滚动列实时变更会同时触发 `update:modelValue` 与 `change`。
 
 ## API
@@ -97,7 +97,7 @@ code: |
 |------|------|---------|------|
 | `modelValue` | `string` | `''` | 当前日期，格式为 `YYYY-MM-DD`。空值或非法值会按今天初始化，并在存在 `min` / `max` 时被限制到边界内。 |
 | `visible` | `boolean` | `false` | 通过 `v-model:visible` 控制弹层显示状态。 |
-| `popup` | `boolean` | `true` | 为 `true` 时使用 Picker 弹层；为 `false` 时以内联模式渲染。 |
+| `popup` | `boolean` | `true` | 仅控制 `picker` 形态：`true` 使用 `TxPicker` 弹层，`false` 以内联方式渲染。`field` 形态通过 `TxPopover` 渲染。 |
 | `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | 选择渲染形态。`picker` 为滚轮选择器，`field` 为字段日历，`adaptive` 会按视口宽度自动选择。 |
 | `title` | `string` | `'Select date'` | 转发给 `TxPicker` 的工具栏标题。 |
 | `placeholder` | `string` | `'Select date'` | 字段日历在空值时显示的占位文本。 |
@@ -123,5 +123,29 @@ code: |
 | `open` | - | Picker 打开时转发。 |
 | `close` | - | Picker 关闭时转发。 |
 
+### Slots
+
+`TxDatePicker` 不暴露自定义插槽。字段标签、帮助文本、校验消息或通过 `v-model:visible` 打开弹层的触发按钮，应由外层表单布局承载。
+
+## 最佳实践
+
+- 日期只按 `YYYY-MM-DD` 字符串存储。组件不承载时区或具体时间语义。
+- 桌面密集表单使用 `variant="field"`，移动优先流程使用 `variant="picker"`；只有两个表面都在同一布局里审过时才使用 `variant="adaptive"`。
+- `min` 和 `max` 必须保持合法 `YYYY-MM-DD`；非法边界会被忽略，可能让本应不可选的日期出现。
+- 周边卡片已经负责展开和留白时，使用 `variant="picker"` 搭配 `popup="false"` 内联选择器；字段形态基于 popover。
+- 有明确地区习惯时显式设置 `weekStartsOn`；默认日历网格从周日开始。
+
+## 审阅说明
+
+- **源码：** `TxDatePicker` 解析 `YYYY-MM-DD`，对空值或非法值使用本地当前日期初始化，按可解析的 `min` / `max` 进行 clamp，并在 `adaptiveBreakpoint` 处解析 `adaptive` 形态。
+- **类型：** `DatePickerProps` 声明了文档中的选择与展示属性；`DatePickerEmits` 声明了格式化的模型/变更、显示状态、确认、取消与生命周期事件。
+- **可访问性说明：** 字段触发器、月份导航和日期单元会按需使用禁用的原生按钮；日历提供带 `aria-selected` 的 `grid` / `gridcell` 角色，`picker` 形态则将其弹层属性转发给 `TxPicker`。
+- **实测覆盖:** `date-picker.test.ts` 覆盖模型到列值的规范化与展示属性转发、边界 clamp 与禁用选项、格式化值事件、显示状态与生命周期转发、字段日历选择，以及桌面端自适应渲染。
+
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/date-picker/src/TxDatePicker.vue`.
+- Types: `packages/tuffex/packages/components/src/date-picker/src/types.ts` exports `DatePickerProps`, `DatePickerEmits`, and `DatePickerVariant`.
+- Coverage: `packages/tuffex/packages/components/src/date-picker/__tests__/date-picker.test.ts` verifies prop forwarding, bounds clamping, disabled date options, formatted emits, visibility events, field calendar behavior, and adaptive desktop rendering.
+
 <TuffDocSourceLink />

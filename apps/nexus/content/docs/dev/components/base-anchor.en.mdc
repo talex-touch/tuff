@@ -5,7 +5,7 @@ category: Feedback
 status: beta
 since: 2.5.0
 tags: [popover, overlay, floating, gsap, animation]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # BaseAnchor
@@ -210,17 +210,22 @@ code: |
 |------|------|---------|-------------|
 | `modelValue` | `boolean` | `false` | Whether popover is open (v-model). |
 | `disabled` | `boolean` | `false` | Disable the popover. |
+| `eager` | `boolean` | `false` | Mount the floating panel before first open; useful when content must measure itself up front. |
 | `placement` | `BaseAnchorPlacement` | `'bottom-start'` | Floating placement. |
 | `offset` | `number` | `8` | Distance from reference element (px). |
 | `width` | `number` | `0` | Panel width (0 = content-driven width). |
 | `minWidth` | `number` | `0` | Minimum width. |
 | `maxWidth` | `number` | `360` | Maximum width. |
+| `maxHeight` | `number` | `420` | Maximum panel height before viewport clamping. |
+| `unlimitedHeight` | `boolean` | `false` | Disable panel height limiting; also active when `maxHeight <= 0`. |
 | `matchReferenceWidth` | `boolean` | `false` | Follow reference width when `width` is 0. |
+| `referenceClass` | `BaseAnchorClassValue` | `undefined` | Extra class value applied to the reference wrapper, not the floating panel. |
 | `virtualReference` | `BaseAnchorVirtualReference` | `undefined` | Use a virtual reference, such as a mouse coordinate, for placement. Useful for ContextMenu, canvas nodes, and cursor menus. |
 | `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer' }` | Unified animation config for motion type, timings, easing, and effect parameters. |
 | `duration` | `number` | `432` | Backward-compatible animation duration (ms); prefer `animation.duration`. |
 | `ease` | `string` | `'back.out(2)'` | Backward-compatible open ease; prefer `animation.ease`. |
 | `useCard` | `boolean` | `true` | Wrap floating content with built-in `TxCard`. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | Panel border variant forwarded to `TxCard` when `useCard=true`. |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background (TxCard background). |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow (TxCard shadow). |
 | `panelRadius` | `number` | `18` | Panel border radius (TxCard radius). |
@@ -229,6 +234,7 @@ code: |
 | `surfaceMotionAdaptation` | `'auto' \| 'manual' \| 'off'` | `'auto'` | Surface downgrade strategy: `auto` follows Anchor motion, `manual` reads `panelCard.surfaceMoving`, `off` disables downgrade adaptation. |
 | `showArrow` | `boolean` | `false` | Enable the triangle arrow that follows floating placement. |
 | `arrowSize` | `number` | `10` | Arrow size in px. |
+| `keepAliveContent` | `boolean` | `false` | Keep floating content mounted after close so inner state is preserved. |
 | `closeOnClickOutside` | `boolean` | `true` | Close on outside click. |
 | `closeOnEsc` | `boolean` | `true` | Close on Escape key. |
 | `toggleOnReferenceClick` | `boolean` | `true` | Toggle open state on reference click. |
@@ -260,7 +266,7 @@ code: |
 | Slot | Description |
 |------|-------------|
 | `reference` | Trigger element. |
-| `default` | Popover content. |
+| `default` | Popover content; receives `{ side }` from final Floating UI placement. |
 
 ### Exposed Methods
 
@@ -278,5 +284,28 @@ code: |
 - `toggleOnReferenceClick=false` keeps reference clicks from changing open state; use it for editable references that own their click behavior.
 - `virtualReference` overrides the DOM reference used by Floating UI, while the reference slot still renders to preserve structure and slot contracts. Use it for coordinate-anchored components.
 - `class`, `style`, and non-class attrs are applied to the floating panel. Use `referenceClass` for the reference wrapper.
+- `maxHeight` is clamped by available viewport height. Use `unlimitedHeight` only for panels with their own scroll container.
 - `surfaceMotionAdaptation` is an active hard-cut strategy: `auto` uses anchor motion state, `manual` forwards `panelCard.surfaceMoving`, and `off` forces `surfaceMoving=false`.
 - Prefer `animation` for new motion config. `duration` / `ease` are only compatibility fallbacks merged into animation defaults.
+- `eager` mounts before first open; `keepAliveContent` preserves content after close. Use them for measured/stateful panels, not static copy.
+
+## Best Practices
+
+- Reach for `TxPopover`, `TxDropdownMenu`, or `TxContextMenu` first. Use `TxBaseAnchor` when you are building a new anchored primitive or need virtual-reference positioning.
+- Keep floating panels lightweight. Move multi-step forms, destructive confirmations, or full-screen flows to Drawer/Dialog components.
+- For coordinate-anchored menus, pass `virtualReference` and call `updatePosition()` after pointer or canvas transforms change.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`, `base-anchor-motion.ts`, `types.ts`, and `base-anchor.test.ts`.
+- Existing tests cover uncontrolled toggling, controlled outside/Escape close paths, disabled blocking, close/toggle switches, floating attrs and reference classes, animation variants with legacy duration/ease fallbacks, and surface-motion adaptation strategies.
+- Accessibility note: `TxBaseAnchor` is positioning infrastructure only. The built primitive must provide menu/dialog/listbox roles, focus handling, and keyboard traversal appropriate to its content.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`.
+- Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` exports `BaseAnchorProps`, `BaseAnchorAnimationOptions`, and virtual-reference types.
+- **Verified coverage:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` verifies uncontrolled toggling, controlled outside/Escape closes, disabled behavior, close/toggle switches, floating attrs/reference classes, animation and legacy fallbacks, and surface-motion adaptation.
+
+<TuffDocSourceLink />

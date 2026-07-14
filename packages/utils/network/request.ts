@@ -1,6 +1,6 @@
 import type { NetworkFileOptions, NetworkRequestOptions, NetworkResponse } from './types'
+import { isTimeoutLikeError, NetworkHttpStatusError, NetworkTimeoutError } from './core/errors'
 import { isHttpSource, resolveLocalFilePath, toTfileUrl } from './file'
-import { NetworkHttpStatusError, NetworkTimeoutError, isTimeoutLikeError } from './core/errors'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
@@ -8,7 +8,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function appendQuery(
   url: string,
-  query: Record<string, string | number | boolean | null | undefined> | undefined
+  query: Record<string, string | number | boolean | null | undefined> | undefined,
 ): string {
   if (!query || Object.keys(query).length === 0) {
     return url
@@ -43,12 +43,12 @@ function toBodyInit(body: unknown, headers: Headers, method: string): BodyInit |
   }
 
   if (
-    typeof body === 'string' ||
-    body instanceof ArrayBuffer ||
-    body instanceof Blob ||
-    body instanceof URLSearchParams ||
-    body instanceof FormData ||
-    body instanceof ReadableStream
+    typeof body === 'string'
+    || body instanceof ArrayBuffer
+    || body instanceof Blob
+    || body instanceof URLSearchParams
+    || body instanceof FormData
+    || body instanceof ReadableStream
   ) {
     return body as BodyInit
   }
@@ -76,7 +76,7 @@ function createAbortSignal(timeoutMs?: number): AbortSignal | undefined {
 
 async function parseResponseData(
   response: Response,
-  responseType: NetworkRequestOptions['responseType']
+  responseType: NetworkRequestOptions['responseType'],
 ): Promise<unknown> {
   if (responseType === 'text') {
     return await response.text()
@@ -97,7 +97,8 @@ async function parseResponseData(
 
   try {
     return JSON.parse(text)
-  } catch {
+  }
+  catch {
     return text
   }
 }
@@ -110,7 +111,7 @@ function shouldTreatAsSuccess(status: number, validateStatus?: number[]): boolea
 }
 
 export async function request<T = unknown>(
-  options: NetworkRequestOptions
+  options: NetworkRequestOptions,
 ): Promise<NetworkResponse<T>> {
   const method = (options.method ?? 'GET').toUpperCase()
   const headers = new Headers(options.headers ?? {})
@@ -123,33 +124,45 @@ export async function request<T = unknown>(
       method,
       headers,
       body,
-      signal: options.signal ?? createAbortSignal(options.timeoutMs)
+      signal: options.signal ?? createAbortSignal(options.timeoutMs),
     })
-  } catch (error) {
+  }
+  catch (error) {
     if (isTimeoutLikeError(error)) {
       throw new NetworkTimeoutError(options.timeoutMs)
     }
     throw error
   }
 
-  const data = (await parseResponseData(response, options.responseType ?? 'json')) as T
+  const responseType = options.responseType ?? 'json'
+  if (!shouldTreatAsSuccess(response.status, options.validateStatus)) {
+    const responseData = options.captureErrorResponseData
+      ? await parseResponseData(response, responseType)
+      : undefined
+    if (!options.captureErrorResponseData)
+      await response.body?.cancel().catch(() => undefined)
+    throw new NetworkHttpStatusError(
+      response.status,
+      response.statusText,
+      response.url || url,
+      responseData,
+    )
+  }
+
+  const data = (await parseResponseData(response, responseType)) as T
   const normalizedResponse: NetworkResponse<T> = {
     status: response.status,
     statusText: response.statusText,
     headers: normalizeHeaders(response.headers),
     data,
     url: response.url,
-    ok: response.ok
-  }
-
-  if (!shouldTreatAsSuccess(response.status, options.validateStatus)) {
-    throw new NetworkHttpStatusError(response.status, response.statusText, response.url || url)
+    ok: response.ok,
   }
 
   return normalizedResponse
 }
 
-type FsPromiseLike = {
+interface FsPromiseLike {
   readFile: (path: string, options?: unknown) => Promise<Uint8Array | string>
 }
 
@@ -162,10 +175,12 @@ function getNodeFsPromises(): FsPromiseLike | null {
 
   try {
     return req('node:fs/promises') as FsPromiseLike
-  } catch {
+  }
+  catch {
     try {
       return req('fs/promises') as FsPromiseLike
-    } catch {
+    }
+    catch {
       return null
     }
   }
@@ -187,7 +202,7 @@ export async function readText(source: string, options: NetworkFileOptions = {})
       proxyOverride: options.proxyOverride,
       retryPolicy: options.retryPolicy,
       cooldownPolicy: options.cooldownPolicy,
-      skipCooldownCheck: options.skipCooldownCheck
+      skipCooldownCheck: options.skipCooldownCheck,
     })
     return response.data
   }
@@ -199,7 +214,8 @@ export async function readText(source: string, options: NetworkFileOptions = {})
       try {
         const value = await fs.readFile(localPath, options.encoding || 'utf-8')
         return typeof value === 'string' ? value : new TextDecoder().decode(value)
-      } catch (error) {
+      }
+      catch (error) {
         if (options.allowMissing) {
           return ''
         }
@@ -222,7 +238,7 @@ export async function readText(source: string, options: NetworkFileOptions = {})
 
 export async function readBinary(
   source: string,
-  options: NetworkFileOptions = {}
+  options: NetworkFileOptions = {},
 ): Promise<ArrayBuffer> {
   if (isHttpSource(source)) {
     const response = await request<ArrayBuffer>({
@@ -233,7 +249,7 @@ export async function readBinary(
       proxyOverride: options.proxyOverride,
       retryPolicy: options.retryPolicy,
       cooldownPolicy: options.cooldownPolicy,
-      skipCooldownCheck: options.skipCooldownCheck
+      skipCooldownCheck: options.skipCooldownCheck,
     })
     return response.data
   }
@@ -248,7 +264,8 @@ export async function readBinary(
           return toArrayBuffer(new TextEncoder().encode(value))
         }
         return toArrayBuffer(value)
-      } catch (error) {
+      }
+      catch (error) {
         if (options.allowMissing) {
           return new ArrayBuffer(0)
         }

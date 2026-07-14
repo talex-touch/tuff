@@ -70,10 +70,11 @@ export interface FeatureSDK {
    * Pushes multiple items to the CoreBox search results
    *
    * @param items - Array of TuffItem objects to display
+   * @returns The host push completion when the active runtime performs asynchronous item processing
    *
    * @example
    * ```typescript
-   * plugin.feature.pushItems([
+   * await plugin.feature.pushItems([
    *   {
    *     id: 'calc-result',
    *     title: { text: '42' },
@@ -83,7 +84,7 @@ export interface FeatureSDK {
    * ])
    * ```
    */
-  pushItems: (items: TuffItem[]) => void
+  pushItems: (items: TuffItem[]) => void | Promise<void>
 
   /**
    * Updates a specific item by ID
@@ -234,12 +235,12 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
   }
 
   return {
-    pushItems(items: TuffItem[]): void {
+    pushItems(items: TuffItem[]): void | Promise<void> {
       ensureActive('pushItems')
       if (!boxItemsAPI || !boxItemsAPI.pushItems) {
         throw new Error('[Feature SDK] boxItems API not available')
       }
-      boxItemsAPI.pushItems(items)
+      return boxItemsAPI.pushItems(items)
     },
 
     updateItem(id: string, updates: Partial<TuffItem>): void {

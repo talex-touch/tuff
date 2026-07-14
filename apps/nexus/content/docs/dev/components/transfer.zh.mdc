@@ -80,7 +80,9 @@ code: |
 ---
 :::
 
-## API（Lite）
+## API
+
+### Props
 
 ::TuffPropsTable
 ---
@@ -131,12 +133,27 @@ rows:
 | `update:modelValue` | `Array<string \| number>` | 已选 key 更新 |
 | `change` | `Array<string \| number>` | 已选 key 变化 |
 
+## Slots
+
+`TxTransfer` 不提供自定义插槽。条目文本通过 `data[].label` 渲染，面板标题通过 `titles` 本地化，空态、筛选框和操作按钮文案通过 props 配置。
+
+## 最佳实践
+
+- `modelValue` 应始终由业务侧受控，并且只保存 item key，不保存完整 item 对象。
+- 保持每个 `data[].key` 唯一且稳定；重复 key 会让左右列表归属不可判断。
+- 目标列表需要保持原始数据顺序时使用 `targetOrder="original"`，选择顺序本身有意义时使用 `targetOrder="push"`。
+- 禁用项应保留在 `data` 中展示，不要在外层过滤掉，避免用户误以为资源不存在。
+- 当中间操作按钮只有图标时，必须显式提供 `addAriaLabel` 和 `removeAriaLabel`。
+- `filterable` 适合中大型列表；短权限列表不加双侧筛选框通常更容易扫读。
+
 ## Source
 
 <TuffDocSourceLink />
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue`。
+- 组件源码：`packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue` 确认左右列表派生、筛选匹配、禁用项检查、`targetOrder` 和纯图标操作按钮标签。
+- 类型契约：`packages/tuffex/packages/components/src/transfer/src/types.ts` 导出 `TransferItem`、`TransferProps` 和 `TransferEmits`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/transfer/__tests__/transfer.test.ts` 覆盖勾选项移动、自定义空态文案和可访问操作按钮标签。
 - 截图：`.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`。
-- 建议：保持 `modelValue` 由业务侧受控；禁用项只展示不可移动，不要在外层过滤掉，避免用户误判权限资源不存在。
+

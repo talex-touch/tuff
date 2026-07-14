@@ -367,6 +367,12 @@ describe('invokeIntelligenceCapability', () => {
     })).rejects.toThrow('provider failed')
 
     expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(storeMocks.createAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      success: false,
+      metadata: expect.objectContaining({
+        errorCode: 'UNKNOWN',
+      }),
+    }))
   })
 
   it('direct invoke 在进入模型前按 Provider Registry governance id 拦截 provider request quota', async () => {
@@ -409,6 +415,7 @@ describe('invokeIntelligenceCapability', () => {
       status: 429,
       success: false,
       metadata: expect.objectContaining({
+        errorCode: 'QUOTA_EXHAUSTED',
         retryable: false,
         willRetry: false,
       }),

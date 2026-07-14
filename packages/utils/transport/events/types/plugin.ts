@@ -14,48 +14,59 @@
 // Plugin Management (Renderer/Main) Types
 // ============================================================================
 
-import type { ITouchPlugin } from '../../../plugin'
-import type { PluginContentPackage } from '../../../types/cloud-share'
+import type {
+  AppLocale,
+  DomainLexiconMatch,
+  DomainLexiconSearchOptions,
+  LocalizedTextValue,
+  PluginDomainLexiconEntryInput,
+  PluginLexiconRegisterOptions,
+  PluginLexiconRegisterResult,
+  PluginLexiconResolveOptions,
+  ResolvedDomainLexiconEntry,
+} from "../../../i18n";
+import type { ITouchPlugin } from "../../../plugin";
+import type { PluginContentPackage } from "../../../types/cloud-share";
 import type {
   PluginInstallConfirmRequest,
   PluginInstallConfirmResponse,
   PluginInstallProgressEvent,
-} from '../../../plugin/install'
-import type { PluginInstallRequest } from '../../../plugin/providers/types'
+} from "../../../plugin/install";
+import type { PluginInstallRequest } from "../../../plugin/providers/types";
 import type {
   InputChangedRequest,
   PluginFilters,
   PluginStateEvent,
   RegisterWidgetRequest,
   TriggerFeatureRequest,
-} from '../../../plugin/sdk/types'
-import type { SecureStoreHealthResponse } from './app'
+} from "../../../plugin/sdk/types";
+import type { SecureStoreHealthResponse } from "./app";
 
 export enum PluginStatus {
   /**
    * Plugin is not loaded.
    */
-  UNLOADED = 'unloaded',
+  UNLOADED = "unloaded",
 
   /**
    * Plugin is currently loading.
    */
-  LOADING = 'loading',
+  LOADING = "loading",
 
   /**
    * Plugin is loaded and active.
    */
-  ACTIVE = 'active',
+  ACTIVE = "active",
 
   /**
    * Plugin is loaded but disabled.
    */
-  DISABLED = 'disabled',
+  DISABLED = "disabled",
 
   /**
    * Plugin encountered an error.
    */
-  ERROR = 'error',
+  ERROR = "error",
 }
 
 /**
@@ -65,7 +76,7 @@ export interface PluginLoadRequest {
   /**
    * Plugin name to load.
    */
-  name: string
+  name: string;
 }
 
 /**
@@ -75,7 +86,7 @@ export interface PluginUnloadRequest {
   /**
    * Plugin name to unload.
    */
-  name: string
+  name: string;
 }
 
 /**
@@ -85,7 +96,7 @@ export interface PluginReloadRequest {
   /**
    * Plugin name to reload.
    */
-  name: string
+  name: string;
 }
 
 /**
@@ -95,7 +106,7 @@ export interface PluginEnableRequest {
   /**
    * Plugin name to enable.
    */
-  name: string
+  name: string;
 }
 
 /**
@@ -105,8 +116,46 @@ export interface PluginDisableRequest {
   /**
    * Plugin name to disable.
    */
-  name: string
+  name: string;
 }
+
+// ============================================================================
+// Plugin Localization SDK Types
+// ============================================================================
+
+export interface PluginI18nGetLocaleRequest {
+  _sdkapi?: number;
+}
+
+export interface PluginI18nResolveTextRequest {
+  value: LocalizedTextValue;
+  locale?: AppLocale;
+  _sdkapi?: number;
+}
+
+export interface PluginLexiconResolveRequest {
+  id: string;
+  options?: PluginLexiconResolveOptions;
+  _sdkapi?: number;
+}
+
+export interface PluginLexiconSearchRequest {
+  query: string;
+  options?: DomainLexiconSearchOptions;
+  _sdkapi?: number;
+}
+
+export interface PluginLexiconRegisterRequest {
+  entries: PluginDomainLexiconEntryInput[];
+  options?: PluginLexiconRegisterOptions;
+  _sdkapi?: number;
+}
+
+export type PluginI18nGetLocaleResponse = AppLocale;
+export type PluginI18nResolveTextResponse = string;
+export type PluginLexiconResolveResponse = ResolvedDomainLexiconEntry | null;
+export type PluginLexiconSearchResponse = DomainLexiconMatch[];
+export type PluginLexiconRegisterResponse = PluginLexiconRegisterResult;
 
 /**
  * Plugin information returned after lifecycle operations.
@@ -115,63 +164,63 @@ export interface PluginInfo {
   /**
    * Plugin name (unique identifier).
    */
-  name: string
+  name: string;
 
   /**
    * Plugin version.
    */
-  version: string
+  version: string;
 
   /**
    * Current plugin status.
    */
-  status: PluginStatus
+  status: PluginStatus;
 
   /**
    * Display name.
    */
-  displayName?: string
+  displayName?: string;
 
   /**
    * Plugin description.
    */
-  description?: string
+  description?: string;
 
   /**
    * Plugin author.
    */
-  author?: string
+  author?: string;
 
   /**
    * Plugin icon.
    */
-  icon?: string
+  icon?: string;
 
   /**
    * Whether this is a dev mode plugin.
    */
-  isDev?: boolean
+  isDev?: boolean;
 
   /**
    * Plugin path on disk.
    */
-  path?: string
+  path?: string;
 
   /**
    * Error message if status is ERROR.
    */
-  error?: string
+  error?: string;
 }
 
-export type PluginInstallSource = 'dev' | 'tpex'
+export type PluginInstallSource = "dev" | "tpex";
 
-export type PluginInstallStatus = 'success' | 'exists' | 'error'
+export type PluginInstallStatus = "success" | "exists" | "error";
 
 export interface PluginInstallCompletedPayload {
-  name?: string
-  source: PluginInstallSource
-  status: PluginInstallStatus
-  error?: string
+  name?: string;
+  source: PluginInstallSource;
+  status: PluginInstallStatus;
+  error?: string;
 }
 
 // ============================================================================
@@ -185,22 +234,22 @@ export interface FeatureTriggerRequest {
   /**
    * Plugin name.
    */
-  pluginName: string
+  pluginName: string;
 
   /**
    * Feature ID to trigger.
    */
-  featureId: string
+  featureId: string;
 
   /**
    * Query/input for the feature.
    */
-  query?: unknown
+  query?: unknown;
 
   /**
    * Additional context.
    */
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>;
 }
 
 /**
@@ -210,17 +259,17 @@ export interface FeatureTriggerResponse {
   /**
    * Whether the feature was triggered successfully.
    */
-  success: boolean
+  success: boolean;
 
   /**
    * Result data from the feature.
    */
-  data?: unknown
+  data?: unknown;
 
   /**
    * Error message if not successful.
    */
-  error?: string
+  error?: string;
 }
 
 // ============================================================================
@@ -231,10 +280,10 @@ export interface FeatureTriggerResponse {
  * Log level enumeration.
  */
 export enum PluginLogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error',
+  DEBUG = "debug",
+  INFO = "info",
+  WARN = "warn",
+  ERROR = "error",
 }
 
 /**
@@ -244,32 +293,32 @@ export interface PluginLogEntry {
   /**
    * Plugin name that generated this log.
    */
-  pluginName: string
+  pluginName: string;
 
   /**
    * Log level.
    */
-  level: PluginLogLevel
+  level: PluginLogLevel;
 
   /**
    * Log message.
    */
-  message: string
+  message: string;
 
   /**
    * Timestamp when log was created.
    */
-  timestamp: number
+  timestamp: number;
 
   /**
    * Additional data.
    */
-  data?: unknown
+  data?: unknown;
 
   /**
    * Stack trace (for errors).
    */
-  stack?: string
+  stack?: string;
 }
 
 // ============================================================================
@@ -283,32 +332,32 @@ export interface PluginMessage {
   /**
    * Source plugin name.
    */
-  from: string
+  from: string;
 
   /**
    * Target plugin name (or '*' for broadcast).
    */
-  to: string
+  to: string;
 
   /**
    * Message type/event name.
    */
-  type: string
+  type: string;
 
   /**
    * Message payload.
    */
-  payload?: unknown
+  payload?: unknown;
 
   /**
    * Message ID for request-response correlation.
    */
-  messageId?: string
+  messageId?: string;
 
   /**
    * Whether this is a response to a previous message.
    */
-  isResponse?: boolean
+  isResponse?: boolean;
 }
 
 /**
@@ -318,506 +367,506 @@ export interface PluginMessageResponse {
   /**
    * Whether the message was delivered.
    */
-  delivered: boolean
+  delivered: boolean;
 
   /**
    * Response data (if synchronous).
    */
-  data?: unknown
+  data?: unknown;
 
   /**
    * Error if delivery failed.
    */
-  error?: string
+  error?: string;
 }
 
 export interface PluginApiListRequest {
-  filters?: PluginFilters
+  filters?: PluginFilters;
 }
 
-export type PluginApiListResponse = ITouchPlugin[]
+export type PluginApiListResponse = ITouchPlugin[];
 
 export interface PluginApiGetRequest {
-  name: string
+  name: string;
 }
 
-export type PluginApiGetResponse = ITouchPlugin | null
+export type PluginApiGetResponse = ITouchPlugin | null;
 
 export interface PluginApiGetStatusRequest {
-  name: string
+  name: string;
 }
 
-export type PluginApiGetStatusResponse = number
+export type PluginApiGetStatusResponse = number;
 
 export interface PluginApiOperationRequest {
-  name: string
+  name: string;
 }
 
 export interface PluginApiOperationResponse {
-  success: boolean
-  error?: string
+  success: boolean;
+  error?: string;
 }
 
-export type PluginApiInstallRequest = PluginInstallRequest
-export type PluginApiInstallResponse = PluginApiOperationResponse
+export type PluginApiInstallRequest = PluginInstallRequest;
+export type PluginApiInstallResponse = PluginApiOperationResponse;
 
-export type PluginApiUninstallRequest = PluginApiOperationRequest
-export type PluginApiUninstallResponse = PluginApiOperationResponse
+export type PluginApiUninstallRequest = PluginApiOperationRequest;
+export type PluginApiUninstallResponse = PluginApiOperationResponse;
 
-export type PluginApiTriggerFeatureRequest = TriggerFeatureRequest
-export type PluginApiTriggerFeatureResponse = unknown
+export type PluginApiTriggerFeatureRequest = TriggerFeatureRequest;
+export type PluginApiTriggerFeatureResponse = unknown;
 
-export type PluginApiRegisterWidgetRequest = RegisterWidgetRequest
-export type PluginApiRegisterWidgetResponse = PluginApiOperationResponse
+export type PluginApiRegisterWidgetRequest = RegisterWidgetRequest;
+export type PluginApiRegisterWidgetResponse = PluginApiOperationResponse;
 
-export type PluginApiFeatureInputChangedRequest = InputChangedRequest
+export type PluginApiFeatureInputChangedRequest = InputChangedRequest;
 
 export interface PluginApiOpenFolderRequest {
-  name: string
+  name: string;
 }
 
 export interface PluginApiGetOfficialListRequest {
-  force?: boolean
+  force?: boolean;
 }
 
 export interface PluginApiGetOfficialListResponse {
-  plugins: unknown[]
+  plugins: unknown[];
 }
 
 export interface PluginApiGetManifestRequest {
-  name: string
+  name: string;
 }
 
-export type PluginApiGetManifestResponse = Record<string, unknown> | null
+export type PluginApiGetManifestResponse = Record<string, unknown> | null;
 
 export interface PluginApiSaveManifestRequest {
-  name: string
-  manifest: Record<string, unknown>
-  reload?: boolean
+  name: string;
+  manifest: Record<string, unknown>;
+  reload?: boolean;
 }
 
 export interface PluginApiSaveManifestResponse {
-  success: boolean
-  error?: string
+  success: boolean;
+  error?: string;
 }
 
 export interface PluginApiSaveWidgetFileRequest {
-  name: string
-  widgetPath: string
-  source: string
-  overwrite?: boolean
+  name: string;
+  widgetPath: string;
+  source: string;
+  overwrite?: boolean;
 }
 
 export interface PluginApiSaveWidgetFileResponse {
-  success: boolean
-  error?: string
-  relativePath?: string
+  success: boolean;
+  error?: string;
+  relativePath?: string;
 }
 
 export interface PluginApiGetPathsRequest {
-  name: string
+  name: string;
 }
 
 export interface PluginApiGetPathsResponse {
-  pluginPath: string
-  dataPath: string
-  configPath: string
-  logsPath: string
-  tempPath: string
+  pluginPath: string;
+  dataPath: string;
+  configPath: string;
+  logsPath: string;
+  tempPath: string;
 }
 
 export interface PluginFileTreeNode {
-  name: string
-  path: string
-  type: 'file' | 'directory'
-  size: number
-  modified: number
-  children?: PluginFileTreeNode[]
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  size: number;
+  modified: number;
+  children?: PluginFileTreeNode[];
 }
 
 export interface PluginApiGetFileTreeRequest {
-  name: string
+  name: string;
 }
 
-export type PluginApiGetFileTreeResponse = PluginFileTreeNode[]
+export type PluginApiGetFileTreeResponse = PluginFileTreeNode[];
 
 export interface PluginApiOpenPathRequest {
-  name: string
-  pathType: 'plugin' | 'data' | 'config' | 'logs' | 'temp'
+  name: string;
+  pathType: "plugin" | "data" | "config" | "logs" | "temp";
 }
 
 export interface PluginTempFileCreateRequest {
-  namespace?: string
-  ext?: string
-  text?: string
-  base64?: string
-  prefix?: string
-  retentionMs?: number
+  namespace?: string;
+  ext?: string;
+  text?: string;
+  base64?: string;
+  prefix?: string;
+  retentionMs?: number;
 }
 
 export interface PluginTempFileCreateResponse {
-  url: string
-  path?: string
-  sizeBytes: number
-  createdAt: number
+  url: string;
+  path?: string;
+  sizeBytes: number;
+  createdAt: number;
 }
 
 export interface PluginTempFileDeleteRequest {
-  url: string
+  url: string;
 }
 
 export interface PluginTempFileDeleteResponse {
-  success: boolean
+  success: boolean;
 }
 
 export interface PluginApiOpenPathResponse {
-  success: boolean
-  path?: string
-  error?: string
+  success: boolean;
+  path?: string;
+  error?: string;
 }
 
 export interface PluginApiRevealPathRequest {
-  name: string
-  path: string
+  name: string;
+  path: string;
 }
 
 export interface PluginApiRevealPathResponse {
-  success: boolean
-  path?: string
-  error?: string
+  success: boolean;
+  path?: string;
+  error?: string;
 }
 
 export interface PluginApiGetPerformanceRequest {
-  name: string
+  name: string;
 }
 
-export type PluginApiGetPerformanceResponse = unknown
+export type PluginApiGetPerformanceResponse = unknown;
 
 export interface PluginApiGetRuntimeStatsRequest {
-  name: string
+  name: string;
 }
 
-export type PluginApiGetRuntimeStatsResponse = unknown
+export type PluginApiGetRuntimeStatsResponse = unknown;
 
 export interface PluginReconnectDevServerRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginReconnectDevServerResponse {
-  success: boolean
-  error?: string
+  success: boolean;
+  error?: string;
 }
 
-export type PluginPushStateChangedPayload = PluginStateEvent
+export type PluginPushStateChangedPayload = PluginStateEvent;
 
 export interface PluginPushStatusUpdatedPayload {
-  plugin: string
-  status: number
+  plugin: string;
+  status: number;
 }
 
 export interface PluginPushReloadReadmePayload {
-  source?: string
-  plugin: string
-  readme: string
+  source?: string;
+  plugin: string;
+  readme: string;
 }
 
 export interface PluginPushCrashedPayload {
-  plugin?: string
-  message?: string
-  stack?: string
-  [key: string]: unknown
+  plugin?: string;
+  message?: string;
+  stack?: string;
+  [key: string]: unknown;
 }
 
-export type PluginInstallProgressPayload = PluginInstallProgressEvent
-export type PluginInstallConfirmPayload = PluginInstallConfirmRequest
-export type PluginInstallConfirmResponsePayload = PluginInstallConfirmResponse
+export type PluginInstallProgressPayload = PluginInstallProgressEvent;
+export type PluginInstallConfirmPayload = PluginInstallConfirmRequest;
+export type PluginInstallConfirmResponsePayload = PluginInstallConfirmResponse;
 
 export interface PluginInstallSourceRequest {
-  source: string
-  hintType?: unknown
-  metadata?: Record<string, unknown>
-  clientMetadata?: Record<string, unknown>
+  source: string;
+  hintType?: unknown;
+  metadata?: Record<string, unknown>;
+  clientMetadata?: Record<string, unknown>;
 }
 
 export interface PluginInstallSourceResponse {
-  status: 'success' | 'error'
-  manifest?: unknown
-  provider?: unknown
-  official?: boolean
-  message?: string
-  error?: string
+  status: "success" | "error";
+  manifest?: unknown;
+  provider?: unknown;
+  official?: boolean;
+  message?: string;
+  error?: string;
 }
 
 export interface PluginContentInstallRequest {
-  packageId: string
-  targetPluginName: string
-  contentPackage: PluginContentPackage
+  packageId: string;
+  targetPluginName: string;
+  contentPackage: PluginContentPackage;
 }
 
 export interface PluginContentInstallResponse {
-  success: boolean
-  importedCount?: number
-  skippedCount?: number
-  error?: string
+  success: boolean;
+  importedCount?: number;
+  skippedCount?: number;
+  error?: string;
 }
 
 export interface PluginStorageOpenInEditorRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginDevServerStatusRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginDevServerStatusResponse {
-  monitoring: boolean
-  connected: boolean
-  error?: string
+  monitoring: boolean;
+  connected: boolean;
+  error?: string;
 }
 
 export interface PluginPushReloadPayload {
-  source?: string
-  plugin: unknown
+  source?: string;
+  plugin: unknown;
 }
 
 export interface PluginStorageFileRequest {
-  pluginName: string
-  fileName: string
+  pluginName: string;
+  fileName: string;
 }
 
 export interface PluginStorageSetFileRequest extends PluginStorageFileRequest {
-  content: unknown
+  content: unknown;
 }
 
 export interface PluginStorageSecretRequest {
-  pluginName?: string
-  key: string
+  pluginName?: string;
+  key: string;
 }
 
 export interface PluginStorageSetSecretRequest extends PluginStorageSecretRequest {
-  value: string | null
+  value: string | null;
 }
 
-export type PluginStorageSecretHealthResponse = SecureStoreHealthResponse
+export type PluginStorageSecretHealthResponse = SecureStoreHealthResponse;
 
 export interface PluginStorageListFilesRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginStorageStatsRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginStorageTreeRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginStorageFileDetailsRequest extends PluginStorageFileRequest {}
 
 export interface PluginStorageClearRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginStorageOpenFolderRequest {
-  pluginName: string
+  pluginName: string;
 }
 
 export interface PluginStorageUpdatePayload {
-  name: string
-  fileName?: string
+  name: string;
+  fileName?: string;
 }
 
 export interface PluginStorageSyncItem {
-  pluginName: string
-  fileName: string
-  qualifiedName: string
-  content: unknown
+  pluginName: string;
+  fileName: string;
+  qualifiedName: string;
+  content: unknown;
 }
 
 export interface PluginStorageListSyncItemsRequest {
-  pluginName?: string
-  qualifiedNames?: string[]
+  pluginName?: string;
+  qualifiedNames?: string[];
 }
 
 export interface PluginStorageApplySyncItemRequest {
-  pluginName: string
-  fileName: string
-  content: unknown
+  pluginName: string;
+  fileName: string;
+  content: unknown;
 }
 
 export interface PluginStorageDeleteSyncItemRequest {
-  pluginName: string
-  fileName: string
+  pluginName: string;
+  fileName: string;
 }
 
 export interface PluginSqliteExecuteRequest {
-  pluginName?: string
-  sql: string
-  params?: unknown[]
+  pluginName?: string;
+  sql: string;
+  params?: unknown[];
 }
 
 export interface PluginSqliteExecuteResponse {
-  success: boolean
-  rowsAffected?: number
-  lastInsertRowId?: number | null
-  error?: string
+  success: boolean;
+  rowsAffected?: number;
+  lastInsertRowId?: number | null;
+  error?: string;
 }
 
 export interface PluginSqliteQueryRequest extends PluginSqliteExecuteRequest {}
 
 export interface PluginSqliteQueryResponse {
-  success: boolean
-  rows?: Array<Record<string, unknown>>
-  columns?: string[]
-  error?: string
+  success: boolean;
+  rows?: Array<Record<string, unknown>>;
+  columns?: string[];
+  error?: string;
 }
 
 export interface PluginSqliteTransactionStatement {
-  sql: string
-  params?: unknown[]
+  sql: string;
+  params?: unknown[];
 }
 
 export interface PluginSqliteTransactionRequest {
-  pluginName?: string
-  statements: PluginSqliteTransactionStatement[]
+  pluginName?: string;
+  statements: PluginSqliteTransactionStatement[];
 }
 
 export interface PluginSqliteTransactionResponse {
-  success: boolean
+  success: boolean;
   results?: Array<{
-    rowsAffected: number
-    lastInsertRowId: number | null
-  }>
-  error?: string
+    rowsAffected: number;
+    lastInsertRowId: number | null;
+  }>;
+  error?: string;
 }
 
-export type PluginPerformanceGetMetricsResponse = unknown
+export type PluginPerformanceGetMetricsResponse = unknown;
 
-export type PluginPerformanceGetPathsResponse = PluginApiGetPathsResponse
+export type PluginPerformanceGetPathsResponse = PluginApiGetPathsResponse;
 
 export const PLUGIN_WINDOW_ERROR_CODES = {
-  PERMISSION_UNAVAILABLE: 'PLUGIN_WINDOW_PERMISSION_UNAVAILABLE',
-  PERMISSION_DENIED: 'PLUGIN_WINDOW_PERMISSION_DENIED',
-  REMOTE_URL_DENIED: 'PLUGIN_WINDOW_REMOTE_URL_DENIED',
-  PATH_OUTSIDE_ROOT: 'PLUGIN_WINDOW_PATH_OUTSIDE_ROOT',
-  TARGET_INVALID: 'PLUGIN_WINDOW_TARGET_INVALID',
-  OPTIONS_INVALID: 'PLUGIN_WINDOW_OPTIONS_INVALID',
-  COMMAND_REMOVED: 'PLUGIN_WINDOW_COMMAND_REMOVED',
-  NOT_FOUND: 'PLUGIN_WINDOW_NOT_FOUND',
-} as const
+  PERMISSION_UNAVAILABLE: "PLUGIN_WINDOW_PERMISSION_UNAVAILABLE",
+  PERMISSION_DENIED: "PLUGIN_WINDOW_PERMISSION_DENIED",
+  REMOTE_URL_DENIED: "PLUGIN_WINDOW_REMOTE_URL_DENIED",
+  PATH_OUTSIDE_ROOT: "PLUGIN_WINDOW_PATH_OUTSIDE_ROOT",
+  TARGET_INVALID: "PLUGIN_WINDOW_TARGET_INVALID",
+  OPTIONS_INVALID: "PLUGIN_WINDOW_OPTIONS_INVALID",
+  COMMAND_REMOVED: "PLUGIN_WINDOW_COMMAND_REMOVED",
+  NOT_FOUND: "PLUGIN_WINDOW_NOT_FOUND",
+} as const;
 
 export type PluginWindowErrorCode =
-  (typeof PLUGIN_WINDOW_ERROR_CODES)[keyof typeof PLUGIN_WINDOW_ERROR_CODES]
+  (typeof PLUGIN_WINDOW_ERROR_CODES)[keyof typeof PLUGIN_WINDOW_ERROR_CODES];
 
 export interface PluginWindowErrorData {
-  code: PluginWindowErrorCode | 'SDKAPI_MISMATCH'
-  message: string
+  code: PluginWindowErrorCode | "SDKAPI_MISMATCH";
+  message: string;
 }
 
-export type PluginWindowResponseError = PluginWindowErrorData | string
+export type PluginWindowResponseError = PluginWindowErrorData | string;
 
 export interface PluginWindowOptions {
-  width?: number
-  height?: number
-  x?: number
-  y?: number
-  title?: string
-  resizable?: boolean
-  alwaysOnTop?: boolean
-  visible?: boolean
+  width?: number;
+  height?: number;
+  x?: number;
+  y?: number;
+  title?: string;
+  resizable?: boolean;
+  alwaysOnTop?: boolean;
+  visible?: boolean;
 }
 
 export interface PluginWindowNewRequest {
-  file: string
-  options?: PluginWindowOptions
-  _sdkapi?: number
+  file: string;
+  options?: PluginWindowOptions;
+  _sdkapi?: number;
 }
 
 export interface PluginWindowNewResponse {
-  id?: number
-  error?: PluginWindowResponseError
+  id?: number;
+  error?: PluginWindowResponseError;
 }
 
 export interface PluginWindowVisibleRequest {
-  id: number
-  visible?: boolean
-  _sdkapi?: number
+  id: number;
+  visible?: boolean;
+  _sdkapi?: number;
 }
 
 export interface PluginWindowVisibleResponse {
-  visible?: boolean
-  error?: PluginWindowResponseError
+  visible?: boolean;
+  error?: PluginWindowResponseError;
 }
 
 export interface PluginWindowBounds {
-  x?: number
-  y?: number
-  width: number
-  height: number
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
 }
 
 export type PluginWindowCommand =
-  | { type: 'focus' }
-  | { type: 'close' }
-  | { type: 'setBounds'; bounds: PluginWindowBounds }
-  | { type: 'setAlwaysOnTop'; value: boolean }
+  | { type: "focus" }
+  | { type: "close" }
+  | { type: "setBounds"; bounds: PluginWindowBounds }
+  | { type: "setAlwaysOnTop"; value: boolean };
 
 export interface PluginWindowCommandRequest {
-  id: number
-  command: PluginWindowCommand
-  _sdkapi?: number
+  id: number;
+  command: PluginWindowCommand;
+  _sdkapi?: number;
 }
 
 export interface PluginWindowCommandResponse {
-  success?: boolean
-  error?: PluginWindowResponseError
+  success?: boolean;
+  error?: PluginWindowResponseError;
 }
 
 export interface LegacyPluginWindowProperties {
   window?: {
-    focus?: []
-    close?: []
-    setBounds?: [PluginWindowBounds]
-    setAlwaysOnTop?: [boolean]
-  }
+    focus?: [];
+    close?: [];
+    setBounds?: [PluginWindowBounds];
+    setAlwaysOnTop?: [boolean];
+  };
 }
 
 export interface PluginWindowPropertyRequest {
-  id: number
-  property: LegacyPluginWindowProperties
-  _sdkapi?: number
+  id: number;
+  property: LegacyPluginWindowProperties;
+  _sdkapi?: number;
 }
 
 export interface PluginWindowPropertyResponse {
-  success?: boolean
-  error?: PluginWindowResponseError
+  success?: boolean;
+  error?: PluginWindowResponseError;
 }
 
 export interface PluginServiceRequest {
-  service: string
+  service: string;
 }
 
 export interface PluginServiceHandlePayload {
-  data: Record<string, unknown>
+  data: Record<string, unknown>;
 }
 
 export interface PluginShortcutRegisterRequest {
-  key: string
-  id?: string
-  description?: string
-  desc?: string
+  key: string;
+  id?: string;
+  description?: string;
+  desc?: string;
 }
 
 export interface PluginShortcutTriggerPayload {
-  id: string
+  id: string;
 }
 
 export interface PluginIndexCommunicateRequest {
-  key: string
-  info?: unknown
+  key: string;
+  info?: unknown;
 }
 
 export interface PluginIndexCommunicateResponse {
-  status?: string
-  error?: string
+  status?: string;
+  error?: string;
 }

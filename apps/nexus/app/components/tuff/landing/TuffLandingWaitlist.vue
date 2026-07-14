@@ -83,7 +83,7 @@ function goToSignIn() {
       <div class="pointer-events-none absolute inset-0 backdrop-blur-[80px]" />
       <!-- Glow orbs -->
       <div class="absolute left-[-220px] top-[30%] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(147,51,234,0.14),_transparent_70%)] blur-3xl" />
-      <div class="absolute bottom-[10%] right-[-200px] h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.12),_transparent_70%)] blur-3xl" />
+      <div class="absolute bottom-[10%] right-0 h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.12),_transparent_70%)] blur-3xl sm:right-[-200px]" />
     </template>
 
     <!-- Two-column layout -->

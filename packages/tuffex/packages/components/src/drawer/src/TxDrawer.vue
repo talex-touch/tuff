@@ -7,6 +7,15 @@ import { getZIndex, nextZIndex, refreshZIndex } from '../../../../utils/z-index-
 
 const MOBILE_BREAKPOINT = 768
 const DRAWER_Z_INDEX_SEED = 10000
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
 
 /**
  * TxDrawer Component
@@ -100,8 +109,51 @@ function handleMaskClick(): void {
   }
 }
 
+function getFocusableElements(): HTMLElement[] {
+  if (!drawerRef.value)
+    return []
+
+  return Array.from(drawerRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter(element => element.getAttribute('aria-hidden') !== 'true')
+}
+
+function trapFocus(event: KeyboardEvent): void {
+  const drawer = drawerRef.value
+  if (!drawer)
+    return
+
+  const focusableElements = getFocusableElements()
+  if (focusableElements.length === 0) {
+    event.preventDefault()
+    drawer.focus()
+    return
+  }
+
+  const firstElement = focusableElements[0]
+  const lastElement = focusableElements[focusableElements.length - 1]
+  const activeElement = document.activeElement
+  const activeInsideDrawer = drawer.contains(activeElement)
+
+  if (event.shiftKey) {
+    if (!activeInsideDrawer || activeElement === drawer || activeElement === firstElement) {
+      event.preventDefault()
+      lastElement?.focus()
+    }
+    return
+  }
+
+  if (!activeInsideDrawer || activeElement === drawer || activeElement === lastElement) {
+    event.preventDefault()
+    firstElement?.focus()
+  }
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (!display.value) {
+    return
+  }
+  if (event.key === 'Tab') {
+    trapFocus(event)
     return
   }
   if (event.key === 'Escape' && props.closeOnPressEscape) {

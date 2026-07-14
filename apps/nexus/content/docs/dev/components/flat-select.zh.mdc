@@ -179,8 +179,27 @@ code: |
 |--------|------|
 | default | 自定义内容（覆盖 label） |
 
+## 最佳实践
+
+- 短且稳定的选项集优先使用 `TxFlatSelect`，尤其是希望展开时让当前选中项保持视觉锚点的场景。
+- 选项文案保持简短。触发器和选项都使用单行截断，长文案应改用 `TxSelect` 或自定义 popover。
+- 建议控制在 3–6 个选项。需要搜索、远程数据、分组、虚拟滚动或复杂选项元数据时使用 `TxSelect`。
+- 每个 `TxFlatSelectItem` 的 `value` 必须稳定且唯一。父组件注册表按 `value` 匹配，重复值会让选中标签和键盘导航产生歧义。
+- 不要在 `TxFlatSelectItem` 内放置其它交互控件；选项本身已经是带 `role="option"` 的 button。
+- 选项不可用时保留 disabled prop，不要直接过滤掉；键盘导航会按设计跳过 disabled 项。
+
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`。
+- 已对照 `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`、`TxFlatSelectItem.vue`、`types.ts` 与 `flat-select.test.ts` 核对。
+- **实测覆盖:** placeholder 展示、选中标签同步、启用项选择、整组/单项禁用阻断、ArrowUp/ArrowDown 跳过 disabled 项，以及 combobox/listbox ARIA 状态。
 - 截图：`.codex-screenshots/nexus-flat-select-release-policy-demo-playwright-2026-05-28.png`。
 - 建议：`TxFlatSelect` 适合 3–6 个简单选项；需要搜索、远程数据或复杂选项渲染时仍优先使用 `TxSelect`。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`.
+- Item source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelectItem.vue`.
+- Types: `packages/tuffex/packages/components/src/flat-select/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/flat-select/__tests__/flat-select.test.ts`.
+
+<TuffDocSourceLink />

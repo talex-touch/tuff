@@ -1,6 +1,6 @@
 import type {
   IntelligenceInvokeOptions,
-  IntelligenceProviderConfig
+  IntelligenceProviderConfig,
 } from '@talex-touch/tuff-intelligence'
 
 export interface StrategySelectionRequest {
@@ -20,9 +20,45 @@ export interface StrategyManager {
   select: (request: StrategySelectionRequest) => Promise<StrategySelectionResult>
 }
 
+const DEFAULT_STRATEGY_ID = 'adaptive-default'
+
+function normalizeStrategyId(strategyId?: string | null): string {
+  if (!strategyId)
+    return DEFAULT_STRATEGY_ID
+  if (strategyId === 'priority')
+    return 'rule-based-default'
+  if (strategyId === 'adaptive')
+    return DEFAULT_STRATEGY_ID
+  return strategyId
+}
+
+function sortByPriority(providers: IntelligenceProviderConfig[]): IntelligenceProviderConfig[] {
+  return [...providers].sort((a, b) => {
+    const priorityA = a.priority ?? 999
+    const priorityB = b.priority ?? 999
+    if (priorityA !== priorityB)
+      return priorityA - priorityB
+    return a.id.localeCompare(b.id)
+  })
+}
+
+function buildFallbackProviders(
+  providers: IntelligenceProviderConfig[],
+  selectedProviderId: string,
+): IntelligenceProviderConfig[] {
+  return providers.filter(provider => provider.id !== selectedProviderId)
+}
+
 class DefaultStrategyManager implements StrategyManager {
-  setDefaultStrategy(_strategyId: string): void {
-    // Note: Strategy implementation can be extended here in the future
+  private defaultStrategyId = DEFAULT_STRATEGY_ID
+  private roundRobinCursor = new Map<string, number>()
+
+  setDefaultStrategy(strategyId: string): void {
+    const normalized = normalizeStrategyId(strategyId)
+    if (normalized !== this.defaultStrategyId) {
+      this.roundRobinCursor.clear()
+    }
+    this.defaultStrategyId = normalized
   }
 
   async select(request: StrategySelectionRequest): Promise<StrategySelectionResult> {
@@ -32,48 +68,64 @@ class DefaultStrategyManager implements StrategyManager {
       throw new Error('No providers available for selection')
     }
 
-    // Handle explicit provider preference
+    const sortedProviders = sortByPriority(availableProviders)
+
+    // Handle explicit provider preference.
     if (options.preferredProviderId) {
-      const preferred = availableProviders.find((p) => p.id === options.preferredProviderId)
+      const preferred = sortedProviders.find(
+        provider => provider.id === options.preferredProviderId,
+      )
       if (preferred) {
         return {
           selectedProvider: preferred,
-          fallbackProviders: availableProviders.filter((p) => p.id !== options.preferredProviderId),
-          reasoning: `Explicit preference for ${options.preferredProviderId}`
+          fallbackProviders: buildFallbackProviders(sortedProviders, preferred.id),
+          reasoning: `Explicit preference for ${options.preferredProviderId}`,
         }
       }
     }
 
-    // Sort providers by priority (lower numbers = higher priority)
-    const sortedProviders = [...availableProviders].sort((a, b) => {
-      const priorityA = a.priority ?? 999
-      const priorityB = b.priority ?? 999
-      return priorityA - priorityB
-    })
-
-    // Handle model preference
+    // Handle model preference.
     if (options.modelPreference && options.modelPreference.length > 0) {
       for (const preferredModel of options.modelPreference) {
         const providerWithModel = sortedProviders.find(
-          (p) => p.models?.includes(preferredModel) || p.defaultModel === preferredModel
+          provider =>
+            provider.models?.includes(preferredModel) || provider.defaultModel === preferredModel,
         )
         if (providerWithModel) {
           return {
             selectedProvider: providerWithModel,
-            fallbackProviders: sortedProviders.filter((p) => p.id !== providerWithModel.id),
-            reasoning: `Model preference for ${preferredModel}`
+            fallbackProviders: buildFallbackProviders(sortedProviders, providerWithModel.id),
+            reasoning: `Model preference for ${preferredModel}`,
           }
         }
       }
     }
 
-    // Default: select highest priority provider
+    const strategyId = normalizeStrategyId(options.strategy || this.defaultStrategyId)
+    if (strategyId === 'round-robin') {
+      const cursorKey = request.capabilityId
+      const cursor = this.roundRobinCursor.get(cursorKey) ?? 0
+      const selectedIndex = cursor % sortedProviders.length
+      const selectedProvider = sortedProviders[selectedIndex]
+      this.roundRobinCursor.set(cursorKey, (selectedIndex + 1) % sortedProviders.length)
+
+      return {
+        selectedProvider,
+        fallbackProviders: [
+          ...sortedProviders.slice(selectedIndex + 1),
+          ...sortedProviders.slice(0, selectedIndex),
+        ],
+        reasoning: 'Round-robin provider selection',
+      }
+    }
+
+    // adaptive-default currently keeps deterministic priority ordering until live telemetry is available.
     const [selected, ...fallbacks] = sortedProviders
 
     return {
       selectedProvider: selected,
       fallbackProviders: fallbacks,
-      reasoning: `Default priority-based selection`
+      reasoning: `${strategyId} priority-based selection`,
     }
   }
 }

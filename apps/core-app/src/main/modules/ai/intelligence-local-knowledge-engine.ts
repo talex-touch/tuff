@@ -119,13 +119,8 @@ function normalizeScopes(permissionScope: KnowledgeSearchInput['permissionScope'
 }
 
 function buildFtsQuery(query: string): string {
-  return query
-    .trim()
-    .split(/\s+/)
-    .map((term) => term.replace(/["*]/g, '').trim())
-    .filter(Boolean)
-    .map((term) => `${term}*`)
-    .join(' OR ')
+  const terms = query.trim().match(/[\p{L}\p{M}\p{N}_]+/gu) ?? []
+  return terms.map(term => `"${term}"*`).join(' OR ')
 }
 
 function rowToHit(row: KnowledgeRow): KnowledgeSearchHit {

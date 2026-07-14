@@ -1,74 +1,115 @@
 ---
 title: "GuideState 引导状态"
-description: "引导场景的快捷空态组件，基于 TxEmptyState 的 `variant=\"guide\"` 预设。"
+description: "基于 TxEmptyState 的引导态快捷组件，固定 guide 变体，并透传文案、操作、布局、表面和命名插槽。"
 category: Feedback
 status: beta
 since: 2.4.7
 tags: [empty, state, guide, onboarding]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # GuideState 引导状态
 
-`TxGuideState` 是 `TxEmptyState` 的快捷封装，自动设置 `variant="guide"`，用于新用户引导、功能入门等场景。
+`TxGuideState` 是一个很薄的 `TxEmptyState` 包装，固定传入 `variant="guide"`。当页面需要解释第一步、介绍功能或引导用户完成设置时使用它，避免在各处重复书写通用空态的 guide 变体。
 
 ## 基础用法
 
-使用默认标题和描述，搭配操作按钮。
+当外围页面已经说明上下文时，可以使用默认的 guide 标题和描述。
 
-### GuideState (basic)
-:::TuffDemoWrapper{demo="GuideStateBasicDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="GuideStateBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxGuideState
-      :primary-action="{ label: 'Get Started', type: 'primary' }"
-      :secondary-action="{ label: 'Learn More' }"
+      :primary-action="{ label: '开始配置', type: 'primary' }"
+      :secondary-action="{ label: '查看指南' }"
     />
   </template>
 ---
-:::
+::::
 
 ## 自定义内容
 
-自定义标题描述，配合 `surface="card"` 和 `size="large"` 呈现更醒目的引导。
+当引导需要独立出现在页面或面板中时，覆盖文案并使用卡片表面。
 
-### GuideState (custom)
-:::TuffDemoWrapper{demo="GuideStateCustomDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="GuideStateCustomDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxGuideState
-      title="Create your first workspace"
-      description="Workspaces help you organize projects. Follow the steps below to begin."
+      title="创建第一个工作区"
+      description="工作区帮助你整理项目、成员和自动化流程。按照引导完成初始配置。"
       surface="card"
       size="large"
-      :primary-action="{ label: 'Create Workspace', type: 'primary' }"
+      :primary-action="{ label: '创建工作区', type: 'primary' }"
     />
   </template>
 ---
-:::
+::::
 
 ## API
 
-`TxGuideState` 继承 `TxEmptyState` 的全部 Props（除 `variant`）、Slots 和 Events，详见 [EmptyState](./empty-state.zh.md)。
+`TxGuideState` 接收 `GuideStateProps`，其类型定义为 `Omit<EmptyStateProps, 'variant'>`。组件会把这些 props 透传给 `TxEmptyState`，并注入 `variant="guide"`。完整基础契约见 [EmptyState](./empty-state.zh.md)。
 
 ### Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| title | `string` | `'Start here'` | 标题（可覆盖） |
-| description | `string` | `'Follow the steps to get started.'` | 描述（可覆盖） |
-| layout | `'vertical' \| 'horizontal'` | `'vertical'` | 布局方向 |
-| align | `'start' \| 'center' \| 'end'` | `'center'` | 对齐方式 |
-| size | `'small' \| 'medium' \| 'large'` | `'medium'` | 尺寸等级 |
-| surface | `'plain' \| 'card'` | `'plain'` | 表面风格 |
-| primaryAction | `EmptyStateAction` | - | 主操作配置 |
-| secondaryAction | `EmptyStateAction` | - | 次操作配置 |
+|------|------|---------|------|
+| `title` | `string` | `'Start here'` | 覆盖从 `TxEmptyState` 继承的 guide 预设标题。 |
+| `description` | `string` | `'Follow the steps to get started.'` | 覆盖 guide 预设描述。 |
+| `icon` | `TxIconSource \| string \| null` | guide 插画 | 替换预设 guide 插画；设为 `null` 时隐藏图标区。 |
+| `iconSize` | `number` | 尺寸预设 | 自定义图标或 spinner 的像素尺寸。 |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 透传给 `TxEmptyState` 的布局方向。 |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | 透传给 `TxEmptyState` 的对齐方式。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 视觉尺寸。 |
+| `surface` | `'plain' \| 'card'` | `'plain'` | 设为 `card` 时启用空态卡片表面。 |
+| `primaryAction` | `EmptyStateAction` | - | 生成的主操作，点击后由 `TxEmptyState` 触发 `primary`。 |
+| `secondaryAction` | `EmptyStateAction` | - | 生成的次操作，点击后由 `TxEmptyState` 触发 `secondary`。 |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | 生成操作按钮的默认尺寸。 |
+| `loading` | `boolean` | `false` | 未提供 icon slot 或 icon prop 时显示 spinner。 |
 
-> 完整 Props 参考 [EmptyState API](./empty-state.zh.md#api)
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `primary` | `()` | 从生成的主操作按钮透传。 |
+| `secondary` | `()` | 从生成的次操作按钮透传。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `icon` | - | 透传给 `TxEmptyState`，替换 guide 插画。 |
+| `title` | - | 透传标题内容。 |
+| `description` | - | 透传描述内容。 |
+| `actions` | - | 替换生成的主/次按钮。 |
 
 ## 交互契约
 
-- `TxGuideState` 始终向 `TxEmptyState` 透传 `variant="guide"`。
-- 组件不额外改写 `title`、`description`、`surface`、`size` 或 action 配置；显式 props 会原样透传。
-- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+- `TxGuideState` 始终以 `variant="guide"` 渲染 `TxEmptyState`；调用方不能通过 props 改变变体。
+- 其它所有 `EmptyStateProps` 字段都会原样透传。
+- 只有提供了 `icon`、`title`、`description`、`actions` 插槽时，组件才会转发对应插槽。
+- 生成的操作按钮以及 `primary`/`secondary` 事件都来自 `TxEmptyState`。
+- 组件自身没有额外包裹 DOM；样式和语义都由 `TxEmptyState` 决定。
+
+## 最佳实践
+
+- 用于首次使用帮助、设置提示或“从这里开始”的面板。数据缺失场景用 `TxEmptyState variant="no-data"` 或专用包装更准确。
+- 引导文案要指向行动。标题应命名下一步，而不是只描述空屏。
+- 引导位于后台内容之间时使用 `surface="card"`；已经有外框的面板内部保持 `plain`。
+- 只有预设插画或生成按钮无法表达目标操作时，再传入 slot 内容。
+- 操作文案保持具体，例如“创建工作区”或“连接账号”，避免泛泛的“继续”。
+
+## 审阅说明
+
+- **可访问性说明：** `TxGuideState` 不添加额外包裹 DOM 或独立语义；可访问结构、标题、操作文案与生成按钮事件都直接来自 `TxEmptyState`。
+- **实测覆盖:** `guide-state.test.ts` 覆盖固定 `variant="guide"`、向 `TxEmptyState` 透传 props、命名插槽转发，以及以 `TxGuideState` 名称完成插件安装。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/guide-state/src/TxGuideState.vue`。
+- Types: `packages/tuffex/packages/components/src/guide-state/src/types.ts` 将 `GuideStateProps` 导出为 `Omit<EmptyStateProps, 'variant'>`。
+- Export alias: `packages/tuffex/packages/components/src/guide-state/index.ts` 导出 `TxGuideState`、`GuideStateProps` 与 `TxGuideStateInstance`。
+- Coverage: `packages/tuffex/packages/components/src/guide-state/__tests__/guide-state.test.ts` 覆盖 variant 锁定、props/slot 透传与安装注册。
+
+<TuffDocSourceLink />

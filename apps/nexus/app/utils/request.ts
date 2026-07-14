@@ -1,4 +1,4 @@
-import type { Ref } from 'vue'
+import type { MaybeRefOrGetter, Ref } from 'vue'
 
 export type JsonRequestOptions = Record<string, unknown>
 interface RequestErrorPayload {
@@ -33,9 +33,9 @@ export interface TypedFetchResult<T> {
   refresh: () => Promise<unknown>
 }
 
-type TypedFetchLike = <T>(request: string, options?: TypedFetchOptions<T>) => TypedFetchResult<T>
+type TypedFetchLike = <T>(request: MaybeRefOrGetter<string>, options?: TypedFetchOptions<T>) => TypedFetchResult<T>
 
-export function useTypedFetch<T>(request: string, options?: TypedFetchOptions<T>) {
+export function useTypedFetch<T>(request: MaybeRefOrGetter<string>, options?: TypedFetchOptions<T>) {
   const fetchData = useFetch as unknown as TypedFetchLike
   return fetchData<T>(request, options)
 }

@@ -103,15 +103,19 @@ code: |
 
 ## 预设组件
 
-- `TxBlankSlate`：大尺寸空白页（默认 `size="large"`）
-- `TxLoadingState`：加载态占位（默认 `variant="loading"`）
-- `TxNoSelection`：未选择占位（默认 `variant="no-selection"`）
-- `TxNoData`：无数据占位（默认 `variant="no-data"`）
-- `TxSearchEmpty`：搜索空态（默认 `variant="search-empty"`）
-- `TxOfflineState`：离线提示（默认 `variant="offline"`）
-- `TxPermissionState`：权限不足（默认 `variant="permission"`）
-- `TxErrorState`：错误状态（默认 `variant="error"`），详见 [ErrorState](./error-state.zh.md)
-- `TxGuideState`：引导状态（默认 `variant="guide"`），详见 [GuideState](./guide-state.zh.md)
+所有预设组件都会渲染 `TxEmptyState`，固定一个 `variant`，并透传同一组 props 和 slots。
+
+| 组件 | 固定 variant | 说明 |
+|------|------|------|
+| `TxBlankSlate` | `blank-slate` | 默认 `size="large"`、`layout="vertical"`、`surface="plain"`。 |
+| `TxLoadingState` | `loading` | 加载占位包装。 |
+| `TxNoSelection` | `no-selection` | 列表未选择项时的详情区占位。 |
+| `TxNoData` | `no-data` | 成功加载后没有数据。 |
+| `TxSearchEmpty` | `search-empty` | 搜索或筛选无结果。 |
+| `TxOfflineState` | `offline` | 网络不可用状态。 |
+| `TxPermissionState` | `permission` | 权限不足状态。 |
+| `TxErrorState` | `error` | 错误状态，详见 [ErrorState](./error-state.zh.md)。 |
+| `TxGuideState` | `guide` | 引导状态，详见 [GuideState](./guide-state.zh.md)。 |
 
 ## API
 
@@ -119,49 +123,93 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `variant` | `EmptyStateVariant` | `'empty'` | 预设场景 |
-| `title` | `string` | - | 标题 |
-| `description` | `string` | - | 描述 |
-| `icon` | `TxIconSource \| string \| null` | - | 图标（string 为 class/name） |
-| `iconSize` | `number` | - | 图标尺寸 |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 布局方向 |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | 对齐方式 |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 尺寸等级 |
-| `surface` | `'plain' \| 'card'` | `'plain'` | 表面风格 |
-| `primaryAction` | `EmptyStateAction` | - | 主操作配置 |
-| `secondaryAction` | `EmptyStateAction` | - | 次操作配置 |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | 操作按钮尺寸 |
-| `loading` | `boolean` | `false` | 强制 loading 图标 |
+| `variant` | `EmptyStateVariant` | `'empty'` | 选择常见状态的预设标题、描述和插画。 |
+| `title` | `string` | - | 覆盖预设标题；无 `title` 插槽时可传空字符串隐藏生成标题。 |
+| `description` | `string` | - | 覆盖预设说明；无 `description` 插槽时可传空字符串隐藏生成说明。 |
+| `icon` | `TxIconSource \| string \| null` | - | 用 Tuff 图标源或图标 class/name 替换预设插画；传 `null` 隐藏图标区。 |
+| `iconSize` | `number` | size 预设 | 自定义图标或 spinner 像素尺寸；small/medium/large 默认 `28`、`36`、`44`。 |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 控制图标和内容垂直排列或横向排列。 |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | 控制图标、文案和操作在空态面板内的对齐方式。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 调整间距、文字大小和预设插画尺寸。 |
+| `surface` | `'plain' \| 'card'` | `'plain'` | 需要视觉容器时添加带边框的 card 表面。 |
+| `primaryAction` | `EmptyStateAction` | - | 渲染主操作按钮，点击后触发 `primary`。 |
+| `secondaryAction` | `EmptyStateAction` | - | 在主操作前渲染次操作按钮，点击后触发 `secondary`。 |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | 未单独设置 `size` 的生成按钮默认尺寸。 |
+| `loading` | `boolean` | `false` | 没有 `icon` 插槽且没有非空 `icon` prop 时显示 `TxSpinner`。 |
+
+### EmptyStateVariant 默认值
+
+| Variant | 默认标题 | 默认说明 | 插画来源 |
+|------|------|------|------|
+| `empty` | `Nothing here` | `There is nothing to show yet.` | 内置 SVG 插画。 |
+| `blank-slate` | `Start from scratch` | `Create your first item to get started.` | 内置 SVG 插画。 |
+| `no-data` | `No data` | `No data available yet.` | 内置 SVG 插画。 |
+| `no-selection` | `Nothing selected` | `Select an item to see details.` | 内置 SVG 插画。 |
+| `search-empty` | `No results` | `Try a different keyword or filter.` | 内置 SVG 插画。 |
+| `loading` | `Loading` | `Please wait a moment.` | 内置骨架插画；`loading=true` 时可显示 spinner。 |
+| `offline` | `You are offline` | `Check your connection and retry.` | 内置 SVG 插画。 |
+| `permission` | `Access denied` | `You do not have permission to view this content.` | 内置 SVG 插画。 |
+| `error` | `Something went wrong` | `Please try again later.` | 内置 SVG 插画。 |
+| `guide` | `Start here` | `Follow the steps to get started.` | 内置 SVG 插画。 |
+| `custom` | 空 | 空 | 无；除非传入 `icon` 或 `icon` 插槽。 |
 
 ### EmptyStateAction
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `label` | `string` | - | 按钮文本 |
-| `type` | `TxButtonProps['type']` | - | 按钮类型 |
-| `variant` | `TxButtonProps['variant']` | - | 按钮变体 |
-| `size` | `TxButtonProps['size']` | - | 按钮尺寸 |
-| `disabled` | `boolean` | `false` | 禁用状态 |
-| `icon` | `string` | - | 图标 class |
+| `label` | `string` | - | 按钮文本。 |
+| `type` | `TxButtonProps['type']` | - | 透传给 `TxButton` 的按钮色调快捷项。 |
+| `variant` | `TxButtonProps['variant']` | - | 显式 `TxButton` 视觉变体。 |
+| `size` | `TxButtonProps['size']` | - | 单个操作按钮尺寸；未设置时回退到 `actionSize`。 |
+| `disabled` | `boolean` | `false` | 禁用生成的操作按钮；原生 disabled 按钮不会触发对应事件。 |
+| `icon` | `string` | - | 透传给 `TxButton` 的可选图标 class。 |
 
 ### Slots
 
-| 名称 | 说明 |
-|------|------|
-| `icon` | 自定义图标区 |
-| `title` | 标题 |
-| `description` | 描述 |
-| `actions` | 操作区 |
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `icon` | - | 替换预设插画、spinner 或 `icon` prop。 |
+| `title` | - | 替换解析后的标题内容。 |
+| `description` | - | 替换解析后的描述内容。 |
+| `actions` | - | 替换生成的主/次操作按钮。 |
 
 ### Events
 
-| 事件名 | 说明 |
-|------|------|
-| `primary` | 主操作点击 |
-| `secondary` | 次操作点击 |
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `primary` | - | 生成的主操作按钮点击时触发。 |
+| `secondary` | - | 生成的次操作按钮点击时触发。 |
+
+## 交互契约
+
+- 预设 `variant` 会先解析标题、描述和插画，之后再应用显式 props 或 slots。
+- 同一区域中，slot 内容优先于生成内容；`actions` 插槽会整体替换生成的主/次按钮。
+- `icon=null` 会隐藏整个图标区。`loading=true` 只有在没有 icon 插槽且没有非空 `icon` prop 时才显示 `TxSpinner`。
+- 生成按钮按次操作在前、主操作在后渲染；禁用的生成按钮不会触发对应事件。
+- `surface="card"` 只增加视觉容器，不改变语义或按钮行为。
+- 预设包装组件会把 props 和 slots 透传给 `TxEmptyState`；它们只固定 `variant`，其中 `TxBlankSlate` 额外提供大尺寸 blank-slate 默认值。
+
+## 最佳实践
+
+- 覆盖文案前先选择最贴近的预设：筛选无结果用 `search-empty`，分栏未选中用 `no-selection`，权限问题用 `permission`，网络问题用 `offline`。
+- 标题要说明当前处境并指向下一步，不要只写“暂无”。优先写“还没有自动化规则”。
+- 加载、空态和错误态应在同一个数据容器内切换，避免布局跳动。
+- 标准操作流使用 `primaryAction` / `secondaryAction`；只有操作布局需要自定义组合时才切换到 `actions` 插槽。
+- 不要同时传自定义 icon 和 `loading=true`；提供 icon 会按设计抑制 spinner。
+- Dashboard 和 panel 内优先用 `surface="card"`；已经有容器的表格、抽屉和卡片里保持 `plain`。
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`
+- 已对照 `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`、`types.ts`、预设包装组件和 empty-state 测试核对。
+- **实测覆盖:** variant 默认值、layout class、显式 title/description 覆盖、slot 替换、生成操作事件、disabled 操作抑制、spinner 优先级、`icon=null` 和 SSR wrapper slot 透传。
 - 建议：数据容器优先用 `variant` 表达状态；只有文案/图标需要业务化时才覆盖 `title`、`description`、`icon`。
 - 可访问性：空态标题需说明用户当前处境，操作按钮需表达下一步；不要只写“暂无”。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`.
+- Types: `packages/tuffex/packages/components/src/empty-state/src/types.ts`.
+- Preset wrappers: `packages/tuffex/packages/components/src/{blank-slate,loading-state,no-selection,no-data,search-empty,offline-state,permission-state,error-state,guide-state}/src/*.vue`.
+- Coverage: `packages/tuffex/packages/components/src/empty-state/__tests__/empty-state.test.ts` and `empty-state-wrappers.test.ts`.
+
+<TuffDocSourceLink />

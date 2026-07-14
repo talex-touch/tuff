@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildOmniPanelAiInvokeRequest,
   createOmniPanelAiInputPreview,
+  executeOmniPanelAiInvoke,
   isOmniPanelAiAction,
   looksLikeCode,
   normalizeOmniPanelAiError,
@@ -75,6 +76,79 @@ describe('omni-panel ai actions', () => {
         source: 'manual'
       }).capabilityId
     ).toBe('text.chat')
+  })
+
+  it('uses a new light host context for conversational explain actions', async () => {
+    const request = buildOmniPanelAiInvokeRequest({
+      actionId: 'builtin.ai.explain',
+      inputText: 'a short paragraph',
+      source: 'shortcut'
+    })
+    const contextInvoke = vi.fn(async () => ({
+      invocation: {
+        result: 'explanation',
+        provider: 'local',
+        model: 'qwen',
+        traceId: 'trace-omni',
+        latency: 3,
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+      },
+      context: {
+        mode: 'new' as const,
+        scope: 'light' as const,
+        itemCount: 1,
+        tokenBudget: 1200,
+        tokenEstimate: 8,
+        sourceTypes: ['current_input' as const],
+        retrievalItemCount: 0,
+        citationCount: 0
+      }
+    }))
+    const invoke = vi.fn()
+
+    await expect(
+      executeOmniPanelAiInvoke({ invoke, contextInvoke }, request, 'builtin.ai.explain')
+    ).resolves.toMatchObject({ result: 'explanation' })
+    expect(contextInvoke).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityId: 'text.chat',
+        context: {
+          mode: 'new',
+          owner: 'omni-panel',
+          scope: 'light',
+          objective: 'builtin.ai.explain'
+        },
+        options: {
+          metadata: expect.objectContaining({
+            contextEntrypoint: {
+              id: 'omni-panel.ai-action',
+              owner: 'omni-panel',
+              mode: 'new'
+            }
+          })
+        }
+      })
+    )
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('falls back to plain invoke when context transport is unavailable', async () => {
+    const request = buildOmniPanelAiInvokeRequest({
+      actionId: 'builtin.ai.explain',
+      inputText: 'a short paragraph',
+      source: 'manual'
+    })
+    const invoke = vi.fn(async () => ({
+      result: 'fallback explanation',
+      provider: 'local',
+      model: 'qwen',
+      traceId: 'trace-fallback',
+      latency: 2,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+    }))
+
+    await executeOmniPanelAiInvoke({ invoke }, request, 'builtin.ai.explain')
+    expect(invoke).toHaveBeenCalledWith('text.chat', request.payload, request.options)
   })
 
   it('maps review to code.review', () => {

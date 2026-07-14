@@ -330,28 +330,23 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
 async function loadAuthToken(): Promise<void> {
   authUseSecureStorage = isAuthTokenSecureStorageEnabled()
   authLog.info('Loading auth token', {
-    meta: { secureStorageEnabled: authUseSecureStorage }
+    meta: { credentialProtectionEnabled: authUseSecureStorage }
   })
 
-  if (!authUseSecureStorage) {
-    setSecureStorageDegradedState(false)
-    authToken = null
-    return
-  }
-
   const secureStoreHealth = await getSecureStoreHealth(appRootPath)
-  setSecureStorageDegradedState(!secureStoreHealth.available)
+  setSecureStorageDegradedState(authUseSecureStorage && !secureStoreHealth.available)
   authToken = await getSecureValue(AUTH_TOKEN_KEY)
   authLog.info('Auth token load completed', {
     meta: {
       hasToken: Boolean(authToken),
+      credentialProtectionEnabled: authUseSecureStorage,
       secureStoreAvailable: secureStoreHealth.available,
       secureStoreBackend: secureStoreHealth.backend,
       secureStoreDegraded: secureStoreHealth.degraded
     }
   })
   if (!secureStoreHealth.available) {
-    authLog.warn('Secure storage unavailable; auth entered session-only mode', {
+    authLog.warn('Secure auth persistence unavailable; login state can only remain in memory', {
       reason: secureStoreHealth.reason
     })
   } else if (secureStoreHealth.degraded) {
@@ -367,15 +362,12 @@ async function setAuthToken(nextToken: string): Promise<void> {
   authLog.info('Auth token accepted', {
     meta: {
       tokenLength: nextToken.length,
-      secureStorageEnabled: authUseSecureStorage
+      credentialProtectionEnabled: authUseSecureStorage
     }
   })
-  if (!authUseSecureStorage) {
-    return
-  }
   const persisted = await setSecureValue(AUTH_TOKEN_KEY, nextToken)
   authLog.info('Auth token persistence completed', {
-    meta: { persisted }
+    meta: { persisted, credentialProtectionEnabled: authUseSecureStorage }
   })
 }
 
@@ -383,11 +375,8 @@ async function clearAuthToken(): Promise<void> {
   const hadToken = Boolean(authToken)
   authToken = null
   authLog.info('Clearing auth token', {
-    meta: { hadToken, secureStorageEnabled: authUseSecureStorage }
+    meta: { hadToken, credentialProtectionEnabled: authUseSecureStorage }
   })
-  if (!authUseSecureStorage) {
-    return
-  }
   await setSecureValue(AUTH_TOKEN_KEY, null)
 }
 
@@ -452,8 +441,9 @@ async function handleAuthStoragePreferenceChanged(nextAppSetting: AppSetting): P
   if (!authUseSecureStorage) {
     markSecureStorageUserOverridden(true)
     setSecureStorageDegradedState(false)
-    await setSecureValue(AUTH_TOKEN_KEY, null)
-    authLog.info('Auth secure storage disabled by user preference; using session-only token mode')
+    authLog.info(
+      'Auth credential protection disabled by user preference; persisted sign-in remains available'
+    )
     return
   }
 

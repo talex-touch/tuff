@@ -9,24 +9,24 @@ const labels = computed(() => {
     return {
       button: '选择文件',
       drop: '将文件拖拽到这里',
-      hint: '或点击浏览文件',
-      count: '已选择文件',
-      unit: '个',
+      hint: '或点击浏览 PDF / 图片',
+      count: '已选择',
+      unit: ' 个文件',
     }
   }
 
   return {
     button: 'Choose files',
     drop: 'Drop files here',
-    hint: 'or click to browse',
-    count: 'Selected files',
-    unit: '',
+    hint: 'or browse PDF / images',
+    count: 'Selected',
+    unit: ' file(s)',
   }
 })
 </script>
 
 <template>
-  <div class="group" style="max-width: 480px;">
+  <div class="file-uploader-demo">
     <TxFileUploader
       v-model="files"
       accept=".pdf,.png,.jpg"
@@ -35,8 +35,20 @@ const labels = computed(() => {
       :drop-text="labels.drop"
       :hint-text="labels.hint"
     />
-    <div style="margin-top: 8px; font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-      {{ labels.count }}：{{ files.length }}{{ labels.unit }}
+    <div class="file-uploader-demo__count">
+      {{ labels.count }}: {{ files.length }}{{ labels.unit }}
     </div>
   </div>
 </template>
+
+<style scoped>
+.file-uploader-demo {
+  width: min(480px, 100%);
+}
+
+.file-uploader-demo__count {
+  margin-top: 8px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+}
+</style>

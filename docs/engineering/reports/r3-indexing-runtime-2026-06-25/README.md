@@ -2,6 +2,15 @@
 
 > 范围：R3 Search / Indexing Runtime SQLite/FTS durable migration readiness、Drizzle migration journal consistency、legacy `file_fts` retain policy、`scan_progress` source-scoped read-only migration plan / copy simulation、controlled seeded / isolated maintenance Settings diagnostics verifier evidence。
 
+## 2026-07-10 Goal Progress
+
+- Overall R3 progress remains approximately `74%`; status remains `active / partial` because no real-profile migration or natural Settings evidence blocker closed in this pass.
+- Preflight, FTS copy simulation, `scan_progress` copy simulation, and `scan_progress` read-only plan now emit a low-sensitivity `evidenceSource.dbIdentity` derived from the canonical source DB path.
+- Strict aggregate verification now includes `database-evidence-correlation` and requires all four DB artifacts to carry the same valid `sha256-realpath-v1` identity, preventing cross-DB evidence packets.
+- Current source-read-only readiness remains `ready` / `blockers=[]`. The legacy 2026-07-03 isolated packet intentionally fails the new correlation gate because those artifacts predate `dbIdentity`; they were not hand-edited or treated as real-profile evidence.
+- Validation: 12 focused R3 test files / 153 tests passed, `typecheck:node` passed, artifact sanity passed, and the R3 targeted diff / whitespace check passed. The repository-wide `git diff --check` is currently blocked only by unrelated existing Nexus documentation/demo whitespace changes.
+- No packaged Tuff process with a loopback remote-debugging endpoint was available on 2026-07-10, so attach-only natural Settings evidence could not be collected in this pass.
+
 ## 2026-07-04 Goal Progress
 
 - Overall R3 progress is recorded as approximately `74%`; status remains `active / partial`.
@@ -24,6 +33,9 @@
 - `search-production-migration-readiness-2026-07-03-journal-gate.json`
   - Source-read-only readiness rerun with Drizzle journal / SQL file consistency blockers enabled.
   - Result: `readiness.status=ready`, `blockers=[]`, latest migration tag `0025_scan_progress_source_scope`, `journalEntriesWithoutSql=[]`, `sqlFilesWithoutJournalEntry=[]`, and `legacyFileFtsMigrationPolicy.status=retained`; this does not open or mutate a profile SQLite DB.
+- `search-production-migration-readiness-2026-07-10.json`
+  - Source-read-only readiness rerun after adding database evidence correlation metadata.
+  - Result: `readiness.status=ready`, `blockers=[]`, latest migration tag `0025_scan_progress_source_scope`, journal / SQL consistency remains clean, and legacy `file_fts` remains retained; this does not open or mutate a profile SQLite DB.
 - `search-index-migration-preflight-old-shape-2026-06-25.json`
   - Read-only preflight against an isolated temporary old-shape SQLite DB.
   - Result: `gate.passed=true`, `scanProgressSourceScope=needs-migration`, `sqliteFtsOwnership=needs-confirmation`.
@@ -38,6 +50,10 @@
   - Strict aggregate verifier output over the current isolated preflight / production readiness / FTS simulation / `scan_progress` simulation / read-only plan artifacts.
   - Result: `gate.passed=false`; the verifier accepts source-read-only production readiness, but blocks final R3 closure because preflight is `evidenceSource.scope=isolated-controlled`, `task-history-store` is `durable-history-empty`, `scanProgressSourceScope=needs-migration`, the FTS / `scan_progress` copy simulations and `scan_progress` plan are isolated-controlled, natural attach-only Settings recent task verification is missing, and Settings/source detail screenshot artifacts are missing.
   - `nextActions` now explicitly calls for real-profile preflight, real-profile FTS / `scan_progress` copy simulations, real-profile `scan_progress` plan evidence, source-scoped post-migration preflight, and attach-only natural Settings visible evidence.
+- `search-index-migration-evidence-verification-isolated-blocked-2026-07-10-db-correlation.json`
+  - Strict aggregate verifier rerun over the legacy isolated DB artifacts plus the 2026-07-10 source-read-only readiness report.
+  - Result: `gate.passed=false` and `requirements.requireDatabaseEvidenceCorrelation=true`; `database-evidence-correlation` fails because the legacy DB artifacts predate `evidenceSource.dbIdentity`, in addition to the existing real-profile, durable-history, source-scope, and natural Settings blockers.
+  - This artifact proves legacy or cross-DB packets cannot close R3 under the current gate; it does not replace fresh same-DB real-profile evidence.
 - `search-fts-ownership-simulation-old-shape-2026-06-25.json`
   - Copy-execute simulation against the same isolated old-shape DB.
   - Result: `gate.passed=true`; simulation copy recreates durable `search_index`, reports full-reindex impact, and retains legacy `file_fts` unchanged.

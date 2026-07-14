@@ -30,6 +30,18 @@ describe('txTreeSelect', () => {
 
     const emitted = wrapper.emitted('update:modelValue')
     expect(emitted?.[0][0]).toBe('b')
+    expect(emitted).toHaveLength(1)
+  })
+
+  it('keeps the treeitem as the single keyboard entry for each custom row', () => {
+    const wrapper = mount(TxTreeSelect, {
+      props: { nodes, searchable: false },
+      global: { stubs: { TxPopover: PopoverStub } },
+    })
+
+    expect(wrapper.find('[role="treeitem"]').attributes('tabindex')).toBe('0')
+    expect(wrapper.find('.tx-card-item').attributes('tabindex')).toBe('-1')
+    expect(wrapper.find('.tx-tree-select__caret').attributes('tabindex')).toBe('-1')
   })
 
   it('renders empty state when nodes are missing', () => {

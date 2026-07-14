@@ -2,7 +2,11 @@
 title: "GlowText 扫光"
 description: "用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。"
 category: Basic
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [glow, text, animation, highlight]
+syncStatus: reviewed
+verified: true
 ---
 # GlowText 扫光
 
@@ -122,13 +126,54 @@ code: |
 | `tag` | `string` | `span` | 外层渲染标签 |
 | `active` | `boolean` | `true` | 是否启用扫光 |
 | `repeat` | `boolean` | `true` | 是否循环 |
-| `durationMs` | `number` | `1400` | 动画时长(ms) |
+| `durationMs` | `number` | `2000` | 动画时长(ms) |
 | `delayMs` | `number` | `0` | 延迟(ms) |
 | `angle` | `number` | `20` | 扫光角度(deg) |
 | `bandSize` | `number` | `38` | 高光带宽度(%) |
 | `color` | `string` | `rgba(255, 255, 255, 0.9)` | 高光颜色 |
 | `opacity` | `number` | `0.75` | 高光不透明度 |
-| `blendMode` | `string` | `screen` | 混合模式（`adaptive` 下会优先尝试 `plus-lighter`；如 `screen` / `overlay` / `lighten`） |
-| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | 扫光模式（`text-clip` 会把高光裁切到文字） |
+| `blendMode` | `string` | - | 自定义 CSS `mix-blend-mode`；未传时 `adaptive` 会优先使用 `plus-lighter`，不支持时回退到 `screen`。 |
+| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | `classic` 使用普通覆盖层，`adaptive` 会为容器场景补充混合/背景滤镜默认值，`text-clip` 会镜像插槽文本并把扫光裁切到字形。 |
 | `backdrop` | `string` | - | 自定义 `backdrop-filter`（如 `brightness(1.2) saturate(1.1)`） |
 | `radius` | `number` | `10` | 圆角(px) |
+
+
+### Slots
+
+| 名称 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 接收扫光的文本或紧凑内容；`text-clip` 模式下会把纯文本镜像到 `aria-hidden` 的高光层。 |
+
+### Events
+
+`TxGlowText` 不触发事件。
+
+## 交互契约
+
+- 根节点由 `tag` 控制；文本保持默认 `span`，卡片、图片或徽章容器使用 `div`。
+- `active=false` 只隐藏扫光层，插槽内容仍正常渲染。
+- `repeat=false` 只运行动画一次并保留最终帧；可结合 `delayMs` 做一次性功能提示徽章。
+- `mode="text-clip"` 会在挂载后及文本变更时读取插槽文本；适合简单文本，不适合包裹复杂交互内容。
+- 用户启用 `prefers-reduced-motion: reduce` 时组件会停止扫动动画，只保留静态高光。
+
+## 最佳实践
+
+- 标签、标题、渐变文字优先用 `text-clip`；图片缩略图、卡片和状态 chip 使用 `adaptive`。
+- 文本场景建议将 `bandSize` 控制在 `24` 到 `40`；更宽的高光带更适合图片或卡片表面。
+- 深色表面优先使用浅色 `color` 和中等 `opacity`；浅色卡片降低 `opacity` 或使用 `blendMode="soft-light"`。
+- 不要遮挡可聚焦控件；如果包裹按钮或输入框，必须确认扫光不会覆盖 focus ring。
+- 不要把 `GlowText` 当加载骨架使用；加载反馈应使用 `TxSkeleton`、`TxProgressBar` 或 `TxLoadingState`。
+
+## 审阅说明
+
+- **可访问性说明：** 两个扫光层都设置为 `aria-hidden`；`text-clip` 模式中的镜像文字只是装饰层，真实可读文本必须保留在默认插槽中。
+- **实测覆盖:** `glow-text.test.ts` 覆盖默认 adaptive 渲染、`aria-hidden` 扫光层、自定义根标签与 CSS 变量、inactive/one-shot class、text-clip 镜像文字，以及切回 adaptive 模式后的清理。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/glow-text/src/TxGlowText.vue`。
+- Types: `packages/tuffex/packages/components/src/glow-text/src/types.ts` 导出 `GlowTextProps`。
+- Export alias: `packages/tuffex/packages/components/src/glow-text/index.ts` 导出 `GlowText`、`TxGlowText`、`GlowTextProps` 与 `TxGlowTextInstance`。
+- Coverage: `packages/tuffex/packages/components/src/glow-text/__tests__/glow-text.test.ts` 覆盖 adaptive 默认值、CSS 变量映射、状态 class、`aria-hidden` 扫光层与 text-clip 模式切换。
+
+<TuffDocSourceLink />

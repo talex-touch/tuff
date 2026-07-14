@@ -1,96 +1,77 @@
 ---
 title: "MarkdownView Markdown 渲染"
-description: "用于将 Markdown 渲染为 HTML（默认开启 sanitize）。"
+description: "基于 GitHub-flavored Markdown 的渲染组件，支持显式 sanitize 与亮/暗主题模式。"
 category: Data
-syncStatus: migrated
+tags: [markdown, sanitize, theme]
+syncStatus: reviewed
+verified: true
 ---
 # MarkdownView Markdown 渲染
 
-用于将 Markdown 渲染为 HTML（默认开启 sanitize）。
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const content = ref(
-  '# Title\n\n- item 1\n- item 2\n\n`inline code`\n\n```ts\nconst a = 1\n```\n\n> Quote',
-)
-
-const richContent = ref(
-  [
-    '# Heading 1',
-    '## Heading 2',
-    '',
-    'This is **bold**, *italic*, ~~strikethrough~~, and a [link](https://github.com).',
-    '',
-    '- Unordered item',
-    '  - Nested item',
-    '- [x] Task done',
-    '- [ ] Task todo',
-    '',
-    '1. First ordered',
-    '2. Second ordered',
-    '',
-    '> Blockquote with multiple lines',
-    '>',
-    '> - Quote item',
-    '> - Another item',
-    '',
-    '---',
-    '',
-    '| Feature | Value |',
-    '| --- | --- |',
-    '| Table | Supported |',
-    '| Inline code | `const a = 1` |',
-    '',
-    '```ts',
-    'export const sum = (a: number, b: number) => a + b',
-    '```',
-  ].join('\n'),
-)
-</script>
+`TxMarkdownView` 通过 `marked` 渲染 GitHub-flavored Markdown。默认开启 sanitize：组件会等待 DOMPurify 就绪后再写入生成的 HTML；只有内容已经可信时才应设置 `sanitize=false`。
 
 ## 基础用法
 
-### MarkdownView
-:::TuffDemoWrapper{demo="MarkdownViewMarkdownViewDemo" code-lang="vue"}
+`content` 是唯一输入源字符串。组件内部已启用 GFM 与软换行。
+
+::::TuffDemoWrapper{demo="MarkdownViewMarkdownViewDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  const content = '# 发布说明\n\n- 新增 API 表格\n- 保持默认 sanitize'
+  </script>
+
   <template>
     <TxMarkdownView :content="content" />
   </template>
 ---
-:::
+::::
 
-## 渲染示例
+## 丰富 Markdown
 
-### 常见 Markdown 结构
-:::TuffDemoWrapper{demo="MarkdownViewMarkdownDemo" code-lang="vue"}
+表格、任务列表、引用、行内代码和 fenced code block 都会渲染到内部 `.markdown-body` 容器中。
+
+::::TuffDemoWrapper{demo="MarkdownViewMarkdownDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  const richContent = [
+    '# 文档片段',
+    '',
+    '- [x] 已完成任务',
+    '- [ ] 待处理任务',
+    '',
+    '| 功能 | 状态 |',
+    '| --- | --- |',
+    '| 表格 | 支持 |',
+    '',
+    '```ts',
+    'export const ok = true',
+    '```',
+  ].join('\n')
+  </script>
+
   <template>
     <TxMarkdownView :content="richContent" />
   </template>
 ---
-:::
+::::
 
 ## 主题预览
 
-### Light / Dark
-:::TuffDemoWrapper{demo="MarkdownViewLightDarkDemo" code-lang="vue"}
+外部表面已知时显式设置 `theme`；页面统一管理主题时保留 `auto`。
+
+::::TuffDemoWrapper{demo="MarkdownViewLightDarkDemo" code-lang="vue"}
 ---
 code: |
   <template>
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; width: 100%;">
-    <div style="padding: 12px; border-radius: 12px; border: 1px solid #d1d9e0; background: #ffffff;">
+    <div class="grid gap-4 md:grid-cols-2">
       <TxMarkdownView :content="richContent" theme="light" />
-    </div>
-    <div style="padding: 12px; border-radius: 12px; border: 1px solid #30363d; background: #0d1117;">
       <TxMarkdownView :content="richContent" theme="dark" />
     </div>
-  </div>
   </template>
 ---
-:::
+::::
 
 ## API
 
@@ -98,6 +79,45 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `content` | `string` | *必填* | Markdown 内容 |
-| `sanitize` | `boolean` | `true` | 是否 sanitize（默认开启） |
-| `theme` | `auto \| light \| dark` | `auto` | 主题模式（auto 跟随外部主题 data-theme/class，未标记时默认 light） |
+| `content` | `string` | 必填 | 渲染到 `.markdown-body` 容器中的 Markdown 源字符串。 |
+| `sanitize` | `boolean` | `true` | 使用 DOMPurify 清洗生成的 HTML；DOMPurify 加载期间不会输出已解析 HTML。 |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` 根据 document 的 `data-theme` / 主题 class 推导，无法识别时回退到 `light`。 |
+
+### Slots
+
+无插槽。渲染结果完全由 `content` 派生。
+
+### Events
+
+无组件事件。
+
+## 交互契约
+
+- Markdown 通过 `marked` 解析，并启用 `gfm: true` 与 `breaks: true`。
+- `sanitize=true` 时，DOMPurify 就绪前不会提前渲染原始 HTML。
+- `sanitize=false` 时，`marked` 输出会直接通过 `v-html` 写入；只适用于可信 Markdown。
+- `theme="auto"` 会读取 `html` / `body` 的 `data-theme` 以及 `light` / `dark` class，并监听 `html` 的 class 与 `data-theme` 变化。
+- 外层容器会带上解析后的 `light` 或 `dark` class，以及同值的 `data-theme` 属性。
+
+## 最佳实践
+
+- 用户生成、远程加载或插件提供的内容保持默认 `sanitize=true`。
+- 传入短且已经标准化的 Markdown 字符串；除非明确需要 Markdown HTML，否则不要混入半转义 HTML。
+- 在预览、卡片或亮/暗并排展示中显式设置 `theme`，避免被页面全局主题误导。
+- `TxMarkdownView` 只负责展示；需要编辑能力时，在外部组合编辑器或 textarea。
+
+## 审阅说明
+
+- **安全说明:** `sanitize=true` 会等待 DOMPurify；如果 sanitizer 动态导入失败，会渲染空内容。插件、远程或用户输入 Markdown 除非已在上游可信并标准化，否则不要关闭 sanitize。
+- **主题说明:** `theme="auto"` 初次会读取 `html` 与 `body` 的主题标记，但 MutationObserver 只监听 `html` 的 class 与 `data-theme`。不跟随 document root 的内嵌预览建议显式传 `theme`。
+- **实测覆盖:** `markdown-view.test.ts` 覆盖 sanitizer 就绪前不渲染、清洗后渲染、`sanitize=false` 原样渲染、显式 light/dark 主题、从 document 标记推导 auto 主题、observer 更新，以及 light fallback。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue`。
+- Types: `packages/tuffex/packages/components/src/markdown-view/src/types.ts` 导出 `MarkdownViewProps`。
+- Styles: `packages/tuffex/packages/components/src/markdown-view/src/github-markdown.css` 由组件样式导入。
+- Export alias: `packages/tuffex/packages/components/src/markdown-view/index.ts` 导出 `MarkdownView`、`TxMarkdownView`、`MarkdownViewProps` 与 `TxMarkdownViewInstance`。
+- Coverage: `packages/tuffex/packages/components/src/markdown-view/__tests__/markdown-view.test.ts` 覆盖 sanitize 与主题行为。
+
+<TuffDocSourceLink />

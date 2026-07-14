@@ -1,21 +1,37 @@
 <script setup lang="ts">
-interface SearchResultItem {
-  id: string
-  _path: string
-  title: string
-}
+import type { DocsSearchItem, DocsSearchResponse } from '#shared/types/content-api'
+import { fetchContentApi } from '~/utils/content-api-client'
 
 const searchTerm = ref('')
-const searchResults = ref<SearchResultItem[]>([])
+const searchResults = ref<DocsSearchItem[]>([])
+const { locale } = useI18n()
+let searchRunId = 0
 
 watch(searchTerm, async (newTerm) => {
-  if (!newTerm) {
+  const query = newTerm.trim()
+  const runId = ++searchRunId
+  if (!query) {
     searchResults.value = []
     return
   }
-  // @ts-expect-error: `searchContent` is auto-imported
-  const results = await searchContent(newTerm) as SearchResultItem[]
-  searchResults.value = results
+
+  try {
+    const normalizedLocale = locale.value === 'zh' ? 'zh' : 'en'
+    const response = await fetchContentApi<DocsSearchResponse>(`/api/docs/search/${normalizedLocale}`, {})
+    const normalizedQuery = query.toLocaleLowerCase()
+    if (runId === searchRunId)
+      searchResults.value = response.items
+        .filter(item => item.locale === normalizedLocale)
+        .filter((item) => {
+          return [item.title, item.description, ...item.tags]
+            .some(value => value.toLocaleLowerCase().includes(normalizedQuery))
+        })
+        .slice(0, 12)
+  }
+  catch {
+    if (runId === searchRunId)
+      searchResults.value = []
+  }
 })
 </script>
 
@@ -37,7 +53,7 @@ watch(searchTerm, async (newTerm) => {
         class="border-b border-primary/5 last:border-none dark:border-light/10"
       >
         <NuxtLink
-          :to="result._path"
+          :to="result.path"
           class="block px-4 py-2 text-sm text-black/70 transition hover:bg-dark/5 hover:text-black dark:text-light/80 dark:hover:bg-light/10 dark:hover:text-light"
         >
           {{ result.title }}

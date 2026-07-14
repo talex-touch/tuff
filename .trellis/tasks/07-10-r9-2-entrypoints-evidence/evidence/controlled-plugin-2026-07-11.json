@@ -1,0 +1,21 @@
+{
+  "schema": "tuff.context-entrypoint-controlled-evidence.v1",
+  "capturedAt": "2026-07-12T04:44:35.000Z",
+  "source": "controlled-plugin-harness",
+  "buildVersion": "2.4.13-beta.4",
+  "runtimeVersion": "vitest-3.2.4",
+  "suiteCount": 1,
+  "testCount": 42,
+  "failedCount": 0,
+  "observations": {
+    "coreboxContextMode": "new",
+    "coreboxContextScope": "retrieval",
+    "assistantContextMode": "new",
+    "assistantContextScope": "light",
+    "assistantOwner": "assistant",
+    "coreboxOwner": "corebox",
+    "isolatedHistorySourceCount": 0,
+    "subsequentCoreboxMode": "new",
+    "rawInteractionFieldsStored": 0
+  }
+}

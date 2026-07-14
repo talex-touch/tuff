@@ -1,0 +1,33 @@
+{
+  "id": "audit-search-system-architecture",
+  "name": "audit-search-system-architecture",
+  "title": "Audit and Remediate Search and System Architecture",
+  "description": "Parent planning and integration task for the audited plugin-window, search-session, indexing, storage, and provider-lifecycle risks.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": "apps/core-app main/renderer plus packages/utils transport, plugin, and search contracts",
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-09",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-09-contain-plugin-window-boundary",
+    "07-09-serialize-search-gather-updates",
+    "07-09-scope-search-sessions-and-streams",
+    "07-09-gate-search-on-storage-hydration",
+    "07-09-establish-single-search-index-writer",
+    "07-09-unify-search-provider-lifecycle"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Parent task only; implementation is split into reviewed child tasks with explicit dependencies.",
+  "meta": {}
+}

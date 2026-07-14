@@ -21,7 +21,8 @@ export class NetworkHttpStatusError extends Error {
   constructor(
     public readonly status: number,
     public readonly statusText: string,
-    public readonly url: string
+    public readonly url: string,
+    public readonly responseData?: unknown,
   ) {
     const normalized = Number.isInteger(status) ? status : 0
     super(`NETWORK_HTTP_STATUS_${normalized}`)

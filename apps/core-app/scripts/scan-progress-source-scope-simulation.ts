@@ -11,6 +11,7 @@ import {
   runScanProgressSourceScopeMigration,
   type ScanProgressSourceScopeMigrationPlan
 } from '../src/main/modules/box-tool/search-engine/scan-progress-schema'
+import { buildSearchIndexDatabaseIdentity } from './search-index-evidence-source'
 
 interface CliOptions {
   db?: string
@@ -29,6 +30,7 @@ interface ScanProgressSimulationEvidenceSource {
   scope: ScanProgressSimulationEvidenceScope
   detection: 'auto' | 'explicit'
   dbPathClass: 'temporary' | 'non-temporary'
+  dbIdentity: string
   realProfileRequired: boolean
 }
 
@@ -211,6 +213,7 @@ function buildEvidenceSource(options: {
     scope,
     detection: options.evidenceScope ? 'explicit' : 'auto',
     dbPathClass,
+    dbIdentity: buildSearchIndexDatabaseIdentity(options.db),
     realProfileRequired: options.requireRealProfileEvidence ?? false
   }
 }

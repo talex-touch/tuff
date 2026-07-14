@@ -101,57 +101,54 @@ code: |
 ---
 ::
 
-## API（简版）
-::TuffPropsTable
----
-rows:
-  - name: content
-    type: 'string'
-    default: "''"
-    description: '提示内容'
-  - name: trigger
-    type: "'hover' | 'click' | 'focus'"
-    default: "'hover'"
-    description: '触发方式'
-  - name: open-delay
-    type: 'number'
-    default: '200'
-    description: '延迟显示（ms）'
-  - name: close-delay
-    type: 'number'
-    default: '120'
-    description: '延迟关闭（ms）'
-  - name: interactive
-    type: 'boolean'
-    default: 'false'
-    description: 'hover 模式下允许鼠标进入浮层'
-  - name: keep-alive-content
-    type: 'boolean'
-    default: 'false'
-    description: '是否保留浮层内容状态（默认关闭后重建）'
-  - name: close-on-click-outside
-    type: 'boolean'
-    default: "trigger === 'click'"
-    description: '点击外部是否关闭（click 模式）'
-  - name: toggle-on-reference-click
-    type: 'boolean'
-    default: "trigger === 'click'"
-    description: '点击 reference 是否切换开关'
-  - name: max-height
-    type: 'number'
-    default: '320'
-    description: '提示层最大高度'
-  - name: anchor
-    type: 'Partial<BaseAnchorProps>'
-    default: '{}'
-    description: '透传给 TxBaseAnchor 的配置（placement/showArrow/panelBackground 等）'
----
-:::
+## API
 
-## Design Notes
-- 文案尽量短，避免多行提示。  
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `modelValue` | `boolean` | `undefined` | 可选的受控打开状态，用于 `v-model`；未设置时使用内部状态。 |
+| `content` | `string` | `''` | 未提供 `content` 插槽时使用的备用提示文本。 |
+| `disabled` | `boolean` | `false` | 阻止打开，并在变为禁用时关闭 tooltip。 |
+| `trigger` | `'hover' \| 'click' \| 'focus'` | `'hover'` | reference 包装层的触发方式。 |
+| `openDelay` | `number` | `200` | hover / focus 模式下的打开延迟，最小按 `0` 处理。 |
+| `closeDelay` | `number` | `120` | hover / focus 模式下的关闭延迟，最小按 `0` 处理。 |
+| `maxHeight` | `number` | `320` | 面板最大高度，单位 px；`<= 0` 时不限制高度。`content` 插槽在默认 `320` 时不限制高度。 |
+| `referenceFullWidth` | `boolean` | `false` | 让 reference 包装层占满 `width: 100%`。 |
+| `interactive` | `boolean` | `false` | hover 模式下，鼠标进入浮层时保持 tooltip 打开。 |
+| `keepAliveContent` | `boolean` | `false` | 透传给 `TxBaseAnchor`，关闭后仍保留浮层内容挂载。 |
+| `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 覆盖点击外部关闭行为；其次使用 anchor 配置，click 模式默认 `true`。 |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 覆盖点击 reference 切换行为；其次使用 anchor 配置，click 模式默认 `true`。 |
+| `anchor` | `Partial<BaseAnchorProps>` | `{}` | 透传给 `TxBaseAnchor` 的配置；tooltip 会先提供定位、箭头、面板和动画默认值。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: boolean) => void` | resolved 打开状态变化时触发。 |
+| `open` | `() => void` | tooltip 从关闭变为打开后触发。 |
+| `close` | `() => void` | tooltip 从打开变为关闭后触发。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | - | 被 tooltip trigger span 包装的 reference 内容。 |
+| `content` | `{ side: string }` | 自定义 tooltip 内容；接收 `TxBaseAnchor` 解析出的浮层方向。 |
+
+## 交互契约
+
+- hover / focus 触发使用 `openDelay` / `closeDelay`；click 触发把切换与点击外部关闭交给 `TxBaseAnchor`。
+- `disabled=true` 会清理等待中的 timer，并强制 resolved 打开状态为 `false`。
+- `interactive=true` 只影响 hover 模式；鼠标进入浮层会清理关闭 timer，离开后重新安排关闭。
+- Tooltip 在浮层内容上设置 `role="tooltip"`，并暴露 `data-side` 方便按方向写样式。
+- 默认 anchor 动画为 `{ type: 'transfer', duration: 432, ease: 'back.out(2)' }`，旧的 `anchor.duration` / `anchor.ease` 会作为 fallback 合并。
+
+## 最佳实践
+
+- 文案尽量短，避免多行提示。
 - 与触发元素的间距保持轻盈。
-- 复杂外观和动效请通过 `anchor` 配置，不在 Tooltip 层重复抽象。
+- 复杂外观和动效通过 `anchor` 配置，不在 Tooltip 层重复抽象。
 - Tooltip 不承载表单、长说明或批量操作；复杂内容升级为 `TxPopover` / `TxDrawer`。
 
 ## 组合示例
@@ -213,8 +210,16 @@ code: |
 ---
 ::
 
-## 审阅说明
+## 审阅说明 / Review Notes
 
-- 源码：`packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue` 与 `packages/tuffex/packages/components/src/tooltip/src/types.ts`。
-- 截图：`.codex-screenshots/nexus-tooltip-feedback-task-center-demo-playwright-2026-05-28.png`。
-- 建议：短说明用 `TxTooltip`，轻量内容用 `TxPopover`，长配置用 `TxDrawer`，不要让 Tooltip 承担复杂交互。
+- **打开状态契约:** 当 `modelValue` 是 boolean 时 `TxTooltip` 受控，否则使用内部 `internalOpen`。打开/关闭会派发 `update:modelValue` 加 `open` 或 `close`；`disabled` 会阻止打开。
+- **Anchor 契约:** click trigger 默认把 `closeOnClickOutside` 和 `toggleOnReferenceClick` 设为 `true`；其它 trigger 除非 props 或 `anchor` 覆盖，否则不启用这两个行为。
+- **实测覆盖:** `tooltip.test.ts` 覆盖 keep-alive 默认值、默认与 legacy animation 透传、content slot 的 `side` 上下文，以及点击外部关闭覆盖行为。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue`。
+- Types: `packages/tuffex/packages/components/src/tooltip/src/types.ts`。
+- Coverage: `packages/tuffex/packages/components/src/tooltip/__tests__/tooltip.test.ts` 校验 keep-alive 默认值、anchor 动画透传、插槽 side 上下文与点击外部关闭行为。
+
+<TuffDocSourceLink />

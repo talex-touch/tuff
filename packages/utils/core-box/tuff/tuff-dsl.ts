@@ -717,12 +717,31 @@ export interface TuffScoring {
 
 // ==================== 上下文信息 ====================
 
+/** Host-requested context execution policy propagated with a CoreBox query. */
+export interface TuffEntrypointExecutionContext {
+  /** Context session behavior requested by the trusted host entrypoint. */
+  mode: 'new' | 'continue' | 'stateless'
+  /** Host-side session ownership boundary. */
+  owner: 'corebox' | 'workflow' | 'omni-panel' | 'assistant' | 'system'
+  scope?: 'light' | 'session' | 'retrieval'
+  sessionId?: string
+  objective?: string
+  tokenBudget?: number
+  /** Prevents the entrypoint request from reading or mutating CoreBox conversation history. */
+  isolated?: boolean
+}
+
+export interface TuffEntrypointContext {
+  id: string
+  source?: string
+  execution: TuffEntrypointExecutionContext
+}
+
 /**
  * 上下文信息
  *
  * @description
- * 用于AI推荐和关联分析的上下文数据。
- * 包含用户状态、时间、位置等信息，帮助系统提供更智能的推荐。
+ * 用于 AI 推荐、关联分析和可信入口执行策略的上下文数据。
  */
 export interface TuffContext {
   /**
@@ -802,6 +821,9 @@ export interface TuffContext {
    * @description 用于分类和组织的标签列表
    */
   tags?: string[]
+  /** Trusted host entrypoint metadata propagated to providers and plugin features. */
+  entrypoint?: TuffEntrypointContext
+
 }
 
 // ==================== Footer Hints 配置 ====================
@@ -930,6 +952,8 @@ export interface TuffMeta {
   interaction?: {
     type: 'webcontent' | 'widget' | 'index'
     path?: string
+    rendererFeatureId?: string
+
     showInput?: boolean
     allowInput?: boolean
     sendMode?: boolean

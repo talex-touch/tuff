@@ -1,28 +1,28 @@
 import type { FSWatcher } from 'chokidar'
+import type { TuffFooterHints } from '../core-box/tuff/tuff-dsl'
 import type { LocalizedListValue, LocalizedTextValue } from '../i18n'
 import type {
   ManifestPermissionReasons,
   ManifestPermissions,
 } from '../permission/types'
 import type {
+  FeatureSearchTokenInput,
   IndexedSourceDescriptor,
   IndexedSourceManifestDescriptor,
   SearchProviderDescriptor,
   SearchProviderManifestDescriptor,
-  FeatureSearchTokenInput,
   SemanticAliasManifestEntry,
 } from '../search'
-import type { TuffFooterHints } from '../core-box/tuff/tuff-dsl'
 import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
-import type { WidgetPrecompiledManifestEntry, WidgetRuntime } from './widget'
-
 import type {
   PluginInstallRequest,
   PluginInstallSummary,
 } from './providers/types'
+
+import type { WidgetPrecompiledManifestEntry, WidgetRuntime } from './widget'
 
 export enum PluginStatus {
   DISABLED,
@@ -324,6 +324,13 @@ export interface IFeatureInteraction {
    * The relative path to the html file from the plugin root.
    */
   path?: string
+  /**
+   * Optional same-plugin feature id whose widget renderer should be reused.
+   * The host resolves this id within the owning plugin and requires the target
+   * feature to declare a widget interaction with a concrete path.
+   */
+  rendererFeatureId?: string
+
   /**
    * Whether to show the input field in CoreBox when this feature is active.
    * Defaults to true for webcontent type.

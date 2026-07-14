@@ -6,6 +6,8 @@ const {
   spawnMock,
   openExternalMock,
   notificationIsSupportedMock,
+  getMediaAccessStatusMock,
+  askForMediaAccessMock,
   appGetPathMock,
   getMainConfigMock,
   accessSyncMock
@@ -14,6 +16,8 @@ const {
   spawnMock: vi.fn(),
   openExternalMock: vi.fn(async () => undefined),
   notificationIsSupportedMock: vi.fn(() => true),
+  getMediaAccessStatusMock: vi.fn(() => 'granted'),
+  askForMediaAccessMock: vi.fn(async () => true),
   appGetPathMock: vi.fn(),
   getMainConfigMock: vi.fn(),
   accessSyncMock: vi.fn(() => undefined)
@@ -44,8 +48,8 @@ vi.mock('electron', () => ({
   },
   systemPreferences: {
     isTrustedAccessibilityClient: vi.fn(() => true),
-    getMediaAccessStatus: vi.fn(() => 'granted'),
-    askForMediaAccess: vi.fn(async () => true)
+    getMediaAccessStatus: getMediaAccessStatusMock,
+    askForMediaAccess: askForMediaAccessMock
   }
 }))
 
@@ -71,21 +75,31 @@ vi.mock('../storage', () => ({
 import * as fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { PermissionChecker, PermissionStatus } from './permission-checker'
+import { PermissionChecker, PermissionStatus, PermissionType } from './permission-checker'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
-  const originalPlatform = process.platform
+  const originalDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  const restore = () => {
+    if (originalDescriptor) {
+      Object.defineProperty(process, 'platform', originalDescriptor)
+    }
+  }
+
   Object.defineProperty(process, 'platform', {
     value: platform,
     configurable: true
   })
+
   try {
-    return run()
-  } finally {
-    Object.defineProperty(process, 'platform', {
-      value: originalPlatform,
-      configurable: true
-    })
+    const result = run()
+    if (result instanceof Promise) {
+      return result.finally(restore) as T
+    }
+    restore()
+    return result
+  } catch (error) {
+    restore()
+    throw error
   }
 }
 
@@ -241,6 +255,76 @@ describe('permission-checker', () => {
 
     expect(result.status).toBe(PermissionStatus.UNSUPPORTED)
     expect(result.canRequest).toBe(false)
+  })
+
+  it.each([
+    ['granted', PermissionStatus.GRANTED],
+    ['denied', PermissionStatus.DENIED],
+    ['not-determined', PermissionStatus.NOT_DETERMINED],
+    ['restricted', PermissionStatus.NOT_DETERMINED],
+    ['unknown', PermissionStatus.NOT_DETERMINED]
+  ])('maps macOS screen recording status %s', (mediaStatus, expectedStatus) => {
+    getMediaAccessStatusMock.mockReturnValue(mediaStatus)
+
+    const result = withPlatform('darwin', () =>
+      PermissionChecker.getInstance().checkScreenRecording()
+    )
+
+    expect(getMediaAccessStatusMock).toHaveBeenCalledWith('screen')
+    expect(result).toMatchObject({
+      status: expectedStatus,
+      canRequest: true
+    })
+  })
+
+  it('opens the macOS Screen Recording settings pane when requested', async () => {
+    const opened = await withPlatform('darwin', () =>
+      PermissionChecker.getInstance().requestPermission(PermissionType.SCREEN_RECORDING)
+    )
+
+    expect(opened).toBe(true)
+    expect(openExternalMock).toHaveBeenCalledWith(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
+    )
+  })
+
+  it('maps denied macOS microphone status to a requestable denial', () => {
+    getMediaAccessStatusMock.mockReturnValue('denied')
+
+    const result = withPlatform('darwin', () => PermissionChecker.getInstance().checkMicrophone())
+
+    expect(getMediaAccessStatusMock).toHaveBeenCalledWith('microphone')
+    expect(result).toMatchObject({
+      status: PermissionStatus.DENIED,
+      canRequest: true
+    })
+  })
+
+  it('opens the macOS Microphone settings pane instead of repeating a denied prompt', async () => {
+    getMediaAccessStatusMock.mockReturnValue('denied')
+
+    const opened = await withPlatform('darwin', () =>
+      PermissionChecker.getInstance().requestPermission(PermissionType.MICROPHONE)
+    )
+
+    expect(opened).toBe(true)
+    expect(openExternalMock).toHaveBeenCalledWith(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
+    )
+    expect(askForMediaAccessMock).not.toHaveBeenCalled()
+  })
+
+  it('requests native microphone access for a not-determined macOS status', async () => {
+    getMediaAccessStatusMock.mockReturnValue('not-determined')
+    askForMediaAccessMock.mockResolvedValue(true)
+
+    const requested = await withPlatform('darwin', () =>
+      PermissionChecker.getInstance().requestPermission(PermissionType.MICROPHONE)
+    )
+
+    expect(requested).toBe(true)
+    expect(askForMediaAccessMock).toHaveBeenCalledWith('microphone')
+    expect(openExternalMock).not.toHaveBeenCalled()
   })
 
   it('opens Linux settings via standard launcher candidates', async () => {

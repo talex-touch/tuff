@@ -133,6 +133,27 @@ describe('Tuff demo client boundary', () => {
     expect(config).toContain("...(disableSentry ? [] : ['@sentry/nuxt/module'])")
   })
 
+  it('tree-shakes unused Sentry tracing and replay runtime independently of source maps', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain('__SENTRY_DEBUG__: false')
+    expect(config).toContain('__SENTRY_TRACING__: false')
+    expect(config).toContain('__RRWEB_EXCLUDE_IFRAME__: true')
+    expect(config).toContain('__RRWEB_EXCLUDE_SHADOW_DOM__: true')
+    expect(config).toContain('__SENTRY_EXCLUDE_REPLAY_WORKER__: true')
+  })
+
+  it('only retains Nitro source maps for explicit diagnostics and lets Sentry own upload maps', () => {
+    const config = readProjectFile('../../../nuxt.config.ts')
+
+    expect(config).toContain('const enableNitroSourceMap = isEnvFlagEnabled(process.env.NUXT_ENABLE_NITRO_SOURCEMAP)')
+    expect(config).toContain('const nitroSourceMap = disableNitroSourceMap')
+    expect(config).toContain(': enableSentrySourceMaps')
+    expect(config).toContain('? undefined')
+    expect(config).toContain('sourceMap: nitroSourceMap')
+    expect(config).not.toContain('sourceMap: !disableNitroSourceMap')
+  })
+
   it('keeps route-local marketing and store components out of auto-registration', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
 
@@ -143,11 +164,13 @@ describe('Tuff demo client boundary', () => {
 
   it('keeps page-local components out of generated routes', () => {
     const config = readProjectFile('../../../nuxt.config.ts')
+    const routeFilter = readProjectFile('../../../build/nexus-page-routes.ts')
 
-    expect(config).toContain('function isRouteLocalPageComponent')
-    expect(config).toContain("normalized.includes('/app/pages/')")
-    expect(config).toContain("normalized.includes('/components/')")
-    expect(config).toContain("pages.splice(index, 1)")
+    expect(config).toContain("import { removeRouteLocalPageComponents } from './build/nexus-page-routes'")
+    expect(config).toContain('removeRouteLocalPageComponents(pages)')
+    expect(routeFilter).toContain('removeRouteLocalPageComponents(page.children)')
+    expect(routeFilter).toContain("normalized.includes('/app/pages/')")
+    expect(routeFilter).toContain("normalized.includes('/components/')")
   })
 
   it('keeps docs demos and demo helpers out of generated Nuxt components', () => {

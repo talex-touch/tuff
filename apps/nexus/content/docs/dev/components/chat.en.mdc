@@ -1,40 +1,18 @@
 ---
 title: "Chat"
-description: "AI markdown"
+description: "AI message list and message primitives with Markdown, image attachments, staggered entry, and image click events."
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [chat, ai, markdown]
+syncStatus: reviewed
+verified: true
 ---
 # Chat
 
-AI markdown
+`TxChatList` renders a transcript from `ChatMessageModel[]`. It delegates each row to `TxChatMessage`, supports Markdown content, lazy image thumbnails, optional staggered entry animation, and emits a normalized `imageClick` payload when an attachment thumbnail is clicked.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const messages = ref([
-  {
-    id: 'm1',
-    role: 'system',
-    content: 'System message',
-    createdAt: Date.now() - 60_000,
-  },
-  {
-    id: 'm2',
-    role: 'user',
-    content: 'Show me **markdown** and an image.',
-    createdAt: Date.now() - 30_000,
-    attachments: [
-      { type: 'image', url: 'https://picsum.photos/seed/tuffex/420/280', name: 'demo' },
-    ],
-  },
-  {
-    id: 'm3',
-    role: 'assistant',
-    content: 'Here is some code:\n\n```ts\nexport const hello = 1\n```',
-    createdAt: Date.now() - 10_000,
-  },
-])
-</script>
+Reviewed against `packages/tuffex/packages/components/src/chat/src/types.ts`, `TxChatList.vue`, `TxChatMessage.vue`, `TxChatComposer.vue`, `TxTypingIndicator.vue`, and the chat component tests.
 
 ## Basic Usage
 
@@ -42,8 +20,138 @@ const messages = ref([
 :::TuffDemoWrapper{demo="ChatChatListDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { ChatMessageModel } from '@talex-touch/tuffex/chat'
+  import { ref } from 'vue'
+
+  const messages = ref<ChatMessageModel[]>([
+    { id: 'system-1', role: 'system', content: 'Markdown is enabled.', createdAt: 1_705_000_000_000 },
+    {
+      id: 'user-1',
+      role: 'user',
+      content: 'Review this release cover.',
+      attachments: [{ type: 'image', url: '/cover.svg', name: 'cover.svg' }],
+    },
+    { id: 'assistant-1', role: 'assistant', content: 'Looks ready.\n\n```ts\nconst status = "ready"\n```' },
+  ])
+  </script>
+
   <template>
-    <TxChatList :messages="messages" :markdown="true" :stagger="true" />
+    <TxChatList :messages="messages" :markdown="true" @image-click="console.log" />
   </template>
 ---
 :::
+
+## Interaction Contract
+
+- `TxChatList` preserves the order of `messages` and renders each message by its stable `id`.
+- `markdown` defaults to `true`; message bodies are passed to `TxMarkdownView`. Set `markdown=false` to render plain text.
+- `stagger` defaults to `true`; the list wraps rows in `TxStagger`. Disable it for virtualized or frequently re-sorted transcripts.
+- `createdAt` is formatted only after mount, avoiding SSR/client time mismatch.
+- Image attachments render as native `button type="button"` thumbnails with lazy-loaded images.
+- `imageClick` always includes `{ url, name, messageId }`, so the host can open a preview, download, or audit the source message.
+
+## API
+
+### Data Models
+
+#### ChatMessageModel
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `id` | `string` | required | Stable message key used by `TxChatList`. |
+| `role` | `'user' \| 'assistant' \| 'system'` | required | Message role and row alignment. |
+| `content` | `string` | required | Markdown or plain text body. |
+| `createdAt` | `number` | - | Epoch timestamp rendered as `HH:mm` after mount. |
+| `avatarUrl` | `string` | - | Optional avatar image for the row. |
+| `attachments` | `ChatMessageAttachment[]` | - | Image attachments rendered as thumbnails. |
+
+#### ChatMessageAttachment
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `type` | `'image'` | required | Current attachment kind. |
+| `url` | `string` | required | Image URL used by the thumbnail and click payload. |
+| `name` | `string` | - | Accessible image alt text and click payload label. |
+
+### Props
+
+#### TxChatList
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `messages` | `ChatMessageModel[]` | required | Transcript messages, rendered in array order. |
+| `markdown` | `boolean` | `true` | Render message content through `TxMarkdownView`. |
+| `stagger` | `boolean` | `true` | Animate rows through `TxStagger`. |
+
+#### TxChatMessage
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `message` | `ChatMessageModel` | required | Single message row. |
+| `markdown` | `boolean` | `true` | Render content as Markdown or plain text. |
+
+### Events
+
+#### TxChatList
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `imageClick` | `{ url: string, name?: string, messageId: string }` | Re-emitted from `TxChatMessage` when an image attachment thumbnail is clicked. |
+
+#### TxChatMessage
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `imageClick` | `{ url: string, name?: string, messageId: string }` | Emitted when an image attachment thumbnail is clicked. |
+
+### Slots
+
+#### TxChatList
+
+No public slots are exposed; customize individual rows through `TxChatMessage` when you need alternate rendering.
+
+#### TxChatMessage
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `avatar` | `{ message: ChatMessageModel }` | Replaces the avatar image/fallback. |
+| `header` | `{ message: ChatMessageModel }` | Replaces the timestamp header. |
+| `content` | `{ message: ChatMessageModel }` | Replaces Markdown/plain body rendering. |
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+## Related Primitives
+
+- `TxChatComposer` covers text entry, attachments, send guards, and toolbar slots. See [ChatComposer](./chat-composer.en.md).
+- `TxTypingIndicator` covers pending assistant states. See [TypingIndicator](./typing-indicator.en.md).
+- New AI transcript surfaces that need `tool` messages or streaming states should prefer [AI Elements](./ai-elements.en.md).
+
+## Best Practices
+
+- Use stable message ids from the conversation store; do not key rows by array index.
+- Keep remote image URLs normalized at the data boundary; `TxChatMessage` does not validate or rewrite attachment sources.
+- Disable `stagger` for virtualized lists or when the host reorders messages during streaming.
+- Handle `imageClick` in the host so previews, downloads, analytics, and permission checks remain product-specific.
+- Keep Markdown enabled for trusted assistant output; sanitize or normalize untrusted content before it reaches the message array.
+- Prefer the separate `TxChatComposer` and `TxTypingIndicator` docs for input and assistant-pending behavior; this page covers transcript rendering.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/chat/src/types.ts`, `TxChatList.vue`, `TxChatMessage.vue`, `TxChatComposer.vue`, `TxTypingIndicator.vue`, `chat-composer.test.ts`, and `typing-indicator.test.ts`.
+- API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections, while keeping the message data models explicit.
+- Verified source behavior: `TxChatList` forwards `imageClick`, `TxChatMessage` emits normalized image payloads, Markdown defaults to `true`, stagger defaults to `true`, and timestamps are suppressed until mounted.
+- **Verified coverage:** Coverage: no dedicated `TxChatList` / `TxChatMessage` unit test currently exists; `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies this page and `ChatChatListDemo`, while `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts` and `typing-indicator.test.ts` cover the related primitives linked from this transcript page.
+- `TxChatComposer` and `TxTypingIndicator` live in the same source folder but are documented as related primitives to avoid duplicating their full API on this transcript page.
+
+## Source
+
+- List source: `packages/tuffex/packages/components/src/chat/src/TxChatList.vue`
+- Message source: `packages/tuffex/packages/components/src/chat/src/TxChatMessage.vue`
+- Types: `packages/tuffex/packages/components/src/chat/src/types.ts`
+- Related sources: `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`, `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`
+- Tests: `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts`, `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts`
+
+<TuffDocSourceLink />

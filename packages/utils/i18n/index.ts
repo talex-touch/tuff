@@ -27,9 +27,9 @@
  */
 
 // Locale data
-export { default as enMessages } from './locales/en.json'
+export { default as enMessages } from "./locales/en.json";
 
-export { default as zhMessages } from './locales/zh.json'
+export { default as zhMessages } from "./locales/zh.json";
 
 export {
   APP_LOCALES,
@@ -43,7 +43,7 @@ export {
   type ShortLocale,
   toAppLocale,
   toShortLocale,
-} from './locale'
+} from "./locale";
 export {
   isLocalizedList,
   isLocalizedText,
@@ -53,7 +53,37 @@ export {
   type LocalizedTextValue,
   resolveLocalizedList,
   resolveLocalizedText,
-} from './localized'
+} from "./localized";
+export {
+  DOMAIN_LEXICON_DOMAINS,
+  type DomainLexiconDomain,
+  type DomainLexiconSource,
+  type DomainLexiconEntry,
+  type DomainLexiconMatch,
+  DomainLexiconRegistry,
+  isDomainLexiconSource,
+  type DomainLexiconSearchOptions,
+  type ResolvedDomainLexiconEntry,
+} from "./lexicon";
+export {
+  officialDomainLexiconRegistry,
+  isUnitLexiconMetadata,
+  UNIT_CATEGORIES,
+  type UnitCategory,
+  UNIT_LEXICON_ENTRIES,
+  type UnitLexiconMetadata,
+  UNIT_LEXICON_VERSION,
+} from "./unit-lexicon";
+export {
+  MAX_PLUGIN_LEXICON_ENTRIES,
+  MAX_PLUGIN_LEXICON_REGISTER_BATCH,
+  MAX_PLUGIN_LEXICON_REGISTER_BYTES,
+  type PluginDomainLexiconEntryInput,
+  type PluginLexiconRegisterOptions,
+  type PluginLexiconRegisterResult,
+  type PluginLexiconResolveOptions,
+  ScopedDomainLexiconRegistry,
+} from "./scoped-lexicon";
 
 // Message keys and utilities for backend
 export {
@@ -75,7 +105,7 @@ export {
   SystemKeys,
   type WidgetKey,
   WidgetKeys,
-} from './message-keys'
+} from "./message-keys";
 // Resolver for frontend
 export {
   createI18nMessage,
@@ -85,4 +115,4 @@ export {
   type Messages,
   resolveI18nMessage,
   useI18nResolver,
-} from './resolver'
+} from "./resolver";

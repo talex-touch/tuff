@@ -3,7 +3,7 @@
   "generatedAt": "2026-06-18T12:27:45.998Z",
   "baselineVersion": "2.4.12-beta.8",
   "verification": {
-    "recommendedCommand": "corepack pnpm -C \"apps/core-app\" run visible:experience:verify -- --input \"../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json\" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireEvidenceTags --requireExistingArtifacts --requireNonEmptyArtifacts"
+    "recommendedCommand": "corepack pnpm -C \"apps/core-app\" run visible:experience:verify -- --input \"../../docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/coreapp-visible-experience-manifest.json\" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireEvidenceTags --requireExistingArtifacts --requireNonEmptyArtifacts --requireCurrentVersion"
   },
   "surfaces": [
     {
@@ -141,7 +141,12 @@
         "raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait-probe.json",
         "raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait.png",
         "packaged-ai-ask-copy-failure-probe.json",
-        "packaged-ai-ask-copy-failure.png"
+        "packaged-ai-ask-copy-failure.png",
+        "packaged-ai-command-editor-2026-07-13-probe.json",
+        "packaged-ai-command-editor-2026-07-13.png",
+        "packaged-ai-command-preset-preview-2026-07-13.png",
+        "packaged-ai-command-dynamic-feature-2026-07-13.png",
+        "packaged-ai-command-dynamic-widget-2026-07-13.png"
       ],
       "checkedEvidence": [
         "CoreBox AI Ask text.chat success preview is visible",
@@ -154,7 +159,11 @@
         "Local/Ollama preferred routing does not call disabled Nexus provider and shows routing trace or provider metadata",
         "Logged-out failure shows a sign-in recovery hint",
         "Provider unavailable failure shows a provider health or settings recovery hint",
-        "Copy failure remains visible inside the preview"
+        "Copy failure remains visible inside the preview",
+        "Current-version packaged AI Command editor saves a canonical registry and exposes the custom command as a CoreBox feature",
+        "Starter presets produce editable drafts with a fully resolved System Prompt preview",
+        "Runtime-added feature file icons resolve to an owning-plugin asset before CoreBox renders the dynamic result",
+        "Saved dynamic AI Commands open the packaged shared renderer in no-history mode"
       ],
       "evidenceTags": [
         "AI-STABLE-01",
@@ -203,7 +212,7 @@
         ]
       },
       "notes": "2026-06-18 packaged app + isolated userData + CDP hotkey capture opened the real CoreBox target; bodyClass=MacIntel core-box and inputIdExists=true. 2026-06-18 provider-enabled AI Ask probe loaded touch-intelligence, enabled touch-intelligence.intelligence-ask search provider, entered a real CoreBox query, and captured visible NEXUS_STREAM_UNSUPPORTED model/capability failure UI. 2026-06-18 runtime permission-denied probe loaded touch-intelligence with grants, revoked intelligence.basic through packaged renderer IPC before CoreBox AI Ask execution, and captured visible permission recovery UI without an Intelligence SDK invocation. 2026-06-20 Local/Ollama routing probe used packaged app + isolated userData + precompiled touch-intelligence widget + local qwen2.5:3b, disabled tuff-nexus-default, and captured visible local-ok answer plus Routing provider metadata: provider local-default, model qwen2.5:3b, latency, trace, input kind text, capability text.chat. 2026-06-21 quota exhausted probe used a fresh Chromium userData profile copied from the seeded Tuff business profile, loaded touch-intelligence from DB, kept touch-intelligence.intelligence-ask enabled, seeded plugin quota disabled, and captured visible AI quota exhausted UI with retry/usage recovery copy; raw app logs also recorded [Intelligence] Quota exceeded: Quota is disabled for this caller. Startup-time missing intelligence.basic blocks plugin enablement before CoreBox AI Ask UI appears; that attempt is a blocker note, not permission-denied UI evidence. Raw probe logs, pid files, output mirrors and duplicate stage screenshots are intentionally not referenced by the manifest. 2026-06-21 logged-out probe used packaged app + isolated userData with no signed-in auth state and captured fail-closed sign-in recovery UI without provider unavailable/model unsupported signals. 2026-06-21 provider-unavailable probe used packaged app + isolated signed-in profile, kept all text.chat providers disabled including tuff-nexus-default, and captured Provider unavailable recovery UI after fixing touch-intelligence error classification for \"No enabled providers ... capability not supported\". 2026-06-21 text.chat success probe used the same signed-in Local/Ollama profile with tuff-nexus-default disabled and captured a visible non-empty answer plus provider local-default, model qwen2.5:3b, latency, trace, input kind text, and capability text.chat metadata. 2026-06-21 OCR handoff probe used a fresh signed-in Chromium profile derived from the text-success profile, excluded stale DevTools/Singleton locks, synced the installed touch-intelligence plugin entry to the current source hash, and captured visible OCR response, text.chat capability, provider local-default, model qwen2.5:3b, latency, trace, input kind text,image, and image-to-text context copy. The OCR artifacts remain under raw/ because they are accepted AI-STABLE-02 evidence captures, while broader report hygiene still keeps exploratory logs and duplicate stages out of the manifest. 2026-06-21 copy failure packaged evidence closed: CDP 9412 triggered MetaOverlayEvents.action.execute -> CoreBoxEvents.metaOverlay.itemAction -> useActionPanel -> CoreBoxEvents.item.execute against an installed dist/build touch-intelligence plugin with precompiled build.widgets; packaged-ai-ask-copy-failure-probe.json is ok=true and packaged-ai-ask-copy-failure.png shows the answer preview notice with 复制失败, clipboard.write, and 请在插件权限中允许 clipboard.write 后重试。",
-      "checkedAt": "2026-06-21T02:40:07.640Z"
+      "checkedAt": "2026-07-13T20:34:37.315Z"
     },
     {
       "id": "omnipanel-writing-tools",

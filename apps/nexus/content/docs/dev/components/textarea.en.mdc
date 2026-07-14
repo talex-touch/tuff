@@ -1,0 +1,100 @@
+---
+title: Textarea
+description: Standalone multiline text field with count, resize, and status states.
+category: Form
+status: beta
+since: 1.0.0
+tags: [textarea, form, multiline]
+syncStatus: reviewed
+verified: true
+---
+# Textarea
+
+`TxTextarea` is the standalone multiline field. Use it when `TuffInput type="textarea"` is too broad and the host needs direct textarea props, count display, resize control, or exposed focus helpers.
+
+Reviewed against `packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue` and `textarea.test.ts`.
+
+## Basic Usage
+
+### Textarea
+::::TuffDemoWrapper{demo="TextareaTextareaDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('')
+  </script>
+
+  <template>
+    <TxTextarea
+      v-model="value"
+      placeholder="Write the release review note..."
+      :max-length="160"
+      show-count
+      :status="value.trim() ? 'success' : 'error'"
+    />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- `v-model` owns a string value and emits both `update:modelValue` and `input` on native input.
+- Wrapper `class` and `style` stay on the root; other attrs are forwarded to the inner `<textarea>`.
+- `showCount` displays the current length; when `maxLength` is present the format is `current/max`.
+- `status` only changes visual state. Put validation copy in the host form item.
+- `focus()` and `blur()` are exposed for form flows and editor shortcuts.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` / `v-model` | `string` | `''` | Textarea value. |
+| `placeholder` | `string` | `''` | Placeholder text. |
+| `rows` | `number` | `4` | Native textarea row count. |
+| `disabled` | `boolean` | `false` | Native disabled state. |
+| `readonly` | `boolean` | `false` | Native read-only state. |
+| `maxLength` | `number` | - | Native maximum length and count denominator. |
+| `showCount` | `boolean` | `false` | Show character count footer. |
+| `resize` | `'none' \| 'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | CSS resize behavior. |
+| `status` | `'default' \| 'success' \| 'error'` | `'default'` | Visual validation state. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `update:modelValue` | `(value: string)` | v-model update. |
+| `input` | `(value: string)` | Mirrors value updates. |
+| `focus` | `(event: FocusEvent)` | Native focus event. |
+| `blur` | `(event: FocusEvent)` | Native blur event. |
+
+### Exposed Methods
+
+| Method | Description |
+|------|-------------|
+| `focus()` | Focus the native textarea. |
+| `blur()` | Blur the native textarea. |
+| `textareaRef` | Native textarea ref. |
+
+## Slots
+
+`TxTextarea` does not expose slots. Keep labels, help text, counters beyond `showCount`, and validation messages in the surrounding form item.
+
+## Best Practices
+
+- Use `maxLength` with `showCount` for bounded notes, summaries, and prompts.
+- Keep `resize="vertical"` for normal forms; use `none` only when the surrounding layout already controls height.
+- Use `status` as a visual hint and keep accessible validation messages outside the component.
+- Forward `id`, `name`, and form-related attrs directly; the component passes them to the textarea.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue` confirms attr forwarding, `class` / `style` placement, count formatting, resize classes, status classes, focus state, and exposed helpers.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/textarea/__tests__/textarea.test.ts` covers value/placeholder/rows, attr forwarding, `input` / `update:modelValue`, count text, status/resize classes, and focus/blur helper exposure.
+- Export: `packages/tuffex/packages/components/src/textarea/index.ts` wraps the component with `withInstall` and exports `TxTextareaInstance`.
+
+## Source
+<TuffDocSourceLink />

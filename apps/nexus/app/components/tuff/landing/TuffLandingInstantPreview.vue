@@ -60,7 +60,7 @@ const previewWidgets = computed(() => ([
   {
     id: 'color',
     type: 'color',
-    icon: 'i-carbon-color-palette',
+    icon: 'i-ri-palette-line',
     depth: 1.1,
     input: t('landing.os.instantPreview.widgets.color.input'),
     result: t('landing.os.instantPreview.widgets.color.result'),

@@ -11,6 +11,7 @@ import {
   type SearchIndexMigrationTableColumn,
   type SearchIndexMigrationTableSnapshot
 } from '../src/main/modules/box-tool/search-engine/search-index-migration-preflight'
+import { buildSearchIndexDatabaseIdentity } from './search-index-evidence-source'
 
 interface CliOptions {
   db?: string
@@ -27,6 +28,7 @@ interface SearchIndexMigrationEvidenceSource {
   scope: SearchIndexMigrationEvidenceScope
   detection: 'auto' | 'explicit'
   dbPathClass: 'temporary' | 'non-temporary'
+  dbIdentity: string
   realProfileRequired: boolean
 }
 
@@ -170,6 +172,7 @@ function buildEvidenceSource(options: CliOptions): SearchIndexMigrationEvidenceS
     scope,
     detection: options.evidenceScope ? 'explicit' : 'auto',
     dbPathClass,
+    dbIdentity: buildSearchIndexDatabaseIdentity(dbPath),
     realProfileRequired: options.requireRealProfileEvidence
   }
 }

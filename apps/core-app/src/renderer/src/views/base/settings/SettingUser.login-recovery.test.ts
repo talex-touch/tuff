@@ -2,6 +2,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import type * as VueModule from 'vue'
 import SettingUser from './SettingUser.vue'
 
 const transportSendMock = vi.hoisted(() => vi.fn())
@@ -15,7 +16,7 @@ const reopenBrowserLoginMock = vi.hoisted(() => vi.fn())
 const cancelPendingBrowserLoginMock = vi.hoisted(() => vi.fn())
 
 const authStateMock = vi.hoisted(() => {
-  const { computed, reactive, ref } = require('vue') as typeof import('vue')
+  const { computed, reactive, ref } = require('vue') as typeof VueModule
   const authLoadingState = reactive({
     isSigningIn: false,
     isSigningUp: false,
@@ -30,14 +31,20 @@ const authStateMock = vi.hoisted(() => {
     loginBrowserOpenFailed: true
   })
   const isLoggedIn = ref(false)
+  const user = ref<{ avatar?: string | null } | null>(null)
+  const displayName = ref('')
+  const primaryEmail = ref('')
   return {
     authLoadingState,
     isLoggedIn,
+    user,
+    displayName,
+    primaryEmail,
     useAuth: () => ({
       isLoggedIn: computed(() => isLoggedIn.value),
-      user: computed(() => null),
-      getDisplayName: () => '',
-      getPrimaryEmail: () => '',
+      user: computed(() => user.value),
+      getDisplayName: () => displayName.value,
+      getPrimaryEmail: () => primaryEmail.value,
       loginWithBrowser: loginWithBrowserMock,
       reopenBrowserLogin: reopenBrowserLoginMock,
       cancelPendingBrowserLogin: cancelPendingBrowserLoginMock,
@@ -49,7 +56,7 @@ const authStateMock = vi.hoisted(() => {
 })
 
 const appSettingMock = vi.hoisted(() => {
-  const { reactive } = require('vue') as typeof import('vue')
+  const { reactive } = require('vue') as typeof VueModule
   return reactive({
     auth: {
       useSecureStorage: true,
@@ -67,17 +74,33 @@ const appSettingMock = vi.hoisted(() => {
   })
 })
 
+const syncPreferenceMock = vi.hoisted(() => ({
+  state: {
+    enabled: false,
+    autoEnabledAt: '',
+    userOverridden: false,
+    status: 'idle' as string,
+    lastSuccessAt: '',
+    lastPushAt: '',
+    lastPullAt: '',
+    queueDepth: 0,
+    lastErrorCode: '',
+    blockedReason: ''
+  }
+}))
+
 vi.mock('vue-sonner', () => ({
   toast: toastMock
 }))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
+    t: (key: string, params?: Record<string, unknown> | string) => {
+      const values = typeof params === 'object' && params ? params : {}
       const messages: Record<string, string> = {
         'settingUser.loginDialogWaitingTitle': '请在浏览器中完成登录',
-        'settingUser.loginDialogWaitingDesc': `已打开授权页面。如页面未打开或已关闭，可以重新打开。剩余 ${String(params?.seconds ?? '')} 秒。`,
-        'settingUser.loginDialogBrowserOpenFailedWithCode': `系统浏览器未自动打开，登录会话仍在等待。请复制登录链接到浏览器继续授权；短码：${String(params?.code ?? '')}。`,
+        'settingUser.loginDialogWaitingDesc': `已打开授权页面。如页面未打开或已关闭，可以重新打开。剩余 ${String(values.seconds ?? '')} 秒。`,
+        'settingUser.loginDialogBrowserOpenFailedWithCode': `系统浏览器未自动打开，登录会话仍在等待。请复制登录链接到浏览器继续授权；短码：${String(values.code ?? '')}。`,
         'settingUser.copyLoginLink': '复制登录链接',
         'settingUser.copyLoginCode': '复制短码',
         'settingUser.reopenLogin': '重新打开',
@@ -85,9 +108,25 @@ vi.mock('vue-i18n', () => ({
         'settingUser.retryLogin': '重试',
         'settingUser.loginDialogFailedTitle': '登录失败',
         'settingUser.loginDialogFailedDesc': '无法完成账户授权，请重试。',
+        'settingUser.syncStatusTitle': '同步状态',
+        'settingUser.syncStatus.status.idle': '空闲',
+        'settingUser.syncStatus.status.syncing': '同步中',
+        'settingUser.syncStatus.status.paused': '已暂停',
+        'settingUser.syncStatus.status.error': '异常',
+        'settingUser.syncStatus.blocked.quota': '配额受限',
+        'settingUser.syncStatus.blocked.device': '设备未授权',
+        'settingUser.syncStatus.blocked.auth': '鉴权异常',
+        'settingUser.syncStatus.unrecorded': '未记录',
+        'settingUser.syncStatus.parts.status': `状态：${String(values.status ?? '')}`,
+        'settingUser.syncStatus.parts.lastSuccess': `最近成功：${String(values.value ?? '')}`,
+        'settingUser.syncStatus.parts.lastPush': `最近推送：${String(values.value ?? '')}`,
+        'settingUser.syncStatus.parts.lastPull': `最近拉取：${String(values.value ?? '')}`,
+        'settingUser.syncStatus.parts.queue': `队列：${String(values.count ?? '')}`,
+        'settingUser.syncStatus.parts.blocked': `阻塞：${String(values.reason ?? '')}`,
+        'settingUser.syncStatus.parts.error': `错误：${String(values.code ?? '')}`,
         'common.close': '关闭'
       }
-      return messages[key] ?? key
+      return messages[key] ?? (typeof params === 'string' ? params : key)
     }
   })
 }))
@@ -109,9 +148,34 @@ vi.mock('@talex-touch/utils/common/storage/entity/app-settings', () => ({
   }
 }))
 
-vi.mock('@talex-touch/utils/env', async (importOriginal) => ({
-  ...((await importOriginal()) as object),
-  isDevEnv: () => false
+vi.mock('@talex-touch/utils/env', () => ({
+  NEXUS_BASE_URL: 'https://tuff.tagzxia.com',
+  NEXUS_LOCAL_BASE_URL: 'http://localhost:3200',
+  setRuntimeEnv: vi.fn(),
+  TUFF_NEXUS_BASE_URL_ENV: 'TUFF_NEXUS_BASE_URL',
+  getEnv: () => undefined,
+  getEnvOrDefault: (_key: string, fallback: string) => fallback,
+  getBooleanEnv: (_key: string, fallback = false) => fallback,
+  hasWindow: () => true,
+  hasDocument: () => true,
+  hasNavigator: () => true,
+  isBrowserRuntime: () => true,
+  isNodeRuntime: () => false,
+  isElectronRuntime: () => false,
+  isElectronRenderer: () => false,
+  isElectronMain: () => false,
+  isDevEnv: () => false,
+  isProdEnv: () => false,
+  normalizeBaseUrl: (input: string) => input.trim().replace(/\/+$/, ''),
+  resolveTuffNexusBaseUrl: () => 'https://tuff.tagzxia.com',
+  getTuffBaseUrl: () => 'https://tuff.tagzxia.com',
+  getTelemetryApiBase: () => 'https://tuff.tagzxia.com',
+  getTpexApiBase: () => 'https://tuff.tagzxia.com'
+}))
+
+vi.mock('@talex-touch/utils/account', () => ({
+  formatCompactAccountLabel: (value: string) => `shared-label:${value.trim().slice(0, 6)}`,
+  formatCompactEmail: (value: string) => `shared-email:${value.trim().slice(0, 5)}`
 }))
 
 vi.mock('~/modules/storage/app-storage', () => ({
@@ -123,18 +187,7 @@ vi.mock('~/modules/auth/useAuth', () => ({
 }))
 
 vi.mock('~/modules/auth/sync-preferences', () => ({
-  getSyncPreferenceState: () => ({
-    enabled: false,
-    autoEnabledAt: '',
-    userOverridden: false,
-    status: 'idle',
-    lastSuccessAt: '',
-    lastPushAt: '',
-    lastPullAt: '',
-    queueDepth: 0,
-    lastErrorCode: '',
-    blockedReason: ''
-  }),
+  getSyncPreferenceState: () => syncPreferenceMock.state,
   setSyncPreferenceByUser: vi.fn()
 }))
 
@@ -162,9 +215,9 @@ function mountSettingUser() {
       stubs: {
         CreditsSummaryBlock: { template: '<div />' },
         UserProfileEditor: { template: '<div />' },
-        TuffGroupBlock: { template: '<section><slot /></section>' },
         TuffBlockSlot: {
-          template: '<div><span>{{ title }}</span><slot /><slot name="tags" /></div>',
+          template:
+            '<div><span data-testid="slot-title">{{ title }}</span><p data-testid="slot-description">{{ description }}</p><slot /><slot name="tags" /></div>',
           props: ['title', 'description']
         },
         TuffBlockSwitch: {
@@ -221,6 +274,26 @@ describe('SettingUser login recovery', () => {
     toastMock.error.mockReset()
     toastMock.info.mockReset()
     authStateMock.isLoggedIn.value = false
+    authStateMock.user.value = null
+    authStateMock.displayName.value = ''
+    authStateMock.primaryEmail.value = ''
+    appSettingMock.dev.advancedSettings = false
+    appSettingMock.auth.useSecureStorage = true
+    appSettingMock.auth.secureStorageUserOverridden = false
+    appSettingMock.auth.secureStorageReminderShown = false
+    appSettingMock.auth.secureStorageUnavailable = false
+    Object.assign(syncPreferenceMock.state, {
+      enabled: false,
+      autoEnabledAt: '',
+      userOverridden: false,
+      status: 'idle',
+      lastSuccessAt: '',
+      lastPushAt: '',
+      lastPullAt: '',
+      queueDepth: 0,
+      lastErrorCode: '',
+      blockedReason: ''
+    })
     authStateMock.authLoadingState.isLoggingIn = false
     authStateMock.authLoadingState.loginStage = 'waiting'
     authStateMock.authLoadingState.loginAuthorizeUrl =
@@ -282,5 +355,35 @@ describe('SettingUser login recovery', () => {
 
     expect(wrapper.find('[data-testid="login-recovery-retry"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="login-recovery-cancel"]').exists()).toBe(false)
+  })
+
+  it('renders shared compact account labels and sync status when advanced settings are disabled', async () => {
+    appSettingMock.dev.advancedSettings = false
+    authStateMock.isLoggedIn.value = true
+    authStateMock.displayName.value = '4mj6b7umhtksb17uiuw1fi8yz6pe'
+    authStateMock.primaryEmail.value = 'sjdlaqwerty@privaterelay.linux.do'
+    authStateMock.user.value = { avatar: '' }
+    Object.assign(syncPreferenceMock.state, {
+      enabled: true,
+      status: 'error',
+      lastSuccessAt: 'not-a-date',
+      queueDepth: 7,
+      lastErrorCode: 'E_SYNC',
+      blockedReason: 'auth'
+    })
+
+    const wrapper = mountSettingUser()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('shared-label:4mj6b7')
+    expect(text).toContain('shared-email:sjdla')
+    expect(text).not.toContain('4mj6b7umhtksb17uiuw1fi8yz6pe')
+    expect(text).not.toContain('sjdlaqwerty@privaterelay.linux.do')
+    expect(text).toContain('同步状态')
+    expect(text).toContain('状态：异常')
+    expect(text).toContain('阻塞：鉴权异常')
+    expect(text).toContain('队列：7')
+    expect(text).toContain('错误：E_SYNC')
   })
 })

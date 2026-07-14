@@ -2,55 +2,95 @@
 
 ## 概述
 
-插件的 `index.js` 是在 Node.js 沙箱环境中运行的后端脚本。系统会向沙箱注入一组全局对象，供插件使用。
+插件 lifecycle handler 会收到 typed `IPluginContext`。新插件应把 `context.utils` 作为 canonical capability surface；宿主会按 verified calling plugin 构造该 facade，并在受保护操作执行前完成 SDK version 与 permission policy 检查。
 
-## 介绍
+旧 CommonJS 插件仍可使用 `globalThis` utilities，但它只是同一组 host-owned capability 的兼容投影。不要导入 CoreApp 内部模块，也不要创建 raw transport channel 绕过 context facade。
 
-**全局上下文对象**
+## Canonical lifecycle context
 
-插件 index.js 可以通过 `globalThis` 访问以下 API：
+## :::TuffCodeBlock{lang="typescript"}
 
-:::TuffCodeBlock{lang="javascript"}
----
 code: |
-  const {
-    // 核心 API
-    logger,           // 日志记录器
-    http,             // HTTP 请求 (axios)
-    clipboard,        // 剪贴板操作
-    storage,          // 插件专属存储
-    power,            // PowerSDK（低电量状态）
-    recommend,        // RecommendSDK（推荐提供者注册）
+import type { IPluginLifecycle } from '@talex-touch/utils/plugin/sdk'
 
-    // 功能 API
-    feature,          // Feature SDK (推送搜索结果)
-    search,           // 搜索管理器 (已废弃，用 feature 替代)
-    box,              // CoreBox 控制
-    boxItems,         // BoxItem 管理
-    
-    // 插件管理
-    plugin,           // 当前插件信息
-    plugins,          // 其他插件 API
-    features,         // 动态 Feature 管理
-    
-    // 通信
-    channel,          // IPC 通道桥接
-    $event,           // Feature 事件监听
-    
-    // UI
-    dialog,           // 系统对话框
-    divisionBox,      // DivisionBox SDK
-    quickActions,     // QuickActions SDK（MetaK 全局动作与原生分享）
-    quickOps,         // QuickOps SDK（内置本地快捷工具只读能力）
-    meta,             // MetaSDK 兼容别名（新代码优先 quickActions）
-    
-    // 工具
-    TuffItemBuilder,  // 搜索结果构建器
-    URLSearchParams,  // URL 参数处理
-    openUrl,          // 打开外部链接
-  } = globalThis
----
+const lifecycle: IPluginLifecycle = {
+async onInit(context) {
+const {
+logger,
+http,
+storage,
+secret,
+clipboard,
+channel,
+dialog,
+box,
+feature,
+quickActions,
+quickOps,
+intelligence,
+screenshot,
+i18n,
+lexicon,
+power,
+recommend,
+divisionBox,
+openUrl
+} = context.utils
+
+      logger.info(`Loaded ${context.pluginName}`)
+      void [
+        http,
+        storage,
+        secret,
+        clipboard,
+        channel,
+        dialog,
+        box,
+        feature,
+        quickActions,
+        quickOps,
+        intelligence,
+        screenshot,
+        i18n,
+        lexicon,
+        power,
+        recommend,
+        divisionBox,
+        openUrl
+      ]
+    },
+
+    onFeatureTriggered(featureId, query) {
+      // query 可以是 string，也可以是带 text/image/files/html inputs 的 TuffQuery。
+      console.log(featureId, query)
+    }
+
+}
+
+## export default lifecycle
+
 :::
+
+`context` 还包含 `pluginPath` 与插件 `config`。secret 必须写入 `context.utils.secret`，不能进入普通 storage 或日志。
+
+## Capability 分组
+
+| Context field                    | 用途                                      | 主要文档                                                             |
+| -------------------------------- | ----------------------------------------- | -------------------------------------------------------------------- |
+| `box`, `feature`                 | CoreBox 窗口与 result item lifecycle      | [Box](./box.zh.md)、[Feature](./feature.zh.md)                       |
+| `clipboard`, `storage`, `secret` | 剪贴板、插件数据与受保护凭据              | [Clipboard](./clipboard.zh.md)、[Storage](./storage.zh.md)           |
+| `intelligence`                   | AI capability discovery、invoke 与 stream | [Intelligence](./intelligence.zh.md)                                 |
+| `screenshot`                     | 权限门禁下的显示器、指针屏幕与区域截图    | [Screenshot](./screenshot.zh.md)                                     |
+| `i18n`, `lexicon`                | 主机语言与插件隔离 Domain Lexicon         | [Localization](./i18n.zh.md)                                         |
+| `quickActions`, `quickOps`       | 全局动作与 bounded built-in tools         | [Quick Actions](./quick-actions.zh.md)、[QuickOps](./quickops.zh.md) |
+| `divisionBox`, `channel`         | 独立窗口与插件 transport                  | [DivisionBox](./division-box.zh.md)、[Channel](./channel.zh.md)      |
+| `power`, `recommend`             | 低电量适配与 recommendation provider      | [Power](./power.zh.md)、[Recommend](./recommend.zh.md)               |
+
+受保护 capability 仍要求 `manifest.json` 声明对应 permission，且当前 grant 有效。字段存在于 `context.utils` 不代表每个操作都已获授权。
+
+## Legacy global 兼容
+
+现有 `index.js` 插件仍可从 `globalThis` 读取 `logger`、`clipboard`、`storage`、`feature`、`box`、`openUrl` 等 utilities。新 lifecycle 代码应在 `onInit` 中获取 `context.utils`，因为它才包含完整 typed SDK surface，包括 `secret`、`intelligence`、`screenshot`、`i18n` 与 `lexicon`。
 
 ---
 
@@ -58,14 +98,16 @@ code: |
 
 插件日志记录器，日志会保存到插件的日志目录。
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  logger.info('信息日志', { extra: 'data' })
-  logger.warn('警告日志')
-  logger.error('错误日志', error)
-  logger.debug('调试日志')
+logger.info('信息日志', { extra: 'data' })
+logger.warn('警告日志')
+logger.error('错误日志', error)
+logger.debug('调试日志')
+
 ---
+
 :::
 
 ---
@@ -74,20 +116,22 @@ code: |
 
 HTTP 请求库 (基于 axios)：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // GET 请求
-  const response = await http.get('https://api.example.com/data', {
-    headers: { 'Authorization': 'Bearer token' },
-    signal // AbortSignal 用于取消请求
-  })
-  
-  // POST 请求
-  const result = await http.post('https://api.example.com/submit', {
-    data: 'payload'
-  }, { signal })
+// GET 请求
+const response = await http.get('https://api.example.com/data', {
+headers: { 'Authorization': 'Bearer token' },
+signal // AbortSignal 用于取消请求
+})
+
+// POST 请求
+const result = await http.post('https://api.example.com/submit', {
+data: 'payload'
+}, { signal })
+
 ---
+
 :::
 
 ---
@@ -96,21 +140,23 @@ code: |
 
 剪贴板操作：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 写入文本
-  clipboard.writeText('复制的内容')
-  
-  // 读取文本
-  const text = clipboard.readText()
-  
-  // 读取图片
-  const image = clipboard.readImage()
-  
-  // 写入图片
-  clipboard.writeImage(nativeImage)
+// 写入文本
+clipboard.writeText('复制的内容')
+
+// 读取文本
+const text = clipboard.readText()
+
+// 读取图片
+const image = clipboard.readImage()
+
+// 写入图片
+clipboard.writeImage(nativeImage)
+
 ---
+
 :::
 
 ---
@@ -119,29 +165,31 @@ code: |
 
 插件专属存储（每个插件 10MB 限制）：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 读取配置文件
-  const config = storage.getFile('providers_config')
-  
-  // 保存配置文件
-  storage.setFile('providers_config', { key: 'value' })
-  
-  // 删除配置文件
-  storage.deleteFile('old_config')
-  
-  // 列出所有文件
-  const files = storage.listFiles()  // ['file1', 'file2']
-  
-  // 监听配置变化
-  const unsubscribe = storage.onDidChange('providers_config', (newConfig) => {
-    console.log('配置已更新:', newConfig)
-  })
-  
-  // 取消监听
-  unsubscribe()
+// 读取配置文件
+const config = storage.getFile('providers_config')
+
+// 保存配置文件
+storage.setFile('providers_config', { key: 'value' })
+
+// 删除配置文件
+storage.deleteFile('old_config')
+
+// 列出所有文件
+const files = storage.listFiles() // ['file1', 'file2']
+
+// 监听配置变化
+const unsubscribe = storage.onDidChange('providers_config', (newConfig) => {
+console.log('配置已更新:', newConfig)
+})
+
+// 取消监听
+unsubscribe()
+
 ---
+
 :::
 
 ---
@@ -150,24 +198,26 @@ code: |
 
 PowerSDK：用于在低电量场景自动做能力降级。
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 读取当前低电量状态
-  const status = await power.getLowPowerStatus({ threshold: 25 })
+// 读取当前低电量状态
+const status = await power.getLowPowerStatus({ threshold: 25 })
 
-  if (status.lowPower) {
-    logger.info('低电量模式，跳过重负载后台任务')
-  }
+if (status.lowPower) {
+logger.info('低电量模式，跳过重负载后台任务')
+}
 
-  // 监听状态变化
-  const disposePower = power.onLowPowerChanged((nextStatus) => {
-    logger.info('低电量状态变化', nextStatus)
-  })
+// 监听状态变化
+const disposePower = power.onLowPowerChanged((nextStatus) => {
+logger.info('低电量状态变化', nextStatus)
+})
 
-  // 可选：取消监听
-  disposePower()
+// 可选：取消监听
+disposePower()
+
 ---
+
 :::
 
 > 说明：在 `index.js` 上下文里，`power.onLowPowerChanged` 当前是轮询（约 60 秒），严格实时推送还在待定。
@@ -178,33 +228,35 @@ code: |
 
 RecommendSDK：向 CoreBox 推荐引擎注册自定义推荐提供者。
 
-:::TuffCodeBlock{lang="javascript"}
----
-code: |
-  // 注册推荐提供者
-  const dispose = recommend.registerProvider({
-    id: 'my-recommendation',
-    name: '我的推荐',
-    canProvide(context) {
-      return context.timeOfDay === 'morning'
-    },
-    getCandidates(context) {
-      return [{
-        id: 'morning-tip',
-        title: '早间提醒',
-        subtitle: '开始新的一天',
-        icon: { type: 'emoji', value: '☀️' },
-        priority: 75,
-        action: 'show-morning-tip'
-      }]
-    }
-  })
+## :::TuffCodeBlock{lang="javascript"}
 
-  // 注销提供者
-  dispose()
-  // 或
-  recommend.unregisterProvider('my-recommendation')
+code: |
+// 注册推荐提供者
+const dispose = recommend.registerProvider({
+id: 'my-recommendation',
+name: '我的推荐',
+canProvide(context) {
+return context.timeOfDay === 'morning'
+},
+getCandidates(context) {
+return [{
+id: 'morning-tip',
+title: '早间提醒',
+subtitle: '开始新的一天',
+icon: { type: 'emoji', value: '☀️' },
+priority: 75,
+action: 'show-morning-tip'
+}]
+}
+})
+
+// 注销提供者
+dispose()
+// 或
+recommend.unregisterProvider('my-recommendation')
+
 ---
+
 :::
 
 > 详见 [RecommendSDK API](./recommend.zh.md)
@@ -215,24 +267,26 @@ code: |
 
 Feature SDK，用于管理搜索结果：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 推送搜索结果
-  feature.pushItems([
-    new TuffItemBuilder('item-1')
-      .setTitle('搜索结果标题')
-      .setSubtitle('副标题')
-      .setIcon({ type: 'file', value: 'assets/icon.svg' })
-      .build()
-  ])
-  
-  // 清空当前插件的搜索结果
-  feature.clearItems()
-  
-  // 获取当前插件的搜索结果
-  const items = feature.getItems()
+// 推送搜索结果
+feature.pushItems([
+new TuffItemBuilder('item-1')
+.setTitle('搜索结果标题')
+.setSubtitle('副标题')
+.setIcon({ type: 'file', value: 'assets/icon.svg' })
+.build()
+])
+
+// 清空当前插件的搜索结果
+feature.clearItems()
+
+// 获取当前插件的搜索结果
+const items = feature.getItems()
+
 ---
+
 :::
 
 ---
@@ -241,21 +295,23 @@ code: |
 
 CoreBox 控制 SDK：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 隐藏 CoreBox
-  box.hide()
-  
-  // 显示 CoreBox
-  box.show()
-  
-  // 设置输入框内容
-  box.setInput('新的输入内容')
-  
-  // 获取输入框内容
-  const input = box.getInput()
+// 隐藏 CoreBox
+box.hide()
+
+// 显示 CoreBox
+box.show()
+
+// 设置输入框内容
+box.setInput('新的输入内容')
+
+// 获取输入框内容
+const input = box.getInput()
+
 ---
+
 :::
 
 ---
@@ -264,27 +320,29 @@ code: |
 
 BoxItem 管理 SDK（新版 API）：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 推送单个 item
-  boxItems.push(item)
-  
-  // 批量推送 items
-  boxItems.pushItems([item1, item2])
-  
-  // 更新指定 item
-  boxItems.update('item-id', { title: '新标题' })
-  
-  // 删除指定 item
-  boxItems.remove('item-id')
-  
-  // 清空该插件的所有 items
-  boxItems.clear()
-  
-  // 获取该插件的所有 items
-  const items = boxItems.getItems()
+// 推送单个 item
+boxItems.push(item)
+
+// 批量推送 items
+boxItems.pushItems([item1, item2])
+
+// 更新指定 item
+boxItems.update('item-id', { title: '新标题' })
+
+// 删除指定 item
+boxItems.remove('item-id')
+
+// 清空该插件的所有 items
+boxItems.clear()
+
+// 获取该插件的所有 items
+const items = boxItems.getItems()
+
 ---
+
 :::
 
 ---
@@ -293,23 +351,23 @@ code: |
 
 QuickActions SDK 用于注册 MetaK / Quick Actions 全局动作，也可以从动作中调用原生分享。`meta` 是历史兼容别名，和 `quickActions` 指向同一个 SDK 实例；新插件请优先使用 `quickActions`。
 
-:::TuffCodeBlock{lang="javascript"}
----
-code: |
-  quickActions.registerAction({
-    id: 'share-current-item',
-    render: {
-      basic: {
-        title: '分享当前项目',
-        subtitle: '使用当前平台可用的原生分享目标',
-        icon: { type: 'class', value: 'i-ri-share-line' }
-      },
-      group: '分享'
-    }
-  })
+## :::TuffCodeBlock{lang="javascript"}
 
-  quickActions.onActionExecute(async ({ actionId, item }) => {
-    if (actionId !== 'share-current-item') return
+code: |
+quickActions.registerAction({
+id: 'share-current-item',
+render: {
+basic: {
+title: '分享当前项目',
+subtitle: '使用当前平台可用的原生分享目标',
+icon: { type: 'class', value: 'i-ri-share-line' }
+},
+group: '分享'
+}
+})
+
+quickActions.onActionExecute(async ({ actionId, item }) => {
+if (actionId !== 'share-current-item') return
 
     const result = await quickActions.shareItem(item, {
       preferredTargets: ['airdrop', 'system-share', 'mail']
@@ -318,21 +376,22 @@ code: |
     if (!result.success) {
       logger.warn('原生分享失败', result.error)
     }
-  })
----
+
+## })
+
 :::
 
 常用方法：
 
-| 方法 | 说明 |
-| --- | --- |
-| `registerAction(action)` | 注册一个 MetaK / Quick Actions 全局动作 |
-| `onActionExecute(handler)` | 监听当前插件注册动作的执行事件 |
-| `getNativeShareTargets(payloadType?)` | 查询当前平台真实可用的原生分享目标 |
-| `resolveNativeShareTarget(options?)` | 按 payload 类型和偏好顺序解析分享目标 |
-| `nativeShare(payload, options?)` | 复用 Flow Transfer 执行原生分享 |
-| `createSharePayloadFromItem(item, options?)` | 将 CoreBox item 转成 Flow payload |
-| `shareItem(item, options?)` | 一步完成 item payload 构造、目标解析和分享 |
+| 方法                                         | 说明                                       |
+| -------------------------------------------- | ------------------------------------------ |
+| `registerAction(action)`                     | 注册一个 MetaK / Quick Actions 全局动作    |
+| `onActionExecute(handler)`                   | 监听当前插件注册动作的执行事件             |
+| `getNativeShareTargets(payloadType?)`        | 查询当前平台真实可用的原生分享目标         |
+| `resolveNativeShareTarget(options?)`         | 按 payload 类型和偏好顺序解析分享目标      |
+| `nativeShare(payload, options?)`             | 复用 Flow Transfer 执行原生分享            |
+| `createSharePayloadFromItem(item, options?)` | 将 CoreBox item 转成 Flow payload          |
+| `shareItem(item, options?)`                  | 一步完成 item payload 构造、目标解析和分享 |
 
 > 详见 [QuickActions SDK](./quick-actions.zh.md)
 
@@ -342,37 +401,39 @@ code: |
 
 当前插件信息 API：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 获取插件完整信息
-  const info = plugin.getInfo()
-  // { name, version, desc, readme, dev, status, features, issues, ... }
-  
-  // 获取插件路径
-  const path = plugin.getPath()
-  
-  // 获取数据目录
-  const dataPath = plugin.getDataPath()
-  
-  // 获取配置目录
-  const configPath = plugin.getConfigPath()
-  
-  // 获取日志目录
-  const logsPath = plugin.getLogsPath()
-  
-  // 获取临时目录
-  const tempPath = plugin.getTempPath()
-  
-  // 获取当前状态
-  const status = plugin.getStatus()
-  
-  // 获取开发配置
-  const devInfo = plugin.getDevInfo()
-  
-  // 获取平台支持信息
-  const platforms = plugin.getPlatforms()
+// 获取插件完整信息
+const info = plugin.getInfo()
+// { name, version, desc, readme, dev, status, features, issues, ... }
+
+// 获取插件路径
+const path = plugin.getPath()
+
+// 获取数据目录
+const dataPath = plugin.getDataPath()
+
+// 获取配置目录
+const configPath = plugin.getConfigPath()
+
+// 获取日志目录
+const logsPath = plugin.getLogsPath()
+
+// 获取临时目录
+const tempPath = plugin.getTempPath()
+
+// 获取当前状态
+const status = plugin.getStatus()
+
+// 获取开发配置
+const devInfo = plugin.getDevInfo()
+
+// 获取平台支持信息
+const platforms = plugin.getPlatforms()
+
 ---
+
 :::
 
 ---
@@ -381,18 +442,20 @@ code: |
 
 其他插件 API（只读访问）：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 获取所有插件列表
-  const allPlugins = await plugins.list()
-  
-  // 获取指定插件信息
-  const otherPlugin = await plugins.get('other-plugin-name')
-  
-  // 获取插件状态
-  const status = await plugins.getStatus('other-plugin-name')
+// 获取所有插件列表
+const allPlugins = await plugins.list()
+
+// 获取指定插件信息
+const otherPlugin = await plugins.get('other-plugin-name')
+
+// 获取插件状态
+const status = await plugins.getStatus('other-plugin-name')
+
 ---
+
 :::
 
 ---
@@ -401,39 +464,43 @@ code: |
 
 动态 Feature 管理：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 动态添加 Feature
-  features.addFeature({
-    id: 'dynamic-feature',
-    name: '动态功能',
-    desc: '运行时添加的功能',
-    icon: { type: 'file', value: 'assets/icon.svg' },
-    push: true,
-    commands: [{ type: 'over', value: ['动态'] }],
-    priority: 5
-  })
-  
-  // 移除 Feature
-  features.removeFeature('dynamic-feature')
-  
-  // 获取所有 Features
-  const allFeatures = features.getFeatures()
-  
-  // 获取指定 Feature
-  const feature = features.getFeature('feature-id')
-  
-  // 设置优先级
-  features.setPriority('feature-id', 10)
-  
-  // 获取优先级
-  const priority = features.getPriority('feature-id')
-  
-  // 按优先级排序获取
-  const sorted = features.getFeaturesByPriority()
+// 动态添加 Feature
+features.addFeature({
+id: 'dynamic-feature',
+name: '动态功能',
+desc: '运行时添加的功能',
+icon: { type: 'file', value: 'assets/icon.svg' },
+push: true,
+commands: [{ type: 'over', value: ['动态'] }],
+priority: 5
+})
+
+// 移除 Feature
+features.removeFeature('dynamic-feature')
+
+// 获取所有 Features
+const allFeatures = features.getFeatures()
+
+// 获取指定 Feature
+const feature = features.getFeature('feature-id')
+
+// 设置优先级
+features.setPriority('feature-id', 10)
+
+// 获取优先级
+const priority = features.getPriority('feature-id')
+
+// 按优先级排序获取
+const sorted = features.getFeaturesByPriority()
+
 ---
+
 :::
+
+运行时新增 Feature 的 `icon.type: 'file'` 由宿主初始化。相对路径会在所属插件根目录内解析；目录穿越或目标缺失会 fail closed，不会把未解析的相对路径留给 CoreBox。
 
 ---
 
@@ -441,28 +508,30 @@ code: |
 
 IPC 通道桥接：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 发送消息到主进程
-  const result = await channel.sendToMain('event-name', { data: 'payload' })
-  
-  // 发送消息到渲染进程
-  await channel.sendToRenderer('event-name', { data: 'payload' })
-  
-  // 监听主进程消息
-  const dispose = channel.onMain('event-name', (data) => {
-    console.log('收到主进程消息:', data)
-  })
-  
-  // 监听渲染进程消息
-  const dispose = channel.onRenderer('event-name', (data) => {
-    console.log('收到渲染进程消息:', data)
-  })
-  
-  // 访问原始 channel 对象
-  channel.raw
+// 发送消息到主进程
+const result = await channel.sendToMain('event-name', { data: 'payload' })
+
+// 发送消息到渲染进程
+await channel.sendToRenderer('event-name', { data: 'payload' })
+
+// 监听主进程消息
+const dispose = channel.onMain('event-name', (data) => {
+console.log('收到主进程消息:', data)
+})
+
+// 监听渲染进程消息
+const dispose = channel.onRenderer('event-name', (data) => {
+console.log('收到渲染进程消息:', data)
+})
+
+// 访问原始 channel 对象
+channel.raw
+
 ---
+
 :::
 
 ---
@@ -471,20 +540,22 @@ code: |
 
 Feature 事件监听：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 监听 Feature 生命周期
-  $event.onFeatureLifeCycle('feature-id', {
-    onLaunch: (feature) => { console.log('启动', feature) },
-    onFeatureTriggered: (data, feature) => { console.log('触发', data) },
-    onInputChanged: (input) => { console.log('输入变化', input) },
-    onClose: (feature) => { console.log('关闭', feature) }
-  })
-  
-  // 取消监听
-  $event.offFeatureLifeCycle('feature-id', callback)
+// 监听 Feature 生命周期
+$event.onFeatureLifeCycle('feature-id', {
+onLaunch: (feature) => { console.log('启动', feature) },
+onFeatureTriggered: (data, feature) => { console.log('触发', data) },
+onInputChanged: (input) => { console.log('输入变化', input) },
+onClose: (feature) => { console.log('关闭', feature) }
+})
+
+// 取消监听
+$event.offFeatureLifeCycle('feature-id', callback)
+
 ---
+
 :::
 
 ---
@@ -493,28 +564,30 @@ code: |
 
 系统对话框：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 消息对话框
-  await dialog.showMessageBox({
-    type: 'info',
-    title: '标题',
-    message: '消息内容',
-    buttons: ['确定', '取消']
-  })
-  
-  // 打开文件对话框
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Images', extensions: ['jpg', 'png'] }]
-  })
-  
-  // 保存文件对话框
-  const result = await dialog.showSaveDialog({
-    defaultPath: 'file.txt'
-  })
+// 消息对话框
+await dialog.showMessageBox({
+type: 'info',
+title: '标题',
+message: '消息内容',
+buttons: ['确定', '取消']
+})
+
+// 打开文件对话框
+const result = await dialog.showOpenDialog({
+properties: ['openFile', 'multiSelections'],
+filters: [{ name: 'Images', extensions: ['jpg', 'png'] }]
+})
+
+// 保存文件对话框
+const result = await dialog.showSaveDialog({
+defaultPath: 'file.txt'
+})
+
 ---
+
 :::
 
 ---
@@ -523,25 +596,27 @@ code: |
 
 DivisionBox SDK，用于创建独立窗口：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // 打开 DivisionBox
-  const session = await divisionBox.open({
-    url: 'plugin://my-plugin/index.html',
-    title: '独立窗口',
-    size: 'medium',  // 'compact' | 'medium' | 'expanded'
-    keepAlive: true
-  })
-  
-  // 关闭 DivisionBox
-  await divisionBox.close(session.sessionId)
-  
-  // 监听状态变化
-  divisionBox.onStateChange(session.sessionId, (state) => {
-    console.log('状态变化:', state)
-  })
+// 打开 DivisionBox
+const session = await divisionBox.open({
+url: 'plugin://my-plugin/index.html',
+title: '独立窗口',
+size: 'medium', // 'compact' | 'medium' | 'expanded'
+keepAlive: true
+})
+
+// 关闭 DivisionBox
+await divisionBox.close(session.sessionId)
+
+// 监听状态变化
+divisionBox.onStateChange(session.sessionId, (state) => {
+console.log('状态变化:', state)
+})
+
 ---
+
 :::
 
 ---
@@ -550,23 +625,25 @@ code: |
 
 搜索结果构建器：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  const item = new TuffItemBuilder('unique-id')
-    .setSource('plugin', 'plugin-features')
-    .setTitle('标题')
-    .setSubtitle('副标题')
-    .setIcon({ type: 'file', value: 'assets/icon.svg' })
-    .createAndAddAction('action-id', 'copy', '复制', '复制的内容')
-    .addTag('标签', 'blue')
-    .setMeta({
-      pluginName: 'my-plugin',
-      featureId: 'my-feature',
-      customData: 'any value'
-    })
-    .build()
+const item = new TuffItemBuilder('unique-id')
+.setSource('plugin', 'plugin-features')
+.setTitle('标题')
+.setSubtitle('副标题')
+.setIcon({ type: 'file', value: 'assets/icon.svg' })
+.createAndAddAction('action-id', 'copy', '复制', '复制的内容')
+.addTag('标签', 'blue')
+.setMeta({
+pluginName: 'my-plugin',
+featureId: 'my-feature',
+customData: 'any value'
+})
+.build()
+
 ---
+
 :::
 
 ---
@@ -575,11 +652,13 @@ code: |
 
 打开外部链接：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  openUrl('https://example.com')
+openUrl('https://example.com')
+
 ---
+
 :::
 
 ---
@@ -588,24 +667,24 @@ code: |
 
 插件 index.js 需要导出生命周期钩子对象：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  const pluginLifecycle = {
-    /**
-     * Feature 被触发时调用
-     * @param {string} featureId - Feature ID
-     * @param {string|TuffQuery} query - 查询内容
-     * @param {IPluginFeature} feature - Feature 定义
-     * @param {AbortSignal} signal - 用于取消操作
-     */
-    async onFeatureTriggered(featureId, query, feature, signal) {
-      // 兼容新版本：query 可能是字符串或 TuffQuery 对象
-      const queryText = typeof query === 'string' ? query : query?.text
-      
+const pluginLifecycle = {
+/\*\*
+_ Feature 被触发时调用
+_ @param {string} featureId - Feature ID
+_ @param {string|TuffQuery} query - 查询内容
+_ @param {IPluginFeature} feature - Feature 定义
+_ @param {AbortSignal} signal - 用于取消操作
+_/
+async onFeatureTriggered(featureId, query, feature, signal) {
+// 兼容新版本：query 可能是字符串或 TuffQuery 对象
+const queryText = typeof query === 'string' ? query : query?.text
+
       // 处理 Feature 逻辑...
     },
-  
+
     /**
      * 搜索结果项被点击时调用
      * @param {TuffItem} item - 被点击的项
@@ -619,10 +698,11 @@ code: |
         }
       }
     }
-  }
-  
-  module.exports = pluginLifecycle
----
+
+}
+
+## module.exports = pluginLifecycle
+
 :::
 
 ---

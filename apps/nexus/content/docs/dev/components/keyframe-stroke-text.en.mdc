@@ -1,17 +1,22 @@
 ---
 title: "KeyframeStrokeText"
-description: "Render any text with a keyframe sequence: stroke first, fill later."
+description: "SVG text effect that draws the stroke first, reveals the fill later, and recalculates text metrics when typography inputs change."
 category: Basic
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [text, svg, animation]
+syncStatus: reviewed
+verified: true
 ---
 # KeyframeStrokeText
 
-Render any text with a keyframe sequence: stroke first, fill later.
+`TxKeyframeStrokeText` renders text as layered SVG `<text>` nodes: one hidden measurement layer, one animated stroke layer, and one delayed fill layer. Use it for short hero words, brand marks, onboarding titles, or celebratory labels where the text itself is the visual object.
 
-## Basic usage
+## Basic Usage
 
-### KeyframeStrokeText
-:::TuffDemoWrapper{demo="KeyframeStrokeTextKeyframeStrokeTextDemo" code-lang="vue"}
+Use short text and tune stroke/fill colors through props. Numeric `fontSize` values become pixels.
+
+::::TuffDemoWrapper{demo="KeyframeStrokeTextKeyframeStrokeTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -30,17 +35,18 @@ code: |
     </div>
   </template>
 ---
-:::
+::::
 
-## Chinese text demo
+## Multilingual Text
 
-### Chinese text
-:::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
+The component measures the rendered SVG text, so CJK copy and mixed-language labels can use the same API.
+
+::::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxKeyframeStrokeText
-      text="Text"
+      text="关键帧描边动画"
       stroke-color="#16a34a"
       fill-color="#14532d"
       :duration-ms="2600"
@@ -50,26 +56,58 @@ code: |
     />
   </template>
 ---
-:::
+::::
 
 ## API
 
 ### Props
 
-| Name | Type | Default | Description |
+| Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `text` | `string` | `''` | Text content to render |
-| `strokeColor` | `string` | `#4C4CFF` | Stroke color |
-| `fillColor` | `string` | `#111827` | Fill color |
-| `durationMs` | `number` | `1800` | Animation duration (ms) |
-| `strokeWidth` | `number` | `2` | Stroke width |
-| `fontSize` | `string \| number` | `64` | Font size |
-| `fontWeight` | `string \| number` | `700` | Font weight |
-| `fontFamily` | `string` | `inherit` | Font family |
+| `text` | `string` | `''` | Text content rendered into all SVG text layers. |
+| `strokeColor` | `string` | `'#4C4CFF'` | Stroke animation color. |
+| `fillColor` | `string` | `'#111827'` | Final fill color. |
+| `durationMs` | `number` | `1800` | Animation duration in milliseconds. Used by both stroke and fill animations. |
+| `strokeWidth` | `number` | `2` | SVG stroke width. Also affects viewBox padding. |
+| `fontSize` | `string \| number` | `64` | Font size. Numbers are converted to px; strings are passed through. |
+| `fontWeight` | `string \| number` | `700` | SVG font weight. |
+| `fontFamily` | `string` | `'inherit'` | SVG font family. |
+
+### Events
+
+No events are emitted.
+
+### Slots
+
+No slots are exposed. Text must come from the `text` prop so measurement and accessibility stay deterministic.
 
 ## Interaction Contract
 
-- The component renders a `role="img"` SVG; non-empty `text` is used as the `aria-label`.
-- Empty `text` uses a non-breaking-space fallback to keep SVG measurement and layout stable, without emitting an `aria-label`.
-- Numeric `fontSize` values are converted to px; `durationMs`, `strokeWidth`, colors, and font settings drive the animation through CSS variables.
-- Text metrics are synced after mount and recalculated when text, font, or stroke width inputs change.
+- The root is an SVG with `role="img"`.
+- Non-empty `text` is mirrored to `aria-label`; empty `text` omits `aria-label` and renders a non-breaking-space fallback to keep measurement stable.
+- The component measures `getBBox()` and `getComputedTextLength()` after mount and after text, font, or stroke-width inputs change.
+- `document.fonts.ready` triggers an additional measurement pass when the browser exposes the Font Loading API.
+- `strokeColor`, `fillColor`, `durationMs`, `strokeWidth`, measured stroke length, font size, font weight, and font family are applied through CSS variables.
+- The component respects `prefers-reduced-motion: reduce` by disabling the animations and showing the final state.
+
+## Best Practices
+
+- Use it for short phrases. Long sentences become hard to read and make SVG measurement/animation visually heavy.
+- Keep the surrounding layout width predictable. The SVG height follows `fontSize`, while the viewBox width follows measured text length.
+- Prefer semantic page headings outside the component when the animated text is decorative; use `text` for the visual label itself.
+- Avoid re-rendering the component on every keystroke in large lists. Each typography/text change schedules a measurement pass.
+- Test custom web fonts in the target surface; font loading can change measured width after the first paint.
+
+## Review Notes
+
+- **Accessibility note:** The source always renders an SVG with `role="img"`; non-empty `text` becomes the accessible name, but there is no prop for `aria-hidden`. Keep semantic headings or labels outside the component when the animation is decorative.
+- **Verified coverage:** `keyframe-stroke-text.test.ts` checks the accessible SVG/text layers, CSS variable mapping, empty-text fallback, metric updates after prop changes, and install registration.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/TxKeyframeStrokeText.vue`.
+- Types: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/types.ts` exports `KeyframeStrokeTextProps`.
+- Export alias: `packages/tuffex/packages/components/src/keyframe-stroke-text/index.ts` exports `KeyframeStrokeText`, `TxKeyframeStrokeText`, `KeyframeStrokeTextProps`, and `TxKeyframeStrokeTextInstance`.
+- Coverage: `packages/tuffex/packages/components/src/keyframe-stroke-text/__tests__/keyframe-stroke-text.test.ts` verifies measurement-driven rendering and installation.
+
+<TuffDocSourceLink />

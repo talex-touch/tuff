@@ -1,44 +1,35 @@
 ---
 title: "TuffLogoStroke"
-description: "Stroke animation for the current Tuff logo SVG, with once, breathe, and hover trigger modes."
+description: "Animated SVG stroke treatment for the Tuff logo with once, breathe, hover, and loop modes."
 category: Basic
-syncStatus: migrated
+tags: [logo, svg, animation]
+syncStatus: reviewed
+verified: true
 ---
 # TuffLogoStroke
 
-Stroke animation for the current Tuff logo SVG, with once, breathe, and hover trigger modes.
+`TxTuffLogoStroke` renders the current Tuff logo as an animated SVG. Use it for brand moments, empty-state accents, or onboarding surfaces where a static logo feels too quiet.
 
-## Animation modes
+## Animation Modes
 
-### Modes
-:::TuffDemoWrapper{demo="TuffLogoStrokeModesDemo" code-lang="vue"}
+`once` plays the draw-in sequence on mount. `breathe` and `loop` keep a subtle pulse after the draw-in sequence. `hover` waits until the user hovers the SVG.
+
+::::TuffDemoWrapper{demo="TuffLogoStrokeModesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center;">
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-        <TxTuffLogoStroke :size="84" mode="once" />
-        <span style="font-size: 12px; opacity: 0.72;">once</span>
-      </div>
-
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-        <TxTuffLogoStroke :size="84" mode="breathe" />
-        <span style="font-size: 12px; opacity: 0.72;">breathe</span>
-      </div>
-
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-        <TxTuffLogoStroke :size="84" mode="hover" />
-        <span style="font-size: 12px; opacity: 0.72;">hover me</span>
-      </div>
-    </div>
+    <TxTuffLogoStroke :size="84" mode="once" />
+    <TxTuffLogoStroke :size="84" mode="breathe" />
+    <TxTuffLogoStroke :size="84" mode="hover" />
   </template>
 ---
-:::
+::::
 
-## Palette and duration customization
+## Palette and Duration
 
-### Palette
-:::TuffDemoWrapper{demo="TuffLogoStrokePaletteDemo" code-lang="vue"}
+Customize the stroke, core gradient, outer glow, and animation duration when the logo appears on a themed surface.
+
+::::TuffDemoWrapper{demo="TuffLogoStrokePaletteDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -54,26 +45,58 @@ code: |
     />
   </template>
 ---
-:::
+::::
 
 ## API
 
 ### Props
 
-| Name | Type | Default | Description |
+| Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `size` | `string \| number` | `120` | Icon width and height |
-| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | Animation mode (`loop` is an alias for `breathe`) |
-| `durationMs` | `number` | `2200` | Animation duration (ms) |
-| `strokeColor` | `string` | `#4C4CFF` | Outer stroke color |
-| `fillStartColor` | `string` | `#199FFE` | Start color of core gradient |
-| `fillEndColor` | `string` | `#810DC6` | End color of core gradient |
-| `outerStartColor` | `string` | `#D73E4D` | Start color of outer ring gradient |
-| `outerEndColor` | `string` | `#7F007F` | End color of outer ring gradient |
+| `size` | `string \| number` | `120` | SVG width and height. Numeric values are normalized to px. |
+| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | Animation trigger mode. `loop` is normalized to `breathe`. |
+| `durationMs` | `number` | `2200` | Base animation duration in milliseconds. |
+| `strokeColor` | `string` | `'#4C4CFF'` | Outline stroke color. |
+| `fillStartColor` | `string` | `'#199FFE'` | Start color of the core fill gradient. |
+| `fillEndColor` | `string` | `'#810DC6'` | End color of the core fill gradient. |
+| `outerStartColor` | `string` | `'#D73E4D'` | Start color of the outer radial gradient. |
+| `outerEndColor` | `string` | `'#7F007F'` | End color of the outer radial gradient. |
+
+### Slots
+
+No slots.
+
+### Events
+
+No component events.
 
 ## Interaction Contract
 
-- The component renders a `role="img"` SVG with the default accessible name `Tuff logo stroke animation`.
-- Numeric `size` values are converted to width and height in px; string values are used as-is.
-- `mode="loop"` maps to the `breathe` class; `once`, `breathe`, and `hover` emit their matching state classes.
-- Gradient and filter ids use an instance-scoped prefix, so multiple logos can render on the same page without collisions.
+- The component renders one SVG with `role="img"` and the accessible name `Tuff logo stroke animation`.
+- `mode="loop"` is an alias for `mode="breathe"`; both produce the breathe state class.
+- Gradient and filter ids are instance-scoped through `useId()`, so multiple logos can render on the same page without SVG id collisions.
+- `durationMs` is written to `--tx-tuff-logo-duration`; breathe mode derives its pulse duration from that value.
+- The component includes `prefers-reduced-motion: reduce` CSS that disables animations and shows the final drawn state.
+
+## Best Practices
+
+- Use `once` for splash, loading-complete, or first-view brand moments.
+- Use `hover` when the logo sits near an interactive affordance and should not animate continuously.
+- Use `breathe` / `loop` sparingly; repeating brand motion can compete with primary UI feedback.
+- Keep custom colors close to the surrounding surface palette. High-saturation gradients work best on calm backgrounds.
+- Do not wrap the SVG in another animation unless you have checked reduced-motion behavior for the combined effect.
+
+## Review Notes
+
+- **Motion note:** `breathe` and `loop` are visually identical after normalization. Use `loop` only when matching older call sites; prefer `breathe` in new examples because it names the actual class state.
+- **SVG note:** Gradient and filter ids are generated per instance with `useId()`. This prevents collisions in repeated logos but means snapshots should assert existence/uniqueness, not exact id strings.
+- **Verified coverage:** `tuff-logo-stroke.test.ts` checks accessible SVG semantics, numeric and string sizes, CSS duration variable, `loop` to `breathe` mapping, palette forwarding, instance-scoped SVG ids, and install registration.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tuff-logo-stroke/src/TxTuffLogoStroke.vue`.
+- Types: `packages/tuffex/packages/components/src/tuff-logo-stroke/src/types.ts` exports `TuffLogoStrokeProps`.
+- Export alias: `packages/tuffex/packages/components/src/tuff-logo-stroke/index.ts` exports `TuffLogoStroke`, `TxTuffLogoStroke`, `TuffLogoStrokeProps`, and `TxTuffLogoStrokeInstance`.
+- Coverage: `packages/tuffex/packages/components/src/tuff-logo-stroke/__tests__/tuff-logo-stroke.test.ts` verifies modes, dimensions, palette props, SVG ids, accessibility, and install behavior.
+
+<TuffDocSourceLink />

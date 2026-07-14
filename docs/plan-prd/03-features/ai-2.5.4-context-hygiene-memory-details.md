@@ -1,6 +1,6 @@
 # Tuff 2.5.4 ContextHygiene 详细设计附录
 
-> 更新时间：2026-06-27
+> 更新时间：2026-07-11
 > 来源：从 `ai-2.5.4-context-hygiene-memory-prd.md` 拆分出的工程细节。
 > 定位：schema、模块职责、状态机、API 合同、策略细则、测试计划与回滚细节。
 
@@ -419,17 +419,19 @@ score = relevance * 0.45
 
 | 入口 | ContextHygiene 行为 |
 | --- | --- |
-| CoreBox AI Ask | 官方 `touch-intelligence` 已在调用前 fail-soft 准备 ContextPackage metadata；默认轻上下文；显式继续时召回旧 session；展示上下文 chip |
-| OmniPanel Writing Tools | 优先使用选区/剪贴板/OCR capsule，不默认带完整聊天历史 |
-| Workflow `Use Model` | 每个 run 可独立 session；Review Queue 写 checkpoint，不默认写长期记忆 |
-| Assistant | 悬浮球/VoicePanel 默认轻上下文；语音或剪贴板动作仅注入当前动作 capsule |
-| `touch-intelligence` 插件 | 通过 Intelligence SDK 触发，受 `intelligence.basic` 和 memory 权限策略控制 |
+| CoreBox AI Ask | 官方 `touch-intelligence` 通过 host-owned `contextInvoke/contextStream` 执行受治理 ContextPackage；支持 new/continue/stateless，展示 metadata-only package/session/citation 摘要；active widget set-query 单次派发并在 item execute 前消费 one-shot entrypoint context。 |
+| OmniPanel Writing Tools | AI action 使用 `owner=omni-panel`、`mode=new`、`scope=light`，优先消费当前选区/剪贴板/OCR capsule，不继承完整聊天历史。 |
+| Workflow `Use Model` | 每个 run 使用 `owner=workflow` 与独立 `scope=session`；首个 `text.chat` model step 以 `mode=new` 建立 session，后续 model step 以 `mode=continue` 复用同一 session。不同 run 不共享 history，Review Queue 状态不自动升级为长期记忆。 |
+| Assistant | VoicePanel/悬浮球通过 trusted one-shot CoreBox query 使用 `owner=assistant`、`new + light`；用户后续输入会清空旧入口 context。 |
+| `touch-intelligence` 插件 | 只调用 host-owned Intelligence context facade，受 `intelligence.basic` 控制；不得读取或管理 host MemoryItem，也不得自行拼接跨 scope prompt。 |
 | 2.5.3 Local Knowledge | RetrievalAssembler 可调用 buildContext；service foundation 已保留 citation / document source / retrieval status / degraded reason 到 ContextPackage metadata，并可通过 `contextListPackageLogs` 读取 metadata-only explain log；Intelligence Audit 已能展示 trace package 摘要、metadata-only explain drawer、included/excluded source detail 与 citation metadata，后续继续补 permission metadata 与完整 explain drawer 产品化 |
 | Provider Runtime | 接收 ContextPackage 后调用模型；不得反向修改 MemoryStore |
 
 ## 23. Feature Flags 与 Rollout
 
 ### Feature Flags
+
+> 截至 2026-07-11，下列 flag 名仅是原始 rollout 设计，尚未作为公开设置或稳定 API 实现。当前真实开关边界是 host context facade、entrypoint policy 与 fail-soft/degraded contract；调用方不得依赖这些计划中的 key。
 
 | Flag | 默认 | 说明 |
 | --- | --- | --- |
@@ -597,32 +599,49 @@ P0 不实现自动长期保存；P1 若启用 suggested memory，必须有“查
 
 | 状态 | 验收项 | 当前证据 / 下一步 |
 | --- | --- | --- |
-| partial | 超过空闲阈值后再次提问，会自动创建新 session 与 `session_start` checkpoint。 | Core service foundation 已有，仍需 CoreBox/packaged 最近路径 evidence。 |
-| partial | 新 session 默认不注入旧 session 原文。 | Service 层已有 scope/package 基线，仍需 entrypoint integration。 |
-| partial | 用户显式“继续刚才”时，可以召回旧 session 摘要并展示召回原因。 | 需补 archived session summary retrieval 与 UI reason。 |
-| open | 长会话 token 不线性增长，能按阈值自动生成结构化 CompressionSnapshot。 | P1 CompressionSnapshot 未落地。 |
-| open | 压缩失败不会删除原 turns，并会返回 degraded reason。 | 待 Compression failure focused test。 |
-| partial | 稳定用户偏好可进入长期 MemoryItem；临时上下文不会误存为长期记忆。 | 手动确认 + MemoryPolicy 已有；自动候选提取和编辑后重评估仍缺。 |
-| partial | 敏感内容不会明文进入普通记忆、localStorage、普通 JSON、日志或同步 payload。 | secret/sensitive policy 和 save 拦截已有；仍需 UI/evidence sweep。 |
-| partial | Sensitive / secret turns 不进入 FTS、embedding、context log 或可同步 payload。 | current input policy-blocked metadata 已有；仍需更多 entrypoint evidence。 |
-| partial | ContextPackage 可解释每段历史、记忆和检索片段的来源、reason 与 token 预算。 | package log / Audit explain shell 已有；仍缺完整产品化和真实数据 evidence。 |
-| partial | Context explain drawer 可解释 included、excluded、policy-blocked、tombstone 和 token budget。 | included/excluded/policy-blocked 已可见；tombstone hit 展示仍待补。 |
-| partial | 用户可以查看、禁用、删除记忆，删除后不再被注入。 | Audit Memory Review 已支持 list、enable/disable、tombstone delete；仍需搜索/编辑/来源审计和 prepareTurn 回灌回归。 |
-| partial | CoreBox / OmniPanel / Workflow / Assistant 至少各有一个最近路径 prepareTurn integration case；P0 可先只要求 CoreBox。 | CoreBox AI Ask metadata 已接入；OmniPanel/Workflow/Assistant 仍 open。 |
-| open | Migration、并发、tombstone、LangChain 外发限制各有 focused evidence。 | 需要 focused integration / race tests。 |
-| partial | README/TODO/CHANGES/INDEX/Roadmap/Quality Baseline 按影响同步。 | TODO / PRD / CHANGES / Quality Baseline 已同步；README / R8-R9 execution plan 本轮补入口摘要。 |
+| partial | 超过空闲阈值后再次提问，会自动创建新 session 与 `session_start` checkpoint。 | Core service/contract 已覆盖；显式 continue 可安全携带摘要，仍缺 real-profile 长空闲可见 evidence。 |
+| passed | 新 session 默认不注入旧 session 原文。 | CoreBox/Assistant integration 与 packaged Provider metadata 均为 system + current user 两项；Assistant session owner=`assistant`、scope=`light`。 |
+| passed | 用户显式“继续刚才”时，可以召回旧 session 摘要并展示召回原因。 | archived/expired/idle session 使用新 id，优先受治理 CompressionSnapshot、回退安全 legacy summary；blocked/missing 为 metadata-only excluded/unavailable，widget 显示 transition reason。 |
+| passed | 长会话按阈值生成结构化 CompressionSnapshot，失败/CAS conflict 不删除原 turns。 | validator、source range、checkpoint、summary CAS、latest consumption、rollback 与 no-delete focused regression 已通过。 |
+| partial | 稳定用户偏好可进入长期 MemoryItem；临时上下文不会误存为长期记忆。 | 手动确认 + MemoryPolicy + 编辑后重评估/原子替换已完成；自动候选提取与 auto-save 仍不启用。 |
+| partial | 敏感内容不会明文进入普通记忆、localStorage、普通 JSON、日志或同步 payload。 | secret/sensitive policy、save/replace 拦截与 evidence privacy verifier 已通过；real-profile sweep 仍开放。 |
+| partial | Sensitive / secret turns 不进入 FTS、embedding、context log 或可同步 payload。 | privacy/package revalidation 与 metadata-only evidence 已覆盖；真实 profile 数据审计仍开放。 |
+| passed | ContextPackage 可解释每段历史、记忆和检索片段的来源、reason 与 token 预算。 | host assembler、package log/Audit summary 与 controlled/packaged context count/token evidence 已闭合。 |
+| passed | Context explain drawer 可解释 included、excluded、policy-blocked、tombstone 和 token budget。 | included/excluded/policy-blocked/token 已可见；`memory-tombstoned` 现有独立 count、中英文 reason/notice，排除项保持 metadata-only。 |
+| passed | 用户可以搜索、查看、编辑、禁用、删除记忆，删除/替换后不再被注入。 | Memory Review 分页/筛选/来源审计、fingerprint/version gate、原子 replace+tombstone 与 invoke 前 revalidation 已通过。 |
+| passed | CoreBox / OmniPanel / Workflow / Assistant 至少各有一个最近路径 context-aware integration case。 | 四入口 unit/controlled contract 与 packaged context metadata 均已覆盖。Workflow 两次独立 run 各有 `new / session` package log 与单次 Provider 调用；OmniPanel visible action 有一个 `new / light` package log、单次 Provider 调用与 Ready result。 |
+| partial | Migration、并发、tombstone、LangChain 外发限制各有 focused evidence。 | 并发/CAS/tombstone/外发限制已覆盖；`scopeRef` schema/data migration 未授权且未执行。 |
+| passed | README/TODO/CHANGES/INDEX/Roadmap/Quality Baseline 按影响同步。 | TODO、PRD/details、CHANGES、R8/R9 execution plan 与 Quality Baseline 已同步；evidence manifest 为单一分级 SoT。 |
 
 ## 28.1 当前剩余 TODO 队列
 
 | 优先级 | TODO | 落点 | 验证 |
 | --- | --- | --- | --- |
-| P0 | 补 `prepareTurn` disabled / tombstoned memory 不注入回归。 | `ContextHygieneService` focused test 或 seeded SQLite integration。 | package items 不包含 disabled/tombstoned memory source。 |
-| P0 | Memory Review 编辑保存前重新 evaluate。 | `IntelligenceMemoryReview.vue`。 | 编辑后保存按钮禁用或重新 evaluate；rejected/needs_review fail-closed。 |
-| P1 | Memory saved list 搜索和来源 session/turn 展示。 | Audit Memory Review / 后续 Memory 面板。 | 不展示完整 prompt/turn content，只显示 source id / metadata。 |
-| P1 | Context explain drawer tombstone hit 展示。 | Audit explain summary + drawer。 | tombstone source 只显示 id/reason，不显示原文。 |
-| P1 | OmniPanel / Workflow / Assistant 各接 1 条 `contextPrepareTurn` 最近路径。 | 对应 entrypoint。 | 默认轻上下文，不继承 CoreBox 长会话。 |
-| P1 | CompressionSnapshot schema / CAS / degraded。 | `ContextHygieneService` 后续 compression slice。 | 压缩失败不删 turns；summary CAS 冲突 fail-soft。 |
-| P2 | 真实数据 evidence。 | `docs/engineering/reports/` 或专题 evidence 目录。 | JSON/截图/录屏 artifact 可复核，覆盖 context package、memory、tombstone。 |
+| P2 | real-profile evidence。 | 同一分级 evidence manifest。 | `real-profile` 只有实际采集并通过隐私扫描后才能从 `open` 改为 `passed`。 |
+| gated | workspace/project `scopeRef` schema/data migration。 | 独立 migration task。 | preflight、旧数据策略、rollback、真实 profile 只读检查与显式确认齐备前继续 fail-closed。 |
+
+### 2026-07-10 R9.2 Closure 任务映射
+
+| 顺序 | 子任务 | 状态 | 依赖 / 验收重点 |
+| ---: | --- | --- | --- |
+| 1 | `07-10-r9-2-memory-governance-scope` | completed | disabled/tombstoned/expired/privacy/scope mismatch 不注入；plugin Memory 管理面 hard-cut。 |
+| 2 | `07-10-r9-2-context-execution-corebox` | completed | ContextPackage 由 host assembler 真实进入 provider messages；CoreBox boundary/degraded 证据已闭合。 |
+| 3 | `07-10-r9-2-memory-review-management` | completed | 搜索/来源 metadata、编辑后重评估、版本冲突与原子 replace+tombstone 已闭合。 |
+| 4 | `07-10-r9-2-compression-snapshot` | completed | 结构化校验、source range、checkpoint、CAS 与 failure no-delete 已闭合。 |
+| 5 | `07-10-r9-2-entrypoints-evidence` | completed with real-profile open | 四入口 contract 与 packaged context metadata；real-profile 保持 open。 |
+| 6 | `07-11-corebox-ai-dispatch-idempotency` | completed | active widget 输入单次派发、latest-request-wins、one-shot context execute 前重绑与后续清理已闭合。 |
+
+实现完成度为 `6/6`。当前 evidence manifest 为 7 cases / 6 passed：unit/controlled passed，packaged entrypoints=`corebox, assistant, workflow, omni-panel`，privacy scan passed，real-profile open；workspace/project MemoryItem 继续因缺稳定 scope identity 而 fail-closed，本轮未执行 schema/data migration。
+
+2026-07-11 follow-up：`07-11-context-archived-continuation` completed。修复 inactive requested session 复用旧 id 的 duplicate-key/fail-soft 缺口；SDK 新增 metadata-only `ContextContinuationSummary`，host/provider 只消费一份安全摘要，旧 raw turns/Memory 不跨边界。packaged/real-profile evidence 未采集，继续保持 open。
+
+2026-07-12 follow-up：`07-12-context-tombstone-explain` completed。`ContextPackageLogSafeSummary.tombstoneCount` 独立分类删除后移除，reason mapper 对已知 tombstone 使用稳定 i18n key、未知 reason 安全回退；Audit inline/drawer 不读取或展示被删 memory 原文。packaged/real-profile evidence 未采集，继续保持 open。
+
+2026-07-12 follow-up：`07-12-workflow-run-structured-clone` completed。Workflow renderer 先把 reactive `toolSources` 投影为 plain array；新建/内置派生 workflow 重生 scoped step ID，并 remap model `previousStep` 引用。isolated fresh-profile packaged run 已成功持久化、创建 run/history 并到达明确 provider-unavailable domain result；该结果只关闭通用 transport/persistence blocker，不声明 Provider 成功，也不升级 owner/scope context packaged/real-profile level。
+
+2026-07-12 follow-up：`07-12-workflow-context-packaged-evidence` completed。Workflow orchestration 以 per-run state 管理 context session：首个 chat model step 使用 `new / session`，后续 chat step 使用 `continue / session` 且复用同一 id，不同 run 使用不同 id。focused 多步回归通过；isolated macOS arm64 package 的两次 visible run 均 completed，SQLite 显示两个独立 `owner=workflow` session、两个无 continuation degradation 的 package log，每 run 一次受控 Provider 调用。curated artifact 不保存 prompt/response/turn/memory/path；该时点 OmniPanel packaged 与 real-profile 仍 open，OmniPanel 随后由下一项关闭。
+
+2026-07-13 follow-up：`07-13-omnipanel-context-packaged-evidence` completed。visible OmniPanel 通过 clipboard desktop capsule 执行 built-in `AI 解释`，host-owned context 产生一个 `owner=omni-panel`、`new / light` session/package log、2 turns 与单次受控 Provider 调用，结果状态 Ready。package 只含 `current_input` metadata，curated artifact 不保存 raw interaction、secret、path 或 Provider payload；manifest 7 cases / 6 passed，四入口 packaged level 已闭合，real-profile 继续 open。
 
 ## 29. 分期计划
 

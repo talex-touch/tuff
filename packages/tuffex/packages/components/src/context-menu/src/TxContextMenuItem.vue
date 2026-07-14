@@ -47,10 +47,11 @@ function onClick() {
     :class="{ 'is-disabled': disabled, 'is-danger': danger, 'has-custom-color': !!color }"
     :style="itemStyle"
     role="menuitem"
-    :clickable="!disabled"
+    :clickable="true"
     :disabled="disabled"
     :aria-disabled="disabled ? 'true' : undefined"
     @click="onClick"
+    @keydown.space.prevent="onClick"
   >
     <template v-if="$slots.avatar" #avatar>
       <slot name="avatar" />

@@ -1,13 +1,15 @@
 ---
 title: "StatCard 指标卡片"
-description: "用于展示一个数字/指标与对应描述。"
+description: "用于展示核心数字、趋势洞察与进度摘要的指标卡片。"
 category: Data
 syncStatus: reviewed
 verified: true
 ---
 # StatCard 指标卡片
 
-用于展示一个数字/指标与对应描述。
+`TxStatCard` 用于展示核心指标，可附加图标装饰、趋势对比或进度环。普通指标使用默认变体，趋势变化使用 `insight`，有明确 0-100 边界的健康度/容量/完成率使用 `variant="progress"` 或 `progress`。
+
+进度环会把数值裁剪到 0-100。`insight` 只有在 `from` 和 `to` 都是有限数字时才渲染，否则会退回普通指标布局。
 
 ## 基础用法
 
@@ -200,14 +202,14 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `value` | `number \| string` | - | 显示值 |
-| `label` | `string` | - | 描述文本 |
-| `iconClass` | `string` | `''` | 图标 class（UnoCSS icones） |
-| `clickable` | `boolean` | `false` | 鼠标悬浮/点击态 |
-| `insight` | `StatCardInsight` | - | 指标变化对象（启用后标题上移） |
-| `variant` | `StatCardVariant` | `'default'` | 变体（`default` \| `progress`） |
-| `progress` | `number` | - | 进度百分比（0-100），传入即启用进度变体 |
-| `meta` | `string` | - | 进度变体底部说明文本 |
+| `value` | `number \| string` | - | 主数值；传入 number 时会使用默认数字格式化 |
+| `label` | `string` | - | 指标标签；在 insight/progress 布局中显示在顶部 |
+| `iconClass` | `string` | `''` | 图标 class（UnoCSS Icones） |
+| `clickable` | `boolean` | `false` | 开启 hover/press 视觉状态，不会自动添加点击行为 |
+| `insight` | `StatCardInsight` | - | 指标变化对象；启用后 label 上移并渲染趋势信息 |
+| `variant` | `StatCardVariant` | `'default'` | 布局变体（`default` \| `progress`） |
+| `progress` | `number` | - | 进度百分比；传入即启用进度变体，进度环会裁剪到 0-100 |
+| `meta` | `string` | - | 进度变体底部说明；存在 `meta` 插槽时会被覆盖 |
 
 ### StatCardInsight
 
@@ -221,6 +223,7 @@ code: |
 | `suffix` | `string` | - | 自定义后缀（默认 percent 为 `%`） |
 | `precision` | `number` | - | 小数精度 |
 
+
 ### Slots
 
 | 插槽 | 说明 |
@@ -229,8 +232,23 @@ code: |
 | `label` | 自定义标题区域 |
 | `meta` | 进度变体底部说明 |
 
+## 最佳实践
+
+- 计数类指标优先传 number，让默认格式化补充分隔符；单位或动效布局复杂时再使用 `value` 插槽。
+- 绝对变化用 `insight.type="delta"`，相对变化用 `insight.type="percent"`；默认精度分别是 `0` 与 `1`。
+- `variant="progress"` 只用于健康度、容量、配额、完成率等有边界的指标，不用于无限增长的总量。
+- `clickable` 只提供视觉反馈。需要跳转或操作时，应由外层按钮/链接或相邻操作控件承载真实交互。
+
 ## 审阅说明
 
 - 源码：`packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
 - 建议：普通指标使用默认变体，增减趋势使用 `insight`，0-100 边界明确的健康度/容量使用 `variant="progress"`。
 - 可访问性：组件根节点使用 `role="group"`；在 Dashboard 中应给相邻标题或上下文，避免只显示裸数字。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`。
+- Type contracts: `packages/tuffex/packages/components/src/stat-card/src/types.ts` 导出 `StatCardProps`、`StatCardInsight` 与变体类型。
+- **实测覆盖:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` 覆盖默认渲染、自定义 value 与 label 插槽、百分比与增量 insight、进度激活与进度环裁剪，以及自定义 progress meta 插槽。
+
+<TuffDocSourceLink />

@@ -2,7 +2,8 @@
 title: "Scroll 滚动"
 description: "基于 `@better-scroll/scroll-bar` 的当前 `TxScroll` 滚动容器，提供更一致的滚动条体验。"
 category: Layout
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Scroll 滚动
 
@@ -281,3 +282,57 @@ code: |
 | `scroll` | `{ scrollTop: number; scrollLeft: number }` | 滚动事件 |
 | `pulling-down` | - | 触发下拉刷新 |
 | `pulling-up` | - | 触发上拉加载更多 |
+
+
+### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 主滚动内容，渲染在 `.tx-scroll__content` 内。 |
+| `header` | 默认内容之前的可选内容。Native 模式渲染在 `.tx-scroll__content` 之前；BetterScroll 模式渲染在滚动内容内部。 |
+| `footer` | 默认内容之后的可选内容，常用于加载更多状态。 |
+
+### Expose
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `nativeScrollRef` | `Ref<HTMLElement \| null>` | Native 模式下的原生滚动元素引用。 |
+| `scrollTo(x, y, time?)` | `(x: number, y: number, time?: number) => void` | 滚动到绝对偏移。BetterScroll 模式内部会取负偏移并使用 `time`；Native 模式调用 `scrollTo(x, y)`。 |
+| `getScrollInfo()` | `() => TxScrollInfo` | 返回当前偏移、滚动尺寸和可视尺寸。 |
+| `refresh()` | `() => void` | 调用 BetterScroll `refresh()` 并更新可滚动状态；Native 模式无操作。 |
+| `finishPullDown()` | `() => void` | 重置 Native 下拉锁，或转发到 BetterScroll `finishPullDown()` 后调度刷新。 |
+| `finishPullUp()` | `() => void` | 重置 Native 上拉锁，或转发到 BetterScroll `finishPullUp()` 后调度刷新。 |
+
+## 交互契约
+
+- `native=true` 始终优先。否则 `unified=true` 强制 BetterScroll；macOS Safari 以及支持原生非根 overscroll 的 macOS Chromium 默认走 Native，除非设置 unified。
+- Native 模式下，`direction` 映射为 CSS overflow；启用轴上 `scrollChaining=false` 会映射为 `overscroll-behavior: contain`。
+- BetterScroll 模式下，`direction` 映射为 `scrollX`、`scrollY` 和 `freeScroll`；`probeType` 控制 scroll 事件频率。
+- 容器和内容尺寸变化会先合并到同一个 animation frame，再执行 `refresh()`；`refreshOnContentChange=false` 只关闭 MutationObserver 刷新，ResizeObserver 刷新仍保留。
+- 下拉 / 上拉事件触发后会加锁。异步任务完成后必须调用 `finishPullDown()` / `finishPullUp()`，下一轮才会再次触发。
+- Native 下拉是在 `scrollTop=0` 时基于 touch 阈值的降级实现；`pullDownStop` 仅 BetterScroll 模式生效。
+
+## 最佳实践
+
+- 普通文章或文档滚动优先使用 Native 模式；只有需要一致滚动条、滚轮桥接、bounce 或 pull 插件时再使用 BetterScroll。
+- 嵌套面板默认保持 `scrollChaining=false`。只有明确需要父子滚动交接且已验证体验时才开启。
+- 子组件自带间距时使用 `noPadding`，尤其是虚拟列表、表格和全出血媒体内容。
+- 横向或双轴内容要提供稳定内容宽度，或让组件设置 `width: max-content`；否则 BetterScroll 无法可靠判断横向溢出。
+- 使用 `pullDownRefresh` / `pullUpLoad` 时，异步成功和失败路径都必须调用对应 finish 方法。
+- 避免把大型可变对象塞进 `options`；已文档化行为优先使用一等 props，方便 watcher 和文档保持准确。
+
+## 审阅说明
+
+- **运行时契约：** `native=true` 始终优先；否则 `unified=true` 强制 BetterScroll，macOS Safari 和支持原生非根 overscroll 的 macOS Chromium 默认走原生降级。
+- **轴向契约：** Native 模式把 `direction` 映射为 CSS overflow 与 `overscroll-behavior`；BetterScroll 模式映射为 `scrollX`、`scrollY` 和 `freeScroll`。
+- **刷新契约：** 尺寸变化和内容变更会先合并再 `refresh()`。下拉/上拉事件带锁，异步结束后必须调用 `finishPullDown()` / `finishPullUp()`。
+- **实测覆盖:** `scroll.test.ts` 覆盖原生 overflow、插槽、滚动事件、`getScrollInfo()`、`scrollTo()`、原生 pull 锁和合并刷新；`scroll-export.test.ts` 保护公开导出边界。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/scroll/src/TxScroll.vue`.
+- Runtime helpers: `packages/tuffex/packages/components/src/scroll/src/scroll-wheel.ts`, `better-scroll-pull-plugins.ts`, and `runtime-capabilities.ts`.
+- Types: `packages/tuffex/packages/components/src/scroll/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/scroll/__tests__/scroll.test.ts` verifies native direction overflow, slots, scroll events, `getScrollInfo()`, `scrollTo()`, native pull locks, and coalesced BetterScroll refreshes. `scroll-export.test.ts` verifies the public export boundary.
+
+<TuffDocSourceLink />

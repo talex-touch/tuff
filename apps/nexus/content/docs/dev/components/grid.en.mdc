@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [grid, layout, alignment]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Grid
@@ -209,7 +210,7 @@ code: |
 ---
 ::
 
-## API Reference
+## API
 
 ### Grid Props
 
@@ -253,9 +254,43 @@ code: |
 ---
 ::
 
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | `TxGrid` and `TxGridItem` do not emit component-specific events. |
+
+### Slots
+
+| Component | Slot | Props | Description |
+|-----------|------|------|-------------|
+| `TxGrid` | `default` | - | Grid item content, normally `TxGridItem` children. |
+| `TxGridItem` | `default` | - | Cell content rendered inside the grid item wrapper. |
+
 ## Interaction Contract
 
 - `minItemWidth` takes precedence over `cols` and outputs `repeat(auto-fit, minmax(..., 1fr))`.
 - Responsive values are resolved from the current window width with breakpoints `xs < 640`, `sm < 768`, `md < 1024`, `lg < 1280`, and `xl` otherwise.
 - Numeric `gap` values are converted to px; `{ row, col }` controls row and column gaps separately.
 - `TxGridItem` clamps `colSpan` and `rowSpan` to at least 1.
+
+## Best Practices
+
+- Prefer explicit `cols` for known dashboard grids and `minItemWidth` for card collections that should auto-fit available space.
+- Keep `TxGridItem` spans predictable; oversized spans should be paired with enough columns at every responsive breakpoint.
+- Use numeric gaps for token-like spacing and string gaps only when the layout needs CSS units such as `rem` or `clamp()`.
+- Do not use Grid for semantic tables or ordered lists; keep data tables in table components and navigation in list markup.
+
+## Review Notes
+
+- **Responsive contract:** `TxGrid` resolves responsive `cols` and `gap` against `window.innerWidth`; SSR/default width starts at 1024, so critical first paint layouts should also work at the `md` fallback.
+- **Sizing note:** `minItemWidth` wins over explicit `cols` and emits `repeat(auto-fit, minmax(..., 1fr))`. Use one strategy per grid to avoid surprising reviewers.
+- **Verified coverage:** `grid.test.ts` covers fixed columns/rows/gaps, `minItemWidth` precedence, responsive resize updates, resize listener cleanup, `TxGridItem` span clamping, self alignment, and install registration.
+
+## Source
+
+- Grid source: `packages/tuffex/packages/components/src/grid/src/TxGrid.vue`.
+- Grid item source: `packages/tuffex/packages/components/src/grid/src/TxGridItem.vue`.
+- Coverage: `packages/tuffex/packages/components/src/grid/__tests__/grid.test.ts` verifies fixed templates, responsive resolution, listener cleanup, and span clamping.
+
+<TuffDocSourceLink />

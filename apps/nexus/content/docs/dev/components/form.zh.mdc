@@ -1,27 +1,43 @@
 ---
 title: "Form 表单"
-description: "提供表单容器与校验能力，配合 `TxFormItem` 统一布局与提示。"
+description: "面向 TuffEx 输入组件的表单容器、字段布局、校验消息与命令式校验流程。"
 category: Form
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [form, validation, input]
+syncStatus: reviewed
+verified: true
 ---
 # Form 表单
 
-提供表单容器与校验能力，配合 `TxFormItem` 统一布局与提示。
+`TxForm` 提供字段校验上下文。`TxFormItem` 会注册到最近的表单，解析字段规则，渲染 label / message 布局，并通过父表单实例暴露字段级校验能力。
+
+已人工核对 `packages/tuffex/packages/components/src/form/src/types.ts`、`TxForm.vue`、`TxFormItem.vue`、`context.ts` 与 `form.test.ts`。
 
 ## 基础用法
 
-::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { reactive, ref } from 'vue'
+  import { computed, reactive, ref } from 'vue'
 
-  const form = reactive({ name: '', email: '' })
-  const rules = { name: { required: true, message: '请输入名称' } }
   const formRef = ref()
+  const form = reactive({ name: '', email: '' })
+  const rules = computed(() => ({
+    name: { required: true, message: '请输入名称' },
+    email: {
+      validator: (value: string) => {
+        if (!value) return '请输入邮箱'
+        return value.includes('@') || '邮箱格式错误'
+      },
+    },
+  }))
 
-  async function handleValidate() {
-    await formRef.value?.validate()
+  async function submit() {
+    const ok = await formRef.value?.validate()
+    if (!ok) return
+    // 提交表单
   }
   </script>
 
@@ -33,51 +49,100 @@ code: |
       <TxFormItem label="邮箱" prop="email">
         <TuffInput v-model="form.email" placeholder="name@example.com" />
       </TxFormItem>
+      <TxButton variant="primary" @click="submit">校验</TxButton>
     </TxForm>
   </template>
 ---
-::
+:::
+
+## 交互契约
+
+- `TxForm` 渲染原生 `<form>`，并阻止默认提交行为。
+- `TxFormItem` 挂载时注册、卸载前注销，因此父级 `validate()`、`resetFields()`、`clearValidate()` 只作用于当前存活字段。
+- 表单级规则通过 `prop` 查找；同字段存在 item 级 `rules` 时，item 级规则覆盖表单级规则。
+- required 校验会把 `null`、`undefined`、`''` 和空数组视为空值。
+- 自定义 validator 可以返回 `true`、`false`、错误字符串，或这些值的 Promise。
+- `resetFields()` 会把每个已注册字段恢复为挂载时的初始值，并清空校验消息。
+- `TxFormItem` 的 `required` 控制必填视觉标记，并在有规则执行时参与 required 检查。字段必须因空值校验失败时，应配置 required rule。
+- `disabled` 与 `size` 会通过表单上下文提供给后代；如果插槽中的输入组件需要这些 props，仍建议显式传入。
 
 ## API
 
 ### TxForm Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|------|------|
-| `model` | `Record<string, any>` | - | 表单数据 |
-| `rules` | `FormRules` | - | 校验规则 |
-| `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | 标签位置 |
-| `labelWidth` | `string \| number` | - | 标签宽度 |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 表单尺寸 |
-| `disabled` | `boolean` | `false` | 禁用表单 |
+|------|------|---------|------|
+| `model` | `Record<string, any>` | - | 响应式表单数据对象。`TxFormItem` 通过 `prop` 读取字段值。 |
+| `rules` | `FormRules` | - | 以字段 prop 为 key 的表单级校验规则。 |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | 子表单项使用的 label 布局。 |
+| `labelWidth` | `string \| number` | - | 非 top 布局下的 label 宽度，数字会转为 px。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 通过上下文暴露的表单尺寸。 |
+| `disabled` | `boolean` | `false` | 通过上下文暴露的禁用状态。 |
 
 ### TxForm Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `validate` | `(valid: boolean)` | 表单校验结果 |
+| `validate` | `(valid: boolean)` | 父级 `validate()` 完成所有已注册字段校验后触发。 |
+
+### TxForm Expose
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `validate` | `() => Promise<boolean>` | 校验所有已注册字段，并返回是否全部通过。 |
+| `resetFields` | `() => void` | 恢复所有已注册字段的挂载初始值，并清空消息。 |
+| `clearValidate` | `() => void` | 只清空校验消息，不修改 model。 |
 
 ### TxFormItem Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|------|------|
-| `label` | `string` | `''` | 标签文本 |
-| `prop` | `string` | - | 对应字段 |
-| `rules` | `FormRule \| FormRule[]` | - | 自定义规则 |
-| `required` | `boolean` | `false` | 是否必填 |
-| `showMessage` | `boolean` | `true` | 是否显示错误 |
-| `inline` | `boolean` | `false` | 内联布局 |
+|------|------|---------|------|
+| `label` | `string` | `''` | 标签文本，省略时回退为 `prop`。 |
+| `prop` | `string` | - | 父级 `model` 与 `rules` 中的字段 key。 |
+| `rules` | `FormRule \| FormRule[]` | - | item 级校验规则，会覆盖当前字段的表单级规则。 |
+| `required` | `boolean` | `false` | 显示必填标记，并在规则执行时参与 required 检查。 |
+| `showMessage` | `boolean` | `true` | 在字段下方显示校验错误消息。 |
+| `inline` | `boolean` | `false` | 用于紧凑行的 label / content 对齐。 |
 
 ### TxFormItem Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `validate` | `(valid: boolean)` | 单项校验结果 |
+| `validate` | `(valid: boolean)` | 当前表单项校验完成后触发。 |
 
-### Expose
+### FormRule
 
-| 名称 | 说明 |
-|------|------|
-| `validate()` | 触发表单校验 |
-| `resetFields()` | 重置字段 |
-| `clearValidate()` | 清空错误 |
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `required` | `boolean` | 启用空值校验。 |
+| `message` | `string` | required 或 validator 返回 `false` 时使用的错误消息。 |
+| `validator` | `(value, rule, model) => boolean \| string \| Promise<boolean \| string>` | 自定义校验器，返回字符串时直接作为错误消息。 |
+
+### Slots
+
+| 组件 | 插槽名 | Props | 说明 |
+|------|------|------|------|
+| `TxForm` | `default` | - | 表单项和操作内容。 |
+| `TxFormItem` | `default` | - | 字段控件内容。 |
+
+## 最佳实践
+
+- 保持 `model` 稳定且响应式；挂载后替换整个对象会让 reset 语义变得不直观。
+- 通用规则放在表单级 `rules`，只把一次性覆盖放在 item 级 `rules`。
+- 异步可用性检查放进 `validator`，并返回精确的用户可读错误字符串。
+- 整个表单锁定时，同时把 `disabled` 传给 `TxForm` 和插槽中的具体控件。
+- 切换记录但保留用户输入时，使用 `clearValidate()` 清空旧记录的错误消息。
+
+## 审阅说明
+
+- **可访问性说明：** `TxFormItem` 会渲染可见 `<label>`，但不会自动绑定 `for`/`id`；需要原生 label 关联时，应给插槽控件补齐匹配 ID 或显式 ARIA 标签。
+- **实测覆盖:** `form.test.ts` 覆盖 required 规则校验、错误消息渲染、model 更新后的再次校验通过，以及 `resetFields()` 恢复挂载时初始值。
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/form/src/TxForm.vue`、`TxFormItem.vue` 与 `context.ts`。
+- Types: `packages/tuffex/packages/components/src/form/src/types.ts` 导出表单 props、item props、emits、规则、尺寸与 label 位置契约。
+- Export aliases: `packages/tuffex/packages/components/src/form/index.ts` 导出 `Form`、`FormItem`、`TxForm` 与 `TxFormItem`。
+- Coverage: `packages/tuffex/packages/components/src/form/__tests__/form.test.ts` 覆盖 required 校验、消息渲染、再次校验通过与重置行为。
+
+<TuffDocSourceLink />

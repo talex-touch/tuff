@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [grid, layout, alignment]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Grid 栅格
@@ -209,7 +210,7 @@ code: |
 ---
 ::
 
-## API 参考
+## API
 
 ### Grid Props
 
@@ -253,9 +254,43 @@ code: |
 ---
 ::
 
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| - | - | `TxGrid` 与 `TxGridItem` 没有组件自定义事件。 |
+
+### Slots
+
+| 组件 | 插槽名 | Props | 说明 |
+|------|--------|-------|------|
+| `TxGrid` | `default` | - | 网格内容，通常放置 `TxGridItem` 子项。 |
+| `TxGridItem` | `default` | - | 渲染在 grid item 包装层内部的单元格内容。 |
+
 ## 交互契约
 
 - `minItemWidth` 优先于 `cols`，会输出 `repeat(auto-fit, minmax(..., 1fr))`。
 - 响应式值按当前窗口宽度解析，断点为 `xs < 640`、`sm < 768`、`md < 1024`、`lg < 1280`、其余为 `xl`。
 - `gap` 数字会转为 px；`{ row, col }` 可分别控制行列间距。
 - `TxGridItem` 的 `colSpan` / `rowSpan` 最小按 1 处理。
+
+## 最佳实践
+
+- 已知列数的后台网格优先使用显式 `cols`；需要随容器自动排布的卡片集合优先使用 `minItemWidth`。
+- `TxGridItem` 的跨列 / 跨行应保持可预测；大跨度项目要确认每个响应式断点都有足够列数。
+- token 化间距优先使用数字；只有需要 `rem`、`clamp()` 等 CSS 单位时才传字符串。
+- 不要把 Grid 当语义表格或有序列表使用；数据表继续使用表格组件，导航继续使用列表语义。
+
+## 审阅说明 / Review Notes
+
+- **响应式契约:** `TxGrid` 按 `window.innerWidth` 解析响应式 `cols` 与 `gap`；SSR/default width 从 1024 开始，因此首屏关键布局也要能接受 `md` fallback。
+- **尺寸说明:** `minItemWidth` 优先于显式 `cols`，并输出 `repeat(auto-fit, minmax(..., 1fr))`。同一个 grid 中只选一种策略，避免 review 时难以判断最终列数。
+- **实测覆盖:** `grid.test.ts` 覆盖固定列/行/gap、`minItemWidth` 优先级、响应式 resize 更新、resize listener 清理、`TxGridItem` span 最小值、自身对齐与 install 注册。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/grid/src/TxGrid.vue`。
+- Grid item source: `packages/tuffex/packages/components/src/grid/src/TxGridItem.vue`。
+- Coverage: `packages/tuffex/packages/components/src/grid/__tests__/grid.test.ts` 校验固定模板、响应式解析、监听清理与 span 最小值处理。
+
+<TuffDocSourceLink />

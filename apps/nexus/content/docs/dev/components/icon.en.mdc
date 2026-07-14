@@ -5,7 +5,8 @@ category: Basic
 status: beta
 since: 1.0.0
 tags: [icon, glyph, visual]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Icon
@@ -181,7 +182,9 @@ code: |
 - `builtin`: built-in common icons.
 - `colorful` can be declared on the component prop or on `icon.colorful`; SVG uses a currentColor mask by default and preserves original colors when colorful is true.
 
-## API (Lite)
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -231,12 +234,30 @@ rows:
 ---
 ::
 
+### Slots
+
+| Name | Props | Description |
+|------|------|------|
+| `empty` | - | Custom fallback content when neither `icon` nor `name` resolves to a visible icon. |
+
+### Events
+
+`TuffIcon`, `TxIcon`, and `TxStatusIcon` do not emit events.
+
 ## Rendering Contract
 
 - `name` values starting with `i-` render as icon classes; known built-in names render as `builtin` SVG.
 - `file` and local absolute `url` values can be transformed by injected `fileProtocol` or `urlResolver`.
 - SVG uses a `currentColor` mask when `colorful=false`; `colorful=true` or `icon.colorful=true` renders the original image.
 - `status='loading' | 'error'` takes precedence over normal icon rendering.
+
+## Best Practices
+
+- Prefer UnoCSS class icons (`i-*`) for product UI because they are cheap to render and inherit `currentColor`.
+- Use `TxIconSource` when the source needs status, color, URL/file resolution, or original SVG colors.
+- Pass meaningful `alt` only when the icon itself carries meaning. Decorative icons should be paired with visible text or hidden by surrounding semantics.
+- Keep `colorful=false` for monochrome SVGs so theme color can flow through `currentColor`; set `colorful=true` for brand marks and multi-color artwork.
+- Inject `TX_ICON_CONFIG_KEY` once at the app shell when resolving plugin files or custom SVG transports, instead of passing resolvers to every icon.
 
 ## Icon sets
 
@@ -266,3 +287,18 @@ code: |
   // { type: 'class', value: 'i-ri-search-line' }
 ---
 ::
+
+
+## Review Notes
+
+- **Accessibility note:** `TxIcon` sets `role="img"` and maps `alt` to `title`; icon-only interactive controls should use `TxIconButton label` or visible text instead of relying on icon title text alone.
+- **Verified coverage:** `icon.test.ts` verifies class and built-in name rendering, size/color styles, emoji/empty/loading/error states, injected file protocol resolution, SVG mask mode, colorful SVG fallback, data SVG handling, multi-color SVG detection, and status indicator sizing.
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue` and `TxStatusIcon.vue`.
+- Types/helpers: `types.ts` exports `TxIconSource`, status/config types, and `TX_ICON_CONFIG_KEY`; `svg-color-mode.ts` decides whether an SVG can render as a currentColor mask.
+- Export aliases: `packages/tuffex/packages/components/src/icon/index.ts` exports `TuffIcon`, `TxIcon`, `TxStatusIcon`, `TX_ICON_CONFIG_KEY`, icon types, and `shouldRenderSvgAsMask`.
+- Coverage: `packages/tuffex/packages/components/src/icon/__tests__/icon.test.ts` covers icon source resolution, SVG color-mode behavior, status states, injected config, and status overlays.
+
+<TuffDocSourceLink />

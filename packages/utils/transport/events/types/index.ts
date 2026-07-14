@@ -39,6 +39,9 @@ export * from './indexed-source'
 // Flow domain types
 export * from './flow'
 
+// Intelligence domain types
+export * from './intelligence'
+
 // Store domain types
 export * from './store'
 

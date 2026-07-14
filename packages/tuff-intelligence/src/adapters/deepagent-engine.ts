@@ -5,6 +5,7 @@ import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
 import type { TurnState } from '../protocol/session'
 import type { AnyTuffTool, TuffToolApprovalGate, TuffToolContext } from '../tools/types'
+import type { IntelligenceUsageInfo } from '../types/intelligence'
 import { toAgentErrorDetail } from '../protocol/error-detail'
 import { LangChainEngineAdapter } from './langchain-engine'
 import { LangChainToolAdapter } from './langchain-tool-adapter'
@@ -26,6 +27,7 @@ export interface DeepAgentResponsesResult {
   content: string
   provider?: string
   model?: string
+  usage?: IntelligenceUsageInfo
 }
 
 export type DeepAgentPromptResolver =
@@ -192,6 +194,7 @@ function extractResponsesText(payload: Record<string, unknown>): string {
 interface ParsedResponsesSsePayload {
   content: string
   model?: string
+  usage?: IntelligenceUsageInfo
 }
 
 function trimSseDataPrefix(line: string): string {
@@ -213,6 +216,7 @@ function tryParseResponsesSsePayload(bodyText: string): ParsedResponsesSsePayloa
   let mergedDelta = ''
   let resolvedText = ''
   let resolvedModel = ''
+  let resolvedUsage: IntelligenceUsageInfo | undefined
 
   const flushData = () => {
     if (dataLines.length <= 0) {
@@ -240,6 +244,8 @@ function tryParseResponsesSsePayload(bodyText: string): ParsedResponsesSsePayloa
     if (model) {
       resolvedModel = model
     }
+
+    resolvedUsage = extractDeepAgentUsage(responseRow) ?? extractDeepAgentUsage(row) ?? resolvedUsage
 
     if (type === 'response.output_text.delta') {
       const delta = typeof row.delta === 'string' ? row.delta : ''
@@ -299,6 +305,7 @@ function tryParseResponsesSsePayload(bodyText: string): ParsedResponsesSsePayloa
   return {
     content,
     model: resolvedModel || undefined,
+    usage: resolvedUsage,
   }
 }
 
@@ -750,6 +757,100 @@ function extractDeepAgentText(payload: Record<string, unknown>): string {
   return ''
 }
 
+function toTokenCount(value: unknown): number | undefined {
+  const numeric = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? Number(value)
+      : Number.NaN
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return undefined
+  }
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.floor(numeric))
+}
+
+function normalizeDeepAgentUsage(value: unknown): IntelligenceUsageInfo | undefined {
+  const row = toRecord(value)
+  const promptTokens = toTokenCount(
+    row.promptTokens ?? row.prompt_tokens ?? row.inputTokens ?? row.input_tokens,
+  )
+  const completionTokens = toTokenCount(
+    row.completionTokens ?? row.completion_tokens ?? row.outputTokens ?? row.output_tokens,
+  )
+  const explicitTotal = toTokenCount(row.totalTokens ?? row.total_tokens)
+  if (promptTokens === undefined && completionTokens === undefined && explicitTotal === undefined) {
+    return undefined
+  }
+
+  const prompt = promptTokens ?? 0
+  const completion = completionTokens ?? 0
+  const summed = Math.min(Number.MAX_SAFE_INTEGER, prompt + completion)
+  return {
+    promptTokens: prompt,
+    completionTokens: completion,
+    totalTokens: Math.max(explicitTotal ?? summed, summed),
+  }
+}
+
+function extractUsageFromRecord(value: unknown): IntelligenceUsageInfo | undefined {
+  const row = toRecord(value)
+  const kwargs = toRecord(row.kwargs)
+  const responseMetadata = toRecord(row.response_metadata ?? row.responseMetadata)
+  const kwargsResponseMetadata = toRecord(kwargs.response_metadata ?? kwargs.responseMetadata)
+  const candidates = [
+    row.usage,
+    row.usage_metadata,
+    row.usageMetadata,
+    kwargs.usage,
+    kwargs.usage_metadata,
+    kwargs.usageMetadata,
+    responseMetadata.tokenUsage,
+    responseMetadata.usage,
+    kwargsResponseMetadata.tokenUsage,
+    kwargsResponseMetadata.usage,
+  ]
+  for (const candidate of candidates) {
+    const usage = normalizeDeepAgentUsage(candidate)
+    if (usage) {
+      return usage
+    }
+  }
+  return undefined
+}
+
+export function extractDeepAgentUsage(payload: unknown): IntelligenceUsageInfo | undefined {
+  const row = toRecord(payload)
+  const rootUsage = extractUsageFromRecord(row)
+  if (rootUsage) {
+    return rootUsage
+  }
+
+  let aggregate: IntelligenceUsageInfo | undefined
+  for (const message of asArray(row.messages)) {
+    if (!isAssistantMessage(message)) {
+      continue
+    }
+    const usage = extractUsageFromRecord(message)
+    if (!usage) {
+      continue
+    }
+    aggregate ??= { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    aggregate.promptTokens = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      aggregate.promptTokens + usage.promptTokens,
+    )
+    aggregate.completionTokens = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      aggregate.completionTokens + usage.completionTokens,
+    )
+    aggregate.totalTokens = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      aggregate.totalTokens + usage.totalTokens,
+    )
+  }
+  return aggregate
+}
+
 function getDeepAgentTodoCount(payload: Record<string, unknown>): number {
   const todos = asArray(payload.todos)
   if (todos.length > 0) {
@@ -1146,11 +1247,13 @@ async function invokeDirectResponsesFallback(params: {
   const data = toRecord(parsedData)
   let content = extractResponsesText(data)
   let resolvedModel = typeof data.model === 'string' ? data.model : model
+  let usage = extractDeepAgentUsage(data)
   if (!content) {
     const parsedSse = tryParseResponsesSsePayload(response.bodyText)
     if (parsedSse) {
       content = parsedSse.content
       resolvedModel = parsedSse.model || resolvedModel
+      usage = parsedSse.usage ?? usage
     }
   }
   if (!content) {
@@ -1173,6 +1276,7 @@ async function invokeDirectResponsesFallback(params: {
       outputChars: content.length,
       retryAttempt: lastAttempt,
       strategy: 'responses.direct',
+      usage,
     },
   })
 
@@ -1180,6 +1284,7 @@ async function invokeDirectResponsesFallback(params: {
     content,
     provider: 'openai-responses',
     model: resolvedModel,
+    usage,
   }
 }
 
@@ -1323,6 +1428,7 @@ async function invokeDeepAgentWithTransport(
 
   const data = toRecord(response)
   const content = extractDeepAgentText(data)
+  const usage = extractDeepAgentUsage(data)
   if (!content) {
     throw createDeepAgentError(
       '[deepagent-runtime] empty response content',
@@ -1343,6 +1449,7 @@ async function invokeDeepAgentWithTransport(
       outputChars: content.length,
       todoCount: getDeepAgentTodoCount(data),
       retryAttempt: lastAttempt,
+      usage,
     },
   })
 
@@ -1350,6 +1457,7 @@ async function invokeDeepAgentWithTransport(
     content,
     provider: 'langchain-deepagents',
     model,
+    usage,
   }
 }
 
@@ -1439,6 +1547,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
           metadata: {
             provider: response.provider,
             model: response.model,
+            usage: response.usage,
           },
         }
       },

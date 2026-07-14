@@ -38,11 +38,12 @@ function toggle() {
 </script>
 
 <template>
-  <div
+  <button
+    type="button"
     role="switch"
     :aria-checked="isActive"
     :aria-disabled="disabled"
-    :tabindex="disabled ? -1 : 0"
+    :disabled="disabled"
     class="tuff-switch" :class="[
       {
         'is-active': isActive,
@@ -51,9 +52,7 @@ function toggle() {
       },
     ]"
     @click="toggle"
-    @keydown.enter.prevent="toggle"
-    @keydown.space.prevent="toggle"
   >
     <span class="tuff-switch__thumb" />
-  </div>
+  </button>
 </template>

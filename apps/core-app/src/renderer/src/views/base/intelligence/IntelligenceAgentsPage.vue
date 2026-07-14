@@ -1,6 +1,6 @@
 <script lang="ts" name="IntelligenceAgentsPage" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
-import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
+import { useAgentsSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -18,14 +18,15 @@ const loading = ref(true)
 const searchQuery = ref('')
 
 const selectedAgent = computed(
-  () => agents.value.find((a) => a.id === selectedAgentId.value) || null
+  () => agents.value.find(a => a.id === selectedAgentId.value) || null,
 )
 
 const filteredAgents = computed(() => {
-  if (!searchQuery.value.trim()) return agents.value
+  if (!searchQuery.value.trim())
+    return agents.value
   const query = searchQuery.value.toLowerCase()
   return agents.value.filter(
-    (a) => a.name.toLowerCase().includes(query) || a.description.toLowerCase().includes(query)
+    a => a.name.toLowerCase().includes(query) || a.description.toLowerCase().includes(query),
   )
 })
 
@@ -37,9 +38,11 @@ async function loadAgents() {
     if (agents.value.length > 0 && !selectedAgentId.value) {
       selectedAgentId.value = agents.value[0].id
     }
-  } catch {
+  }
+  catch {
     toast.error(t('intelligence.audit.loadAgentsFailed'))
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }

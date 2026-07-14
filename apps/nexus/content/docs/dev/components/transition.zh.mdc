@@ -1,8 +1,10 @@
 ---
 title: "Transition 动效"
-description: "用于内容切换（X）与列表增删（Y）的通用过渡封装。"
+description: "用于带 key 内容切换、列表动效与平滑尺寸变化的通用过渡封装。"
 category: Layout
-syncStatus: migrated
+tags: [transition, motion, list, auto-size]
+syncStatus: reviewed
+verified: true
 ---
 # Transition 动效
 
@@ -177,20 +179,73 @@ code: |
 ### TxTransition Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | 预设动效 |
-| `group` | `boolean` | `false` | 是否使用 TransitionGroup（列表场景） |
-| `tag` | `string` | `'div'` | group 模式下容器 tag |
-| `appear` | `boolean` | `true` | 是否首屏执行 enter |
-| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | 内容切换模式（非 group） |
-| `duration` | `number` | `180` | 动画时长（ms） |
-| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | 缓动 |
+|------|------|--------|------|
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | 选择过渡 class 名。只有 `group=false` 时，`smooth-size` 才会切换到 `TxTransitionSmoothSize`。 |
+| `group` | `boolean` | `false` | 使用 Vue `TransitionGroup` 渲染带 key 的列表。列表场景优先使用 `fade`、`slide-fade` 或 `rebound`。 |
+| `tag` | `string` | `'div'` | `group=true` 时传给 `TransitionGroup` 的根标签。 |
+| `appear` | `boolean` | `true` | 首次渲染时是否执行进入动效。 |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | 单子节点 `Transition` 模式；`TransitionGroup` 不使用该属性。 |
+| `duration` | `number` | `180` | 动画时长（ms），写入 `--tx-transition-duration`。 |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | CSS 缓动函数，写入 `--tx-transition-easing`。 |
 
-### Semantic Components
+### TxTransitionSmoothSize Props
 
-- `TxTransitionFade`
-- `TxTransitionSlideFade`
-- `TxTransitionRebound`
-- `TxTransitionSmoothSize`
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `appear` | `boolean` | `true` | 首次渲染时是否执行进入动效。 |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | `TxAutoSizer` 内部带 key 子节点的 `Transition` 模式。 |
+| `duration` | `number` | `220` | 尺寸测量过渡与内部内容动效共用的时长。 |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | 尺寸与内容动效共用的缓动函数。 |
+| `width` | `boolean` | `false` | 通过 `TxAutoSizer` 动画宽度变化。 |
+| `height` | `boolean` | `true` | 通过 `TxAutoSizer` 动画高度变化。 |
+| `motion` | `'fade' \| 'slide-fade' \| 'rebound'` | `'fade'` | 外层动画尺寸时，内部内容使用的动效。 |
 
-这些组件等价于 `TxTransition` 的不同 `preset`，用于更语义化的调用方式。
+### 语义化组件
+
+| 组件 | 预设 |
+|------|------|
+| `TxTransitionFade` | `fade` |
+| `TxTransitionSlideFade` | `slide-fade` |
+| `TxTransitionRebound` | `rebound` |
+| `TxTransitionSmoothSize` | 支持尺寸动画的封装，可配置内部 `motion` |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| - | - | 没有组件自定义事件。非 smooth 模式会把 Vue transition 监听器属性转发给底层 `Transition` / `TransitionGroup`；smooth-size 模式会把 attrs 转发给 `TxAutoSizer`。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | - | 单个带 key 子节点用于 `Transition`；`group=true` 时放置多个带稳定 key 的列表子节点。 |
+
+## 交互契约
+
+- `class` 与 `style` 会合并到外层 `.tx-transition`；非 smooth 模式下，其余 attrs 转发给 `Transition` / `TransitionGroup`。
+- `smooth-size` 是单子节点模式。它用 `TxAutoSizer` 包住内容，默认只动画高度，并在测量期间隐藏溢出。
+- `group=true` 会切换为 `TransitionGroup`；此时 `mode` 不生效，每个列表项都必须有稳定 key。
+- 各预设共用 `--tx-transition-duration` 与 `--tx-transition-easing` CSS 变量；`rebound` 的 enter 阶段刻意使用弹性曲线。
+
+## 最佳实践
+
+- 带 key 的面板切换优先使用 `mode="out-in"`，保证旧内容先离场，新内容再进入。
+- 内容高度变化时用 `smooth-size`；列表和重复行使用普通 `fade` / `slide-fade` / `rebound`。
+- 列表 key 使用稳定业务 id。文档示例可以用 `Date.now()`，生产可排序列表不要用临时下标。
+- 高频动效保持短时长；`rebound` 只用于小面积、允许轻微回弹的反馈。
+
+## 审阅说明
+
+- **属性说明:** `class` 与 `style` 会落到 `.tx-transition` 包装层；非样式 attrs 会转发给 Vue `Transition` / `TransitionGroup`，因此测试中不会出现在包装层上。
+- **smooth-size 说明:** 只有 `group=false` 时，`preset="smooth-size"` 才会委托给 `TxTransitionSmoothSize`。列表分组场景仍会渲染为 transition name，不建议使用，因为尺寸感知包装器面向单子节点。
+- **实测覆盖:** `transition.test.ts` 覆盖 preset 到 name 的映射、时长 CSS 变量、group tag、smooth-size 委托、`TxAutoSizer` 尺寸 prop 转发、语义化包装组件 preset、attrs 转发与 slot 渲染。
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/transition/src/TxTransition.vue`、`TxTransitionSmoothSize.vue`、`TxTransitionFade.vue`、`TxTransitionSlideFade.vue` 与 `TxTransitionRebound.vue`。
+- Types: `packages/tuffex/packages/components/src/transition/src/types.ts` 导出 `TransitionPreset`、`TxTransitionProps` 与 `TxTransitionSmoothSizeProps`。
+- Export alias: `packages/tuffex/packages/components/src/transition/index.ts` 导出可安装 transition 别名、原始 `Tx*` 组件、prop 类型与实例类型。
+- Coverage: `packages/tuffex/packages/components/src/transition/__tests__/transition.test.ts` 覆盖 preset 映射、smooth-size 行为、语义化组件、attrs、样式与 slot。
+
+<TuffDocSourceLink />

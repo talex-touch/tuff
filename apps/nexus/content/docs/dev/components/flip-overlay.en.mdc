@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [overlay, motion, transition]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # FlipOverlay
@@ -83,9 +84,12 @@ code: |
 | `maskClosable` | `boolean` | `true` | Click mask to close |
 | `preventAccidentalClose` | `boolean` | `false` | Accidental-close protection (block mask close + intercept page exit + red warning glow) |
 | `globalMask` | `boolean` | `true` | Whether to render the global visual mask layer |
-| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Built-in card surface mode |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'mask'` | Built-in card surface mode |
 | `surfaceColor` | `string` | `''` | Surface base color (theme overlay color by default) |
 | `surfaceOpacity` | `number` | `0.96` | Surface opacity (mask mode) |
+| `speedBoost` | `number` | `1.12` | Time-scale boost applied after `speedBoostAt` progress. |
+| `speedBoostAt` | `number` | `0.7` | Open/close animation progress threshold that enables `speedBoost`. |
+| `transitionName` | `string` | `'TxFlipOverlay-Mask'` | Vue transition name used for the mask layer. |
 | `header` | `boolean` | `true` | Enable built-in header when no `#header` slot is provided |
 | `headerTitle` | `string` | `''` | Built-in header title |
 | `headerDesc` | `string` | `''` | Built-in header description |
@@ -93,13 +97,17 @@ code: |
 | `closeAriaLabel` | `string` | `'Close'` | Built-in close button aria-label |
 | `maskClass` | `string` | `''` | Mask class |
 | `cardClass` | `string` | `''` | Card class |
+| `cardStyle` | `CSSProperties` | - | Inline style object forwarded to the overlay card. |
 | `border` | `'solid' \| 'dashed' \| 'dash' \| 'none'` | `'solid'` | Card border style (`dash` aliases `dashed`) |
 | `scrollable` | `boolean` | `true` | Whether body area scrolls internally |
+| `expanded` | `boolean` | - | Optional controlled expanded animation state for consumers that need sync telemetry. |
+| `animating` | `boolean` | - | Optional controlled animation state for consumers that need sync telemetry. |
 
 ### Events
 
 | Event | Params | Description |
 |------|--------|-------------|
+| `update:modelValue` | `(value: boolean)` | Emitted with `false` when the overlay closes itself. |
 | `open` | - | Open animation starts |
 | `opened` | - | Open animation ends |
 | `close` | - | Close animation starts |
@@ -116,3 +124,36 @@ code: |
 | `header-display` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom built-in title/description area |
 | `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom area left of close button |
 | `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom close area (hidden when `closable=false`) |
+
+## Interaction Contract
+
+- `modelValue=true` mounts the overlay, resolves the `source` rectangle, emits `open`, then emits `opened` after the card animation completes.
+- Built-in close button, slot `close()`, and mask click all start the close path; `maskClosable=false` blocks only mask clicks.
+- Internal close emits `close`, then `update:modelValue(false)`, then `closed`. Parent code must update `v-model` to fully close controlled overlays.
+- `expanded` and `animating` are sync telemetry values; bind them only when the surrounding UI needs to observe overlay motion state.
+- `globalMask=true` uses a shared body-level mask for stacked overlays. Underlay masks are non-interactive; only the top overlay receives mask clicks.
+- `preventAccidentalClose=true` blocks mask close and page exit attempts, then flashes the warning state instead of silently closing.
+
+## Best Practices
+
+- Pass the real trigger element or its `DOMRect` as `source`; `null` falls back to the centered card without origin continuity.
+- Keep `duration` near the default for stacked overlays so shared mask and card motion stay synchronized.
+- Use `cardStyle` for size constraints such as `width` and `maxHeight`; use `cardClass` for reusable visual variants.
+- Prefer `surface="mask"` for normal cards, `glass` / `refraction` only when the backdrop remains readable, and `pure` for fully custom card styling.
+- Use `#header-display`, `#header-actions`, or `#header-close` before replacing the whole header; full `#header` opts out of built-in close layout.
+
+## Review Notes
+
+- **State contract:** `TxFlipOverlay` owns the mount/animation lifecycle but only emits `update:modelValue(false)` when it closes itself; consumers must still sync `v-model` after built-in close, slot `close()`, or mask close.
+- **Stacking contract:** `globalMask=true` shares the visual backdrop across open overlays while only the top overlay keeps an interactive mask; size-similar overlays receive capped displacement and deeper overlays fade out.
+- **Safety contract:** `preventAccidentalClose` blocks mask close and page-exit attempts, then flashes the warning state; it is a guardrail, not a persistence or autosave feature.
+- **Verified coverage:** `flip-overlay.test.ts` covers defaults, header slot priority, close ordering, card style forwarding, stacked masks, layered displacement, and blocked-close behavior.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`.
+- Motion implementation: `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-motion.ts`.
+- Types: `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts` verifies surface defaults, header slot priority, close event order, card style forwarding, stacked masks, layered displacement, and safety-close guards.
+
+<TuffDocSourceLink />

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentPermission } from '@talex-touch/utils'
 
 const {
   mockAdapterCtor,
   mockAdapterRun,
   mockCaptureContext,
+  mockContextInvoke,
   mockCallTool,
   mockGetAllTools,
   mockGetTool,
@@ -14,11 +14,13 @@ const {
   mockRegisterProfiles,
   mockRegisterTool,
   mockResolveDeepAgentRuntimeConfig,
-  mockStartSession
+  mockStartSession,
+  mockAgentPermission
 } = vi.hoisted(() => ({
   mockAdapterCtor: vi.fn(),
   mockAdapterRun: vi.fn(),
   mockCaptureContext: vi.fn(),
+  mockContextInvoke: vi.fn(),
   mockCallTool: vi.fn(),
   mockGetAllTools: vi.fn(() => []),
   mockGetTool: vi.fn(),
@@ -28,7 +30,14 @@ const {
   mockRegisterProfiles: vi.fn(),
   mockRegisterTool: vi.fn(),
   mockResolveDeepAgentRuntimeConfig: vi.fn(),
-  mockStartSession: vi.fn(async () => undefined)
+  mockStartSession: vi.fn(async () => undefined),
+  mockAgentPermission: {
+    SYSTEM_EXEC: 'system.exec',
+    FILE_DELETE: 'file.delete',
+    CLIPBOARD_WRITE: 'clipboard.write',
+    FILE_WRITE: 'file.write',
+    NETWORK_ACCESS: 'network.access'
+  }
 }))
 
 vi.mock('@talex-touch/tuff-intelligence', () => ({
@@ -52,10 +61,20 @@ vi.mock('@talex-touch/tuff-intelligence', () => ({
   }
 }))
 
+vi.mock('@talex-touch/utils', () => ({
+  AgentPermission: mockAgentPermission
+}))
+
 vi.mock('./intelligence-sdk', () => ({
   tuffIntelligence: {
     resolveDeepAgentRuntimeConfig: mockResolveDeepAgentRuntimeConfig,
     invoke: mockInvoke
+  }
+}))
+
+vi.mock('./intelligence-context-execution', () => ({
+  intelligenceContextExecutionService: {
+    invoke: mockContextInvoke
   }
 }))
 
@@ -102,6 +121,10 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
     mockGetAllTools.mockReturnValue([])
     mockListStructuredTools.mockResolvedValue([])
     mockInvoke.mockResolvedValue({ result: undefined })
+    mockContextInvoke.mockResolvedValue({
+      invocation: { result: undefined },
+      context: { mode: 'continue', scope: 'session', itemCount: 1 }
+    })
   })
 
   it('executes prompt workflow capability through DeepAgent runtime config', async () => {
@@ -190,6 +213,192 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
     })
     expect(adapterPayload.messages[0].content).toContain('工作流输入')
     expect(adapterPayload.messages[0].content).toContain('clipboard')
+  })
+
+  it('returns adapter metadata usage from agent capability results', async () => {
+    mockResolveDeepAgentRuntimeConfig.mockResolvedValue({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'openai-key',
+      model: 'gpt-4.1-mini',
+      instructions: 'be precise',
+      runtimeOptions: { metadata: {} }
+    })
+    mockAdapterRun.mockResolvedValue({
+      text: '任务完成',
+      metadata: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        usage: {
+          promptTokens: 17,
+          completionTokens: 6,
+          totalTokens: 23
+        }
+      }
+    })
+
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    const result = await service.executeAgentCapability(
+      { task: '整理本次会议记录' },
+      { metadata: { sessionId: 'sess-agent-usage' } }
+    )
+
+    expect(result).toMatchObject({
+      usage: {
+        promptTokens: 17,
+        completionTokens: 6,
+        totalTokens: 23
+      },
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      traceId: 'sess-agent-usage'
+    })
+  })
+
+  it('retains DeepAgent step usage and aggregates stable model workflow usage', async () => {
+    mockResolveDeepAgentRuntimeConfig.mockResolvedValue({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'openai-key',
+      model: 'gpt-4.1-mini',
+      instructions: 'be precise',
+      runtimeOptions: { metadata: {} }
+    })
+    mockAdapterRun.mockResolvedValueOnce({
+      text: 'prompt complete',
+      metadata: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        usage: {
+          promptTokens: 11,
+          completionTokens: 7,
+          totalTokens: 18
+        }
+      }
+    })
+    mockAdapterRun.mockResolvedValueOnce({
+      text: 'agent complete',
+      metadata: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        usage: {
+          promptTokens: 5,
+          completionTokens: 4,
+          totalTokens: 9
+        }
+      }
+    })
+    mockInvoke.mockResolvedValue({
+      result: 'model complete',
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      usage: {
+        promptTokens: 13,
+        completionTokens: 8,
+        totalTokens: 21
+      }
+    })
+
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    const result = await service.executeWorkflowCapability(
+      {
+        steps: [
+          {
+            id: 'prompt-step',
+            kind: 'prompt',
+            prompt: 'Summarize the notes'
+          },
+          {
+            id: 'agent-step',
+            kind: 'agent',
+            agentId: 'builtin.workflow-agent',
+            prompt: 'Review the summary'
+          },
+          {
+            id: 'model-step',
+            kind: 'model',
+            input: {
+              capabilityId: 'text.summarize',
+              text: 'stable model input'
+            }
+          }
+        ]
+      },
+      { metadata: { sessionId: 'sess-workflow-usage' } }
+    )
+
+    expect(result.result.outputs).toMatchObject({
+      'prompt-step': {
+        usage: {
+          promptTokens: 11,
+          completionTokens: 7,
+          totalTokens: 18
+        }
+      },
+      'agent-step': {
+        usage: {
+          promptTokens: 5,
+          completionTokens: 4,
+          totalTokens: 9
+        }
+      },
+      'model-step': {
+        usage: {
+          promptTokens: 13,
+          completionTokens: 8,
+          totalTokens: 21
+        }
+      }
+    })
+    expect(result.usage).toEqual({
+      promptTokens: 29,
+      completionTokens: 19,
+      totalTokens: 48
+    })
+  })
+
+  it('uses zero workflow usage when no step reports usage', async () => {
+    mockResolveDeepAgentRuntimeConfig.mockResolvedValue({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'openai-key',
+      model: 'gpt-4.1-mini',
+      instructions: 'be precise',
+      runtimeOptions: { metadata: {} }
+    })
+    mockAdapterRun.mockResolvedValue({
+      text: 'usage unavailable',
+      metadata: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini'
+      }
+    })
+
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    const result = await service.executeWorkflowCapability(
+      {
+        steps: [
+          {
+            id: 'prompt-step',
+            kind: 'prompt',
+            prompt: 'Respond briefly'
+          }
+        ]
+      },
+      { metadata: { sessionId: 'sess-workflow-no-usage' } }
+    )
+
+    expect(result.usage).toEqual({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0
+    })
   })
 
   it('normalizes inline prompt and tool workflow steps without retired workflow ids', async () => {
@@ -357,6 +566,78 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
     )
   })
 
+  it('routes chat model steps through isolated workflow run context sessions', async () => {
+    mockContextInvoke.mockResolvedValue({
+      invocation: {
+        result: 'context answer',
+        provider: 'local',
+        model: 'qwen',
+        traceId: 'context-trace',
+        latency: 4
+      },
+      context: { mode: 'continue', scope: 'session', itemCount: 1 }
+    })
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+    const workflow = {
+      steps: [
+        {
+          id: 'first-chat-step',
+          kind: 'model',
+          prompt: 'Use only this workflow run context',
+          input: { capabilityId: 'text.chat' }
+        },
+        {
+          id: 'second-chat-step',
+          kind: 'model',
+          prompt: 'Continue using only this workflow run context',
+          input: { capabilityId: 'text.chat' }
+        }
+      ]
+    }
+
+    await service.executeWorkflowCapability(workflow, {
+      metadata: { sessionId: 'shared-runtime-session' }
+    })
+    await service.executeWorkflowCapability(workflow, {
+      metadata: { sessionId: 'shared-runtime-session' }
+    })
+
+    expect(mockContextInvoke).toHaveBeenCalledTimes(4)
+    const contextRequests = mockContextInvoke.mock.calls.map(([request]) => request)
+    expect(contextRequests.map((request) => request.context.mode)).toEqual([
+      'new',
+      'continue',
+      'new',
+      'continue'
+    ])
+    expect(
+      contextRequests.map((request) => ({
+        owner: request.context.owner,
+        scope: request.context.scope,
+        entrypoint: request.options.metadata.contextEntrypoint.id
+      }))
+    ).toEqual([
+      { owner: 'workflow', scope: 'session', entrypoint: 'workflow.use-model' },
+      { owner: 'workflow', scope: 'session', entrypoint: 'workflow.use-model' },
+      { owner: 'workflow', scope: 'session', entrypoint: 'workflow.use-model' },
+      { owner: 'workflow', scope: 'session', entrypoint: 'workflow.use-model' }
+    ])
+
+    const [firstRunFirstStep, firstRunSecondStep, secondRunFirstStep, secondRunSecondStep] =
+      contextRequests
+    const firstRunSessionId = firstRunFirstStep.context.sessionId
+    const secondRunSessionId = secondRunFirstStep.context.sessionId
+
+    expect(firstRunSessionId).toEqual(expect.stringMatching(/^workflow-context\.inline_/))
+    expect(secondRunSessionId).toEqual(expect.stringMatching(/^workflow-context\.inline_/))
+    expect(firstRunSecondStep.context.sessionId).toBe(firstRunSessionId)
+    expect(secondRunSecondStep.context.sessionId).toBe(secondRunSessionId)
+    expect(secondRunSessionId).not.toBe(firstRunSessionId)
+    expect(mockInvoke).not.toHaveBeenCalled()
+  })
+
   it('rejects non-stable model workflow capabilities', async () => {
     const { IntelligenceDeepAgentOrchestrationService } =
       await import('./intelligence-deepagent-orchestration')
@@ -482,7 +763,7 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
       id: 'browser.extract',
       name: 'Extract Web Page Text',
       description: 'Extract a web page',
-      permissions: [AgentPermission.NETWORK_ACCESS],
+      permissions: [mockAgentPermission.NETWORK_ACCESS],
       inputSchema: {
         type: 'object',
         properties: {}

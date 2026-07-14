@@ -193,6 +193,7 @@ describe('scan progress source-scope simulation cli', () => {
         dbPathClass: 'temporary',
         realProfileRequired: false
       })
+      expect(fileReport.evidenceSource.dbIdentity).toMatch(/^sha256-realpath-v1:[a-f0-9]{64}$/)
       expect(fileReport.sourceMutationPolicy).toBe('source-not-mutated-copy-execute')
       expect(fileReport.sourceSnapshotUnchanged).toBe(true)
       expect(fileReport.gate.passed).toBe(true)

@@ -2,7 +2,12 @@
 import { TxAiConversation } from '@talex-touch/tuffex/ai-elements'
 import { computed, defineComponent, nextTick, ref, watch } from 'vue'
 
-type IntelligenceWidgetStatus = 'idle' | 'ocr-pending' | 'chat-pending' | 'ready' | 'error'
+type IntelligenceWidgetStatus =
+  | 'idle'
+  | 'ocr-pending'
+  | 'chat-pending'
+  | 'ready'
+  | 'error'
 
 interface IntelligenceWidgetAttachment {
   type?: 'image' | string
@@ -28,8 +33,36 @@ interface IntelligenceImageContext {
   note?: string
 }
 
+type IntelligenceContextMode = 'new' | 'continue' | 'stateless'
+
+type IntelligenceContextContinuationReason =
+  | 'archived-session-continuation'
+  | 'expired-session-continuation'
+  | 'idle-session-continuation'
+  | 'continuation-session-missing'
+
+interface IntelligenceContextContinuationSummary {
+  reason?: IntelligenceContextContinuationReason
+  status?: 'included' | 'excluded' | 'unavailable'
+  degradedReason?: string
+}
+
+interface IntelligenceContextSummary {
+  mode?: IntelligenceContextMode
+  scope?: string
+  itemCount?: number
+  tokenBudget?: number
+  tokenEstimate?: number
+  retrievalItemCount?: number
+  citationCount?: number
+  degradedReason?: string
+  checkpointReason?: string
+  continuation?: IntelligenceContextContinuationSummary
+}
+
 interface IntelligenceWidgetPayload {
   requestId?: string
+  aiCommandId?: string
   prompt?: string
   answer?: string
   status?: string
@@ -44,7 +77,12 @@ interface IntelligenceWidgetPayload {
   copyStatus?: string
   copyError?: string
   copyRecovery?: string
+  replaceStatus?: string
+  replaceError?: string
+  replaceRecovery?: string
   messages?: IntelligenceWidgetMessage[]
+  contextMode?: IntelligenceContextMode
+  contextPackage?: IntelligenceContextSummary | null
   imageContext?: IntelligenceImageContext | null
   modelOptions?: IntelligenceProviderModelOption[]
   selectedProviderId?: string
@@ -78,6 +116,22 @@ interface ModelSelectOption {
 
 const AUTO_MODEL_VALUE = '__auto__'
 
+function formatContextContinuation(
+  summary: IntelligenceContextContinuationSummary,
+): string {
+  const base =
+    summary.reason === 'archived-session-continuation'
+      ? '已从归档会话摘要开启新会话'
+      : summary.reason === 'expired-session-continuation'
+        ? '已从过期会话摘要开启新会话'
+        : summary.reason === 'idle-session-continuation'
+          ? '长时间未活动，已从摘要开启新会话'
+          : '原会话不可用，已开启新会话'
+  if (summary.status === 'excluded') return `${base}（摘要已阻止）`
+  if (summary.status === 'unavailable') return `${base}（摘要不可用）`
+  return base
+}
+
 export default defineComponent({
   name: 'ask-panel',
   components: {
@@ -85,39 +139,88 @@ export default defineComponent({
   },
   props: {
     item: { type: Object, required: true },
-    payload: { type: Object as () => IntelligenceWidgetPayload | undefined, required: false },
-    hostKeyEvent: { type: Object as () => HostKeyEventEnvelope | null | undefined, required: false },
+    payload: {
+      type: Object as () => IntelligenceWidgetPayload | undefined,
+      required: false,
+    },
+    hostKeyEvent: {
+      type: Object as () => HostKeyEventEnvelope | null | undefined,
+      required: false,
+    },
   },
   emits: ['host-action'],
   setup(props, { emit }) {
     const contentRef = ref<HTMLElement | null>(null)
     const modelSearch = ref('')
-    const widgetPayload = computed<IntelligenceWidgetPayload>(() => props.payload ?? {})
+    const widgetPayload = computed<IntelligenceWidgetPayload>(
+      () => props.payload ?? {},
+    )
     const status = computed<IntelligenceWidgetStatus>(() => {
       const value = widgetPayload.value.status
-      if (value === 'ocr-pending' || value === 'chat-pending' || value === 'ready' || value === 'error') {
+      if (
+        value === 'ocr-pending' ||
+        value === 'chat-pending' ||
+        value === 'ready' ||
+        value === 'error'
+      ) {
         return value
       }
       return 'idle'
     })
     const messages = computed<IntelligenceWidgetMessage[]>(() => {
-      if (Array.isArray(widgetPayload.value.messages) && widgetPayload.value.messages.length > 0) {
+      if (
+        Array.isArray(widgetPayload.value.messages) &&
+        widgetPayload.value.messages.length > 0
+      ) {
         return widgetPayload.value.messages.filter(message => {
           const content = message?.content?.trim()
-          return Boolean(content || message?.status === 'streaming' || message?.status === 'pending')
+          return Boolean(
+            content ||
+            message?.status === 'streaming' ||
+            message?.status === 'pending',
+          )
         })
       }
       return []
     })
     const isEmpty = computed(() => messages.value.length === 0)
-    const imageContext = computed(() => widgetPayload.value.imageContext || null)
-    const isBusy = computed(() => status.value === 'ocr-pending' || status.value === 'chat-pending')
-    const errorCode = computed(() => String(widgetPayload.value.errorCode || '').trim())
-    const errorMessage = computed(() => String(widgetPayload.value.errorMessage || '').trim())
-    const isPermissionDenied = computed(() => errorCode.value === 'PERMISSION_DENIED')
-    const copyFailed = computed(() => String(widgetPayload.value.copyStatus || '').trim() === 'failed')
-    const copyError = computed(() => String(widgetPayload.value.copyError || '').trim())
-    const copyRecovery = computed(() => String(widgetPayload.value.copyRecovery || '').trim())
+    const imageContext = computed(
+      () => widgetPayload.value.imageContext || null,
+    )
+    const isBusy = computed(
+      () => status.value === 'ocr-pending' || status.value === 'chat-pending',
+    )
+    const errorCode = computed(() =>
+      String(widgetPayload.value.errorCode || '').trim(),
+    )
+    const errorMessage = computed(() =>
+      String(widgetPayload.value.errorMessage || '').trim(),
+    )
+    const isPermissionDenied = computed(
+      () => errorCode.value === 'PERMISSION_DENIED',
+    )
+    const copyFailed = computed(
+      () => String(widgetPayload.value.copyStatus || '').trim() === 'failed',
+    )
+    const copyError = computed(() =>
+      String(widgetPayload.value.copyError || '').trim(),
+    )
+    const copyRecovery = computed(() =>
+      String(widgetPayload.value.copyRecovery || '').trim(),
+    )
+    const replaceFailed = computed(
+      () => String(widgetPayload.value.replaceStatus || '').trim() === 'failed',
+    )
+    const replaceError = computed(() =>
+      String(widgetPayload.value.replaceError || '').trim(),
+    )
+    const replaceRecovery = computed(() =>
+      String(widgetPayload.value.replaceRecovery || '').trim(),
+    )
+    const canUseAnswerActions = computed(
+      () =>
+        status.value === 'ready' && Boolean(widgetPayload.value.answer?.trim()),
+    )
     const runtimeMetadata = computed<RuntimeMetadataItem[]>(() => {
       const payload = widgetPayload.value
       const items: RuntimeMetadataItem[] = []
@@ -129,29 +232,76 @@ export default defineComponent({
         ? payload.inputKinds.map(kind => String(kind).trim()).filter(Boolean)
         : []
       const latency = Number(payload.latency)
+      const contextPackage = payload.contextPackage
+      const contextModeValue = contextPackage?.mode || payload.contextMode
+      const contextScope = String(contextPackage?.scope || '').trim()
+      const contextItemCount = Number(contextPackage?.itemCount)
+      const contextTokenBudget = Number(contextPackage?.tokenBudget)
+      const contextTokenEstimate = Number(contextPackage?.tokenEstimate)
+      const retrievalItemCount = Number(contextPackage?.retrievalItemCount)
+      const citationCount = Number(contextPackage?.citationCount)
+      const degradedReason = String(contextPackage?.degradedReason || '').trim()
+      const continuation = contextPackage?.continuation
 
       if (provider) {
-        const providerValue = provider.toLowerCase() === 'local'
-          ? 'Local/Ollama (local)'
-          : provider
+        const providerValue =
+          provider.toLowerCase() === 'local' ? 'Local/Ollama (local)' : provider
         items.push({ label: 'Provider', value: providerValue })
       }
-      if (model)
-        items.push({ label: 'Model', value: model })
+      if (model) items.push({ label: 'Model', value: model })
       if (Number.isFinite(latency) && latency >= 0)
         items.push({ label: 'Latency', value: `${Math.round(latency)} ms` })
-      if (traceId)
-        items.push({ label: 'Trace', value: traceId })
+      if (traceId) items.push({ label: 'Trace', value: traceId })
       if (inputKinds.length > 0)
         items.push({ label: 'Input kind', value: inputKinds.join(', ') })
-      if (capabilityId)
-        items.push({ label: 'Capability', value: capabilityId })
+      if (capabilityId) items.push({ label: 'Capability', value: capabilityId })
+      if (contextPackage) {
+        items.push({
+          label: 'Context boundary',
+          value: `${contextModeValue || 'new'} / ${contextScope || 'retrieval'}`,
+        })
+        if (continuation?.reason) {
+          items.push({
+            label: 'Context transition',
+            value: formatContextContinuation(continuation),
+          })
+        }
+        if (Number.isFinite(contextItemCount) && contextItemCount >= 0)
+          items.push({
+            label: 'Context items',
+            value: String(contextItemCount),
+          })
+        if (
+          Number.isFinite(contextTokenEstimate) &&
+          contextTokenEstimate >= 0 &&
+          Number.isFinite(contextTokenBudget) &&
+          contextTokenBudget > 0
+        ) {
+          items.push({
+            label: 'Context tokens',
+            value: `${Math.round(contextTokenEstimate)} / ${Math.round(contextTokenBudget)}`,
+          })
+        }
+        if (Number.isFinite(retrievalItemCount) && retrievalItemCount > 0)
+          items.push({
+            label: 'Retrieval items',
+            value: String(retrievalItemCount),
+          })
+        if (Number.isFinite(citationCount) && citationCount > 0)
+          items.push({ label: 'Citations', value: String(citationCount) })
+        if (degradedReason)
+          items.push({ label: 'Context state', value: degradedReason })
+      }
 
       return items
     })
     const hasRuntimeMetadata = computed(() => runtimeMetadata.value.length > 0)
-    const selectedProviderId = computed(() => String(widgetPayload.value.selectedProviderId || '').trim())
-    const selectedModel = computed(() => String(widgetPayload.value.selectedModel || '').trim())
+    const selectedProviderId = computed(() =>
+      String(widgetPayload.value.selectedProviderId || '').trim(),
+    )
+    const selectedModel = computed(() =>
+      String(widgetPayload.value.selectedModel || '').trim(),
+    )
     const selectedModelValue = computed(() => {
       if (!selectedProviderId.value || !selectedModel.value)
         return AUTO_MODEL_VALUE
@@ -162,13 +312,19 @@ export default defineComponent({
         ? widgetPayload.value.modelOptions
         : []
       return values
-        .map((option) => {
+        .map(option => {
           const providerId = String(option?.providerId || '').trim()
           const providerName = String(option?.providerName || providerId).trim()
           const providerType = String(option?.providerType || '').trim()
           const defaultModel = String(option?.defaultModel || '').trim()
           const models = Array.isArray(option?.models)
-            ? Array.from(new Set(option.models.map(model => String(model || '').trim()).filter(Boolean)))
+            ? Array.from(
+                new Set(
+                  option.models
+                    .map(model => String(model || '').trim())
+                    .filter(Boolean),
+                ),
+              )
             : []
           return {
             providerId,
@@ -176,13 +332,16 @@ export default defineComponent({
             providerType,
             defaultModel,
             models,
-            available: option?.available !== false,
+            available: option?.available === true,
           }
         })
-        .filter(option => option.providerId && option.models.length > 0)
+        .filter(
+          option =>
+            option.available && option.providerId && option.models.length > 0,
+        )
     })
     const flattenedModelOptions = computed<ModelSelectOption[]>(() => {
-      return modelOptions.value.flatMap((provider) => {
+      return modelOptions.value.flatMap(provider => {
         const orderedModels = [...provider.models].sort((a, b) => {
           if (provider.defaultModel && a === provider.defaultModel) return -1
           if (provider.defaultModel && b === provider.defaultModel) return 1
@@ -202,8 +361,8 @@ export default defineComponent({
     const filteredModelGroups = computed(() => {
       const query = modelSearch.value.trim().toLowerCase()
       return modelOptions.value
-        .map((provider) => {
-          const models = provider.models.filter((model) => {
+        .map(provider => {
+          const models = provider.models.filter(model => {
             if (!query) return true
             return [
               provider.providerId,
@@ -217,17 +376,33 @@ export default defineComponent({
         .filter(provider => provider.models.length > 0)
     })
     const selectedModelSummary = computed(() => {
-      if (!selectedProviderId.value || !selectedModel.value)
-        return '自动路由'
-      const provider = modelOptions.value.find(option => option.providerId === selectedProviderId.value)
+      if (!selectedProviderId.value || !selectedModel.value) return '自动路由'
+      const provider = modelOptions.value.find(
+        option => option.providerId === selectedProviderId.value,
+      )
       const providerName = provider?.providerName || selectedProviderId.value
       return `${providerName} / ${selectedModel.value}`
     })
+    const isAiCommand = computed(() => Boolean(widgetPayload.value.aiCommandId))
+    const contextModes: IntelligenceContextMode[] = [
+      'new',
+      'continue',
+      'stateless',
+    ]
+    const contextMode = computed<IntelligenceContextMode>(() => {
+      if (isAiCommand.value) return 'stateless'
+      const value = widgetPayload.value.contextMode
+      return value === 'continue' || value === 'stateless' ? value : 'new'
+    })
 
-    function cloneMessage(message: IntelligenceWidgetMessage): IntelligenceWidgetMessage {
+    function cloneMessage(
+      message: IntelligenceWidgetMessage,
+    ): IntelligenceWidgetMessage {
       return {
         ...message,
-        attachments: message.attachments?.map(attachment => ({ ...attachment })),
+        attachments: message.attachments?.map(attachment => ({
+          ...attachment,
+        })),
       }
     }
 
@@ -239,7 +414,10 @@ export default defineComponent({
         if (!el) return
         const apply = () => {
           el.scrollTop = el.scrollHeight
-          el.scrollTo?.({ top: el.scrollHeight, behavior: force ? 'auto' : 'smooth' })
+          el.scrollTo?.({
+            top: el.scrollHeight,
+            behavior: force ? 'auto' : 'smooth',
+          })
         }
         apply()
         requestAnimationFrame(() => {
@@ -250,39 +428,73 @@ export default defineComponent({
     }
 
     watch(
-      () => [visibleMessages.value, status.value, widgetPayload.value.updatedAt],
+      () => [
+        visibleMessages.value,
+        status.value,
+        widgetPayload.value.updatedAt,
+      ],
       () => scrollToBottom(true),
       { immediate: true, deep: true, flush: 'post' },
     )
 
+    function buildHostActionPayload(overrides: Record<string, unknown> = {}) {
+      const payload = widgetPayload.value
+      return {
+        requestId: payload.requestId || '',
+        aiCommandId: payload.aiCommandId || '',
+        prompt: payload.prompt || '',
+        answer: payload.answer || '',
+        status: payload.status || 'idle',
+        provider: payload.provider || '',
+        model: payload.model || '',
+        latency: payload.latency,
+        traceId: payload.traceId || '',
+        capabilityId: payload.capabilityId || 'text.chat',
+        inputKinds: payload.inputKinds || [],
+        errorCode: payload.errorCode || '',
+        errorMessage: payload.errorMessage || '',
+        copyStatus: payload.copyStatus || '',
+        copyError: payload.copyError || '',
+        copyRecovery: payload.copyRecovery || '',
+        replaceStatus: payload.replaceStatus || '',
+        replaceError: payload.replaceError || '',
+        replaceRecovery: payload.replaceRecovery || '',
+        imageDataUrl: payload.imageContext?.preview || '',
+        ocrText: payload.imageContext?.ocrText || '',
+        contextMode: contextMode.value,
+        contextPackage: payload.contextPackage || null,
+        ...overrides,
+      }
+    }
+
+    function handleAnswerAction(actionId: 'copy-answer' | 'replace-answer') {
+      if (!canUseAnswerActions.value || isBusy.value) return
+      emit('host-action', {
+        actionId,
+        payload: buildHostActionPayload(),
+      })
+    }
+
     function handleModelChange(event: Event) {
       const target = event.target as HTMLSelectElement | null
       const value = target?.value || AUTO_MODEL_VALUE
-      const option = flattenedModelOptions.value.find(item => item.value === value)
-      const payload = widgetPayload.value
+      const option = flattenedModelOptions.value.find(
+        item => item.value === value,
+      )
       emit('host-action', {
         actionId: 'select-model',
-        payload: {
-          requestId: payload.requestId || '',
-          prompt: payload.prompt || '',
-          answer: payload.answer || '',
-          status: payload.status || 'idle',
-          provider: payload.provider || '',
-          model: payload.model || '',
-          latency: payload.latency,
-          traceId: payload.traceId || '',
-          capabilityId: payload.capabilityId || 'text.chat',
-          inputKinds: payload.inputKinds || [],
-          errorCode: payload.errorCode || '',
-          errorMessage: payload.errorMessage || '',
-          copyStatus: payload.copyStatus || '',
-          copyError: payload.copyError || '',
-          copyRecovery: payload.copyRecovery || '',
-          imageDataUrl: payload.imageContext?.preview || '',
-          ocrText: payload.imageContext?.ocrText || '',
+        payload: buildHostActionPayload({
           selectedProviderId: option?.providerId || '',
           selectedModel: option?.model || '',
-        },
+        }),
+      })
+    }
+
+    function handleContextModeChange(mode: IntelligenceContextMode) {
+      if (mode === contextMode.value || isBusy.value) return
+      emit('host-action', {
+        actionId: 'select-context-mode',
+        payload: buildHostActionPayload({ contextMode: mode }),
       })
     }
 
@@ -300,13 +512,22 @@ export default defineComponent({
       copyFailed,
       copyError,
       copyRecovery,
+      replaceFailed,
+      replaceError,
+      replaceRecovery,
+      canUseAnswerActions,
       runtimeMetadata,
       hasRuntimeMetadata,
+      contextModes,
+      isAiCommand,
+      contextMode,
       selectedModelValue,
       selectedModelSummary,
       filteredModelGroups,
       AUTO_MODEL_VALUE,
       handleModelChange,
+      handleContextModeChange,
+      handleAnswerAction,
       scrollToBottom,
     }
   },
@@ -335,8 +556,12 @@ export default defineComponent({
           empty-text="Start a conversation"
         />
 
-        <div v-if="hasRuntimeMetadata" class="AiChatbot__runtimeMetadata" aria-label="Routing provider metadata">
-          <strong>Routing provider metadata</strong>
+        <div
+          v-if="hasRuntimeMetadata"
+          class="AiChatbot__runtimeMetadata"
+          aria-label="Execution metadata"
+        >
+          <strong>Execution metadata</strong>
           <dl>
             <template v-for="item in runtimeMetadata" :key="item.label">
               <dt>{{ item.label }}</dt>
@@ -345,18 +570,33 @@ export default defineComponent({
           </dl>
         </div>
 
-        <div v-if="imageContext" class="AiImageContext" :class="`is-${imageContext.status || 'attached'}`">
-          <img v-if="imageContext.preview" :src="imageContext.preview" alt="图片上下文" />
+        <div
+          v-if="imageContext"
+          class="AiImageContext"
+          :class="`is-${imageContext.status || 'attached'}`"
+        >
+          <img
+            v-if="imageContext.preview"
+            :src="imageContext.preview"
+            alt="图片上下文"
+          />
           <div>
             <strong>{{ imageContext.title || '图片上下文' }}</strong>
             <span>{{ imageContext.note || '图片已作为上下文引用。' }}</span>
           </div>
         </div>
 
-        <div v-if="status === 'error' && errorMessage" class="AiChatbot__errorNotice">
-          <strong>{{ isPermissionDenied ? '需要授权 AI 权限' : '请求失败' }}</strong>
+        <div
+          v-if="status === 'error' && errorMessage"
+          class="AiChatbot__errorNotice"
+        >
+          <strong>{{
+            isPermissionDenied ? '需要授权 AI 权限' : '请求失败'
+          }}</strong>
           <span>{{ errorMessage }}</span>
-          <small v-if="isPermissionDenied">请到插件权限设置中允许 intelligence.basic 后重试。</small>
+          <small v-if="isPermissionDenied"
+            >请到插件权限设置中允许 intelligence.basic 后重试。</small
+          >
         </div>
 
         <div v-if="copyFailed" class="AiChatbot__copyFailureNotice">
@@ -364,14 +604,79 @@ export default defineComponent({
           <span>{{ copyError || '无法复制回答到剪贴板。' }}</span>
           <small>{{ copyRecovery || '请检查插件剪贴板权限后重试。' }}</small>
         </div>
+
+        <div
+          v-if="canUseAnswerActions"
+          class="AiChatbot__answerActions"
+          role="group"
+          aria-label="回答操作"
+        >
+          <button
+            type="button"
+            :disabled="isBusy"
+            @click="handleAnswerAction('copy-answer')"
+          >
+            <i class="i-carbon-copy" aria-hidden="true" />
+            复制回答
+          </button>
+          <button
+            type="button"
+            :disabled="isBusy"
+            @click="handleAnswerAction('replace-answer')"
+          >
+            <i class="i-carbon-text-selection" aria-hidden="true" />
+            替换选中文本
+          </button>
+        </div>
+
+        <div v-if="replaceFailed" class="AiChatbot__replaceFailureNotice">
+          <strong>替换失败</strong>
+          <span>{{ replaceError || '无法将回答粘贴到当前应用。' }}</span>
+          <small>{{ replaceRecovery || '请检查系统自动化权限后重试。' }}</small>
+        </div>
       </div>
 
-      <button class="AiChatbot__scrollButton" type="button" aria-label="Scroll to bottom" @click="scrollToBottom(true)">
+      <button
+        class="AiChatbot__scrollButton"
+        type="button"
+        aria-label="Scroll to bottom"
+        @click="scrollToBottom(true)"
+      >
         ↓
       </button>
     </div>
 
     <div class="AiChatbot__modelToolbar" aria-label="渠道模型选择">
+      <div v-if="!isAiCommand" class="AiChatbot__contextControl">
+        <span>上下文</span>
+        <div
+          class="AiChatbot__contextModes"
+          role="group"
+          aria-label="上下文模式"
+        >
+          <button
+            v-for="mode in contextModes"
+            :key="mode"
+            type="button"
+            :class="{ 'is-active': contextMode === mode }"
+            :aria-pressed="contextMode === mode"
+            :disabled="isBusy"
+            @click="handleContextModeChange(mode)"
+          >
+            {{
+              mode === 'new'
+                ? '新会话'
+                : mode === 'continue'
+                  ? '继续'
+                  : '无历史'
+            }}
+          </button>
+        </div>
+      </div>
+      <div v-else class="AiChatbot__contextControl">
+        <span>AI 命令</span>
+        <strong>无历史</strong>
+      </div>
       <div class="AiChatbot__modelSummary">
         <span>渠道模型</span>
         <strong>{{ selectedModelSummary }}</strong>
@@ -390,9 +695,13 @@ export default defineComponent({
         @change="handleModelChange"
       >
         <option :value="AUTO_MODEL_VALUE">自动路由</option>
-        <template v-for="provider in filteredModelGroups" :key="provider.providerId">
+        <template
+          v-for="provider in filteredModelGroups"
+          :key="provider.providerId"
+        >
           <option disabled :value="`group:${provider.providerId}`">
-            {{ provider.providerName }}{{ provider.providerType ? ` · ${provider.providerType}` : '' }}
+            {{ provider.providerName
+            }}{{ provider.providerType ? ` · ${provider.providerType}` : '' }}
           </option>
           <option
             v-for="model in provider.models"
@@ -412,13 +721,41 @@ export default defineComponent({
   --ai-chat-bg: transparent;
   --ai-chat-text: var(--tx-text-color-primary, #1f2937);
   --ai-chat-text-secondary: var(--tx-text-color-secondary, #6b7280);
-  --ai-chat-border: color-mix(in srgb, var(--tx-border-color, #dcdfe6) 72%, transparent);
-  --ai-chat-assistant-bg: color-mix(in srgb, var(--tx-fill-color, #f3f4f6) 82%, transparent);
-  --ai-chat-user-bg: color-mix(in srgb, var(--tx-color-primary, #3082ff) 18%, transparent);
-  --ai-chat-user-border: color-mix(in srgb, var(--tx-color-primary, #3082ff) 42%, transparent);
-  --ai-chat-floating-bg: color-mix(in srgb, var(--tx-bg-color, #ffffff) 86%, transparent);
-  --ai-chat-danger-bg: color-mix(in srgb, var(--tx-color-danger, #e5484d) 14%, transparent);
-  --ai-chat-danger-border: color-mix(in srgb, var(--tx-color-danger, #e5484d) 28%, transparent);
+  --ai-chat-border: color-mix(
+    in srgb,
+    var(--tx-border-color, #dcdfe6) 72%,
+    transparent
+  );
+  --ai-chat-assistant-bg: color-mix(
+    in srgb,
+    var(--tx-fill-color, #f3f4f6) 82%,
+    transparent
+  );
+  --ai-chat-user-bg: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 18%,
+    transparent
+  );
+  --ai-chat-user-border: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 42%,
+    transparent
+  );
+  --ai-chat-floating-bg: color-mix(
+    in srgb,
+    var(--tx-bg-color, #ffffff) 86%,
+    transparent
+  );
+  --ai-chat-danger-bg: color-mix(
+    in srgb,
+    var(--tx-color-danger, #e5484d) 14%,
+    transparent
+  );
+  --ai-chat-danger-border: color-mix(
+    in srgb,
+    var(--tx-color-danger, #e5484d) 28%,
+    transparent
+  );
   position: relative;
   display: flex;
   width: 100%;
@@ -552,9 +889,15 @@ export default defineComponent({
   line-height: 1.35;
 }
 
-.AiMarkdown :deep(h1) { font-size: 1.45em; }
-.AiMarkdown :deep(h2) { font-size: 1.32em; }
-.AiMarkdown :deep(h3) { font-size: 1.18em; }
+.AiMarkdown :deep(h1) {
+  font-size: 1.45em;
+}
+.AiMarkdown :deep(h2) {
+  font-size: 1.32em;
+}
+.AiMarkdown :deep(h3) {
+  font-size: 1.18em;
+}
 
 .AiMarkdown :deep(ul) {
   margin: 0 0 0.85em;
@@ -695,7 +1038,9 @@ export default defineComponent({
   bottom: 14px;
   left: 16px;
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) minmax(120px, 160px) minmax(180px, 260px);
+  grid-template-columns:
+    minmax(210px, auto) minmax(130px, 1fr) minmax(120px, 160px)
+    minmax(180px, 260px);
   gap: 8px;
   align-items: center;
   padding: 8px;
@@ -703,6 +1048,71 @@ export default defineComponent({
   border-radius: 12px;
   background: var(--ai-chat-floating-bg);
   backdrop-filter: blur(18px);
+}
+
+.AiChatbot__contextControl {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.AiChatbot__contextControl > span {
+  color: var(--ai-chat-text-secondary);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.AiChatbot__contextModes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-bg-color, #ffffff) 82%, transparent);
+}
+
+.AiChatbot__contextModes button {
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ai-chat-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.AiChatbot__contextModes button:hover:not(:disabled) {
+  color: var(--ai-chat-text);
+}
+
+.AiChatbot__contextModes button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.AiChatbot__contextModes button:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--tx-color-primary, #3082ff) 60%, transparent);
+  outline-offset: 1px;
+}
+
+.AiChatbot__contextModes button.is-active {
+  background: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 16%,
+    var(--tx-bg-color, #ffffff)
+  );
+  color: var(--ai-chat-text);
+  font-weight: 650;
+}
+
+.AiChatbot__contextModes button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .AiChatbot__modelSummary {
@@ -751,12 +1161,16 @@ export default defineComponent({
 
 .AiChatbot__modelSearch:focus,
 .AiChatbot__modelSelect:focus {
-  border-color: color-mix(in srgb, var(--tx-color-primary, #3082ff) 64%, var(--ai-chat-border));
+  border-color: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 64%,
+    var(--ai-chat-border)
+  );
 }
 
 @media (max-width: 640px) {
   .AiChatbot__content {
-    padding: 18px 16px 126px;
+    padding: 18px 16px 220px;
   }
 
   .AiChatbot__modelToolbar {
@@ -777,8 +1191,12 @@ export default defineComponent({
   background: var(--ai-chat-text-secondary);
 }
 
-.AiTypingDot:nth-child(2) { animation-delay: 0.14s; }
-.AiTypingDot:nth-child(3) { animation-delay: 0.28s; }
+.AiTypingDot:nth-child(2) {
+  animation-delay: 0.14s;
+}
+.AiTypingDot:nth-child(3) {
+  animation-delay: 0.28s;
+}
 
 .AiChatbot__errorNotice {
   display: grid;
@@ -798,11 +1216,16 @@ export default defineComponent({
 }
 
 .AiChatbot__errorNotice small {
-  color: color-mix(in srgb, var(--tx-color-danger, #e5484d) 78%, var(--ai-chat-text));
+  color: color-mix(
+    in srgb,
+    var(--tx-color-danger, #e5484d) 78%,
+    var(--ai-chat-text)
+  );
   font-size: 12px;
 }
 
-.AiChatbot__copyFailureNotice {
+.AiChatbot__copyFailureNotice,
+.AiChatbot__replaceFailureNotice {
   display: grid;
   max-width: min(78%, 720px);
   gap: 6px;
@@ -815,14 +1238,63 @@ export default defineComponent({
   line-height: 1.5;
 }
 
-.AiChatbot__copyFailureNotice strong {
+.AiChatbot__copyFailureNotice strong,
+.AiChatbot__replaceFailureNotice strong {
   font-size: 14px;
   font-weight: 700;
 }
 
-.AiChatbot__copyFailureNotice small {
-  color: color-mix(in srgb, var(--tx-color-danger, #e5484d) 78%, var(--ai-chat-text));
+.AiChatbot__copyFailureNotice small,
+.AiChatbot__replaceFailureNotice small {
+  color: color-mix(
+    in srgb,
+    var(--tx-color-danger, #e5484d) 78%,
+    var(--ai-chat-text)
+  );
   font-size: 12px;
+}
+
+.AiChatbot__answerActions {
+  display: flex;
+  max-width: min(78%, 720px);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.AiChatbot__answerActions button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-bg-color, #ffffff) 88%, transparent);
+  color: var(--ai-chat-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.AiChatbot__answerActions button:hover:not(:disabled) {
+  border-color: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 54%,
+    var(--ai-chat-border)
+  );
+  color: var(--tx-color-primary, #3082ff);
+}
+
+.AiChatbot__answerActions button:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--tx-color-primary, #3082ff) 58%, transparent);
+  outline-offset: 2px;
+}
+
+.AiChatbot__answerActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .AiChatbot__scrollButton {
@@ -838,11 +1310,20 @@ export default defineComponent({
   background: var(--ai-chat-floating-bg);
   color: var(--ai-chat-text-secondary);
   font-size: 16px;
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--ai-chat-text) 10%, transparent);
+  box-shadow: 0 8px 24px
+    color-mix(in srgb, var(--ai-chat-text) 10%, transparent);
 }
 
 @keyframes ai-conversation-dot {
-  0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
-  40% { transform: translateY(-3px); opacity: 1; }
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }
 </style>

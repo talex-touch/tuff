@@ -55,11 +55,15 @@ describe('/api/docs/navigation', () => {
       staleMaxAge: 3600,
       name: 'docs-navigation',
     })
-    expect(cachedOptions.getKey({})).toBe('locale:all')
+    expect(cachedOptions.getKey({})).toBe('locale:all:scope:all')
 
     getQueryMock.mockReturnValue({ locale: 'zh' })
 
-    expect(cachedOptions.getKey({})).toBe('locale:zh')
+    expect(cachedOptions.getKey({})).toBe('locale:zh:scope:all')
+
+    getQueryMock.mockReturnValue({ locale: 'en', scope: 'components' })
+
+    expect(cachedOptions.getKey({})).toBe('locale:en:scope:components')
   })
 
   it('keeps only requested locale leaf docs while preserving directory nodes', async () => {
@@ -93,6 +97,41 @@ describe('/api/docs/navigation', () => {
               { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
             ],
           },
+        ],
+      },
+    ])
+  })
+
+  it('uses path locale and scope for prerenderable static variants', async () => {
+    contentMocks.queryCollectionNavigation.mockResolvedValue([
+      {
+        title: 'Docs',
+        path: '/docs',
+        children: [
+          {
+            title: 'Dev',
+            path: '/docs/dev',
+            children: [
+              {
+                title: 'Components',
+                path: '/docs/dev/components',
+                children: [
+                  { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
+                  { title: 'Tabs 标签页', path: '/docs/dev/components/tabs.zh' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ])
+
+    await expect(handler({ context: { params: { locale: 'en', scope: 'components' } } })).resolves.toEqual([
+      {
+        title: 'Components',
+        path: '/docs/dev/components',
+        children: [
+          { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
         ],
       },
     ])

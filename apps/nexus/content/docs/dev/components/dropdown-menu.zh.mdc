@@ -127,36 +127,84 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `boolean` | `false` | 是否打开（v-model） |
-| `placement` | `DropdownPlacement` | `'bottom-start'` | 位置 |
-| `offset` | `number` | `6` | 间距 |
-| `closeOnSelect` | `boolean` | `true` | 选择后自动关闭 |
-| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180 }` | 透传给 BaseAnchor 的锚点动画配置 |
-| `duration` | `number` | `180` | 兼容旧用法的动画时长，建议改用 `animation.duration` |
-| `minWidth` | `number` | `220` | 最小宽度 |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
-| `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
-| `panelPadding` | `number` | `8` | 面板 padding（TxCard padding） |
+| `modelValue` | `boolean` | `false` | 是否打开（v-model）。 |
+| `placement` | `DropdownPlacement` | `'bottom-start'` | 相对触发器的浮层位置。 |
+| `offset` | `number` | `6` | 触发器与面板之间的距离，单位 px。 |
+| `closeOnSelect` | `boolean` | `true` | 可用菜单项触发 `select` 后是否关闭父菜单。 |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | 透传给 BaseAnchor/Popover 的锚点动画配置。 |
+| `duration` | `number` | `180` | 兼容旧用法的动画时长；优先使用 `animation.duration`。 |
+| `minWidth` | `number` | `220` | 面板最小宽度，单位 px。 |
+| `maxHeight` | `number` | `420` | 面板最大可滚动高度，单位 px。 |
+| `unlimitedHeight` | `boolean` | `false` | 禁用面板最大高度限制。 |
+| `referenceClass` | `BaseAnchorClassValue` | - | 透传给触发锚点的额外 class。 |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给 Popover 面板卡片的低层配置。 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框样式。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景效果。 |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影强度。 |
+| `panelRadius` | `number` | `18` | 面板圆角，单位 px。 |
+| `panelPadding` | `number` | `8` | 面板内边距，单位 px。 |
 
 ### TxDropdownItem Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `disabled` | `boolean` | `false` | 禁用 |
-| `danger` | `boolean` | `false` | 危险样式 |
-| `arrow` | `boolean` | `false` | 显示右侧箭头（可通过 `#right` 覆盖） |
+| `disabled` | `boolean` | `false` | 禁用当前菜单项，不触发选择，也不会关闭父菜单。 |
+| `danger` | `boolean` | `false` | 使用危险操作文字样式。 |
+| `arrow` | `boolean` | `false` | 没有 `right` 插槽时显示右侧箭头。 |
 
-### Events
+### TxDropdownMenu Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `select` | - | 点击菜单项时触发 |
+| `update:modelValue` | `(value: boolean)` | 菜单请求打开状态变更时触发。 |
+| `open` | - | 菜单请求打开时触发。 |
+| `close` | - | 菜单请求关闭时触发。 |
+
+### TxDropdownItem Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | - | 可用菜单项被点击时触发。 |
+
+## Slots
+
+### TxDropdownMenu
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `trigger` | - | 透传给 Popover reference 插槽的触发内容。 |
+| `default` | - | 菜单行，通常是 `TxDropdownItem` 子项，渲染在菜单面板内。 |
+
+### TxDropdownItem
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 菜单项主标签。 |
+| `right` | - | 覆盖 `arrow` 自动生成的右侧箭头区域。 |
 
 ## 交互契约
 
 - `TxDropdownMenu` 只承载短操作列表；包含说明、表单或复杂状态时改用 `TxPopover` / `TxDrawer`。
+- `TxDropdownMenu` 包装 `TxPopover`，因此 `placement`、`offset`、高度限制、panel card props 和动画都遵循同一套锚点行为。
 - `closeOnSelect` 默认会在可用菜单项触发 `select` 后关闭父菜单，禁用项不会触发选择或关闭。
-- 面板由 `TxPopover` 承载，`placement`、`offset`、`panelBackground` 等浮层行为应与 Popover 保持一致。
-- 源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue`
+- 菜单面板使用 `role="menu"`，每个 `TxDropdownItem` 使用 `role="menuitem"`。
+- `TxDropdownItem` 的 `select` 不带 payload；业务上下文应在渲染该 item 的 handler 中闭包保存。
+
+## 最佳实践
+
+- Dropdown 只放短命令列表；如果面板需要段落、表单或多步骤交互，应改用 `TxPopover`、`TxDrawer` 或 `TxContextMenuPanel` 组合。
+- `danger` 只用于破坏性命令；列表变长时应让危险操作与普通操作保持视觉分组。
+- `arrow` 用于导航/二级菜单行；外链图标、快捷键提示或状态徽标使用 `right` 插槽。
+- 普通命令保持 `closeOnSelect=true`；只有该行会打开另一层浮层或进入多步骤流程时才设为 `false`。
+- 除非外层 surface 已经提供足够对比，否则优先保留默认 `panelBackground="refraction"` 与默认面板样式。
+
+## 审阅说明
+
+- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` 透传 Popover 位置、尺寸、动画、面板视觉 props，以及 trigger/default 插槽。
+- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` 确认 disabled/danger/arrow props、`right` 插槽、`role="menuitem"` 和 close-on-select 注入行为。
+- 类型契约：`packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` 导出 `DropdownMenuProps`、`DropdownItemProps` 和支持的 placement 联合类型。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` 覆盖 props 透传、open/close 事件、可用项选择、禁用项无操作和 `closeOnSelect=false`。
+
+## Source
+<TuffDocSourceLink />
+

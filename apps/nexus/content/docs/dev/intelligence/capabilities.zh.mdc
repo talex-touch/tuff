@@ -6,7 +6,7 @@
 - `text.translate`
 - `text.summarize`
 - `text.rewrite`
-- `text.grammarCheck`
+- `text.grammar`
 
 ## 视觉（Vision）
 
@@ -17,11 +17,10 @@
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+  import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
   
-  const { vision } = useIntelligence()
-  
-  const res = await vision.ocr({
+  const intelligence = useIntelligenceSdk()
+  const res = await intelligence.vision.ocr({
     source: { type: 'data-url', dataUrl },
     includeLayout: true,
     includeKeywords: true,
@@ -48,11 +47,10 @@ code: |
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+  import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
   
-  const { embedding } = useIntelligence()
-  
-  const res = await embedding.generate({
+  const intelligence = useIntelligenceSdk()
+  const res = await intelligence.embedding.generate({
     text: veryLongText,
   })
   

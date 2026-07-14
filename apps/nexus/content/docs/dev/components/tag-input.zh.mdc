@@ -10,7 +10,7 @@ verified: true
 ---
 # TagInput 标签输入
 
-用于快速录入标签，支持分隔符与回车确认。
+`TxTagInput` 管理受控的字符串数组标签列表，支持分隔符解析、Enter 确认、可选失焦确认、重复值抑制和硬性 `max` 上限。已有标签会渲染为可关闭的小尺寸 `TxTag`。
 
 ## 基础用法
 
@@ -85,6 +85,17 @@ code: |
 ---
 ::
 
+## 交互契约
+
+- `modelValue` 是唯一数据源；每次新增或移除都会用新数组触发 `update:modelValue` 和 `change`。
+- 输入文本会先 trim；空标签会被忽略。
+- 除非 `allowDuplicates=true`，否则 trim 后完全相同的标签会被抑制。
+- `separators` 会拆分粘贴或键入的文本；Enter 始终确认当前输入。
+- `confirmOnBlur=true` 时，失焦会先发出原生 blur 事件，再提交未确认输入。
+- 只有输入框为空时，Backspace 才会移除最后一个标签。
+- `disabled` 会阻止新增/移除，并禁用已有标签的关闭操作。
+- 达到 `max` 后，内部输入框会被禁用，占位文本会清空。
+
 ## API
 
 ### TxTagInput Props
@@ -103,15 +114,31 @@ code: |
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(tags)` | 变更 |
-| `change` | `(tags)` | 变更 |
-| `add` | `(tags)` | 新增 |
-| `remove` | `(tag)` | 移除 |
-| `focus` | `(event)` | 聚焦 |
-| `blur` | `(event)` | 失焦 |
+| `update:modelValue` | `(tags: string[])` | 使用下一份完整标签列表更新 v-model。 |
+| `change` | `(tags: string[])` | 新增或移除后用同一份下一列表触发。 |
+| `add` | `(tags: string[])` | 当前操作实际接收的标签。 |
+| `remove` | `(tag: string)` | 被移除的标签值。 |
+| `focus` | `(event: FocusEvent)` | 透传原生 input focus 事件。 |
+| `blur` | `(event: FocusEvent)` | 透传原生 input blur 事件；`confirmOnBlur=true` 时可能提交未确认输入。 |
+
+### Slots
+
+`TxTagInput` 不暴露自定义插槽。已有标签由 `TxTag` 渲染；标签说明、帮助文本或校验提示应放在组件外层组合。
+
+## 最佳实践
+
+- 标签只承载短元数据，发布备注、审批原因和长说明应使用文本域或详情表单。
+- `max` 应设置为当前流程真正需要的最小上限；达到上限后内部输入框会禁用，占位文本也会隐藏。
+- 除非同一集合内重复标签有明确业务含义，否则保持 `allowDuplicates` 关闭。去重只在 trim 后做精确匹配，不做大小写归一。
+- 帮助文案里提到的分隔符都要写进 `separators`；Enter 始终确认当前输入，`confirmOnBlur` 决定失焦时是否提交未确认文本。
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/tag-input/src/TxTagInput.vue`。
-- 截图：`.codex-screenshots/nexus-tag-input-release-policy-demo-playwright-2026-05-28.png`。
-- 建议：标签只承载短元数据；发布备注、长说明或审批原因不要塞进标签输入，应使用文本域或详情表单。
+- 组件源码:`packages/tuffex/packages/components/src/tag-input/src/TxTagInput.vue` 确认分隔符拆分、trim 归一化、重复检查、最大数量行为、Enter/backspace/blur 处理、禁用保护和 `TxTag` 关闭绑定。
+- 类型契约:`packages/tuffex/packages/components/src/tag-input/src/types.ts` 导出 `TagInputProps` 和 `TagInputEmits`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/tag-input/__tests__/tag-input.test.ts` 验证 Enter 新增和关闭按钮移除。
+- 截图:`.codex-screenshots/nexus-tag-input-release-policy-demo-playwright-2026-05-28.png`。
+
+## Source
+
+<TuffDocSourceLink />

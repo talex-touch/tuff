@@ -2,7 +2,11 @@
 title: "AutoSizer 自适应尺寸"
 description: "用于让容器在内容变化时自动跟随宽/高，并带过渡动画。"
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [auto-size, layout, animation]
+syncStatus: reviewed
+verified: true
 ---
 # AutoSizer 自适应尺寸
 
@@ -423,6 +427,17 @@ code: |
 | `rounding` | `'none' \| 'round' \| 'floor' \| 'ceil'` | `ceil` | 测量值取整策略 |
 | `immediate` | `boolean` | `true` | mount 后是否立即测量 |
 | `rafBatch` | `boolean` | `true` | 是否使用 rAF 合并测量 |
+| `observeTarget` | `'inner' \| 'outer' \| 'both'` | `inner` | 自动监听尺寸变化的目标元素。 |
+
+### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 渲染在 inner 包装层内的被测量内容。 |
+
+### 事件
+
+`TxAutoSizer` 不触发组件级 Vue 事件。父组件需要协调明确状态变更时，应使用暴露的 `action()`、`flip()` 或 `refresh()` 方法。
 
 ### Expose
 
@@ -432,3 +447,36 @@ code: |
 | `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | 以 action 触发一次尺寸过渡（适合 Tabs 切换/明确动作） |
 | `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | 执行一次“事务动作”，内部自动前后快照检测并触发过渡（推荐用于 demo/复杂切换） |
 | `size` | `Ref<{ width: number; height: number } \| null>` | 最新测量结果 |
+| `focus()` | `() => void` | 当 outer 包装层可聚焦时，聚焦到该包装层。 |
+| `outerEl` | `Ref<HTMLElement \| null>` | 暴露 outer 包装层元素，供高级集成使用。 |
+
+## 交互契约
+
+- outer 包装层接收透传 attrs，并合并 `outerClass`、外部 class、基础尺寸样式和外部 style；inner 包装层负责包裹被测内容，并使用 `display: flow-root`。
+- 仅开启宽度跟随（`width=true` 且 `height=false`）时，默认使用 inline shrink-to-content 布局；显式设置 `inline=false` 可保持块级布局。
+- `flip(action)` 会临时暂停自动 resize，执行 action 后运行尺寸 FLIP，再恢复测量。
+- `action(fn, options?)` 会在指定 `inner` / `outer` 目标上做前后快照，并返回变化的 `changedKeys`。
+- `observeTarget`、`rounding`、`immediate`、`rafBatch`、`durationMs` 和 `easing` 会透传给底层 resize / FLIP 工具。
+
+## 最佳实践
+
+- Tabs、Accordion、Dropdown 内容区优先使用 `height=true`、`width=false`，让外围布局维持原宽度。
+- Button 文案、内联标签、数字变化优先使用 `width=true`、`height=false`；该模式默认自动收缩到内容宽度。
+- 内容带 blur、scale 或 FLIP 动效时保留 `outerClass="overflow-hidden"`，避免过渡中间态溢出包装层。
+- 明确的状态切换用 `action()` 或 `flip()` 包裹，不要先改状态再手动 `refresh()`；这样才能保留过渡所需的前后快照。
+- 只有 outer 与 inner 都可能独立变化尺寸时才设置 `observeTarget="both"`；普通内容变化只观察 `inner` 可减少不必要刷新。
+- 文本和按钮标签默认使用 `rounding="ceil"`，避免亚像素测量导致内容被裁切；只有父级布局需要更紧边界时再改成 `floor`。
+
+## 审阅说明
+
+- 已对照 `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`、`TxAutoSizer.vue` 与 `auto-sizer.test.ts` 核对。
+- 组件公开契约主要是暴露方法，而不是事件；示例应继续围绕 `action()` / `flip()` 的状态协调。
+- `observeTarget="both"` 属于高级用法；普通内容过渡只观察 `inner` 可减少额外测量。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/auto-sizer/src/TxAutoSizer.vue`.
+- Types: `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/auto-sizer/__tests__/auto-sizer.test.ts` 验证外层/内层标签渲染、尺寸选项转发、仅宽度模式的自动 inline 布局、暴露的 `refresh` / `focus` / `outerEl`，以及 `action()` 快照差异检测。
+
+<TuffDocSourceLink />

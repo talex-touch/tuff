@@ -11,6 +11,10 @@ const clipboardModuleMock = vi.hoisted(() => ({
   saveCustomEntry: vi.fn()
 }))
 
+const i18nHelperMock = vi.hoisted(() => ({
+  getLocale: vi.fn(() => 'zh-CN')
+}))
+
 vi.mock('electron', () => ({
   clipboard: {
     readText: electronMocks.readText,
@@ -20,6 +24,10 @@ vi.mock('electron', () => ({
 
 vi.mock('../../../clipboard', () => ({
   clipboardModule: clipboardModuleMock
+}))
+
+vi.mock('../../../../utils/i18n-helper', () => ({
+  getLocale: i18nHelperMock.getLocale
 }))
 
 import { PreviewProvider } from './preview-provider'
@@ -85,6 +93,7 @@ describe('PreviewProvider', () => {
 
     expect(sdk.resolve).toHaveBeenCalledWith({
       query: { text: '2 + 2', inputs: [] },
+      locale: 'zh-CN',
       signal: expect.any(AbortSignal)
     })
     expect(result.items).toHaveLength(1)
@@ -124,6 +133,7 @@ describe('PreviewProvider', () => {
 
     expect(sdk.resolve).toHaveBeenCalledWith({
       query: { text: '2 + 2', inputs: [] },
+      locale: 'zh-CN',
       signal: expect.any(AbortSignal)
     })
     expect(result.query.text).toBe('calc: 2 + 2')
@@ -157,6 +167,7 @@ describe('PreviewProvider', () => {
 
     expect(sdk.resolve).toHaveBeenCalledWith({
       query,
+      locale: 'zh-CN',
       signal: expect.any(AbortSignal)
     })
     expect(provider.supportedInputTypes).toEqual([TuffInputType.Text, TuffInputType.Html])
@@ -172,6 +183,7 @@ describe('PreviewProvider', () => {
     expect(electronMocks.readText).not.toHaveBeenCalled()
     expect(sdk.resolve).toHaveBeenCalledWith({
       query: { text: 'json', inputs: [] },
+      locale: 'zh-CN',
       signal: expect.any(AbortSignal)
     })
   })

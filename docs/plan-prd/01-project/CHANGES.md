@@ -1,7 +1,373 @@
 # 变更日志
 
 > 更新时间：2026-07-13
-> 定位：只保留当前阶段的高信号变更索引。更早流水记录已从文档树移除，可从 Git 历史追溯。
+> 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+
+## 2026-07-13
+
+### intelligence: fail closed when quota verification is unavailable
+
+- Intelligence SDK 不再在 quota storage/check 异常时返回 `allowed: true`；统一抛出稳定 `QUOTA_CHECK_UNAVAILABLE`，保留原始 cause，并提供独立 reason/recovery。caller-scoped `invoke()` / `stream()` 都在 provider 选择与执行前阻断，正常 quota deny 语义不变。
+- Assistant screenshot 的 OCR/text fallback 两阶段统一传递 `caller: core.assistant.screenshot-translate` 与稳定 source，补齐 host fallback 对 Intelligence quota guard/audit 的归属；不再因只写 source metadata 而绕过 caller-scoped 配额校验。Focused verification：Assistant screenshot translate 1 file / 23 tests 与 CoreApp node typecheck passed。
+- `@talex-touch/utils` 新增共享 `IntelligenceErrorCode` / runtime guard，CoreApp normalizer 不再维护第二份 union；CoreBox image scene 与 Assistant clipboard/screenshot response 透传 typed `code/reason/recovery`，semantic scene failure 仍可进入 OCR/text degraded fallback，并记录 `IMAGE_TRANSLATE_<code>`。
+- VoicePanel 复用统一 AI recovery classifier 展示本地化登录、quota verification、provider/model/permission/network 恢复；`INVALID_REQUEST` / `UNKNOWN` 显示通用失败但不提供误导性的 Intelligence settings 动作。Focused regression：6 files / 127 tests passed；CoreApp node/web typecheck、TuffEx build 与 `mise run ai-docs:dev` passed。
+- Official `touch-intelligence` error normalizer 现在保留 canonical shared codes，message fallback 也区分 quota exhausted / quota verification、capability / model、network 与 invalid request；不再输出 plugin 私有 `AUTH_REQUIRED` / `QUOTA_EXCEEDED` 别名。
+- CoreBox result signal reason/tone/action 覆盖 canonical AI failures，并为 quota verification、network、invalid request 提供独立中英文恢复提示。Focused verification：plugin 1 file / 63 tests、CoreBox source metadata 1 file / 19 tests、plugin packaged build、CoreApp web typecheck、TuffEx build 与 `mise run ai-docs:dev` passed。
+- Nexus Intelligence token SSE error frame 新增 canonical `code/message/reason/recovery`；server 将 H3 nested code、credits/provider quota 与常见 provider failure 统一归类，quota verification 优先于 generic 402/429 quota。CoreApp NexusProvider 在首 delta 前和可见 delta 后均保留 typed Error 字段，legacy message-only frame 不虚构 code。Focused verification：Nexus normalizer + real Response endpoint 2 files / 26 tests、CoreApp NexusProvider 1 file / 8 tests、CoreApp node / Nexus typecheck 与 `mise run ai-docs:dev` passed；Nexus typecheck 保留既有 vue-router Volar subpath warning。
+- Nexus Intelligence `/invoke` 现将 auth、invalid request、permission、quota、unsupported、provider unavailable、quota-check unavailable、network 与 unknown 失败映射为稳定 HTTP status + canonical body；CoreApp network SDK 的 `NetworkHttpStatusError.responseData` 保留解析后的非 2xx body，NexusProvider 恢复 typed Error，同时 retry/cooldown 仍把请求计为失败，malformed legacy body 不被误分类。Focused verification：shared network 1 file / 1 test、CoreApp network + NexusProvider 2 files / 15 tests、Nexus HTTP + SSE 3 files / 41 tests、CoreApp node / Nexus typecheck 与 `mise run ai-docs:dev` passed；Nexus typecheck 保留既有 vue-router Volar subpath warning。
+- Dashboard Agent continuous SSE 新增真实 `Response.body` 分块 smoke：首事件在 graph completion 前可读，后续事件与唯一 done 有序到达，并锁定 `text/event-stream`、`no-cache, no-transform`、`keep-alive` headers。同步纠正文档中当前仓库不存在的 historical `/api/chat/sessions/:sessionId/stream` 与 `fromSeq + follow` 声明；现行入口为 `/api/admin/intelligence-agent/session/stream`，历史 trace 使用 `fromSeq + limit`。Focused verification：Nexus 1 file / 1 test 与 `mise run ai-docs:dev` passed。
+- Admin Intelligence analytics 修复 runtime audit source 漂移：current writers 的 `intelligence-agent-runtime` 与 legacy `intelligence-lab-runtime` 现在同时进入 selected-days status/recovery summary，避免 7 天面板漏掉当前 Agent runs。长期 backlog 同步退役当前仓库无 producer 的 `AIAPP_STRICT_MODE_UNAVAILABLE` label，并明确后续告警应基于 canonical `errorCode`。Focused verification：Nexus store 1 file / 1 test、targeted ESLint、Nexus typecheck 与 `mise run ai-docs:dev` passed；Nexus typecheck 保留既有 vue-router Volar subpath warning。
+- 修正文档对 `video.generate` 完成度的低估：当前仓库从 capability type、payload/result、typed SDK、provider adapter、异步 job 生命周期到 UI/e2e 均未实现，并非只缺“真实 Provider runtime”。长期计划改为先确定 provider + job status/progress/cancel/artifact + quota/audit 合同，真实成功路径成立后再公开 SDK，避免交付永久 unsupported 的空入口。Focused verification：repo-wide capability/runtime search 与 `mise run ai-docs:dev` passed。
+- Default Nexus 不再广告/首选绑定尚未实现的 `audio.tts`：fresh shared defaults 移除 capability 与 binding，persisted Intelligence config 同步清理 stale provider capability/binding；OpenAI/SiliconFlow TTS 保持不变。修复 UI/SDK 把 Nexus TTS 标为 available 后，server 在模型调用前稳定 unsupported 的假阳性。Focused verification：CoreApp config 1 file / 10 tests、scoped Core config ESLint、Tuff Intelligence build、CoreApp node/web typecheck（含 TuffEx build）与 `mise run ai-docs:dev` passed；legacy generated Intelligence type surfaces 仍有既存全文件 style debt，本批不声称其 ESLint passed。
+- Network SDK 的非 2xx response body capture 改为 least-privilege opt-in：`NetworkRequestOptions.captureErrorResponseData` 默认 false，shared/CoreApp network path 均只在显式启用时解析并挂载 `NetworkHttpStatusError.responseData`；未启用时取消 body 且仍按 status failure 进入 retry/cooldown。Nexus `/invoke` 是当前唯一 opt-in consumer，typed canonical failure 保持不变。Focused verification：shared network 1 file / 2 tests、CoreApp NetworkService + NexusProvider 2 files / 16 tests、CoreApp node typecheck、scoped network-core ESLint 与 `mise run ai-docs:dev` passed。
+- Nexus guest auth preflight 从 plain `Error('NEXUS_AUTH_REQUIRED')` 升级为 canonical typed failure：普通 invoke 与 token stream 都在零网络请求下保留 exact message/code、稳定 reason 与 recovery，直接 provider caller 不再依赖下游 message inference。Focused verification：CoreApp NexusProvider 1 file / 11 tests 与 node typecheck passed。
+- Admin Intelligence selected-days analytics 新增 canonical `errorCodeDistribution` 与 recent-run `errorCode`：兼容 explicit code 和 legacy message-only runtime audit，复用 shared normalizer，排除 success contamination，并只返回 code/count，不泄露 raw provider error message/stack。Focused verification：Nexus analytics 1 file / 1 test、targeted ESLint、Nexus typecheck 与 `mise run ai-docs:dev` passed；Nexus typecheck 保留既有 vue-router Volar subpath warning。
+- Nexus buffered/token-stream provider attempt 的 failed audit 现显式持久化 canonical `metadata.errorCode`，与 HTTP/SSE failure normalizer 对齐；generic provider failure 与 governance quota failure 分别稳定记录 `UNKNOWN` / `QUOTA_EXHAUSTED`，不改变 retry/fallback 或 billing。Focused verification：Nexus invoke service 1 file / 8 tests、targeted ESLint、Nexus typecheck 与 `mise run ai-docs:dev` passed；Nexus typecheck 保留既有 vue-router Volar subpath warning。
+- Agent runtime failure telemetry 已改为 canonical safe detail：graph/legacy runtime 的 SSE、persisted trace、failed audit 及 outer Admin stream rejection 只携带 `code/message/reason/recovery`，audit 另存 explicit `errorCode`；不再复制 Error stack/cause/name/enumerable secret。Focused verification：graph runner 1 file / 2 tests、Admin stream route 1 file / 2 tests、targeted ESLint 与 Nexus typecheck passed；Nexus typecheck 保留既有 vue-router Volar subpath warning。
+- Admin Agent historical trace GET 对 legacy persisted root/nested `error` 增加读取侧 canonical sanitization：保留非错误 trace 与分页/鉴权，返回安全 `code/message/reason/recovery`，不暴露旧 stack/cause/name/enumerable secret，也不修改存量记录。Focused verification：trace route 1 file / 1 test、targeted ESLint、Nexus typecheck 与 `mise run ai-docs:dev` passed；Nexus typecheck 保留既有 vue-router Volar subpath warning。
+- Plugin Intelligence quota boundary 改为 host-owned：插件 facade 不再发现六个 quota/usage control-plane 方法，raw event 也在 quota manager 前 fail-closed；plugin invoke/stream caller 由 transport identity 覆盖为 `plugin:<id>`，避免 caller omission/spoof 绕过或跨插件计费。Focused verification：CoreApp quota + invoke actor boundary 2 files / 10 tests、Utils plugin facade 1 file / 9 tests、CoreApp/Utils scoped ESLint 0 errors与 `mise run ai-docs:dev` passed；CoreApp node typecheck 仍被用户工作区既有 unresolved merge markers（`packages/utils/transport/events/types/core-box.ts`、`apps/core-app/src/main/modules/plugin/plugin-module.test.ts`）阻断，未改动这些冲突文件。
+- Plugin autonomous Agent/workflow execution 不再借 `intelligence.basic` 旁路高风险权限：generic invoke/stream、auto-run session 与 workflow run 统一要求 `intelligence.agents` 并在 runtime/provider/tool 前 fail-closed；text.chat、inert session 和 host workflow 保持原行为。Focused verification：CoreApp generic invoke actor + autonomous channel boundary 2 files / 7 tests、scoped ESLint 0 errors与 `mise run ai-docs:dev` passed；CoreApp node typecheck 仍被用户工作区既有 unresolved merge markers 阻断。
+- Plugin Intelligence provider/admin surface 改为 host-only：provider test/capability smoke/model fetch、audit/usage telemetry 与 local environment 不再从 facade 或 raw typed event 可达；安全 capability/model/test-meta discovery 保持可用，避免插件借宿主网络/系统 caller 绕过治理或读取本机工具配置路径。Focused verification：CoreApp admin boundary 1 file / 11 tests、Utils plugin facade 1 file / 9 tests、scoped ESLint 0 errors与 `mise run ai-docs:dev` passed；CoreApp node typecheck 仍被用户工作区既有 unresolved merge markers 阻断。
+- Plugin alternate provider path 不再绕过 caller quota attribution：`chatLangChain` 与 `ttsSpeak` 在 provider/cache 前绑定 verified transport caller，host metadata 不变；TTS cache 按 caller 隔离，避免跨插件 trace/result 泄露。Focused verification：CoreApp actor boundary + TTS cache 2 files / 11 tests、changed-file diagnostics 0、scoped ESLint 0 errors；CoreApp node typecheck 仍被用户工作区既有 unresolved merge markers 阻断。
+- Plugin local knowledge 不再信任 `permissionScope` 或全局 SQLite id：index/search/build 统一绑定 verified plugin actor scope，document/chunk references 使用 deterministic per-plugin namespace；host payload 原样透传。Focused verification：CoreApp knowledge actor boundary + local engine 2 files / 11 tests、changed-file diagnostics 0、scoped ESLint 0 errors；CoreApp node typecheck 仍被用户工作区既有 unresolved merge markers 阻断。
+- DeepAgent/Workflow 真实 token usage 现从 OpenAI Responses 与 LangChain AIMessage 元数据归一并贯穿 adapter、Agent result、prompt/agent step 与 workflow aggregate，移除可用 usage 被硬编码零覆盖的问题。Focused verification：Tuff Intelligence parser 1 file / 5 tests、CoreApp orchestration 1 file / 12 tests、changed-file diagnostics + ESLint 0 errors、Tuff Intelligence build passed；CoreApp broad typecheck 仍被用户工作区既有 unresolved merge markers 阻断。
+- CoreBox / OmniPanel AI recovery 优先识别 quota verification failure，显示稍后重试及检查 Intelligence quota storage/configuration 的中英文建议，不再把它归类为 credits/team quota exhausted。Focused verification：Intelligence SDK + error normalizer + renderer recovery 3 files / 46 tests、CoreApp node/web typecheck、TuffEx build 与 `mise run ai-docs:dev` passed。
+
+### assistant: add provider-channel failure recovery
+
+- VoicePanel 在剪贴板图片 `SCENE_UNAVAILABLE` 以及截图 `SCENE_UNAVAILABLE` / `OCR_UNAVAILABLE` / `TEXT_TRANSLATE_UNAVAILABLE` 后展示独立的 AI 渠道恢复动作；图片缺失、截图权限、平台不支持或截图不可用继续保持各自语义，不误导用户修改 provider。
+- typed `assistant:voice-panel:open-intelligence-settings` 由 Assistant 主进程恢复、显示并聚焦主窗口，通过既有 typed navigation 直达 `/intelligence/channels`，成功后才隐藏 Voice Panel；主窗口缺失/销毁或 renderer navigation 失败均返回 false，保留可重试错误态。
+- 中英文文案、Assistant typed contract/runtime、VoicePanel 和行为测试已同步。Focused verification：Assistant main + VoicePanel 2 files / 40 tests passed；CoreApp node/web typecheck、TuffEx build 与 `mise run ai-docs:dev` passed。scoped ESLint 仍被这 5 个既有文件的 669 个格式错误阻断，本批不声称 lint passed。
+
+### assistant: add microphone permission recovery
+
+- VoicePanel 将 Web Speech `not-allowed` / `service-not-allowed` 回调，以及同步 `NotAllowedError` / `SecurityError`，统一映射为可恢复的麦克风拒绝态；授权错误会停止自动 restart，避免持续打扰。
+- 首次恢复通过既有 typed `system:permission:request` 请求 `microphone`；macOS 已拒绝时 `PermissionChecker` 直达 `Privacy_Microphone`，未决定时仍使用原生 `askForMediaAccess`，Windows 保持系统麦克风设置入口。设置/请求完成后按钮切换为显式“重试语音输入”，重建 recognizer 且不重复打开设置。
+- denied microphone 在 Permission Center 继续标记为可请求，中英文状态与恢复文案、Assistant PRD/TODO/能力矩阵已同步。Focused verification：PermissionChecker + VoicePanel 2 files / 38 tests passed；包含 Assistant navigation 的合并回归 3 files / 61 tests passed；CoreApp node/web typecheck、TuffEx build 与 `mise run ai-docs:dev` passed。scoped ESLint 仍被这 2 个既有 permission 文件的 152 个格式错误阻断，本批不声称 lint passed。
+
+### assistant: make VoicePanel keyboard-first
+
+- VoicePanel 每次 `panelOpened` 都先聚焦文本框，再并行刷新 runtime config 与显示器列表；listener 在初始异步加载前同步注册，避免窗口 show/broadcast 与 renderer mount 之间丢失 opened event。
+- 普通 Enter 单次提交，Shift+Enter 保留换行，IME composition Enter 不误触；pending submit 通过 renderer guard 去重。纯键盘文本发送 `source: 'manual'`，收到非空 SpeechRecognition 结果后仍保留 `source: 'voice'`。Escape 单次发送 typed close，composition/defaultPrevented 不误关，pending close 去重且 unmount 清理全局 listener。
+- textarea / close button 分别暴露 `enterkeyhint=send`、`aria-keyshortcuts=Enter` / `Escape`；Assistant PRD/TODO 已同步。Focused verification：VoicePanel 1 file / 31 tests passed；Assistant + PermissionChecker 合并回归 3 files / 72 tests passed；CoreApp node/web typecheck、TuffEx build 与 `mise run ai-docs:dev` passed。scoped ESLint 仍受上方既有格式基线阻断，本批不声称 lint passed。
+
+### docs(ai): realign the current CoreApp version baseline
+
+- 当前代码已是 CoreApp `2.4.13-beta.6`；活跃 TODO、计划、PRD、质量基线、能力矩阵与 AI evidence report 不再把 `2.4.13-beta.4` 写成当前版本。
+- `2.4.13-beta.4` AI Command packaged capture 与 strict verifier JSON 继续保留为历史/partial evidence，不伪造 beta.6 recapture；current-version gate 仍因 `2.4.12-beta.8 != 2.4.13-beta.6` fail-closed。
+- Focused verification：`mise run ai-docs:dev` passed。
+
+
+### plugin(ai): restore ContextHygiene token streaming
+
+- CoreApp 插件 lifecycle 不再用 send-only compatibility channel 构造 `IntelligenceSdk`；改为复用插件 typed transport，并在 `send` / `stream` 两条路径注入当前 `_sdkapi`。因此官方 `touch-intelligence` 的 `contextStream()` 会进入受 `intelligence.basic`、verified plugin actor、取消和审计约束的 `intelligence:context:stream`，不再因 `stream-capable transport` 缺失而固定退化到 buffered `contextInvoke()`。
+- 现有 top-level `stream()` permission/caller guard 保持不变；ContextHygiene stream 仍由 host-owned assembler 生成安全 ContextPackage，插件拿不到 host-only Memory 管理原文。send-only legacy client 调用 streaming 继续显式失败，不伪装 token stream。
+- 官方 `touch-intelligence` 同样把首个 widget-visible delta 作为 commit point：只有 stream transport/auth 在输出前失败时才降级 `contextInvoke()`；已展示部分回答后发生错误会保留原错误态，不再启动 buffered invoke 重放或拼接第二份答案。
+- 官方插件现在持有当前 `contextStream()` 的 `StreamController`：新 feature query、清空/切走入口、send 或 retry 会先失效旧 request id，再取消上游 stream；若 controller 在 supersede 后才返回，也会立即自取消。旧 delta/end/error 因 commit guard 不得覆盖新请求或 idle 状态，避免隐藏窗口继续消耗 provider token/quota。
+- Stream delta/terminal 状态现在优先通过 `plugin.feature.updateItem("intelligence-widget", …)` 原位更新已有 widget，只在首次挂载或旧 host 缺少 update/get API 时 clear+push。FeatureSDK `pushItems()` 会透传底层 `void | Promise<void>` completion，首次挂载可等待 host 异步 file-icon 初始化与 batch upsert 完成；后续 update 刻意保留已解析 icon/source，消除逐 token 重跑和旧异步 push 晚到覆盖新答案的顺序风险。
+- Renderer 与 main-process lifecycle 现在复用同一 `createPluginIntelligenceFacade()` hard-cut：`get` / `in` / `Object.keys` 均不暴露 prepare-turn、CompressionSnapshot 与 Memory list/save/replace/enable/delete 管理方法；host handler 的 `INTELLIGENCE_HOST_ONLY_CAPABILITY` 保留为 defense-in-depth。插件类型、运行时对象与文档不再出现三套边界。
+- Focused verification：official plugin full contract 63/63（含 stream fallback/cancellation、dynamic shared renderer 与 in-place widget update）、FeatureSDK lifecycle 14/14、plugin Intelligence hard-cut 9/9、CoreApp plugin runtime injection 1/1、CoreApp node typecheck passed；typed plugin stream smoke 证明 `_sdkapi=260713` 随 start envelope 发送并收到 delta/end，`touch-intelligence@1.2.0` builder passed。
+
+### plugin(ai): add custom CoreBox AI Command registry
+
+- `touch-intelligence@1.2.0` 新增 bounded `ai-commands.json` schema：最多 20 个 enabled command、每项 1–8 个唯一 alias、受限 id/name/description/template/variables/version；invalid、disabled、重复、内置 alias 冲突与超限项确定性跳过。
+- 合法 command 动态注册为 `intelligence-custom-<id>` text/html widget feature，并通过 `interaction.rendererFeatureId: "intelligence-ask"` 复用同插件已预编译 ask renderer，而不是声明不存在的动态 `interaction.path`；命令继续使用 first-class template/variables、stateless context、显式后缀优先、附带剪贴板文本 fallback，以及 host-owned provider/model、quota/audit/fallback、copy/retry 链路。
+- `AI 命令管理` 提供配置目录打开与 reload；reload 以 feature id 原子 reconcile。top-level malformed、static id/name collision 或 add/remove failure 保留上一版 registry，不产生半更新。
+- 管理入口升级为预编译 Vue editor：支持 create/update/delete、JSON import/export、打开目录和 reload；表单先校验 id/alias/version/template/variables/duplicate，host 再执行同一 bounded schema 校验并以 canonical document 持久化。
+- 模板正文只进入本地插件 storage、editor payload 与 provider input；普通 runtime metadata 只保留 command id/version 和既有 prompt hash。invalid save/import、storage failure 与 registry collision 均回滚文件和 active features。
+- Current-version packaged smoke 进一步修复三个真实运行缺口：host 缺失文件返回 `{}` 时初始化 canonical empty registry；变量 byte limit 改用 VM-safe UTF-8 计数，不依赖 sandbox 未注入的 `Buffer`；AI Ask、内置/自定义命令与管理入口统一用 prefix `match`，避免 `over` catch-all 抢占显式命令后缀。
+- Focused verification：plugin intelligence + official seed version contracts 3 files / 62 tests passed；CoreApp node/web typecheck、Electron/Vite build 与 `electron-builder --dir` passed；afterPack 验证 `touch-intelligence@1.2.0` seed，builder 预编译 5 个 widget 并生成 `.tpex`。`2.4.13-beta.4` packaged evidence 覆盖 editor ready/save 与 dynamic exact/suffix result，但不等于 provider invocation 或全局 13-surface current-version gate。
+
+### plugin(ai): preview custom command prompt variables
+
+- `AI 命令管理` editor 新增 live System Prompt 预览：按 host LangChain simple Mustache 语义替换 `{{name}}` / nested key，重复变量只计一次，缺失或 `null` 值明确提示并渲染为空文本。
+- invalid / oversized Prompt Variables JSON 不生成误导性预览；预览使用 Vue 文本插值呈现，不把变量值作为 HTML 注入。轻量 renderer 位于 widget sandbox 的 `_shared` private module，并随 editor bundle 编译。
+- Focused verification：official intelligence plugin 1 file / 58 tests passed；`touch-intelligence@1.2.0` builder 仅预编译 manifest 对应的 5 个 widget 并成功生成 `.tpex`。当前不替代 provider-backed command invocation 或 packaged editor preview evidence。
+
+### plugin(ai): add curated AI Command starter presets
+
+- `AI 命令管理` editor 新增 host-owned 入门模板选择：语法与拼写修正、专业语气、友好语气、代码审查。选择只填充 unsaved draft，不绕过现有 validation、atomic save 或 reserved alias 边界。
+- 同一 preset 可重复使用；editor 会基于当前 registry 为 id 和全部 alias 确定性分配 `-2` / `-3` 后缀，避免覆盖或直到保存时才暴露冲突。四个 preset 通过 runtime canonical parser，0 rejected。
+- Focused verification：official intelligence plugin 1 file / 59 tests passed；`touch-intelligence@1.2.0` builder 仍只预编译 5 个 widget 并生成 `.tpex`。当前只关闭本地 starter preset，不宣称 Raycast 式分享链接或一键安装分发。
+
+### sdk: support private widget helper modules
+
+- `tuff builder` 保留公开 supported files 的 directory-widget auto-discovery，同时将任一路径段以下划线开头的文件视为 private module；manifest 显式 entry 不受影响。
+- private module 仍必须位于 `widgets/` sandbox 内，可被 Vue/script widget 相对导入并打进 entry bundle，但不再生成伪 `widget._shared.*` manifest entry；这消除了复用 `.ts` helper 被误打包成独立 widget 的 SDK 缺口。
+- Focused verification：`tuff-cli-core` widget builder 1 file / 11 tests passed；`tuff-cli-core`、`tuff-cli` build passed；`touch-intelligence@1.2.0` 使用 `widgets/_shared/prompt-template-preview.ts` 后仍只预编译 5 个 widget 并生成 `.tpex`。
+
+### plugin(ai): add governed replace-selection action
+
+- Plugin main-runtime `featureUtil.clipboard` 新增 typed `copyAndPaste`，通过现有 `ClipboardEvents.copyAndPaste`、plugin identity 与 `_sdkapi` 路由宿主权限/自动粘贴链路；失败保留 host error code，不回退 raw IPC、shell 或浏览器剪贴板。
+- `touch-intelligence@1.2.0` answer preview 新增“复制回答 / 替换选中文本”显式动作；替换前 fail-closed 检查 `clipboard.write`，成功时由宿主隐藏 CoreBox 并粘贴，macOS 自动化拒绝、旧宿主 SDK 缺失和通用粘贴失败会重新激活 widget 并展示恢复提示。
+- `touch-intelligence` manifest 升至当前 `sdkapi: 260713`，README、AI 2.5 约束与 Raycast/uTools 能力矩阵同步该合同；清理 `packages/test` 仍把 `260626` 当 current marker 的陈旧断言。
+- Focused verification：CoreApp plugin runtime 1 file / 21 tests、official intelligence plugin 1 file / 57 tests passed；CoreApp node/web typecheck passed。当前未宣称 macOS 自动化真实应用粘贴 packaged evidence。
+
+### plugin(sdk): repair dynamic feature identity lifecycle
+
+- `TouchPlugin.addFeature()` 现在同时拒绝重复 id 与重复展示名，不再允许同 id、不同名称的动态 feature 覆盖 registry identity。
+- `delFeature()` / SDK `removeFeature()` 统一按 `feature.id` 删除；未知 id 返回 `false` 且不修改其它 feature，为后续 storage-backed AI Command registry 的 reload/reconcile 清除阻塞。
+- Focused verification：CoreApp plugin runtime 1 file / 20 tests passed；CoreApp node typecheck 与 scoped ESLint passed。该 identity 修复已由 `touch-intelligence@1.2.0` registry/editor 消费。
+
+### plugin(ai): add built-in CoreBox AI Commands
+
+- `touch-intelligence@1.1.0` 新增 `intelligence-rewrite`、`intelligence-summarize`、`intelligence-explain` 三个 text-only widget feature，支持 `rewrite/改写`、`summarize/summary/总结/摘要`、`explain/解释` 命令别名并复用现有 ask panel。
+- 每个命令使用 versioned first-class `promptTemplate` / `promptVariables` 与审计安全的 `aiCommandId/aiCommandVersion`；provider/model 选择、quota/audit、fallback、copy/retry 仍由宿主链路承担，不新增 raw IPC。
+- 命令强制 `stateless`，不创建 handoff，不读取/写入 AI Ask conversation history，也不触发 Memory policy；widget 隐藏可变 context chooser 并明确展示“AI 命令 / 无历史”。默认 AI Ask/OCR 路径保持原合同。
+- 命令输入按“显式后缀 > CoreBox 附带 text/html 剪贴板文本”解析；空后缀可直接处理长剪贴板输入，显式后缀不会被附件覆盖，默认 AI Ask 也不会隐式读取附件文本。
+- Focused verification：plugin intelligence + official seed version contracts 3 files / 57 tests passed；`touch-intelligence` builder 已生成 4 个 widget 和 `touch-intelligence-1.1.0.tpex`，scoped ESLint passed。该 `1.1.0` 内置命令切片自身不等于后续 custom registry/editor 或 current-version packaged evidence。
+
+### ai: stream Nexus provider tokens end to end
+
+- 新增已认证 `POST /api/v1/intelligence/stream` SSE；只接受 `text.chat`，按 `start -> delta* -> usage -> end` 输出真实 provider token 与后端 route metadata。Nexus provider quota/request audit、credits billing、usage ledger 和 secret 边界继续生效。
+- Nexus provider stream adapter 覆盖 OpenAI-compatible / Local / Anthropic，并通过 AbortSignal/timeout 终止上游；CoreApp Intelligence SDK 同步在每个候选 provider 记录首个 client-visible delta，并对 fallback start 去重：整次调用只有一个 provisional start，只有首个 delta 前的失败可进入下一候选，任何 provider 输出后失败都直接上抛，避免把两个 provider 的回答拼接成重复文本。
+- CoreApp `NexusProvider.chatStream()` 改走 `requestStream()`，安全解析跨 chunk UTF-8/SSE frame，忽略 comment/unknown event，透传 trace/provider/model/latency/usage，确保 terminal chunk 只出现一次；guest 在网络前 fail-closed。
+- Focused verification：Core Nexus provider 1 file / 6 tests、Nexus governed provider adapter 1 file / 4 tests、CoreApp Intelligence SDK stream routing focused cases passed；CoreApp node typecheck、Nexus typecheck 与两包 scoped ESLint passed。当前不替代登录态 packaged success、真实 token pacing 或 server/model denial recapture。
+
+### sdk: expose typed AI Command prompt options
+
+- `IntelligenceInvokeOptions` 新增 first-class `promptTemplate` / `promptVariables`，typed `invoke` 与 `text.chat` transport 原样透传；显式顶层字段优先于 legacy metadata 与 capability binding，旧调用保持兼容。
+- CoreApp chat runtime 在 primary provider 失败后继续把同一模板和变量交给 fallback，避免 AI Command 降级时静默丢失 system prompt；模板变量会进入 provider 输入，审计只保留 prompt hash。
+- Nexus 中英文 Intelligence SDK 与 Plugin Workflow 新增 Raycast-style AI Command 最小示例，明确 `intelligence.basic`、capability discovery、host-owned provider/quota/audit/fallback 与 secret 边界。
+- Focused verification：CoreApp Intelligence runtime 1 file / 36 tests、Utils typed transport 1 file / 39 tests passed；CoreApp node typecheck、`@talex-touch/tuff-intelligence` build 与 scoped ESLint passed。当前不替代 official command registry/editor 或 current-version packaged AI surface 采证。
+
+### assistant: add host-owned pin window actions
+
+- image translation pin window 继续使用 sandboxed data URL 与 strict CSP，不引入 raw IPC 或 renderer browser clipboard；右键菜单由 main process 提供复制译图/译文/原文、Zoom In/Out/Reset、100%/85%/70%/55% 透明度预设和关闭动作，Linux 明确禁用不受支持的透明度菜单。
+- 窗口以初始中心为锚按 75%/100%/125%/150%/200% 缩放，始终限界在当前 work area；Esc 关闭，`Cmd/Ctrl+Shift+C` 优先复制译文，`Cmd/Ctrl +/-/0` 调整或重置缩放。加载后再显示，继续保持 always-on-top 与跨 workspace 可见。
+- Focused verification：`image-translate-pin-window.test.ts` 1 file / 8 tests passed；CoreApp node typecheck、scoped ESLint、Electron build 与 unsigned packaged directory build passed。当前不替代 current-version packaged 右键复制、键盘缩放、透明度、多显示器与窗口边界采证。
+
+### assistant: add typed screenshot region selection
+
+- VoicePanel 截图来源新增 `region`：capture、save 和 translate 在执行前按需打开透明区域 overlay，可选择指针所在或指定显示器；有效框选统一发送 `{ target: 'region', displayId, region }` 到既有 NativeScreenshotService，不新增 raw IPC。
+- region selector 通过独立 `AssistantRegionSelector` window role 与 typed submit/cancel events 工作；主进程只接受 selector 自身 webContents，裁剪本地矩形并映射为全局 DIP，overlay 在提交、Esc/右键/按钮取消、60 秒超时、窗口关闭和 module destroy 时销毁。
+- VoicePanel 在选择期间隐藏，取消立即恢复且不触发 capture/save/translate，成功则在 native capture 后恢复；3 秒兜底避免 renderer 中断后面板永久隐藏。当前仅有 focused code/test evidence，不替代 current-version packaged 多显示器/HiDPI/permission smoke。
+- Focused verification：Utils window role、Assistant contract/runtime、VoicePanel、region selector 与 native screenshot service 6 files / 50 tests passed；CoreApp node/web typecheck、TuffEx build、scoped ESLint 与 `mise run ai-docs:dev` passed。
+
+### assistant: expose image translation route metadata
+
+- `CoreBoxImageTranslateResponse` 与 typed Assistant clipboard/screenshot translation response 新增可选 route metadata：scene `runId` / `sceneId`、端到端耗时，以及逐阶段 capability/provider/model/latency；不向 renderer 暴露 scene selection 中的 authRef、endpoint 或 credential。
+- image translate normalizer 以 Nexus `selected` 为实际路由、用同 provider+capability 的 `usage` 补 model、用成功 `adapter.dispatch` trace 补 latency；无效可选字段被忽略，翻译结果不因观测字段缺失而失败。
+- VoicePanel 对截图和剪贴板图片成功路径展示低敏路由卡片，新一轮 panel open、翻译或截图复制会清理 stale metadata。当前仅有 focused code/test evidence，不替代 current-version packaged provider-backed recapture。
+- Focused verification：image translate / Assistant runtime / VoicePanel 3 files / 39 tests passed；CoreApp node/web typecheck、TuffEx build、scoped ESLint 与 `mise run ai-docs:dev` passed。
+
+### quality: fail closed stale visible-evidence baselines
+
+- `visible:experience:verify` 新增 opt-in `--requireCurrentVersion`：读取当前 `apps/core-app/package.json`，manifest `baselineVersion` 不一致时输出稳定 failure 并 exit 1；不带 flag 仍可验证明确标注的 historical snapshot。
+- 当前 AI visible manifest 的 artifact/schema/tag/file gate 仍为 historical 13/13 passed，但新版本门禁直接证明 `2.4.12-beta.8 != 2.4.13-beta.4`。README、TODO、AI PRD、Evidence Matrix、report 与 recommended command 已改为 current recapture open，不再把旧 artifact 写成当前闭环。
+- Focused verification：verifier CLI 1 file / 4 tests、CoreApp node typecheck 与 scoped ESLint passed；真实 current-version packaged recapture 未执行。
+
+### assistant: select the screenshot display
+
+- VoicePanel 新增截图来源选择：默认保持“指针所在显示器”，也可从 `NativeScreenshotService.listDisplays()` 的友好名称、分辨率和主屏标记中选择指定显示器；无可用显示器时自动保留默认模式。
+- typed Assistant transport 新增 `listScreenshotDisplays`，capture / save / translate payload 共享 `cursor-display | display` target 与 `displayId`；主进程只接受非空指定显示器 ID，否则 fail-safe 回退 cursor-display。
+- 截图复制、保存与翻译共用当前选择；现有 permission-denied 恢复、preview/copy/save 状态和默认 cursor-display 行为保持不变。当前改动只有 focused code/test evidence，不替代 current-version packaged 多显示器 recapture。
+- Focused verification：Assistant contract/runtime/VoicePanel 与 native screenshot service 4 files / 29 tests passed；CoreApp node/web typecheck、TuffEx build、scoped ESLint 与 `mise run ai-docs:dev` passed。
+
+### docs(core): remove the obsolete Assistant environment gate
+
+- Nexus Core App runtime env 中英文参考不再把已删除的 `TUFF_ENABLE_ASSISTANT_EXPERIMENT` 列为有效开关，也不再描述不存在的 Assistant `shouldSkip` 路径。
+- 文档改为当前真实语义：`assistantModule` 始终参与启动编排，产品默认关闭和启用状态由持久化 App Settings 的 `assistant.enabled` 控制。
+- Focused verification：Nexus docs API/page/search/prerender 4 files / 22 tests passed；仓库复查仅保留“flag 已移除”的说明与防回归断言。
+
+### sdk: expose permission-gated plugin screenshots
+
+- `IPluginUtils` 新增同对象 `screenshot` / `plugin.screenshot` facade，复用 `createNativeScreenshotSdk()` 与 typed `NativeEvents.screenshot.*`，覆盖 support、显示器枚举和 cursor-display / display / region capture，不新增 raw IPC。
+- `createPluginScreenshotSDK()` 在插件边界移除 native 临时文件原始 `path`，只返回 `tfileUrl` / `dataUrl` 与低敏 capture metadata；plugin transport 将宿主解析后的 `sdkapi` 与 verified identity 一并带入 native handler，再执行既有高风险 `window.capture` permission 门禁，避免权限层把有效插件误判为 missing-sdkapi。
+- Nexus 新增 Screenshot SDK 中英文 API 页并接入 API 索引、sidebar 与 feature search；Plugin Context、Permission、平台能力 PRD 和 package SDK README 同步真实 facade、截图后 OCR 的独立 `intelligence.basic` 权限与禁止记录图片/OCR payload 的边界。
+- Focused verification：Utils native SDK 1 file / 38 tests、CoreApp plugin/native facade 2 files / 26 tests、permission guard/store 2 files / 14 tests、Nexus SDK route/docs API/page/search/prerender 5 files / 29 tests passed；CoreApp node 与 Nexus typecheck、三包 scoped ESLint、`mise run ai-docs:dev` passed（Nexus 保留既有 vue-router/Volar subpath warning）。当前结果不替代真实 packaged plugin 的授权、拒绝、多显示器与区域截图 smoke。
+
+### assistant: degrade screenshot translation to OCR text
+
+- `translateScreenshot` 在 `image.translate.e2e` scene 不可用时不再直接终止：复用同一张内存截图调用 host Intelligence `vision.ocr`，识别到非空文本后再调用 `text.translate`；图片翻译成功路径继续打开 pin window，且不会触发 fallback。
+- typed response 新增 `translated-image | ocr-text` mode、稳定 `OCR_UNAVAILABLE` / `TEXT_TRANSLATE_UNAVAILABLE` 错误与低敏 fallback metadata；只返回 source/target text 和 OCR/translate provider、model、trace、latency，不持久化截图、OCR 文本或 AI payload。
+- VoicePanel 新增可滚动 OCR 文本翻译卡片，展示识别文本、译文和两阶段 provider/model；新一轮 panel open、截图翻译或截图复制会清理 stale fallback，错误文案保持 i18n。当前改动不替代 current-version packaged 系统 OCR + 真实 text provider 采证。
+
+### ai: restore interim Nexus chat stream compatibility (superseded)
+
+- 该中间切片先移除了客户端 `NEXUS_STREAM_UNSUPPORTED`，把已认证 invoke 完整结果投影成单 delta，并补 `traceId/provider/model/latency` metadata；现已由本日上方 authenticated token SSE 实现替代。
+- historical focused contract 保留用于证明 guest fail-before-network、空结果 terminal usage 与 metadata 兼容；不再把 buffered compatibility 描述为当前能力。
+- 当时补充的 Intelligence SDK callback / `StreamController` 文档继续有效；buffered 边界已改为真实 token SSE、terminal usage 与 pre-delta-only fallback 边界。
+- historical verification：Nexus provider、Intelligence SDK 与 Nexus invoke smoke 共 3 files / 42 tests passed；packaged login-state success recapture 一直开放。
+
+### docs(sdk): make plugin context the canonical facade
+
+- Nexus Plugin Context 中英文页改为以 typed `IPluginContext` / `context.utils` 为主入口，补齐 `secret`、Intelligence、Localization/Domain Lexicon、QuickOps 与 permission 边界；`globalThis` 明确降为旧 CommonJS compatibility projection，不再被描述为完整现代 SDK。
+- SDK feature search 新增 Indexed Source、BoxItem、Features、Plugin 与 TuffTransport card 的真实文档 route，复用现有 Search/Feature/Plugin Context/Transport 页面，不创建重复文档体系。
+- Focused verification：SDK route + docs API/page/search/prerender 5 files / 28 tests passed；Nexus typecheck passed（保留既有 vue-router Volar subpath warning），scoped ESLint passed。
+
+### docs(ai): realign the AI docs contract gate
+
+- `mise run ai-docs:dev` 不再要求已从当前 TODO/PRD 删除的 `P1-AI-250/253/254/255/258` 与旧“文本 + OCR / Nexus AI invoke”措辞；gate 改为检查当前 R2 historical/current recapture、`--requireCurrentVersion`、R9.2 closure、R8-F CatalogService 和 authenticated Nexus token stream 合同。
+- 这次只修正验证器与当前 SoT 的漂移，不恢复旧任务 ID，也不把 current-version packaged evidence 标为完成。
+- Focused verification：`mise run ai-docs:dev` passed；scoped ESLint passed（保留既有 `.eslintignore` migration warning）。
+
+### assistant: add screenshot permission recovery
+
+- `PermissionChecker` 新增 `screenRecording` status/request：macOS 通过 Electron `getMediaAccessStatus('screen')` 返回 granted/denied/notDetermined，并把显式用户动作深链到 `Privacy_ScreenCapture`；其他平台保持 unsupported/false，不伪造授权成功。
+- VoicePanel 仅在 capture/save/translate 返回 `SCREENSHOT_PERMISSION_DENIED` 后展示“前往录屏权限设置”，通过 typed `system:permission:request` 发送 `screenRecording`，并区分 settings opened 与 unavailable；普通 provider/unsupported/unavailable 错误不显示该恢复动作。
+- 当前改动只有 focused code/test evidence，不替代 `2.4.13-beta.4` packaged screenshot recapture。
+- Focused verification：PermissionChecker、Assistant screenshot contract/runtime 与 VoicePanel recovery 4 files / 37 tests passed；CoreApp node/web typecheck、TuffEx build 与 scoped ESLint passed。
+
+### docs(sdk): expose the permission-gated Localization SDK
+
+- Nexus `i18n` 中英文 API 页从宿主内部 `$i18n:`/`i18nResolver.addMessages()` 说明切换为真实 `sdkapi 260713` 插件合同，覆盖 main/renderer 入口、三项权限、API 返回值、error codes、namespace 隔离、原子注册上限与 lifecycle cleanup；不再建议插件绕过 verified identity 和 host permission。
+- `tuffSdkItems`、feature search map 与 API index 新增 Localization SDK discoverability，搜索结果直达 `/docs/dev/api/i18n`；Raycast/uTools gap matrix 同步 AI historical/current evidence 边界与已落地 Browser Data 首版。
+- Focused verification：Nexus SDK search + docs API/page/search/prerender 5 files / 23 tests passed，Nexus typecheck passed（保留既有 vue-router Volar subpath warning），scoped ESLint passed。
+
+### r8: expose permission-gated plugin localization SDK
+
+- 新增 `sdkapi 260713` 的 `PluginI18nSDK` / `PluginLexiconSDK`：main `context.utils` 与 renderer exports 共用 typed `plugin:i18n:*` / `plugin:lexicon:*` transport；`getLocale`、localized text、纯 `createMessage`、official/scoped resolve/search/register 均有单一 contract。
+- 新增 `i18n.read`、`lexicon.read`、`lexicon.register` 与中英文 permission/category 文案。host handler 要求 verified plugin context、已加载且 marker 达标、permission runtime/manifest declaration/grant 全部有效；payload identity 无法选择其他 plugin overlay。
+- `DomainLexiconEntry` 增加 `builtin/catalog/plugin` source provenance；plugin-local entries 由宿主投影为 `plugin:<pluginId>:<localId>`，执行 100 entries/plugin、50 entries/batch、256 KiB/batch 的 plain-JSON 原子验证，禁止 official override/跨插件读取，并在 disable/unload 清理。
+- Focused verification：utils 7 files / 56 tests、CoreApp localization/permission 4 files / 29 tests、plugin facade/loader 2 files / 41 tests passed；CoreApp node/web typecheck 与 utils/CoreApp scoped ESLint passed。R8-E closed；R8-F CatalogService 与 R8-G quality gates 继续开放。
+
+### r8: land Domain Lexicon V1 and shared unit conversion source
+
+- `packages/utils/i18n` 新增只读 `DomainLexiconRegistry` 与 53-entry unit baseline；canonical `unit.*` id、zh-CN/en-US labels/aliases、跨 locale 解析、确定性排序与不可变返回值均由 focused contract 覆盖，`KB`/`Kb` 保持精确 symbol 语义。
+- PreviewSDK UnitConversion、CoreApp calculation 与 QuickOps preview 改为共用 lexicon-backed conversion core；PreviewSDK resolve options 与 CoreApp/QuickOps host context 显式传递 locale，中文/英文输入均可解析，输出按当前 locale 展示。
+- Focused verification：`packages/utils` 3 files / 31 tests、CoreApp PreviewProvider 8/8 与 QuickOps 114/114 passed；CoreApp node/web typecheck 与 scoped ESLint passed。R8-D closed；R8-E Plugin SDK facade、CatalogService 与质量门禁继续开放。
+
+## 2026-07-12
+
+### ai: close packaged OmniPanel context evidence
+
+- visible OmniPanel 通过 clipboard desktop capsule 执行 built-in `AI 解释`，host-owned context 建立 `owner=omni-panel`、`mode=new`、`scope=light` session/package log；UI 展示 local Provider、受控 model 与 Ready result。
+- isolated macOS arm64 profile 记录 1 个 context session、1 个 `new / light` package log、2 turns 与恰好 1 次 `/api/chat`；package 只含 `current_input` metadata，不携带跨入口 history。Provider harness 仅保存 role/count/length projection，不保存请求 payload。
+- OmniPanel focused 3 files / 38 tests、manifest verifier 与 privacy scan passed。manifest 现为 7 cases / 6 passed，packaged entrypoints=`corebox, assistant, workflow, omni-panel`；仅 real-profile 保持 open。
+
+### ai: close packaged Workflow context lifecycle evidence
+
+- Workflow `Use Model` 不再对尚未创建的 `workflow-context.<run>` 直接 `continue`。每个 run 的首个 `text.chat` step 现在用 `new / session` 建立确定 session，后续 chat step 用 `continue / session` 复用它；不同 run 保持不同 session。
+- 多步骤 focused regression 覆盖 `[new, continue, new, continue]`、run 内同 session、run 间隔离、`owner=workflow` / `scope=session` / `workflow.use-model` 与 raw invoke 禁止路径。
+- isolated macOS arm64 package 通过受控 Local/Ollama-compatible Provider 完成两次 visible Workflow run：SQLite 记录两个独立 Workflow session、两个 `new / session` package log、每 session 2 turns，Provider 捕获恰好 2 次调用。manifest 现为 6 cases / 5 passed，packaged entrypoints=`corebox, assistant, workflow`，privacy scan passed；OmniPanel packaged 与 real-profile 继续 open。
+
+### quickops: preserve CoreBox query and plugin identity through confirmed Pomodoro Flow
+
+- CoreBox Flow payload 现在由统一 builder 保留 `{ item, query }`，并从 `meta.pluginName` 解析真实 sender/actor；通用 provider id `plugin-features` 不再被冒充为插件 identity，owner 缺失时 sender 回退 `corebox`、actor fail-closed 为 undefined。
+- `FlowSelector` focused contract 改为真实 `quickops.start-pomodoro` requireConfirm target；用户确认后携带 one-time confirmation token。主进程 `resolveFlowPomodoroOptions()` 同时消费 direct `text` 与 CoreBox envelope 的 `query`，让 settings-driven custom template、CJK alias、cycle/long-break 参数穿过真实确认链，显式结构化字段继续优先。
+- QuickOps main 114 tests、FlowSelector 4 tests、useDetach 10 tests，合计 128/128；focused ESLint、CoreApp node/web typecheck、`quickops:flow-ai:audit --strict` 与本切片 scoped `git diff --check` 已通过。该 focused 产品链不替代真实确认 UI 截图/录屏、clean-screen visual 或 packaged advanced-loop/quit evidence。
+
+### touch-dev-toolbox: validate external URLs before the network gate
+
+- toolbox 配置与 item action 的外链统一通过 `URL` parser canonicalize，只接受 HTTP/HTTPS；`file:`、`javascript:`、畸形或空 payload 在 permission check 前返回 `invalid-url`，不会触发 permission request 或 `openUrl`。
+- 补齐 `network.internet` check 异常不继续 request，以及 `openUrl` SDK 缺失/调用失败的稳定 `open-url-unavailable` / `open-url-failed` blocked result；只有授权成功且 host capability 完成后才返回 `started`。
+- Canonical dev-toolbox suite 12/12、package-test ESLint、Prelude ESLint `--no-ignore`、`node --check`、边界顺序检查与本切片 scoped `git diff --check` 已通过。R5 仍保持 partial，其他 shell / OS / network / fs 与 Widget sandbox 长尾继续开放。
+
+### tuffex: make GroupBlock header toggle semantic without nesting actions
+
+- `TxGroupBlock` 不再把整段 header `div` 直接绑定 click；collapsible 模式新增全幅原生 `button type="button"`，提供 `aria-expanded`、`aria-controls`、可见 focus ring 与浏览器原生 Enter/Space 激活，静态 group 不渲染交互入口。
+- toggle button 与 `header-extra` 成为 sibling 层，标题/图标区域继续把 pointer 交给全幅 toggle，但 extra 中的 `TxButton` / 原生按钮不再嵌套在 toggle 内，也不会因冒泡意外折叠分组；既有 header/label/toggle class 与存储、动画、emit contract 保持不变。
+- GroupBlock focused 5/5，连同 Tree/TreeSelect 相关回归共 14/14；focused ESLint、TuffEx 全包 `vue-tsc` 与本切片 scoped `git diff --check` 已通过。R6 继续保留其他非语义交互、legacy Menu 与 visual smoke 长尾。
+
+### tuffex: add Tree roving focus and keyboard navigation
+
+- `TxTree` 现在只保留一个可 Tab 进入的 enabled `treeitem`，disabled item 会被跳过；Enter/Space 执行选择，ArrowUp/ArrowDown/Home/End 移动焦点，ArrowRight/ArrowLeft 完成展开、进入子级、折叠与返回父级。
+- 内置 caret/checkbox 保留 pointer 操作但退出行内 Tab 序列；`TxTreeSelect` 自定义 `TxCardItem` 同样把键盘入口交给外层 treeitem，并移除内外两层同时处理同一次 click 导致的重复 selection emit。
+- Tree/TreeSelect focused 9/9，Checkbox/Transfer/Cascader 相关消费回归合计 25/25；focused ESLint、TuffEx 全包 `vue-tsc` 与本切片 scoped `git diff --check` 已通过。R6 仍保持 partial，其他主路径非语义交互、legacy Menu 与 visual smoke 继续开放。
+
+### touch-translation: prove network provider fail-closed boundary
+
+- canonical translation suite 新增行为级矩阵，从真实 `onFeatureTriggered('touch-translate')`、debounce 和 provider config 路径进入 `startTranslationRequest`，覆盖 permission SDK 缺失、`network.internet` 拒绝、check 异常与 request 异常。
+- 每条场景都给 `http.get/post` 注入 trap，证明 permission failure 时 provider/network 调用保持为零；check 异常不会继续 request，拒绝/request 异常只请求 canonical `network.internet`。
+- Focused network matrix 4/4、translation 本包 tests 11/11、package-test scoped ESLint、plugin `vue-tsc`、Prelude `node --check`、边界顺序检查与 `git diff --check` 已通过。canonical translation 全文件仍有 3 个既有 generated bundled-runtime ENOENT，未用本轮 focused 结果冒充完整 suite closure。
+
+### tuffex: make DataTable row interaction explicit and keyboard accessible
+
+- `TxDataTable` 新增默认关闭的 `interactiveRows`：只读表格继续不产生额外 Tab stop；opt-in rows 获得稳定 tabindex、pointer cursor、focus-visible 和 Enter/Space 行级激活，内部 button/control 的键盘事件不会冒泡触发行动作。
+- Nexus updates、pending review 与 plugin list 三个真实 `@row-click` 表格已显式 opt-in；现有 mouse `rowClick` emit 与 row/column/class contract 不变。
+- 同步修复 `TxContextMenuPanel`、`TxDropdownMenu`、`TxDrawer` 在 Nexus `noUncheckedIndexedAccess` 下暴露的索引类型缺口。DataTable focused 7/7、相关 TuffEx 44/44、ESLint、TuffEx `vue-tsc`、Nexus typecheck 与 `git diff --check` 已通过；Nexus typecheck 仍输出既有 vue-router Volar export warning，但退出码为 0。
+
+### quickops: connect custom Pomodoro templates to Flow delivery
+
+- `quickops.start-pomodoro` 的 confirmed Flow delivery 现在会把字符串或 object payload 中的 `text` 交给 canonical `parseQuickOpsQuery()`，把 settings-driven template 的 focus/break/cycle/long-break 参数传入 shared runtime；显式结构化字段继续优先，只由文本 parser 填补缺失值。
+- 修复 CJK 自定义模板名称/别名只能在空格边界命中的问题；含中文关键字改为连续文本匹配，`开始写作冲刺` 可消费 `写作冲刺` 别名，disabled template 继续不匹配，英文模板仍保留词边界。
+- CoreApp QuickOps 5 files / 142 tests、官方插件 26 tests、focused ESLint、主进程 typecheck 与 `git diff --check` 已通过；真实 CoreBox confirmation UI、packaged advanced-loop path、clean-screen visual 与 packaged quit cleanup evidence 仍开放。
+
+### touch-system-actions: strengthen shell fail-closed evidence
+
+- canonical plugin suite 不再依赖当前机器是否恰好缺少 safe-shell；测试显式注入 unavailable runner 并固定受支持 runtime platform，证明 shell capability 在 permission request 前阻断。
+- 新增 permission check 抛错回归，断言不会继续 request `system.shell`，也不会进入 safe-shell runner；既有 SDK 缺失、拒绝、request 异常与 native main-window 独立路径继续通过。
+- Focused Vitest 17/17、ESLint、Prelude `node --check`、边界顺序检查和 `git diff --check` 已通过；生产 Prelude 与 manifest 无需修改。
+
+### touch-batch-rename: prove fs.write fail-closed boundary
+
+- 新增 Prelude 行为测试，覆盖 apply 的 permission SDK 缺失、用户拒绝、permission check 异常与 request 异常，以及 undo 的 `fs.write` 拒绝路径。
+- 测试在插件加载前注入 `fs/promises.rename` trap，并使用真实临时文件断言原文件保留、目标文件不存在；所有 blocked 路径同时保持 rename、确认 dialog、撤销记录 storage 读写为零。
+- Focused `node --test` 5/5、ESLint `--no-ignore`、`node --check`、边界静态检查和 `git diff --check` 已通过；R5 继续保留其他 shell / OS / network / fs 与 Widget sandbox 长尾。
+
+### tuffex: restore Dropdown state and keyboard navigation
+
+- `TxDropdownMenu` 的可选 `modelValue` 不再被默认 `false` 强制成受控模式；未传 `v-model` 的既有用法现在由内部状态持有打开/关闭，同时继续发送 `update:modelValue` / `open` / `close`。
+- Dropdown 打开后聚焦首个可用 menu item，支持 ArrowDown / ArrowUp 循环导航与 Home / End 跳转；嵌套 menu 的键盘事件不会被父 menu 接管。
+- `TxDropdownItem` 补 Space 激活与 disabled `menuitem` / `aria-disabled` 语义；focused 9/9、ESLint、TuffEx 全包 `vue-tsc`、静态检查和 `git diff --check` 已通过。
+
+### tuffex: add ContextMenu keyboard navigation
+
+- `TxContextMenu` 打开后聚焦首个可用 menu item，支持 ArrowDown / ArrowUp 循环导航与 Home / End 首尾跳转，并在导航时跳过 disabled item。
+- `TxContextMenuItem` 补 Space 激活；disabled item 继续阻断 select/close，同时保留 `role="menuitem"` / `aria-disabled="true"` 且不进入 Tab 序列。
+- Focused ContextMenu 15/15、ESLint、TuffEx 全包 `vue-tsc` 与 `git diff --check` 已通过；row interaction、更多 legacy Menu 与 visual smoke 仍开放。
+
+### touch-browser-open: bind specific-browser actions to detected targets
+
+- specific-browser action 不再直接信任 item payload 的 browser `id/name/target`；每次浏览器检测先清空并重建仅内存 canonical map，执行时要求 `id + target` 精确匹配当前检测结果。
+- 未知 action、未知 browser、同 ID 错配 target 在 permission request 前返回 `unsupported-action` / `browser-target-not-allowed`；合法 action 使用 canonical name/target 执行并写 recent storage，忽略 payload 伪造 name。
+- 行为测试覆盖 unknown action/target、target mismatch、permission denied、permission SDK unavailable 与 canonical success/spawn 参数，共 6/6；ESLint、语法检查、边界顺序扫描和 `git diff --check` 已通过。
+
+### tuffex: trap focus inside TxDrawer
+
+- `TxDrawer` 在 visible modal 状态下接管 Tab：dialog root/外部焦点进入首个可聚焦控件，末尾 Tab 回到首项，首项 Shift+Tab 回到末项。
+- Drawer 内没有可聚焦子控件时，Tab 保持焦点在 `role="dialog"` root；既有打开聚焦 root、Escape / mask / close button 关闭与关闭后恢复原焦点合同不变。
+- Focused Drawer 13/13、ESLint、TuffEx 全包 `vue-tsc`、静态键盘扫描和 `git diff --check` 已通过；legacy Menu 与 visual smoke 仍开放。
+
+### tuffex: make DataTable sortable headers semantic
+
+- `TxDataTable` 可排序列继续使用 `<th scope="col" aria-sort>` 表格语义，但移除 `<th>` 自身的 tabindex、click 与 Enter/Space 手写处理。
+- 排序 label/slot 与 sort indicator 迁入满尺寸 `button type="button"`，sortable cell 的 padding 转移到按钮，保留原点击面积、列宽、fixed/nowrap/header class 与三态排序合同；非 sortable header DOM 不新增包装。
+- Focused DataTable 5/5、ESLint、TuffEx 全包 `vue-tsc`、静态扫描和 `git diff --check` 已通过；整行 row interaction 保留为后续独立切片。
+
+### touch-window-manager: bind shell execution to runtime platform
+
+- 修复 action payload 的 `platform` 被执行路径直接信任的问题：`executeAction` 现在只使用实际 `process.platform`，`onItemAction` 在 permission request 前拒绝 payload/runtime platform mismatch。
+- unsupported runtime 同样在 permission 与 shell 之前 fail-closed，避免伪造 `darwin` / `win32` payload 选择错误的 AppleScript、PowerShell 或 `open -a` 分支。
+- 新增 lifecycle 行为测试并给 `execFile` / `spawn` 注入 trap，覆盖 platform mismatch、unsupported runtime、permission SDK unavailable、denied、check failure、request failure；focused 6/6、ESLint、语法检查、执行顺序静态检查和 `git diff --check` 已通过。
+
+### tuffex: make TxCheckbox semantic
+
+- `TxCheckbox` 根节点从 `div role="checkbox"` 收为原生 `button type="button" role="checkbox"`，使用原生 disabled 与 Enter/Space 激活语义，移除手写 tabindex / keydown，并保留 `aria-checked`、label/slot、`update:modelValue` / `change` 和现有 class contract。
+- 组件补最小 button reset，避免在表单中触发 submit 或继承浏览器默认边框、字体和背景。
+- Checkbox focused 7 tests、DataTable / Tree / TreeSelect / Transfer / Cascader 直接消费者 19 tests、ESLint、TuffEx 全包 `vue-tsc`、静态语义扫描与 `git diff --check` 已通过；R6 仍保持 partial。
+
+### quickops: expose advanced Pomodoro loop capability accurately
+
+- `QuickOpsDiagnosticsInfo` 新增 `pomodoroAdvancedLoopSupported` 与 `pomodoroCustomTemplateCount`，CoreApp diagnostics producer 从当前 runtime/settings 生成真实只读能力状态，并在诊断文本中显示 loop support 与启用的自定义模板数量。
+- 官方插件 settings summary 改为消费 host diagnostics，显示 `supported` / `unsupported` / `unknown-host-capability`；旧 host 缺字段时保持明确 unknown，不再固定标记 `pending-host-capability`。
+- CoreApp QuickOps focused tests 123/123、官方插件 tests 26/26、主进程 typecheck 与 `git diff --check` 已通过。全文件 scoped ESLint 仍被目标文件既有风格债务阻断，本轮新增行未出现在报错位置；真实 advanced loop 产品路径、clean-screen visual 与 packaged app quit cleanup evidence 仍开放。
+
+### tuffex: close TxStep verification and make TxSwitch semantic
+
+- `TxStep` 原生 button 切片已通过仓库本地 Vitest 5/5、focused ESLint、静态语义扫描与 `git diff --check`；此前 pnpm non-TTY module-dir 清理提示不再作为验证阻塞。
+- `TxSwitch` 根节点从 `div role="switch"` 收为原生 `button type="button" role="switch"`，使用原生 disabled 与 Enter/Space 激活语义，移除手写 tabindex / keydown，并保留 `aria-checked`、`update:modelValue` / `change` 和现有 class contract。
+- Switch 样式补最小 button reset；focused Vitest 3/3、ESLint、TuffEx 全包 `vue-tsc`、静态语义扫描与 `git diff --check` 已通过。R6 仍保持 partial，继续收 legacy Menu/Drawer、剩余非语义交互与 visual smoke。
+
+### touch-window-presets: prove shell permission fail-closed boundary
+
+- 新增 Prelude lifecycle 行为级测试，覆盖 `system.shell` permission SDK 缺失、用户拒绝、permission check 异常与 request 异常四条路径。
+- 测试在加载插件前注入 `execFile` trap，并断言四类失败都返回稳定 blocked reason、shell 调用次数保持为零；生产执行逻辑不变。
+- Focused `node --test` 4/4、ESLint `--no-ignore`、`node --check`、执行顺序静态检查与 `git diff --check` 已通过；R5 仍保持 partial，继续收其他 shell / OS / network / fs 与 Widget sandbox 长尾。
+
+### ai: harden packaged Workflow dispatch and clone persistence
+
+- Workflow 编辑器在进入 typed Intelligence SDK 前会复制 reactive `toolSources`，避免 Vue proxy 触发 Electron structured-clone 失败。
+- 新建或从内置模板派生的 workflow 现在生成 workflow-scoped step ID，并同步重写 model `previousStep` 引用，避免全局主键 `intelligence_workflow_steps.id` 与内置步骤冲突。
+- focused workflow editor `12 tests`、CoreApp web typecheck、focused lint、production bundle 与 isolated macOS arm64 package 均通过。fresh-profile packaged run 已成功持久化并进入 `text.chat` 执行，最终以明确的 `[Intelligence] No enabled providers for text.chat` domain result 结束；该 smoke 不等同于 Provider 成功，也不关闭 Workflow entrypoint owner/scope context evidence。
+
+### ai: productize tombstone context explain
+
+- Intelligence Audit 现在对 `memory-tombstoned` package exclusion 独立计数，并在 inline summary 与 explain drawer 显示中英文“删除后移除”reason/notice。
+- explain summarizer 继续只投影 sourceType/sourceId/reason/tokenEstimate；unknown reason 安全回退，不展示被删 MemoryItem、prompt 或 turn 原文。
+- focused summarizer 9 tests、CoreApp web typecheck、catalog JSON parse 与 focused lint-error check 通过；packaged/real-profile evidence 未采集。
 
 ## 2026-07-13
 
@@ -11,6 +377,39 @@
 - Plugin feature activation keeps an immutable submission snapshot while widget render metadata refreshes, preventing a refreshed custom-render item from replacing the feature payload executed by the plugin.
 
 ## 2026-07-11
+
+### ai: productize archived context continuation
+
+- 修复显式 continue 指向 archived/expired/idle session 时复用旧 `sessionId` 重插、触发主键冲突并退化为 current-input-only 的问题；现在创建新 session 与 metadata-only `session_start` checkpoint。
+- 新 session 只继承一份经过既有 policy 校验的 CompressionSnapshot 或 secret-free legacy summary；blocked/missing 返回 excluded/unavailable，旧 raw turns、MemoryItem 和摘要正文不进入公开 context metadata。
+- `ContextContinuationSummary` 已进入 utils/tuff-intelligence typed contract；官方 `touch-intelligence` widget 安全展示 boundary reason/status。CoreApp 59 tests、插件 42 tests、utils SDK 46 tests、plugin production build 与 node/web typecheck 通过；packaged/real-profile evidence 未采集。
+
+### ai: close R9.2 P0/P1 context hygiene and entrypoint evidence
+
+- R9.2 六个 closure 子任务实现 `6/6`：Memory governance/scope、host context execution/CoreBox、Memory Review、CompressionSnapshot、entrypoint/evidence 与 CoreBox AI dispatch idempotency 均完成；workspace/project memory 在稳定 `scopeRef` migration 前继续 fail-closed，本轮未执行 schema/data migration，自动长期记忆仍关闭。
+- Workflow `Use Model` 以每 run 独立 session 执行，OmniPanel AI action 与 Assistant voice 使用 `new + light`；CoreBox 保留 new/continue/stateless。CoreBox set-query 现在把 trusted one-shot entrypoint context 绑定到实际 item execution，并抑制同值 reactive duplicate search，避免 Assistant 意图在搜索/执行边界退化为 CoreBox history。
+- canonical `touch-intelligence` build 已同步到 CoreApp bundled runtime seed；同版本 signature drift 会在启动时刷新旧 seed，避免 packaged app 继续运行缺少 entrypoint context 的陈旧插件 bundle。
+- 分级 evidence manifest 已通过：unit `1 passed`、controlled `1 passed`、packaged `2 passed`、real-profile `1 open`，privacy scan passed。isolated macOS arm64 packaged Electron 证明 CoreBox owner=`corebox`/scope=`retrieval` 与 Assistant owner=`assistant`/scope=`light`，每次操作各触发一次受控 `/api/chat`；OmniPanel/Workflow packaged 与真实用户 profile 不在本次完成声明内。
+
+### ai: preserve CoreBox model selection and reconcile Stable status
+
+- 修复 `touch-intelligence` 模型选项刷新时把 session 的 `selectedProviderId` / `selectedModel` 当成 `providerId` / `model` 读取、从而清空用户显式选择的问题；刷新后只在 provider/model 已不再可用时回退自动选择。
+- 补强 AI 测试加载边界：mock harness 在 subject module 前注册，避免静态导入提前加载 Electron/Sentry 依赖；CoreApp AI 31 files / 178 tests、插件 Intelligence 40 tests、Intelligence package 36 tests 与 utils SDK focused 42 tests 已通过。
+- `ai-2.5.0-plan-prd.md` 已与 Evidence Matrix、`TODO-AI.md` 和 visible evidence report 对齐：Stable packaged gate 为 13/13 passed，旧的 evidence-open 清单改为已完成；下一高优先级回到 R9.2 Memory governance/scope 与 host context execution。
+
+### ai: fail closed unsafe Memory injection and plugin management
+
+- ContextHygiene usable-memory 策略现在同时检查 enabled、normal privacy、正数 TTL、tombstone SQL 过滤和 scope：只允许 global 与 `sourceSessionId` 精确匹配的 session memory；workspace/project 在没有稳定 `scopeRef` 时不再注入，且应用层会对数据库结果再次执行同一 fail-closed policy。
+- Memory 保存会同时扫描 content、summary 与 tags 的 secret pattern，避免安全正文配合敏感摘要/标签绕过 MemoryPolicy；`ttl` 合同明确为从最近 `updatedAt` 开始的正数毫秒生命周期。
+- Plugin Intelligence facade 已移除 raw context prepare 与 Memory list/save/enable/delete，主进程 handler 同时按 `HandlerContext.plugin` 拒绝绕过 facade 的调用；raw typed-event handler regression 覆盖五个 host-only event。`revalidatePackageMemories()` 会在共享 assembler 前重新读取 tombstone/enabled/privacy/TTL/scope，移除 prepare 后失效项并更新 metadata-only package log。未执行任何 SQLite schema/data migration。
+
+### ai: execute governed ContextPackage content in CoreBox
+
+- 新增 typed `contextInvoke()` / `contextStream()` 与 host-owned `IntelligenceContextExecutionService`；stream/non-stream 共用 `ContextMessageAssembler`，忽略插件提供的 user/assistant history，只按 system policy -> validated summary -> recent turns -> Memory -> untrusted retrieval reference -> current input 组装有界 provider messages。
+- Context execution 使用 `host:*` / `plugin:*` actor namespace 隔离 session，最终 Memory 复核紧邻 assembler；policy-blocked current input 不会通过 fail-soft 绕过，prepare/revalidate 不可用时只回退到经过清洗的 system + current input，并返回 metadata-only `context_prepare_failed` 摘要。无历史模式仍可消费 retrieval，但不会携带 summary/recent turns/Memory；成功响应会写入受治理 assistant turn。
+- 官方 `touch-intelligence` 已迁移到新 contract，插件只持有 package/session/citation 安全摘要；CoreBox widget 增加新会话、继续、无历史三种显式模式，保留 provider/model 选择。旧宿主兼容 invoke 也会剥离插件 history，不能绕开 host-owned 边界；packaged Electron closure 见本日最新 R9.2 条目。
+- `@talex-touch/tuff-intelligence` 现在直接复用 `@talex-touch/utils` 的 canonical `DEFAULT_CAPABILITIES`，消除两份默认 capability registry 漂移，同时保留 package 自有 message/runtime 类型扩展。
+- Controlled verification：CoreApp AI `29 files / 173 tests`、官方插件 `41 tests`、utils Intelligence SDK `44 tests`、tuff-intelligence `36 tests` 通过；workspace node/web typecheck 与 `touch-intelligence` production build 通过。以上不替代 packaged Electron 可见证据。
 
 ### workspace: complete renderer and package optimization wave
 
@@ -25,6 +424,22 @@
 
 - CoreBox renderer hooks now share one clipboard freshness predicate and track whether active clipboard state came from implicit AutoPaste or an explicit user action.
 - Hidden clipboard changes no longer populate active renderer state directly; shortcut reopen and implicit search refresh both reject ineligible or expired clipboard items, while explicit paste and plugin execution retain manual clipboard semantics.
+
+## 2026-07-10
+
+### docs: plan R9.2 ContextHygiene P0/P1 closure
+
+- 新增 R9.2 ContextHygiene Trellis 父任务与 5 个子任务，补齐 PRD / Design / Implement，规划 `5/5`、实现 `0/5`；顺序为 Memory governance/scope -> host context execution/CoreBox -> Memory Review 与 CompressionSnapshot -> 多入口/evidence。
+- 记录两项当前真实缺口：CoreBox 仅把 ContextPackage 安全摘要写入 metadata，retrieval/memory 尚未由宿主统一进入 provider messages；workspace/project memory 缺稳定 `scopeRef`，在迁移确认前必须 fail-closed。
+- 同步 `TODO.md`、R8/R9 execution plan、2.5.4 PRD/details 与 Quality Baseline；自动长期记忆、R9.3 本地模型和 R9.4 ASR runtime 继续后置，SQLite schema/data migration 保留单独确认门禁。
+
+### goal: snapshot R4-R6 small-slice progress
+
+- 当前 Goal `R4-R6小切片并行QuickOps、Plugin Trust Boundary、UI/TuffEx，不抢当前稳定化窗口。` 记录为 `paused / partial`；本次只同步日期进度，不修改 scope，后续单独讨论是否拆分或收窄。
+- R4 已完成并验证 safe Flow `statefulRuntime` / cleanup marker、clean-screen visual contract marker 与 Pomodoro 默认只读模板 contract；真实 visual evidence、高级循环 runtime 与 app quit cleanup 仍开放。
+- R5 已完成并验证五个官方插件的 clipboard SDK / permission fail-closed 小切片，不回退 `navigator.clipboard`；shell / OS / network / fs 权限缺失路径和 Widget sandbox 仍开放。
+- R6 已完成并验证 `touch-music` 与七个 TuffEx 语义清理切片；`TxCardItem` 默认非交互语义已收敛。`TxStep` 原生 button 源码与 focused test 调整已落，但 Vitest / ESLint 验证受 pnpm `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` 阻塞，因此不计为已验证闭环。
+- 下一次 Goal 复盘重点：评估是否按 QuickOps runtime/evidence、Plugin permission matrix、TuffEx semantics/visual smoke 拆为三个更短、可独立关账的目标。
 
 ## 2026-07-07
 

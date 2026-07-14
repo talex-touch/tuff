@@ -3,89 +3,94 @@ import {
   featureCards,
   heroHighlights,
   testingHighlights,
-} from '~/data/tuffHeroContent'
-import { tuffSdkItems } from '~/data/tuffSdkItems'
+} from "~/data/tuffHeroContent";
+import { tuffSdkItems } from "~/data/tuffSdkItems";
 
 export interface FeatureSearchItem {
-  id: string
-  titleKey: string
-  descriptionKey?: string
-  icon?: string
-  path: string
-  searchTokens?: string[]
+  id: string;
+  titleKey: string;
+  descriptionKey?: string;
+  icon?: string;
+  path: string;
+  searchTokens?: string[];
 }
 
 function extractKeySegment(key: string, fallback: string) {
-  const match = key.match(/\.([^.]+)\.title$/)
-  return match?.[1] ?? fallback
+  const match = key.match(/\.([^.]+)\.title$/);
+  return match?.[1] ?? fallback;
 }
 
 const HERO_HIGHLIGHT_PATHS: Record<string, string> = {
-  'landing.hero.highlights.integrations.title': '/#integrations',
-  'landing.hero.highlights.workspace.title': '/#built-for-you',
-  'landing.hero.highlights.focus.title': '/#ai-overview',
-}
+  "landing.hero.highlights.integrations.title": "/#integrations",
+  "landing.hero.highlights.workspace.title": "/#built-for-you",
+  "landing.hero.highlights.focus.title": "/#ai-overview",
+};
 
 const SDK_DOCS_MAP: Record<string, string> = {
-  'plugin-workflow': '/docs/dev/getting-started/plugin-workflow',
-  'box-sdk': 'box',
-  'clipboard-sdk': 'clipboard',
-  'tempfile-sdk': 'temp-file',
-  'storage-sdk': 'storage',
-  'download-sdk': 'download',
-  'platform-capabilities-sdk': 'platform-capabilities',
-  'account-sdk': 'account',
-  'feature-sdk': 'feature',
-  'divisionbox-sdk': 'division-box',
-  'flow-sdk': 'flow-transfer',
-  'intelligence-sdk': 'intelligence',
-  'meta-sdk': 'quick-actions',
-}
+  "plugin-workflow": "/docs/dev/getting-started/plugin-workflow",
+  "box-sdk": "box",
+  "clipboard-sdk": "clipboard",
+  "tempfile-sdk": "temp-file",
+  "storage-sdk": "storage",
+  "download-sdk": "download",
+  "platform-capabilities-sdk": "platform-capabilities",
+  "screenshot-sdk": "screenshot",
+  "account-sdk": "account",
+  "feature-sdk": "feature",
+  "indexed-source-sdk": "search",
+  "boxitem-sdk": "feature",
+  "features-sdk": "feature",
+  "divisionbox-sdk": "division-box",
+  "flow-sdk": "flow-transfer",
+  "intelligence-sdk": "intelligence",
+  "localization-sdk": "i18n",
+  "plugin-sdk": "plugin-context",
+  "tuff-transport-sdk": "transport",
+  "meta-sdk": "quick-actions",
+};
 
 const heroHighlightItems: FeatureSearchItem[] = heroHighlights
   .map((item): FeatureSearchItem | null => {
-    const path = HERO_HIGHLIGHT_PATHS[item.titleKey]
-    if (!path)
-      return null
+    const path = HERO_HIGHLIGHT_PATHS[item.titleKey];
+    if (!path) return null;
     return {
       id: `hero-${extractKeySegment(item.titleKey, item.titleKey)}`,
       titleKey: item.titleKey,
       descriptionKey: item.descriptionKey,
       icon: item.icon,
       path,
-    }
+    };
   })
-  .filter((item): item is FeatureSearchItem => item !== null)
+  .filter((item): item is FeatureSearchItem => item !== null);
 
-const featureCardItems: FeatureSearchItem[] = featureCards.map(item => ({
+const featureCardItems: FeatureSearchItem[] = featureCards.map((item) => ({
   id: `feature-${extractKeySegment(item.titleKey, item.titleKey)}`,
   titleKey: item.titleKey,
   descriptionKey: item.descriptionKey,
   icon: item.icon,
-  path: '/#features',
-}))
+  path: "/#features",
+}));
 
-const extensionItems: FeatureSearchItem[] = extensionHighlights.map(item => ({
+const extensionItems: FeatureSearchItem[] = extensionHighlights.map((item) => ({
   id: `extension-${extractKeySegment(item.titleKey, item.titleKey)}`,
   titleKey: item.titleKey,
   descriptionKey: item.descriptionKey,
-  icon: 'i-carbon-code',
-  path: '/#ecosystem',
-}))
+  icon: "i-carbon-code",
+  path: "/#ecosystem",
+}));
 
-const testingItems: FeatureSearchItem[] = testingHighlights.map(item => ({
+const testingItems: FeatureSearchItem[] = testingHighlights.map((item) => ({
   id: `testing-${extractKeySegment(item.titleKey, item.titleKey)}`,
   titleKey: item.titleKey,
   descriptionKey: item.descriptionKey,
-  icon: 'i-carbon-rocket',
-  path: '/#waitlist',
-}))
+  icon: "i-carbon-rocket",
+  path: "/#waitlist",
+}));
 
 const sdkItems: FeatureSearchItem[] = tuffSdkItems.flatMap((item) => {
-  const slug = SDK_DOCS_MAP[item.id]
-  if (!slug)
-    return []
-  const path = slug.startsWith('/') ? slug : `/docs/dev/api/${slug}`
+  const slug = SDK_DOCS_MAP[item.id];
+  if (!slug) return [];
+  const path = slug.startsWith("/") ? slug : `/docs/dev/api/${slug}`;
   return [
     {
       id: item.id,
@@ -93,10 +98,10 @@ const sdkItems: FeatureSearchItem[] = tuffSdkItems.flatMap((item) => {
       descriptionKey: item.description,
       icon: item.icon,
       path,
-      searchTokens: [item.tag, slug, 'sdk'],
+      searchTokens: [item.tag, slug, "sdk"],
     },
-  ]
-})
+  ];
+});
 
 export const featureSearchItems: FeatureSearchItem[] = [
   ...heroHighlightItems,
@@ -104,4 +109,4 @@ export const featureSearchItems: FeatureSearchItem[] = [
   ...extensionItems,
   ...testingItems,
   ...sdkItems,
-]
+];

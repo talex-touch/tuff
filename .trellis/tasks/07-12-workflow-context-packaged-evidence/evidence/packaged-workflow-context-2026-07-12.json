@@ -1,0 +1,69 @@
+{
+  "schema": "tuff.context-entrypoint-workflow-packaged-evidence.v1",
+  "capturedAt": "2026-07-13T07:05:36.425Z",
+  "source": "packaged-electron",
+  "buildVersion": "2.4.13-beta.4",
+  "runtimeVersion": "electron-41.3.0",
+  "environment": {
+    "platform": "darwin-arm64",
+    "profile": "isolated-controlled",
+    "providerKind": "local-ollama-compatible",
+    "providerModel": "context-evidence-model",
+    "runtimeSeedSynchronized": true
+  },
+  "observations": {
+    "workflow": {
+      "entrypointId": "workflow.use-model",
+      "owner": "workflow",
+      "scope": "session",
+      "contextMode": "new",
+      "boundaryLabel": "new / session",
+      "contextActorType": "host",
+      "runCount": 2,
+      "distinctRunCount": 2,
+      "distinctWorkflowCount": 2,
+      "distinctContextSessionCount": 2,
+      "packageLogCount": 2,
+      "packageSessionCount": 2,
+      "continuationMetadataCount": 0,
+      "packageItemCount": 2,
+      "packageItemCountPerRun": 1,
+      "packageItemSourceTypes": [
+        "current_input"
+      ],
+      "crossSessionHistoryItemCount": 0,
+      "turnsPerSessionMin": 2,
+      "turnsPerSessionMax": 2,
+      "userTurnCount": 2,
+      "assistantTurnCount": 2,
+      "tokenBudgetMin": 1600,
+      "tokenBudgetMax": 1600,
+      "tokenEstimateMin": 254,
+      "tokenEstimateMax": 329,
+      "providerCallCount": 2,
+      "providerCallsPerRun": 1,
+      "providerRequestEntryCountMin": 1,
+      "providerRequestEntryCountMax": 1,
+      "providerRoles": [
+        "user"
+      ],
+      "providerStream": false,
+      "provider": "local",
+      "model": "context-evidence-model",
+      "workflowStepCount": 2,
+      "workflowStatus": "completed",
+      "workflowStepStatus": "completed",
+      "totalTokens": 40,
+      "visibleExecution": true,
+      "visibleProvider": true,
+      "visibleReviewQueue": true
+    }
+  },
+  "privacy": {
+    "rawInteractionFieldsStored": 0,
+    "rawSecretFieldsStored": 0,
+    "rawPathFieldsStored": 0,
+    "packageItemRawFieldsStored": 0,
+    "providerRequestPayloadStored": false
+  }
+}

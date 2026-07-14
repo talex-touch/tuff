@@ -15,18 +15,20 @@
 
 ### 内置测试器
 
-1. **ChatCapabilityTester** - 对话能力测试器
-   - 支持用户自定义测试消息
-   - 默认消息：`请用一句话介绍你自己。`
+当前 `IntelligenceModule.registerCapabilities()` 注册的 30 个稳定能力都必须有测试器覆盖。按能力域划分如下：
 
-2. **EmbeddingCapabilityTester** - 向量嵌入测试器
-   - 支持用户自定义测试文本
-   - 默认文本：`这是一个测试文本，用于生成向量嵌入。`
-   - 显示向量维度和前5个值
+| 能力域 | capabilityId | 测试器文件 |
+|------|------|------|
+| Text | `text.chat`, `text.translate`, `text.summarize`, `text.rewrite`, `text.grammar`, `text.classify` | `chat-tester.ts`, `translate-tester.ts`, `summarize-tester.ts`, `text-tester.ts`, `analysis-tester.ts` |
+| Embedding | `embedding.generate` | `embedding-tester.ts` |
+| Code | `code.generate`, `code.explain`, `code.review`, `code.refactor`, `code.debug` | `code-tester.ts` |
+| Analysis | `intent.detect`, `sentiment.analyze`, `content.extract`, `keywords.extract` | `analysis-tester.ts` |
+| Vision / Image | `vision.ocr`, `image.caption`, `image.analyze`, `image.translate.e2e`, `image.generate`, `image.edit` | `vision-tester.ts`, `image-tester.ts` |
+| Audio | `audio.tts`, `audio.stt`, `audio.transcribe` | `audio-tester.ts` |
+| RAG / Search | `rag.query`, `search.semantic`, `search.rerank` | `search-tester.ts` |
+| Workflow / Agent | `workflow.execute`, `agent.run` | `workflow-agent-tester.ts` |
 
-3. **VisionCapabilityTester** - 视觉能力测试器
-   - 使用内置示例图片
-   - 显示 OCR 识别的文本和关键词
+`registry-coverage.test.ts` 会直接对齐 `IntelligenceModule.registerCapabilities()` 的注册结果；新增或删除稳定能力时，必须同步更新对应 tester、registry 注册和覆盖测试。
 
 ### 注册系统
 
@@ -41,31 +43,41 @@ capabilityTesterRegistry.register('custom.capability', new CustomTester())
 
 ## 添加新的测试器
 
-1. 创建新的测试器类，继承 `BaseCapabilityTester`
-2. 实现所有抽象方法
-3. 在 `registry.ts` 中注册
+1. 创建新的测试器类，继承 `BaseCapabilityTester<TPayload, TResult>`
+2. 复用已有 typed payload / result 类型，不新增宽泛 `any` 返回
+3. 使用 `buildTestResult()` 格式化 provider、model、latency、usage、稳定性字段
+4. 在 `registry.ts` 中注册，并从 `index.ts` 导出对应文件
+5. 更新 `registry-coverage.test.ts` 的稳定能力集守卫
 
 示例：
 
 ```typescript
-export class CustomCapabilityTester extends BaseCapabilityTester {
+import type { IntelligenceInvokeResult } from '@talex-touch/tuff-intelligence'
+import type { CapabilityTestPayload } from './base-tester'
+import { BaseCapabilityTester } from './base-tester'
+
+interface CustomPayload {
+  text: string
+}
+
+interface CustomResult {
+  summary: string
+}
+
+export class CustomCapabilityTester extends BaseCapabilityTester<CustomPayload, CustomResult> {
   readonly capabilityType = 'custom'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<CustomPayload> {
     return {
-      // 你的 payload 逻辑
+      text: input.userInput || '请输入测试内容'
     }
   }
 
-  formatTestResult(result: AiInvokeResult<any>) {
-    return {
-      success: true,
+  formatTestResult(result: IntelligenceInvokeResult<CustomResult>) {
+    return this.buildTestResult(result, {
       message: '测试成功',
-      textPreview: '...',
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: result.result?.summary || ''
+    })
   }
 
   getDefaultInputHint(): string {

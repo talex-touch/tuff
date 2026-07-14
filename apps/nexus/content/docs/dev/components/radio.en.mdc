@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [radio, form, selection]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # Radio
@@ -239,6 +239,36 @@ code: |
 | Event | Params | Description |
 |------|------|------|
 | `click` | `(value: string \| number)` | Emitted after an enabled, unchecked radio selects itself through the parent group. |
+
+## Slots
+
+### TxRadioGroup
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Place `TxRadio` children here. The group provides selected value, disabled state, and visual type through injection. |
+
+### TxRadio
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Visible label or rich card content. Falls back to the `label` prop when omitted. |
+
+## Best Practices
+
+- Keep every `TxRadio.value` unique within a group; duplicate primitives make checked state ambiguous.
+- Use `label` for simple text-only radios and the default slot for card content or formatted labels.
+- Prefer `type="standard" direction="column"` for long form choices, `type="button"` for short segmented controls, and `type="card"` when each option needs explanatory copy.
+- For `glass` / `blur` indicators, keep `updateOnSettled` default unless form validation must run immediately. The default waits for motion to settle before emitting.
+- Disable unavailable options individually so users can see why a choice exists but is not selectable; disable the group only for read-only or loading states.
+- Do not rely on `direction` for button groups. Button radios always resolve to row layout.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/radio/src/TxRadioGroup.vue` owns group defaults, direction resolution, indicator variant resolution, keyboard handler wiring, and button indicator rendering.
+- Source: `packages/tuffex/packages/components/src/radio/src/TxRadio.vue` confirms `button` / `standard` / `card` item markup, `label` fallback, disabled handling, and `click` emission only for enabled unchecked items.
+- Model behavior: `packages/tuffex/packages/components/src/radio/src/radio-group-model.ts` delays `update:modelValue` / `change` only when `updateOnSettled` is active.
+- **Verified coverage:** `packages/tuffex/packages/components/src/radio/__tests__/radio.test.ts` covers radiogroup semantics, selected and disabled state rendering, arrow-key navigation that skips disabled radios, Home/End selection, and group-disabled keyboard no-op behavior.
 
 ## Source
 <TuffDocSourceLink />

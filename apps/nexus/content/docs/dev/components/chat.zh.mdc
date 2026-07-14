@@ -1,40 +1,18 @@
 ---
 title: "Chat 消息列表"
-description: "常见 AI 消息列表（支持 markdown、图片缩略图、消息依次进入）。"
+description: "支持 Markdown、图片附件、消息入场动画与图片点击事件的 AI 消息列表。"
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [chat, ai, markdown]
+syncStatus: reviewed
+verified: true
 ---
 # Chat 消息列表
 
-常见 AI 消息列表（支持 markdown、图片缩略图、消息依次进入）。
+`TxChatList` 根据 `ChatMessageModel[]` 渲染对话记录。组件把每一行交给 `TxChatMessage`，支持 Markdown 正文、懒加载图片缩略图、可选入场动画，并在附件缩略图点击时发出标准化 `imageClick` payload。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const messages = ref([
-  {
-    id: 'm1',
-    role: 'system',
-    content: 'System message',
-    createdAt: Date.now() - 60_000,
-  },
-  {
-    id: 'm2',
-    role: 'user',
-    content: 'Show me **markdown** and an image.',
-    createdAt: Date.now() - 30_000,
-    attachments: [
-      { type: 'image', url: 'https://picsum.photos/seed/tuffex/420/280', name: 'demo' },
-    ],
-  },
-  {
-    id: 'm3',
-    role: 'assistant',
-    content: 'Here is some code:\n\n```ts\nexport const hello = 1\n```',
-    createdAt: Date.now() - 10_000,
-  },
-])
-</script>
+已人工核对 `packages/tuffex/packages/components/src/chat/src/types.ts`、`TxChatList.vue`、`TxChatMessage.vue`、`TxChatComposer.vue`、`TxTypingIndicator.vue` 与 chat 组件测试。
 
 ## 基础用法
 
@@ -42,8 +20,138 @@ const messages = ref([
 :::TuffDemoWrapper{demo="ChatChatListDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { ChatMessageModel } from '@talex-touch/tuffex/chat'
+  import { ref } from 'vue'
+
+  const messages = ref<ChatMessageModel[]>([
+    { id: 'system-1', role: 'system', content: 'Markdown 已启用。', createdAt: 1_705_000_000_000 },
+    {
+      id: 'user-1',
+      role: 'user',
+      content: '请审阅这张发布封面。',
+      attachments: [{ type: 'image', url: '/cover.svg', name: 'cover.svg' }],
+    },
+    { id: 'assistant-1', role: 'assistant', content: '可以进入发布说明。\n\n```ts\nconst status = "ready"\n```' },
+  ])
+  </script>
+
   <template>
-    <TxChatList :messages="messages" :markdown="true" :stagger="true" />
+    <TxChatList :messages="messages" :markdown="true" @image-click="console.log" />
   </template>
 ---
 :::
+
+## 交互契约
+
+- `TxChatList` 保持 `messages` 顺序，并用稳定 `id` 渲染每条消息。
+- `markdown` 默认是 `true`，正文交给 `TxMarkdownView`；设为 `false` 时渲染纯文本。
+- `stagger` 默认是 `true`，列表会用 `TxStagger` 包裹消息行；虚拟列表或频繁重排的记录应关闭。
+- `createdAt` 只在挂载后格式化，避免 SSR 与客户端时间不一致。
+- 图片附件以原生 `button type="button"` 缩略图渲染，图片使用 lazy loading。
+- `imageClick` 始终包含 `{ url, name, messageId }`，宿主可据此打开预览、下载或审计来源消息。
+
+## API
+
+### Data Models
+
+#### ChatMessageModel
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `id` | `string` | 必填 | `TxChatList` 使用的消息稳定 key。 |
+| `role` | `'user' \| 'assistant' \| 'system'` | 必填 | 消息角色与行对齐方式。 |
+| `content` | `string` | 必填 | Markdown 或纯文本正文。 |
+| `createdAt` | `number` | - | epoch 时间戳，挂载后渲染为 `HH:mm`。 |
+| `avatarUrl` | `string` | - | 当前行头像图片。 |
+| `attachments` | `ChatMessageAttachment[]` | - | 以缩略图渲染的图片附件。 |
+
+#### ChatMessageAttachment
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `type` | `'image'` | 必填 | 当前附件类型。 |
+| `url` | `string` | 必填 | 缩略图和点击 payload 使用的图片地址。 |
+| `name` | `string` | - | 图片 alt 文本和点击 payload 标签。 |
+
+### Props
+
+#### TxChatList
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `messages` | `ChatMessageModel[]` | 必填 | 对话消息数组，按数组顺序渲染。 |
+| `markdown` | `boolean` | `true` | 使用 `TxMarkdownView` 渲染消息正文。 |
+| `stagger` | `boolean` | `true` | 用 `TxStagger` 播放消息入场动画。 |
+
+#### TxChatMessage
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `message` | `ChatMessageModel` | 必填 | 单条消息数据。 |
+| `markdown` | `boolean` | `true` | 以 Markdown 或纯文本渲染正文。 |
+
+### Events
+
+#### TxChatList
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `imageClick` | `{ url: string, name?: string, messageId: string }` | 图片附件缩略图点击时，从 `TxChatMessage` 透传发出。 |
+
+#### TxChatMessage
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `imageClick` | `{ url: string, name?: string, messageId: string }` | 图片附件缩略图点击时发出。 |
+
+### Slots
+
+#### TxChatList
+
+不暴露公开插槽；需要改写单行渲染时，直接使用 `TxChatMessage` 的插槽。
+
+#### TxChatMessage
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `avatar` | `{ message: ChatMessageModel }` | 替换头像图片/回退内容。 |
+| `header` | `{ message: ChatMessageModel }` | 替换时间头部。 |
+| `content` | `{ message: ChatMessageModel }` | 替换 Markdown/纯文本正文渲染。 |
+
+### Exposed Methods
+
+不暴露公开实例方法。
+
+## 相关组件
+
+- `TxChatComposer` 负责文本输入、附件、发送保护和工具栏插槽，见 [ChatComposer](./chat-composer.zh.md)。
+- `TxTypingIndicator` 负责助手输入中状态，见 [TypingIndicator](./typing-indicator.zh.md)。
+- 需要 `tool` 消息或 streaming 状态的新 AI 对话界面，优先使用 [AI Elements](./ai-elements.zh.md)。
+
+## 最佳实践
+
+- 使用对话存储中的稳定消息 id，不要用数组下标作为 key。
+- 在数据边界归一化远程图片 URL；`TxChatMessage` 不校验或重写附件来源。
+- 虚拟列表或流式过程中会重排消息时关闭 `stagger`。
+- 在宿主处理 `imageClick`，让预览、下载、analytics 和权限检查保留产品语义。
+- 可信助手输出可保持 Markdown 开启；不可信内容进入消息数组前应先清洗或归一化。
+- 输入框和助手 pending 状态分别参考独立的 `TxChatComposer` 与 `TxTypingIndicator` 文档；本页只覆盖对话记录渲染。
+
+## 审阅说明
+
+- 已人工核对 `packages/tuffex/packages/components/src/chat/src/types.ts`、`TxChatList.vue`、`TxChatMessage.vue`、`TxChatComposer.vue`、`TxTypingIndicator.vue`、`chat-composer.test.ts` 与 `typing-indicator.test.ts`。
+- API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分组件，同时保留 message 数据模型。
+- 已按源码确认 `TxChatList` 会透传 `imageClick`，`TxChatMessage` 发出标准化图片 payload，Markdown 默认开启，stagger 默认开启，时间戳挂载前不渲染。
+- **实测覆盖:** Coverage: 当前没有专用的 `TxChatList` / `TxChatMessage` 单测；`apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 会验证本页与 `ChatChatListDemo`，同目录的 `chat-composer.test.ts` 和 `typing-indicator.test.ts` 覆盖本页链接到的相关组件。
+- `TxChatComposer` 和 `TxTypingIndicator` 位于同一源码目录，但作为相关组件链接，避免在本对话记录页面重复完整 API。
+
+## Source
+
+- List source: `packages/tuffex/packages/components/src/chat/src/TxChatList.vue`
+- Message source: `packages/tuffex/packages/components/src/chat/src/TxChatMessage.vue`
+- Types: `packages/tuffex/packages/components/src/chat/src/types.ts`
+- Related sources: `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`, `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`
+- Tests: `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts`, `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts`
+
+<TuffDocSourceLink />

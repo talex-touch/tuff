@@ -1,7 +1,7 @@
-import type { DeviceAuthGrantType, DeviceAuthRequest } from '../../../utils/authStore'
+import type { DeviceAuthGrantType, DeviceAuthRequest } from '../../../../server/utils/authStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import approveHandler from './approve.post'
+import approveHandler from '../../../../server/api/app-auth/device/approve.post'
 
 vi.hoisted(() => {
   ;(globalThis as typeof globalThis & {
@@ -31,8 +31,8 @@ const authStoreMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('h3', () => h3Mocks)
-vi.mock('../../../utils/auth', () => authMocks)
-vi.mock('../../../utils/authStore', () => authStoreMocks)
+vi.mock('../../../../server/utils/auth', () => authMocks)
+vi.mock('../../../../server/utils/authStore', () => authStoreMocks)
 
 function createDeviceAuthRequest(grantType: DeviceAuthGrantType): DeviceAuthRequest {
   return {

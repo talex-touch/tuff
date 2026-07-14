@@ -1,5 +1,8 @@
+import type { IntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
+import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { requireAdmin } from '../../../utils/auth'
 import { listRuntimeAudits } from '../../../utils/intelligenceStore'
+import { normalizeNexusIntelligenceTransportError } from '../../../utils/intelligenceErrorContract'
 
 interface RuntimeMetricMetadata {
   status?: string
@@ -17,6 +20,7 @@ interface RuntimeMetricMetadata {
   disconnectPaused?: boolean
   pauseReason?: string | null
   checkpointLossCount?: number
+  errorCode?: IntelligenceErrorCode
 }
 
 function toPercent(numerator: number, denominator: number): number {
@@ -36,6 +40,12 @@ function asRecord(value: unknown): Record<string, unknown> {
 function parseRuntimeMetadata(value: unknown): RuntimeMetricMetadata {
   const row = asRecord(value)
   const toolFailureDistribution = asRecord(row.toolFailureDistribution)
+  const error = asRecord(row.error)
+  const errorCode = isIntelligenceErrorCode(row.errorCode)
+    ? row.errorCode
+    : Object.keys(error).length > 0
+      ? normalizeNexusIntelligenceTransportError(error).code
+      : undefined
   const normalizedDistribution: Record<string, number> = {}
   for (const [toolId, count] of Object.entries(toolFailureDistribution)) {
     normalizedDistribution[toolId] = toNumber(count, 0)
@@ -56,6 +66,7 @@ function parseRuntimeMetadata(value: unknown): RuntimeMetricMetadata {
     disconnectPaused: row.disconnectPaused === true,
     pauseReason: typeof row.pauseReason === 'string' ? row.pauseReason : null,
     checkpointLossCount: toNumber(row.checkpointLossCount, 0),
+    errorCode,
   }
 }
 
@@ -76,6 +87,7 @@ export default defineEventHandler(async (event) => {
 
   const toolFailureDistribution: Record<string, number> = {}
   const statusDistribution: Record<string, number> = {}
+  const errorCodeDistribution = new Map<IntelligenceErrorCode, number>()
   const durations: number[] = []
 
   let totalActions = 0
@@ -100,6 +112,7 @@ export default defineEventHandler(async (event) => {
       fallbackCount: metadata.fallbackCount || 0,
       approvalHitCount: metadata.approvalHitCount || 0,
       durationMs: metadata.durationMs || audit.latency || 0,
+      errorCode: audit.success ? undefined : metadata.errorCode,
       createdAt: audit.createdAt,
     }
   })
@@ -108,6 +121,12 @@ export default defineEventHandler(async (event) => {
     const metadata = parseRuntimeMetadata(audit.metadata)
     const status = metadata.status || (audit.success ? 'completed' : 'failed')
     statusDistribution[status] = (statusDistribution[status] ?? 0) + 1
+    if (!audit.success && metadata.errorCode) {
+      errorCodeDistribution.set(
+        metadata.errorCode,
+        (errorCodeDistribution.get(metadata.errorCode) ?? 0) + 1,
+      )
+    }
 
     const duration = metadata.durationMs || audit.latency || 0
     durations.push(duration)
@@ -167,6 +186,8 @@ export default defineEventHandler(async (event) => {
       p95DurationMs: percentile(durations, 95),
     },
     statusDistribution,
+    errorCodeDistribution: Array.from(errorCodeDistribution, ([code, count]) => ({ code, count }))
+      .sort((left, right) => right.count - left.count || left.code.localeCompare(right.code)),
     toolFailureDistribution: Object.entries(toolFailureDistribution)
       .sort((a, b) => b[1] - a[1])
       .map(([toolId, count]) => ({ toolId, count })),

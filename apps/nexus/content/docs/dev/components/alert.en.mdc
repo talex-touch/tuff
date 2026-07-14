@@ -1,58 +1,133 @@
 ---
 title: Alert
-description: Status banner for inline feedback
+description: Inline status banner for contextual feedback, semantic alert messaging, and dismissible notices.
 category: Feedback
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [alert, feedback, status]
+syncStatus: reviewed
+verified: true
 ---
 
 # Alert
 
-Inline status banner for contextual feedback.
+`TxAlert` renders an inline `role="alert"` banner with semantic color, optional leading icon, title/body slots, and an optional close button.
+
+Reviewed against `packages/tuffex/packages/components/src/alert/src/types.ts`, `TxAlert.vue`, and `alert.test.ts`.
 
 ## Basic Usage
+
 ### Alert Variants
-Info / Success / Warning / Error.
+
 :::TuffDemoWrapper{demo="AlertAlertVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxAlert title="Heads up" message="Check your configuration." type="info" />
-    <TxAlert title="Success" message="Saved successfully." type="success" />
-    <TxAlert title="Warning" message="Something needs your attention." type="warning" />
-    <TxAlert title="Error" message="Save failed." type="error" />
+    <div class="tuff-demo-stack">
+      <TxAlert title="Heads up" message="Check your configuration." type="info" />
+      <TxAlert title="Success" message="Saved successfully." type="success" />
+      <TxAlert title="Warning" message="Something needs your attention." type="warning" />
+      <TxAlert title="Error" message="Save failed." type="error" />
+    </div>
   </template>
 ---
 :::
+
+## Composition Examples
+
+### Persistent Notice
+
+Use `closable=false` when the message is part of the page state and should not disappear locally.
+
+```vue
+<template>
+  <TxAlert
+    type="warning"
+    title="Manual review required"
+    message="This release contains unsigned artifacts."
+    :closable="false"
+  />
+</template>
+```
+
+### Rich Title and Body
+
+```vue
+<template>
+  <TxAlert type="success" @close="dismissed = true">
+    <template #title>
+      Runtime evidence collected
+    </template>
+
+    <p>
+      Preview checks passed. Open the evidence panel for screenshots and traces.
+    </p>
+  </TxAlert>
+</template>
+```
+
+### Text-only Banner
+
+```vue
+<template>
+  <TxAlert :show-icon="false" message="Local-only demo data is shown on this page." />
+</template>
+```
+
 ## Interaction Contract
 
-Alert renders with `role="alert"`, uses the shared `TxIcon` renderer for semantic leading icons, and emits `close` only from the close button. Set `closable=false` for persistent alerts, or `showIcon=false` for text-only banners.
+- The root renders `role="alert"` and a type class (`tx-alert--info`, `--success`, `--warning`, or `--error`).
+- `type` selects the leading icon name: `info`, `check-circle`, `alert-triangle`, or `x-circle`.
+- `showIcon=false` removes the leading icon container.
+- The title row renders only when `title` or the `title` slot is present.
+- The default slot replaces `message` inside `.tx-alert__message`.
+- `closable=true` renders the close button, adds `tx-alert--closable`, and reserves right padding.
+- Clicking the close button emits `close`; the component does not hide itself automatically.
+- Close button text is icon-only and uses `aria-label="Close"`.
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: type
-    type: "'info' | 'success' | 'warning' | 'error'"
-    default: "'info'"
-    description: Visual intent
-  - name: title
-    type: string
-    default: "''"
-    description: Alert title
-  - name: message
-    type: string
-    default: "''"
-    description: Alert message
-  - name: closable
-    type: boolean
-    default: 'true'
-    description: Show close button
-  - name: showIcon
-    type: boolean
-    default: 'true'
-    description: Show leading icon
----
-:::
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `type` | `'info' \| 'success' \| 'warning' \| 'error'` | `'info'` | Visual intent and default icon mapping. |
+| `title` | `string` | - | Optional title text. Hidden when absent and no `title` slot is provided. |
+| `message` | `string` | - | Body message used when no default slot is provided. |
+| `closable` | `boolean` | `true` | Render the close button and close padding. |
+| `showIcon` | `boolean` | `true` | Render the semantic leading icon. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `close` | - | Emitted when the close button is clicked. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `title` | - | Custom title content. |
+| `default` | - | Custom body content. Replaces `message`. |
+
+## Best Practices
+
+- Use alerts for contextual page feedback, not as a toast replacement.
+- Keep `type` aligned with the user impact: `error` for failed actions, `warning` for risk, `info` for neutral guidance.
+- Handle `close` in the host by removing the alert or persisting dismissal state.
+- Use `closable=false` for compliance, blocking, or always-relevant notices.
+- Do not put primary workflows inside the alert body; place action buttons after the alert where layout and semantics are clearer.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`, `types.ts`, and `alert.test.ts`.
+- **Verified coverage:** `alert.test.ts` covers semantic alert role, type class, title/message rendering, icon visibility, title/default slots, closable hiding, and `close` emit behavior.
+- Accessibility note: `role="alert"` announces content assertively. Use short, actionable copy and avoid mounting multiple new alerts at once.
 
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`.
+- Types: `packages/tuffex/packages/components/src/alert/src/types.ts` exports `AlertProps`, `AlertEmits`, and `AlertType`.
+- Coverage: `packages/tuffex/packages/components/src/alert/__tests__/alert.test.ts` verifies role/class rendering, slots, close controls, and close events.
 <TuffDocSourceLink />

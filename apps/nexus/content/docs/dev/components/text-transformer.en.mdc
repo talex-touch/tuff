@@ -1,12 +1,14 @@
 ---
 title: "TextTransformer"
-description: "fade + blur `TxAutoSizer` “ + ”"
+description: "Short-text transition helper that crossfades text with blur, preserves outgoing color, exposes a scoped text slot, and pairs with TxAutoSizer for size-following changes."
 category: Basic
-syncStatus: migrated
+tags: [text, transition, autosize, live-region]
+syncStatus: reviewed
+verified: true
 ---
 # TextTransformer
 
-fade + blur `TxAutoSizer` “ + ”
+`TxTextTransformer` renders current and outgoing text layers, crossfades them with blur, and exposes the active text to the default slot. Pair it with `TxAutoSizer` when the surrounding box should animate its width or height with the text.
 
 > Not recommended for high-frequency real-time updates (e.g., streaming text, per-frame state changes). Better for occasional state/title/chapter/short-text changes.
 
@@ -424,3 +426,45 @@ code: |
 | `blurPx` | `number` | `8` | Blur distance applied to the outgoing and incoming layers during the transition. |
 | `tag` | `string` | `span` | Root HTML tag used for the transformer wrapper. |
 | `wrap` | `boolean` | `false` | Allows multi-line text by switching layer whitespace from ellipsis mode to `pre-line`. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | `{ text: string }` | Optional renderer for both current and previous layers. Use it to wrap the text in custom inline markup while keeping the transition logic. |
+
+#### Events
+
+No Vue events are emitted. Drive state from the parent via the `text` prop.
+
+## Interaction Contract
+
+- `text` is normalized with `String(...)`; numbers are displayed as their string form.
+- The root uses `aria-live="polite"`; the previous layer is `aria-hidden` so screen readers announce only the current text.
+- When `text` changes, the component snapshots the previous DOM color, renders both layers, starts animation on the next animation frame, then removes the previous layer after `durationMs + 34ms`.
+- A newer text change cancels the previous timer/frame through an internal sequence guard, so stale transitions cannot remove the active layer.
+- `wrap=false` keeps one-line ellipsis behavior; `wrap=true` switches layers to `white-space: pre-line` for multiline or newline-delimited content.
+- The scoped slot is invoked for both current and previous text, so slot output should be deterministic from the provided `text` value.
+
+## Best Practices
+
+- Use it for labels, titles, badges, and occasional state changes; avoid streaming tokens or per-frame counters.
+- Keep `durationMs` aligned with the surrounding `TxAutoSizer` transaction when both are used together.
+- Prefer `wrap=false` inside compact buttons/badges to avoid vertical jumps; enable `wrap` only for paragraph or chapter transitions.
+- Keep slot content inline and lightweight. Heavy components inside the slot are duplicated while the previous layer is visible.
+- If color changes with text, set color on the transformer root; the outgoing layer keeps the old computed color for a cleaner crossfade.
+
+## Review Notes
+
+- **Live-region note:** The root always uses `aria-live="polite"`. Avoid placing multiple high-churn instances in the same dense region, or screen readers may announce more changes than users can consume.
+- **Transition note:** The outgoing layer is duplicated until `durationMs + 34ms`; slot content is rendered for both layers during that window. Keep slot renderers pure and cheap.
+- **Verified coverage:** `text-transformer.test.ts` checks default live-region semantics, custom root tag, CSS variable mapping for duration/blur, wrap class, numeric text normalization, previous/current layers, preserved previous color, `aria-hidden` on the outgoing layer, timer cleanup, and scoped slot props.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/text-transformer/src/TxTextTransformer.vue`.
+- Types: `packages/tuffex/packages/components/src/text-transformer/src/types.ts` exports `TextTransformerProps`.
+- Export alias: `packages/tuffex/packages/components/src/text-transformer/index.ts` exports `TextTransformer`, `TxTextTransformer`, `TextTransformerProps`, and `TxTextTransformerInstance`.
+- Coverage: `packages/tuffex/packages/components/src/text-transformer/__tests__/text-transformer.test.ts` verifies live-region defaults, transitions, CSS variables, slots, and cleanup.
+
+<TuffDocSourceLink />

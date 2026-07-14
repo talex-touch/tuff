@@ -1,4 +1,4 @@
-import type { SdkApiVersion } from './index'
+import type { SdkApiVersion } from "./index";
 
 /**
  * Known SDK API versions (format: YYMMDD).
@@ -12,6 +12,7 @@ import type { SdkApiVersion } from './index'
  * - >= 260225: OmniPanel declarative transfer is available
  * - >= 260228: plugin capability auth baseline is enabled
  * - >= 260626: SemanticAliasSDK is available
+ * - >= 260713: plugin i18n/Domain Lexicon facade is available
  */
 export enum SdkApi {
   /**
@@ -52,6 +53,10 @@ export enum SdkApi {
    * No additional runtime gate is introduced beyond existing baselines.
    */
   V260626 = 260626,
+  /**
+   * 2026-07-13: permission-gated plugin localization and Domain Lexicon facade.
+   */
+  V260713 = 260713,
 }
 
 /**
@@ -59,6 +64,7 @@ export enum SdkApi {
  * This list is the canonical allowlist for plugin-declared sdkapi markers.
  */
 export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
+  SdkApi.V260713,
   SdkApi.V260626,
   SdkApi.V260615,
   SdkApi.V260428,
@@ -68,52 +74,58 @@ export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
   SdkApi.V260121,
   SdkApi.V260114,
   SdkApi.V251212,
-]
+];
 
 /**
  * Current SDK API version.
  * Updated when a new supported plugin SDK marker is introduced.
  */
-export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260626
+export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260713;
 
 /**
  * Minimum SDK version required for permission enforcement.
  * Plugins below this version are blocked by the core-app runtime gate.
  */
-export const PERMISSION_ENFORCEMENT_MIN_VERSION: SdkApiVersion = SdkApi.V251212
+export const PERMISSION_ENFORCEMENT_MIN_VERSION: SdkApiVersion = SdkApi.V251212;
 
 /**
  * Minimum SDK version required for `manifest.json.category`.
  */
-export const CATEGORY_REQUIRED_MIN_VERSION: SdkApiVersion = SdkApi.V260114
+export const CATEGORY_REQUIRED_MIN_VERSION: SdkApiVersion = SdkApi.V260114;
 
 /**
  * Minimum SDK version required for `tfileScope` enforcement.
  */
-export const TFILE_SCOPE_REQUIRED_MIN_VERSION: SdkApiVersion = SdkApi.V260121
+export const TFILE_SCOPE_REQUIRED_MIN_VERSION: SdkApiVersion = SdkApi.V260121;
 
 /**
  * Minimum SDK version required for OmniPanel declarative transfer.
  */
-export const OMNI_TRANSFER_DECLARATIVE_MIN_VERSION: SdkApiVersion = SdkApi.V260225
+export const OMNI_TRANSFER_DECLARATIVE_MIN_VERSION: SdkApiVersion =
+  SdkApi.V260225;
 
 /**
  * Minimum SDK version required for capability-level auth baseline.
  */
-export const CAPABILITY_AUTH_MIN_VERSION: SdkApiVersion = SdkApi.V260228
+export const CAPABILITY_AUTH_MIN_VERSION: SdkApiVersion = SdkApi.V260228;
+
+/**
+ * Minimum SDK version required for the plugin localization facade.
+ */
+export const LOCALIZATION_FACADE_MIN_VERSION: SdkApiVersion = SdkApi.V260713;
 
 /**
  * SDK version compatibility result
  */
 export interface SdkCompatibilityResult {
   /** Whether the plugin SDK version is compatible */
-  compatible: boolean
+  compatible: boolean;
   /** Whether permission enforcement should be applied */
-  enforcePermissions: boolean
+  enforcePermissions: boolean;
   /** Warning message if compatibility issues exist */
-  warning?: string
+  warning?: string;
   /** Suggestion for fixing compatibility issues */
-  suggestion?: string
+  suggestion?: string;
 }
 
 /**
@@ -133,10 +145,10 @@ export function checkSdkCompatibility(
       enforcePermissions: false,
       warning: `Plugin "${pluginName}" is blocked because manifest.json must declare sdkapi >= ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
       suggestion: `Add "sdkapi": ${CURRENT_SDK_VERSION} to manifest.json and republish the plugin.`,
-    }
+    };
   }
 
-  const declared = parseSdkApiInput(pluginSdkVersion)
+  const declared = parseSdkApiInput(pluginSdkVersion);
 
   if (declared === undefined) {
     return {
@@ -144,7 +156,7 @@ export function checkSdkCompatibility(
       enforcePermissions: false,
       warning: `Plugin "${pluginName}" is blocked because sdkapi "${pluginSdkVersion}" is invalid. Use YYMMDD format and declare at least ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
       suggestion: `Use format YYMMDD (for example "sdkapi": ${CURRENT_SDK_VERSION}).`,
-    }
+    };
   }
 
   if (declared < PERMISSION_ENFORCEMENT_MIN_VERSION) {
@@ -153,7 +165,7 @@ export function checkSdkCompatibility(
       enforcePermissions: false,
       warning: `Plugin "${pluginName}" is blocked because sdkapi ${declared} is below the minimum supported baseline ${PERMISSION_ENFORCEMENT_MIN_VERSION}.`,
       suggestion: `Update to sdkapi: ${CURRENT_SDK_VERSION}.`,
-    }
+    };
   }
 
   if (!isSupportedSdkVersion(declared)) {
@@ -162,13 +174,13 @@ export function checkSdkCompatibility(
       enforcePermissions: false,
       warning: `Plugin "${pluginName}" is blocked because sdkapi ${declared} is not a supported SDK marker.`,
       suggestion: `Use one of the supported sdkapi markers, preferably ${CURRENT_SDK_VERSION}.`,
-    }
+    };
   }
 
   return {
     compatible: true,
     enforcePermissions: true,
-  }
+  };
 }
 
 /**
@@ -181,36 +193,36 @@ export function checkSdkCompatibility(
  * - Unknown current/future markers => undefined (blocked by runtime gate)
  */
 export function resolveSdkApiVersion(raw: unknown): SdkApiVersion | undefined {
-  const num = parseSdkApiInput(raw)
+  const num = parseSdkApiInput(raw);
 
   if (num === undefined) {
-    return undefined
+    return undefined;
   }
 
   if (isSupportedSdkVersion(num) || num < PERMISSION_ENFORCEMENT_MIN_VERSION) {
-    return num
+    return num;
   }
 
-  return undefined
+  return undefined;
 }
 
 export function isSupportedSdkVersion(version: SdkApiVersion): boolean {
-  return SUPPORTED_SDK_VERSIONS.includes(version)
+  return SUPPORTED_SDK_VERSIONS.includes(version);
 }
 
 function parseSdkApiInput(raw: unknown): SdkApiVersion | undefined {
-  const num
-    = typeof raw === 'number'
+  const num =
+    typeof raw === "number"
       ? raw
-      : typeof raw === 'string'
+      : typeof raw === "string"
         ? parseSdkVersion(raw)
-        : undefined
+        : undefined;
 
   if (num === undefined || !isValidSdkVersion(num)) {
-    return undefined
+    return undefined;
   }
 
-  return num
+  return num;
 }
 
 /**
@@ -218,16 +230,23 @@ function parseSdkApiInput(raw: unknown): SdkApiVersion | undefined {
  */
 export function isValidSdkVersion(version: number): boolean {
   if (!Number.isInteger(version) || version < 100000 || version > 999999) {
-    return false
+    return false;
   }
 
-  const str = version.toString()
-  const year = Number.parseInt(str.substring(0, 2), 10)
-  const month = Number.parseInt(str.substring(2, 4), 10)
-  const day = Number.parseInt(str.substring(4, 6), 10)
+  const str = version.toString();
+  const year = Number.parseInt(str.substring(0, 2), 10);
+  const month = Number.parseInt(str.substring(2, 4), 10);
+  const day = Number.parseInt(str.substring(4, 6), 10);
 
   // Basic validation: year 20-99, month 01-12, day 01-31
-  return year >= 20 && year <= 99 && month >= 1 && month <= 12 && day >= 1 && day <= 31
+  return (
+    year >= 20 &&
+    year <= 99 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= 31
+  );
 }
 
 /**
@@ -236,8 +255,8 @@ export function isValidSdkVersion(version: number): boolean {
  * @returns Formatted string like "25.12.12"
  */
 export function formatSdkVersion(version: SdkApiVersion): string {
-  const str = version.toString().padStart(6, '0')
-  return `${str.substring(0, 2)}.${str.substring(2, 4)}.${str.substring(4, 6)}`
+  const str = version.toString().padStart(6, "0");
+  return `${str.substring(0, 2)}.${str.substring(2, 4)}.${str.substring(4, 6)}`;
 }
 
 /**
@@ -247,11 +266,11 @@ export function formatSdkVersion(version: SdkApiVersion): string {
  */
 export function parseSdkVersion(str: string): SdkApiVersion | undefined {
   // Remove dots if present
-  const cleaned = str.replace(/\./g, '')
-  const num = Number.parseInt(cleaned, 10)
+  const cleaned = str.replace(/\./g, "");
+  const num = Number.parseInt(cleaned, 10);
 
   if (isValidSdkVersion(num)) {
-    return num
+    return num;
   }
-  return undefined
+  return undefined;
 }

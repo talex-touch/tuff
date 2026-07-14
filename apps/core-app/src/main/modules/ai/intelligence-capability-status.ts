@@ -2,7 +2,7 @@ import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { ensureIntelligenceConfigLoaded, getCapabilityOptions } from './intelligence-config'
-import { getIntelligenceProviderManager } from './intelligence-sdk'
+import { getIntelligenceProviderManager, providerSupportsCapability } from './intelligence-sdk'
 
 export interface IntelligenceCapabilityStatusSnapshot {
   capabilityId: string
@@ -20,25 +20,18 @@ function hasUsableRuntimeCredential(provider: IntelligenceProviderConfig): boole
   return Boolean(apiKey) && apiKey !== 'guest' && provider.metadata?.tokenMode !== 'guest'
 }
 
-function providerCanServeCapability(
-  provider: IntelligenceProviderConfig,
-  capabilityId: string
-): boolean {
+function providerCanServeCapability(provider: IntelligenceProviderConfig): boolean {
   if (provider.enabled === false) {
     return false
   }
   if (!hasUsableRuntimeCredential(provider)) {
     return false
   }
-  return (
-    !Array.isArray(provider.capabilities) ||
-    provider.capabilities.length === 0 ||
-    provider.capabilities.includes(capabilityId)
-  )
+  return true
 }
 
 export function resolveCapabilityStatus(
-  capabilityId: string
+  capabilityId: string,
 ): IntelligenceCapabilityStatusSnapshot {
   ensureIntelligenceConfigLoaded()
   const capability = intelligenceCapabilityRegistry.get(capabilityId)
@@ -47,7 +40,7 @@ export function resolveCapabilityStatus(
       capabilityId,
       available: false,
       providerIds: [],
-      reason: 'capability-not-found'
+      reason: 'capability-not-found',
     }
   }
 
@@ -55,16 +48,21 @@ export function resolveCapabilityStatus(
   const allowedProviderIds = new Set(options.allowedProviderIds ?? [])
   const providerIds = getIntelligenceProviderManager()
     .getEnabled()
-    .map((provider) => provider.getConfig())
-    .filter((provider) => capability.supportedProviders.includes(provider.type))
-    .filter((provider) => allowedProviderIds.size === 0 || allowedProviderIds.has(provider.id))
-    .filter((provider) => providerCanServeCapability(provider, capabilityId))
-    .map((provider) => provider.id)
+    .filter((provider) => {
+      const config = provider.getConfig()
+      return (
+        capability.supportedProviders.includes(config.type)
+        && (allowedProviderIds.size === 0 || allowedProviderIds.has(config.id))
+        && providerCanServeCapability(config)
+        && providerSupportsCapability(provider, capabilityId, capability.type, false)
+      )
+    })
+    .map(provider => provider.getConfig().id)
 
   return {
     capabilityId,
     available: providerIds.length > 0,
     providerIds,
-    reason: providerIds.length > 0 ? undefined : 'no-enabled-provider'
+    reason: providerIds.length > 0 ? undefined : 'no-enabled-provider',
   }
 }

@@ -32,6 +32,42 @@ describe('dev toolbox config', () => {
     expect(config.commands).toBeUndefined()
   })
 
+  it('normalizes only HTTP and HTTPS external URLs', () => {
+    expect(toolboxTest.normalizeExternalUrl('https://example.com/docs')).toBe('https://example.com/docs')
+    expect(toolboxTest.normalizeExternalUrl('http://example.com')).toBe('http://example.com/')
+    expect(toolboxTest.normalizeExternalUrl('file:///tmp/toolbox.json')).toBe('')
+    expect(toolboxTest.normalizeExternalUrl('javascript:alert(1)')).toBe('')
+    expect(toolboxTest.normalizeExternalUrl('not a url')).toBe('')
+  })
+
+  it('blocks invalid link payloads before permission checks', async () => {
+    const openUrl = vi.fn()
+    const check = vi.fn(async () => true)
+    const request = vi.fn(async () => true)
+    const pluginModule = loadPluginModule(devToolboxUrl, createPluginGlobals({
+      openUrl,
+      permission: { check, request },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'dev-toolbox',
+        actionId: 'open-link',
+        payload: { url: 'file:///tmp/toolbox.json' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'invalid-url',
+    })
+    expect(check).not.toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
+    expect(openUrl).not.toHaveBeenCalled()
+  })
+
   it('blocks link opening when network permission is denied', async () => {
     const openUrl = vi.fn()
     const request = vi.fn(async () => false)
@@ -114,6 +150,91 @@ describe('dev toolbox config', () => {
     expect(openUrl).not.toHaveBeenCalled()
   })
 
+  it('blocks link opening when network permission check fails without requesting', async () => {
+    const openUrl = vi.fn()
+    const request = vi.fn(async () => true)
+    const pluginModule = loadPluginModule(devToolboxUrl, createPluginGlobals({
+      openUrl,
+      permission: {
+        check: async () => {
+          throw new Error('permission check failed')
+        },
+        request,
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'dev-toolbox',
+        actionId: 'open-link',
+        payload: { url: 'https://example.com' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-request-failed',
+    })
+    expect(request).not.toHaveBeenCalled()
+    expect(openUrl).not.toHaveBeenCalled()
+  })
+
+  it('blocks link opening when the openUrl capability is unavailable', async () => {
+    const pluginModule = loadPluginModule(devToolboxUrl, createPluginGlobals({
+      openUrl: withoutGlobal(),
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'dev-toolbox',
+        actionId: 'open-link',
+        payload: { url: 'https://example.com' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'open-url-unavailable',
+    })
+  })
+
+  it('returns an explicit blocked result when openUrl fails', async () => {
+    const openUrl = vi.fn(async () => {
+      throw new Error('host open failed')
+    })
+    const pluginModule = loadPluginModule(devToolboxUrl, createPluginGlobals({
+      openUrl,
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+    }))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'dev-toolbox',
+        actionId: 'open-link',
+        payload: { url: 'https://example.com' },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'open-url-failed',
+    })
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/')
+  })
+
   it('opens link after network permission is granted', async () => {
     const openUrl = vi.fn(async () => undefined)
     const pluginModule = loadPluginModule(devToolboxUrl, createPluginGlobals({
@@ -133,6 +254,6 @@ describe('dev toolbox config', () => {
     })
 
     expect(result).toMatchObject({ externalAction: true, status: 'started' })
-    expect(openUrl).toHaveBeenCalledWith('https://example.com')
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/')
   })
 })

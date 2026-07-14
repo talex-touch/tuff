@@ -81,7 +81,8 @@
     "quickops:surface:audit": "pnpm exec tsx \"scripts/quickops-surface-audit.ts\"",
     "quickops:flow-ai:audit": "pnpm exec tsx \"scripts/quickops-flow-ai-adapter-audit.ts\"",
     "quickops:evidence:template": "pnpm exec tsx \"scripts/quickops-evidence-template.ts\"",
-    "quickops:evidence:verify": "pnpm exec tsx \"scripts/quickops-evidence-verify.ts\""
+    "quickops:evidence:verify": "pnpm exec tsx \"scripts/quickops-evidence-verify.ts\"",
+    "context:entrypoint:evidence:verify": "pnpm exec tsx \"scripts/context-entrypoint-evidence.ts\""
   },
   "dependencies": {
     "@arrow-js/core": "1.0.6",

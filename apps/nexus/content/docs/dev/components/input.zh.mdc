@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [input, field, search]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -184,6 +184,10 @@ rows:
     description: '读取当前值'
     type: '() => string | number'
     default: '-'
+  - name: inputEl
+    description: '暴露的原生 input 或 textarea 引用，用于高级聚焦或测量场景'
+    type: 'HTMLInputElement | HTMLTextAreaElement | null'
+    default: '-'
 ---
 :::
 
@@ -203,11 +207,13 @@ rows:
 ---
 :::
 
-## Design Notes
-- 聚焦态优先通过边框与阴影的细微变化体现。  
-- 搜索态更轻，适合工具栏与列表筛选。
-- `type="number"` 在非空输入时发出 number，清空时发出 `''`。
+## 最佳实践
+
+- 聚焦态优先通过边框与阴影的细微变化体现；除非外层表单有统一规范，不要再给包裹层叠加第二套 focus ring。
+- 搜索态更适合保持轻量，用在工具栏与列表筛选；当 Enter 搜索和防抖远程搜索属于契约时，使用 `TxSearchInput`。
+- `type="number"` 在非空输入时发出 number，清空时发出 `''`，持久化前需要在下游 schema 中归一化。
 - 清空控件是可键盘聚焦的 button，并会在禁用或只读状态下隐藏。
+- 插槽内容会覆盖 `prefixIcon` / `suffixIcon`；同一个字段只选择一种路径，避免图标在文档与实现之间漂移。
 
 ## 组合示例
 
@@ -222,3 +228,18 @@ code: |
   </template>
 ---
 :::
+
+## 审阅说明
+
+- **值契约：** `type="number"` 在非空输入时发出 `Number(value)`，清空时保留 `''`，因此持久化层应先做 schema 归一化。
+- **清空契约：** `disabled` 或 `readonly` 时，`clear()` 与清空按钮都会被阻止；其他情况下清空会触发 `update:modelValue`、`input` 和 `clear`。
+- **组合契约：** wrapper 的 `class` / `style` 保留在外层，其余 attrs 透传给原生 `input` / `textarea`；前后缀插槽优先于图标 props。
+- **实测覆盖:** `input.test.ts` 覆盖文本事件、数字归一化、textarea attrs 透传、清空按钮无障碍、禁用/只读阻断和插槽优先级。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/input/src/TxInput.vue`.
+- Export alias: `packages/tuffex/packages/components/src/input/index.ts` exports both `TuffInput` and `TxInput`.
+- Coverage: `packages/tuffex/packages/components/src/input/__tests__/input.test.ts` verifies text emits, number normalization, textarea attr forwarding, accessible clear button behavior, disabled/readonly clear blocking, and prefix/suffix slot precedence.
+
+<TuffDocSourceLink />

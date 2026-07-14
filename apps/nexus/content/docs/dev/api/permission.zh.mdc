@@ -1,61 +1,67 @@
 # Permission 权限系统
 
 ## 概述
+
 插件权限系统用于控制插件对敏感资源和 API 的访问。从 SDK API `251212` 版本开始，所有权限声明都会被强制校验；未声明合法 `sdkapi` 的插件会在运行时被直接阻断。
 
 ## 介绍
+
 权限声明强调最小授权，通过 `permissions` 与 `permissionReasons` 对用户解释用途，提升授权通过率。
 
 ## 快速开始
 
 **1. 在 manifest.json 中声明权限**
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  {
-    "id": "com.example.plugin",
-    "name": "My Plugin",
-    "version": "1.0.0",
-    "sdkapi": 260626,
-    "permissions": {
-      "required": ["clipboard.read", "network.internet"],
-      "optional": ["storage.shared"]
-    },
-    "permissionReasons": {
-      "clipboard.read": "需要读取剪贴板以获取待翻译文本",
-      "network.internet": "需要访问翻译 API 服务"
-    }
-  }
+{
+"id": "com.example.plugin",
+"name": "My Plugin",
+"version": "1.0.0",
+"sdkapi": 260626,
+"permissions": {
+"required": ["clipboard.read", "network.internet"],
+"optional": ["storage.shared"]
+},
+"permissionReasons": {
+"clipboard.read": "需要读取剪贴板以获取待翻译文本",
+"network.internet": "需要访问翻译 API 服务"
+}
+}
+
 ---
+
 :::
 
 **2. 权限分类**
 
-| 类别 | 权限 ID | 风险等级 | 说明 |
-|------|---------|----------|------|
-| **文件系统** | `fs.read` | 中 | 读取用户文件 |
-| | `fs.write` | 高 | 写入/修改文件 |
-| | `fs.execute` | 高 | 执行文件或脚本 |
-| **剪贴板** | `clipboard.read` | 中 | 读取剪贴板内容 |
-| | `clipboard.write` | 低 | 写入剪贴板内容 |
-| **网络** | `network.local` | 低 | 访问本地网络 |
-| | `network.internet` | 中 | 访问互联网 |
-| | `network.download` | 中 | 下载文件到本地 |
-| **系统** | `system.shell` | 高 | 执行系统命令 |
-| | `system.notification` | 低 | 发送系统通知 |
-| | `system.tray` | 中 | 操作系统托盘 |
-| **智能** | `intelligence.basic` | 低 | 基础智能能力 |
-| | `intelligence.admin` | 高 | 管理级智能能力 |
-| | `intelligence.agents` | 高 | 智能体系统 |
-| **存储** | `storage.plugin` | 低 | 插件私有存储（自动授予） |
-| | `storage.shared` | 中 | 跨插件共享存储 |
-| | `storage.sqlite` | 中 | 访问插件本地 SQLite 数据库 |
-| **窗口** | `window.create` | 低 | 创建窗口（自动授予） |
-| | `window.capture` | 高 | 屏幕截图 |
-| **搜索** | `search.root-results` | 高 | 向 CoreBox 根结果推送或更新搜索项 |
+| 类别         | 权限 ID               | 风险等级 | 说明                              |
+| ------------ | --------------------- | -------- | --------------------------------- |
+| **文件系统** | `fs.read`             | 中       | 读取用户文件                      |
+|              | `fs.write`            | 高       | 写入/修改文件                     |
+|              | `fs.execute`          | 高       | 执行文件或脚本                    |
+| **剪贴板**   | `clipboard.read`      | 中       | 读取剪贴板内容                    |
+|              | `clipboard.write`     | 低       | 写入剪贴板内容                    |
+| **网络**     | `network.local`       | 低       | 访问本地网络                      |
+|              | `network.internet`    | 中       | 访问互联网                        |
+|              | `network.download`    | 中       | 下载文件到本地                    |
+| **系统**     | `system.shell`        | 高       | 执行系统命令                      |
+|              | `system.notification` | 低       | 发送系统通知                      |
+|              | `system.tray`         | 中       | 操作系统托盘                      |
+| **智能**     | `intelligence.basic`  | 低       | 基础智能能力                      |
+|              | `intelligence.admin`  | 高       | 管理级智能能力                    |
+|              | `intelligence.agents` | 高       | 智能体系统                        |
+| **存储**     | `storage.plugin`      | 低       | 插件私有存储（自动授予）          |
+|              | `storage.shared`      | 中       | 跨插件共享存储                    |
+|              | `storage.sqlite`      | 中       | 访问插件本地 SQLite 数据库        |
+| **窗口**     | `window.create`       | 低       | 创建窗口（自动授予）              |
+|              | `window.capture`      | 高       | 屏幕截图                          |
+| **搜索**     | `search.root-results` | 高       | 向 CoreBox 根结果推送或更新搜索项 |
 
 `search.root-results` 是 Search Provider 的根结果写入权限。任何插件只要通过 push feature 或 `boxItems.push()` / `plugin.feature.pushItems()` 把内容写入 CoreBox 根结果，都必须在 `manifest.json` 中声明并获得授权；删除或清理自己插件已有结果不需要该权限，以免权限状态异常时留下 stale items。
+
+`window.capture` 会门禁 `context.utils.screenshot` / `context.utils.plugin.screenshot` 的 support、显示器列表与 capture 调用。Screenshot SDK 仍要求 verified plugin context；声明权限并不授权插件自行拼接 raw `native:screenshot:*` channel。截图后 OCR 还必须独立声明 `intelligence.basic`。
 
 **3. 风险等级说明**
 
@@ -77,31 +83,34 @@ code: |
 
 `sdkapi` 字段决定插件能否进入权限校验运行时：
 
-| sdkapi 值 | 权限校验 | 说明 |
-|-----------|----------|------|
-| 未声明 | 阻断 | 运行时返回 `SDKAPI_BLOCKED` |
-| < 251212 | 阻断 | 运行时返回 `SDKAPI_BLOCKED` |
-| 未列入支持列表 | 阻断 | 非 canonical 或未来 marker 返回 `SDKAPI_BLOCKED` |
-| 受支持且 >= 251212 | 启用 | 完整权限校验 |
+| sdkapi 值          | 权限校验 | 说明                                             |
+| ------------------ | -------- | ------------------------------------------------ |
+| 未声明             | 阻断     | 运行时返回 `SDKAPI_BLOCKED`                      |
+| < 251212           | 阻断     | 运行时返回 `SDKAPI_BLOCKED`                      |
+| 未列入支持列表     | 阻断     | 非 canonical 或未来 marker 返回 `SDKAPI_BLOCKED` |
+| 受支持且 >= 251212 | 启用     | 完整权限校验                                     |
 
 **迁移指南**
 
 如果您的插件未声明 `sdkapi` 或版本较低：
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  {
-    "sdkapi": 260626,
-    "permissions": {
-      "required": ["clipboard.read"],
-      "optional": []
-    }
-  }
+{
+"sdkapi": 260626,
+"permissions": {
+"required": ["clipboard.read"],
+"optional": []
+}
+}
+
 ---
+
 :::
 
 ## 技术原理
+
 - 权限校验由权限中心统一管理，`sdkapi` 达到门槛才启用完整校验。
 - 授权结果持久化在 `<appData>/config/permission/` 下的 SQLite 权限存储；旧 `permissions.json` 仅用于一次性迁移，不再是可写真相源。
 
@@ -109,85 +118,93 @@ code: |
 
 **在 Prelude (index.js) 中检查权限**
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  const { permission } = globalThis
-  
-  // 检查是否有权限
-  const hasPermission = await permission.check('clipboard.read')
-  
-  // 请求权限（会触发用户确认弹窗）
-  const granted = await permission.request('clipboard.read', '需要读取剪贴板内容')
-  
-  if (granted) {
-    // 使用 clipboard API
-    const text = clipboard.readText()
-  }
+const { permission } = globalThis
+
+// 检查是否有权限
+const hasPermission = await permission.check('clipboard.read')
+
+// 请求权限（会触发用户确认弹窗）
+const granted = await permission.request('clipboard.read', '需要读取剪贴板内容')
+
+if (granted) {
+// 使用 clipboard API
+const text = clipboard.readText()
+}
+
 ---
+
 :::
 
 **在 Surface (Vue) 中使用**
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import { usePermission } from '@talex-touch/utils/plugin/sdk'
-  
-  const { check, request, status } = usePermission()
-  
-  // 检查权限
-  const hasClipboard = await check('clipboard.read')
-  
-  // 请求权限
-  const granted = await request('network.internet', '需要访问翻译服务')
-  
-  // 获取所有权限状态
-  const allStatus = await status()
+import { usePermission } from '@talex-touch/utils/plugin/sdk'
+
+const { check, request, status } = usePermission()
+
+// 检查权限
+const hasClipboard = await check('clipboard.read')
+
+// 请求权限
+const granted = await request('network.internet', '需要访问翻译服务')
+
+// 获取所有权限状态
+const allStatus = await status()
+
 ---
+
 :::
 
 **SQLite SDK（sdkapi >= 260215）**
 
 当使用 `usePluginSqlite()` 时，需要在 manifest 中声明 `storage.sqlite` 必需权限：
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  {
-    "sdkapi": 260626,
-    "permissions": {
-      "required": ["storage.sqlite"],
-      "optional": []
-    },
-    "permissionReasons": {
-      "storage.sqlite": "将插件业务数据存储到本地 SQLite 数据库"
-    }
-  }
+{
+"sdkapi": 260626,
+"permissions": {
+"required": ["storage.sqlite"],
+"optional": []
+},
+"permissionReasons": {
+"storage.sqlite": "将插件业务数据存储到本地 SQLite 数据库"
+}
+}
+
 ---
+
 :::
 
-:::TuffCodeBlock{lang="ts"}
----
+## :::TuffCodeBlock{lang="ts"}
+
 code: |
-  import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
 
-  const sqlite = usePluginSqlite()
+const sqlite = usePluginSqlite()
 
-  await sqlite.execute(
-    'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TEXT NOT NULL)'
-  )
+await sqlite.execute(
+'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TEXT NOT NULL)'
+)
 
-  await sqlite.execute(
-    'INSERT INTO notes (title, created_at) VALUES (?, ?)',
-    ['hello', new Date().toISOString()]
-  )
+await sqlite.execute(
+'INSERT INTO notes (title, created_at) VALUES (?, ?)',
+['hello', new Date().toISOString()]
+)
 
-  const result = await sqlite.query<{ id: number; title: string }>(
-    'SELECT id, title FROM notes ORDER BY id DESC LIMIT 10'
-  )
-  console.log(result.rows)
+const result = await sqlite.query<{ id: number; title: string }>(
+'SELECT id, title FROM notes ORDER BY id DESC LIMIT 10'
+)
+console.log(result.rows)
+
 ---
+
 :::
 
 ## 最佳实践
@@ -196,42 +213,46 @@ code: |
 
 只声明实际需要的权限：
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  // ✅ 好的做法
-  "permissions": {
-    "required": ["clipboard.read"],
-    "optional": []
-  }
-  
-  // ❌ 避免
-  "permissions": {
-    "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
-  }
+// ✅ 好的做法
+"permissions": {
+"required": ["clipboard.read"],
+"optional": []
+}
+
+// ❌ 避免
+"permissions": {
+"required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
+}
+
 ---
+
 :::
 
 **2. 提供权限说明**
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  "permissionReasons": {
-    "clipboard.read": "读取剪贴板中的待翻译文本",
-    "network.internet": "连接 Google 翻译 API"
-  }
+"permissionReasons": {
+"clipboard.read": "读取剪贴板中的待翻译文本",
+"network.internet": "连接 Google 翻译 API"
+}
+
 ---
+
 :::
 
 **3. 优雅降级**
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  async function translateText(text) {
-    const hasNetwork = await permission.check('network.internet')
-    
+async function translateText(text) {
+const hasNetwork = await permission.check('network.internet')
+
     if (!hasNetwork) {
       // 请求权限或提示用户
       const granted = await permission.request('network.internet')
@@ -239,23 +260,26 @@ code: |
         return { error: '需要网络权限才能翻译' }
       }
     }
-    
+
     // 正常翻译逻辑
     return await http.post('...')
-  }
----
+
+## }
+
 :::
 
 **4. 区分必需和可选权限**
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  "permissions": {
-    "required": ["clipboard.read"],  // 核心功能必需
-    "optional": ["network.internet"] // 增强功能可选
-  }
+"permissions": {
+"required": ["clipboard.read"], // 核心功能必需
+"optional": ["network.internet"] // 增强功能可选
+}
+
 ---
+
 :::
 
 ## 用户界面
@@ -271,29 +295,33 @@ code: |
 
 A: 您的 `manifest.json` 未声明 `sdkapi`、使用了非法 / 未受支持 marker，或版本低于 `251212`。请更新为当前受支持的版本：
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  "sdkapi": 260626
+"sdkapi": 260626
+
 ---
+
 :::
 
 **Q: 如何处理用户拒绝权限？**
 
 A: 提供降级方案或清晰的错误提示：
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  const granted = await permission.request('clipboard.read')
-  if (!granted) {
-    // 显示提示，引导用户手动输入或授权
-    feature.pushItems([{
-      title: '需要剪贴板权限',
-      subtitle: '请在插件设置中授予权限'
-    }])
-  }
+const granted = await permission.request('clipboard.read')
+if (!granted) {
+// 显示提示，引导用户手动输入或授权
+feature.pushItems([{
+title: '需要剪贴板权限',
+subtitle: '请在插件设置中授予权限'
+}])
+}
+
 ---
+
 :::
 
 **Q: 权限数据存储在哪里？**

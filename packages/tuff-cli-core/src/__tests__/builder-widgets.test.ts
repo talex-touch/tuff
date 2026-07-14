@@ -319,4 +319,74 @@ describe('builder widget precompile', () => {
       ).resolves.toBe(true)
     })
   })
+
+  it('bundles underscore-prefixed private modules without compiling them as widgets', async () => {
+    await withPluginFixture(async (root) => {
+      await fs.ensureDir(path.join(root, 'widgets', '_shared'))
+      await fs.writeFile(
+        path.join(root, 'widgets', '_shared', 'prompt-preview.ts'),
+        'export const promptPreview = "Private helper bundled"',
+      )
+      await fs.writeFile(
+        path.join(root, 'widgets', 'panel.vue'),
+        [
+          '<script setup lang="ts">',
+          'import { promptPreview } from "./_shared/prompt-preview"',
+          '</script>',
+          '<template><div class="panel">{{ promptPreview }}</div></template>',
+        ].join('\n'),
+      )
+
+      await build({
+        root,
+        outDir: 'dist',
+        versionSync: { enabled: false },
+      })
+
+      const packagedManifest = await fs.readJson(
+        path.join(root, 'dist', 'build', 'manifest.json'),
+      )
+      expect(packagedManifest.build.widgets).toHaveLength(1)
+      expect(packagedManifest.build.widgets[0]).toMatchObject({
+        featureId: 'translate',
+        sourcePath: 'widgets/panel.vue',
+      })
+      expect(packagedManifest.build.widgets).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sourcePath: 'widgets/_shared/prompt-preview.ts',
+          }),
+        ]),
+      )
+
+      const compiled = await fs.readFile(
+        path.join(
+          root,
+          'dist',
+          'build',
+          packagedManifest.build.widgets[0].compiledPath,
+        ),
+        'utf8',
+      )
+      expect(compiled).toContain('Private helper bundled')
+    })
+  })
+
+  it('does not feed a previous tpex archive into the next package', async () => {
+    await withPluginFixture(async (root) => {
+      const staleArchive = 'demo-plugin-0.9.0.tpex'
+      await fs.writeFile(path.join(root, 'dist', staleArchive), 'stale package')
+
+      await build({
+        root,
+        outDir: 'dist',
+        versionSync: { enabled: false },
+      })
+
+      const packagedManifest = await fs.readJson(path.join(root, 'dist', 'build', 'manifest.json'))
+      await expect(fs.pathExists(path.join(root, 'dist', 'out', staleArchive))).resolves.toBe(false)
+      await expect(fs.pathExists(path.join(root, 'dist', 'build', staleArchive))).resolves.toBe(false)
+      expect(packagedManifest._files).not.toHaveProperty(staleArchive)
+    })
+  })
 })

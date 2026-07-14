@@ -27,22 +27,24 @@ code: |
   </template>
 ---
 :::
-## API（简版）
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
   - name: loading
     type: 'boolean'
     default: 'true'
-    description: '是否显示骨架'
+    description: '是否显示骨架。`false` 时渲染默认插槽。'
   - name: lines
     type: 'number'
-    default: '3'
-    description: '文本行数'
+    default: '1'
+    description: '占位项数量；最小会收敛到 1。'
   - name: variant
     type: "'text' | 'rect' | 'circle'"
     default: 'text'
-    description: '形态'
+    description: '每个占位项的形态。'
   - name: width
     type: 'string | number'
     default: '100%'
@@ -51,12 +53,36 @@ rows:
     type: 'string | number'
     default: '12'
     description: '高度，number 会转换为 px'
+  - name: radius
+    type: 'string | number'
+    default: '8'
+    description: '非 circle 占位项圆角；number 会转换为 px。'
   - name: gap
     type: 'string | number'
     default: '10'
     description: '多行间距，number 会转换为 px'
 ---
 ::
+
+### Events
+
+`TxSkeleton`、`TxCardSkeleton` 和 `TxListItemSkeleton` 不会 emit 自定义事件。
+
+### Slots
+
+| 组件 | 插槽名 | 参数 | 说明 |
+|------|--------|------|------|
+| `TxSkeleton` | `default` | - | `loading=false` 时渲染的最终内容。 |
+| `TxCardSkeleton` | - | - | 固定卡片占位，无插槽。 |
+| `TxListItemSkeleton` | - | - | 固定列表行占位，无插槽。 |
+
+### 预设组件
+
+| 导出 | 用途 |
+|------|------|
+| `TxSkeleton` / `Skeleton` | 可配置文本、矩形或圆形占位。 |
+| `TxCardSkeleton` / `CardSkeleton` | 固定卡片 / feed 占位，包含 icon、title、badge 和 description 区块。 |
+| `TxListItemSkeleton` / `ListItemSkeleton` | 固定列表行占位，包含 icon、name、meta 和尾部 badge 区块。 |
 
 ## 交互契约
 
@@ -94,8 +120,25 @@ code: |
 ---
 :::
 
+## 最佳实践
+
+- 骨架的宽度、高度、行数和圆角应贴近最终内容，避免 loading 阶段形成第二套布局。
+- 可配置文本、矩形、头像占位用 `TxSkeleton`；固定结构刚好匹配最终界面时再用 `TxCardSkeleton` 或 `TxListItemSkeleton`。
+- 把 `loading=false` 作为切换到真实内容的交接点，不要在不同分支里分别维护骨架和内容。
+- 不要把骨架当作灰色装饰。如果最终内容结构未知，优先使用有文案的空态或加载态。
+- 短耗时表格等待用 `TxDataTable loading`；需要保留周围结构节奏的长耗时等待再用骨架。
+
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`
-- 建议：骨架宽高应贴近最终内容；不要把 `TxSkeleton` 当作通用灰色装饰使用。
-- 交互：`loading=false` 会渲染默认 slot，适合用同一组件包住最终内容，降低状态分支复杂度。
+- 已对照 `packages/tuffex/packages/components/src/skeleton/src/types.ts`、`TxSkeleton.vue`、`TxCardSkeleton.vue`、`TxListItemSkeleton.vue` 与 `skeleton.test.ts` 核对。
+- 现有测试覆盖 CSS 变量输出、number 转 px、行数最小值收敛、circle 半径归一化、`loading=false` slot 交接、固定预设渲染和 install 注册。
+- API 说明：`TxSkeleton` 是可配置基础组件；`TxCardSkeleton` 和 `TxListItemSkeleton` 是固定形状预设，无 props、events 或 slots。
+- 渲染说明：`variant="circle"` 会强制 `--tx-skeleton-radius: 999px`；调用方应同时设置匹配的 `width` 和 `height` 才能得到正圆。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`, `TxCardSkeleton.vue`, and `TxListItemSkeleton.vue`.
+- Types: `packages/tuffex/packages/components/src/skeleton/src/types.ts` exports `SkeletonProps` and `SkeletonVariant`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/skeleton/__tests__/skeleton.test.ts` 验证 CSS 变量输出、number 转 px、行数最小值收敛、circle 半径、`loading=false` slot 交接、固定预设渲染与 install 注册。
+
+<TuffDocSourceLink />

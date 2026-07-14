@@ -1,12 +1,16 @@
 ---
 title: "ChatComposer 消息输入"
-description: "用于 AI 消息输入、发送。"
+description: "AI 消息输入、附件 chip、键盘发送和自定义工具栏。"
 category: Form
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [chat, composer, input]
+syncStatus: reviewed
+verified: true
 ---
 # ChatComposer 消息输入
 
-用于 AI 消息输入、发送。
+`TxChatComposer` 渲染受控聊天 textarea，包含附件 chip、受保护的发送行为、键盘快捷键和可替换操作区。组件不负责传输：消息持久化、上传状态和提交副作用都由宿主处理。
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -82,3 +86,23 @@ code: |
 - 提交中默认阻断附件操作，除非 `allowAttachmentWhileSubmitting=true`。
 - `sendOnMetaEnter=true` 时键盘发送需要 Meta/Ctrl+Enter；关闭后 Enter 发送，Shift+Enter 保留换行。
 - 自定义 `toolbar` 会收到可调用的 `send` / `attachmentClick`，并替换默认操作行。
+
+
+## 最佳实践
+
+- 在宿主中保持 `modelValue` 受控，只在发送处理器确认接收 payload 后清空。
+- 把 `send` 视为发送意图，而不是投递成功；API 失败时宿主应保留可重试状态。
+- 请求进行中使用 `submitting` 防止重复发送。
+- 密集聊天输入里优先保留 Meta/Ctrl+Enter 发送，让 Enter 继续用于换行。
+- `attachments` 适合作为状态 chip；上传进度、删除和重试行为应放在宿主或自定义 `attachments` 插槽中。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue` 确认受控 textarea 更新、trim 后发送 payload、仅附件发送保护、附件按钮保护、键盘发送模式、作用域 toolbar 函数和原生 textarea 事件透传。
+- 类型契约:`packages/tuffex/packages/components/src/chat/src/types.ts` 定义 `ChatComposerProps`、`ChatComposerAttachment` 和 `ChatComposerEmits`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/chat-composer.test.ts` 覆盖默认渲染、model 更新、trim 发送、键盘模式、发送阻断、仅附件发送、附件保护、作用域插槽、原生事件和安装注册。
+- 导出入口:`packages/tuffex/packages/components/src/chat/index.ts` 导出 `ChatComposer`、`TxChatComposer` 和公共 composer 类型。
+
+## Source
+
+<TuffDocSourceLink />

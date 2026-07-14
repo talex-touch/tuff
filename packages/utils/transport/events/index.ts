@@ -344,6 +344,16 @@ import type {
 import type {
   FeatureTriggerRequest,
   FeatureTriggerResponse,
+  PluginI18nGetLocaleRequest,
+  PluginI18nGetLocaleResponse,
+  PluginI18nResolveTextRequest,
+  PluginI18nResolveTextResponse,
+  PluginLexiconRegisterRequest,
+  PluginLexiconRegisterResponse,
+  PluginLexiconResolveRequest,
+  PluginLexiconResolveResponse,
+  PluginLexiconSearchRequest,
+  PluginLexiconSearchResponse,
   PluginApiFeatureInputChangedRequest,
   PluginApiGetManifestRequest,
   PluginApiGetManifestResponse,
@@ -1175,9 +1185,10 @@ export const CoreBoxEvents = {
     /**
      * Read unified indexed source health for Settings/CoreBox diagnostics.
      */
-    indexingDiagnostics: defineRawEvent<void, CoreBoxIndexingDiagnosticsResponse>(
-      "core-box:indexing-diagnostics",
-    ),
+    indexingDiagnostics: defineRawEvent<
+      void,
+      CoreBoxIndexingDiagnosticsResponse
+    >("core-box:indexing-diagnostics"),
   },
 
   /**
@@ -1500,7 +1511,6 @@ export const StorageEvents = {
       .event("delete")
       .define<PluginStorageDeleteRequest, void>(),
   },
-
 } as const;
 
 /**
@@ -1754,6 +1764,38 @@ export const PluginEvents = {
       >(),
   },
 
+  /**
+   * Permission-gated plugin localization APIs.
+   */
+  i18n: {
+    getLocale: defineEvent("plugin")
+      .module("i18n")
+      .event("get-locale")
+      .define<PluginI18nGetLocaleRequest, PluginI18nGetLocaleResponse>(),
+    resolveText: defineEvent("plugin")
+      .module("i18n")
+      .event("resolve-text")
+      .define<PluginI18nResolveTextRequest, PluginI18nResolveTextResponse>(),
+  },
+
+  /**
+   * Permission-gated official and plugin-scoped Domain Lexicon APIs.
+   */
+  lexicon: {
+    resolve: defineEvent("plugin")
+      .module("lexicon")
+      .event("resolve")
+      .define<PluginLexiconResolveRequest, PluginLexiconResolveResponse>(),
+    search: defineEvent("plugin")
+      .module("lexicon")
+      .event("search")
+      .define<PluginLexiconSearchRequest, PluginLexiconSearchResponse>(),
+    register: defineEvent("plugin")
+      .module("lexicon")
+      .event("register")
+      .define<PluginLexiconRegisterRequest, PluginLexiconRegisterResponse>(),
+  },
+
   install: {
     progress: defineRawEvent<PluginInstallProgressPayload, void>(
       "plugin:install-progress",
@@ -1831,7 +1873,10 @@ export const PluginEvents = {
     deleteSecret: defineEvent("plugin")
       .module("storage")
       .event("delete-secret")
-      .define<PluginStorageSecretRequest, { success: boolean; error?: string }>(),
+      .define<
+        PluginStorageSecretRequest,
+        { success: boolean; error?: string }
+      >(),
 
     listFiles: defineEvent("plugin")
       .module("storage")
@@ -2117,7 +2162,10 @@ export const NativeEvents = {
     capture: defineEvent("native")
       .module("screenshot")
       .event("capture")
-      .define<NativeScreenshotCaptureRequest | void, NativeScreenshotCaptureResult>(),
+      .define<
+        NativeScreenshotCaptureRequest | void,
+        NativeScreenshotCaptureResult
+      >(),
   },
 
   fileIndex: {
@@ -2140,7 +2188,10 @@ export const NativeEvents = {
     rebuild: defineEvent("native")
       .module("file-index")
       .event("rebuild")
-      .define<NativeFileIndexRebuildRequest | void, NativeFileIndexRebuildResult>(),
+      .define<
+        NativeFileIndexRebuildRequest | void,
+        NativeFileIndexRebuildResult
+      >(),
     addPath: defineEvent("native")
       .module("file-index")
       .event("add-path")
@@ -2399,7 +2450,10 @@ export const QuickOpsEvents = {
     get: defineEvent("quick-ops")
       .module("directory-usage")
       .event("get")
-      .define<QuickOpsDirectoryUsageGetRequest | void, QuickOpsDirectoryUsageGetResponse>(),
+      .define<
+        QuickOpsDirectoryUsageGetRequest | void,
+        QuickOpsDirectoryUsageGetResponse
+      >(),
   },
   queryLocalIp: {
     get: defineEvent("quick-ops")
@@ -2441,7 +2495,10 @@ export const QuickOpsEvents = {
     get: defineEvent("quick-ops")
       .module("common-directory")
       .event("get")
-      .define<QuickOpsCommonDirectoryGetRequest | void, QuickOpsCommonDirectoryGetResponse>(),
+      .define<
+        QuickOpsCommonDirectoryGetRequest | void,
+        QuickOpsCommonDirectoryGetResponse
+      >(),
   },
   pathFormat: {
     get: defineEvent("quick-ops")
@@ -2477,11 +2534,17 @@ export const QuickOpsEvents = {
     get: defineEvent("quick-ops")
       .module("developer-preview")
       .event("get")
-      .define<QuickOpsDeveloperPreviewRequest, QuickOpsDeveloperPreviewResponse>(),
+      .define<
+        QuickOpsDeveloperPreviewRequest,
+        QuickOpsDeveloperPreviewResponse
+      >(),
     save: defineEvent("quick-ops")
       .module("developer-preview")
       .event("save")
-      .define<QuickOpsDeveloperPreviewSaveRequest, QuickOpsDeveloperPreviewSaveResponse>(),
+      .define<
+        QuickOpsDeveloperPreviewSaveRequest,
+        QuickOpsDeveloperPreviewSaveResponse
+      >(),
   },
 } as const;
 
@@ -2962,4 +3025,14 @@ export const TuffEvents = {
 } as const;
 
 // Export MetaOverlayEvents separately for convenience
-export { AccountEvents, AppEvents, AuthEvents, CoreBoxRetainedEvents, MetaOverlayEvents, OpenerEvents, PluginBroadcastEvents, SyncEvents, TerminalEvents };
+export {
+  AccountEvents,
+  AppEvents,
+  AuthEvents,
+  CoreBoxRetainedEvents,
+  MetaOverlayEvents,
+  OpenerEvents,
+  PluginBroadcastEvents,
+  SyncEvents,
+  TerminalEvents,
+};

@@ -48,6 +48,10 @@ import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
+import {
+  clearPluginLocalizationEntries,
+  registerPluginLocalizationChannels
+} from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
@@ -837,6 +841,7 @@ function createPluginModuleInternal(
 
     const success = await plugin.disable()
     if (success) {
+      clearPluginLocalizationEntries(plugin.name)
       enabledPlugins.delete(pluginName)
       await persistEnabledPlugins()
     }
@@ -1083,6 +1088,7 @@ function createPluginModuleInternal(
 
     clearPluginDeclaredPermissions(plugin.name)
     clearIssueSnapshot(plugin.name)
+    clearPluginLocalizationEntries(plugin.name)
     plugins.delete(pluginName)
     enabledPlugins.delete(pluginName)
 
@@ -1666,6 +1672,12 @@ export class PluginModule extends BaseModule {
       }
     })
     const installQueue = this.installQueue
+
+    this.transportDisposers.push(
+      ...registerPluginLocalizationChannels(transport, {
+        resolvePlugin: (pluginId) => manager.getPluginByName(pluginId) as TouchPlugin | undefined
+      })
+    )
 
     this.transportDisposers.push(
       transport.on(StoreEvents.api.httpRequest, async (request) =>

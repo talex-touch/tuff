@@ -1,0 +1,95 @@
+---
+title: NumberInput
+description: 带步进控制、范围限制与精度归一化的数字输入。
+category: Form
+status: beta
+since: 1.0.0
+tags: [number, input, form]
+syncStatus: reviewed
+verified: true
+---
+# NumberInput
+
+`TxNumberInput` 包装原生数字输入和可选步进按钮。组件会根据 `min`、`max` 与 `precision` 归一化数值，然后发出 `number | null`。
+
+已人工核对 `packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` 与 `number-input.test.ts`。
+
+## 基础用法
+
+### NumberInput
+::::TuffDemoWrapper{demo="NumberInputNumberInputDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const percentage = ref(35)
+  </script>
+
+  <template>
+    <TxNumberInput v-model="percentage" :min="0" :max="100" :step="5" :precision="0" />
+  </template>
+---
+::::
+
+## 交互契约
+
+- 空输入会归一化为 `null`。
+- 非有限数字会回退到上一个值；没有上一个值时回退为 `null`。
+- `min` / `max` 会限制手输值和步进按钮结果。
+- `precision` 会在范围限制后执行 `Number(value.toFixed(precision))`。
+- `controls=false` 隐藏两个步进按钮，但保留原生数字输入。
+- `readonly` 与 `disabled` 都会阻止步进按钮；`disabled` 还会禁用输入框。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `number \| null` | `null` | 当前数字值。 |
+| `min` | `number` | - | 最小值。 |
+| `max` | `number` | - | 最大值。 |
+| `step` | `number` | `1` | 步进按钮和原生输入使用的步长。 |
+| `precision` | `number` | - | 归一化后的保留小数位。 |
+| `placeholder` | `string` | `''` | 原生输入占位文本。 |
+| `disabled` | `boolean` | `false` | 禁用输入和按钮。 |
+| `readonly` | `boolean` | `false` | 输入只读并阻止步进。 |
+| `controls` | `boolean` | `true` | 是否显示减少/增加按钮。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: number \| null)` | 归一化后的 v-model 更新。 |
+| `change` | `(value: number \| null)` | 发送同一个归一化值。 |
+| `focus` | `(event: FocusEvent)` | 原生 focus 事件。 |
+| `blur` | `(event: FocusEvent)` | 原生 blur 事件，并再次归一化字段。 |
+
+### Exposed Methods
+
+| 方法 | 说明 |
+|------|------|
+| `focus()` | 聚焦原生输入。 |
+| `blur()` | 让原生输入失焦。 |
+| `inputRef` | 原生输入 ref。 |
+
+## Slots
+
+`TxNumberInput` 不暴露插槽。标签、前后缀、辅助说明和校验文案应通过相邻表单结构或外层布局完成。
+
+## 最佳实践
+
+- 百分比、配额、分页控制建议明确传入 `min`、`max` 与 `step`。
+- 小数场景使用 `precision`，不要在消费端每次事件后重复四舍五入。
+- 表格筛选等高密度区域可以隐藏 controls，让键盘输入更快。
+- 在表单校验和 API 映射中，把 `null` 当作未设置状态。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` 确认归一化、范围限制、精度处理、attrs 透传、步进控制、焦点状态和暴露方法。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/number-input/__tests__/number-input.test.ts` 覆盖数字 attrs、归一化输入、范围限制步进、隐藏 controls 和 focus helper 暴露。
+- 导出入口:`packages/tuffex/packages/components/src/number-input/index.ts` 使用 `withInstall` 包装组件并导出 `TxNumberInputInstance`。
+
+## Source
+<TuffDocSourceLink />

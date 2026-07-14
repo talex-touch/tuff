@@ -1,12 +1,18 @@
 ---
 title: "BlankSlate"
-description: "Large first-use empty state built on TxEmptyState."
+description: "Large onboarding empty state for first-use screens and empty product areas."
 category: Feedback
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [empty, onboarding, first-run]
+syncStatus: reviewed
+verified: true
 ---
 # BlankSlate
 
-Large first-use empty state built on `TxEmptyState`. Use it when a feature or section has no user-created content yet and needs an onboarding-style call to action.
+`TxBlankSlate` is a `TxEmptyState` wrapper with `variant="blank-slate"` fixed and first-run defaults applied. Use it when a product area has no user-created content yet and the page should explain the value of taking the first action.
+
+Reviewed against `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`, `types.ts`, and `blank-slate.test.ts`.
 
 ## Basic Usage
 
@@ -17,21 +23,76 @@ code: |
   <template>
     <TxBlankSlate
       title="Create your first project"
-      description="Start by creating a project to organize your work."
-      :primary-action="{ label: 'Create', type: 'primary' }"
-      :secondary-action="{ label: 'Learn more' }"
+      description="Start with a project to organize docs, reviews, and automation."
+      :primary-action="{ label: 'Create project', type: 'primary' }"
+      :secondary-action="{ label: 'View guide' }"
     />
   </template>
 ---
 :::
 
-## API
-
-Props / Slots / Events follow `TxEmptyState`.
-
 ## Interaction Contract
 
-- `TxBlankSlate` always forwards `variant="blank-slate"` to `TxEmptyState`.
-- Defaults are optimized for onboarding: `size="large"`, `layout="vertical"`, and `surface="plain"`.
+- Always forwards `variant="blank-slate"` to `TxEmptyState`.
+- Applies onboarding defaults: `size="large"`, `layout="vertical"`, and `surface="plain"`.
 - Explicit `size`, `layout`, and `surface` props override those defaults.
-- `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
+- Forwards `icon`, `title`, `description`, and `actions` slots unchanged to `TxEmptyState`.
+- Generated `primary` / `secondary` events come from the wrapped `TxEmptyState` action buttons.
+
+## API
+
+### Props
+
+`TxBlankSlate` accepts every `EmptyStateProps` field except `variant`.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | preset title | Onboarding headline. |
+| `description` | `string` | preset description | Explains why the first action matters. |
+| `icon` | `TxIconSource \| string \| null` | preset illustration | Custom icon source/class, or `null` to hide the icon area. |
+| `iconSize` | `number` | size preset | Custom icon size in pixels. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Empty-state layout. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Alignment within the wrapper. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'large'` | Density and illustration scale. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Adds card containment when needed. |
+| `primaryAction` | `EmptyStateAction` | - | Generated primary action. |
+| `secondaryAction` | `EmptyStateAction` | - | Generated secondary action. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Default generated action size. |
+| `loading` | `boolean` | `false` | Uses spinner when no custom icon is supplied. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `primary` | - | Forwarded from the generated primary action. |
+| `secondary` | - | Forwarded from the generated secondary action. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `icon` | - | Replaces the preset illustration or custom icon. |
+| `title` | - | Replaces resolved title content. |
+| `description` | - | Replaces resolved description content. |
+| `actions` | - | Replaces generated primary/secondary action buttons. |
+
+## Best Practices
+
+- Use it for first-use or onboarding states; use `TxNoData` for recurring empty query results.
+- Explain the value of the first action, not just the absence of content.
+- Keep the primary action singular and direct. Secondary actions should teach, import, or dismiss.
+- Avoid `surface="card"` on full-page blank slates unless the surrounding layout already uses card containment.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`, `types.ts`, and `blank-slate.test.ts`.
+- **Verified coverage:** `blank-slate.test.ts` covers fixed `variant="blank-slate"`, onboarding defaults, explicit layout overrides, named slot forwarding, and install registration.
+- Accessibility note: `TxBlankSlate` delegates semantics to `TxEmptyState`; keep first-action copy specific and avoid placing multiple competing calls to action in `actions`.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`.
+- Types: `packages/tuffex/packages/components/src/blank-slate/src/types.ts` exports `BlankSlateProps` as `Omit<EmptyStateProps, 'variant'>`.
+- Coverage: `packages/tuffex/packages/components/src/blank-slate/__tests__/blank-slate.test.ts` verifies wrapper defaults, overrides, slot forwarding, and install registration.
+<TuffDocSourceLink />

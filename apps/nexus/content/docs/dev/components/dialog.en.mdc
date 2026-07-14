@@ -5,7 +5,7 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [dialog, modal, confirm]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -184,16 +184,16 @@ code: |
 
 `message` is rendered as plain text and preserves line breaks through component styles. Use `messageHtml` only for trusted, sanitized internal content.
 
-### TxBottomDialog props
+### TxBottomDialog Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Dialog title |
 | `message` | `string` | `''` | Dialog message |
-| `stay` | `number` | `0` | Auto close duration (ms) |
+| `stay` | `number` | `0` | Reserved auto-close duration prop; current runtime does not start a timer from `stay` alone. |
 | `close` | `() => void` | *required* | Close callback |
 | `btns` | `DialogButton[]` | `[]` | Button configs |
-| `icon` | `string` | `''` | Icon class |
+| `icon` | `string` | `''` | Legacy icon class prop; not rendered by the current template. |
 | `index` | `number` | `0` | z-index offset |
 
 ### DialogButton interface
@@ -211,44 +211,75 @@ code: |
 ---
 ::
 
-### TxBlowDialog props
+### TxBlowDialog Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Dialog title |
 | `message` | `string` | `''` | Plain-text message |
-| `messageHtml` | `string` | `''` | Trusted HTML message for sanitized internal call sites |
+| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
 | `confirmText` | `string` | `'Confirm'` | Confirm button text |
 | `close` | `() => void` | *required* | Close callback |
 | `comp` | `Component` | `undefined` | Custom component |
 | `render` | `() => VNode` | `undefined` | Render function |
 
-### TxPopperDialog props
+### TxPopperDialog Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Dialog title |
 | `message` | `string` | `''` | Plain-text message |
-| `messageHtml` | `string` | `''` | Trusted HTML message for sanitized internal call sites |
+| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
 | `confirmText` | `string` | `'Confirm'` | Confirm button text |
 | `close` | `() => void` | *required* | Close callback |
 | `comp` | `Component` | `undefined` | Custom component |
 | `render` | `() => VNode` | `undefined` | Render function |
 
-### TxTouchTip props
+### TxTouchTip Props
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Title |
 | `message` | `string` | `''` | Message text |
-| `messageHtml` | `string` | `''` | Trusted HTML message for sanitized internal call sites |
+| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
 | `buttons` | `TouchTipButton[]` | `[]` | Button configs |
 | `close` | `() => void` | *required* | Close callback |
 
-### Accessibility
+### Events
 
-- ESC to close
-- Focus moves to the dialog container or confirm button on open
-- Focus restore on close
-- `role="dialog"`, `aria-modal`, and instance-scoped title/description ARIA links by default
-- `DialogButton.onClick()` closes the dialog when it returns `true` and keeps it open when it returns `false`
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | Dialog variants do not emit Vue events; they close through the required `close` prop callback. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| - | - | Dialog variants do not expose slots. Use `comp` or `render` for custom `TxBlowDialog` / `TxPopperDialog` content. |
+
+## Interaction Contract
+
+- All dialog variants teleport to `body`, assign z-index through the shared z-index manager, and close through the required `close()` callback.
+- Escape closes the active dialog after its leave animation; `TxBottomDialog`, `TxBlowDialog`, `TxPopperDialog`, and `TxTouchTip` restore the previously focused element on unmount.
+- `TxBottomDialog` and `TxTouchTip` use instance-scoped title/description ids; `TxBlowDialog` and `TxPopperDialog` use stable internal ids for their default title/content regions.
+- Plain `message` renders as text and preserves line breaks. Use `messageHtml` only with `asTrustedDialogHtml()` after sanitizing internal content.
+- `DialogButton.onClick()` / `TouchTipButton.onClick()` closes when it resolves `true` and keeps the dialog open when it resolves `false`.
+
+## Best Practices
+
+- Use `TxBottomDialog` for mobile-style bottom confirmations and destructive flow checkpoints.
+- Use `TxBlowDialog` sparingly for high-emphasis announcements; its background transform is intentionally dramatic.
+- Use `TxPopperDialog` for compact centered prompts that still need modal semantics.
+- Use `TxTouchTip` for touch-first guidance with multiple action buttons.
+- Keep `messageHtml` out of user-generated content paths unless a caller has explicitly sanitized and branded it as trusted.
+
+## Review Notes
+
+- Sources: `packages/tuffex/packages/components/src/dialog/src/TxBottomDialog.vue`, `TxBlowDialog.vue`, `TxPopperDialog.vue`, and `TxTouchTip.vue` confirm teleport-to-body rendering, z-index allocation, Escape close behavior, focus restore, button return semantics, text-vs-trusted-HTML paths, and component/render content hooks.
+- Type contracts: `packages/tuffex/packages/components/src/dialog/src/types.ts` defines trusted HTML branding, `asTrustedDialogHtml`, button interfaces, dialog props, and exported instance types.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dialog/__tests__/dialog.test.ts` verifies ARIA wiring, Escape close, focus restore, text-vs-trusted-HTML rendering, and button return semantics.
+- Export: `packages/tuffex/packages/components/src/dialog/index.ts` wraps each dialog with `withInstall`, exports all variants, exports `asTrustedDialogHtml`, and exposes public types.
+
+## Source
+
+<TuffDocSourceLink />

@@ -1,67 +1,125 @@
 ---
 title: "ImageGallery"
-description: "Image grid with modal preview."
+description: "Thumbnail grid with modal image preview, clamped start index, and bounded previous/next navigation."
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [image, gallery, preview]
+syncStatus: reviewed
+verified: true
 ---
 # ImageGallery
 
-Image grid with modal preview. Clicking a thumbnail opens that image, and the modal footer provides bounded previous/next navigation.
-
-<script setup lang="ts">
-const items = [
-  { id: 'a', url: 'https://picsum.photos/seed/a/640/420', name: 'A' },
-  { id: 'b', url: 'https://picsum.photos/seed/b/640/420', name: 'B' },
-  { id: 'c', url: 'https://picsum.photos/seed/c/640/420', name: 'C' },
-]
-</script>
+`TxImageGallery` renders an image thumbnail grid and opens a `TxModal` preview when a thumbnail is clicked. It is best for small gallery sets where every image can be rendered as a thumbnail.
 
 ## Basic Usage
 
-### ImageGallery
-:::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  const items = [
+    { id: 'one', url: '/images/one.png', name: 'Workspace overview' },
+    { id: 'two', url: '/images/two.png', name: 'Release graph' },
+  ]
+  </script>
+
   <template>
-    <TxImageGallery :items="items" />
+    <TxImageGallery :items="items" :start-index="1" />
   </template>
 ---
-:::
+::::
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: items
-    type: 'ImageGalleryItem[]'
-    default: '[]'
-    description: Image list. Each item contains id, url, and optional name
-  - name: startIndex
-    type: 'number'
-    default: '0'
-    description: Current preview index; out-of-range values are clamped
----
-::
+## Composition Examples
 
-## Events
-::TuffPropsTable
----
-rows:
-  - name: open
-    type: '(payload: { index: number, item: ImageGalleryItem }) => void'
-    default: '-'
-    description: Fired after clicking a thumbnail and opening the preview
-  - name: close
-    type: '() => void'
-    default: '-'
-    description: Fired when the modal closes
----
-::
+### Track Preview Opens
+
+```vue
+<script setup lang="ts">
+function onOpen({ index, item }: { index: number, item: { id: string } }) {
+  analytics.track('gallery_open', { index, imageId: item.id })
+}
+</script>
+
+<template>
+  <TxImageGallery :items="images" @open="onOpen" @close="onClose" />
+</template>
+```
+
+### Controlled Starting Image
+
+```vue
+<template>
+  <TxImageGallery :items="screenshots" :start-index="selectedIndex" />
+</template>
+```
+
+`startIndex` is clamped whenever it changes. It chooses the initial/current preview index but does not open the modal by itself.
 
 ## Interaction Contract
 
-- Thumbnail buttons expose readable `aria-label` values. Image `alt` text uses `name`; unnamed images keep empty alt text.
-- Empty `items` render no thumbnails and do not open the modal or emit `open`.
-- `startIndex` and list length changes are clamped to a valid index. Clearing the list closes the preview.
-- The modal inherits `TxModal` dialog semantics, title linkage, close button, backdrop close, and Escape close behavior.
-- Footer Prev / Next controls only navigate inside valid bounds. Prev is disabled on the first image; Next is disabled on the last image.
+- The thumbnail grid renders one native `button type="button"` for each item.
+- Thumbnail buttons use `aria-label="Open {label} preview"`, where `label` is `item.name` or a generated `Image N` fallback.
+- Thumbnail and preview image `alt` text use `item.name`; unnamed images intentionally use empty alt text.
+- Empty `items` render no thumbnail buttons and cannot emit `open`.
+- Clicking a thumbnail clamps the clicked index, opens the modal, and emits `open` with `{ index, item }`.
+- `startIndex` changes are clamped to `0..items.length - 1`.
+- When `items` becomes empty, the preview closes and the index resets to `0`.
+- Preview navigation is bounded: previous is disabled at the first image, next is disabled at the last image.
+- The modal title is the current image name, falling back to `Preview`.
+- Close behavior is delegated to `TxModal`; closing emits `close`.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `items` | `ImageGalleryItem[]` | required | Images rendered as thumbnails and previewable modal items. |
+| `startIndex` | `number` | `0` | Initial/current preview index, clamped to the available item range. |
+
+### ImageGalleryItem
+
+| Field | Type | Description |
+|------|------|-------------|
+| `id` | `string` | Stable key for thumbnail rendering. |
+| `url` | `string` | Image URL used by thumbnails and modal preview. |
+| `name` | `string` | Optional display name used for labels, alt text, and modal title. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `open` | `{ index: number, item: ImageGalleryItem }` | Emitted after a thumbnail opens the modal preview. |
+| `close` | `void` | Emitted when the modal closes. |
+
+### Slots
+
+No public slots are exposed.
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+## Best Practices
+
+- Use stable `id` values; do not use array indexes for long-lived gallery data.
+- Provide `name` for informative images so button labels, alt text, and modal titles are meaningful.
+- Keep the list size modest. This component renders all thumbnails; it is not virtualized.
+- Do not pass untrusted remote image URLs without normalizing or proxying them at your application boundary.
+- Use `startIndex` for selected preview context, not as a visibility control.
+- Use `@open` for analytics or detail-panel coordination; do not mutate `items` synchronously in a way that invalidates the opened image.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/image-gallery/src/types.ts`, `TxImageGallery.vue`, and `image-gallery.test.ts`.
+- `startIndex` is clamped and updates the current preview index, but it never opens the modal by itself.
+- Unnamed images intentionally use empty image alt text while thumbnail buttons still receive generated open labels.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue`.
+- Types: `packages/tuffex/packages/components/src/image-gallery/src/types.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/image-gallery/__tests__/image-gallery.test.ts` verifies thumbnail labels and alt text, open payloads, bounded previous / next navigation, empty-list no-op behavior, start-index clamping, and close-on-empty updates.
+
+<TuffDocSourceLink />

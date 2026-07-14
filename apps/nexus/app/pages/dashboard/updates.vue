@@ -520,6 +520,7 @@ function closeDeleteConfirm() {
           row-key="id"
           bordered
           hover
+          interactive-rows
           class="UpdateTable-Data min-w-[920px]"
           @row-click="({ row }) => openUpdateLink(row.link)"
         >

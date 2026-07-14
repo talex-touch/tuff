@@ -2,7 +2,7 @@
 title: "Picker 滚轮选择"
 description: "列式滚轮选择器，支持弹层/内联渲染、工具栏操作、禁用项和数组值归一化。"
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # Picker 滚轮选择
@@ -184,6 +184,33 @@ type PickerValue = Array<string | number>
 | `cancel` | - | 点击取消时触发，随后关闭弹层。 |
 | `open` | - | 选择器打开时触发。 |
 | `close` | - | 选择器关闭时触发。 |
+
+### Exposes
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `open` | `() => void` | 通过写入 `visible=true` 打开弹层。 |
+| `close` | `() => void` | 关闭弹层。 |
+| `toggle` | `() => void` | 切换弹层打开状态。 |
+
+## Slots
+
+`TxPicker` 不提供插槽。选项可见文本使用 `columns[].options[].label`，工具栏文案使用 `title` / `confirmText` / `cancelText`。
+
+## 最佳实践
+
+- 让 `modelValue` 保持为与 `columns` 顺序一致的稳定数组；稀疏数组会被归一化，但显式值更利于表单状态审计。
+- 当列会重新排序或条件渲染时提供 `column.key`，避免 Vue 把旧滚动容器复用给不同数据。
+- 保持 option `value` 为稳定原始值；展示名称放在 `label`，不要把文案当作持久化值。
+- 设置页中需要常驻展示时使用内联模式（`popup=false`）；移动端或短任务型选择使用弹层模式。
+- 不要把 disabled 的选项值提交到业务表单。组件只会在归一化或滚动恢复时跳过禁用项。
+- 设计稿中尽量使用奇数 `visibleItemCount`；运行时会把偶数向上修正，截图可能多出一行。
+
+## 审阅说明
+
+- 组件源码：`packages/tuffex/packages/components/src/picker/src/TxPicker.vue` 定义弹层/内联两条渲染路径、值归一化回退、滚动吸附、`open` / `close` / `toggle` 暴露方法和行高限制。
+- 类型契约：`packages/tuffex/packages/components/src/picker/src/types.ts` 导出 `PickerValue`、`PickerColumn`、`PickerOption`、`PickerProps` 与 `PickerEmits`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/picker/__tests__/picker.test.ts` 覆盖值归一化、禁用项回退、工具栏 confirm/cancel 事件、禁用 toolbar/选项和布局变量限制。
 
 ## Source
 <TuffDocSourceLink />

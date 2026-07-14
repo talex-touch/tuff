@@ -2,6 +2,7 @@
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
+import { formatCompactAccountLabel } from '@talex-touch/utils/account'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -32,6 +33,7 @@ const {
   openAccountOverview
 } = useAccountOverview()
 const appSdk = useAppSdk()
+
 
 const planLabel = computed(() =>
   subscriptionStatus.value ? formatPlan(subscriptionStatus.value.plan) : '-'
@@ -197,7 +199,7 @@ watch(profileVisible, (visible) => {
       </div>
       <div class="user-info">
         <p class="user-name">
-          {{ displayName || t('userProfile.unknownName', 'User') }}
+          {{ formatCompactAccountLabel(displayName) || t('userProfile.unknownName', 'User') }}
         </p>
         <span class="user-email">
           {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
@@ -242,7 +244,7 @@ watch(profileVisible, (visible) => {
                   <div class="UserProfile-Identity">
                     <div class="UserProfile-NameRow">
                       <p class="UserProfile-Name">
-                        {{ displayName || t('userProfile.unknownName', 'User') }}
+                        {{ formatCompactAccountLabel(displayName) || t('userProfile.unknownName', 'User') }}
                       </p>
                       <span class="UserProfile-Badge">
                         {{ statusBadgeLabel }}
@@ -252,7 +254,7 @@ watch(profileVisible, (visible) => {
                       {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
                     </p>
                     <p class="UserProfile-MetaText">
-                      {{ t('userProfile.id', 'User ID') }}: {{ displayId || '-' }}
+                      {{ t('userProfile.id', 'User ID') }}: {{ formatCompactAccountLabel(displayId) || '-' }}
                     </p>
                     <p v-if="profileBio" class="UserProfile-MetaText">
                       {{ profileBio }}

@@ -120,7 +120,18 @@ export function buildDetachedFeatureConfig(
   }
 }
 
-function resolveActorPluginId(payload: FlowPayload | null): string | undefined {
+export function buildCoreBoxFlowPayload(item: TuffItem, query: string): FlowPayload {
+  return {
+    type: 'json',
+    data: { item, query },
+    context: {
+      sourcePluginId: resolveFeaturePluginId(item) ?? 'corebox',
+      sourceFeatureId: item.meta?.featureId
+    }
+  }
+}
+
+export function resolveCoreBoxFlowActorPluginId(payload: FlowPayload | null): string | undefined {
   if (!payload || payload.type !== 'json') {
     return undefined
   }
@@ -129,7 +140,7 @@ function resolveActorPluginId(payload: FlowPayload | null): string | undefined {
   if (item?.source?.type !== 'plugin') {
     return undefined
   }
-  return item.source.id
+  return resolveFeaturePluginId(item)
 }
 
 function getFlowPermissionMessage(
@@ -266,14 +277,7 @@ export function useDetach(options: UseDetachOptions) {
   }
 
   function openFlowSelector(item: TuffItem): void {
-    flowPayload.value = {
-      type: 'json',
-      data: { item, query: searchVal.value },
-      context: {
-        sourcePluginId: item.source?.id || 'corebox',
-        sourceFeatureId: item.meta?.featureId
-      }
-    }
+    flowPayload.value = buildCoreBoxFlowPayload(item, searchVal.value)
     flowVisible.value = true
   }
 
@@ -291,7 +295,7 @@ export function useDetach(options: UseDetachOptions) {
     if (!flowPayload.value) return
     try {
       const { targetId, consentToken, confirmationToken } = payload
-      const actorPluginId = resolveActorPluginId(flowPayload.value)
+      const actorPluginId = resolveCoreBoxFlowActorPluginId(flowPayload.value)
       const response = await transport.send(FlowEvents.dispatch, {
         senderId: 'corebox',
         actorPluginId,

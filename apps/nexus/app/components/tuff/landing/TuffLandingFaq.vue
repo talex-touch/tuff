@@ -34,7 +34,7 @@ const faq = computed(() => ({
   >
     <template #decoration>
       <div class="absolute left-[-220px] top-[30%] h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(236,72,153,0.16),_transparent_70%)] blur-3xl" />
-      <div class="absolute bottom-[-120px] right-[-240px] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.18),_transparent_70%)] blur-3xl" />
+      <div class="absolute bottom-[-120px] right-0 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.18),_transparent_70%)] blur-3xl sm:right-[-240px]" />
     </template>
 
     <div class="space-y-4" data-reveal>

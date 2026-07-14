@@ -185,6 +185,8 @@ type QuickOpsDiagnosticsFixture = {
   defaultTimerDurationMs: number
   defaultPomodoroFocusMs: number
   defaultPomodoroBreakMs: number
+  pomodoroAdvancedLoopSupported: boolean
+  pomodoroCustomTemplateCount: number
   defaultScreenCleanDurationMs: number
 }
 type QuickOpsSessionFixture = {
@@ -381,6 +383,8 @@ const quickOpsDiagnosticsInfo = vi.hoisted(
     defaultTimerDurationMs: 1_500_000,
     defaultPomodoroFocusMs: 1_500_000,
     defaultPomodoroBreakMs: 300_000,
+    pomodoroAdvancedLoopSupported: true,
+    pomodoroCustomTemplateCount: 0,
     defaultScreenCleanDurationMs: 60_000
   })
 )
@@ -528,6 +532,7 @@ const formatDurationMock = vi.hoisted(() =>
 const parseDurationMsMock = vi.hoisted(() =>
   vi.fn((text: string) => (text.includes('5m') ? 300000 : null))
 )
+const parseQuickOpsQueryMock = vi.hoisted(() => vi.fn())
 const resolveCommonDirectoryMock = vi.hoisted(() =>
   vi.fn((text: string) =>
     text.includes('logs')
@@ -642,6 +647,7 @@ vi.mock('./quick-ops-runtime-host', () => ({
     const match = text.match(/(?:port|端口)\s+(-?\d+)/i)
     return match?.[1] ? Number(match[1]) : null
   }),
+  parseQuickOpsQuery: parseQuickOpsQueryMock,
   probeLocalTcpPort: quickOpsPortProbeMock,
   quickOpsRuntime: quickOpsRuntimeMock,
   resolveCommonDirectory: resolveCommonDirectoryMock,
@@ -1123,6 +1129,7 @@ describe('QuickOpsModule', () => {
     appGetPathMock.mockReturnValue('/tmp')
     clipboardReadTextMock.mockReturnValue('')
     getMainConfigMock.mockReturnValue(undefined)
+    parseQuickOpsQueryMock.mockReturnValue(null)
     fsMkdirMock.mockResolvedValue(undefined)
     fsWriteFileMock.mockResolvedValue(undefined)
   })
@@ -2992,6 +2999,13 @@ describe('QuickOpsModule', () => {
   })
 
   it('acks Flow startPomodoro delivery after starting the shared pomodoro session', async () => {
+    parseQuickOpsQueryMock.mockReturnValue({
+      action: 'pomodoro-start',
+      durationMs: 10 * 60 * 1000,
+      breakDurationMs: 2 * 60 * 1000,
+      pomodoroCycles: 2,
+      pomodoroMode: 'cycle'
+    })
     const module = new QuickOpsModule()
 
     module.onInit({} as ModuleInitContext<TalexEvents>)
@@ -3008,6 +3022,7 @@ describe('QuickOpsModule', () => {
       targetId: 'start-pomodoro',
       payload: {
         data: {
+          text: 'start writing sprint',
           focusDurationMinutes: 40,
           breakDurationMinutes: 8,
           cycles: 3,
@@ -3017,6 +3032,7 @@ describe('QuickOpsModule', () => {
       }
     })
 
+    expect(parseQuickOpsQueryMock).toHaveBeenCalledWith('start writing sprint')
     expect(quickOpsRuntimeMock.startPomodoro).toHaveBeenCalledWith(
       2_400_000,
       'cycle',
@@ -3039,6 +3055,66 @@ describe('QuickOpsModule', () => {
       longBreakEveryCycles: 2,
       expiresAt: 1781800000000
     })
+  })
+
+  it('resolves a settings-driven Pomodoro template from the CoreBox Flow envelope', async () => {
+    parseQuickOpsQueryMock.mockReturnValue({
+      action: 'pomodoro-start',
+      durationMs: 45 * 60 * 1000,
+      breakDurationMs: 12 * 60 * 1000,
+      pomodoroCycles: 4,
+      pomodoroLongBreakMs: 20 * 60 * 1000,
+      pomodoroLongBreakEvery: 2,
+      pomodoroMode: 'cycle'
+    })
+    const module = new QuickOpsModule()
+
+    module.onInit({} as ModuleInitContext<TalexEvents>)
+
+    const handler = flowRegisterDeliveryHandlerMock.mock.calls[0]?.[1] as
+      | ((session: {
+          sessionId: string
+          targetId: string
+          payload: { data: Record<string, unknown> }
+        }) => Promise<void>)
+      | undefined
+    await handler?.({
+      sessionId: 'flow-session-custom-pomodoro',
+      targetId: 'start-pomodoro',
+      payload: {
+        data: {
+          item: {
+            id: 'touch-quickops-writing-sprint',
+            source: { type: 'plugin', id: 'plugin-features', name: 'touch-quickops' },
+            meta: { pluginName: 'touch-quickops', featureId: 'quickops' }
+          },
+          query: 'start writing sprint'
+        }
+      }
+    })
+
+    expect(parseQuickOpsQueryMock).toHaveBeenCalledWith('start writing sprint')
+    expect(quickOpsRuntimeMock.startPomodoro).toHaveBeenCalledWith(
+      45 * 60 * 1000,
+      'cycle',
+      12 * 60 * 1000,
+      4,
+      20 * 60 * 1000,
+      2
+    )
+    expect(flowAcknowledgeMock).toHaveBeenCalledWith(
+      'flow-session-custom-pomodoro',
+      expect.objectContaining({
+        kind: 'quickops.startPomodoro',
+        state: 'started',
+        mode: 'cycle',
+        durationMs: 45 * 60 * 1000,
+        breakDurationMs: 12 * 60 * 1000,
+        totalCycles: 4,
+        longBreakDurationMs: 20 * 60 * 1000,
+        longBreakEveryCycles: 2
+      })
+    )
   })
 
   it('acks Flow pausePomodoro delivery after pausing the shared pomodoro session', async () => {

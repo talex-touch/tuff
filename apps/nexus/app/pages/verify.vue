@@ -41,7 +41,7 @@ onMounted(async () => {
   <div class="min-h-screen flex items-center justify-center bg-white px-4 py-16 dark:bg-gray-900">
     <div class="w-full max-w-md rounded-3xl border border-primary/10 bg-white/80 p-8 text-center shadow-lg dark:border-light/10 dark:bg-dark/70">
       <div v-if="status === 'loading'" class="space-y-4">
-        <span class="i-carbon-circle-dash animate-spin text-3xl text-primary" />
+        <span class="i-ri-loader-4-line animate-spin text-3xl text-primary" />
         <p class="text-sm text-black/70 dark:text-light/70">
           {{ t('auth.verifying', '正在验证邮箱...') }}
         </p>

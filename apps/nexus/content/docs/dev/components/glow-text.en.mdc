@@ -2,7 +2,11 @@
 title: "GlowText"
 description: "Animated shine overlay for text and compact UI surfaces."
 category: Basic
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [glow, text, animation, highlight]
+syncStatus: reviewed
+verified: true
 ---
 # GlowText
 
@@ -122,13 +126,54 @@ code: |
 | `tag` | `string` | `span` | Root element used to wrap the default slot. |
 | `active` | `boolean` | `true` | Disables the shine overlay when set to `false`. |
 | `repeat` | `boolean` | `true` | Runs the sweep once when set to `false`. |
-| `durationMs` | `number` | `1400` | Sweep animation duration in milliseconds. |
+| `durationMs` | `number` | `2000` | Sweep animation duration in milliseconds. |
 | `delayMs` | `number` | `0` | Delay before the sweep animation starts. |
 | `angle` | `number` | `20` | Gradient angle in degrees. |
 | `bandSize` | `number` | `38` | Highlight band width as a percentage of the gradient. |
 | `color` | `string` | `rgba(255, 255, 255, 0.9)` | Highlight color used in the sweep gradient. |
 | `opacity` | `number` | `0.75` | Overlay opacity during the visible part of the sweep. |
 | `blendMode` | `string` | - | Optional CSS `mix-blend-mode` override for the shine overlay. |
-| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | `adaptive` uses a container overlay; `text-clip` mirrors slot text and clips the shine to glyphs. |
+| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | `classic` uses a plain overlay, `adaptive` adds blend/backdrop defaults for surfaces, and `text-clip` mirrors slot text so the shine is clipped to glyphs. |
 | `backdrop` | `string` | - | Optional CSS backdrop filter override for the shine overlay. |
 | `radius` | `number` | `10` | Root border radius in pixels. |
+
+
+### Slots
+
+| Name | Props | Description |
+|------|------|------|
+| `default` | - | Text or compact content that receives the shine overlay. In `text-clip` mode, plain text is mirrored into an aria-hidden shine layer. |
+
+### Events
+
+`TxGlowText` does not emit events.
+
+## Interaction Contract
+
+- The root element is controlled by `tag`; keep it inline (`span`) for text and block (`div`) for cards, images, or badges.
+- `active=false` removes the shine layer visually but keeps slot content rendered.
+- `repeat=false` runs the animation once and keeps the final frame; combine it with `delayMs` for one-shot announcement badges.
+- `mode="text-clip"` reads the rendered slot text after mount and on text mutations; it is best for simple text nodes, not large nested interactive content.
+- Reduced-motion users get a static highlight because the component disables sweep animation under `prefers-reduced-motion: reduce`.
+
+## Best Practices
+
+- Use `text-clip` for labels, headings, and gradient text; use `adaptive` for image thumbnails, cards, and status chips.
+- Keep `bandSize` between `24` and `40` for readable text. Larger bands work better on image/card surfaces.
+- Prefer a light `color` with moderate `opacity` on dark surfaces; on light cards, lower `opacity` or use `blendMode="soft-light"`.
+- Avoid wrapping focusable controls unless the glow is purely decorative and does not obscure focus rings.
+- Do not use `GlowText` as a loading skeleton. Use `TxSkeleton`, `TxProgressBar`, or `TxLoadingState` for loading feedback.
+
+## Review Notes
+
+- **Accessibility note:** Both shine layers are `aria-hidden`; in `text-clip` mode the mirrored text is decorative, so keep the real readable text in the default slot.
+- **Verified coverage:** `glow-text.test.ts` verifies default adaptive rendering, `aria-hidden` shine layers, custom root tags and CSS variables, inactive/one-shot classes, text-clip mirror text, and cleanup when switching back to adaptive mode.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/glow-text/src/TxGlowText.vue`.
+- Types: `packages/tuffex/packages/components/src/glow-text/src/types.ts` exports `GlowTextProps`.
+- Export alias: `packages/tuffex/packages/components/src/glow-text/index.ts` exports `GlowText`, `TxGlowText`, `GlowTextProps`, and `TxGlowTextInstance`.
+- Coverage: `packages/tuffex/packages/components/src/glow-text/__tests__/glow-text.test.ts` verifies adaptive defaults, CSS variable mapping, state classes, `aria-hidden` shine layers, and text-clip mode transitions.
+
+<TuffDocSourceLink />

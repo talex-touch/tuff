@@ -96,7 +96,7 @@ code: |
 |------|------|------|------|
 | `columns` | `DataTableColumn[]` | `[]` | 列配置 |
 | `data` | `any[]` | `[]` | 数据源 |
-| `rowKey` | `string \| (row, index) => string \| number` | `index` | 行唯一标识 |
+| `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | 行唯一标识 |
 | `loading` | `boolean` | `false` | 加载状态 |
 | `emptyText` | `string` | `'No data'` | 空数据提示 |
 | `striped` | `boolean` | `false` | 斑马纹 |
@@ -106,6 +106,8 @@ code: |
 | `selectedKeys` | `Array<string \| number>` | `[]` | 选中 key 列表 |
 | `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 默认排序 |
 | `sortOnClient` | `boolean` | `true` | 是否前端排序 |
+| `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | 原生 table-layout 模式；列宽需要稳定时使用 `fixed` |
+| `nowrap` | `boolean` | `false` | 全局禁止表头与单元格内容换行 |
 
 ### DataTableColumn
 
@@ -115,6 +117,11 @@ code: |
 | `title` | `string` | 表头文本 |
 | `dataIndex` | `string` | 数据字段名 |
 | `width` | `string \| number` | 列宽 |
+| `minWidth` | `string \| number` | 列最小宽度 |
+| `maxWidth` | `string \| number` | 列最大宽度 |
+| `auto` | `boolean` | 强制列宽为 `auto` |
+| `fixed` | `boolean \| 'left' \| 'right'` | 固定列方向；`true` 等价于 `'left'` |
+| `nowrap` | `boolean` | 禁止当前列换行 |
 | `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
 | `sortable` | `boolean` | 是否可排序 |
 | `sorter` | `(a, b) => number` | 自定义排序器 |
@@ -135,13 +142,28 @@ code: |
 
 | 名称 | 说明 |
 |------|------|
-| `header-<columnKey>` | 自定义表头 |
-| `cell-<columnKey>` | 自定义单元格 |
-| `empty` | 空状态 |
+| `header-<columnKey>` | 自定义表头；接收 `{ column }` |
+| `cell-<columnKey>` | 自定义单元格；接收 `{ row, column, value, index }` |
+| `empty` | 无展示行且 `loading=false` 时渲染的空状态 |
+
+## 最佳实践
+
+- 业务列表必须传稳定 `rowKey`；需要跨页保留选择时，用业务 id 驱动 `selectedKeys`，不要依赖默认 index。
+- 可排序列支持点击、Enter 与 Space；远程排序时设置 `sortOnClient=false` 并监听 `sortChange`。
+- `tableLayout="fixed"` 配合显式 `width` / `minWidth`，能避免运维表格在加载或排序时宽度跳动。
+- 固定列优先使用数值 px 的 `width` 或 `minWidth`；sticky 偏移会根据这些值计算。
+- 自定义单元格要保留可读文本或状态徽标文本，因为可排序表头会通过 `aria-sort` 暴露状态。
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`
-- 建议：业务列表必须传稳定 `rowKey`；需要跨页保留选择时，用业务 id 驱动 `selectedKeys`，不要依赖默认 index。
-- 交互：可排序列支持点击、Enter 与 Space；远程排序时设置 `sortOnClient=false` 并监听 `sortChange`。
-- 可访问性：可排序表头会写入 `aria-sort`；自定义单元格时仍需保留可读文本或状态徽标文本。
+- **可访问性说明：**`TxDataTable` 渲染原生表格；可排序表头使用 `scope="col"`、`aria-sort`、键盘焦点，以及 Enter/Space 处理器。
+- **类型：**`rowKey` 声明为 `keyof T` 或返回字符串/数字的回调；`sortChange` 可触发 `DataTableSortState` 或 `null`。
+- **实测覆盖:** 组件测试覆盖表头和行渲染、指针排序与键盘 `aria-sort` 状态切换、选择事件，以及 layout/nowrap/auto/固定列样式。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`。
+- Type contracts: `packages/tuffex/packages/components/src/data-table/src/types.ts` 导出 `DataTableProps`、`DataTableColumn`、排序状态、行 key 与 emit 类型。
+- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` 覆盖表头和行渲染、指针与键盘排序（包括 `aria-sort`）、选择事件，以及 layout/nowrap/auto/固定列样式。
+
+<TuffDocSourceLink />

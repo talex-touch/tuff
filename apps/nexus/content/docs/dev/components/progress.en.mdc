@@ -1,23 +1,24 @@
 ---
 title: Progress
-description: Linear progress and status feedback
+description: Lightweight wrapper around TxProgressBar for standard linear progress rows.
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [progress, status, loading]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
-
 # Progress
 
-> Linear progress shows stages and rhythm of work.  
-> **Status**: Beta
+`TuffProgress` is the lightweight compatibility entry for standard linear progress rows. It forwards a small prop set to `TxProgressBar` with outside text, plain mask styling, and `strokeWidth` mapped to bar height.
 
+Reviewed against `packages/tuffex/packages/components/src/progress/src/TxProgress.vue`, `progress.test.ts`, and `index.ts`.
 
 ## Demo
+
 ### Progress States
-Base progress with status colors
-:::TuffDemoWrapper{demo="ProgressProgressStatesDemo" code-lang="vue"}
+
+::::TuffDemoWrapper{demo="ProgressProgressStatesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -26,53 +27,11 @@ code: |
     <TuffProgress :percentage="100" status="success" />
   </template>
 ---
-:::
-## Basic Usage
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TuffProgress :percentage="60" />
-    <TuffProgress :percentage="60" :show-text="false" />
-  </template>
----
-::
+::::
 
-## Interaction Contract
-
-`TuffProgress` is the lightweight entry for standard progress rows. It forwards percentage, status, stroke width, indeterminate state, and text formatting to the current `TxProgressBar` implementation. Determinate progress exposes `role="progressbar"` with `aria-valuenow`; indeterminate progress omits `aria-valuenow`.
-
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: percentage
-    type: 'number'
-    default: '0'
-    description: 'Progress percentage'
-  - name: status
-    type: "'success' | 'warning' | 'error'"
-    default: '-'
-    description: 'Status color'
-  - name: indeterminate
-    type: 'boolean'
-    default: 'false'
-    description: 'Indeterminate mode'
-  - name: strokeWidth
-    type: 'number'
-    default: '6'
-    description: 'Bar height in px'
-  - name: showText
-    type: 'boolean'
-    default: 'true'
-    description: 'Show outside percentage text'
----
-::
-
-## Composite Patterns
 ### Progress Row
-Progress paired with status label.
-:::TuffDemoWrapper{demo="ProgressProgressRowDemo" code-lang="vue"}
+
+::::TuffDemoWrapper{demo="ProgressProgressRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -80,4 +39,73 @@ code: |
     <TxStatusBadge text="Running" status="warning" />
   </template>
 ---
-:::
+::::
+
+## Composition Examples
+
+### Custom Text Formatting
+
+```vue
+<template>
+  <TuffProgress :percentage="42" :format="value => `Done ${value}%`" />
+</template>
+```
+
+### Indeterminate Progress
+
+```vue
+<template>
+  <TuffProgress indeterminate :percentage="60" :show-text="false" />
+</template>
+```
+
+For unknown-duration work, prefer an indeterminate state instead of showing a fake percentage.
+
+## Interaction Contract
+
+- `TuffProgress` renders `TxProgressBar` and does not add its own wrapper DOM.
+- `percentage`, `status`, `indeterminate`, `showText`, and `format` are forwarded directly.
+- `strokeWidth` is converted to a CSS height string such as `"6px"` and passed as `height`.
+- Text placement is fixed to `outside`.
+- The underlying bar uses `maskVariant="plain"` and `maskBackground="mask"`.
+- Determinate progress exposes `role="progressbar"` and `aria-valuenow` through `TxProgressBar`.
+- Indeterminate progress omits `aria-valuenow` and applies the progress-bar indeterminate class.
+- The install entry registers the component name `TuffProgress`.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `percentage` | `number` | `0` | Determinate progress value forwarded to `TxProgressBar`. |
+| `status` | `'success' \| 'error' \| 'warning' \| ''` | `''` | Visual status tone forwarded to `TxProgressBar`. |
+| `strokeWidth` | `number` | `6` | Bar height in pixels. |
+| `showText` | `boolean` | `true` | Shows outside progress text. |
+| `indeterminate` | `boolean` | `false` | Enables indeterminate progress mode. |
+| `format` | `(percentage: number) => string` | - | Custom formatter for displayed determinate text. |
+
+### Events
+
+`TuffProgress` does not emit component events. Observe progress changes in the host task state and update props.
+
+## Slots
+
+`TuffProgress` does not expose slots. Use `format` for text customization, or use `TxProgressBar` directly when the layout needs custom content.
+
+## Best Practices
+
+- Use `TuffProgress` for simple rows where the legacy public name and compact API are enough.
+- Use `TxProgressBar` directly for segments, tooltip, messages, loading/success/error booleans, flow effects, or custom text placement.
+- Keep `strokeWidth` modest; this wrapper is intended for row-level progress, not hero metrics.
+- Do not show stale percentages for unknown work. Use `indeterminate` and hide text unless you can provide a trustworthy value.
+- Pair progress with a concise status label when the surrounding UI needs operational context.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/progress/src/TxProgress.vue` confirms the wrapper renders `TxProgressBar` directly and maps `strokeWidth` to `height`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/progress/__tests__/progress.test.ts` covers forwarded status, custom formatting, `strokeWidth`, hidden text, and indeterminate ARIA behavior.
+- Export: `packages/tuffex/packages/components/src/progress/index.ts` registers the public component name `TuffProgress`.
+
+## Source
+<TuffDocSourceLink />

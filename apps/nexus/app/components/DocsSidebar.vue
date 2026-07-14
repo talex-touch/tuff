@@ -1,557 +1,585 @@
 <script setup lang="ts">
-import DocSection from './docs/DocSection.vue'
-import { hasWindow } from '@talex-touch/utils/env'
-import { coerceJsonArray } from '~/utils/docs-api'
-import { requestDocsPage } from '~/utils/docs-page-client-cache'
-import { useTypedFetch } from '~/utils/request'
-import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
+import DocSection from "./docs/DocSection.vue";
+import { hasWindow } from "@talex-touch/utils/env";
+import { coerceJsonArray } from "~/utils/docs-api";
+import { requestDocsPage } from "~/utils/docs-page-client-cache";
+import { useTypedFetch } from "~/utils/request";
+import {
+  normalizeDocsPagePath,
+  resolveDocsLocaleFromRoute,
+  toLocalizedDocsPath,
+} from "#shared/utils/docs-path";
 
-type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
+type SyncStatusKey = "not_started" | "in_progress" | "migrated" | "verified";
 
 interface SidebarComponentDoc {
-  title: string
-  path: string
-  normalizedPath: string
-  locale: 'en' | 'zh'
-  category: string | null
-  syncStatus: SyncStatusKey
-  verified: boolean
+  title: string;
+  path: string;
+  normalizedPath: string;
+  locale: "en" | "zh";
+  category: string | null;
+  syncStatus: SyncStatusKey;
+  verified: boolean;
 }
 
 const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
-  未迁移: 'not_started',
-  迁移中: 'in_progress',
-  已迁移: 'migrated',
-  已确认: 'verified',
-  not_started: 'not_started',
-  in_progress: 'in_progress',
-  migrated: 'migrated',
-  verified: 'verified',
-}
+  未迁移: "not_started",
+  迁移中: "in_progress",
+  已迁移: "migrated",
+  已确认: "verified",
+  not_started: "not_started",
+  in_progress: "in_progress",
+  migrated: "migrated",
+  verified: "verified",
+};
 
-const route = useRoute()
-const { t, locale } = useI18n()
-const navRef = ref<HTMLElement | null>(null)
-const sidebarHydrated = ref(false)
-const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
-const normalizedRoutePath = computed(() => normalizeDocsPagePath(route.path))
-const isComponentDocsRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/dev/components'))
-const shouldLoadComponentDocs = computed(() => sidebarHydrated.value && isComponentDocsRoute.value)
-const docsNavigationScope = computed(() => (isComponentDocsRoute.value ? 'components' : undefined))
-const { data: navigationTreePayload, pending, error } = await useTypedFetch<unknown>(
-  '/api/docs/navigation',
-  {
-    key: computed(() => `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? 'all'}`),
-    query: computed(() => ({
-      locale: docsLocale.value,
-      ...(docsNavigationScope.value ? { scope: docsNavigationScope.value } : {}),
-    })),
-    server: false,
-    lazy: true,
-    responseType: 'json',
-    default: () => [],
-  },
-)
+const route = useRoute();
+const { t, locale } = useI18n();
+const navRef = ref<HTMLElement | null>(null);
+const sidebarHydrated = ref(false);
+const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path));
+const normalizedRoutePath = computed(() => normalizeDocsPagePath(route.path));
+const isComponentDocsRoute = computed(() =>
+  normalizedRoutePath.value.startsWith("/docs/dev/components"),
+);
+const shouldLoadComponentDocs = computed(
+  () => sidebarHydrated.value && isComponentDocsRoute.value,
+);
+const docsNavigationScope = computed(() =>
+  isComponentDocsRoute.value ? "components" : undefined,
+);
+const docsNavigationEndpoint = computed(
+  () =>
+    `/api/docs/navigation/${docsLocale.value}/${docsNavigationScope.value ?? "all"}`,
+);
+const {
+  data: navigationTreePayload,
+  pending,
+  error,
+} = await useTypedFetch<unknown>(docsNavigationEndpoint, {
+  key: computed(
+    () =>
+      `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? "all"}`,
+  ),
+  server: false,
+  lazy: true,
+  responseType: "json",
+  default: () => [],
+});
+const sidebarComponentsEndpoint = computed(
+  () => `/api/docs/sidebar-components/${docsLocale.value}`,
+);
 const {
   data: componentDocsPayload,
   pending: componentDocsPending,
   refresh: refreshComponentDocs,
-} = await useTypedFetch<unknown>(
-  '/api/docs/sidebar-components',
-  {
-    key: computed(() => `docs-components-meta:${docsLocale.value}`),
-    query: computed(() => ({
-      locale: docsLocale.value,
-    })),
-    server: false,
-    lazy: true,
-    immediate: false,
-    responseType: 'json',
-    default: () => [],
-  },
-)
-const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
-const COMPONENT_DOCS_METADATA_DELAY_MS = 360
-const COMPONENT_DOCS_METADATA_INTENT_DELAY_MS = 180
-const COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS = 3600
-const COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS = 900
-const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
-let activeScrollFrame: number | null = null
-let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null
-let componentDocsMetadataIdleId: number | null = null
-const prefetchedDocsMetadataTargets = new Set<string>()
-const prefetchedDocsFullBodyTargets = new Set<string>()
-const pendingDocsFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const pendingDocsFullBodyPrefetchIdleIds = new Map<string, number>()
+} = await useTypedFetch<unknown>(sidebarComponentsEndpoint, {
+  key: computed(() => `docs-components-meta:${docsLocale.value}`),
+  server: false,
+  lazy: true,
+  immediate: false,
+  responseType: "json",
+  default: () => [],
+});
+const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g;
+const COMPONENT_DOCS_METADATA_DELAY_MS = 360;
+const COMPONENT_DOCS_METADATA_INTENT_DELAY_MS = 180;
+const COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS = 3600;
+const COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS = 900;
+const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400;
+let activeScrollFrame: number | null = null;
+let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null;
+let componentDocsMetadataIdleId: number | null = null;
+const prefetchedDocsMetadataTargets = new Set<string>();
+const prefetchedDocsFullBodyTargets = new Set<string>();
+const pendingDocsFullBodyPrefetchTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+const pendingDocsFullBodyPrefetchIdleIds = new Map<string, number>();
 
 function stripCjk(value: string) {
-  return value.replace(CJK_PATTERN, '').replace(/\s{2,}/g, ' ').trim()
+  return value
+    .replace(CJK_PATTERN, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function fallbackTitleFromPath(path?: string) {
-  if (!path)
-    return 'Untitled'
-  return path
-    .split('/')
-    .filter(Boolean)
-    .pop()
-    ?.replace(/\.(en|zh)$/, '')
-    ?.replace(/[-_]/g, ' ')
-    ?.replace(/\b\w/g, c => c.toUpperCase()) ?? 'Untitled'
+  if (!path) return "Untitled";
+  return (
+    path
+      .split("/")
+      .filter(Boolean)
+      .pop()
+      ?.replace(/\.(en|zh)$/, "")
+      ?.replace(/[-_]/g, " ")
+      ?.replace(/\b\w/g, (c) => c.toUpperCase()) ?? "Untitled"
+  );
 }
 
-const TOP_SECTIONS = computed(() => ([
+const TOP_SECTIONS = computed(() => [
   {
-    key: 'components',
-    basePath: '/docs/dev/components',
-    entryPath: '/docs/dev/components/index',
-    label: t('docsSidebar.components'),
-    icon: 'i-carbon-cube',
-    description: 'Components',
+    key: "components",
+    basePath: "/docs/dev/components",
+    entryPath: "/docs/dev/components/index",
+    label: t("docsSidebar.components"),
+    icon: "i-carbon-cube",
+    description: "Components",
   },
   {
-    key: 'extensions',
-    basePath: '/docs/dev',
-    entryPath: '/docs/dev/index',
-    label: t('docsSidebar.extensions'),
-    icon: 'i-carbon-code',
-    description: 'Extensions',
+    key: "extensions",
+    basePath: "/docs/dev",
+    entryPath: "/docs/dev/index",
+    label: t("docsSidebar.extensions"),
+    icon: "i-carbon-code",
+    description: "Extensions",
   },
-]))
+]);
 
 const SECTION_ORDER: Record<string, string[]> = {
-  '/docs/dev': [
-    '/docs/dev/index',
-    '/docs/dev/getting-started',
-    '/docs/dev/api',
-    '/docs/dev/architecture',
-    '/docs/dev/extensions',
-    '/docs/dev/intelligence',
-    '/docs/dev/release',
-    '/docs/dev/tools',
-    '/docs/dev/reference',
+  "/docs/dev": [
+    "/docs/dev/index",
+    "/docs/dev/getting-started",
+    "/docs/dev/api",
+    "/docs/dev/architecture",
+    "/docs/dev/extensions",
+    "/docs/dev/intelligence",
+    "/docs/dev/release",
+    "/docs/dev/tools",
+    "/docs/dev/reference",
   ],
-  '/docs/dev/getting-started': [
-    '/docs/dev/getting-started/index',
-    '/docs/dev/getting-started/overview',
-    '/docs/dev/getting-started/quickstart',
-    '/docs/dev/getting-started/tuffex-composition',
-    '/docs/dev/getting-started/plugin-workflow',
+  "/docs/dev/getting-started": [
+    "/docs/dev/getting-started/index",
+    "/docs/dev/getting-started/overview",
+    "/docs/dev/getting-started/quickstart",
+    "/docs/dev/getting-started/tuffex-composition",
+    "/docs/dev/getting-started/plugin-workflow",
   ],
-  '/docs/dev/api': [
-    '/docs/dev/api/index',
-    '/docs/dev/api/plugin-context',
-    '/docs/dev/api/box',
-    '/docs/dev/api/feature',
-    '/docs/dev/api/quick-actions',
-    '/docs/dev/api/search',
-    '/docs/dev/api/clipboard',
-    '/docs/dev/api/storage',
-    '/docs/dev/api/temp-file',
-    '/docs/dev/api/download',
-    '/docs/dev/api/platform-capabilities',
-    '/docs/dev/api/power',
-    '/docs/dev/api/account',
-    '/docs/dev/api/intelligence',
-    '/docs/dev/api/permission',
-    '/docs/dev/api/i18n',
-    '/docs/dev/api/transport',
-    '/docs/dev/api/transport-internals',
-    '/docs/dev/api/channel',
-    '/docs/dev/api/bridge-hooks',
-    '/docs/dev/api/event',
-    '/docs/dev/api/keyboard',
-    '/docs/dev/api/widget',
-    '/docs/dev/api/division-box',
-    '/docs/dev/api/flow-transfer',
+  "/docs/dev/api": [
+    "/docs/dev/api/index",
+    "/docs/dev/api/plugin-context",
+    "/docs/dev/api/box",
+    "/docs/dev/api/feature",
+    "/docs/dev/api/quick-actions",
+    "/docs/dev/api/search",
+    "/docs/dev/api/clipboard",
+    "/docs/dev/api/storage",
+    "/docs/dev/api/temp-file",
+    "/docs/dev/api/download",
+    "/docs/dev/api/platform-capabilities",
+    "/docs/dev/api/screenshot",
+    "/docs/dev/api/power",
+    "/docs/dev/api/account",
+    "/docs/dev/api/intelligence",
+    "/docs/dev/api/permission",
+    "/docs/dev/api/i18n",
+    "/docs/dev/api/transport",
+    "/docs/dev/api/transport-internals",
+    "/docs/dev/api/channel",
+    "/docs/dev/api/bridge-hooks",
+    "/docs/dev/api/event",
+    "/docs/dev/api/keyboard",
+    "/docs/dev/api/widget",
+    "/docs/dev/api/division-box",
+    "/docs/dev/api/flow-transfer",
   ],
-  '/docs/dev/architecture': [
-    '/docs/dev/architecture/app-tech-principles',
-    '/docs/dev/architecture/module-map',
-    '/docs/dev/architecture/corebox-system',
-    '/docs/dev/architecture/corebox-and-views',
-    '/docs/dev/architecture/search-engine',
-    '/docs/dev/architecture/plugin-system',
-    '/docs/dev/architecture/transport-events',
-    '/docs/dev/architecture/ipc-events-detail',
-    '/docs/dev/architecture/ipc-events-handlers',
-    '/docs/dev/architecture/ipc-events-sdk-map',
-    '/docs/dev/architecture/storage-and-db',
-    '/docs/dev/architecture/division-box',
-    '/docs/dev/architecture/intelligence-system',
-    '/docs/dev/architecture/intelligence-module',
-    '/docs/dev/architecture/device-idle-service',
+  "/docs/dev/architecture": [
+    "/docs/dev/architecture/app-tech-principles",
+    "/docs/dev/architecture/module-map",
+    "/docs/dev/architecture/corebox-system",
+    "/docs/dev/architecture/corebox-and-views",
+    "/docs/dev/architecture/search-engine",
+    "/docs/dev/architecture/plugin-system",
+    "/docs/dev/architecture/transport-events",
+    "/docs/dev/architecture/ipc-events-detail",
+    "/docs/dev/architecture/ipc-events-handlers",
+    "/docs/dev/architecture/ipc-events-sdk-map",
+    "/docs/dev/architecture/storage-and-db",
+    "/docs/dev/architecture/division-box",
+    "/docs/dev/architecture/intelligence-system",
+    "/docs/dev/architecture/intelligence-module",
+    "/docs/dev/architecture/device-idle-service",
   ],
-  '/docs/dev/extensions': [
-    '/docs/dev/extensions/layout',
-    '/docs/dev/extensions/search-sorting',
-    '/docs/dev/extensions/toast',
-    '/docs/dev/extensions/unplugin-export-plugin',
+  "/docs/dev/extensions": [
+    "/docs/dev/extensions/layout",
+    "/docs/dev/extensions/search-sorting",
+    "/docs/dev/extensions/toast",
+    "/docs/dev/extensions/unplugin-export-plugin",
   ],
-  '/docs/dev/intelligence': [
-    '/docs/dev/intelligence/index',
-    '/docs/dev/intelligence/configuration',
-    '/docs/dev/intelligence/langchain-agent',
-    '/docs/dev/intelligence/schema-migration',
-    '/docs/dev/intelligence/capabilities',
-    '/docs/dev/intelligence/troubleshooting',
+  "/docs/dev/intelligence": [
+    "/docs/dev/intelligence/index",
+    "/docs/dev/intelligence/configuration",
+    "/docs/dev/intelligence/langchain-agent",
+    "/docs/dev/intelligence/schema-migration",
+    "/docs/dev/intelligence/capabilities",
+    "/docs/dev/intelligence/troubleshooting",
   ],
-  '/docs/dev/release': [
-    '/docs/dev/release/index',
-    '/docs/dev/release/publish',
-    '/docs/dev/release/performance-persistence',
-    '/docs/dev/release/migration',
+  "/docs/dev/release": [
+    "/docs/dev/release/index",
+    "/docs/dev/release/publish",
+    "/docs/dev/release/performance-persistence",
+    "/docs/dev/release/migration",
   ],
-  '/docs/dev/tools': [
-    '/docs/dev/tools/index',
-    '/docs/dev/tools/tuff-cli',
-    '/docs/dev/tools/tuffex',
+  "/docs/dev/tools": [
+    "/docs/dev/tools/index",
+    "/docs/dev/tools/tuff-cli",
+    "/docs/dev/tools/tuffex",
   ],
-  '/docs/dev/components': [
-    '/docs/dev/components/index',
-    '/docs/dev/components/foundations',
-    '/docs/dev/components/button',
-    '/docs/dev/components/icon',
-    '/docs/dev/components/input',
-    '/docs/dev/components/switch',
-    '/docs/dev/components/dialog',
-    '/docs/dev/components/drawer',
-    '/docs/dev/components/tooltip',
-    '/docs/dev/components/toast',
-    '/docs/dev/components/progress',
-    '/docs/dev/components/progress-bar',
-    '/docs/dev/components/status-badge',
-    '/docs/dev/components/tag',
-    '/docs/dev/components/avatar',
-    '/docs/dev/components/grid',
-    '/docs/dev/components/skeleton',
-    '/docs/dev/components/layout-skeleton',
+  "/docs/dev/components": [
+    "/docs/dev/components/index",
+    "/docs/dev/components/foundations",
+    "/docs/dev/components/button",
+    "/docs/dev/components/icon",
+    "/docs/dev/components/input",
+    "/docs/dev/components/switch",
+    "/docs/dev/components/dialog",
+    "/docs/dev/components/drawer",
+    "/docs/dev/components/tooltip",
+    "/docs/dev/components/toast",
+    "/docs/dev/components/progress",
+    "/docs/dev/components/progress-bar",
+    "/docs/dev/components/status-badge",
+    "/docs/dev/components/tag",
+    "/docs/dev/components/avatar",
+    "/docs/dev/components/grid",
+    "/docs/dev/components/skeleton",
+    "/docs/dev/components/layout-skeleton",
   ],
-  '/docs/dev/reference': [
-    '/docs/dev/reference/index',
-    '/docs/dev/reference/manifest',
-    '/docs/dev/reference/snippets',
-    '/docs/dev/reference/examples',
+  "/docs/dev/reference": [
+    "/docs/dev/reference/index",
+    "/docs/dev/reference/manifest",
+    "/docs/dev/reference/snippets",
+    "/docs/dev/reference/examples",
   ],
-  '/docs/guide': [
-    '/docs/guide/start',
-    '/docs/guide/features',
-    '/docs/guide/scenes',
-    '/docs/guide/tips',
-    '/docs/guide/index',
+  "/docs/guide": [
+    "/docs/guide/start",
+    "/docs/guide/features",
+    "/docs/guide/scenes",
+    "/docs/guide/tips",
+    "/docs/guide/index",
   ],
-  '/docs/guide/features': [
-    '/docs/guide/features/workspace',
-    '/docs/guide/features/corebox-workflow',
-    '/docs/guide/features/plugin-ecosystem',
-    '/docs/guide/features/store',
-    '/docs/guide/features/preview',
-    '/docs/guide/features/wallpaper',
+  "/docs/guide/features": [
+    "/docs/guide/features/workspace",
+    "/docs/guide/features/corebox-workflow",
+    "/docs/guide/features/plugin-ecosystem",
+    "/docs/guide/features/store",
+    "/docs/guide/features/preview",
+    "/docs/guide/features/wallpaper",
   ],
-  '/docs/guide/scenes': [
-    '/docs/guide/scenes/student',
-    '/docs/guide/scenes/creator',
-    '/docs/guide/scenes/developer',
+  "/docs/guide/scenes": [
+    "/docs/guide/scenes/student",
+    "/docs/guide/scenes/creator",
+    "/docs/guide/scenes/developer",
   ],
-  '/docs/guide/tips': [
-    '/docs/guide/tips/index',
-    '/docs/guide/tips/intelligence-workflow',
-    '/docs/guide/tips/intelligence-agent-playbook',
-    '/docs/guide/tips/intelligence-prompts',
-    '/docs/guide/tips/automation',
-    '/docs/guide/tips/productivity',
-    '/docs/guide/tips/faq',
+  "/docs/guide/tips": [
+    "/docs/guide/tips/index",
+    "/docs/guide/tips/intelligence-workflow",
+    "/docs/guide/tips/intelligence-agent-playbook",
+    "/docs/guide/tips/intelligence-prompts",
+    "/docs/guide/tips/automation",
+    "/docs/guide/tips/productivity",
+    "/docs/guide/tips/faq",
   ],
-}
+};
 
-const COMPONENT_CATEGORY_ORDER = computed(() => ([
-  { key: 'Basic', label: t('docsSidebar.categories.basic') },
-  { key: 'Form', label: t('docsSidebar.categories.form') },
-  { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
-  { key: 'Layout', label: t('docsSidebar.categories.layout') },
-  { key: 'Data', label: t('docsSidebar.categories.data') },
-]))
+const COMPONENT_CATEGORY_ORDER = computed(() => [
+  { key: "Basic", label: t("docsSidebar.categories.basic") },
+  { key: "Form", label: t("docsSidebar.categories.form") },
+  { key: "Feedback", label: t("docsSidebar.categories.feedback") },
+  { key: "Layout", label: t("docsSidebar.categories.layout") },
+  { key: "Data", label: t("docsSidebar.categories.data") },
+]);
 
-const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(() => {
-  if (locale.value === 'zh') {
-    return {
-      not_started: '开发中',
-      in_progress: '开发中',
-      migrated: 'AI迁移',
-      verified: '已审阅',
+const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(
+  () => {
+    if (locale.value === "zh") {
+      return {
+        not_started: "开发中",
+        in_progress: "开发中",
+        migrated: "AI迁移",
+        verified: "已审阅",
+      };
     }
-  }
 
-  return {
-    not_started: 'In progress',
-    in_progress: 'In progress',
-    migrated: 'AI migrated',
-    verified: 'Reviewed',
-  }
-})
+    return {
+      not_started: "In progress",
+      in_progress: "In progress",
+      migrated: "AI migrated",
+      verified: "Reviewed",
+    };
+  },
+);
 
-const COMPONENT_PRIORITY_SECTIONS = computed(() => ([
+const COMPONENT_PRIORITY_SECTIONS = computed(() => [
   {
-    key: 'design-patterns',
-    label: locale.value === 'zh' ? '设计模式' : 'Design Patterns',
+    key: "design-patterns",
+    label: locale.value === "zh" ? "设计模式" : "Design Patterns",
     paths: [
-      '/docs/dev/components/glass-surface',
-      '/docs/dev/components/gradient-border',
-      '/docs/dev/components/outline-border',
-      '/docs/dev/components/corner-overlay',
-      '/docs/dev/components/gradual-blur',
-      '/docs/dev/components/edge-fade-mask',
-      '/docs/dev/components/glow-text',
-      '/docs/dev/components/keyframe-stroke-text',
-      '/docs/dev/components/tuff-logo-stroke',
-      '/docs/dev/components/text-transformer',
-      '/docs/dev/components/transition',
-      '/docs/dev/components/stagger',
-      '/docs/dev/components/fusion',
-      '/docs/dev/components/avatar-variants',
+      "/docs/dev/components/glass-surface",
+      "/docs/dev/components/gradient-border",
+      "/docs/dev/components/outline-border",
+      "/docs/dev/components/corner-overlay",
+      "/docs/dev/components/gradual-blur",
+      "/docs/dev/components/edge-fade-mask",
+      "/docs/dev/components/glow-text",
+      "/docs/dev/components/keyframe-stroke-text",
+      "/docs/dev/components/tuff-logo-stroke",
+      "/docs/dev/components/text-transformer",
+      "/docs/dev/components/transition",
+      "/docs/dev/components/stagger",
+      "/docs/dev/components/fusion",
+      "/docs/dev/components/avatar-variants",
     ],
   },
   {
-    key: 'design-cases',
-    label: locale.value === 'zh' ? '设计案例' : 'Design Cases',
+    key: "design-cases",
+    label: locale.value === "zh" ? "设计案例" : "Design Cases",
     paths: [
-      '/docs/dev/components/agents',
-      '/docs/dev/components/chat',
-      '/docs/dev/components/chat-composer',
-      '/docs/dev/components/markdown-view',
-      '/docs/dev/components/image-gallery',
-      '/docs/dev/components/group-block',
-      '/docs/dev/components/card',
-      '/docs/dev/components/card-item',
+      "/docs/dev/components/agents",
+      "/docs/dev/components/chat",
+      "/docs/dev/components/chat-composer",
+      "/docs/dev/components/markdown-view",
+      "/docs/dev/components/image-gallery",
+      "/docs/dev/components/group-block",
+      "/docs/dev/components/card",
+      "/docs/dev/components/card-item",
     ],
   },
   {
-    key: 'dark-mode',
-    label: locale.value === 'zh' ? '暗黑模式与主题' : 'Dark Mode & Theme',
-    paths: ['/docs/dev/components/foundations'],
+    key: "dark-mode",
+    label: locale.value === "zh" ? "暗黑模式与主题" : "Dark Mode & Theme",
+    paths: ["/docs/dev/components/foundations"],
   },
-]))
+]);
 
-const defaultSection = computed(() => 'extensions')
+const defaultSection = computed(() => "extensions");
 
 const docLabels = computed<Record<string, string>>(() => ({
-  '/docs/guide/start': t('docsNav.start'),
-  '/docs/guide/start.zh': t('docsNav.start'),
-}))
+  "/docs/guide/start": t("docsNav.start"),
+  "/docs/guide/start.zh": t("docsNav.start"),
+}));
 
 function normalizeContentPath(path: string | null | undefined) {
-  if (!path)
-    return null
-  return normalizeDocsPagePath(path)
+  if (!path) return null;
+  return normalizeDocsPagePath(path);
 }
 
 function localizedDocsPath(path: string | null | undefined) {
-  return toLocalizedDocsPath(path, docsLocale.value)
+  return toLocalizedDocsPath(path, docsLocale.value);
 }
 
 function shouldPrefetchDocsTarget(path: string | null | undefined) {
-  if (!path)
-    return false
-  const normalized = normalizeContentPath(path)
-  return Boolean(normalized?.startsWith('/docs/dev/components/'))
+  if (!path) return false;
+  const normalized = normalizeContentPath(path);
+  return Boolean(normalized?.startsWith("/docs/dev/components/"));
 }
 
-function prefetchDocsMetadataTarget(normalized: string, locale: 'en' | 'zh') {
-  const cacheKey = `${normalized}:${locale}`
-  if (prefetchedDocsMetadataTargets.has(cacheKey))
-    return
-  prefetchedDocsMetadataTargets.add(cacheKey)
+function prefetchDocsMetadataTarget(normalized: string, locale: "en" | "zh") {
+  const cacheKey = `${normalized}:${locale}`;
+  if (prefetchedDocsMetadataTargets.has(cacheKey)) return;
+  prefetchedDocsMetadataTargets.add(cacheKey);
 
-  const routeTarget = toLocalizedDocsPath(normalized, locale)
-  void preloadRouteComponents(routeTarget)
-  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
+  const routeTarget = toLocalizedDocsPath(normalized, locale);
+  void preloadRouteComponents(routeTarget);
+  void requestDocsPage({ path: normalized, locale, body: "0" }).catch(() => {});
 }
 
-function scheduleDocsFullBodyPrefetch(normalized: string, locale: 'en' | 'zh') {
-  const cacheKey = `${normalized}:${locale}`
-  if (prefetchedDocsFullBodyTargets.has(cacheKey) || pendingDocsFullBodyPrefetchTimers.has(cacheKey))
-    return
+function scheduleDocsFullBodyPrefetch(normalized: string, locale: "en" | "zh") {
+  const cacheKey = `${normalized}:${locale}`;
+  if (
+    prefetchedDocsFullBodyTargets.has(cacheKey) ||
+    pendingDocsFullBodyPrefetchTimers.has(cacheKey)
+  )
+    return;
 
   const clearPending = () => {
-    pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
-    pendingDocsFullBodyPrefetchIdleIds.delete(cacheKey)
-  }
+    pendingDocsFullBodyPrefetchTimers.delete(cacheKey);
+    pendingDocsFullBodyPrefetchIdleIds.delete(cacheKey);
+  };
   const prefetchFullDoc = () => {
-    clearPending()
-    if (prefetchedDocsFullBodyTargets.has(cacheKey))
-      return
-    prefetchedDocsFullBodyTargets.add(cacheKey)
-    void requestDocsPage({ path: normalized, locale, body: '1' }).catch(() => {})
-  }
+    clearPending();
+    if (prefetchedDocsFullBodyTargets.has(cacheKey)) return;
+    prefetchedDocsFullBodyTargets.add(cacheKey);
+    void requestDocsPage({ path: normalized, locale, body: "1" }).catch(
+      () => {},
+    );
+  };
 
   const timer = setTimeout(() => {
-    pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
-    if (hasWindow() && 'requestIdleCallback' in window) {
-      const idleId = window.requestIdleCallback(prefetchFullDoc, { timeout: COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS })
-      pendingDocsFullBodyPrefetchIdleIds.set(cacheKey, idleId)
-      return
+    pendingDocsFullBodyPrefetchTimers.delete(cacheKey);
+    if (hasWindow() && "requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(prefetchFullDoc, {
+        timeout: COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS,
+      });
+      pendingDocsFullBodyPrefetchIdleIds.set(cacheKey, idleId);
+      return;
     }
 
-    prefetchFullDoc()
-  }, COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS)
-  pendingDocsFullBodyPrefetchTimers.set(cacheKey, timer)
+    prefetchFullDoc();
+  }, COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS);
+  pendingDocsFullBodyPrefetchTimers.set(cacheKey, timer);
 }
 
 function prefetchDocsTarget(path: string | null | undefined) {
-  if (import.meta.server || !shouldPrefetchDocsTarget(path))
-    return
+  if (import.meta.server || !shouldPrefetchDocsTarget(path)) return;
 
-  const normalized = normalizeContentPath(path)
-  if (!normalized)
-    return
+  const normalized = normalizeContentPath(path);
+  if (!normalized) return;
 
-  const locale = docsLocale.value
-  prefetchDocsMetadataTarget(normalized, locale)
-  scheduleDocsFullBodyPrefetch(normalized, locale)
+  const locale = docsLocale.value;
+  prefetchDocsMetadataTarget(normalized, locale);
+  scheduleDocsFullBodyPrefetch(normalized, locale);
 }
 
 function cancelDocsFullBodyPrefetch(path: string | null | undefined) {
-  if (import.meta.server || !path)
-    return
+  if (import.meta.server || !path) return;
 
-  const normalized = normalizeContentPath(path)
-  if (!normalized)
-    return
+  const normalized = normalizeContentPath(path);
+  if (!normalized) return;
 
-  const cacheKey = `${normalized}:${docsLocale.value}`
-  const timer = pendingDocsFullBodyPrefetchTimers.get(cacheKey)
+  const cacheKey = `${normalized}:${docsLocale.value}`;
+  const timer = pendingDocsFullBodyPrefetchTimers.get(cacheKey);
   if (timer) {
-    clearTimeout(timer)
-    pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
+    clearTimeout(timer);
+    pendingDocsFullBodyPrefetchTimers.delete(cacheKey);
   }
 
-  const idleId = pendingDocsFullBodyPrefetchIdleIds.get(cacheKey)
-  if (idleId !== undefined && hasWindow() && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(idleId)
-    pendingDocsFullBodyPrefetchIdleIds.delete(cacheKey)
+  const idleId = pendingDocsFullBodyPrefetchIdleIds.get(cacheKey);
+  if (idleId !== undefined && hasWindow() && "cancelIdleCallback" in window) {
+    window.cancelIdleCallback(idleId);
+    pendingDocsFullBodyPrefetchIdleIds.delete(cacheKey);
   }
 }
 
 function filterByLocale(items: any[]): any[] {
-  if (!items.length)
-    return []
-  const currentLocale = locale.value
-  const otherLocale = currentLocale === 'en' ? 'zh' : 'en'
-  const hasCurrentLocale = items.some(item =>
-    typeof item?.path === 'string' && item.path.endsWith(`.${currentLocale}`),
-  )
+  if (!items.length) return [];
+  const currentLocale = locale.value;
+  const otherLocale = currentLocale === "en" ? "zh" : "en";
+  const hasCurrentLocale = items.some(
+    (item) =>
+      typeof item?.path === "string" && item.path.endsWith(`.${currentLocale}`),
+  );
 
   return items
     .filter((item) => {
-      if (!item?.path || !hasCurrentLocale)
-        return true
-      const path = item.path as string
-      return !path.endsWith(`.${otherLocale}`)
+      if (!item?.path || !hasCurrentLocale) return true;
+      const path = item.path as string;
+      return !path.endsWith(`.${otherLocale}`);
     })
     .map((item) => {
       if (Array.isArray(item.children) && item.children.length > 0) {
         return {
           ...item,
           children: filterByLocale(item.children),
-        }
+        };
       }
-      return item
-    })
+      return item;
+    });
 }
 
 function sortByOrder(items: any[], parentPath: string | null): any[] {
-  const order = SECTION_ORDER[parentPath ?? ''] ?? []
-  const orderMap = new Map(order.map((path, index) => [path, index]))
+  const order = SECTION_ORDER[parentPath ?? ""] ?? [];
+  const orderMap = new Map(order.map((path, index) => [path, index]));
   return [...items].sort((a, b) => {
-    const aPath = normalizeContentPath(a.path) ?? ''
-    const bPath = normalizeContentPath(b.path) ?? ''
-    const aIndex = orderMap.has(aPath) ? orderMap.get(aPath)! : Number.POSITIVE_INFINITY
-    const bIndex = orderMap.has(bPath) ? orderMap.get(bPath)! : Number.POSITIVE_INFINITY
-    if (aIndex !== bIndex)
-      return aIndex - bIndex
-    const titleA = (a.title || '').toLowerCase()
-    const titleB = (b.title || '').toLowerCase()
-    return titleA.localeCompare(titleB)
-  })
+    const aPath = normalizeContentPath(a.path) ?? "";
+    const bPath = normalizeContentPath(b.path) ?? "";
+    const aIndex = orderMap.has(aPath)
+      ? orderMap.get(aPath)!
+      : Number.POSITIVE_INFINITY;
+    const bIndex = orderMap.has(bPath)
+      ? orderMap.get(bPath)!
+      : Number.POSITIVE_INFINITY;
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    const titleA = (a.title || "").toLowerCase();
+    const titleB = (b.title || "").toLowerCase();
+    return titleA.localeCompare(titleB);
+  });
 }
 
 function sortTree(items: any[], parentPath: string | null): any[] {
-  const sorted = sortByOrder(items, parentPath)
+  const sorted = sortByOrder(items, parentPath);
   return sorted.map((item) => {
     if (Array.isArray(item.children) && item.children.length > 0) {
-      const childParent = normalizeContentPath(item.path)
+      const childParent = normalizeContentPath(item.path);
       return {
         ...item,
         children: sortTree(item.children, childParent),
-      }
+      };
     }
-    return item
-  })
+    return item;
+  });
 }
 
-const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value))
-const componentItems = computed(() => coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[])
-const lastComponentSections = shallowRef<any[]>([])
-const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
+const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value));
+const componentItems = computed(
+  () =>
+    coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value).filter(
+      (item) => item.locale === docsLocale.value,
+    ) as any[],
+);
+const lastComponentSections = shallowRef<any[]>([]);
+const isTutorialRoute = computed(() =>
+  normalizedRoutePath.value.startsWith("/docs/guide"),
+);
 
 const allSections = computed(() => {
-  if (!items.value.length)
-    return []
-  const [first] = items.value
-  if (first?.path === '/docs' && Array.isArray(first.children))
-    return first.children
-  return items.value
-})
+  if (!items.value.length) return [];
+  const [first] = items.value;
+  if (first?.path === "/docs" && Array.isArray(first.children))
+    return first.children;
+  return items.value;
+});
 
 function findSectionByPath(list: any[], targetPath: string): any | null {
-  const normalizedTarget = normalizeContentPath(targetPath)
-  if (!normalizedTarget)
-    return null
+  const normalizedTarget = normalizeContentPath(targetPath);
+  if (!normalizedTarget) return null;
   for (const item of list) {
-    const itemPath = normalizeContentPath(item.path)
-    if (itemPath === normalizedTarget)
-      return item
+    const itemPath = normalizeContentPath(item.path);
+    if (itemPath === normalizedTarget) return item;
     if (Array.isArray(item.children)) {
-      const found = findSectionByPath(item.children, targetPath)
-      if (found)
-        return found
+      const found = findSectionByPath(item.children, targetPath);
+      if (found) return found;
     }
   }
-  return null
+  return null;
 }
 
 const resolvedComponentSections = computed(() => {
-  const sourceItems = componentItems.value ?? []
-  if (!sourceItems.length)
-    return []
+  const sourceItems = componentItems.value ?? [];
+  if (!sourceItems.length) return [];
 
-  const normalizedItems = sourceItems
-    .filter(item => item.normalizedPath?.startsWith('/docs/dev/components'))
+  const normalizedItems = sourceItems.filter((item) =>
+    item.normalizedPath?.startsWith("/docs/dev/components"),
+  );
 
-  if (!normalizedItems.length)
-    return []
+  if (!normalizedItems.length) return [];
 
-  const indexItem = normalizedItems.find(item => item.normalizedPath === '/docs/dev/components/index')
-  const entries = normalizedItems.filter(item => item.normalizedPath && item.normalizedPath !== '/docs/dev/components/index')
+  const indexItem = normalizedItems.find(
+    (item) => item.normalizedPath === "/docs/dev/components/index",
+  );
+  const entries = normalizedItems.filter(
+    (item) =>
+      item.normalizedPath &&
+      item.normalizedPath !== "/docs/dev/components/index",
+  );
 
-  const used = new Set<string>()
-  const sections: any[] = []
-  const indexLinkPath = '/docs/dev/components'
+  const used = new Set<string>();
+  const sections: any[] = [];
+  const indexLinkPath = "/docs/dev/components";
 
   const addSection = (title: string, children: any[]) => {
-    if (!children.length)
-      return
+    if (!children.length) return;
     for (const child of children) {
-      if (child.normalizedPath)
-        used.add(child.normalizedPath)
+      if (child.normalizedPath) used.add(child.normalizedPath);
     }
     sections.push({
       title,
       path: children[0].path,
       children,
       page: false,
-    })
-  }
+    });
+  };
 
   if (indexItem) {
     sections.push({
@@ -559,299 +587,324 @@ const resolvedComponentSections = computed(() => {
       path: indexLinkPath,
       children: [],
       page: true,
-    })
+    });
   }
 
-  const entriesByPath = new Map(entries.map(item => [item.normalizedPath, item]))
+  const entriesByPath = new Map(
+    entries.map((item) => [item.normalizedPath, item]),
+  );
 
   for (const section of COMPONENT_PRIORITY_SECTIONS.value) {
     const children = section.paths
-      .map(path => entriesByPath.get(path))
+      .map((path) => entriesByPath.get(path))
       .filter((item): item is any => Boolean(item))
-      .filter(item => !used.has(item.normalizedPath ?? ''))
+      .filter((item) => !used.has(item.normalizedPath ?? ""));
 
-    addSection(section.label, children)
+    addSection(section.label, children);
   }
 
   for (const category of COMPONENT_CATEGORY_ORDER.value) {
     const children = sortByOrder(
-      entries.filter(item => item.category === category.key && !used.has(item.normalizedPath ?? '')),
-      '/docs/dev/components',
-    )
-    addSection(category.label, children)
+      entries.filter(
+        (item) =>
+          item.category === category.key &&
+          !used.has(item.normalizedPath ?? ""),
+      ),
+      "/docs/dev/components",
+    );
+    addSection(category.label, children);
   }
 
   const remaining = sortByOrder(
-    entries.filter(item => !used.has(item.normalizedPath ?? '')),
-    '/docs/dev/components',
-  )
-  addSection(t('docsSidebar.categories.misc'), remaining)
+    entries.filter((item) => !used.has(item.normalizedPath ?? "")),
+    "/docs/dev/components",
+  );
+  addSection(t("docsSidebar.categories.misc"), remaining);
 
-  return sections
-})
+  return sections;
+});
 
 const componentSections = computed(() => {
-  if (componentDocsPending.value)
-    return lastComponentSections.value
+  if (componentDocsPending.value) return lastComponentSections.value;
 
-  return resolvedComponentSections.value
-})
+  return resolvedComponentSections.value;
+});
 
 watch(
   () => [componentDocsPending.value, resolvedComponentSections.value] as const,
   ([isPending, latestSections]) => {
-    if (!isPending)
-      lastComponentSections.value = latestSections
+    if (!isPending) lastComponentSections.value = latestSections;
   },
   { immediate: true },
-)
+);
 
 function resolveComponentItemStatus(item: any): SyncStatusKey | null {
-  if (!item)
-    return null
+  if (!item) return null;
 
-  const preset = typeof item?.syncStatus === 'string' ? item.syncStatus.trim() : ''
-  if (preset)
-    return COMPONENT_SYNC_STATUS_ALIASES[preset] ?? null
+  const preset =
+    typeof item?.syncStatus === "string" ? item.syncStatus.trim() : "";
+  if (preset) return COMPONENT_SYNC_STATUS_ALIASES[preset] ?? null;
 
-  const verified = item?.verified === true
-  if (verified)
-    return 'verified'
+  const verified = item?.verified === true;
+  if (verified) return "verified";
 
-  const raw = typeof item?.syncStatus === 'string' ? item.syncStatus.trim() : ''
-  if (!raw)
-    return null
+  const raw =
+    typeof item?.syncStatus === "string" ? item.syncStatus.trim() : "";
+  if (!raw) return null;
 
-  return COMPONENT_SYNC_STATUS_ALIASES[raw] ?? null
+  return COMPONENT_SYNC_STATUS_ALIASES[raw] ?? null;
 }
 
 function componentSyncBadge(item: any) {
-  if (activeTopSection.value !== 'components')
-    return null
+  if (activeTopSection.value !== "components") return null;
 
-  const status = resolveComponentItemStatus(item)
-  if (!status || status === 'verified')
-    return null
+  const status = resolveComponentItemStatus(item);
+  if (!status || status === "verified") return null;
 
   return {
     status,
     label: COMPONENT_SYNC_STATUS_LABELS.value[status],
-  }
+  };
 }
 
 const activeTopSection = computed(() => {
-  if (isTutorialRoute.value)
-    return 'tutorial'
-  const path = normalizedRoutePath.value
+  if (isTutorialRoute.value) return "tutorial";
+  const path = normalizedRoutePath.value;
   for (const section of TOP_SECTIONS.value) {
-    if (path.startsWith(section.basePath))
-      return section.key
+    if (path.startsWith(section.basePath)) return section.key;
   }
-  return defaultSection.value
-})
+  return defaultSection.value;
+});
 
-const sidebarPending = computed(() => pending.value)
+const sidebarPending = computed(() => pending.value);
 
 function hasComponentDocsMetadata() {
-  return coerceJsonArray(componentDocsPayload.value).length > 0
+  return coerceJsonArray(componentDocsPayload.value).length > 0;
 }
 
 function clearComponentDocsMetadataSchedule() {
   if (componentDocsMetadataTimer) {
-    clearTimeout(componentDocsMetadataTimer)
-    componentDocsMetadataTimer = null
+    clearTimeout(componentDocsMetadataTimer);
+    componentDocsMetadataTimer = null;
   }
-  if (componentDocsMetadataIdleId !== null && hasWindow() && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(componentDocsMetadataIdleId)
-    componentDocsMetadataIdleId = null
+  if (
+    componentDocsMetadataIdleId !== null &&
+    hasWindow() &&
+    "cancelIdleCallback" in window
+  ) {
+    window.cancelIdleCallback(componentDocsMetadataIdleId);
+    componentDocsMetadataIdleId = null;
   }
 }
 
 function requestComponentDocsMetadata() {
-  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
-    return
-  clearComponentDocsMetadataSchedule()
-  void refreshComponentDocs()
+  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return;
+  clearComponentDocsMetadataSchedule();
+  void refreshComponentDocs();
 }
 
 function requestComponentDocsMetadataOnIntent() {
-  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
-    return
+  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return;
 
-  clearComponentDocsMetadataSchedule()
+  clearComponentDocsMetadataSchedule();
   componentDocsMetadataTimer = setTimeout(() => {
-    componentDocsMetadataTimer = null
-    requestComponentDocsMetadata()
-  }, COMPONENT_DOCS_METADATA_INTENT_DELAY_MS)
+    componentDocsMetadataTimer = null;
+    requestComponentDocsMetadata();
+  }, COMPONENT_DOCS_METADATA_INTENT_DELAY_MS);
 }
 
 function scheduleComponentDocsMetadata() {
-  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
-    return
+  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return;
 
-  clearComponentDocsMetadataSchedule()
+  clearComponentDocsMetadataSchedule();
   componentDocsMetadataTimer = setTimeout(() => {
-    componentDocsMetadataTimer = null
-    if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata())
-      return
-    if (hasWindow() && 'requestIdleCallback' in window) {
-      componentDocsMetadataIdleId = window.requestIdleCallback(() => {
-        componentDocsMetadataIdleId = null
-        requestComponentDocsMetadata()
-      }, { timeout: COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS })
-      return
+    componentDocsMetadataTimer = null;
+    if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return;
+    if (hasWindow() && "requestIdleCallback" in window) {
+      componentDocsMetadataIdleId = window.requestIdleCallback(
+        () => {
+          componentDocsMetadataIdleId = null;
+          requestComponentDocsMetadata();
+        },
+        { timeout: COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS },
+      );
+      return;
     }
-    requestComponentDocsMetadata()
-  }, COMPONENT_DOCS_METADATA_DELAY_MS)
+    requestComponentDocsMetadata();
+  }, COMPONENT_DOCS_METADATA_DELAY_MS);
 }
 
 watch(
   shouldLoadComponentDocs,
   (shouldLoad) => {
     if (!shouldLoad) {
-      clearComponentDocsMetadataSchedule()
-      return
+      clearComponentDocsMetadataSchedule();
+      return;
     }
-    scheduleComponentDocsMetadata()
+    scheduleComponentDocsMetadata();
   },
   { immediate: import.meta.client },
-)
+);
 
 onMounted(() => {
-  sidebarHydrated.value = true
-})
+  sidebarHydrated.value = true;
+});
 
 const currentSectionData = computed(() => {
   if (isTutorialRoute.value) {
     return allSections.value.find((s: any) => {
-      const sectionPath = normalizeContentPath(s.path)
-      return sectionPath === '/docs/guide'
-    })
+      const sectionPath = normalizeContentPath(s.path);
+      return sectionPath === "/docs/guide";
+    });
   }
-  const active = TOP_SECTIONS.value.find(section => section.key === activeTopSection.value)
-  const targetPath = active?.basePath ?? `/docs/${activeTopSection.value}`
-  return findSectionByPath(allSections.value, targetPath)
-})
+  const active = TOP_SECTIONS.value.find(
+    (section) => section.key === activeTopSection.value,
+  );
+  const targetPath = active?.basePath ?? `/docs/${activeTopSection.value}`;
+  return findSectionByPath(allSections.value, targetPath);
+});
 
 const sections = computed(() => {
-  if (activeTopSection.value === 'components' && componentSections.value.length)
-    return componentSections.value
+  if (activeTopSection.value === "components" && componentSections.value.length)
+    return componentSections.value;
 
-  const data = currentSectionData.value
-  if (!data)
-    return []
+  const data = currentSectionData.value;
+  if (!data) return [];
 
-  const children = sortTree(filterByLocale(data.children ?? []), normalizeContentPath(data.path))
-  const filtered = activeTopSection.value === 'extensions'
-    ? children.filter((child: any) => normalizeContentPath(child.path) !== '/docs/dev/components')
-    : children
+  const children = sortTree(
+    filterByLocale(data.children ?? []),
+    normalizeContentPath(data.path),
+  );
+  const filtered =
+    activeTopSection.value === "extensions"
+      ? children.filter(
+          (child: any) =>
+            normalizeContentPath(child.path) !== "/docs/dev/components",
+        )
+      : children;
 
   // If there are subdirectories (features, scenes, api, etc.), show them as sections
   // Otherwise, show the files directly as a flat list
-  const hasSubdirs = filtered.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
+  const hasSubdirs = filtered.some(
+    (c: any) => Array.isArray(c.children) && c.children.length > 0,
+  );
 
   if (hasSubdirs) {
-    return filtered
+    return filtered;
   }
 
   // For flat file lists, wrap them in a single section
-  return [{
-    title: data.title,
-    path: data.path,
-    children: filtered,
-    page: false,
-  }]
-})
+  return [
+    {
+      title: data.title,
+      path: data.path,
+      children: filtered,
+      page: false,
+    },
+  ];
+});
 
-const expandedSections = ref<Record<string, boolean>>({})
+const expandedSections = ref<Record<string, boolean>>({});
 
 function isLinkActive(path: string) {
-  const normalizedTarget = normalizeContentPath(path)
-  if (!normalizedTarget)
-    return false
+  const normalizedTarget = normalizeContentPath(path);
+  if (!normalizedTarget) return false;
 
-  if (normalizedRoutePath.value === normalizedTarget)
-    return true
-  return normalizedRoutePath.value.startsWith(`${normalizedTarget}/`)
+  if (normalizedRoutePath.value === normalizedTarget) return true;
+  return normalizedRoutePath.value.startsWith(`${normalizedTarget}/`);
 }
 
 function itemTitle(title?: string, path?: string) {
   if (path) {
-    const label = docLabels.value[path]
+    const label = docLabels.value[path];
     if (label)
-      return locale.value === 'en' ? (stripCjk(label) || fallbackTitleFromPath(path)) : label
+      return locale.value === "en"
+        ? stripCjk(label) || fallbackTitleFromPath(path)
+        : label;
   }
 
-  const fallback = fallbackTitleFromPath(path)
-  const raw = title || fallback
-  if (locale.value !== 'en')
-    return raw
-  const stripped = stripCjk(raw)
-  return stripped || fallback
+  const fallback = fallbackTitleFromPath(path);
+  const raw = title || fallback;
+  if (locale.value !== "en") return raw;
+  const stripped = stripCjk(raw);
+  return stripped || fallback;
 }
 
 function linkTarget(item: any) {
-  if (!item?.path)
-    return null
+  if (!item?.path) return null;
 
-  if (item.page === false && Array.isArray(item.children) && item.children.length > 0)
-    return normalizeContentPath(item.children[0].path)
+  if (
+    item.page === false &&
+    Array.isArray(item.children) &&
+    item.children.length > 0
+  )
+    return normalizeContentPath(item.children[0].path);
 
-  return normalizeContentPath(item.path)
+  return normalizeContentPath(item.path);
 }
 
 function sectionKey(item: any) {
-  return normalizeContentPath(item.path) ?? item.title ?? JSON.stringify(item)
+  return normalizeContentPath(item.path) ?? item.title ?? JSON.stringify(item);
 }
 
 function toggleSection(item: any) {
-  const key = sectionKey(item)
-  expandedSections.value[key] = !expandedSections.value[key]
+  const key = sectionKey(item);
+  expandedSections.value[key] = !expandedSections.value[key];
 }
 
 function isSectionExpanded(item: any) {
-  const key = sectionKey(item)
-  return expandedSections.value[key] ?? true
+  const key = sectionKey(item);
+  return expandedSections.value[key] ?? true;
 }
 
 function findScrollableParent(element: HTMLElement) {
-  let current = element.parentElement
+  let current = element.parentElement;
   while (current && current !== document.body) {
-    const style = window.getComputedStyle(current)
-    const canScrollY = ['auto', 'scroll', 'overlay'].includes(style.overflowY)
+    const style = window.getComputedStyle(current);
+    const canScrollY = ["auto", "scroll", "overlay"].includes(style.overflowY);
     if (canScrollY && current.scrollHeight > current.clientHeight)
-      return current
-    current = current.parentElement
+      return current;
+    current = current.parentElement;
   }
-  return null
+  return null;
 }
 
 function scrollActiveLinkIntoView() {
-  if (!hasWindow() || !navRef.value)
-    return
+  if (!hasWindow() || !navRef.value) return;
 
   if (activeScrollFrame !== null)
-    window.cancelAnimationFrame(activeScrollFrame)
+    window.cancelAnimationFrame(activeScrollFrame);
 
   activeScrollFrame = window.requestAnimationFrame(() => {
-    activeScrollFrame = null
-    const activeLink = navRef.value?.querySelector<HTMLElement>('.docs-nav-link.is-active')
-    if (!activeLink)
-      return
+    activeScrollFrame = null;
+    const activeLink = navRef.value?.querySelector<HTMLElement>(
+      ".docs-nav-link.is-active",
+    );
+    if (!activeLink) return;
 
-    const scrollContainer = activeLink.closest<HTMLElement>('.docs-sidebar') ?? findScrollableParent(activeLink)
+    const scrollContainer =
+      activeLink.closest<HTMLElement>(".docs-sidebar") ??
+      findScrollableParent(activeLink);
     if (!scrollContainer) {
-      activeLink.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' })
-      return
+      activeLink.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+        behavior: "auto",
+      });
+      return;
     }
 
-    const linkRect = activeLink.getBoundingClientRect()
-    const containerRect = scrollContainer.getBoundingClientRect()
-    const offsetTop = linkRect.top - containerRect.top
-    const targetTop = scrollContainer.scrollTop + offsetTop - scrollContainer.clientHeight / 2 + activeLink.clientHeight / 2
+    const linkRect = activeLink.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const offsetTop = linkRect.top - containerRect.top;
+    const targetTop =
+      scrollContainer.scrollTop +
+      offsetTop -
+      scrollContainer.clientHeight / 2 +
+      activeLink.clientHeight / 2;
 
-    scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' })
-  })
+    scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
+  });
 }
 
 // Initialize all sections as expanded by default
@@ -860,41 +913,45 @@ watch(
   () => {
     // Expand all sections by default (including new ones when switching tabs)
     for (const section of sections.value) {
-      const key = sectionKey(section)
+      const key = sectionKey(section);
       if (expandedSections.value[key] === undefined) {
-        expandedSections.value[key] = true
+        expandedSections.value[key] = true;
       }
     }
   },
   { immediate: true },
-)
+);
 
 // When route changes, expand the section containing the active link
 watch(
   () => normalizedRoutePath.value,
   () => {
     for (const section of sections.value) {
-      expandedSections.value[sectionKey(section)] = true
+      expandedSections.value[sectionKey(section)] = true;
     }
   },
-)
+);
 
 watch(
-  () => [normalizedRoutePath.value, sidebarPending.value, activeTopSection.value, sections.value],
+  () => [
+    normalizedRoutePath.value,
+    sidebarPending.value,
+    activeTopSection.value,
+    sections.value,
+  ],
   async () => {
-    if (sidebarPending.value)
-      return
-    await nextTick()
-    scrollActiveLinkIntoView()
+    if (sidebarPending.value) return;
+    await nextTick();
+    scrollActiveLinkIntoView();
   },
-  { immediate: true, flush: 'post' },
-)
+  { immediate: true, flush: "post" },
+);
 
 onBeforeUnmount(() => {
-  clearComponentDocsMetadataSchedule()
+  clearComponentDocsMetadataSchedule();
   if (hasWindow() && activeScrollFrame !== null)
-    window.cancelAnimationFrame(activeScrollFrame)
-})
+    window.cancelAnimationFrame(activeScrollFrame);
+});
 </script>
 
 <template>
@@ -906,7 +963,10 @@ onBeforeUnmount(() => {
     @touchstart.passive="requestComponentDocsMetadataOnIntent"
   >
     <!-- Top-level section tabs (sticky within sidebar) -->
-    <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pb-1 pt-1 backdrop-blur-sm">
+    <div
+      v-if="!isTutorialRoute"
+      class="sticky top-0 z-10 -mx-1 mb-3 px-1 pb-1 pt-1 backdrop-blur-sm"
+    >
       <div class="flex gap-1 rounded-xl p-1">
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
@@ -914,9 +974,11 @@ onBeforeUnmount(() => {
           :to="localizedDocsPath(sec.entryPath || sec.basePath)"
           :prefetch="false"
           class="flex flex-1 items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium no-underline transition-all duration-200"
-          :class="activeTopSection === sec.key
-            ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
-            : 'text-black/45 hover:text-black/65 dark:text-white/45 dark:hover:text-white/65'"
+          :class="
+            activeTopSection === sec.key
+              ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
+              : 'text-black/45 hover:text-black/65 dark:text-white/45 dark:hover:text-white/65'
+          "
         >
           <span :class="sec.icon" class="text-sm" />
           <span>{{ sec.label }}</span>
@@ -927,8 +989,10 @@ onBeforeUnmount(() => {
     <!-- Scrollable content -->
     <div v-if="!sidebarPending" class="flex flex-col gap-0.5">
       <template v-if="error">
-        <div class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300">
-          {{ t('docsSidebar.error') }}
+        <div
+          class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300"
+        >
+          {{ t("docsSidebar.error") }}
         </div>
       </template>
       <template v-else-if="sections.length === 0">
@@ -940,19 +1004,35 @@ onBeforeUnmount(() => {
               :to="localizedDocsPath(linkTarget(currentSectionData)!)"
               :prefetch="false"
               class="docs-nav-link"
-              :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
-              :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
+              :class="
+                isLinkActive(linkTarget(currentSectionData) || '')
+                  ? 'is-active'
+                  : ''
+              "
+              :aria-current="
+                isLinkActive(linkTarget(currentSectionData) || '')
+                  ? 'page'
+                  : undefined
+              "
               @focus="prefetchDocsTarget(linkTarget(currentSectionData))"
               @blur="cancelDocsFullBodyPrefetch(linkTarget(currentSectionData))"
               @mouseenter="prefetchDocsTarget(linkTarget(currentSectionData))"
-              @mouseleave="cancelDocsFullBodyPrefetch(linkTarget(currentSectionData))"
-              @touchstart.passive="prefetchDocsTarget(linkTarget(currentSectionData))"
+              @mouseleave="
+                cancelDocsFullBodyPrefetch(linkTarget(currentSectionData))
+              "
+              @touchstart.passive="
+                prefetchDocsTarget(linkTarget(currentSectionData))
+              "
             >
               <span
                 class="truncate"
-                :title="itemTitle(currentSectionData.title, currentSectionData.path)"
+                :title="
+                  itemTitle(currentSectionData.title, currentSectionData.path)
+                "
               >
-                {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
+                {{
+                  itemTitle(currentSectionData.title, currentSectionData.path)
+                }}
               </span>
             </NuxtLink>
           </li>
@@ -971,9 +1051,19 @@ onBeforeUnmount(() => {
             <span class="flex flex-1 items-center gap-1.5 truncate">
               <span
                 class="flex-1 truncate"
-                :title="itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined)"
+                :title="
+                  itemTitle(
+                    section.title,
+                    section.path ?? linkTarget(section) ?? undefined,
+                  )
+                "
               >
-                {{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}
+                {{
+                  itemTitle(
+                    section.title,
+                    section.path ?? linkTarget(section) ?? undefined,
+                  )
+                }}
               </span>
               <span
                 v-if="section.children?.length"
@@ -993,8 +1083,16 @@ onBeforeUnmount(() => {
               :to="localizedDocsPath(linkTarget(child)!)"
               :prefetch="false"
               class="docs-nav-link"
-              :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
-              :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"
+              :class="
+                isLinkActive(linkTarget(child) || child.path || '')
+                  ? 'is-active'
+                  : ''
+              "
+              :aria-current="
+                isLinkActive(linkTarget(child) || child.path || '')
+                  ? 'page'
+                  : undefined
+              "
               @focus="prefetchDocsTarget(linkTarget(child))"
               @blur="cancelDocsFullBodyPrefetch(linkTarget(child))"
               @mouseenter="prefetchDocsTarget(linkTarget(child))"
@@ -1003,9 +1101,19 @@ onBeforeUnmount(() => {
             >
               <span
                 class="truncate"
-                :title="itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined)"
+                :title="
+                  itemTitle(
+                    child.title,
+                    child.path ?? linkTarget(child) ?? undefined,
+                  )
+                "
               >
-                {{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}
+                {{
+                  itemTitle(
+                    child.title,
+                    child.path ?? linkTarget(child) ?? undefined,
+                  )
+                }}
               </span>
               <span
                 v-if="componentSyncBadge(child)"
@@ -1036,7 +1144,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.docs-nav-list)::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 4px;
   top: 4px;
@@ -1083,20 +1191,20 @@ onBeforeUnmount(() => {
   letter-spacing: 0.02em;
 }
 
-:deep(.docs-nav-sync-badge[data-status='in_progress']),
-:deep(.docs-nav-sync-badge[data-status='not_started']) {
+:deep(.docs-nav-sync-badge[data-status="in_progress"]),
+:deep(.docs-nav-sync-badge[data-status="not_started"]) {
   border-color: rgba(245, 158, 11, 0.35);
   background: rgba(245, 158, 11, 0.12);
   color: rgba(180, 83, 9, 0.95);
 }
 
-:deep(.docs-nav-sync-badge[data-status='migrated']) {
+:deep(.docs-nav-sync-badge[data-status="migrated"]) {
   border-color: rgba(14, 165, 233, 0.35);
   background: rgba(14, 165, 233, 0.1);
   color: rgba(3, 105, 161, 0.95);
 }
 
-:deep(.docs-nav-sync-badge[data-status='verified']) {
+:deep(.docs-nav-sync-badge[data-status="verified"]) {
   border-color: rgba(16, 185, 129, 0.3);
   background: rgba(16, 185, 129, 0.1);
   color: rgba(5, 150, 105, 0.95);
@@ -1118,7 +1226,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.docs-nav-link)::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -10px;
   top: 6px;
@@ -1128,7 +1236,9 @@ onBeforeUnmount(() => {
   background: currentColor;
   opacity: 0;
   transform: scaleY(0.6);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 :deep(.docs-nav-link:hover) {
@@ -1153,79 +1263,79 @@ onBeforeUnmount(() => {
 }
 
 :global(.dark .docs-nav-list)::before,
-:global([data-theme='dark'] .docs-nav-list)::before {
+:global([data-theme="dark"] .docs-nav-list)::before {
   background: rgba(148, 163, 184, 0.16);
 }
 
 :global(.dark .docs-nav-list),
-:global([data-theme='dark'] .docs-nav-list),
+:global([data-theme="dark"] .docs-nav-list),
 :global(.dark .docs-nav-item),
-:global([data-theme='dark'] .docs-nav-item),
+:global([data-theme="dark"] .docs-nav-item),
 :global(.dark .docs-nav-link),
-:global([data-theme='dark'] .docs-nav-link) {
+:global([data-theme="dark"] .docs-nav-link) {
   background: transparent !important;
   box-shadow: none !important;
 }
 
 :global(.dark .docs-nav-item),
-:global([data-theme='dark'] .docs-nav-item) {
+:global([data-theme="dark"] .docs-nav-item) {
   background: transparent;
 }
 
 :global(.dark .docs-nav-link),
-:global([data-theme='dark'] .docs-nav-link) {
+:global([data-theme="dark"] .docs-nav-link) {
   color: rgba(226, 232, 240, 0.56);
   background: transparent;
   box-shadow: none;
 }
 
 :global(.dark .docs-nav-section-count),
-:global([data-theme='dark'] .docs-nav-section-count) {
+:global([data-theme="dark"] .docs-nav-section-count) {
   background: rgba(71, 85, 105, 0.4);
   color: rgba(226, 232, 240, 0.88);
 }
 
 :global(.dark .docs-nav-sync-badge),
-:global([data-theme='dark'] .docs-nav-sync-badge) {
+:global([data-theme="dark"] .docs-nav-sync-badge) {
   border-color: rgba(71, 85, 105, 0.55);
   background: rgba(51, 65, 85, 0.45);
   color: rgba(226, 232, 240, 0.9);
 }
 
-:global(.dark .docs-nav-sync-badge[data-status='in_progress']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='in_progress']),
-:global(.dark .docs-nav-sync-badge[data-status='not_started']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='not_started']) {
+:global(.dark .docs-nav-sync-badge[data-status="in_progress"]),
+:global([data-theme="dark"] .docs-nav-sync-badge[data-status="in_progress"]),
+:global(.dark .docs-nav-sync-badge[data-status="not_started"]),
+:global([data-theme="dark"] .docs-nav-sync-badge[data-status="not_started"]) {
   border-color: rgba(245, 158, 11, 0.5);
   background: rgba(120, 53, 15, 0.35);
   color: rgba(253, 186, 116, 0.95);
 }
 
-:global(.dark .docs-nav-sync-badge[data-status='migrated']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='migrated']) {
+:global(.dark .docs-nav-sync-badge[data-status="migrated"]),
+:global([data-theme="dark"] .docs-nav-sync-badge[data-status="migrated"]) {
   border-color: rgba(14, 165, 233, 0.5);
   background: rgba(12, 74, 110, 0.35);
   color: rgba(125, 211, 252, 0.95);
 }
 
-:global(.dark .docs-nav-sync-badge[data-status='verified']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='verified']) {
+:global(.dark .docs-nav-sync-badge[data-status="verified"]),
+:global([data-theme="dark"] .docs-nav-sync-badge[data-status="verified"]) {
   border-color: rgba(16, 185, 129, 0.45);
   background: rgba(6, 95, 70, 0.35);
   color: rgba(110, 231, 183, 0.95);
 }
 :global(.dark .docs-nav-link:hover),
-:global([data-theme='dark'] .docs-nav-link:hover) {
+:global([data-theme="dark"] .docs-nav-link:hover) {
   color: rgba(226, 232, 240, 0.82);
 }
 
 :global(.dark .docs-nav-link.is-active),
-:global([data-theme='dark'] .docs-nav-link.is-active) {
+:global([data-theme="dark"] .docs-nav-link.is-active) {
   color: rgba(248, 250, 252, 0.95);
 }
 
 :global(.dark .docs-nav-link)::before,
-:global([data-theme='dark'] .docs-nav-link)::before {
+:global([data-theme="dark"] .docs-nav-link)::before {
   background: currentColor;
 }
 </style>

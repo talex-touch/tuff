@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { hasWindow } from '@talex-touch/utils/env'
-import { networkClient } from '@talex-touch/utils/network'
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { gsap } from 'gsap'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -108,6 +107,7 @@ const currentIndex = ref(0)
 const progress = ref(0)
 const isPointerInside = ref(false)
 const isAnimating = ref(false)
+const mediaEnabled = ref(false)
 
 const viewportRef = ref<HTMLElement | null>(null)
 const renderedSlides = ref<ShowcaseSlide[]>([])
@@ -129,20 +129,7 @@ let transitionTimeline: gsap.core.Timeline | null = null
 let revealTween: gsap.core.Tween | null = null
 let queuedIndex: number | null = null
 let queuedResume = false
-
-const durationCache = new Map<string, number>()
-const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'm4v'])
-
-function getMediaExtension(src: string): string | null {
-  const cleanSrc = src.split('?')[0]?.split('#')[0]
-  const match = cleanSrc?.match(/\.([a-z0-9]+)$/i)
-  return match?.[1] ? match[1].toLowerCase() : null
-}
-
-function isVideoSource(src: string): boolean {
-  const extension = getMediaExtension(src)
-  return extension ? VIDEO_EXTENSIONS.has(extension) : false
-}
+let mediaObserver: IntersectionObserver | null = null
 
 function now() {
   if (typeof performance !== 'undefined' && typeof performance.now === 'function')
@@ -164,6 +151,37 @@ function cancelFrame(handle: FrameHandle) {
     return
   }
   clearTimeout(handle as ReturnType<typeof setTimeout>)
+}
+
+function activateMedia() {
+  if (mediaEnabled.value)
+    return
+
+  mediaEnabled.value = true
+  mediaObserver?.disconnect()
+  mediaObserver = null
+
+  nextTick(() => {
+    if (!prefersReducedMotion.value)
+      startRotation({ resetElapsed: true })
+    playInitialReveal()
+  })
+}
+
+function handleMediaDuration(slideId: string, durationMs: number) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0)
+    return
+
+  const index = slides.value.findIndex(slide => slide.id === slideId)
+  if (index < 0)
+    return
+
+  const durations = [...slideDurations.value]
+  durations[index] = durationMs
+  slideDurations.value = durations
+
+  if (index === currentIndex.value && mediaEnabled.value && !prefersReducedMotion.value)
+    startRotation({ resetElapsed: true })
 }
 
 function normalizeIndex(index: number) {
@@ -189,162 +207,6 @@ function getActiveDuration() {
 }
 
 const activeSlide = computed(() => slides.value[currentIndex.value] ?? null)
-
-function parseGifDuration(bytes: Uint8Array) {
-  if (bytes.length < 16)
-    return 0
-  if (bytes[0] !== 0x47 || bytes[1] !== 0x49 || bytes[2] !== 0x46)
-    return 0
-
-  let offset = 6
-  if (offset + 7 > bytes.length)
-    return 0
-
-  const packed = bytes[offset + 4] ?? 0
-  const hasGct = (packed & 0x80) === 0x80
-  const gctSize = 3 * (1 << ((packed & 0x07) + 1))
-  offset += 7
-
-  if (hasGct)
-    offset += gctSize
-
-  let duration = 0
-
-  while (offset < bytes.length) {
-    const blockId = bytes[offset] ?? 0
-    if (blockId === 0x21) {
-      const label = bytes[offset + 1] ?? 0
-      if (label === 0xF9) {
-        const blockSize = bytes[offset + 2] ?? 0
-        if (blockSize === 4 && offset + 7 < bytes.length) {
-          const delay = (bytes[offset + 4] ?? 0) | ((bytes[offset + 5] ?? 0) << 8)
-          if (delay > 0)
-            duration += delay * 10
-        }
-        offset += 3 + blockSize + 1
-      }
-      else {
-        offset += 2
-        while (offset < bytes.length) {
-          const size = bytes[offset] ?? 0
-          offset += 1
-          if (size === 0)
-            break
-          offset += size
-        }
-      }
-    }
-    else if (blockId === 0x2C) {
-      if (offset + 9 >= bytes.length)
-        break
-      const packedField = bytes[offset + 9] ?? 0
-      const hasLct = (packedField & 0x80) === 0x80
-      const lctSize = 3 * (1 << ((packedField & 0x07) + 1))
-      offset += 10
-
-      if (hasLct)
-        offset += lctSize
-
-      if (offset >= bytes.length)
-        break
-
-      offset += 1
-      while (offset < bytes.length) {
-        const size = bytes[offset] ?? 0
-        offset += 1
-        if (size === 0)
-          break
-        offset += size
-      }
-    }
-    else if (blockId === 0x3B) {
-      break
-    }
-    else {
-      offset += 1
-    }
-  }
-
-  return duration
-}
-
-async function resolveGifDuration(src: string) {
-  if (durationCache.has(src))
-    return durationCache.get(src) ?? DEFAULT_ROTATION_DURATION
-
-  const buffer = await networkClient.readBinary(src)
-  const duration = parseGifDuration(new Uint8Array(buffer))
-  const normalized = duration > 0 ? duration : DEFAULT_ROTATION_DURATION
-  durationCache.set(src, normalized)
-  return normalized
-}
-
-function resolveVideoDuration(src: string): Promise<number> {
-  if (!hasWindow())
-    return Promise.resolve(DEFAULT_ROTATION_DURATION)
-
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video')
-
-    const cleanup = () => {
-      video.removeEventListener('loadedmetadata', handleLoaded)
-      video.removeEventListener('error', handleError)
-      video.src = ''
-    }
-
-    const handleLoaded = () => {
-      const duration = Number.isFinite(video.duration)
-        ? video.duration * 1000
-        : DEFAULT_ROTATION_DURATION
-      cleanup()
-      resolve(duration)
-    }
-
-    const handleError = () => {
-      cleanup()
-      reject(new Error('Failed to load video metadata.'))
-    }
-
-    video.preload = 'metadata'
-    video.addEventListener('loadedmetadata', handleLoaded, { once: true })
-    video.addEventListener('error', handleError, { once: true })
-    video.src = src
-    video.load()
-  })
-}
-
-async function resolveMediaDuration(src: string) {
-  if (durationCache.has(src))
-    return durationCache.get(src) ?? DEFAULT_ROTATION_DURATION
-
-  if (isVideoSource(src)) {
-    const duration = await resolveVideoDuration(src)
-    durationCache.set(src, duration)
-    return duration
-  }
-
-  return resolveGifDuration(src)
-}
-
-async function loadSlideDurations(list: ShowcaseSlide[]) {
-  if (!hasWindow())
-    return
-
-  const durations = await Promise.all(list.map(async (slide) => {
-    const src = slide.scenario?.media?.src
-    if (!src)
-      return DEFAULT_ROTATION_DURATION
-
-    try {
-      return await resolveMediaDuration(src)
-    }
-    catch {
-      return DEFAULT_ROTATION_DURATION
-    }
-  }))
-
-  slideDurations.value = durations
-}
 
 function clearTimers() {
   if (rotationTimeout !== null) {
@@ -391,7 +253,7 @@ interface StartRotationOptions {
 function startRotation(options: StartRotationOptions = {}) {
   const { resetElapsed = false } = options
 
-  if (slides.value.length <= 1 || prefersReducedMotion.value || isPointerInside.value || isAnimating.value)
+  if (!mediaEnabled.value || slides.value.length <= 1 || prefersReducedMotion.value || isPointerInside.value || isAnimating.value)
     return
 
   clearTimers()
@@ -654,20 +516,30 @@ watch(slides, (list) => {
     currentIndex.value = 0
 
   syncRenderedSlides()
-  void loadSlideDurations(list)
+  slideDurations.value = list.map((_, index) => slideDurations.value[index] ?? DEFAULT_ROTATION_DURATION)
 }, { immediate: true })
 
 onMounted(() => {
-  if (!prefersReducedMotion.value)
-    startRotation({ resetElapsed: true })
+  const target = viewportRef.value
+  if (!target || !('IntersectionObserver' in window)) {
+    activateMedia()
+    return
+  }
 
-  nextTick(() => {
-    playInitialReveal()
+  mediaObserver = new IntersectionObserver((entries) => {
+    if (entries.some(entry => entry.isIntersecting))
+      activateMedia()
+  }, {
+    rootMargin: '0px',
+    threshold: 0.01,
   })
+  mediaObserver.observe(target)
 })
 
 onBeforeUnmount(() => {
   stopRotation()
+  mediaObserver?.disconnect()
+  mediaObserver = null
   transitionTimeline?.kill()
   transitionTimeline = null
   revealTween?.kill()
@@ -712,7 +584,9 @@ watch(prefersReducedMotion, (enabled) => {
         class="tuff-showcase-displayer__slide"
         :data-slide-id="slide.id"
         :data-slide-state="slide.id === outgoingSlideId ? 'outgoing' : slide.id === incomingSlideId ? 'incoming' : 'active'"
+        :media-enabled="mediaEnabled"
         active
+        @media-duration="handleMediaDuration(slide.id, $event)"
       />
     </div>
 

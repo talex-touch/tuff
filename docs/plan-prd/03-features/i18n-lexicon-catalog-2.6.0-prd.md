@@ -1,9 +1,15 @@
 # Tuff 2.6.0 i18n / Domain Lexicon / Cloud Catalog 收敛 PRD
 
-> 更新时间：2026-06-18
-> 状态：Planning
+> 更新时间：2026-07-13
+> 状态：In Progress — Phase 0-4 implemented；Phase 5-6 planning
 > 目标版本：2.6.0
 > 定位：统一 CoreApp / Nexus / packages / plugins 的多语言、领域词库、插件本地化与云端 Catalog 下载架构。
+
+## 0. 当前实现状态
+
+- R8-D Domain Lexicon V1 已于 2026-07-13 完成：`packages/utils/i18n` 提供带 `source` provenance 的只读 `DomainLexiconRegistry`、53 个内置单位 canonical entries 与共享 conversion source，支持跨 locale aliases、确定性排序和当前 locale label 投影。
+- R8-E Plugin SDK facade 已于 2026-07-13 完成：`sdkapi 260713` 暴露 main/renderer 同构 i18n/lexicon facade，typed transport 只接受 verified context，并由 `i18n.read`、`lexicon.read`、`lexicon.register` fail-closed；plugin-local entries 由宿主命名/provenance、原子有界注册且 disable/unload 清理。
+- Phase 5 CatalogService 与 Phase 6 Quality Gates 仍保持开放；本批不代表 SQLite catalog、签名 pack 或 CI 门禁已完成。
 
 ## 1. Final Goal / North Star
 
@@ -107,13 +113,13 @@
 新增共享 locale primitive，建议放入 `packages/utils/i18n/locale`：
 
 ```ts
-export type AppLocale = 'zh-CN' | 'en-US'
-export type ShortLocale = 'zh' | 'en'
+export type AppLocale = "zh-CN" | "en-US";
+export type ShortLocale = "zh" | "en";
 
-export function normalizeLocale(input?: string | null): AppLocale | null
-export function toShortLocale(locale: AppLocale): ShortLocale
-export function toAppLocale(locale: ShortLocale | AppLocale): AppLocale
-export function getFallbackChain(locale: AppLocale): AppLocale[]
+export function normalizeLocale(input?: string | null): AppLocale | null;
+export function toShortLocale(locale: AppLocale): ShortLocale;
+export function toAppLocale(locale: ShortLocale | AppLocale): AppLocale;
+export function getFallbackChain(locale: AppLocale): AppLocale[];
 ```
 
 落地规则：
@@ -128,17 +134,23 @@ export function getFallbackChain(locale: AppLocale): AppLocale[]
 
 ```ts
 export interface LocalizedText {
-  default: string
-  locales?: Partial<Record<AppLocale, string>>
+  default: string;
+  locales?: Partial<Record<AppLocale, string>>;
 }
 
 export interface LocalizedList {
-  default: string[]
-  locales?: Partial<Record<AppLocale, string[]>>
+  default: string[];
+  locales?: Partial<Record<AppLocale, string[]>>;
 }
 
-export function resolveLocalizedText(value: string | LocalizedText, locale: AppLocale): string
-export function resolveLocalizedList(value: string[] | LocalizedList, locale: AppLocale): string[]
+export function resolveLocalizedText(
+  value: string | LocalizedText,
+  locale: AppLocale,
+): string;
+export function resolveLocalizedList(
+  value: string[] | LocalizedList,
+  locale: AppLocale,
+): string[];
 ```
 
 设计要求：
@@ -153,15 +165,22 @@ export function resolveLocalizedList(value: string[] | LocalizedList, locale: Ap
 
 ```ts
 export interface DomainLexiconEntry {
-  id: string
-  domain: 'unit' | 'currency' | 'timezone' | 'capability' | 'fileType' | 'systemAction'
-  version: string
-  labels: LocalizedText
-  aliases: LocalizedList
-  searchBoost?: Partial<Record<AppLocale, number>>
-  deprecated?: boolean
-  replacedBy?: string
-  metadata?: Record<string, unknown>
+  id: string;
+  domain:
+    | "unit"
+    | "currency"
+    | "timezone"
+    | "capability"
+    | "fileType"
+    | "systemAction";
+  source: "builtin" | `catalog:${string}` | `plugin:${string}`;
+  version: string;
+  labels: LocalizedText;
+  aliases: LocalizedList;
+  searchBoost?: Partial<Record<AppLocale, number>>;
+  deprecated?: boolean;
+  replacedBy?: string;
+  metadata?: Record<string, unknown>;
 }
 ```
 
@@ -171,6 +190,7 @@ export interface DomainLexiconEntry {
 {
   "id": "unit.length.km",
   "domain": "unit",
+  "source": "builtin",
   "version": "260000",
   "labels": {
     "default": "km",
@@ -187,8 +207,7 @@ export interface DomainLexiconEntry {
     }
   },
   "metadata": {
-    "dimension": "length",
-    "factor": 1000,
+    "category": "length",
     "symbol": "km"
   }
 }
@@ -206,21 +225,21 @@ export interface DomainLexiconEntry {
 插件 SDK 对外开放 i18n 与 lexicon facade：
 
 ```ts
-await tuff.i18n.getLocale()
-tuff.i18n.resolveText(localizedText)
-tuff.i18n.createMessage(key, params)
+await context.utils.i18n.getLocale();
+await context.utils.i18n.resolveText(localizedText);
+context.utils.i18n.createMessage(key, params);
 
-await tuff.lexicon.search(query, options)
-await tuff.lexicon.resolve(id, options)
-await tuff.lexicon.register(entries, options)
+await context.utils.lexicon.search(query, options);
+await context.utils.lexicon.resolve(id, options);
+await context.utils.lexicon.register(entries, options);
 ```
 
-建议权限：
+已实现权限（`sdkapi >= 260713`）：
 
-- `i18n.read`：读取当前 locale 与解析插件本地化文本。
-- `lexicon.read`：查询官方 domain lexicon。
-- `lexicon.register`：注册插件 scoped lexicon entries。
-- `catalog.read`：读取 catalog 版本与本地可用 pack metadata。
+- `i18n.read`：读取当前 locale 与解析插件本地化文本；`createMessage()` 为不读取宿主状态的纯构造。
+- `lexicon.read`：查询 official 与当前插件 scoped domain lexicon。
+- `lexicon.register`：把 plugin-local id 原子投影到 `plugin:<pluginId>:` namespace；单插件 100 entries、单批 50 entries / 256 KiB。
+- `catalog.read` 仍属于 Phase 5，用于读取 catalog 版本与本地可用 pack metadata。
 
 插件 manifest 示例：
 
@@ -241,7 +260,7 @@ await tuff.lexicon.register(entries, options)
 }
 ```
 
-第三方插件默认只能读取官方词库；注册词库默认在 plugin namespace 下生效。官方插件或签名 catalog 才能提供全局 domain entries。
+第三方插件只能读取 official 与自身 overlay；不能覆盖 official canonical id，也不能读取其他插件 entries。overlay 仅驻留内存并在 disable/unload 时清理；只有签名 catalog 才能在后续 Phase 5 提供全局 domain entries。
 
 ### 5.5 CatalogService
 
@@ -249,15 +268,21 @@ CatalogService 统一处理云端公开数据包：
 
 ```ts
 interface CatalogPackManifest {
-  id: string
-  type: 'i18n-messages' | 'domain-lexicon' | 'plugin-registry' | 'capability-registry' | 'model-registry' | 'release-metadata'
-  version: string
-  schemaVersion: number
-  minSdkApi?: number
-  localeCoverage?: AppLocale[]
-  hash: string
-  signature: string
-  createdAt: string
+  id: string;
+  type:
+    | "i18n-messages"
+    | "domain-lexicon"
+    | "plugin-registry"
+    | "capability-registry"
+    | "model-registry"
+    | "release-metadata";
+  version: string;
+  schemaVersion: number;
+  minSdkApi?: number;
+  localeCoverage?: AppLocale[];
+  hash: string;
+  signature: string;
+  createdAt: string;
 }
 ```
 
@@ -312,17 +337,17 @@ Catalog 数据源：
 - 插件 manifest loader 支持 localized metadata，并保持旧 string manifest 兼容。
 - Store、CoreBox、Plugin detail 使用 resolver 展示 localized plugin metadata。
 
-### Phase 3 - Domain Lexicon V1
+### Phase 3 - Domain Lexicon V1（已完成，2026-07-13）
 
-- 先迁移单位 registry，建立 `unit.*` canonical id。
-- PreviewSDK UnitConversion 与 CoreApp calculation 共用 domain lexicon。
-- 完成解析/展示分离：跨语言 aliases 解析，当前 locale label 展示。
+- 单位 baseline 已迁入 `unit.*` canonical ids，共 53 个 length/mass/temperature/data/time/area/volume/speed entries。
+- PreviewSDK UnitConversion 与 CoreApp calculation 共用 domain lexicon-backed conversion core。
+- 解析/展示已分离：所有 locale aliases 均可解析，结果按 host locale 展示；专业 symbol 保持精确大小写，`KB` 与 `Kb` 不折叠冲突。
 
-### Phase 4 - Plugin SDK Exposure
+### Phase 4 - Plugin SDK Exposure（已完成，2026-07-13）
 
-- 暴露 `tuff.i18n.*` 与 `tuff.lexicon.*` 只读 API。
-- 增加 `lexicon.register()` 的 plugin-scoped 能力与权限 gate。
-- 在插件开发文档中补 manifest localized fields 与 lexicon 使用示例。
+- main `context.utils` 与 renderer exports 已暴露同构 `i18n` / `lexicon` facade，并保留纯 `createMessage()`。
+- typed `plugin:i18n:*` / `plugin:lexicon:*` events 只接受 verified plugin context，执行最低 SDK 与三项 permission fail-closed。
+- `lexicon.register()` 由宿主分配 namespace/provenance，执行有界原子提交、跨插件隔离和 lifecycle cleanup；插件开发文档已补完整示例。
 
 ### Phase 5 - CatalogService
 
@@ -354,6 +379,8 @@ Catalog 数据源：
 - 可观测：CatalogService 必须暴露 active version、last update、signature status、rollback reason。
 
 ## 9. Acceptance Criteria
+
+> 当前完成边界：Phase 3 单位 Domain Lexicon 与 Phase 4 Plugin SDK facade 验收已通过；下列 CatalogService 与质量门禁条目仍是后续 phase 的最终验收要求。
 
 功能验收：
 

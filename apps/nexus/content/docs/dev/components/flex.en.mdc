@@ -5,15 +5,15 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [flex, layout]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Flex
 
-Use `Flex` when you need direct Flexbox semantics for rows, columns, wrapping groups, and inline layout surfaces.
+`TxFlex` is a thin Flexbox primitive for direct control over direction, alignment, wrapping, inline display, and gap. It maps props to CSS variables instead of adding behavior.
 
 ## Basic Usage
 
-### Flex
 :::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}
 ---
 code: |
@@ -21,24 +21,105 @@ code: |
     <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
       <TxFlex justify="space-between" align="center">
         <TxTag label="Left" />
-        <TxButton variant="primary">
-          Action
-        </TxButton>
+        <TxButton variant="primary">Action</TxButton>
       </TxFlex>
     </div>
   </template>
 ---
 :::
 
+## Composition Examples
+
+### Wrapping Toolbar
+
+```vue
+<template>
+  <TxFlex align="center" justify="space-between" wrap="wrap" gap="0.75rem">
+    <TxFlex align="center" gap="0.5rem" wrap="wrap">
+      <TxTag label="Docs" />
+      <TxTag label="Reviewed" color="var(--tx-color-success)" />
+    </TxFlex>
+    <TxButton size="sm">Publish</TxButton>
+  </TxFlex>
+</template>
+```
+
+### Reverse Direction
+
+```vue
+<template>
+  <TxFlex direction="row-reverse" align="center" gap="8px">
+    <TxButton variant="primary">Primary</TxButton>
+    <TxButton variant="ghost">Secondary</TxButton>
+  </TxFlex>
+</template>
+```
+
+## Interaction Contract
+
+- The root is a `div` with `display: flex` by default.
+- `direction`, `wrap`, `align`, and `justify` are passed directly through to Flexbox CSS variables.
+- Numeric `gap` values become px; string values are passed through unchanged.
+- `inline=true` switches display from `flex` to `inline-flex`.
+- Empty `align`, `justify`, `direction`, or `wrap` values fall back to the component defaults when computed.
+- The root sets `min-width: 0` so children can shrink inside constrained cards.
+
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | flex-direction |
-| `gap` | `number \| string` | `12` | Gap |
-| `align` | `string` | `'stretch'` | align-items |
-| `justify` | `string` | `'flex-start'` | justify-content |
-| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | flex-wrap |
-| `inline` | `boolean` | `false` | Uses `inline-flex` instead of block-level `flex`. |
+|------|------|---------|-------------|
+| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | CSS `flex-direction` value. |
+| `gap` | `number \| string` | `12` | Gap between children. Numbers become px. |
+| `align` | `string` | `'stretch'` | CSS `align-items` value. |
+| `justify` | `string` | `'flex-start'` | CSS `justify-content` value. |
+| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | CSS `flex-wrap` value. |
+| `inline` | `boolean` | `false` | Use `inline-flex` instead of block-level `flex`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Flex children. |
+
+### Events
+
+No public events are emitted.
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-flex-gap` | `gap` | CSS gap. |
+| `--tx-flex-align` | `align` | `align-items`. |
+| `--tx-flex-justify` | `justify` | `justify-content`. |
+| `--tx-flex-direction` | `direction` | `flex-direction`. |
+| `--tx-flex-wrap` | `wrap` | `flex-wrap`. |
+| `--tx-flex-display` | `inline` | `flex` or `inline-flex`. |
+
+## Best Practices
+
+- Use `TxFlex` when you need exact Flexbox semantics. Use `TxStack` for common horizontal/vertical rhythm.
+- Use `wrap="wrap"` on toolbars and filter rows that must survive narrow containers.
+- Keep `gap` responsible for spacing; avoid margin hacks on child components.
+- Prefer semantic child controls (`TxButton`, links, form controls) inside `TxFlex`; the container itself does not add roles or keyboard behavior.
+- For grid-like repeated cards, use `TxGridLayout` instead of nested flex rows.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/flex/src/types.ts`, `TxFlex.vue`, and `flex.test.ts`.
+- `TxFlex` is intentionally behaviorless: it adds no role, events, or focus handling beyond the slotted children.
+- Numeric `gap` is normalized to pixels; string gap values remain caller-owned CSS.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flex/src/TxFlex.vue`.
+- Types: `packages/tuffex/packages/components/src/flex/src/types.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/flex/__tests__/flex.test.ts` verifies default CSS variables and slot content, custom layout variable forwarding, inline display, and numeric gap normalization.
+
+<TuffDocSourceLink />

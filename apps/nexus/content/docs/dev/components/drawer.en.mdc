@@ -343,10 +343,24 @@ rows:
 - `showClose=false` removes the default close button without changing mask or Escape behavior.
 - `mobileAdapt=true` forces bottom direction on mobile; set `:mobile-adapt="false"` to preserve the requested direction.
 
+## Best Practices
+
+- Use Drawer for long forms, audit details, permission matrices, and flows that need footer actions.
+- Keep `title` meaningful even when `showHeader=false`; it becomes the dialog's accessible fallback label.
+- Prefer `size` and `full`; keep `width` only for old call sites that have not migrated yet.
+- Use `mobileAdapt=false` only when preserving side direction is more important than bottom-sheet ergonomics on small screens.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`.
+- Types: `packages/tuffex/packages/components/src/drawer/src/types.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/drawer/__tests__/drawer.test.ts` verifies visibility emits, focus restoration, ARIA labeling, close controls, size resolution, mobile adaptation, and separator rendering.
+
+<TuffDocSourceLink />
+
 ## Review Notes
 
 - The drawer root already exposes `role="dialog"` / `aria-modal="true"` and title linkage; form fields inside still need explicit labels.
 - Opening stores the previously focused element and restores it on hide/unmount; avoid manually stealing focus from outside.
 - Dashboard settings pages should place long forms, permission matrices, and audit detail in Drawer rather than Popover.
 - Built-in header/footer separators come from `TxDivider`, avoiding duplicated border styling.
-- Source: `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`

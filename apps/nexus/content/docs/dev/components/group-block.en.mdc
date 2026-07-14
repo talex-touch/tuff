@@ -2,6 +2,9 @@
 title: "GroupBlock"
 description: "Collapsible settings groups and block rows for preference surfaces."
 category: Layout
+status: beta
+since: 1.0.0
+tags: [group, layout, settings]
 syncStatus: reviewed
 verified: true
 ---
@@ -14,9 +17,15 @@ import { ref } from 'vue'
 
 const notifications = ref(true)
 const language = ref<'en' | 'zh'>('en')
+const theme = ref<'light' | 'dark' | 'auto'>('auto')
+const profileName = ref('Talex')
+const displayName = ref('Talex')
+const timezone = ref('local')
 const autoUpdate = ref(true)
 const loading = ref(true)
+const locked = ref(false)
 const dummy = ref(false)
+function handleClick() {}
 </script>
 
 ## Basic Usage
@@ -53,7 +62,7 @@ code: |
 
 ## Initially Collapsed
 
-Use `default-expand` or `collapsed` to control initial expansion.
+Use `:default-expand="false"` for first-render collapsed groups. Treat `collapsed` as an external state input that only applies before stored state or user interaction takes over.
 
 ### GroupBlock (collapsed)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockCollapsedDemo" code-lang="vue"}
@@ -187,7 +196,7 @@ A block container with icon, title, description, and a custom control slot.
 code: |
   <template>
     <TxGroupBlock name="Appearance" description="Custom control slot" default-icon="i-ri-palette-line" :collapsible="false">
-      <TxBlockSlot title="Theme" description="Choose the interface appearance" default-icon="i-carbon-color-palette">
+      <TxBlockSlot title="Theme" description="Choose the interface appearance" default-icon="i-ri-palette-line">
         <TxSelect v-model="theme" placeholder="Select theme">
           <TuffSelectItem value="light" label="Light" />
           <TuffSelectItem value="dark" label="Dark" />
@@ -241,6 +250,59 @@ code: |
         </template>
         <TuffInput v-model="profileName" placeholder="Enter profile name" />
       </TxBlockSlot>
+    </TxGroupBlock>
+  </template>
+---
+:::
+
+---
+
+# BlockInput
+
+Use `TxBlockInput` when a settings row needs a standard text-like input while preserving GroupBlock spacing, icons, tags, and disabled state.
+
+### BlockInput
+:::TuffDemoWrapper{demo="GroupBlockBlockInputDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGroupBlock name="Account profile" description="Input controls keep the settings-row rhythm" default-icon="i-ri-user-settings-line" :collapsible="false">
+      <TxBlockInput
+        v-model="displayName"
+        title="Display name"
+        description="Shown in shared workspaces and notifications."
+        placeholder="Enter display name"
+        default-icon="i-carbon-user-profile"
+        clearable
+      />
+    </TxGroupBlock>
+  </template>
+---
+:::
+
+---
+
+# BlockSelect
+
+Use `TxBlockSelect` when a settings row should expose a compact `TxSelect` without rebuilding the row chrome by hand.
+
+### BlockSelect
+:::TuffDemoWrapper{demo="GroupBlockBlockSelectDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGroupBlock name="Workspace defaults" description="Select controls reuse the same row layout" default-icon="i-ri-dashboard-line" :collapsible="false">
+      <TxBlockSelect
+        v-model="timezone"
+        title="Time display"
+        description="Choose how activity timestamps are shown."
+        placeholder="Select time display"
+        default-icon="i-carbon-time"
+      >
+        <TuffSelectItem value="local" label="Local time" />
+        <TuffSelectItem value="utc" label="UTC" />
+        <TuffSelectItem value="relative" label="Relative time" />
+      </TxBlockSelect>
     </TxGroupBlock>
   </template>
 ---
@@ -345,22 +407,30 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `name` | `string` | - | Header title for the group. |
+| `name` | `string` | *required* | Header title for the group. |
 | `description` | `string` | `''` | Supporting text displayed below the group title. |
 | `defaultIcon` | `TxIconSource \| string` | - | Icon shown when the group is collapsed or when no active icon is provided. |
 | `activeIcon` | `TxIconSource \| string` | - | Icon shown while the group is expanded; falls back to `defaultIcon`. |
 | `iconSize` | `number` | `22` | Header icon size in pixels. |
 | `collapsible` | `boolean` | `true` | Allow the header to toggle the group body. |
-| `collapsed` | `boolean` | `false` | External initial collapsed state, ignored after stored state or user interaction takes over. |
-| `defaultExpand` | `boolean` | `true` | Initial expanded state used when no stored state is available. |
-| `memoryName` | `string` | - | Persist expanded state in `localStorage` under the `tuff-block-storage-` prefix. |
+| `collapsed` | `boolean` | `false` | External collapsed input watched before stored state or user interaction exists; prefer `:default-expand="false"` for first-render collapsed groups. |
+| `defaultExpand` | `boolean` | `true` | Initial expanded state when no stored state exists; set to `false` for a collapsed first render. |
+| `memoryName` | `string` | `''` | Persist expanded state in `localStorage` under the `tuff-block-storage-` prefix. |
 
 ### TxGroupBlock Events
 
 | Event | Params | Description |
-|------|------------|-------------|
+|------|--------|-------------|
 | `update:expanded` | `expanded: boolean` | Emitted after a collapsible group changes expansion state. |
 | `toggle` | `expanded: boolean` | Emitted with the same state when the header toggles the group. |
+
+### TxGroupBlock Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Group body rows. |
+| `icon` | `{ active: boolean }` | Custom header icon; replaces `defaultIcon` / `activeIcon`. |
+| `header-extra` | `{ active: boolean }` | Header action area rendered before the collapse chevron. |
 
 ### TxBlockLine Props
 
@@ -368,7 +438,19 @@ code: |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Row label. |
 | `description` | `string` | `''` | Row value text when `link=false`; can be replaced with the `description` slot. |
-| `link` | `boolean` | `false` | Use link styling and emit click/Enter activation events. |
+| `link` | `boolean` | `false` | Render as a native button with link styling and click emits. |
+
+### TxBlockLine Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `click` | `event: MouseEvent` | Emitted only when `link=true`. |
+
+### TxBlockLine Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `description` | - | Custom row value/link content. |
 
 ### TxBlockSlot Props
 
@@ -382,23 +464,150 @@ code: |
 | `active` | `boolean` | `false` | Switch the slot row into active visual/icon state. |
 | `disabled` | `boolean` | `false` | Apply disabled styling and block row click emits. |
 
+### TxBlockSlot Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `click` | `event: MouseEvent` | Emitted when the row is clicked and `disabled=false`. |
+
+### TxBlockSlot Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | `{ active: boolean }` | Control area aligned to the right side. |
+| `icon` | `{ active: boolean }` | Custom icon area. |
+| `label` | - | Full custom label block; replaces `title` and `description`. |
+| `tags` | - | Inline metadata beside the title, or below a custom label. |
+
+### TxBlockInput Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string \| number` | `''` | Current input value for `v-model`. |
+| `title` | `string` | `''` | Row title. |
+| `description` | `string` | `''` | Row description. |
+| `defaultIcon` | `TxIconSource \| string` | - | Icon shown when the input is not focused or when no active icon is provided. |
+| `activeIcon` | `TxIconSource \| string` | - | Icon shown while focused. |
+| `disabled` | `boolean` | `false` | Disable the row and underlying input. |
+| `placeholder` | `string` | `''` | Input placeholder. |
+| `clearable` | `boolean` | `false` | Forwarded to `TxInput`. |
+| `inputType` | `'text' \| 'password' \| 'number' \| 'email'` | `'text'` | Forwarded as the `TxInput` type. |
+
+### TxBlockInput Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `update:modelValue` | `value: string \| number` | Emitted when the underlying input model changes. |
+| `input` | `value: string \| number` | Mirrors the underlying `TxInput` input event. |
+| `focus` | `event: FocusEvent` | Emitted when the input gains focus. |
+| `blur` | `event: FocusEvent` | Emitted when the input loses focus. |
+
+### TxBlockInput Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `control` | `{ value: string \| number, focused: boolean }` | Replaces the default `TxInput`. |
+| `tags` | - | Inline metadata forwarded to the row title area. |
+
+### TxBlockSelect Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string \| number` | `''` | Current select value for `v-model`. |
+| `title` | `string` | `''` | Row title. |
+| `description` | `string` | `''` | Row description. |
+| `defaultIcon` | `TxIconSource \| string` | - | Icon shown when no value is selected or when no active icon is provided. |
+| `activeIcon` | `TxIconSource \| string` | - | Icon shown when a value is selected. |
+| `disabled` | `boolean` | `false` | Disable the row and underlying select. |
+| `placeholder` | `string` | `''` | Select placeholder. |
+
+### TxBlockSelect Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `update:modelValue` | `value: string \| number` | Emitted when the selected value changes. |
+| `change` | `value: string \| number` | Mirrors the same selected value after change. |
+
+### TxBlockSelect Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | `TxSelect` option children such as `TuffSelectItem`. |
+| `tags` | - | Inline metadata forwarded to the row title area. |
+
 ### TxBlockSwitch Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` | `boolean` | - | Current switch value for `v-model`. |
-| `title` | `string` | - | Switch row title. |
-| `description` | `string` | - | Switch row description. |
+| `modelValue` | `boolean` | *required* | Current switch value for `v-model`. |
+| `title` | `string` | *required* | Switch row title. |
+| `description` | `string` | *required* | Switch row description. |
 | `defaultIcon` | `TxIconSource \| string` | - | Icon shown when the switch is off or when no active icon is provided. |
 | `activeIcon` | `TxIconSource \| string` | - | Icon shown when the switch is on; falls back to `defaultIcon`. |
 | `disabled` | `boolean` | `false` | Disable the row and underlying switch. |
 | `guidance` | `boolean` | `false` | Render as a navigation row with a chevron instead of a switch. |
-| `loading` | `boolean` | `false` | Show a loader and temporarily disable switch interaction. |
+| `loading` | `boolean` | `false` | Show a spinner/shimmer and temporarily disable switch interaction. |
 
 ### TxBlockSwitch Events
 
 | Event | Params | Description |
-|------|------------|-------------|
+|------|--------|-------------|
 | `update:modelValue` | `value: boolean` | Emitted by the underlying switch when the value changes. |
 | `change` | `value: boolean` | Mirrors the switch `change` event after user interaction. |
 | `click` | `event: MouseEvent` | Emitted only in `guidance` mode. |
+
+### TxBlockSwitch Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `tags` | - | Inline metadata forwarded to the row title area. |
+
+
+## Exposed Methods
+
+None. Use props, `update:expanded`, `toggle`, and the row-specific events instead of imperative handles.
+
+## Interaction Contract
+
+- `memoryName` wins over initial defaults; stored state is saved as `{ expand: boolean }` in `localStorage`.
+- `defaultExpand` drives first render when no stored state exists. `collapsed` is then watched as an external input until the user toggles the group.
+- After the user toggles a group, later `collapsed` / `defaultExpand` prop changes no longer overwrite the chosen state.
+- Group bodies stay mounted; expansion only animates height, opacity, and display.
+- `TxBlockLine` renders a non-interactive `div` by default and a native `button type="button"` only when `link=true`.
+- `TxBlockSlot` blocks click emits when disabled; `TxBlockSwitch` also disables the row while `loading=true`.
+- `TxBlockSwitch` guidance mode replaces the switch with a chevron and only emits `click`; it does not mutate `modelValue`.
+
+## Style Customization
+
+| Theme token | Used for |
+|-------------|----------|
+| `--tx-border-color-lighter` | Group card border and header divider. |
+| `--tx-fill-color-dark` / `--tx-fill-color` / `--tx-fill-color-light` | Header, row, hover, and touch-blur surfaces. |
+| `--tx-text-color-primary` / `--tx-text-color-secondary` | Group titles, row labels, descriptions, guidance arrows, and loader color. |
+| `--tx-color-primary` / `--tx-color-primary-dark-2` | `TxBlockLine link` color and hover color. |
+| `--tx-color-white` | Loading shimmer highlight mixed into `TxBlockSwitch` loading overlay. |
+
+## Best Practices
+
+- Use `TxGroupBlock` for compact settings and preference clusters; keep each group focused on one product area.
+- Use unique, stable `memoryName` values. Do not reuse the same key across unrelated groups.
+- Set `collapsible=false` for always-visible status or form sections to avoid implying hidden state.
+- Use `TxBlockLine` for read-only values and lightweight navigation links, `TxBlockSlot` for custom controls, `TxBlockInput` / `TxBlockSelect` for standard form rows, and `TxBlockSwitch` for booleans or guidance rows.
+- Keep row labels short; move long explanations to the description line or a nearby help pattern instead of adding nested layouts inside rows.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/group-block/src/types.ts` and all six Vue entry points in the group-block package.
+- `TxBlockLine` only becomes interactive when `link=true`; do not describe it as a generic clickable row.
+- `TxBlockSwitch` loading mode blocks mutation, while guidance mode emits only `click` and should be documented as navigation, not a boolean toggle.
+- Collapsed demos intentionally use `:default-expand="false"`; current source watches `collapsed` only before storage or user interaction changes the group state.
+- **Verified coverage:** persisted expansion, static-group behavior, semantic link rows, disabled slot-click blocking, guidance mode, and loading-state value-change guards.
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/group-block/src/TxGroupBlock.vue`, `TxBlockLine.vue`, `TxBlockSlot.vue`, `TxBlockInput.vue`, `TxBlockSelect.vue`, and `TxBlockSwitch.vue`.
+- Types: `packages/tuffex/packages/components/src/group-block/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/group-block/__tests__/group-block.test.ts` verifies persistence, static groups, semantic link rows, slot click blocking, guidance mode, and loading-state value guards.
+
+<TuffDocSourceLink />
+

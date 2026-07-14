@@ -1,13 +1,13 @@
 ---
 title: "Tabs 标签页"
-description: "用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。"
+description: "支持多方向布局、分组导航、动态指示器和内容尺寸测量的组合式标签页。"
 category: Layout
 syncStatus: reviewed
 verified: true
 ---
 # Tabs 标签页
 
-用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。
+使用 `TxTabs` 在相关产品分区之间切换，支持左、右、上、下导航。配合 `TxTabItem`、可选 `TxTabItemGroup` 与可选 `TxTabHeader`，可以为活动面板补充上下文头部。
 
 
 ## 基础用法
@@ -479,66 +479,146 @@ code: |
 
 ## API
 
-### TxTabs Props
+### TxTabs 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `string` | - | 当前激活 tab（v-model） |
-| `defaultValue` | `string` | - | 默认激活 tab（当未传 modelValue 时） |
-| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Tabs 布局位置 |
-| `offset` | `number` | `0` | 指示条定位偏移 |
-| `navMinWidth` | `number` | `220` | 左侧导航最小宽度 |
-| `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |
-| `contentPadding` | `number` | `12` | 内容区 padding |
-| `contentScrollable` | `boolean` | `true` | 内容是否可滚动（关闭后可用于 autoHeight/autoWidth 的尺寸测量） |
-| `autoHeight` | `boolean` | `false` | 自动高度（需要 `contentScrollable=false` + `animation.size.enabled=true`） |
-| `autoWidth` | `boolean` | `false` | 自动宽度（需要 `animation.size.enabled=true`） |
-| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | 指示器样式 |
-| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器动效风格 |
-| `indicatorMotionStrength` | `number` | `1` | 指示器动效强度（数值越大越“Q弹”，`0` 基本关闭 scale 弹性） |
-| `animation` | `TabsAnimation` | - | 动画配置（size/nav/indicator/content） |
-| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时使用 `autoHeight/autoWidth` 启用状态与 `autoHeightDurationMs/autoHeightEasing` 默认值 |
-| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | 导航容器动画（nav 宽度/布局变化过渡） |
-| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | 指示条动画 |
-| `animation.content` | `boolean \| { enabled? }` | - | 内容切换过渡（zoom 动画） |
-| `autoHeightDurationMs` | `number` | `250` | `animation.size.durationMs` 未指定时的默认时长 |
-| `autoHeightEasing` | `string` | `ease` | `animation.size.easing` 未指定时的默认缓动 |
+| `modelValue` | `string` | - | 受控激活 tab 名称。父级更新该值会切换面板，但不会再次触发 `change`。 |
+| `defaultValue` | `string` | - | 非受控初始激活 tab。必须匹配某个 `TxTabItem name`，否则不选中任何 tab。 |
+| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | 导航位置；非法值回退为 `left`。 |
+| `offset` | `number` | `0` | `line` / `pill` 指示器沿当前轴线的额外偏移。 |
+| `navMinWidth` | `number` | `220` | 垂直布局下导航区域最小宽度。 |
+| `navMaxWidth` | `number` | `320` | 垂直布局下导航区域最大宽度。 |
+| `contentPadding` | `number` | `12` | 主内容区 padding。 |
+| `contentScrollable` | `boolean` | `true` | 是否包裹内部滚动容器；高度动画启用时会自动移除该容器以便直接测量。 |
+| `borderless` | `boolean` | `false` | 移除外层边框和背景，适合嵌入式布局。 |
+| `autoHeight` | `boolean` | `false` | 通过默认 `animation.size` 配置启用 AutoSizer 高度动画。 |
+| `autoWidth` | `boolean` | `false` | 通过默认 `animation.size` 配置启用 AutoSizer 宽度动画。 |
+| `showIndicator` | `boolean` | `true` | 是否渲染活动 tab 指示器；设为 `false` 可得到纯文本导航。 |
+| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | 指示器样式；非法值回退为 `line`。 |
+| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器动效类型；非法值回退为 `stretch`。 |
+| `indicatorMotionStrength` | `number` | `1` | 控制指示器缩放弹性的非负数；负数会夹到 `0`。 |
+| `animation` | `TabsAnimation` | - | 分别配置 size、nav、indicator、content 动画。 |
+| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | 从 `autoHeight` / `autoWidth` 推导 | 启用并配置 AutoSizer 尺寸动画；默认使用 `autoHeightDurationMs` / `autoHeightEasing`。 |
+| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | 启用，`220ms ease` | 配置导航宽度/布局过渡变量。 |
+| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | 启用，`350ms cubic-bezier(...)` | 配置指示器位置和尺寸过渡。 |
+| `animation.content` | `boolean \| { enabled?; type?; durationMs?; durationRatio?; easing? }` | 启用 `zoom`，`180ms ease` | 配置活动面板入场动画。`type` 支持 `fade`、`slide`、`zoom`、`blur`、`scale`、`none`；`durationRatio` 可从指示器时长推导面板时长。 |
+| `autoHeightDurationMs` | `number` | `250` | `animation.size.durationMs` 未传时的默认尺寸动画时长。 |
+| `autoHeightEasing` | `string` | `ease` | `animation.size.easing` 未传时的默认尺寸动画缓动。 |
 
-### Slots
-
-| 名称 | 参数 | 说明 |
-|------|------|------|
-| `default` | - | 放置 `TxTabItem` / `TxTabItemGroup` / `TxTabHeader` |
-| `nav-right` | - | 顶部/底部 Tabs 的导航右侧区域（适合放按钮、搜索等），宽度变化会配合 `autoWidth` 跟随内容 |
-
-### Expose
-
-| 名称 | 类型 | 说明 |
-|------|------|------|
-| `refresh` | `() => void` | 触发内容尺寸重新测量（AutoSizer passthrough） |
-| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | 包裹一次变更并使用 FLIP 尺寸过渡 |
-| `action` | `(fn: (el: HTMLElement) => void \| Promise<void>, optionsOrDetect?: any) => Promise<any>` | AutoSizer 的 action wrapper（用于丝滑自动切换） |
-| `size` | `() => { width: number; height: number } \| undefined` | 当前测量的尺寸信息 |
-
-### TxTabItem Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `name` | `string` | - | tab 名称（唯一 key） |
-| `iconClass` | `string` | `''` | 图标 class |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `activation` | `boolean` | `false` | 是否作为初始激活项 |
-
-### Events
+### TxTabs 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `change` | `string` | 切换时触发 |
-| `update:modelValue` | `string` | v-model 更新 |
+| `update:modelValue` | `value: string` | 用户激活、`defaultValue` 或 `activation` 在非受控流程中改变当前 tab 时触发。 |
+| `change` | `value: string` | 激活后以相同 tab 名称触发；父级驱动的 `modelValue` 更新不会触发。 |
 
-## 审阅要点
+### TxTabs 插槽
 
-- `modelValue` / `update:modelValue` 是唯一受控状态来源，避免在 tab 内容里复制当前分区状态。
-- `TxTabItemGroup` 只负责分组导航，真正内容仍由子级 `TxTabItem` 提供。
-- Dashboard 设置页建议使用 `placement="left"`；顶部/底部 Tabs 更适合较短的二级切换。
-- 源码：`packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 放置直接子级 `TxTabItem`、可选 `TxTabItemGroup` 与可选 `TxTabHeader`。支持 Fragment；无关节点会被忽略。 |
+| `nav-right` | - | 在导航栏末尾渲染紧凑操作区，常用于横向 tabs。 |
+
+### TxTabs 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `refresh` | `() => void` | 透传内部 AutoSizer `refresh()`。 |
+| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | 在可用时把一次变更包进内部 AutoSizer FLIP 过渡。 |
+| `action` | `(fn: (el: HTMLElement \| undefined) => void \| Promise<void>, optionsOrDetect?: any) => Promise<{ changedKeys: string[] } \| any>` | 透传内部 AutoSizer action helper；不可用时调用 `fn(undefined)`。 |
+| `size` | `() => { width: number; height: number } \| undefined` | 返回 AutoSizer 最近一次测得的尺寸。 |
+
+### TxTabItem 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `name` | `string` | *必填* | 唯一 tab 名称，同时作为激活值和查找 key。 |
+| `iconClass` | `string` | `''` | 导航标签前的可选图标 class。 |
+| `disabled` | `boolean` | `false` | 阻止点击激活，并渲染禁用的原生按钮。 |
+| `activation` | `boolean` | `false` | 当 `modelValue` 和 `defaultValue` 都没有选中 tab 时，作为非受控默认项。 |
+
+### TxTabItem 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `click` | - | 独立使用 `TxTabItem` 且未禁用时触发；放在 `TxTabs` 内时由父级消费并更新活动状态。 |
+
+### TxTabItem 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 活动面板内容，由 `TxTabs` 渲染；未激活面板不会保持挂载。 |
+| `icon` | - | 自定义导航图标，替代 `iconClass`。 |
+| `name` | - | 自定义导航标签；默认显示 `name` prop。 |
+
+### TxTabHeader 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `node` | `unknown` | - | `TxTabs` 传入的当前活动 `TxTabItem` VNode；读取 `node?.props` 时需防御。 |
+
+### TxTabHeader 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | `{ props: { node?: unknown } }` | 渲染在活动面板上方的 sticky 内容头部。 |
+
+### TxTabItemGroup 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `name` | `string` | - | 导航列中的可选分组标题。 |
+
+### TxTabItemGroup 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 子级 `TxTabItem` 节点。该组件脱离 `TxTabs` 时自身不渲染 DOM。 |
+
+## 交互契约
+
+- `modelValue` 是受控状态来源。父级更新 `modelValue` 不会再次触发 `change` 或 `update:modelValue`。
+- 没有 `modelValue` 时，`defaultValue` 优先于 `activation`。如果 `defaultValue` 不匹配任何 tab，会渲染空状态，而不会回退到 `activation`。
+- 默认插槽只收集 `TxTabItem`、`TxTabItemGroup` 与 `TxTabHeader`；支持 Fragment，但会忽略任意包装组件。
+- `TxTabItemGroup` 只是导航分组标记；真实面板内容仍来自子级 `TxTabItem`。
+- `showIndicator=false` 会移除指示器 DOM 和指示器动画；尺寸动画启用时仍会观察内容与导航区域。
+- 高度动画会移除内部滚动容器，让 AutoSizer 直接测量面板高度；手动直测布局可使用 `contentScrollable=false`。
+- 未激活 tab 的面板不会挂载。需要跨切换保留的状态应放在面板子树之外。
+
+## 样式定制
+
+| 主题变量 / CSS 变量 | 用途 |
+|----------------------------|----------|
+| `--tx-border-color` | 外层边框和不同 placement 下的导航分隔线。 |
+| `--tx-bg-color` | Tabs 容器背景。 |
+| `--tx-fill-color` / `--tx-fill-color-light` | 活动与 hover 导航项表面。 |
+| `--tx-color-primary` | 指示器渐变、高光、描边和示例强调色。 |
+| `--tx-text-color-primary` / `--tx-text-color-secondary` | Tab 标签、图标、分组标题与空状态文字。 |
+| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | 由指示器动画 props 生成的运行时变量。 |
+| `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | 由内容动画 props 生成的运行时变量。 |
+| `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | 由导航动画 props 生成的运行时变量。 |
+
+## 最佳实践
+
+- `TxTabItem name` 保持稳定且唯一，并与 `modelValue` / `defaultValue` 的值一致。
+- Dashboard 设置和高密度后台页优先使用 `placement="left"`；顶部/底部 tabs 更适合短二级切换。
+- 只有在匹配 tab 一定存在时才使用 `defaultValue`；静态非受控示例优先用 `activation`。
+- 不要把必须长期保留的表单状态只放在未激活面板内；切换时未激活内容会卸载。
+- 面板高度会在异步数据或图片加载后变化时，使用直接测量（`contentScrollable=false` 或 `autoHeight`）并在内容稳定后调用 `refresh()`。
+- `nav-right` 保持紧凑；复杂操作放入 `TxDropdownMenu`、`TxPopover` 或 `TxDrawer`，不要撑大 tab bar。
+
+## 审阅说明
+
+- 已对照 `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`、`TxTabItem.vue`、`TxTabHeader.vue`、`TxTabItemGroup.vue` 和 `types.ts` 核对。
+- `indicatorMotionStrength` 是 `TxTabs` 运行时 prop，已同步补入导出的 `TabsProps` 接口。
+- `TxTabItemGroup.vue` 刻意使用空模板；`TxTabs` 读取其子级 `TxTabItem` VNode 并创建分组 DOM。
+- `TxTabs` 会按组件名过滤默认插槽，文档示例不应展示任意包装组件包住 tab item。
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
+- Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` 覆盖 activation 渲染、可用与禁用 tab 切换、受控更新、fragment、异步 tab item、分组、内容动效变体、隐藏指示器、视觉 prop 归一化，以及暴露的 AutoSizer 方法。
+
+<TuffDocSourceLink />

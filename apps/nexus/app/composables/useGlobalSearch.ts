@@ -1,15 +1,8 @@
 import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 import type { GlobalSearchResult } from '~/composables/useGlobalSearchState'
+import { fetchContentApi } from '~/utils/content-api-client'
+import type { DocsSearchResponse, SidebarComponentItem } from '#shared/types/content-api'
 import { isDocsPath, toLocalizedDocsPath } from '#shared/utils/docs-path'
-
-interface SearchContentRecord {
-  _path?: string
-  path?: string
-  title?: string
-  description?: string
-  meta?: Record<string, any>
-  tags?: string[]
-}
 
 let searchRunId = 0
 
@@ -26,6 +19,8 @@ interface DocIndexItem {
 
 const componentIndexCache = new Map<string, DocIndexItem[]>()
 const componentIndexPromise = new Map<string, Promise<DocIndexItem[]>>()
+const docsIndexCache = new Map<string, DocIndexItem[]>()
+const docsIndexPromise = new Map<string, Promise<DocIndexItem[]>>()
 let featureMatcherPromise: Promise<typeof import('@talex-touch/utils/search/feature-matcher')> | null = null
 let featureIndexPromise: Promise<typeof import('~/data/search/featureIndex')> | null = null
 let pageIndexPromise: Promise<typeof import('~/data/search/pageIndex')> | null = null
@@ -45,39 +40,6 @@ function loadPageIndex() {
   return pageIndexPromise
 }
 
-function normalizeDocPath(path: string) {
-  return path.replace(/\.(en|zh)$/, '')
-}
-
-function resolveDocPath(record: SearchContentRecord) {
-  return record._path ?? record.path ?? ''
-}
-
-function resolveDocTitle(record: SearchContentRecord) {
-  if (record.title)
-    return record.title
-  const metaTitle = record.meta?.title
-  if (typeof metaTitle === 'string')
-    return metaTitle
-  return ''
-}
-
-function resolveDocDescription(record: SearchContentRecord) {
-  if (record.description)
-    return record.description
-  const metaDescription = record.meta?.description
-  if (typeof metaDescription === 'string')
-    return metaDescription
-  return ''
-}
-
-function matchesLocale(path: string, locale: string) {
-  const match = path.match(/\.(en|zh)$/)
-  if (!match)
-    return true
-  return match[1] === locale
-}
-
 async function loadComponentIndex(locale: string) {
   const cached = componentIndexCache.get(locale)
   if (cached)
@@ -89,27 +51,21 @@ async function loadComponentIndex(locale: string) {
 
   const loader = (async () => {
     try {
-      const records = await queryCollection('docs')
-        .where('path', 'LIKE', '/docs/dev/components/%')
-        .all() as SearchContentRecord[]
+      const records = await fetchContentApi<SidebarComponentItem[]>(`/api/docs/sidebar-components/${locale}`, {})
 
       const items = records
-        .map((record) => {
-          const rawPath = resolveDocPath(record)
-          if (!rawPath || !matchesLocale(rawPath, locale))
-            return null
-          const path = normalizeDocPath(rawPath)
-          const searchTokens = Array.isArray(record.tags) ? record.tags : undefined
+        .filter(record => record.locale === locale)
+        .map((record): DocIndexItem => {
+          const searchTokens = record.tags.length ? record.tags : undefined
           const base: DocIndexItem = {
-            id: `component-${path}`,
-            path,
-            title: resolveDocTitle(record) || path,
-            description: resolveDocDescription(record),
+            id: `component-${record.normalizedPath}`,
+            path: record.normalizedPath,
+            title: record.title || record.normalizedPath,
+            description: record.description,
             icon: 'i-carbon-cube',
           }
           return searchTokens ? { ...base, searchTokens } : base
         })
-        .filter((item): item is DocIndexItem => item !== null)
 
       componentIndexCache.set(locale, items)
       return items
@@ -124,6 +80,39 @@ async function loadComponentIndex(locale: string) {
   })()
 
   componentIndexPromise.set(locale, loader)
+  return loader
+}
+
+async function loadDocsIndex(locale: string) {
+  const cached = docsIndexCache.get(locale)
+  if (cached)
+    return cached
+
+  const pending = docsIndexPromise.get(locale)
+  if (pending)
+    return pending
+
+  const loader = (async () => {
+    try {
+      const response = await fetchContentApi<DocsSearchResponse>(`/api/docs/search/${locale}`, {})
+      const items = response.items
+        .filter(item => item.locale === locale)
+        .map((item): DocIndexItem => ({
+          id: item.id,
+          path: item.path,
+          title: item.title,
+          description: item.description,
+          searchTokens: item.tags.length ? item.tags : undefined,
+        }))
+      docsIndexCache.set(locale, items)
+      return items
+    }
+    finally {
+      docsIndexPromise.delete(locale)
+    }
+  })()
+
+  docsIndexPromise.set(locale, loader)
   return loader
 }
 
@@ -154,28 +143,35 @@ export function useGlobalSearch() {
 
   async function searchDocs(trimmed: string, runId: number) {
     try {
-      // @ts-expect-error: searchContent is auto-imported by Nuxt Content
-      const rawResults = await searchContent(trimmed) as SearchContentRecord[]
+      const [{ matchFeature }, index] = await Promise.all([
+        loadFeatureMatcher(),
+        loadDocsIndex(docsLocale.value),
+      ])
       if (runId !== searchRunId)
         return []
-      return rawResults
-        .filter(item => typeof resolveDocPath(item) === 'string' && resolveDocPath(item).startsWith('/docs/'))
-        .filter(item => matchesLocale(resolveDocPath(item), locale.value))
-        .map((item) => {
-          const title = resolveDocTitle(item)
-          const description = resolveDocDescription(item)
-          const path = normalizeDocPath(resolveDocPath(item) || '/docs')
+      return index
+        .map((item): GlobalSearchResult | null => {
+          const match = matchFeature({
+            title: item.title,
+            desc: item.description,
+            searchTokens: item.searchTokens,
+            query: trimmed,
+          })
+          if (!match.matched)
+            return null
           return {
-            id: `doc-${path}`,
+            id: `doc-${item.id}`,
             source: 'docs' as const,
-            title: title || path,
-            description,
-            to: resolveSearchPath(path),
-            score: 0,
+            title: item.title || item.path,
+            description: item.description,
+            to: resolveSearchPath(item.path),
+            score: match.score,
             icon: 'i-carbon-document',
-            keywords: [title, description].filter(Boolean) as string[],
+            keywords: item.searchTokens,
           }
         })
+        .filter(isSearchResult)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 6)
     }
     catch {
@@ -185,7 +181,7 @@ export function useGlobalSearch() {
 
   async function searchComponents(trimmed: string) {
     const { matchFeature } = await loadFeatureMatcher()
-    const index = await loadComponentIndex(locale.value)
+    const index = await loadComponentIndex(docsLocale.value)
     return index
       .map((item): GlobalSearchResult | null => {
         const match = matchFeature({

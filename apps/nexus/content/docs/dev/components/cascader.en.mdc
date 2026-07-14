@@ -180,6 +180,10 @@ code: |
 | `open` | - | Emitted after the dropdown opens. |
 | `close` | - | Emitted after the dropdown closes. |
 
+### Slots
+
+`TxCascader` does not expose custom slots. Labels and disabled state come from `CascaderNode`; compose field labels, help text, or validation outside the component.
+
 ### Expose
 
 | Name | Type | Description |
@@ -193,8 +197,26 @@ code: |
 | `setValue(v)` | `(v) => void` | Emits `update:modelValue` and `change` with the supplied value. |
 | `getValue()` | `() => any` | Returns the current `modelValue` prop. |
 
+## Best Practices
+
+- Keep hierarchy depth shallow. The panel works best for two to three levels; deeper organization trees should use search or TreeSelect instead.
+- Use stable `value` keys across releases. `modelValue` stores path keys, so changing keys breaks persisted selections.
+- Mark terminal async nodes with `leaf: true`; otherwise a node with no `children` may call `load` instead of becoming selectable.
+- Keep `searchable` enabled when the loaded tree has many leaves, but remember search only covers already loaded local nodes.
+- In `multiple` mode, treat the value as an array of complete paths, not leaf ids. Persist the full path so labels can be reconstructed consistently.
+
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`.
+- Reviewed against `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`, `types.ts`, and `cascader.test.ts`.
+- Existing tests cover leaf selection, empty search results, multiple-path toggle and clear, disabled trigger/node blocking, lazy child loading, and exposed state helpers.
+- Accessibility note: the trigger uses `role="combobox"` with `aria-haspopup="listbox"`; preserve a visible field label and do not rely on placeholder text as the only label.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`.
+- Types: `packages/tuffex/packages/components/src/cascader/src/types.ts` exports `CascaderProps`, `CascaderEmits`, `CascaderNode`, and `CascaderValue`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts` verifies leaf selection, empty search, multiple clearing, disabled blocking, lazy child loading, and exposed helpers.
 - Screenshot: `.codex-screenshots/nexus-cascader-release-policy-demo-playwright-2026-05-28.png`.
-- Recommendation: single mode stores one path array and multiple mode stores path arrays; keep release scopes within about three levels so the cascader does not become an organization browser.
+
+<TuffDocSourceLink />

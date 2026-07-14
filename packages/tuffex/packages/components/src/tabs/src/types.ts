@@ -13,6 +13,7 @@ export interface TabsProps {
   showIndicator?: boolean
   indicatorVariant?: 'line' | 'pill' | 'block' | 'dot' | 'outline'
   indicatorMotion?: 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
+  indicatorMotionStrength?: number
   autoHeightDurationMs?: number
   autoHeightEasing?: string
   animation?: TabsAnimation

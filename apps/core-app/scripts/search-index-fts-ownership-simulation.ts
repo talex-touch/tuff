@@ -5,6 +5,7 @@ import { dirname, resolve, sep } from 'node:path'
 import os from 'node:os'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { buildSearchIndexDatabaseIdentity } from './search-index-evidence-source'
 
 const SEARCH_INDEX_COLUMNS = [
   'item_id',
@@ -43,6 +44,7 @@ interface SearchIndexFtsSimulationEvidenceSource {
   scope: SearchIndexFtsSimulationEvidenceScope
   detection: 'auto' | 'explicit'
   dbPathClass: 'temporary' | 'non-temporary'
+  dbIdentity: string
   realProfileRequired: boolean
 }
 
@@ -232,6 +234,7 @@ function buildEvidenceSource(options: {
     scope,
     detection: options.evidenceScope ? 'explicit' : 'auto',
     dbPathClass,
+    dbIdentity: buildSearchIndexDatabaseIdentity(options.db),
     realProfileRequired: options.requireRealProfileEvidence ?? false
   }
 }

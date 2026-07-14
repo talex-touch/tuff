@@ -8,7 +8,7 @@ const { t } = useI18n()
 
 const aiResultKeys = ['figma', 'files', 'gmail', 'slack'] as const
 const aiResultIcons = {
-  figma: 'i-carbon-logo-figma',
+  figma: 'i-ri-figma-fill',
   files: 'i-carbon-document',
   gmail: 'i-carbon-email',
   slack: 'i-carbon-logo-slack',

@@ -1,28 +1,31 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
-const active = ref(false)
+const active = ref('first')
+
+const labels = computed(() => (locale.value === 'zh'
+  ? {
+      firstTitle: '快速开始',
+      firstBody: '手风琴模式下一次只展开一个面板。',
+      secondTitle: '高级选项',
+      secondBody: '再次点击当前面板会清空展开项。',
+    }
+  : {
+      firstTitle: 'Getting Started',
+      firstBody: 'Accordion mode keeps only one panel open.',
+      secondTitle: 'Advanced',
+      secondBody: 'Clicking the active panel again clears the active value.',
+    }))
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TxCollapse v-model="active">
-          <TxCollapseItem title="快速开始" name="first">
-            这里是基础说明。
-          </TxCollapseItem>
-          <TxCollapseItem title="高级选项" name="second">
-            这里是高级配置说明。
-          </TxCollapseItem>
-        </TxCollapse>
-  </div>
-  <div v-else>
-        <TxCollapse v-model="active">
-          <TxCollapseItem title="Getting Started" name="first">
-            Starter content goes here.
-          </TxCollapseItem>
-          <TxCollapseItem title="Advanced" name="second">
-            Extra options and settings.
-          </TxCollapseItem>
-        </TxCollapse>
-  </div>
+  <TxCollapse v-model="active" accordion>
+    <TxCollapseItem :title="labels.firstTitle" name="first">
+      {{ labels.firstBody }}
+    </TxCollapseItem>
+    <TxCollapseItem :title="labels.secondTitle" name="second">
+      {{ labels.secondBody }}
+    </TxCollapseItem>
+  </TxCollapse>
 </template>

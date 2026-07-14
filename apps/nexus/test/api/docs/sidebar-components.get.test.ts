@@ -16,13 +16,15 @@ const docs = [
   {
     title: 'Tabs',
     path: '/docs/dev/components/tabs.en',
+    description: 'Tabbed navigation',
+    tags: ['tabs', 'navigation'],
     category: 'Basic',
     syncStatus: '已迁移',
   },
   {
     title: 'Tabs 标签页',
     path: '/docs/dev/components/tabs.zh',
-    meta: JSON.stringify({ category: 'Basic', syncStatus: '已确认', verified: true }),
+    meta: JSON.stringify({ category: 'Basic', description: '标签页导航', tags: ['标签页'], syncStatus: '已确认', verified: true }),
   },
   {
     title: 'Toast',
@@ -82,7 +84,30 @@ describe('/api/docs/sidebar-components', () => {
       '/docs/dev/components/tabs',
       '/docs/dev/components/toast',
     ])
+    expect(rows[0]).toMatchObject({
+      description: 'Tabbed navigation',
+      tags: ['tabs', 'navigation'],
+    })
     expect(lastPathPattern).toBe('/docs/dev/components/%.en')
+  })
+
+  it('uses path locale for prerenderable static variants', async () => {
+    const rows = await handler({ context: { params: { locale: 'zh' } } })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].locale).toBe('zh')
+    expect(lastPathPattern).toBe('/docs/dev/components/%.zh')
+  })
+
+  it('normalizes component descriptions and tags from metadata', async () => {
+    getQueryMock.mockReturnValue({ locale: 'zh' })
+
+    await expect(handler({})).resolves.toEqual([
+      expect.objectContaining({
+        description: '标签页导航',
+        tags: ['标签页'],
+      }),
+    ])
   })
 
   it('keeps invalid locale requests backwards-compatible', async () => {

@@ -1,8 +1,10 @@
 ---
 title: "GradualBlur"
-description: "Layered backdrop blur overlay for soft edge fades, presets, hover intensity, and responsive dimensions."
+description: "Layered backdrop-filter edge fade for parent or page overlays, presets, hover intensity, scroll reveal, responsive sizing, and GPU hints."
 category: Layout
-syncStatus: migrated
+tags: [blur, edge-fade, overlay, backdrop-filter]
+syncStatus: reviewed
+verified: true
 ---
 # GradualBlur
 
@@ -65,7 +67,7 @@ code: |
             <span style="font-size: 20px;">↑</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-            Headline content stays sharp，Text。
+            Headline content stays sharp while the top edge fades the scrolled content behind it.
           </p>
           <div style="height: 160px;" />
           <p style="color: var(--tx-text-color-secondary); margin: 0;">
@@ -82,7 +84,7 @@ code: |
             <span style="font-size: 20px;">↓</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-            Text，Text CTA Text。
+            A bottom fade keeps footer actions readable over long card content.
           </p>
           <div style="height: 200px;" />
           <p style="color: var(--tx-text-color-secondary); margin: 0;">
@@ -99,7 +101,7 @@ code: |
             <span style="font-size: 20px;">←</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-            SidebarText + IconText，TexthandleText。
+            Sidebar text and icon grids stay readable while the outside edge is softened.
           </p>
           <div style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
             <div style="height: 48px; border-radius: 8px; background: rgba(125,211,252,.35);" />
@@ -117,7 +119,7 @@ code: |
             <span style="font-size: 20px;">→</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-            Text，Text。
+            Useful for media rails or chat panes where the right edge should not steal focus.
           </p>
           <div style="flex: 1; display: flex; gap: 6px;">
             <div style="flex: 1; border-radius: 10px; background: rgba(248,113,113,.15);" />
@@ -345,7 +347,45 @@ code: |
 | `className` | `string` | `''` | Extra class appended to the root element. |
 | `style` | `CSSProperties` | `{}` | Extra inline style merged into the root style after generated positioning styles. |
 
-## Usage Tips
+## Slots
 
-- **[Container positioning]** When `target="parent"`, set parent `position: relative` and use `overflow: hidden` to clip edges.
-- **[Browser support]** Depends on `backdrop-filter`; rendering may vary across engines.
+| Slot | Description |
+|------|-------------|
+| `default` | Optional content rendered above the blur layers inside the overlay root. |
+
+## Events
+
+No Vue events are emitted. Use `onAnimationComplete` when `animated="scroll"` needs a completion hook.
+
+## Interaction Contract
+
+- Presets are merged first; props explicitly present on the component override preset values.
+- `position` controls both edge anchoring and mask-gradient direction. Vertical edges use `height`; horizontal edges use `width` or fall back to `height`.
+- `target="parent"` renders `position: absolute`; `target="page"` renders `position: fixed`, uses full viewport width for vertical edges, and adds `100` to `zIndex`.
+- `divCount` is floored and clamped to at least one layer. Each layer receives its own mask band and `backdrop-filter` blur value.
+- `hoverIntensity` enables pointer events and multiplies `strength` only while the overlay is hovered.
+- `animated="scroll"` starts hidden, observes the root with `IntersectionObserver`, and calls `onAnimationComplete` after the configured `duration` once visible.
+- `responsive` installs a debounced resize listener and applies mobile/tablet/desktop dimensions by viewport width (`<=480`, `<=768`, `<=1024`).
+- `style` is merged after generated positioning styles, so parent pages can deliberately override coordinates.
+
+## Best Practices
+
+- Keep the parent `position: relative` and `overflow: hidden` for card-local fades; use `target="page"` only for fixed viewport chrome.
+- Increase `divCount` for smoother fades, then tune `strength`; very high layer counts multiply backdrop-filter work.
+- Prefer presets for common headers/footers and override one or two props instead of repeating the whole parameter matrix.
+- Do not put interactive controls under the overlay unless `hoverIntensity` is required; by default the overlay is pointer-transparent.
+- Check contrast in both themes because `backdrop-filter` output depends on the content behind the overlay.
+
+## Review Notes
+
+- **Accessibility note:** The blur root is decorative and pointer-transparent by default. Enabling `hoverIntensity` turns on pointer events, so keep it away from focusable controls unless the hover boost is essential.
+- **Verified coverage:** `gradual-blur.test.ts` verifies configured layer rendering, slot content, page-target positioning and z-index offset, GPU styles, preset merging with `divCount` clamping, hover-strength changes, and responsive dimensions.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue`.
+- Types: `packages/tuffex/packages/components/src/gradual-blur/src/types.ts` exports `GradualBlurProps` and the position, curve, animated, and target unions.
+- Export alias: `packages/tuffex/packages/components/src/gradual-blur/index.ts` exports `GradualBlur`, `TxGradualBlur`, `GradualBlurProps`, and `TxGradualBlurInstance`.
+- Coverage: `packages/tuffex/packages/components/src/gradual-blur/__tests__/gradual-blur.test.ts` covers layer generation, presets, page targeting, GPU optimization, hover intensity, and responsive sizing.
+
+<TuffDocSourceLink />

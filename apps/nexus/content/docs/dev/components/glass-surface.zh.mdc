@@ -1,13 +1,13 @@
 ---
 title: "GlassSurface 玻璃拟态"
-description: "用于渲染带玻璃拟态效果的容器。"
+description: "带 SVG displacement、backdrop-filter 与纯色兜底路径的折射玻璃容器。"
 category: Layout
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # GlassSurface 玻璃拟态
 
-用于渲染带玻璃拟态效果的容器。
+`TxGlassSurface` 用于渲染有边界的玻璃层，适合透明面板和光学折射预览。组件优先使用 SVG displacement filter，SVG filter 不可用时降级到原生 `backdrop-filter` 模糊，两者都不可用时保留纯半透明兜底表面。
 
 ## 基础用法
 
@@ -386,73 +386,83 @@ rows:
   - name: width
     type: "string | number"
     default: "'200px'"
-    description: 宽度
+    description: 表面宽度。数字值会归一化为 px；字符串会原样透传。
   - name: height
     type: "string | number"
     default: "'200px'"
-    description: 高度
+    description: 表面高度。数字值会归一化为 px；字符串会原样透传。
   - name: borderRadius
     type: number
     default: 20
-    description: 圆角
+    description: 外层圆角 px 值，也用于生成 displacement map 内的矩形圆角。
   - name: borderWidth
     type: number
     default: 0.07
-    description: 边缘强度
+    description: 生成 displacement map 遮罩时使用的边缘尺寸倍率。
   - name: brightness
     type: number
     default: 70
-    description: 亮度
+    description: 生成内部 displacement 遮罩时使用的亮度百分比。
   - name: opacity
     type: number
     default: 0.93
-    description: 玻璃透明度
+    description: 生成内部 displacement 遮罩时使用的透明度。
   - name: blur
     type: number
     default: 11
-    description: 模糊
+    description: displacement 遮罩的模糊半径，也驱动 backdrop-filter 兜底路径的 blur。
   - name: displace
     type: number
     default: 0.5
-    description: 位移模糊强度
+    description: RGB displacement map 混合后最终 SVG feGaussianBlur.stdDeviation。
   - name: backgroundOpacity
     type: number
     default: 0
-    description: 背景透明度
+    description: SVG filter 渲染路径上的背景透明度。
   - name: saturation
     type: number
     default: 1
-    description: 饱和度
+    description: 追加到 SVG filter backdrop-filter 链路中的饱和度。
   - name: distortionScale
     type: number
     default: -180
-    description: 色散强度
+    description: 应用于红、绿、蓝三组 map 的基础 SVG displacement scale。
   - name: redOffset
     type: number
     default: 0
-    description: 红色通道偏移
+    description: 叠加到 distortionScale 上的红色 displacement map 偏移。
   - name: greenOffset
     type: number
     default: 10
-    description: 绿色通道偏移
+    description: 叠加到 distortionScale 上的绿色 displacement map 偏移。
   - name: blueOffset
     type: number
     default: 20
-    description: 蓝色通道偏移
+    description: 叠加到 distortionScale 上的蓝色 displacement map 偏移。
   - name: xChannel
     type: "'R' | 'G' | 'B'"
     default: "'R'"
-    description: X 轴通道选择
+    description: 透传给所有 RGB map 的 SVG displacement X 轴通道选择器。
   - name: yChannel
     type: "'R' | 'G' | 'B'"
     default: "'G'"
-    description: Y 轴通道选择
+    description: 透传给所有 RGB map 的 SVG displacement Y 轴通道选择器。
   - name: mixBlendMode
     type: string
     default: "'difference'"
-    description: 混合模式
+    description: 生成 displacement map 时蓝色渐变矩形使用的 CSS mix-blend-mode。
 ---
 ::
+
+### Events
+
+`TxGlassSurface` 不会 emit 自定义事件。玻璃面板内需要交互时，把控件放进默认插槽并在控件自身处理原生事件。
+
+### Slots
+
+| 插槽名 | 参数 | 说明 |
+|--------|------|------|
+| `default` | - | 面板内容，渲染在生成的 SVG filter 层之上，并由 `.tx-glass-surface__content` 居中。 |
 
 ## Fallback 降级
 
@@ -463,3 +473,27 @@ rows:
 3. **纯半透明背景路径**：当 `backdrop-filter` 也不可用时，最终降级为半透明背景 + 边框，不再提供真实模糊和折射，但仍保持容器尺寸、圆角和基础可读性。
 
 Safari 与 Firefox 当前会跳过 SVG filter 折射路径，优先进入后两级 fallback。
+
+## 最佳实践
+
+- 只有当周围插画、图片或渐变背景确实需要折射感时才使用该组件。普通卡片优先使用 `TxBaseSurface` 或 `TxCard`，保证对比度稳定。
+- 玻璃层覆盖滚动内容或图片时，显式控制 `width`、`height` 与 `borderRadius`；displacement map 会根据实测容器尺寸重新生成。
+- `blur`、`backgroundOpacity` 与 `saturation` 必须结合真实背景调参。低对比内容上使用过重模糊，会让背后的文字不可读。
+- `distortionScale` 与 RGB offsets 是视觉导演参数。大幅负值或宽通道偏移只适合 hero / preview 表面，不适合密集表单。
+- Safari、Firefox、SSR、测试环境和不支持 `CSS.supports` 的环境会进入 fallback 路径；这些路径保留布局和可读性，但不会保留 RGB 折射。
+- 重要交互控件应放在默认插槽内；生成的 SVG 只负责装饰，非交互，并位于 `.tx-glass-surface__content` 下方。
+
+## 审阅说明
+
+- **渲染契约：** 数字 `width` / `height` 会归一化为 px 字符串，字符串尺寸原样透传，并用实测边界生成 displacement map。
+- **降级契约：** SVG displacement 是高保真路径；不支持时依次降级到原生 `backdrop-filter` 和纯半透明表面，后两者保留布局与可读性但不保留 RGB 折射。
+- **交互契约：** 生成的 SVG/filter 层只负责装饰。可交互控件应放进默认插槽，并位于 `.tx-glass-surface__content` 上方。
+- **实测覆盖:** `glass-surface.test.ts` 覆盖尺寸归一化、插槽渲染、纯色兜底样式和 RGB displacement 通道透传。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/glass-surface/src/TxGlassSurface.vue`.
+- Types: `packages/tuffex/packages/components/src/glass-surface/index.ts` exports `GlassSurfaceProps` and `TxGlassSurfaceInstance`.
+- Coverage: `packages/tuffex/packages/components/src/glass-surface/__tests__/glass-surface.test.ts` verifies numeric dimension normalization, slot rendering, solid fallback styling, and SVG displacement channel forwarding.
+
+<TuffDocSourceLink />

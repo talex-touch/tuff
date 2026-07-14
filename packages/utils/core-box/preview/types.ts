@@ -1,3 +1,4 @@
+import type { AppLocale } from "../../i18n";
 import type { TuffQuery } from "../tuff";
 
 export type { TuffQuery } from "../tuff";
@@ -35,6 +36,7 @@ export interface PreviewAbilityInventoryItem {
 export interface PreviewAbilityContext {
   query: TuffQuery;
   signal: AbortSignal;
+  locale?: AppLocale;
 }
 
 export interface PreviewAbility {
@@ -114,6 +116,7 @@ export interface PreviewResolveDiagnostics {
 export interface PreviewResolveOptions {
   query: TuffQuery;
   signal: AbortSignal;
+  locale?: AppLocale;
   budgetMs?: number;
 }
 

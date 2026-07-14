@@ -15,6 +15,7 @@ export enum PermissionType {
   ACCESSIBILITY = 'accessibility',
   NOTIFICATIONS = 'notifications',
   MICROPHONE = 'microphone',
+  SCREEN_RECORDING = 'screenRecording',
   ADMIN_PRIVILEGES = 'adminPrivileges',
   FILE_ACCESS = 'fileAccess'
 }
@@ -203,7 +204,8 @@ export class PermissionChecker {
             : status === 'denied'
               ? PermissionStatus.DENIED
               : PermissionStatus.NOT_DETERMINED,
-        canRequest: status !== 'denied',
+        canRequest:
+          process.platform === 'darwin' || process.platform === 'win32' || status !== 'denied',
         message: `Microphone permission: ${status}`
       }
     } catch (error) {
@@ -212,6 +214,45 @@ export class PermissionChecker {
         status: PermissionStatus.NOT_DETERMINED,
         canRequest: false,
         message: 'Unable to check microphone permission status'
+      }
+    }
+  }
+
+  /**
+   * Check screen recording permission (macOS only)
+   */
+  public checkScreenRecording(): PermissionCheckResult {
+    if (
+      process.platform !== 'darwin' ||
+      typeof systemPreferences.getMediaAccessStatus !== 'function'
+    ) {
+      return {
+        status: PermissionStatus.UNSUPPORTED,
+        canRequest: false,
+        message: 'Screen recording permission status is only available on macOS'
+      }
+    }
+
+    try {
+      const status = systemPreferences.getMediaAccessStatus(
+        'screen' as Parameters<typeof systemPreferences.getMediaAccessStatus>[0]
+      )
+      return {
+        status:
+          status === 'granted'
+            ? PermissionStatus.GRANTED
+            : status === 'denied'
+              ? PermissionStatus.DENIED
+              : PermissionStatus.NOT_DETERMINED,
+        canRequest: true,
+        message: `Screen recording permission: ${status}`
+      }
+    } catch (error) {
+      permissionCheckerLog.error('Failed to check screen recording permission', { error })
+      return {
+        status: PermissionStatus.NOT_DETERMINED,
+        canRequest: true,
+        message: 'Unable to check screen recording permission status'
       }
     }
   }
@@ -424,15 +465,37 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
         break
 
       case PermissionType.MICROPHONE:
-        if (
-          process.platform === 'darwin' &&
-          typeof systemPreferences.askForMediaAccess === 'function'
-        ) {
-          return await systemPreferences.askForMediaAccess(
-            'microphone' as Parameters<typeof systemPreferences.askForMediaAccess>[0]
-          )
+        if (process.platform === 'darwin') {
+          const status =
+            typeof systemPreferences.getMediaAccessStatus === 'function'
+              ? systemPreferences.getMediaAccessStatus(
+                  'microphone' as Parameters<
+                    typeof systemPreferences.getMediaAccessStatus
+                  >[0]
+                )
+              : undefined
+          if (status === 'denied') {
+            await shell.openExternal(
+              'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
+            )
+            return true
+          }
+          if (typeof systemPreferences.askForMediaAccess === 'function') {
+            return await systemPreferences.askForMediaAccess(
+              'microphone' as Parameters<typeof systemPreferences.askForMediaAccess>[0]
+            )
+          }
         } else if (process.platform === 'win32') {
           await shell.openExternal('ms-settings:privacy-microphone')
+          return true
+        }
+        break
+
+      case PermissionType.SCREEN_RECORDING:
+        if (process.platform === 'darwin') {
+          await shell.openExternal(
+            'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
+          )
           return true
         }
         break
@@ -590,6 +653,11 @@ export class PermissionCheckerModule extends BaseModule {
           permissionType === PermissionType.MICROPHONE
         ) {
           result = this.checker.checkMicrophone()
+        } else if (
+          permissionType === 'screenRecording' ||
+          permissionType === PermissionType.SCREEN_RECORDING
+        ) {
+          result = this.checker.checkScreenRecording()
         } else if (
           permissionType === 'adminPrivileges' ||
           permissionType === PermissionType.ADMIN_PRIVILEGES

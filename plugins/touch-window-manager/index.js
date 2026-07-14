@@ -769,7 +769,7 @@ function openAppMac(appName) {
 }
 
 async function executeAction(actionId, payload) {
-  const platform = payload?.platform || process.platform
+  const platform = process.platform
 
   if (platform === 'win32') {
     if (actionId === 'launch') {
@@ -989,7 +989,17 @@ const pluginLifecycle = {
     if (!actionId)
       return
 
-    const shellStatus = resolveShellStatus(payload?.platform || process.platform)
+    const requestedPlatform = normalizeText(payload?.platform)
+    const runtimePlatform = process.platform
+    if (requestedPlatform && requestedPlatform !== runtimePlatform) {
+      return {
+        externalAction: true,
+        status: 'blocked',
+        reason: 'platform-mismatch',
+      }
+    }
+
+    const shellStatus = resolveShellStatus(runtimePlatform)
     if (shellStatus.status !== 'available') {
       return { externalAction: true, status: 'blocked', reason: shellStatus.reason }
     }
@@ -1004,7 +1014,7 @@ const pluginLifecycle = {
     }
 
     try {
-      await executeAction(actionId, payload)
+      await executeAction(actionId, { ...payload, platform: runtimePlatform })
 
       if (isTrackableAction(actionId) && payload?.window) {
         const recent = await loadRecentWindows()

@@ -212,7 +212,11 @@ const categoryInfo: Record<string, { nameKey: string; icon: string }> = {
   storage: { nameKey: 'plugin.permissions.categories.storage', icon: 'i-carbon-data-base' },
   window: { nameKey: 'plugin.permissions.categories.window', icon: 'i-carbon-application' },
   search: { nameKey: 'plugin.permissions.categories.search', icon: 'i-carbon-search' },
-  media: { nameKey: 'plugin.permissions.categories.media', icon: 'i-carbon-image' }
+  media: { nameKey: 'plugin.permissions.categories.media', icon: 'i-carbon-image' },
+  localization: {
+    nameKey: 'plugin.permissions.categories.localization',
+    icon: 'i-carbon-language'
+  }
 }
 
 // Group permissions by category

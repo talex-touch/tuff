@@ -354,6 +354,22 @@
         "name": "全局快捷键",
         "desc": "注册系统级全局快捷键"
       }
+    },
+    "i18n": {
+      "read": {
+        "name": "读取应用语言",
+        "desc": "读取当前应用语言并解析插件本地化文本"
+      }
+    },
+    "lexicon": {
+      "read": {
+        "name": "读取领域词库",
+        "desc": "搜索并解析官方及插件私有领域词条"
+      },
+      "register": {
+        "name": "注册领域词库",
+        "desc": "在当前插件隔离命名空间中注册有界词条"
+      }
     }
   },
   "settingUser": {
@@ -399,6 +415,55 @@
     "deviceManagement": "设备管理",
     "logoutSuccess": "已登出",
     "logoutFailed": "登出失败",
+    "loginSuccessToast": "登录成功",
+    "stepUpPrompt": "请在浏览器中完成二次验证。",
+    "browserOpenManualToast": "浏览器未自动打开，请手动复制登录链接继续。",
+    "completeBrowserLoginToast": "请在浏览器中完成登录。",
+    "loginPageReopenedToast": "已重新打开登录页面。",
+    "tokenRequired": "请输入 token",
+    "secureStorageTitle": "登录凭证保护",
+    "syncNow": "立即同步",
+    "syncEnableFirst": "请先开启同步",
+    "syncComplete": "同步完成",
+    "syncFailed": "同步失败",
+    "syncDescriptions": {
+      "autoEnabled": "登录后默认启用，可在此关闭。",
+      "enabled": "同步已开启。",
+      "userDisabled": "你已手动关闭，同步不会在登录时自动恢复。",
+      "disabled": "同步已关闭。"
+    },
+    "secureStorage": {
+      "enabledToast": "已启用登录凭证保护",
+      "disabledToast": "已关闭登录凭证保护。",
+      "disabledDescription": "启用登录凭证保护后，本地凭证防护更强，登录更安全。",
+      "checkingDescription": "正在检测本地凭证保护后端。",
+      "unavailableDescription": "本地凭证保护当前不可用；可用时开启后能提供更强防护，登录更安全。",
+      "enabledDescription": "登录凭证保护已启用：凭证由本机 root 密钥加密保存，防护更强。",
+      "sessionModeReminder": "登录凭证保护已关闭；可在账户设置中开启，以获得更强的本地凭证防护。"
+    },
+    "syncStatus": {
+      "unrecorded": "未记录",
+      "status": {
+        "idle": "空闲",
+        "syncing": "同步中",
+        "paused": "已暂停",
+        "error": "异常"
+      },
+      "blocked": {
+        "quota": "配额受限",
+        "device": "设备未授权",
+        "auth": "鉴权异常"
+      },
+      "parts": {
+        "status": "状态：{status}",
+        "lastSuccess": "最近成功：{value}",
+        "lastPush": "最近推送：{value}",
+        "lastPull": "最近拉取：{value}",
+        "queue": "队列：{count}",
+        "blocked": "阻塞：{reason}",
+        "error": "错误：{code}"
+      }
+    },
     "authErrors": {
       "initializationFailed": "认证系统初始化失败，请检查网络连接后重试。",
       "signInFailed": "登录失败，请检查网络连接后重试。",
@@ -1086,7 +1151,8 @@
         "storage": "存储",
         "window": "窗口",
         "search": "搜索",
-        "media": "媒体"
+        "media": "媒体",
+        "localization": "本地化与领域词库"
       },
       "shortcuts": {
         "title": "快捷键",
@@ -1206,6 +1272,22 @@
           "read": {
             "name": "读取媒体",
             "desc": "读取媒体元数据和缩略图"
+          }
+        },
+        "i18n": {
+          "read": {
+            "name": "读取应用语言",
+            "desc": "读取当前应用语言并解析插件本地化文本"
+          }
+        },
+        "lexicon": {
+          "read": {
+            "name": "读取领域词库",
+            "desc": "搜索并解析官方及插件私有领域词条"
+          },
+          "register": {
+            "name": "注册领域词库",
+            "desc": "在当前插件隔离命名空间中注册有界词条"
           }
         }
       },
@@ -1672,6 +1754,10 @@
       "providerDisabled": "Provider 已禁用",
       "authRequired": "需要登录",
       "quotaExceeded": "额度不足",
+      "quotaCheckUnavailable": "配额校验暂不可用",
+      "networkFailure": "网络请求失败",
+      "invalidRequest": "AI 请求无效",
+      "unknownFailure": "AI 请求失败",
       "rateLimited": "请求过快",
       "unsupportedPlatform": "平台不支持",
       "permissionDenied": "权限被拒绝",
@@ -1692,6 +1778,9 @@
       "switchCapability": "切换到支持该能力的 Provider 或模型。",
       "signIn": "先登录 Nexus，再重新执行该动作。",
       "checkQuota": "先检查积分或额度，再重试。",
+      "inspectQuota": "检查 Intelligence 配额存储与配置后再重试。",
+      "retryNetwork": "检查网络或 Provider endpoint 后再重试。",
+      "fixRequest": "检查请求输入与参数后再重试。",
       "retryLater": "等待限流恢复后再重试。",
       "unsupportedPlatform": "请在支持该能力的平台上使用。",
       "grantPermission": "先授予所需权限，再执行该动作。",
@@ -3606,6 +3695,16 @@
       "translateScreenshot": "截图并翻译",
       "captureScreenshot": "截图并复制",
       "saveScreenshot": "保存截图",
+      "screenshotMode": "截图来源",
+      "screenshotModeCursorDisplay": "指针所在显示器",
+      "screenshotModeSelectedDisplay": "选择显示器",
+      "screenshotModeRegion": "选择区域",
+      "screenshotRegionDisplay": "选区显示器",
+      "screenshotRegionDisplayCursor": "指针所在显示器",
+      "screenshotRegionSelecting": "拖拽选择截图区域，按 Esc 取消",
+      "screenshotRegionSelectionUnavailable": "区域选择不可用，请选择显示器或稍后重试",
+      "screenshotDisplay": "显示器",
+      "screenshotDisplayPrimary": "主显示器",
       "imageTranslatingShort": "翻译中...",
       "screenshotTranslatingShort": "翻译中...",
       "screenshotCapturingShort": "截图中...",
@@ -3615,12 +3714,38 @@
       "clipboardImageTranslateFailed": "剪贴板图片翻译失败，请稍后重试",
       "screenshotTranslating": "正在截图并翻译...",
       "screenshotTranslateReady": "截图翻译已打开",
+      "screenshotTextFallbackReady": "图片翻译不可用，已改用 OCR 文本翻译，结果见下方",
+      "screenshotTextFallbackTitle": "OCR 文本翻译",
+      "screenshotTextFallbackSource": "识别文本",
+      "screenshotTextFallbackTarget": "翻译结果",
+      "screenshotTextFallbackMetadata": "OCR：{ocr} · 翻译：{translation}",
+      "screenshotImageTranslateRouteTitle": "图片翻译路由",
+      "screenshotImageTranslateRouteStage": "{capability}：{route}",
+      "screenshotImageTranslateRouteStageLatency": "{stage} · {latency} ms",
+      "screenshotImageTranslateRouteSummary": "总耗时 {duration} ms · 运行 {runId}",
+      "screenshotFallbackProviderUnknown": "未知 provider",
+      "screenshotOcrUnavailable": "图片翻译不可用，且 OCR 未能从截图中提取文本",
+      "screenshotTextTranslateUnavailable": "OCR 已提取文本，但文本翻译不可用，请检查登录、额度或 provider 状态",
       "screenshotTranslateFailed": "截图翻译失败，请稍后重试",
       "screenshotCapturing": "正在截图并复制到剪贴板...",
       "screenshotCaptureReady": "截图已复制，可在下方预览",
       "screenshotCaptureFailed": "截图失败，请稍后重试",
       "screenshotCaptureAssistantDisabled": "请先在设置中开启 Assistant 和悬浮球",
       "screenshotPermissionDenied": "截图权限未授权，请在系统隐私设置中允许 Tuff 录屏后重试",
+      "openScreenshotPermissionSettings": "前往录屏权限设置",
+      "openingScreenshotPermissionSettings": "正在打开设置...",
+      "screenshotPermissionSettingsOpened": "已打开录屏权限设置，请允许 Tuff 后重试截图",
+      "screenshotPermissionSettingsUnavailable": "无法打开录屏权限设置，请手动前往“系统设置 > 隐私与安全性 > 屏幕录制”",
+      "openMicrophonePermissionSettings": "处理麦克风权限",
+      "openingMicrophonePermissionSettings": "正在处理麦克风权限...",
+      "microphonePermissionSettingsOpened": "已完成麦克风权限请求，请点击“重试语音输入”",
+      "microphonePermissionSettingsUnavailable": "无法请求或打开麦克风权限设置，请在系统隐私设置中允许 Tuff 使用麦克风",
+      "retryVoiceInput": "重试语音输入",
+
+      "openIntelligenceSettings": "前往 AI 渠道设置",
+      "openingIntelligenceSettings": "正在打开 AI 设置...",
+      "intelligenceSettingsOpened": "已打开 AI 渠道设置，请检查登录、额度和 provider 后重试",
+      "intelligenceSettingsUnavailable": "无法打开 AI 渠道设置，请在主窗口进入 Intelligence",
       "screenshotUnsupported": "当前平台或运行环境暂不支持原生截图",
       "screenshotCaptureUnavailable": "截图不可用，请检查系统录屏权限或稍后重试",
       "screenshotSaving": "正在保存截图...",
@@ -3639,6 +3764,13 @@
       "screenshotTranslateImageUnavailable": "截图图片无效，请重新截图后再试",
       "imageTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态",
       "screenshotTranslateProviderUnavailable": "图片翻译服务暂不可用，请检查登录、额度或 provider 状态"
+    },
+    "regionSelector": {
+      "title": "选择截图区域",
+      "hint": "拖拽框选要截图的区域，按 Esc 或右键取消",
+      "cancel": "取消",
+      "submitFailed": "无法使用该选区，请重新拖拽",
+      "cancelFailed": "无法关闭选区，请再次按 Esc"
     }
   },
   "settingPermission": {
@@ -3704,6 +3836,8 @@
       "authDetail": "登录 Tuff Nexus 后再重试这次 AI 请求。",
       "quotaTitle": "AI 额度不可用",
       "quotaDetail": "检查 Nexus credits 或团队配额后再重试。",
+      "quotaVerificationTitle": "AI 配额校验暂不可用",
+      "quotaVerificationDetail": "请稍后重试；若持续失败，请检查 Intelligence 配额存储与配置。",
       "providerTitle": "AI Provider 不可用",
       "providerDetail": "检查 Provider 健康状态、凭证，或切换到其他模型。",
       "credentialsTitle": "Provider 凭证需要处理",
@@ -3920,27 +4054,35 @@
     },
     "memoryReview": {
       "title": "记忆审核",
-      "description": "手动评估候选记忆，并在策略允许后显式保存",
+      "description": "搜索、审计并通过策略评估管理本地记忆",
       "panelTitle": "手动记忆候选",
+      "editTitle": "编辑已保存记忆",
+      "editingId": "正在替换",
       "panelDescription": "先执行策略评估，再由你确认是否写入本地记忆库。",
       "manualOnly": "仅手动保存",
       "contentLabel": "候选内容",
       "contentPlaceholder": "输入明确希望保留的偏好、项目约束或临时上下文",
+      "summaryPlaceholder": "可选；留空时从内容生成",
+      "tagsPlaceholder": "使用逗号分隔标签",
       "typeLabel": "类型",
       "scopeLabel": "范围",
       "evaluate": "评估策略",
       "save": "保存记忆",
+      "replace": "确认替换",
       "ignore": "忽略",
       "summary": "摘要",
       "privacy": "隐私级别",
       "confidence": "置信度",
       "tags": "标签",
       "contentRequired": "请输入候选内容",
-      "contentChanged": "内容已变更，请重新评估后再保存。",
+      "contentChanged": "表单已变更，请重新评估后再保存。",
+      "evaluationInvalidated": "编辑内容已变化，之前的策略评估已失效。",
       "failClosed": "该结果不会写入记忆库。",
       "evaluateFailed": "评估记忆策略失败",
       "saveFailed": "保存记忆失败",
       "saveSuccess": "记忆已保存",
+      "replaceSuccess": "记忆已原子替换",
+      "replaceConflict": "原记忆已变化，请刷新后重新评估",
       "savedId": "已保存 ID",
       "loadFailed": "加载记忆列表失败",
       "enable": "启用",
@@ -3953,9 +4095,26 @@
       "deleteSuccess": "记忆已删除",
       "deleteFailed": "删除记忆失败",
       "savedTitle": "已保存记忆",
-      "savedDescription": "查看当前可用的普通记忆，可删除后写入 tombstone。",
+      "savedDescription": "按关键词、类型、范围与状态查找记忆；编辑会创建新记忆并 tombstone 原记录。",
       "savedEmpty": "暂无已保存记忆",
       "usageCount": "使用次数",
+      "searchLabel": "搜索",
+      "searchPlaceholder": "搜索内容、摘要或标签",
+      "filterAll": "全部",
+      "memoryStatus": "状态",
+      "enabled": "已启用",
+      "applyFilters": "应用筛选",
+      "edit": "编辑",
+      "sourceSession": "来源会话",
+      "sourceTurn": "来源轮次",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间",
+      "lastUsedAt": "最近使用",
+      "replacesMemory": "替换自",
+      "notAvailable": "无",
+      "previous": "上一页",
+      "next": "下一页",
+      "page": "第 {page} 页",
       "types": {
         "preference": "偏好",
         "project": "项目",
@@ -4010,6 +4169,9 @@
       "contextExcluded": "已排除",
       "contextPolicyBlocked": "策略阻断",
       "contextPruned": "预算裁剪",
+      "contextTombstoned": "删除后移除",
+      "contextReasonMemoryTombstoned": "已删除记忆在 AI 调用前移除",
+      "contextTombstoneNotice": "上下文准备后有 {count} 条已删除记忆来源被移除。",
       "contextIncludedSources": "注入来源",
       "contextExcludedSources": "排除来源",
       "contextExcludedEmpty": "暂无排除来源",

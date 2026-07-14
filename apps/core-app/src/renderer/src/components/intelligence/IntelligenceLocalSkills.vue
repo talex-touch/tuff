@@ -2,33 +2,32 @@
 import type {
   IntelligenceLocalEnvironmentSummary,
   IntelligenceLocalSkillGateStatus,
-  IntelligenceLocalToolSummary
+  IntelligenceLocalToolSummary,
 } from '@talex-touch/tuff-intelligence'
+import type { IntelligenceLocalSkillChipDisplay } from '~/modules/intelligence/local-skills-display'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
-import { useTuffTransport } from '@talex-touch/utils/transport'
+import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import {
   buildIntelligenceLocalSkillsDisplayModel,
-  type IntelligenceLocalSkillChipDisplay
+
 } from '~/modules/intelligence/local-skills-display'
 
 const { t } = useI18n()
-const transport = useTuffTransport()
-const aiClient = createIntelligenceClient(transport)
+const aiClient = useIntelligenceSdk()
 
 const environment = ref<IntelligenceLocalEnvironmentSummary | null>(null)
 const loading = ref(false)
 const error = ref('')
 
 const skillDisplay = computed(() =>
-  buildIntelligenceLocalSkillsDisplayModel(environment.value?.skillProviders ?? [])
+  buildIntelligenceLocalSkillsDisplayModel(environment.value?.skillProviders ?? []),
 )
 const installedTools = computed(
-  () => environment.value?.tools.filter((tool) => tool.installed) ?? []
+  () => environment.value?.tools.filter(tool => tool.installed) ?? [],
 )
 const installedSkills = computed(() => skillDisplay.value.installedSkills)
 const enabledSkills = computed(() => skillDisplay.value.enabledSkills)
@@ -37,41 +36,47 @@ const approvalRequiredSkills = computed(() => skillDisplay.value.approvalRequire
 const unavailableSkills = computed(() => skillDisplay.value.unavailableSkills)
 const installedGatedSkills = computed(() => skillDisplay.value.installedGatedSkills)
 const configFileCount = computed(
-  () => environment.value?.configFiles.filter((file) => file.exists).length ?? 0
+  () => environment.value?.configFiles.filter(file => file.exists).length ?? 0,
 )
 const sceneHintCount = computed(() => skillDisplay.value.sceneIds.length)
 const visibleSkillChips = computed(() => skillDisplay.value.visibleSkillChips)
 
 function formatToolNames(): string {
-  if (!environment.value) return t('settings.intelligence.localSkills.loading')
-  if (installedTools.value.length === 0) return t('settings.intelligence.localSkills.noTools')
-  return installedTools.value.map((tool) => tool.name).join(' / ')
+  if (!environment.value)
+    return t('settings.intelligence.localSkills.loading')
+  if (installedTools.value.length === 0)
+    return t('settings.intelligence.localSkills.noTools')
+  return installedTools.value.map(tool => tool.name).join(' / ')
 }
 
 function formatSkillNames(): string {
-  if (!environment.value) return t('settings.intelligence.localSkills.loading')
-  if (installedSkills.value.length === 0) return t('settings.intelligence.localSkills.noSkills')
+  if (!environment.value)
+    return t('settings.intelligence.localSkills.loading')
+  if (installedSkills.value.length === 0)
+    return t('settings.intelligence.localSkills.noSkills')
   const names = enabledSkills.value
     .slice(0, 4)
-    .map((skill) => skill.name)
+    .map(skill => skill.name)
     .join(' / ')
   return names || t('settings.intelligence.localSkills.noReadySkills')
 }
 
 function formatConfigSummary(): string {
-  if (!environment.value) return t('settings.intelligence.localSkills.loading')
+  if (!environment.value)
+    return t('settings.intelligence.localSkills.loading')
   return t('settings.intelligence.localSkills.configSummary', {
-    count: configFileCount.value
+    count: configFileCount.value,
   })
 }
 
 function formatGateSummary(): string {
-  if (!environment.value) return t('settings.intelligence.localSkills.loading')
+  if (!environment.value)
+    return t('settings.intelligence.localSkills.loading')
   return t('settings.intelligence.localSkills.gateSummary', {
     ready: readySkills.value.length,
     approval: approvalRequiredSkills.value.length,
     unavailable: unavailableSkills.value.length,
-    scenes: sceneHintCount.value
+    scenes: sceneHintCount.value,
   })
 }
 
@@ -102,15 +107,18 @@ function skillChipTitle(skill: IntelligenceLocalSkillChipDisplay): string {
 }
 
 async function refreshEnvironment(): Promise<void> {
-  if (loading.value) return
+  if (loading.value)
+    return
   loading.value = true
   error.value = ''
   try {
     environment.value = await aiClient.getLocalEnvironment()
-  } catch (err) {
-    error.value =
-      err instanceof Error ? err.message : t('settings.intelligence.localSkills.refreshFailed')
-  } finally {
+  }
+  catch (err) {
+    error.value
+      = err instanceof Error ? err.message : t('settings.intelligence.localSkills.refreshFailed')
+  }
+  finally {
     loading.value = false
   }
 }
@@ -205,7 +213,7 @@ onMounted(() => {
       <span v-if="installedGatedSkills.length" class="local-skills__hint">
         {{
           t('settings.intelligence.localSkills.gatedHint', {
-            count: installedGatedSkills.length
+            count: installedGatedSkills.length,
           })
         }}
       </span>

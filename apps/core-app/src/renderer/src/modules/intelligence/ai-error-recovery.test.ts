@@ -18,12 +18,6 @@ describe('ai-error-recovery', () => {
       title: 'AI provider unavailable'
     })
 
-    expect(
-      resolveIntelligenceErrorRecovery({ errorCode: 'quota_exceeded', error: 'quota exceeded' }, t)
-    ).toMatchObject({
-      code: 'quota',
-      title: 'AI quota unavailable'
-    })
 
     expect(
       resolveIntelligenceErrorRecovery({ error: 'Unsupported capability: vision.ocr' }, t)
@@ -50,6 +44,30 @@ describe('ai-error-recovery', () => {
         title: 'Network request failed'
       }
     )
+  })
+
+  it('distinguishes unavailable quota verification from exhausted quota', () => {
+    const quotaVerificationRecovery = {
+      code: 'quota-verification',
+      title: 'Quota verification unavailable',
+      detail: 'Retry later. If this continues, inspect Intelligence quota storage and configuration.'
+    }
+
+    expect(
+      resolveIntelligenceErrorRecovery({ errorCode: 'QUOTA_CHECK_UNAVAILABLE' }, t)
+    ).toEqual(quotaVerificationRecovery)
+
+    expect(
+      resolveIntelligenceErrorRecovery({ error: 'quota verification is unavailable' }, t)
+    ).toEqual(quotaVerificationRecovery)
+
+    expect(
+      resolveIntelligenceErrorRecovery({ errorCode: 'quota_exceeded', error: 'quota exceeded' }, t)
+    ).toEqual({
+      code: 'quota',
+      title: 'AI quota unavailable',
+      detail: 'Check your Nexus credits or team quota before retrying.'
+    })
   })
 
   it('keeps unknown AI errors visible', () => {

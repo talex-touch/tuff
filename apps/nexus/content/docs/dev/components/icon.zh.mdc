@@ -5,7 +5,8 @@ category: Basic
 status: beta
 since: 1.0.0
 tags: [icon, glyph, visual]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Icon 图标
@@ -181,7 +182,9 @@ code: |
 - `builtin`：内置常用图标。
 - `colorful` 可在组件 prop 或 `icon.colorful` 中声明；SVG 默认使用 currentColor mask，`colorful=true` 时保留原色。
 
-## API（简版）
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -231,12 +234,30 @@ rows:
 ---
 ::
 
+### Slots
+
+| 名称 | 参数 | 说明 |
+|------|------|------|
+| `empty` | - | 当 `icon` 和 `name` 都没有解析出可见图标时，替换默认空占位内容。 |
+
+### Events
+
+`TuffIcon`、`TxIcon` 和 `TxStatusIcon` 不触发事件。
+
 ## 渲染契约
 
 - `name` 以 `i-` 开头时按图标 class 渲染；命中内置名时按 `builtin` SVG 渲染。
 - `file` 与本地绝对 `url` 可通过注入的 `fileProtocol` 或 `urlResolver` 转换。
 - SVG 在 `colorful=false` 时通过 mask 使用 `currentColor`；`colorful=true` 或 `icon.colorful=true` 时渲染为原图。
 - `status='loading' | 'error'` 会优先展示加载或错误状态。
+
+## 最佳实践
+
+- 产品 UI 优先使用 UnoCSS 图标类（`i-*`），渲染成本低，并且天然继承 `currentColor`。
+- 需要状态、颜色、URL/file 解析或保留 SVG 原色时，再使用 `TxIconSource`。
+- 只有图标本身承载语义时才传有意义的 `alt`；装饰性图标应由周围文本提供语义。
+- 单色 SVG 保持 `colorful=false`，让主题色通过 `currentColor` 生效；品牌标识和多色图使用 `colorful=true`。
+- 插件文件或自定义 SVG 传输建议在应用外壳统一注入 `TX_ICON_CONFIG_KEY`，不要在每个图标上重复传 resolver。
 
 ## 图标集
 
@@ -266,3 +287,18 @@ code: |
   // { type: 'class', value: 'i-ri-search-line' }
 ---
 ::
+
+
+## 审阅说明
+
+- **可访问性说明：** `TxIcon` 会设置 `role="img"`，并把 `alt` 映射到 `title`；纯图标交互控件应使用 `TxIconButton label` 或可见文本，不要只依赖图标 title 文案。
+- **实测覆盖:** `icon.test.ts` 覆盖 class 与内置名称渲染、尺寸/颜色样式、emoji/empty/loading/error 状态、注入 file protocol 解析、SVG mask 模式、colorful SVG 回退、data SVG 处理、多色 SVG 检测与状态角标尺寸。
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue` 与 `TxStatusIcon.vue`。
+- Types/helpers: `types.ts` 导出 `TxIconSource`、状态/config 类型与 `TX_ICON_CONFIG_KEY`；`svg-color-mode.ts` 判断 SVG 是否可作为 currentColor mask 渲染。
+- Export aliases: `packages/tuffex/packages/components/src/icon/index.ts` 导出 `TuffIcon`、`TxIcon`、`TxStatusIcon`、`TX_ICON_CONFIG_KEY`、图标类型与 `shouldRenderSvgAsMask`。
+- Coverage: `packages/tuffex/packages/components/src/icon/__tests__/icon.test.ts` 覆盖图标来源解析、SVG 颜色模式、状态渲染、注入配置与状态角标。
+
+<TuffDocSourceLink />

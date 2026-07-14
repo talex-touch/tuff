@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
 import type { TxIconSource } from '../../icon'
 import type { TreeEmits, TreeKey, TreeNode, TreeProps, TreeValue } from './types'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { TxCheckbox } from '../../checkbox'
 import { TxIcon } from '../../icon'
 
@@ -157,6 +158,120 @@ const flatItems = computed(() => {
 })
 
 const empty = computed(() => flatItems.value.length === 0)
+const focusedKey = ref<TreeKey | null>(null)
+const itemRefs = new Map<TreeKey, HTMLElement>()
+
+function isItemDisabled(item: FlatItem): boolean {
+  return props.disabled || !!item.node.disabled
+}
+
+const keyboardItems = computed(() => flatItems.value.filter(item => !isItemDisabled(item)))
+
+const tabStopKey = computed<TreeKey | null>(() => {
+  if (focusedKey.value !== null && keyboardItems.value.some(item => item.node.key === focusedKey.value))
+    return focusedKey.value
+
+  const selectedItem = keyboardItems.value.find(item => selectedSet.value.has(item.node.key))
+  return selectedItem?.node.key ?? keyboardItems.value[0]?.node.key ?? null
+})
+
+function setItemRef(key: TreeKey, element: Element | ComponentPublicInstance | null): void {
+  if (element instanceof HTMLElement)
+    itemRefs.set(key, element)
+  else
+    itemRefs.delete(key)
+}
+
+function handleItemFocus(item: FlatItem): void {
+  if (!isItemDisabled(item))
+    focusedKey.value = item.node.key
+}
+
+function handleItemClick(item: FlatItem): void {
+  if (isItemDisabled(item))
+    return
+  focusedKey.value = item.node.key
+  toggleSelect(item.node)
+}
+
+async function focusItem(item: FlatItem | undefined): Promise<void> {
+  if (!item || isItemDisabled(item))
+    return
+  focusedKey.value = item.node.key
+  await nextTick()
+  itemRefs.get(item.node.key)?.focus()
+}
+
+function findChildItem(item: FlatItem, index: number): FlatItem | undefined {
+  for (let current = index + 1; current < flatItems.value.length; current += 1) {
+    const candidate = flatItems.value[current]
+    if (!candidate || candidate.level <= item.level)
+      return undefined
+    if (!isItemDisabled(candidate))
+      return candidate
+  }
+  return undefined
+}
+
+function findParentItem(item: FlatItem, index: number): FlatItem | undefined {
+  for (let current = index - 1; current >= 0; current -= 1) {
+    const candidate = flatItems.value[current]
+    if (candidate && candidate.level < item.level && !isItemDisabled(candidate))
+      return candidate
+  }
+  return undefined
+}
+
+async function handleItemKeydown(event: KeyboardEvent, item: FlatItem): Promise<void> {
+  if (event.target !== event.currentTarget || isItemDisabled(item))
+    return
+
+  const keyboardIndex = keyboardItems.value.findIndex(candidate => candidate.node.key === item.node.key)
+  const flatIndex = flatItems.value.findIndex(candidate => candidate.node.key === item.node.key)
+
+  switch (event.key) {
+    case 'Enter':
+    case ' ':
+      if (!props.selectable)
+        return
+      event.preventDefault()
+      toggleSelect(item.node)
+      return
+    case 'ArrowDown':
+      event.preventDefault()
+      await focusItem(keyboardItems.value[keyboardIndex + 1])
+      return
+    case 'ArrowUp':
+      event.preventDefault()
+      await focusItem(keyboardItems.value[keyboardIndex - 1])
+      return
+    case 'Home':
+      event.preventDefault()
+      await focusItem(keyboardItems.value[0])
+      return
+    case 'End':
+      event.preventDefault()
+      await focusItem(keyboardItems.value.at(-1))
+      return
+    case 'ArrowRight':
+      event.preventDefault()
+      if (!item.hasChildren)
+        return
+      if (!item.expanded) {
+        toggleExpand(item.node)
+        return
+      }
+      await focusItem(findChildItem(item, flatIndex))
+      return
+    case 'ArrowLeft':
+      event.preventDefault()
+      if (item.hasChildren && item.expanded) {
+        toggleExpand(item.node)
+        return
+      }
+      await focusItem(findParentItem(item, flatIndex))
+  }
+}
 
 function itemPadding(level: number): string {
   return `${level * (props.indent ?? 16)}px`
@@ -164,7 +279,7 @@ function itemPadding(level: number): string {
 </script>
 
 <template>
-  <div class="tx-tree" role="tree">
+  <div class="tx-tree" role="tree" :aria-multiselectable="multiple || undefined">
     <div v-if="empty" class="tx-tree__empty">
       <slot name="empty">
         No results
@@ -174,12 +289,18 @@ function itemPadding(level: number): string {
       <div
         v-for="item in flatItems"
         :key="item.node.key"
+        :ref="element => setItemRef(item.node.key, element)"
         class="tx-tree__item"
         :style="{ paddingLeft: itemPadding(item.level) }"
         role="treeitem"
+        :tabindex="isItemDisabled(item) ? -1 : (tabStopKey === item.node.key ? 0 : -1)"
+        :aria-level="item.level + 1"
         :aria-expanded="item.hasChildren ? item.expanded : undefined"
-        :aria-selected="selectedSet.has(item.node.key)"
-        @click="toggleSelect(item.node)"
+        :aria-selected="selectable ? selectedSet.has(item.node.key) : undefined"
+        :aria-disabled="isItemDisabled(item) || undefined"
+        @focus="handleItemFocus(item)"
+        @click="handleItemClick(item)"
+        @keydown="handleItemKeydown($event, item)"
       >
         <slot
           name="item"
@@ -200,6 +321,7 @@ function itemPadding(level: number): string {
               v-if="item.hasChildren"
               type="button"
               class="tx-tree__caret"
+              tabindex="-1"
               :aria-label="item.expanded ? 'Collapse' : 'Expand'"
               @click.stop="toggleExpand(item.node)"
             >
@@ -214,6 +336,7 @@ function itemPadding(level: number): string {
               :model-value="selectedSet.has(item.node.key)"
               :disabled="props.disabled || item.node.disabled"
               aria-label="Select"
+              tabindex="-1"
               @click.stop
               @update:model-value="() => toggleSelect(item.node)"
             />
@@ -244,6 +367,12 @@ function itemPadding(level: number): string {
 
 .tx-tree__item {
   width: 100%;
+  border-radius: 10px;
+  outline: none;
+}
+
+.tx-tree__item:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, transparent);
 }
 
 .tx-tree__row {
