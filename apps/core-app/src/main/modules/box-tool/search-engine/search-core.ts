@@ -82,6 +82,10 @@ interface SearchCacheEntry {
 const SEARCH_CACHE_TTL_MS = 5_000
 const SEARCH_CACHE_MAX_SIZE = 100
 const SEARCH_FRONTEND_ITEM_LIMIT = 80
+// Deferred semantic recall: only runs for text queries whose primary results are
+// sparse enough that surfacing semantically-related files adds value.
+const DEFERRED_SEMANTIC_MIN_QUERY_LENGTH = 3
+const DEFERRED_SEMANTIC_MAX_BASE_ITEMS = 20
 const SEARCH_TRACE_SCHEMA = 'search-trace/v1'
 const SEARCH_TRACE_SLOW_THRESHOLD_MS = 800
 
@@ -592,6 +596,53 @@ export class SearchEngineCore
       })
   }
 
+  /**
+   * After first results render, asynchronously surface files that are
+   * semantically related to the query but were missed by the keyword/FTS pass,
+   * and merge-append them into the still-active session. Runs entirely off the
+   * hot search path; a superseded session (latestSessionId mismatch) or an
+   * aborted signal drops the recall silently. Renderer `search.update` merges by
+   * id, so recalled items append after the primary results without reordering
+   * them.
+   */
+  private scheduleDeferredSemanticRecall(
+    sessionId: string,
+    query: TuffQuery,
+    providerFilter: string | undefined,
+    baseItems: TuffItem[],
+    signal: AbortSignal,
+    sendUpdateToFrontend: (itemsToSend: TuffItem[]) => void
+  ): void {
+    const text = query.text?.trim()
+    if (!text || text.length < DEFERRED_SEMANTIC_MIN_QUERY_LENGTH) return
+    // Provider-scoped queries (e.g. "@app foo") should not pull in file recall.
+    if (providerFilter) return
+    // Only worth the embedding scan when the primary results are sparse.
+    if (baseItems.length >= DEFERRED_SEMANTIC_MAX_BASE_ITEMS) return
+    if (signal.aborted || this.latestSessionId !== sessionId) return
+
+    void (async () => {
+      try {
+        const excludeIds = new Set(baseItems.map((item) => item.id))
+        const recallItems = await fileProvider.semanticRecall(query, excludeIds, signal)
+        if (recallItems.length === 0) return
+        if (signal.aborted || this.latestSessionId !== sessionId) return
+        this._recordSearchResults(sessionId, [...baseItems, ...recallItems]).catch((error) => {
+          searchEngineLog.debug('Failed to record semantic recall results', {
+            error,
+            meta: { sessionId }
+          })
+        })
+        sendUpdateToFrontend(recallItems)
+      } catch (error) {
+        searchEngineLog.debug('Deferred semantic recall skipped', {
+          error,
+          meta: { sessionId }
+        })
+      }
+    })()
+  }
+
   async search(query: TuffQuery): Promise<TuffSearchResult> {
     markSearchActivity()
     const pipelineDurations: SearchPipelineStageDurations = {
@@ -1025,6 +1076,14 @@ export class SearchEngineCore
                 this.enrichAndPushSearchItems(
                   sessionId,
                   query,
+                  sortedItems,
+                  gatherController!.signal,
+                  sendUpdateToFrontend
+                )
+                this.scheduleDeferredSemanticRecall(
+                  sessionId,
+                  query,
+                  providerFilter,
                   sortedItems,
                   gatherController!.signal,
                   sendUpdateToFrontend
