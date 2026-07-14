@@ -15,6 +15,13 @@ import {
 type FileRecord = typeof filesSchema.$inferSelect
 type FileSearchEntry = { file: FileRecord; extensions: Record<string, string> }
 
+/** Minimum query length before deferred semantic recall is worth running. */
+const SEMANTIC_RECALL_MIN_QUERY_LENGTH = 3
+/** How many nearest-neighbour embedding matches to consider. */
+const SEMANTIC_RECALL_SCAN_LIMIT = 30
+/** Hard cap on how many semantic-recall items are appended to a result set. */
+const SEMANTIC_RECALL_MAX_ITEMS = 8
+
 export interface FileProviderSearchResultServiceDeps {
   providerId: string
   getDbUtils: () => DbUtils | null
@@ -28,7 +35,15 @@ export interface FileProviderSearchResultServiceDeps {
   ) => TuffItem | null
   sanitizeExtensions: (extensions: Record<string, string>) => Record<string, string>
   cleanupStaleCandidates: (paths: string[]) => void
-  scheduleSemanticEnrichment: (normalizedQuery: string, candidateCount: number) => void
+  /**
+   * Nearest-neighbour lookup over file content embeddings. Returns
+   * `{ sourceId, score }` where `sourceId === String(files.id)` and score is a
+   * cosine similarity. Resolves to `[]` when embeddings are unavailable.
+   */
+  semanticSearch: (
+    query: string,
+    limit: number
+  ) => Promise<Array<{ sourceId: string; score: number }>>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   formatDuration: (durationMs: number) => string
   now?: () => number
@@ -209,7 +224,6 @@ export class FileProviderSearchResultService {
       if (candidateIds.size >= 120) break
       candidateIds.add(match.itemId)
     }
-    this.deps.scheduleSemanticEnrichment(normalizedQuery, candidateIds.size)
     if (candidateIds.size === 0) return this.empty(query)
 
     const candidatePaths = [...candidateIds].slice(0, 120)
@@ -291,6 +305,92 @@ export class FileProviderSearchResultService {
       duration: this.deps.formatDuration(this.now() - searchStart)
     })
     return new TuffSearchResultBuilder(query).setItems(scoredItems).build()
+  }
+
+  /**
+   * Deferred semantic recall: surface files semantically related to the query
+   * that the keyword/FTS candidate pass missed. Runs OFF the hot search path
+   * (scheduled by the search engine after first results are shown) and returns
+   * brand-new items only — anything whose id is already in `excludeIds` (the ids
+   * already rendered) is dropped so the caller can append these without dupes.
+   */
+  async semanticRecall(
+    query: TuffQuery,
+    excludeIds: Set<string>,
+    signal: AbortSignal
+  ): Promise<TuffItem[]> {
+    if (signal.aborted) return []
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils) return []
+
+    const { text: searchText } = this.extractFilters(query.text.trim())
+    const normalizedQuery = searchText.toLowerCase()
+    if (normalizedQuery.length < SEMANTIC_RECALL_MIN_QUERY_LENGTH) return []
+
+    let matches: Array<{ sourceId: string; score: number }>
+    try {
+      matches = await this.deps.semanticSearch(normalizedQuery, SEMANTIC_RECALL_SCAN_LIMIT)
+    } catch (error) {
+      this.deps.logDebug('Semantic recall lookup failed', { error: String(error) })
+      return []
+    }
+    if (signal.aborted || matches.length === 0) return []
+
+    // embeddings.sourceId === String(files.id); keep the best score per file.
+    const scoreByFileId = new Map<number, number>()
+    for (const match of matches) {
+      const fileId = Number(match.sourceId)
+      if (!Number.isInteger(fileId)) continue
+      if (match.score > (scoreByFileId.get(fileId) ?? 0)) scoreByFileId.set(fileId, match.score)
+    }
+    if (scoreByFileId.size === 0) return []
+
+    const rows = await dbUtils
+      .getDb()
+      .select({
+        file: filesSchema,
+        extensionKey: fileExtensions.key,
+        extensionValue: fileExtensions.value
+      })
+      .from(filesSchema)
+      .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
+      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.id, [...scoreByFileId.keys()])))
+    if (signal.aborted) return []
+
+    const scored: Array<{ item: TuffItem; score: number }> = []
+    for (const { file, extensions: rawExtensions } of this.groupRows(rows).values()) {
+      const score = scoreByFileId.get(file.id) ?? 0
+      const extensions = this.deps.sanitizeExtensions(rawExtensions)
+      const item = this.deps.buildItem(file, extensions)
+      item.scoring = {
+        final: score,
+        match: 0,
+        recency: 0,
+        frequency: 0,
+        base: score,
+        match_details: { type: 'semantic', query: searchText, confidence: score }
+      }
+      item.meta ??= {}
+      item.meta.extension = {
+        ...(item.meta.extension ?? {}),
+        search: { keywordMatch: false, ftsScore: 0, semanticScore: score }
+      }
+      const normalized = this.deps.normalizeItem(item, file, extensions, 'semantic-recall')
+      if (normalized && !excludeIds.has(normalized.id)) {
+        scored.push({ item: normalized, score })
+      }
+    }
+
+    scored.sort((left, right) => right.score - left.score)
+    const recalled = scored.slice(0, SEMANTIC_RECALL_MAX_ITEMS).map((entry) => entry.item)
+    if (recalled.length > 0) {
+      this.deps.logDebug('Semantic recall produced items', {
+        query: normalizedQuery,
+        candidates: scoreByFileId.size,
+        recalled: recalled.length
+      })
+    }
+    return recalled
   }
 
   private async buildTypeOnlyResult(
