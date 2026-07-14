@@ -19,6 +19,8 @@ export type AgentEventType =
   | 'view.dispose'
   | 'approval.request'
   | 'approval.response'
+  | 'skill.request'
+  | 'subagent.task'
   | 'error'
 
 export interface AgentEnvelope<T = unknown> {

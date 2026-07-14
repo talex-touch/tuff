@@ -16,6 +16,7 @@ const SOURCE_TYPE = 'file'
 const MAX_TEXT_LENGTH = 8000
 const BATCH_SIZE = 5
 const EMBEDDING_CACHE_TTL = 30 * 60 * 1000 // 30 min
+const SEMANTIC_SEARCH_SCAN_LIMIT = 1000
 
 interface EmbeddingSearchResult {
   sourceId: string
@@ -197,7 +198,10 @@ export class EmbeddingService {
       const queryVector = await this.getQueryEmbedding(query)
       if (!queryVector) return []
 
-      // Load all file embeddings from DB
+      // Bound best-effort semantic recall. The local SQLite vector store has
+      // no ANN index, so scoring every persisted file embedding can spike CPU
+      // and memory on large file indexes.
+      const scanLimit = Math.max(limit, SEMANTIC_SEARCH_SCAN_LIMIT)
       const rows = await this.db
         .select({
           sourceId: embeddingsSchema.sourceId,
@@ -205,6 +209,7 @@ export class EmbeddingService {
         })
         .from(embeddingsSchema)
         .where(eq(embeddingsSchema.sourceType, SOURCE_TYPE))
+        .limit(scanLimit)
 
       if (rows.length === 0) return []
 

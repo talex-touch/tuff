@@ -116,9 +116,19 @@ vi.mock('node:fs', () => ({
   mkdirSync: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  execFile: execFileMock
-}))
+vi.mock('node:child_process', () => {
+  execFileMock[Symbol.for('nodejs.util.promisify.custom')] = (command: string, args: string[]) =>
+    new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      execFileMock(command, args, {}, (error: Error | null, stdout = '', stderr = '') => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve({ stdout, stderr })
+      })
+    })
+  return { execFile: execFileMock }
+})
 
 vi.mock('electron', () => ({
   app: {
@@ -732,6 +742,169 @@ describe('CommonChannelModule private helpers', () => {
 
     openExternalHandler?.({ url: 'https://example.com/docs' }, {})
     expect(shell.openExternal).toHaveBeenCalledWith('https://example.com/docs')
+  })
+
+  it('maps each supported desktop wallpaper backend output to a usable path', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const getDesktopWallpaper = handlers.get('wallpaper:get-desktop')
+    expect(getDesktopWallpaper).toBeTypeOf('function')
+
+    const originalPlatform = process.platform
+    const cases = [
+      {
+        platform: 'win32' as const,
+        command: 'reg',
+        args: ['query', 'HKCU\\Control Panel\\Desktop', '/v', 'WallPaper'],
+        output: 'WallPaper    REG_SZ    C:\\Wallpapers\\aurora.jpg',
+        expected: 'C:\\Wallpapers\\aurora.jpg'
+      },
+      {
+        platform: 'darwin' as const,
+        command: 'osascript',
+        args: [
+          '-e',
+          'tell application "System Events" to get POSIX path of (get picture of item 1 of desktops)'
+        ],
+        output: '/Users/demo/Pictures/aurora.jpg\n',
+        expected: '/Users/demo/Pictures/aurora.jpg'
+      },
+      {
+        platform: 'linux' as const,
+        command: 'gsettings',
+        args: ['get', 'org.gnome.desktop.background', 'picture-uri'],
+        output: "'file:///home/demo/Pictures/aurora%20day.jpg'",
+        expected: '/home/demo/Pictures/aurora day.jpg'
+      }
+    ]
+
+    try {
+      for (const testCase of cases) {
+        Object.defineProperty(process, 'platform', {
+          value: testCase.platform,
+          configurable: true
+        })
+        execFileMock.mockImplementationOnce(
+          (
+            _command: string,
+            _args: string[],
+            optionsOrCallback: unknown,
+            callbackMaybe?: (error: Error | null, stdout?: string, stderr?: string) => void
+          ) => {
+            const callback =
+              typeof optionsOrCallback === 'function'
+                ? (optionsOrCallback as (
+                    error: Error | null,
+                    stdout?: string,
+                    stderr?: string
+                  ) => void)
+                : callbackMaybe
+            callback?.(null, testCase.output, '')
+          }
+        )
+
+        await expect(getDesktopWallpaper?.({}, {})).resolves.toEqual({ path: testCase.expected })
+        expect(execFileMock).toHaveBeenLastCalledWith(
+          testCase.command,
+          testCase.args,
+          {},
+          expect.any(Function)
+        )
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
+  })
+
+  it('maps desktop wallpaper command failures to the unavailable response', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const getDesktopWallpaper = handlers.get('wallpaper:get-desktop')
+    const originalPlatform = process.platform
+    try {
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+      execFileMock.mockImplementationOnce(
+        (
+          _command: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callbackMaybe?: (error: Error | null, stdout?: string, stderr?: string) => void
+        ) => {
+          const callback =
+            typeof optionsOrCallback === 'function'
+              ? (optionsOrCallback as (
+                  error: Error | null,
+                  stdout?: string,
+                  stderr?: string
+                ) => void)
+              : callbackMaybe
+          callback?.(new Error('registry access denied'))
+        }
+      )
+
+      await expect(getDesktopWallpaper?.({}, {})).resolves.toEqual({
+        path: null,
+        error: 'Desktop wallpaper path is unavailable on current system.'
+      })
+      expect(execFileMock).toHaveBeenLastCalledWith(
+        'reg',
+        ['query', 'HKCU\\Control Panel\\Desktop', '/v', 'WallPaper'],
+        {},
+        expect.any(Function)
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        configurable: true
+      })
+    }
   })
 
   it('includes plugin search providers in indexed source provider config response', async () => {

@@ -40,6 +40,8 @@ export interface IClipboardOptions {
   detectedAt: number | null
   /** Timestamp of the last clipboard item that was cleared (to prevent re-paste of same content) */
   lastClearedTimestamp: string | Date | null
+  /** Whether current clipboard state was activated implicitly or by an explicit paste */
+  activeClipboardSource?: 'manual' | 'auto' | null
   /** Fingerprint for the most recent text/html clipboard item shown as an attachment */
   lastTextAttachmentIdentity?: string | null
   /** Source that recorded the most recent text/html attachment fingerprint */

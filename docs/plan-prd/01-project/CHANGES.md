@@ -1,7 +1,87 @@
 # 变更日志
 
-> 更新时间：2026-07-06
-> 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+> 更新时间：2026-07-11
+> 定位：只保留当前阶段的高信号变更索引。更早流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-11
+
+### workspace: complete renderer and package optimization wave
+
+- Added the repository-wide HTML dry-run audit at `docs/engineering/reports/optimization-dry-run-2026-07-11/index.html`, covering renderer complexity, Tuffex delegation, shared-utils candidates, OSAdapter bypasses, monolith boundaries, package naming, and generated artifacts.
+- Extracted stateful renderer logic into focused CoreApp/Nexus/plugin composables, including user identity, dialog interaction/autosizing, locale orchestration, provider-registry administration, analytics data, and word-lyric runtime behavior.
+- Migrated duplicated UI primitives to `@talex-touch/tuffex`, removed legacy wrapper files/callers, and added parity contracts for button, checkbox, icon, tag, tabs, and progress behavior.
+- Consolidated canonical sleep, plugin image-data URL handling, indexing snapshot cloning, and environment/OSAdapter capabilities in `@talex-touch/utils`; system actions and app launching now route through typed adapters instead of local platform branching.
+- Split the plugin transport, app provider, QuickOps, search/indexing, updater, governance, analytics, and provider-registry monoliths by runtime responsibility while preserving public behavior through focused contracts.
+- Normalized package-backed plugin names, moved the internal analysis app to `apps/tuff-analyse`, promoted the builder example to `examples/tuff-builder.example.ts`, and removed approved generated outputs; CoreApp now exposes the documented package typecheck script.
+
+### corebox: unify AutoPaste freshness gating
+
+- CoreBox renderer hooks now share one clipboard freshness predicate and track whether active clipboard state came from implicit AutoPaste or an explicit user action.
+- Hidden clipboard changes no longer populate active renderer state directly; shortcut reopen and implicit search refresh both reject ineligible or expired clipboard items, while explicit paste and plugin execution retain manual clipboard semantics.
+
+## 2026-07-07
+
+### nexus: bound plugin store APIs
+
+- `/api/store/search` now uses `searchStorePlugins` instead of loading every store plugin/version into the route handler; D1 mode pushes approval/category/keyword filters, latest visible approved version selection, total count, and limit/offset into SQL.
+- `/api/store/plugins` now reuses the bounded store list helper with limit/offset metadata; compact listing returns only latest-version card fields, while non-compact D1 responses hydrate approved versions only for the current bounded page.
+- Added store-search D1 indexes for approved plugin/category listing and approved version lookup, plus focused Nexus tests for D1 binding/mapping, memory fallback pagination/latest-version semantics, route pagination clamps, compact field trimming, and bounded D1 version hydration.
+- Store front page now consumes compact `/api/store/search` directly with remote debounce, server-side category/keyword refresh, and offset-based "load more" pagination, so first paint no longer depends on fetching all store plugins for local filtering.
+- Store front page detail overlay now lazy-loads the dialog, tab shell, metadata header, and shared detail renderers only when a plugin detail is requested, keeping interaction-only plugin detail code out of the initial store page import graph.
+
+### nexus: trim dashboard first-visit imports
+
+- Dashboard devices page now lazy-loads `GeoLeafletMap.client.vue` only when a device map is expanded, keeping Leaflet map code out of the first-visit synchronous import graph; added a focused performance boundary test for the lazy map contract.
+- Dashboard overview page now lazy-loads `DashboardSparklineChart.client.vue` and `GeoLeafletMap.client.vue`, keeping ECharts/Leaflet client widgets behind the chart/map render boundary instead of the page's synchronous imports.
+- Dashboard storage page now lazy-loads the sync details `FlipDialog` and sparkline chart client only when their UI boundaries render, trimming dialog/chart code from the storage route's first-visit synchronous imports.
+- Dashboard team page now lazy-loads team action `FlipDialog` overlays and the credit trend sparkline client at their render boundaries, avoiding modal/chart code in the team route's first-visit synchronous imports.
+- Dashboard account page now lazy-loads the profile edit `FlipDialog` only when the edit overlay opens, keeping dialog code out of the account route's first-visit synchronous imports.
+- Dashboard notifications page now lazy-loads the browser setup `FlipDialog` only when the setup overlay opens, while keeping the setup trigger in the initial page without dialog code.
+- Dashboard OAuth page now lazy-loads the create-app `FlipDialog` only when the create dialog opens, while keeping the primary create trigger in the route's initial UI.
+- Dashboard API keys page now lazy-loads the create-key `FlipDialog` only when a create overlay opens, preserving both populated and empty-state create triggers without dialog code in the initial route graph.
+- Dashboard admin analytics page now lazy-loads the geo `GeoLeafletMap.client.vue` widget behind the geo analytics data boundary, avoiding Leaflet code in the analytics route's initial synchronous imports.
+
+### corebox: bound subsequence fallback scans
+
+- SearchIndex subsequence fallback now pushes the subsequence shape into SQLite with an escaped `LIKE` prefilter, deterministic short-keyword ordering, and a hard 2k scan cap before JS scoring, reducing hot-path keyword rows scored in memory while preserving fuzzy recall.
+- Added focused CoreApp coverage for LIKE prefilter generation, scan-limit clamping, and fallback result ordering.
+
+### corebox: parallelize hot search-index reads
+
+- AppProvider 与 FileProvider 搜索首段 now dispatch exact keyword lookup, short-query prefix lookup, and FTS lookup together, so independent SQLite/SearchIndex reads overlap instead of stacking on the user-visible `onSearch` path.
+- Added deterministic CoreApp tests proving prefix/FTS reads start before exact lookup resolves; n-gram/subsequence fallback remains gated after first-pass candidate aggregation.
+- AppProvider and FileProvider search now observe `AbortSignal` before starting search-index work, after parallel candidate reads, and after candidate DB fetch/processing boundaries, avoiding stale query row loads/scoring when CoreBox supersedes app/file searches.
+- Search gatherer now gives each provider call a per-task `AbortSignal`, aborts it on provider timeout, and clears fast-layer timeout timers once fast providers complete, so timed-out fast/deferred providers stop stale work and completed fast searches do not leave extra pending timers.
+
+### nexus: bound intelligence chat and provider probe streams
+
+- `/api/admin/intelligence/chat` and `/api/dashboard/intelligence/providers/:id/probe-stream` now clamp provider/request stream timeouts to 5s–120s and apply them to stream open plus per-chunk waits, so stalled LLM providers produce typed SSE errors and close instead of leaving callers waiting indefinitely.
+- LangChain provider clients now use static imports and pass timeout through OpenAI/Anthropic-supported config paths; added focused fake-timer utility coverage for bounded promises and async iterables.
+
+### intelligence: surface orchestration decisions as AEP events
+
+- `@talex-touch/tuff-intelligence` now dispatches `skillRequests` and `subAgentTasks` from normalized agent decisions as first-class AEP runtime envelopes (`skill.request` / `subagent.task`) instead of silently dropping them.
+- Added focused DecisionDispatcher coverage that preserves request/task payload identity and correlation ids, giving CoreApp/Nexus callers a stable hook for LangChain/DeepAgent-style skill loading and delegated agent execution.
+
+### nexus: bound shared runtime bridge stalls
+
+- Nexus intelligence-agent shared runtime bridge now enforces a bounded AEP stream timeout, emits a `shared_runtime_timeout` error event, and persists failed runtime session state instead of letting `/api/admin/intelligence-agent/session/stream` callers wait indefinitely.
+- Added focused bridge tests covering the successful shared AEP stream path and a fake-timer never-yielding runtime stream, locking the failed metrics/session behavior without sleeping in real time.
+
+### corebox: avoid stale file search cleanup waits
+
+- FileProvider search now schedules stale search-index candidate removal off the user-visible `onSearch` path, so missing DB rows no longer make file search wait on FTS cleanup or worker initialization latency.
+- Added focused CoreApp coverage where stale candidate cleanup never settles; `onSearch` still returns an empty result promptly while scheduling `removeProviderItems` best-effort cleanup.
+
+### corebox: batch app search exact keyword lookup
+
+- AppProvider 多词精确搜索复用现有 `SearchIndexService.lookupByKeywords` 批量查询，一次读取 term / phrase 命中集合，避免按 term 并发打 `keyword_mappings` 查询造成可感知延迟与 SQLite 读放大。
+- 新增 focused AppProvider 测试，锁定多词交集语义、phrase lookup 复用 batch 结果、候选加载仍只返回共同命中应用，并确保旧的 per-term `db.select({ itemId })` 路径会失败。
+
+### corebox: align AutoPaste freshness behavior
+
+- AutoPaste 快捷键唤起时刷新剪贴板快照，并统一以 `freshnessBaseAt` / `observedAt` 判断新鲜度；超过 `autoPaste.time` 的旧内容不会再经由短文本或重复长文本路径自动填入。
+- `autoPaste.time = 0` 明确保留为无限制，`-1` 为关闭；Nexus CoreBox 架构文档同步为当前实际行为。
 
 ## 2026-07-06
 

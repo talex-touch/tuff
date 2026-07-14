@@ -110,6 +110,34 @@ export class DecisionDispatcher {
       }
     }
 
+    for (const request of decision.skillRequests ?? []) {
+      yield {
+        version: 'aep/1',
+        id: makeEventId('evt'),
+        sessionId: state.sessionId,
+        turnId: state.turnId,
+        correlationId: request.id,
+        source: 'runtime',
+        type: 'skill.request',
+        ts: new Date().toISOString(),
+        payload: request,
+      }
+    }
+
+    for (const task of decision.subAgentTasks ?? []) {
+      yield {
+        version: 'aep/1',
+        id: makeEventId('evt'),
+        sessionId: state.sessionId,
+        turnId: state.turnId,
+        correlationId: task.id,
+        source: 'runtime',
+        type: 'subagent.task',
+        ts: new Date().toISOString(),
+        payload: task,
+      }
+    }
+
     for (const intent of decision.viewIntents ?? []) {
       if (!this.deps.viewRenderer) {
         continue

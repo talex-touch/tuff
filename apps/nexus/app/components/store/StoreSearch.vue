@@ -3,6 +3,16 @@ import SearchInput from '~/components/ui/SearchInput.vue'
 import Tag from '~/components/ui/Tag.vue'
 import { PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
 
+const props = withDefaults(defineProps<{
+  remote?: boolean
+  searchDebounce?: number
+}>(), {
+  remote: false,
+  searchDebounce: 200,
+})
+const emit = defineEmits<{
+  (event: 'search', value: string): void
+}>()
 const value = defineModel<string>()
 const filter = defineModel<string | undefined>('filter')
 
@@ -28,7 +38,10 @@ const categoryOptions = computed(() => [
         v-model="value"
         :placeholder="t('store.search.placeholder')"
         :aria-label="t('store.search.label')"
+        :remote="props.remote"
+        :search-debounce="props.searchDebounce"
         class="w-full"
+        @search="value => emit('search', value)"
       />
       <p class="self-end pr-4 text-xs text-black/40 dark:text-light/60">
         <slot name="result" />

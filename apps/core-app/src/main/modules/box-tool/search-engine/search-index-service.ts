@@ -19,6 +19,10 @@ const NGRAM_MAX_SOURCE_KEYWORDS = 96
 const NGRAM_MAX_ENTRIES_PER_ITEM = 256
 const PRIORITY_EPSILON = 0.0001
 const ZERO_RESULT_DIAGNOSTIC_THROTTLE_MS = 30_000
+const SUBSEQUENCE_SCAN_LIMIT_DEFAULT = 2000
+const SUBSEQUENCE_SCAN_LIMIT_MAX = 2000
+const SUBSEQUENCE_LIKE_ESCAPE_CHAR = '\\'
+const SQLITE_LIKE_WILDCARD_REGEX = /[%_\\]/g
 const searchIndexLog = createLogger('SearchIndex')
 
 export interface SearchIndexRuntimeLogger {
@@ -569,30 +573,39 @@ export class SearchIndexService {
   /**
    * Subsequence matching: find items whose keywords contain the query
    * as a character subsequence (e.g. "nte" matches "netease").
-   * Loads keywords from DB and filters in memory for flexibility.
+   * SQLite first applies the same subsequence shape as a bounded LIKE
+   * prefilter, keeping the hot search path from scoring arbitrary provider
+   * keyword rows in JS.
    */
   async lookupBySubsequence(
     providerId: string,
     query: string,
     limit = 100,
-    scanLimit = 2000
+    scanLimit = SUBSEQUENCE_SCAN_LIMIT_DEFAULT
   ): Promise<Array<{ itemId: string; keyword: string; priority: number }>> {
-    if (!query || query.length < 2) return []
+    const lowerQuery = query.trim().toLowerCase()
+    const resultLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 100
+    if (resultLimit === 0) return []
+    if (lowerQuery.length < 2) return []
     await this.ensureInitialized()
 
-    const lowerQuery = query.toLowerCase()
-    const effectiveScanLimit = Math.max(
-      limit,
-      Number.isFinite(scanLimit) ? Math.max(0, Math.floor(scanLimit)) : 2000
+    const requestedScanLimit = Number.isFinite(scanLimit)
+      ? Math.max(0, Math.floor(scanLimit))
+      : SUBSEQUENCE_SCAN_LIMIT_DEFAULT
+    const effectiveScanLimit = Math.min(
+      SUBSEQUENCE_SCAN_LIMIT_MAX,
+      Math.max(resultLimit, requestedScanLimit)
     )
+    const likePattern = buildSubsequenceLikePattern(lowerQuery)
 
-    // Load non-ngram keywords for this provider
     const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
       sql`SELECT item_id, keyword, priority
           FROM keyword_mappings
           WHERE provider_id = ${providerId}
             AND keyword NOT LIKE 'ng:%'
             AND length(keyword) >= ${lowerQuery.length}
+            AND keyword LIKE ${likePattern} ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}
+          ORDER BY length(keyword) ASC, priority DESC, keyword ASC
           LIMIT ${effectiveScanLimit}`
     )
 
@@ -609,9 +622,14 @@ export class SearchIndexService {
       }
     }
 
-    // Sort by score descending, take top results
-    matches.sort((a, b) => b.score - a.score)
-    return matches.slice(0, limit).map(({ itemId, keyword, priority }) => ({
+    matches.sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.priority - a.priority ||
+        a.keyword.length - b.keyword.length ||
+        a.keyword.localeCompare(b.keyword)
+    )
+    return matches.slice(0, resultLimit).map(({ itemId, keyword, priority }) => ({
       itemId,
       keyword,
       priority
@@ -1317,4 +1335,16 @@ function subsequenceScore(query: string, target: string): number {
   const coverage = qLen / tLen
   const consecutiveBonus = maxConsecutive / qLen
   return coverage * 0.5 + consecutiveBonus * 0.5
+}
+
+function buildSubsequenceLikePattern(query: string): string {
+  let pattern = '%'
+  for (const char of query) {
+    pattern += char.replace(
+      SQLITE_LIKE_WILDCARD_REGEX,
+      (value) => `${SUBSEQUENCE_LIKE_ESCAPE_CHAR}${value}`
+    )
+    pattern += '%'
+  }
+  return pattern
 }

@@ -111,8 +111,8 @@ function cloneIndexingSnapshotError(error: Error, seen: WeakMap<object, unknown>
   if ('cause' in error) {
     ;(clone as Error & { cause?: unknown }).cause = cloneIndexingSnapshotFallback(error.cause, seen)
   }
-  if (error instanceof AggregateError) {
-    ;(clone as AggregateError & { errors: unknown[] }).errors = error.errors.map((item) =>
+  if (isIndexingSnapshotErrorWithEntries(error)) {
+    ;(clone as Error & { errors: unknown[] }).errors = error.errors.map((item) =>
       cloneIndexingSnapshotFallback(item, seen)
     )
   }
@@ -124,8 +124,13 @@ function cloneIndexingSnapshotError(error: Error, seen: WeakMap<object, unknown>
   return clone
 }
 
+function isIndexingSnapshotErrorWithEntries(
+  error: Error
+): error is Error & { errors: readonly unknown[] } {
+  return Array.isArray((error as Error & { errors?: unknown }).errors)
+}
+
 function createIndexingSnapshotErrorClone(error: Error): Error {
-  if (error instanceof AggregateError) return new AggregateError([], error.message)
   if (error instanceof EvalError) return new EvalError(error.message)
   if (error instanceof RangeError) return new RangeError(error.message)
   if (error instanceof ReferenceError) return new ReferenceError(error.message)

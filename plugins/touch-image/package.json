@@ -1,5 +1,5 @@
 {
-  "name": "touch-image",
+  "name": "@talex-touch/touch-image-plugin",
   "type": "module",
   "version": "0.0.0",
   "private": true,

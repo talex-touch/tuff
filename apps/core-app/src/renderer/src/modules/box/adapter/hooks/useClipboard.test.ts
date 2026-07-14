@@ -141,6 +141,28 @@ describe('useClipboard auto-paste freshness', () => {
     hook.cleanup()
   })
 
+  it('does not auto-fill eligible text older than the default TTL', async () => {
+    const item = createClipboardItem({
+      id: 15,
+      content: 'stale text',
+      freshnessBaseAt: Date.now() - 6000,
+      autoPasteEligible: true
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions(item)
+    state.latest = item
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ attemptAutoFill: true, triggerSearch: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe('')
+    expect(clipboardOptions.pendingAutoFillItem).toBeNull()
+    hook.cleanup()
+  })
+
   it('does not auto-fill the same item twice', async () => {
     const item = createClipboardItem({
       id: 12,
@@ -321,6 +343,42 @@ describe('useClipboard auto-paste freshness', () => {
     expect(clipboardOptions.last).toBeNull()
     expect(clipboardOptions.pendingAutoFillItem?.id).toBe(27)
     expect(clipboardOptions.lastTextAttachmentSource).toBe('auto')
+    hook.cleanup()
+  })
+
+  it('does not auto-fill a stale repeated long text first pasted manually', async () => {
+    const content = 'manual then stale auto long text '.repeat(6)
+    const first = createClipboardItem({
+      id: 31,
+      content,
+      autoPasteEligible: false
+    })
+    const second = createClipboardItem({
+      id: 32,
+      content,
+      timestamp: new Date(Date.now() + 1000).toISOString(),
+      freshnessBaseAt: Date.now() - 6000,
+      autoPasteEligible: true
+    })
+    const boxOptions = createBoxOptions()
+    const clipboardOptions = createClipboardOptions()
+    state.latest = first
+    const searchVal = ref('')
+
+    const hook = useClipboard(boxOptions, clipboardOptions, vi.fn(), searchVal)
+    hook.handlePaste({ overrideDismissed: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(clipboardOptions.lastTextAttachmentSource).toBe('manual')
+
+    state.latest = second
+    hook.handlePaste({ attemptAutoFill: true, triggerSearch: true })
+    await nextTick()
+    await Promise.resolve()
+
+    expect(searchVal.value).toBe('')
+    expect(clipboardOptions.pendingAutoFillItem).toBeNull()
     hook.cleanup()
   })
 

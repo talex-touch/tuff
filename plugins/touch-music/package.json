@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@talex-touch/tuffex": "workspace:^",
     "@milkdown/theme-nord": "^7.20.0",
     "@types/howler": "^2.2.12",
     "axios": "^1.15.2",

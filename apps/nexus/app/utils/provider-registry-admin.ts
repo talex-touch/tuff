@@ -1091,8 +1091,39 @@ export function resolveSceneObservabilityEmptyState(
   }
 }
 
-export function normalizeError(err: any, fallback: string) {
-  return err?.data?.message || err?.data?.statusMessage || err?.message || fallback
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isSceneRunResult(value: unknown): value is SceneRunResult {
+  if (!isRecord(value))
+    return false
+
+  return typeof value.runId === 'string'
+    && typeof value.sceneId === 'string'
+    && ['planned', 'completed', 'failed'].includes(String(value.status))
+    && ['dry_run', 'execute'].includes(String(value.mode))
+    && Array.isArray(value.requestedCapabilities)
+    && Array.isArray(value.selected)
+    && Array.isArray(value.candidates)
+    && Array.isArray(value.fallbackTrail)
+    && Array.isArray(value.trace)
+    && Array.isArray(value.usage)
+}
+
+export function normalizeError(err: unknown, fallback: string) {
+  const error = isRecord(err) ? err : null
+  const data = isRecord(error?.data) ? error.data : null
+  const message = data?.message ?? data?.statusMessage ?? error?.message
+  return typeof message === 'string' ? message : fallback
+}
+
+export function extractFailedSceneRun(err: unknown): SceneRunResult | null {
+  const error = isRecord(err) ? err : null
+  const data = isRecord(error?.data) ? error.data : null
+  const nestedData = isRecord(data?.data) ? data.data : null
+  const run = nestedData?.run ?? data?.run
+  return isSceneRunResult(run) ? run : null
 }
 
 export function formatJson(value: Record<string, unknown> | null) {
@@ -1348,4 +1379,47 @@ export function createSceneRunPanel(scene: SceneRegistryRecord): SceneRunPanelSt
     result: null,
     error: null,
   }
+}
+
+export function mergeJsonObjects(
+  base: Record<string, unknown> | null,
+  patch: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const next = { ...(base ?? {}) }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined || value === null || value === '')
+      delete next[key]
+    else
+      next[key] = value
+  }
+
+  return Object.keys(next).length > 0 ? next : null
+}
+
+export function parseOptionalNonNegativeNumber(value: string, field: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed)
+    return null
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed < 0)
+    throw new Error(`${field} must be a non-negative number.`)
+  return parsed
+}
+
+export function parseBoundedNumber(value: string, field: string, min = 0, max?: number): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed)
+    return undefined
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed < min || (max !== undefined && parsed > max)) {
+    const range = max === undefined ? `greater than or equal to ${min}` : `between ${min} and ${max}`
+    throw new Error(`${field} must be a number ${range}.`)
+  }
+  return parsed
+}
+
+export function parseOptionalJson(value: string): unknown {
+  const trimmed = value.trim()
+  return trimmed ? JSON.parse(trimmed) : undefined
 }

@@ -2,6 +2,7 @@
 import type { IManifest } from '@talex-touch/utils/plugin'
 import type { PluginInstallSourceRequest } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
 import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -12,7 +13,6 @@ import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
-import TCheckBox from '~/components/base/checkbox/TCheckBox.vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
@@ -670,16 +670,16 @@ async function handleInstallDegit(): Promise<void> {
       </BlockTemplate>
 
       <BlockTemplate :title="t('plugin.new.create.actionsTitle')">
-        <TCheckBox v-model="plugin.openInVSC" text-sm>
+        <TxCheckbox v-model="plugin.openInVSC" variant="checkmark" text-sm>
           <span inline-flex items-center gap-1>
             <div inline-block style="width: 16px" class="i-simple-icons-visualstudio" />
             <span>{{ t('plugin.new.create.openInVscode') }}</span>
           </span>
-        </TCheckBox>
-        <TCheckBox v-model="plugin.agreement" text-sm>
+        </TxCheckbox>
+        <TxCheckbox v-model="plugin.agreement" variant="checkmark" text-sm>
           {{ t('plugin.new.create.agreementPrefix') }}
           <i>{{ t('plugin.new.create.agreementName') }}</i>
-        </TCheckBox>
+        </TxCheckbox>
         <div flex relative mt-8 gap-4 w-4>
           <TxButton variant="flat" hover:bg-red @click="emits('close')">
             {{ t('common.cancel') }}

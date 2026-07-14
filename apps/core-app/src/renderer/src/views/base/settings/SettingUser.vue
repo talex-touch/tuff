@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import CreditsSummaryBlock from '~/components/account/CreditsSummaryBlock.vue'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
+import { useUserIdentity } from '~/components/base/composables/useUserIdentity'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -28,10 +29,6 @@ import { resolveLoginManualHint } from './login-recovery-display'
 const { t } = useI18n()
 const transport = useTuffTransport()
 const {
-  isLoggedIn,
-  user,
-  getDisplayName,
-  getPrimaryEmail,
   loginWithBrowser,
   reopenBrowserLogin,
   cancelPendingBrowserLogin,
@@ -39,6 +36,7 @@ const {
   runSyncBootstrap,
   authLoadingState
 } = useAuth()
+const { isLoggedIn, displayName, displayEmail, avatarUrl, displayInitial } = useUserIdentity()
 
 const profileEditorVisible = ref(false)
 const loginDialogVisible = ref(false)
@@ -81,15 +79,6 @@ function ensureAuthSettings() {
 
 ensureSecuritySettings()
 ensureAuthSettings()
-
-const displayName = computed(() => getDisplayName())
-const displayEmail = computed(() => getPrimaryEmail())
-const avatarUrl = computed(() => user.value?.avatar || '')
-
-const displayInitial = computed(() => {
-  const seed = displayName.value || displayEmail.value
-  return seed ? seed.trim().charAt(0).toUpperCase() : '?'
-})
 
 const syncEnabled = computed({
   get: () => getSyncPreferenceState().enabled,

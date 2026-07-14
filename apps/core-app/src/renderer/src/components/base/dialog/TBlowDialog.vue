@@ -1,8 +1,9 @@
 <script lang="ts" name="TBlowDialog" setup>
-import type { Component, VNode } from 'vue'
+import { defineComponent, onMounted, ref, type Component, type VNode } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
 import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import { sleep } from '@talex-touch/utils/common'
+import { useDialogFocus } from './useDialogFocus'
 
 /**
  * Props for the TBlowDialog component
@@ -42,38 +43,20 @@ const renderComp = ref<Component | null>(null)
 /** Reference to the dialog wrapper element */
 const dialogWrapper = ref<HTMLElement | null>(null)
 
-/** Reference to the previously focused element */
-let previouslyFocusedElement: HTMLElement | null = null
+if (props.render) {
+  renderComp.value = defineComponent({
+    render: props.render
+  })
+}
 
-/**
- * Lifecycle hook when component is mounted
- * - Creates component if render function is provided
- * - Applies background blur effect
- * - Sets focus to dialog
- */
-onMounted(() => {
-  // Save the currently focused element
-  previouslyFocusedElement = document.activeElement as HTMLElement
-
-  if (props.render) {
-    renderComp.value = defineComponent({
-      render: props.render
-    })
-  }
-
-  // Apply background blur effect
-  applyBackgroundBlur(true)
-
-  // Set focus to dialog
-  setFocusToDialog()
+useDialogFocus({
+  target: dialogWrapper,
+  focus: setFocusToDialog,
+  scrollLock: false
 })
 
-/**
- * Lifecycle hook when component is unmounted
- * - Restores focus to the previously focused element
- */
-onUnmounted(() => {
-  restoreFocus()
+onMounted(() => {
+  applyBackgroundBlur(true)
 })
 
 /**
@@ -88,15 +71,6 @@ function setFocusToDialog(): void {
     // Otherwise, focus on the dialog wrapper
     dialogWrapper.value.setAttribute('tabindex', '-1')
     dialogWrapper.value.focus()
-  }
-}
-
-/**
- * Restores focus to the previously focused element
- */
-function restoreFocus(): void {
-  if (previouslyFocusedElement) {
-    previouslyFocusedElement.focus()
   }
 }
 

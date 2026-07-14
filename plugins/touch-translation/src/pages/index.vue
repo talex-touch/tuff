@@ -1,4 +1,5 @@
 <script setup lang="ts" generic="T extends any, O extends any">
+import { TxInput } from '@talex-touch/tuffex/input'
 defineOptions({
   name: 'IndexPage',
 })
@@ -26,8 +27,10 @@ function go() {
 
     <div py-4 />
 
-    <TheInput
+    <TxInput
+      id="input"
       v-model="name"
+      class="w-250px text-center"
       placeholder="What's your name?"
       autocomplete="false"
       @keydown.enter="go"

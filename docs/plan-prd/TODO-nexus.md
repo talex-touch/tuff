@@ -1,6 +1,6 @@
 # Nexus Performance TODO
 
-> 更新时间：2026-07-04
+> 更新时间：2026-07-07
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台性能收口。
 
 ## Goal
@@ -79,6 +79,8 @@
   - `build:analyze-worker` 已守卫 dashboard smoke 代表性 API route chunks：`/api/dashboard/plugins`、`/api/dashboard/team`、`/api/dashboard/provider-registry/providers`、`/api/dashboard/governance/summary`、`/api/dashboard/storage/status`、`/api/dashboard/telemetry/me` 必须存在于 Worker 产物。
   - 静态证据已补：`output/playwright/nexus-dashboard-runtime-route-guard-2026-06-28.{json,md}`，dashboard runtime route chunks `6/6` 通过；该证据不替代 authenticated Cloudflare / wrangler dashboard runtime smoke。
   - 本地 Wrangler unauth boundary 已补：`/api/dashboard/team` 返回 `401`，`/dashboard/` shell 返回 `200` 并显示登录入口；authenticated dashboard runtime smoke 仍待真实 session。
+- Store plugin APIs / Store front page 已完成有界查询与首访 import 止血：`/api/store/search` 下推 D1 approval/category/keyword/latest-version/limit/offset 并默认返回 compact 卡片字段；Store 页面首屏改走 `/api/store/search` + 50 条分页、remote debounce、服务端筛选与 offset load-more；`/api/store/plugins` 统一走 bounded list helper，compact 首屏只返回卡片所需 latest-version 字段，非 compact 仅为当前页插件补齐 approved versions；插件详情弹层、tabs、metadata header 与 shared detail renderer 改为按需懒加载，避免首屏同步拉入交互后才需要的详情代码。
+- Dashboard devices / overview / storage / team / account / notifications / oauth / api-keys / admin analytics 首访 import 已继续止血：devices 的 `GeoLeafletMap.client.vue` 改为展开设备地图时按需懒加载；overview 的 `DashboardSparklineChart.client.vue` 与 `GeoLeafletMap.client.vue` 改为图表/地图渲染边界内懒加载；admin analytics 的 geo `GeoLeafletMap.client.vue` 改为 geo 数据边界内按需懒加载；storage 的同步详情 `FlipDialog` 与 sparkline chart client 改为弹层/图表边界内懒加载；team 的 action overlays 与 credit trend chart 同步改为按需懒加载；account 的 profile edit、notifications 的 browser setup、oauth 的 create-app 与 api-keys 的 create-key `FlipDialog` 改为对应弹层打开时按需懒加载；均补 focused performance boundary test，避免 Leaflet/ECharts/dialog 客户端组件进入页面首访同步 import graph。
 - `/en/docs/dev/components/tabs` 当前关键状态：
   - 页面 200
   - 3.5s HAR 中 Assistant / dompurify / sonner / current-user profile graph 为 0

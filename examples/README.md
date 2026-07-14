@@ -40,8 +40,8 @@
 - [util-pkg/tuff-test](./util-pkg/tuff-test)
 - [util-pkg/tuff-utils](./util-pkg/tuff-utils)
 
-### Deprecated
-- [tuff-builder.example.ts.bak](./tuff-builder.example.ts.bak) - 备份文件，不作为示例入口
+### TUFF Builder
+- [tuff-builder.example.ts](./tuff-builder.example.ts) - TuffItemBuilder、TuffFactory 和 TuffListBuilder 使用示例
 
 ## 维护流程
 1. 更新或新增示例文件（优先 `.ts`）。

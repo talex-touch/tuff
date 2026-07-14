@@ -1,5 +1,7 @@
 import type { BaseMessage } from '@langchain/core/messages'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { ChatAnthropic } from '@langchain/anthropic'
+import { ChatOpenAI } from '@langchain/openai'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { createError, getRouterParam, readBody } from 'h3'
 import { requireAdmin } from '../../../../../utils/auth'
@@ -9,6 +11,11 @@ import {
   getIntelligenceProviderRegistryMirror,
 } from '../../../../../utils/intelligenceProviderRegistryBridge'
 import { getProvider, type IntelligenceProviderRecord } from '../../../../../utils/intelligenceStore'
+import {
+  iterateWithIntelligenceStreamTimeout,
+  resolveIntelligenceStreamTimeoutMs,
+  withIntelligenceStreamTimeout,
+} from '../../../../../utils/intelligenceStreamTimeout'
 
 interface ResolvedProbeContext {
   provider: IntelligenceProviderRecord
@@ -16,6 +23,10 @@ interface ResolvedProbeContext {
   apiKey: string | null
   baseUrl: string
   timeoutMs: number
+}
+
+interface StreamingProbeModel {
+  stream: (messages: BaseMessage[]) => Promise<AsyncIterable<unknown>>
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -84,9 +95,7 @@ async function resolveProbeContext(
   }
 
   const baseUrl = resolveProviderBaseUrl(provider.type, provider.baseUrl)
-  const timeoutMs = Number.isFinite(requestedTimeoutMs)
-    ? Math.min(Math.max(Math.floor(requestedTimeoutMs as number), 5000), 120000)
-    : Math.max(5000, provider.timeout || DEFAULT_TIMEOUT_MS)
+  const timeoutMs = resolveIntelligenceStreamTimeoutMs(requestedTimeoutMs ?? provider.timeout ?? DEFAULT_TIMEOUT_MS)
 
   return {
     provider,
@@ -97,21 +106,21 @@ async function resolveProbeContext(
   }
 }
 
-async function createProbeModel(context: ResolvedProbeContext) {
+function createProbeModel(context: ResolvedProbeContext): StreamingProbeModel {
   if (context.provider.type === IntelligenceProviderType.ANTHROPIC) {
-    const { ChatAnthropic } = await import('@langchain/anthropic') as { ChatAnthropic: any }
     return new ChatAnthropic({
       anthropicApiKey: context.apiKey || '',
       model: context.model,
       maxTokens: 800,
-      timeout: context.timeoutMs,
       anthropicApiUrl: context.baseUrl,
-      clientOptions: { baseURL: context.baseUrl },
-    })
+      clientOptions: {
+        baseURL: context.baseUrl,
+        timeout: context.timeoutMs,
+      },
+    }) as StreamingProbeModel
   }
 
   if (OPENAI_COMPATIBLE_TYPES.has(context.provider.type as IntelligenceProviderType)) {
-    const { ChatOpenAI } = await import('@langchain/openai') as { ChatOpenAI: any }
     const compatBaseUrl = buildOpenAiCompatBaseUrls(context.baseUrl)[0] ?? context.baseUrl
     return new ChatOpenAI({
       apiKey: context.apiKey || 'tuff-local-key',
@@ -120,7 +129,7 @@ async function createProbeModel(context: ResolvedProbeContext) {
       timeout: context.timeoutMs,
       streaming: true,
       configuration: { baseURL: compatBaseUrl },
-    })
+    }) as StreamingProbeModel
   }
 
   throw createError({ statusCode: 400, statusMessage: 'Provider type is not supported by streaming probe.' })
@@ -198,8 +207,12 @@ export default defineEventHandler(async (event) => {
           })
 
           const model = await createProbeModel(context)
-          const responseStream = await model.stream(buildProbeMessages(prompt))
-          for await (const chunk of responseStream) {
+          const responseStream = await withIntelligenceStreamTimeout(
+            model.stream(buildProbeMessages(prompt)),
+            context.timeoutMs,
+            'provider-probe.stream.open',
+          )
+          for await (const chunk of iterateWithIntelligenceStreamTimeout(responseStream, context.timeoutMs, 'provider-probe.stream.delta')) {
             if (aborted)
               break
             const delta = extractChunkText(chunk)

@@ -14,6 +14,36 @@ describe('txButton', () => {
     expect(wrapper.classes()).toContain('tx-button')
   })
 
+  it('keeps explicit caller props, attrs, classes, and slot content on the native control', () => {
+    const wrapper = mount(Button, {
+      props: {
+        variant: 'danger',
+        size: 'lg',
+        block: true,
+        nativeType: 'submit',
+      },
+      attrs: {
+        class: 'caller-action',
+        'aria-label': 'Remove selected item',
+        'data-testid': 'remove-action',
+      },
+      slots: {
+        default: 'Remove',
+      },
+    })
+
+    expect(wrapper.attributes('type')).toBe('submit')
+    expect(wrapper.attributes('aria-label')).toBe('Remove selected item')
+    expect(wrapper.attributes('data-testid')).toBe('remove-action')
+    expect(wrapper.classes()).toEqual(expect.arrayContaining([
+      'caller-action',
+      'variant-danger',
+      'tx-size-lg',
+      'block',
+    ]))
+    expect(wrapper.text()).toContain('Remove')
+  })
+
   it('maps semantic type to variant when variant is not set', () => {
     const wrapper = mount(Button, {
       props: {

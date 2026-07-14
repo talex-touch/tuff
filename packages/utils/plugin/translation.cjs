@@ -48,6 +48,32 @@ function normalizeLanguage(input) {
   return ''
 }
 
+const IMAGE_MIME_TYPE_PATTERN = /^image\/[a-z0-9.+-]+$/i
+const IMAGE_DATA_URL_PATTERN = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i
+
+
+function parseImageDataUrl(dataUrl) {
+  const match = IMAGE_DATA_URL_PATTERN.exec(String(dataUrl ?? '').trim())
+  if (!match) {
+    return null
+  }
+
+  const mime = match[1]?.toLowerCase()
+  const base64 = match[2]?.replace(/\s+/g, '')
+  if (!mime || !IMAGE_MIME_TYPE_PATTERN.test(mime) || !base64) {
+    return null
+  }
+
+  return { mime, base64 }
+}
+
+function toImageDataUrl(base64, mime = 'image/png') {
+  const normalizedMime = typeof mime === 'string' && IMAGE_MIME_TYPE_PATTERN.test(mime)
+    ? mime.toLowerCase()
+    : 'image/png'
+  return `data:${normalizedMime};base64,${base64}`
+}
+
 function detectLanguage(input) {
   return /[\u4E00-\u9FFF]/.test(normalizeText(input)) ? 'zh' : 'en'
 }
@@ -160,5 +186,7 @@ module.exports = {
   isDefaultEnabledProvider,
   normalizeCallFailureMessage,
   normalizeTranslationErrorMessage,
+  parseImageDataUrl,
+  toImageDataUrl,
   resolveTargetLanguage,
 }

@@ -4,8 +4,8 @@
 <script setup>
 import WordLyricItem from '@comp/music/word-lyric/WordLyricItem.vue'
 import { musicManager } from '@modules/music'
-import { throttleRef } from '@modules/utils'
-import { onMounted, ref, watch } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
+import { useLyricAudioShine } from './useLyricAudioShine'
 
 defineOptions({
   name: 'WordLyricScroller',
@@ -15,62 +15,33 @@ const ind = ref(-1)
 const scroll = ref()
 const wordLyrics = ref([])
 const tlyric = ref([])
-
-const shine = throttleRef(false, 2400)
 const song = musicManager.playManager.song
+const { shine } = useLyricAudioShine(song)
 
-onMounted(() => {
-  let draw
+watch(song, (currentSong) => {
+  wordLyrics.value = currentSong?._songManager?.wordLyric?.wordLyric?.split('\n') ?? []
+  tlyric.value = currentSong?._songManager?.lyric?.tlyric?.lyric?.split('\n') ?? []
+}, { immediate: true })
 
-  watch(() => song.value, () => {
-    const lyric = song.value?._songManager?.wordLyric?.wordLyric
-    if (!lyric)
-      return
+let task
 
-    wordLyrics.value = lyric.split('\n')
-
-    tlyric.value = song.value?._songManager?.lyric?.tlyric?.lyric?.split('\n')
-    // console.log( tlyric.value )
-
-    // emphasis shadow
-    const audioNode = song.value.audio._sounds[0]._node
-
-    const oCtx = new AudioContext()
-    const audioSrc = oCtx.createMediaElementSource(audioNode)
-    const analyser = oCtx.createAnalyser()
-
-    audioSrc.connect(analyser)
-    analyser.connect(oCtx.destination)
-
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-
-    draw = (analyser, dataArray) => {
-      requestAnimationFrame(() => draw(analyser, dataArray))
-      analyser.getByteFrequencyData(dataArray)
-      const sum = dataArray.reduce((a, b) => a + b, 0)
-      const avg = sum / dataArray.length
-
-      shine.value = avg > 100
-    }
-
-    draw(analyser, dataArray)
-  }, { immediate: true })
+onUnmounted(() => {
+  if (task !== undefined)
+    clearTimeout(task)
 })
 
-let lastTop = -1; let task
-
-async function handleIndex(i) {
+function handleIndex(i) {
   ind.value = i
 
-  clearTimeout(task)
-  task = setTimeout(async () => {
+  if (task !== undefined)
+    clearTimeout(task)
+
+  task = setTimeout(() => {
     const el = scroll.value?.$el?.querySelector('.tx-scroll__content')
     if (!el)
       return
-    const target = el.children[i].offsetTop - 100
 
-    lastTop = target
+    const target = el.children[i].offsetTop - 100
     scroll.value.scrollTo(0, target)
   })
 }

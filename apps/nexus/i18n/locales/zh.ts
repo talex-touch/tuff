@@ -382,6 +382,8 @@ export default {
       filtered: '已筛选 {count}/{total} 个官方插件',
       empty: '没有符合条件的官方插件。',
       none: '目前还没有官方插件。',
+      loadMore: '加载更多插件',
+      loadMoreFailed: '加载更多插件失败。',
     },
     badges: {
       official: '官方',

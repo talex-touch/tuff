@@ -21,7 +21,9 @@ const {
   getTranslationProviderLabel,
   normalizeCallFailureMessage,
   normalizeTranslationErrorMessage,
+  parseImageDataUrl,
   resolveTargetLanguage,
+  toImageDataUrl,
 } = require('../../packages/utils/plugin/translation.cjs')
 
 const PLUGIN_NAME = 'touch-translation'
@@ -76,25 +78,6 @@ function truncateText(value, max = 96) {
   return `${text.slice(0, max - 1)}…`
 }
 
-function parseImageDataUrl(dataUrl) {
-  const match = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i.exec(String(dataUrl ?? '').trim())
-  if (!match) {
-    return null
-  }
-
-  const mime = match[1]?.toLowerCase()
-  const base64 = match[2]?.replace(/\s+/g, '')
-  if (!mime || !base64) {
-    return null
-  }
-
-  return { mime, base64 }
-}
-
-function toImageDataUrl(base64, mime = 'image/png') {
-  const normalizedMime = /^image\/[a-z0-9.+-]+$/i.test(mime) ? mime : 'image/png'
-  return `data:${normalizedMime};base64,${base64}`
-}
 
 function buildInfoItem({ id, featureId, title, subtitle }) {
   return new TuffItemBuilder(id)
