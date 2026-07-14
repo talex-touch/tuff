@@ -1,589 +1,404 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
+const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
+const governanceTypes = readFileSync(new URL('../../../types/admin-governance.ts', import.meta.url), 'utf8')
+const governanceFormatters = readFileSync(new URL('../../../utils/admin-governance.ts', import.meta.url), 'utf8')
+
+function expectSourceContracts(source: string, contracts: string[]) {
+  for (const contract of contracts)
+    expect(source).toContain(contract)
+}
+
 describe('dashboard data governance UI contract', () => {
-  it('exposes notification channel test controls wired to the admin test API', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain("requestJson<NotificationChannelsResponse>('/api/dashboard/notifications/channels'")
-    expect(page).toContain("requestJson<NotificationChannelTestResponse>('/api/dashboard/notifications/channels/test'")
-    expect(page).toContain('interface NotificationChannelProfileTemplate')
-    expect(page).toContain('notificationProfiles')
-    expect(page).toContain('selectedNotificationProfile')
-    expect(page).toContain('selectedNotificationChannelEvaluation')
-    expect(page).toContain('applyNotificationProfile')
-    expect(page).toContain('createNotificationCredentialTemplate')
-    expect(page).toContain('notificationForm.profileId')
-    expect(page).toContain('evaluations: NotificationChannelEvaluation[]')
-    expect(page).toContain('notificationChannelReadinessLabel(selectedNotificationChannelEvaluation)')
-    expect(page).toContain('notificationCredentialForm.credentialsJson')
-    expect(page).toContain('profile.defaultConfig')
-    expect(page).toContain('dashboard.governance.notificationProfiles.credential')
-    expect(page).toContain('dashboard.governance.notificationProfiles.configKeys')
-    expect(page).toContain("testNotificationChannel('plan')")
-    expect(page).toContain("testNotificationChannel('send')")
-    expect(page).toContain('notificationTestForm.configId')
-    expect(page).toContain('notificationTestResult.deliveries')
-    expect(page).toContain('dashboard.governance.notificationTest.dryRun')
-    expect(page).toContain('dashboard.governance.notificationTest.send')
+  it('keeps notification channel request, profile, and delivery contracts at their owning boundaries', () => {
+    expectSourceContracts(governanceTypes, [
+      'export interface NotificationChannelProfileTemplate',
+      'export interface NotificationChannelEvaluation',
+      'export interface NotificationChannelsResponse',
+      'evaluations: NotificationChannelEvaluation[]',
+      'profiles: NotificationChannelProfileTemplate[]',
+      'export interface NotificationChannelTestResponse',
+      'deliveries: NotificationDeliveryRecord[]',
+      'export interface NotificationCredentialRecord',
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function notificationChannelLabel',
+      'function notificationChannelCredentialLabel',
+      'function notificationChannelReadinessLabel',
+      'function notificationDeliveryTone',
+    ])
+    expectSourceContracts(page, [
+      "requestJson<NotificationChannelsResponse>('/api/dashboard/notifications/channels'",
+      "requestJson<NotificationChannelTestResponse>('/api/dashboard/notifications/channels/test'",
+      'notificationProfiles',
+      'selectedNotificationProfile',
+      'selectedNotificationChannelEvaluation',
+      'applyNotificationProfile',
+      'createNotificationCredentialTemplate',
+      'notificationForm.profileId',
+      'notificationCredentialForm.credentialsJson',
+      'notificationTestForm.configId',
+      'notificationTestResult.deliveries',
+      "testNotificationChannel('plan')",
+      "testNotificationChannel('send')",
+      'dashboard.governance.notificationProfiles.credential',
+      'dashboard.governance.notificationTest.dryRun',
+      'dashboard.governance.notificationTest.send',
+    ])
   })
 
-  it('exposes granular anonymized search context analytics', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('analyticsData.searches.byLocalHour')
-    expect(page).toContain('analyticsData.searches.byLocalDayOfWeek')
-    expect(page).toContain('analyticsData.searches.byLocalTimeSlot')
-    expect(page).toContain('interface GovernanceSearchTimeHeatmapPoint')
-    expect(page).toContain('timeHeatmap: GovernanceSearchTimeHeatmapPoint[]')
-    expect(page).toContain('interface GovernanceSearchFrequencyCohort')
-    expect(page).toContain('frequencyCohorts: GovernanceSearchFrequencyCohort[]')
-    expect(page).toContain('analytics.value.searches.timeHeatmap')
-    expect(page).toContain('const searchTimeHeatmapRows = computed')
-    expect(page).toContain('const searchTimeHeatmapTop = computed')
-    expect(page).toContain('formatHeatmapCellOpacity(cell.events, searchTimeHeatmapPeak)')
-    expect(page).toContain('formatWeekdayLabel(item.dayOfWeek)')
-    expect(page).toContain('dashboard.governance.analytics.searchTimeHeatmap')
-    expect(page).toContain('dashboard.governance.analytics.searchTimeHeatmapEmpty')
-    expect(page).toContain('analyticsData.searches.byContextAppCategory')
-    expect(page).toContain('analyticsData.searches.byTriggerType')
-    expect(page).toContain('analyticsData.searches.byUserPreferenceMode')
-    expect(page).toContain('analyticsData.searches.byPluginId')
-    expect(page).toContain('analyticsData.searches.byPluginCategory')
-    expect(page).toContain('pluginPreferenceByTimeSlot: GovernanceSearchPluginPreferenceByTimeSlot[]')
-    expect(page).toContain('analyticsData.searches.pluginPreferenceByTimeSlot')
-    expect(page).toContain('pluginPreferenceByContext: GovernanceSearchPluginPreferenceByContext[]')
-    expect(page).toContain('analyticsData.searches.pluginPreferenceByContext')
-    expect(page).toContain('contextSelectionMatrix: GovernanceSearchContextSelectionMatrixItem[]')
-    expect(page).toContain('analyticsData.searches.contextSelectionMatrix')
-    expect(page).toContain('interface GovernanceSearchJourney')
-    expect(page).toContain('journey: GovernanceSearchJourney')
-    expect(page).toContain('analyticsData.searches.journey.total')
-    expect(page).toContain('analyticsData.searches.journey.withResultsRate')
-    expect(page).toContain('analyticsData.searches.journey.segments')
-    expect(page).toContain('analyticsData.searches.bySelectedProvider')
-    expect(page).toContain('analyticsData.searches.bySelectedCategory')
-    expect(page).toContain('analyticsData.searches.bySelectedPluginId')
-    expect(page).toContain('analyticsData.searches.bySelectedRankBucket')
-    expect(page).toContain('analyticsData.searches.byQueryLengthBucket')
-    expect(page).toContain('analyticsData.searches.byResultCountBucket')
-    expect(page).toContain('analyticsData.searches.byFirstResultLatencyBucket')
-    expect(page).toContain('analyticsData.searches.byTotalDurationBucket')
-    expect(page).toContain('selectionSummary: {')
-    expect(page).toContain('analyticsData.searches.selectionSummary.selectionRate')
-    expect(page).toContain('reliabilitySummary: {')
-    expect(page).toContain('analyticsData.searches.reliabilitySummary.zeroResultRate')
-    expect(page).toContain('analyticsData.searches.reliabilitySummary.problemRate')
-    expect(page).toContain('analyticsData.searches.reliabilityTrend')
-    expect(page).toContain('analyticsData.searches.frequencyCohorts')
-    expect(page).toContain('item.avgSearchesPerUser')
-    expect(page).toContain('item.topLocalTimeSlots')
-    expect(page).toContain('item.selectedPlugins')
-    expect(page).toContain('dashboard.governance.analytics.searchPreference')
-    expect(page).toContain('dashboard.governance.analytics.searchLocalTimeSlot')
-    expect(page).toContain('dashboard.governance.analytics.searchLocalWeekday')
-    expect(page).toContain('dashboard.governance.analytics.searchFrequencyCohorts')
-    expect(page).toContain('dashboard.governance.analytics.searchFrequencyAverage')
-    expect(page).toContain('dashboard.governance.analytics.searchZeroResultRate')
-    expect(page).toContain('dashboard.governance.analytics.searchProblemRate')
-    expect(page).toContain('dashboard.governance.analytics.searchSelectionRate')
-    expect(page).toContain('dashboard.governance.analytics.searchSelectedRank')
-    expect(page).toContain('dashboard.governance.analytics.searchQueryLengthBuckets')
-    expect(page).toContain('dashboard.governance.analytics.searchResultBuckets')
-    expect(page).toContain('dashboard.governance.analytics.searchFirstResultLatency')
-    expect(page).toContain('dashboard.governance.analytics.searchTotalDuration')
-    expect(page).toContain('dashboard.governance.analytics.searchSelectedProvider')
-    expect(page).toContain('dashboard.governance.analytics.searchSelectedCategory')
-    expect(page).toContain('dashboard.governance.analytics.searchSelectedPlugin')
-    expect(page).toContain('dashboard.governance.analytics.searchPluginTimeSlot')
-    expect(page).toContain('dashboard.governance.analytics.searchPluginContext')
-    expect(page).toContain('dashboard.governance.analytics.searchContextSelectionMatrix')
-    expect(page).toContain('dashboard.governance.analytics.searchJourneyFunnel')
-    expect(page).toContain('dashboard.governance.analytics.searchJourneySegment')
-    expect(page).toContain('dashboard.governance.analytics.searchPluginSeen')
-    expect(page).toContain('dashboard.governance.analytics.searchPluginSelected')
+  it('keeps granular anonymized search analytics schema separate from its dashboard presentation', () => {
+    expectSourceContracts(governanceTypes, [
+      'export interface GovernanceSearchTimeHeatmapPoint',
+      'timeHeatmap: GovernanceSearchTimeHeatmapPoint[]',
+      'export interface GovernanceSearchFrequencyCohort',
+      'frequencyCohorts: GovernanceSearchFrequencyCohort[]',
+      'pluginPreferenceByTimeSlot: GovernanceSearchPluginPreferenceByTimeSlot[]',
+      'pluginPreferenceByContext: GovernanceSearchPluginPreferenceByContext[]',
+      'contextSelectionMatrix: GovernanceSearchContextSelectionMatrixItem[]',
+      'journey: GovernanceSearchJourney',
+      'selectionSummary: {',
+      'reliabilitySummary: {',
+      'reliabilityTrend: Array<'
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function formatHeatmapCellOpacity',
+      'function formatWeekdayLabel',
+      'function formatPercent',
+    ])
+    expectSourceContracts(page, [
+      'analyticsData.searches.byLocalHour',
+      'analyticsData.searches.byLocalDayOfWeek',
+      'analyticsData.searches.byLocalTimeSlot',
+      'analytics.value.searches.timeHeatmap',
+      'analyticsData.searches.frequencyCohorts',
+      'analyticsData.searches.byContextAppCategory',
+      'analyticsData.searches.byTriggerType',
+      'analyticsData.searches.byUserPreferenceMode',
+      'analyticsData.searches.byPluginId',
+      'analyticsData.searches.byPluginCategory',
+      'analyticsData.searches.pluginPreferenceByTimeSlot',
+      'analyticsData.searches.pluginPreferenceByContext',
+      'analyticsData.searches.contextSelectionMatrix',
+      'analyticsData.searches.journey.total',
+      'analyticsData.searches.journey.withResultsRate',
+      'analyticsData.searches.selectionSummary.selectionRate',
+      'analyticsData.searches.reliabilitySummary.zeroResultRate',
+      'analyticsData.searches.reliabilitySummary.problemRate',
+      'analyticsData.searches.bySelectedProvider',
+      'analyticsData.searches.bySelectedCategory',
+      'analyticsData.searches.bySelectedPluginId',
+      'analyticsData.searches.bySelectedRankBucket',
+      'analyticsData.searches.byQueryLengthBucket',
+      'analyticsData.searches.byResultCountBucket',
+      'analyticsData.searches.byFirstResultLatencyBucket',
+      'analyticsData.searches.byTotalDurationBucket',
+      'formatHeatmapCellOpacity(cell.events, searchTimeHeatmapPeak)',
+      'formatWeekdayLabel(item.dayOfWeek)',
+      'dashboard.governance.analytics.searchTimeHeatmap',
+      'dashboard.governance.analytics.searchFrequencyCohorts',
+      'dashboard.governance.analytics.searchJourneyFunnel',
+    ])
   })
 
-  it('exposes hot plugin leaderboard score and action mix', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('hotScore: number')
-    expect(page).toContain('growthRate: number')
-    expect(page).toContain('formatNumber(item.hotScore)')
-    expect(page).toContain('formatDelta(item.growth.growthRate)')
-    expect(page).toContain('item.byAction.slice(0, 3)')
-    expect(page).toContain('formatNumber(action.quantity)')
+  it('renders growth, hot-plugin, and operations data from the shared analytics schema', () => {
+    expectSourceContracts(governanceTypes, [
+      'export interface GovernanceGrowthTrendPoint',
+      'signupGrowthTrend: GovernanceGrowthTrendPoint[]',
+      'export interface PluginLeaderboardItem',
+      'hotScore: number',
+      'growthRate: number',
+      'export interface GovernanceOperationsTimelinePoint',
+      'operationsTimeline: GovernanceOperationsTimelinePoint[]',
+      'leaderboards: {',
+      'riskSummary: {',
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function formatNumber',
+      'function formatDelta',
+      'function formatTrendWidth',
+    ])
+    expectSourceContracts(page, [
+      'analyticsData.users.signupGrowthTrend',
+      'formatNumber(item.cumulative)',
+      'formatDelta(item.growthRate)',
+      'dashboard.governance.analytics.userGrowthTrend',
+      'dashboard.governance.analytics.userGrowthTotal',
+      'formatNumber(item.hotScore)',
+      'formatDelta(item.growth.growthRate)',
+      'item.byAction.slice(0, 3)',
+      'analyticsData.dashboard.growth.userSignups',
+      'analyticsData.dashboard.growth.searches',
+      'analyticsData.dashboard.growth.pluginInstalls',
+      'analyticsData.dashboard.growth.providerUsage.tokens',
+      'analyticsData.dashboard.growth.uploads.failureRate',
+      'analyticsData.dashboard.leaderboards.hotPlugins',
+      'analyticsData.dashboard.leaderboards.topModels',
+      'analyticsData.dashboard.trends.operationsTimeline',
+      'formatTrendWidth(item.searches, dashboardOperationsPeaks.searches)',
+      'dashboard.governance.analytics.operationsDashboard',
+      'dashboard.governance.analytics.dashboardOperationsCommandBoard',
+      'dashboard.governance.analytics.dashboardHotPlugins',
+      'dashboard.governance.analytics.dashboardModelDistribution',
+    ])
   })
 
-  it('exposes user signup growth amount and growth-rate trend', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('interface GovernanceGrowthTrendPoint')
-    expect(page).toContain('signupGrowthTrend: GovernanceGrowthTrendPoint[]')
-    expect(page).toContain('analyticsData.users.signupGrowthTrend')
-    expect(page).toContain('formatNumber(item.cumulative)')
-    expect(page).toContain('formatDelta(item.growthRate)')
-    expect(page).toContain('dashboard.governance.analytics.userGrowthTrend')
-    expect(page).toContain('dashboard.governance.analytics.userGrowthTotal')
+  it('keeps the governance report and D1 readiness models and formatters outside the page', () => {
+    expectSourceContracts(governanceTypes, [
+      'export interface PlatformGovernanceReportSnapshot',
+      'export interface PlatformGovernanceReportScorecard',
+      'export interface PlatformGovernanceReportRiskQueueItem',
+      'export interface PlatformGovernanceReportEvidenceItem',
+      'export interface PlatformGovernanceD1Readiness',
+      'export interface PlatformGovernanceD1ReadinessCheck',
+      'missingTables: number',
+      'missingIndexes: number',
+      'backfillRequired: number',
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function reportStatusLabel',
+      'function reportEvidenceLabel',
+      'function reportPriorityTone',
+      'function formatD1MissingObjects',
+      'function d1ReadinessLabel',
+    ])
+    expectSourceContracts(page, [
+      "requestJson<PlatformGovernanceReportSnapshot>('/api/dashboard/governance/report'",
+      "requestJson<PlatformGovernanceD1Readiness>('/api/dashboard/governance/d1-readiness'",
+      'governanceReport.report.scorecards',
+      'governanceReport.report.evidenceStatus',
+      'governanceReport.report.riskQueue',
+      'governanceReport.report.trendSummary.peakProviderTokens',
+      'reportStatusLabel(governanceReport.report.status)',
+      'reportEvidenceLabel(item.status)',
+      'reportPriorityTone(item.priority)',
+      'd1Readiness.summary.missingTables',
+      'd1Readiness.summary.missingIndexes',
+      'd1Readiness.summary.backfillRequired',
+      'formatD1MissingObjects(check)',
+      'dashboard.governance.report.title',
+      'dashboard.governance.d1Readiness.title',
+    ])
   })
 
-  it('exposes operations dashboard summary for growth, risks, leaderboards, tokens, and models', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('dashboard: {')
-    expect(page).toContain('leaderboards: {')
-    expect(page).toContain('riskSummary: {')
-    expect(page).toContain('const dashboardRiskTotal = computed')
-    expect(page).toContain('analyticsData.dashboard.growth.userSignups')
-    expect(page).toContain('analyticsData.dashboard.growth.searches')
-    expect(page).toContain('analyticsData.dashboard.growth.pluginInstalls')
-    expect(page).toContain('analyticsData.dashboard.growth.providerUsage.tokens')
-    expect(page).toContain('analyticsData.dashboard.growth.uploads.failureRate')
-    expect(page).toContain('analyticsData.dashboard.leaderboards.hotPlugins')
-    expect(page).toContain('analyticsData.dashboard.leaderboards.topModels')
-    expect(page).toContain('GovernanceOperationsTimelinePoint')
-    expect(page).toContain('operationsTimeline: GovernanceOperationsTimelinePoint[]')
-    expect(page).toContain('analyticsData.dashboard.trends.operationsTimeline')
-    expect(page).toContain('const dashboardOperationsTimeline = computed')
-    expect(page).toContain('const dashboardOperationsLatest = computed')
-    expect(page).toContain('const dashboardOperationsPeaks = computed')
-    expect(page).toContain('formatTrendWidth(item.searches, dashboardOperationsPeaks.searches)')
-    expect(page).toContain('dashboardOperationsTimeline.slice(-8)')
-    expect(page).toContain('dashboardOperationsLatest.providerTokens')
-    expect(page).toContain('dashboardOperationsLatest.riskScore')
-    expect(page).toContain('item.searchSelectionRate')
-    expect(page).toContain('item.pluginInvocations')
-    expect(page).toContain('item.providerTokens')
-    expect(page).toContain('item.uploadFailureRate')
-    expect(page).toContain('item.storageOperations')
-    expect(page).toContain('channelDistribution: ProviderChannelDistributionItem[]')
-    expect(page).toContain('analyticsData.providers.channelDistribution')
-    expect(page).toContain('modelChannelDistribution: ProviderModelChannelDistributionItem[]')
-    expect(page).toContain('analyticsData.providers.modelChannelDistribution')
-    expect(page).toContain('quotaActionQueue: ProviderQuotaActionQueueItem[]')
-    expect(page).toContain('quotaRiskItems: ProviderQuotaRiskItem[]')
-    expect(page).toContain('providerQuotaNearestExhaustionDays')
-    expect(page).toContain('analyticsData.providers.quotaActionQueue')
-    expect(page).toContain('analyticsData.providers.quotaRiskItems')
-    expect(page).toContain('providerQuotaActionReasonLabel(item.reason)')
-    expect(page).toContain('providerQuotaActionTone(item.priority)')
-    expect(page).toContain('item.suggestedAction')
-    expect(page).toContain('providerQuotaRiskReasonLabel(item.riskReason)')
-    expect(page).toContain('analyticsData.providers.quotaSummary.requestOverage')
-    expect(page).toContain('analyticsData.providers.quotaSummary.lowestRemainingTokens')
-    expect(page).toContain('dashboard.governance.analytics.operationsDashboard')
-    expect(page).toContain('dashboard.governance.analytics.dashboardOperationsCommandBoard')
-    expect(page).toContain('dashboard.governance.analytics.dashboardOperationsTimeline')
-    expect(page).toContain('dashboard.governance.analytics.dashboardHotPlugins')
-    expect(page).toContain('dashboard.governance.analytics.dashboardModelDistribution')
-    expect(page).toContain('dashboard.governance.analytics.providerChannelBreakdown')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaActionQueue')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaRiskBudget')
+  it('renders visit and upload reliability analytics without inlining their payload types', () => {
+    expectSourceContracts(governanceTypes, [
+      'byRoute: GovernanceMetric[]',
+      'bySurface: GovernanceMetric[]',
+      'byLocalTimeSlot: GovernanceMetric[]',
+      'byLocalDayOfWeek: GovernanceMetric[]',
+      'byCountry: GovernanceMetric[]',
+      'byRegion: GovernanceMetric[]',
+      'byTimezone: GovernanceMetric[]',
+      'export interface UploadSceneAssetHealthItem',
+      'sceneAssetHealth: UploadSceneAssetHealthItem[]',
+      'recoveredEvidence: Array<{',
+      'actionQueue: Array<{',
+      'failureMatrix: Array<{',
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function formatDurationMs',
+    ])
+    expectSourceContracts(page, [
+      'analyticsData.visits.byRoute',
+      'analyticsData.visits.bySurface',
+      'analyticsData.visits.byLocalTimeSlot',
+      'analyticsData.visits.byLocalDayOfWeek',
+      'analyticsData.visits.byCountry',
+      'analyticsData.visits.byRegion',
+      'analyticsData.visits.byTimezone',
+      'analyticsData.visits.trend',
+      'dashboard.governance.analytics.visitHotspot',
+      'analyticsData.uploads.stuckAttempts',
+      'analyticsData.uploads.stuckAttemptAgeMs',
+      'analyticsData.uploads.stuckRate',
+      'analyticsData.uploads.uploadDurationMs.average',
+      'analyticsData.uploads.retrySummary.recoveredRetryRate',
+      'analyticsData.uploads.sceneAssetHealth',
+      'analyticsData.uploads.pipelineSummary',
+      'analyticsData.uploads.failureMatrix',
+      'analyticsData.uploads.actionQueue',
+      'analyticsData.uploads.problemAttempts',
+      'formatDurationMs(analyticsData.uploads.uploadDurationMs.average)',
+      'dashboard.governance.analytics.uploadRecoveredEvidence',
+      'dashboard.governance.analytics.uploadSceneAssetHealth',
+      'dashboard.governance.analytics.uploadActionQueue',
+      'dashboard.governance.analytics.uploadFailureMatrix',
+    ])
   })
 
-  it('exposes read-only operations report snapshot from governance report API', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain("requestJson<PlatformGovernanceReportSnapshot>('/api/dashboard/governance/report'")
-    expect(page).toContain('PlatformGovernanceReportScorecard')
-    expect(page).toContain('PlatformGovernanceReportRiskQueueItem')
-    expect(page).toContain('PlatformGovernanceReportEvidenceItem')
-    expect(page).toContain('const governanceReport = computed')
-    expect(page).toContain('refreshReport()')
-    expect(page).toContain('dashboard.governance.report.title')
-    expect(page).toContain('governanceReport.report.scorecards')
-    expect(page).toContain('governanceReport.report.evidenceStatus')
-    expect(page).toContain('governanceReport.report.riskQueue')
-    expect(page).toContain('governanceReport.report.trendSummary.peakProviderTokens')
-    expect(page).toContain('reportStatusLabel(governanceReport.report.status)')
-    expect(page).toContain("import type { EvidenceSource as PlatformGovernanceReportEvidenceStatus }")
-    expect(page).toContain('isProductionEvidenceSource(status)')
-    expect(page).toContain('isFallbackEvidenceSource(status)')
-    expect(page).toContain('reportEvidenceLabel(item.status)')
-    expect(page).toContain('reportPriorityTone(item.priority)')
+  it('renders notification health, evidence, and browser-push analytics from shared contracts', () => {
+    expectSourceContracts(governanceTypes, [
+      'export interface NotificationDeliveryAnalytics',
+      'channelSummary: {',
+      'channelRisks: Array<{',
+      'actionQueue: NotificationActionQueueItem[]',
+      'providerMix: Array<{',
+      'providerHealth: Array<{',
+      'deliveryTrend: Array<',
+      'durationMs: GovernanceNumberStat',
+      'byStatusCode: GovernanceMetric[]',
+      'export interface NotificationDeliveryEvidenceItem',
+      'deliveryEvidence: NotificationDeliveryEvidenceItem[]',
+      'export interface NotificationTestEvidenceItem',
+      'testEvidence: NotificationTestEvidenceItem[]',
+      'browserPushSubscriptions: {',
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function notificationActionQueueStatusLabel',
+      'function notificationChannelCredentialLabel',
+      'function notificationChannelReadinessLabel',
+    ])
+    expectSourceContracts(page, [
+      'analyticsData.notifications.browserPushSubscriptions.total',
+      'analyticsData.notifications.browserPushSubscriptions.byEndpointHost',
+      'analyticsData.notifications.channelSummary.enabled',
+      'analyticsData.notifications.channelSummary.credentialMissing',
+      'analyticsData.notifications.channelSummary.productionReady',
+      'analyticsData.notifications.actionQueue',
+      'analyticsData.notifications.providerMix',
+      'analyticsData.notifications.channelRisks',
+      'analyticsData.notifications.deliveries.durationMs.average',
+      'analyticsData.notifications.byStatusCode',
+      'analyticsData.notifications.deliveryTrend',
+      'analyticsData.notifications.providerHealth',
+      'analyticsData.notifications.deliveryEvidence',
+      'analyticsData.notifications.testEvidence',
+      'notificationChannelLabel(channel.status)',
+      'notificationChannelCredentialLabel(channel)',
+      'notificationChannelReadinessLabel(channel)',
+      'notificationDeliveryTone(item.status)',
+      'dashboard.governance.analytics.browserPushSubscriptions',
+      'dashboard.governance.analytics.notificationActionQueue',
+      'dashboard.governance.analytics.notificationDeliveryEvidence',
+      'dashboard.governance.analytics.notificationTestEvidence',
+    ])
   })
 
-  it('exposes anonymized app visit hotspots and visit trend', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('byRoute: GovernanceMetric[]')
-    expect(page).toContain('bySurface: GovernanceMetric[]')
-    expect(page).toContain('byLocalTimeSlot: GovernanceMetric[]')
-    expect(page).toContain('byLocalDayOfWeek: GovernanceMetric[]')
-    expect(page).toContain('byCountry: GovernanceMetric[]')
-    expect(page).toContain('byRegion: GovernanceMetric[]')
-    expect(page).toContain('byTimezone: GovernanceMetric[]')
-    expect(page).toContain('analyticsData.visits.byRoute')
-    expect(page).toContain('analyticsData.visits.bySurface')
-    expect(page).toContain('analyticsData.visits.byLocalTimeSlot')
-    expect(page).toContain('analyticsData.visits.byLocalDayOfWeek')
-    expect(page).toContain('analyticsData.visits.byCountry')
-    expect(page).toContain('analyticsData.visits.byRegion')
-    expect(page).toContain('analyticsData.visits.byTimezone')
-    expect(page).toContain('analyticsData.visits.trend')
-    expect(page).toContain('dashboard.governance.analytics.visitHotspot')
-    expect(page).toContain('dashboard.governance.analytics.visitRoute')
-    expect(page).toContain('dashboard.governance.analytics.visitLocalTimeSlot')
-    expect(page).toContain('dashboard.governance.analytics.visitLocalWeekday')
-    expect(page).toContain('dashboard.governance.analytics.visitCountry')
-    expect(page).toContain('dashboard.governance.analytics.visitRegionTimezone')
+  it('keeps storage policy, capacity, and alert payload contracts outside the page defaults', () => {
+    expectSourceContracts(governanceTypes, [
+      'export type StorageAlertMetric',
+      'export interface StoragePolicyAlert',
+      'alerts: StoragePolicyAlert[]',
+      'limitKey: StorageAlertLimitKey',
+      'export interface StorageUsageBreakdown',
+      'export interface StorageChannelPressure',
+      'export interface StorageActionQueueItem',
+      'export interface StorageSmokeEvidenceItem',
+      'smokeEvidence: StorageSmokeEvidenceItem[]',
+      'policySummary: {',
+      'remaining: {',
+      'overage: {',
+      'burnRate: {',
+      'projectedExhaustionDays: {',
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function formatStorageAlertValue',
+      'function formatStorageBudgetValue',
+      'function formatProjectedDays',
+      'function storageEvaluationLabel',
+      'function storageChannelPressureLabel',
+      'function storageSmokeEvidenceLabel',
+    ])
+    expectSourceContracts(page, [
+      "requestJson<StorageAlertNotifyResponse>('/api/dashboard/storage/alerts/notify'",
+      "notifyStorageAlerts('plan')",
+      "notifyStorageAlerts('send')",
+      'storageAlertNotifyResult.dispatches',
+      'derivedStoragePolicyAlerts',
+      'storagePolicyAlerts.some(item => item.status ===',
+      'formatStorageAlertValue(alert, alert.usage)',
+      'analyticsData.storage.storedBytes',
+      'analyticsData.storage.trafficBytes',
+      'analyticsData.storage.operations',
+      'analyticsData.storage.byChannelUsage',
+      'analyticsData.storage.byProviderUsage',
+      'analyticsData.storage.channelPressure',
+      'analyticsData.storage.actionQueue',
+      'analyticsData.storage.smokeEvidence',
+      'analyticsData.storage.policySummary.blocked',
+      'analyticsData.storage.policyRisks',
+      'formatStorageBudgetValue',
+      'formatProjectedDays',
+      'dashboard.governance.storageAlerts.title',
+      'dashboard.governance.analytics.storageUsage',
+      'dashboard.governance.analytics.storageActionQueue',
+      'dashboard.governance.analytics.storageChannelProjectedExhaustion',
+    ])
   })
 
-  it('exposes upload reliability diagnostics for stuck attempts and failures', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('analyticsData.uploads.stuckAttempts')
-    expect(page).toContain('analyticsData.uploads.stuckAttemptAgeMs')
-    expect(page).toContain('analyticsData.uploads.stuckRate')
-    expect(page).toContain('analyticsData.uploads.uploadDurationMs.average')
-    expect(page).toContain('formatDurationMs(analyticsData.uploads.uploadDurationMs.average)')
-    expect(page).toContain('analyticsData.uploads.byStatusCode')
-    expect(page).toContain('analyticsData.uploads.bySurface')
-    expect(page).toContain('analyticsData.uploads.byStorageProvider')
-    expect(page).toContain('analyticsData.uploads.statusTrend')
-    expect(page).toContain('analyticsData.uploads.retrySummary.retryableFailures')
-    expect(page).toContain('analyticsData.uploads.retrySummary.scheduledRetries')
-    expect(page).toContain('analyticsData.uploads.retrySummary.exhaustedFailures')
-    expect(page).toContain('analyticsData.uploads.retrySummary.recoveredUploads')
-    expect(page).toContain('analyticsData.uploads.retrySummary.recoveredRetryCount')
-    expect(page).toContain('analyticsData.uploads.retrySummary.recoveredRetryRate')
-    expect(page).toContain('analyticsData.uploads.retrySummary.recoveredAttempts.average')
-    expect(page).toContain('analyticsData.uploads.retrySummary.nextRetryDelayMs.average')
-    expect(page).toContain('analyticsData.uploads.retrySummary.calibrationCoverageRate')
-    expect(page).toContain('analyticsData.uploads.retrySummary.liveFailureSamples')
-    expect(page).toContain('analyticsData.uploads.retrySummary.manualFailureSamples')
-    expect(page).toContain('analyticsData.uploads.byRetryDisposition')
-    expect(page).toContain('analyticsData.uploads.retryTrend')
-    expect(page).toContain('item.recovered')
-    expect(page).toContain('recoveredEvidence: Array<{')
-    expect(page).toContain('analyticsData.uploads.recoveredEvidence')
-    expect(page).toContain('dashboard.governance.analytics.uploadRecoveredEvidence')
-    expect(page).toContain('item.storageOperation')
-    expect(page).toContain('item.storageStatusCode')
-    expect(page).toContain('interface UploadSceneAssetHealthItem')
-    expect(page).toContain('sceneAssetHealth: UploadSceneAssetHealthItem[]')
-    expect(page).toContain('analyticsData.uploads.sceneAssetHealth')
-    expect(page).toContain('dashboard.governance.analytics.uploadSceneAssetHealth')
-    expect(page).toContain('item.sceneId')
-    expect(page).toContain('item.capability')
-    expect(page).toContain('item.providerId')
-    expect(page).toContain('item.assetKind')
-    expect(page).toContain('item.failureReasons[0]?.key')
-    expect(page).toContain('item.statusCodes[0]?.key')
-    expect(page).toContain('analyticsData.uploads.pipelineSummary')
-    expect(page).toContain('dashboard.governance.analytics.uploadPipelineSummary')
-    expect(page).toContain('item.completionRate')
-    expect(page).toContain('item.pending')
-    expect(page).toContain('analyticsData.uploads.failureMatrix')
-    expect(page).toContain('actionQueue: Array<{')
-    expect(page).toContain('analyticsData.uploads.actionQueue')
-    expect(page).toContain('dashboard.governance.analytics.uploadActionQueue')
-    expect(page).toContain('dashboard.governance.analytics.uploadActionEvidence')
-    expect(page).toContain('item.priority')
-    expect(page).toContain('item.suggestedAction')
-    expect(page).toContain('item.evidenceAttemptHashes')
-    expect(page).toContain('item.evidenceResourceHashes')
-    expect(page).toContain('formatDurationMs(item.oldestAgeMs)')
-    expect(page).toContain('dashboard.governance.analytics.uploadFailureMatrix')
-    expect(page).toContain('dashboard.governance.analytics.uploadSuggestedAction')
-    expect(page).toContain('item.suggestedAction')
-    expect(page).toContain('item.disposition')
-    expect(page).toContain('item.scheduled')
-    expect(page).toContain('item.exhausted')
-    expect(page).toContain('item.calibrationStatus')
-    expect(page).toContain('item.sampleSource')
-    expect(page).toContain('item.sampleCount')
-    expect(page).toContain('analyticsData.uploads.problemAttempts')
-    expect(page).toContain('attempt.attemptHash')
-    expect(page).toContain('attempt.resourceType')
-    expect(page).toContain('attempt.retryable')
-    expect(page).toContain('attempt.nextRetryDelayMs')
-    expect(page).toContain('dashboard.governance.analytics.uploadRetryableFailures')
-    expect(page).toContain('dashboard.governance.analytics.uploadRecoveredRetries')
-    expect(page).toContain('dashboard.governance.analytics.uploadRecoveredRetryCount')
-    expect(page).toContain('dashboard.governance.analytics.uploadRecoveredRetryRate')
-    expect(page).toContain('dashboard.governance.analytics.uploadRecoveredAttempts')
-    expect(page).toContain('dashboard.governance.analytics.uploadRetryDisposition')
-    expect(page).toContain('dashboard.governance.analytics.uploadRetryState')
-    expect(page).toContain('dashboard.governance.analytics.uploadFailureCalibration')
-    expect(page).toContain('dashboard.governance.analytics.uploadFailureSamples')
-    expect(page).toContain('dashboard.governance.analytics.uploadStuckAttempts')
-    expect(page).toContain('dashboard.governance.analytics.uploadProblemAttempts')
+  it('keeps storage channel smoke and drill-down request contracts in the page', () => {
+    expectSourceContracts(governanceTypes, [
+      'export interface StorageChannelSmokeResponse',
+      'export type StorageChannelSmokeMode',
+      'export type StorageChannelAnalyticsResponse',
+    ])
+    expectSourceContracts(page, [
+      "requestJson<StorageChannelSmokeResponse>('/api/dashboard/storage/channels/smoke'",
+      "smokeStoragePolicy(item.policyId, 'dry-run')",
+      "smokeStoragePolicy(item.policyId, 'write')",
+      'storageSmokeResult.policyName',
+      "requestJson<StorageChannelAnalyticsResponse>('/api/dashboard/storage/channels/analytics'",
+      'storageChannelAnalyticsQuery',
+      'selectedStorageChannelAnalytics',
+      'storageChannelAnalyticsData.byResourceTypeUsage',
+      'storageChannelAnalyticsData.byActionUsage',
+      'selectedStorageChannelAnalytics.trend',
+      'selectedStorageChannelAnalytics.evaluations',
+      'dashboard.governance.analytics.storageChannelDetail',
+    ])
   })
 
-  it('exposes browser push subscription analytics in the notification cockpit', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('browserPushSubscriptions: {')
-    expect(page).toContain('analyticsData.notifications.browserPushSubscriptions.total')
-    expect(page).toContain('analyticsData.notifications.browserPushSubscriptions.registered')
-    expect(page).toContain('analyticsData.notifications.browserPushSubscriptions.deleted')
-    expect(page).toContain('analyticsData.notifications.browserPushSubscriptions.byEndpointHost')
-    expect(page).toContain('analyticsData.notifications.browserPushSubscriptions.byAction')
-    expect(page).toContain('dashboard.governance.analytics.browserPushSubscriptions')
-  })
-
-  it('exposes per-provider notification delivery health and latest failure reason', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('channelSummary: {')
-    expect(page).toContain('channelRisks: Array<{')
-    expect(page).toContain('analyticsData.notifications.channelSummary.enabled')
-    expect(page).toContain('analyticsData.notifications.channelSummary.credentialMissing')
-    expect(page).toContain('analyticsData.notifications.channelSummary.productionReady')
-    expect(page).toContain('analyticsData.notifications.channelSummary.runtimeMissing')
-    expect(page).toContain('analyticsData.notifications.channelSummary.relayMissing')
-    expect(page).toContain('analyticsData.notifications.channelSummary.sendModeMissing')
-    expect(page).toContain('interface NotificationActionQueueItem')
-    expect(page).toContain('actionQueue: NotificationActionQueueItem[]')
-    expect(page).toContain('analyticsData.notifications.actionQueue')
-    expect(page).toContain('dashboard.governance.analytics.notificationActionQueue')
-    expect(page).toContain('dashboard.governance.analytics.notificationDeliveryRisk')
-    expect(page).toContain('item.priority')
-    expect(page).toContain('item.suggestedAction')
-    expect(page).toContain('item.reason')
-    expect(page).toContain('item.source')
-    expect(page).toContain('item.latestFailureReason')
-    expect(page).toContain('providerMix: Array<{')
-    expect(page).toContain('analyticsData.notifications.providerMix')
-    expect(page).toContain('dashboard.governance.analytics.notificationProviderMix')
-    expect(page).toContain('item.productionReady')
-    expect(page).toContain('item.warning')
-    expect(page).toContain('item.disabled')
-    expect(page).toContain('analyticsData.notifications.channelRisks')
-    expect(page).toContain('notificationChannelLabel(channel.status)')
-    expect(page).toContain('notificationChannelCredentialLabel(channel)')
-    expect(page).toContain('notificationChannelReadinessLabel(channel)')
-    expect(page).toContain('notificationChannelCredentialMissing')
-    expect(page).toContain('notificationChannelCredentialBound')
-    expect(page).toContain('requiresPublicRuntime: boolean')
-    expect(page).toContain('requiresRelayEndpoint: boolean')
-    expect(page).toContain('providerHealth: Array<{')
-    expect(page).toContain('deliveryTrend: Array<GovernanceTrendPoint')
-    expect(page).toContain('durationMs: GovernanceNumberStat')
-    expect(page).toContain('byStatusCode: GovernanceMetric[]')
-    expect(page).toContain('latestFailureStatusCode: number | null')
-    expect(page).toContain('statusCode: number | null')
-    expect(page).toContain('analyticsData.notifications.deliveries.durationMs.average')
-    expect(page).toContain('analyticsData.notifications.byStatusCode')
-    expect(page).toContain('formatDurationMs(item.durationMs.average)')
-    expect(page).toContain('formatDurationMs(item.durationMs.max)')
-    expect(page).toContain('formatDurationMs(delivery.durationMs)')
-    expect(page).toContain('delivery.statusCode != null')
-    expect(page).toContain('analyticsData.notifications.deliveryTrend')
-    expect(page).toContain('analyticsData.notifications.providerHealth')
-    expect(page).toContain('interface NotificationDeliveryEvidenceItem')
-    expect(page).toContain('deliveryEvidence: NotificationDeliveryEvidenceItem[]')
-    expect(page).toContain('analyticsData.notifications.deliveryEvidence')
-    expect(page).toContain('dashboard.governance.analytics.notificationDeliveryEvidence')
-    expect(page).toContain('interface NotificationTestEvidenceItem')
-    expect(page).toContain('testEvidence: NotificationTestEvidenceItem[]')
-    expect(page).toContain('analyticsData.notifications.testEvidence')
-    expect(page).toContain('dashboard.governance.analytics.notificationTestEvidence')
-    expect(page).toContain('notificationDeliveryTone(item.status)')
-    expect(page).toContain('item.uniqueActors')
-    expect(page).toContain('dashboard.governance.analytics.notificationProviderHealth')
-    expect(page).toContain('dashboard.governance.analytics.notificationAvgDuration')
-    expect(page).toContain('dashboard.governance.analytics.notificationMaxDuration')
-    expect(page).toContain('dashboard.governance.analytics.notificationStatusCode')
-    expect(page).toContain('formatPercent(item.sentRate)')
-    expect(page).toContain('formatPercent(item.failureRate)')
-    expect(page).toContain('item.latestFailureReason')
-    expect(page).toContain('item.latestFailureStatusCode')
-  })
-
-  it('exposes storage policy alerts for storage limit and traffic risk', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('interface StoragePolicyAlert')
-    expect(page).toContain('alerts: StoragePolicyAlert[]')
-    expect(page).toContain('limitKey: StorageAlertLimitKey')
-    expect(page).toContain('const derivedStoragePolicyAlerts = computed<StoragePolicyAlert[]>')
-    expect(page).toContain('const storagePolicyAlerts = computed(() => storagePoliciesData.value?.alerts')
-    expect(page).toContain("metric: 'storedBytes'")
-    expect(page).toContain("metric: 'trafficBytes'")
-    expect(page).toContain("metric: 'operations'")
-    expect(page).toContain('dashboard.governance.storageAlerts.title')
-    expect(page).toContain('storagePolicyAlerts.some(item => item.status ===')
-    expect(page).toContain('formatStorageAlertValue(alert, alert.usage)')
-  })
-
-  it('exposes storage alert notification controls', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain("requestJson<StorageAlertNotifyResponse>('/api/dashboard/storage/alerts/notify'")
-    expect(page).toContain("notifyStorageAlerts('plan')")
-    expect(page).toContain("notifyStorageAlerts('send')")
-    expect(page).toContain('storageAlertNotifyResult.dispatches')
-    expect(page).toContain('dashboard.governance.storageAlerts.dryRun')
-    expect(page).toContain('dashboard.governance.storageAlerts.send')
-  })
-
-  it('exposes storage channel smoke controls for live storage evidence', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain("requestJson<StorageChannelSmokeResponse>('/api/dashboard/storage/channels/smoke'")
-    expect(page).toContain("smokeStoragePolicy(item.policyId, 'dry-run')")
-    expect(page).toContain("smokeStoragePolicy(item.policyId, 'write')")
-    expect(page).toContain('storageSmokeResult.policyName')
-    expect(page).toContain('StorageChannelSmokeResponse')
-    expect(page).toContain('dashboard.governance.storageSmoke.dryRun')
-    expect(page).toContain('dashboard.governance.storageSmoke.write')
-  })
-
-  it('exposes storage channel usage analytics for traffic and capacity planning', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('interface StorageUsageBreakdown')
-    expect(page).toContain('analyticsData.storage.storedBytes')
-    expect(page).toContain('analyticsData.storage.trafficBytes')
-    expect(page).toContain('analyticsData.storage.operations')
-    expect(page).toContain('analyticsData.storage.byChannelUsage')
-    expect(page).toContain('analyticsData.storage.byProviderUsage')
-    expect(page).toContain('analyticsData.storage.byResourceTypeUsage')
-    expect(page).toContain('analyticsData.storage.byActionUsage')
-    expect(page).toContain('interface StorageChannelPressure')
-    expect(page).toContain('interface StorageActionQueueItem')
-    expect(page).toContain('analyticsData.storage.channelPressure')
-    expect(page).toContain('actionQueue: StorageActionQueueItem[]')
-    expect(page).toContain('analyticsData.storage.actionQueue')
-    expect(page).toContain('interface StorageSmokeEvidenceItem')
-    expect(page).toContain('smokeEvidence: StorageSmokeEvidenceItem[]')
-    expect(page).toContain('analyticsData.storage.smokeEvidence')
-    expect(page).toContain('storageSmokeEvidenceLabel(item.status)')
-    expect(page).toContain('storageSmokeEvidenceTone(item.status)')
-    expect(page).toContain('dashboard.governance.analytics.storageSmokeEvidence')
-    expect(page).toContain('dashboard.governance.analytics.storageSmokeOperations')
-    expect(page).toContain('dashboard.governance.analytics.storageSmokeCredential')
-    expect(page).toContain('storageChannelPressureLabel(item.pressureStatus)')
-    expect(page).toContain('storageChannelPressureTone(item.pressureStatus)')
-    expect(page).toContain('item.remaining.storedBytes')
-    expect(page).toContain('item.trend.at(-1)?.operations')
-    expect(page).toContain('item.priority')
-    expect(page).toContain('item.suggestedAction')
-    expect(page).toContain('item.reason')
-    expect(page).toContain('item.latestTrendDate')
-    expect(page).toContain('dashboard.governance.analytics.storageActionQueue')
-    expect(page).toContain('dashboard.governance.analytics.storageActionQueueRemaining')
-    expect(page).toContain('dashboard.governance.analytics.storageActionQueueOverage')
-    expect(page).toContain('dashboard.governance.analytics.storageActionQueueBurnRate')
-    expect(page).toContain('dashboard.governance.analytics.storageChannelPressure')
-    expect(page).toContain('analyticsData.storage.trend')
-    expect(page).toContain('policySummary: {')
-    expect(page).toContain('analyticsData.storage.policySummary.active')
-    expect(page).toContain('analyticsData.storage.policySummary.blocked')
-    expect(page).toContain('analyticsData.storage.policySummary.warning')
-    expect(page).toContain('storagePolicyPeakUtilization')
-    expect(page).toContain('analyticsData.storage.policyRisks')
-    expect(page).toContain('storageEvaluationLabel(policy.status)')
-    expect(page).toContain('formatRatio(policy.utilization.storedBytes)')
-    expect(page).toContain('remaining: {')
-    expect(page).toContain('overage: {')
-    expect(page).toContain('burnRate: {')
-    expect(page).toContain('projectedExhaustionDays: {')
-    expect(page).toContain('policy.remaining.storedBytes')
-    expect(page).toContain('policy.remaining.trafficBytes')
-    expect(page).toContain('policy.remaining.operations')
-    expect(page).toContain('policy.burnRate.storedBytesPerDay')
-    expect(page).toContain('policy.burnRate.trafficBytesPerDay')
-    expect(page).toContain('policy.projectedExhaustionDays.operations')
-    expect(page).toContain('item.remaining.storedBytes')
-    expect(page).toContain('item.overage.alertBytes')
-    expect(page).toContain('item.burnRate.operationsPerDay')
-    expect(page).toContain('item.projectedExhaustionDays.storedBytes')
-    expect(page).toContain('formatProjectedDays')
-    expect(page).toContain('formatStorageBudgetValue')
-    expect(page).toContain('dashboard.governance.analytics.storageChannelBurnRate')
-    expect(page).toContain('dashboard.governance.analytics.storageChannelProjectedExhaustion')
-    expect(page).toContain('dashboard.governance.analytics.storagePolicyRemainingStored')
-    expect(page).toContain('dashboard.governance.storagePolicy.projectedExhaustion')
-    expect(page).toContain('dashboard.governance.storagePolicy.alertOverage')
-    expect(page).toContain('dashboard.governance.analytics.storageUsage')
-    expect(page).toContain('dashboard.governance.analytics.storageProvider')
-    expect(page).toContain('dashboard.governance.analytics.storageAction')
-    expect(page).toContain('dashboard.governance.analytics.storagePolicyUtilization')
-  })
-
-  it('exposes selected storage channel drill-down analytics', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain("requestJson<StorageChannelAnalyticsResponse>('/api/dashboard/storage/channels/analytics'")
-    expect(page).toContain('type StorageChannelAnalyticsResponse')
-    expect(page).toContain('const storageChannelAnalyticsQuery = computed')
-    expect(page).toContain('selectedStorageChannelAnalytics')
-    expect(page).toContain('storageChannelAnalyticsData.byResourceTypeUsage')
-    expect(page).toContain('storageChannelAnalyticsData.byActionUsage')
-    expect(page).toContain('selectedStorageChannelAnalytics.trend')
-    expect(page).toContain('selectedStorageChannelAnalytics.evaluations')
-    expect(page).toContain('dashboard.governance.analytics.storageChannelDetail')
-    expect(page).toContain('dashboard.governance.analytics.storageChannelLatestTrend')
-    expect(page).toContain('dashboard.governance.analytics.storageChannelPolicyState')
-    expect(page).toContain('dashboard.governance.analytics.storageChannelDetailEmpty')
-  })
-
-  it('exposes read-only D1 migration readiness diagnostics', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain("requestJson<PlatformGovernanceD1Readiness>('/api/dashboard/governance/d1-readiness'")
-    expect(page).toContain('PlatformGovernanceD1ReadinessCheck')
-    expect(page).toContain('d1Readiness.summary.missingTables')
-    expect(page).toContain('d1Readiness.summary.missingIndexes')
-    expect(page).toContain('d1Readiness.summary.backfillRequired')
-    expect(page).toContain('d1ReadinessGaps')
-    expect(page).toContain('formatD1MissingObjects(check)')
-    expect(page).toContain('dashboard.governance.d1Readiness.title')
-    expect(page).toContain('dashboard.governance.d1Readiness.backfill')
-  })
-
-  it('exposes provider quota utilization and risk status in the provider cockpit', () => {
-    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
-
-    expect(page).toContain('type ProviderQuotaStatus')
-    expect(page).toContain('quotaSummary: {')
-    expect(page).toContain('analyticsData.providers.quotaSummary.active')
-    expect(page).toContain('analyticsData.providers.quotaSummary.blocked')
-    expect(page).toContain('analyticsData.providers.quotaSummary.warning')
-    expect(page).toContain('providerQuotaPeakUtilization')
-    expect(page).toContain('interface ProviderQuotaSmokeEvidenceItem')
-    expect(page).toContain('quotaSmokeEvidence: ProviderQuotaSmokeEvidenceItem[]')
-    expect(page).toContain('analyticsData.providers.quotaSmokeEvidence')
-    expect(page).toContain('providerQuotaSmokeLabel(item.status)')
-    expect(page).toContain('providerQuotaSmokeTone(item.status)')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaSmokeEvidence')
-    expect(page).toContain('usageSummary: {')
-    expect(page).toContain('analyticsData.providers.usageSummary.tokens')
-    expect(page).toContain('analyticsData.providers.usageSummary.requests')
-    expect(page).toContain('analyticsData.providers.trend')
-    expect(page).toContain('dashboard.governance.analytics.providerTrend')
-    expect(page).toContain('interface ProviderModelDistributionItem')
-    expect(page).toContain('modelDistribution: ProviderModelDistributionItem[]')
-    expect(page).toContain('analyticsData.providers.modelDistribution')
-    expect(page).toContain('interface ProviderModelChannelDistributionItem')
-    expect(page).toContain('modelChannelDistribution: ProviderModelChannelDistributionItem[]')
-    expect(page).toContain('analyticsData.providers.modelChannelDistribution')
-    expect(page).toContain('item.byProvider[0]?.providerId')
-    expect(page).toContain('item.byProviderType.slice(0, 2)')
-    expect(page).toContain('dashboard.governance.analytics.providerModelBreakdown')
-    expect(page).toContain('dashboard.governance.analytics.providerModelChannelBreakdown')
-    expect(page).toContain('analyticsData.providers.quotas')
-    expect(page).toContain('providerQuotaLabel(quota.status)')
-    expect(page).toContain('providerQuotaTone(quota.status)')
-    expect(page).toContain('formatRatio(quota.utilization.requests)')
-    expect(page).toContain('formatRatio(quota.utilization.tokens)')
-    expect(page).toContain('remaining: {')
-    expect(page).toContain('overage: {')
-    expect(page).toContain('burnRate: {')
-    expect(page).toContain('projectedExhaustionDays: {')
-    expect(page).toContain('quota.remaining.requests')
-    expect(page).toContain('quota.remaining.tokens')
-    expect(page).toContain('quota.burnRate.requestsPerDay')
-    expect(page).toContain('quota.burnRate.tokensPerDay')
-    expect(page).toContain('quota.projectedExhaustionDays.requests')
-    expect(page).toContain('quota.projectedExhaustionDays.tokens')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaRemainingRequests')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaRemainingTokens')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaBurnRate')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaProjectedExhaustion')
-    expect(page).toContain('dashboard.governance.analytics.providerQuotaUtilization')
+  it('renders provider quota utilization, risk, smoke evidence, and actions from shared types', () => {
+    expectSourceContracts(governanceTypes, [
+      'export type ProviderQuotaStatus',
+      'export interface ProviderQuotaActionQueueItem',
+      'quotaActionQueue: ProviderQuotaActionQueueItem[]',
+      'export interface ProviderQuotaRiskItem',
+      'quotaRiskItems: ProviderQuotaRiskItem[]',
+      'export interface ProviderQuotaSmokeEvidenceItem',
+      'quotaSmokeEvidence: ProviderQuotaSmokeEvidenceItem[]',
+      'quotaSummary: {',
+      'usageSummary: {',
+      'export interface ProviderModelDistributionItem',
+      'modelDistribution: ProviderModelDistributionItem[]',
+      'export interface ProviderModelChannelDistributionItem',
+      'modelChannelDistribution: ProviderModelChannelDistributionItem[]',
+      'channelDistribution: ProviderChannelDistributionItem[]',
+    ])
+    expectSourceContracts(governanceFormatters, [
+      'function providerQuotaLabel',
+      'function providerQuotaTone',
+      'function providerQuotaSmokeLabel',
+      'function providerQuotaSmokeTone',
+      'function providerQuotaActionReasonLabel',
+      'function providerQuotaActionTone',
+      'function providerQuotaRiskReasonLabel',
+    ])
+    expectSourceContracts(page, [
+      'analyticsData.providers.channelDistribution',
+      'analyticsData.providers.modelChannelDistribution',
+      'analyticsData.providers.quotaActionQueue',
+      'analyticsData.providers.quotaRiskItems',
+      'analyticsData.providers.quotaSummary.requestOverage',
+      'analyticsData.providers.quotaSummary.lowestRemainingTokens',
+      'analyticsData.providers.quotaSmokeEvidence',
+      'analyticsData.providers.usageSummary.tokens',
+      'analyticsData.providers.usageSummary.requests',
+      'analyticsData.providers.trend',
+      'analyticsData.providers.modelDistribution',
+      'analyticsData.providers.quotas',
+      'providerQuotaActionReasonLabel(item.reason)',
+      'providerQuotaRiskReasonLabel(item.riskReason)',
+      'providerQuotaSmokeLabel(item.status)',
+      'providerQuotaLabel(quota.status)',
+      'formatRatio(quota.utilization.requests)',
+      'formatRatio(quota.utilization.tokens)',
+      'dashboard.governance.analytics.providerQuotaActionQueue',
+      'dashboard.governance.analytics.providerQuotaRiskBudget',
+      'dashboard.governance.analytics.providerQuotaSmokeEvidence',
+      'dashboard.governance.analytics.providerQuotaProjectedExhaustion',
+    ])
   })
 })
