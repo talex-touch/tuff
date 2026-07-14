@@ -42,6 +42,7 @@ export interface DataTableProps<T = any> {
   striped?: boolean
   bordered?: boolean
   hover?: boolean
+  interactiveRows?: boolean
   selectable?: boolean
   selectedKeys?: DataTableKey[]
   defaultSort?: DataTableSortState

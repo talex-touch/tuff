@@ -37,6 +37,7 @@ export interface ContextPackageLogSafeSummary {
   excludedCount: number
   policyBlockedCount: number
   prunedCount: number
+  tombstoneCount: number
   includedItems: ContextPackageLogExplainItem[]
   excludedItems: ContextPackageLogExplainItem[]
 }
@@ -49,6 +50,16 @@ export interface ContextCheckpointSafeSummary {
   contextScope: ContextCheckpoint['contextScope']
   metadataKeys: string[]
   createdAt: number
+}
+
+export type ContextExplainReasonI18nKey = 'intelligence.audit.contextReasonMemoryTombstoned'
+
+export function getContextExplainReasonI18nKey(
+  reason: string
+): ContextExplainReasonI18nKey | undefined {
+  return reason === 'memory-tombstoned'
+    ? 'intelligence.audit.contextReasonMemoryTombstoned'
+    : undefined
 }
 
 function getRecord(value: unknown): Record<string, unknown> | null {
@@ -162,6 +173,8 @@ export function summarizeContextPackageLog(log: ContextPackageLog): ContextPacka
       getString(item.reason)?.includes('policy-blocked')
     ).length,
     prunedCount: excludedItems.filter((item) => getString(item.reason) === 'token-budget-pruned')
+      .length,
+    tombstoneCount: excludedItems.filter((item) => getString(item.reason) === 'memory-tombstoned')
       .length,
     includedItems: log.items.map(summarizeIncludedItem),
     excludedItems: excludedItems.map(summarizeExcludedItem)

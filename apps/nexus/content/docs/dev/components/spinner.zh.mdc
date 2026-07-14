@@ -95,11 +95,30 @@ code: |
 ### Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `size` | `number` | `16` | 尺寸(px) |
-| `strokeWidth` | `number` | `2` | 线宽 |
-| `fallback` | `boolean` | `false` | 使用 SVG fallback 样式 |
-| `visible` | `boolean` | `true` | 显示/隐藏（内部 v-if，带 enter/leave 过渡动画） |
+|------|------|--------|------|
+| `size` | `number` | `16` | spinner 的宽高，单位 px；写入 `--tx-spinner-size`。 |
+| `strokeWidth` | `number` | `2` | 环形线宽与 SVG fallback 线宽；写入 `--tx-spinner-stroke`。 |
+| `fallback` | `boolean` | `false` | 使用 SVG fallback 旋转图形，而不是默认的 ball/ring 动效。 |
+| `visible` | `boolean` | `true` | 通过内置 `tx-spinner-visibility` 过渡控制显示或隐藏。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| - | - | 没有组件自定义事件，通过 `visible` prop 控制显隐。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| - | - | `TxSpinner` 没有插槽；需要状态文案时在 spinner 外部组合文本。 |
+
+## 交互契约
+
+- `visible=false` 时，离场过渡结束后不渲染 spinner。
+- 可见根节点是 inline-flex `span`，带 `aria-busy="true"` 与 `aria-live="polite"`。
+- 默认模式渲染 ball/ring 动效；`fallback=true` 渲染 SVG circle，并复用 `size` 与 `strokeWidth`。
+- 组件通过 `currentColor` 继承上下文文本色，宿主组件可用普通 CSS color 着色。
 
 ## 后台行内等待
 
@@ -115,10 +134,25 @@ code: |
     </span>
   </template>
 ---
-::
+:::
+
+## 最佳实践
+
+- Spinner 只表达不确定等待；一旦有数值或阶段进度，切换为 `TxProgressBar`。
+- 行内 spinner 要把文案放在图标旁边；spinner 自身只表达 busy，不表达完成结果。
+- 需要内置进出场过渡时使用 `visible`；挂载时机由宿主管理时再使用 `v-if`。
+- 只有在 CSS ball 动效不适合受限表面时才使用 `fallback=true`。
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue` 与 `packages/tuffex/packages/components/src/spinner/src/types.ts`。
-- 截图：`.codex-screenshots/nexus-spinner-feedback-task-center-demo-playwright-2026-05-28.png`。
-- 建议：Spinner 不表达完成度；有数值进度时切换为 `TxProgressBar`，有完整恢复路径时切换为 `TxLoadingState`。
+- **可访问性说明:** 可见根节点带 `aria-busy="true"` 与 `aria-live="polite"`，但 spinner 本身没有可读标签或完成播报。超过瞬时行内等待时，需要在旁边组合状态文案。
+- **实测覆盖:** `spinner.test.ts` 覆盖默认可访问性属性、默认与 SVG fallback 分支、`size`/`strokeWidth` 的 CSS 变量映射，以及 `visible=false` 时不渲染。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue`。
+- Types: `packages/tuffex/packages/components/src/spinner/src/types.ts` 导出 `SpinnerProps`。
+- Export alias: `packages/tuffex/packages/components/src/spinner/index.ts` 导出 `Spinner`、`TxSpinner`、`SpinnerProps` 与 `TxSpinnerInstance`。
+- Coverage: `packages/tuffex/packages/components/src/spinner/__tests__/spinner.test.ts` 覆盖渲染分支与 prop 驱动的 CSS 变量。
+
+<TuffDocSourceLink />

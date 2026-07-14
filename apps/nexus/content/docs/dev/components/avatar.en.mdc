@@ -1,116 +1,107 @@
 ---
 title: Avatar
-description: User avatars and identity marks
+description: User avatars, identity fallbacks, status dots, custom shapes, and stacked avatar groups.
 category: Basic
 status: beta
 since: 1.0.0
 tags: [avatar, identity, profile]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
-
 # Avatar
 
-The Avatar component displays user avatars, brand marks, or other circular content, supporting images, text (slot / name), and icons.
+`TxAvatar` displays a user image, brand mark, initials fallback, icon fallback, or custom slot content. `TxAvatarGroup` stacks avatar children, injects a shared size when needed, and renders a `+N` overflow avatar when `max` hides extra entries.
+
+Reviewed against `packages/tuffex/packages/components/src/avatar/src/types.ts`, `TxAvatar.vue`, `TxAvatarGroup.vue`, and `avatar.test.ts`.
 
 ## Basic Usage
 
 ### Avatar
 
-Image, name, icon, and fallback content.
-
-::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+    <div class="tuff-demo-row">
+      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" alt="GitHub user" />
       <TxAvatar name="Talex DreamSoul" />
       <TxAvatar icon="user" />
       <TxAvatar>U</TxAvatar>
     </div>
   </template>
 ---
-::
+:::
 
-## Sizes
+### Sizes
 
-Preset sizes: small/medium/large/xlarge.
-
-::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxAvatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
+    <div class="tuff-demo-row">
+      <TxAvatar size="small" name="Small" />
+      <TxAvatar size="medium" name="Medium" />
+      <TxAvatar size="large" name="Large" />
+      <TxAvatar size="xlarge" name="Extra Large" />
+      <TxAvatar :size="56" name="Custom Size" />
     </div>
   </template>
 ---
-::
+:::
 
-## Text Avatars
+### Text Avatars
 
-Use text as avatar content.
-
-::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxAvatar>U</TxAvatar>
+    <div class="tuff-demo-row">
+      <TxAvatar>AL</TxAvatar>
       <TxAvatar>AB</TxAvatar>
       <TxAvatar>User</TxAvatar>
     </div>
   </template>
 ---
-::
+:::
 
-## Icon Avatars
+### Icon Avatars
 
-Use icons as avatar content.
-
-::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
+    <div class="tuff-demo-row">
       <TxAvatar icon="user" />
       <TxAvatar icon="team" />
     </div>
   </template>
 ---
-::
+:::
 
-## Avatar Group
+### Avatar Group
 
-Stacked avatars with a max limit.
-
-::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxAvatarGroup :max="3" size="small" :overlap="10">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/2?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/3?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+      <TxAvatar name="Talex DreamSoul" />
+      <TxAvatar name="Alex Lee" />
+      <TxAvatar name="Mira Chen" />
+      <TxAvatar name="Noah Park" />
+      <TxAvatar name="Lina Song" />
     </TxAvatarGroup>
   </template>
 ---
-::
+:::
 
-## Status
+### Status
 
-Status badge overlay.
-
-::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
+    <div class="tuff-demo-row">
       <TxAvatar status="online" name="Online" />
       <TxAvatar status="offline" name="Offline" />
       <TxAvatar status="busy" name="Busy" />
@@ -118,93 +109,112 @@ code: |
     </div>
   </template>
 ---
-::
+:::
 
-## Clickable Avatar
+## Interaction Contract
 
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxAvatar
-      name="Click"
-      clickable
-      @click="handleAvatarClick"
-    />
-  </template>
----
-::
+- Fallback priority is image, default slot, `icon`, initials from `name`, then the default `user` icon.
+- Image load errors switch to the same non-image fallback chain.
+- Initials use the first character of the first word and, when present, the first character of the last word.
+- `size` accepts preset sizes, positive numbers, positive numeric strings, and positive px strings. Invalid custom sizes fall back to preset styling.
+- Custom numeric sizes set CSS variables for avatar size, font size, status dot size, and status border width.
+- `backgroundColor` also sets `textColor`; when `textColor` is omitted it falls back to white.
+- `click` emits only when `clickable=true`.
+- `TxAvatarGroup` preserves child props, injects group `size` only into children without their own size, and renders `+N` for hidden children when `max` is lower than the child count.
 
-## Contract
+## API
 
-Avatar fallback priority is image, default slot, icon, name initials, then the default user icon. Image load errors fall back to the same non-image chain. `size` accepts presets, numbers, numeric strings, and px strings. `TxAvatarGroup` injects `size` only into child avatars that do not already set one, and renders `+N` when `max` hides extra avatars.
+### Props
 
-## API Reference
+#### TxAvatar
 
-### Avatar Props
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string` | - | Avatar image URL. |
+| `alt` | `string` | - | Image alt text. Provide it when `src` is meaningful content. |
+| `name` | `string` | - | Name used to generate initials fallback. |
+| `icon` | `string` | - | Icon name passed to `TxIcon`. |
+| `size` | `'small' \| 'medium' \| 'large' \| 'xlarge' \| number \| \`${number}\` \| \`${number}px\`` | `'medium'` | Preset or custom avatar size. Positive custom numbers and px strings write runtime size variables. |
+| `status` | `'online' \| 'offline' \| 'busy' \| 'away'` | - | Status dot rendered in the avatar corner. |
+| `shape` | `'circle' \| 'square' \| 'rounded'` | `'circle'` | Avatar shape class. |
+| `clickable` | `boolean` | `false` | Enables clickable styling and allows the `click` event to emit. |
+| `backgroundColor` | `string` | - | Custom fallback background color; writes `--tx-avatar-bg`. |
+| `textColor` | `string` | `'#ffffff'` when `backgroundColor` is set | Custom fallback text color; writes `--tx-avatar-text` only with `backgroundColor`. |
 
-::TuffPropsTable
----
-rows:
-  - name: src
-    description: 'Avatar image URL'
-    type: 'string'
-    default: '-'
-  - name: alt
-    description: 'Alt text'
-    type: 'string'
-    default: '-'
-  - name: name
-    description: 'Name (used for initials fallback)'
-    type: 'string'
-    default: '-'
-  - name: icon
-    description: 'Icon name (via TxIcon)'
-    type: 'string'
-    default: '-'
-  - name: size
-    description: 'Avatar size'
-    type: "'small' | 'medium' | 'large' | 'xlarge' | number | `${number}` | `${number}px`"
-    default: "'medium'"
-  - name: status
-    description: 'Status'
-    type: "'online' | 'offline' | 'busy' | 'away'"
-    default: '-'
-  - name: clickable
-    description: 'Clickable state'
-    type: 'boolean'
-    default: 'false'
-  - name: backgroundColor
-    description: 'Custom background color'
-    type: 'string'
-    default: '-'
-  - name: textColor
-    description: 'Custom text color'
-    type: 'string'
-    default: '-'
----
-::
+#### TxAvatarGroup
 
-### Avatar Events
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `max` | `number` | child count | Maximum visible child avatars before rendering the `+N` overflow avatar. Values below zero behave as zero. |
+| `size` | `AvatarSize` | - | Size injected into child avatars that do not define their own size. |
+| `overlap` | `number \| string` | `8` | Overlap distance. Numbers become px values and are applied as negative margin between avatars. |
 
-::TuffPropsTable
----
-rows:
-  - name: click
-    description: 'Triggered on click (clickable=true only)'
-    type: '() => void'
-    default: '-'
----
-::
+### Events
 
-### Avatar Slots
+#### TxAvatar
 
-::TuffPropsTable
----
-rows:
-  - name: default
-    description: 'Custom content (higher priority than icon/name)'
-    type: '-'
-    default: '-'
----
-::
+| Event | Payload | Description |
+|------|---------|-------------|
+| `click` | - | Emitted when the root is clicked and `clickable=true`. |
+
+#### TxAvatarGroup
+
+No public events are emitted.
+
+### Slots
+
+#### TxAvatar
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Custom fallback content. Takes priority over `icon` and `name`. |
+
+#### TxAvatarGroup
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | `TxAvatar` children or compatible avatar VNodes. |
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+## Style Customization
+
+| Variable | Written by | Purpose |
+|----------|------------|---------|
+| `--tx-avatar-size` | custom `size` | Avatar width and height. |
+| `--tx-avatar-font-size` | custom `size` | Fallback text and icon font size. |
+| `--tx-avatar-status-size` | custom `size` | Status dot diameter. |
+| `--tx-avatar-status-border` | custom `size` | Status dot border width. |
+| `--tx-avatar-bg` | `backgroundColor` | Fallback background color. |
+| `--tx-avatar-text` | `textColor` with `backgroundColor` | Fallback text color. |
+| `--tx-avatar-group-overlap` | `TxAvatarGroup.overlap` | Exposes the resolved overlap distance on the group root. |
+| `--tx-avatar-group-border` | caller / theme | Border color for grouped avatar items. |
+
+Preset internals also use `--tx-avatar-size-preset`, `--tx-avatar-font-size-preset`, `--tx-avatar-status-size-preset`, and `--tx-avatar-status-border-preset`; callers should prefer the `size` prop over setting these directly.
+
+## Best Practices
+
+- Prefer `name` fallbacks for generated identity marks instead of hard-coded initials.
+- Always provide meaningful `alt` when `src` represents a real user or account image.
+- Use `status` only for presence or availability; use `TxStatusBadge` for textual system state.
+- Avoid relying on `clickable` for primary actions. Pair avatars with a semantic `TxButton` when keyboard accessibility or clear action semantics are required.
+- In groups, let the group inject `size` unless a specific child intentionally needs a different scale.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/avatar/src/types.ts`, `TxAvatar.vue`, `TxAvatarGroup.vue`, and `avatar.test.ts`.
+- API headings now use shared `Props`, `Events`, and `Slots` sections with per-component subsections so automated coverage checks and readers both find the contracts.
+- Verified source behavior: image fallback order, initials generation, custom size normalization, click gating, group `max` overflow, group size injection, and overlap CSS variable.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` covers initials/custom colors, image error fallback, slot priority, custom size normalization, click gating, and group overflow.
+- Accessibility boundary: the component forwards image `alt`, but the root remains a non-semantic `div`; use a real button/link when the avatar is the primary action.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`
+- Group source: `packages/tuffex/packages/components/src/avatar/src/TxAvatarGroup.vue`
+- Types: `packages/tuffex/packages/components/src/avatar/src/types.ts`
+- Tests: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts`
+
+<TuffDocSourceLink />

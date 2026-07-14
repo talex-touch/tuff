@@ -171,18 +171,22 @@ code: |
 
 ## API
 
-### TxPopover Props
+### TxPopover Props / 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `modelValue` | `boolean` | - | 是否打开（v-model） |
 | `disabled` | `boolean` | `false` | 禁用 |
+| `eager` | `boolean` | `false` | 通过 `TxBaseAnchor` 提前挂载锚点内容。 |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | 浮层位置 |
 | `offset` | `number` | 自动计算 | 间距（有箭头时按 `arrowSize` 计算，无箭头为 `2`） |
 | `width` | `number` | `0` | 面板宽度（0 = 跟随 reference） |
 | `minWidth` | `number` | `0` | 最小宽度 |
 | `maxWidth` | `number` | `360` | 最大宽度 |
+| `maxHeight` | `number` | `420` | 面板内部滚动前的最大高度。 |
+| `unlimitedHeight` | `boolean` | `false` | 关闭最大高度限制，适合内部自行管理滚动的面板。 |
 | `referenceFullWidth` | `boolean` | `false` | reference 容器是否占满宽度 |
+| `referenceClass` | `BaseAnchorClassValue` | - | 额外透传到 BaseAnchor reference 包装层的 class。 |
 | `showArrow` | `boolean` | `true` | 是否显示箭头 |
 | `arrowSize` | `number` | `12` | 箭头尺寸 |
 | `trigger` | `'click' \| 'hover'` | `'click'` | 触发方式 |
@@ -197,6 +201,7 @@ code: |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | 高级面板卡片覆盖配置，会透传给 BaseAnchor。 |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭（仅 click 模式生效） |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 
@@ -208,9 +213,36 @@ code: |
 | `close` | - | 关闭 |
 | `update:modelValue` | `boolean` | v-model 更新 |
 
+### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `reference` | - | 渲染在锚点 reference 包装层内的触发内容。 |
+| `default` | `{ side: string }` | Popover 面板内容；`side` 来自 `TxBaseAnchor` 计算后的浮层方向。 |
+
 ## 交互契约
 
 - `trigger="click"` 时支持外部点击与 Escape 关闭；`trigger="hover"` 会使用打开/关闭延迟，避免鼠标移入面板时闪退。
 - `keepAliveContent` 适合筛选器、短表单和带本地状态的说明面板；纯展示说明可以关闭以减少保留状态。
 - Popover 只放轻量内容；超过一屏、需要 footer 或多字段配置时升级为 Drawer。
-- 源码：`packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+
+## 最佳实践
+
+- Popover 只放短说明、紧凑筛选和一两个轻量操作。
+- reference 内包含输入框或自定义焦点行为时使用 `toggleOnReferenceClick=false`，`TxSearchSelect` 就是这个模式。
+- 小表单或带本地状态的筛选器保留 `keepAliveContent=true`；纯静态说明才建议设为 `false`。
+- 选项面板使用 `maxHeight` 或内部滚动，不要让 Popover 覆盖整个视口。
+
+## 审阅说明
+
+- 已对照 `packages/tuffex/packages/components/src/popover/src/types.ts`、`TxPopover.vue` 与 `popover.test.ts` 核对。
+- 未传 `offset` 时会根据 `arrowSize` 自动计算；示例不应暗示固定默认间距。
+- `closeOnClickOutside` 仅对 click 触发模式生效，因为 hover 模式通过指针/焦点离开延迟控制关闭。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`.
+- Types: `packages/tuffex/packages/components/src/popover/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` 验证默认 BaseAnchor props 透传、offset 推导、hover 触发时序、禁用时关闭、全宽 reference class 与内容 side slot 参数。
+
+<TuffDocSourceLink />

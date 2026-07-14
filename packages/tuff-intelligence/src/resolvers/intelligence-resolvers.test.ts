@@ -37,7 +37,25 @@ describe('intelligence shared resolvers', () => {
     expect(toRuntimeCapabilityId('chat.completion')).toBe('text.chat')
     expect(toRuntimeCapabilityId('image-generate')).toBe('image.generate')
     expect(toRuntimeCapabilityId('images.edit')).toBe('image.edit')
-    expect(toRuntimeCapabilityId('speech-to-text')).toBe('audio.transcribe')
+    expect(toRuntimeCapabilityId('speech-to-text')).toBe('audio.stt')
+
+    const runtimeAliasCases: Array<[input: string, expected: string]> = [
+      ['semantic-search', 'search.semantic'],
+      ['semantic.search', 'search.semantic'],
+      ['rerank', 'search.rerank'],
+      ['stt', 'audio.stt'],
+      ['transcribe', 'audio.transcribe'],
+      ['workflow', 'workflow.execute'],
+      ['workflow-execute', 'workflow.execute'],
+      ['workflow.run', 'workflow.execute'],
+      ['agent', 'agent.run'],
+      ['agent-run', 'agent.run'],
+    ]
+
+    for (const [input, expected] of runtimeAliasCases) {
+      expect(toRuntimeCapabilityId(input), input).toBe(expected)
+    }
+
     expect(toRegistryCapabilityId('text.chat')).toBe('chat.completion')
     expect(toRegistryCapabilityId('image.create')).toBe('image.generate')
     expect(uniqueRegistryCapabilityIds(['text.chat', 'chat.completion', 'text.summarize'])).toEqual([

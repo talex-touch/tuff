@@ -1,16 +1,22 @@
 ---
 title: "FileUploader"
-description: "General file uploader with multi-file, drag & drop, and list management."
+description: "Controlled file picker and drag-drop uploader with max-count limiting, file list rendering, and remove events."
 category: Form
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [upload, file, form]
+syncStatus: reviewed
+verified: true
 ---
 # FileUploader
 
-General file uploader with multi-file support, drag & drop, and list management.
+`TxFileUploader` is a controlled file-selection component. It opens the native file picker, accepts drag-and-drop files, emits normalized file records, and renders a removable selected-file list.
+
+Reviewed against `packages/tuffex/packages/components/src/file-uploader/src/types.ts`, `TxFileUploader.vue`, and `file-uploader.test.ts`.
 
 ## Basic Usage
 
-::TuffDemoWrapper{demo="FileUploaderFileUploaderDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="FileUploaderFileUploaderDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -23,46 +29,130 @@ code: |
     <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
   </template>
 ---
-::
+::::
+
+## Composition Examples
+
+### Upload After Selection
+
+`add` contains only newly accepted records. `change` and `update:modelValue` contain the full next value.
+
+```vue
+<script setup lang="ts">
+import type { FileUploaderFile } from '@talex-touch/tuffex/components'
+import { ref } from 'vue'
+
+const files = ref<FileUploaderFile[]>([])
+
+async function uploadAdded(added: FileUploaderFile[]) {
+  await Promise.all(added.map(item => uploadFile(item.file)))
+}
+</script>
+
+<template>
+  <TxFileUploader v-model="files" accept="image/*" :max="3" @add="uploadAdded" />
+</template>
+```
+
+### Imperative Picker
+
+```vue
+<script setup lang="ts">
+const uploader = ref<{ pick: () => void }>()
+</script>
+
+<template>
+  <TxFileUploader ref="uploader" v-model="files" />
+  <TxButton @click="uploader?.pick()">Browse</TxButton>
+</template>
+```
+
+`pick()` respects `disabled=true` and will not open the input when disabled.
+
+## Interaction Contract
+
+- The hidden native input uses `type="file"`, `multiple`, `accept`, and `disabled` from props.
+- The visible drop zone is a native `button type="button"`; clicking it calls `pick()`.
+- `pick()` does nothing when disabled; otherwise it clicks the hidden file input.
+- File input changes are converted into `FileUploaderFile` records with generated ids.
+- After each input change, the native input value is cleared so the same file can be selected again.
+- Added files are capped by remaining capacity: `max - modelValue.length`.
+- When no capacity remains, no events are emitted.
+- Valid additions emit `add`, then `update:modelValue`, then `change`.
+- Removing an existing file emits `remove` with `{ id, value }`, then `update:modelValue`, then `change`.
+- `allowDrop=false` or `disabled=true` blocks drag-over and drop handling.
+- Drag-over calls `preventDefault()` only when drop is allowed and sets `is-dragging`; drop clears that state.
+- File sizes render as `B`, `KB`, or `MB` when `showSize=true`.
 
 ## API
 
-### TxFileUploader Props
+### Props
 
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `modelValue` | `FileUploaderFile[]` | `[]` | File list |
-| `multiple` | `boolean` | `true` | Enable multi-select |
-| `accept` | `string` | `*/*` | Accept types |
-| `disabled` | `boolean` | `false` | Disabled state |
-| `max` | `number` | `10` | Max files |
-| `showSize` | `boolean` | `true` | Show file size |
-| `allowDrop` | `boolean` | `true` | Enable drag & drop |
-| `buttonText` | `string` | `'Choose files'` | Button text |
-| `dropText` | `string` | `'Drop files here'` | Drop area text |
-| `hintText` | `string` | `'or click to browse'` | Hint text |
-
-### Events
-
-| Event | Payload | Description |
-|------|------|------|
-| `update:modelValue` | `(files)` | File update |
-| `change` | `(files)` | File change |
-| `add` | `(files)` | Add files |
-| `remove` | `({ id, value })` | Remove file |
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `FileUploaderFile[]` | `[]` | Controlled selected-file list. |
+| `multiple` | `boolean` | `true` | Passed to the native file input. |
+| `accept` | `string` | `'*/*'` | Accepted file types passed to the native input. |
+| `disabled` | `boolean` | `false` | Disables browse, remove, and drop behavior. |
+| `max` | `number` | `10` | Maximum total number of selected files. |
+| `showSize` | `boolean` | `true` | Shows formatted file sizes in the list. |
+| `allowDrop` | `boolean` | `true` | Enables drag-over and drop file addition. |
+| `buttonText` | `string` | `'Choose files'` | Text inside the emphasized browse label. |
+| `dropText` | `string` | `'Drop files here'` | Primary drop-zone text. |
+| `hintText` | `string` | `'or click to browse'` | Secondary drop-zone hint. |
 
 ### FileUploaderFile
 
 | Field | Type | Description |
+|------|------|-------------|
+| `id` | `string` | Generated unique id used for list keys and remove payloads. |
+| `name` | `string` | Original file name. |
+| `size` | `number` | Original file size in bytes. |
+| `type` | `string` | Original MIME type. |
+| `file` | `File` | Original browser `File` object. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `FileUploaderFile[]` | Full selected-file list after add or remove. |
+| `change` | `FileUploaderFile[]` | Same full selected-file list after add or remove. |
+| `add` | `FileUploaderFile[]` | Newly accepted files only. |
+| `remove` | `{ id: string, value: FileUploaderFile[] }` | Removed id plus the next full list. |
+
+### Slots
+
+| Slot | Props | Description |
 |------|------|------|
-| `id` | `string` | Unique id |
-| `name` | `string` | File name |
-| `size` | `number` | File size |
-| `type` | `string` | MIME type |
-| `file` | `File` | Original file |
+| - | - | `TxFileUploader` does not expose slots. Customize copy through `buttonText`, `dropText`, and `hintText`; replace the component only when the file-list layout must change. |
 
 ### Expose
 
-| Name | Description |
-|------|------|
-| `pick()` | Open system file picker |
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `pick` | `() => void` | Opens the native file picker unless disabled. |
+
+## Best Practices
+
+- Treat `FileUploaderFile.file` as the upload payload and keep metadata in `modelValue` for UI state.
+- Enforce server-side file size, MIME, and content validation. The `accept` prop is only a browser hint.
+- Use `max` to limit UI selection count, but still validate limits before upload.
+- Listen to `add` for upload side effects; listen to `change` when you need the full list.
+- Store generated ids only for the current UI session. Do not persist them as durable file ids.
+- Keep `allowDrop=false` for compact forms where accidental drag/drop would be surprising.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/file-uploader/src/types.ts`, `TxFileUploader.vue`, and `file-uploader.test.ts`.
+- **Verified coverage:** native button semantics, disabled browse blocking, file additions, and remove event emission.
+- API note: `remove` is not blocked inside the method, but the generated remove button is disabled by prop state; custom wrappers should preserve that disabled guard.
+- Validation note: `accept` and `max` are UI constraints only. Backends must revalidate file count, MIME, size, and content.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/file-uploader/src/TxFileUploader.vue`.
+- Types: `packages/tuffex/packages/components/src/file-uploader/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/file-uploader/__tests__/file-uploader.test.ts`.
+
+<TuffDocSourceLink />
+

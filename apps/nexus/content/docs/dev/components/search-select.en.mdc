@@ -2,6 +2,9 @@
 title: "SearchSelect"
 description: "Searchable select input with local filtering, remote search events, and Popover-backed options panel."
 category: Form
+status: beta
+since: 1.0.0
+tags: [search, select, form]
 syncStatus: reviewed
 verified: true
 ---
@@ -179,9 +182,39 @@ code: |
 ---
 :::
 
+### Slots
+
+`TxSearchSelect` does not expose public slots. The input prefix, loading suffix, empty state, and option rows are internal so keyboard and Popover behavior stay consistent.
+
+### Expose
+
+| Name | Type | Description |
+|------|------|-------------|
+| `open()` | `() => void` | Opens the options panel unless the component is disabled. |
+| `close()` | `() => void` | Closes the options panel. |
+| `focus()` | `() => void` | Focuses the internal `TxInput`. |
+| `blur()` | `() => void` | Blurs the internal `TxInput`. |
+| `clear()` | `() => void` | Calls the internal input clear affordance. |
+
+## Best Practices
+
+- Keep `options` small in local mode; large remote sources should use `remote`, `searchDebounce`, and external result hydration.
+- Keep `label` stable and human-readable because local filtering only checks `option.label`.
+- Do not put free-form keyword search here when the value is not selected from a controlled option list; use `TxSearchInput` instead.
+- Treat disabled options as explanatory entries only. They remain visible but cannot be selected and should not be the only available result.
+
 ## Review Notes
 
 - Source: `packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`
 - Recommendation: pass `options` directly for small local lists; use `remote` + `search` for external data sources and write results back through `options`.
 - Interaction: disabled options remain visible but cannot be selected; clearing emits both `update:modelValue` and `change` with an empty value.
 - Surface: the panel is hosted by `TxPopover`; use `panelBackground`, `panelShadow`, and `panelRadius` to align with the surrounding surface hierarchy.
+
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`.
+- Types: `packages/tuffex/packages/components/src/search-select/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/search-select/__tests__/search-select.test.ts` verifies local filtering with option selection, debounced remote search emission, and empty-state rendering when no results match.
+
+<TuffDocSourceLink />

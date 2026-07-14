@@ -343,10 +343,24 @@ rows:
 - `showClose=false` 会移除默认关闭按钮，但不影响遮罩和 Escape 的配置化关闭能力。
 - `mobileAdapt=true` 时移动端会强制从底部弹出；需要保持原方向时设置 `:mobile-adapt="false"`。
 
-## 审阅要点
+## 最佳实践
+
+- Drawer 适合长表单、审计明细、权限矩阵，以及需要 Footer 操作区的流程。
+- 即使 `showHeader=false` 也要提供有意义的 `title`；它会作为 dialog 的无障碍兜底标签。
+- 优先使用 `size` 和 `full`；`width` 只为尚未迁移的旧调用点保留。
+- 只有在小屏上保持侧向进入比 bottom sheet 手感更重要时，才设置 `mobileAdapt=false`。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`.
+- Types: `packages/tuffex/packages/components/src/drawer/src/types.ts`.
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/drawer/__tests__/drawer.test.ts` 校验 visibility 事件、焦点恢复、ARIA 标签、关闭控制、尺寸解析、移动端适配和分隔线渲染。
+
+<TuffDocSourceLink />
+
+## 审阅说明
 
 - Drawer 根节点已经提供 `role="dialog"` / `aria-modal="true"` 和标题关联，正文中仍需为表单字段提供明确 label。
 - 打开时会记录之前的焦点元素，隐藏或卸载后恢复焦点；不要在外层手动抢焦点造成冲突。
 - Dashboard 配置页建议把长表单、权限矩阵、审计明细放进 Drawer，而不是塞进 Popover。
 - Header/Footer 的内置分隔线由 `TxDivider` 提供，避免重复硬编码边框样式。
-- 源码：`packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`

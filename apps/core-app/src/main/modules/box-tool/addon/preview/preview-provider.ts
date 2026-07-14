@@ -10,11 +10,17 @@ import type {
 import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-engine/types'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
-import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
+import {
+  normalizeLocale,
+  TuffInputType,
+  TuffItemBuilder,
+  TuffSearchResultBuilder
+} from '@talex-touch/utils'
 import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { clipboard } from 'electron'
 import { clipboardModule } from '../../../clipboard'
 import { createLogger } from '../../../../utils/logger'
+import { getLocale } from '../../../../utils/i18n-helper'
 
 const PREVIEW_COMPONENT_NAME = DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD
 const SOURCE_ID = 'preview-provider'
@@ -67,7 +73,11 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       return this.createEmptyResult(query, startedAt)
     }
 
-    const result = await this.sdk.resolve({ query: preparedQuery.sdkQuery, signal })
+    const result = await this.sdk.resolve({
+      query: preparedQuery.sdkQuery,
+      signal,
+      locale: normalizeLocale(getLocale()) ?? 'en-US'
+    })
     if (!result) {
       return this.createEmptyResult(query, startedAt)
     }

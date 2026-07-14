@@ -7,6 +7,7 @@ import VSCodeBackground from '~/images/assets/plugin-cards/vscode.jpg'
   <div class="PluginCardVSCode inset-0 h-full w-full flex items-center justify-center bg-[#010816]">
     <TuffCarouselAppleBlurImage
       :src="VSCodeBackground"
+      :defer="true"
       alt="VSCode"
       class="absolute bottom-0 z-1 h-[80%] w-full object-cover"
     />

@@ -8,7 +8,7 @@ defineOptions({ name: 'TxGlowText' })
 const props = withDefaults(defineProps<GlowTextProps>(), {
   tag: 'span',
   active: true,
-  durationMs: 1400,
+  durationMs: 2000,
   delayMs: 0,
   angle: 20,
   bandSize: 38,
@@ -242,11 +242,12 @@ onBeforeUnmount(() => {
     transparent 100%
   );
   background-repeat: no-repeat;
-  background-size: 240% 220%;
-  background-position: -160% 50%;
-  filter: blur(0.2px);
-  animation: tx-glow-text-sweep var(--tx-glow-duration, 1400ms) var(--tx-glow-ease, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
+  background-size: 300% 100%;
+  background-position: 0 0;
+  opacity: var(--tx-glow-opacity, 0.75);
+  animation: tx-glow-text-sweep var(--tx-glow-duration, 2000ms) var(--tx-glow-ease, ease) infinite;
   animation-delay: var(--tx-glow-delay, 0ms);
+  will-change: background-position;
 }
 
 .tx-glow-text.is-once .tx-glow-text__shine {
@@ -298,16 +299,10 @@ onBeforeUnmount(() => {
 
 @keyframes tx-glow-text-sweep {
   0% {
-    background-position: 160% 50%;
-    opacity: 0;
-  }
-  20%,
-  80% {
-    opacity: var(--tx-glow-opacity, 0.75);
+    background-position: 100% 0;
   }
   100% {
-    background-position: -160% 50%;
-    opacity: 0;
+    background-position: 0 0;
   }
 }
 </style>

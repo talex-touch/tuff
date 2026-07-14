@@ -211,8 +211,8 @@ defineExpose({
               :clickable="!node.disabled"
               :disabled="!!node.disabled"
               :active="selected"
+              tabindex="-1"
               :style="{ paddingLeft: `${10 + level * indent}px` }"
-              @click="toggleSelect()"
             >
               <template #avatar>
                 <div class="tx-tree-select__left" @click.stop>
@@ -220,6 +220,7 @@ defineExpose({
                     v-if="hasChildren"
                     type="button"
                     class="tx-tree-select__caret"
+                    tabindex="-1"
                     :aria-label="expanded ? 'Collapse' : 'Expand'"
                     @click.stop="toggleExpand()"
                   >
@@ -234,6 +235,7 @@ defineExpose({
                     :model-value="selected"
                     :disabled="!!node.disabled"
                     aria-label="Select"
+                    tabindex="-1"
                     @click.stop
                     @update:model-value="() => toggleSelect()"
                   />

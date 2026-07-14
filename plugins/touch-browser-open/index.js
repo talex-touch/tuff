@@ -18,6 +18,7 @@ const RECENT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SUGGEST_TIMEOUT_MS = 2500
 const SUGGEST_LIMIT = 6
 const SHELL_PERMISSION_ID = 'system.shell'
+const SUPPORTED_ACTION_IDS = new Set(['copy-url', 'default-open', 'search-web', 'open-browser'])
 const BROWSER_OPEN_STATUS_LABELS = {
   'available': '可用',
   'permission-missing': '缺少权限',
@@ -85,6 +86,7 @@ let latestFeatureRequestSeq = 0
 let latestFeatureRequestIdentity = null
 let activeSearchMode = null
 let activeSearchRequestController = null
+let detectedBrowsersById = new Map()
 
 function getRuntimePlatform() {
   const platform = typeof os?.platform === 'function' ? os.platform() : ''
@@ -163,6 +165,29 @@ const WIN_BROWSER_CANDIDATES = [
 
 function normalizeText(value) {
   return String(value ?? '').trim()
+}
+
+function cacheDetectedBrowsers(items) {
+  const next = new Map()
+  for (const item of items || []) {
+    const id = normalizeText(item?.id)
+    const name = normalizeText(item?.name)
+    const target = normalizeText(item?.target)
+    if (!id || !name || !target)
+      continue
+    next.set(id, { id, name, target })
+  }
+  detectedBrowsersById = next
+  return Array.from(next.values())
+}
+
+function resolveDetectedBrowser(browser) {
+  const id = normalizeText(browser?.id)
+  const target = normalizeText(browser?.target)
+  const detected = detectedBrowsersById.get(id)
+  if (!detected || detected.target !== target)
+    return null
+  return detected
 }
 
 function truncateText(value, max = 72) {
@@ -679,11 +704,12 @@ async function detectBrowsersWin() {
 }
 
 async function detectBrowsers() {
+  cacheDetectedBrowsers([])
   if (CURRENT_PLATFORM === 'darwin')
-    return detectBrowsersMac()
+    return cacheDetectedBrowsers(await detectBrowsersMac())
   if (CURRENT_PLATFORM === 'win32')
-    return detectBrowsersWin()
-  return []
+    return cacheDetectedBrowsers(await detectBrowsersWin())
+  return cacheDetectedBrowsers([])
 }
 
 function cleanupRecentBrowsers(items, now = Date.now()) {
@@ -1433,6 +1459,24 @@ const pluginLifecycle = {
       || (actionId === 'search-web' ? buildSearchUrl(payload.engineId, payload.query) : null)
     if (!actionId || !url)
       return
+    if (!SUPPORTED_ACTION_IDS.has(actionId)) {
+      return {
+        externalAction: true,
+        status: 'blocked',
+        reason: 'unsupported-action',
+      }
+    }
+
+    const detectedBrowser = actionId === 'open-browser'
+      ? resolveDetectedBrowser(payload.browser)
+      : null
+    if (actionId === 'open-browser' && !detectedBrowser) {
+      return {
+        externalAction: true,
+        status: 'blocked',
+        reason: 'browser-target-not-allowed',
+      }
+    }
 
     beginFeatureRequest()
 
@@ -1476,13 +1520,9 @@ const pluginLifecycle = {
       }
 
       if (actionId === 'open-browser') {
-        const browser = payload.browser || {}
-        const browserTarget = normalizeText(browser.target)
-        const browserId = normalizeText(browser.id)
-        const browserName = normalizeText(browser.name) || browserId
-
-        if (!browserTarget)
-          return
+        const browserTarget = detectedBrowser.target
+        const browserId = detectedBrowser.id
+        const browserName = detectedBrowser.name
 
         const result = await executeBrowserOpenAction(url, browserTarget, actionId)
         if (!result.ok)
@@ -1518,6 +1558,7 @@ module.exports = {
   ...pluginLifecycle,
   __test: {
     buildWindowsOpenScript,
+    cacheDetectedBrowsers,
     buildSearchEngineFeatures,
     buildSearchItems,
     buildSearchUrl,
@@ -1532,6 +1573,7 @@ module.exports = {
     parseEngineSuggestions,
     parseSearchQuery,
     parseRecentBrowsers,
+    resolveDetectedBrowser,
     resolveBrowserOpenCapabilityState,
     resolveBrowserOpenSupport,
     resolveGroupOrder,

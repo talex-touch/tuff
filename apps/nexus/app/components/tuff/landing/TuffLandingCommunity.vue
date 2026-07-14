@@ -63,7 +63,7 @@ const community = computed(() => ({
   >
     <template #decoration>
       <div class="absolute left-[-260px] top-1/2 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.12),_transparent_68%)] blur-3xl -translate-y-1/2" />
-      <div class="absolute right-[-200px] top-[15%] h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.10),_transparent_70%)] blur-3xl" />
+      <div class="absolute right-0 top-[15%] h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.10),_transparent_70%)] blur-3xl sm:right-[-200px]" />
     </template>
 
     <!-- Channel cards -->

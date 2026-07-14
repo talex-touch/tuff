@@ -89,6 +89,10 @@ Automatically handles:
 - **Static assets**: Copies `public/` directory to output
 - **Icon files**: Processes icons declared in manifest
 
+**Generated-output isolation**
+
+The exporter reserves `<outDir>/out`, `<outDir>/build`, and top-level `<outDir>/*.tpex` as generated output. Repeated builds never restage those entries as source payload, preventing prior archives from being nested in the next package or recorded in `manifest._files`.
+
 **3. Development Mode Support**
 
 In development mode:

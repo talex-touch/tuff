@@ -120,7 +120,7 @@ async function copyToken() {
 
       <!-- Loading -->
       <div v-else-if="status === 'verifying'" class="flex flex-col items-center gap-4">
-        <span class="i-carbon-circle-dash animate-spin text-4xl text-primary" />
+        <span class="i-ri-loader-4-line animate-spin text-4xl text-primary" />
         <p class="text-gray-600 dark:text-gray-300">
           {{ t('auth.stepUpVerifying', 'Verifying...') }}
         </p>

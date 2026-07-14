@@ -53,6 +53,10 @@ export function createDiagnosticsInfo(settings: QuickOpsResolvedSettings): Quick
     defaultTimerDurationMs: settings.defaultTimerDurationMs,
     defaultPomodoroFocusMs: settings.defaultPomodoroFocusMs,
     defaultPomodoroBreakMs: settings.defaultPomodoroBreakMs,
+    pomodoroAdvancedLoopSupported: true,
+    pomodoroCustomTemplateCount: settings.pomodoroTemplates.custom.filter(
+      template => template.enabled
+    ).length,
     defaultScreenCleanDurationMs: settings.defaultScreenCleanDurationMs
   }
 }
@@ -78,6 +82,8 @@ export function formatDiagnosticsInfo(info: QuickOpsDiagnosticsInfo): string {
       `keepAwake=${formatDuration(info.defaultKeepAwakeDurationMs)}`,
       `timer=${formatDuration(info.defaultTimerDurationMs)}`,
       `pomodoro=${formatDuration(info.defaultPomodoroFocusMs)}/${formatDuration(info.defaultPomodoroBreakMs)}`,
+      `pomodoroLoop=${info.pomodoroAdvancedLoopSupported ? 'supported' : 'unsupported'}`,
+      `pomodoroCustomTemplates=${info.pomodoroCustomTemplateCount}`,
       `screenClean=${formatDuration(info.defaultScreenCleanDurationMs)}`
     ].join(' '),
     'Safety: redacted paths only; no log contents; no full configuration dump'

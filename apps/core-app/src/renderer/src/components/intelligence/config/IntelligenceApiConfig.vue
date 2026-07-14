@@ -1,10 +1,9 @@
 <script lang="ts" name="IntelligenceApiConfig" setup>
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxPopover } from '@talex-touch/tuffex/popover'
-import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
-import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
+import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
-import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatInput from '~/components/base/input/FlatInput.vue'
@@ -19,33 +18,32 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: IntelligenceProviderConfig]
-  change: []
-  testSuccess: [models: string[]]
+  'change': []
+  'testSuccess': [models: string[]]
 }>()
 
 const { t } = useI18n()
 
-const transport = useTuffTransport()
-const aiClient = createIntelligenceClient(transport)
+const aiClient = useIntelligenceSdk()
 
 const localApiKey = computed({
   get: () => props.modelValue.apiKey || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      apiKey: value.trim() || undefined
+      apiKey: value.trim() || undefined,
     })
     emits('change')
-  }
+  },
 })
 
 const localBaseUrl = computed({
   get: () => props.modelValue.baseUrl || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      baseUrl: value.trim() || undefined
+      baseUrl: value.trim() || undefined,
     })
     emits('change')
-  }
+  },
 })
 
 const apiKeyError = ref('')
@@ -81,12 +79,12 @@ const canTest = computed(() => {
   return localApiKey.value.trim().length > 0
 })
 
-function resolveTestFailureMessage(result?: { code?: string; message?: string }): string {
+function resolveTestFailureMessage(result?: { code?: string, message?: string }): string {
   if (result?.code === 'NETWORK_COOLDOWN_ACTIVE') {
     const retryAfterSeconds = Number(result.message?.match(/^NETWORK_COOLDOWN_ACTIVE:(\d+)$/)?.[1])
     if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
       return t('intelligence.config.api.networkRecoveringWithRetry', {
-        seconds: retryAfterSeconds
+        seconds: retryAfterSeconds,
       })
     }
     return t('intelligence.config.api.networkRecovering')
@@ -111,9 +109,10 @@ function isBaseUrlValid(value: string): boolean {
   }
 
   try {
-    new URL(value)
+    void new URL(value)
     return true
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -138,8 +137,10 @@ function handleBaseUrlBlur() {
 }
 
 async function handleTest() {
-  if (!canTest.value || isTesting.value) return
-  if (!validateBaseUrl(localBaseUrl.value) || !validateApiKey(localApiKey.value)) return
+  if (!canTest.value || isTesting.value)
+    return
+  if (!validateBaseUrl(localBaseUrl.value) || !validateApiKey(localApiKey.value))
+    return
 
   isTesting.value = true
   testError.value = ''
@@ -162,10 +163,10 @@ async function handleTest() {
       rateLimit: props.modelValue.rateLimit
         ? {
             requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
-            tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
+            tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined,
           }
         : undefined,
-      priority: Number(props.modelValue.priority) || 1
+      priority: Number(props.modelValue.priority) || 1,
     }
 
     const result = (await aiClient.testProvider(testProvider)) as {
@@ -181,11 +182,12 @@ async function handleTest() {
         t('intelligence.config.api.testSuccessTitle'),
         t('intelligence.config.api.testSuccessDesc', { name: props.modelValue.name }),
         { type: 'class', value: 'i-ri-checkbox-circle-line' },
-        [{ content: t('intelligence.config.api.confirm'), type: 'success', onClick: () => true }]
+        [{ content: t('intelligence.config.api.confirm'), type: 'success', onClick: () => true }],
       )
 
       await fetchAvailableModels(testProvider)
-    } else {
+    }
+    else {
       const message = resolveTestFailureMessage(result)
       testError.value = message
 
@@ -193,21 +195,23 @@ async function handleTest() {
         t('intelligence.config.api.testFailedTitle'),
         message || t('intelligence.config.api.testFailedDesc'),
         { type: 'class', value: 'i-ri-error-warning-line' },
-        [{ content: t('intelligence.config.api.confirm'), type: 'danger', onClick: () => true }]
+        [{ content: t('intelligence.config.api.confirm'), type: 'danger', onClick: () => true }],
       )
     }
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : t('intelligence.config.api.connectionFailed')
+  }
+  catch (error) {
+    const message
+      = error instanceof Error ? error.message : t('intelligence.config.api.connectionFailed')
     testError.value = message
 
     await forDialogMention(
       t('intelligence.config.api.testFailedTitle'),
       t('intelligence.config.api.testErrorDesc', { message }),
       { type: 'class', value: 'i-ri-error-warning-line' },
-      [{ content: t('intelligence.config.api.confirm'), type: 'danger', onClick: () => true }]
+      [{ content: t('intelligence.config.api.confirm'), type: 'danger', onClick: () => true }],
     )
-  } finally {
+  }
+  finally {
     isTesting.value = false
   }
 }
@@ -222,7 +226,7 @@ async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
 
     if (result?.success && result?.models) {
       intelligenceSettings.updateProvider(provider.id, {
-        models: result.models
+        models: result.models,
       })
       emits('testSuccess', result.models)
 
@@ -230,12 +234,14 @@ async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
         t('intelligence.config.api.modelsFetchSuccessTitle'),
         t('intelligence.config.api.modelsFetchSuccessDesc', { count: result.models.length }),
         { type: 'class', value: 'i-ri-checkbox-circle-line' },
-        [{ content: t('intelligence.config.api.confirm'), type: 'success', onClick: () => true }]
+        [{ content: t('intelligence.config.api.confirm'), type: 'success', onClick: () => true }],
       )
-    } else {
+    }
+    else {
       emits('testSuccess', [])
     }
-  } catch {
+  }
+  catch {
     emits('testSuccess', [])
   }
 }

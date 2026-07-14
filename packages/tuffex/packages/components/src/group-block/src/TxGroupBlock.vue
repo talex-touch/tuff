@@ -2,7 +2,7 @@
 import type { TxIconSource } from '../../icon'
 import type { GroupBlockEmits, GroupBlockProps } from './types'
 import gsap from 'gsap'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, useId, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
 import { TuffIcon } from '../../icon'
 
@@ -69,6 +69,7 @@ const expanded = ref(storedExpand.value ?? resolveDefaultExpand())
 
 const contentRef = ref<HTMLElement | null>(null)
 const isMounted = ref(false)
+const contentId = `tx-group-block-content-${useId()}`
 
 function toIcon(icon?: IconValue): TxIconSource | null {
   if (!icon)
@@ -213,8 +214,17 @@ onMounted(() => {
     <div
       class="tx-group-block__header TGroupBlock-Header fake-background index-fix"
       :class="{ 'tx-group-block__header--static': !collapsible, 'is-static': !collapsible }"
-      @click="toggle"
     >
+      <button
+        v-if="collapsible"
+        type="button"
+        class="tx-group-block__trigger"
+        :aria-label="name"
+        :aria-expanded="expanded"
+        :aria-controls="contentId"
+        @click="toggle"
+      />
+
       <div class="tx-group-block__content TGroupBlock-Content">
         <slot name="icon" :active="expanded">
           <TuffIcon v-if="headerIcon" :icon="headerIcon" :size="iconSize" />
@@ -229,7 +239,9 @@ onMounted(() => {
         </div>
       </div>
 
-      <slot name="header-extra" :active="expanded" />
+      <div v-if="$slots['header-extra']" class="tx-group-block__header-extra">
+        <slot name="header-extra" :active="expanded" />
+      </div>
 
       <div
         v-if="collapsible"
@@ -239,7 +251,7 @@ onMounted(() => {
       />
     </div>
 
-    <div ref="contentRef" class="tx-group-block__body TGroupBlock-Main">
+    <div :id="contentId" ref="contentRef" class="tx-group-block__body TGroupBlock-Main">
       <slot />
     </div>
   </div>
@@ -262,6 +274,7 @@ onMounted(() => {
   }
 
   &__header {
+    position: relative;
     padding: 4px 22px 4px 12px;
     display: flex;
     justify-content: space-between;
@@ -297,11 +310,35 @@ onMounted(() => {
     }
   }
 
-  &__content {
+  &__header > &__trigger {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    color: inherit;
+    font: inherit;
+    background: transparent;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-focus-ring-color, var(--tx-color-primary, #409eff));
+      outline-offset: -2px;
+    }
+  }
+
+  &__header > &__content {
+    position: relative;
+    z-index: 2;
     display: flex;
     justify-content: space-between;
     align-items: center;
     height: 100%;
+    pointer-events: none;
 
     > * {
       margin-right: 12px;
@@ -331,15 +368,23 @@ onMounted(() => {
     color: var(--tx-text-color-secondary, #909399);
   }
 
-  &__toggle {
+  &__header > &__toggle {
     position: relative;
+    z-index: 2;
     font-size: 18px;
     color: var(--tx-text-color-secondary, #909399);
+    pointer-events: none;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &.is-expanded {
       transform: rotate(180deg);
     }
+  }
+
+  &__header > &__header-extra {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
   }
 
   &__body {

@@ -781,6 +781,10 @@ code: |
 | `update:modelValue` | `number` | Emitted on native input with the next clamped value. |
 | `change` | `number` | Emitted on native change with the input's current numeric value. |
 
+### Slots
+
+`TxSlider` does not expose public slots. Tooltip, thumb, track, and value display are internal so pointer math and elastic tooltip transforms stay in sync.
+
 ## Interaction Contract
 
 - The rendered native range input clamps `modelValue` into the `min..max` range.
@@ -790,6 +794,21 @@ code: |
 - Tooltip visibility follows `tooltipTrigger`: `drag`, `hover`, or `always`; `showTooltip=false` disables it.
 - Negative `tooltipMotionDuration` and `tooltipMotionBlurPx` values are clamped to `0ms` and `0px`.
 - Global pointer listeners are cleaned up on unmount.
+
+## Best Practices
+
+- Use sliders for continuous or near-continuous numeric values; choose `TxSegmentedSlider` when every stop has separate semantic meaning.
+- Always show surrounding copy for units. Use `formatValue` / `tooltipFormatter` for `%`, `ms`, or quota units instead of adding unit text into `modelValue`.
+- Keep `min`, `max`, and `step` stable while the user is dragging; changing range math mid-drag can make the thumb jump.
+- Use `tooltipTilt` / jelly motion for exploratory tuning surfaces, not dense enterprise forms where motion may distract.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
+- Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` covers display and emitted-value clamping, disabled interaction and tooltip suppression, formatted bottom tooltips, non-transition tooltip rendering, and global pointer-listener cleanup.
+
+<TuffDocSourceLink />
 
 ## Review Notes
 

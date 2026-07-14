@@ -174,12 +174,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
     const searchQuery = args.searchResult?.query
+    const itemMeta = item.meta as Record<string, unknown> | undefined
 
-    if (item.meta?.defaultAction) {
+    if (args.actionId || typeof itemMeta?.actionId === 'string' || item.meta?.defaultAction) {
       const pluginName = item.meta?.pluginName
       if (!pluginName) {
         pluginFeaturesLog.error(
-          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
+          '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.',
         )
         return null
       }
@@ -188,22 +189,21 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       if (plugin?.pluginLifecycle?.onItemAction) {
         const actionStartTime = Date.now()
-        const itemMeta = item.meta as Record<string, unknown> | undefined
         const itemActionId = typeof itemMeta?.actionId === 'string' ? itemMeta.actionId : undefined
-        const actionItem =
-          args.actionId && itemActionId !== args.actionId
+        const actionItem
+          = args.actionId && itemActionId !== args.actionId
             ? {
                 ...item,
                 meta: {
                   ...item.meta,
-                  actionId: args.actionId
-                }
+                  actionId: args.actionId,
+                },
               }
             : item
 
         try {
           const result = await plugin.pluginLifecycle.onItemAction(actionItem, {
-            actionId: args.actionId
+            actionId: args.actionId,
           })
           const executionTime = Date.now() - actionStartTime
           const isExternalAction = executionTime > 100 || result?.externalAction === true

@@ -53,6 +53,16 @@ code: |
 ---
 :::
 
+## Build Output Contract
+
+With the default `outDir`, the builder owns three generated outputs:
+
+- `dist/out/`: staged Vite output used as package input;
+- `dist/build/`: the unpacked, installable plugin runtime;
+- `dist/<name>-<version>.tpex`: the publishable archive.
+
+`out`, `build`, and top-level `*.tpex` entries inside `outDir` are reserved generated output. `tuff builder` excludes them while restaging, so rebuilding cannot nest an earlier archive or add it to `manifest._files`. Keep authored plugin resources outside these reserved entries.
+
 **`tuff dev`**
 
 Start the Vite dev server for plugin development.

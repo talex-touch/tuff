@@ -1,12 +1,13 @@
 # Tuff R3 Search / Indexing Runtime TODO
 
-> 更新时间：2026-07-04
+> 更新时间：2026-07-10
 > 范围：Roadmap R3 / Search Provider 与 Indexing Runtime。专题设计以 `03-features/search/INDEXING-RUNTIME-V1-PLAN.md` 为准。
 
 ## 当前口径
 
 - R3 目标是把 File write/store boundary、SQLite/FTS 写入、`scan_progress`、integrity reset 与 durable job history 收敛到 runtime task/store。
 - 当前完成度约 `74%`，状态仍为 `active / partial`；本进度记录不改变 goal 定义，后续单独讨论是否调整 goal scope。
+- 2026-07-10 进度快照：四类 SQLite evidence producer（preflight、FTS copy simulation、`scan_progress` copy simulation / read-only plan）新增低敏 `evidenceSource.dbIdentity=sha256-realpath-v1:<digest>`；strict aggregate verifier 新增 `database-evidence-correlation` check，要求四份 DB evidence 的 identity 完整且一致，阻止不同 profile DB / 不同路径的 artifacts 拼成同一 closure packet。当前源码 readiness 复跑仍为 `ready` / `blockers=[]`；旧 2026-07-03 isolated packet 因不含 `dbIdentity` 被 2026-07-10 strict artifact 正确阻塞。focused validation 为 12 个 R3 测试文件 / 153 tests 通过，`typecheck:node`、artifact sanity 与 R3 targeted diff/whitespace check 通过；全仓 `git diff --check` 仅被现有 Nexus 文档/示例空白改动阻塞，本批未触碰。该推进不打开或修改真实 profile，整体进度仍约 `74%`。
 - 2026-07-04 进度快照：runtime/store evidence、resource migration readiness、isolated preflight / copy-simulation / query-only plan 与 strict aggregate verifier 已进一步收紧；R3 strict verifier 现在同时要求 Settings verification artifact 路径匹配 probe envelope 的 `artifactPaths.verification`，且 JSON 内容匹配 probe 内嵌 `verification` envelope，防止跨 run 拼接 Settings verification、DOM 与截图 artifact。最新 focused validation 为 12 个 R3 相关测试文件 / 151 tests 通过，`typecheck:node`、`git diff --check` 与 query-only plan / isolated-blocked verifier artifact sanity 通过。仍未执行真实 profile migration。
 - 2026-06-24 durable job history 已完成非 schema focused 小切片：复用现有 SQLite task state store，不新增表结构，不改变 `scan_progress` / FTS ownership。
 - 2026-06-25 durable job history 新增 Settings diagnostics evidence verifier：`pnpm -C "apps/core-app" run settings:indexing-diagnostics:verify -- --input <diagnostics.json> --sourceId file-provider` 会复用 Settings recent task chip helper 校验 `duration/trigger/reason/attempt/code` 已进入用户可见 chip values/summary；2026-07-03 新增 `--requireReadOnlyEnvelope` 与 `--requireNaturalRecentTaskEvidence`，用于真实 packaged/profile evidence 时强制 probe envelope 为 `mode=attach-only` / `profileMutationPolicy=read-only`，并拒绝 seeded recent task、maintenance action 与 fixture-root controlled 标记，避免 isolated/controlled evidence 误过真实 evidence gate。该 gate 只验证真实/packaged probe 产物，不替代截图/录屏 evidence。

@@ -781,6 +781,10 @@ code: |
 | `update:modelValue` | `number` | v-model 更新 |
 | `change` | `number` | change 事件 |
 
+### 插槽
+
+`TxSlider` 不暴露公共插槽。tooltip、thumb、track 与数值展示都由组件内部控制，以保持指针计算和弹性 tooltip transform 同步。
+
 ## 交互契约
 
 - 原生 range 输入会把 `modelValue` 夹在 `min..max` 范围内展示。
@@ -788,6 +792,23 @@ code: |
 - `disabled` 会阻止值更新并隐藏 tooltip。
 - `formatValue` 控制右侧展示值；未传 `tooltipFormatter` 时也作为 tooltip 文本。
 - tooltip 显示遵循 `tooltipTrigger`：`drag`、`hover` 或 `always`；`showTooltip=false` 会完全禁用。
+- 负数 `tooltipMotionDuration` 与 `tooltipMotionBlurPx` 会分别夹到 `0ms` 与 `0px`。
+- 组件卸载时会清理全局 pointer 监听。
+
+## 最佳实践
+
+- Slider 用于连续或近似连续的数值；如果每个停靠点都有独立语义，请使用 `TxSegmentedSlider`。
+- 单位说明放在相邻文案中，并用 `formatValue` / `tooltipFormatter` 处理 `%`、`ms` 或配额单位，不要把单位塞进 `modelValue`。
+- 用户拖动期间保持 `min`、`max` 和 `step` 稳定；中途改变范围计算会让 thumb 跳动。
+- `tooltipTilt` / jelly 动效适合探索式调参界面，不适合高密度企业表单。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/slider/src/TxSlider.vue`.
+- Types: `packages/tuffex/packages/components/src/slider/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/slider/__tests__/slider.test.ts` 覆盖显示值与事件值裁剪、禁用交互与 tooltip 抑制、带格式的底部 tooltip、无过渡 tooltip 渲染，以及全局指针监听器清理。
+
+<TuffDocSourceLink />
 
 ## 审阅说明
 

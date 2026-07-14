@@ -1,27 +1,43 @@
 ---
 title: "Form"
-description: "Form container with validation, paired with `TxFormItem` for consistent layout and messages."
+description: "Validated form container and item layout for TuffEx inputs, field messages, and imperative validation flows."
 category: Form
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [form, validation, input]
+syncStatus: reviewed
+verified: true
 ---
 # Form
 
-Form container with validation, paired with `TxFormItem` for consistent layout and messages.
+`TxForm` provides the validation context for form fields. `TxFormItem` registers itself with the nearest form, resolves field rules, renders the label/message layout, and exposes field-level validation through the parent form instance.
+
+Reviewed against `packages/tuffex/packages/components/src/form/src/types.ts`, `TxForm.vue`, `TxFormItem.vue`, `context.ts`, and `form.test.ts`.
 
 ## Basic Usage
 
-::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { reactive, ref } from 'vue'
+  import { computed, reactive, ref } from 'vue'
 
-  const form = reactive({ name: '', email: '' })
-  const rules = { name: { required: true, message: 'Please enter your name' } }
   const formRef = ref()
+  const form = reactive({ name: '', email: '' })
+  const rules = computed(() => ({
+    name: { required: true, message: 'Please enter your name' },
+    email: {
+      validator: (value: string) => {
+        if (!value) return 'Please enter your email'
+        return value.includes('@') || 'Invalid email format'
+      },
+    },
+  }))
 
-  async function handleValidate() {
-    await formRef.value?.validate()
+  async function submit() {
+    const ok = await formRef.value?.validate()
+    if (!ok) return
+    // submit form
   }
   </script>
 
@@ -33,51 +49,100 @@ code: |
       <TxFormItem label="Email" prop="email">
         <TuffInput v-model="form.email" placeholder="name@example.com" />
       </TxFormItem>
+      <TxButton variant="primary" @click="submit">Validate</TxButton>
     </TxForm>
   </template>
 ---
-::
+:::
+
+## Interaction Contract
+
+- `TxForm` renders a native `<form>` and prevents default submit behavior.
+- `TxFormItem` registers on mount and unregisters before unmount, so parent `validate()`, `resetFields()`, and `clearValidate()` only affect live fields.
+- Form-level rules are looked up by `prop`; item-level `rules` override the form-level rule for the same field.
+- Required validation treats `null`, `undefined`, `''`, and empty arrays as empty.
+- A custom validator may return `true`, `false`, an error string, or a Promise of those values.
+- `resetFields()` restores each registered field to its mounted initial value and clears its validation message.
+- `required` on `TxFormItem` controls the required visual marker and augments validation when a rule is present. Use a required rule when the field must fail validation on empty input.
+- `disabled` and `size` are provided through form context for descendants; slotted controls should still receive their own disabled/size props when the input component requires them.
 
 ## API
 
 ### TxForm Props
 
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `model` | `Record<string, any>` | - | Form data |
-| `rules` | `FormRules` | - | Validation rules |
-| `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | Label position |
-| `labelWidth` | `string \| number` | - | Label width |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Form size |
-| `disabled` | `boolean` | `false` | Disable form |
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `model` | `Record<string, any>` | - | Reactive form data object. `TxFormItem` reads fields by `prop`. |
+| `rules` | `FormRules` | - | Form-level validation rules keyed by field prop. |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | Label layout used by child form items. |
+| `labelWidth` | `string \| number` | - | Label width for non-top label layouts. Numbers become pixel values. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Form size exposed through context. |
+| `disabled` | `boolean` | `false` | Disabled state exposed through context. |
 
 ### TxForm Events
 
 | Event | Payload | Description |
-|------|------|------|
-| `validate` | `(valid: boolean)` | Validation result |
+|------|---------|-------------|
+| `validate` | `(valid: boolean)` | Emitted after parent `validate()` resolves all registered items. |
+
+### TxForm Expose
+
+| Method | Signature | Description |
+|------|-----------|-------------|
+| `validate` | `() => Promise<boolean>` | Runs validation on every registered item and returns whether all passed. |
+| `resetFields` | `() => void` | Restores mounted initial values for every registered item and clears messages. |
+| `clearValidate` | `() => void` | Clears validation messages without changing model values. |
 
 ### TxFormItem Props
 
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `label` | `string` | `''` | Label text |
-| `prop` | `string` | - | Target field |
-| `rules` | `FormRule \| FormRule[]` | - | Custom rules |
-| `required` | `boolean` | `false` | Required flag |
-| `showMessage` | `boolean` | `true` | Show error message |
-| `inline` | `boolean` | `false` | Inline layout |
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `label` | `string` | `''` | Label text. Falls back to `prop` when omitted. |
+| `prop` | `string` | - | Field key in the parent `model` and `rules`. |
+| `rules` | `FormRule \| FormRule[]` | - | Item-level validation rules. Overrides form-level rules for this item. |
+| `required` | `boolean` | `false` | Shows the required marker and augments required checks when a rule runs. |
+| `showMessage` | `boolean` | `true` | Renders the validation error message below the field. |
+| `inline` | `boolean` | `false` | Aligns label/content for compact inline rows. |
 
 ### TxFormItem Events
 
 | Event | Payload | Description |
-|------|------|------|
-| `validate` | `(valid: boolean)` | Field validation result |
+|------|---------|-------------|
+| `validate` | `(valid: boolean)` | Emitted after the item validates. |
 
-### Expose
+### FormRule
 
-| Name | Description |
-|------|------|
-| `validate()` | Trigger form validation |
-| `resetFields()` | Reset all fields |
-| `clearValidate()` | Clear validation state |
+| Field | Type | Description |
+|------|------|-------------|
+| `required` | `boolean` | Enables empty-value validation. |
+| `message` | `string` | Error message for required or `false` validator results. |
+| `validator` | `(value, rule, model) => boolean \| string \| Promise<boolean \| string>` | Custom validator. Returning a string uses that string as the error message. |
+
+### Slots
+
+| Component | Slot | Props | Description |
+|-----------|------|------|-------------|
+| `TxForm` | `default` | - | Form item and action content. |
+| `TxFormItem` | `default` | - | Field control content. |
+
+## Best Practices
+
+- Keep `model` stable and reactive; replacing it after mount can make reset semantics surprising.
+- Prefer form-level `rules` for shared validation and item-level `rules` only for one-off overrides.
+- Put async availability checks in `validator`, and return a string for the precise user-facing error.
+- Pass `disabled` to both `TxForm` and the slotted controls when the whole form is locked.
+- Call `clearValidate()` when switching between records without resetting user-entered values.
+
+## Review Notes
+
+- **Accessibility note:** `TxFormItem` renders a visible `<label>` but does not bind `for`/`id` automatically; ensure slotted controls receive matching IDs or explicit ARIA labels when the native label association matters.
+- **Verified coverage:** `form.test.ts` exercises required-rule validation, error message rendering, successful revalidation after model updates, and `resetFields()` restoring the mounted initial value.
+
+## Source
+
+- Component sources: `packages/tuffex/packages/components/src/form/src/TxForm.vue`, `TxFormItem.vue`, and `context.ts`.
+- Types: `packages/tuffex/packages/components/src/form/src/types.ts` exports form props, item props, emits, rules, size, and label position contracts.
+- Export aliases: `packages/tuffex/packages/components/src/form/index.ts` exports `Form`, `FormItem`, `TxForm`, and `TxFormItem`.
+- Coverage: `packages/tuffex/packages/components/src/form/__tests__/form.test.ts` verifies required validation, message rendering, successful revalidation, and reset behavior.
+
+<TuffDocSourceLink />

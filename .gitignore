@@ -58,6 +58,7 @@ out/
 /index-*.js
 /index--*.js
 apps/core-app/tuff
+apps/core-app/resources/bundled-plugins
 apps/core-app/.dev-electron/
 apps/core-app/.electron-builder-cache/
 apps/core-app/index-*.js

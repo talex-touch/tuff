@@ -1,16 +1,21 @@
 ---
 title: "Stack"
-description: "A direction-first Flexbox wrapper for evenly spaced vertical or horizontal layouts."
+description: "Direction-first Flexbox wrapper for evenly spaced vertical or horizontal layouts."
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [stack, flex, layout]
+syncStatus: reviewed
+verified: true
 ---
 # Stack
 
-Use `Stack` for simple one-dimensional layouts such as form sections, button groups, and compact panel content.
+`TxStack` is a one-dimensional layout primitive for form sections, button groups, compact panel content, and simple vertical or horizontal rhythm.
+
+Reviewed against `packages/tuffex/packages/components/src/stack/src/types.ts`, `TxStack.vue`, and `stack.test.ts`.
 
 ## Basic Usage
 
-### Stack
 :::TuffDemoWrapper{demo="StackStackDemo" code-lang="vue"}
 ---
 code: |
@@ -18,27 +23,105 @@ code: |
     <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
       <TxStack :gap="10">
         <TxButton>One</TxButton>
-        <TxButton variant="secondary">
-          Two
-        </TxButton>
-        <TxButton variant="ghost">
-          Three
-        </TxButton>
+        <TxButton variant="secondary">Two</TxButton>
+        <TxButton variant="ghost">Three</TxButton>
       </TxStack>
     </div>
   </template>
 ---
 :::
 
+## Composition Examples
+
+### Horizontal Actions
+
+```vue
+<template>
+  <TxStack direction="horizontal" align="center" justify="flex-end" :gap="8" wrap>
+    <TxButton variant="ghost">Cancel</TxButton>
+    <TxButton variant="primary">Save</TxButton>
+  </TxStack>
+</template>
+```
+
+### Inline Stack
+
+```vue
+<template>
+  <p>
+    Status:
+    <TxStack inline direction="horizontal" align="center" gap="0.5rem">
+      <TxBadge value="Live" variant="success" />
+      <TxTag label="Beta" size="sm" />
+    </TxStack>
+  </p>
+</template>
+```
+
+## Interaction Contract
+
+- The root is a `div` with `display: flex` by default.
+- `direction="vertical"` maps to `flex-direction: column`; `direction="horizontal"` maps to `row`.
+- Numeric `gap` values become px; string values are passed through unchanged.
+- `align` and `justify` are passed to CSS variables and then used as `align-items` and `justify-content`.
+- `wrap=true` maps to `flex-wrap: wrap`; otherwise `nowrap` is used.
+- `inline=true` switches display from `flex` to `inline-flex`.
+- The root sets `min-width: 0` so children can shrink inside constrained cards.
+
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `direction` | `'horizontal' \| 'vertical'` | `'vertical'` | Direction |
-| `gap` | `number \| string` | `12` | Gap |
-| `align` | `string` | `'stretch'` | align-items |
-| `justify` | `string` | `'flex-start'` | justify-content |
-| `wrap` | `boolean` | `false` | Allows children to wrap onto multiple lines. |
-| `inline` | `boolean` | `false` | Uses `inline-flex` instead of block-level `flex`. |
+|------|------|---------|-------------|
+| `direction` | `'horizontal' \| 'vertical'` | `'vertical'` | Main axis direction. |
+| `gap` | `number \| string` | `12` | Gap between children. Numbers become px. |
+| `align` | `string` | `'stretch'` | CSS `align-items` value. |
+| `justify` | `string` | `'flex-start'` | CSS `justify-content` value. |
+| `wrap` | `boolean` | `false` | Allow children to wrap onto multiple lines. |
+| `inline` | `boolean` | `false` | Use `inline-flex` instead of block-level `flex`. |
+
+### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| - | - | `TxStack` does not emit custom events. Child components keep their own event behavior. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Stack children. |
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-stack-gap` | `gap` | CSS gap. |
+| `--tx-stack-align` | `align` | `align-items`. |
+| `--tx-stack-justify` | `justify` | `justify-content`. |
+| `--tx-stack-direction` | `direction` | Resolved flex direction. |
+| `--tx-stack-wrap` | `wrap` | Resolved wrapping mode. |
+| `--tx-stack-display` | `inline` | `flex` or `inline-flex`. |
+
+## Best Practices
+
+- Use `TxStack` when the design asks for rhythm between siblings, not for arbitrary page layout.
+- Prefer `vertical` for forms and settings panels; prefer `horizontal` for action rows and compact metadata.
+- Use `wrap` for button groups that must survive narrow containers.
+- Keep `gap` token-based or numeric; avoid using empty children as spacers.
+- Use `TxFlex` when you need native flex directions such as `row-reverse` or `column-reverse`.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/stack/src/TxStack.vue`, `types.ts`, and `stack.test.ts`.
+- Existing tests cover default vertical variables, slot content rendering, horizontal prop mapping, wrapping, inline display, and numeric gap normalization.
+- Accessibility note: `TxStack` adds no semantic role. Keep list, form, and navigation semantics on the children or surrounding element.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/stack/src/TxStack.vue`.
+- Types: `packages/tuffex/packages/components/src/stack/src/types.ts` exports `StackProps` and `StackDirection`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/stack/__tests__/stack.test.ts` covers default vertical CSS variables and slot rendering, horizontal prop mapping, wrapping, inline display, and numeric-gap normalization.
+<TuffDocSourceLink />

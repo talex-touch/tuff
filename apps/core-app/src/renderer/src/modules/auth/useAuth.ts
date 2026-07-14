@@ -19,6 +19,7 @@ import { isDevEnv } from '@talex-touch/utils/env'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import AuthLoginResumePrompt from '~/components/auth/AuthLoginResumePrompt.vue'
 import { appSetting } from '../storage/app-storage'
+import { getGlobalI18nInstance } from '../lang/i18n'
 import { resolveAuthErrorMessage } from './auth-error-message'
 import { attestCurrentDevice } from './device-attest'
 import { applyDefaultSyncOnLogin, getSyncPreferenceState } from './sync-preferences'
@@ -154,6 +155,11 @@ const isAuthenticated = computed(() => authState.isSignedIn)
 const user = computed(() => authState.user)
 const isLoggedIn = computed(() => authState.isSignedIn)
 
+function resolveAuthUiMessage(key: string, fallback: string): string {
+  const translated = getGlobalI18nInstance()?.global.t(key)
+  return typeof translated === 'string' && translated !== key ? translated : fallback
+}
+
 function ensureAuthPreferenceSettings(): void {
   if (!appSetting.auth) {
     appSetting.auth = { ...appSettingOriginData.auth }
@@ -184,7 +190,12 @@ function remindSecureStoragePreferenceOnce(): void {
     return
   }
   appSetting.auth.secureStorageReminderShown = true
-  toast.info('当前登录凭证为会话模式。可在“用户设置”中启用登录凭证持久保护。')
+  toast.info(
+    resolveAuthUiMessage(
+      'settingUser.secureStorage.sessionModeReminder',
+      'Login credential protection is off. Enable it in Account settings for stronger local credential protection.'
+    )
+  )
 }
 
 function syncSentryUser(nextUser: AuthUser | null): void {
@@ -334,7 +345,12 @@ async function openLoginSettings(): Promise<boolean> {
 
 async function requestStepUp(): Promise<void> {
   await transport.send(AuthEvents.stepUp.request)
-  toast.info('请在浏览器中完成二次验证')
+  toast.info(
+    resolveAuthUiMessage(
+      'settingUser.stepUpPrompt',
+      'Complete secondary verification in your browser.'
+    )
+  )
 }
 
 async function runSyncBootstrap(): Promise<boolean> {
@@ -429,8 +445,14 @@ async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promis
         }
         toast.info(
           authLoadingState.loginBrowserOpenFailed
-            ? '浏览器未自动打开，请手动复制登录链接继续'
-            : '请在浏览器中完成登录'
+            ? resolveAuthUiMessage(
+                'settingUser.browserOpenManualToast',
+                'The browser did not open automatically. Copy the sign-in link to continue.'
+              )
+            : resolveAuthUiMessage(
+                'settingUser.completeBrowserLoginToast',
+                'Complete sign-in in your browser.'
+              )
         )
       })
       .catch((err) => {
@@ -466,7 +488,7 @@ async function logout(): Promise<void> {
     if (isAuthenticated.value) {
       await signOut()
     }
-    toast.success('已登出')
+    toast.success(resolveAuthUiMessage('settingUser.logoutSuccess', 'Signed out'))
   } catch (error) {
     const errorMessage = resolveAuthErrorMessage(error, 'SIGN_OUT_FAILED')
     toast.error(errorMessage)
@@ -510,7 +532,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
     authLoadingState.loginStage = 'success'
     authLoadingState.isLoggingIn = false
     authLoadingState.loginProgress = 100
-    toast.success('登录成功')
+    toast.success(resolveAuthUiMessage('settingUser.loginSuccessToast', 'Signed in'))
   } catch (error) {
     const errorMessage = resolveAuthErrorMessage(error, 'AUTH_ERROR')
     toast.error(errorMessage)
@@ -537,7 +559,7 @@ function setupAuthStateListener(): void {
         finishPendingBrowserLogin({ success: true, user: currentUser.value })
         authLoadingState.loginStage = 'success'
         authLoadingState.loginProgress = 100
-        toast.success('登录成功')
+        toast.success(resolveAuthUiMessage('settingUser.loginSuccessToast', 'Signed in'))
         return
       }
       if (authLoadingState.isLoggingIn) {
@@ -670,8 +692,11 @@ async function retryPendingBrowserLogin(): Promise<void> {
     authLoadingState.loginStage = 'waiting'
     toast.info(
       authLoadingState.loginBrowserOpenFailed
-        ? '浏览器未自动打开，请手动复制登录链接继续'
-        : '已重新打开登录页面'
+        ? resolveAuthUiMessage(
+            'settingUser.browserOpenManualToast',
+            'The browser did not open automatically. Copy the sign-in link to continue.'
+          )
+        : resolveAuthUiMessage('settingUser.loginPageReopenedToast', 'Sign-in page reopened.')
     )
   } catch (error) {
     const errorMessage = resolveAuthErrorMessage(error, 'BROWSER_OPEN_FAILED')
@@ -694,7 +719,7 @@ async function reopenBrowserLogin(): Promise<void> {
 async function handleManualTokenLogin(rawToken: string): Promise<void> {
   const token = rawToken.trim()
   if (!token) {
-    toast.error('请输入 token')
+    toast.error(resolveAuthUiMessage('settingUser.tokenRequired', 'Enter a token'))
     return
   }
   if (isJwtToken(token)) {
@@ -729,7 +754,7 @@ async function showLoginResumePrompt(): Promise<{
     const vnode = createVNode(AuthLoginResumePrompt, {
       onAction: (result: { action: 'manual' | 'retry' | 'cancel'; token?: string }) => {
         if (result.action === 'manual' && !result.token) {
-          toast.error('请输入 token')
+          toast.error(resolveAuthUiMessage('settingUser.tokenRequired', 'Enter a token'))
           return
         }
         finish(result)

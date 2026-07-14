@@ -1,12 +1,16 @@
 ---
 title: "Card 卡片"
-description: "Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。"
+description: "带插槽、材质背景、加载、点击、惯性和折射模式的 surface 容器。"
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [card, surface, layout]
+syncStatus: reviewed
+verified: true
 ---
 # Card 卡片
 
-Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。
+`TxCard` 是面向生产场景的 surface 容器，内置 header/body/footer/cover 插槽、材质背景、加载遮罩、可点击状态、惯性跟随和 refraction 光效。
 
 ## 基础用法
 
@@ -1641,23 +1645,25 @@ code: |
 - 需要底层材质细调：改用 `TxBaseSurface`。尤其是折射与滤镜底层参数（`displace`、`distortionScale`、`redOffset/greenOffset/blueOffset`、`filterSaturation/filterContrast/filterBrightness`、`refractionHaloOpacity`）。
 - 约定：`TxCard` 维持“开箱即用”稳定 API；材质实验或品牌化渲染直接在 `TxBaseSurface` 层完成。
 
-## API 参考
+## API
 
 ### Props
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框与交互形态 |
-| background | `'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'refraction'` | 背景风格：`blur`=filter 层，`glass`=glass 层，`refraction`=glass+filter（默认推荐），`mask`=mask 层 |
-| shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | 阴影强度 |
-| size | `'small' \| 'medium' \| 'large'` | `'medium'` | 卡片尺寸 |
-| radius | `number` | `18` | 圆角 |
-| padding | `number` | - | 内边距（不传时由 `size` 决定） |
-| glassBlur | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：是否启用 blur |
-| glassBlurAmount | `number` | `22` | 仅 `background='glass' \| 'refraction'`：blur 强度（px） |
-| glassOverlay | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：是否叠加高光遮罩层 |
-| glassOverlayOpacity | `number` | `0.18` | 仅 `background='glass' \| 'refraction'`：高光遮罩层透明度 |
-| fallbackMaskOpacity | `number` | `0.26` | 运动降级到 mask 时的遮罩透明度（0-1） |
+| `variant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框与交互形态；`plain` 会移除标准边框。 |
+| `background` | `'pure' \| 'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'pure'` | 转发给 `TxBaseSurface` 的 surface 模式；`mask` 使用卡片颜色/透明度，`glass` 与 `refraction` 启用光学层。 |
+| `shadow` | `'none' \| 'soft' \| 'medium'` | `'none'` | 卡片包装器的阴影强度。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 未显式传入 `padding` 时使用的内边距预设。 |
+| `radius` | `number` | `18` | px 圆角，转发给视觉 surface 并写入根 CSS 变量。 |
+| `padding` | `number` | - | 显式 px 内边距。默认由 `size` 决定为 `10`、`12` 或 `16`。 |
+| `glassBlur` | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：启用 blur。 |
+| `glassBlurAmount` | `number` | `22` | 仅 `background='glass' \| 'refraction'`：blur 强度，单位 px。 |
+| `glassOverlay` | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：启用高光 overlay。 |
+| `glassOverlayOpacity` | `number` | `0.18` | 仅 `background='glass' \| 'refraction'`：高光 overlay 透明度。 |
+| `maskOpacity` | `number` | `0.75` | 仅 `background='mask'`：转发给 `TxBaseSurface` 的透明度，会收敛到 `0..1`。 |
+| `fallbackMaskOpacity` | `number` | `0.26` | 运动降级到 mask 时的遮罩透明度（0-1）。 |
+| `surfaceMoving` | `boolean` | `false` | 外部 moving 标记，会与内部惯性 motion 合并后转发给 `TxBaseSurface`。|
 | refractionStrength | `number` | `62` | 仅 `background='refraction'`：折射强度（0-100），主控色散与扭曲强度 |
 | refractionProfile | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | 仅 `background='refraction'`：折射风格预设 |
 | refractionTone | `'mist' \| 'balanced' \| 'vivid'` | `'vivid'` | 仅 `background='refraction'`：折射色调预设（默认 `vivid`，减少发灰） |
@@ -1679,56 +1685,61 @@ code: |
 
 | 事件名 | 参数 | 说明 |
 |--------|------|------|
-| click | `(event: MouseEvent)` | 点击卡片时触发 |
+| `click` | `(event: MouseEvent)` | 仅在 `clickable=true` 且 `disabled=false` 时发出。 |
 
 ### Slots
 
-| 插槽名 | 说明 |
-|--------|------|
-| default | 卡片主要内容 |
-| header | 卡片头部内容 |
-| footer | 卡片底部内容 |
-| cover | 卡片封面图片 |
+| 插槽名 | Props | 说明 |
+|--------|-------|------|
+| `default` | - | 卡片主要内容。 |
+| `header` | - | 可选头部区域，渲染在 body 上方。 |
+| `footer` | - | 可选底部区域，渲染在 body 下方。 |
+| `cover` | - | 可选封面区域，渲染在 header 和 body 之前。 |
+
+### Exposed Methods
+
+不暴露公开实例方法。
+
+## 交互契约
+
+- 根节点是非语义化 `div`。`clickable` 只适合卡片级选择/导航；需要原生语义的动作应放在插槽内的真实按钮或链接上。
+- `click` 只在 `clickable=true` 且 `disabled=false` 时发出；禁用卡片仍渲染内容，但会阻止 click 事件和指针驱动 motion 更新。
+- `loading=true` 会用 `aria-hidden="true"` 的 `TxSpinner` 覆盖卡片；调用方仍负责 live-region 或表单 busy 状态提示。
+- `background` 会作为 surface mode 转发给 `TxBaseSurface`。`mask` 转发 `maskOpacity`；`glass` 和 `refraction` 转发 blur / overlay props。
+- refraction profile、tone、strength、angle 与 light-follow props 只在 `background="refraction"` 时生效。
+- `refractionStrength`、light-follow intensity、spring stiffness、spring damping 和 inertial rebound 在用于派生视觉状态前会被收敛。
+- `inertial=true` 会写入指针跟随 transform 变量，并调度 RAF 直到 motion 稳定；关闭 inertial 会重置 motion 状态。
 
 ## 样式定制
 
 ### CSS 变量
 
-:::TuffCodeBlock{lang="css"}
+`TxCard` 只在根节点暴露少量运行时变量。大部分视觉调整应优先使用 props；只有当包装层需要和插槽内容或底层 `TxBaseSurface` mask 颜色对齐时，才建议覆盖变量。
+
+::::TuffCodeBlock{lang="css"}
 ---
 code: |
   .custom-card {
-    --tx-card-fake-background: rgba(255, 255, 255, 0.8);
-    --tx-card-padding: 24px;
+    /* mask / refraction fallback surface 采样的背景色。 */
+    --tx-card-fake-background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent);
   }
 ---
-:::
+::::
 
-### 主题定制
+| 变量 | 写入方 | 用途 |
+|------|--------|------|
+| `--tx-card-radius` | `radius` prop | 根节点、surface、cover 和 loading overlay 的圆角。 |
+| `--tx-card-padding` | `padding` prop 或 `size` 预设 | 根节点 padding、cover 负 margin 和 cover 底部间距。 |
+| `--tx-card-dx` / `--tx-card-dy` | 内部 inertial motion | 根节点 `translate3d(...)` 偏移；调用方不应手动设置。 |
+| `--tx-card-fake-background` | 调用方 / 主题 | mask 与 refraction fallback surface 采样的背景色。 |
+| `--tx-surface-refraction-mask-color` | 卡片根节点 inline style | 将 `--tx-card-fake-background` 转发给 `TxBaseSurface`；通常只需要覆盖 `--tx-card-fake-background`。 |
 
-:::TuffCodeBlock{lang="css"}
----
-code: |
-  :root {
-    /* 卡片背景 */
-    --tx-card-background-default: rgba(255, 255, 255, 0.8);
-    --tx-card-background-glass: rgba(255, 255, 255, 0.1);
-    
-    /* 卡片边框 */
-    --tx-card-border-default: 1px solid rgba(0, 0, 0, 0.1);
-    --tx-card-border-outlined: 1px solid var(--tx-color-border);
-    
-    /* 卡片阴影 */
-    --tx-card-shadow-default: 0 2px 8px rgba(0, 0, 0, 0.1);
-    --tx-card-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.15);
-    
-    /* 卡片尺寸 */
-    --tx-card-padding-small: 16px;
-    --tx-card-padding-medium: 20px;
-    --tx-card-padding-large: 24px;
-  }
----
-:::
+### 主题说明
+
+- 组件源码中没有 `--tx-card-background-*`、`--tx-card-border-*`、`--tx-card-shadow-*` 或 `--tx-card-padding-*` 主题 token。
+- 支持的样式调整优先使用 `variant`、`shadow`、`size`、`radius`、`padding` 和 surface props。
+- 卡片需要跟随应用主题时，应覆盖全局 TuffEx token，例如 `--tx-bg-color-overlay`、`--tx-border-color-light` 和 `--tx-color-primary`。
+
 
 ## 最佳实践
 
@@ -1771,3 +1782,21 @@ code: |
   TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。
 ---
 :::
+
+
+## 审阅说明
+
+- 已人工核对 `packages/tuffex/packages/components/src/card/src/types.ts`、`TxCard.vue` 与 `card.test.ts`。
+- Props 表已覆盖源码中的全部 props，包括此前缺失的 `maskOpacity` 与 `surfaceMoving`。
+- 已修正样式定制内容，只保留源码中真实存在的 CSS 变量；移除了过期的 `--tx-card-background-*`、border、shadow 和 padding theme-token 示例。
+- 已按测试确认关键行为：默认 mode 是 `pure`，size 派生 padding 为 `10/12/16`，只有启用且未禁用的 clickable 卡片才会发出 click，loading 会渲染 spinner overlay，disabled 会阻止 pointer-driven updates。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts` 覆盖默认 class/surface props、结构插槽、clickable gating、loading overlay、mask/glass 映射和 refraction 跟随光源映射。
+- 与 `TxBaseSurface` 的选型说明是刻意保留的边界：底层 refraction / filter 控制仍在 `TxBaseSurface`，`TxCard` 负责稳定的容器 API。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/card/src/TxCard.vue`
+- Types: `packages/tuffex/packages/components/src/card/src/types.ts`
+- Tests: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts`
+
+<TuffDocSourceLink />

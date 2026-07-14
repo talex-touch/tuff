@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -11,7 +11,18 @@ import {
 const repoRoot = path.resolve(__dirname, '../../..')
 const scriptPath = path.join(__dirname, 'coreapp-visible-experience-verify.ts')
 
-function runVerifier(manifestPath: string): string {
+interface RunVerifierOptions {
+  requireCurrentVersion?: boolean
+  requireEvidenceTags?: boolean
+  requireExistingArtifacts?: boolean
+}
+
+interface VerifierFailure {
+  status?: number
+  output: string
+}
+
+function runVerifier(manifestPath: string, options: RunVerifierOptions = {}): string {
   return execFileSync(
     'corepack',
     [
@@ -21,8 +32,9 @@ function runVerifier(manifestPath: string): string {
       scriptPath,
       '--input',
       manifestPath,
-      '--requireEvidenceTags',
-      '--requireExistingArtifacts',
+      ...(options.requireEvidenceTags !== false ? ['--requireEvidenceTags'] : []),
+      ...(options.requireExistingArtifacts !== false ? ['--requireExistingArtifacts'] : []),
+      ...(options.requireCurrentVersion ? ['--requireCurrentVersion'] : []),
       '--compact'
     ],
     {
@@ -33,25 +45,77 @@ function runVerifier(manifestPath: string): string {
   )
 }
 
-function captureVerifierFailure(manifestPath: string): string {
+function captureVerifierFailure(manifestPath: string, options?: RunVerifierOptions): string {
   try {
-    runVerifier(manifestPath)
+    runVerifier(manifestPath, options)
     return ''
   } catch (error) {
-    const childProcessError = error as Partial<{
-      message: string
-      stderr: Buffer | string
-      stdout: Buffer | string
-    }>
-
-    return [
-      childProcessError.message,
-      childProcessError.stdout?.toString(),
-      childProcessError.stderr?.toString()
-    ]
-      .filter(Boolean)
-      .join('\n')
+    return formatVerifierFailure(error).output
   }
+}
+
+function captureVerifierFailureDetails(
+  manifestPath: string,
+  options?: RunVerifierOptions
+): VerifierFailure | null {
+  try {
+    runVerifier(manifestPath, options)
+    return null
+  } catch (error) {
+    return formatVerifierFailure(error)
+  }
+}
+
+function formatVerifierFailure(error: unknown): VerifierFailure {
+  const message = error instanceof Error ? error.message : String(error)
+  if (!error || typeof error !== 'object') return { output: message }
+
+  const stdout =
+    'stdout' in error && (typeof error.stdout === 'string' || Buffer.isBuffer(error.stdout))
+      ? error.stdout.toString()
+      : undefined
+  const stderr =
+    'stderr' in error && (typeof error.stderr === 'string' || Buffer.isBuffer(error.stderr))
+      ? error.stderr.toString()
+      : undefined
+
+  return {
+    status: 'status' in error && typeof error.status === 'number' ? error.status : undefined,
+    output: [message, stdout, stderr].filter(Boolean).join('\n')
+  }
+}
+
+function currentCoreAppVersion(): string {
+  const packageJson: unknown = JSON.parse(
+    readFileSync(path.join(repoRoot, 'apps/core-app/package.json'), 'utf8')
+  )
+  if (
+    !packageJson ||
+    typeof packageJson !== 'object' ||
+    !('version' in packageJson) ||
+    typeof packageJson.version !== 'string'
+  ) {
+    throw new Error('CoreApp package version is unavailable')
+  }
+
+  return packageJson.version
+}
+
+function writeManifest(dir: string, baselineVersion: string): string {
+  const manifestPath = path.join(dir, 'manifest.json')
+  writeFileSync(
+    manifestPath,
+    JSON.stringify(
+      buildCoreAppVisibleExperienceManifest({
+        baselineVersion,
+        generatedAt: '2026-07-13T00:00:00.000Z',
+        evidenceDir: '.'
+      }),
+      null,
+      2
+    )
+  )
+  return manifestPath
 }
 
 describe('coreapp visible experience verifier cli', () => {
@@ -89,5 +153,60 @@ describe('coreapp visible experience verifier cli', () => {
     )
 
     expect(captureVerifierFailure(manifestPath)).toMatch(/tag-only-missing\.png/)
+  })
+
+  it('accepts a manifest whose baseline matches the current package version when required', () => {
+    const currentVersion = currentCoreAppVersion()
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'coreapp-visible-verify-'))
+    const manifestPath = writeManifest(dir, currentVersion)
+
+    expect(
+      JSON.parse(
+        runVerifier(manifestPath, {
+          requireCurrentVersion: true,
+          requireEvidenceTags: false,
+          requireExistingArtifacts: false
+        })
+      )
+    ).toMatchObject({
+      baselineVersion: currentVersion,
+      gate: { passed: true, failures: [] }
+    })
+  })
+
+  it('fails the current-version gate for a stale manifest and reports both versions', () => {
+    const currentVersion = currentCoreAppVersion()
+    const staleVersion = `${currentVersion}-stale-baseline`
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'coreapp-visible-verify-'))
+    const manifestPath = writeManifest(dir, staleVersion)
+
+    const failure = captureVerifierFailureDetails(manifestPath, {
+      requireCurrentVersion: true,
+      requireEvidenceTags: false,
+      requireExistingArtifacts: false
+    })
+
+    expect(failure?.status).toBe(1)
+    expect(failure?.output).toContain(
+      `Visible experience baseline version mismatch: manifest=${staleVersion}, current=${currentVersion}`
+    )
+  })
+
+  it('continues to verify historical baselines when the current-version flag is absent', () => {
+    const staleVersion = `${currentCoreAppVersion()}-historical-baseline`
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'coreapp-visible-verify-'))
+    const manifestPath = writeManifest(dir, staleVersion)
+
+    expect(
+      JSON.parse(
+        runVerifier(manifestPath, {
+          requireEvidenceTags: false,
+          requireExistingArtifacts: false
+        })
+      )
+    ).toMatchObject({
+      baselineVersion: staleVersion,
+      gate: { passed: true, failures: [] }
+    })
   })
 })

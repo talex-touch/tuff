@@ -1,18 +1,57 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+
+const { locale } = useI18n()
+
+const labels = computed(() => (locale.value === 'zh'
+  ? {
+      once: 'once / 入场一次',
+      breathe: 'breathe / 循环呼吸',
+      hover: 'hover / 悬停触发',
+    }
+  : {
+      once: 'once',
+      breathe: 'breathe',
+      hover: 'hover me',
+    }))
+</script>
+
 <template>
-  <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center;">
-    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+  <div class="tuff-logo-stroke-modes-demo">
+    <div class="tuff-logo-stroke-modes-demo__item">
       <TxTuffLogoStroke :size="84" mode="once" />
-      <span style="font-size: 12px; opacity: 0.72;">once</span>
+      <span>{{ labels.once }}</span>
     </div>
 
-    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <div class="tuff-logo-stroke-modes-demo__item">
       <TxTuffLogoStroke :size="84" mode="breathe" />
-      <span style="font-size: 12px; opacity: 0.72;">breathe</span>
+      <span>{{ labels.breathe }}</span>
     </div>
 
-    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <div class="tuff-logo-stroke-modes-demo__item">
       <TxTuffLogoStroke :size="84" mode="hover" />
-      <span style="font-size: 12px; opacity: 0.72;">hover me</span>
+      <span>{{ labels.hover }}</span>
     </div>
   </div>
 </template>
+
+<style scoped>
+.tuff-logo-stroke-modes-demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.tuff-logo-stroke-modes-demo__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.tuff-logo-stroke-modes-demo__item span {
+  font-size: 12px;
+  opacity: 0.72;
+}
+</style>

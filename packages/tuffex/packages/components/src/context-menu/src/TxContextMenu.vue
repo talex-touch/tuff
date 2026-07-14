@@ -48,6 +48,7 @@ const emit = defineEmits<{
 const internalOpen = ref(false)
 const triggerRef = ref<HTMLElement | null>(null)
 const anchorRef = ref<InstanceType<typeof TxBaseAnchor> | null>(null)
+const panelRef = ref<InstanceType<typeof TxContextMenuPanel> | null>(null)
 const point = ref<ContextMenuPoint>({ x: props.x, y: props.y })
 const lastOpenedAt = ref(0)
 const openedByContextMenu = ref(false)
@@ -228,7 +229,13 @@ function onAnchorUpdate(v: boolean) {
   open.value = v
 }
 
-function onAnchorOpen() {}
+function focusFirstMenuItem() {
+  nextTick(() => panelRef.value?.focusFirstItem())
+}
+
+function onAnchorOpen() {
+  focusFirstMenuItem()
+}
 
 function onAnchorClose() {}
 
@@ -238,6 +245,15 @@ watch(
     if (disabled)
       close()
   },
+)
+
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen)
+      focusFirstMenuItem()
+  },
+  { immediate: true },
 )
 
 onMounted(() => {
@@ -310,6 +326,7 @@ defineExpose({
 
     <template #default>
       <TxContextMenuPanel
+        ref="panelRef"
         :close="close"
         :close-on-select="closeOnSelect"
       >

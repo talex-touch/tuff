@@ -1,8 +1,10 @@
 ---
 title: "GradualBlur 渐变模糊"
-description: "用于在容器边缘叠加多层 `backdrop-filter: blur(...)`，实现从清晰到模糊的渐变过渡。"
+description: "用于父容器或页面边缘的分层 backdrop-filter 渐变模糊，覆盖预设、hover 强度、滚动触发、响应式尺寸与 GPU 提示。"
 category: Layout
-syncStatus: migrated
+tags: [blur, edge-fade, overlay, backdrop-filter]
+syncStatus: reviewed
+verified: true
 ---
 # GradualBlur 渐变模糊
 
@@ -318,34 +320,72 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | 模糊方向 |
-| `strength` | `number` | `2` | 模糊强度（倍数） |
-| `height` | `string` | `'6rem'` | 垂直方向尺寸（top/bottom） |
-| `width` | `string` | - | 水平方向尺寸（left/right） |
-| `divCount` | `number` | `5` | 分层数量 |
-| `exponential` | `boolean` | `false` | 是否指数增强模糊强度 |
-| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | 分层强度曲线 |
-| `opacity` | `number` | `1` | 整体透明度 |
-| `animated` | `boolean \| 'scroll'` | `false` | 是否启用过渡/滚动触发 |
-| `duration` | `string` | `'0.3s'` | 动画时长 |
-| `easing` | `string` | `'ease-out'` | 动画曲线 |
-| `zIndex` | `number` | `1000` | 层级 |
-| `target` | `'parent' \| 'page'` | `'parent'` | 定位目标：父容器/页面 |
-| `hoverIntensity` | `number` | - | hover 时强度倍率（启用后组件接收 pointer events） |
-| `responsive` | `boolean` | `false` | 是否根据窗口宽度切换尺寸 |
-| `mobileHeight` | `string` | - | `responsive` 模式下移动端 height |
-| `tabletHeight` | `string` | - | `responsive` 模式下平板 height |
-| `desktopHeight` | `string` | - | `responsive` 模式下桌面端 height |
-| `mobileWidth` | `string` | - | `responsive` 模式下移动端 width |
-| `tabletWidth` | `string` | - | `responsive` 模式下平板 width |
-| `desktopWidth` | `string` | - | `responsive` 模式下桌面端 width |
-| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | 预设组合 |
-| `gpuOptimized` | `boolean` | `false` | 开启后会加 `translateZ(0)` / `will-change` 以优化渲染 |
-| `onAnimationComplete` | `() => void` | - | `animated="scroll"` 进入可见区域且动画完成后回调 |
-| `className` | `string` | `''` | 额外 class |
-| `style` | `CSSProperties` | `{}` | 额外 style |
+| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | 挂载边缘，同时决定 mask 渐变方向。 |
+| `strength` | `number` | `2` | 每层 blur 半径的倍率。 |
+| `height` | `string` | `'6rem'` | top/bottom 的覆盖厚度；left/right 在未传 `width` 时也会用它兜底。 |
+| `width` | `string` | - | 覆盖宽度；top/bottom 默认 `100%`，left/right 未传时回退到 `height`。 |
+| `divCount` | `number` | `5` | 分层数量；会向下取整，并至少保留 1 层。 |
+| `exponential` | `boolean` | `false` | 使用指数式 blur 递增，而不是线性递增。 |
+| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | 控制各层 blur 进度分布。 |
+| `opacity` | `number` | `1` | 应用到每个 blur layer 的透明度。 |
+| `animated` | `boolean \| 'scroll'` | `false` | 启用 opacity/filter 过渡；`'scroll'` 会等进入视口后淡入。 |
+| `duration` | `string` | `'0.3s'` | opacity 与 blur 过渡时长。 |
+| `easing` | `string` | `'ease-out'` | opacity 与 blur 过渡曲线。 |
+| `zIndex` | `number` | `1000` | 基础层级；`target="page"` 会在此基础上加 `100`。 |
+| `target` | `'parent' \| 'page'` | `'parent'` | `parent` 使用 absolute 定位；`page` 使用 fixed 定位。 |
+| `hoverIntensity` | `number` | - | hover 时乘到 `strength` 上，并让覆盖层接收 pointer events。 |
+| `responsive` | `boolean` | `false` | 根据窗口宽度切换 height/width，并安装防抖 resize 监听。 |
+| `mobileHeight` | `string` | - | `responsive` 下 viewport `<= 480px` 时使用的 height。 |
+| `tabletHeight` | `string` | - | `responsive` 下 viewport `<= 768px` 时使用的 height。 |
+| `desktopHeight` | `string` | - | `responsive` 下 viewport `<= 1024px` 时使用的 height。 |
+| `mobileWidth` | `string` | - | `responsive` 下 viewport `<= 480px` 时使用的 width。 |
+| `tabletWidth` | `string` | - | `responsive` 下 viewport `<= 768px` 时使用的 width。 |
+| `desktopWidth` | `string` | - | `responsive` 下 viewport `<= 1024px` 时使用的 width。 |
+| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | 先应用预设配置；显式传入的 prop 仍会覆盖预设。 |
+| `gpuOptimized` | `boolean` | `false` | 增加 `will-change: backdrop-filter, opacity` 与 `translateZ(0)`。 |
+| `onAnimationComplete` | `() => void` | - | `animated="scroll"` 进入可见区域并经过 `duration` 后调用。 |
+| `className` | `string` | `''` | 追加到根节点的额外 class。 |
+| `style` | `CSSProperties` | `{}` | 追加到根节点的内联样式；会在生成的定位样式之后合并。 |
 
-## 使用建议
+## Slots
 
-- **[容器定位]** `target="parent"` 时父容器建议 `position: relative`，并配合 `overflow: hidden` 来裁切边缘。
-- **[浏览器支持]** 依赖 `backdrop-filter`，不同浏览器表现会略有差异。
+| 插槽名 | 说明 |
+|------|------|
+| `default` | 可选内容，渲染在覆盖层根节点内，并位于 blur layers 之上。 |
+
+## Events
+
+不派发 Vue 事件；`animated="scroll"` 需要完成回调时使用 `onAnimationComplete`。
+
+## 交互契约
+
+- 先合并 preset，再用显式传入的 props 覆盖预设值。
+- `position` 同时控制挂载边缘与 mask 渐变方向；垂直边缘使用 `height`，水平边缘优先使用 `width`，否则回退到 `height`。
+- `target="parent"` 渲染为 `position: absolute`；`target="page"` 渲染为 `position: fixed`，垂直边缘默认占满 viewport 宽度，并在 `zIndex` 上加 `100`。
+- `divCount` 会向下取整并至少保留一层；每层都有独立的 mask 区间与 `backdrop-filter` blur 值。
+- `hoverIntensity` 会启用 pointer events，并只在 hover 时把倍率乘到 `strength` 上。
+- `animated="scroll"` 初始隐藏，通过 `IntersectionObserver` 观察根节点；进入可见区域后经过 `duration` 再调用 `onAnimationComplete`。
+- `responsive` 会安装防抖 resize 监听，并按 viewport 宽度应用 mobile/tablet/desktop 尺寸（`<=480`、`<=768`、`<=1024`）。
+- `style` 在生成的定位样式之后合并，因此页面可以有意覆盖坐标。
+
+## 最佳实践
+
+- 卡片内边缘渐隐应让父容器保持 `position: relative` 与 `overflow: hidden`；固定页面 chrome 才使用 `target="page"`。
+- 需要更顺滑的渐变时先增加 `divCount`，再调 `strength`；过高的层数会增加 backdrop-filter 成本。
+- 常见页眉/页脚优先使用 preset，再覆盖少量 props，避免重复维护整套参数。
+- 默认覆盖层不接收 pointer events；除非需要 hover 强度，不要把交互控件放在覆盖层下方。
+- 两套主题都要检查对比度，因为 `backdrop-filter` 的实际效果取决于后方内容。
+
+## 审阅说明
+
+- **可访问性说明：** 模糊根节点默认只是装饰层且不接收 pointer events。启用 `hoverIntensity` 会打开 pointer events，除非确实需要 hover 强度增强，否则不要覆盖可聚焦控件。
+- **实测覆盖:** `gradual-blur.test.ts` 覆盖配置化 layer 渲染、插槽内容、page target 定位与 z-index 偏移、GPU 样式、preset 合并和 `divCount` 下限、hover 强度变化，以及响应式尺寸。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue`。
+- Types: `packages/tuffex/packages/components/src/gradual-blur/src/types.ts` 导出 `GradualBlurProps` 以及 position、curve、animated、target 联合类型。
+- Export alias: `packages/tuffex/packages/components/src/gradual-blur/index.ts` 导出 `GradualBlur`、`TxGradualBlur`、`GradualBlurProps` 与 `TxGradualBlurInstance`。
+- Coverage: `packages/tuffex/packages/components/src/gradual-blur/__tests__/gradual-blur.test.ts` 覆盖 layer 生成、presets、page target、GPU 优化、hover intensity 与响应式尺寸。
+
+<TuffDocSourceLink />

@@ -57,6 +57,7 @@ Package-level recommended commands are listed in:
 ## Evidence Boundaries
 
 - R2 AI Stable visible evidence is governed by `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md` and its strict verifier.
+- A visible-evidence claim about the current CoreApp version must run the strict verifier with `--requireCurrentVersion`; a historical 13/13 manifest may still prove its dated artifact snapshot, but it must not be relabeled as current packaged evidence when `baselineVersion` differs from `apps/core-app/package.json`.
 - R3 Search / Indexing Runtime evidence is governed by `docs/plan-prd/TODO-R3.md` and `docs/engineering/reports/r3-indexing-runtime-2026-06-25/README.md`.
 - Nexus performance and production conclusions are governed by `docs/plan-prd/TODO-nexus.md`.
 - Governance production evidence must distinguish `live`, `d1`, `r2`, `local-only`, `memory`, and `open`.
@@ -86,3 +87,122 @@ Reviewers should check:
 - Pairing a verifier JSON from one run with screenshots or DOM from another run.
 - Fixing a semantic control by adding ARIA to a `div` when a native button is available.
 - Updating a shared payload in one package without updating SDK mirror tests.
+
+---
+
+## Scenario: Official Plugin Release Seed Integrity
+
+### 1. Scope / Trigger
+
+- Apply this contract when changing Tuff plugin exporter staging, canonical official plugin builds, CoreApp packaged plugin seeds, runtime bootstrap, or release orchestration.
+- Canonical source and version ownership stays under `plugins/<plugin>/`; `apps/core-app/resources/bundled-plugins/<plugin>/` is generated package input and Electron `Resources/bundled-plugins/<plugin>/` is immutable release payload.
+
+### 2. Signatures
+
+- Exporter internal classifier: `isGeneratedPackageOutputEntry(entryName: string): boolean`.
+- Official build registry: `OFFICIAL_PLUGIN_BUILD_TARGETS: ReadonlyArray<{ packageName: string; pluginName: string }>`.
+- Build orchestration: `buildOfficialPluginPackages(options?): string[]` returns the exact successful package build order.
+- Single seed sync: `syncOfficialPluginBundledRuntime(pluginName, options?): SyncResult`.
+- All-seed sync: `syncOfficialPluginBundledRuntimes(options?): SyncResult[]`.
+- Packaged verifier: `verifyPackagedOfficialPluginSeeds(context): void`.
+- Runtime bootstrap: `installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot }): OfficialPluginSeedResult[]`; it is synchronous by contract.
+
+### 3. Contracts
+
+- Exporter staging must exclude top-level `out`, `build`, and case-insensitive `*.tpex` entries from source payload collection.
+- Release order is CLI core, CLI entrypoint, every `OFFICIAL_PLUGIN_BUILD_TARGETS` package, every seed projection, plugin prelude bundling, CoreApp build/package, then after-pack seed verification.
+- `electron-vite build` or direct `electron-builder --dir` only packages the existing resource projection; it does not rebuild/synchronize canonical official plugin code. After any official plugin source/build change, release/evidence flow must run canonical plugin build + `syncOfficialPluginBundledRuntimes` before packaging.
+- A successful projection result contains `pluginName`, `packageName`, `canonicalBuildRoot`, `bundledPluginRoot`, `canonicalVersion`, `synced: true`, and `skipped: false`.
+- Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs` and never downgrades an identity-matching newer local runtime.
+
+### 4. Validation & Error Matrix
+
+- Unsupported plugin name -> `syncOfficialPluginBundledRuntime` throws.
+- Missing canonical `dist/build`, `package.json`, or built `manifest.json` -> sync returns `reason: 'missing-canonical-build'`; release orchestration must throw.
+- Built manifest name differs from registry plugin name -> throw canonical-build mismatch.
+- Built manifest version differs from canonical package version -> throw canonical-build mismatch.
+- Any prerequisite or plugin package build exits non-zero -> stop immediately; do not sync or package CoreApp.
+- Missing packaged seed, version mismatch, nested `dist`, or nested `.tpex` -> `afterPack` throws and packaging fails.
+- Missing/empty/invalid runtime seed set -> runtime installer throws before mutating any plugin.
+- Older, corrupt, wrong-identity, or same-version/different-signature local runtime -> staged clean replacement with rollback.
+- Same-version canonical build differs from `apps/core-app/resources/bundled-plugins/<plugin>` -> treat the resource projection as stale even if after-pack version checks pass; synchronize content before packaging. Runtime same-version signature repair only helps when the packaged seed itself is current.
+- Identity-matching newer local runtime -> return `newer-local` without mutation.
+
+### 5. Good / Base / Bad Cases
+
+- Good: repeated builds keep only the current archive outside `dist/build`; packaged Resources contain two clean official seeds; a fresh profile discovers both during initial plugin loading.
+- Base: a clean checkout builds CLI prerequisites and both official plugins, projects them, packages/verifies them, then installs them before module startup.
+- Bad: copying the whole canonical `dist` directory, seeding after plugin discovery starts, or overwriting newer local runtime/data is prohibited.
+
+### 6. Tests Required
+
+- Both exporter implementations: seed a stale top-level `.tpex`, build, then assert absence from `dist/out`, `dist/build`, and `manifest._files`.
+- Build orchestration: assert prerequisite/plugin order and assert a failed build prevents later builds.
+- Seed projection and after-pack: assert clean stale-file removal, canonical version propagation, packaged resource presence, and fail-closed missing/mismatch/artifact behavior.
+- Runtime bootstrap: assert immediate synchronous return, pre-mutation validation, clean install/update, data/log preservation, wrong-identity repair, and newer-local no-downgrade.
+- Content freshness: compare canonical `dist/build` files with the bundled resource projection (excluding the resource-only package metadata where applicable), then verify a previously installed same-version/different-signature runtime is refreshed on startup.
+- Release smoke: package CoreApp, inspect actual Resources, then launch a fresh isolated profile and assert both seeds are discovered during initial plugin loading.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```js
+// Wrong: packages whichever generated seed happens to be in resources.
+electronViteBuild();
+electronBuilderDir();
+startModuleManager();
+```
+
+#### Correct
+
+```js
+// Correct: canonical build and projection precede Electron packaging.
+buildOfficialPluginPackages({ projectRoot, workspaceRoot });
+const results = syncOfficialPluginBundledRuntimes({
+  projectRoot,
+  workspaceRoot,
+});
+if (results.some((result) => !result.synced))
+  throw new Error("Official plugin seed sync failed");
+electronViteBuild();
+electronBuilderDir();
+installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot });
+startModuleManager();
+```
+
+## Scenario: DeepAgent Usage Signal Integrity
+
+### Scope
+
+- Trigger: LangChain/DeepAgent returns a provider response used by `agent.run` or `workflow.execute`.
+- The runtime must not replace available token usage with hardcoded zeroes.
+
+### Contract
+
+- Normalize OpenAI Responses `usage.input_tokens/output_tokens/total_tokens` and LangChain `AIMessage.usage_metadata` into `IntelligenceUsageInfo`.
+- Prefer an explicit root aggregate; otherwise sum each assistant message once, including `kwargs` serialization shapes without double-counting mirrored fields.
+- Reject non-finite/negative values and preserve the invariant `totalTokens >= promptTokens + completionTokens`.
+- Adapter `run()` exposes usage with provider/model metadata.
+- `agent.run` returns adapter usage; prompt/agent workflow step outputs retain it; workflow top-level usage sums prompt, agent, and stable model step outputs.
+- Return explicit zero usage only when no step/provider reported usage.
+
+### Validation
+
+- Pure parser tests cover Responses, LangChain direct/kwargs, common response metadata aliases, mirrored fields, and malformed input.
+- CoreApp orchestration tests cover agent propagation, mixed workflow aggregation, and the no-usage zero fallback.
+- Package build must emit declarations successfully.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+```
+
+#### Correct
+
+```ts
+usage: aggregateWorkflowUsage(run.outputs)
+```

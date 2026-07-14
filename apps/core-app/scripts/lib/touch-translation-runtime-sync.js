@@ -1,7 +1,24 @@
+const { execFileSync } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
 const TOUCH_TRANSLATION_PLUGIN_NAME = 'touch-translation'
+
+const OFFICIAL_PLUGIN_BUILD_TARGETS = Object.freeze([
+  {
+    packageName: '@talex-touch/touch-translation-plugin',
+    pluginName: TOUCH_TRANSLATION_PLUGIN_NAME
+  },
+  {
+    packageName: '@talex-touch/touch-intelligence-plugin',
+    pluginName: 'touch-intelligence'
+  }
+])
+
+const OFFICIAL_PLUGIN_BUILD_PREREQUISITES = Object.freeze([
+  '@talex-touch/tuff-cli-core',
+  '@talex-touch/tuff-cli'
+])
 
 function copyDirectoryContents(sourceDir, targetDir) {
   fs.mkdirSync(targetDir, { recursive: true })
@@ -14,6 +31,40 @@ function copyDirectoryContents(sourceDir, targetDir) {
       recursive: true
     })
   }
+}
+
+function replaceDirectoryContents(sourceDir, targetDir) {
+  fs.rmSync(targetDir, { force: true, recursive: true })
+  copyDirectoryContents(sourceDir, targetDir)
+}
+
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+}
+
+function buildOfficialPluginPackages(options = {}) {
+  const projectRoot = options.projectRoot || path.join(__dirname, '..', '..')
+  const workspaceRoot = options.workspaceRoot || path.resolve(projectRoot, '..', '..')
+  const packageNames = [
+    ...OFFICIAL_PLUGIN_BUILD_PREREQUISITES,
+    ...OFFICIAL_PLUGIN_BUILD_TARGETS.map((entry) => entry.packageName)
+  ]
+  const runPackageBuild =
+    options.runPackageBuild ||
+    ((packageName) => {
+      const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+      execFileSync(pnpmExecutable, ['--filter', packageName, 'run', 'build'], {
+        cwd: workspaceRoot,
+        env: process.env,
+        stdio: 'inherit'
+      })
+    })
+
+  for (const packageName of packageNames) {
+    runPackageBuild(packageName)
+  }
+
+  return packageNames
 }
 
 function writeBundledPackageVersion(sourcePackagePath, bundledPackagePath) {
@@ -44,61 +95,89 @@ function writeBundledPackageVersion(sourcePackagePath, bundledPackagePath) {
   )
 }
 
-function syncTouchTranslationBundledRuntime(options = {}) {
+function syncOfficialPluginBundledRuntime(pluginName, options = {}) {
+  const target = OFFICIAL_PLUGIN_BUILD_TARGETS.find((entry) => entry.pluginName === pluginName)
+  if (!target) {
+    throw new Error(`[official-plugin-sync] Unsupported official plugin: ${pluginName}`)
+  }
+
   const projectRoot = options.projectRoot || path.join(__dirname, '..', '..')
   const workspaceRoot = options.workspaceRoot || path.resolve(projectRoot, '..', '..')
-
-  const canonicalPluginRoot = path.join(workspaceRoot, 'plugins', TOUCH_TRANSLATION_PLUGIN_NAME)
+  const canonicalPluginRoot = path.join(workspaceRoot, 'plugins', pluginName)
   const canonicalBuildRoot = path.join(canonicalPluginRoot, 'dist', 'build')
-  const canonicalDistRoot = path.join(canonicalPluginRoot, 'dist')
-  const bundledPluginRoot = path.join(
-    projectRoot,
-    'tuff',
-    'modules',
-    'plugins',
-    TOUCH_TRANSLATION_PLUGIN_NAME
-  )
+  const canonicalPackagePath = path.join(canonicalPluginRoot, 'package.json')
+  const canonicalManifestPath = path.join(canonicalBuildRoot, 'manifest.json')
+  const bundledPluginRoot = path.join(projectRoot, 'resources', 'bundled-plugins', pluginName)
   const runtimePluginRoots = Array.isArray(options.runtimePluginRoots)
     ? options.runtimePluginRoots.filter(Boolean)
     : []
 
-  if (!fs.existsSync(canonicalBuildRoot) || !fs.existsSync(canonicalDistRoot)) {
+  if (
+    !fs.existsSync(canonicalBuildRoot) ||
+    !fs.existsSync(canonicalPackagePath) ||
+    !fs.existsSync(canonicalManifestPath)
+  ) {
     return {
+      pluginName,
       reason: 'missing-canonical-build',
       skipped: true,
       synced: false
     }
   }
 
-  copyDirectoryContents(canonicalBuildRoot, bundledPluginRoot)
-  copyDirectoryContents(canonicalDistRoot, path.join(bundledPluginRoot, 'dist'))
-  writeBundledPackageVersion(
-    path.join(canonicalPluginRoot, 'package.json'),
-    path.join(bundledPluginRoot, 'package.json')
-  )
+  const canonicalPackage = readJson(canonicalPackagePath)
+  const canonicalManifest = readJson(canonicalManifestPath)
+  const canonicalVersion = canonicalPackage.version
+  if (
+    canonicalManifest.name !== pluginName ||
+    typeof canonicalVersion !== 'string' ||
+    canonicalManifest.version !== canonicalVersion
+  ) {
+    throw new Error(
+      `[official-plugin-sync] Canonical build mismatch for ${pluginName}: ` +
+        `package=${String(canonicalVersion)}, manifest=${String(canonicalManifest.version)}`
+    )
+  }
+
+  replaceDirectoryContents(canonicalBuildRoot, bundledPluginRoot)
+  writeBundledPackageVersion(canonicalPackagePath, path.join(bundledPluginRoot, 'package.json'))
 
   const syncedRuntimePluginRoots = []
   for (const runtimePluginRoot of runtimePluginRoots) {
     copyDirectoryContents(canonicalBuildRoot, runtimePluginRoot)
-    copyDirectoryContents(canonicalDistRoot, path.join(runtimePluginRoot, 'dist'))
-    writeBundledPackageVersion(
-      path.join(canonicalPluginRoot, 'package.json'),
-      path.join(runtimePluginRoot, 'package.json')
-    )
+    writeBundledPackageVersion(canonicalPackagePath, path.join(runtimePluginRoot, 'package.json'))
     syncedRuntimePluginRoots.push(runtimePluginRoot)
   }
 
   return {
     bundledPluginRoot,
     canonicalBuildRoot,
-    canonicalDistRoot,
+    canonicalVersion,
+    packageName: target.packageName,
+    pluginName,
     syncedRuntimePluginRoots,
     skipped: false,
     synced: true
   }
 }
 
+function syncOfficialPluginBundledRuntimes(options = {}) {
+  const pluginNames = Array.isArray(options.pluginNames)
+    ? options.pluginNames
+    : OFFICIAL_PLUGIN_BUILD_TARGETS.map((entry) => entry.pluginName)
+  return pluginNames.map((pluginName) => syncOfficialPluginBundledRuntime(pluginName, options))
+}
+
+function syncTouchTranslationBundledRuntime(options = {}) {
+  return syncOfficialPluginBundledRuntime(TOUCH_TRANSLATION_PLUGIN_NAME, options)
+}
+
 module.exports = {
+  OFFICIAL_PLUGIN_BUILD_PREREQUISITES,
+  OFFICIAL_PLUGIN_BUILD_TARGETS,
   TOUCH_TRANSLATION_PLUGIN_NAME,
+  buildOfficialPluginPackages,
+  syncOfficialPluginBundledRuntime,
+  syncOfficialPluginBundledRuntimes,
   syncTouchTranslationBundledRuntime
 }

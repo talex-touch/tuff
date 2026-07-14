@@ -1,27 +1,30 @@
 ---
 title: "CardItem"
-description: "Compact list row with avatar, text, right-side actions, and clickable states."
+description: "Compact list row with optional avatar media, text, right-side actions, active state, and explicit click handling."
 category: Layout
-syncStatus: migrated
+tags: [card, list, settings]
+syncStatus: reviewed
+verified: true
 ---
 # CardItem
 
-`TxCardItem` is a compact row primitive for settings, command lists, and lightweight navigation. It renders optional avatar content, primary text, supporting copy, and right-side controls while keeping click handling explicit through `clickable`.
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const enabled = ref(true)
-</script>
+`TxCardItem` is a compact row primitive for settings pages, command lists, and lightweight navigation. It renders optional media on the left, title/subtitle/description text in the middle, and a right-side action slot while keeping interactivity opt-in through `clickable`.
 
 ## Basic Usage
 
-### CardItem
-:::TuffDemoWrapper{demo="CardItemCardItemDemo" code-lang="vue"}
+Use the `right` slot for switches, chevrons, metadata, or secondary status. The row itself does not emit clicks unless `clickable` is enabled.
+
+::::TuffDemoWrapper{demo="CardItemCardItemDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const enabled = ref(true)
+  </script>
+
   <template>
-    <TxCardItem title="Enable feature" description="Right area supports actions" icon-class="i-carbon-settings">
+    <TxCardItem title="Enable sync" description="The right slot can combine controls." icon-class="i-carbon-settings">
       <template #right>
         <TxSwitch v-model="enabled" />
         <i class="i-carbon-chevron-right" />
@@ -29,39 +32,70 @@ code: |
     </TxCardItem>
   </template>
 ---
-:::
+::::
 
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `role` | `string` | `'button'` | ARIA role applied to the root element. |
+|------|------|---------|-------------|
+| `role` | `string` | `undefined` | ARIA role applied only when `clickable=true`. Pass `button`, `menuitem`, or `option` when the row needs explicit semantics. |
 | `title` | `string` | `''` | Primary single-line label when the `title` slot is not used. |
-| `subtitle` | `string` | `''` | Secondary single-line label rendered below the title. |
+| `subtitle` | `string` | `''` | Secondary single-line label below the title. |
 | `description` | `string` | `''` | Supporting copy rendered below the top row. |
 | `iconClass` | `string` | `''` | Icon class rendered in the avatar area when no avatar URL is provided. |
-| `avatarText` | `string` | `''` | Text fallback rendered in the avatar area. |
+| `avatarText` | `string` | `''` | Text fallback rendered in the avatar area when no image or icon is provided. |
 | `avatarUrl` | `string` | `''` | Image URL rendered before icon or text avatar fallbacks. |
-| `avatarSize` | `number` | `36` | Avatar size in pixels. |
-| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | Avatar corner style. |
-| `clickable` | `boolean` | `false` | Enables pointer cursor, focusability, and click / Enter emits. |
+| `avatarSize` | `number` | `36` | Avatar box size in pixels. |
+| `avatarShape` | `'circle' \| 'rounded'` | `'circle'` | Avatar corner style. `rounded` uses a 12px radius. |
+| `clickable` | `boolean` | `false` | Enables pointer cursor, focusability, and mouse / Enter activation. |
 | `active` | `boolean` | `false` | Applies the selected visual state. |
-| `disabled` | `boolean` | `false` | Disables focus and click / keyboard emits. |
+| `disabled` | `boolean` | `false` | Disables focus and click / keyboard activation. |
 
 ### Slots
 
-| Name | Description |
-|------|------|
-| `avatar` | Replaces the generated avatar area. |
-| `title` | Replaces the primary title content. |
-| `subtitle` | Replaces the subtitle content. |
-| `description` | Replaces the supporting description content. |
-| `right` | Renders actions or trailing metadata on the right side of the top row. |
+| Slot | Props | Description |
+|------|-------|-------------|
+| `avatar` | - | Replaces the generated image / icon / text avatar area. |
+| `title` | - | Replaces the primary title content. |
+| `subtitle` | - | Replaces the subtitle content. |
+| `description` | - | Replaces the supporting description content. |
+| `right` | - | Renders actions or trailing metadata on the right side of the top row. |
 
 ### Events
 
-| Event | Params | Description |
-|------|------|------|
-| `click` | `MouseEvent` | Emitted from mouse click or Enter when `clickable=true` and not disabled. |
+| Event | Payload | Description |
+|------|---------|-------------|
+| `click` | `MouseEvent` | Emitted on mouse click when `clickable=true` and not disabled. Enter activation uses the same event channel at runtime. |
+
+## Interaction Contract
+
+- The left media column is omitted when there is no `avatar` slot, `avatarUrl`, `iconClass`, or `avatarText`.
+- Generated avatar priority is `avatarUrl` first, then `iconClass`, then `avatarText`.
+- `tabindex="0"` is applied only when `clickable=true` and `disabled=false`.
+- `role` is also applied only when `clickable=true`; there is no implicit default role.
+- `disabled=true` adds the disabled class, removes focusability, and suppresses mouse and Enter activation.
+- Text areas use single-line ellipsis for `title` and `subtitle`; `description` can wrap.
+
+## Best Practices
+
+- Set `clickable=true` only when the row itself performs an action. If only the `right` slot is interactive, keep the row non-clickable.
+- Pass an explicit `role` when a clickable row is not already inside a semantic list or menu.
+- Use `avatar` slot for complex media. Use `avatarUrl`, `iconClass`, or `avatarText` for simple, generated media.
+- Keep the `right` slot compact; long controls can collapse the title area.
+- Avoid duplicating row navigation and switch toggles on the same click target. Separate row click behavior from right-slot controls.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`, `types.ts`, and `card-item.test.ts`.
+- **Verified coverage:** `card-item.test.ts` covers text and icon rendering, avatar CSS variables, image-over-icon/text priority, named slots, clickable mouse/Enter emits, disabled blocking, and the no-left layout.
+- Accessibility note: a clickable row gets focusability but no implicit role. Supply the semantic role that matches the surrounding interaction pattern, and keep interactive controls in `right` outside the row click target.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue`.
+- Types: `packages/tuffex/packages/components/src/card-item/src/types.ts` exports `CardItemProps` and `CardItemAvatarShape`.
+- Coverage: `packages/tuffex/packages/components/src/card-item/__tests__/card-item.test.ts` verifies generated media, slots, keyboard activation, disabled state, and layout fallbacks.
+<TuffDocSourceLink />

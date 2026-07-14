@@ -1,0 +1,93 @@
+---
+title: IconButton
+description: 带按下态的可访问纯图标操作按钮。
+category: Basic
+status: beta
+since: 1.0.0
+tags: [button, icon, action]
+syncStatus: reviewed
+verified: true
+---
+# IconButton
+
+`TxIconButton` 是用于紧凑图标操作的语义化 `<button>`。组件提供尺寸、形状、按下态、禁用态、原生 type，以及用于自定义图标内容的作用域插槽。
+
+已人工核对 `packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue`。
+
+## 基础用法
+
+### IconButton
+::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const pinned = ref(false)
+  </script>
+
+  <template>
+    <TxIconButton
+      icon="i-carbon-star"
+      label="置顶工作区"
+      shape="circle"
+      :pressed="pinned"
+      @click="pinned = !pinned"
+    />
+  </template>
+---
+::::
+
+## 交互契约
+
+- 根节点是真实 `button`，键盘激活与禁用行为使用原生语义。
+- `label` 会成为 `aria-label`；纯图标按钮必须提供。
+- `pressed` 是 boolean 时会输出 `aria-pressed` 并应用激活样式。
+- `disabled` 会禁用原生按钮，并阻止组件触发 `click`。
+- 默认插槽接收 `{ hover, pressed }`，用于自定义图标动画。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `icon` | `string` | `''` | 未提供默认插槽时，通过 `TxIcon` 渲染的图标名称。 |
+| `label` | `string` | `''` | 可访问名称。纯图标操作必填。 |
+| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | 按钮尺寸。 |
+| `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | 点击区域轮廓。 |
+| `pressed` | `boolean` | - | 持久切换态；定义后转发为 `aria-pressed`。 |
+| `disabled` | `boolean` | `false` | 原生禁用态与禁用样式。 |
+| `nativeType` | `'button' \| 'submit' \| 'reset'` | `'button'` | 原生 `type` 属性。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `click` | `(event: MouseEvent)` | 启用状态下点击后触发。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | `{ hover, pressed }` | 自定义图标或动画内容。 |
+
+## 最佳实践
+
+- 除非插槽中有可见文本，否则始终设置 `label`。
+- `pressed` 只用于持久开关；一次性动作使用普通点击按钮即可。
+- 危险图标操作不要只靠颜色表达，应配合说明或确认流程。
+- 表单内默认使用 `nativeType="button"`，除非明确要提交表单。
+
+## 审阅说明
+
+- **可访问性说明：** `label` 是纯图标按钮内置的唯一可访问名称来源；如果自定义插槽包含可见文本，需要确认它仍能被辅助技术读取。
+- **实测覆盖:** 当前尚无专门的 `icon-button` 单元测试；本页已按 `TxIconButton.vue` 源码人工核对，`apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 会校验组件页面与 demo registry 可加载。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue`。
+- Export alias: `packages/tuffex/packages/components/src/icon-button/index.ts` 导出可安装的 `TxIconButton` 与 `TxIconButtonInstance`。
+- Coverage: `packages/tuffex/packages/components/src/icon-button` 下当前没有专门组件单元测试；本文档行为通过源码审阅与 Nexus 文档覆盖测试验证。
+
+<TuffDocSourceLink />

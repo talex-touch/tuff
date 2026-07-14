@@ -328,21 +328,104 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     state.send.mockClear()
-    state.listeners.get('core-box:input:set-query')?.({ value: 'screenshot' })
+    state.listeners.get('core-box:input:set-query')?.({
+      value: 'screenshot',
+      context: {
+        entrypoint: {
+          id: 'assistant.voice',
+          source: 'voice',
+          execution: {
+            mode: 'new',
+            owner: 'assistant',
+            scope: 'light',
+            isolated: true
+          }
+        }
+      }
+    })
     await flushPromises()
 
     expect(hook.searchVal.value).toBe('screenshot')
     expect(state.send).toHaveBeenCalledWith(
       expect.objectContaining({ toEventName: expect.any(Function) }),
       {
-        query: { text: 'screenshot', inputs: [] }
+        query: {
+          text: 'screenshot',
+          inputs: [],
+          context: {
+            entrypoint: {
+              id: 'assistant.voice',
+              source: 'voice',
+              execution: {
+                mode: 'new',
+                owner: 'assistant',
+                scope: 'light',
+                isolated: true
+              }
+            }
+          }
+        }
       }
     )
+    expect(
+      state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
+    ).toHaveLength(1)
+    state.send.mockClear()
+    hook.searchVal.value = 'next query'
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+    expect(state.send).toHaveBeenCalledWith(
+      expect.objectContaining({ toEventName: expect.any(Function) }),
+      { query: { text: 'next query', inputs: [] } }
+    )
+
     expect(hook.res.value).toHaveLength(1)
-    expect(hook.res.value[0].render.basic?.title).toBe('screenshot-1')
+    expect(hook.res.value[0].render.basic?.title).toBe('next query-1')
     expect(state.dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'corebox:layout-refresh' })
     )
+
+    state.send.mockClear()
+    state.listeners.get('core-box:input:set-query')?.({
+      value: 'ai isolated request',
+      context: {
+        entrypoint: {
+          id: 'assistant.voice',
+          source: 'voice',
+          execution: {
+            mode: 'new',
+            owner: 'assistant',
+            scope: 'light',
+            isolated: true
+          }
+        }
+      }
+    })
+    await flushPromises()
+
+    await hook.handleExecute({
+      id: 'touch-intelligence/intelligence-ask',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: 'AI Ask' } },
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        interaction: { type: 'widget', allowInput: true },
+        extension: { acceptedInputTypes: ['text'] }
+      }
+    } as TuffItem)
+
+    const executeCall = state.send.mock.calls.find(
+      ([event]) => String(event) === 'core-box:execute'
+    )
+    const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
+    expect(executePayload?.searchResult?.query.context).toMatchObject({
+      entrypoint: {
+        id: 'assistant.voice',
+        execution: { mode: 'new', owner: 'assistant', scope: 'light', isolated: true }
+      }
+    })
   })
 
   it('hides CoreBox immediately before dispatching background app launch', async () => {
@@ -719,6 +802,19 @@ describe('useSearch CoreBox reopen behavior', () => {
         }
       })
     })
+    expect(hook.activeActivations.value?.[0]?.meta?.activationFeature).toMatchObject({
+      meta: {
+        interaction: { type: 'widget', allowInput: true, sendMode: true },
+        extension: { acceptedInputTypes: ['text'] }
+      }
+    })
+
+    state.send.mockClear()
+    hook.searchVal.value = 'follow-up draft'
+    await nextTick()
+    await flushPromises()
+
+    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
   })
 
   it('refreshes active widget feature when BoxItem SDK pushes updated custom render data', async () => {

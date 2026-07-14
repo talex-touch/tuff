@@ -118,69 +118,99 @@ code: |
 
 ## 注意事项
 
-- `multiple` 为 true 时，`modelValue` 需要为数组；清空会回传空数组。
-- `multiple` 为 false 时，清空会回传 `undefined`。
+- `TxTreeSelect` 内部复用 `TxTree`。下拉树只接收 `defaultExpandedKeys`、`filterText` 和 `multiple`；当前不透出 `expandedKeys` 或 `filterMethod`。
+- `multiple=true` 时，`modelValue` 必须是数组，触发器会把选中 label 渲染为标签；清空回传 `[]`。
+- `multiple=false` 时，`modelValue` 是单个 key 或 `undefined`；选择节点后会关闭下拉层，清空回传 `undefined`。
+- 禁用节点不可选择，但有子节点时 caret 仍可展开。
 
 ## API
 
-### TxTreeSelect Props
+### TxTreeSelect 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `string \| number \| Array<string \| number> \| undefined` | - | 当前值（v-model） |
-| `nodes` | `TreeSelectNode[]` | `[]` | 数据源 |
-| `multiple` | `boolean` | `false` | 是否多选 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `placeholder` | `string` | `'请选择'` | 占位文本 |
-| `searchable` | `boolean` | `true` | 是否可搜索 |
-| `clearable` | `boolean` | `true` | 是否可清空 |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | 浮层位置 |
-| `dropdownOffset` | `number` | `6` | 浮层偏移 |
-| `dropdownWidth` | `number` | `0` | 浮层宽度（0 表示跟随触发器） |
-| `dropdownMaxWidth` | `number` | `480` | 浮层最大宽度 |
-| `dropdownMaxHeight` | `number` | `320` | 浮层最大高度 |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 默认展开 key |
+| `modelValue` | `string \| number \| Array<string \| number> \| undefined` | - | 单选时为选中 key；`multiple` 模式下为选中 key 数组。 |
+| `nodes` | `TreeSelectNode[]` | `[]` | 下拉树节点，同时用于解析触发器里展示的 label。 |
+| `multiple` | `boolean` | `false` | 启用 checkbox 多选，并在触发器中以标签展示已选 label。 |
+| `disabled` | `boolean` | `false` | 禁用触发器、下拉交互、键盘切换和清空动作。 |
+| `placeholder` | `string` | `'请选择'` | 没有选中 key 解析到 label 时显示的占位文本。 |
+| `searchable` | `boolean` | `true` | 显示搜索输入框，并把搜索文本作为 `filterText` 传给内部 `TxTree`。 |
+| `clearable` | `boolean` | `true` | 存在选中 key 且组件未禁用时显示清空按钮。 |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | 下拉层的 `TxPopover` 位置。 |
+| `dropdownOffset` | `number` | `6` | 下拉层相对触发器的偏移。 |
+| `dropdownWidth` | `number` | `0` | 显式下拉层宽度；`0` 表示交给 `TxPopover` 处理。 |
+| `dropdownMaxWidth` | `number` | `480` | 下拉层最大宽度。 |
+| `dropdownMaxHeight` | `number` | `320` | 下拉树最大高度，列表会在该高度内滚动。 |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 传给内部 `TxTree` 的初始展开 key。 |
 
 ### TreeSelectNode
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `key` | `string \| number` | 唯一标识 |
-| `label` | `string` | 展示文本 |
-| `disabled` | `boolean` | 是否禁用 |
-| `children` | `TreeSelectNode[]` | 子节点 |
+| `key` | `string \| number` | 稳定唯一 key，用作选中值。 |
+| `label` | `string` | 可见节点文本、默认搜索目标和触发器展示文本。 |
+| `disabled` | `boolean` | 禁用该节点选择。 |
+| `children` | `TreeSelectNode[]` | 可选子节点。 |
 
-### Events
+### TxTreeSelect 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(v)` | v-model 更新 |
-| `change` | `(v)` | 值变化 |
-| `open` | - | 打开浮层 |
-| `close` | - | 关闭浮层 |
+| `update:modelValue` | `value: TreeSelectValue` | 选择、清空或调用 `setValue()` 后触发的 v-model 更新。 |
+| `change` | `value: TreeSelectValue` | 紧跟 `update:modelValue` 以相同值触发。 |
+| `open` | - | 下拉层打开时触发。 |
+| `close` | - | 下拉层关闭时触发。 |
 
-### Slots
+### TxTreeSelect 插槽
 
-| 名称 | 说明 |
-|------|------|
-| `node` | 自定义节点内容（slot props: `node`, `level`, `expanded`, `selected`） |
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `node` | `{ node, level, expanded, selected }` | 替换内置 `TxCardItem` 行里的节点标签区域。caret、checkbox、缩进和点击处理仍由组件维护。 |
 
-### Expose
+### 暴露方法
 
 | 名称 | 类型 | 说明 |
 |------|------|------|
-| `open()` | `() => void` | 打开 |
-| `close()` | `() => void` | 关闭 |
-| `toggle()` | `() => void` | 切换 |
-| `focus()` | `() => void` | 聚焦触发器 |
-| `blur()` | `() => void` | 失焦触发器 |
-| `clear()` | `() => void` | 清空 |
-| `setValue(v)` | `(v) => void` | 设置值 |
-| `getValue()` | `() => any` | 获取当前值 |
-| `getCheckedKeys()` | `() => Array<string \| number>` | 获取选中 key（单选也返回数组） |
+| `open()` | `() => void` | 打开下拉层。 |
+| `close()` | `() => void` | 关闭下拉层。 |
+| `toggle()` | `() => void` | 切换下拉层开关状态。 |
+| `focus()` | `() => void` | 聚焦 combobox 触发器。 |
+| `blur()` | `() => void` | 让 combobox 触发器失焦。 |
+| `clear()` | `() => void` | 未禁用时，单选发出 `undefined`，多选发出 `[]`。 |
+| `setValue(value)` | `(value: TreeSelectValue) => void` | 通过 `update:modelValue` 和 `change` 发出传入值；不会校验该值是否存在于 `nodes`。 |
+| `getValue()` | `() => TreeSelectValue` | 返回当前 `modelValue` prop。 |
+| `getCheckedKeys()` | `() => Array<string \| number>` | 单选和多选模式都以数组返回当前选中 key。 |
+
+## 交互契约
+
+- 触发器是可聚焦的 `role="combobox"`；`Enter` 和 `Space` 切换下拉层，`Escape` 关闭下拉层。
+- 下拉层由 `TxPopover` 承载；位置和宽度类属性会透传给该组件。
+- 搜索使用内部 `TxTree` 的默认 label 过滤；当前没有 prop 可把自定义 `filterMethod` 传给 `TxTreeSelect`。
+- 单选在发出值事件后关闭下拉层；多选会保持打开，便于继续勾选。
+- 触发器文案从当前 `nodes` 树解析。未知已选 key 会保留在选中集合里，但不会渲染可见 label。
+- `setValue()` 是发事件的辅助方法，不是内部状态源；父级仍通过 v-model 持有 `modelValue`。
+- `setValue` 和 `getCheckedKeys` 是供表单封装与测试夹具使用的轻量暴露方法；常规产品代码优先使用 v-model。
+
+## 最佳实践
+
+- 用 `TxTreeSelect` 承载紧凑的归属、命名空间、分类和组织单元选择；需要常驻上下文、批量树操作或自定义行控件时用完整 `TxTree`。
+- 保持 `key` 稳定且不依赖本地化 label；文案变化不应影响已保存选择。
+- 渲染前让值形态匹配 `multiple`。运行时切换 `multiple` 不会把已有标量自动转换成数组，反之亦然。
+- 默认展开保持浅层，例如根部门或产品域；过深的下拉树更难浏览和滚动。
+- `node` 插槽适合补充徽标或副标题，不要添加与行选择行为竞争的独立点击目标。
+- 需要领域搜索时，在外层组合搜索体验，或在 `filterMethod` 暴露前直接使用 `TxTree`。
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`。
-- 截图：`.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`。
+- 已对照 `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue` 和 `types.ts` 核对。
+- 现有测试覆盖选择事件、空状态渲染和清空行为。
 - 建议：`nodes` 使用 `key`/`label`，不要沿用旧选择器的 `value` 字段；单选清空为 `undefined`，多选清空为空数组。
+- 截图参考：`.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`.
+- Types: `packages/tuffex/packages/components/src/tree-select/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/tree-select/__tests__/tree-select.test.ts` 覆盖选择值发出、缺少节点时的空状态渲染，以及单选清空值发出。
+
+<TuffDocSourceLink />

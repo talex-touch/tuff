@@ -1,107 +1,110 @@
 ---
 title: "Agents 智能体列表"
-description: "用于展示智能体列表（分组、选中、loading、badge）。这是一个纯展示组件，不包含执行/请求等业务逻辑。"
+description: "可选择的智能体列表，支持启用/禁用分组、loading 骨架、空态、选中态和 badge。"
 category: Data
-syncStatus: migrated
+tags: [agents, list, selection]
+syncStatus: reviewed
+verified: true
 ---
 # Agents 智能体列表
 
-用于展示智能体列表（分组、选中、loading、badge）。这是一个纯展示组件，不包含执行/请求等业务逻辑。
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const selectedId = ref<string | null>('chat')
-const loading = ref(false)
-
-const agents = [
-  {
-    id: 'chat',
-    name: 'Chat Agent',
-    description: 'General conversation assistant',
-    iconClass: 'i-carbon-chat',
-    badgeText: 6,
-  },
-  {
-    id: 'code',
-    name: 'Code Agent',
-    description: 'Code generation & refactor',
-    iconClass: 'i-carbon-code',
-    badgeText: 12,
-  },
-  {
-    id: 'search',
-    name: 'Search Agent',
-    description: 'Web search & citations',
-    iconClass: 'i-carbon-search',
-  },
-  {
-    id: 'disabled',
-    name: 'Disabled Agent',
-    description: 'Not available',
-    iconClass: 'i-carbon-bot',
-    disabled: true,
-  },
-]
-</script>
+`TxAgentsList` 用于渲染智能体选择器和 AI 工作流入口中的分组列表。它只是展示组件：不启动运行、不请求 API，也不持有路由逻辑。禁用智能体会单独分组，并且不会派发选择事件。
 
 ## 基础用法
 
-### AgentsList
-:::TuffDemoWrapper{demo="AgentsAgentsListDemo" code-lang="vue"}
+在调用方绑定 `selectedId`，并通过 `select` 更新它。列表出现在中文界面时，同时传入分组标题和空态文案。
+
+::::TuffDemoWrapper{demo="AgentsAgentsListDemo" code-lang="vue"}
 ---
 code: |
-  &lt;script setup lang="ts"&gt;
+  <script setup lang="ts">
   import { ref } from 'vue'
 
   const selectedId = ref<string | null>('chat')
-  const loading = ref(false)
   const agents = [
     { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
     { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
-    { id: 'disabled', name: 'Disabled Agent', disabled: true },
+    { id: 'legacy', name: 'Legacy Agent', disabled: true },
   ]
-  &lt;/script&gt;
+  </script>
 
   <template>
-    <TxAgentsList
-      :agents="agents"
-      :loading="loading"
-      :selected-id="selectedId"
-      @select="(id) => (selectedId = id)"
-    />
+    <TxAgentsList :agents="agents" :selected-id="selectedId" @select="selectedId = $event" />
   </template>
 ---
-:::
+::::
 
 ## API
 
-### TxAgentsList
-
-#### Props
+### TxAgentsList Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `agents` | `AgentItemProps[]` | - | 数据源 |
-| `selectedId` | `string \| null` | `null` | 当前选中 |
-| `loading` | `boolean` | `false` | 是否显示 loading |
+| `agents` | `AgentItemProps[]` | 必填 | 智能体记录。可用项会在禁用项之前渲染。 |
+| `selectedId` | `string \| null` | `null` | 标记 id 匹配的智能体为选中。 |
+| `loading` | `boolean` | `false` | 显示四条列表骨架，而不是智能体分组。 |
+| `enabledTitle` | `string` | `'Enabled'` | `disabled` 未设置的智能体分组标题。 |
+| `disabledTitle` | `string` | `'Disabled'` | `disabled=true` 的智能体分组标题。 |
+| `emptyText` | `string` | `'No agents'` | `agents` 为空且非 loading 时展示的空态文案。 |
 
-#### Events
+### TxAgentsList Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `select` | `(id: string)` | 点击条目触发 |
+| `select` | `string` | 从可用 `TxAgentItem` 行透传出来的选中 id。 |
 
-### TxAgentItem
-
-#### Props
+### TxAgentItem Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `id` | `string` | - | 唯一标识 |
-| `name` | `string` | - | 标题 |
-| `description` | `string` | `''` | 描述 |
-| `iconClass` | `string` | `'i-carbon-bot'` | 图标 class |
-| `selected` | `boolean` | `false` | 是否选中 |
-| `disabled` | `boolean` | `false` | 是否禁用 |
-| `badgeText` | `string \| number` | `''` | badge 文本 |
+| `id` | `string` | 必填 | 通过 `select` 派发的稳定 id。 |
+| `name` | `string` | 必填 | 主标题。 |
+| `description` | `string` | `''` | 可选辅助文本。 |
+| `iconClass` | `string` | `'i-carbon-bot'` | 渲染到生成头像区域中的图标 class。 |
+| `selected` | `boolean` | `false` | 应用激活样式，并设置 `aria-selected=true`。 |
+| `disabled` | `boolean` | `false` | 阻止点击 / Enter / Space 选择，并设置 `aria-disabled=true`。 |
+| `badgeText` | `string \| number` | `''` | 右侧 badge。空字符串、`null`、`undefined` 会隐藏 badge slot。 |
+
+## Slots
+
+### TxAgentsList
+
+`TxAgentsList` 不暴露自定义插槽。需要自定义行级 badge 视觉时，应在直接组合 `TxAgentItem` 时使用数据或插槽完成。
+
+### TxAgentItem
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `badge` | - | 当 `badgeText` 存在时，替换默认右侧 badge 内容。 |
+
+### TxAgentItem Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | `string` | 可用项被点击、Enter 或 Space 激活时才派发。 |
+
+## 交互契约
+
+- `TxAgentsList` 从同一个 `agents` 数组中计算可用和禁用分组；不会在分组内部重新排序或修改记录。
+- loading 状态优先级高于列表和空态；`loading=true` 时忽略 `agents` 内容展示骨架。
+- 每个分组内容区带 `role="listbox"`，`aria-label` 等于该分组标题。
+- `TxAgentItem` 基于 `TxCardItem` 构建，使用 `role="option"`；仅可用项开启 `clickable`，头像形状固定为 rounded。
+- 禁用项会阻止 click、Enter、Space 选择；可用项三种激活方式都会派发该项 `id`。
+
+## 最佳实践
+
+- 把组件保持在选择器层。启动对话、拉取能力和执行智能体应放在外层业务模块。
+- 页面已本地化时，同时传入本地化的 `enabledTitle`、`disabledTitle` 和 `emptyText`。
+- `id` 使用后端或注册表中的稳定值；不要用展示名当 id，因为展示名可能本地化或改名。
+- `badgeText` 保持短小：计数、状态首字母或紧凑标签。只有 badge 需要自定义视觉时再使用 `badge` slot。
+- 初始数据请求时使用 `loading`。单个智能体的执行状态应放到该项状态文本或 badge 中，不要阻塞整个列表。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/agents/src/TxAgentsList.vue` 确认 loading 骨架、启用/禁用分组、分组 badge、空态和 `select` 透传行为。
+- 组件源码:`packages/tuffex/packages/components/src/agents/src/TxAgentItem.vue` 确认 `TxCardItem` 组合、`role="option"`、禁用保护、`aria-selected`、`aria-disabled` 和 `badge` 插槽渲染。
+- 类型契约:`packages/tuffex/packages/components/src/agents/src/types.ts` 定义 `AgentItemProps`、`AgentsListGroup` 和 `AgentsListProps`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/agents/__tests__/agents.test.ts` 覆盖分组标题、空态文案、仅可用项选择、键盘激活和禁用项抑制。
+
+## Source
+<TuffDocSourceLink />

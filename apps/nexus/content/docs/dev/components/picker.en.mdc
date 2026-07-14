@@ -2,7 +2,7 @@
 title: "Picker"
 description: "Column picker with popup or inline rendering, toolbar actions, disabled options, and normalized array values."
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # Picker
@@ -184,6 +184,33 @@ type PickerValue = Array<string | number>
 | `cancel` | - | Emitted when cancel is clicked, then closes. |
 | `open` | - | Emitted when the picker opens. |
 | `close` | - | Emitted when the picker closes. |
+
+### Exposes
+
+| Name | Type | Description |
+|------|------|------|
+| `open` | `() => void` | Opens the picker popup by writing `visible=true`. |
+| `close` | `() => void` | Closes the picker popup. |
+| `toggle` | `() => void` | Toggles the popup open state. |
+
+## Slots
+
+`TxPicker` does not expose slots. Use `columns[].options[].label` for visible option text and `title` / `confirmText` / `cancelText` for toolbar copy.
+
+## Best Practices
+
+- Keep `modelValue` as a stable array ordered exactly like `columns`; sparse arrays are normalized, but explicit values make form state easier to audit.
+- Provide `column.key` whenever columns can be reordered or conditionally rendered, so Vue does not reuse scroll containers for different data.
+- Keep option `value` primitives stable. Store display names in `label`, not in the persisted value.
+- Use inline mode (`popup=false`) for settings panels that should remain visible; use popup mode for mobile or task-focused transient choices.
+- Do not put selectable disabled values in submitted form state. The component skips disabled options only when it has to normalize or recover from scroll.
+- Keep `visibleItemCount` odd in design specs. The runtime rounds even numbers upward, which can make screenshots differ by one row.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/picker/src/TxPicker.vue` defines the popup/inline rendering paths, normalization fallback, scroll snapping, `open` / `close` / `toggle` exposes, and row-size clamping.
+- Type contracts: `packages/tuffex/packages/components/src/picker/src/types.ts` exports `PickerValue`, `PickerColumn`, `PickerOption`, `PickerProps`, and `PickerEmits`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/picker/__tests__/picker.test.ts` covers value normalization, disabled-option fallback, toolbar confirm/cancel emissions, disabled toolbar/options, and clamped layout variables.
 
 ## Source
 <TuffDocSourceLink />

@@ -1,0 +1,93 @@
+---
+title: IconButton
+description: Accessible icon-only action button with pressed state.
+category: Basic
+status: beta
+since: 1.0.0
+tags: [button, icon, action]
+syncStatus: reviewed
+verified: true
+---
+# IconButton
+
+`TxIconButton` is a semantic `<button>` for compact icon actions. It exposes size, shape, pressed, disabled, native type, and a scoped slot for custom icon content.
+
+Reviewed against `packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue`.
+
+## Basic Usage
+
+### IconButton
+::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const pinned = ref(false)
+  </script>
+
+  <template>
+    <TxIconButton
+      icon="i-carbon-star"
+      label="Pin workspace"
+      shape="circle"
+      :pressed="pinned"
+      @click="pinned = !pinned"
+    />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- The root element is a real `button`; keyboard activation and disabled behavior are native.
+- `label` becomes `aria-label`; provide it for icon-only controls.
+- When `pressed` is boolean, the component emits `aria-pressed` and applies active styling.
+- `disabled` blocks the native button and suppresses the component `click` emit.
+- The default slot receives `{ hover, pressed }` for custom icon animations.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `icon` | `string` | `''` | Icon class/name rendered through `TxIcon` when no default slot is provided. |
+| `label` | `string` | `''` | Accessible label. Required for icon-only actions. |
+| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Button size. |
+| `shape` | `'square' \| 'circle' \| 'pill'` | `'square'` | Hit-area silhouette. |
+| `pressed` | `boolean` | - | Toggle state; forwarded to `aria-pressed` when defined. |
+| `disabled` | `boolean` | `false` | Native disabled state and visual disabled class. |
+| `nativeType` | `'button' \| 'submit' \| 'reset'` | `'button'` | Native `type` attribute. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `click` | `(event: MouseEvent)` | Emitted for enabled clicks. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | `{ hover, pressed }` | Custom icon or animated content. |
+
+## Best Practices
+
+- Always set `label` unless visible text is supplied through the slot.
+- Use `pressed` only for persistent toggles; use normal click buttons for one-shot actions.
+- Keep destructive icon actions visually distinct through surrounding copy or confirmation, not icon color alone.
+- Prefer `nativeType="button"` inside forms unless the button intentionally submits the form.
+
+## Review Notes
+
+- **Accessibility note:** `label` is the only built-in accessible name source for an icon-only button; if a custom slot includes visible text, verify it remains visible to assistive technologies.
+- **Verified coverage:** No dedicated `icon-button` unit test exists yet; this page is source-reviewed against `TxIconButton.vue`, and `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies the component page plus demo registry remain loadable.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue`.
+- Export alias: `packages/tuffex/packages/components/src/icon-button/index.ts` exports installable `TxIconButton` and `TxIconButtonInstance`.
+- Coverage: no dedicated component unit test file exists under `packages/tuffex/packages/components/src/icon-button`; docs behavior here is verified by source review plus Nexus docs coverage.
+
+<TuffDocSourceLink />

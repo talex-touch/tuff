@@ -1,6 +1,6 @@
 ---
 title: StatusBadge
-description: Status signals and system feedback
+description: Status signals and platform-aware system feedback badges.
 category: Feedback
 status: beta
 since: 1.0.0
@@ -8,36 +8,35 @@ tags: [badge, status, signal]
 syncStatus: reviewed
 verified: true
 ---
-
 # StatusBadge
 
-> Lightweight badges for system status and signals.  
-> **Status**: Beta
+`TxStatusBadge` renders compact status text with a tone icon, optional platform icon, and a normalized `statusKey` mapping for permission or backend status enums.
 
+Reviewed against `packages/tuffex/packages/components/src/status-badge/src/types.ts`, `TxStatusBadge.vue`, and `status-badge.test.ts`.
 
 ## Demo
 
 ### Status Signals
 
-Success, warning, error, info.
-
-::TuffDemoWrapper{demo="StatusBadgeSignalsDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="StatusBadgeSignalsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxStatusBadge text="Success" status="success" />
-    <TxStatusBadge text="Warning" status="warning" />
-    <TxStatusBadge text="Error" status="danger" />
-    <TxStatusBadge text="Info" status="info" />
+    <div class="tuff-demo-row">
+      <TxStatusBadge text="Success" status="success" />
+      <TxStatusBadge text="Warning" status="warning" />
+      <TxStatusBadge text="Error" status="danger" />
+      <TxStatusBadge text="Info" status="info" />
+    </div>
   </template>
 ---
-::
+:::
 
 ### Dashboard Operations Status
 
-In dashboard headers, `TxStatusBadge` usually works with `TxStatCard`, `TxProgressBar`, and `TuffSwitch` to summarize release, build, and sync health.
+In dashboard headers, `TxStatusBadge` usually works with `TxStatCard`, `TxProgressBar`, and switches to summarize release, build, and sync health.
 
-::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="A dashboard status composition verified on the local Nexus page."}
+:::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="A dashboard status composition verified on the local Nexus page."}
 ---
 code: |
   <template>
@@ -49,65 +48,68 @@ code: |
     </section>
   </template>
 ---
-::
-
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: text
-    type: 'string'
-    default: '-'
-    description: 'Label text'
-  - name: status
-    type: "'success' | 'warning' | 'danger' | 'info' | 'muted'"
-    default: 'info'
-    description: 'Status type'
-  - name: statusKey
-    type: "'granted' | 'denied' | 'notDetermined' | 'unsupported' | string"
-    default: "''"
-    description: 'Permission/status key mapped to a tone'
-  - name: icon
-    type: 'string'
-    default: "''"
-    description: 'Custom icon class'
-  - name: size
-    type: "'sm' | 'md'"
-    default: 'md'
-    description: 'Size'
-  - name: os
-    type: "'macos' | 'windows' | 'linux'"
-    default: '-'
-    description: 'Optional platform icon'
-  - name: osOnly
-    type: 'boolean'
-    default: 'false'
-    description: 'Render only the platform icon'
----
-::
-
-## Contract
-
-Explicit `status` takes precedence over `statusKey`. `statusKey` maps `granted/denied/notDetermined/unsupported` to success/danger/warning/muted, and unknown keys fall back to info. Platform icons render before the tone icon; `osOnly` hides the tone icon. The badge emits `click` when clicked.
-
-## Review Notes
-
-- Source: `packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue`
-- Recommendation: prefer `statusKey` for backend status enums; use explicit `status` for page-local decisions.
-- Accessibility: the component uses `role="status"`; badge text must express the state without relying on color alone.
-
-## Composite Patterns
+:::
 
 ### Status Row
 
-Status badge paired with avatar.
-
-::TuffDemoWrapper{demo="StatusBadgeRowDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="StatusBadgeRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxAvatar name="TA" />
-    <TxStatusBadge text="Online" status="success" />
+    <div class="tuff-demo-row">
+      <TxAvatar name="TA" />
+      <TxStatusBadge text="Online" status="success" />
+    </div>
   </template>
 ---
-::
+:::
+
+## Interaction Contract
+
+- The root element uses `role="status"`; the visible `text` must describe the state without relying on color.
+- Explicit `status` takes precedence over `statusKey`.
+- `statusKey` maps `granted → success`, `denied → danger`, `notDetermined → warning`, `unsupported → muted`, and unknown keys to `info`.
+- `icon` overrides the resolved tone icon.
+- `os` renders a platform icon before the tone icon; `osOnly` hides the tone icon but keeps the text.
+- Clicking the badge emits `click` with the original `MouseEvent`.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string` | required | Visible badge label. |
+| `icon` | `string` | `''` | Custom icon class. Uses the resolved tone icon when omitted. |
+| `status` | `'success' \| 'warning' \| 'danger' \| 'info' \| 'muted'` | - | Explicit visual tone. Takes precedence over `statusKey`. |
+| `statusKey` | `'granted' \| 'denied' \| 'notDetermined' \| 'unsupported' \| string` | `''` | Permission/status key mapped to a tone. |
+| `size` | `'sm' \| 'md'` | `'md'` | Badge density. |
+| `os` | `'macos' \| 'windows' \| 'linux'` | - | Optional platform marker icon. |
+| `osOnly` | `boolean` | `false` | Render the platform icon but hide the tone icon. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `click` | `MouseEvent` | Emitted when the badge root is clicked. |
+
+## Slots
+
+`TxStatusBadge` does not expose slots. Keep the visible status label in `text`; use `icon`, `status`, `statusKey`, and `os` for visual variation.
+
+## Best Practices
+
+- Prefer `statusKey` when the state comes from an API or permission enum; use explicit `status` for page-local decisions.
+- Do not use color as the only signal. Keep labels like “Sync healthy” or “Access denied”.
+- Use `os` only when the platform materially changes the state being communicated.
+- For primary user actions, place a `TxButton` next to the badge instead of making the badge the only control.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue` confirms `role="status"`, explicit `status` precedence, `statusKey` tone mapping, OS icon mapping, `osOnly`, custom `icon`, and root click emission.
+- Type contracts: `packages/tuffex/packages/components/src/status-badge/src/types.ts` defines `StatusTone`, `StatusKey`, `TxOsType`, `StatusBadgeProps`, and `StatusBadgeEmits`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/status-badge/__tests__/status-badge.test.ts` covers text/size/status rendering, key mapping, explicit status precedence, OS icon rendering, `osOnly`, custom icon, and click emission.
+- Export: `packages/tuffex/packages/components/src/status-badge/index.ts` exports `StatusBadge`, `TxStatusBadge`, public types, and `TxStatusBadgeInstance`.
+
+## Source
+<TuffDocSourceLink />

@@ -1,8 +1,9 @@
 ---
 title: "Avatar Variants"
-description: "`TxAvatar` + `TxOutlineBorder` + `TxCornerOverlay` “”"
+description: "Curated TxAvatar, TxOutlineBorder, and TxCornerOverlay recipes for status, activity, platform, system, social, and contextual avatar badges."
 category: Basic
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Avatar Variants
 
@@ -995,3 +996,19 @@ code: |
   </style>
 ---
 :::
+
+## Review Notes
+
+- **Composition note:** This page is a recipe gallery, not a standalone exported component. Each card combines `TxAvatar`, `TxCornerOverlay`, `TxOutlineBorder`, `TxIcon`, and local CSS utilities; copy the smallest needed pattern instead of importing the gallery demo.
+- **Accessibility note:** Purely decorative badges use empty `alt` or `aria-hidden` in the demo. If a badge changes user state, expose that state in adjacent text or the parent control label rather than relying on color or icon shape alone.
+- **Verified coverage:** The demo registry loads `AvatarVariantsAvatarVariantsGalleryDemo`; the underlying component tests are `avatar.test.ts` for `TxAvatar`/`TxAvatarGroup`, plus the relevant `corner-overlay` and `outline-border` component tests for overlay placement and ring/mask behavior.
+
+## Source
+
+- Demo source: `apps/nexus/app/components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue`.
+- Helper source: `apps/nexus/app/components/content/demos/AvatarVariantCard.vue`.
+- Component sources: `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`, `TxAvatarGroup.vue`, plus the documented `corner-overlay` and `outline-border` primitives used by the recipes.
+- Types: `packages/tuffex/packages/components/src/avatar/src/types.ts` exports `AvatarProps`, `AvatarGroupProps`, `AvatarSize`, `AvatarStatus`, and `AvatarShape`.
+- Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` verifies initials, image fallback, slots, custom size, click emission, and group overflow count; `apps/nexus/app/components/content/demo-lazy.test.ts` verifies lazy demo loading.
+
+<TuffDocSourceLink />

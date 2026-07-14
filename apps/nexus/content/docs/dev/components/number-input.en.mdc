@@ -1,0 +1,95 @@
+---
+title: NumberInput
+description: Numeric input with step controls, clamping, and precision normalization.
+category: Form
+status: beta
+since: 1.0.0
+tags: [number, input, form]
+syncStatus: reviewed
+verified: true
+---
+# NumberInput
+
+`TxNumberInput` wraps a native numeric input and optional step buttons. It normalizes values through `min`, `max`, and `precision`, then emits `number | null`.
+
+Reviewed against `packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` and `number-input.test.ts`.
+
+## Basic Usage
+
+### NumberInput
+::::TuffDemoWrapper{demo="NumberInputNumberInputDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const percentage = ref(35)
+  </script>
+
+  <template>
+    <TxNumberInput v-model="percentage" :min="0" :max="100" :step="5" :precision="0" />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- Empty input normalizes to `null`.
+- Non-finite input falls back to the previous value, or `null` when no value exists.
+- `min` / `max` clamp typed values and step button results.
+- `precision` applies `Number(value.toFixed(precision))` after clamping.
+- `controls=false` hides both step buttons and keeps the native numeric field.
+- `readonly` and `disabled` block step buttons; `disabled` also disables the input.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` / `v-model` | `number \| null` | `null` | Current numeric value. |
+| `min` | `number` | - | Minimum value. |
+| `max` | `number` | - | Maximum value. |
+| `step` | `number` | `1` | Step size used by controls and native input. |
+| `precision` | `number` | - | Decimal precision after normalization. |
+| `placeholder` | `string` | `''` | Native input placeholder. |
+| `disabled` | `boolean` | `false` | Disable input and controls. |
+| `readonly` | `boolean` | `false` | Make input read-only and block controls. |
+| `controls` | `boolean` | `true` | Show decrease/increase buttons. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `update:modelValue` | `(value: number \| null)` | v-model update after normalization. |
+| `change` | `(value: number \| null)` | Emitted with the same normalized value. |
+| `focus` | `(event: FocusEvent)` | Native focus event. |
+| `blur` | `(event: FocusEvent)` | Native blur event; also re-normalizes the field. |
+
+### Exposed Methods
+
+| Method | Description |
+|------|-------------|
+| `focus()` | Focus the native input. |
+| `blur()` | Blur the native input. |
+| `inputRef` | Native input ref. |
+
+## Slots
+
+`TxNumberInput` does not expose slots. Use adjacent form help text or wrapper layout for labels, prefixes, suffixes, and validation copy.
+
+## Best Practices
+
+- Prefer explicit `min`, `max`, and `step` for percentages, quotas, and pagination controls.
+- Use `precision` for decimals rather than rounding in the consumer after every event.
+- Hide controls for dense table filters where keyboard entry is faster.
+- Treat `null` as the unset state in validation and API payload mapping.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` confirms normalization, clamping, precision handling, attr forwarding, step controls, focus state, and exposed helpers.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/number-input/__tests__/number-input.test.ts` covers numeric attrs, normalized input, clamped step controls, hidden controls, and focus helper exposure.
+- Export: `packages/tuffex/packages/components/src/number-input/index.ts` wraps the component with `withInstall` and exports `TxNumberInputInstance`.
+
+## Source
+<TuffDocSourceLink />

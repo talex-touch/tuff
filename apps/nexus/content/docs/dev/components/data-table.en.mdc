@@ -96,7 +96,7 @@ code: |
 |------|------|------|------|
 | `columns` | `DataTableColumn[]` | `[]` | Column config |
 | `data` | `any[]` | `[]` | Data source |
-| `rowKey` | `string \| (row, index) => string \| number` | `index` | Unique row key |
+| `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | Unique row key |
 | `loading` | `boolean` | `false` | Loading state |
 | `emptyText` | `string` | `'No data'` | Empty text |
 | `striped` | `boolean` | `false` | Zebra rows |
@@ -106,6 +106,8 @@ code: |
 | `selectedKeys` | `Array<string \| number>` | `[]` | Selected keys |
 | `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Default sort |
 | `sortOnClient` | `boolean` | `true` | Client-side sort |
+| `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | Native table layout mode. Use `fixed` when column widths must stay stable. |
+| `nowrap` | `boolean` | `false` | Prevent wrapping for all header and cell content. |
 
 ### DataTableColumn
 
@@ -115,6 +117,11 @@ code: |
 | `title` | `string` | Header title |
 | `dataIndex` | `string` | Data field |
 | `width` | `string \| number` | Column width |
+| `minWidth` | `string \| number` | Minimum column width. |
+| `maxWidth` | `string \| number` | Maximum column width. |
+| `auto` | `boolean` | Force column width to `auto`. |
+| `fixed` | `boolean \| 'left' \| 'right'` | Sticky column side; `true` equals `'left'`. |
+| `nowrap` | `boolean` | Prevent wrapping for this column. |
 | `align` | `'left' \| 'center' \| 'right'` | Alignment |
 | `sortable` | `boolean` | Sortable |
 | `sorter` | `(a, b) => number` | Custom sorter |
@@ -135,13 +142,28 @@ code: |
 
 | Name | Description |
 |------|------|
-| `header-<columnKey>` | Custom header |
-| `cell-<columnKey>` | Custom cell |
-| `empty` | Empty slot |
+| `header-<columnKey>` | Custom header; receives `{ column }`. |
+| `cell-<columnKey>` | Custom cell; receives `{ row, column, value, index }`. |
+| `empty` | Empty slot rendered when there are no display rows and `loading=false`. |
+
+## Best Practices
+
+- Pass a stable `rowKey` for business lists; when selection persists across pages, drive `selectedKeys` with business ids instead of default indexes.
+- Sortable columns support click, Enter, and Space. Use `sortOnClient=false` with `sortChange` for remote sorting.
+- `tableLayout="fixed"` plus explicit `width` / `minWidth` keeps dense operations tables from shifting during loading or sorting.
+- Fixed columns should use numeric px `width` or `minWidth`; sticky offsets are calculated from those values.
+- Custom cells should preserve readable text or status-badge labels because sortable headers expose state through `aria-sort`.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`
-- Recommendation: pass a stable `rowKey` for business lists; when selection persists across pages, drive `selectedKeys` with business ids instead of default indexes.
-- Interaction: sortable columns support click, Enter, and Space; use `sortOnClient=false` with `sortChange` for remote sorting.
-- Accessibility: sortable headers expose `aria-sort`; custom cells should still preserve readable text or status-badge labels.
+- **Accessibility note:** `TxDataTable` renders a native table and gives sortable header cells `scope="col"`, `aria-sort`, keyboard focus, and Enter/Space handlers.
+- **Types:** `rowKey` is declared as `keyof T` or a callback that returns a string or number; `sortChange` may emit a `DataTableSortState` or `null`.
+- **Verified coverage:** The component test renders headers and rows, checks pointer sorting plus keyboard `aria-sort` transitions, selection emission, and layout/nowrap/auto/fixed-column styles.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`.
+- Type contracts: `packages/tuffex/packages/components/src/data-table/src/types.ts` exports `DataTableProps`, `DataTableColumn`, sort state, row-key, and emit types.
+- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` verifies header and row rendering, pointer and keyboard sorting (including `aria-sort`), selection emission, and layout/nowrap/auto/fixed-column styles.
+
+<TuffDocSourceLink />

@@ -1,3 +1,7 @@
+import type {
+  CoreBoxImageTranslateRouteMetadata,
+  IntelligenceErrorCode
+} from '@talex-touch/utils/transport/events/types'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 export const COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID = 'translate-image'
@@ -16,13 +20,17 @@ export type CoreBoxImageTranslateErrorCode =
   | 'INVALID_ITEM'
   | 'IMAGE_UNAVAILABLE'
   | 'SCENE_UNAVAILABLE'
+  | IntelligenceErrorCode
 
 export interface CoreBoxImageTranslateResponse {
   success: boolean
   translatedImageBase64?: string
   sourceText?: string
   targetText?: string
+  metadata?: CoreBoxImageTranslateRouteMetadata
   error?: string
+  reason?: string
+  recovery?: string
   code?: CoreBoxImageTranslateErrorCode
 }
 

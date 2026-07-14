@@ -10,7 +10,10 @@ import {
 } from '@talex-touch/utils/plugin'
 import { describe, expect, it } from 'vitest'
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..')
+const repoRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../..',
+)
 const pluginsDir = join(repoRoot, 'plugins')
 
 function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
@@ -19,7 +22,9 @@ function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
     .flatMap((entry) => {
       const manifestPath = join(pluginsDir, entry.name, 'manifest.json')
       try {
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { sdkapi?: unknown }
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+          sdkapi?: unknown
+        }
         return [{ pluginName: entry.name, sdkapi: manifest.sdkapi }]
       }
       catch {
@@ -29,18 +34,30 @@ function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
 }
 
 describe('sdk-version', () => {
-  it('treats 260626 as the current sdkapi marker and keeps 260615/260428 supported', () => {
-    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260626)
+  it('treats 260713 as current and keeps prior sdkapi markers supported', () => {
+    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260713)
+    expect(resolveSdkApiVersion(SdkApi.V260713)).toBe(SdkApi.V260713)
+    expect(
+      checkSdkCompatibility(SdkApi.V260713, 'touch-intelligence').warning,
+    ).toBeUndefined()
+
+    expect(isSupportedSdkVersion(SdkApi.V260626)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260626)).toBe(SdkApi.V260626)
-    expect(checkSdkCompatibility(SdkApi.V260626, 'touch-intelligence').warning).toBeUndefined()
+    expect(
+      checkSdkCompatibility(SdkApi.V260626, 'touch-intelligence').warning,
+    ).toBeUndefined()
 
     expect(isSupportedSdkVersion(SdkApi.V260615)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260615)).toBe(SdkApi.V260615)
-    expect(checkSdkCompatibility(SdkApi.V260615, 'touch-intelligence').warning).toBeUndefined()
+    expect(
+      checkSdkCompatibility(SdkApi.V260615, 'touch-intelligence').warning,
+    ).toBeUndefined()
 
     expect(isSupportedSdkVersion(SdkApi.V260428)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260428)).toBe(SdkApi.V260428)
-    expect(checkSdkCompatibility(SdkApi.V260428, 'touch-dev-utils').warning).toBeUndefined()
+    expect(
+      checkSdkCompatibility(SdkApi.V260428, 'touch-dev-utils').warning,
+    ).toBeUndefined()
   })
 
   it('blocks unknown sdkapi markers instead of normalizing them', () => {
@@ -54,12 +71,12 @@ describe('sdk-version', () => {
   })
 
   it('blocks future sdkapi markers until the runtime explicitly supports them', () => {
-    const compatibility = checkSdkCompatibility(260701, 'future-plugin')
+    const compatibility = checkSdkCompatibility(260801, 'future-plugin')
 
-    expect(resolveSdkApiVersion(260701)).toBeUndefined()
+    expect(resolveSdkApiVersion(260801)).toBeUndefined()
     expect(compatibility.compatible).toBe(false)
     expect(compatibility.enforcePermissions).toBe(false)
-    expect(compatibility.warning).toContain('260701')
+    expect(compatibility.warning).toContain('260801')
   })
 
   it('keeps bundled plugin manifests on explicitly supported sdkapi markers', () => {
@@ -73,6 +90,6 @@ describe('sdk-version', () => {
       .sort()
 
     expect(unsupported).toEqual([])
-    expect(currentMarkerPlugins).toEqual([])
+    expect(currentMarkerPlugins).toEqual(['touch-intelligence'])
   })
 })

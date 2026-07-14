@@ -1,198 +1,204 @@
 ---
-title: I18n Message System
-description: Backend-to-frontend internationalization message system
+title: Plugin Localization SDK
+description: Permission-gated host locale, localized text, and scoped Domain Lexicon APIs for plugins
 ---
 
-# I18n Message System
-
-The i18n message system enables seamless internationalization between main process and renderer process using a simple `$i18n:key` format.
+# Plugin Localization SDK
 
 ## Overview
 
-Backend sends messages with i18n keys (`$i18n:devServer.disconnected`), and frontend resolves them to localized strings based on the user's language preference.
+The Localization SDK is the supported plugin contract for reading the host locale, resolving localized values, creating transport-safe i18n messages, and using the host Domain Lexicon.
 
-## Introduction
-Use i18n keys for notifications, plugin errors, and system messages to keep UI text centralized.
+It is available to plugins with `sdkapi >= 260713` through:
 
-## Backend Usage (Main Process)
+- Main/runtime context: `context.utils.i18n` and `context.utils.lexicon`
+- Mirrored main/runtime context: `context.utils.plugin.i18n` and `context.utils.plugin.lexicon`
+- Plugin renderer: `usePluginI18n()` and `usePluginLexicon()` from `@talex-touch/utils/plugin/sdk`
 
-:::TuffCodeBlock{lang="typescript"}
----
+The current host locales are `en-US` and `zh-CN`.
+
+## Manifest requirements
+
+Declare only the permissions used by the plugin:
+
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  import { i18nMsg, DevServerKeys, FlowTransferKeys } from '@talex-touch/utils/i18n'
-  
-  // Basic usage - send i18n key
-  win.webContents.send('notification', {
-    title: i18nMsg(DevServerKeys.DISCONNECTED),
-    message: i18nMsg(DevServerKeys.CONNECTION_LOST)
-  })
-  
-  // With parameters (for interpolation)
-  import { i18nMsgWithParams } from '@talex-touch/utils/i18n'
-  
-  win.webContents.send('error', {
-    message: i18nMsgWithParams('plugin.loadFailed', { name: 'my-plugin' })
-  })
+{
+"sdkapi": 260713,
+"permissions": {
+"required": ["i18n.read", "lexicon.read"],
+"optional": ["lexicon.register"]
+},
+"permissionReasons": {
+"i18n.read": "Resolve plugin labels using the host locale",
+"lexicon.read": "Search the host Domain Lexicon",
+"lexicon.register": "Register plugin-scoped aliases while the plugin is enabled"
+}
+}
+
 ---
+
 :::
 
-## Frontend Usage (Renderer)
+| Permission         | Required by                    |
+| ------------------ | ------------------------------ |
+| `i18n.read`        | `getLocale()`, `resolveText()` |
+| `lexicon.read`     | `resolve()`, `search()`        |
+| `lexicon.register` | `register()`                   |
 
-:::TuffCodeBlock{lang="typescript"}
----
+The host checks the SDK marker, manifest declaration, current grant, loaded plugin, and verified plugin identity. Missing state fails closed before locale or lexicon services run.
+
+`createMessage()` is a pure string constructor and does not read host state. It rejects an empty message key.
+
+## Runtime usage
+
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import { resolveI18nMessage, i18nResolver, useI18nResolver } from '@talex-touch/utils/i18n'
-  
-  // Set locale (typically on app init)
-  i18nResolver.setLocale('zh')
-  
-  // Resolve message
-  const text = resolveI18nMessage('$i18n:devServer.disconnected')
-  // => 'text'
-  
-  // Non-i18n strings pass through unchanged
-  const plain = resolveI18nMessage('Hello World')
-  // => 'Hello World'
-  
-  // Vue composable
-  const { resolve, setLocale } = useI18nResolver()
-  const message = resolve(receivedMessage)
----
-:::
+export default {
+async onInit(context) {
+const { i18n, lexicon } = context.utils
 
-## Message Keys
+      const locale = await i18n.getLocale()
+      const title = await i18n.resolveText(
+        {
+          default: 'Unit Converter',
+          locales: { 'zh-CN': '单位换算' }
+        },
+        locale
+      )
+      const message = i18n.createMessage('plugin.ready', { title })
 
-**DevServerKeys**
+      const meter = await lexicon.resolve('unit.length.meter', {
+        locale,
+        domain: 'unit'
+      })
+      const matches = await lexicon.search('meter', {
+        locale,
+        domain: 'unit',
+        limit: 5
+      })
 
-| Key | English | Chinese |
-|-----|---------|---------|
-| `devServer.disconnected` | Dev Server Disconnected | See zh translation. |
-| `devServer.reconnected` | Dev Server Reconnected | See zh translation. |
-| `devServer.connectionLost` | Dev Server connection lost | See zh translation. |
-| `devServer.checkServer` | Check if Dev Server is running... | See zh translation. |
-
-**FlowTransferKeys**
-
-| Key | English | Chinese |
-|-----|---------|---------|
-| `flowTransfer.shareComplete` | Share Complete | See zh translation. |
-| `flowTransfer.shareFailed` | Share Failed | See zh translation. |
-| `flowTransfer.copiedToClipboard` | Copied to Clipboard | See zh translation. |
-
-**PluginKeys**
-
-| Key | English | Chinese |
-|-----|---------|---------|
-| `plugin.loadFailed` | Plugin Load Failed | See zh translation. |
-| `plugin.manifestInvalid` | Invalid Manifest | See zh translation. |
-
-**SystemKeys**
-
-| Key | English | Chinese |
-|-----|---------|---------|
-| `system.networkError` | Network Error | See zh translation. |
-| `system.timeout` | Request Timeout | See zh translation. |
-
-## Adding New Messages
-
-**1. Add Message Key**
-
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  // packages/utils/i18n/message-keys.ts
-  export const MyModuleKeys = {
-    SUCCESS: 'myModule.success',
-    ERROR: 'myModule.error',
-  } as const
----
-:::
-
-**2. Add Translations**
-
-:::TuffCodeBlock{lang="json"}
----
-code: |
-  // packages/utils/i18n/locales/en.json
-  {
-    "myModule": {
-      "success": "Operation Successful",
-      "error": "Operation Failed"
+      context.utils.logger.info(
+        `${message}:${meter?.label ?? 'missing'}:${matches.length}`
+      )
     }
-  }
----
+
+## }
+
 :::
 
-:::TuffCodeBlock{lang="json"}
----
+## Renderer usage
+
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  // packages/utils/i18n/locales/zh.json
-  {
-    "myModule": {
-      "success": "Text",
-      "error": "Text"
-    }
-  }
+import {
+usePluginI18n,
+usePluginLexicon
+} from '@talex-touch/utils/plugin/sdk'
+
+const i18n = usePluginI18n()
+const lexicon = usePluginLexicon()
+
+const locale = await i18n.getLocale()
+const label = await i18n.resolveText({
+default: 'Ready',
+locales: { 'zh-CN': '就绪' }
+})
+const capabilities = await lexicon.search('ready', {
+locale,
+domain: 'capability'
+})
+
 ---
+
 :::
 
-**3. Export Key**
+Renderer hooks require an active plugin renderer channel. Do not call them from a normal application renderer or before the plugin channel is ready.
 
-:::TuffCodeBlock{lang="typescript"}
----
+## API reference
+
+### I18n
+
+| Method                        | Result                        | Notes                                                                                                |
+| ----------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `getLocale()`                 | `Promise<'en-US' \| 'zh-CN'>` | Reads the current host locale.                                                                       |
+| `resolveText(value, locale?)` | `Promise<string>`             | Resolves a string or `{ default, locales }` value. The host locale is used when `locale` is omitted. |
+| `createMessage(key, params?)` | `string`                      | Creates a `$i18n:` transport message without a host call.                                            |
+
+### Domain Lexicon
+
+| Method                        | Result                                        | Notes                                                                                             |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `resolve(id, options?)`       | `Promise<ResolvedDomainLexiconEntry \| null>` | Resolves an official entry or an entry owned by the calling plugin.                               |
+| `search(query, options?)`     | `Promise<DomainLexiconMatch[]>`               | Searches official and caller-owned entries. Supports `locale`, `domain`, and `limit`.             |
+| `register(entries, options?)` | `Promise<PluginLexiconRegisterResult>`        | Atomically registers plugin-local entries. `replace: true` replaces the caller's current overlay. |
+
+Supported domains are `unit`, `currency`, `timezone`, `capability`, `fileType`, and `systemAction`.
+
+## Register plugin-scoped entries
+
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  // packages/utils/i18n/message-keys.ts
-  export const MessageKeys = {
-    // ... existing keys
-    myModule: MyModuleKeys,
-  } as const
+const result = await context.utils.lexicon.register(
+[
+{
+id: 'status.ready',
+domain: 'capability',
+version: '1',
+labels: {
+default: 'Ready',
+locales: { 'zh-CN': '就绪' }
+},
+aliases: {
+default: ['ready'],
+locales: { 'zh-CN': ['就绪'] }
+}
+}
+],
+{ replace: false }
+)
+
+// The host assigns plugin:<pluginId>:status.ready.
+console.log(result.ids[0])
+
 ---
+
 :::
 
-## Custom Messages (Plugin Use)
+Registration boundaries:
 
-Plugins can add their own messages:
+- IDs supplied by a plugin are local IDs. A plugin cannot choose another plugin namespace.
+- The host projects `status.ready` to `plugin:<pluginId>:status.ready` and sets `source=plugin:<pluginId>`.
+- Official IDs cannot be overridden, and one plugin cannot resolve or search another plugin's overlay.
+- Each plugin can hold at most 100 entries. One request can register at most 50 entries and 256 KiB.
+- A batch is fully validated before it is committed.
+- Plugin overlays are in memory only. They are removed when the plugin is disabled or unloaded and are not written to SQLite, Catalog, or sync payloads.
 
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  import { i18nResolver } from '@talex-touch/utils/i18n'
-  
-  // Add custom messages
-  i18nResolver.addMessages('en', {
-    myPlugin: {
-      hello: 'Hello from plugin'
-    }
-  })
-  
-  i18nResolver.addMessages('zh', {
-    myPlugin: {
-      hello: 'Text'
-    }
-  })
----
-:::
+## Errors and recovery
 
-## Best Practices
-- Define keys in `message-keys.ts` to avoid drift.
-- Send keys via `i18nMsg` or `i18nMsgWithParams`.
-- Update locale files without touching business logic.
+Permission, SDK, identity, and payload failures are explicit transport errors. Handle them as unavailable capability states rather than returning a fake localized value or empty successful result.
 
-## Technical Notes
-- `$i18n:` prefixes mark resolvable messages; the resolver maps them by locale.
-- Runtime injection is supported for plugin-provided messages.
+Common codes include:
 
-## File Structure
+- `PLUGIN_I18N_PERMISSION_UNAVAILABLE`
+- `PLUGIN_I18N_PERMISSION_DENIED`
+- `PLUGIN_LEXICON_PERMISSION_UNAVAILABLE`
+- `PLUGIN_LEXICON_PERMISSION_DENIED`
+- `PLUGIN_LOCALIZATION_SDK_UNSUPPORTED`
+- `PLUGIN_LOCALIZATION_INVALID_REQUEST`
+- `PLUGIN_LOCALIZATION_PLUGIN_UNAVAILABLE`
 
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  packages/utils/i18n/
-  ├── index.ts           # Unified exports
-  ├── message-keys.ts    # Key definitions + utilities
-  ├── resolver.ts        # Frontend resolver
-  └── locales/
-      ├── en.json       # English translations
-      └── zh.json       # Chinese translations
----
-:::
+## Do not use host internals as a plugin API
+
+`i18nResolver.addMessages()` and direct imports from the host locale registry are application-internal mechanisms. They do not provide plugin identity, permission checks, namespace isolation, or lifecycle cleanup. Plugins must use the Localization SDK described above.
+
+## Related documentation
+
+- [Plugin Context](./plugin-context.en.md)
+- [Permission SDK](./permission.en.md)
+- [Manifest Reference](../reference/manifest.en.md)
+- [Intelligence SDK](./intelligence.en.md)

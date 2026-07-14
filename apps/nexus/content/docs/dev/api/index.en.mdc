@@ -1,41 +1,48 @@
 # SDK API Overview
 
 ## Overview
+
 The Tuff Plugin SDK provides a complete set of APIs for developing CoreBox plugins. All APIs follow a functional design pattern, accessed through `use*` hook functions.
 
 ## Introduction
+
 The SDK exposes window control, clipboard, search, storage, and transport capabilities through a unified runtime context, so plugins can stay small and focused.
 
 ## Installation
 
-:::TuffCodeBlock{lang="bash"}
----
+## :::TuffCodeBlock{lang="bash"}
+
 code: |
-  pnpm add @talex-touch/utils
+pnpm add @talex-touch/utils
+
 ---
+
 :::
 
 ## API Reference
 
-| Module | Import | Description |
-|--------|--------|-------------|
-| [Plugin Context](./plugin-context.en.md) | `globalThis` | index.js global context API |
-| [Box SDK](./box.en.md) | `useBox()` | Control CoreBox window |
-| [Clipboard SDK](./clipboard.en.md) | `useClipboard()` | Clipboard read/write and history |
-| [TempFile SDK](./temp-file.en.md) | `useTempPluginFiles()` | Create and clean temp files |
-| [Storage SDK](./storage.en.md) | `usePluginStorage()` | Plugin data persistence |
-| [Download SDK](./download.en.md) | `useDownloadSdk()` | Download task management |
-| [Platform Capabilities SDK](./platform-capabilities.en.md) | `usePlatformSdk()` | Platform capability catalog |
-| [PowerSDK](./power.en.md) | `usePowerSDK()` | Low-power status for plugin adaptation |
-| [RecommendSDK](./recommend.en.md) | `recommend` | Custom recommendation provider registration |
-| [**Account SDK**](./account.en.md) | `accountSDK` | **User info, subscription, quota** |
-| [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
-| [Feature SDK](./feature.en.md) | `useFeature()` | Search result management |
-| [QuickActions SDK](./quick-actions.en.md) | `quickActions` / `plugin.quickActions` | MetaK global actions and native share |
-| [QuickOps SDK](./quickops.en.md) | `quickOps` / `plugin.quickOps` | Bounded, policy-aware host facade for built-in local tools |
-| [DivisionBox SDK](./division-box.en.md) | `useDivisionBox()` | Independent window management |
-| [Flow SDK](./flow-transfer.en.md) | `createFlowSDK()` | Inter-plugin data transfer |
-| [Intelligence SDK](./intelligence.en.md) | `useIntelligence()` | AI capabilities |
+| Module                                                     | Import                                         | Description                                                |
+| ---------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| [Plugin Context](./plugin-context.en.md)                   | `IPluginContext` / `context.utils`             | Canonical lifecycle capability facade                      |
+| [Box SDK](./box.en.md)                                     | `useBox()`                                     | Control CoreBox window                                     |
+| [Clipboard SDK](./clipboard.en.md)                         | `useClipboard()`                               | Clipboard read/write and history                           |
+| [TempFile SDK](./temp-file.en.md)                          | `useTempPluginFiles()`                         | Create and clean temp files                                |
+| [Storage SDK](./storage.en.md)                             | `usePluginStorage()`                           | Plugin data persistence                                    |
+| [Download SDK](./download.en.md)                           | `useDownloadSdk()`                             | Download task management                                   |
+| [Platform Capabilities SDK](./platform-capabilities.en.md) | `usePlatformSdk()`                             | Platform capability catalog                                |
+| [Screenshot SDK](./screenshot.en.md)                       | `screenshot` / `plugin.screenshot`             | Permission-gated display, cursor, and region capture       |
+| [PowerSDK](./power.en.md)                                  | `usePowerSDK()`                                | Low-power status for plugin adaptation                     |
+| [RecommendSDK](./recommend.en.md)                          | `recommend`                                    | Custom recommendation provider registration                |
+| [**Account SDK**](./account.en.md)                         | `accountSDK`                                   | **User info, subscription, quota**                         |
+| [**TuffTransport**](./transport.en.md)                     | `useTuffTransport()`                           | **Next-gen IPC (recommended)**                             |
+| [Feature SDK](./feature.en.md)                             | `useFeature()`                                 | Search result management                                   |
+| [Search / Indexed Source SDK](./search.en.md)              | `@talex-touch/utils/search`                    | Search providers and indexed-source lifecycle contracts    |
+| [QuickActions SDK](./quick-actions.en.md)                  | `quickActions` / `plugin.quickActions`         | MetaK global actions and native share                      |
+| [QuickOps SDK](./quickops.en.md)                           | `quickOps` / `plugin.quickOps`                 | Bounded, policy-aware host facade for built-in local tools |
+| [DivisionBox SDK](./division-box.en.md)                    | `useDivisionBox()`                             | Independent window management                              |
+| [Flow SDK](./flow-transfer.en.md)                          | `createFlowSDK()`                              | Inter-plugin data transfer                                 |
+| [Intelligence SDK](./intelligence.en.md)                   | `useIntelligenceSdk()` / `plugin.intelligence` | AI capabilities and provider discovery                     |
+| [Localization SDK](./i18n.en.md)                           | `usePluginI18n()` / `plugin.i18n`              | Host locale, localized text, and scoped Domain Lexicon     |
 
 ::alert{type="info"}
 **New:** [TuffTransport](./transport.en.md) is the recommended IPC API for new plugins. It provides type-safe events, automatic batching, and streaming support. See also [TuffTransport Internals](./transport-internals.en.md) for technical details.
@@ -45,52 +52,53 @@ code: |
 
 ## Quick Start
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import {
-    useBox,
-    useClipboard,
-    usePluginStorage,
-    usePowerSDK,
-    useFeature,
-    useDivisionBox
-  } from '@talex-touch/utils/plugin/sdk'
-  import { useTuffTransport } from '@talex-touch/utils/transport'
-  
-  // Initialize SDKs
-  const box = useBox()
-  const clipboard = useClipboard()
-  const storage = usePluginStorage()
-  const power = usePowerSDK()
-  const transport = useTuffTransport()
-  const feature = useFeature()
-  const divisionBox = useDivisionBox()
-  
-  // Usage example
-  async function init() {
-    // Read config
-    const config = await storage.getFile('config.json')
+import {
+useBox,
+useClipboard,
+usePluginStorage,
+usePowerSDK,
+useFeature,
+useDivisionBox
+} from '@talex-touch/utils/plugin/sdk'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+
+// Initialize SDKs
+const box = useBox()
+const clipboard = useClipboard()
+const storage = usePluginStorage()
+const power = usePowerSDK()
+const transport = useTuffTransport()
+const feature = useFeature()
+const divisionBox = useDivisionBox()
+
+// Usage example
+async function init() {
+// Read config
+const config = await storage.getFile('config.json')
 
     // Read low-power status
     const lowPower = await power.isLowPower({ threshold: 25 })
     if (lowPower) {
       console.log('Skip heavy work on battery')
     }
-    
+
     // Listen to input changes
     feature.onInputChange(async (input) => {
       const results = await search(input)
       feature.pushItems(results)
     })
-    
+
     // Listen to clipboard
     await box.allowClipboard(ClipboardType.TEXT)
     clipboard.history.onDidChange((item) => {
       console.log('Clipboard changed:', item)
     })
-  }
----
+
+## }
+
 :::
 
 ---
@@ -101,80 +109,91 @@ code: |
 
 All SDKs are accessed through `use*` functions, no context passing required:
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  // ✅ Correct
-  const storage = usePluginStorage()
-  await storage.getFile('config.json')
-  
-  // ❌ Wrong (deprecated API)
-  // const storage = ctx.storage
-  // await storage.getItem('key')
+// ✅ Correct
+const storage = usePluginStorage()
+await storage.getFile('config.json')
+
+// ❌ Wrong (deprecated API)
+// const storage = ctx.storage
+// await storage.getItem('key')
+
 ---
+
 :::
 
 **2. Automatic Context Detection**
 
 SDKs automatically detect plugin context, no manual configuration needed:
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const storage = usePluginStorage()
-  // Automatically gets current plugin name
+const storage = usePluginStorage()
+// Automatically gets current plugin name
+
 ---
+
 :::
 
 **3. Returns Dispose Function**
 
 All listeners return an unsubscribe function:
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const unsubscribe = feature.onInputChange((input) => {
-    // ...
-  })
-  
-  // Unsubscribe when component unmounts
-  onUnmounted(() => {
-    unsubscribe()
-  })
+const unsubscribe = feature.onInputChange((input) => {
+// ...
+})
+
+// Unsubscribe when component unmounts
+onUnmounted(() => {
+unsubscribe()
+})
+
 ---
+
 :::
 
 **4. Promise-based Async**
 
 All async operations return Promises:
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  const config = await storage.getFile('config.json')
-  await clipboard.copyAndPaste({ text: 'Hello' })
+const config = await storage.getFile('config.json')
+await clipboard.copyAndPaste({ text: 'Hello' })
+
 ---
+
 :::
 
 ---
 
 ## Technical Notes
+
 - `use*` hooks resolve plugin context at runtime to avoid manual wiring.
 - IPC and transport abstractions provide consistent cleanup via dispose functions.
 
 ## Type Imports
 
-:::TuffCodeBlock{lang="typescript"}
----
+## :::TuffCodeBlock{lang="typescript"}
+
 code: |
-  import type {
-    TuffItem,
-    TuffQuery,
-    ClipboardType,
-    DivisionBoxConfig,
-    FlowPayload
-  } from '@talex-touch/utils/plugin/sdk'
+import type {
+TuffItem,
+TuffQuery,
+ClipboardType,
+DivisionBoxConfig,
+FlowPayload
+} from '@talex-touch/utils/plugin/sdk'
+
 ---
+
 :::
 
 ---

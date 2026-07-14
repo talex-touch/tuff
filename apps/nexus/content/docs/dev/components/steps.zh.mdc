@@ -1,18 +1,22 @@
 ---
 title: Steps 步骤条
-description: 多步骤进度展示
+description: 多步骤进度展示，支持横向/纵向布局、数字或字符串步骤键、可点击头部和显式禁用状态。
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [steps, progress, workflow]
+syncStatus: reviewed
+verified: true
 ---
-
 # Steps 步骤条
 
-用于展示流程进度。
+`TxSteps` 为一组 `TxStep` 子项提供上下文。适合展示短流程、初始化向导或发布流程中的当前位置。步骤键可以来自子项顺序、显式数字或显式字符串。
 
 ## 基础用法
-### 步骤条
-展示当前进度。
-:::TuffDemoWrapper{demo="StepsStepsDemo" code-lang="vue"}
+
+常见场景使用数字步骤。当 `active` 和步骤键都是数字时，已完成状态会自动推断。
+
+::::TuffDemoWrapper{demo="StepsStepsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -23,72 +27,71 @@ code: |
     </TxSteps>
   </template>
 ---
-:::
-## API（Lite）
+::::
+
+## API
+
 ### TxSteps Props
-::TuffPropsTable
----
-rows:
-  - name: active
-    type: "number | string"
-    default: '0'
-    description: 当前步骤
-  - name: direction
-    type: "'horizontal' | 'vertical'"
-    default: "'horizontal'"
-    description: 方向
-  - name: size
-    type: "'small' | 'medium' | 'large'"
-    default: "'medium'"
-    description: 尺寸
----
-:::
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `active` | `number \| string` | `0` | 当前步骤键。prop 变化会同步到内部 active step。 |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | 根节点和子步骤的布局方向。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 传递给子步骤的视觉尺寸。 |
 
 ### TxStep Props
-::TuffPropsTable
----
-rows:
-  - name: title
-    type: string
-    default: '-'
-    description: 步骤标题
-  - name: description
-    type: string
-    default: '-'
-    description: 步骤描述
-  - name: step
-    type: "number | string"
-    default: '顺序索引'
-    description: 步骤标识；未提供时使用子项顺序索引
-  - name: status
-    type: "'wait' | 'active' | 'completed' | 'error'"
-    default: "'wait'"
-    description: 手动状态
-  - name: clickable
-    type: boolean
-    default: 'true'
-    description: 是否允许点击/键盘切换到该步骤
-  - name: disabled
-    type: boolean
-    default: 'false'
-    description: 禁用该步骤交互
-  - name: icon
-    type: string
-    default: '-'
-    description: 自定义步骤图标
-  - name: completedIcon
-    type: string
-    default: "'check'"
-    description: 已完成图标
----
-:::
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `title` | `string` | - | 步骤标题。 |
+| `description` | `string` | - | 可选辅助说明。 |
+| `icon` | `string` | - | 非完成状态下使用的图标名或 class。 |
+| `status` | `'wait' \| 'active' \| 'completed' \| 'error'` | `'wait'` | 手动状态；当前项和数字完成推断可能覆盖它。 |
+| `step` | `number \| string` | 子项顺序 | 步骤键；未提供时使用从 0 开始的子项顺序。 |
+| `clickable` | `boolean` | `true` | 渲染按钮头部，并允许点击更新内部 active step。 |
+| `disabled` | `boolean` | `false` | 禁用步骤按钮并阻止激活。 |
+| `showLine` | `boolean` | `true` | 控制连接线渲染；最后一个步骤始终不渲染连接线。 |
+| `completedIcon` | `string` | `'check'` | resolved status 为 completed 时渲染的图标。 |
+
+### Slots
+
+| 组件 | 插槽名 | 说明 |
+|------|------|------|
+| `TxSteps` | `default` | `TxStep` 子项。 |
+
+### Events
+
+不触发事件。可点击步骤只更新 `TxSteps` 内部保存的 active step。
 
 ## 交互契约
 
-- `TxStep` 未传 `step` 时按子项顺序自动使用 `0` 起始索引，与 `active` 数字索引对齐。
-- 可点击步骤的头部暴露 `role="button"`、`tabindex="0"`；当前步骤暴露 `aria-current="step"`。
-- 点击、Enter 与 Space 会切换内部 active step；`disabled` 或 `clickable=false` 的步骤不会响应交互。
-- 最后一项不会渲染连接线。
+- `TxSteps` 渲染 `role="list"`；每个 `TxStep` 渲染 `role="listitem"`。
+- 可点击步骤头部是原生 `button type="button"`；不可点击头部渲染为 `div`。
+- 禁用的可点击步骤会渲染 disabled 按钮并忽略激活。
+- 当前步骤会在头部暴露 `aria-current="step"`。
+- 未提供 `step` 时，`TxStep` 按子项顺序注册，并把从 0 开始的索引作为步骤键。
+- 数字步骤在数字 active 之前时会自动视为已完成。字符串流程需要显式设置 `status="completed"` 才会显示完成样式。
+- 点击会更新内部 active step，但不会触发 change 事件，也不会自动更新父级状态。
+
+## 最佳实践
+
+- 线性表单和新手引导优先使用数字键，让完成状态自动推断。
+- 命名工作流使用字符串键，但需要显式设置 completed 或 error 状态。
+- 后续步骤依赖前置条件时，把不可跳转步骤设为 `disabled`。
+- 把 `TxSteps` 视为进度/导航提示，而不是路由或表单状态的唯一来源；权威流程状态应保存在父级。
+- 避免在每个步骤里写长描述；需要段落或控件时，把详情放在步骤条下方。
+
+## 审阅说明 / Review Notes
+
+- **状态契约:** `TxSteps` 维护内部 `activeStep`，并监听 `active` prop。点击步骤只修改内部值；组件不会派发 `update:active` 或 `change` 事件。
+- **排序说明:** 步骤通过组件 uid 和子节点顺序注册。数字步骤会根据 `effectiveStep < activeStep` 自动推断 completed；字符串流程如果要展示完成态，需要显式传 `status="completed"`。
+- **实测覆盖:** `steps.test.ts` 覆盖 list/listitem 语义、数字步骤自动完成、最后一项不渲染连接线、显式字符串步骤、点击驱动的内部 active 状态，以及 disabled/non-clickable 阻断。
 
 ## Source
+
+- Component sources: `packages/tuffex/packages/components/src/steps/src/TxSteps.vue` 与 `TxStep.vue`。
+- Types: `packages/tuffex/packages/components/src/steps/src/types.ts` 导出 `StepsProps`、`StepProps`、`StepsDirection`、`StepsSize` 与 `StepStatus`。
+- Export entry: `packages/tuffex/packages/components/src/steps/index.ts` 从 `src` re-export。
+- Coverage: `packages/tuffex/packages/components/src/steps/__tests__/steps.test.ts` 验证排序、active 状态、字符串步骤、连接线、点击行为与阻断状态。
+
 <TuffDocSourceLink />

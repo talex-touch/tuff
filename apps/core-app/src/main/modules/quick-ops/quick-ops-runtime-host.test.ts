@@ -440,6 +440,46 @@ describe('QuickOpsRuntimeHost', () => {
   it('parses QuickOps natural language commands without CoreBox item builders', async () => {
     const { parseQuickOpsQuery, parseDurationMs } = await import('./quick-ops-runtime-host')
 
+    const settings = {
+      enabled: true,
+      showRunningSessionsInCoreBox: true,
+      allowStatefulTools: true,
+      allowNetworkTools: true,
+      allowFileTools: true,
+      allowSystemTools: true,
+      allowDeveloperTools: true,
+      allowHighRiskTools: false,
+      defaultKeepAwakeDurationMs: 30 * 60 * 1000,
+      defaultSystemAwakeDurationMs: 30 * 60 * 1000,
+      defaultTimerDurationMs: 25 * 60 * 1000,
+      defaultTimerExtendMs: 5 * 60 * 1000,
+      defaultPomodoroFocusMs: 25 * 60 * 1000,
+      defaultPomodoroBreakMs: 5 * 60 * 1000,
+      pomodoroTemplates: {
+        classic: true,
+        long: true,
+        custom: [
+          {
+            name: 'writing sprint',
+            aliases: ['写作冲刺'],
+            focusMinutes: 45,
+            breakMinutes: 12,
+            enabled: true
+          },
+          {
+            name: 'disabled sprint',
+            aliases: ['停用冲刺'],
+            focusMinutes: 30,
+            breakMinutes: 6,
+            enabled: false
+          }
+        ]
+      },
+      defaultScreenCleanDurationMs: 60 * 1000,
+      defaultScreenCleanMode: 'black' as const,
+      allowPublicIpLookup: false
+    }
+
     expect(parseDurationMs('1小时30分钟')).toBe(90 * 60 * 1000)
     expect(parseQuickOpsQuery('keep awake 30m')).toMatchObject({
       action: 'keep-awake-start',
@@ -456,6 +496,19 @@ describe('QuickOpsRuntimeHost', () => {
       pomodoroLongBreakEvery: 2,
       pomodoroMode: 'cycle'
     })
+    expect(parseQuickOpsQuery('start writing sprint', settings)).toMatchObject({
+      action: 'pomodoro-start',
+      durationMs: 45 * 60 * 1000,
+      breakDurationMs: 12 * 60 * 1000,
+      pomodoroMode: 'cycle'
+    })
+    expect(parseQuickOpsQuery('开始写作冲刺', settings)).toMatchObject({
+      action: 'pomodoro-start',
+      durationMs: 45 * 60 * 1000,
+      breakDurationMs: 12 * 60 * 1000,
+      pomodoroMode: 'cycle'
+    })
+    expect(parseQuickOpsQuery('start disabled sprint', settings)).toBeNull()
     expect(parseQuickOpsQuery('blue screen test')).toMatchObject({
       action: 'screen-clean-start',
       screenMode: 'blue'
@@ -737,6 +790,9 @@ describe('QuickOpsRuntimeHost', () => {
       defaultScreenCleanMode: 'black',
       allowPublicIpLookup: false
     })
+    expect(diagnostics.pomodoroAdvancedLoopSupported).toBe(true)
+    expect(diagnostics.pomodoroCustomTemplateCount).toBe(0)
+    expect(formatDiagnosticsInfo(diagnostics)).toContain('pomodoroLoop=supported')
     expect(formatDiagnosticsInfo(diagnostics)).not.toContain('/Users/tester')
   })
 })

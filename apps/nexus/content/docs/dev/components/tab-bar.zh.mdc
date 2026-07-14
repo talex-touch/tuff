@@ -1,42 +1,38 @@
 ---
 title: "TabBar 底部导航"
-description: "移动端底部 TabBar，支持图标与 badge。"
+description: "移动端底部 Tab 导航，支持图标、badge、fixed 定位和安全区占位。"
 category: Layout
-syncStatus: migrated
+tags: [navigation, tabs, mobile]
+syncStatus: reviewed
+verified: true
 ---
 # TabBar 底部导航
 
-移动端底部 TabBar，支持图标与 badge。
+`TxTabBar` 根据 `items` 数组渲染 App 风格底部导航。它不绑定路由；调用方通过 `v-model` 和 `change` 决定选中值用于路由、筛选还是本地视图状态。
 
 ## 基础用法
 
-### TabBar
-:::TuffDemoWrapper{demo="TabBarTabBarDemo" code-lang="vue"}
+当 TabBar 位于预览框、弹层或自定义外壳内部时，关闭 `fixed`，避免定位到真实视口底部。
+
+::::TuffDemoWrapper{demo="TabBarTabBarDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
   const value = ref('home')
-
   const items = [
-    { value: 'home', label: 'Home', iconClass: 'i-carbon-home' },
-    { value: 'search', label: 'Search', iconClass: 'i-carbon-search', badge: 3 },
-    { value: 'profile', label: 'Me', iconClass: 'i-carbon-user' },
+    { value: 'home', label: '首页', iconClass: 'i-carbon-home' },
+    { value: 'search', label: '搜索', iconClass: 'i-carbon-search', badge: 3 },
+    { value: 'profile', label: '我的', iconClass: 'i-carbon-user' },
   ]
   </script>
 
   <template>
-    <div style="width: 360px; height: 220px; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden; position: relative;">
-      <div style="padding: 16px; color: var(--tx-text-color-secondary);">
-        Active: {{ value }}
-      </div>
-
-      <TxTabBar v-model="value" :items="items" />
-    </div>
+    <TxTabBar v-model="value" :items="items" :fixed="false" />
   </template>
 ---
-:::
+::::
 
 ## API
 
@@ -44,26 +40,61 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `string \| number` | `''` | 当前值（v-model） |
-| `items` | `TabBarItem[]` | `[]` | 数据源 |
-| `fixed` | `boolean` | `true` | 是否 fixed 底部 |
-| `safeAreaBottom` | `boolean` | `true` | 是否预留底部安全区 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `zIndex` | `number` | `2000` | z-index |
+| `modelValue` | `string \| number` | `''` | `v-model` 使用的当前选中值。 |
+| `items` | `TabBarItem[]` | `[]` | 从左到右渲染的 tab 数据。 |
+| `fixed` | `boolean` | `true` | 使用 `position: fixed` 固定到视口底部。 |
+| `safeAreaBottom` | `boolean` | `true` | 在 tab 行下方渲染 `env(safe-area-inset-bottom)` 安全区占位。 |
+| `disabled` | `boolean` | `false` | 禁用所有 tab，并阻止值更新。 |
+| `zIndex` | `number` | `2000` | 写入 `--tx-tab-bar-z-index` 的 CSS z-index。 |
 
 ### TabBarItem
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `value` | `string \| number` | 唯一值 |
-| `label` | `string` | 文案 |
-| `iconClass` | `string` | 图标 class |
-| `badge` | `string \| number` | badge |
-| `disabled` | `boolean` | 禁用 |
+| `value` | `string \| number` | 选中该 tab 时派发的值。 |
+| `label` | `string` | 可见 tab 文案。 |
+| `iconClass` | `string` | 可选图标 class，显示在文案上方。 |
+| `badge` | `string \| number` | 图标区 badge。`null`、`undefined` 和空字符串不会显示。 |
+| `disabled` | `boolean` | 仅禁用当前 tab。 |
+
+### Slots
+
+无插槽。请通过 `items` 渲染 tab。
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value)` | v-model 更新 |
-| `change` | `(value)` | 值变化 |
+| `update:modelValue` | `TabBarValue` | 选中项的值，用于 `v-model`。 |
+| `change` | `TabBarValue` | 非禁用项被选择后派发同一个值。 |
+
+## 交互契约
+
+- 根节点是带 `role="tablist"` 的 `nav`；每一项是带 `role="tab"` 的 `button`，`aria-selected` 由 `modelValue` 推导。
+- 点击禁用项，或在 `disabled=true` 时点击任意项，都不会派发事件。
+- 点击当前已选中项仍会派发 `update:modelValue` 和 `change`；需要忽略重复值时在调用方处理。
+- `safeAreaBottom` 只控制底部占位节点；fixed 与非 fixed 布局都可以使用。
+- `zIndex` 通过 CSS 变量写入，应用外壳可避免深层选择器覆盖。
+
+## 最佳实践
+
+- 数量保持在适合拇指导航的范围，通常是 3 到 5 个主入口。
+- `value` 使用稳定的 primitive，方便映射到路由或视图 key。
+- 嵌入式预览、抽屉和自定义 App 外壳内设置 `fixed=false`。
+- `badge` 保持短小，优先使用数字或紧凑状态文本，避免挤压图标区。
+- 不要在 label 内再嵌套交互控件；每个 tab 本身已经是按钮。
+
+## 审阅说明 / Review Notes
+
+- **Model contract:** `TxTabBar` 只在 tab bar 本身启用且被点击 item 也启用时派发 `update:modelValue` 与 `change`。禁用项会渲染原生 disabled button。
+- **布局说明:** `fixed=true` 会把 tab bar 固定到视口，`safeAreaBottom=true` 会追加 `env(safe-area-inset-bottom)` spacer。预览框、弹层和嵌入式 shell 内应同时关闭。
+- **实测覆盖:** `tab-bar.test.ts` 覆盖 tablist 语义、选中态、图标、badge、z-index CSS 变量、fixed/safe-area 开关、启用态派发，以及禁用 bar/item 阻断。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue`。
+- Types: `packages/tuffex/packages/components/src/tab-bar/src/types.ts` 导出 `TabBarItem`、`TabBarProps`、`TabBarEmits` 与 `TabBarValue`。
+- Export entry: `packages/tuffex/packages/components/src/tab-bar/index.ts` 导出 `TabBar`、`TxTabBar`、props/emits/item types 与 `TxTabBarInstance`。
+- Coverage: `packages/tuffex/packages/components/src/tab-bar/__tests__/tab-bar.test.ts` 验证渲染语义、badge/icon、布局开关、事件派发与禁用行为。
+
+<TuffDocSourceLink />

@@ -1,0 +1,118 @@
+---
+title: AI Elements
+description: 用于 AI 对话界面的会话与消息基础组件。
+category: Data
+status: beta
+since: 1.0.0
+tags: [ai, conversation, message]
+syncStatus: reviewed
+verified: true
+---
+# AI Elements
+
+`TxAiConversation` 与 `TxAiMessage` 用于渲染按角色区分的 AI 对话记录。组件的数据契约很小：每条消息需要 `id`、`role` 和 `content`，可选补充名称、头像、时间戳与状态。
+
+已人工核对 `packages/tuffex/packages/components/src/ai-elements/src/types.ts`、`TxAiConversation.vue` 与 `TxAiMessage.vue`。
+
+## 对话列表
+
+宿主已经维护消息数组，只需要统一的对话排版时使用 `TxAiConversation`。
+
+### AI Conversation
+::::TuffDemoWrapper{demo="AiElementsAiConversationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { AiElementMessage } from '@talex-touch/tuffex/ai-elements'
+  import { computed } from 'vue'
+
+  const messages = computed<AiElementMessage[]>(() => [
+    { id: 'u1', role: 'user', content: '帮我总结这次发布审阅结果。', name: '你' },
+    { id: 'a1', role: 'assistant', content: '已完成 **组件文档** 审阅。', name: 'Nexus AI' },
+    { id: 't1', role: 'tool', content: '', name: 'Verifier', status: 'streaming' },
+  ])
+  </script>
+
+  <template>
+    <TxAiConversation :messages="messages" show-avatar />
+  </template>
+---
+::::
+
+## 交互契约
+
+- `messages` 渲染前会被过滤：空 `content` 会被隐藏，除非 `status` 是 `pending` 或 `streaming`。
+- `markdown` 默认是 `true`，消息正文会交给 `TxMarkdownView` 渲染。
+- `showAvatar` 开启头像列；未提供 `message.avatar` 时显示角色/名称首字母。
+- `pending` 或 `streaming` 且内容为空的消息会显示内置输入中指示器。
+- `TxAiConversation` 使用 `aria-live="polite"`，追加消息时不会抢焦点。
+
+## API
+
+### AiElementMessage
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `id` | `string` | 必填 | 消息稳定 key。 |
+| `role` | `'user' \| 'assistant' \| 'system' \| 'tool'` | 必填 | 视觉和语义角色。 |
+| `content` | `string` | 必填 | 消息文本或 Markdown 源。 |
+| `createdAt` | `number \| string \| Date` | - | 宿主可选时间戳。 |
+| `name` | `string` | - | 显示名称；默认回退为 You / AI / Tool / System。 |
+| `avatar` | `string` | - | 开启头像时使用的图片 URL。 |
+| `status` | `'pending' \| 'streaming' \| 'complete' \| 'error'` | - | 消息生命周期状态。 |
+
+### TxAiConversation Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `messages` | `AiElementMessage[]` | 必填 | 对话数据；空 `content` 会被过滤，除非消息处于 pending 或 streaming。 |
+| `markdown` | `boolean` | `true` | 使用 `TxMarkdownView` 渲染消息正文。 |
+| `compact` | `boolean` | `false` | 使用更紧凑的消息间距。 |
+| `emptyText` | `string` | `'No messages yet'` | 过滤后没有可渲染消息时显示的内置空状态文案。 |
+| `showAvatar` | `boolean` | `false` | 为所有渲染消息显示头像列。 |
+
+### TxAiMessage Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `message` | `AiElementMessage` | 必填 | 单条消息数据。 |
+| `markdown` | `boolean` | `true` | 使用 `TxMarkdownView` 渲染正文；设为 `false` 时保留纯文本换行。 |
+| `compact` | `boolean` | `false` | 使用紧凑行密度和更小头像尺寸。 |
+| `showAvatar` | `boolean` | `false` | 为当前消息开启头像。 |
+
+### Events
+
+`TxAiConversation` 与 `TxAiMessage` 不派发组件事件。请在宿主对话 store 中更新状态，再把新的 `messages` 数组传回 `TxAiConversation`。
+
+## Slots
+
+### TxAiConversation
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `empty` | - | 替换消息过滤后的内置空状态段落。 |
+
+### TxAiMessage
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | `{ message }` | 替换消息正文区域；适合工具卡片、附件或自定义渲染器。 |
+| `avatar` | `{ message }` | `showAvatar` 开启时替换头像图片或回退内容。 |
+
+## 最佳实践
+
+- 在宿主维护 provider 流式状态，再映射到 `status`。
+- 使用对话存储里的稳定消息 id，不要使用数组下标。
+- 助手输出建议保持 Markdown 开启；不可信 Markdown 应在数据边界做清洗或归一化。
+- 工具卡片或附件建议用 `default` 插槽，不要把自定义 HTML 塞进 `content`。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/ai-elements/src/TxAiConversation.vue` 确认消息过滤、polite live region、`empty` 插槽和子消息透传。
+- 组件源码:`packages/tuffex/packages/components/src/ai-elements/src/TxAiMessage.vue` 确认角色标签、状态标签、Markdown/纯文本渲染、输入中指示器以及 `default` / `avatar` 插槽。
+- 类型契约:`packages/tuffex/packages/components/src/ai-elements/src/types.ts` 定义 `AiElementMessage`、`AiConversationProps` 和 `AiMessageProps`。
+- **实测覆盖:** Coverage: 当前没有专用的 `ai-elements` 组件单测；`apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 会验证本页具备中英文文档，并确保 `AiElementsAiConversationDemo` 仍注册到存在的 Vue 示例。
+- 导出入口:`packages/tuffex/packages/components/src/ai-elements/index.ts` 导出可安装的 `AiConversation`、`AiMessage`、`TxAiConversation` 和 `TxAiMessage`。
+
+## Source
+<TuffDocSourceLink />

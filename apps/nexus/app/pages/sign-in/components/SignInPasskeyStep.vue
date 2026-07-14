@@ -37,7 +37,7 @@ const showRetry = computed(() => isError.value)
     <div class="auth-passkey-hero">
       <div class="auth-passkey-visual">
         <div class="auth-passkey-icon" :class="{ 'is-hidden': isVerifying, 'is-blur': isPrepare }">
-          <span class="i-carbon-fingerprint-recognition text-2xl" />
+          <span class="i-ri-fingerprint-2-line text-2xl" />
         </div>
         <div class="auth-passkey-spinner" :class="{ 'is-visible': isVerifying }">
           <TxSpinner :size="26" />

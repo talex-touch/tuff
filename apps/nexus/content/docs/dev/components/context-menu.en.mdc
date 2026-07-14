@@ -374,3 +374,52 @@ Animation is handled directly by `BaseAnchor`: `transfer`, `boom`, `opacity`, an
 |------|------|---------|------|
 | `dashed` | `boolean` | `false` | Uses a dashed separator. |
 | `inset` | `boolean` | `false` | Adds left inset to align with icon/nested content. |
+
+## Slots
+
+### TxContextMenu
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `trigger` | - | Custom trigger element. The default slot is used as fallback trigger content. |
+| `default` | - | Fallback trigger content when `trigger` is not provided. |
+| `menu` | - | Menu content rendered inside the internal `TxContextMenuPanel`. |
+
+### TxContextMenuPanel
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Menu items, dividers, or nested overlay content. |
+
+### TxContextMenuItem
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Main item label. |
+| `avatar` | - | Leading icon/avatar content forwarded to `TxCardItem`. |
+| `description` | - | Secondary description text forwarded to `TxCardItem`. |
+| `right` | - | Replaces the generated shortcut/submenu area. |
+
+`TxContextMenuDivider` does not expose slots.
+
+## Best Practices
+
+- Use `TxContextMenu` when you need trigger handling, coordinates, viewport collision handling, and open state in one component.
+- Use `TxContextMenuPanel` inside `TxPopover` for secondary menus or dropdown-like surfaces that should reuse ContextMenu item behavior without another trigger layer.
+- Prefer `trigger="manual"` with explicit `x` / `y` for editor shortcuts, command surfaces, canvas nodes, and any trigger that is not a native right-click or simple click.
+- Keep `anchorMode="pointer"` for real context menus; switch to `reference` only when the menu should align to the whole trigger element.
+- For teleported submenus, set `outsideGuard` on the child `TxContextMenuPanel`; otherwise the parent outside-click logic can treat submenu clicks as external.
+- Use `closeOnSelect=false` only for parent submenu rows or multi-step actions. Normal menu commands should close after selection.
+- Keep destructive actions visually explicit with `danger`; use `color` only for semantic product colors that are already part of the design system.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/context-menu/src/TxContextMenu.vue` confirms controlled/uncontrolled open state, pointer/reference virtual anchors, trigger modes, outside-click handling, and BaseAnchor forwarding.
+- Source: `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue` confirms the panel layout, `closeOnSelect` / `close` injection, `dense`, `outsideGuard`, `role`, and `ariaLabel` behavior.
+- Source: `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuItem.vue` confirms `disabled`, `danger`, custom `color`, `shortcut`, `submenu`, per-item `closeOnSelect`, and item slots.
+- Type contracts: `packages/tuffex/packages/components/src/context-menu/src/types.ts` exports the trigger, anchor, panel visual enums, props, and open-target shapes.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts` covers controlled width rendering, contextmenu coordinates, controlled x/y opening, Escape close guards, trigger pointerdown close behavior, pointer/reference anchor modes, enabled/disabled item selection, shortcut/custom color/submenu rendering, and standalone panel close injection.
+
+## Source
+<TuffDocSourceLink />
+

@@ -10,6 +10,7 @@ import { useStartupInfo } from './modules/hooks/useStartupInfo'
 import { resolvedTheme } from './modules/storage/theme-style'
 import FloatingBall from './views/assistant/FloatingBall.vue'
 import VoicePanel from './views/assistant/VoicePanel.vue'
+import ScreenshotRegionSelector from './views/assistant/ScreenshotRegionSelector.vue'
 import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
 import OmniPanel from './views/omni-panel/OmniPanel.vue'
@@ -76,6 +77,9 @@ watchEffect(() => {
     </template>
     <template v-else-if="appEntranceMode === 'AssistantVoicePanel'">
       <VoicePanel />
+    </template>
+    <template v-else-if="appEntranceMode === 'AssistantRegionSelector'">
+      <ScreenshotRegionSelector />
     </template>
     <template v-else-if="appEntranceMode === 'OmniPanel'">
       <OmniPanel />

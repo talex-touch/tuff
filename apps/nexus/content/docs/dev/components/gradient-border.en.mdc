@@ -1,16 +1,19 @@
 ---
 title: "GradientBorder"
-description: "Animated gradient border wrapper for highlighting content containers."
+description: "Animated gradient border wrapper for highlighting cards, hero panels, and callout containers."
 category: Basic
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [border, gradient, highlight]
+syncStatus: reviewed
+verified: true
 ---
 # GradientBorder
 
-Animated gradient border wrapper for highlighting content containers while keeping the inner content layout under your control.
+`TxGradientBorder` wraps arbitrary content with a rotating gradient border while leaving the inner layout fully controlled by the caller.
 
 ## Basic Usage
 
-### GradientBorder
 :::TuffDemoWrapper{demo="GradientBorderGradientBorderDemo" code-lang="vue"}
 ---
 code: |
@@ -24,14 +27,105 @@ code: |
 ---
 :::
 
+## Composition Examples
+
+### Semantic Root
+
+Use `as` when the highlighted surface should be a semantic landmark or list item.
+
+```vue
+<template>
+  <TxGradientBorder as="section" :border-width="3" :border-radius="20" padding="1rem 1.25rem">
+    <article class="rounded-[16px] bg-[var(--tx-bg-color)] p-4">
+      <h3>Release candidate</h3>
+      <p>Ready for manual QA.</p>
+    </article>
+  </TxGradientBorder>
+</template>
+```
+
+### Custom Units
+
+Numeric sizing props become pixels. String props are preserved, so CSS variables and multi-value padding are valid.
+
+```vue
+<template>
+  <TxGradientBorder
+    border-width="0.125rem"
+    border-radius="var(--radius-lg)"
+    padding="1rem 1.5rem"
+    :animation-duration="6"
+  >
+    <div class="rounded-[inherit] bg-[var(--tx-bg-color)] p-4">
+      Uses project tokens
+    </div>
+  </TxGradientBorder>
+</template>
+```
+
+## Interaction Contract
+
+- The root element is rendered by `<component :is="as">`; default root is `div`.
+- The component renders one inner wrapper, `.tx-gradient-border__inner`, around the default slot.
+- `borderWidth`, `borderRadius`, and `padding` accept numbers or strings. Numbers are normalized to px; strings are passed through unchanged.
+- `animationDuration` is numeric seconds and is written to `--tx-gradient-duration` with an `s` suffix.
+- The gradient layer is a non-interactive pseudo-element with `pointer-events: none`; the slotted content owns all actual interaction.
+- The wrapper uses `overflow: hidden`, so child focus rings or shadows can be clipped when they extend outside the border radius.
+
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
+|------|------|---------|-------------|
 | `as` | `string` | `'div'` | Root element tag rendered by the wrapper. |
-| `borderWidth` | `string \| number` | `'2px'` | Gradient border width; numeric values are normalized to pixels. |
-| `borderRadius` | `string \| number` | `'12px'` | Border radius applied to the wrapper and gradient layer. |
-| `padding` | `string \| number` | `'12px'` | Inner content padding; numeric values are normalized to pixels. |
-| `animationDuration` | `number` | `4` | Rotation animation duration in seconds. |
+| `borderWidth` | `string \| number` | `'2px'` | Gradient border width. Numbers become px. |
+| `borderRadius` | `string \| number` | `'12px'` | Border radius applied to the wrapper and gradient layer. Numbers become px. |
+| `padding` | `string \| number` | `'12px'` | Padding applied to the inner content wrapper. Numbers become px. |
+| `animationDuration` | `number` | `4` | Gradient rotation duration in seconds. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Content rendered inside `.tx-gradient-border__inner`. |
+
+### Events
+
+No public events are emitted.
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-gradient-border-width` | `borderWidth` | Border thickness and blur distance. |
+| `--tx-gradient-border-radius` | `borderRadius` | Wrapper and gradient radius. |
+| `--tx-gradient-inner-padding` | `padding` | Inner wrapper padding. |
+| `--tx-gradient-duration` | `animationDuration` | Rotation animation duration. |
+| `--tx-gradient-angle` | internal animation | Registered angle property used by the gradient. |
+
+## Best Practices
+
+- Put a real surface inside the wrapper and align its radius with `borderRadius - borderWidth` to avoid exposed corners.
+- Use semantic `as` values for sections, list items, or articles instead of adding extra wrapper landmarks around the component.
+- Keep `animationDuration` slower on dense pages; multiple fast animated borders compete with primary content.
+- Avoid wrapping controls whose focus rings must escape the border unless the inner content handles focus styling itself.
+- Prefer one highlighted gradient surface per view region; use `TxBadge` or `TxTag` for smaller status accents.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/gradient-border/index.ts`, `TxGradientBorder.vue`, and `gradient-border.test.ts`.
+- Props are declared in `index.ts`; there is no separate `src/types.ts` for this component.
+- The animated gradient is a non-interactive pseudo-element. Slotted content remains responsible for all interaction and focus styling.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/gradient-border/src/TxGradientBorder.vue`.
+- Types: `packages/tuffex/packages/components/src/gradient-border/index.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/gradient-border/__tests__/gradient-border.test.ts` verifies default root rendering, custom root tags, numeric unit normalization, duration seconds, and string CSS unit preservation.
+
+<TuffDocSourceLink />

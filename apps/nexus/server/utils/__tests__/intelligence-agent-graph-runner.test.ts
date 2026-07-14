@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runIntelligenceAgentGraphStream } from '../intelligenceAgentGraphRunner'
+import type { H3Event } from 'h3'
+import type { IntelligenceLabStreamEvent } from '../tuffIntelligenceLabService'
 
 const stateStoreMocks = vi.hoisted(() => {
   let seq = 0
   return {
-    appendRuntimeTraceEvent: vi.fn(async () => {
+    appendRuntimeTraceEvent: vi.fn(async (
+      _event: unknown,
+      input: { payload: Record<string, unknown> },
+    ) => {
       seq += 1
       return { seq }
     }),
@@ -105,7 +110,10 @@ const serviceMocks = vi.hoisted(() => ({
 }))
 
 const auditMocks = vi.hoisted(() => ({
-  createAudit: vi.fn(async () => undefined),
+  createAudit: vi.fn(async (
+    _event: unknown,
+    _data: { metadata?: Record<string, unknown> | null },
+  ) => undefined),
 }))
 
 vi.mock('../tuffIntelligenceRuntimeStore', () => stateStoreMocks)
@@ -142,5 +150,60 @@ describe('intelligenceAgentGraphRunner', () => {
     expect(events.some(event => event.type === 'execution.step')).toBe(true)
     expect(events.some(event => event.type === 'reflection.completed')).toBe(true)
     expect(events.some(event => event.type === 'done')).toBe(true)
+  })
+
+  it('emits, persists, and audits only canonical details for a model network failure', async () => {
+    const networkFailure = Object.assign(new Error('fetch failed: socket reset'), {
+      cause: new Error('provider credential secret'),
+      customSecret: 'agent-runtime-secret',
+      stage: 'planning',
+    })
+    networkFailure.stack = 'ModelTransportError: fetch failed: socket reset\n    at https://provider.example/internal?token=agent-runtime-secret'
+    serviceMocks.planIntelligenceLab.mockRejectedValueOnce(networkFailure)
+
+    const emittedEvents: IntelligenceLabStreamEvent[] = []
+    // Store calls are mocked; the graph only forwards this opaque runtime context.
+    const event = {} as unknown as H3Event
+    await runIntelligenceAgentGraphStream(
+      event,
+      'user_1',
+      {
+        message: 'test objective',
+        sessionId: 'session_1',
+      },
+      {
+        emit: async (streamEvent) => {
+          emittedEvents.push(streamEvent)
+        },
+      },
+    )
+
+    const expectedErrorDetail = {
+      code: 'NETWORK_FAILURE',
+      message: 'fetch failed: socket reset',
+      reason: 'The provider request failed before a valid model response was returned.',
+      recovery: 'Check network/proxy settings and retry the request.',
+    }
+    const emittedError = emittedEvents.find(eventItem => eventItem.type === 'error')
+    const persistedError = stateStoreMocks.appendRuntimeTraceEvent.mock.calls
+      .map(([, input]) => input.payload)
+      .find(payload => payload.type === 'error')
+    const auditMetadata = auditMocks.createAudit.mock.calls[0]?.[1].metadata
+
+    expect(auditMetadata).toMatchObject({
+      errorCode: 'NETWORK_FAILURE',
+      error: expectedErrorDetail,
+    })
+    for (const errorDetail of [
+      emittedError?.payload?.error,
+      persistedError?.payload?.error,
+      auditMetadata?.error,
+    ]) {
+      expect(errorDetail).toEqual(expectedErrorDetail)
+      expect(errorDetail).not.toHaveProperty('stack')
+      expect(errorDetail).not.toHaveProperty('cause')
+      expect(errorDetail).not.toHaveProperty('name')
+      expect(errorDetail).not.toHaveProperty('customSecret')
+    }
   })
 })

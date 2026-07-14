@@ -1,10 +1,10 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
-import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
 import { TuffProgress } from '@talex-touch/tuffex/progress'
-import { toast } from 'vue-sonner'
+import { useAgentsSdk } from '@talex-touch/utils/renderer'
 import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
@@ -83,7 +83,8 @@ async function pollTaskStatus() {
   try {
     const statusResult = await agentsSdk.getTaskStatus(taskId)
     finalizeTaskByPolledStatus(statusResult?.status || '')
-  } catch {
+  }
+  catch {
     // Keep retrying during execution; transient query failure should not interrupt UI state.
   }
 }
@@ -137,7 +138,8 @@ const taskListeners = [
 
     if (payload.result?.success) {
       toast.success(t('intelligence.agents.task_success'))
-    } else {
+    }
+    else {
       toast.error(taskError.value || t('intelligence.agents.task_failed'))
     }
   }),
@@ -166,12 +168,12 @@ const taskListeners = [
     currentTaskId.value = null
     stopTaskStatusPolling()
     toast.warning(taskError.value)
-  })
+  }),
 ]
 
 onBeforeUnmount(() => {
   stopTaskStatusPolling()
-  taskListeners.forEach((dispose) => dispose())
+  taskListeners.forEach(dispose => dispose())
 })
 
 function createTaskId(): string {
@@ -181,7 +183,8 @@ function createTaskId(): string {
 }
 
 async function executeTask() {
-  if (!taskInput.value.trim()) return
+  if (!taskInput.value.trim())
+    return
 
   const taskId = createTaskId()
 
@@ -199,7 +202,7 @@ async function executeTask() {
       id: taskId,
       agentId: props.agent.id,
       type: 'execute',
-      input: { query: taskInput.value }
+      input: { query: taskInput.value },
     }
 
     const queued = await agentsSdk.execute(task)
@@ -211,7 +214,8 @@ async function executeTask() {
     }
 
     startTaskStatusPolling()
-  } catch (err) {
+  }
+  catch (err) {
     agentDetailLog.error('Task execution failed:', err)
     taskError.value = err instanceof Error ? err.message : t('intelligence.agents.task_failed')
     taskStep.value = t('intelligence.agents.task_failed')
@@ -239,7 +243,8 @@ async function cancelTask() {
 
     taskStep.value = t('intelligence.agents.task_cancel_requested')
     toast.info(t('intelligence.agents.task_cancel_requested'))
-  } catch (err) {
+  }
+  catch (err) {
     canceling.value = false
     const message = err instanceof Error ? err.message : t('intelligence.agents.cancel_failed')
     toast.error(message)
@@ -250,7 +255,7 @@ function getCapabilityIcon(type: string): string {
   const iconMap: Record<string, string> = {
     action: 'i-carbon-play-filled',
     query: 'i-carbon-search',
-    workflow: 'i-carbon-flow'
+    workflow: 'i-carbon-flow',
   }
   return iconMap[type] || 'i-carbon-circle-filled'
 }
@@ -265,7 +270,9 @@ function getCapabilityIcon(type: string): string {
         <h2 class="agent-title">
           {{ agent.name }}
         </h2>
-        <p class="agent-version">v{{ agent.version }}</p>
+        <p class="agent-version">
+          v{{ agent.version }}
+        </p>
       </div>
       <TxTag v-if="agent.enabled !== false" type="success">
         {{ t('intelligence.agents.active') }}

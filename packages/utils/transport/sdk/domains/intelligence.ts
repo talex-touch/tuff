@@ -1,6 +1,9 @@
 import type {
   BuildContextInput,
   BuildContextResult,
+  CompressionSnapshot,
+  CreateCompressionSnapshotInput,
+  CreateCompressionSnapshotResult,
   EvaluateMemoryInput,
   EvaluateMemoryResult,
   IndexChunkInput,
@@ -27,6 +30,9 @@ import type {
   IntelligenceCodeReviewResult,
   IntelligenceContentExtractPayload,
   IntelligenceContentExtractResult,
+  IntelligenceContextExecutionRequest,
+  IntelligenceContextExecutionResult,
+  IntelligenceContextStreamEvent,
   IntelligenceEmbeddingPayload,
   IntelligenceGrammarCheckPayload,
   IntelligenceGrammarCheckResult,
@@ -71,6 +77,8 @@ import type {
   IntelligenceVisionOcrResult,
   KnowledgeSearchInput,
   KnowledgeSearchResult,
+  ListCompressionSnapshotsInput,
+  ListCompressionSnapshotsResult,
   ListContextCheckpointsInput,
   ListContextCheckpointsResult,
   ListContextPackageLogsInput,
@@ -83,6 +91,8 @@ import type {
   PrepareContextTurnInput,
   PrepareContextTurnResult,
   PromptWorkflowExecution,
+  ReplaceMemoryInput,
+  ReplaceMemoryResult,
   SetMemoryEnabledInput,
   SetMemoryEnabledResult,
   TuffIntelligenceAgentSession,
@@ -487,6 +497,13 @@ export interface IntelligenceSdk {
     options: IntelligenceStreamOptions<T>,
     invokeOptions?: IntelligenceInvokeOptions,
   ) => Promise<StreamController>
+  contextInvoke: <T = unknown>(
+    payload: IntelligenceContextExecutionRequest,
+  ) => Promise<IntelligenceContextExecutionResult<T>>
+  contextStream: <T = unknown>(
+    payload: IntelligenceContextExecutionRequest,
+    options: IntelligenceStreamOptions<T>,
+  ) => Promise<StreamController>
   text: IntelligenceTextCapabilitySdk
   embedding: IntelligenceEmbeddingCapabilitySdk
   code: IntelligenceCodeCapabilitySdk
@@ -540,9 +557,13 @@ export interface IntelligenceSdk {
   contextPrepareTurn: (payload: PrepareContextTurnInput) => Promise<PrepareContextTurnResult>
   contextListCheckpoints: (payload: ListContextCheckpointsInput) => Promise<ListContextCheckpointsResult>
   contextListPackageLogs: (payload: ListContextPackageLogsInput) => Promise<ListContextPackageLogsResult>
+  contextCreateCompressionSnapshot: (payload: CreateCompressionSnapshotInput) => Promise<CreateCompressionSnapshotResult>
+  contextListCompressionSnapshots: (payload: ListCompressionSnapshotsInput) => Promise<ListCompressionSnapshotsResult>
+  contextGetLatestCompressionSnapshot: (payload: { sessionId: string }) => Promise<CompressionSnapshot | null>
   contextListMemories: (payload?: ListMemoriesInput) => Promise<ListMemoriesResult>
   contextEvaluateMemory: (payload: EvaluateMemoryInput) => Promise<EvaluateMemoryResult>
   contextSaveMemory: (payload: MemoryUpsertInput) => Promise<MemoryItem>
+  contextReplaceMemory: (payload: ReplaceMemoryInput) => Promise<ReplaceMemoryResult>
   contextSetMemoryEnabled: (payload: SetMemoryEnabledInput) => Promise<SetMemoryEnabledResult>
   contextDeleteMemory: (payload: { memoryId: string, reason?: string }) => Promise<MemoryTombstone>
 
@@ -737,6 +758,20 @@ export const intelligenceKnowledgeEvents = {
 } as const
 
 export const intelligenceContextEvents = {
+  execute: defineEvent('intelligence')
+    .module('context')
+    .event('execute')
+    .define<
+    IntelligenceContextExecutionRequest,
+    IntelligenceApiResponse<IntelligenceContextExecutionResult<unknown>>
+  >(),
+  stream: defineEvent('intelligence')
+    .module('context')
+    .event('stream')
+    .define<
+    IntelligenceContextExecutionRequest,
+    AsyncIterable<IntelligenceContextStreamEvent<unknown>>
+  >(),
   prepareTurn: defineEvent('intelligence')
     .module('context')
     .event('prepare-turn')
@@ -749,6 +784,18 @@ export const intelligenceContextEvents = {
     .module('context')
     .event('package-logs:list')
     .define<ListContextPackageLogsInput, IntelligenceApiResponse<ListContextPackageLogsResult>>(),
+  createCompressionSnapshot: defineEvent('intelligence')
+    .module('context')
+    .event('compression:create')
+    .define<CreateCompressionSnapshotInput, IntelligenceApiResponse<CreateCompressionSnapshotResult>>(),
+  listCompressionSnapshots: defineEvent('intelligence')
+    .module('context')
+    .event('compression:list')
+    .define<ListCompressionSnapshotsInput, IntelligenceApiResponse<ListCompressionSnapshotsResult>>(),
+  getLatestCompressionSnapshot: defineEvent('intelligence')
+    .module('context')
+    .event('compression:latest')
+    .define<{ sessionId: string }, IntelligenceApiResponse<CompressionSnapshot | null>>(),
   listMemories: defineEvent('intelligence')
     .module('context')
     .event('memory:list')
@@ -761,6 +808,10 @@ export const intelligenceContextEvents = {
     .module('context')
     .event('memory:save')
     .define<MemoryUpsertInput, IntelligenceApiResponse<MemoryItem>>(),
+  replaceMemory: defineEvent('intelligence')
+    .module('context')
+    .event('memory:replace')
+    .define<ReplaceMemoryInput, IntelligenceApiResponse<ReplaceMemoryResult>>(),
   setMemoryEnabled: defineEvent('intelligence')
     .module('context')
     .event('memory:set-enabled')
@@ -1100,6 +1151,59 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       return assertApiResponse(response, 'Failed to build local knowledge context')
     },
 
+    async contextInvoke<T = unknown>(payload: IntelligenceContextExecutionRequest) {
+      const response = await transport.send(intelligenceContextEvents.execute, payload)
+      return assertApiResponse(
+        response,
+        'Failed to execute intelligence context',
+      ) as IntelligenceContextExecutionResult<T>
+    },
+
+    async contextStream<T = unknown>(
+      payload: IntelligenceContextExecutionRequest,
+      options: IntelligenceStreamOptions<T>,
+    ) {
+      if (typeof transport.stream !== 'function') {
+        throw new TypeError('Intelligence context streaming requires a stream-capable transport')
+      }
+      let streamEnded = false
+      const emitEnd = (event?: IntelligenceContextStreamEvent<T>) => {
+        if (streamEnded)
+          return
+        streamEnded = true
+        options.onEnd?.(event ?? { type: 'end', capabilityId: payload.capabilityId })
+      }
+      return transport.stream(
+        intelligenceContextEvents.stream,
+        payload,
+        {
+          onData: (event) => {
+            const typedEvent = event as IntelligenceContextStreamEvent<T>
+            if (typedEvent.type === 'start') {
+              options.onStart?.(typedEvent)
+            }
+            else if (typedEvent.type === 'delta') {
+              options.onDelta?.(typedEvent.delta || '', typedEvent)
+            }
+            else if (typedEvent.type === 'message' && typedEvent.message) {
+              options.onMessage?.(typedEvent.message, typedEvent)
+            }
+            else if (typedEvent.type === 'usage' && typedEvent.usage) {
+              options.onUsage?.(typedEvent.usage, typedEvent)
+            }
+            else if (typedEvent.type === 'metadata' && typedEvent.metadata) {
+              options.onMetadata?.(typedEvent.metadata, typedEvent)
+            }
+            else if (typedEvent.type === 'end') {
+              emitEnd(typedEvent)
+            }
+          },
+          onError: options.onError,
+          onEnd: () => emitEnd(),
+        },
+      )
+    },
+
     async contextPrepareTurn(payload) {
       const response = await transport.send(intelligenceContextEvents.prepareTurn, payload)
       return assertApiResponse(response, 'Failed to prepare intelligence context')
@@ -1115,6 +1219,21 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       return assertApiResponse(response, 'Failed to list intelligence context package logs')
     },
 
+    async contextCreateCompressionSnapshot(payload) {
+      const response = await transport.send(intelligenceContextEvents.createCompressionSnapshot, payload)
+      return assertApiResponse(response, 'Failed to create intelligence compression snapshot')
+    },
+
+    async contextListCompressionSnapshots(payload) {
+      const response = await transport.send(intelligenceContextEvents.listCompressionSnapshots, payload)
+      return assertApiResponse(response, 'Failed to list intelligence compression snapshots')
+    },
+
+    async contextGetLatestCompressionSnapshot(payload) {
+      const response = await transport.send(intelligenceContextEvents.getLatestCompressionSnapshot, payload)
+      return assertApiResponse(response, 'Failed to get latest intelligence compression snapshot')
+    },
+
     async contextListMemories(payload = {}) {
       const response = await transport.send(intelligenceContextEvents.listMemories, payload)
       return assertApiResponse(response, 'Failed to list intelligence memories')
@@ -1128,6 +1247,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async contextSaveMemory(payload) {
       const response = await transport.send(intelligenceContextEvents.saveMemory, payload)
       return assertApiResponse(response, 'Failed to save intelligence memory')
+    },
+
+    async contextReplaceMemory(payload) {
+      const response = await transport.send(intelligenceContextEvents.replaceMemory, payload)
+      return assertApiResponse(response, 'Failed to replace intelligence memory')
     },
 
     async contextSetMemoryEnabled(payload) {

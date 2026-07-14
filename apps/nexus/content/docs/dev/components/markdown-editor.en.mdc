@@ -1,0 +1,116 @@
+---
+title: MarkdownEditor
+description: WYSIWYG/source/preview Markdown editor with sanitization and toolbar actions.
+category: Form
+status: beta
+since: 1.0.0
+tags: [markdown, editor, wysiwyg]
+syncStatus: reviewed
+verified: true
+---
+# MarkdownEditor
+
+`TxMarkdownEditor` edits Markdown in three modes: WYSIWYG, source, and preview. It renders Markdown with `marked`, sanitizes HTML through DOMPurify by default, and serializes rich editing content back to Markdown.
+
+## Basic Usage
+
+### MarkdownEditor
+::::TuffDemoWrapper{demo="MarkdownEditorMarkdownEditorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const content = ref('## Release note\n\n- API reviewed\n- Demos verified')
+  </script>
+
+  <template>
+    <TxMarkdownEditor
+      v-model="content"
+      default-mode="source"
+      :toolbar-actions="['heading', 'bold', 'italic', 'bulletList', 'orderedList', 'link']"
+    />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- `mode` is controlled when provided; otherwise `defaultMode` initializes internal mode.
+- `update:mode` and `mode-change` emit whenever the user changes modes.
+- `sanitize` defaults to `true`; disable it only for already trusted content.
+- Source mode writes directly to Markdown. WYSIWYG mode serializes edited DOM back to Markdown on input.
+- Toolbar actions are shared across modes, but preview mode disables editing actions.
+- `theme="auto"` watches `documentElement` class / `data-theme` and falls back to light.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` / `v-model` | `string` | `''` | Markdown source. |
+| `placeholder` | `string` | `''` | Placeholder shown in editable modes. |
+| `mode` | `'wysiwyg' \| 'source' \| 'preview'` | - | Controlled editor mode. |
+| `defaultMode` | `'wysiwyg' \| 'source' \| 'preview'` | `'wysiwyg'` | Initial internal mode. |
+| `disabled` | `boolean` | `false` | Disable toolbar and fields. |
+| `readonly` | `boolean` | `false` | Prevent edits while allowing reading. |
+| `sanitize` | `boolean` | `true` | Sanitize rendered HTML with DOMPurify. |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | Editor theme. |
+| `toolbar` | `boolean` | `true` | Show toolbar and mode switcher. |
+| `toolbarActions` | `MarkdownEditorToolbarActionKey[]` | built-in set | Ordered toolbar actions. |
+| `minHeight` | `string \| number` | `220` | Editor body minimum height. |
+| `maxHeight` | `string \| number` | - | Editor body maximum height. |
+| `linkPrompt` | `(selectedText: string) => string \| Promise<string>` | - | Async URL provider for link action. |
+
+### Toolbar Actions
+
+`heading`, `bold`, `italic`, `strike`, `quote`, `code`, `bulletList`, `orderedList`, `link`, `undo`, `redo`.
+
+### Slots
+
+No public slots are exposed; toolbar buttons, editing surfaces, and preview output are internal.
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `update:modelValue` | `(value: string)` | v-model update. |
+| `change` | `(value: string)` | Markdown value changed. |
+| `update:mode` | `(mode: MarkdownEditorMode)` | Mode update for controlled use. |
+| `mode-change` | `(mode: MarkdownEditorMode)` | Mode changed. |
+| `focus` | `()` | Editable surface or source field focused. |
+| `blur` | `()` | Editable surface or source field blurred. |
+
+### Exposed Methods
+
+| Method | Description |
+|------|-------------|
+| `focus()` | Focus the active editable surface. |
+| `blur()` | Blur the active editable surface. |
+| `setMode(mode)` | Change editor mode. |
+| `getMode()` | Return current mode. |
+| `getValue()` | Return current Markdown source. |
+| `setValue(value)` | Set Markdown, emit updates, and refresh rendered HTML. |
+
+## Best Practices
+
+- Keep `sanitize=true` for user-authored or provider-authored content.
+- Use controlled `mode` when the host stores the current editor tab in route/query state.
+- Restrict `toolbarActions` for narrow editors such as release notes or comments.
+- Provide `linkPrompt` instead of letting the component own product-specific URL dialogs.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`, `TxMarkdownEditor.vue`, `markdown-serializer.ts`, and `markdown-editor.test.ts`.
+- Sanitization is enabled by default through DOMPurify; `sanitize=false` should remain a trusted-content escape hatch only.
+- `linkPrompt` is the extension point for product-specific URL collection, keeping dialogs outside the component contract.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue`.
+- Types: `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`.
+- Serializer: `packages/tuffex/packages/components/src/markdown-editor/src/markdown-serializer.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/markdown-editor/__tests__/markdown-editor.test.ts` verifies exports, sanitized WYSIWYG rendering, source-mode input updates, uncontrolled mode emits, and rich-content serialization back to Markdown.
+
+<TuffDocSourceLink />

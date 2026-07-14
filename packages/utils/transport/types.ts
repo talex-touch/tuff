@@ -3,12 +3,15 @@
  * @module @talex-touch/utils/transport/types
  */
 
-import type { TuffEvent } from './event/types'
-import type { TransportPortUpgradeRequest, TransportPortUpgradeResponse } from './events/types/transport'
+import type { TuffEvent } from "./event/types";
+import type {
+  TransportPortUpgradeRequest,
+  TransportPortUpgradeResponse,
+} from "./events/types/transport";
 
 // Electron types - import from electron package if available
 // This allows the package to work in both Electron and non-Electron contexts
-type ElectronWebContents = import('electron').WebContents
+type ElectronWebContents = import("electron").WebContents;
 
 // ============================================================================
 // Send Options
@@ -23,50 +26,52 @@ export interface SendOptions {
    * Use this for time-critical requests.
    * @defaultValue false
    */
-  immediate?: boolean
+  immediate?: boolean;
 
   /**
    * Request timeout in milliseconds.
    * @defaultValue 10000
    */
-  timeout?: number
+  timeout?: number;
 
   /**
    * Optional cache control for transport responses.
    * Only used when explicitly enabled.
    */
-  cache?: boolean | {
-    /**
-     * Custom cache key override.
-     */
-    key?: string
+  cache?:
+    | boolean
+    | {
+        /**
+         * Custom cache key override.
+         */
+        key?: string;
 
-    /**
-     * Cache mode.
-     * - prefer: return cached value when available, otherwise fetch
-     * - only: return cached value or throw if missing
-     * @defaultValue prefer
-     */
-    mode?: 'prefer' | 'only'
+        /**
+         * Cache mode.
+         * - prefer: return cached value when available, otherwise fetch
+         * - only: return cached value or throw if missing
+         * @defaultValue prefer
+         */
+        mode?: "prefer" | "only";
 
-    /**
-     * Cache time-to-live in milliseconds.
-     */
-    ttlMs?: number
-  }
+        /**
+         * Cache time-to-live in milliseconds.
+         */
+        ttlMs?: number;
+      };
 
   /**
    * Target window ID for main process.
    * If not specified, sends to the default window.
    * @remarks Only applicable in main process context.
    */
-  targetWindowId?: number
+  targetWindowId?: number;
 
   /**
    * Target WebContents ID for precise targeting.
    * @remarks Only applicable in main process context.
    */
-  targetWebContentsId?: number
+  targetWebContentsId?: number;
 }
 
 // ============================================================================
@@ -76,7 +81,7 @@ export interface SendOptions {
 /**
  * Message types for stream communication.
  */
-export type StreamMessageType = 'data' | 'error' | 'end'
+export type StreamMessageType = "data" | "error" | "end";
 
 /**
  * Message structure for stream communication via MessagePort.
@@ -87,22 +92,22 @@ export interface StreamMessage<T = unknown> {
   /**
    * Type of stream message.
    */
-  type: StreamMessageType
+  type: StreamMessageType;
 
   /**
    * Data payload (only for 'data' type).
    */
-  chunk?: T
+  chunk?: T;
 
   /**
    * Error message (only for 'error' type).
    */
-  error?: string
+  error?: string;
 
   /**
    * Stream identifier.
    */
-  streamId: string
+  streamId: string;
 }
 
 /**
@@ -115,36 +120,36 @@ export interface StreamOptions<TChunk> {
    * Callback invoked for each data chunk.
    * @param chunk - The data chunk
    */
-  onData: (chunk: TChunk) => void
+  onData: (chunk: TChunk) => void;
 
   /**
    * Callback invoked when an error occurs.
    * @param error - The error that occurred
    */
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void;
 
   /**
    * Callback invoked when the stream ends.
    */
-  onEnd?: () => void
+  onEnd?: () => void;
 
   /**
    * Optional port upgrade settings for stream transport.
    * Set to false to disable MessagePort and use channel fallback.
    */
-  port?: TransportPortOpenOptions | false
+  port?: TransportPortOpenOptions | false;
 }
 
 export interface TransportPortHandle {
-  portId: string
-  channel: string
-  port: MessagePort
-  close: (reason?: string) => Promise<void>
+  portId: string;
+  channel: string;
+  port: MessagePort;
+  close: (reason?: string) => Promise<void>;
 }
 
 export interface TransportPortOpenOptions extends TransportPortUpgradeRequest {
-  force?: boolean
-  timeoutMs?: number
+  force?: boolean;
+  timeoutMs?: number;
 }
 
 /**
@@ -155,17 +160,17 @@ export interface StreamController {
    * Cancels the stream.
    * After cancellation, no more data/error/end callbacks will be invoked.
    */
-  cancel: () => void
+  cancel: () => void;
 
   /**
    * Whether the stream has been cancelled.
    */
-  readonly cancelled: boolean
+  readonly cancelled: boolean;
 
   /**
    * Unique identifier for this stream.
    */
-  readonly streamId: string
+  readonly streamId: string;
 }
 
 /**
@@ -178,44 +183,44 @@ export interface StreamContext<TChunk> {
    * Emits a data chunk to the client.
    * @param chunk - The data to send
    */
-  emit: (chunk: TChunk) => void
+  emit: (chunk: TChunk) => void;
 
   /**
    * Emits an error and closes the stream.
    * @param err - The error to send
    */
-  error: (err: Error) => void
+  error: (err: Error) => void;
 
   /**
    * Signals successful completion of the stream.
    */
-  end: () => void
+  end: () => void;
 
   /**
    * Checks if the client has cancelled the stream.
    * @returns `true` if cancelled
    */
-  isCancelled: () => boolean
+  isCancelled: () => boolean;
 
   /**
    * Unique identifier for this stream.
    */
-  readonly streamId: string
+  readonly streamId: string;
 
   /**
    * The WebContents that initiated this stream.
    */
-  readonly sender?: ElectronWebContents
+  readonly sender?: ElectronWebContents;
 
   /**
    * The event name for this stream.
    */
-  readonly eventName?: string
+  readonly eventName?: string;
 
   /**
    * Plugin context if this is a plugin stream request.
    */
-  readonly plugin?: PluginSecurityContext
+  readonly plugin?: PluginSecurityContext;
 }
 
 // ============================================================================
@@ -229,7 +234,7 @@ export interface BatchPayload {
   /**
    * Event name.
    */
-  event: string
+  event: string;
 
   /**
    * Array of individual requests.
@@ -238,13 +243,13 @@ export interface BatchPayload {
     /**
      * Unique request ID for response correlation.
      */
-    id: string
+    id: string;
 
     /**
      * Request payload.
      */
-    payload: unknown
-  }>
+    payload: unknown;
+  }>;
 }
 
 /**
@@ -254,17 +259,17 @@ export interface BatchResult {
   /**
    * Request ID (correlates to BatchPayload.requests[].id).
    */
-  id: string
+  id: string;
 
   /**
    * Response data (if successful).
    */
-  data?: unknown
+  data?: unknown;
 
   /**
    * Error message (if failed).
    */
-  error?: string
+  error?: string;
 }
 
 /**
@@ -274,12 +279,12 @@ export interface BatchResponse {
   /**
    * Event name.
    */
-  event: string
+  event: string;
 
   /**
    * Array of results matching the request order.
    */
-  results: BatchResult[]
+  results: BatchResult[];
 }
 
 // ============================================================================
@@ -293,29 +298,29 @@ export interface HandlerContext {
   /**
    * The WebContents that sent this request.
    */
-  sender: ElectronWebContents
+  sender: ElectronWebContents;
 
   /**
    * The event name being handled.
    */
-  eventName: string
+  eventName: string;
 
   /**
    * Plugin context if this is a plugin request.
    */
-  plugin?: PluginSecurityContext
+  plugin?: PluginSecurityContext;
 }
 
 export interface MainInvokeContext {
   /**
    * Optional sender override for in-process invocation.
    */
-  sender?: ElectronWebContents
+  sender?: ElectronWebContents;
 
   /**
    * Optional plugin context for in-process invocation.
    */
-  plugin?: PluginSecurityContext
+  plugin?: PluginSecurityContext;
 }
 
 // ============================================================================
@@ -333,18 +338,23 @@ export interface PluginSecurityContext {
   /**
    * Plugin name.
    */
-  name: string
+  name: string;
 
   /**
    * Encrypted unique key for this plugin session.
    * This key is generated when the plugin UI view is attached.
    */
-  uniqueKey: string
+  uniqueKey: string;
 
   /**
    * Whether this is a verified plugin context.
    */
-  verified: boolean
+  verified: boolean;
+
+  /**
+   * Host-resolved SDK API marker for permission enforcement.
+   */
+  sdkapi?: number;
 }
 
 /**
@@ -360,7 +370,7 @@ export interface PluginKeyManager {
    * @param pluginName - Name of the plugin
    * @returns The encrypted key
    */
-  requestKey: (pluginName: string) => string
+  requestKey: (pluginName: string) => string;
 
   /**
    * Revokes a previously issued key.
@@ -368,7 +378,7 @@ export interface PluginKeyManager {
    * @param key - The key to revoke
    * @returns `true` if successfully revoked
    */
-  revokeKey: (key: string) => boolean
+  revokeKey: (key: string) => boolean;
 
   /**
    * Resolves a key to its plugin name.
@@ -376,7 +386,7 @@ export interface PluginKeyManager {
    * @param key - The encrypted key
    * @returns Plugin name or `undefined` if invalid
    */
-  resolveKey: (key: string) => string | undefined
+  resolveKey: (key: string) => string | undefined;
 
   /**
    * Checks if a key is valid.
@@ -384,7 +394,7 @@ export interface PluginKeyManager {
    * @param key - The key to validate
    * @returns `true` if valid
    */
-  isValidKey: (key: string) => boolean
+  isValidKey: (key: string) => boolean;
 }
 
 // ============================================================================
@@ -421,23 +431,28 @@ export interface ITuffTransport {
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
     options?: SendOptions,
-  ) => Promise<TRes>) & (<TRes>(
-    event: TuffEvent<void, TRes>,
-    payload?: void,
-    options?: SendOptions,
-  ) => Promise<TRes>)
+  ) => Promise<TRes>) &
+    (<TRes>(
+      event: TuffEvent<void, TRes>,
+      payload?: void,
+      options?: SendOptions,
+    ) => Promise<TRes>);
 
   /**
    * Requests a MessagePort upgrade for a given channel.
    * Returns a response indicating whether the upgrade was accepted.
    */
-  upgrade: (options: TransportPortUpgradeRequest) => Promise<TransportPortUpgradeResponse>
+  upgrade: (
+    options: TransportPortUpgradeRequest,
+  ) => Promise<TransportPortUpgradeResponse>;
 
   /**
    * Opens (or reuses) a MessagePort transport channel.
    * Returns null when MessagePort is not available.
    */
-  openPort: (options: TransportPortOpenOptions) => Promise<TransportPortHandle | null>
+  openPort: (
+    options: TransportPortOpenOptions,
+  ) => Promise<TransportPortHandle | null>;
 
   /**
    * Initiates a stream request.
@@ -468,7 +483,7 @@ export interface ITuffTransport {
     event: TuffEvent<TReq, AsyncIterable<TChunk>>,
     payload: TReq,
     options: StreamOptions<TChunk>,
-  ) => Promise<StreamController>
+  ) => Promise<StreamController>;
 
   /**
    * Registers an event handler (for receiving messages from main process).
@@ -482,18 +497,18 @@ export interface ITuffTransport {
   on: <TReq, TRes>(
     event: TuffEvent<TReq, TRes>,
     handler: (payload: TReq) => TRes | Promise<TRes>,
-  ) => () => void
+  ) => () => void;
 
   /**
    * Forces immediate flush of all pending batch requests.
    * @returns Promise that resolves when all batches are flushed
    */
-  flush: () => Promise<void>
+  flush: () => Promise<void>;
 
   /**
    * Destroys the transport instance and cleans up resources.
    */
-  destroy: () => void
+  destroy: () => void;
 }
 
 /**
@@ -516,7 +531,7 @@ export interface ITuffTransportMain {
   on: <TReq, TRes>(
     event: TuffEvent<TReq, TRes>,
     handler: (payload: TReq, context: HandlerContext) => TRes | Promise<TRes>,
-  ) => () => void
+  ) => () => void;
 
   /**
    * Registers a stream handler.
@@ -529,8 +544,11 @@ export interface ITuffTransportMain {
    */
   onStream: <TReq, TChunk>(
     event: TuffEvent<TReq, AsyncIterable<TChunk>>,
-    handler: (payload: TReq, context: StreamContext<TChunk>) => void | Promise<void>,
-  ) => () => void
+    handler: (
+      payload: TReq,
+      context: StreamContext<TChunk>,
+    ) => void | Promise<void>,
+  ) => () => void;
 
   /**
    * Invokes handlers in the main process directly without IPC roundtrip.
@@ -546,7 +564,7 @@ export interface ITuffTransportMain {
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
     context?: MainInvokeContext,
-  ) => Promise<TRes>
+  ) => Promise<TRes>;
 
   /**
    * Sends a message to a specific window.
@@ -562,7 +580,7 @@ export interface ITuffTransportMain {
     windowId: number,
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
-  ) => Promise<TRes>
+  ) => Promise<TRes>;
 
   /**
    * Broadcasts a message to a specific window (fire-and-forget).
@@ -576,7 +594,7 @@ export interface ITuffTransportMain {
     windowId: number,
     event: TuffEvent<TReq, void>,
     payload: TReq,
-  ) => void
+  ) => void;
 
   /**
    * Sends a message to a specific WebContents.
@@ -592,7 +610,7 @@ export interface ITuffTransportMain {
     webContents: ElectronWebContents,
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
-  ) => Promise<TRes>
+  ) => Promise<TRes>;
 
   /**
    * Sends a message to a plugin's renderer.
@@ -608,7 +626,7 @@ export interface ITuffTransportMain {
     pluginName: string,
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
-  ) => Promise<TRes>
+  ) => Promise<TRes>;
 
   /**
    * Broadcasts a message to all windows.
@@ -617,10 +635,7 @@ export interface ITuffTransportMain {
    * @param event - The TuffEvent to broadcast
    * @param payload - Request payload
    */
-  broadcast: <TReq>(
-    event: TuffEvent<TReq, void>,
-    payload: TReq,
-  ) => void
+  broadcast: <TReq>(event: TuffEvent<TReq, void>, payload: TReq) => void;
 
   /**
    * Broadcasts a message to a specific plugin's renderer (fire-and-forget).
@@ -634,12 +649,12 @@ export interface ITuffTransportMain {
     pluginName: string,
     event: TuffEvent<TReq, void> | string,
     payload: TReq,
-  ) => void
+  ) => void;
 
   /**
    * Plugin key manager for security.
    */
-  readonly keyManager: PluginKeyManager
+  readonly keyManager: PluginKeyManager;
 }
 
 /**
@@ -653,10 +668,10 @@ export interface IPluginTuffTransport extends ITuffTransport {
   /**
    * The plugin name this transport belongs to.
    */
-  readonly pluginName: string
+  readonly pluginName: string;
 
   /**
    * The plugin's unique security key.
    */
-  readonly pluginKey: string
+  readonly pluginKey: string;
 }

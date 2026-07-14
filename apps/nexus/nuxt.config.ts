@@ -5,6 +5,8 @@ import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
 import { remarkMermaid } from './app/utils/remark-mermaid'
+import { nexusPageMetaFastPathPlugin } from './build/nexus-page-meta-fast-path'
+import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 
@@ -59,7 +61,15 @@ const disableSsr = process.env.NUXT_DISABLE_SSR === 'true'
 const disablePrerender = process.env.NUXT_DISABLE_PRERENDER === 'true'
 const ssrEnabled = isProd ? true : !disableSsr
 const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === 'true'
+const enableNitroSourceMap = isEnvFlagEnabled(process.env.NUXT_ENABLE_NITRO_SOURCEMAP)
 const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
+const nitroSourceMap = disableNitroSourceMap
+  ? false
+  : enableNitroSourceMap
+    ? true
+    : enableSentrySourceMaps
+      ? undefined
+      : false
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
 
 function isNexusAutoImportScannable(file: string) {
@@ -67,14 +77,6 @@ function isNexusAutoImportScannable(file: string) {
   return !normalized.endsWith('/server/utils/billing/index.ts')
     && !normalized.endsWith('/shared/utils/docs-path.ts')
     && !normalized.endsWith('/server/utils/telemetryRetentionCore.ts')
-}
-
-function isRouteLocalPageComponent(file: string | undefined) {
-  if (!file)
-    return false
-
-  const normalized = file.replace(/\\/g, '/')
-  return normalized.includes('/app/pages/') && normalized.includes('/components/')
 }
 
 function isSidebaseAuthClientPlugin(file: string | undefined) {
@@ -339,7 +341,7 @@ export default defineNuxtConfig({
 
   nitro: {
     minify: !disableNitroMinify,
-    sourceMap: !disableNitroSourceMap,
+    sourceMap: nitroSourceMap,
     imports: {
       dirsScanOptions: {
         fileFilter: isNexusAutoImportScannable,
@@ -356,6 +358,13 @@ export default defineNuxtConfig({
       'next-auth/core': nextAuthCoreEntry,
     },
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
+    cloudflare: {
+      pages: {
+        routes: {
+          exclude: ['/en/docs', '/en/docs/*', '/zh/docs', '/zh/docs/*'],
+        },
+      },
+    },
     ...(useCloudflareDev
       ? {
         cloudflareDev: {
@@ -384,6 +393,16 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    define: {
+      __SENTRY_DEBUG__: false,
+      __SENTRY_TRACING__: false,
+      __RRWEB_EXCLUDE_IFRAME__: true,
+      __RRWEB_EXCLUDE_SHADOW_DOM__: true,
+      __SENTRY_EXCLUDE_REPLAY_WORKER__: true,
+    },
+    build: {
+      chunkSizeWarningLimit: 600,
+    },
     optimizeDeps: {
       include: [
         'mermaid',
@@ -419,7 +438,10 @@ export default defineNuxtConfig({
         { find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/, replacement: tuffexComponentEntry },
       ],
     },
-    plugins: [tuffexOnDemandStylePlugin({ enabled: !useWorkspaceSource })],
+    plugins: [
+      nexusPageMetaFastPathPlugin(resolve(currentDir, 'app/pages')),
+      tuffexOnDemandStylePlugin({ enabled: !useWorkspaceSource }),
+    ],
     server: {
       fs: {
         allow: [workspaceRoot],
@@ -476,10 +498,7 @@ export default defineNuxtConfig({
       }
     },
     'pages:extend'(pages) {
-      for (let index = pages.length - 1; index >= 0; index -= 1) {
-        if (isRouteLocalPageComponent(pages[index]?.file))
-          pages.splice(index, 1)
-      }
+      removeRouteLocalPageComponents(pages)
 
       const docsCatchAll = pages.find(page => page.file?.replace(/\\/g, '/').endsWith('/app/pages/docs/[...slug].vue'))
       if (!docsCatchAll?.file)

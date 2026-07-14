@@ -2,55 +2,95 @@
 
 ## Overview
 
-The plugin's `index.js` runs in a Node.js sandbox environment as a backend script. The system injects a set of global objects for plugin use.
+Plugin lifecycle handlers receive a typed `IPluginContext`. New plugins should use `context.utils` as the canonical capability surface; the host builds it for the verified calling plugin and applies SDK-version and permission policy before protected operations run.
 
-## Introduction
+Legacy `globalThis` utilities remain available to existing CommonJS plugins, but they are a compatibility projection of the same host-owned capabilities. Do not import CoreApp internals or construct raw transport channels to bypass the context facade.
 
-**Global Context Objects**
+## Canonical lifecycle context
 
-Plugin index.js can access the following APIs via `globalThis`:
+## :::TuffCodeBlock{lang="typescript"}
 
-:::TuffCodeBlock{lang="javascript"}
----
 code: |
-  const {
-    // Core APIs
-    logger,           // Logger
-    http,             // HTTP requests (axios)
-    clipboard,        // Clipboard operations
-    storage,          // Plugin-specific storage
-    power,            // PowerSDK (low-power state)
-    recommend,        // RecommendSDK (recommendation provider registration)
+import type { IPluginLifecycle } from '@talex-touch/utils/plugin/sdk'
 
-    // Feature APIs
-    feature,          // Feature SDK (push search results)
-    search,           // Search manager (deprecated, use feature)
-    box,              // CoreBox control
-    boxItems,         // BoxItem management
-    
-    // Plugin Management
-    plugin,           // Current plugin info
-    plugins,          // Other plugins API
-    features,         // Dynamic Feature management
-    
-    // Communication
-    channel,          // IPC channel bridge
-    $event,           // Feature event listeners
-    
-    // UI
-    dialog,           // System dialogs
-    divisionBox,      // DivisionBox SDK
-    quickActions,     // QuickActions SDK (MetaK global actions and native share)
-    quickOps,         // QuickOps SDK (read-only built-in local tools)
-    meta,             // MetaSDK compatibility alias (prefer quickActions)
-    
-    // Utilities
-    TuffItemBuilder,  // Search result builder
-    URLSearchParams,  // URL parameter handling
-    openUrl,          // Open external links
-  } = globalThis
----
+const lifecycle: IPluginLifecycle = {
+async onInit(context) {
+const {
+logger,
+http,
+storage,
+secret,
+clipboard,
+channel,
+dialog,
+box,
+feature,
+quickActions,
+quickOps,
+intelligence,
+screenshot,
+i18n,
+lexicon,
+power,
+recommend,
+divisionBox,
+openUrl
+} = context.utils
+
+      logger.info(`Loaded ${context.pluginName}`)
+      void [
+        http,
+        storage,
+        secret,
+        clipboard,
+        channel,
+        dialog,
+        box,
+        feature,
+        quickActions,
+        quickOps,
+        intelligence,
+        screenshot,
+        i18n,
+        lexicon,
+        power,
+        recommend,
+        divisionBox,
+        openUrl
+      ]
+    },
+
+    onFeatureTriggered(featureId, query) {
+      // `query` can be a string or a TuffQuery with text/image/files/html inputs.
+      console.log(featureId, query)
+    }
+
+}
+
+## export default lifecycle
+
 :::
+
+`context` also includes `pluginPath` and plugin `config`. Store secrets through `context.utils.secret`, not normal storage or logs.
+
+## Capability groups
+
+| Context field                    | Purpose                                              | Primary documentation                                                |
+| -------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `box`, `feature`                 | CoreBox window and result-item lifecycle             | [Box](./box.en.md), [Feature](./feature.en.md)                       |
+| `clipboard`, `storage`, `secret` | Clipboard, plugin data, and protected credentials    | [Clipboard](./clipboard.en.md), [Storage](./storage.en.md)           |
+| `intelligence`                   | AI capability discovery, invoke, and stream          | [Intelligence](./intelligence.en.md)                                 |
+| `screenshot`                     | Permission-gated display, cursor, and region capture | [Screenshot](./screenshot.en.md)                                     |
+| `i18n`, `lexicon`                | Host locale and plugin-scoped Domain Lexicon         | [Localization](./i18n.en.md)                                         |
+| `quickActions`, `quickOps`       | Global actions and bounded built-in tools            | [Quick Actions](./quick-actions.en.md), [QuickOps](./quickops.en.md) |
+| `divisionBox`, `channel`         | Independent windows and plugin transport             | [DivisionBox](./division-box.en.md), [Channel](./channel.en.md)      |
+| `power`, `recommend`             | Low-power adaptation and recommendation providers    | [Power](./power.en.md), [Recommend](./recommend.en.md)               |
+
+Protected capabilities still require the matching `manifest.json` permission declaration and current grant. A field being present on `context.utils` is not proof that every operation is authorized.
+
+## Legacy global compatibility
+
+Existing `index.js` plugins may still read utilities such as `logger`, `clipboard`, `storage`, `feature`, `box`, and `openUrl` from `globalThis`. New lifecycle code should capture `context.utils` in `onInit` instead, because it exposes the complete typed SDK surface, including `secret`, `intelligence`, `screenshot`, `i18n`, and `lexicon`.
 
 ---
 
@@ -58,14 +98,16 @@ code: |
 
 Plugin logger - logs are saved to the plugin's log directory.
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  logger.info('Info message', { extra: 'data' })
-  logger.warn('Warning message')
-  logger.error('Error message', error)
-  logger.debug('Debug message')
+logger.info('Info message', { extra: 'data' })
+logger.warn('Warning message')
+logger.error('Error message', error)
+logger.debug('Debug message')
+
 ---
+
 :::
 
 ---
@@ -74,20 +116,22 @@ code: |
 
 HTTP request library (axios-based):
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // GET request
-  const response = await http.get('https://api.example.com/data', {
-    headers: { 'Authorization': 'Bearer token' },
-    signal // AbortSignal for cancellation
-  })
-  
-  // POST request
-  const result = await http.post('https://api.example.com/submit', {
-    data: 'payload'
-  }, { signal })
+// GET request
+const response = await http.get('https://api.example.com/data', {
+headers: { 'Authorization': 'Bearer token' },
+signal // AbortSignal for cancellation
+})
+
+// POST request
+const result = await http.post('https://api.example.com/submit', {
+data: 'payload'
+}, { signal })
+
 ---
+
 :::
 
 ---
@@ -96,21 +140,23 @@ code: |
 
 Clipboard operations:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Write text
-  clipboard.writeText('Copied content')
-  
-  // Read text
-  const text = clipboard.readText()
-  
-  // Read image
-  const image = clipboard.readImage()
-  
-  // Write image
-  clipboard.writeImage(nativeImage)
+// Write text
+clipboard.writeText('Copied content')
+
+// Read text
+const text = clipboard.readText()
+
+// Read image
+const image = clipboard.readImage()
+
+// Write image
+clipboard.writeImage(nativeImage)
+
 ---
+
 :::
 
 ---
@@ -119,29 +165,31 @@ code: |
 
 Plugin-specific storage (10MB limit per plugin):
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Read config file
-  const config = storage.getFile('providers_config')
-  
-  // Save config file
-  storage.setFile('providers_config', { key: 'value' })
-  
-  // Delete config file
-  storage.deleteFile('old_config')
-  
-  // List all files
-  const files = storage.listFiles()  // ['file1', 'file2']
-  
-  // Watch for config changes
-  const unsubscribe = storage.onDidChange('providers_config', (newConfig) => {
-    console.log('Config updated:', newConfig)
-  })
-  
-  // Unsubscribe
-  unsubscribe()
+// Read config file
+const config = storage.getFile('providers_config')
+
+// Save config file
+storage.setFile('providers_config', { key: 'value' })
+
+// Delete config file
+storage.deleteFile('old_config')
+
+// List all files
+const files = storage.listFiles() // ['file1', 'file2']
+
+// Watch for config changes
+const unsubscribe = storage.onDidChange('providers_config', (newConfig) => {
+console.log('Config updated:', newConfig)
+})
+
+// Unsubscribe
+unsubscribe()
+
 ---
+
 :::
 
 ---
@@ -150,24 +198,26 @@ code: |
 
 PowerSDK for low-power adaptation:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Read current low-power status
-  const status = await power.getLowPowerStatus({ threshold: 25 })
+// Read current low-power status
+const status = await power.getLowPowerStatus({ threshold: 25 })
 
-  if (status.lowPower) {
-    logger.info('Skip expensive background tasks')
-  }
+if (status.lowPower) {
+logger.info('Skip expensive background tasks')
+}
 
-  // Listen to status changes
-  const disposePower = power.onLowPowerChanged((nextStatus) => {
-    logger.info('Low power changed', nextStatus)
-  })
+// Listen to status changes
+const disposePower = power.onLowPowerChanged((nextStatus) => {
+logger.info('Low power changed', nextStatus)
+})
 
-  // Optional: stop listening
-  disposePower()
+// Optional: stop listening
+disposePower()
+
 ---
+
 :::
 
 > Note: In `index.js` context, `power.onLowPowerChanged` currently uses polling (about 60s), and strict real-time push is pending.
@@ -178,33 +228,35 @@ code: |
 
 RecommendSDK for registering custom recommendation providers with CoreBox.
 
-:::TuffCodeBlock{lang="javascript"}
----
-code: |
-  // Register recommendation provider
-  const dispose = recommend.registerProvider({
-    id: 'my-recommendation',
-    name: 'My Recommendations',
-    canProvide(context) {
-      return context.timeOfDay === 'morning'
-    },
-    getCandidates(context) {
-      return [{
-        id: 'morning-tip',
-        title: 'Morning Reminder',
-        subtitle: 'Start a new day',
-        icon: { type: 'emoji', value: '☀️' },
-        priority: 75,
-        action: 'show-morning-tip'
-      }]
-    }
-  })
+## :::TuffCodeBlock{lang="javascript"}
 
-  // Unregister provider
-  dispose()
-  // or
-  recommend.unregisterProvider('my-recommendation')
+code: |
+// Register recommendation provider
+const dispose = recommend.registerProvider({
+id: 'my-recommendation',
+name: 'My Recommendations',
+canProvide(context) {
+return context.timeOfDay === 'morning'
+},
+getCandidates(context) {
+return [{
+id: 'morning-tip',
+title: 'Morning Reminder',
+subtitle: 'Start a new day',
+icon: { type: 'emoji', value: '☀️' },
+priority: 75,
+action: 'show-morning-tip'
+}]
+}
+})
+
+// Unregister provider
+dispose()
+// or
+recommend.unregisterProvider('my-recommendation')
+
 ---
+
 :::
 
 > See [RecommendSDK API](./recommend.en.md) for full documentation.
@@ -215,24 +267,26 @@ code: |
 
 Feature SDK for managing search results:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Push search results
-  feature.pushItems([
-    new TuffItemBuilder('item-1')
-      .setTitle('Search Result Title')
-      .setSubtitle('Subtitle')
-      .setIcon({ type: 'file', value: 'assets/icon.svg' })
-      .build()
-  ])
-  
-  // Clear current plugin's search results
-  feature.clearItems()
-  
-  // Get current plugin's search results
-  const items = feature.getItems()
+// Push search results
+feature.pushItems([
+new TuffItemBuilder('item-1')
+.setTitle('Search Result Title')
+.setSubtitle('Subtitle')
+.setIcon({ type: 'file', value: 'assets/icon.svg' })
+.build()
+])
+
+// Clear current plugin's search results
+feature.clearItems()
+
+// Get current plugin's search results
+const items = feature.getItems()
+
 ---
+
 :::
 
 ---
@@ -241,21 +295,23 @@ code: |
 
 CoreBox control SDK:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Hide CoreBox
-  box.hide()
-  
-  // Show CoreBox
-  box.show()
-  
-  // Set input content
-  box.setInput('New input content')
-  
-  // Get input content
-  const input = box.getInput()
+// Hide CoreBox
+box.hide()
+
+// Show CoreBox
+box.show()
+
+// Set input content
+box.setInput('New input content')
+
+// Get input content
+const input = box.getInput()
+
 ---
+
 :::
 
 ---
@@ -264,27 +320,29 @@ code: |
 
 BoxItem management SDK (new API):
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Push single item
-  boxItems.push(item)
-  
-  // Push multiple items
-  boxItems.pushItems([item1, item2])
-  
-  // Update specific item
-  boxItems.update('item-id', { title: 'New Title' })
-  
-  // Remove specific item
-  boxItems.remove('item-id')
-  
-  // Clear all items for this plugin
-  boxItems.clear()
-  
-  // Get all items for this plugin
-  const items = boxItems.getItems()
+// Push single item
+boxItems.push(item)
+
+// Push multiple items
+boxItems.pushItems([item1, item2])
+
+// Update specific item
+boxItems.update('item-id', { title: 'New Title' })
+
+// Remove specific item
+boxItems.remove('item-id')
+
+// Clear all items for this plugin
+boxItems.clear()
+
+// Get all items for this plugin
+const items = boxItems.getItems()
+
 ---
+
 :::
 
 ---
@@ -293,23 +351,23 @@ code: |
 
 QuickActions SDK registers MetaK / Quick Actions global actions and can call native share from those actions. `meta` is a compatibility alias that points to the same SDK instance. New plugins should prefer `quickActions`.
 
-:::TuffCodeBlock{lang="javascript"}
----
-code: |
-  quickActions.registerAction({
-    id: 'share-current-item',
-    render: {
-      basic: {
-        title: 'Share current item',
-        subtitle: 'Use the current platform native share target',
-        icon: { type: 'class', value: 'i-ri-share-line' }
-      },
-      group: 'Share'
-    }
-  })
+## :::TuffCodeBlock{lang="javascript"}
 
-  quickActions.onActionExecute(async ({ actionId, item }) => {
-    if (actionId !== 'share-current-item') return
+code: |
+quickActions.registerAction({
+id: 'share-current-item',
+render: {
+basic: {
+title: 'Share current item',
+subtitle: 'Use the current platform native share target',
+icon: { type: 'class', value: 'i-ri-share-line' }
+},
+group: 'Share'
+}
+})
+
+quickActions.onActionExecute(async ({ actionId, item }) => {
+if (actionId !== 'share-current-item') return
 
     const result = await quickActions.shareItem(item, {
       preferredTargets: ['airdrop', 'system-share', 'mail']
@@ -318,21 +376,22 @@ code: |
     if (!result.success) {
       logger.warn('Native share failed', result.error)
     }
-  })
----
+
+## })
+
 :::
 
 Common methods:
 
-| Method | Description |
-| --- | --- |
-| `registerAction(action)` | Register a MetaK / Quick Actions global action |
-| `onActionExecute(handler)` | Listen for actions registered by this plugin |
-| `getNativeShareTargets(payloadType?)` | Read native share targets available on this platform |
-| `resolveNativeShareTarget(options?)` | Resolve a target by payload type and preference order |
-| `nativeShare(payload, options?)` | Run native share through Flow Transfer |
-| `createSharePayloadFromItem(item, options?)` | Convert a CoreBox item into a Flow payload |
-| `shareItem(item, options?)` | Build item payload, resolve target, and share in one call |
+| Method                                       | Description                                               |
+| -------------------------------------------- | --------------------------------------------------------- |
+| `registerAction(action)`                     | Register a MetaK / Quick Actions global action            |
+| `onActionExecute(handler)`                   | Listen for actions registered by this plugin              |
+| `getNativeShareTargets(payloadType?)`        | Read native share targets available on this platform      |
+| `resolveNativeShareTarget(options?)`         | Resolve a target by payload type and preference order     |
+| `nativeShare(payload, options?)`             | Run native share through Flow Transfer                    |
+| `createSharePayloadFromItem(item, options?)` | Convert a CoreBox item into a Flow payload                |
+| `shareItem(item, options?)`                  | Build item payload, resolve target, and share in one call |
 
 > See [QuickActions SDK](./quick-actions.en.md) for full documentation.
 
@@ -342,37 +401,39 @@ Common methods:
 
 Current plugin info API:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Get complete plugin info
-  const info = plugin.getInfo()
-  // { name, version, desc, readme, dev, status, features, issues, ... }
-  
-  // Get plugin path
-  const path = plugin.getPath()
-  
-  // Get data directory
-  const dataPath = plugin.getDataPath()
-  
-  // Get config directory
-  const configPath = plugin.getConfigPath()
-  
-  // Get logs directory
-  const logsPath = plugin.getLogsPath()
-  
-  // Get temp directory
-  const tempPath = plugin.getTempPath()
-  
-  // Get current status
-  const status = plugin.getStatus()
-  
-  // Get dev configuration
-  const devInfo = plugin.getDevInfo()
-  
-  // Get platform support info
-  const platforms = plugin.getPlatforms()
+// Get complete plugin info
+const info = plugin.getInfo()
+// { name, version, desc, readme, dev, status, features, issues, ... }
+
+// Get plugin path
+const path = plugin.getPath()
+
+// Get data directory
+const dataPath = plugin.getDataPath()
+
+// Get config directory
+const configPath = plugin.getConfigPath()
+
+// Get logs directory
+const logsPath = plugin.getLogsPath()
+
+// Get temp directory
+const tempPath = plugin.getTempPath()
+
+// Get current status
+const status = plugin.getStatus()
+
+// Get dev configuration
+const devInfo = plugin.getDevInfo()
+
+// Get platform support info
+const platforms = plugin.getPlatforms()
+
 ---
+
 :::
 
 ---
@@ -381,18 +442,20 @@ code: |
 
 Other plugins API (read-only access):
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Get all plugins list
-  const allPlugins = await plugins.list()
-  
-  // Get specific plugin info
-  const otherPlugin = await plugins.get('other-plugin-name')
-  
-  // Get plugin status
-  const status = await plugins.getStatus('other-plugin-name')
+// Get all plugins list
+const allPlugins = await plugins.list()
+
+// Get specific plugin info
+const otherPlugin = await plugins.get('other-plugin-name')
+
+// Get plugin status
+const status = await plugins.getStatus('other-plugin-name')
+
 ---
+
 :::
 
 ---
@@ -401,39 +464,43 @@ code: |
 
 Dynamic Feature management:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Add Feature dynamically
-  features.addFeature({
-    id: 'dynamic-feature',
-    name: 'Dynamic Feature',
-    desc: 'Runtime-added feature',
-    icon: { type: 'file', value: 'assets/icon.svg' },
-    push: true,
-    commands: [{ type: 'over', value: ['dynamic'] }],
-    priority: 5
-  })
-  
-  // Remove Feature
-  features.removeFeature('dynamic-feature')
-  
-  // Get all Features
-  const allFeatures = features.getFeatures()
-  
-  // Get specific Feature
-  const feature = features.getFeature('feature-id')
-  
-  // Set priority
-  features.setPriority('feature-id', 10)
-  
-  // Get priority
-  const priority = features.getPriority('feature-id')
-  
-  // Get sorted by priority
-  const sorted = features.getFeaturesByPriority()
+// Add Feature dynamically
+features.addFeature({
+id: 'dynamic-feature',
+name: 'Dynamic Feature',
+desc: 'Runtime-added feature',
+icon: { type: 'file', value: 'assets/icon.svg' },
+push: true,
+commands: [{ type: 'over', value: ['dynamic'] }],
+priority: 5
+})
+
+// Remove Feature
+features.removeFeature('dynamic-feature')
+
+// Get all Features
+const allFeatures = features.getFeatures()
+
+// Get specific Feature
+const feature = features.getFeature('feature-id')
+
+// Set priority
+features.setPriority('feature-id', 10)
+
+// Get priority
+const priority = features.getPriority('feature-id')
+
+// Get sorted by priority
+const sorted = features.getFeaturesByPriority()
+
 ---
+
 :::
+
+Runtime-added features with `icon.type: 'file'` are initialized by the host. Relative values are resolved against the owning plugin root; traversal and missing targets fail closed instead of leaving an unresolved relative path in CoreBox.
 
 ---
 
@@ -441,28 +508,30 @@ code: |
 
 IPC channel bridge:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Send message to main process
-  const result = await channel.sendToMain('event-name', { data: 'payload' })
-  
-  // Send message to renderer process
-  await channel.sendToRenderer('event-name', { data: 'payload' })
-  
-  // Listen to main process messages
-  const dispose = channel.onMain('event-name', (data) => {
-    console.log('Received from main:', data)
-  })
-  
-  // Listen to renderer process messages
-  const dispose = channel.onRenderer('event-name', (data) => {
-    console.log('Received from renderer:', data)
-  })
-  
-  // Access raw channel object
-  channel.raw
+// Send message to main process
+const result = await channel.sendToMain('event-name', { data: 'payload' })
+
+// Send message to renderer process
+await channel.sendToRenderer('event-name', { data: 'payload' })
+
+// Listen to main process messages
+const dispose = channel.onMain('event-name', (data) => {
+console.log('Received from main:', data)
+})
+
+// Listen to renderer process messages
+const dispose = channel.onRenderer('event-name', (data) => {
+console.log('Received from renderer:', data)
+})
+
+// Access raw channel object
+channel.raw
+
 ---
+
 :::
 
 ---
@@ -471,20 +540,22 @@ code: |
 
 Feature event listeners:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Listen to Feature lifecycle
-  $event.onFeatureLifeCycle('feature-id', {
-    onLaunch: (feature) => { console.log('Launched', feature) },
-    onFeatureTriggered: (data, feature) => { console.log('Triggered', data) },
-    onInputChanged: (input) => { console.log('Input changed', input) },
-    onClose: (feature) => { console.log('Closed', feature) }
-  })
-  
-  // Remove listener
-  $event.offFeatureLifeCycle('feature-id', callback)
+// Listen to Feature lifecycle
+$event.onFeatureLifeCycle('feature-id', {
+onLaunch: (feature) => { console.log('Launched', feature) },
+onFeatureTriggered: (data, feature) => { console.log('Triggered', data) },
+onInputChanged: (input) => { console.log('Input changed', input) },
+onClose: (feature) => { console.log('Closed', feature) }
+})
+
+// Remove listener
+$event.offFeatureLifeCycle('feature-id', callback)
+
 ---
+
 :::
 
 ---
@@ -493,28 +564,30 @@ code: |
 
 System dialogs:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Message dialog
-  await dialog.showMessageBox({
-    type: 'info',
-    title: 'Title',
-    message: 'Message content',
-    buttons: ['OK', 'Cancel']
-  })
-  
-  // Open file dialog
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Images', extensions: ['jpg', 'png'] }]
-  })
-  
-  // Save file dialog
-  const result = await dialog.showSaveDialog({
-    defaultPath: 'file.txt'
-  })
+// Message dialog
+await dialog.showMessageBox({
+type: 'info',
+title: 'Title',
+message: 'Message content',
+buttons: ['OK', 'Cancel']
+})
+
+// Open file dialog
+const result = await dialog.showOpenDialog({
+properties: ['openFile', 'multiSelections'],
+filters: [{ name: 'Images', extensions: ['jpg', 'png'] }]
+})
+
+// Save file dialog
+const result = await dialog.showSaveDialog({
+defaultPath: 'file.txt'
+})
+
 ---
+
 :::
 
 ---
@@ -523,25 +596,27 @@ code: |
 
 DivisionBox SDK for creating independent windows:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  // Open DivisionBox
-  const session = await divisionBox.open({
-    url: 'plugin://my-plugin/index.html',
-    title: 'Independent Window',
-    size: 'medium',  // 'compact' | 'medium' | 'expanded'
-    keepAlive: true
-  })
-  
-  // Close DivisionBox
-  await divisionBox.close(session.sessionId)
-  
-  // Listen to state changes
-  divisionBox.onStateChange(session.sessionId, (state) => {
-    console.log('State changed:', state)
-  })
+// Open DivisionBox
+const session = await divisionBox.open({
+url: 'plugin://my-plugin/index.html',
+title: 'Independent Window',
+size: 'medium', // 'compact' | 'medium' | 'expanded'
+keepAlive: true
+})
+
+// Close DivisionBox
+await divisionBox.close(session.sessionId)
+
+// Listen to state changes
+divisionBox.onStateChange(session.sessionId, (state) => {
+console.log('State changed:', state)
+})
+
 ---
+
 :::
 
 ---
@@ -550,23 +625,25 @@ code: |
 
 Search result builder:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  const item = new TuffItemBuilder('unique-id')
-    .setSource('plugin', 'plugin-features')
-    .setTitle('Title')
-    .setSubtitle('Subtitle')
-    .setIcon({ type: 'file', value: 'assets/icon.svg' })
-    .createAndAddAction('action-id', 'copy', 'Copy', 'Content to copy')
-    .addTag('Tag', 'blue')
-    .setMeta({
-      pluginName: 'my-plugin',
-      featureId: 'my-feature',
-      customData: 'any value'
-    })
-    .build()
+const item = new TuffItemBuilder('unique-id')
+.setSource('plugin', 'plugin-features')
+.setTitle('Title')
+.setSubtitle('Subtitle')
+.setIcon({ type: 'file', value: 'assets/icon.svg' })
+.createAndAddAction('action-id', 'copy', 'Copy', 'Content to copy')
+.addTag('Tag', 'blue')
+.setMeta({
+pluginName: 'my-plugin',
+featureId: 'my-feature',
+customData: 'any value'
+})
+.build()
+
 ---
+
 :::
 
 ---
@@ -575,11 +652,13 @@ code: |
 
 Open external links:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  openUrl('https://example.com')
+openUrl('https://example.com')
+
 ---
+
 :::
 
 ---
@@ -588,24 +667,24 @@ code: |
 
 Plugin index.js must export a lifecycle hooks object:
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  const pluginLifecycle = {
-    /**
-     * Called when a Feature is triggered
-     * @param {string} featureId - Feature ID
-     * @param {string|TuffQuery} query - Query content
-     * @param {IPluginFeature} feature - Feature definition
-     * @param {AbortSignal} signal - For cancellation
-     */
-    async onFeatureTriggered(featureId, query, feature, signal) {
-      // Compatibility: query can be string or TuffQuery object
-      const queryText = typeof query === 'string' ? query : query?.text
-      
+const pluginLifecycle = {
+/\*\*
+_ Called when a Feature is triggered
+_ @param {string} featureId - Feature ID
+_ @param {string|TuffQuery} query - Query content
+_ @param {IPluginFeature} feature - Feature definition
+_ @param {AbortSignal} signal - For cancellation
+_/
+async onFeatureTriggered(featureId, query, feature, signal) {
+// Compatibility: query can be string or TuffQuery object
+const queryText = typeof query === 'string' ? query : query?.text
+
       // Handle Feature logic...
     },
-  
+
     /**
      * Called when a search result item is clicked
      * @param {TuffItem} item - The clicked item
@@ -619,10 +698,11 @@ code: |
         }
       }
     }
-  }
-  
-  module.exports = pluginLifecycle
----
+
+}
+
+## module.exports = pluginLifecycle
+
 :::
 
 ---

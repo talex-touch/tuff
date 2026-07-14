@@ -51,8 +51,8 @@ code: |
   </template>
 ---
 ::
-## API（Lite）
-### TxTimeline Props
+## API
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -90,17 +90,40 @@ rows:
 ---
 :::
 
+### Slots
+
+| 组件 | 插槽 | 参数 | 说明 |
+|------|------|------|------|
+| `TxTimeline` | `default` | - | 时间线条目。 |
+| `TxTimelineItem` | `default` | - | 渲染在标题/时间下方的事件说明。 |
+
+### Events
+
+`TxTimeline` 和 `TxTimelineItem` 不触发事件。
+
 ## 交互契约
 
 - `TxTimeline` 暴露 `role="list"`，每个 `TxTimelineItem` 暴露 `role="listitem"`。
 - `active` 会同时作用于条目和节点圆点，用于突出当前事件。
 - `layout="horizontal"` 会通过 provide/inject 同步到子项，切换为横向事件流布局。
 
-## Source
-<TuffDocSourceLink />
+
+## 最佳实践
+
+- 稳定状态应写进 `title` 或默认插槽，`color` 只作为视觉辅助。
+- 步骤流里只标记一个当前事件为 `active`。
+- 短里程碑序列可使用 `layout="horizontal"`；审计日志和长历史保持纵向。
+- `time` 保持简短，并在同一条时间线中使用一致格式。
+- 谨慎使用 `icon`；密集时间线只给异常或关键状态加图标更易读。
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue` 与 `packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue`。
-- 截图：`.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`。
+- 组件源码:`packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue` 确认 `role="list"`、纵向/横向布局 class 解析，以及传给子项的上下文。
+- 条目源码:`packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue` 确认 `role="listitem"`、title/time/默认插槽渲染、可选图标渲染、语义节点颜色 class、active 条目/节点 class 和注入布局 class。
+- 类型契约:`packages/tuffex/packages/components/src/timeline/src/types.ts` 定义布局与条目颜色联合类型，以及组件 prop 契约。
+- **实测覆盖:** `packages/tuffex/packages/components/src/timeline/__tests__/timeline.test.ts` 覆盖列表语义、默认纵向布局、横向布局注入、title/time/默认插槽/图标渲染、语义颜色 class 和 active 条目/节点状态。
+- 截图:`.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`。
 - 建议：使用 `active` 标记当前事件，`color` 只使用 `'default' | 'primary' | 'success' | 'warning' | 'error'`，不要传入未定义语义色。
+
+## Source
+<TuffDocSourceLink />

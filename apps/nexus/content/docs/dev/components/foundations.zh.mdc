@@ -5,7 +5,8 @@ category: 基础
 status: beta
 since: 1.0.0
 tags: [design, tokens, typography, color]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 本页与 Tuffex 变量体系保持一致，确保 Nexus 文档渲染出来的视觉与 Tuffex 相同。
@@ -91,6 +92,18 @@ code: |
 
 - 变量全部以 Tuffex 默认值为准。
 - 暗色模式支持 `[data-theme='dark']` 与 `.dark` 两种选择器。
+
+## 审阅说明 / Review Notes
+
+- **Token 说明:** 表格记录的是 `variables.scss` 中默认 light/dark 变量。高对比 mixin 定义了另一组值；Nexus 暴露该模式时应单独补充文档。
+- **导入说明:** 新页面应使用 `@talex-touch/tuffex/base.css` 加按组件的 style import。完整 `@talex-touch/tuffex/style.css` bundle 只是迁移兼容入口，不是文档推荐模式。
+- **实测覆盖:** 本页已按 `variables.scss` 人工核对；docs smoke 覆盖由 component-docs coverage 测试与 demo lazy/client-boundary 测试提供。
+
+## Source
+
+- Token source: `packages/tuffex/packages/components/style/variables.scss`。
+- Runtime entry: `@talex-touch/tuffex/base.css` 提供变量/基础样式，`@talex-touch/tuffex/<component>/style.css` 提供组件级 CSS。
+- Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 校验组件文档注册；`apps/nexus/app/components/content/demo-lazy.test.ts` 与 `demo-client-boundary.test.ts` 校验 demo 加载边界。
 
 <style scoped>
 .tuff-swatch {

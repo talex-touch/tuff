@@ -1,16 +1,18 @@
 # Core App Startup and Runtime Env Reference
 
-> Updated: 2026-05-12
+> Updated: 2026-07-13
 > Scope: actual `process.env` / `import.meta.env` usage in `apps/core-app/src`
 
-## Startup Incident Summary (Changes 1 + 2)
+## Startup and fallback status
 
-### 1) Assistant gate (fixed)
-- When `TUFF_ENABLE_ASSISTANT_EXPERIMENT` is off, Assistant is now handled by explicit `shouldSkip`.
-- It no longer goes through optional-failure handling.
-- Result: no misleading warning like `Optional module failed to load: Symbol(Assistant)`.
+### 1) Assistant startup state (current)
+
+- `assistantModule` is always registered in the Core App startup module list; there is no environment-variable gate or Assistant-specific `shouldSkip` branch.
+- Product availability is controlled by persisted App Settings. The host repairs missing `assistant.enabled` to `false`, so the Assistant remains opt-in without changing module startup semantics.
+- Result: operators must use Settings rather than the removed `TUFF_ENABLE_ASSISTANT_EXPERIMENT` flag; startup no longer reports the old optional-module or environment-gate messages.
 
 ### 2) dev.source probe + local fallback (fixed)
+
 - `DevPluginLoader` probes remote `manifest.json` first.
 - If remote probe fails:
   - fall back to local `manifest.json` + local assets for current runtime only;
@@ -20,68 +22,67 @@
 
 ## Plugin Issue Codes (quick lookup)
 
-| Code | Default severity | Meaning |
-| --- | --- | --- |
-| `MISSING_MANIFEST` | error | `manifest.json` missing |
-| `INVALID_MANIFEST_JSON` | error | manifest parse/load failed |
-| `NAME_MISMATCH` | error | manifest name mismatches directory name |
-| `MANIFEST_MISSING_NAME` | error | missing `name` |
-| `MANIFEST_MISSING_VERSION` | warning | missing `version` |
-| `CATEGORY_MISSING` | error | `category` required for current `sdkapi` |
-| `SDKAPI_BLOCKED` | error | plugin is blocked because `sdkapi` is missing, invalid, unsupported, or below the enforced baseline |
-| `PERMISSION_MISSING` | warning | required permissions not granted |
-| `UNKNOWN_PERMISSION_IDS` | warning | unknown permission IDs declared |
-| `INVALID_FEATURE_COMMANDS` | warning | invalid feature.commands shape |
-| `OMNI_TRANSFER_SDK_TOO_LOW` | warning | omniTransfer declared with low sdkapi |
-| `DUPLICATE_PLUGIN_NAME` | error | plugin name collision |
-| `LOADER_FATAL` | error | fatal loader exception |
-| `DEV_MODE_ACTIVE` | warning | running from dev source mode |
-| `DEV_ADDRESS_INVALID` | error | invalid `dev.address` |
-| `DEV_SOURCE_DISABLED_IN_PACKAGED` | warning | `dev.source` auto-disabled in packaged runtime |
-| `DEV_SOURCE_FALLBACK_LOCAL` | warning | remote manifest failed, local fallback activated |
-| `REMOTE_MANIFEST_FAILED` | error | remote failed and local fallback also failed |
-| `DEV_SERVER_DISCONNECTED` | warning | dev server heartbeat disconnected |
-| `LIFECYCLE_SCRIPT_FAILED` | error | prelude lifecycle script failed |
-| `RUNTIME_ERROR` | error | runtime lifecycle execution error |
-| `AUTO_DISABLED_EXCESSIVE_ERRORS` | error | auto-disabled after burst runtime errors |
-| `INVALID_VIEW_PATH` | error | invalid interaction/view path |
-| `PROTOCOL_NOT_ALLOWED` | error | remote http/https view blocked in production |
-| `WIDGET_UNSUPPORTED_TYPE` | error | unsupported widget type |
-| `WIDGET_INVALID_DEPENDENCY` | error | invalid widget dependency |
-| `WIDGET_COMPILE_FAILED` | error | widget compile failed |
+| Code                              | Default severity | Meaning                                                                                             |
+| --------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `MISSING_MANIFEST`                | error            | `manifest.json` missing                                                                             |
+| `INVALID_MANIFEST_JSON`           | error            | manifest parse/load failed                                                                          |
+| `NAME_MISMATCH`                   | error            | manifest name mismatches directory name                                                             |
+| `MANIFEST_MISSING_NAME`           | error            | missing `name`                                                                                      |
+| `MANIFEST_MISSING_VERSION`        | warning          | missing `version`                                                                                   |
+| `CATEGORY_MISSING`                | error            | `category` required for current `sdkapi`                                                            |
+| `SDKAPI_BLOCKED`                  | error            | plugin is blocked because `sdkapi` is missing, invalid, unsupported, or below the enforced baseline |
+| `PERMISSION_MISSING`              | warning          | required permissions not granted                                                                    |
+| `UNKNOWN_PERMISSION_IDS`          | warning          | unknown permission IDs declared                                                                     |
+| `INVALID_FEATURE_COMMANDS`        | warning          | invalid feature.commands shape                                                                      |
+| `OMNI_TRANSFER_SDK_TOO_LOW`       | warning          | omniTransfer declared with low sdkapi                                                               |
+| `DUPLICATE_PLUGIN_NAME`           | error            | plugin name collision                                                                               |
+| `LOADER_FATAL`                    | error            | fatal loader exception                                                                              |
+| `DEV_MODE_ACTIVE`                 | warning          | running from dev source mode                                                                        |
+| `DEV_ADDRESS_INVALID`             | error            | invalid `dev.address`                                                                               |
+| `DEV_SOURCE_DISABLED_IN_PACKAGED` | warning          | `dev.source` auto-disabled in packaged runtime                                                      |
+| `DEV_SOURCE_FALLBACK_LOCAL`       | warning          | remote manifest failed, local fallback activated                                                    |
+| `REMOTE_MANIFEST_FAILED`          | error            | remote failed and local fallback also failed                                                        |
+| `DEV_SERVER_DISCONNECTED`         | warning          | dev server heartbeat disconnected                                                                   |
+| `LIFECYCLE_SCRIPT_FAILED`         | error            | prelude lifecycle script failed                                                                     |
+| `RUNTIME_ERROR`                   | error            | runtime lifecycle execution error                                                                   |
+| `AUTO_DISABLED_EXCESSIVE_ERRORS`  | error            | auto-disabled after burst runtime errors                                                            |
+| `INVALID_VIEW_PATH`               | error            | invalid interaction/view path                                                                       |
+| `PROTOCOL_NOT_ALLOWED`            | error            | remote http/https view blocked in production                                                        |
+| `WIDGET_UNSUPPORTED_TYPE`         | error            | unsupported widget type                                                                             |
+| `WIDGET_INVALID_DEPENDENCY`       | error            | invalid widget dependency                                                                           |
+| `WIDGET_COMPILE_FAILED`           | error            | widget compile failed                                                                               |
 
 ## Runtime Env Variables (by category)
 
 ### A. Behavior flags / configurable vars
 
-| Variable | Purpose |
-| --- | --- |
-| `ELECTRON_RENDERER_URL` | dev renderer entry URL for main windows and overlays |
-| `NODE_ENV` | dev/test/prod behavior branching |
-| `BUILD_TYPE` | build channel for Sentry and runtime labeling |
-| `TUFF_ENABLE_ASSISTANT_EXPERIMENT` | gates Assistant startup module |
-| `TUFF_ENABLE_RENDERER_OVERRIDE` | enables renderer override package |
-| `TUFF_NEXUS_BASE_URL` | explicit Core App runtime Nexus API base override; takes precedence over server mode settings |
-| `TUFF_DISABLE_NATIVE_OCR` | disables local OCR provider |
-| `TUFF_RELEASE_API_URL` | overrides release verification API base |
-| `TUFF_BUILD_SIGNATURE_URL` | overrides build signature URL |
-| `TUFF_BUILD_SIGNATURE_KEY_URL` | overrides build signature key URL |
-| `TUFF_UPDATE_SIGNATURE_KEY_URL` | update signature key URL (preferred) |
-| `TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL` | compatibility alias |
-| `TALEX_EVERYTHING_SDK_PATH` | custom Everything SDK addon path |
-| `TALEX_FILE_PROVIDER_EXTRACT_ICONS` | file icon extraction switch |
+| Variable                               | Purpose                                                                                       |
+| -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `ELECTRON_RENDERER_URL`                | dev renderer entry URL for main windows and overlays                                          |
+| `NODE_ENV`                             | dev/test/prod behavior branching                                                              |
+| `BUILD_TYPE`                           | build channel for Sentry and runtime labeling                                                 |
+| `TUFF_ENABLE_RENDERER_OVERRIDE`        | enables renderer override package                                                             |
+| `TUFF_NEXUS_BASE_URL`                  | explicit Core App runtime Nexus API base override; takes precedence over server mode settings |
+| `TUFF_DISABLE_NATIVE_OCR`              | disables local OCR provider                                                                   |
+| `TUFF_RELEASE_API_URL`                 | overrides release verification API base                                                       |
+| `TUFF_BUILD_SIGNATURE_URL`             | overrides build signature URL                                                                 |
+| `TUFF_BUILD_SIGNATURE_KEY_URL`         | overrides build signature key URL                                                             |
+| `TUFF_UPDATE_SIGNATURE_KEY_URL`        | update signature key URL (preferred)                                                          |
+| `TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL` | compatibility alias                                                                           |
+| `TALEX_EVERYTHING_SDK_PATH`            | custom Everything SDK addon path                                                              |
+| `TALEX_FILE_PROVIDER_EXTRACT_ICONS`    | file icon extraction switch                                                                   |
 
 ### B. Internal bootstrap vars
 
-| Variable | Purpose |
-| --- | --- |
-| `APP_VERSION` | runtime app version injection |
-| `DIST` | runtime dist directory |
-| `PUBLIC` | runtime public assets directory |
-| `DEBUG` | debug logger switch from `debug.talex` file |
-| `ELECTRON_DISABLE_SECURITY_WARNINGS` | suppresses Electron security warning logs |
-| `WS_NO_UTF_8_VALIDATE` | disables optional ws native addon |
-| `WS_NO_BUFFER_UTIL` | disables optional ws native addon |
+| Variable                             | Purpose                                     |
+| ------------------------------------ | ------------------------------------------- |
+| `APP_VERSION`                        | runtime app version injection               |
+| `DIST`                               | runtime dist directory                      |
+| `PUBLIC`                             | runtime public assets directory             |
+| `DEBUG`                              | debug logger switch from `debug.talex` file |
+| `ELECTRON_DISABLE_SECURITY_WARNINGS` | suppresses Electron security warning logs   |
+| `WS_NO_UTF_8_VALIDATE`               | disables optional ws native addon           |
+| `WS_NO_BUFFER_UTIL`                  | disables optional ws native addon           |
 
 ### C. OS-provided env vars
 

@@ -32,9 +32,11 @@ function onClick() {
     class="tx-dropdown-item"
     :class="{ 'is-disabled': disabled, 'is-danger': danger }"
     role="menuitem"
-    :clickable="!disabled"
+    :clickable="true"
     :disabled="disabled"
+    :aria-disabled="disabled ? 'true' : undefined"
     @click="onClick"
+    @keydown.space.prevent="onClick"
   >
     <template #title>
       <slot />

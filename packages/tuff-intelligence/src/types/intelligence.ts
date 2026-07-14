@@ -1,28 +1,45 @@
-import { NEXUS_BASE_URL } from '../env'
+import { DEFAULT_CAPABILITIES as SHARED_DEFAULT_CAPABILITIES } from "@talex-touch/utils/types/intelligence";
+import { NEXUS_BASE_URL } from "../env";
 
 export type {
   BuildContextInput,
   BuildContextResult,
   CompressionSnapshot,
+  CompressionSnapshotDegradedReason,
+  CompressionSnapshotDraft,
+  CompressionSnapshotMetadata,
   ContextCheckpoint,
+  ContextContinuationReason,
+  ContextContinuationStatus,
+  ContextContinuationSummary,
   ContextPackage,
   ContextPackageLog,
   ContextPrivacyLevel,
   ContextScope,
   ContextSession,
   ContextTurn,
+  CreateCompressionSnapshotInput,
+  CreateCompressionSnapshotResult,
   EvaluateMemoryInput,
   EvaluateMemoryResult,
   IndexChunkInput,
   IndexChunkResult,
   IndexDocumentInput,
   IndexDocumentResult,
+  IntelligenceContextExecutionIntent,
+  IntelligenceContextExecutionRequest,
+  IntelligenceContextExecutionResult,
+  IntelligenceContextExecutionSummary,
+  IntelligenceContextMode,
+  IntelligenceContextStreamEvent,
   KnowledgeChunk,
   KnowledgeDocument,
   KnowledgeSearchHit,
   KnowledgeSearchInput,
   KnowledgeSearchResult,
   KnowledgeSourceType,
+  ListCompressionSnapshotsInput,
+  ListCompressionSnapshotsResult,
   ListContextCheckpointsInput,
   ListContextCheckpointsResult,
   ListContextPackageLogsInput,
@@ -30,25 +47,29 @@ export type {
   ListMemoriesInput,
   ListMemoriesResult,
   MemoryItem,
+  MemoryListStatus,
   MemoryPolicyCandidate,
+  MemoryReplacementInput,
   MemoryTombstone,
   MemoryUpsertInput,
   PrepareContextTurnInput,
   PrepareContextTurnResult,
+  ReplaceMemoryInput,
+  ReplaceMemoryResult,
   SetMemoryEnabledInput,
   SetMemoryEnabledResult,
-} from '@talex-touch/utils/types/intelligence'
+} from "@talex-touch/utils/types/intelligence";
 
 /**
  * Supported intelligence provider types.
  */
 export enum IntelligenceProviderType {
-  OPENAI = 'openai',
-  ANTHROPIC = 'anthropic',
-  DEEPSEEK = 'deepseek',
-  SILICONFLOW = 'siliconflow',
-  LOCAL = 'local',
-  CUSTOM = 'custom',
+  OPENAI = "openai",
+  ANTHROPIC = "anthropic",
+  DEEPSEEK = "deepseek",
+  SILICONFLOW = "siliconflow",
+  LOCAL = "local",
+  CUSTOM = "custom",
 }
 
 /**
@@ -56,215 +77,235 @@ export enum IntelligenceProviderType {
  */
 export enum IntelligenceCapabilityType {
   // Text capabilities
-  CHAT = 'chat',
-  COMPLETION = 'completion',
-  EMBEDDING = 'embedding',
-  SUMMARIZE = 'summarize',
-  TRANSLATE = 'translate',
-  REWRITE = 'rewrite',
-  GRAMMAR_CHECK = 'grammar-check',
+  CHAT = "chat",
+  COMPLETION = "completion",
+  EMBEDDING = "embedding",
+  SUMMARIZE = "summarize",
+  TRANSLATE = "translate",
+  REWRITE = "rewrite",
+  GRAMMAR_CHECK = "grammar-check",
   // Code capabilities
-  CODE_GENERATE = 'code-generate',
-  CODE_EXPLAIN = 'code-explain',
-  CODE_REVIEW = 'code-review',
-  CODE_REFACTOR = 'code-refactor',
-  CODE_DEBUG = 'code-debug',
+  CODE_GENERATE = "code-generate",
+  CODE_EXPLAIN = "code-explain",
+  CODE_REVIEW = "code-review",
+  CODE_REFACTOR = "code-refactor",
+  CODE_DEBUG = "code-debug",
   // Analysis capabilities
-  INTENT_DETECT = 'intent-detect',
-  SENTIMENT_ANALYZE = 'sentiment-analyze',
-  CONTENT_EXTRACT = 'content-extract',
-  KEYWORDS_EXTRACT = 'keywords-extract',
-  CLASSIFICATION = 'classification',
+  INTENT_DETECT = "intent-detect",
+  SENTIMENT_ANALYZE = "sentiment-analyze",
+  CONTENT_EXTRACT = "content-extract",
+  KEYWORDS_EXTRACT = "keywords-extract",
+  CLASSIFICATION = "classification",
   // Audio capabilities
-  TTS = 'tts',
-  STT = 'stt',
-  AUDIO_TRANSCRIBE = 'audio-transcribe',
+  TTS = "tts",
+  STT = "stt",
+  AUDIO_TRANSCRIBE = "audio-transcribe",
   // Vision capabilities
-  VISION = 'vision',
-  VISION_OCR = 'vision-ocr',
-  IMAGE_CAPTION = 'image-caption',
-  IMAGE_ANALYZE = 'image-analyze',
-  IMAGE_TRANSLATE_E2E = 'image-translate-e2e',
-  IMAGE_GENERATE = 'image-generate',
-  IMAGE_EDIT = 'image-edit',
+  VISION = "vision",
+  VISION_OCR = "vision-ocr",
+  IMAGE_CAPTION = "image-caption",
+  IMAGE_ANALYZE = "image-analyze",
+  IMAGE_TRANSLATE_E2E = "image-translate-e2e",
+  IMAGE_GENERATE = "image-generate",
+  IMAGE_EDIT = "image-edit",
   // RAG & Search capabilities
-  RAG_QUERY = 'rag-query',
-  SEMANTIC_SEARCH = 'semantic-search',
-  RERANK = 'rerank',
+  RAG_QUERY = "rag-query",
+  SEMANTIC_SEARCH = "semantic-search",
+  RERANK = "rerank",
   // Workflow capabilities
-  WORKFLOW = 'workflow',
-  AGENT = 'agent',
+  WORKFLOW = "workflow",
+  AGENT = "agent",
 }
 
-export type IntelligenceToolRiskLevel = 'low' | 'medium' | 'high' | 'critical'
+export type IntelligenceToolRiskLevel = "low" | "medium" | "high" | "critical";
 
-export type ToolSource = 'builtin' | 'mcp'
-export type WorkflowTriggerType = 'manual' | 'clipboard.batch'
-export type WorkflowStepKind = 'prompt' | 'tool' | 'agent' | 'model'
-export type WorkflowRunStatus
-  = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
-export type WorkflowStepStatus
-  = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'skipped'
-export type WorkflowModelInputSourceType
-  = 'literal' | 'workflow.input' | 'selectionRef' | 'clipboardRef' | 'ocrRef' | 'fileTextRef' | 'previousStep'
-export type WorkflowModelOutputFormat = 'text' | 'markdown' | 'json'
-export type WorkflowReviewQueueItemStatus
-  = 'pending' | 'copied' | 'clipboard_replaced' | 'dismissed' | 'failed'
+export type ToolSource = "builtin" | "mcp";
+export type WorkflowTriggerType = "manual" | "clipboard.batch";
+export type WorkflowStepKind = "prompt" | "tool" | "agent" | "model";
+export type WorkflowRunStatus =
+  | "pending"
+  | "running"
+  | "waiting_approval"
+  | "completed"
+  | "failed"
+  | "cancelled";
+export type WorkflowStepStatus =
+  | "pending"
+  | "running"
+  | "waiting_approval"
+  | "completed"
+  | "failed"
+  | "skipped";
+export type WorkflowModelInputSourceType =
+  | "literal"
+  | "workflow.input"
+  | "selectionRef"
+  | "clipboardRef"
+  | "ocrRef"
+  | "fileTextRef"
+  | "previousStep";
+export type WorkflowModelOutputFormat = "text" | "markdown" | "json";
+export type WorkflowReviewQueueItemStatus =
+  | "pending"
+  | "copied"
+  | "clipboard_replaced"
+  | "dismissed"
+  | "failed";
 
 export interface WorkflowModelInputSource {
-  type: WorkflowModelInputSourceType | string
-  key?: string
-  label?: string
-  text?: string
-  stepId?: string
-  field?: string
-  fallback?: string
+  type: WorkflowModelInputSourceType | string;
+  key?: string;
+  label?: string;
+  text?: string;
+  stepId?: string;
+  field?: string;
+  fallback?: string;
 }
 
 export interface WorkflowModelOutputContract {
-  format?: WorkflowModelOutputFormat | string
-  schema?: Record<string, unknown>
-  reviewPolicy?: 'preview' | 'approval'
-  riskLevel?: 'low' | 'medium' | 'high'
+  format?: WorkflowModelOutputFormat | string;
+  schema?: Record<string, unknown>;
+  reviewPolicy?: "preview" | "approval";
+  riskLevel?: "low" | "medium" | "high";
 }
 
 export interface WorkflowReviewQueueItemState {
-  status: WorkflowReviewQueueItemStatus
-  error?: string
-  updatedAt?: number
+  status: WorkflowReviewQueueItemStatus;
+  error?: string;
+  updatedAt?: number;
 }
 
 export interface WorkflowReviewQueueMetadata {
-  items?: Record<string, WorkflowReviewQueueItemState>
+  items?: Record<string, WorkflowReviewQueueItemState>;
 }
 
 export interface WorkflowTrigger {
-  id?: string
-  type?: WorkflowTriggerType | string
-  enabled?: boolean
-  label?: string
-  config?: Record<string, unknown>
+  id?: string;
+  type?: WorkflowTriggerType | string;
+  enabled?: boolean;
+  label?: string;
+  config?: Record<string, unknown>;
 }
 
 export interface WorkflowContextSource {
-  id?: string
-  type?: string
-  enabled?: boolean
-  label?: string
-  config?: Record<string, unknown>
+  id?: string;
+  type?: string;
+  enabled?: boolean;
+  label?: string;
+  config?: Record<string, unknown>;
 }
 
 export interface ToolApprovalPolicy {
-  requireApprovalAtOrAbove?: IntelligenceToolRiskLevel
-  autoApproveReadOnly?: boolean
+  requireApprovalAtOrAbove?: IntelligenceToolRiskLevel;
+  autoApproveReadOnly?: boolean;
 }
 
 export interface WorkflowDefinitionStep {
-  id?: string
-  name?: string
-  kind?: WorkflowStepKind | string
-  description?: string
-  prompt?: string
-  toolId?: string
-  toolSource?: ToolSource | string
-  agentId?: string
-  input?: Record<string, unknown>
-  inputSources?: WorkflowModelInputSource[]
-  output?: WorkflowModelOutputContract
-  continueOnError?: boolean
-  metadata?: Record<string, unknown>
+  id?: string;
+  name?: string;
+  kind?: WorkflowStepKind | string;
+  description?: string;
+  prompt?: string;
+  toolId?: string;
+  toolSource?: ToolSource | string;
+  agentId?: string;
+  input?: Record<string, unknown>;
+  inputSources?: WorkflowModelInputSource[];
+  output?: WorkflowModelOutputContract;
+  continueOnError?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface WorkflowDefinition {
-  id: string
-  name: string
-  description?: string
-  version?: string
-  enabled?: boolean
-  triggers: WorkflowTrigger[]
-  contextSources: WorkflowContextSource[]
-  toolSources: ToolSource[]
-  approvalPolicy?: ToolApprovalPolicy
-  steps: WorkflowDefinitionStep[]
-  metadata?: Record<string, unknown>
-  createdAt?: number
-  updatedAt?: number
+  id: string;
+  name: string;
+  description?: string;
+  version?: string;
+  enabled?: boolean;
+  triggers: WorkflowTrigger[];
+  contextSources: WorkflowContextSource[];
+  toolSources: ToolSource[];
+  approvalPolicy?: ToolApprovalPolicy;
+  steps: WorkflowDefinitionStep[];
+  metadata?: Record<string, unknown>;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface DesktopContextSnapshot {
-  capturedAt: number
-  contextSources: WorkflowContextSource[]
+  capturedAt: number;
+  contextSources: WorkflowContextSource[];
   clipboard?: Array<{
-    id?: string
-    type?: string
-    content: string
-    sourceApp?: string | null
-    createdAt?: number
-    metadata?: Record<string, unknown>
-  }>
+    id?: string;
+    type?: string;
+    content: string;
+    sourceApp?: string | null;
+    createdAt?: number;
+    metadata?: Record<string, unknown>;
+  }>;
   activeApp?: {
-    identifier?: string | null
-    displayName?: string | null
-    bundleId?: string | null
-    executablePath?: string | null
-    windowTitle?: string | null
-    url?: string | null
-    lastUpdated?: number
-  } | null
+    identifier?: string | null;
+    displayName?: string | null;
+    bundleId?: string | null;
+    executablePath?: string | null;
+    windowTitle?: string | null;
+    url?: string | null;
+    lastUpdated?: number;
+  } | null;
   recentFiles?: Array<{
-    id?: string
-    title: string
-    summary: string
-    path?: string
-    lastUsedAt?: number
-    metadata?: Record<string, unknown>
-  }>
+    id?: string;
+    title: string;
+    summary: string;
+    path?: string;
+    lastUsedAt?: number;
+    metadata?: Record<string, unknown>;
+  }>;
   recentUrls?: Array<{
-    id?: string
-    title: string
-    summary: string
-    url?: string
-    lastUsedAt?: number
-    metadata?: Record<string, unknown>
-  }>
+    id?: string;
+    title: string;
+    summary: string;
+    url?: string;
+    lastUsedAt?: number;
+    metadata?: Record<string, unknown>;
+  }>;
   sessionMemory?: Array<{
-    id: string
-    content: string
-    updatedAt: number
-    metadata?: Record<string, unknown>
-  }>
+    id: string;
+    content: string;
+    updatedAt: number;
+    metadata?: Record<string, unknown>;
+  }>;
 }
 
 export interface WorkflowRunStepRecord {
-  id?: string
-  workflowStepId?: string
-  kind?: WorkflowStepKind | string
-  name?: string
-  status?: WorkflowStepStatus | string
-  toolId?: string
-  toolSource?: ToolSource | string
-  input?: Record<string, unknown>
-  output?: unknown
-  error?: string
-  metadata?: Record<string, unknown>
-  startedAt?: number
-  completedAt?: number
+  id?: string;
+  workflowStepId?: string;
+  kind?: WorkflowStepKind | string;
+  name?: string;
+  status?: WorkflowStepStatus | string;
+  toolId?: string;
+  toolSource?: ToolSource | string;
+  input?: Record<string, unknown>;
+  output?: unknown;
+  error?: string;
+  metadata?: Record<string, unknown>;
+  startedAt?: number;
+  completedAt?: number;
 }
 
 export interface WorkflowRunRecord {
-  id: string
-  workflowId: string
-  workflowName?: string
-  status: WorkflowRunStatus | string
-  triggerType?: WorkflowTriggerType | string
-  inputs: Record<string, unknown>
-  outputs?: Record<string, unknown>
-  error?: string
-  contextSnapshot?: DesktopContextSnapshot | Record<string, unknown>
-  steps: WorkflowRunStepRecord[]
-  startedAt: number
-  completedAt?: number
-  metadata?: Record<string, unknown>
+  id: string;
+  workflowId: string;
+  workflowName?: string;
+  status: WorkflowRunStatus | string;
+  triggerType?: WorkflowTriggerType | string;
+  inputs: Record<string, unknown>;
+  outputs?: Record<string, unknown>;
+  error?: string;
+  contextSnapshot?: DesktopContextSnapshot | Record<string, unknown>;
+  steps: WorkflowRunStepRecord[];
+  startedAt: number;
+  completedAt?: number;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -272,13 +313,13 @@ export interface WorkflowRunRecord {
  */
 export interface IntelligenceProviderRateLimit {
   /** Maximum requests allowed per minute. */
-  requestsPerMinute?: number
+  requestsPerMinute?: number;
   /** Maximum requests allowed per day. */
-  requestsPerDay?: number
+  requestsPerDay?: number;
   /** Maximum tokens allowed per minute. */
-  tokensPerMinute?: number
+  tokensPerMinute?: number;
   /** Maximum tokens allowed per day. */
-  tokensPerDay?: number
+  tokensPerDay?: number;
 }
 
 /**
@@ -286,13 +327,13 @@ export interface IntelligenceProviderRateLimit {
  */
 export interface IntelligenceVisionImageSource {
   /** Source type: data URL, file path, or base64 encoded. */
-  type: 'data-url' | 'file' | 'base64'
+  type: "data-url" | "file" | "base64";
   /** Data URL of the image. */
-  dataUrl?: string
+  dataUrl?: string;
   /** File path to the image. */
-  filePath?: string
+  filePath?: string;
   /** Base64 encoded image data. */
-  base64?: string
+  base64?: string;
 }
 
 /**
@@ -300,21 +341,21 @@ export interface IntelligenceVisionImageSource {
  */
 export interface IntelligenceVisionOcrBlock {
   /** Unique identifier for the block. */
-  id?: string
+  id?: string;
   /** Detected text content. */
-  text: string
+  text: string;
   /** Detected language of the text. */
-  language?: string
+  language?: string;
   /** Confidence score (0-1). */
-  confidence?: number
+  confidence?: number;
   /** Bounding box coordinates [x, y, width, height]. */
-  boundingBox?: [number, number, number, number]
+  boundingBox?: [number, number, number, number];
   /** Polygon points for non-rectangular regions. */
-  polygon?: Array<[number, number]>
+  polygon?: Array<[number, number]>;
   /** Block type classification. */
-  type?: 'word' | 'line' | 'paragraph' | 'region'
+  type?: "word" | "line" | "paragraph" | "region";
   /** Nested child blocks. */
-  children?: IntelligenceVisionOcrBlock[]
+  children?: IntelligenceVisionOcrBlock[];
 }
 
 /**
@@ -322,23 +363,23 @@ export interface IntelligenceVisionOcrBlock {
  */
 export interface IntelligenceVisionOcrResult {
   /** Full extracted text. */
-  text: string
+  text: string;
   /** Overall confidence score. */
-  confidence?: number
+  confidence?: number;
   /** Detected primary language. */
-  language?: string
+  language?: string;
   /** Extracted keywords for search. */
-  keywords?: string[]
+  keywords?: string[];
   /** Suggested search terms. */
-  suggestions?: string[]
+  suggestions?: string[];
   /** Structured text blocks. */
-  blocks?: IntelligenceVisionOcrBlock[]
+  blocks?: IntelligenceVisionOcrBlock[];
   /** OCR engine identifier. */
-  engine?: 'apple-vision' | 'windows-ocr' | 'cloud'
+  engine?: "apple-vision" | "windows-ocr" | "cloud";
   /** OCR execution latency in milliseconds. */
-  durationMs?: number
+  durationMs?: number;
   /** Raw provider response. */
-  raw?: any
+  raw?: any;
 }
 
 /**
@@ -346,17 +387,17 @@ export interface IntelligenceVisionOcrResult {
  */
 export interface IntelligenceVisionOcrPayload {
   /** Image source configuration. */
-  source: IntelligenceVisionImageSource
+  source: IntelligenceVisionImageSource;
   /** Expected language hint. */
-  language?: string
+  language?: string;
   /** Custom prompt for OCR. */
-  prompt?: string
+  prompt?: string;
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
   /** Include layout information. */
-  includeLayout?: boolean
+  includeLayout?: boolean;
   /** Extract keywords from text. */
-  includeKeywords?: boolean
+  includeKeywords?: boolean;
 }
 
 /**
@@ -364,33 +405,33 @@ export interface IntelligenceVisionOcrPayload {
  */
 export interface IntelligenceProviderConfig {
   /** Unique provider identifier. */
-  id: string
+  id: string;
   /** Provider type. */
-  type: IntelligenceProviderType
+  type: IntelligenceProviderType;
   /** Display name. */
-  name: string
+  name: string;
   /** Whether the provider is enabled. */
-  enabled: boolean
+  enabled: boolean;
   /** API key for authentication. */
-  apiKey?: string
+  apiKey?: string;
   /** Base URL for API requests. */
-  baseUrl?: string
+  baseUrl?: string;
   /** Rate limit configuration. */
-  rateLimit?: IntelligenceProviderRateLimit
+  rateLimit?: IntelligenceProviderRateLimit;
   /** Available models. */
-  models?: string[]
+  models?: string[];
   /** Default model to use. */
-  defaultModel?: string
+  defaultModel?: string;
   /** System instructions. */
-  instructions?: string
+  instructions?: string;
   /** Request timeout in milliseconds. */
-  timeout?: number
+  timeout?: number;
   /** Provider priority for selection. */
-  priority?: number
+  priority?: number;
   /** Supported capability IDs. */
-  capabilities?: string[]
+  capabilities?: string[];
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -398,13 +439,13 @@ export interface IntelligenceProviderConfig {
  */
 export interface IntelligenceMessage {
   /** Message role. */
-  role: 'system' | 'user' | 'assistant'
+  role: "system" | "user" | "assistant";
   /** Message content. */
-  content: string
+  content: string;
   /** Optional metadata for routing/context policies. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
   /** Optional sender name. */
-  name?: string
+  name?: string;
 }
 
 /**
@@ -412,25 +453,29 @@ export interface IntelligenceMessage {
  */
 export interface IntelligenceInvokeOptions {
   /** Strategy ID for provider selection. */
-  strategy?: string
+  strategy?: string;
   /** Preferred models in order. */
-  modelPreference?: string[]
+  modelPreference?: string[];
   /** Maximum cost ceiling. */
-  costCeiling?: number
+  costCeiling?: number;
   /** Target latency in milliseconds. */
-  latencyTarget?: number
+  latencyTarget?: number;
   /** Request timeout in milliseconds. */
-  timeout?: number
+  timeout?: number;
   /** Enable streaming response. */
-  stream?: boolean
+  stream?: boolean;
   /** Preferred provider ID. */
-  preferredProviderId?: string
+  preferredProviderId?: string;
   /** Allowed provider IDs. */
-  allowedProviderIds?: string[]
+  allowedProviderIds?: string[];
+  /** Explicit system prompt template for a chat invocation. */
+  promptTemplate?: string;
+  /** Variables used to render the explicit chat prompt template. */
+  promptVariables?: Record<string, unknown>;
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
   /** Mark as test run. */
-  testRun?: boolean
+  testRun?: boolean;
 }
 
 /**
@@ -438,13 +483,13 @@ export interface IntelligenceInvokeOptions {
  */
 export interface IntelligenceInvokeContext {
   /** Request source identifier. */
-  source?: string
+  source?: string;
   /** User locale. */
-  locale?: string
+  locale?: string;
   /** User identifier. */
-  userId?: string
+  userId?: string;
   /** Session identifier. */
-  sessionId?: string
+  sessionId?: string;
 }
 
 /**
@@ -452,13 +497,13 @@ export interface IntelligenceInvokeContext {
  */
 export interface IntelligenceUsageInfo {
   /** Tokens used in prompt. */
-  promptTokens: number
+  promptTokens: number;
   /** Tokens used in completion. */
-  completionTokens: number
+  completionTokens: number;
   /** Total tokens used. */
-  totalTokens: number
+  totalTokens: number;
   /** Estimated cost. */
-  cost?: number
+  cost?: number;
 }
 
 /**
@@ -467,19 +512,19 @@ export interface IntelligenceUsageInfo {
  */
 export interface IntelligenceInvokeResult<T = any> {
   /** The result data. */
-  result: T
+  result: T;
   /** Token usage information. */
-  usage: IntelligenceUsageInfo
+  usage: IntelligenceUsageInfo;
   /** Model used for the request. */
-  model: string
+  model: string;
   /** Request latency in milliseconds. */
-  latency: number
+  latency: number;
   /** Unique trace identifier. */
-  traceId: string
+  traceId: string;
   /** Provider that handled the request. */
-  provider: string
+  provider: string;
   /** Optional model reasoning or thinking trace when exposed by the provider. */
-  reasoning?: string
+  reasoning?: string;
 }
 
 /**
@@ -487,38 +532,61 @@ export interface IntelligenceInvokeResult<T = any> {
  */
 export interface IntelligenceStreamChunk {
   /** Content delta. */
-  delta: string
+  delta: string;
   /** Whether streaming is complete. */
-  done: boolean
+  done: boolean;
   /** Final usage info (when done). */
-  usage?: IntelligenceUsageInfo
+  usage?: IntelligenceUsageInfo;
+  /** Provider trace identifier when known. */
+  traceId?: string;
+  /** Effective provider selected by a routed backend. */
+  provider?: string;
+  /** Effective model selected by a routed backend. */
+  model?: string;
+  /** Provider-reported request latency in milliseconds. */
+  latency?: number;
 }
 
-export type IntelligenceStreamEventType = 'start' | 'delta' | 'message' | 'usage' | 'metadata' | 'end'
+export type IntelligenceStreamEventType =
+  | "start"
+  | "delta"
+  | "message"
+  | "usage"
+  | "metadata"
+  | "end";
 
 export interface IntelligenceStreamEvent<T = unknown> {
-  type: IntelligenceStreamEventType
-  capabilityId: string
-  requestId?: string
-  traceId?: string
-  provider?: string
-  model?: string
-  delta?: string
-  content?: string
-  message?: IntelligenceMessage
-  result?: T
-  usage?: IntelligenceUsageInfo
-  metadata?: Record<string, unknown>
+  type: IntelligenceStreamEventType;
+  capabilityId: string;
+  requestId?: string;
+  traceId?: string;
+  provider?: string;
+  model?: string;
+  delta?: string;
+  content?: string;
+  message?: IntelligenceMessage;
+  result?: T;
+  usage?: IntelligenceUsageInfo;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceStreamOptions<T = unknown> {
-  onStart?: (event: IntelligenceStreamEvent<T>) => void
-  onDelta?: (delta: string, event: IntelligenceStreamEvent<T>) => void
-  onMessage?: (message: IntelligenceMessage, event: IntelligenceStreamEvent<T>) => void
-  onUsage?: (usage: IntelligenceUsageInfo, event: IntelligenceStreamEvent<T>) => void
-  onMetadata?: (metadata: Record<string, unknown>, event: IntelligenceStreamEvent<T>) => void
-  onEnd?: (event: IntelligenceStreamEvent<T>) => void
-  onError?: (error: Error) => void
+  onStart?: (event: IntelligenceStreamEvent<T>) => void;
+  onDelta?: (delta: string, event: IntelligenceStreamEvent<T>) => void;
+  onMessage?: (
+    message: IntelligenceMessage,
+    event: IntelligenceStreamEvent<T>,
+  ) => void;
+  onUsage?: (
+    usage: IntelligenceUsageInfo,
+    event: IntelligenceStreamEvent<T>,
+  ) => void;
+  onMetadata?: (
+    metadata: Record<string, unknown>,
+    event: IntelligenceStreamEvent<T>,
+  ) => void;
+  onEnd?: (event: IntelligenceStreamEvent<T>) => void;
+  onError?: (error: Error) => void;
 }
 
 /**
@@ -526,23 +594,23 @@ export interface IntelligenceStreamOptions<T = unknown> {
  */
 export interface IntelligenceCapabilityDescriptor {
   /** Unique capability identifier. */
-  id: string
+  id: string;
   /** Capability type. */
-  type: IntelligenceCapabilityType
+  type: IntelligenceCapabilityType;
   /** Display name. */
-  name: string
+  name: string;
   /** Description of the capability. */
-  description: string
+  description: string;
   /** JSON schema for input validation. */
-  inputSchema?: any
+  inputSchema?: any;
   /** JSON schema for output validation. */
-  outputSchema?: any
+  outputSchema?: any;
   /** Default strategy for provider selection. */
-  defaultStrategy?: string
+  defaultStrategy?: string;
   /** Providers that support this capability. */
-  supportedProviders: IntelligenceProviderType[]
+  supportedProviders: IntelligenceProviderType[];
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -550,21 +618,21 @@ export interface IntelligenceCapabilityDescriptor {
  */
 export interface IntelligenceChatPayload {
   /** Conversation messages. */
-  messages: IntelligenceMessage[]
+  messages: IntelligenceMessage[];
   /** Invocation context. */
-  context?: IntelligenceInvokeContext
+  context?: IntelligenceInvokeContext;
   /** Sampling temperature (0-2). */
-  temperature?: number
+  temperature?: number;
   /** Maximum tokens to generate. */
-  maxTokens?: number
+  maxTokens?: number;
   /** Top-p sampling parameter. */
-  topP?: number
+  topP?: number;
   /** Frequency penalty (-2 to 2). */
-  frequencyPenalty?: number
+  frequencyPenalty?: number;
   /** Presence penalty (-2 to 2). */
-  presencePenalty?: number
+  presencePenalty?: number;
   /** Stop sequences. */
-  stop?: string[]
+  stop?: string[];
 }
 
 /**
@@ -572,9 +640,9 @@ export interface IntelligenceChatPayload {
  */
 export interface IntelligenceEmbeddingPayload {
   /** Text to embed (single or batch). */
-  text: string | string[]
+  text: string | string[];
   /** Specific model to use. */
-  model?: string
+  model?: string;
 }
 
 /**
@@ -582,11 +650,11 @@ export interface IntelligenceEmbeddingPayload {
  */
 export interface IntelligenceTranslatePayload {
   /** Text to translate. */
-  text: string
+  text: string;
   /** Source language (auto-detect if omitted). */
-  sourceLang?: string
+  sourceLang?: string;
   /** Target language. */
-  targetLang: string
+  targetLang: string;
 }
 
 /**
@@ -594,11 +662,11 @@ export interface IntelligenceTranslatePayload {
  */
 export interface IntelligenceSummarizePayload {
   /** Text to summarize. */
-  text: string
+  text: string;
   /** Maximum summary length. */
-  maxLength?: number
+  maxLength?: number;
   /** Summary style. */
-  style?: 'concise' | 'detailed' | 'bullet-points'
+  style?: "concise" | "detailed" | "bullet-points";
 }
 
 // ============================================================================
@@ -610,15 +678,15 @@ export interface IntelligenceSummarizePayload {
  */
 export interface IntelligenceRewritePayload {
   /** Text to rewrite. */
-  text: string
+  text: string;
   /** Writing style. */
-  style?: 'formal' | 'casual' | 'professional' | 'creative' | 'simplified'
+  style?: "formal" | "casual" | "professional" | "creative" | "simplified";
   /** Tone of voice. */
-  tone?: 'neutral' | 'friendly' | 'authoritative' | 'humorous'
+  tone?: "neutral" | "friendly" | "authoritative" | "humorous";
   /** Target audience description. */
-  targetAudience?: string
+  targetAudience?: string;
   /** Keywords to preserve. */
-  preserveKeywords?: string[]
+  preserveKeywords?: string[];
 }
 
 /**
@@ -626,13 +694,13 @@ export interface IntelligenceRewritePayload {
  */
 export interface IntelligenceGrammarCheckPayload {
   /** Text to check. */
-  text: string
+  text: string;
   /** Language of the text. */
-  language?: string
+  language?: string;
   /** Types of issues to check. */
-  checkTypes?: ('spelling' | 'grammar' | 'punctuation' | 'style')[]
+  checkTypes?: ("spelling" | "grammar" | "punctuation" | "style")[];
   /** Strictness level. */
-  strictness?: 'lenient' | 'standard' | 'strict'
+  strictness?: "lenient" | "standard" | "strict";
 }
 
 /**
@@ -640,17 +708,17 @@ export interface IntelligenceGrammarCheckPayload {
  */
 export interface IntelligenceGrammarCheckResult {
   /** Corrected text. */
-  correctedText: string
+  correctedText: string;
   /** List of issues found. */
   issues: Array<{
-    type: 'spelling' | 'grammar' | 'punctuation' | 'style'
-    original: string
-    suggestion: string
-    position: { start: number, end: number }
-    explanation?: string
-  }>
+    type: "spelling" | "grammar" | "punctuation" | "style";
+    original: string;
+    suggestion: string;
+    position: { start: number; end: number };
+    explanation?: string;
+  }>;
   /** Overall score (0-100). */
-  score: number
+  score: number;
 }
 
 /**
@@ -658,19 +726,19 @@ export interface IntelligenceGrammarCheckResult {
  */
 export interface IntelligenceCodeGeneratePayload {
   /** Description of code to generate. */
-  description: string
+  description: string;
   /** Target programming language. */
-  language: string
+  language: string;
   /** Framework to use. */
-  framework?: string
+  framework?: string;
   /** Additional context. */
-  context?: string
+  context?: string;
   /** Include unit tests. */
-  includeTests?: boolean
+  includeTests?: boolean;
   /** Include code comments. */
-  includeComments?: boolean
+  includeComments?: boolean;
   /** Code style preference. */
-  style?: 'minimal' | 'verbose' | 'production'
+  style?: "minimal" | "verbose" | "production";
 }
 
 /**
@@ -678,15 +746,15 @@ export interface IntelligenceCodeGeneratePayload {
  */
 export interface IntelligenceCodeGenerateResult {
   /** Generated code. */
-  code: string
+  code: string;
   /** Programming language. */
-  language: string
+  language: string;
   /** Explanation of the code. */
-  explanation?: string
+  explanation?: string;
   /** Required dependencies. */
-  dependencies?: string[]
+  dependencies?: string[];
   /** Generated tests. */
-  tests?: string
+  tests?: string;
 }
 
 /**
@@ -694,13 +762,13 @@ export interface IntelligenceCodeGenerateResult {
  */
 export interface IntelligenceCodeExplainPayload {
   /** Code to explain. */
-  code: string
+  code: string;
   /** Programming language. */
-  language?: string
+  language?: string;
   /** Explanation depth. */
-  depth?: 'brief' | 'detailed' | 'comprehensive'
+  depth?: "brief" | "detailed" | "comprehensive";
   /** Target audience level. */
-  targetAudience?: 'beginner' | 'intermediate' | 'expert'
+  targetAudience?: "beginner" | "intermediate" | "expert";
 }
 
 /**
@@ -708,15 +776,15 @@ export interface IntelligenceCodeExplainPayload {
  */
 export interface IntelligenceCodeExplainResult {
   /** Detailed explanation. */
-  explanation: string
+  explanation: string;
   /** Brief summary. */
-  summary: string
+  summary: string;
   /** Key points. */
-  keyPoints: string[]
+  keyPoints: string[];
   /** Complexity assessment. */
-  complexity?: 'simple' | 'moderate' | 'complex'
+  complexity?: "simple" | "moderate" | "complex";
   /** Programming concepts used. */
-  concepts?: string[]
+  concepts?: string[];
 }
 
 /**
@@ -724,13 +792,19 @@ export interface IntelligenceCodeExplainResult {
  */
 export interface IntelligenceCodeReviewPayload {
   /** Code to review. */
-  code: string
+  code: string;
   /** Programming language. */
-  language?: string
+  language?: string;
   /** Additional context. */
-  context?: string
+  context?: string;
   /** Areas to focus on. */
-  focusAreas?: ('security' | 'performance' | 'style' | 'bugs' | 'best-practices')[]
+  focusAreas?: (
+    | "security"
+    | "performance"
+    | "style"
+    | "bugs"
+    | "best-practices"
+  )[];
 }
 
 /**
@@ -738,19 +812,19 @@ export interface IntelligenceCodeReviewPayload {
  */
 export interface IntelligenceCodeReviewResult {
   /** Review summary. */
-  summary: string
+  summary: string;
   /** Overall score (0-100). */
-  score: number
+  score: number;
   /** Issues found. */
   issues: Array<{
-    severity: 'critical' | 'warning' | 'info' | 'suggestion'
-    type: string
-    line?: number
-    message: string
-    suggestion?: string
-  }>
+    severity: "critical" | "warning" | "info" | "suggestion";
+    type: string;
+    line?: number;
+    message: string;
+    suggestion?: string;
+  }>;
   /** Suggested improvements. */
-  improvements: string[]
+  improvements: string[];
 }
 
 /**
@@ -758,13 +832,13 @@ export interface IntelligenceCodeReviewResult {
  */
 export interface IntelligenceCodeRefactorPayload {
   /** Code to refactor. */
-  code: string
+  code: string;
   /** Programming language. */
-  language?: string
+  language?: string;
   /** Refactoring goals. */
-  goals?: ('readability' | 'performance' | 'maintainability' | 'modularity')[]
+  goals?: ("readability" | "performance" | "maintainability" | "modularity")[];
   /** Preserve public interface. */
-  preserveInterface?: boolean
+  preserveInterface?: boolean;
 }
 
 /**
@@ -772,16 +846,16 @@ export interface IntelligenceCodeRefactorPayload {
  */
 export interface IntelligenceCodeRefactorResult {
   /** Refactored code. */
-  refactoredCode: string
+  refactoredCode: string;
   /** List of changes made. */
   changes: Array<{
-    type: string
-    description: string
-    before?: string
-    after?: string
-  }>
+    type: string;
+    description: string;
+    before?: string;
+    after?: string;
+  }>;
   /** Explanation of changes. */
-  explanation: string
+  explanation: string;
 }
 
 /**
@@ -789,15 +863,15 @@ export interface IntelligenceCodeRefactorResult {
  */
 export interface IntelligenceCodeDebugPayload {
   /** Code with bug. */
-  code: string
+  code: string;
   /** Error message. */
-  error?: string
+  error?: string;
   /** Programming language. */
-  language?: string
+  language?: string;
   /** Additional context. */
-  context?: string
+  context?: string;
   /** Stack trace. */
-  stackTrace?: string
+  stackTrace?: string;
 }
 
 /**
@@ -805,15 +879,15 @@ export interface IntelligenceCodeDebugPayload {
  */
 export interface IntelligenceCodeDebugResult {
   /** Bug diagnosis. */
-  diagnosis: string
+  diagnosis: string;
   /** Root cause analysis. */
-  rootCause: string
+  rootCause: string;
   /** Fixed code. */
-  fixedCode: string
+  fixedCode: string;
   /** Explanation of the fix. */
-  explanation: string
+  explanation: string;
   /** Tips to prevent similar bugs. */
-  preventionTips?: string[]
+  preventionTips?: string[];
 }
 
 /**
@@ -821,13 +895,13 @@ export interface IntelligenceCodeDebugResult {
  */
 export interface IntelligenceIntentDetectPayload {
   /** Text to analyze. */
-  text: string
+  text: string;
   /** Additional context. */
-  context?: string
+  context?: string;
   /** Possible intents to consider. */
-  possibleIntents?: string[]
+  possibleIntents?: string[];
   /** Language of the text. */
-  language?: string
+  language?: string;
 }
 
 /**
@@ -835,17 +909,17 @@ export interface IntelligenceIntentDetectPayload {
  */
 export interface IntelligenceIntentDetectResult {
   /** Detected intent. */
-  intent: string
+  intent: string;
   /** Confidence score (0-1). */
-  confidence: number
+  confidence: number;
   /** Extracted entities. */
   entities: Array<{
-    type: string
-    value: string
-    position?: { start: number, end: number }
-  }>
+    type: string;
+    value: string;
+    position?: { start: number; end: number };
+  }>;
   /** Secondary intents. */
-  subIntents?: Array<{ intent: string, confidence: number }>
+  subIntents?: Array<{ intent: string; confidence: number }>;
 }
 
 /**
@@ -853,13 +927,13 @@ export interface IntelligenceIntentDetectResult {
  */
 export interface IntelligenceSentimentAnalyzePayload {
   /** Text to analyze. */
-  text: string
+  text: string;
   /** Language of the text. */
-  language?: string
+  language?: string;
   /** Analysis granularity. */
-  granularity?: 'document' | 'sentence' | 'aspect'
+  granularity?: "document" | "sentence" | "aspect";
   /** Aspects to analyze. */
-  aspects?: string[]
+  aspects?: string[];
 }
 
 /**
@@ -867,17 +941,17 @@ export interface IntelligenceSentimentAnalyzePayload {
  */
 export interface IntelligenceSentimentAnalyzeResult {
   /** Overall sentiment. */
-  sentiment: 'positive' | 'negative' | 'neutral' | 'mixed'
+  sentiment: "positive" | "negative" | "neutral" | "mixed";
   /** Sentiment score (-1 to 1). */
-  score: number
+  score: number;
   /** Confidence score (0-1). */
-  confidence: number
+  confidence: number;
   /** Detected emotions. */
-  emotions?: Array<{ emotion: string, score: number }>
+  emotions?: Array<{ emotion: string; score: number }>;
   /** Aspect-based sentiments. */
-  aspects?: Array<{ aspect: string, sentiment: string, score: number }>
+  aspects?: Array<{ aspect: string; sentiment: string; score: number }>;
   /** Sentiment keywords. */
-  keywords?: string[]
+  keywords?: string[];
 }
 
 /**
@@ -885,13 +959,23 @@ export interface IntelligenceSentimentAnalyzeResult {
  */
 export interface IntelligenceContentExtractPayload {
   /** Text to extract from. */
-  text: string
+  text: string;
   /** Types of entities to extract. */
-  extractTypes?: ('dates' | 'people' | 'locations' | 'organizations' | 'events' | 'products' | 'urls' | 'emails' | 'phones')[]
+  extractTypes?: (
+    | "dates"
+    | "people"
+    | "locations"
+    | "organizations"
+    | "events"
+    | "products"
+    | "urls"
+    | "emails"
+    | "phones"
+  )[];
   /** Language of the text. */
-  language?: string
+  language?: string;
   /** Include surrounding context. */
-  includeContext?: boolean
+  includeContext?: boolean;
 }
 
 /**
@@ -899,14 +983,17 @@ export interface IntelligenceContentExtractPayload {
  */
 export interface IntelligenceContentExtractResult {
   /** Extracted entities by type. */
-  entities: Record<string, Array<{
-    value: string
-    confidence: number
-    context?: string
-    position?: { start: number, end: number }
-  }>>
+  entities: Record<
+    string,
+    Array<{
+      value: string;
+      confidence: number;
+      context?: string;
+      position?: { start: number; end: number };
+    }>
+  >;
   /** Content summary. */
-  summary?: string
+  summary?: string;
 }
 
 /**
@@ -914,15 +1001,15 @@ export interface IntelligenceContentExtractResult {
  */
 export interface IntelligenceKeywordsExtractPayload {
   /** Text to extract keywords from. */
-  text: string
+  text: string;
   /** Maximum keywords to return. */
-  maxKeywords?: number
+  maxKeywords?: number;
   /** Language of the text. */
-  language?: string
+  language?: string;
   /** Include relevance scores. */
-  includeScores?: boolean
+  includeScores?: boolean;
   /** Types of keywords to extract. */
-  keywordTypes?: ('noun' | 'verb' | 'phrase' | 'entity')[]
+  keywordTypes?: ("noun" | "verb" | "phrase" | "entity")[];
 }
 
 /**
@@ -931,11 +1018,11 @@ export interface IntelligenceKeywordsExtractPayload {
 export interface IntelligenceKeywordsExtractResult {
   /** Extracted keywords. */
   keywords: Array<{
-    term: string
-    relevance: number
-    frequency?: number
-    type?: string
-  }>
+    term: string;
+    relevance: number;
+    frequency?: number;
+    type?: string;
+  }>;
 }
 
 /**
@@ -943,13 +1030,13 @@ export interface IntelligenceKeywordsExtractResult {
  */
 export interface IntelligenceClassificationPayload {
   /** Text to classify. */
-  text: string
+  text: string;
   /** Available categories. */
-  categories: string[]
+  categories: string[];
   /** Allow multiple labels. */
-  multiLabel?: boolean
+  multiLabel?: boolean;
   /** Confidence threshold. */
-  threshold?: number
+  threshold?: number;
 }
 
 /**
@@ -958,11 +1045,11 @@ export interface IntelligenceClassificationPayload {
 export interface IntelligenceClassificationResult {
   /** Classification predictions. */
   predictions: Array<{
-    category: string
-    confidence: number
-  }>
+    category: string;
+    confidence: number;
+  }>;
   /** Classification explanation. */
-  explanation?: string
+  explanation?: string;
 }
 
 // ============================================================================
@@ -974,19 +1061,19 @@ export interface IntelligenceClassificationResult {
  */
 export interface IntelligenceTTSPayload {
   /** Text to convert to speech. */
-  text: string
+  text: string;
   /** Voice identifier. */
-  voice?: string
+  voice?: string;
   /** Language code. */
-  language?: string
+  language?: string;
   /** Speech speed multiplier. */
-  speed?: number
+  speed?: number;
   /** Voice pitch adjustment. */
-  pitch?: number
+  pitch?: number;
   /** Output audio format. */
-  format?: 'mp3' | 'wav' | 'ogg' | 'flac'
+  format?: "mp3" | "wav" | "ogg" | "flac";
   /** Audio quality. */
-  quality?: 'standard' | 'hd'
+  quality?: "standard" | "hd";
 }
 
 /**
@@ -994,13 +1081,13 @@ export interface IntelligenceTTSPayload {
  */
 export interface IntelligenceTTSResult {
   /** Audio data. */
-  audio: ArrayBuffer | string
+  audio: ArrayBuffer | string;
   /** Audio format. */
-  format: string
+  format: string;
   /** Duration in seconds. */
-  duration?: number
+  duration?: number;
   /** Sample rate in Hz. */
-  sampleRate?: number
+  sampleRate?: number;
 }
 
 /**
@@ -1008,31 +1095,34 @@ export interface IntelligenceTTSResult {
  */
 export interface IntelligenceTtsSpeakPayload extends IntelligenceTTSPayload {
   /** Trace ID of the source intelligence result, for example a translation trace. */
-  sourceTraceId?: string
+  sourceTraceId?: string;
   /** Preferred provider ID for this synthesis. */
-  providerId?: string
+  providerId?: string;
   /** Preferred model for this synthesis. */
-  model?: string
+  model?: string;
   /** Additional invocation metadata. */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>;
 }
 
 /**
  * Result from the typed text-to-speech speak API.
  */
-export interface IntelligenceTtsSpeakResult extends Omit<IntelligenceTTSResult, 'audio'> {
+export interface IntelligenceTtsSpeakResult extends Omit<
+  IntelligenceTTSResult,
+  "audio"
+> {
   /** Playable audio data URL. */
-  audio: string
+  audio: string;
   /** Provider that produced the audio. */
-  provider: string
+  provider: string;
   /** Model that produced the audio. */
-  model: string
+  model: string;
   /** Trace ID of the speech synthesis call. */
-  traceId: string
+  traceId: string;
   /** Trace ID of the source intelligence result, when provided. */
-  sourceTraceId?: string
+  sourceTraceId?: string;
   /** Whether this response came from the process-local TTS cache. */
-  cacheHit: boolean
+  cacheHit: boolean;
 }
 
 /**
@@ -1040,15 +1130,15 @@ export interface IntelligenceTtsSpeakResult extends Omit<IntelligenceTTSResult, 
  */
 export interface IntelligenceSTTPayload {
   /** Audio data. */
-  audio: ArrayBuffer | string
+  audio: ArrayBuffer | string;
   /** Expected language. */
-  language?: string
+  language?: string;
   /** Audio format. */
-  format?: string
+  format?: string;
   /** Include word timestamps. */
-  enableTimestamps?: boolean
+  enableTimestamps?: boolean;
   /** Enable speaker diarization. */
-  enableSpeakerDiarization?: boolean
+  enableSpeakerDiarization?: boolean;
 }
 
 /**
@@ -1056,19 +1146,19 @@ export interface IntelligenceSTTPayload {
  */
 export interface IntelligenceSTTResult {
   /** Transcribed text. */
-  text: string
+  text: string;
   /** Confidence score (0-1). */
-  confidence: number
+  confidence: number;
   /** Detected language. */
-  language?: string
+  language?: string;
   /** Transcription segments. */
   segments?: Array<{
-    text: string
-    start: number
-    end: number
-    speaker?: string
-    confidence?: number
-  }>
+    text: string;
+    start: number;
+    end: number;
+    speaker?: string;
+    confidence?: number;
+  }>;
 }
 
 /**
@@ -1076,17 +1166,17 @@ export interface IntelligenceSTTResult {
  */
 export interface IntelligenceAudioTranscribePayload {
   /** Audio data. */
-  audio: ArrayBuffer | string
+  audio: ArrayBuffer | string;
   /** Expected language. */
-  language?: string
+  language?: string;
   /** Audio format. */
-  format?: string
+  format?: string;
   /** Task type. */
-  task?: 'transcribe' | 'translate'
+  task?: "transcribe" | "translate";
   /** Include timestamps. */
-  enableTimestamps?: boolean
+  enableTimestamps?: boolean;
   /** Context prompt. */
-  prompt?: string
+  prompt?: string;
 }
 
 /**
@@ -1094,19 +1184,19 @@ export interface IntelligenceAudioTranscribePayload {
  */
 export interface IntelligenceAudioTranscribeResult {
   /** Transcribed text. */
-  text: string
+  text: string;
   /** Detected language. */
-  language: string
+  language: string;
   /** Audio duration in seconds. */
-  duration: number
+  duration: number;
   /** Transcription segments. */
   segments?: Array<{
-    id: number
-    text: string
-    start: number
-    end: number
-    confidence?: number
-  }>
+    id: number;
+    text: string;
+    start: number;
+    end: number;
+    confidence?: number;
+  }>;
 }
 
 // ============================================================================
@@ -1118,13 +1208,13 @@ export interface IntelligenceAudioTranscribeResult {
  */
 export interface IntelligenceImageCaptionPayload {
   /** Image source. */
-  source: IntelligenceVisionImageSource
+  source: IntelligenceVisionImageSource;
   /** Caption style. */
-  style?: 'brief' | 'detailed' | 'creative'
+  style?: "brief" | "detailed" | "creative";
   /** Output language. */
-  language?: string
+  language?: string;
   /** Maximum caption length. */
-  maxLength?: number
+  maxLength?: number;
 }
 
 /**
@@ -1132,13 +1222,13 @@ export interface IntelligenceImageCaptionPayload {
  */
 export interface IntelligenceImageCaptionResult {
   /** Generated caption. */
-  caption: string
+  caption: string;
   /** Alternative captions. */
-  alternativeCaptions?: string[]
+  alternativeCaptions?: string[];
   /** Image tags. */
-  tags?: string[]
+  tags?: string[];
   /** Confidence score (0-1). */
-  confidence?: number
+  confidence?: number;
 }
 
 /**
@@ -1146,13 +1236,21 @@ export interface IntelligenceImageCaptionResult {
  */
 export interface IntelligenceImageAnalyzePayload {
   /** Image source. */
-  source: IntelligenceVisionImageSource
+  source: IntelligenceVisionImageSource;
   /** Types of analysis to perform. */
-  analysisTypes?: ('objects' | 'faces' | 'text' | 'colors' | 'composition' | 'scene' | 'emotions')[]
+  analysisTypes?: (
+    | "objects"
+    | "faces"
+    | "text"
+    | "colors"
+    | "composition"
+    | "scene"
+    | "emotions"
+  )[];
   /** Output language. */
-  language?: string
+  language?: string;
   /** Include detailed analysis. */
-  detailed?: boolean
+  detailed?: boolean;
 }
 
 /**
@@ -1160,36 +1258,36 @@ export interface IntelligenceImageAnalyzePayload {
  */
 export interface IntelligenceImageAnalyzeResult {
   /** Overall description. */
-  description: string
+  description: string;
   /** Detected objects. */
   objects?: Array<{
-    name: string
-    confidence: number
-    boundingBox?: [number, number, number, number]
-  }>
+    name: string;
+    confidence: number;
+    boundingBox?: [number, number, number, number];
+  }>;
   /** Detected faces. */
   faces?: Array<{
-    age?: number
-    gender?: string
-    emotion?: string
-    boundingBox?: [number, number, number, number]
-  }>
+    age?: number;
+    gender?: string;
+    emotion?: string;
+    boundingBox?: [number, number, number, number];
+  }>;
   /** Dominant colors. */
   colors?: Array<{
-    color: string
-    percentage: number
-    hex?: string
-  }>
+    color: string;
+    percentage: number;
+    hex?: string;
+  }>;
   /** Scene classification. */
   scene?: {
-    type: string
-    confidence: number
-    attributes?: Record<string, any>
-  }
+    type: string;
+    confidence: number;
+    attributes?: Record<string, any>;
+  };
   /** Detected text. */
-  text?: string[]
+  text?: string[];
   /** Image tags. */
-  tags?: string[]
+  tags?: string[];
 }
 
 /**
@@ -1197,15 +1295,15 @@ export interface IntelligenceImageAnalyzeResult {
  */
 export interface IntelligenceImageTranslateE2ePayload {
   /** Base64 encoded image data without data URL prefix. */
-  imageBase64: string
+  imageBase64: string;
   /** Target language. */
-  targetLang?: string
+  targetLang?: string;
   /** Source language hint. */
-  sourceLang?: string
+  sourceLang?: string;
   /** Source image MIME type. */
-  imageMimeType?: string
+  imageMimeType?: string;
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -1213,17 +1311,17 @@ export interface IntelligenceImageTranslateE2ePayload {
  */
 export interface IntelligenceImageTranslateE2eResult {
   /** Translated image payload as base64. */
-  translatedImageBase64: string
+  translatedImageBase64: string;
   /** Output image MIME type. */
-  imageMimeType?: string
+  imageMimeType?: string;
   /** Detected/source text. */
-  sourceText?: string
+  sourceText?: string;
   /** Translated target text. */
-  targetText?: string
+  targetText?: string;
   /** Overlay metadata returned by the provider or scene. */
-  overlay?: any
+  overlay?: any;
   /** Provider request ID. */
-  providerRequestId?: string
+  providerRequestId?: string;
 }
 
 /**
@@ -1231,21 +1329,21 @@ export interface IntelligenceImageTranslateE2eResult {
  */
 export interface IntelligenceImageGeneratePayload {
   /** Generation prompt. */
-  prompt: string
+  prompt: string;
   /** Negative prompt. */
-  negativePrompt?: string
+  negativePrompt?: string;
   /** Image width in pixels. */
-  width?: number
+  width?: number;
   /** Image height in pixels. */
-  height?: number
+  height?: number;
   /** Style preset. */
-  style?: string
+  style?: string;
   /** Image quality. */
-  quality?: 'standard' | 'hd'
+  quality?: "standard" | "hd";
   /** Number of images to generate. */
-  count?: number
+  count?: number;
   /** Random seed for reproducibility. */
-  seed?: number
+  seed?: number;
 }
 
 /**
@@ -1254,12 +1352,12 @@ export interface IntelligenceImageGeneratePayload {
 export interface IntelligenceImageGenerateResult {
   /** Generated images. */
   images: Array<{
-    url?: string
-    base64?: string
-    revisedPrompt?: string
-  }>
+    url?: string;
+    base64?: string;
+    revisedPrompt?: string;
+  }>;
   /** Seed used for generation. */
-  seed?: number
+  seed?: number;
 }
 
 /**
@@ -1267,13 +1365,13 @@ export interface IntelligenceImageGenerateResult {
  */
 export interface IntelligenceImageEditPayload {
   /** Source image. */
-  source: IntelligenceVisionImageSource
+  source: IntelligenceVisionImageSource;
   /** Mask for inpainting. */
-  mask?: IntelligenceVisionImageSource
+  mask?: IntelligenceVisionImageSource;
   /** Edit prompt. */
-  prompt: string
+  prompt: string;
   /** Type of edit. */
-  editType?: 'inpaint' | 'outpaint' | 'variation' | 'upscale'
+  editType?: "inpaint" | "outpaint" | "variation" | "upscale";
 }
 
 /**
@@ -1282,11 +1380,11 @@ export interface IntelligenceImageEditPayload {
 export interface IntelligenceImageEditResult {
   /** Edited image. */
   image: {
-    url?: string
-    base64?: string
-  }
+    url?: string;
+    base64?: string;
+  };
   /** Revised prompt. */
-  revisedPrompt?: string
+  revisedPrompt?: string;
 }
 
 // ============================================================================
@@ -1298,21 +1396,21 @@ export interface IntelligenceImageEditResult {
  */
 export interface IntelligenceRAGQueryPayload {
   /** Query text. */
-  query: string
+  query: string;
   /** Documents to search. */
   documents?: Array<{
-    id: string
-    content: string
-    metadata?: Record<string, any>
-  }>
+    id: string;
+    content: string;
+    metadata?: Record<string, any>;
+  }>;
   /** Number of top results. */
-  topK?: number
+  topK?: number;
   /** Relevance threshold. */
-  threshold?: number
+  threshold?: number;
   /** Enable reranking. */
-  rerank?: boolean
+  rerank?: boolean;
   /** Include context in response. */
-  includeContext?: boolean
+  includeContext?: boolean;
 }
 
 /**
@@ -1320,16 +1418,16 @@ export interface IntelligenceRAGQueryPayload {
  */
 export interface IntelligenceRAGQueryResult {
   /** Generated answer. */
-  answer: string
+  answer: string;
   /** Source documents. */
   sources: Array<{
-    id: string
-    content: string
-    relevance: number
-    metadata?: Record<string, any>
-  }>
+    id: string;
+    content: string;
+    relevance: number;
+    metadata?: Record<string, any>;
+  }>;
   /** Confidence score (0-1). */
-  confidence: number
+  confidence: number;
 }
 
 /**
@@ -1337,18 +1435,18 @@ export interface IntelligenceRAGQueryResult {
  */
 export interface IntelligenceSemanticSearchPayload {
   /** Search query. */
-  query: string
+  query: string;
   /** Documents to search. */
   documents: Array<{
-    id: string
-    content: string
-    embedding?: number[]
-    metadata?: Record<string, any>
-  }>
+    id: string;
+    content: string;
+    embedding?: number[];
+    metadata?: Record<string, any>;
+  }>;
   /** Number of top results. */
-  topK?: number
+  topK?: number;
   /** Similarity threshold. */
-  threshold?: number
+  threshold?: number;
 }
 
 /**
@@ -1357,11 +1455,11 @@ export interface IntelligenceSemanticSearchPayload {
 export interface IntelligenceSemanticSearchResult {
   /** Search results. */
   results: Array<{
-    id: string
-    content: string
-    score: number
-    metadata?: Record<string, any>
-  }>
+    id: string;
+    content: string;
+    score: number;
+    metadata?: Record<string, any>;
+  }>;
 }
 
 /**
@@ -1369,15 +1467,15 @@ export interface IntelligenceSemanticSearchResult {
  */
 export interface IntelligenceRerankPayload {
   /** Query for relevance scoring. */
-  query: string
+  query: string;
   /** Documents to rerank. */
   documents: Array<{
-    id: string
-    content: string
-    metadata?: Record<string, any>
-  }>
+    id: string;
+    content: string;
+    metadata?: Record<string, any>;
+  }>;
   /** Number of top results. */
-  topK?: number
+  topK?: number;
 }
 
 /**
@@ -1386,357 +1484,385 @@ export interface IntelligenceRerankPayload {
 export interface IntelligenceRerankResult {
   /** Reranked results. */
   results: Array<{
-    id: string
-    content: string
-    score: number
-    originalRank: number
-    metadata?: Record<string, any>
-  }>
+    id: string;
+    content: string;
+    score: number;
+    originalRank: number;
+    metadata?: Record<string, any>;
+  }>;
 }
 
 // ============================================================================
 // Prompt Workflow System
 // ============================================================================
 
-export type PromptVariableType = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'file' | 'image'
+export type PromptVariableType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "array"
+  | "object"
+  | "file"
+  | "image";
 
 export interface PromptVariable {
-  name: string
-  type: PromptVariableType
-  description?: string
-  required?: boolean
-  default?: any
+  name: string;
+  type: PromptVariableType;
+  description?: string;
+  required?: boolean;
+  default?: any;
   validation?: {
-    minLength?: number
-    maxLength?: number
-    pattern?: string
-    enum?: any[]
-    min?: number
-    max?: number
-  }
+    minLength?: number;
+    maxLength?: number;
+    pattern?: string;
+    enum?: any[];
+    min?: number;
+    max?: number;
+  };
 }
 
 export interface PromptTemplate {
-  id: string
-  name: string
-  description?: string
-  template: string
-  variables: PromptVariable[]
-  category?: string
-  tags?: string[]
-  version?: string
-  author?: string
-  createdAt?: number
-  updatedAt?: number
+  id: string;
+  name: string;
+  description?: string;
+  template: string;
+  variables: PromptVariable[];
+  category?: string;
+  tags?: string[];
+  version?: string;
+  author?: string;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
-export type IntelligencePromptScope = 'global' | 'capability' | 'provider'
+export type IntelligencePromptScope = "global" | "capability" | "provider";
 
-export type IntelligencePromptStatus = 'active' | 'deprecated'
+export type IntelligencePromptStatus = "active" | "deprecated";
 
 export interface IntelligencePromptRecord {
-  id: string
-  version: string
-  template: string
-  name?: string
-  description?: string
-  variablesSchema?: PromptVariable[]
-  scope: IntelligencePromptScope
-  status: IntelligencePromptStatus
-  capabilityId?: string
-  providerId?: string
-  channel?: 'stable' | 'latest'
-  tags?: string[]
-  metadata?: Record<string, any>
-  createdAt?: number
-  updatedAt?: number
+  id: string;
+  version: string;
+  template: string;
+  name?: string;
+  description?: string;
+  variablesSchema?: PromptVariable[];
+  scope: IntelligencePromptScope;
+  status: IntelligencePromptStatus;
+  capabilityId?: string;
+  providerId?: string;
+  channel?: "stable" | "latest";
+  tags?: string[];
+  metadata?: Record<string, any>;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface IntelligencePromptBinding {
-  capabilityId: string
-  promptId: string
-  promptVersion?: string
-  channel?: 'stable' | 'latest'
-  providerId?: string
-  metadata?: Record<string, any>
+  capabilityId: string;
+  promptId: string;
+  promptVersion?: string;
+  channel?: "stable" | "latest";
+  providerId?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface IntelligencePromptRegistryQuery {
-  scope?: IntelligencePromptScope
-  capabilityId?: string
-  providerId?: string
-  status?: IntelligencePromptStatus
-  limit?: number
+  scope?: IntelligencePromptScope;
+  capabilityId?: string;
+  providerId?: string;
+  status?: IntelligencePromptStatus;
+  limit?: number;
 }
 
 export interface IntelligencePromptBindingQuery {
-  capabilityId?: string
+  capabilityId?: string;
 }
 
 export interface IntelligencePromptRegistryUpsertPayload {
-  record: IntelligencePromptRecord
+  record: IntelligencePromptRecord;
 }
 
 export interface IntelligencePromptRegistryDeletePayload {
-  id: string
-  version?: string
+  id: string;
+  version?: string;
 }
 
 export interface IntelligencePromptBindingUpsertPayload {
-  binding: IntelligencePromptBinding
+  binding: IntelligencePromptBinding;
 }
 
 export interface IntelligencePromptBindingDeletePayload {
-  capabilityId: string
-  providerId?: string
+  capabilityId: string;
+  providerId?: string;
 }
 
 export interface IntelligencePromptRegistryListResponse {
-  prompts: IntelligencePromptRecord[]
+  prompts: IntelligencePromptRecord[];
 }
 
 export interface IntelligencePromptBindingListResponse {
-  bindings: IntelligencePromptBinding[]
+  bindings: IntelligencePromptBinding[];
 }
 
-export const TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION = 1 as const
+export const TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION = 1 as const;
 
 export interface IntelligenceProviderSyncRecord {
-  id: string
-  type: string
-  name: string
-  enabled: boolean
-  hasApiKey: boolean
-  baseUrl: string | null
-  models: string[]
-  defaultModel: string | null
-  instructions: string | null
-  timeout: number
-  priority: number
-  rateLimit: Record<string, number> | null
-  capabilities: string[] | null
-  metadata: Record<string, unknown> | null
-  updatedAt: string
+  id: string;
+  type: string;
+  name: string;
+  enabled: boolean;
+  hasApiKey: boolean;
+  baseUrl: string | null;
+  models: string[];
+  defaultModel: string | null;
+  instructions: string | null;
+  timeout: number;
+  priority: number;
+  rateLimit: Record<string, number> | null;
+  capabilities: string[] | null;
+  metadata: Record<string, unknown> | null;
+  updatedAt: string;
 }
 
 export interface IntelligenceProviderSyncPayload {
-  schemaVersion: typeof TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION
-  source: 'nexus'
-  exportedAt: string
-  providers: IntelligenceProviderSyncRecord[]
+  schemaVersion: typeof TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION;
+  source: "nexus";
+  exportedAt: string;
+  providers: IntelligenceProviderSyncRecord[];
 }
 
-export const TUFF_INTELLIGENCE_AGENT_TRACE_CONTRACT_VERSION = 3 as const
+export const TUFF_INTELLIGENCE_AGENT_TRACE_CONTRACT_VERSION = 3 as const;
 
 export interface PromptStep {
-  id: string
-  name: string
-  type: 'prompt' | 'condition' | 'loop' | 'parallel' | 'transform' | 'api-call'
-  config: PromptStepConfig
-  next?: string | PromptStepCondition[]
-  onError?: 'fail' | 'skip' | 'retry' | string
+  id: string;
+  name: string;
+  type: "prompt" | "condition" | "loop" | "parallel" | "transform" | "api-call";
+  config: PromptStepConfig;
+  next?: string | PromptStepCondition[];
+  onError?: "fail" | "skip" | "retry" | string;
   retryConfig?: {
-    maxRetries: number
-    delay: number
-    backoff?: 'linear' | 'exponential'
-  }
+    maxRetries: number;
+    delay: number;
+    backoff?: "linear" | "exponential";
+  };
 }
 
 export interface PromptStepConfig {
   // For prompt type
-  templateId?: string
-  template?: string
-  variables?: Record<string, any>
-  capabilityId?: string
-  modelPreference?: string[]
+  templateId?: string;
+  template?: string;
+  variables?: Record<string, any>;
+  capabilityId?: string;
+  modelPreference?: string[];
   // For condition type
-  condition?: string
+  condition?: string;
   // For loop type
-  items?: string
-  maxIterations?: number
+  items?: string;
+  maxIterations?: number;
   // For parallel type
-  branches?: string[]
+  branches?: string[];
   // For transform type
-  transform?: string
+  transform?: string;
   // For api-call type
-  url?: string
-  method?: string
-  headers?: Record<string, string>
-  body?: any
+  url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: any;
 }
 
 export interface PromptStepCondition {
-  condition: string
-  next: string
+  condition: string;
+  next: string;
 }
 
 export interface PromptWorkflow {
-  id: string
-  name: string
-  description?: string
-  version?: string
-  steps: PromptStep[]
-  entryPoint: string
-  variables: PromptVariable[]
-  outputs?: string[]
-  metadata?: Record<string, any>
-  createdAt?: number
-  updatedAt?: number
+  id: string;
+  name: string;
+  description?: string;
+  version?: string;
+  steps: PromptStep[];
+  entryPoint: string;
+  variables: PromptVariable[];
+  outputs?: string[];
+  metadata?: Record<string, any>;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface PromptWorkflowExecution {
-  id: string
-  workflowId: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  startedAt: number
-  completedAt?: number
-  inputs: Record<string, any>
-  outputs?: Record<string, any>
+  id: string;
+  workflowId: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  startedAt: number;
+  completedAt?: number;
+  inputs: Record<string, any>;
+  outputs?: Record<string, any>;
   steps: Array<{
-    stepId: string
-    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-    startedAt?: number
-    completedAt?: number
-    input?: any
-    output?: any
-    error?: string
-  }>
-  error?: string
+    stepId: string;
+    status: "pending" | "running" | "completed" | "failed" | "skipped";
+    startedAt?: number;
+    completedAt?: number;
+    input?: any;
+    output?: any;
+    error?: string;
+  }>;
+  error?: string;
 }
 
 export interface PromptWorkflowContext {
-  execution: PromptWorkflowExecution
-  variables: Record<string, any>
-  stepResults: Record<string, any>
-  currentStep?: string
+  execution: PromptWorkflowExecution;
+  variables: Record<string, any>;
+  stepResults: Record<string, any>;
+  currentStep?: string;
 }
 
 // ============================================================================
 // TuffIntelligence Orchestration
 // ============================================================================
 
-export type TuffIntelligenceSessionStatus
-  = | 'idle'
-    | 'planning'
-    | 'planned'
-    | 'executing'
-    | 'reflecting'
-    | 'finalizing'
-    | 'waiting_approval'
-    | 'paused_disconnect'
-    | 'resuming'
-    | 'completed'
-    | 'failed'
-    | 'cancelled'
+export type TuffIntelligenceSessionStatus =
+  | "idle"
+  | "planning"
+  | "planned"
+  | "executing"
+  | "reflecting"
+  | "finalizing"
+  | "waiting_approval"
+  | "paused_disconnect"
+  | "resuming"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
-export type TuffIntelligenceActionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type TuffIntelligenceActionStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export interface TuffIntelligenceActionNode {
-  id: string
-  type: 'intent' | 'plan' | 'tool' | 'agent' | 'capability' | 'reflect' | 'finalize' | 'result'
-  title: string
-  status: TuffIntelligenceActionStatus
-  capabilityId?: string
-  toolId?: string
-  input?: unknown
-  output?: unknown
-  error?: string
-  parentId?: string
-  metadata?: Record<string, any>
-  createdAt: number
-  updatedAt?: number
+  id: string;
+  type:
+    | "intent"
+    | "plan"
+    | "tool"
+    | "agent"
+    | "capability"
+    | "reflect"
+    | "finalize"
+    | "result";
+  title: string;
+  status: TuffIntelligenceActionStatus;
+  capabilityId?: string;
+  toolId?: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  parentId?: string;
+  metadata?: Record<string, any>;
+  createdAt: number;
+  updatedAt?: number;
 }
 
 export interface TuffIntelligenceActionGraph {
-  sessionId: string
-  nodes: TuffIntelligenceActionNode[]
-  edges: Array<{ from: string, to: string, kind?: 'sequence' | 'dependency' | 'reflection' }>
-  version: number
-  updatedAt: number
+  sessionId: string;
+  nodes: TuffIntelligenceActionNode[];
+  edges: Array<{
+    from: string;
+    to: string;
+    kind?: "sequence" | "dependency" | "reflection";
+  }>;
+  version: number;
+  updatedAt: number;
 }
 
 export interface TuffIntelligenceTurn {
-  id: string
-  sessionId: string
-  status: TuffIntelligenceSessionStatus
-  objective?: string
-  userInput?: string
-  plannerModel?: string
-  executionModel?: string
-  actionIds: string[]
-  reflection?: string
-  error?: string
-  metadata?: Record<string, any>
-  startedAt: number
-  completedAt?: number
+  id: string;
+  sessionId: string;
+  status: TuffIntelligenceSessionStatus;
+  objective?: string;
+  userInput?: string;
+  plannerModel?: string;
+  executionModel?: string;
+  actionIds: string[];
+  reflection?: string;
+  error?: string;
+  metadata?: Record<string, any>;
+  startedAt: number;
+  completedAt?: number;
 }
 
 export interface TuffIntelligenceSession {
-  id: string
-  status: TuffIntelligenceSessionStatus
-  pauseReason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
-  lastEventSeq?: number
-  lastCheckpointAt?: number
-  resumeHint?: string
-  objective?: string
-  context?: Record<string, any>
-  metadata?: Record<string, any>
-  currentTurnId?: string
-  createdAt: number
-  updatedAt: number
+  id: string;
+  status: TuffIntelligenceSessionStatus;
+  pauseReason?:
+    | "client_disconnect"
+    | "heartbeat_timeout"
+    | "manual_pause"
+    | "system_preempted";
+  lastEventSeq?: number;
+  lastCheckpointAt?: number;
+  resumeHint?: string;
+  objective?: string;
+  context?: Record<string, any>;
+  metadata?: Record<string, any>;
+  currentTurnId?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface TuffIntelligenceTraceEvent {
-  id: string
-  sessionId: string
-  seq?: number
-  turnId?: string
+  id: string;
+  sessionId: string;
+  seq?: number;
+  turnId?: string;
   type:
-    | 'session.started'
-    | 'session.resumed'
-    | 'session.paused'
-    | 'session.cancelled'
-    | 'plan.created'
-    | 'plan.updated'
-    | 'execution.started'
-    | 'execution.completed'
-    | 'execution.failed'
-    | 'tool.called'
-    | 'tool.completed'
-    | 'tool.approval_required'
-    | 'tool.approved'
-    | 'tool.rejected'
-    | 'reflection.completed'
-    | 'state.snapshot'
-  level: 'debug' | 'info' | 'warn' | 'error'
-  message: string
-  payload?: Record<string, any>
-  timestamp: number
+    | "session.started"
+    | "session.resumed"
+    | "session.paused"
+    | "session.cancelled"
+    | "plan.created"
+    | "plan.updated"
+    | "execution.started"
+    | "execution.completed"
+    | "execution.failed"
+    | "tool.called"
+    | "tool.completed"
+    | "tool.approval_required"
+    | "tool.approved"
+    | "tool.rejected"
+    | "reflection.completed"
+    | "state.snapshot";
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  payload?: Record<string, any>;
+  timestamp: number;
 }
 
 export interface TuffIntelligenceApprovalTicket {
-  id: string
-  sessionId: string
-  turnId?: string
-  actionId?: string
-  toolId: string
-  riskLevel: 'low' | 'medium' | 'high' | 'critical'
-  reason: string
-  status: 'pending' | 'approved' | 'rejected'
-  requestedAt: number
-  resolvedAt?: number
-  resolvedBy?: string
-  metadata?: Record<string, any>
+  id: string;
+  sessionId: string;
+  turnId?: string;
+  actionId?: string;
+  toolId: string;
+  riskLevel: "low" | "medium" | "high" | "critical";
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requestedAt: number;
+  resolvedAt?: number;
+  resolvedBy?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface TuffIntelligenceStateSnapshot {
-  sessionId: string
-  status: TuffIntelligenceSessionStatus
-  currentTurn?: TuffIntelligenceTurn
-  actionGraph: TuffIntelligenceActionGraph
-  pendingApprovals: TuffIntelligenceApprovalTicket[]
-  lastTraceEvent?: TuffIntelligenceTraceEvent
-  updatedAt: number
+  sessionId: string;
+  status: TuffIntelligenceSessionStatus;
+  currentTurn?: TuffIntelligenceTurn;
+  actionGraph: TuffIntelligenceActionGraph;
+  pendingApprovals: TuffIntelligenceApprovalTicket[];
+  lastTraceEvent?: TuffIntelligenceTraceEvent;
+  updatedAt: number;
 }
 
 export interface TuffIntelligenceAgentSession extends TuffIntelligenceSession {}
@@ -1744,34 +1870,34 @@ export interface TuffIntelligenceAgentSession extends TuffIntelligenceSession {}
 export interface TuffIntelligenceAgentAction extends TuffIntelligenceActionNode {}
 
 export interface TuffIntelligenceAgentPlan {
-  sessionId: string
-  turnId: string
-  objective: string
-  actions: TuffIntelligenceAgentAction[]
-  metadata?: Record<string, any>
+  sessionId: string;
+  turnId: string;
+  objective: string;
+  actions: TuffIntelligenceAgentAction[];
+  metadata?: Record<string, any>;
 }
 
 export interface TuffIntelligenceAgentTraceEvent extends TuffIntelligenceTraceEvent {
-  contractVersion?: 3
+  contractVersion?: 3;
 }
 
 export interface IntelligenceAgentStreamEvent {
   type:
-    | 'stream.started'
-    | 'stream.heartbeat'
-    | 'replay.started'
-    | 'replay.finished'
-    | 'done'
-    | 'error'
-    | TuffIntelligenceAgentTraceEvent['type']
-  sessionId: string
-  timestamp: number
-  seq?: number
-  replay?: boolean
-  turnId?: string
-  payload?: Record<string, any>
-  message?: string
-  detail?: Record<string, any>
+    | "stream.started"
+    | "stream.heartbeat"
+    | "replay.started"
+    | "replay.finished"
+    | "done"
+    | "error"
+    | TuffIntelligenceAgentTraceEvent["type"];
+  sessionId: string;
+  timestamp: number;
+  seq?: number;
+  replay?: boolean;
+  turnId?: string;
+  payload?: Record<string, any>;
+  message?: string;
+  detail?: Record<string, any>;
 }
 
 // ============================================================================
@@ -1783,22 +1909,25 @@ export interface IntelligenceAgentStreamEvent {
  */
 export interface IntelligenceAgentTool {
   /** Tool name. */
-  name: string
+  name: string;
   /** Tool description. */
-  description: string
+  description: string;
   /** Parameter schema. */
   parameters: {
-    type: 'object'
-    properties: Record<string, {
-      type: string
-      description?: string
-      enum?: any[]
-      required?: boolean
-    }>
-    required?: string[]
-  }
+    type: "object";
+    properties: Record<
+      string,
+      {
+        type: string;
+        description?: string;
+        enum?: any[];
+        required?: boolean;
+      }
+    >;
+    required?: string[];
+  };
   /** Handler function name. */
-  handler?: string
+  handler?: string;
 }
 
 /**
@@ -1806,17 +1935,17 @@ export interface IntelligenceAgentTool {
  */
 export interface IntelligenceAgentPayload {
   /** Task description. */
-  task: string
+  task: string;
   /** Available tools. */
-  tools?: IntelligenceAgentTool[]
+  tools?: IntelligenceAgentTool[];
   /** Additional context. */
-  context?: string
+  context?: string;
   /** Maximum iterations. */
-  maxIterations?: number
+  maxIterations?: number;
   /** Conversation memory. */
-  memory?: Array<{ role: string, content: string }>
+  memory?: Array<{ role: string; content: string }>;
   /** Constraints for the agent. */
-  constraints?: string[]
+  constraints?: string[];
 }
 
 /**
@@ -1824,22 +1953,22 @@ export interface IntelligenceAgentPayload {
  */
 export interface IntelligenceAgentResult {
   /** Final result. */
-  result: string
+  result: string;
   /** Reasoning steps. */
   steps: Array<{
-    thought: string
-    action?: string
-    actionInput?: any
-    observation?: string
-  }>
+    thought: string;
+    action?: string;
+    actionInput?: any;
+    observation?: string;
+  }>;
   /** Tool call history. */
   toolCalls: Array<{
-    tool: string
-    input: any
-    output: any
-  }>
+    tool: string;
+    input: any;
+    output: any;
+  }>;
   /** Number of iterations. */
-  iterations: number
+  iterations: number;
 }
 
 /**
@@ -1847,23 +1976,23 @@ export interface IntelligenceAgentResult {
  */
 export interface IntelligenceSDKConfig {
   /** Provider configurations. */
-  providers: IntelligenceProviderConfig[]
+  providers: IntelligenceProviderConfig[];
   /** Default strategy ID. */
-  defaultStrategy: string
+  defaultStrategy: string;
   /** Enable audit logging. */
-  enableAudit: boolean
+  enableAudit: boolean;
   /** Enable result caching. */
-  enableCache: boolean
+  enableCache: boolean;
   /** Enable quota management. */
-  enableQuota?: boolean
+  enableQuota?: boolean;
   /** Cache expiration in seconds. */
-  cacheExpiration?: number
+  cacheExpiration?: number;
   /** Capability routing configurations. */
-  capabilities?: Record<string, IntelligenceCapabilityRoutingConfig>
+  capabilities?: Record<string, IntelligenceCapabilityRoutingConfig>;
   /** Prompt registry records. */
-  promptRegistry?: IntelligencePromptRecord[]
+  promptRegistry?: IntelligencePromptRecord[];
   /** Capability prompt bindings. */
-  promptBindings?: IntelligencePromptBinding[]
+  promptBindings?: IntelligencePromptBinding[];
 }
 
 /**
@@ -1871,15 +2000,15 @@ export interface IntelligenceSDKConfig {
  */
 export interface IntelligenceStrategyConfig {
   /** Strategy ID. */
-  id: string
+  id: string;
   /** Strategy name. */
-  name: string
+  name: string;
   /** Strategy type. */
-  type: 'rule-based' | 'adaptive' | 'custom'
+  type: "rule-based" | "adaptive" | "custom";
   /** Strategy rules. */
-  rules?: any
+  rules?: any;
   /** Strategy priority. */
-  priority?: number
+  priority?: number;
 }
 
 /**
@@ -1887,27 +2016,27 @@ export interface IntelligenceStrategyConfig {
  */
 export interface IntelligenceAuditLog {
   /** Trace ID. */
-  traceId: string
+  traceId: string;
   /** Timestamp. */
-  timestamp: number
+  timestamp: number;
   /** Capability ID. */
-  capabilityId: string
+  capabilityId: string;
   /** Provider ID. */
-  provider: string
+  provider: string;
   /** Model used. */
-  model: string
+  model: string;
   /** Prompt hash. */
-  promptHash?: string
+  promptHash?: string;
   /** Caller identifier. */
-  caller?: string
+  caller?: string;
   /** Usage information. */
-  usage: IntelligenceUsageInfo
+  usage: IntelligenceUsageInfo;
   /** Latency in milliseconds. */
-  latency: number
+  latency: number;
   /** Success status. */
-  success: boolean
+  success: boolean;
   /** Error message. */
-  error?: string
+  error?: string;
 }
 
 /**
@@ -1915,15 +2044,15 @@ export interface IntelligenceAuditLog {
  */
 export interface IntelligenceCapabilityProviderBinding {
   /** Provider ID. */
-  providerId: string
+  providerId: string;
   /** Specific models to use. */
-  models?: string[]
+  models?: string[];
   /** Priority for selection. */
-  priority?: number
+  priority?: number;
   /** Whether binding is enabled. */
-  enabled?: boolean
+  enabled?: boolean;
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -1931,19 +2060,19 @@ export interface IntelligenceCapabilityProviderBinding {
  */
 export interface IntelligenceCapabilityRoutingConfig {
   /** Display label. */
-  label?: string
+  label?: string;
   /** Description. */
-  description?: string
+  description?: string;
   /** Provider bindings. */
-  providers: IntelligenceCapabilityProviderBinding[]
+  providers: IntelligenceCapabilityProviderBinding[];
   /** Prompt template. */
-  promptTemplate?: string
+  promptTemplate?: string;
   /** Prompt binding reference. */
-  promptBinding?: IntelligencePromptBinding
+  promptBinding?: IntelligencePromptBinding;
   /** Test resource directory. */
-  testResourceDir?: string
+  testResourceDir?: string;
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -1951,23 +2080,23 @@ export interface IntelligenceCapabilityRoutingConfig {
  */
 export interface IntelligenceSDKPersistedConfig {
   /** Provider configurations. */
-  providers: IntelligenceProviderConfig[]
+  providers: IntelligenceProviderConfig[];
   /** Global configuration. */
   globalConfig: {
-    defaultStrategy: string
-    enableAudit: boolean
-    enableCache: boolean
-    enableQuota?: boolean
-    cacheExpiration?: number
-  }
+    defaultStrategy: string;
+    enableAudit: boolean;
+    enableCache: boolean;
+    enableQuota?: boolean;
+    cacheExpiration?: number;
+  };
   /** Capability configurations. */
-  capabilities?: Record<string, IntelligenceCapabilityRoutingConfig>
+  capabilities?: Record<string, IntelligenceCapabilityRoutingConfig>;
   /** Prompt registry records. */
-  promptRegistry?: IntelligencePromptRecord[]
+  promptRegistry?: IntelligencePromptRecord[];
   /** Capability prompt bindings. */
-  promptBindings?: IntelligencePromptBinding[]
+  promptBindings?: IntelligencePromptBinding[];
   /** Configuration version. */
-  version: number
+  version: number;
 }
 
 /**
@@ -1975,57 +2104,147 @@ export interface IntelligenceSDKPersistedConfig {
  */
 export interface IntelligenceProviderAdapter {
   /** Provider type. */
-  readonly type: IntelligenceProviderType
+  readonly type: IntelligenceProviderType;
   /** Get provider configuration. */
-  getConfig: () => IntelligenceProviderConfig
+  getConfig: () => IntelligenceProviderConfig;
   /** Update provider configuration. */
-  updateConfig: (config: Partial<IntelligenceProviderConfig>) => void
+  updateConfig: (config: Partial<IntelligenceProviderConfig>) => void;
   /** Check if provider is enabled. */
-  isEnabled: () => boolean
+  isEnabled: () => boolean;
 
   // Core text capabilities
-  chat: (payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  chatStream: (payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions) => AsyncGenerator<IntelligenceStreamChunk>
-  embedding: (payload: IntelligenceEmbeddingPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<number[]>>
-  translate: (payload: IntelligenceTranslatePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  summarize?: (payload: IntelligenceSummarizePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  rewrite?: (payload: IntelligenceRewritePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  grammarCheck?: (payload: IntelligenceGrammarCheckPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceGrammarCheckResult>>
+  chat: (
+    payload: IntelligenceChatPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  chatStream: (
+    payload: IntelligenceChatPayload,
+    options: IntelligenceInvokeOptions,
+  ) => AsyncGenerator<IntelligenceStreamChunk>;
+  embedding: (
+    payload: IntelligenceEmbeddingPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<number[]>>;
+  translate: (
+    payload: IntelligenceTranslatePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  summarize?: (
+    payload: IntelligenceSummarizePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  rewrite?: (
+    payload: IntelligenceRewritePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  grammarCheck?: (
+    payload: IntelligenceGrammarCheckPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceGrammarCheckResult>>;
 
   // Code capabilities
-  codeGenerate?: (payload: IntelligenceCodeGeneratePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeGenerateResult>>
-  codeExplain?: (payload: IntelligenceCodeExplainPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeExplainResult>>
-  codeReview?: (payload: IntelligenceCodeReviewPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeReviewResult>>
-  codeRefactor?: (payload: IntelligenceCodeRefactorPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeRefactorResult>>
-  codeDebug?: (payload: IntelligenceCodeDebugPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeDebugResult>>
+  codeGenerate?: (
+    payload: IntelligenceCodeGeneratePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeGenerateResult>>;
+  codeExplain?: (
+    payload: IntelligenceCodeExplainPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeExplainResult>>;
+  codeReview?: (
+    payload: IntelligenceCodeReviewPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeReviewResult>>;
+  codeRefactor?: (
+    payload: IntelligenceCodeRefactorPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeRefactorResult>>;
+  codeDebug?: (
+    payload: IntelligenceCodeDebugPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeDebugResult>>;
 
   // Analysis capabilities
-  intentDetect?: (payload: IntelligenceIntentDetectPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceIntentDetectResult>>
-  sentimentAnalyze?: (payload: IntelligenceSentimentAnalyzePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSentimentAnalyzeResult>>
-  contentExtract?: (payload: IntelligenceContentExtractPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceContentExtractResult>>
-  keywordsExtract?: (payload: IntelligenceKeywordsExtractPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>>
-  classification?: (payload: IntelligenceClassificationPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceClassificationResult>>
+  intentDetect?: (
+    payload: IntelligenceIntentDetectPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceIntentDetectResult>>;
+  sentimentAnalyze?: (
+    payload: IntelligenceSentimentAnalyzePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceSentimentAnalyzeResult>>;
+  contentExtract?: (
+    payload: IntelligenceContentExtractPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceContentExtractResult>>;
+  keywordsExtract?: (
+    payload: IntelligenceKeywordsExtractPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>>;
+  classification?: (
+    payload: IntelligenceClassificationPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceClassificationResult>>;
 
   // Vision capabilities
-  visionOcr: (payload: IntelligenceVisionOcrPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>>
-  imageCaption?: (payload: IntelligenceImageCaptionPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>
-  imageAnalyze?: (payload: IntelligenceImageAnalyzePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>
-  imageTranslateE2e?: (payload: IntelligenceImageTranslateE2ePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>>
-  imageGenerate?: (payload: IntelligenceImageGeneratePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>
-  imageEdit?: (payload: IntelligenceImageEditPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>
+  visionOcr: (
+    payload: IntelligenceVisionOcrPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>>;
+  imageCaption?: (
+    payload: IntelligenceImageCaptionPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>;
+  imageAnalyze?: (
+    payload: IntelligenceImageAnalyzePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>;
+  imageTranslateE2e?: (
+    payload: IntelligenceImageTranslateE2ePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>>;
+  imageGenerate?: (
+    payload: IntelligenceImageGeneratePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>;
+  imageEdit?: (
+    payload: IntelligenceImageEditPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>;
 
   // Audio capabilities
-  tts?: (payload: IntelligenceTTSPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceTTSResult>>
-  stt?: (payload: IntelligenceSTTPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSTTResult>>
-  audioTranscribe?: (payload: IntelligenceAudioTranscribePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>>
+  tts?: (
+    payload: IntelligenceTTSPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceTTSResult>>;
+  stt?: (
+    payload: IntelligenceSTTPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceSTTResult>>;
+  audioTranscribe?: (
+    payload: IntelligenceAudioTranscribePayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>>;
 
   // RAG & Search capabilities
-  ragQuery?: (payload: IntelligenceRAGQueryPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceRAGQueryResult>>
-  semanticSearch?: (payload: IntelligenceSemanticSearchPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>>
-  rerank?: (payload: IntelligenceRerankPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceRerankResult>>
+  ragQuery?: (
+    payload: IntelligenceRAGQueryPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceRAGQueryResult>>;
+  semanticSearch?: (
+    payload: IntelligenceSemanticSearchPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>>;
+  rerank?: (
+    payload: IntelligenceRerankPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceRerankResult>>;
 
   // Agent capabilities
-  agent?: (payload: IntelligenceAgentPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>
+  agent?: (
+    payload: IntelligenceAgentPayload,
+    options: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>;
 }
 
 /**
@@ -2033,49 +2252,53 @@ export interface IntelligenceProviderAdapter {
  */
 export interface IntelligenceProviderManagerAdapter {
   /** Clear all providers. */
-  clear: () => void
+  clear: () => void;
   /** Register provider from configuration. */
-  registerFromConfig: (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter
+  registerFromConfig: (
+    config: IntelligenceProviderConfig,
+  ) => IntelligenceProviderAdapter;
   /** Get all enabled providers. */
-  getEnabled: () => IntelligenceProviderAdapter[]
+  getEnabled: () => IntelligenceProviderAdapter[];
   /** Get provider by ID. */
-  get: (providerId: string) => IntelligenceProviderAdapter | undefined
+  get: (providerId: string) => IntelligenceProviderAdapter | undefined;
   /** Create provider instance. */
-  createProviderInstance: (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter
+  createProviderInstance: (
+    config: IntelligenceProviderConfig,
+  ) => IntelligenceProviderAdapter;
 }
 
-export type ProviderManagerAdapter = IntelligenceProviderManagerAdapter
+export type ProviderManagerAdapter = IntelligenceProviderManagerAdapter;
 
 /**
  * Global SDK configuration.
  */
 export interface IntelligenceGlobalConfig {
   /** Default strategy ID. */
-  defaultStrategy: string
+  defaultStrategy: string;
   /** Enable audit logging. */
-  enableAudit: boolean
+  enableAudit: boolean;
   /** Enable result caching. */
-  enableCache: boolean
+  enableCache: boolean;
   /** Enable quota management. */
-  enableQuota?: boolean
+  enableQuota?: boolean;
   /** Cache expiration in seconds. */
-  cacheExpiration?: number
+  cacheExpiration?: number;
   /** Maximum retry attempts. */
-  maxRetries?: number
+  maxRetries?: number;
   /** Default timeout in milliseconds. */
-  defaultTimeout?: number
+  defaultTimeout?: number;
   /** Enable logging. */
-  enableLogging?: boolean
+  enableLogging?: boolean;
   /** Log level. */
-  logLevel?: 'debug' | 'info' | 'warn' | 'error'
+  logLevel?: "debug" | "info" | "warn" | "error";
   /** Enable caching. */
-  enableCaching?: boolean
+  enableCaching?: boolean;
   /** Cache size limit. */
-  cacheSize?: number
+  cacheSize?: number;
   /** Fallback strategy. */
-  fallbackStrategy?: 'next-available' | 'fail-fast' | 'round-robin'
+  fallbackStrategy?: "next-available" | "fail-fast" | "round-robin";
   /** Allow parallel requests. */
-  parallelRequests?: boolean
+  parallelRequests?: boolean;
 }
 
 /**
@@ -2083,39 +2306,39 @@ export interface IntelligenceGlobalConfig {
  */
 export interface IntelligenceTestResult {
   /** Whether test succeeded. */
-  success: boolean
+  success: boolean;
   /** Stable machine-readable result code. */
-  code?: string
+  code?: string;
   /** Result message. */
-  message?: string
+  message?: string;
   /** Latency in milliseconds. */
-  latency?: number
+  latency?: number;
   /** Test timestamp. */
-  timestamp: number
+  timestamp: number;
 }
 
-export type TestResult = IntelligenceTestResult
+export type TestResult = IntelligenceTestResult;
 
 /**
  * Capability configuration for SDK.
  */
 export interface IntelligenceCapabilityConfig {
   /** Capability ID. */
-  id: string
+  id: string;
   /** Display label. */
-  label: string
+  label: string;
   /** Description. */
-  description?: string
+  description?: string;
   /** Provider bindings. */
-  providers: IntelligenceCapabilityProviderBinding[]
+  providers: IntelligenceCapabilityProviderBinding[];
   /** Prompt template. */
-  promptTemplate?: string
+  promptTemplate?: string;
   /** Prompt binding reference. */
-  promptBinding?: IntelligencePromptBinding
+  promptBinding?: IntelligencePromptBinding;
   /** Test resource directory. */
-  testResourceDir?: string
+  testResourceDir?: string;
   /** Additional metadata. */
-  metadata?: Record<string, any>
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -2123,17 +2346,17 @@ export interface IntelligenceCapabilityConfig {
  */
 export interface IntelligenceStorageData {
   /** Provider configurations. */
-  providers: IntelligenceProviderConfig[]
+  providers: IntelligenceProviderConfig[];
   /** Global configuration. */
-  globalConfig: IntelligenceGlobalConfig
+  globalConfig: IntelligenceGlobalConfig;
   /** Capability configurations. */
-  capabilities: Record<string, IntelligenceCapabilityConfig>
+  capabilities: Record<string, IntelligenceCapabilityConfig>;
   /** Prompt registry records. */
-  promptRegistry?: IntelligencePromptRecord[]
+  promptRegistry?: IntelligencePromptRecord[];
   /** Capability prompt bindings. */
-  promptBindings?: IntelligencePromptBinding[]
+  promptBindings?: IntelligencePromptBinding[];
   /** Data version. */
-  version: number
+  version: number;
 }
 
 /**
@@ -2141,385 +2364,132 @@ export interface IntelligenceStorageData {
  */
 export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
   {
-    id: 'openai-default',
+    id: "openai-default",
     type: IntelligenceProviderType.OPENAI,
-    name: 'OpenAI',
+    name: "OpenAI",
     enabled: false,
     priority: 1,
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-    defaultModel: 'gpt-4o-mini',
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+    defaultModel: "gpt-4o-mini",
     timeout: 30000,
     rateLimit: {},
   },
   {
-    id: 'anthropic-default',
+    id: "anthropic-default",
     type: IntelligenceProviderType.ANTHROPIC,
-    name: 'Anthropic',
+    name: "Anthropic",
     enabled: false,
     priority: 2,
-    models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
-    defaultModel: 'claude-3-5-sonnet-20241022',
-    timeout: 30000,
-    rateLimit: {},
-  },
-  {
-    id: 'deepseek-default',
-    type: IntelligenceProviderType.DEEPSEEK,
-    name: 'DeepSeek',
-    enabled: false,
-    priority: 2,
-    models: ['deepseek-chat', 'deepseek-coder'],
-    defaultModel: 'deepseek-chat',
-    timeout: 30000,
-    rateLimit: {},
-  },
-  {
-    id: 'siliconflow-default',
-    type: IntelligenceProviderType.SILICONFLOW,
-    name: 'SiliconFlow',
-    enabled: false,
-    priority: 2,
-    baseUrl: 'https://api.siliconflow.cn/v1',
     models: [
-      'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
-      'tencent/Hunyuan-MT-7B',
-      'TeleAI/TeleSpeechASR',
-      'THUDM/GLM-4.1V-9B-Thinking',
-      'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
-      'BAAI/bge-reranker-v2-m3',
-      'netease-youdao/bce-embedding-base_v1',
-      'Kwai-Kolors/Kolors',
-      'BAAI/bge-m3',
+      "claude-3-5-sonnet-20241022",
+      "claude-3-opus-20240229",
+      "claude-3-haiku-20240307",
     ],
-    defaultModel: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
+    defaultModel: "claude-3-5-sonnet-20241022",
     timeout: 30000,
     rateLimit: {},
   },
   {
-    id: 'tuff-nexus-default',
+    id: "deepseek-default",
+    type: IntelligenceProviderType.DEEPSEEK,
+    name: "DeepSeek",
+    enabled: false,
+    priority: 2,
+    models: ["deepseek-chat", "deepseek-coder"],
+    defaultModel: "deepseek-chat",
+    timeout: 30000,
+    rateLimit: {},
+  },
+  {
+    id: "siliconflow-default",
+    type: IntelligenceProviderType.SILICONFLOW,
+    name: "SiliconFlow",
+    enabled: false,
+    priority: 2,
+    baseUrl: "https://api.siliconflow.cn/v1",
+    models: [
+      "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+      "tencent/Hunyuan-MT-7B",
+      "TeleAI/TeleSpeechASR",
+      "THUDM/GLM-4.1V-9B-Thinking",
+      "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+      "BAAI/bge-reranker-v2-m3",
+      "netease-youdao/bce-embedding-base_v1",
+      "Kwai-Kolors/Kolors",
+      "BAAI/bge-m3",
+    ],
+    defaultModel: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+    timeout: 30000,
+    rateLimit: {},
+  },
+  {
+    id: "tuff-nexus-default",
     type: IntelligenceProviderType.CUSTOM,
-    name: 'Tuff Nexus',
+    name: "Tuff Nexus",
     enabled: false,
     priority: 1,
     baseUrl: `${NEXUS_BASE_URL}/v1`,
-    models: ['gpt-4o', 'gpt-4o-mini'],
-    defaultModel: 'gpt-4o-mini',
+    models: ["gpt-4o", "gpt-4o-mini"],
+    defaultModel: "gpt-4o-mini",
     timeout: 30000,
     rateLimit: {},
     capabilities: [
-      'text.chat',
-      'text.translate',
-      'text.summarize',
-      'text.rewrite',
-      'vision.ocr',
-      'image.translate.e2e',
-      'audio.tts',
+      "text.chat",
+      "text.translate",
+      "text.summarize",
+      "text.rewrite",
+      "vision.ocr",
+      "image.translate.e2e",
     ],
     metadata: {
-      origin: 'tuff-nexus',
+      origin: "tuff-nexus",
     },
   },
   {
-    id: 'local-default',
+    id: "local-default",
     type: IntelligenceProviderType.LOCAL,
-    name: 'Local Model',
+    name: "Local Model",
     enabled: false,
     priority: 3,
     models: [],
-    baseUrl: 'http://localhost:11434',
+    baseUrl: "http://localhost:11434",
     timeout: 60000,
     rateLimit: {},
   },
-]
+];
 
 export const DEFAULT_GLOBAL_CONFIG: IntelligenceGlobalConfig = {
-  defaultStrategy: 'adaptive-default',
+  defaultStrategy: "adaptive-default",
   enableAudit: false,
   enableCache: true,
   enableQuota: true,
   cacheExpiration: 3600,
-}
+};
 
-export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> = {
-  'text.chat': {
-    id: 'text.chat',
-    label: '对话 / Chat',
-    description: '通用对话、问答、助理类能力',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'openai-default', priority: 2, enabled: false },
-      { providerId: 'anthropic-default', priority: 3, enabled: false },
-      { providerId: 'deepseek-default', priority: 4, enabled: true },
-      { providerId: 'siliconflow-default', priority: 5, enabled: true },
-    ],
-  },
-  'embedding.generate': {
-    id: 'embedding.generate',
-    label: 'Embedding / 向量生成',
-    description: '为向量检索/摘要生成 embedding',
-    providers: [
-      {
-        providerId: 'siliconflow-default',
-        models: ['netease-youdao/bce-embedding-base_v1', 'BAAI/bge-m3'],
-        priority: 1,
-        enabled: true,
-      },
-      {
-        providerId: 'openai-default',
-        models: ['text-embedding-3-small', 'text-embedding-3-large'],
-        priority: 2,
-        enabled: false,
-      },
-    ],
-  },
-  'vision.ocr': {
-    id: 'vision.ocr',
-    label: '图像 OCR / Image Recognition',
-    description: '识别截图、图片中的文字并生成关键词',
-    promptTemplate:
-      '你是 OCR 助手，识别图片所有文本，生成 keywords 数组（5 个以内）辅助搜索。',
-    testResourceDir: 'intelligence/test-capability/ocr',
-    providers: [
-      {
-        providerId: 'siliconflow-default',
-        models: ['deepseek-ai/DeepSeek-OCR', 'THUDM/GLM-4.1V-9B-Thinking'],
-        priority: 1,
-        enabled: true,
-      },
-      {
-        providerId: 'openai-default',
-        models: ['gpt-4o', 'gpt-4o-mini'],
-        priority: 2,
-        enabled: false,
-      },
-      {
-        providerId: 'anthropic-default',
-        models: ['claude-3-5-sonnet-20241022'],
-        priority: 3,
-        enabled: false,
-      },
-    ],
-  },
-  'image.translate.e2e': {
-    id: 'image.translate.e2e',
-    label: '图片翻译 / Image Translation',
-    description: '将图片中的文字翻译并返回译后图片',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-    ],
-  },
-  'text.translate': {
-    id: 'text.translate',
-    label: '翻译 / Translation',
-    description: '多语言文本翻译',
-    promptTemplate: '你是专业翻译助手。请将以下文本翻译成 {{targetLang}}，只返回译文，不要解释。',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', priority: 2, enabled: true },
-      { providerId: 'openai-default', priority: 3, enabled: false },
-      { providerId: 'anthropic-default', priority: 4, enabled: false },
-    ],
-  },
-  'text.summarize': {
-    id: 'text.summarize',
-    label: '摘要 / Summarization',
-    description: '生成文本内容的简洁摘要',
-    promptTemplate: '请用简洁的语言总结以下内容的核心要点，不超过 {{maxLength}} 字。',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', priority: 2, enabled: true },
-      { providerId: 'openai-default', priority: 3, enabled: false },
-      { providerId: 'anthropic-default', priority: 4, enabled: false },
-    ],
-  },
-  'intent.detect': {
-    id: 'intent.detect',
-    label: '意图识别 / Intent Detection',
-    description: '识别用户查询的意图类型（搜索、打开、计算等）',
-    promptTemplate: '分析用户输入的意图，返回 JSON 格式：{intent: string, confidence: number, entities: string[]}',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', priority: 2, enabled: true },
-      { providerId: 'openai-default', priority: 3, enabled: false },
-    ],
-  },
-  'code.generate': {
-    id: 'code.generate',
-    label: '代码生成 / Code Generation',
-    description: '根据需求生成代码片段',
-    promptTemplate: '你是编程助手。根据需求生成 {{language}} 代码，包含注释说明。',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 2, enabled: true },
-      { providerId: 'openai-default', models: ['gpt-4o'], priority: 3, enabled: false },
-    ],
-  },
-  'code.explain': {
-    id: 'code.explain',
-    label: '代码解释 / Code Explanation',
-    description: '解释代码的功能和逻辑',
-    promptTemplate: '你是编程导师。用通俗易懂的语言解释这段代码的功能、逻辑和关键点。',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 2, enabled: true },
-      { providerId: 'anthropic-default', priority: 3, enabled: false },
-    ],
-  },
-  'content.extract': {
-    id: 'content.extract',
-    label: '内容提取 / Content Extraction',
-    description: '从文本中提取关键信息（日期、人名、地点等）',
-    promptTemplate: '从文本中提取关键信息，返回 JSON 格式：{dates: [], people: [], locations: [], keywords: []}',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', priority: 2, enabled: true },
-      { providerId: 'openai-default', priority: 3, enabled: false },
-    ],
-  },
-  'sentiment.analyze': {
-    id: 'sentiment.analyze',
-    label: '情感分析 / Sentiment Analysis',
-    description: '分析文本的情感倾向（积极/消极/中性）',
-    promptTemplate: '分析文本情感倾向，返回 JSON：{sentiment: "positive"|"negative"|"neutral", score: 0-1, keywords: []}',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', priority: 2, enabled: true },
-      { providerId: 'openai-default', priority: 3, enabled: false },
-    ],
-  },
-  'code.review': {
-    id: 'code.review',
-    label: '代码审查 / Code Review',
-    description: '审查代码，发现潜在问题、最佳实践和改进建议',
-    promptTemplate: '作为资深代码审查员，审查以下代码。关注：1) 潜在bug 2) 性能问题 3) 安全隐患 4) 最佳实践 5) 可读性',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', models: ['deepseek-coder'], priority: 2, enabled: true },
-      { providerId: 'anthropic-default', priority: 3, enabled: false },
-      { providerId: 'openai-default', models: ['gpt-4o'], priority: 4, enabled: false },
-    ],
-  },
-  'keywords.extract': {
-    id: 'keywords.extract',
-    label: '关键词提取 / Keyword Extraction',
-    description: '从文本中提取关键词和短语',
-    promptTemplate: '从文本中提取最重要的关键词，返回 JSON 数组：{keywords: [{term: string, relevance: number}]}',
-    providers: [
-      { providerId: 'tuff-nexus-default', priority: 1, enabled: false },
-      { providerId: 'deepseek-default', priority: 2, enabled: true },
-      { providerId: 'openai-default', priority: 3, enabled: false },
-    ],
-  },
-  'audio.transcribe': {
-    id: 'audio.transcribe',
-    label: '音频转录 / Audio Transcription',
-    description: '将语音转换为文字（支持多语言）',
-    providers: [
-      {
-        providerId: 'openai-default',
-        models: ['whisper-1'],
-        priority: 1,
-        enabled: false,
-      },
-      {
-        providerId: 'siliconflow-default',
-        models: ['TeleAI/TeleSpeechASR'],
-        priority: 2,
-        enabled: true,
-      },
-    ],
-  },
-  'audio.tts': {
-    id: 'audio.tts',
-    label: '语音合成 / Text-to-Speech',
-    description: '将文字转换为自然语音（Beta）',
-    providers: [
-      {
-        providerId: 'tuff-nexus-default',
-        priority: 1,
-        enabled: true,
-      },
-      {
-        providerId: 'openai-default',
-        models: ['tts-1', 'tts-1-hd'],
-        priority: 2,
-        enabled: false,
-      },
-    ],
-  },
-  'image.caption': {
-    id: 'image.caption',
-    label: '图像标题 / Image Captioning',
-    description: '为图片生成描述性标题',
-    promptTemplate: '生成简洁准确的图片描述（中英文），捕捉主要内容和氛围。',
-    providers: [
-      {
-        providerId: 'siliconflow-default',
-        models: ['THUDM/GLM-4.1V-9B-Thinking'],
-        priority: 1,
-        enabled: true,
-      },
-      {
-        providerId: 'openai-default',
-        models: ['gpt-4o', 'gpt-4o-mini'],
-        priority: 2,
-        enabled: false,
-      },
-      {
-        providerId: 'anthropic-default',
-        models: ['claude-3-5-sonnet-20241022'],
-        priority: 3,
-        enabled: false,
-      },
-    ],
-  },
-  'image.analyze': {
-    id: 'image.analyze',
-    label: '图像分析 / Image Analysis',
-    description: '深度分析图像内容、物体、场景和上下文',
-    promptTemplate: '详细分析图片，包括：物体识别、场景理解、颜色分析、构图评估。返回结构化结果。',
-    providers: [
-      {
-        providerId: 'siliconflow-default',
-        models: ['THUDM/GLM-4.1V-9B-Thinking'],
-        priority: 1,
-        enabled: true,
-      },
-      {
-        providerId: 'openai-default',
-        models: ['gpt-4o'],
-        priority: 2,
-        enabled: false,
-      },
-      {
-        providerId: 'anthropic-default',
-        models: ['claude-3-5-sonnet-20241022'],
-        priority: 3,
-        enabled: false,
-      },
-    ],
-  },
-}
+export const DEFAULT_CAPABILITIES: Record<
+  string,
+  IntelligenceCapabilityConfig
+> = SHARED_DEFAULT_CAPABILITIES;
 
 export interface CapabilityTestResult {
-  success: boolean
-  message?: string
-  latency?: number
-  provider?: string
-  model?: string
-  usage?: IntelligenceUsageInfo
-  tokensPerSecond?: number
+  success: boolean;
+  message?: string;
+  latency?: number;
+  provider?: string;
+  model?: string;
+  usage?: IntelligenceUsageInfo;
+  tokensPerSecond?: number;
   stability?: {
-    status: 'stable' | 'slow' | 'unstable' | 'unknown'
-    score?: number
-    summary: string
-    signals?: string[]
-  }
-  reasoning?: string
-  textPreview?: string
-  timestamp: number
+    status: "stable" | "slow" | "unstable" | "unknown";
+    score?: number;
+    summary: string;
+    signals?: string[];
+  };
+  reasoning?: string;
+  textPreview?: string;
+  timestamp: number;
 }
 
 export interface CapabilityBinding extends IntelligenceCapabilityProviderBinding {
-  provider?: IntelligenceProviderConfig
+  provider?: IntelligenceProviderConfig;
 }

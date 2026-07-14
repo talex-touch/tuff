@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 2.5.0
 tags: [surface, background, blur, glass, backdrop-filter, fallback]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # BaseSurface
 
@@ -216,29 +217,76 @@ code: |
 | `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | Target mode while moving. |
 | `settleDelay` | `number` | `150` | Delay before recovery after motion ends (ms). |
 | `autoDetect` | `boolean` | `false` | Auto detect transform motion and fallback. |
-| `transitionDuration` | `number` | `260` | Recovery transition duration (ms). |
+| `transitionDuration` | `number` | `299` | Recovery transition duration (ms). |
 | `fake` | `boolean` | `false` | Enable fake pseudo-element rendering mode. |
 | `fakeIndex` | `number` | `0` | z-index for fake layer. |
 | `tag` | `string` | `'div'` | Root element tag name. |
 
 ### Slots
 
-| Slot | Description |
-|------|-------------|
-| `default` | Surface content. |
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Surface content. It is rendered in `.tx-base-surface__content` above glass, filter, mask, motion-cover, and refraction-edge layers. |
+
+### Events
+
+None. `TxBaseSurface` is a visual primitive and does not emit interaction or lifecycle events.
+
+### Exposed Methods
+
+None. Drive motion fallback with `moving` or `autoDetect`, and update visual state through props.
 
 ### CSS Variables
 
-| Variable | Description | Light Default | Dark Default |
-|----------|-------------|---------------|--------------|
-| `--tx-surface-color` | Solid/mask background color | `var(--tx-fill-color-lighter)` (#fafafa) | #1d1d1d |
-| `--tx-surface-blur-bg` | Semi-transparent base for blur/glass | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.4)` |
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-surface-color` | `color` prop or theme fallback | Solid/mask background color. Falls back to `var(--tx-fill-color-lighter, #fafafa)`. |
+| `--tx-surface-radius` | `radius` prop | Root and layer border radius; numeric values become `px`. |
+| `--tx-surface-transition` | `transitionDuration` prop | Layer fade, background, and backdrop-filter transition duration. |
+| `--tx-surface-filter-blur` | `blur` prop | Backdrop blur radius for filter and refraction filter layers. |
+| `--tx-surface-filter-saturation` | `filterSaturation` prop | Filter-layer saturation multiplier. |
+| `--tx-surface-filter-contrast` | `filterContrast` prop | Filter-layer contrast multiplier. |
+| `--tx-surface-filter-brightness` | `filterBrightness` prop | Filter-layer brightness multiplier. |
+| `--tx-surface-mask-opacity` | `opacity`, `fallbackMaskOpacity`, or `overlayOpacity` | Active mask opacity after clamping to `0..1`. |
+| `--tx-surface-refraction-light-x` / `--tx-surface-refraction-light-y` | `refractionLightX` / `refractionLightY` or angle model | Refraction light anchor in percentages. |
+| `--tx-surface-refraction-strength` | `refractionStrength` model | Blended optical strength during rest, motion, and recovery. |
+| `--tx-surface-fake-index` | `fakeIndex` prop | z-index for fake pseudo-element rendering. |
 
 ## Interaction Contract
 
 - `tag` controls the root element and the default slot is rendered above all material layers.
 - `pure` mode renders only the root background; `mask` renders the mask layer and clamps opacity to `0..1`.
 - `blur` and `glass` degrade while `moving=true` or auto-detected transform motion is active. `fallbackMode='mask'` uses `fallbackMaskOpacity` when provided; `fallbackMode='pure'` renders no mask layer.
-- `glass` and `refraction` forward normalized geometry and optical props to `TxGlassSurface`.
-- `refraction` adds glass, filter, mask, and edge layers, plus renderer/profile/tone classes and light/strength CSS variables.
-- `autoDetect` observes the root and ancestor style/transition changes and tears listeners/observers down on unmount.
+- `glass` and `refraction` forward normalized geometry and optical props to `TxGlassSurface`; `brightness <= 3` is treated as a multiplier and converted to a percentage.
+- `refraction` renders glass, filter, mask, optional motion-cover, and edge layers, plus renderer/profile/tone classes and light/strength CSS variables.
+- `autoDetect` observes the root and ancestor `style` mutations plus `transitionstart`, `transitionend`, and `transitioncancel`; listeners and observers are removed on unmount.
+- `settleDelay` and `transitionDuration` both affect fallback recovery. The actual settle timer is at least the transition duration.
+- `refraction` keeps the refraction renderer active during motion, but blends optical parameters down while moving and back up during recovery.
+
+## Best Practices
+
+- Prefer `TxCard` for normal product containers; reach for `TxBaseSurface` only when a page needs direct material or fallback tuning.
+- Use `moving` when the parent already owns animation state. Use `autoDetect` for legacy transform transitions where explicit state is unavailable.
+- Keep `fallbackMode="mask"` for readable blur/glass content during motion; use `pure` only when a flat color is visually acceptable.
+- Treat `refractionStrength`, `refractionProfile`, and `refractionTone` as the high-level API. Touch raw channel offsets only for visual experiments.
+- Use `refractionRenderer="css"` only when the page can tolerate the CSS renderer's lower optical fidelity; keep `svg` for the default premium material.
+- Use `fake` when matching existing `.fake-background` layering; otherwise keep normal layer rendering for clearer DOM/debugging.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`, `types.ts`, `base-surface-motion.ts`, `base-surface-math.ts`, and `style/index.scss`.
+- The CSS-variable table now reflects runtime variables actually emitted or consumed by the component, instead of stale blur-background documentation from an earlier implementation.
+- Existing tests cover root tag/radius/color variables, mask opacity clamping, blur fallback, pure fallback, normalized `TxGlassSurface` props, refraction classes/light variables, and auto-detect teardown.
+- No events or exposed methods exist in source; visual state is controlled through props and CSS variables.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`.
+- Types: `packages/tuffex/packages/components/src/base-surface/src/types.ts`.
+- Motion helper: `packages/tuffex/packages/components/src/base-surface/src/base-surface-motion.ts`.
+- Math helper: `packages/tuffex/packages/components/src/base-surface/src/base-surface-math.ts`.
+- Styles: `packages/tuffex/packages/components/src/base-surface/src/style/index.scss`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/base-surface/__tests__/base-surface.test.ts` verifies mode rendering, fallback behavior, refraction parameters, and observer cleanup.
+
+<TuffDocSourceLink />
+

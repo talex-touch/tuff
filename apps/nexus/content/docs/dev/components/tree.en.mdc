@@ -97,48 +97,91 @@ code: |
 
 ### TxTree Props
 
-| Name | Type | Default | Description |
+| Prop | Type | Default | Description |
 |------|------|------|------|
-| `nodes` | `TreeNode[]` | `[]` | Data source |
-| `modelValue` | `string \| number \| Array<string \| number>` | - | Selected value |
-| `multiple` | `boolean` | `false` | Enable multi-select |
-| `selectable` | `boolean` | `true` | Selectable nodes |
-| `checkable` | `boolean` | `false` | Show checkboxes |
-| `disabled` | `boolean` | `false` | Disabled state |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Default expanded keys |
-| `expandedKeys` | `Array<string \| number>` | - | Controlled expanded keys |
-| `indent` | `number` | `16` | Indent width |
-| `filterText` | `string` | `''` | Filter text |
-| `filterMethod` | `(node, query) => boolean` | - | Custom filter function |
+| `nodes` | `TreeNode[]` | `[]` | Hierarchical data source. Nodes are flattened by expanded state and current filter. |
+| `modelValue` | `string \| number \| Array<string \| number>` | - | Selected key for single select, or selected keys when `multiple=true`. |
+| `multiple` | `boolean` | `false` | Toggle selected keys as an array instead of replacing with one key. |
+| `selectable` | `boolean` | `true` | Allow row and checkbox selection. Expansion controls still work when selection is disabled. |
+| `checkable` | `boolean` | `false` | Show a checkbox for each visible node. Checkbox state mirrors `modelValue`; it does not cascade to descendants. |
+| `disabled` | `boolean` | `false` | Disable selection for the whole tree and apply disabled row styling. Expansion remains available. |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Initial uncontrolled expanded keys; later prop changes reset internal expansion only when `expandedKeys` is not controlled. |
+| `expandedKeys` | `Array<string \| number>` | - | Controlled expanded keys. Parent must update this after `update:expandedKeys`. |
+| `indent` | `number` | `16` | Per-level left padding in pixels. |
+| `filterText` | `string` | `''` | Trimmed query used to filter nodes. Matching branches auto-expand while the query is non-empty. |
+| `filterMethod` | `(node: TreeNode, query: string) => boolean` | - | Custom matcher. Receives the original trimmed query; default matching uses a lowercased label contains check. |
 
 ### TreeNode
 
 | Field | Type | Description |
 |------|------|------|
-| `key` | `string \| number` | Unique key |
-| `label` | `string` | Display label |
-| `disabled` | `boolean` | Disabled state |
-| `children` | `TreeNode[]` | Child nodes |
-| `icon` | `TxIconSource \| string` | Node icon |
+| `key` | `string \| number` | Stable unique key used for selection and expansion. |
+| `label` | `string` | Default row text and default filter target. |
+| `children` | `TreeNode[]` | Child nodes. |
+| `leaf` | `boolean` | Set `false` to render an expandable caret even before child data exists. |
+| `disabled` | `boolean` | Disable selection for this node; expansion is still allowed for nodes with children. |
+| `icon` | `TxIconSource \| string` | Optional node icon; strings are treated as class icons. |
 
-### Events
+### TxTree Events
 
 | Event | Payload | Description |
 |------|------|------|
-| `update:modelValue` | `(value)` | Selection update |
-| `select` | `({ key, node })` | Node selected |
-| `toggle` | `({ key, expanded })` | Expand/collapse |
-| `update:expandedKeys` | `(keys)` | Expanded keys update |
+| `update:modelValue` | `value: TreeValue` | Emitted after a selectable node is clicked or its checkbox changes. |
+| `select` | `{ key: TreeKey, node: TreeNode }` | Emitted with the selected node after `update:modelValue`. |
+| `toggle` | `{ key: TreeKey, expanded: boolean }` | Emitted after a node caret expands or collapses. |
+| `update:expandedKeys` | `keys: TreeKey[]` | Emitted with the next expanded keys for uncontrolled and controlled expansion flows. |
 
-### Slots
+### TxTree Slots
 
-| Name | Description |
-|------|------|
-| `item` | Custom item renderer |
-| `empty` | Empty state |
+| Slot | Props | Description |
+|------|------|------|
+| `item` | `{ node, level, expanded, hasChildren, selected, toggleExpand, toggleSelect, indent }` | Replace the full visible row renderer. Call the slot helpers to preserve selection and expansion behavior. |
+| `empty` | - | Empty state shown when no visible rows remain after filtering. Defaults to `No results`. |
+
+## Exposed Methods
+
+None. Control selection and expansion through props and emitted events.
+
+## Interaction Contract
+
+- `expandedKeys` makes expansion controlled. The component still emits `update:expandedKeys`, but does not mutate internal expansion until the parent passes the new keys back.
+- `defaultExpandedKeys` seeds uncontrolled expansion and can reset it later while `expandedKeys` is absent.
+- Filtering does not mutate expansion state. It temporarily expands ancestors of matching nodes through `effectiveExpanded` while `filterText` is non-empty.
+- The default filter checks `node.label.toLowerCase().includes(query.toLowerCase())`; custom `filterMethod` receives the trimmed original query.
+- Selection is flat. `checkable` only changes the control UI; it does not implement parent/child tri-state or descendant cascading.
+- `disabled` and `node.disabled` block selection, but caret expansion remains available for expandable nodes.
+- The root uses `role="tree"` and rows use `role="treeitem"`; custom `item` slots should preserve comparable semantics when replacing the row.
+
+## Style Customization
+
+| Theme token | Used for |
+|-------------|----------|
+| `--tx-text-color-primary` | Default row label color. |
+| `--tx-text-color-secondary` | Caret and empty-state color. |
+| `--tx-color-primary` | Selected row background tint. |
+| `--tx-fill-color` | Hover row background tint. |
+
+## Best Practices
+
+- Treat `key` as the durable identifier. Do not derive it from display labels that may be translated or renamed.
+- Use `expandedKeys` only when another surface needs to own expansion state; otherwise prefer `defaultExpandedKeys`.
+- Keep permission-scope trees single-select and move actual grant assignment into `TxTransfer`, `DataTable`, or a detail panel.
+- Use `filterMethod` for domain-specific search such as path aliases or hidden metadata; keep `label` search for simple trees.
+- If you use `leaf=false` for lazy-looking placeholders, also provide a loading or empty child state in the surrounding UI. `TxTree` does not fetch children by itself.
+- When replacing rows with the `item` slot, call `toggleExpand()` from the disclosure control and `toggleSelect()` from the selectable region instead of duplicating state logic.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
-- Screenshot: `.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`.
-- Recommendation: use `key` as the stable node identifier; keep permission-scope trees single-select and move actual resource grants into `TxTransfer` so the tree does not own two responsibilities.
+- Reviewed against `packages/tuffex/packages/components/src/tree/src/TxTree.vue` and `types.ts`.
+- Existing tests cover expanded rendering and selection events; docs call out untested but source-visible behavior such as filtering expansion, controlled expansion, and non-cascading checkboxes.
+- The permission orchestration example should keep `TxTree` responsible for scope selection only; assigning resources belongs in adjacent controls.
+- Screenshot reference: `.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
+- Types: `packages/tuffex/packages/components/src/tree/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` covers default-expanded child rendering and selection-value emission.
+
+<TuffDocSourceLink />
+

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ContextCheckpoint, ContextPackageLog } from '@talex-touch/tuff-intelligence'
 import {
+  getContextExplainReasonI18nKey,
   summarizeContextCheckpoint,
   summarizeContextPackageLog
 } from './context-package-log-summary'
@@ -72,6 +73,7 @@ describe('context-package-log-summary', () => {
       excludedCount: 0,
       policyBlockedCount: 0,
       prunedCount: 0,
+      tombstoneCount: 0,
       includedItems: [
         {
           sourceType: 'current_input',
@@ -164,6 +166,48 @@ describe('context-package-log-summary', () => {
       ]
     })
     expect(JSON.stringify(summary)).not.toContain('api_key = secret')
+  })
+
+  it('classifies memory tombstones as metadata-only exclusions', () => {
+    const summary = summarizeContextPackageLog(
+      packageLog({
+        metadata: {
+          excluded: [
+            {
+              sourceType: 'memory',
+              sourceId: 'memory-removed',
+              reason: 'memory-tombstoned',
+              tokenEstimate: 24,
+              content: 'private memory body'
+            }
+          ]
+        }
+      })
+    )
+
+    expect(summary).toMatchObject({
+      excludedCount: 1,
+      tombstoneCount: 1,
+      policyBlockedCount: 0,
+      prunedCount: 0
+    })
+    expect(summary.excludedItems).toEqual([
+      {
+        sourceType: 'memory',
+        sourceId: 'memory-removed',
+        reason: 'memory-tombstoned',
+        tokenEstimate: 24
+      }
+    ])
+    expect(summary.excludedItems[0]).not.toHaveProperty('content')
+    expect(JSON.stringify(summary)).not.toContain('private memory body')
+  })
+
+  it('maps only known explain reasons to i18n keys', () => {
+    expect(getContextExplainReasonI18nKey('memory-tombstoned')).toBe(
+      'intelligence.audit.contextReasonMemoryTombstoned'
+    )
+    expect(getContextExplainReasonI18nKey('future-exclusion')).toBeUndefined()
   })
 
   it('keeps explain details metadata-only', () => {

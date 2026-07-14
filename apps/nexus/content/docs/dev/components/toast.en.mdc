@@ -36,7 +36,15 @@ code: |
 :::
 ## API
 
+### TxToastHost Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| - | - | - | `TxToastHost` has no props. Mount one host near the app root. |
+
 ### toast(options)
+
+Import `toast` from `@talex-touch/tuffex/utils`:
 
 ::TuffCodeBlock{lang="ts"}
 ---
@@ -46,17 +54,43 @@ code: |
     title?: string
     description?: string
     variant?: 'default' | 'success' | 'warning' | 'danger'
-    duration?: number // ms, 0 = no auto dismiss
-  })
+    duration?: number // default: 2600, 0 = no auto dismiss
+  }): string
 ---
 ::
 
+### dismissToast / clearToasts
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { clearToasts, dismissToast, toast } from '@talex-touch/tuffex/utils'
+
+  const id = toast({ title: 'Queued', duration: 0 })
+  dismissToast(id)
+  clearToasts()
+---
+::
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | No component-specific emits. The close button calls `dismissToast(id)` internally. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| - | - | `TxToastHost` renders from the global toast store and has no slots. |
+
 ## Interaction Contract
 
-- `<TxToastHost />` renders a notification region with `role="region"` and `aria-label="Notifications"`.
+- `<TxToastHost />` teleports a notification region to `body` with `role="region"` and `aria-label="Notifications"`.
 - Each toast includes a keyboard-focusable close button named `Dismiss notification`.
+- `toast()` returns the resolved id. Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
 - `duration > 0` auto-dismisses the toast; `duration: 0` keeps it visible until `dismissToast(id)` or `clearToasts()` is called.
-- Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
+- Every call raises the host z-index via the shared z-index manager so new notifications sit above the current interaction layer.
 
 ## Dashboard Feedback Center
 
@@ -97,19 +131,24 @@ code: |
 ---
 :::
 
-### dismissToast / clearToasts
+## Best Practices
 
-Import from `@talex-touch/tuffex/utils`:
-
-::TuffCodeBlock{lang="ts"}
----
-code: |
-  import { dismissToast, clearToasts } from '@talex-touch/tuffex/utils'
----
-::
+- Mount one host. Multiple hosts render the same global store and can duplicate notification regions.
+- Use stable ids for task, save, sync, and retry notifications so repeated state updates replace the previous toast.
+- Keep descriptions short; long progress, errors with recovery, or forms belong in panels, drawers, or pages.
+- Clear persistent toasts when leaving the owning page or when the underlying task resolves.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/toast/src/TxToastHost.vue` and `packages/tuffex/packages/utils/toast.ts`.
-- Screenshot: `.codex-screenshots/nexus-toast-feedback-task-center-demo-playwright-2026-05-28.png`.
-- Recommendation: mount `TxToastHost` at the app root and let business code use `toast` / `dismissToast` / `clearToasts`; persistent task notifications must provide a stable `id`.
+- **Accessibility note:** The host exposes a labeled notification region and each toast has a close button, but toast items are not `role="status"`/`alert` and the region is not `aria-live`. Use persistent visible copy or page-level status text for critical failures and long-running operations.
+- **Timer note:** Reusing an `id` replaces the store item, but existing auto-dismiss timers are not cancelled. Use `duration: 0` for persistent id-based task toasts, or unique ids for repeated transient success messages.
+- **Verified coverage:** `toast.test.ts` checks id replacement, returned ids, auto-dismiss, persistent toasts, dismiss/clear helpers, host region semantics, variant classes, rendered title/description, accessible close buttons, and close-button dismissal.
+
+## Source
+
+- Host source: `packages/tuffex/packages/components/src/toast/src/TxToastHost.vue`.
+- Utility source: `packages/tuffex/packages/utils/toast.ts` exports `toast`, `dismissToast`, `clearToasts`, `toastStore`, `TxToastOptions`, `TxToastItem`, and `TxToastVariant`.
+- Export alias: `packages/tuffex/packages/components/src/toast/index.ts` exports installable `ToastHost`, `TxToastHost`, and `TxToastHostInstance`.
+- Coverage: `packages/tuffex/packages/components/src/toast/__tests__/toast.test.ts` verifies store behavior, timers, host rendering, and dismissal.
+
+<TuffDocSourceLink />

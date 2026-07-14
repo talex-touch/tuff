@@ -93,6 +93,7 @@ const {
   resolveConfirmationFlowAction,
   resolveHighRiskFlowAction,
   resolveMode,
+  resolvePomodoroAdvancedLoopState,
   resolveSafeFlowAction,
 } = quickopsPlugin.__test
 
@@ -388,6 +389,8 @@ test('buildResultItems renders plugin-owned QuickOps settings summary read-only'
           defaultTimerDurationMs: 25 * 60 * 1000,
           defaultPomodoroFocusMs: 25 * 60 * 1000,
           defaultPomodoroBreakMs: 5 * 60 * 1000,
+          pomodoroAdvancedLoopSupported: true,
+          pomodoroCustomTemplateCount: 2,
           defaultScreenCleanDurationMs: 60 * 1000,
         },
       }
@@ -414,9 +417,17 @@ test('buildResultItems renders plugin-owned QuickOps settings summary read-only'
       state: 'read-only',
     },
   ])
-  assert.equal(items[2].meta.pomodoroAdvancedLoopState, 'pending-host-capability')
+  assert.match(items[2].subtitle, /pomodoroLoop supported/)
+  assert.equal(items[2].meta.pomodoroAdvancedLoopState, 'supported')
+  assert.equal(items[2].meta.pomodoroCustomTemplateCount, 2)
   assert.equal(items[3].meta.privateIpcFallback, false)
   assert.equal(items.every(item => item.actions.length === 0), true)
+})
+
+test('resolvePomodoroAdvancedLoopState keeps legacy diagnostics explicit', () => {
+  assert.equal(resolvePomodoroAdvancedLoopState({ pomodoroAdvancedLoopSupported: true }), 'supported')
+  assert.equal(resolvePomodoroAdvancedLoopState({ pomodoroAdvancedLoopSupported: false }), 'unsupported')
+  assert.equal(resolvePomodoroAdvancedLoopState({}), 'unknown-host-capability')
 })
 
 test('buildResultItems renders developer preview through QuickOps facade', async () => {

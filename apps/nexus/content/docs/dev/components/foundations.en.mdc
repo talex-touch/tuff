@@ -5,7 +5,8 @@ category: Foundation
 status: beta
 since: 1.0.0
 tags: [design, tokens, typography, color]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 This page mirrors the Tuffex variable system so Nexus docs render the same visual tokens.
@@ -91,6 +92,18 @@ code: |
 
 - Tokens follow the Tuffex default palette.
 - Dark mode uses `[data-theme='dark']` or `.dark`.
+
+## Review Notes
+
+- **Token note:** The tables document the default light/dark variables from `variables.scss`. High-contrast mixins define alternate values and should be documented separately when Nexus exposes that mode.
+- **Import note:** New pages should use `@talex-touch/tuffex/base.css` plus per-component style imports. The full `@talex-touch/tuffex/style.css` bundle remains a migration compatibility entry, not the preferred docs pattern.
+- **Verified coverage:** This page was manually checked against `variables.scss`; docs smoke coverage is provided by the component-docs coverage test and demo lazy/client-boundary tests.
+
+## Source
+
+- Token source: `packages/tuffex/packages/components/style/variables.scss`.
+- Runtime entry: `@talex-touch/tuffex/base.css` for variables/base styles, and `@talex-touch/tuffex/<component>/style.css` for component-level CSS.
+- Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies component doc registration; `apps/nexus/app/components/content/demo-lazy.test.ts` and `demo-client-boundary.test.ts` verify demo loading boundaries.
 
 <style scoped>
 .tuff-swatch {

@@ -63,6 +63,14 @@ function normalizeNavigationScope(value: unknown): typeof NAVIGATION_COMPONENTS_
   return value === NAVIGATION_COMPONENTS_SCOPE ? NAVIGATION_COMPONENTS_SCOPE : null
 }
 
+function resolveNavigationRequest(event: H3Event) {
+  const query = getQuery(event)
+  return {
+    locale: normalizeLocale(event.context?.params?.locale ?? query.locale),
+    scope: normalizeNavigationScope(event.context?.params?.scope ?? query.scope),
+  }
+}
+
 function findNavigationNodeByPath(items: unknown, targetPath: string): Record<string, unknown> | null {
   if (!Array.isArray(items))
     return null
@@ -119,16 +127,12 @@ async function queryDocsNavigation(event: H3Event) {
 }
 
 function resolveNavigationCacheKey(event: H3Event) {
-  const query = getQuery(event)
-  const locale = normalizeLocale(query.locale)
-  const scope = normalizeNavigationScope(query.scope)
+  const { locale, scope } = resolveNavigationRequest(event)
   return `${locale ? `locale:${locale}` : 'locale:all'}:${scope ? `scope:${scope}` : 'scope:all'}`
 }
 
 export default defineCachedEventHandler(async (event) => {
-  const query = getQuery(event)
-  const locale = normalizeLocale(query.locale)
-  const scope = normalizeNavigationScope(query.scope)
+  const { locale, scope } = resolveNavigationRequest(event)
   const navigation = await queryDocsNavigation(event)
   const localizedNavigation = filterNavigationByLocale(navigation, locale)
   const scopedNavigation = scopeNavigation(localizedNavigation, scope)

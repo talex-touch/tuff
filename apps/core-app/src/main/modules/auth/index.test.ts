@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AuthModule from './index'
 
 const {
   getMainConfigMock,
@@ -195,10 +196,15 @@ function createAppSetting(): MockAppSetting {
 }
 
 let appSettingState: MockAppSetting
-type AuthModuleTestApi = Awaited<typeof import('./index')>['__test__']
+type AuthModuleTestApi = typeof AuthModule.__test__
 type AuthStoragePreferenceInput = Parameters<
   AuthModuleTestApi['handleAuthStoragePreferenceChanged']
 >[0]
+
+async function importAuthModule(): Promise<typeof AuthModule> {
+  // Dynamic import is intentional: each test resets modules so auth state is rebuilt from current mocks.
+  return await import('./index')
+}
 
 describe('auth secure storage preference', () => {
   beforeEach(() => {
@@ -223,7 +229,7 @@ describe('auth secure storage preference', () => {
   })
 
   afterEach(async () => {
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH
     delete process.env.TUFF_STARTUP_BENCHMARK_ONCE
@@ -237,7 +243,7 @@ describe('auth secure storage preference', () => {
     delete appSettingState.auth?.useSecureStorage
     getSecureStoreValueMock.mockResolvedValue('persisted-token')
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
 
@@ -255,8 +261,8 @@ describe('auth secure storage preference', () => {
     expect(authModule.getAuthToken()).toBe('persisted-token')
   })
 
-  it('does not touch secure storage when clearing a session-only token', async () => {
-    const authModule = await import('./index')
+  it('clears persisted auth token when credential protection is disabled', async () => {
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({
       appRootPath: '/tmp/tuff',
@@ -266,31 +272,45 @@ describe('auth secure storage preference', () => {
 
     await authModule.__test__.clearAuthToken()
 
-    expect(setSecureStoreValueMock).not.toHaveBeenCalled()
+    expect(setSecureStoreValueMock).toHaveBeenCalledWith(
+      '/tmp/tuff',
+      'auth.token',
+      null,
+      'auth-token',
+      expect.any(Function)
+    )
     expect(authModule.getAuthToken()).toBeNull()
   })
 
-  it('does not touch secure storage during cold startup when session-only mode is enabled', async () => {
+  it('restores persisted auth token on cold startup after credential protection was disabled', async () => {
     appSettingState.auth!.useSecureStorage = false
     appSettingState.auth!.secureStorageUserOverridden = true
+    getSecureStoreValueMock.mockResolvedValue('persisted-token')
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
 
     await authModule.__test__.loadAuthToken()
 
-    expect(getSecureStoreHealthMock).not.toHaveBeenCalled()
-    expect(getSecureStoreValueMock).not.toHaveBeenCalled()
+    expect(getSecureStoreHealthMock).toHaveBeenCalledTimes(1)
+    expect(getSecureStoreValueMock).toHaveBeenCalledWith(
+      '/tmp/tuff',
+      'auth.token',
+      'auth-token',
+      expect.any(Function)
+    )
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()
-    expect(authModule.getAuthToken()).toBeNull()
+    expect(appSettingState.auth?.useSecureStorage).toBe(false)
+    expect(appSettingState.auth?.secureStorageUserOverridden).toBe(true)
+    expect(authModule.getAuthToken()).toBe('persisted-token')
   })
 
   it('restores persisted auth token when secure storage stays enabled', async () => {
     appSettingState.auth!.useSecureStorage = true
     getSecureStoreValueMock.mockResolvedValue('persisted-token')
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
 
@@ -306,11 +326,12 @@ describe('auth secure storage preference', () => {
     expect(authModule.getAuthToken()).toBe('persisted-token')
   })
 
-  it('clears persisted auth token when user explicitly disables secure storage', async () => {
-    const authModule = await import('./index')
+  it('keeps persisted auth token when user disables credential protection', async () => {
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({
       appRootPath: '/tmp/tuff',
+      authToken: 'memory-token',
       authUseSecureStorage: true
     })
 
@@ -323,14 +344,9 @@ describe('auth secure storage preference', () => {
       }
     } as AuthStoragePreferenceInput)
 
-    expect(setSecureStoreValueMock).toHaveBeenCalledWith(
-      '/tmp/tuff',
-      'auth.token',
-      null,
-      'auth-token',
-      expect.any(Function)
-    )
+    expect(setSecureStoreValueMock).not.toHaveBeenCalled()
     expect(getSecureStoreHealthMock).not.toHaveBeenCalled()
+    expect(authModule.getAuthToken()).toBe('memory-token')
   })
 
   it('migrates old default-disabled secure storage back to persistent protection mode', async () => {
@@ -338,7 +354,7 @@ describe('auth secure storage preference', () => {
     appSettingState.auth!.secureStorageUserOverridden = false
     getSecureStoreValueMock.mockResolvedValue('migrated-token')
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
 
@@ -356,7 +372,7 @@ describe('auth secure storage preference', () => {
   })
 
   it('persists in-memory token when user explicitly re-enables secure storage', async () => {
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({
       appRootPath: '/tmp/tuff',
@@ -383,7 +399,7 @@ describe('auth secure storage preference', () => {
   })
 
   it('does not persist anything when re-enabling secure storage without an in-memory token', async () => {
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({
       appRootPath: '/tmp/tuff',
@@ -413,7 +429,7 @@ describe('auth secure storage preference', () => {
     })
     getSecureStoreValueMock.mockResolvedValue('fallback-token')
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
 
@@ -441,7 +457,7 @@ describe('auth secure storage preference', () => {
         data: { status: 'pending' }
       })
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
 
@@ -490,7 +506,7 @@ describe('auth secure storage preference', () => {
     process.env.TUFF_VISIBLE_EVIDENCE_AUTH_POLL_STATUS = 'timeout'
     process.env.TUFF_VISIBLE_EVIDENCE_AUTH_POLL_DELAY_MS = '1'
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
 
@@ -542,7 +558,7 @@ describe('auth secure storage preference', () => {
       updatedAt: null
     }
 
-    const authModule = await import('./index')
+    const authModule = await importAuthModule()
     authModule.__test__.resetState()
     authModule.__test__.setState({
       appRootPath: '/tmp/tuff',

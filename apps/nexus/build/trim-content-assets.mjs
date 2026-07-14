@@ -62,44 +62,46 @@ function trimDuplicateSqliteWasm() {
   console.log(`[nexus-content-assets] removed duplicate sqlite wasm ${duplicateFileName}; worker now uses ${canonicalFileName}`)
 }
 
-function verifyRequiredRootSqlDumps() {
+function trimPrerenderedClientSqlDumps() {
   const contentRoot = join(distRoot, '__nuxt_content')
-  if (!existsSync(contentRoot)) {
-    console.log('[nexus-content-assets] root SQL dump verification skipped; __nuxt_content output is missing')
-    return
-  }
-
-  const collections = readdirSync(contentRoot).filter((collectionName) => {
-    return existsSync(join(contentRoot, collectionName, 'sql_dump.txt'))
-  })
-  if (!collections.length) {
-    console.log('[nexus-content-assets] root SQL dump verification skipped; no __nuxt_content SQL dumps found')
-    return
-  }
+  const collections = readdirSync(distRoot)
+    .map(fileName => fileName.match(/^dump\.([A-Za-z0-9_-]+)\.sql$/)?.[1])
+    .filter(Boolean)
+  if (!collections.length)
+    throw new Error('[nexus-content-assets] required Cloudflare root SQL dumps are missing')
 
   const verifiedDumps = []
+  let removedBytes = 0
   for (const collectionName of collections) {
     const rootFileName = `dump.${collectionName}.sql`
     const rootDumpPath = join(distRoot, rootFileName)
     const contentDumpPath = join(contentRoot, collectionName, 'sql_dump.txt')
-    if (!existsSync(rootDumpPath)) {
-      console.error(`[nexus-content-assets] required Cloudflare root SQL dump is missing: ${rootFileName}`)
-      process.exit(1)
-    }
+    if (!existsSync(rootDumpPath) || statSync(rootDumpPath).size === 0)
+      throw new Error(`[nexus-content-assets] required Cloudflare root SQL dump is missing or empty: ${rootFileName}`)
 
-    if (sha256(rootDumpPath) !== sha256(contentDumpPath)) {
-      console.error(`[nexus-content-assets] root SQL dump does not match __nuxt_content dump: ${rootFileName}`)
-      process.exit(1)
+    if (existsSync(contentDumpPath)) {
+      if (sha256(rootDumpPath) !== sha256(contentDumpPath))
+        throw new Error(`[nexus-content-assets] root SQL dump does not match __nuxt_content dump: ${rootFileName}`)
+
+      removedBytes += statSync(contentDumpPath).size
+      rmSync(contentDumpPath)
+      const collectionRoot = dirname(contentDumpPath)
+      if (!readdirSync(collectionRoot).length)
+        rmSync(collectionRoot, { recursive: true })
     }
 
     verifiedDumps.push(rootFileName)
   }
 
+  if (existsSync(contentRoot) && !readdirSync(contentRoot).length)
+    rmSync(contentRoot, { recursive: true })
+
   console.log(`[nexus-content-assets] verified Cloudflare root SQL dumps: ${verifiedDumps.join(', ')}`)
+  console.log(`[nexus-content-assets] removed prerendered client SQL dumps: ${removedBytes} bytes`)
 }
 
 trimDuplicateSqliteWasm()
-verifyRequiredRootSqlDumps()
+trimPrerenderedClientSqlDumps()
 
 const remainingDuplicateWasm = walkFiles(nuxtRoot)
   .map(file => relative(nuxtRoot, file))
@@ -108,6 +110,17 @@ const remainingDuplicateWasm = walkFiles(nuxtRoot)
 if (remainingDuplicateWasm.length) {
   console.error('[nexus-content-assets] duplicate sqlite wasm files remain:')
   for (const file of remainingDuplicateWasm)
+    console.error(`  ${file}`)
+  process.exit(1)
+}
+
+const remainingClientSqlDumps = walkFiles(distRoot)
+  .map(file => relative(distRoot, file))
+  .filter(file => /^__nuxt_content\/[A-Za-z0-9_-]+\/sql_dump\.txt$/.test(file))
+
+if (remainingClientSqlDumps.length) {
+  console.error('[nexus-content-assets] prerendered client SQL dumps remain:')
+  for (const file of remainingClientSqlDumps)
     console.error(`  ${file}`)
   process.exit(1)
 }

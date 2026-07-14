@@ -1,25 +1,22 @@
 ---
-title: FlatInput 扁平输入
-description: 简洁的扁平输入框
-category: Form
-syncStatus: migrated
+title: "FlatInput 扁平输入框"
+description: "低强调文本、密码与多行输入框，支持前缀内容和 Caps Lock 提示。"
+category: Basic
+status: beta
+since: 1.0.0
+tags: [input, form, flat]
+syncStatus: reviewed
+verified: true
 ---
+# FlatInput 扁平输入框
 
-# FlatInput 扁平输入
+`FlatInput` 是旧版 TuffEx 界面中使用的紧凑低强调输入框。它支持 `v-model`、可选图标或前缀插槽、带 Caps Lock 检测的密码模式，以及多行 textarea 模式。
 
-轻量、紧凑的输入样式。
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const text = ref('')
-const secret = ref('')
-</script>
+已人工核对 `packages/tuffex/packages/components/src/flat-input/src/FlatInput.vue`、`flat-input.test.ts` 与 `index.ts`。
 
 ## 基础用法
-### 扁平输入
-文本与密码输入。
-:::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}
+
+::::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -30,45 +27,93 @@ code: |
   </script>
 
   <template>
-    <FlatInput v-model="text" placeholder="请输入内容" />
+    <FlatInput v-model="text" icon="i-carbon-search" placeholder="搜索项目" />
     <FlatInput v-model="secret" placeholder="密码" password />
   </template>
 ---
-:::
-## API（Lite）
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: string
-    default: "''"
-    description: 输入值
-  - name: placeholder
-    type: string
-    default: "''"
-    description: 占位提示
-  - name: icon
-    type: string
-    default: "''"
-    description: 前缀图标类名
-  - name: password
-    type: boolean
-    default: 'false'
-    description: 密码模式
-  - name: area
-    type: boolean
-    default: 'false'
-    description: 文本域模式
----
-:::
+::::
 
-## Source
-<TuffDocSourceLink />
+## 组合示例
+
+### 前缀插槽
+
+同时提供默认插槽和 `icon` 时，默认插槽会替换 `icon` 渲染。
+
+```vue
+<template>
+  <FlatInput v-model="query" placeholder="命令">
+    <kbd>⌘K</kbd>
+  </FlatInput>
+</template>
+```
+
+### 多行模式
+
+```vue
+<template>
+  <FlatInput v-model="description" area :non-win="true" placeholder="补充说明" />
+</template>
+```
+
+`area` 适合短备注，不适合自动高度编辑器。组件渲染固定高度 textarea。
 
 ## 交互契约
 
-- `modelValue` 可省略，默认空字符串；输入时只触发 `update:modelValue`。
-- `icon` 会在没有 prefix slot 时渲染为前缀图标；传入默认 slot 时由 slot 完全替换前缀内容。
-- 根容器不产生额外 tab stop，键盘焦点停留在原生 `input` 或 `textarea` 上。
-- `password=true` 会使用原生 password input，并仅在密码模式下显示 Caps Lock 提示。
-- `area=true` 渲染 `textarea`；`nonWin=true` 移除 Windows 风格 class。
+- `v-model` 从 `modelValue` 读取，并通过 `update:modelValue` 发出当前字符串。
+- 没有 `icon` 和默认插槽时，根节点添加 `none-prefix` 并使用单列布局。
+- 默认插槽会替换图标渲染；它是前缀内容，不是后缀或操作插槽。
+- `password=true` 渲染 `input type="password"`，并在 keydown 时启用 Caps Lock 检测。
+- Caps Lock 检测基于 key code 和 `shiftKey`；提示只作信息展示，并且只在密码模式出现。
+- `area=true` 渲染 `textarea` 而不是 `input`，并添加 `area` 类以使用固定高度。
+- `nonWin=true` 会移除 `win` 类，从而关闭 Windows 风格的聚焦视觉。
+- 组件没有暴露 `disabled`、`readonly`、`name` 或校验 props；需要这些契约时应使用更完整的输入组件。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 绑定的输入值。 |
+| `placeholder` | `string` | `''` | input 或 textarea 的原生占位文本。 |
+| `icon` | `string` | `''` | 未提供默认插槽时，渲染到前缀 `<i>` 上的 CSS 类。 |
+| `password` | `boolean` | `false` | 渲染密码输入框并启用 Caps Lock 提示。 |
+| `nonWin` | `boolean` | `false` | 设为 `true` 时关闭默认 `win` 视觉类。 |
+| `area` | `boolean` | `false` | 渲染 textarea 并应用固定高度多行样式。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `string` | input 或 textarea 值变化时发出。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | 无 | 前缀内容，会替换 `icon` prop 输出。 |
+
+### 安装别名
+
+通过插件安装时，`index.ts` 会同时注册 `FlatInput` 与 `TxFlatInput` 两个名称。
+
+## 最佳实践
+
+- 仅在最小 API 足够时使用 `FlatInput`；需要禁用、校验、autocomplete 或表单 `name` 时应选择更完整的输入组件。
+- 前缀插槽适合键盘提示或短标签，不要放可点击控件。
+- 密码字段应配合组件外部真实的表单校验与提交语义。
+- `area` 适合短多行备注；它不会自动高度变化，也不应替代编辑器。
+- 需要标准边框和聚焦样式时传入 `:non-win="true"`，避免旧版 Windows 风格下划线视觉。
+
+## 审阅说明
+
+- **可访问性说明：** `FlatInput` 只渲染原生 input/textarea 控件与可选前缀；标签、`aria-label`、`name`、autocomplete、校验提示、禁用/只读状态需要由外层表单提供。
+- **实测覆盖:** `flat-input.test.ts` 覆盖默认文本模式、placeholder/type 输出、`v-model` 更新、图标与前缀插槽优先级、textarea 模式、`nonWin` class 切换、密码 Caps Lock 提示，以及插件安装路径。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flat-input/src/FlatInput.vue`。
+- Export alias: `packages/tuffex/packages/components/src/flat-input/index.ts` 导出 `FlatInput` 与 `TxFlatInput`，并在插件安装时注册两个名称。
+- Coverage: `packages/tuffex/packages/components/src/flat-input/__tests__/flat-input.test.ts` 覆盖渲染模式、更新事件、前缀行为、Caps Lock 提示、视觉 class 切换与安装注册。
+
+<TuffDocSourceLink />

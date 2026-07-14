@@ -33,10 +33,15 @@ export function createPreviewSdk(
     register: (ability) => registry.register(ability),
     listAbilities: () => registry.list(),
     listInventory: () => registry.listInventory(),
-    resolveWithDiagnostics: ({ query, signal, budgetMs }: PreviewResolveOptions) =>
-      registry.resolveWithDiagnostics({ query, signal }, budgetMs),
-    resolve: ({ query, signal }: PreviewResolveOptions) =>
-      registry.resolve({ query, signal }),
+    resolveWithDiagnostics: ({
+      query,
+      signal,
+      locale,
+      budgetMs,
+    }: PreviewResolveOptions) =>
+      registry.resolveWithDiagnostics({ query, signal, locale }, budgetMs),
+    resolve: ({ query, signal, locale }: PreviewResolveOptions) =>
+      registry.resolve({ query, signal, locale }),
   };
 }
 
@@ -77,7 +82,8 @@ export async function runPreviewSdkBenchmark(
     failures,
     summary: {
       total: results.length,
-      matchedExpected: results.filter((result) => result.matchedExpected).length,
+      matchedExpected: results.filter((result) => result.matchedExpected)
+        .length,
       mismatchedExpected: results.filter((result) => !result.matchedExpected)
         .length,
       exceededBudget: results.filter(
@@ -95,7 +101,9 @@ function resolvePreviewBenchmarkFailures(
   cases: PreviewBenchmarkCase[],
   results: PreviewBenchmarkCaseResult[],
 ): PreviewBenchmarkFailure[] {
-  const caseById = new Map(cases.map((benchmarkCase) => [benchmarkCase.id, benchmarkCase]));
+  const caseById = new Map(
+    cases.map((benchmarkCase) => [benchmarkCase.id, benchmarkCase]),
+  );
   const failures: PreviewBenchmarkFailure[] = [];
 
   for (const result of results) {

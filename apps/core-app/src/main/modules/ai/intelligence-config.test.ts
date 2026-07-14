@@ -1,13 +1,13 @@
+import { DEFAULT_CAPABILITIES, IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { getCapabilityOptions, ensureIntelligenceConfigLoaded } from './intelligence-config'
+import { ensureIntelligenceConfigLoaded, getCapabilityOptions } from './intelligence-config'
 import { tuffIntelligence } from './intelligence-sdk'
 
 const storageMocks = vi.hoisted(() => ({
   storedConfig: undefined as unknown,
   getMainConfig: vi.fn(() => storageMocks.storedConfig),
   saveMainConfig: vi.fn(),
-  subscribeMainConfig: vi.fn()
+  subscribeMainConfig: vi.fn(),
 }))
 
 vi.mock('electron', () => {
@@ -22,46 +22,47 @@ vi.mock('electron', () => {
       once: vi.fn(),
       setAppLogsPath: vi.fn(),
       setPath: vi.fn(),
-      whenReady: vi.fn().mockResolvedValue(undefined)
+      whenReady: vi.fn().mockResolvedValue(undefined),
     },
     screen: {
-      getPrimaryDisplay: vi.fn()
+      getPrimaryDisplay: vi.fn(),
     },
     crashReporter: {
-      start: vi.fn()
+      start: vi.fn(),
     },
     BrowserWindow: class BrowserWindow {},
     Tray: class Tray {},
     Menu: {
       buildFromTemplate: vi.fn(),
-      setApplicationMenu: vi.fn()
+      setApplicationMenu: vi.fn(),
     },
     nativeImage: {
-      createFromPath: vi.fn()
+      createFromPath: vi.fn(),
     },
     ipcMain: {
       handle: vi.fn(),
       on: vi.fn(),
-      removeHandler: vi.fn()
+      removeHandler: vi.fn(),
     },
     MessageChannelMain: class MessageChannelMain {
       port1 = {
         on: vi.fn(),
         postMessage: vi.fn(),
         start: vi.fn(),
-        close: vi.fn()
+        close: vi.fn(),
       }
+
       port2 = {
         on: vi.fn(),
         postMessage: vi.fn(),
         start: vi.fn(),
-        close: vi.fn()
+        close: vi.fn(),
       }
-    }
+    },
   }
   return {
     ...electronMock,
-    default: electronMock
+    default: electronMock,
   }
 })
 
@@ -77,33 +78,33 @@ vi.mock('@sentry/electron/main', () => ({
     fn({
       setTag: vi.fn(),
       setContext: vi.fn(),
-      setExtra: vi.fn()
-    })
+      setExtra: vi.fn(),
+    }),
   ),
   getCurrentScope: vi.fn(() => ({
     setTag: vi.fn(),
     setContext: vi.fn(),
-    setUser: vi.fn()
+    setUser: vi.fn(),
   })),
-  flush: vi.fn(async () => true)
+  flush: vi.fn(async () => true),
 }))
 
 vi.mock('../../core/precore', () => ({
   rootPath: '/tmp/tuff-test',
-  innerRootPath: '/tmp/tuff-test'
+  innerRootPath: '/tmp/tuff-test',
 }))
 
 vi.mock('../storage', () => ({
   getMainConfig: storageMocks.getMainConfig,
   saveMainConfig: storageMocks.saveMainConfig,
   subscribeMainConfig: storageMocks.subscribeMainConfig,
-  isMainStorageReady: vi.fn(() => false)
+  isMainStorageReady: vi.fn(() => false),
 }))
 
 vi.mock('./intelligence-sdk', () => ({
   tuffIntelligence: {
-    updateConfig: vi.fn()
-  }
+    updateConfig: vi.fn(),
+  },
 }))
 
 describe('intelligence-config capability options', () => {
@@ -114,22 +115,118 @@ describe('intelligence-config capability options', () => {
 
   it('does not enable Nexus by default for a fresh intelligence config', () => {
     ensureIntelligenceConfigLoaded(true)
+    const savedConfig = storageMocks.saveMainConfig.mock.calls[0]?.[1] as {
+      providers: Array<{ id: string, capabilities?: string[] }>
+      capabilities: Record<string, { providers: Array<{ providerId: string }> }>
+    }
 
     expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         providers: expect.arrayContaining([
-          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false })
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
         ]),
         capabilities: expect.objectContaining({
           'text.chat': expect.objectContaining({
             providers: expect.arrayContaining([
-              expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false })
-            ])
-          })
-        })
-      })
+              expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false }),
+            ]),
+          }),
+        }),
+      }),
     )
+
+    expect(
+      savedConfig.providers.find(provider => provider.id === 'tuff-nexus-default')?.capabilities,
+    ).not.toContain('audio.tts')
+    expect(
+      savedConfig.capabilities['audio.tts']?.providers.map(binding => binding.providerId),
+    ).not.toContain('tuff-nexus-default')
+    expect(
+      DEFAULT_CAPABILITIES['audio.tts']?.providers.map(binding => binding.providerId),
+    ).not.toContain('tuff-nexus-default')
+  })
+
+  it('removes stale Nexus TTS routing from stored configs without dropping valid bindings', () => {
+    const survivingTtsBindings = [
+      {
+        providerId: 'siliconflow-default',
+        priority: 1,
+        enabled: true,
+        models: ['fnlp/MOSS-TTSD-v0.5'],
+      },
+      {
+        providerId: 'openai-default',
+        priority: 2,
+        enabled: false,
+        models: ['tts-1', 'tts-1-hd'],
+      },
+    ]
+    const unrelatedCapability = {
+      id: 'custom.legacy',
+      name: 'Legacy capability',
+      type: 'custom',
+      providers: [{ providerId: 'local-default', priority: 1, enabled: true }],
+    }
+    const localProvider = {
+      id: 'local-default',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Local Model',
+      enabled: true,
+      priority: 3,
+      capabilities: ['custom.legacy'],
+    }
+
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'tuff-nexus-default',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Tuff Nexus',
+          enabled: true,
+          priority: 1,
+          capabilities: ['text.chat', 'audio.tts'],
+          metadata: { origin: 'tuff-nexus' },
+        },
+        localProvider,
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true,
+      },
+      capabilities: {
+        'audio.tts': {
+          id: 'audio.tts',
+          name: 'Text-to-Speech',
+          type: 'tts',
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 0, enabled: true },
+            ...survivingTtsBindings,
+          ],
+        },
+        'custom.legacy': unrelatedCapability,
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2,
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const savedConfig = storageMocks.saveMainConfig.mock.calls[0]?.[1] as {
+      providers: Array<{ id: string, capabilities?: string[] }>
+      capabilities: Record<string, { providers: unknown[] }>
+    }
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledOnce()
+    expect(
+      savedConfig.providers.find(provider => provider.id === 'tuff-nexus-default')?.capabilities,
+    ).not.toContain('audio.tts')
+    expect(savedConfig.capabilities['audio.tts']?.providers).toEqual(survivingTtsBindings)
+    expect(savedConfig.providers.find(provider => provider.id === 'local-default')).toEqual(localProvider)
+    expect(savedConfig.capabilities['custom.legacy']).toEqual(unrelatedCapability)
   })
 
   it('does not auto-enable Nexus when patching a config without explicit enabled flags', () => {
@@ -140,19 +237,19 @@ describe('intelligence-config capability options', () => {
           type: IntelligenceProviderType.LOCAL,
           name: 'Local Model',
           priority: 1,
-          capabilities: ['text.chat']
-        }
+          capabilities: ['text.chat'],
+        },
       ],
       globalConfig: {
         defaultStrategy: 'adaptive-default',
         enableAudit: true,
         enableCache: false,
-        enableQuota: true
+        enableQuota: true,
       },
       capabilities: {},
       promptRegistry: [],
       promptBindings: [],
-      version: 2
+      version: 2,
     }
 
     ensureIntelligenceConfigLoaded(true)
@@ -161,16 +258,16 @@ describe('intelligence-config capability options', () => {
       expect.anything(),
       expect.objectContaining({
         providers: expect.arrayContaining([
-          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false })
-        ])
-      })
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
+        ]),
+      }),
     )
     expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         providers: expect.arrayContaining([
-          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false })
-        ])
-      })
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
+        ]),
+      }),
     )
   })
 
@@ -183,26 +280,26 @@ describe('intelligence-config capability options', () => {
           name: 'Local Model',
           enabled: true,
           priority: 1,
-          capabilities: ['text.chat']
-        }
+          capabilities: ['text.chat'],
+        },
       ],
       globalConfig: {
         defaultStrategy: 'adaptive-default',
         enableAudit: true,
         enableCache: false,
-        enableQuota: true
+        enableQuota: true,
       },
       capabilities: {
         'text.chat': {
           id: 'text.chat',
           name: 'Chat',
           type: 'chat',
-          providers: [{ providerId: 'local-default', priority: 1, enabled: true }]
-        }
+          providers: [{ providerId: 'local-default', priority: 1, enabled: true }],
+        },
       },
       promptRegistry: [],
       promptBindings: [],
-      version: 2
+      version: 2,
     }
 
     ensureIntelligenceConfigLoaded(true)
@@ -213,11 +310,11 @@ describe('intelligence-config capability options', () => {
         capabilities: expect.objectContaining({
           'text.chat': expect.objectContaining({
             providers: expect.arrayContaining([
-              expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false })
-            ])
-          })
-        })
-      })
+              expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false }),
+            ]),
+          }),
+        }),
+      }),
     )
   })
 
@@ -231,7 +328,7 @@ describe('intelligence-config capability options', () => {
           enabled: false,
           priority: 1,
           capabilities: ['text.chat'],
-          metadata: { origin: 'tuff-nexus' }
+          metadata: { origin: 'tuff-nexus' },
         },
         {
           id: 'local-default',
@@ -239,14 +336,14 @@ describe('intelligence-config capability options', () => {
           name: 'Local Model',
           enabled: true,
           priority: 1,
-          capabilities: ['text.chat']
-        }
+          capabilities: ['text.chat'],
+        },
       ],
       globalConfig: {
         defaultStrategy: 'adaptive-default',
         enableAudit: true,
         enableCache: false,
-        enableQuota: true
+        enableQuota: true,
       },
       capabilities: {
         'text.chat': {
@@ -255,13 +352,13 @@ describe('intelligence-config capability options', () => {
           type: 'chat',
           providers: [
             { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
-            { providerId: 'local-default', priority: 1, enabled: true, models: [] }
-          ]
-        }
+            { providerId: 'local-default', priority: 1, enabled: true, models: [] },
+          ],
+        },
       },
       promptRegistry: [],
       promptBindings: [],
-      version: 2
+      version: 2,
     }
 
     ensureIntelligenceConfigLoaded(true)
@@ -273,14 +370,14 @@ describe('intelligence-config capability options', () => {
           'text.chat': expect.objectContaining({
             providers: expect.arrayContaining([
               expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false }),
-              expect.objectContaining({ providerId: 'local-default', enabled: true })
-            ])
-          })
-        })
-      })
+              expect.objectContaining({ providerId: 'local-default', enabled: true }),
+            ]),
+          }),
+        }),
+      }),
     )
     expect(getCapabilityOptions('text.chat')).toMatchObject({
-      allowedProviderIds: ['local-default']
+      allowedProviderIds: ['local-default'],
     })
   })
 
@@ -293,7 +390,7 @@ describe('intelligence-config capability options', () => {
           name: 'Local Model',
           enabled: true,
           priority: 1,
-          capabilities: ['text.chat']
+          capabilities: ['text.chat'],
         },
         {
           id: 'tuff-nexus-default',
@@ -302,13 +399,13 @@ describe('intelligence-config capability options', () => {
           enabled: false,
           priority: 2,
           capabilities: ['text.chat'],
-          metadata: { origin: 'tuff-nexus' }
-        }
+          metadata: { origin: 'tuff-nexus' },
+        },
       ],
       globalConfig: {
         defaultStrategy: 'adaptive-default',
         enableAudit: true,
-        enableCache: false
+        enableCache: false,
       },
       capabilities: {
         'text.chat': {
@@ -317,18 +414,18 @@ describe('intelligence-config capability options', () => {
           type: 'chat',
           providers: [
             { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
-            { providerId: 'local-default', priority: 2, enabled: true, models: ['llama3.1'] }
-          ]
-        }
+            { providerId: 'local-default', priority: 2, enabled: true, models: ['llama3.1'] },
+          ],
+        },
       },
       promptRegistry: [],
       promptBindings: [],
-      version: 2
+      version: 2,
     }
 
     expect(getCapabilityOptions('text.chat')).toMatchObject({
       allowedProviderIds: ['local-default'],
-      modelPreference: ['llama3.1']
+      modelPreference: ['llama3.1'],
     })
   })
 
@@ -338,24 +435,113 @@ describe('intelligence-config capability options', () => {
       globalConfig: {
         defaultStrategy: 'adaptive-default',
         enableAudit: true,
-        enableCache: false
+        enableCache: false,
       },
       capabilities: {},
       promptRegistry: [],
       promptBindings: [],
-      version: 2
+      version: 2,
     }
 
     ensureIntelligenceConfigLoaded(true)
 
     expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ enableQuota: true })
+      expect.objectContaining({ enableQuota: true }),
     )
     expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        globalConfig: expect.objectContaining({ enableQuota: true })
+        globalConfig: expect.objectContaining({ enableQuota: true }),
+      }),
+    )
+  })
+
+  it('patches persisted configs with missing stable default capabilities without enabling Nexus', () => {
+    const capabilityIdsPatchedFromDefaults = [
+      'search.semantic',
+      'audio.stt',
+      'workflow.execute',
+      'agent.run',
+    ] as const
+
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'tuff-nexus-default',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Tuff Nexus',
+          enabled: false,
+          priority: 1,
+          capabilities: ['text.chat'],
+          metadata: { origin: 'tuff-nexus' },
+        },
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          enabled: true,
+          priority: 2,
+          capabilities: ['text.chat'],
+        },
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true,
+      },
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          name: 'Chat',
+          type: 'chat',
+          providers: [
+            { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
+            { providerId: 'local-default', priority: 2, enabled: true },
+          ],
+        },
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2,
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const patchedConfig = storageMocks.storedConfig as {
+      providers: Array<{ id: string, enabled?: boolean }>
+      capabilities: Record<
+        string,
+        { id?: string, providers?: Array<{ providerId: string, enabled?: boolean }> }
+      >
+    }
+
+    for (const capabilityId of capabilityIdsPatchedFromDefaults) {
+      expect(
+        Object.prototype.hasOwnProperty.call(DEFAULT_CAPABILITIES, capabilityId),
+        `${capabilityId} must be registered as a default capability`,
+      ).toBe(true)
+      expect(patchedConfig.capabilities[capabilityId], capabilityId).toMatchObject({
+        id: capabilityId,
       })
+    }
+
+    expect(
+      patchedConfig.providers.find(provider => provider.id === 'tuff-nexus-default'),
+    ).toMatchObject({
+      enabled: false,
+    })
+    expect(patchedConfig.capabilities['text.chat']?.providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ providerId: 'tuff-nexus-default', enabled: false }),
+      ]),
+    )
+    expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
+        ]),
+      }),
     )
   })
 
@@ -368,26 +554,26 @@ describe('intelligence-config capability options', () => {
           name: 'Local Model',
           enabled: false,
           priority: 1,
-          capabilities: ['text.chat']
-        }
+          capabilities: ['text.chat'],
+        },
       ],
       globalConfig: {
         defaultStrategy: 'adaptive-default',
         enableAudit: true,
         enableCache: false,
-        enableQuota: true
+        enableQuota: true,
       },
       capabilities: {
         'text.chat': {
           id: 'text.chat',
           name: 'Chat',
           type: 'chat',
-          providers: [{ providerId: 'local-default', priority: 1, enabled: true }]
-        }
+          providers: [{ providerId: 'local-default', priority: 1, enabled: true }],
+        },
       },
       promptRegistry: [],
       promptBindings: [],
-      version: 2
+      version: 2,
     }
 
     ensureIntelligenceConfigLoaded(true)
@@ -397,17 +583,17 @@ describe('intelligence-config capability options', () => {
       expect.objectContaining({
         providers: expect.arrayContaining([
           expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
-          expect.objectContaining({ id: 'local-default', enabled: false })
-        ])
-      })
+          expect.objectContaining({ id: 'local-default', enabled: false }),
+        ]),
+      }),
     )
     expect(tuffIntelligence.updateConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         providers: expect.arrayContaining([
           expect.objectContaining({ id: 'tuff-nexus-default', enabled: false }),
-          expect.objectContaining({ id: 'local-default', enabled: false })
-        ])
-      })
+          expect.objectContaining({ id: 'local-default', enabled: false }),
+        ]),
+      }),
     )
   })
 
@@ -420,32 +606,32 @@ describe('intelligence-config capability options', () => {
           name: 'Local Model',
           enabled: true,
           priority: 1,
-          capabilities: ['text.chat']
-        }
+          capabilities: ['text.chat'],
+        },
       ],
       globalConfig: {
         defaultStrategy: 'adaptive-default',
         enableAudit: true,
         enableCache: false,
-        enableQuota: true
+        enableQuota: true,
       },
       capabilities: {
         'text.chat': {
           id: 'text.chat',
           name: 'Chat',
           type: 'chat',
-          providers: [{ providerId: 'local-default', priority: 1, enabled: true }]
+          providers: [{ providerId: 'local-default', priority: 1, enabled: true }],
         },
         'vision.ocr': {
           id: 'vision.ocr',
           name: 'OCR',
           type: 'vision',
-          providers: [{ providerId: 'tuff-nexus-default', priority: 1, enabled: false }]
-        }
+          providers: [{ providerId: 'tuff-nexus-default', priority: 1, enabled: false }],
+        },
       },
       promptRegistry: [],
       promptBindings: [],
-      version: 2
+      version: 2,
     }
 
     ensureIntelligenceConfigLoaded(true)
@@ -456,8 +642,8 @@ describe('intelligence-config capability options', () => {
           expect.objectContaining({
             id: 'local-system-ocr',
             enabled: true,
-            capabilities: ['vision.ocr']
-          })
+            capabilities: ['vision.ocr'],
+          }),
         ]),
         capabilities: expect.objectContaining({
           'vision.ocr': expect.objectContaining({
@@ -465,17 +651,17 @@ describe('intelligence-config capability options', () => {
               expect.objectContaining({
                 providerId: 'local-system-ocr',
                 enabled: true,
-                models: ['system-ocr']
-              })
-            ])
-          })
-        })
-      })
+                models: ['system-ocr'],
+              }),
+            ]),
+          }),
+        }),
+      }),
     )
 
     expect(getCapabilityOptions('vision.ocr')).toMatchObject({
       allowedProviderIds: ['local-system-ocr'],
-      modelPreference: ['system-ocr']
+      modelPreference: ['system-ocr'],
     })
   })
 })

@@ -1,40 +1,125 @@
 ---
 title: "GridLayout"
-description: "A responsive CSS Grid helper with an optional cursor-following hover spotlight."
+description: "Responsive CSS Grid helper with auto-fit columns and an optional cursor-following item spotlight."
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [grid, layout, responsive]
+syncStatus: reviewed
+verified: true
 ---
 # GridLayout
 
-Use `GridLayout` to arrange repeated cards or panels into an auto-fitting responsive grid. Add `tx-grid-layout__item` to children when the hover spotlight should be enabled.
+`TxGridLayout` arranges repeated cards or panels into an auto-fit CSS Grid and can add a cursor-following spotlight effect to children marked with `.tx-grid-layout__item`.
 
 ## Basic Usage
 
-### GridLayout
 :::TuffDemoWrapper{demo="GridLayoutGridLayoutDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxGridLayout>
-      <div v-for="i in 6" :key="i" class="tx-grid-layout__item" style="padding: 16px;">
-        Item {{ i }}
+      <div v-for="itemIndex in 6" :key="itemIndex" class="tx-grid-layout__item" style="padding: 16px;">
+        Item {{ itemIndex }}
       </div>
     </TxGridLayout>
   </template>
 ---
 :::
 
+## Composition Examples
+
+### Card Grid
+
+```vue
+<template>
+  <TxGridLayout min-item-width="240px" gap="16px" :max-columns="3">
+    <article v-for="card in cards" :key="card.id" class="tx-grid-layout__item p-4">
+      <h3>{{ card.title }}</h3>
+      <p>{{ card.description }}</p>
+    </article>
+  </TxGridLayout>
+</template>
+```
+
+### Static Grid
+
+Turn off `interactive` for dense tables, virtualized content, or any grid where pointer movement should not mutate child inline styles.
+
+```vue
+<template>
+  <TxGridLayout :interactive="false" min-item-width="180px" gap="12px">
+    <div v-for="metric in metrics" :key="metric.name" class="rounded-xl border p-3">
+      {{ metric.name }}
+    </div>
+  </TxGridLayout>
+</template>
+```
+
+## Interaction Contract
+
+- The root is a block `div` with CSS Grid layout.
+- Columns use `repeat(auto-fit, minmax(minItemWidth, 1fr))` by default.
+- At viewport widths `>= 1400px`, columns switch to `repeat(maxColumns, 1fr)`.
+- `gap`, `minItemWidth`, and `maxColumns` are written as CSS variables on the root.
+- The spotlight effect is applied only to descendants with class `.tx-grid-layout__item`.
+- When `interactive=true`, mouse movement updates each `.tx-grid-layout__item` with `--tx-grid-op`, `--tx-grid-x`, and `--tx-grid-y` inline style variables.
+- Mouse leave sets `--tx-grid-op` back to `0`.
+- When `interactive=false`, pointer movement and mouse leave handlers return without mutating child styles.
+
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
+|------|------|---------|-------------|
 | `minItemWidth` | `string` | `'300px'` | Minimum width used by the auto-fit grid columns. |
-| `gap` | `string` | `'1.5rem'` | Gap between grid items. |
+| `gap` | `string` | `'1.5rem'` | CSS gap between grid items. |
 | `maxColumns` | `number` | `4` | Fixed column count used on wide screens (`>= 1400px`). |
-| `interactive` | `boolean` | `true` | Enables the cursor-following hover spotlight for `.tx-grid-layout__item` children. |
+| `interactive` | `boolean` | `true` | Enables cursor-following spotlight updates for `.tx-grid-layout__item` children. |
 
-## Notes
+### Slots
 
-- Add class `tx-grid-layout__item` to items to enable hover styles.
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Grid item content. Add `.tx-grid-layout__item` to children that should receive the built-in card style and spotlight variables. |
+
+### Events
+
+No public events are emitted.
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-grid-gap` | `gap` | Root grid gap. |
+| `--tx-grid-min-width` | `minItemWidth` | Minimum column width. |
+| `--tx-grid-max-columns` | `maxColumns` | Wide-screen column count. |
+| `--tx-grid-op` | mouse state | Spotlight opacity on each item. |
+| `--tx-grid-x` / `--tx-grid-y` | mouse state | Pointer position relative to each item. |
+
+## Best Practices
+
+- Use `TxGridLayout` for repeated peer cards. Use `TxFlex` or `TxStack` for one-dimensional alignment.
+- Add `.tx-grid-layout__item` only when you want the built-in background, radius, cursor, and spotlight style.
+- Disable `interactive` for very large grids to avoid per-mousemove style updates across many children.
+- Keep `minItemWidth` aligned with the card’s real minimum readable width; do not use it as a spacing hack.
+- Avoid nesting interactive grids inside other pointer-heavy surfaces.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/grid-layout/index.ts`, `TxGridLayout.vue`, and `grid-layout.test.ts`.
+- Spotlight variables are written only to descendants with `.tx-grid-layout__item`; ordinary slotted children remain untouched.
+- `interactive=false` prevents pointer handlers from mutating child inline styles, which is important for large or virtualized grids.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/grid-layout/src/TxGridLayout.vue`.
+- Types: `packages/tuffex/packages/components/src/grid-layout/index.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/grid-layout/__tests__/grid-layout.test.ts` verifies default grid variables and slot content, prop-driven variable updates, and spotlight variables mutating only while interactive.
+
+<TuffDocSourceLink />

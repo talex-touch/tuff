@@ -213,7 +213,7 @@ vi.mock('./screenshot-service', () => ({
   }))
 }))
 
-function createContext(pluginName?: string) {
+function createContext(pluginName?: string, sdkapi?: number) {
   return {
     sender: {} as HandlerContext['sender'],
     eventName: NativeEvents.screenshot.capture.toEventName(),
@@ -221,9 +221,22 @@ function createContext(pluginName?: string) {
       ? {
           name: pluginName,
           uniqueKey: 'key',
-          verified: true
+          verified: true,
+          sdkapi
         }
       : undefined
+  }
+}
+
+function createUnverifiedPluginContext() {
+  return {
+    sender: {} as HandlerContext['sender'],
+    eventName: NativeEvents.screenshot.capture.toEventName(),
+    plugin: {
+      name: 'unverified.plugin',
+      uniqueKey: '',
+      verified: false
+    }
   }
 }
 
@@ -251,11 +264,38 @@ describe('NativeCapabilitiesModule', () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
 
+    const resolvedPluginSdkapi = 260713
     initNativeModule(module)
     const handler = mocks.handlers.get(NativeEvents.screenshot.capture.toEventName())
-    await handler?.({ target: 'cursor-display' }, createContext('demo.plugin'))
+    await handler?.(
+      { target: 'cursor-display' },
+      createContext('demo.plugin', resolvedPluginSdkapi)
+    )
 
-    expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:screenshot:capture')
+    expect(mocks.enforcePermission).toHaveBeenCalledWith(
+      'demo.plugin',
+      'native:screenshot:capture',
+      resolvedPluginSdkapi
+    )
+  })
+
+  it('rejects unverified plugin screenshot capture before permission or service execution', async () => {
+    const { NativeCapabilitiesModule } = await import('./index')
+    const module = new NativeCapabilitiesModule()
+
+    mocks.enforcePermission.mockClear()
+    mocks.capture.mockClear()
+    initNativeModule(module)
+    const handler = mocks.handlers.get(NativeEvents.screenshot.capture.toEventName())
+    expect(handler).toBeTypeOf('function')
+    if (!handler) throw new Error('Native screenshot capture handler was not registered')
+
+    await expect(
+      handler({ target: 'cursor-display' }, createUnverifiedPluginContext())
+    ).rejects.toMatchObject({ code: 'ERR_NATIVE_PLUGIN_UNVERIFIED' })
+
+    expect(mocks.enforcePermission).not.toHaveBeenCalled()
+    expect(mocks.capture).not.toHaveBeenCalled()
   })
 
   it('registers capability, file-index, file, and media handlers', async () => {
@@ -279,7 +319,11 @@ describe('NativeCapabilitiesModule', () => {
     const handler = mocks.handlers.get(NativeEvents.fileIndex.query.toEventName())
     const result = await handler?.({ text: 'demo', limit: 2 }, createContext('demo.plugin'))
 
-    expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:file-index:query')
+    expect(mocks.enforcePermission).toHaveBeenCalledWith(
+      'demo.plugin',
+      'native:file-index:query',
+      undefined
+    )
     expect(mocks.fileIndexSearch).toHaveBeenCalledWith({ text: 'demo' }, expect.any(AbortSignal))
     expect(result).toMatchObject({
       provider: 'auto',
@@ -301,8 +345,16 @@ describe('NativeCapabilitiesModule', () => {
       createContext('demo.plugin')
     )
 
-    expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:file:stat')
-    expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:media:probe')
+    expect(mocks.enforcePermission).toHaveBeenCalledWith(
+      'demo.plugin',
+      'native:file:stat',
+      undefined
+    )
+    expect(mocks.enforcePermission).toHaveBeenCalledWith(
+      'demo.plugin',
+      'native:media:probe',
+      undefined
+    )
     expect(mocks.stat).toHaveBeenCalledWith({ path: '/tmp/a.png' })
     expect(mocks.probeMedia).toHaveBeenCalledWith({ path: '/tmp/a.png' })
   })

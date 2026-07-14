@@ -374,3 +374,52 @@ function openFromButton(event: MouseEvent) {
 |------|------|---------|------|
 | `dashed` | `boolean` | `false` | 虚线分隔符 |
 | `inset` | `boolean` | `false` | 左侧缩进，适合与有图标/层级的 item 对齐 |
+
+## Slots
+
+### TxContextMenu
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `trigger` | - | 自定义触发元素；未提供时使用默认插槽作为触发内容。 |
+| `default` | - | 未提供 `trigger` 时的触发内容回退。 |
+| `menu` | - | 渲染到内部 `TxContextMenuPanel` 里的菜单内容。 |
+
+### TxContextMenuPanel
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 菜单项、分隔符或嵌套浮层内容。 |
+
+### TxContextMenuItem
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 主标签内容。 |
+| `avatar` | - | 透传给 `TxCardItem` 的左侧图标/头像内容。 |
+| `description` | - | 透传给 `TxCardItem` 的次级描述文本。 |
+| `right` | - | 覆盖默认生成的快捷键/二级菜单区域。 |
+
+`TxContextMenuDivider` 不提供插槽。
+
+## 最佳实践
+
+- 需要触发处理、坐标、视口碰撞避让和打开状态时，直接使用 `TxContextMenu`。
+- 只想复用菜单项行为且定位由外层负责时，把 `TxContextMenuPanel` 放进 `TxPopover`，适合二级菜单或 dropdown-like surface。
+- 编辑器快捷键、命令面板、画布节点等非原生右键/简单点击场景，优先使用 `trigger="manual"` 并显式传入 `x` / `y`。
+- 真正的右键菜单保持 `anchorMode="pointer"`；只有需要贴齐整个触发元素时才切换为 `reference`。
+- Teleport 出去的子菜单必须在子级 `TxContextMenuPanel` 上设置 `outsideGuard`，否则父菜单的外部点击逻辑可能把子菜单点击当作外部点击。
+- `closeOnSelect=false` 只用于父级二级菜单行或多步骤动作；普通命令选中后应关闭菜单。
+- 破坏性操作使用 `danger` 明确表达风险；`color` 只用于设计系统中已有语义色。
+
+## 审阅说明
+
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenu.vue` 确认受控/非受控打开状态、pointer/reference virtual anchor、触发模式、外部点击处理和 BaseAnchor 透传。
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue` 确认面板布局、`closeOnSelect` / `close` 注入、`dense`、`outsideGuard`、`role` 与 `ariaLabel` 行为。
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuItem.vue` 确认 `disabled`、`danger`、自定义 `color`、`shortcut`、`submenu`、单项 `closeOnSelect` 和 item 插槽。
+- 类型契约：`packages/tuffex/packages/components/src/context-menu/src/types.ts` 导出触发方式、锚点模式、面板视觉枚举、props 和打开目标类型。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts` 覆盖受控宽度渲染、右键坐标、受控 x/y 打开、Escape 关闭保护、触发器 pointerdown 关闭行为、pointer/reference 锚点模式、启用/禁用 item 选择、快捷键/自定义颜色/子菜单渲染，以及独立 panel 的 close 注入。
+
+## Source
+<TuffDocSourceLink />
+

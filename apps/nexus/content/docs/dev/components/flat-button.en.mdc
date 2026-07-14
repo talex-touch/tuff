@@ -1,58 +1,127 @@
 ---
 title: FlatButton
-description: Minimal, low-emphasis button
+description: Native low-emphasis button for secondary actions, compact buttons, and lightweight loading states.
 category: Basic
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [button, action, flat]
+syncStatus: reviewed
+verified: true
 ---
 
 # FlatButton
 
-A lightweight button for secondary actions.
+`TuffFlatButton` is a native `<button type="button">` with low-emphasis styling. It keeps button semantics, blocks clicks while disabled or loading, and is intentionally smaller in scope than `TxButton`.
+
+Reviewed against `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`, `index.ts`, and `flat-button.test.ts`.
 
 ## Basic Usage
+
 ### Flat Button
-Default, primary, mini, and loading states.
+
 :::TuffDemoWrapper{demo="FlatButtonFlatButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffFlatButton>Default</TuffFlatButton>
-    <TuffFlatButton primary>Primary</TuffFlatButton>
-    <TuffFlatButton mini>Mini</TuffFlatButton>
-    <TuffFlatButton loading>Loading</TuffFlatButton>
+    <div class="tuff-demo-row">
+      <TuffFlatButton>Default</TuffFlatButton>
+      <TuffFlatButton primary>Primary</TuffFlatButton>
+      <TuffFlatButton mini>Mini</TuffFlatButton>
+      <TuffFlatButton loading>Loading</TuffFlatButton>
+    </div>
   </template>
 ---
 :::
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: primary
-    type: boolean
-    default: 'false'
-    description: Primary visual style
-  - name: mini
-    type: boolean
-    default: 'false'
-    description: Compact size
-  - name: disabled
-    type: boolean
-    default: 'false'
-    description: Disable interactions
-  - name: loading
-    type: boolean
-    default: 'false'
-    description: Loading state
----
-:::
 
-## Source
-<TuffDocSourceLink />
+## Composition Examples
+
+### Secondary Toolbar Action
+
+```vue
+<template>
+  <TxFlex align="center" gap="8px">
+    <TuffFlatButton @click="refresh">Refresh</TuffFlatButton>
+    <TuffFlatButton primary @click="openDetails">View details</TuffFlatButton>
+  </TxFlex>
+</template>
+```
+
+### Async Action
+
+```vue
+<script setup lang="ts">
+const saving = ref(false)
+
+async function save() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    await api.save()
+  }
+  finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <TuffFlatButton :loading="saving" @click="save">
+    Save changes
+  </TuffFlatButton>
+</template>
+```
 
 ## Interaction Contract
 
 - The root is a native `<button type="button">`, so it does not submit parent forms by default.
 - `disabled` and `loading` both set the native `disabled` attribute and block `click` emission.
-- `loading` renders a spinner while preserving button content.
-- `primary` only changes the visual style. Non-primary buttons keep the `fake-background` hover layer.
-- `mini` switches to the compact size without changing button semantics.
+- `loading` adds `.is-loading`, renders `.tx-flat-button__loading` with an inline SVG spinner, and keeps the default slot content visible.
+- `primary` adds `.is-primary` and removes the non-primary `fake-background` class.
+- Non-primary buttons keep `fake-background` and set hover background through `--fake-color`.
+- `mini` adds `.is-mini`, reducing min width and horizontal padding without changing semantics.
+- Enabled clicks emit the original `MouseEvent`.
+- The component installs globally under `TuffFlatButton`, not `TxFlatButton`.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `primary` | `boolean` | `false` | Use primary visual styling. |
+| `mini` | `boolean` | `false` | Use compact size styling. |
+| `disabled` | `boolean` | `false` | Disable native button and block click emits. |
+| `loading` | `boolean` | `false` | Show spinner, disable native button, and block click emits. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `click` | `MouseEvent` | Emitted only when `disabled=false` and `loading=false`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Button label/content. Remains visible during loading. |
+
+## Best Practices
+
+- Use `TuffFlatButton` for secondary or local actions. Use `TxButton` for full variant, native type, border, vibration, or stronger hierarchy needs.
+- Bind `loading` to async mutations to prevent duplicate submissions.
+- Do not rely on `primary` to mean destructive or success. Pair important states with explicit text.
+- Use `mini` for dense toolbars, not for primary form actions.
+- Since the component always uses `type="button"`, use `TxButton native-type="submit"` when a form submit button is required.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`, `index.ts`, and `flat-button.test.ts`.
+- **Verified coverage:** native button rendering, default slot content, non-primary `fake-background`, primary and mini classes, enabled click emission with the native `MouseEvent`, disabled/loading native semantics, no-submit default type, and plugin install registration.
+- Accessibility note: the component keeps native button semantics with `type="button"`; `disabled` and `loading` set the native `disabled` attribute, while enabled keyboard/focus behavior stays delegated to the browser.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`.
+- Export alias: `packages/tuffex/packages/components/src/flat-button/index.ts` exports the component as `TuffFlatButton` and installs the same global name.
+- Coverage: `packages/tuffex/packages/components/src/flat-button/__tests__/flat-button.test.ts` verifies rendering, classes, click emission, disabled/loading blocking, form-safe button type, and plugin registration.
+<TuffDocSourceLink />

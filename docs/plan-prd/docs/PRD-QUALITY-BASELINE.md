@@ -1,6 +1,6 @@
 # PRD 质量基线
 
-> 更新时间：2026-07-06
+> 更新时间：2026-07-10
 > 定位：活跃 PRD 的最小质量约束。
 
 ## 1. 适用范围
@@ -16,20 +16,27 @@
 
 ## 2. 当前强口径
 
-- 当前执行基线：root / CoreApp `2.4.13-beta.4`。历史 release 事实保留在 `../01-project/CHANGES.md` 与对应 Evidence Matrix；本文件只记录仍有效的质量边界。
+- 当前执行基线：root / CoreApp `2.4.13-beta.6`。历史 release 事实保留在 `../01-project/CHANGES.md` 与对应 Evidence Matrix；本文件只记录仍有效的质量边界。
 - `2.4.10` GitHub Release 与 Nexus release metadata sync 已完成；release integrity 继续按 R1 跟踪，公共包发布不再作为独立 Roadmap / blocker / evidence 项。当前质量主线以 `Roadmap-vNext-2026-06-18.md` 为准。
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务，并以 release checklist、质量门禁与 R1 Release Integrity 为本轮收口主线；owner 已完成的平台人工验证不再作为 Roadmap 待办、平台后续或 blocker。
 - `2.5.0` AI Stable 只承诺 CoreBox 文本 + 显式 OCR、provider routing 与固定失败路径；OmniPanel Writing Tools 为 MVP/Beta，Workflow/Review Queue/Skills/Automation 为 Beta，Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。AI 已有 CoreApp Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但只有 packaged Electron CoreBox 文本/OCR成功、固定失败路径与 routing evidence 补齐后才能宣称 Stable 体验闭环。
+- Visible evidence 的 artifact/schema/tag/file 完整性与版本新鲜度是两个独立门禁：任何“当前版本 passed”声明必须使用 `visible:experience:verify --requireCurrentVersion`，并要求 manifest `baselineVersion` 精确匹配 `apps/core-app/package.json`。不带该 flag 的 13/13 结果只能描述 historical artifact snapshot，不能升级为当前 packaged runtime evidence。
 - `2.5.3` 本地知识检索方向已锁定：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 是增强项；MVP 不引入独立向量数据库服务。2026-06-17 CoreApp 已落地 documents/chunks SQLite SoT、FTS5 index/triggers、typed SDK、metadata filters、citation 与 token-budgeted Context Builder foundation。
 - 2026-06-24 `LocalKnowledgeEngine` metadata filters 增强为支持 dotted nested path 与数组 scalar 包含匹配；ContextHygiene retrieval scope 已把 2.5.3 citation、document source、retrieval status 与 degraded reason 写入 `ContextPackage` item/package log metadata，并提供 metadata-only `contextListPackageLogs` typed SDK / CoreApp channel 读取入口，形成 2.5.3 -> 2.5.4 citation/explain 桥接；`contextListCheckpoints` typed SDK / CoreApp channel 已可按 session/type 读取 checkpoint boundary reason、context scope 与 metadata；`@talex-touch/tuff-intelligence` 镜像 SDK 与 Intelligence Audit 已可展示 trace package metadata 摘要、metadata-only explain drawer、included/excluded source detail、citation metadata 与 excluded/pruned/policy-blocked 证据，官方 `touch-intelligence` CoreBox AI Ask 已在调用前生成 ContextPackage metadata 并 fail-soft 保持原问答路径；只读 `contextEvaluateMemory` 已提供显式记忆候选的 MemoryPolicy 预览，覆盖 suggested/rejected/needs_review 且不写库，CoreBox AI Ask 仅在用户显式“记住 / remember”时消费该预览生成 metadata 摘要。2026-06-27 Intelligence Audit 已新增 host-side Memory Review 最小面板与 `contextListMemories` / `contextSetMemoryEnabled` typed SDK / CoreApp channel：手动输入候选、先策略评估、仅 `suggested` 且内容未变更时显式保存，saved list 只展示 normal / non-tombstoned memory，可禁用/重新启用，并可通过 `contextDeleteMemory` 写 tombstone 删除，`rejected` / `needs_review` fail-closed。该进展只扩展 SQLite/FTS/citation MVP、ContextPackage metadata 证据链、checkpoint metadata reader、CoreBox 最近路径、Audit explain drawer 最小外壳、记忆策略预览、最小手动确认入口与查看/禁用/删除/tombstone 小闭环，不代表 embeddings/rerank、本地模型、完整 explain drawer 产品化、完整 Memory 面板搜索/编辑或 2.5.4 自动长期记忆完成。
 - `2.5.4` ContextHygiene 与自动记忆治理方向已锁定：Session / Checkpoint / CompressionSnapshot / MemoryItem / ContextPackage 必须以本地 SQLite 为 SoT；新 session 不默认继承旧 session 原文，旧会话只允许通过相关性检索或用户显式继续意图注入。2026-06-17 CoreApp 已落地 CoreBox-only prepareTurn/saveMemory/deleteMemory foundation、context package explain log、secret memory rejection、tombstone-first delete 与 private turn redaction。
+- 2026-07-11 R9.2 P0/P1 closure 质量门禁：6 个子任务实现 `6/6`。host-owned assembler、final memory/tombstone revalidation、Memory Review 原子 replace+tombstone、CompressionSnapshot CAS/no-delete、Workflow run isolation、OmniPanel/Assistant light context，以及 CoreBox active widget 单次派发/latest-request-wins 均有 focused/controlled contract；isolated packaged Electron 已覆盖 CoreBox `new / retrieval` 与 Assistant `new / light`，且两条受控 Provider 路径均为单次调用。evidence manifest 必须继续区分 unit/controlled/packaged/real-profile 并扫描 raw prompt/response/turn/memory/secret；该时点 `real-profile`、OmniPanel/Workflow packaged 保持 open；Workflow 后续 closure 见下方 2026-07-12 context lifecycle evidence。workspace/project memory 缺稳定 scope identity 时继续 fail-closed，任何 `scopeRef` schema/data migration 仍需独立 preflight、rollback 与显式确认。任务入口为 `.trellis/tasks/07-10-r9-2-context-hygiene-p0-p1-closure/`。
+- 2026-07-11 archived continuation follow-up：inactive/missing explicit continue 必须创建新 session id，优先受治理 CompressionSnapshot、仅在无 snapshot 时回退 secret-free legacy summary；旧 raw turns/Memory 不得跨边界。`ContextContinuationSummary` 只暴露 source id、reason、status 与 summary source metadata；blocked/missing 继续 current input 并标记 excluded/unavailable。当前只有 focused/controlled + plugin build evidence，不升级 packaged/real-profile 口径。
+- 2026-07-12 tombstone explain follow-up：`memory-tombstoned` 必须在 Audit safe summary 中独立计数并映射本地化 reason；excluded item 只保留 sourceType/sourceId/reason/tokenEstimate。未知 reason 安全回退为机器字符串，不能误标或泄露 content。当前只有 focused summarizer/UI typecheck evidence，不升级 packaged/real-profile 口径。
+- 2026-07-12 Workflow packaged runtime follow-up：renderer 发给 typed Intelligence SDK 的 `WorkflowDefinition` 必须可被 Electron structured-clone；不得把 Vue proxy 或其它不可 clone 值带入 transport。新建/内置派生 workflow 的 step ID 必须按 workflow scope 重生，并同步更新 model `previousStep` 引用，避免 `intelligence_workflow_steps.id` 全局主键冲突。focused 12 tests、web typecheck、lint、bundle/package 与 fresh-profile packaged terminal domain result 已通过；明确 provider-unavailable 不是 Provider 成功，也不升级 Workflow owner/scope context evidence。
+- 2026-07-12 Workflow context lifecycle / packaged evidence follow-up：每个 run 必须拥有独立 `owner=workflow`、`scope=session` context session；首个 `text.chat` model step 使用 `mode=new` 建立确定的 per-run session，后续 model step 使用 `mode=continue` 复用它。禁止对未创建 session 直接 continue 后把 `continuation-session-missing` 当正常闭环，也禁止同一 run 的步骤漂移到多个 context session。focused orchestration 9 tests、node typecheck/lint、bundle/package、两次 visible controlled run 与 evidence manifest privacy scan passed；当前 packaged entrypoints 为 CoreBox/Assistant/Workflow，OmniPanel 与 real-profile 仍 open。
+- 2026-07-13 OmniPanel packaged context evidence follow-up：visible built-in AI action 必须通过 host-owned `contextInvoke` 建立 `owner=omni-panel`、`mode=new`、`scope=light` ContextPackage，并保持每次用户 action 单次 Provider dispatch。isolated macOS arm64 package 已取得 1 session / 1 package log / 2 turns / 1 `/api/chat` / Ready result；focused OmniPanel 3 files / 38 tests 与 evidence verifier passed。manifest 当前 7 cases / 6 passed，packaged entrypoints 覆盖 CoreBox/Assistant/Workflow/OmniPanel，privacy scan passed；real-profile 仍 open。
 - `2.5.5` 本地模型运行时方向已锁定：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重不得进入安装包、同步载荷或普通日志。
 - `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
 - `2.6.0` i18n / Domain Lexicon / Cloud Catalog 收敛方向已锁定：UI messages、transport messages、domain lexicon、plugin localized metadata 与 cloud catalog 必须分层；单位、币种、时区、能力标签和搜索别名必须支持多语言但走 Domain Lexicon；CatalogService 下载数据必须验签/hash/schema 校验后导入 SQLite。
 - App Data Plugins 与 Everything 收口已新增 Roadmap：新增 Browser Data、Obsidian、VSCode、macOS App Data、Epic 等数据源必须显式授权、只读优先、可清理索引、可见 degraded/unsupported reason；Windows Everything 必须明确 SDK/CLI 策略、路径授权过滤与运行证据。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
 - 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；`pnpm test:targeted` 的 Nexus sync route test 已指向当前 `apps/nexus/test/api/sync/sync-routes-410.test.ts` 路径；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；独立 OmniPanel Gate workflow 已于 2026-05-18 删除，不再作为 GitHub Actions 自动门禁；若既有失败阻断，必须记录失败项与最近路径替代验证。
-- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；近期自动化与增量审计未发现新的 P0 fixed fake-success，CoreApp/TuffEx dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片。当前代码版本 root/CoreApp `2.4.13-beta.4`；本地 HEAD 以 Git 状态为准，避免把历史提交写成长期事实。当前工作区仍存在多主题未提交改动，必须按 related-only 拆分验证。CLI publish 已补 focused publish evidence：过期 app JWT 交互式自动刷新、API key `plugin:read`/`plugin:publish` scopes preflight、`TUFF_NON_INTERACTIVE=1` fail-closed、以及 upload POST 与 probe 一致的 device headers；公共包发布后续统一以版本变更后的 GitHub 自动发版 workflow 结果为准。`2.4.11-beta.6` 发布后 Gate D strict 已通过并作为最近完整发布链路证据；Nexus 资产 sha256/signatureUrl 与 signature endpoint 缺口仍按 R1 Release Integrity 记录；`2.4.11` release checklist 已有通过记录，但 R1 Release Integrity 未完成前不得宣称发布链路全闭环。旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用。vNext 路线见 `../04-implementation/Roadmap-vNext-2026-06-18.md`。
+- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；近期自动化与增量审计未发现新的 P0 fixed fake-success，CoreApp/TuffEx dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片。当前代码版本 root/CoreApp `2.4.13-beta.6`；本地 HEAD 以 Git 状态为准，避免把历史提交写成长期事实。当前工作区仍存在多主题未提交改动，必须按 related-only 拆分验证。CLI publish 已补 focused publish evidence：过期 app JWT 交互式自动刷新、API key `plugin:read`/`plugin:publish` scopes preflight、`TUFF_NON_INTERACTIVE=1` fail-closed、以及 upload POST 与 probe 一致的 device headers；公共包发布后续统一以版本变更后的 GitHub 自动发版 workflow 结果为准。`2.4.11-beta.6` 发布后 Gate D strict 已通过并作为最近完整发布链路证据；Nexus 资产 sha256/signatureUrl 与 signature endpoint 缺口仍按 R1 Release Integrity 记录；`2.4.11` release checklist 已有通过记录，但 R1 Release Integrity 未完成前不得宣称发布链路全闭环。旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用。vNext 路线见 `../04-implementation/Roadmap-vNext-2026-06-18.md`。
 - 2026-07-06 工作区质量口径：提交仍必须按 related-only 组织；当前 dirty worktree 至少包含 CoreApp auth、Nexus UI/account/design、packages/utils account helper 与 Trellis spec 变更，不能混成一个验证/提交批次。下一批优先级为当前 dirty worktree 拆分验证、Trellis bootstrap 收尾、R3 attach-only natural evidence、Nexus deployed preview evidence、R1 签名材料闭环。
 - 2026-07-04 文档稳定性口径：当前事实以 `../TODO.md`、Roadmap、Evidence Matrix 与本文件共同约束；不在长期质量文档里固化本地 `HEAD`、dirty worktree 或临时环境状态。稳定性与架构代码优化的执行导航见 `../04-implementation/Stability-Architecture-Optimization-2026-07-04.md`。
 - 2026-06-13 Nexus docs SEO/prerender 质量口径：docs 页面 metadata/OG/Twitter/canonical/alternate/robots/TechArticle JSON-LD 已抽到可测 helper 并形成最近路径覆盖；`no_prefix` 暂不切换为全站前缀策略，docs 过渡方案是显式 `/en/docs/**`、`/zh/docs/**` 页面路由 + 页内 locale 同步。prerender evidence helper 必须复用实际 route 枚举并验证真实 `content/docs`，避免 evidence 与生产清单分叉；localized `/en/docs`、`/zh/docs` 与稳定 docs API 是当前静态输出检查目标，unprefixed `/docs` 继续走 redirect/runtime 口径。已通过 focused prerender/SEO Vitest 与 scoped ESLint；不改变 `quality:pr` / `quality:release` 门禁。
@@ -131,9 +138,11 @@
 
 - Locale core 必须统一 `zh-CN` / `en-US` 与短码 `zh` / `en` 的映射；新增语言前必须先补 fallback、coverage 与 QA 口径。
 - `LocalizedText` / `LocalizedList` 必须支持 default 值与按 locale 解析；缺失翻译只能走显式 fallback chain，不得临时拼接中英文。
-- 2026-06-24 已落地 R8 Phase 1/2 foundation：共享 Locale Core、`LocalizedText` / `LocalizedList` resolver、CoreApp 插件 manifest localized metadata loader 与运行态展示解析；这只证明基础类型和兼容展示路径，不替代 Domain Lexicon、Plugin SDK facade、CatalogService 或质量门禁完成。
-- Domain Lexicon entry 必须包含 stable id、kind、source、version、labels、aliases 与 locale coverage；单位换算展示、解析和搜索召回必须消费同一词库。
-- 插件 SDK 只能开放受控 facade，不暴露宿主内部 resolver、raw locale store 或未隔离 catalog 写入。
+- 2026-06-24 已落地 R8 Phase 1/2 foundation：共享 Locale Core、`LocalizedText` / `LocalizedList` resolver、CoreApp 插件 manifest localized metadata loader 与运行态展示解析。
+- 2026-07-13 已落地 R8 Phase 3 Domain Lexicon V1：带 `source=builtin` provenance 的只读 registry、53-entry 单位 baseline、跨语言 aliases、locale label 与 PreviewSDK/CoreApp/QuickOps 共享 conversion source。
+- 2026-07-13 已落地 R8 Phase 4 Plugin SDK facade：`sdkapi 260713` main/renderer typed surface、verified context、`i18n.read` / `lexicon.read` / `lexicon.register` fail-closed、host namespace/provenance、原子 bounds、跨插件隔离与 disable/unload cleanup；CatalogService 与质量门禁仍未完成。
+- Domain Lexicon entry 必须包含 stable id、domain/source provenance、version、labels、aliases 与 locale coverage；metadata 必须是 plain JSON，单位换算展示、解析和搜索召回必须消费同一 official registry。
+- 插件 SDK 只能开放受控 facade，不暴露宿主内部 resolver、raw locale store 或未隔离 catalog 写入；plugin overlay 只驻留内存，不能覆盖 official 或跨 plugin 读取。
 - CatalogService 必须覆盖 download、verify、schema validate、SQLite import、activate、rollback 与版本状态；校验失败不得污染 active catalog。
 
 ## 5. PRD 验收模板
@@ -151,13 +160,13 @@
 
 ## 6. 文档同步矩阵
 
-| 变更类型 | 必须同步 |
-| --- | --- |
-| 行为/接口/架构变化 | `README` / `TODO` / `CHANGES` / `INDEX` 至少一处 |
-| 目标或质量门禁变化 | 同步 Roadmap 与本文件 |
-| 发布 gate、CI 自动门禁或 evidence 变化 | `TODO`、`CHANGES`、Roadmap、Quality Baseline；若涉及 Release manifest/asset 命名或 Nexus sync，还需同步更新链路规范与 workflow README |
-| 包发布 workflow 触发路径、lockfile/catalog 口径变化 | `TODO`、`CHANGES`、Roadmap、Quality Baseline、`.github/workflows/README.md` |
-| 历史事实归档 | `CHANGES` 或 archive，入口文档只保留索引 |
+| 变更类型                                            | 必须同步                                                                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 行为/接口/架构变化                                  | `README` / `TODO` / `CHANGES` / `INDEX` 至少一处                                                                                      |
+| 目标或质量门禁变化                                  | 同步 Roadmap 与本文件                                                                                                                 |
+| 发布 gate、CI 自动门禁或 evidence 变化              | `TODO`、`CHANGES`、Roadmap、Quality Baseline；若涉及 Release manifest/asset 命名或 Nexus sync，还需同步更新链路规范与 workflow README |
+| 包发布 workflow 触发路径、lockfile/catalog 口径变化 | `TODO`、`CHANGES`、Roadmap、Quality Baseline、`.github/workflows/README.md`                                                           |
+| 历史事实归档                                        | `CHANGES` 或 archive，入口文档只保留索引                                                                                              |
 
 ## 7. 关联入口
 

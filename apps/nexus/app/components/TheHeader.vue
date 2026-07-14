@@ -128,11 +128,11 @@ onUnmounted(() => {
 
         <div v-if="isHome" class="header-auth-divider" />
 
-        <div class="TuffHeader-Auth flex items-center gap-2 sm:gap-3">
+        <div class="TuffHeader-Auth flex shrink-0 items-center gap-2 sm:gap-3">
           <template v-if="!isAuthenticated">
             <NuxtLink
               :to="signInRoute"
-              class="border border-primary/20 rounded-full bg-transparent px-3 py-1 text-sm text-black font-medium transition dark:border-light/15 hover:border-primary/40 hover:bg-dark/5 dark:text-light dark:hover:bg-light/10"
+              class="shrink-0 whitespace-nowrap border border-primary/20 rounded-full bg-transparent px-3 py-1 text-sm text-black font-medium leading-none transition dark:border-light/15 hover:border-primary/40 hover:bg-dark/5 dark:text-light dark:hover:bg-light/10"
             >
               {{ t('nav.login') }}
             </NuxtLink>

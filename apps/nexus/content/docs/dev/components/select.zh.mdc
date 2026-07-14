@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [select, form, dropdown]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # Select 选择器
@@ -387,6 +387,8 @@ code: |
 | `search` | `(query: string)` | 远程模式下，面板打开且可编辑文本变化时触发。 |
 | `create` | `(option: TxSelectOption)` | `allowCreate` 根据当前输入创建选项时触发。 |
 
+## Slots
+
 ### TuffSelect Slots
 
 | 插槽名 | Props | 说明 |
@@ -417,6 +419,22 @@ code: |
 | `focus()` | 聚焦触发器输入框。 |
 | `blur()` | 让触发器输入框失焦。 |
 | `clear()` | 清空 value 和选中 label；单选触发 `''`，多选触发 `[]`。 |
+
+## 最佳实践
+
+- 数据驱动列表优先使用 `options`；少量静态模板且需要内联自定义标记时再使用 `TuffSelectItem`。
+- 同一组选项不要混用 `options` 和 slot item；存在 `options` 时由 `options` 模式负责渲染，slot item 只在无 prop options 时注册。
+- 远程搜索请求放在宿主层处理，并用 `searchDebounce` 控制请求频率。
+- 需要让创建值在后续打开下拉时出现时，应在宿主的 options store 中持久化 `create` 结果。
+- `modelValue` 类型必须与 `multiple` 对齐；单选使用标量，多选使用数组。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/select/src/TxSelect.vue` 确认基于 Popover 渲染、prop/slot 选项注册、单选与多选值路径、本地与远程搜索、创建、分组选项、loading/empty/footer 插槽、暴露方法和选中 label 同步。
+- 选项源码:`packages/tuffex/packages/components/src/select/src/TxSelectItem.vue` 确认注入注册、slot 文本 label 回退、本地过滤可见性和禁用点击抑制。
+- 类型契约:`packages/tuffex/packages/components/src/select/src/types.ts` 定义 `TxSelectValue`、model 值形态、选项/分组结构、prop 契约、上下文和 `SELECT_KEY`。
+- **实测覆盖:** `packages/tuffex/packages/components/src/select/__tests__/select.test.ts` 覆盖启用/禁用选择、本地过滤、远程搜索、选中 label 解析、数字字符串匹配、loading/empty 状态、多选标签、创建、分组选项、footer 插槽和状态 class。
+- 导出入口:`packages/tuffex/packages/components/src/select/index.ts` 导出 `TuffSelect`、`TuffSelectItem`、`TxSelect`、`TxSelectItem`、公共类型、上下文 key 和实例类型。
 
 ## Source
 <TuffDocSourceLink />

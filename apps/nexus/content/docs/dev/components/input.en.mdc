@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [input, field, search]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -184,6 +184,10 @@ rows:
     description: 'Read current value'
     type: '() => string | number'
     default: '-'
+  - name: inputEl
+    description: 'Native input or textarea element ref exposed for advanced focus/measurement cases'
+    type: 'HTMLInputElement | HTMLTextAreaElement | null'
+    default: '-'
 ---
 :::
 
@@ -203,11 +207,13 @@ rows:
 ---
 :::
 
-## Design Notes
-- Use subtle border/shadow shifts to express focus.  
-- Search states should feel lighter for toolbars and lists.
-- `type="number"` emits numbers for non-empty values and `''` when cleared.
+## Best Practices
+
+- Use subtle border and shadow shifts to express focus; do not add a second focus ring around the wrapper unless the surrounding form requires it.
+- Search states should stay lightweight for toolbars and lists. Use `TxSearchInput` when Enter search and debounced remote search are part of the contract.
+- `type="number"` emits numbers for non-empty values and `''` when cleared. Normalize downstream schemas before persistence.
 - The clear control is a keyboard-focusable button and is hidden for disabled or readonly input.
+- Slot content overrides `prefixIcon` / `suffixIcon`; choose one path per field so icons do not drift between docs and implementation.
 
 ## Composite Patterns
 
@@ -222,3 +228,18 @@ code: |
   </template>
 ---
 :::
+
+## Review Notes
+
+- **Value contract:** `type="number"` emits `Number(value)` for non-empty input and preserves `''` when cleared, so persistence layers should normalize before saving.
+- **Clear contract:** `clear()` and the clear button are blocked while `disabled` or `readonly`; otherwise clearing emits `update:modelValue`, `input`, and `clear`.
+- **Composition contract:** wrapper `class` / `style` stay on the outer shell while remaining attrs forward to the native `input` / `textarea`; prefix/suffix slots take precedence over icon props.
+- **Verified coverage:** `input.test.ts` covers text emits, number normalization, textarea attr forwarding, clear button accessibility, disabled/readonly clear blocking, and slot precedence.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/input/src/TxInput.vue`.
+- Export alias: `packages/tuffex/packages/components/src/input/index.ts` exports both `TuffInput` and `TxInput`.
+- Coverage: `packages/tuffex/packages/components/src/input/__tests__/input.test.ts` verifies text emits, number normalization, textarea attr forwarding, accessible clear button behavior, disabled/readonly clear blocking, and prefix/suffix slot precedence.
+
+<TuffDocSourceLink />

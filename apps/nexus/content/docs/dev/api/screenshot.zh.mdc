@@ -1,0 +1,135 @@
+# Screenshot SDK
+
+## 概述
+
+Screenshot SDK 通过 canonical 插件 lifecycle context 暴露原生截图能力：
+
+- `context.utils.screenshot`
+- `context.utils.plugin.screenshot`（同一个 facade）
+
+该 facade 复用 typed `NativeEvents.screenshot.*` transport 与宿主 `NativeScreenshotService`。插件不得自行拼 raw event，也不得导入 Core App 内部模块。
+
+`window.capture` 是高风险权限。support 查询、显示器枚举或截图进入 native service 前，宿主会依次要求 verified plugin context、有效且受支持的 `sdkapi`、manifest 权限声明和当前 grant。
+
+## Manifest
+
+## ::::TuffCodeBlock{lang="json"}
+
+code: |
+{
+"sdkapi": 260713,
+"permissions": {
+"required": ["window.capture"],
+"optional": ["intelligence.basic"]
+},
+"permissionReasons": {
+"window.capture": "按用户选择捕获屏幕区域并执行插件动作",
+"intelligence.basic": "用户要求 OCR 时识别截图中的文字"
+}
+}
+
+::::
+
+只有插件还会调用 OCR 或其他 Intelligence 能力时才声明 `intelligence.basic`。截图权限不会授予 AI 访问权，Intelligence 权限也不会授予屏幕捕获权。
+
+## API
+
+```typescript
+interface PluginScreenshotSDK {
+  getSupport(): Promise<NativeScreenshotSupport>;
+  listDisplays(): Promise<NativeScreenshotDisplay[]>;
+  capture(
+    request?: NativeScreenshotCaptureRequest,
+  ): Promise<PluginScreenshotCaptureResult>;
+}
+```
+
+| 方法               | 合同                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `getSupport()`     | 返回平台支持状态、engine 和可选 unsupported reason。                                          |
+| `listDisplays()`   | 返回稳定截图 ID、友好名称、全局 DIP 边界、缩放、旋转和主屏状态；不支持或枚举失败时返回 `[]`。 |
+| `capture(request)` | 捕获指针所在显示器、指定显示器或正数尺寸的全局区域。                                          |
+
+### Capture target
+
+| `target`         | 必需字段                          | 行为                                                                           |
+| ---------------- | --------------------------------- | ------------------------------------------------------------------------------ |
+| `cursor-display` | 无                                | 捕获当前指针所在显示器；可选 `cursorPoint` 使用全局桌面 DIP 坐标。这是默认值。 |
+| `display`        | 建议传 `displayId`                | 捕获 `listDisplays()` 返回的一个 ID。需要确定性行为时必须显式传 ID。           |
+| `region`         | `region: { x, y, width, height }` | 捕获全局桌面 DIP 坐标中的正数矩形；可选 `displayId` 用于约束显示器解析。       |
+
+`output` 默认是 `tfile`，也可设为 `data-url`。只有明确用户动作后才应设置 `writeClipboard: true`。结果包含显示器、尺寸、缩放、耗时、字节数和剪贴板状态。插件 facade 会主动移除临时文件原始 `path`；应消费 `tfileUrl` 或 `dataUrl`。
+
+## 捕获指定显示器
+
+## ::::TuffCodeBlock{lang="typescript"}
+
+code: |
+export default {
+async onInit(context) {
+const { screenshot } = context.utils
+const support = await screenshot.getSupport()
+if (!support.supported) {
+context.utils.logger.warn(`截图不可用：${support.reason ?? 'unsupported'}`)
+return
+}
+
+      const displays = await screenshot.listDisplays()
+      const display = displays.find(item => item.isPrimary) ?? displays[0]
+      if (!display) return
+
+      const capture = await screenshot.capture({
+        target: 'display',
+        displayId: display.id,
+        output: 'tfile',
+        writeClipboard: false
+      })
+
+      context.utils.logger.info(
+        `已捕获 ${capture.displayName}：${capture.width}x${capture.height}`
+      )
+      // 展示或传递 capture.tfileUrl，不要记录图片 payload。
+    }
+
+}
+
+::::
+
+## 截图后 OCR
+
+仅当下一个 typed capability 需要内联图片时使用 `data-url`。OCR 继续由 `context.utils.intelligence` 独立授权。
+
+## ::::TuffCodeBlock{lang="typescript"}
+
+code: |
+const capture = await context.utils.screenshot.capture({
+target: 'cursor-display',
+output: 'data-url',
+writeClipboard: false
+})
+
+if (!capture.dataUrl) throw new Error('SCREENSHOT_DATA_URL_UNAVAILABLE')
+
+const ocr = await context.utils.intelligence.vision.ocr({
+source: { type: 'data-url', dataUrl: capture.dataUrl },
+language: 'zh-CN',
+includeLayout: true
+})
+
+context.utils.logger.info(`OCR 完成：${ocr.result.text.length} 个字符`)
+
+::::
+
+不得把截图 data URL、OCR 文本、prompt 或模型输出写入普通日志、插件 metadata 或同步 payload。
+
+## 失败行为
+
+- `ERR_NATIVE_PLUGIN_UNVERIFIED`：调用没有携带宿主验证的插件上下文。
+- `ERR_NATIVE_PERMISSION_UNAVAILABLE`：权限运行时尚未就绪。
+- `PERMISSION_DENIED` / `SDKAPI_BLOCKED`：权限声明、grant 或 SDK hard-cut 未通过。
+- `ERR_NATIVE_SCREENSHOT_UNSUPPORTED`：当前运行时不支持原生截图。
+- `ERR_NATIVE_SCREENSHOT_INVALID_REGION`：region 缺失或尺寸不是正数。
+- `ERR_NATIVE_SCREENSHOT_DISPLAY_NOT_FOUND`：无法解析指定显示器或区域。
+- `ERR_NATIVE_SCREENSHOT_CAPTURE_FAILED`：native capture 执行失败。
+
+所有失败都应作为真实 unavailable 状态处理。不得伪造成功图片，也不得在用户已选定显示器后静默改抓另一块屏幕。

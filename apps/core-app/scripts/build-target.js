@@ -4,7 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { postProcessMacArtifacts } = require('./build-target/postprocess-mac');
-const { syncTouchTranslationBundledRuntime } = require('./lib/touch-translation-runtime-sync');
+const {
+  buildOfficialPluginPackages,
+  syncOfficialPluginBundledRuntimes
+} = require('./lib/touch-translation-runtime-sync');
 const {
   PACKAGED_RUNTIME_MODULES,
   collectPackagedRuntimeModuleEntries,
@@ -542,16 +545,19 @@ function build() {
 
   console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`);
 
-    const runtimeSyncResult = syncTouchTranslationBundledRuntime({ projectRoot, workspaceRoot });
-    if (runtimeSyncResult.synced) {
+    const officialPluginBuildOrder = buildOfficialPluginPackages({ projectRoot, workspaceRoot });
+    console.log(`[build-target] Built official plugin toolchain and packages: ${officialPluginBuildOrder.join(', ')}`);
+
+    const runtimeSyncResults = syncOfficialPluginBundledRuntimes({ projectRoot, workspaceRoot });
+    for (const runtimeSyncResult of runtimeSyncResults) {
+      if (!runtimeSyncResult.synced) {
+        throw new Error(
+          `[build-target] Official plugin runtime sync failed for ${runtimeSyncResult.pluginName}: ${runtimeSyncResult.reason}`
+        );
+      }
       console.log(
-        `[build-target] Synced touch-translation bundled runtime seed from ${runtimeSyncResult.canonicalBuildRoot}`
-      );
-    } else if (!runtimeSyncResult.skipped) {
-      console.warn('[build-target] touch-translation bundled runtime seed sync did not run');
-    } else {
-      console.warn(
-        `[build-target] Skip touch-translation bundled runtime seed sync: ${runtimeSyncResult.reason}`
+        `[build-target] Synced ${runtimeSyncResult.pluginName} bundled runtime seed ` +
+          `v${runtimeSyncResult.canonicalVersion} from ${runtimeSyncResult.canonicalBuildRoot}`
       );
     }
 

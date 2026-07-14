@@ -177,12 +177,16 @@ code: |
 |------|------|---------|------|
 | `modelValue` | `boolean` | - | Open state (`v-model`) |
 | `disabled` | `boolean` | `false` | Disable interaction |
+| `eager` | `boolean` | `false` | Mounts anchor content eagerly through `TxBaseAnchor`. |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | Floating placement |
 | `offset` | `number` | auto | Gap (computed from `arrowSize` when arrow is enabled; otherwise `2`) |
 | `width` | `number` | `0` | Panel width (`0` follows reference width) |
 | `minWidth` | `number` | `0` | Minimum panel width |
 | `maxWidth` | `number` | `360` | Maximum panel width |
+| `maxHeight` | `number` | `420` | Maximum panel height before internal overflow handling. |
+| `unlimitedHeight` | `boolean` | `false` | Disables the max-height cap for panels that manage their own scrolling. |
 | `referenceFullWidth` | `boolean` | `false` | Stretch reference container to full width |
+| `referenceClass` | `BaseAnchorClassValue` | - | Additional class value forwarded to the BaseAnchor reference wrapper. |
 | `showArrow` | `boolean` | `true` | Show arrow |
 | `arrowSize` | `number` | `12` | Arrow size |
 | `trigger` | `'click' \| 'hover'` | `'click'` | Trigger mode |
@@ -197,6 +201,7 @@ code: |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Card shadow style |
 | `panelRadius` | `number` | `18` | Card radius |
 | `panelPadding` | `number` | `10` | Card padding |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Advanced override object forwarded to the BaseAnchor panel card. |
 | `closeOnClickOutside` | `boolean` | `true` | Close on outside click (click trigger only) |
 | `closeOnEsc` | `boolean` | `true` | Close on ESC |
 
@@ -208,9 +213,36 @@ code: |
 | `close` | - | Emitted when uncontrolled or internal state closes. |
 | `update:modelValue` | `boolean` | Emitted whenever Popover requests a controlled or uncontrolled open state change. |
 
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `reference` | - | Trigger/reference content rendered inside the anchor reference wrapper. |
+| `default` | `{ side: string }` | Popover panel content. `side` is the resolved floating side from `TxBaseAnchor`. |
+
 ## Interaction Contract
 
 - With `trigger="click"`, outside-click and Escape closing are available; with `trigger="hover"`, open/close delays prevent flicker while entering the panel.
 - Use `keepAliveContent` for filters, short forms, and stateful explanation panels; disable it for pure display copy when state does not matter.
 - Popover should stay lightweight; upgrade to Drawer for one-screen-plus content, footer actions, or multi-field configuration.
-- Source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+
+## Best Practices
+
+- Keep popover content short: explanations, compact filters, and one or two lightweight actions.
+- Use `toggleOnReferenceClick=false` when the reference contains an input or custom focus behavior, as `TxSearchSelect` does.
+- Leave `keepAliveContent=true` for small forms or stateful filters; set it to `false` only for static copy.
+- Use `maxHeight` or internal scrolling for option panels instead of allowing a popover to cover the viewport.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/popover/src/types.ts`, `TxPopover.vue`, and `popover.test.ts`.
+- `offset` is computed from `arrowSize` when omitted; examples should not imply a fixed default gap.
+- `closeOnClickOutside` is click-trigger only because hover mode owns close timing through pointer/focus leave delays.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`.
+- Types: `packages/tuffex/packages/components/src/popover/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` verifies default BaseAnchor prop forwarding, offset derivation, hover trigger timing, disabled-close behavior, full-width reference classes, and content side slot props.
+
+<TuffDocSourceLink />

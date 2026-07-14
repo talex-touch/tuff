@@ -50,13 +50,14 @@ export class UnitConversionAbility extends BasePreviewAbility {
   ): Promise<PreviewAbilityResult | null> {
     const startedAt = Date.now();
     const text = this.getNormalizedQuery(context.query);
+    const locale = context.locale ?? "zh-CN";
     const parsed = parseUnitQuery(text);
     if (!parsed) return null;
 
-    const fromUnit = resolveUnit(parsed.fromUnit);
+    const fromUnit = resolveUnit(parsed.fromUnit, locale);
     if (!fromUnit) return null;
 
-    const toUnit = parsed.toUnit ? resolveUnit(parsed.toUnit) : null;
+    const toUnit = parsed.toUnit ? resolveUnit(parsed.toUnit, locale) : null;
     if (toUnit && fromUnit.category !== toUnit.category) {
       return null;
     }
@@ -105,7 +106,11 @@ export class UnitConversionAbility extends BasePreviewAbility {
       };
     }
 
-    const filteredRows = getUnitSuggestions(fromUnit.category, fromUnit.unit)
+    const filteredRows = getUnitSuggestions(
+      fromUnit.category,
+      fromUnit.unit,
+      locale,
+    )
       .slice(0, 3)
       .map((target) => ({
         label: `${fromUnit.display} → ${target.display}`,

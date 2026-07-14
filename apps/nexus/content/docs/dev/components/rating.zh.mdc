@@ -2,7 +2,7 @@
 title: Rating 评分
 description: 星级评分输入
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -114,22 +114,24 @@ code: |
 
 Rating 会将星级组暴露为 radio group。`disabled` 与 `readonly` 都会阻止评分更新；`readonly` 是只展示模式，会移除星级按钮交互入口但保留评分展示。
 
-## API（Lite）
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
   - name: modelValue
     type: number
     default: '0'
-    description: 当前评分
+    description: 通过 `v-model` 传入的当前评分。
   - name: maxStars
     type: number
     default: '5'
-    description: 星级数量
+    description: 渲染的星级按钮数量。
   - name: precision
     type: "number | 0.5"
     default: '1'
-    description: 精度步进
+    description: 步进精度。`0.5` 启用半星切换；其它 number 主要影响分数文本精度。
   - name: showText
     type: boolean
     default: 'false'
@@ -137,57 +139,90 @@ rows:
   - name: disabled
     type: boolean
     default: 'false'
-    description: 禁用交互
+    description: 禁用星级按钮，并在根节点标记 aria-disabled。
   - name: readonly
     type: boolean
     default: 'false'
-    description: 只展示模式
+    description: 只展示模式。星级按钮禁用，根节点标记 aria-readonly。
   - name: icon
     type: "string | TxIconSource"
     default: '-'
-    description: 统一设置评分图标
+    description: 统一设置填充层和空态层图标；状态图标未设置时使用它。
   - name: filledIcon
     type: "string | TxIconSource"
     default: 'star'
-    description: 已填充图标
+    description: 已填充图标。未设置时回退到 `icon`，再回退到 `star`。
   - name: emptyIcon
     type: "string | TxIconSource"
     default: 'star'
-    description: 空态图标
+    description: 空态图标。未设置时回退到 `icon`，再回退到 `star`。
   - name: halfIcon
     type: "string | TxIconSource"
     default: '-'
-    description: 半星图标；未设置时使用左侧裁切填充层
+    description: 半星图标。未设置时使用左侧裁切填充层。
   - name: filledColor
     type: string
     default: '#fbbf24'
-    description: 已填充颜色
+    description: 已填充图标颜色；CSS fallback 为 `#fbbf24`。
   - name: emptyColor
     type: string
     default: '#d1d5db'
-    description: 空态颜色
+    description: 空态图标颜色；CSS fallback 为 `#d1d5db`。
   - name: hoverColor
     type: string
     default: 'filledColor'
-    description: 悬停颜色
+    description: 填充层悬停颜色；回退到 `filledColor` / `#fbbf24`。
   - name: textColor
     type: string
     default: '#6b7280'
-    description: 分数文本颜色
+    description: 分数文本颜色；CSS fallback 为 `#6b7280`。
   - name: size
     type: "number | string"
     default: '20px'
-    description: 星级图标大小
+    description: 星级图标大小。number 会转换为 px；CSS fallback 为 `20px`。
   - name: gap
     type: "number | string"
     default: '2px'
-    description: 星级间距
+    description: 星级间距。number 会转换为 px；CSS fallback 为 `2px`。
   - name: animated
     type: boolean
     default: 'true'
-    description: 点击后是否播放 pop 动画
+    description: 选择后是否播放点击 pop / ripple 动画。
 ---
 :::
 
+### Events
+
+| 事件名 | 参数 | 说明 |
+|--------|------|------|
+| `update:modelValue` | `(value: number)` | 可交互星级点击后，带下一评分值 emit。 |
+| `change` | `(value: number)` | 与 `update:modelValue` 同步触发，供 change handler 消费。 |
+
+### Slots
+
+| 插槽名 | 参数 | 说明 |
+|--------|------|------|
+| `text` | `{ value: number, max: number }` | `showText` 为 true 时，替换默认 `value / max` 文本。 |
+
+## 最佳实践
+
+- 只有半步反馈有业务意义时才使用 `precision="0.5"`。是否满意或粗略信心值用整星更易扫读。
+- 不可输入时使用 `disabled`；展示历史评分时使用 `readonly`。两者都会阻止更新，但表达的意图不同。
+- 精确数值重要时打开 `showText` 或提供自定义 `#text` 插槽，尤其是半星值。
+- 只有图标集对比清晰时才分别设置 `filledIcon` / `emptyIcon` / `halfIcon`；否则使用统一 `icon` 并通过颜色区分状态。
+- 密集表单、表格或对动效敏感的上下文里关闭 `animated`，避免点击 pop 动效干扰录入节奏。
+
+## 审阅说明
+
+- 已对照 `packages/tuffex/packages/components/src/rating/src/types.ts`、`TxRating.vue` 与 `rating.test.ts` 核对。
+- 现有测试覆盖半星裁切、整星与半星重选、model/change 事件、readonly/disabled 阻断、自定义颜色/图标/尺寸、关闭动画、radio 语义和 `text` 插槽参数。
+- API 说明：`precision="0.5"` 会在点击当前选中的整星时启用半星切换；其它数值 precision 主要影响评分文本精度。
+- 可访问性说明：星级行是 radio group。展示历史评分用 `readonly`，不可输入状态用 `disabled`。
+
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/rating/src/TxRating.vue`.
+- Types: `packages/tuffex/packages/components/src/rating/src/types.ts` exports `RatingProps`, `RatingEmits`, and `RatingIcon`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/rating/__tests__/rating.test.ts` 验证半星裁切、model/change 事件、半星重选、readonly/disabled 阻断、自定义样式与图标、关闭动画、radio 语义及 `text` slot 参数。
+
 <TuffDocSourceLink />

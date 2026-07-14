@@ -1,6 +1,8 @@
 import type {
   IntelligenceAgentPayload,
   IntelligenceAgentResult,
+  IntelligenceAudioTranscribePayload,
+  IntelligenceAudioTranscribeResult,
   IntelligenceChatPayload,
   IntelligenceClassificationPayload,
   IntelligenceClassificationResult,
@@ -23,6 +25,8 @@ import type {
   IntelligenceImageAnalyzeResult,
   IntelligenceImageCaptionPayload,
   IntelligenceImageCaptionResult,
+  IntelligenceImageEditPayload,
+  IntelligenceImageEditResult,
   IntelligenceImageGeneratePayload,
   IntelligenceImageGenerateResult,
   IntelligenceImageTranslateE2ePayload,
@@ -50,9 +54,12 @@ import type {
   IntelligenceSentimentAnalyzeResult,
   IntelligenceStreamChunk,
   IntelligenceStreamEvent,
-  IntelligenceTTSPayload,
+  IntelligenceSTTPayload,
+  IntelligenceSTTResult,
   IntelligenceSummarizePayload,
   IntelligenceTranslatePayload,
+  IntelligenceTTSPayload,
+  IntelligenceTTSResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
   PromptWorkflowExecution
@@ -67,15 +74,16 @@ import {
   toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
 import { NetworkCooldownError } from '@talex-touch/utils/network'
-import { enterPerfContext } from '../../utils/perf-context'
 import { createLogger } from '../../utils/logger'
+import { enterPerfContext } from '../../utils/perf-context'
 import { agentManager } from './agents'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
+import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
-import { fetchProviderModels } from './provider-models'
 import { strategyManager } from './intelligence-strategy-manager'
+import { fetchProviderModels } from './provider-models'
 import { IntelligenceProvider } from './runtime/base-provider'
 
 const intelligenceLog = createLogger('Intelligence')
@@ -121,8 +129,9 @@ function hasExplicitProviderSelection(options: IntelligenceInvokeOptions): boole
 const findErrorArg = (args: unknown[]): unknown => args.find((arg) => arg instanceof Error)
 const logInfo = (...args: unknown[]) => intelligenceLog.info(formatLogMessage(...args))
 const logWarn = (...args: unknown[]) => intelligenceLog.warn(formatLogMessage(...args))
-const logError = (...args: unknown[]) =>
-  intelligenceLog.error(formatLogMessage(...args), { error: findErrorArg(args) })
+function logError(...args: unknown[]) {
+  return intelligenceLog.error(formatLogMessage(...args), { error: findErrorArg(args) })
+}
 
 const MAX_EMBEDDING_TOTAL_CHARS = 32_000
 const EMBEDDING_CHUNK_CHARS = 2_000
@@ -196,6 +205,73 @@ function averageEmbeddings(vectors: number[][], weights: number[]): number[] {
   return sum
 }
 
+function normalizeSemanticTopK(topK?: number): number {
+  if (!Number.isFinite(topK)) return 10
+  return Math.max(1, Math.floor(topK as number))
+}
+
+function normalizeSemanticThreshold(threshold?: number): number {
+  if (!Number.isFinite(threshold)) return 0
+  return Math.min(1, Math.max(0, threshold as number))
+}
+
+function isUsableEmbeddingVector(vector: unknown): vector is number[] {
+  if (!Array.isArray(vector) || vector.length === 0) {
+    return false
+  }
+
+  let squaredMagnitude = 0
+  for (const value of vector) {
+    if (!Number.isFinite(value)) {
+      return false
+    }
+    squaredMagnitude += value * value
+  }
+
+  return Number.isFinite(squaredMagnitude) && squaredMagnitude > 0
+}
+
+function calculateCosineSimilarity(
+  queryEmbedding: number[],
+  documentEmbedding: number[]
+): number | null {
+  if (queryEmbedding.length === 0 || queryEmbedding.length !== documentEmbedding.length) {
+    return null
+  }
+
+  let dotProduct = 0
+  let queryMagnitude = 0
+  let documentMagnitude = 0
+
+  for (let index = 0; index < queryEmbedding.length; index += 1) {
+    const queryValue = queryEmbedding[index]
+    const documentValue = documentEmbedding[index]
+    if (!Number.isFinite(queryValue) || !Number.isFinite(documentValue)) {
+      return null
+    }
+
+    dotProduct += queryValue * documentValue
+    queryMagnitude += queryValue * queryValue
+    documentMagnitude += documentValue * documentValue
+  }
+
+  const denominator = Math.sqrt(queryMagnitude) * Math.sqrt(documentMagnitude)
+  if (!Number.isFinite(denominator) || denominator <= 0) {
+    return null
+  }
+
+  const score = dotProduct / denominator
+  if (!Number.isFinite(score)) {
+    return null
+  }
+
+  return Math.min(1, Math.max(-1, score))
+}
+
+function normalizeRerankScore(score: number): number {
+  return Math.min(1, Math.max(0, (score + 1) / 2))
+}
+
 type CapabilityMethodName = keyof IntelligenceProviderAdapter
 
 const CAPABILITY_METHOD_MAP: Record<
@@ -246,35 +322,93 @@ function resolveCapabilityMethod(
   return CAPABILITY_METHOD_MAP[capabilityType] ?? null
 }
 
-function providerSupportsCapability(
+function providerImplementsMethod(
   provider: IntelligenceProviderAdapter,
-  capabilityId: string,
-  capabilityType: string,
-  stream: boolean
+  methodInfo: { method: CapabilityMethodName; requiresOverride?: boolean }
 ): boolean {
-  const config = provider.getConfig()
-  if (Array.isArray(config.capabilities) && config.capabilities.length > 0) {
-    if (!config.capabilities.includes(capabilityId)) {
-      return false
-    }
-  }
-
-  const methodInfo = resolveCapabilityMethod(capabilityType, stream)
-  if (!methodInfo) return false
-
   const providerRecord = provider as unknown as Record<string, unknown>
   const method = providerRecord[methodInfo.method]
   if (typeof method !== 'function') return false
 
   if (methodInfo.requiresOverride && provider instanceof IntelligenceProvider) {
     const baseRecord = IntelligenceProvider.prototype as unknown as Record<string, unknown>
-    const baseMethod = baseRecord[methodInfo.method]
-    if (method === baseMethod) {
+    if (method === baseRecord[methodInfo.method]) {
       return false
     }
   }
 
   return true
+}
+
+function providerDeclaresCapabilityOrFallback(
+  providerConfig: IntelligenceProviderConfig,
+  capabilityId: string,
+  capabilityType: string
+): boolean {
+  const declaredCapabilities = providerConfig.capabilities
+  if (!Array.isArray(declaredCapabilities) || declaredCapabilities.length === 0) {
+    return true
+  }
+
+  const declaresCapability = declaredCapabilities.includes(capabilityId)
+  const declaresSemanticEmbeddingFallback =
+    capabilityType === 'semantic-search' && declaredCapabilities.includes('embedding.generate')
+  const declaresRagEmbeddingFallback =
+    capabilityType === 'rag-query' &&
+    declaredCapabilities.includes('text.chat') &&
+    declaredCapabilities.includes('embedding.generate')
+  const declaresRerankEmbeddingFallback =
+    capabilityType === 'rerank' && declaredCapabilities.includes('embedding.generate')
+  const declaresChatRuntimeFallback =
+    (capabilityType === 'workflow' || capabilityType === 'agent') &&
+    declaredCapabilities.includes('text.chat')
+
+  return (
+    declaresCapability ||
+    declaresSemanticEmbeddingFallback ||
+    declaresRagEmbeddingFallback ||
+    declaresRerankEmbeddingFallback ||
+    declaresChatRuntimeFallback
+  )
+}
+
+export function providerSupportsCapability(
+  provider: IntelligenceProviderAdapter,
+  capabilityId: string,
+  capabilityType: string,
+  stream: boolean
+): boolean {
+  const config = provider.getConfig()
+  if (!providerDeclaresCapabilityOrFallback(config, capabilityId, capabilityType)) {
+    return false
+  }
+
+  const methodInfo = resolveCapabilityMethod(capabilityType, stream)
+  if (!methodInfo) return false
+
+  if (capabilityType === 'semantic-search' && !stream) {
+    return (
+      providerImplementsMethod(provider, { method: 'semanticSearch', requiresOverride: true }) ||
+      providerImplementsMethod(provider, { method: 'embedding' })
+    )
+  }
+
+  if (capabilityType === 'rag-query' && !stream) {
+    return (
+      providerImplementsMethod(provider, { method: 'ragQuery', requiresOverride: true }) ||
+      (providerImplementsMethod(provider, { method: 'chat' }) &&
+        providerImplementsMethod(provider, { method: 'embedding' }))
+    )
+  }
+
+  if (capabilityType === 'rerank' && !stream) {
+    return (
+      providerImplementsMethod(provider, { method: 'rerank', requiresOverride: true }) ||
+      providerImplementsMethod(provider, { method: 'embedding' })
+    )
+  }
+
+  return providerImplementsMethod(provider, methodInfo)
 }
 
 function extractMustacheVariables(template: string): string[] {
@@ -475,6 +609,12 @@ export class TuffIntelligenceSDK {
       }
       logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
 
+      const fallbackRuntimeOptions: IntelligenceInvokeOptions = {
+        ...runtimeOptions,
+        ...(runtimeOptions.modelPreference
+          ? { modelPreference: [...runtimeOptions.modelPreference] }
+          : {})
+      }
       this.applyModelPreference(runtimeOptions, strategyResult.selectedProvider, capabilityId)
 
       const startTime = Date.now()
@@ -540,9 +680,11 @@ export class TuffIntelligenceSDK {
               capabilityId,
               capabilityType: capability.type,
               payload,
-              runtimeOptions,
+              runtimeOptions: fallbackRuntimeOptions,
               manager,
-              fallbackProviders: strategyResult.fallbackProviders
+              fallbackProviders: strategyResult.fallbackProviders,
+              promptTemplate,
+              promptVariables
             })
 
         if (fallbackResult) {
@@ -637,7 +779,13 @@ export class TuffIntelligenceSDK {
           messages: sdk.applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
         }
         const startTime = Date.now()
-        const traceId = intelligenceAuditLogger.generateTraceId()
+        const provisionalTraceId = intelligenceAuditLogger.generateTraceId()
+        const configuredModel =
+          providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel
+        let finalTraceId = provisionalTraceId
+        let finalProvider = providerConfig.id
+        let finalModel = configuredModel
+        let finalLatency: number | undefined
         let accumulated = ''
         let finalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 
@@ -648,20 +796,35 @@ export class TuffIntelligenceSDK {
             typeof providerRuntimeOptions.metadata?.requestId === 'string'
               ? providerRuntimeOptions.metadata.requestId
               : undefined,
-          traceId,
+          traceId: provisionalTraceId,
           provider: providerConfig.id,
-          model: providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel,
+          model: configuredModel,
           metadata: providerRuntimeOptions.metadata
         }
 
         for await (const chunk of provider.chatStream(nextPayload, providerRuntimeOptions)) {
+          const chunkTraceId = chunk.traceId?.trim()
+          const chunkProvider = chunk.provider?.trim()
+          const chunkModel = chunk.model?.trim()
+          if (chunkTraceId) finalTraceId = chunkTraceId
+          if (chunkProvider) finalProvider = chunkProvider
+          if (chunkModel) finalModel = chunkModel
+          if (
+            typeof chunk.latency === 'number' &&
+            Number.isFinite(chunk.latency) &&
+            chunk.latency >= 0
+          ) {
+            finalLatency = chunk.latency
+          }
           if (chunk.usage) {
             finalUsage = chunk.usage
             yield {
               type: 'usage',
               capabilityId,
-              traceId,
-              usage: chunk.usage
+              traceId: finalTraceId,
+              usage: chunk.usage,
+              provider: finalProvider,
+              model: finalModel
             }
           }
           if (chunk.delta) {
@@ -669,11 +832,11 @@ export class TuffIntelligenceSDK {
             yield {
               type: 'delta',
               capabilityId,
-              traceId,
+              traceId: finalTraceId,
               delta: chunk.delta,
               content: accumulated,
-              provider: providerConfig.id,
-              model: providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel
+              provider: finalProvider,
+              model: finalModel
             }
           }
         }
@@ -681,22 +844,29 @@ export class TuffIntelligenceSDK {
         yield {
           type: 'end',
           capabilityId,
-          traceId,
+          traceId: finalTraceId,
           result: accumulated as T,
           content: accumulated,
           usage: finalUsage,
-          provider: providerConfig.id,
-          model: providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel,
+          provider: finalProvider,
+          model: finalModel,
           metadata: {
-            latency: Date.now() - startTime
+            latency: finalLatency ?? Date.now() - startTime
           }
         }
       }
 
+      let streamStarted = false
+      let selectedProviderEmittedDelta = false
       try {
-        yield* streamFromProvider(this, strategyResult.selectedProvider)
+        for await (const event of streamFromProvider(this, strategyResult.selectedProvider)) {
+          streamStarted ||= event.type === 'start'
+          selectedProviderEmittedDelta ||= event.type === 'delta'
+          yield event
+        }
       } catch (error) {
         if (
+          selectedProviderEmittedDelta ||
           strategyResult.fallbackProviders.length === 0 ||
           hasExplicitProviderSelection(runtimeOptions)
         ) {
@@ -704,19 +874,30 @@ export class TuffIntelligenceSDK {
         }
 
         logWarn(
-          `Stream failed for ${capabilityId} via ${strategyResult.selectedProvider.id}, attempting fallback providers`,
+          `Stream failed before the first delta for ${capabilityId} via ${strategyResult.selectedProvider.id}, attempting fallback providers`,
           toInvokeErrorMessage(error)
         )
 
         let lastError: unknown = error
         for (const fallbackProvider of strategyResult.fallbackProviders) {
+          let fallbackProviderEmittedDelta = false
           try {
-            yield* streamFromProvider(this, fallbackProvider)
+            for await (const event of streamFromProvider(this, fallbackProvider)) {
+              if (event.type === 'start' && streamStarted) {
+                continue
+              }
+              streamStarted ||= event.type === 'start'
+              fallbackProviderEmittedDelta ||= event.type === 'delta'
+              yield event
+            }
             return
           } catch (fallbackError) {
+            if (fallbackProviderEmittedDelta) {
+              throw fallbackError
+            }
             lastError = fallbackError
             logWarn(
-              `Stream fallback provider ${fallbackProvider.id} failed: ${toInvokeErrorMessage(fallbackError)}`
+              `Stream fallback provider ${fallbackProvider.id} failed before the first delta: ${toInvokeErrorMessage(fallbackError)}`
             )
           }
         }
@@ -828,6 +1009,27 @@ export class TuffIntelligenceSDK {
     })
   }
 
+  private resolveCapabilityRouting(capabilityId: string) {
+    const capabilityRouting = this.config.capabilities?.[capabilityId]
+    const fallbackCapabilityId =
+      capabilityId === 'search.semantic' || capabilityId === 'search.rerank'
+        ? 'embedding.generate'
+        : capabilityId === 'workflow.execute' || capabilityId === 'agent.run'
+          ? 'text.chat'
+          : undefined
+
+    if (!fallbackCapabilityId) {
+      return capabilityRouting
+    }
+
+    const hasEnabledCapabilityBinding = capabilityRouting?.providers?.some(
+      (binding) => binding.enabled !== false
+    )
+    return hasEnabledCapabilityBinding
+      ? capabilityRouting
+      : (this.config.capabilities?.[fallbackCapabilityId] ?? capabilityRouting)
+  }
+
   private prepareRuntimeOptions(
     capabilityId: string,
     options: IntelligenceInvokeOptions
@@ -850,7 +1052,7 @@ export class TuffIntelligenceSDK {
       runtimeOptions.allowedProviderIds = [preferredProviderId]
     }
 
-    const capabilityRouting = this.config.capabilities?.[capabilityId]
+    const capabilityRouting = this.resolveCapabilityRouting(capabilityId)
     const configuredProviders =
       capabilityRouting?.providers
         ?.filter((binding) => binding.enabled !== false)
@@ -885,9 +1087,12 @@ export class TuffIntelligenceSDK {
       | IntelligencePromptBinding
       | undefined
     const promptTemplate =
+      options.promptTemplate ??
       (options.metadata?.promptTemplate as string | undefined) ??
       this.resolvePromptTemplateByBinding(capabilityId, metadataPromptBinding)
-    const promptVariables = options.metadata?.promptVariables as Record<string, unknown> | undefined
+    const promptVariables =
+      options.promptVariables ??
+      (options.metadata?.promptVariables as Record<string, unknown> | undefined)
 
     return {
       runtimeOptions,
@@ -974,6 +1179,16 @@ export class TuffIntelligenceSDK {
       }
     }
 
+    const capabilityModels =
+      this.resolveCapabilityRouting(capabilityId)
+        ?.providers?.filter(
+          (binding) => binding.providerId === selectedProvider.id && binding.enabled !== false
+        )
+        .flatMap((binding) => binding.models ?? []) ?? []
+    for (const model of capabilityModels) {
+      if (model) providerModels.add(model)
+    }
+
     if (providerModels.size === 0) {
       return
     }
@@ -1028,11 +1243,18 @@ export class TuffIntelligenceSDK {
     let model = ''
     let traceId = ''
     let providerName = ''
+    const modelPreference = runtimeOptions.modelPreference?.[0]
+    const embeddingPayload =
+      typeof payload.model === 'string' && payload.model.trim()
+        ? payload
+        : modelPreference
+          ? { ...payload, model: modelPreference }
+          : payload
 
     for (const chunk of chunks) {
       const res = await embeddingProvider.embedding(
         {
-          ...payload,
+          ...embeddingPayload,
           text: chunk
         },
         runtimeOptions
@@ -1062,6 +1284,295 @@ export class TuffIntelligenceSDK {
         ? `${traceId}-chunked-${chunks.length}${truncated ? '-truncated' : ''}`
         : intelligenceAuditLogger.generateTraceId(),
       provider: providerName
+    }
+  }
+
+  private async invokeSemanticSearchWithEmbeddings(
+    embeddingProvider: IntelligenceProviderAdapter,
+    payload: IntelligenceSemanticSearchPayload,
+    runtimeOptions: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>> {
+    const query = typeof payload.query === 'string' ? payload.query.trim() : ''
+    if (!query) {
+      throw new Error('[Intelligence] Semantic search query is required')
+    }
+
+    const documents = Array.isArray(payload.documents) ? payload.documents : []
+    if (documents.length === 0) {
+      const providerConfig = embeddingProvider.getConfig()
+      return {
+        result: { results: [] },
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: runtimeOptions.modelPreference?.[0] ?? providerConfig.defaultModel ?? '',
+        latency: 0,
+        traceId: intelligenceAuditLogger.generateTraceId(),
+        provider: providerConfig.id
+      }
+    }
+
+    const startedAt = Date.now()
+    const embeddingModel = runtimeOptions.modelPreference?.[0]
+    const createEmbeddingPayload = (text: string): IntelligenceEmbeddingPayload => ({
+      text,
+      ...(embeddingModel ? { model: embeddingModel } : {})
+    })
+    const queryResult = await this.invokeEmbeddingWithGovernance(
+      embeddingProvider,
+      createEmbeddingPayload(query),
+      runtimeOptions
+    )
+    const queryEmbedding = queryResult.result
+    if (!isUsableEmbeddingVector(queryEmbedding)) {
+      throw new Error('[Intelligence] Embedding provider returned an unusable query vector')
+    }
+
+    const usage = {
+      promptTokens: queryResult.usage?.promptTokens ?? 0,
+      completionTokens: queryResult.usage?.completionTokens ?? 0,
+      totalTokens: queryResult.usage?.totalTokens ?? 0
+    }
+    const threshold = normalizeSemanticThreshold(payload.threshold)
+    const ranked: Array<{
+      id: string
+      content: string
+      score: number
+      metadata?: Record<string, any>
+      index: number
+    }> = []
+
+    for (let index = 0; index < documents.length; index += 1) {
+      const document = documents[index]
+      if (!document || typeof document.id !== 'string' || typeof document.content !== 'string') {
+        continue
+      }
+
+      let documentEmbedding = document.embedding
+      if (!Array.isArray(documentEmbedding)) {
+        const documentResult = await this.invokeEmbeddingWithGovernance(
+          embeddingProvider,
+          createEmbeddingPayload(document.content),
+          runtimeOptions
+        )
+        documentEmbedding = documentResult.result
+        usage.promptTokens += documentResult.usage?.promptTokens ?? 0
+        usage.completionTokens += documentResult.usage?.completionTokens ?? 0
+        usage.totalTokens += documentResult.usage?.totalTokens ?? 0
+      }
+
+      const score = calculateCosineSimilarity(queryEmbedding, documentEmbedding)
+      if (score === null || score < threshold) {
+        continue
+      }
+
+      ranked.push({
+        id: document.id,
+        content: document.content,
+        score,
+        ...(document.metadata ? { metadata: document.metadata } : {}),
+        index
+      })
+    }
+
+    ranked.sort((left, right) => right.score - left.score || left.index - right.index)
+
+    return {
+      result: {
+        results: ranked
+          .slice(0, normalizeSemanticTopK(payload.topK))
+          .map(({ index: _index, ...result }) => result)
+      },
+      usage,
+      model: queryResult.model,
+      latency: Date.now() - startedAt,
+      traceId: queryResult.traceId,
+      provider: queryResult.provider
+    }
+  }
+
+  private async invokeRerankWithEmbeddings(
+    embeddingProvider: IntelligenceProviderAdapter,
+    payload: IntelligenceRerankPayload,
+    runtimeOptions: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceRerankResult>> {
+    const query = typeof payload.query === 'string' ? payload.query.trim() : ''
+    if (!query) {
+      throw new Error('[Intelligence] Rerank query is required')
+    }
+
+    const documents = Array.isArray(payload.documents) ? payload.documents : []
+    if (documents.length === 0) {
+      const providerConfig = embeddingProvider.getConfig()
+      return {
+        result: { results: [] },
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: runtimeOptions.modelPreference?.[0] ?? providerConfig.defaultModel ?? '',
+        latency: 0,
+        traceId: intelligenceAuditLogger.generateTraceId(),
+        provider: providerConfig.id
+      }
+    }
+
+    const startedAt = Date.now()
+    const embeddingModel = runtimeOptions.modelPreference?.[0]
+    const createEmbeddingPayload = (text: string): IntelligenceEmbeddingPayload => ({
+      text,
+      ...(embeddingModel ? { model: embeddingModel } : {})
+    })
+    const queryResult = await this.invokeEmbeddingWithGovernance(
+      embeddingProvider,
+      createEmbeddingPayload(query),
+      runtimeOptions
+    )
+    const queryEmbedding = queryResult.result
+    if (!isUsableEmbeddingVector(queryEmbedding)) {
+      throw new Error('[Intelligence] Embedding provider returned an unusable rerank query vector')
+    }
+
+    const usage = {
+      promptTokens: queryResult.usage?.promptTokens ?? 0,
+      completionTokens: queryResult.usage?.completionTokens ?? 0,
+      totalTokens: queryResult.usage?.totalTokens ?? 0
+    }
+    const ranked: IntelligenceRerankResult['results'] = []
+
+    for (let index = 0; index < documents.length; index += 1) {
+      const document = documents[index]
+      if (!document || typeof document.id !== 'string' || typeof document.content !== 'string') {
+        continue
+      }
+
+      const documentResult = await this.invokeEmbeddingWithGovernance(
+        embeddingProvider,
+        createEmbeddingPayload(document.content),
+        runtimeOptions
+      )
+      const similarity = calculateCosineSimilarity(queryEmbedding, documentResult.result)
+      usage.promptTokens += documentResult.usage?.promptTokens ?? 0
+      usage.completionTokens += documentResult.usage?.completionTokens ?? 0
+      usage.totalTokens += documentResult.usage?.totalTokens ?? 0
+      if (similarity === null) {
+        continue
+      }
+
+      ranked.push({
+        id: document.id,
+        content: document.content,
+        score: normalizeRerankScore(similarity),
+        originalRank: index,
+        ...(document.metadata ? { metadata: document.metadata } : {})
+      })
+    }
+
+    ranked.sort((left, right) => right.score - left.score || left.originalRank - right.originalRank)
+
+    return {
+      result: { results: ranked.slice(0, normalizeSemanticTopK(payload.topK)) },
+      usage,
+      model: queryResult.model,
+      latency: Date.now() - startedAt,
+      traceId: queryResult.traceId,
+      provider: queryResult.provider
+    }
+  }
+
+  private async invokeRagQueryWithEmbeddings(
+    provider: IntelligenceProviderAdapter,
+    payload: IntelligenceRAGQueryPayload,
+    runtimeOptions: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceRAGQueryResult>> {
+    const query = typeof payload.query === 'string' ? payload.query.trim() : ''
+    if (!query) {
+      throw new Error('[Intelligence] RAG query is required')
+    }
+    if (!Array.isArray(payload.documents) || payload.documents.length === 0) {
+      throw new Error('[Intelligence] RAG query requires caller-provided documents')
+    }
+
+    const startedAt = Date.now()
+    const providerConfig = provider.getConfig()
+    const { runtimeOptions: semanticRuntimeOptions } = this.prepareRuntimeOptions(
+      'search.semantic',
+      {
+        ...runtimeOptions,
+        preferredProviderId: providerConfig.id,
+        allowedProviderIds: [providerConfig.id],
+        modelPreference: undefined,
+        metadata: { ...(runtimeOptions.metadata ?? {}) }
+      }
+    )
+    this.applyModelPreference(semanticRuntimeOptions, providerConfig, 'search.semantic')
+    const retrieval = await this.invokeSemanticSearchWithEmbeddings(
+      provider,
+      {
+        query,
+        documents: payload.documents,
+        topK: payload.topK,
+        threshold: payload.threshold
+      },
+      semanticRuntimeOptions
+    )
+    const sources = retrieval.result.results.map((result) => ({
+      id: result.id,
+      content: result.content,
+      relevance: result.score,
+      ...(result.metadata ? { metadata: result.metadata } : {})
+    }))
+    const confidence = Math.max(0, Math.min(1, sources[0]?.relevance ?? 0))
+
+    if (sources.length === 0) {
+      return {
+        result: {
+          answer: 'No relevant documents matched the query.',
+          sources,
+          confidence
+        },
+        usage: retrieval.usage,
+        model: retrieval.model,
+        latency: Date.now() - startedAt,
+        traceId: retrieval.traceId,
+        provider: retrieval.provider
+      }
+    }
+
+    const context = sources
+      .map(
+        (source, index) => `Source ${index + 1} (${source.id}):\n${source.content.slice(0, 8_000)}`
+      )
+      .join('\n\n')
+    const answer = await provider.chat(
+      {
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Answer only from the retrieved document excerpts. If they are insufficient, say so plainly. Do not use outside knowledge.'
+          },
+          {
+            role: 'user',
+            content: `Question:\n${query}\n\nRetrieved documents:\n${context}`
+          }
+        ]
+      },
+      runtimeOptions
+    )
+
+    return {
+      result: {
+        answer: answer.result,
+        sources,
+        confidence
+      },
+      usage: {
+        promptTokens: (retrieval.usage?.promptTokens ?? 0) + (answer.usage?.promptTokens ?? 0),
+        completionTokens:
+          (retrieval.usage?.completionTokens ?? 0) + (answer.usage?.completionTokens ?? 0),
+        totalTokens: (retrieval.usage?.totalTokens ?? 0) + (answer.usage?.totalTokens ?? 0)
+      },
+      model: answer.model,
+      latency: Date.now() - startedAt,
+      traceId: answer.traceId,
+      provider: answer.provider,
+      reasoning: answer.reasoning
     }
   }
 
@@ -1290,24 +1801,62 @@ export class TuffIntelligenceSDK {
           payload as IntelligenceImageGeneratePayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
+      case 'image-edit':
+        return (await provider.imageEdit!(
+          payload as IntelligenceImageEditPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
       case 'tts':
         return (await provider.tts!(
           payload as IntelligenceTTSPayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
+      case 'stt':
+        return (await provider.stt!(
+          payload as IntelligenceSTTPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'audio-transcribe':
+        return (await provider.audioTranscribe!(
+          payload as IntelligenceAudioTranscribePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
 
       case 'rag-query':
-        return (await provider.ragQuery!(
+        if (providerImplementsMethod(provider, { method: 'ragQuery', requiresOverride: true })) {
+          return (await provider.ragQuery!(
+            payload as IntelligenceRAGQueryPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
+        }
+        return (await this.invokeRagQueryWithEmbeddings(
+          provider,
           payload as IntelligenceRAGQueryPayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
       case 'semantic-search':
-        return (await provider.semanticSearch!(
+        if (
+          providerImplementsMethod(provider, { method: 'semanticSearch', requiresOverride: true })
+        ) {
+          return (await provider.semanticSearch!(
+            payload as IntelligenceSemanticSearchPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
+        }
+        return (await this.invokeSemanticSearchWithEmbeddings(
+          provider,
           payload as IntelligenceSemanticSearchPayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
       case 'rerank':
-        return (await provider.rerank!(
+        if (providerImplementsMethod(provider, { method: 'rerank', requiresOverride: true })) {
+          return (await provider.rerank!(
+            payload as IntelligenceRerankPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
+        }
+        return (await this.invokeRerankWithEmbeddings(
+          provider,
           payload as IntelligenceRerankPayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
@@ -1335,9 +1884,18 @@ export class TuffIntelligenceSDK {
     provider: IntelligenceProviderAdapter,
     capabilityType: string,
     payload: unknown,
-    runtimeOptions: IntelligenceInvokeOptions
+    runtimeOptions: IntelligenceInvokeOptions,
+    promptTemplate?: string,
+    promptVariables?: Record<string, unknown>
   ): Promise<IntelligenceInvokeResult<T> | null> {
-    return this.invokeByCapabilityType(provider, capabilityType, payload, runtimeOptions)
+    return this.invokeByCapabilityType(
+      provider,
+      capabilityType,
+      payload,
+      runtimeOptions,
+      promptTemplate,
+      promptVariables
+    )
   }
 
   private async tryFallbackProviders<T>(params: {
@@ -1347,9 +1905,19 @@ export class TuffIntelligenceSDK {
     runtimeOptions: IntelligenceInvokeOptions
     manager: IntelligenceProviderManagerAdapter
     fallbackProviders: IntelligenceProviderConfig[]
+    promptTemplate?: string
+    promptVariables?: Record<string, unknown>
   }): Promise<IntelligenceInvokeResult<T> | null> {
-    const { capabilityId, capabilityType, payload, runtimeOptions, manager, fallbackProviders } =
-      params
+    const {
+      capabilityId,
+      capabilityType,
+      payload,
+      runtimeOptions,
+      manager,
+      fallbackProviders,
+      promptTemplate,
+      promptVariables
+    } = params
 
     if (fallbackProviders.length === 0) {
       return null
@@ -1362,11 +1930,20 @@ export class TuffIntelligenceSDK {
       if (!fallbackProvider) continue
 
       try {
+        const fallbackRuntimeOptions: IntelligenceInvokeOptions = {
+          ...runtimeOptions,
+          ...(runtimeOptions.modelPreference
+            ? { modelPreference: [...runtimeOptions.modelPreference] }
+            : {})
+        }
+        this.applyModelPreference(fallbackRuntimeOptions, fallbackConfig, capabilityId)
         const result = await this.invokeFallbackByCapabilityType<T>(
           fallbackProvider,
           capabilityType,
           payload,
-          runtimeOptions
+          fallbackRuntimeOptions,
+          promptTemplate,
+          promptVariables
         )
         if (!result) continue
 
@@ -1594,7 +2171,14 @@ export class TuffIntelligenceSDK {
       return { allowed: result.allowed, reason: result.reason }
     } catch (error) {
       logError('Failed to check quota:', error)
-      return { allowed: true } // Fail open on quota check errors
+      throw Object.assign(
+        toNormalizedIntelligenceError(
+          Object.assign(new Error('Quota verification is unavailable.'), {
+            code: 'QUOTA_CHECK_UNAVAILABLE'
+          })
+        ),
+        { cause: error }
+      )
     }
   }
 
@@ -1723,8 +2307,14 @@ export class TuffIntelligenceSDK {
     rewrite: (payload: IntelligenceRewritePayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<string>('text.rewrite', payload, options),
 
+    grammar: (payload: IntelligenceGrammarCheckPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceGrammarCheckResult>('text.grammar', payload, options),
+
     grammarCheck: (payload: IntelligenceGrammarCheckPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceGrammarCheckResult>('text.grammar', payload, options)
+      this.text.grammar(payload, options),
+
+    classify: (payload: IntelligenceClassificationPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceClassificationResult>('text.classify', payload, options)
   }
 
   embedding = {
@@ -1749,27 +2339,47 @@ export class TuffIntelligenceSDK {
       this.invoke<IntelligenceCodeDebugResult>('code.debug', payload, options)
   }
 
+  intent = {
+    detect: (payload: IntelligenceIntentDetectPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceIntentDetectResult>('intent.detect', payload, options)
+  }
+
+  sentiment = {
+    analyze: (payload: IntelligenceSentimentAnalyzePayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options)
+  }
+
+  content = {
+    extract: (payload: IntelligenceContentExtractPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceContentExtractResult>('content.extract', payload, options)
+  }
+
+  keywords = {
+    extract: (payload: IntelligenceKeywordsExtractPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options)
+  }
+
   analysis = {
     detectIntent: (payload: IntelligenceIntentDetectPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceIntentDetectResult>('intent.detect', payload, options),
+      this.intent.detect(payload, options),
 
     analyzeSentiment: (
       payload: IntelligenceSentimentAnalyzePayload,
       options?: IntelligenceInvokeOptions
-    ) => this.invoke<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options),
+    ) => this.sentiment.analyze(payload, options),
 
     extractContent: (
       payload: IntelligenceContentExtractPayload,
       options?: IntelligenceInvokeOptions
-    ) => this.invoke<IntelligenceContentExtractResult>('content.extract', payload, options),
+    ) => this.content.extract(payload, options),
 
     extractKeywords: (
       payload: IntelligenceKeywordsExtractPayload,
       options?: IntelligenceInvokeOptions
-    ) => this.invoke<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options),
+    ) => this.keywords.extract(payload, options),
 
     classify: (payload: IntelligenceClassificationPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceClassificationResult>('text.classify', payload, options)
+      this.text.classify(payload, options)
   }
 
   vision = {
@@ -1777,20 +2387,45 @@ export class TuffIntelligenceSDK {
       this.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload, options),
 
     caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) =>
+      this.image.caption(payload, options),
+
+    analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) =>
+      this.image.analyze(payload, options),
+
+    generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
+      this.image.generate(payload, options)
+  }
+
+  image = {
+    caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<IntelligenceImageCaptionResult>('image.caption', payload, options),
 
     analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<IntelligenceImageAnalyzeResult>('image.analyze', payload, options),
 
     generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options)
-  }
+      this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options),
 
-  image = {
     translateE2e: (
       payload: IntelligenceImageTranslateE2ePayload,
       options?: IntelligenceInvokeOptions
-    ) => this.invoke<IntelligenceImageTranslateE2eResult>('image.translate.e2e', payload, options)
+    ) => this.invoke<IntelligenceImageTranslateE2eResult>('image.translate.e2e', payload, options),
+
+    edit: (payload: IntelligenceImageEditPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceImageEditResult>('image.edit', payload, options)
+  }
+
+  audio = {
+    tts: (payload: IntelligenceTTSPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceTTSResult>('audio.tts', payload, options),
+
+    stt: (payload: IntelligenceSTTPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceSTTResult>('audio.stt', payload, options),
+
+    transcribe: (
+      payload: IntelligenceAudioTranscribePayload,
+      options?: IntelligenceInvokeOptions
+    ) => this.invoke<IntelligenceAudioTranscribeResult>('audio.transcribe', payload, options)
   }
 
   rag = {
@@ -1800,10 +2435,23 @@ export class TuffIntelligenceSDK {
     semanticSearch: (
       payload: IntelligenceSemanticSearchPayload,
       options?: IntelligenceInvokeOptions
-    ) => this.invoke<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
+    ) => this.search.semantic(payload, options),
+
+    rerank: (payload: IntelligenceRerankPayload, options?: IntelligenceInvokeOptions) =>
+      this.search.rerank(payload, options)
+  }
+
+  search = {
+    semantic: (payload: IntelligenceSemanticSearchPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
 
     rerank: (payload: IntelligenceRerankPayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<IntelligenceRerankResult>('search.rerank', payload, options)
+  }
+
+  workflow = {
+    execute: (payload: unknown, options?: IntelligenceInvokeOptions) =>
+      this.invoke<PromptWorkflowExecution>('workflow.execute', payload, options)
   }
 
   agent = {

@@ -141,20 +141,20 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `CascaderValue` | - | 当前值（v-model） |
-| `options` | `CascaderNode[]` | `[]` | 数据源 |
-| `multiple` | `boolean` | `false` | 是否多选 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `placeholder` | `string` | `'请选择'` | 占位 |
-| `searchable` | `boolean` | `true` | 是否可搜索 |
-| `clearable` | `boolean` | `true` | 是否可清空 |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | 浮层位置 |
-| `dropdownOffset` | `number` | `6` | 浮层偏移 |
-| `dropdownWidth` | `number` | `360` | 浮层宽度 |
-| `dropdownMaxWidth` | `number` | `520` | 浮层最大宽度 |
-| `dropdownMaxHeight` | `number` | `340` | 浮层最大高度 |
-| `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | 展开触发方式 |
-| `load` | `(node, level) => Promise<CascaderNode[]>` | - | 异步加载子节点（仅对未提供 children 的节点生效） |
+| `modelValue` | `CascaderValue` | - | 当前值。单选模式是一条路径数组，多选模式是路径数组列表。 |
+| `options` | `CascaderNode[]` | `[]` | 根级选项树，用于渲染级联列。 |
+| `multiple` | `boolean` | `false` | 启用多选叶子路径，并把选中的路径渲染为标签。 |
+| `disabled` | `boolean` | `false` | 禁用触发器、清空按钮、节点选择和键盘打开行为。 |
+| `placeholder` | `string` | `'请选择'` | 未选择路径时显示的占位文本。 |
+| `searchable` | `boolean` | `true` | 显示本地搜索输入框，按已加载叶子路径的格式化标签过滤。 |
+| `clearable` | `boolean` | `true` | 组件启用且已有值时显示清空按钮。 |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | 转发给底层 `TxPopover` 的浮层位置。 |
+| `dropdownOffset` | `number` | `6` | 转发给底层 `TxPopover` 的浮层偏移。 |
+| `dropdownWidth` | `number` | `360` | 转发给底层 `TxPopover` 的浮层宽度。 |
+| `dropdownMaxWidth` | `number` | `520` | 转发给底层 `TxPopover` 的最大浮层宽度。 |
+| `dropdownMaxHeight` | `number` | `340` | 面板最大高度，单位 px。 |
+| `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | 控制非叶子节点展开方式；`hover` 模式下点击分支节点不会展开。 |
+| `load` | `(node, level) => Promise<CascaderNode[]>` | - | 为没有 `children` 且不是 `leaf` 的非叶子节点异步加载子节点。 |
 
 ### CascaderNode
 
@@ -180,6 +180,10 @@ code: |
 | `open` | - | 打开浮层 |
 | `close` | - | 关闭浮层 |
 
+### Slots
+
+`TxCascader` 不暴露自定义插槽。标签和禁用状态来自 `CascaderNode`；字段标签、帮助文本或校验信息应在外层组合。
+
 ### Expose
 
 | 名称 | 类型 | 说明 |
@@ -193,8 +197,26 @@ code: |
 | `setValue(v)` | `(v) => void` | 设置值 |
 | `getValue()` | `() => any` | 获取当前值 |
 
+## 最佳实践
+
+- 层级保持浅。面板最适合二到三级路径；更深的组织树应使用搜索或 TreeSelect。
+- `value` key 需要跨版本稳定。`modelValue` 存储路径 key，修改 key 会破坏已持久化的选择。
+- 异步叶子节点要显式标记 `leaf: true`；否则没有 `children` 的节点会尝试调用 `load`，而不是直接可选。
+- 叶子节点较多时保持 `searchable` 开启，但搜索只覆盖已经加载到本地的节点。
+- 多选模式下把值当作完整路径数组列表，而不是叶子 id 列表；持久化完整路径才能稳定还原展示标签。
+
+
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`。
-- 截图：`.codex-screenshots/nexus-cascader-release-policy-demo-playwright-2026-05-28.png`。
-- 建议：单选值是路径数组，多选值是路径数组列表；后台发布范围建议保留三级以内，避免级联面板承载过深组织树。
+- 已核对 `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`、`types.ts` 与 `cascader.test.ts`。
+- 现有测试覆盖叶子选择、空搜索结果、多路径切换与清空、禁用触发器/节点阻断、懒加载子节点与暴露状态方法。
+- 可访问性说明：触发器使用 `role="combobox"` 与 `aria-haspopup="listbox"`；应保留可见字段标签，不要只依赖 placeholder 作为标签。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/cascader/src/TxCascader.vue`.
+- Types: `packages/tuffex/packages/components/src/cascader/src/types.ts` exports `CascaderProps`, `CascaderEmits`, `CascaderNode`, and `CascaderValue`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/cascader/__tests__/cascader.test.ts` 验证叶子选择、空搜索、多选清空、禁用阻断、懒加载子节点与暴露方法。
+- Screenshot: `.codex-screenshots/nexus-cascader-release-policy-demo-playwright-2026-05-28.png`.
+
+<TuffDocSourceLink />

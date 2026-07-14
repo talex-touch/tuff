@@ -95,50 +95,92 @@ code: |
 
 ## API
 
-### TxTree Props
+### TxTree 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|------|------|
-| `nodes` | `TreeNode[]` | `[]` | 数据源 |
-| `modelValue` | `string \| number \| Array<string \| number>` | - | 选中值 |
-| `multiple` | `boolean` | `false` | 是否多选 |
-| `selectable` | `boolean` | `true` | 是否可选 |
-| `checkable` | `boolean` | `false` | 是否显示复选 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 默认展开 |
-| `expandedKeys` | `Array<string \| number>` | - | 受控展开 |
-| `indent` | `number` | `16` | 缩进 |
-| `filterText` | `string` | `''` | 搜索文本 |
-| `filterMethod` | `(node, query) => boolean` | - | 自定义过滤 |
+| `nodes` | `TreeNode[]` | `[]` | 树形数据源；组件会按展开状态和当前过滤结果展平成可见行。 |
+| `modelValue` | `string \| number \| Array<string \| number>` | - | 单选时为选中 key；`multiple=true` 时为选中 key 数组。 |
+| `multiple` | `boolean` | `false` | 以数组形式切换多个选中 key，而不是替换为单个 key。 |
+| `selectable` | `boolean` | `true` | 是否允许行和 checkbox 选择；关闭选择后展开控件仍可用。 |
+| `checkable` | `boolean` | `false` | 为每个可见节点显示 checkbox。checkbox 状态映射 `modelValue`，不会向子孙级联。 |
+| `disabled` | `boolean` | `false` | 禁用整棵树的选择能力并应用禁用样式；展开仍可用。 |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 非受控初始展开 key；仅在未使用 `expandedKeys` 时，后续 prop 变化会重置内部展开状态。 |
+| `expandedKeys` | `Array<string \| number>` | - | 受控展开 key。父级需要在 `update:expandedKeys` 后回传新数组。 |
+| `indent` | `number` | `16` | 每级左侧缩进像素。 |
+| `filterText` | `string` | `''` | 过滤文本；非空时匹配分支会临时自动展开。 |
+| `filterMethod` | `(node: TreeNode, query: string) => boolean` | - | 自定义过滤函数。收到的是 trim 后的原始查询；默认逻辑使用小写 label 包含匹配。 |
 
 ### TreeNode
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `key` | `string \| number` | 唯一标识 |
-| `label` | `string` | 展示文本 |
-| `disabled` | `boolean` | 禁用 |
-| `children` | `TreeNode[]` | 子节点 |
-| `icon` | `TxIconSource \| string` | 节点图标 |
+| `key` | `string \| number` | 稳定唯一 key，用于选择和展开。 |
+| `label` | `string` | 默认行文本，也是默认过滤目标。 |
+| `children` | `TreeNode[]` | 子节点。 |
+| `leaf` | `boolean` | 设为 `false` 时，即使当前没有子节点也会显示可展开 caret。 |
+| `disabled` | `boolean` | 禁用该节点选择；有子节点时仍允许展开。 |
+| `icon` | `TxIconSource \| string` | 可选节点图标；字符串会按 class 图标处理。 |
 
-### Events
+### TxTree 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value)` | 选中变化 |
-| `select` | `({ key, node })` | 选择节点 |
-| `toggle` | `({ key, expanded })` | 展开切换 |
-| `update:expandedKeys` | `(keys)` | 展开变化 |
+| `update:modelValue` | `value: TreeValue` | 可选节点被点击或 checkbox 变化后触发。 |
+| `select` | `{ key: TreeKey, node: TreeNode }` | `update:modelValue` 后带上选中节点触发。 |
+| `toggle` | `{ key: TreeKey, expanded: boolean }` | 节点 caret 展开或折叠后触发。 |
+| `update:expandedKeys` | `keys: TreeKey[]` | 在非受控和受控展开流程中都返回下一组展开 key。 |
 
-### Slots
+### TxTree 插槽
 
-| 名称 | 说明 |
-|------|------|
-| `item` | 自定义节点 |
-| `empty` | 空状态 |
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `item` | `{ node, level, expanded, hasChildren, selected, toggleExpand, toggleSelect, indent }` | 替换完整可见行渲染。调用插槽 helper 可保留选择和展开行为。 |
+| `empty` | - | 过滤后没有可见行时的空状态；默认文本为 `No results`。 |
+
+## 暴露方法
+
+无。选择与展开都通过 props 和事件控制。
+
+## 交互契约
+
+- 传入 `expandedKeys` 后展开状态受控。组件仍会触发 `update:expandedKeys`，但只有父级回传新数组后视图才更新。
+- `defaultExpandedKeys` 用于初始化非受控展开；没有 `expandedKeys` 时，后续变化也会重置内部展开状态。
+- 过滤不会改写展开状态。`filterText` 非空时，匹配节点的祖先只会通过 `effectiveExpanded` 临时展开。
+- 默认过滤逻辑是 `node.label.toLowerCase().includes(query.toLowerCase())`；自定义 `filterMethod` 收到 trim 后的原始查询。
+- 选择模型是扁平的。`checkable` 只改变控件形态，不提供父子半选或子孙级联。
+- `disabled` 和 `node.disabled` 会阻止选择，但可展开节点的 caret 仍可展开/折叠。
+- 根节点使用 `role="tree"`，行使用 `role="treeitem"`；自定义 `item` 插槽替换整行时应保留等价语义。
+
+## 样式定制
+
+| 主题变量 | 用途 |
+|-------------|----------|
+| `--tx-text-color-primary` | 默认行标签颜色。 |
+| `--tx-text-color-secondary` | caret 与空状态颜色。 |
+| `--tx-color-primary` | 选中行背景色调。 |
+| `--tx-fill-color` | hover 行背景色调。 |
+
+## 最佳实践
+
+- 把 `key` 当作持久标识，不要从会翻译或重命名的显示文案派生。
+- 只有其它界面需要拥有展开状态时才使用 `expandedKeys`；普通树优先用 `defaultExpandedKeys`。
+- 后台权限域树建议保持单选，真实资源授权交给 `TxTransfer`、`DataTable` 或详情面板。
+- 领域搜索（路径别名、隐藏元数据等）用 `filterMethod`；简单树保留默认 label 搜索即可。
+- 如果用 `leaf=false` 表现懒加载占位，外围 UI 也要提供加载或空子级状态。`TxTree` 本身不会拉取子节点。
+- 使用 `item` 插槽替换行时，由展开控件调用 `toggleExpand()`，由可选区域调用 `toggleSelect()`，不要复制内部状态逻辑。
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/tree/src/TxTree.vue`。
-- 截图：`.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`。
-- 建议：节点标识统一使用 `key` 字段；后台权限域建议保持单选，真正的资源分配交给 `TxTransfer`，避免一个树承担选择和授权两个职责。
+- 已对照 `packages/tuffex/packages/components/src/tree/src/TxTree.vue` 和 `types.ts` 核对。
+- 现有测试覆盖默认展开渲染与选择事件；文档补充了源码可见但测试未直接覆盖的过滤展开、受控展开和非级联 checkbox 行为。
+- 权限编排示例应让 `TxTree` 只负责范围选择；资源分配交给相邻控件。
+- 截图参考：`.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
+- Types: `packages/tuffex/packages/components/src/tree/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` 覆盖默认展开的子节点渲染与选择值发出。
+
+<TuffDocSourceLink />

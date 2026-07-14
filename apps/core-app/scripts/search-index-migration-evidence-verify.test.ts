@@ -11,6 +11,8 @@ import {
 const repoRoot = path.resolve(__dirname, '../../..')
 const scriptPath = path.join(__dirname, 'search-index-migration-evidence-verify.ts')
 const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x52, 0x33])
+const testDatabaseIdentity = `sha256-realpath-v1:${'a'.repeat(64)}`
+const otherDatabaseIdentity = `sha256-realpath-v1:${'b'.repeat(64)}`
 
 function createPreflight(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -19,6 +21,7 @@ function createPreflight(overrides: Record<string, unknown> = {}): Record<string
     evidenceSource: {
       scope: 'real-profile',
       dbPathClass: 'non-temporary',
+      dbIdentity: testDatabaseIdentity,
       realProfileRequired: true
     },
     migrationReadiness: {
@@ -78,6 +81,7 @@ function createFtsSimulation(overrides: Record<string, unknown> = {}): Record<st
     evidenceSource: {
       scope: 'real-profile',
       dbPathClass: 'non-temporary',
+      dbIdentity: testDatabaseIdentity,
       realProfileRequired: true
     },
     gate: {
@@ -99,6 +103,7 @@ function createScanProgressSimulation(
     evidenceSource: {
       scope: 'real-profile',
       dbPathClass: 'non-temporary',
+      dbIdentity: testDatabaseIdentity,
       realProfileRequired: true
     },
     execution: {
@@ -120,6 +125,7 @@ function createScanProgressPlan(overrides: Record<string, unknown> = {}): Record
     evidenceSource: {
       scope: 'real-profile',
       dbPathClass: 'non-temporary',
+      dbIdentity: testDatabaseIdentity,
       realProfileRequired: true
     },
     plan: {
@@ -220,6 +226,7 @@ const strictRequirements = {
   requireFtsSimulation: true,
   requireScanProgressSimulation: true,
   requireScanProgressPlan: true,
+  requireDatabaseEvidenceCorrelation: true,
   requireNaturalSettingsEvidence: true,
   requireSettingsVisibleArtifacts: true
 }
@@ -232,6 +239,7 @@ describe('search index migration evidence verifier', () => {
           evidenceSource: {
             scope: 'isolated-controlled',
             dbPathClass: 'temporary',
+            dbIdentity: testDatabaseIdentity,
             realProfileRequired: false
           },
           migrationReadiness: {
@@ -282,6 +290,70 @@ describe('search index migration evidence verifier', () => {
     expect(result.checks.every((check) => check.status === 'passed')).toBe(true)
   })
 
+  it('rejects strict database evidence collected from different source databases', () => {
+    const result = verifySearchIndexMigrationEvidence(
+      {
+        preflight: createPreflight(),
+        productionReadiness: createProductionReadiness(),
+        ftsSimulation: createFtsSimulation(),
+        scanProgressSimulation: createScanProgressSimulation(),
+        scanProgressPlan: createScanProgressPlan({
+          evidenceSource: {
+            scope: 'real-profile',
+            dbPathClass: 'non-temporary',
+            dbIdentity: otherDatabaseIdentity,
+            realProfileRequired: true
+          }
+        }),
+        settingsVerification: createSettingsVerification(),
+        settingsProbe: createSettingsProbe(),
+        settingsVisibleArtifacts: createSettingsVisibleArtifacts()
+      },
+      strictRequirements
+    )
+
+    expect(result.gate.passed).toBe(false)
+    expect(result.gate.failures).toContain(
+      'Database evidence artifacts must share the same evidenceSource.dbIdentity'
+    )
+    expect(
+      result.checks.find((check) => check.id === 'database-evidence-correlation')
+    ).toMatchObject({
+      status: 'failed',
+      evidence: {
+        preflightDbIdentity: testDatabaseIdentity,
+        scanProgressPlanDbIdentity: otherDatabaseIdentity
+      }
+    })
+  })
+
+  it('rejects strict database evidence without a valid database identity', () => {
+    const result = verifySearchIndexMigrationEvidence(
+      {
+        preflight: createPreflight({
+          evidenceSource: {
+            scope: 'real-profile',
+            dbPathClass: 'non-temporary',
+            realProfileRequired: true
+          }
+        }),
+        productionReadiness: createProductionReadiness(),
+        ftsSimulation: createFtsSimulation(),
+        scanProgressSimulation: createScanProgressSimulation(),
+        scanProgressPlan: createScanProgressPlan(),
+        settingsVerification: createSettingsVerification(),
+        settingsProbe: createSettingsProbe(),
+        settingsVisibleArtifacts: createSettingsVisibleArtifacts()
+      },
+      strictRequirements
+    )
+
+    expect(result.gate.passed).toBe(false)
+    expect(result.gate.failures).toContain(
+      'Database evidence correlation requires valid evidenceSource.dbIdentity for: preflight'
+    )
+  })
+
   it('rejects isolated scan progress plan evidence in strict mode', () => {
     const result = verifySearchIndexMigrationEvidence(
       {
@@ -293,6 +365,7 @@ describe('search index migration evidence verifier', () => {
           evidenceSource: {
             scope: 'isolated-controlled',
             dbPathClass: 'temporary',
+            dbIdentity: testDatabaseIdentity,
             realProfileRequired: false
           }
         }),
@@ -324,6 +397,7 @@ describe('search index migration evidence verifier', () => {
           evidenceSource: {
             scope: 'isolated-controlled',
             dbPathClass: 'temporary',
+            dbIdentity: testDatabaseIdentity,
             realProfileRequired: false
           }
         }),
@@ -331,6 +405,7 @@ describe('search index migration evidence verifier', () => {
           evidenceSource: {
             scope: 'isolated-controlled',
             dbPathClass: 'temporary',
+            dbIdentity: testDatabaseIdentity,
             realProfileRequired: false
           }
         }),
@@ -397,6 +472,7 @@ describe('search index migration evidence verifier', () => {
           evidenceSource: {
             scope: 'isolated-controlled',
             dbPathClass: 'temporary',
+            dbIdentity: testDatabaseIdentity,
             realProfileRequired: false
           }
         })

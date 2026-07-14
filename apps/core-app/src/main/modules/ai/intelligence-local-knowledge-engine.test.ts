@@ -99,7 +99,7 @@ describe('LocalKnowledgeEngine', () => {
     const engine = new LocalKnowledgeEngine()
 
     const result = await engine.search({
-      query: 'CoreBox AI',
+      query: 'CoreBox follow-up',
       sourceType: 'manual',
       permissionScope: 'workspace:tuff',
       timeRange: { from: 1, to: 100 },
@@ -117,7 +117,7 @@ describe('LocalKnowledgeEngine', () => {
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: ['CoreBox* OR AI*', 'manual', 'workspace:tuff', 1, 100, 20]
+        args: ['"CoreBox"* OR "follow"* OR "up"*', 'manual', 'workspace:tuff', 1, 100, 20],
       })
     )
   })

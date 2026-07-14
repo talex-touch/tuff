@@ -12,10 +12,16 @@ interface ShowcaseSearchScenario {
 const props = withDefaults(defineProps<{
   scenario?: ShowcaseSearchScenario | null
   active?: boolean
+  mediaEnabled?: boolean
 }>(), {
   scenario: null,
   active: false,
+  mediaEnabled: false,
 })
+
+const emit = defineEmits<{
+  'media-duration': [durationMs: number]
+}>()
 
 const media = computed(() => props.scenario?.media ?? null)
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'm4v'])
@@ -35,10 +41,20 @@ const isVideo = computed(() => {
 })
 
 const mediaGlowSrc = computed(() => {
-  if (!media.value?.src)
+  if (!props.mediaEnabled || !media.value?.src)
     return null
   return isVideo.value ? (media.value.poster ?? null) : media.value.src
 })
+
+const mediaSrc = computed(() => props.mediaEnabled ? media.value?.src : undefined)
+const mediaPoster = computed(() => props.mediaEnabled ? media.value?.poster : undefined)
+
+function handleLoadedMetadata(event: Event) {
+  const video = event.currentTarget
+  if (!(video instanceof HTMLVideoElement) || !Number.isFinite(video.duration))
+    return
+  emit('media-duration', video.duration * 1000)
+}
 </script>
 
 <template>
@@ -61,18 +77,19 @@ const mediaGlowSrc = computed(() => {
           <video
             v-if="media?.src && isVideo"
             class="corebox-mock__media-image"
-            :src="media.src"
-            :poster="media.poster"
-            autoplay
+            :src="mediaSrc"
+            :poster="mediaPoster"
+            :autoplay="mediaEnabled && active"
             muted
             loop
             playsinline
-            preload="metadata"
+            preload="none"
+            @loadedmetadata="handleLoadedMetadata"
           />
           <img
             v-else-if="media?.src"
             class="corebox-mock__media-image"
-            :src="media.src"
+            :src="mediaSrc"
             :alt="media.alt"
             loading="lazy"
             decoding="async"

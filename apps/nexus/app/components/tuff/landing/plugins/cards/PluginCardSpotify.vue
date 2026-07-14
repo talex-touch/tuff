@@ -7,6 +7,7 @@ import SpotifyBackground from '~/images/assets/plugin-cards/spotify.jpg'
   <div class="PluginCardSpotify inset-0 h-full w-full flex items-center justify-center bg-[#000618]">
     <TuffCarouselAppleBlurImage
       :src="SpotifyBackground"
+      :defer="true"
       alt="Spotify"
       class="absolute bottom-0 z-1 h-[80%] w-full object-cover"
     />

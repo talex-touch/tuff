@@ -1,58 +1,127 @@
 ---
 title: FlatButton 扁平按钮
-description: 低强调的轻量按钮
+description: 用于次要操作、紧凑按钮和轻量 loading 状态的原生低强调按钮。
 category: Basic
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [button, action, flat]
+syncStatus: reviewed
+verified: true
 ---
 
 # FlatButton 扁平按钮
 
-用于次要动作的轻量按钮样式。
+`TuffFlatButton` 是带低强调样式的原生 `<button type="button">`。它保留按钮语义，在 disabled 或 loading 时阻断点击，范围也刻意小于 `TxButton`。
+
+已人工核对 `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`、`index.ts` 与 `flat-button.test.ts`。
 
 ## 基础用法
+
 ### 扁平按钮
-基础、主色、小尺寸与加载状态。
+
 :::TuffDemoWrapper{demo="FlatButtonFlatButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffFlatButton>默认</TuffFlatButton>
-    <TuffFlatButton primary>主色</TuffFlatButton>
-    <TuffFlatButton mini>小尺寸</TuffFlatButton>
-    <TuffFlatButton loading>加载中</TuffFlatButton>
+    <div class="tuff-demo-row">
+      <TuffFlatButton>默认</TuffFlatButton>
+      <TuffFlatButton primary>主色</TuffFlatButton>
+      <TuffFlatButton mini>小尺寸</TuffFlatButton>
+      <TuffFlatButton loading>加载中</TuffFlatButton>
+    </div>
   </template>
 ---
 :::
-## API（Lite）
-::TuffPropsTable
----
-rows:
-  - name: primary
-    type: boolean
-    default: 'false'
-    description: 是否主色样式
-  - name: mini
-    type: boolean
-    default: 'false'
-    description: 紧凑尺寸
-  - name: disabled
-    type: boolean
-    default: 'false'
-    description: 是否禁用
-  - name: loading
-    type: boolean
-    default: 'false'
-    description: 加载状态
----
-:::
 
-## Source
-<TuffDocSourceLink />
+## 组合示例
+
+### 次要工具栏操作
+
+```vue
+<template>
+  <TxFlex align="center" gap="8px">
+    <TuffFlatButton @click="refresh">刷新</TuffFlatButton>
+    <TuffFlatButton primary @click="openDetails">查看详情</TuffFlatButton>
+  </TxFlex>
+</template>
+```
+
+### 异步操作
+
+```vue
+<script setup lang="ts">
+const saving = ref(false)
+
+async function save() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    await api.save()
+  }
+  finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <TuffFlatButton :loading="saving" @click="save">
+    保存更改
+  </TuffFlatButton>
+</template>
+```
 
 ## 交互契约
 
 - 根节点是原生 `<button type="button">`，默认不会提交外层表单。
 - `disabled` 与 `loading` 都会设置原生 `disabled` 属性，并阻断 `click` 事件。
-- `loading` 会渲染 spinner，同时保留按钮内容。
-- `primary` 只切换主色视觉；非 primary 默认带 `fake-background` hover 背景。
-- `mini` 切换紧凑尺寸，不改变按钮语义。
+- `loading` 会添加 `.is-loading`，渲染带 inline SVG spinner 的 `.tx-flat-button__loading`，并保留默认插槽内容。
+- `primary` 会添加 `.is-primary`，并移除非 primary 的 `fake-background` class。
+- 非 primary 按钮保留 `fake-background`，并通过 `--fake-color` 设置 hover 背景。
+- `mini` 会添加 `.is-mini`，减少最小宽度和水平 padding，不改变按钮语义。
+- 可用状态下点击会发出原始 `MouseEvent`。
+- 组件全局安装名是 `TuffFlatButton`，不是 `TxFlatButton`。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `primary` | `boolean` | `false` | 使用主色视觉样式。 |
+| `mini` | `boolean` | `false` | 使用紧凑尺寸样式。 |
+| `disabled` | `boolean` | `false` | 禁用原生按钮并阻断 click。 |
+| `loading` | `boolean` | `false` | 显示 spinner、禁用原生按钮并阻断 click。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `click` | `MouseEvent` | 仅在 `disabled=false` 且 `loading=false` 时触发。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | - | 按钮文本/内容；loading 时仍保留显示。 |
+
+## 最佳实践
+
+- `TuffFlatButton` 用于次要或局部操作。需要完整 variant、native type、border、震动或更强层级时使用 `TxButton`。
+- 异步变更应绑定 `loading`，避免重复提交。
+- 不要把 `primary` 当成危险或成功语义；重要状态应写进明确文案。
+- `mini` 用于密集工具栏，不用于表单主操作。
+- 该组件固定 `type="button"`；需要表单提交按钮时使用 `TxButton native-type="submit"`。
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`、`index.ts` 与 `flat-button.test.ts`。
+- **实测覆盖:** 原生按钮渲染、默认插槽内容、非 primary 的 `fake-background`、primary 与 mini class、可用点击发出原始 `MouseEvent`、disabled/loading 原生语义、默认不提交表单类型，以及插件安装注册。
+- 可访问性说明:组件保留原生按钮语义并固定 `type="button"`;`disabled` 与 `loading` 设置原生 `disabled` 属性,可用状态下的键盘/焦点行为交给浏览器处理。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`。
+- Export alias: `packages/tuffex/packages/components/src/flat-button/index.ts` 以 `TuffFlatButton` 导出组件,并安装同名全局组件。
+- Coverage: `packages/tuffex/packages/components/src/flat-button/__tests__/flat-button.test.ts` 覆盖渲染、class、点击事件、disabled/loading 阻断、表单安全 button type 与插件注册。
+<TuffDocSourceLink />

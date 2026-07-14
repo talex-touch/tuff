@@ -1,0 +1,85 @@
+---
+title: CopyButton
+description: Clipboard copy action with copied feedback and error events.
+category: Basic
+status: beta
+since: 1.0.0
+tags: [copy, clipboard, action]
+syncStatus: reviewed
+verified: true
+---
+# CopyButton
+
+`TxCopyButton` copies a string to the clipboard and temporarily switches its label after success. It uses `navigator.clipboard.writeText` when available and falls back to a hidden textarea plus `document.execCommand('copy')`.
+
+Reviewed against `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue` and `copy-button.test.ts`.
+
+## Basic Usage
+
+### CopyButton
+::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const installCommand = 'pnpm add @talex-touch/tuffex'
+  </script>
+
+  <template>
+    <TxCopyButton
+      :text="installCommand"
+      copy-label="Copy install command"
+      copied-label="Copied"
+    />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- Clicking while `disabled` or while a copy operation is already running is ignored.
+- `copy` is emitted only after clipboard write succeeds.
+- `error` is emitted with the thrown error when both clipboard strategies fail.
+- `copiedLabel` is shown for `timeout` milliseconds after success, then the button returns to `copyLabel`.
+- The default slot receives `{ copied, copying }` when the host needs custom content.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string` | `''` | Text written to the clipboard. |
+| `copyLabel` | `string` | `'Copy'` | Idle label and aria-label. |
+| `copiedLabel` | `string` | `'Copied'` | Success label and aria-label. |
+| `disabled` | `boolean` | `false` | Disables the button and prevents copy. |
+| `timeout` | `number` | `1400` | Milliseconds before copied state resets. |
+| `size` | `'sm' \| 'md'` | `'sm'` | Button density. |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `copy` | `(text: string)` | Emitted after successful clipboard write. |
+| `error` | `(error: unknown)` | Emitted when clipboard write fails. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | `{ copied, copying }` | Custom button label/content. |
+
+## Best Practices
+
+- Use short, explicit `copyLabel` text that names the target, such as “Copy token” or “Copy command”.
+- Handle `error` when the copied value is critical; browsers can reject clipboard writes outside trusted gestures.
+- Do not put secrets in ordinary docs examples or analytics when copy events fire.
+- Keep the copied text in host state so it is easy to audit and test.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue` confirms Clipboard API usage, textarea fallback, disabled/copying guards, copied-state timer, `copy` / `error` events, ARIA label switching, and default slot props.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/copy-button/__tests__/copy-button.test.ts` covers clipboard success, copied visual state, disabled no-op, and error emission.
+- Export: `packages/tuffex/packages/components/src/copy-button/index.ts` wraps the component with `withInstall` and exports `TxCopyButtonInstance`.
+
+## Source
+<TuffDocSourceLink />

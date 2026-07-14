@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 2.5.0
 tags: [surface, background, blur, glass, backdrop-filter, fallback]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # BaseSurface 基础表面层
 
@@ -216,29 +217,75 @@ code: |
 | `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | 运动降级模式。 |
 | `settleDelay` | `number` | `150` | 结束运动后恢复延迟（ms）。 |
 | `autoDetect` | `boolean` | `false` | 自动检测 transform 触发降级。 |
-| `transitionDuration` | `number` | `260` | 过渡时长（ms）。 |
+| `transitionDuration` | `number` | `299` | 恢复过渡时长（ms）。 |
 | `fake` | `boolean` | `false` | 是否使用 fake 伪元素渲染。 |
 | `fakeIndex` | `number` | `0` | fake 层 z-index。 |
 | `tag` | `string` | `'div'` | 根元素标签名。 |
 
 ### Slots
 
-| 插槽名 | 说明 |
-|------|------|
-| `default` | 表面层内容 |
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 表面层内容。会渲染在 `.tx-base-surface__content` 中，层级高于 glass、filter、mask、motion-cover 和 refraction-edge。 |
+
+### 事件
+
+无。`TxBaseSurface` 是视觉基础组件，不触发交互或生命周期事件。
+
+### 暴露方法
+
+无。运动降级通过 `moving` 或 `autoDetect` 驱动，视觉状态通过 props 更新。
 
 ### CSS 变量
 
-| 变量名 | 说明 | 亮色默认值 | 暗色默认值 |
-|------|------|---------|---------|
-| `--tx-surface-color` | 纯色/遮罩背景色 | `var(--tx-fill-color-lighter)` (#fafafa) | #1d1d1d |
-| `--tx-surface-blur-bg` | blur/glass 半透明底色 | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.4)` |
+| 变量名 | 来源 | 说明 |
+|------|------|------|
+| `--tx-surface-color` | `color` prop 或主题兜底 | 纯色/遮罩背景色，默认回退到 `var(--tx-fill-color-lighter, #fafafa)`。 |
+| `--tx-surface-radius` | `radius` prop | 根节点和各层圆角；数字会转换成 `px`。 |
+| `--tx-surface-transition` | `transitionDuration` prop | layer fade、background 与 backdrop-filter 的过渡时长。 |
+| `--tx-surface-filter-blur` | `blur` prop | filter 与 refraction filter 层的 backdrop blur 半径。 |
+| `--tx-surface-filter-saturation` | `filterSaturation` prop | filter 层饱和度倍率。 |
+| `--tx-surface-filter-contrast` | `filterContrast` prop | filter 层对比度倍率。 |
+| `--tx-surface-filter-brightness` | `filterBrightness` prop | filter 层亮度倍率。 |
+| `--tx-surface-mask-opacity` | `opacity`、`fallbackMaskOpacity` 或 `overlayOpacity` | clamp 到 `0..1` 后的当前 mask 透明度。 |
+| `--tx-surface-refraction-light-x` / `--tx-surface-refraction-light-y` | `refractionLightX` / `refractionLightY` 或角度模型 | 折射光源锚点百分比。 |
+| `--tx-surface-refraction-strength` | `refractionStrength` 模型 | 静止、运动和恢复过程中的混合光学强度。 |
+| `--tx-surface-fake-index` | `fakeIndex` prop | fake 伪元素渲染层的 z-index。 |
 
 ## 交互契约
 
 - `tag` 控制根元素标签，默认插槽内容始终渲染在材质层之上。
 - `pure` 模式只渲染根背景；`mask` 模式渲染 mask 层并将透明度 clamp 到 `0..1`。
 - `blur` 与 `glass` 在 `moving=true` 或自动检测到 transform 运动时降级。`fallbackMode='mask'` 会优先使用 `fallbackMaskOpacity`；`fallbackMode='pure'` 不渲染 mask 层。
-- `glass` 与 `refraction` 会把归一化后的几何和光学参数透传给 `TxGlassSurface`。
-- `refraction` 会渲染 glass/filter/mask/edge 层，并暴露 renderer/profile/tone class 与 light/strength CSS 变量。
-- `autoDetect` 会监听根节点及祖先节点的 style/transition 变化，并在卸载时清理监听器与 observer。
+- `glass` 与 `refraction` 会把归一化后的几何和光学参数透传给 `TxGlassSurface`；`brightness <= 3` 会按倍率转换成百分比。
+- `refraction` 会渲染 glass、filter、mask、可选 motion-cover 和 edge 层，并暴露 renderer/profile/tone class 与 light/strength CSS 变量。
+- `autoDetect` 监听根节点及祖先节点的 `style` mutation，以及 `transitionstart`、`transitionend`、`transitioncancel`；卸载时会移除监听器和 observer。
+- `settleDelay` 与 `transitionDuration` 都会影响降级恢复，实际 settle timer 至少等于 transition duration。
+- `refraction` 在运动中仍保持折射渲染器启用，但会在运动/恢复过程中降低再恢复光学参数。
+
+## 最佳实践
+
+- 常规业务容器优先用 `TxCard`；只有需要直接调材质、降级或折射参数时才使用 `TxBaseSurface`。
+- 父层已有动画状态时优先传 `moving`；无法拿到显式状态的历史 transform 过渡，再使用 `autoDetect`。
+- `blur` / `glass` 运动中优先保持 `fallbackMode="mask"`，保证内容可读；只有纯色可接受时才用 `pure`。
+- 优先把 `refractionStrength`、`refractionProfile`、`refractionTone` 当成高层 API；RGB 通道偏移只适合视觉实验。
+- 只有页面能接受 CSS renderer 的较低光学保真度时才使用 `refractionRenderer="css"`；默认高级材质保持 `svg`。
+- 需要复用现有 `.fake-background` 层级时使用 `fake`；否则保持普通 layer 渲染，便于 DOM 调试。
+
+## 审阅说明
+
+- 已对照 `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`、`types.ts`、`base-surface-motion.ts`、`base-surface-math.ts` 和 `style/index.scss` 核对。
+- CSS 变量表已改为记录组件实际发出或消费的运行时变量，不再保留早期实现遗留的 blur background 变量说明。
+- 现有测试覆盖根标签/radius/color 变量、mask 透明度 clamp、blur 降级、pure 降级、归一化后的 `TxGlassSurface` props、refraction class/light 变量和 auto-detect 清理。
+- 源码没有事件或暴露方法；视觉状态通过 props 和 CSS 变量控制。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`.
+- Types: `packages/tuffex/packages/components/src/base-surface/src/types.ts`.
+- Motion helper: `packages/tuffex/packages/components/src/base-surface/src/base-surface-motion.ts`.
+- Math helper: `packages/tuffex/packages/components/src/base-surface/src/base-surface-math.ts`.
+- Styles: `packages/tuffex/packages/components/src/base-surface/src/style/index.scss`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/base-surface/__tests__/base-surface.test.ts` 验证模式渲染、运动降级行为、折射参数与 observer 清理。
+
+<TuffDocSourceLink />

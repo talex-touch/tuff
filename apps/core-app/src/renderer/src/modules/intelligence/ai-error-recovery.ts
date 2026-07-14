@@ -41,6 +41,25 @@ export function resolveIntelligenceErrorRecovery(
     }
   }
 
+  if (
+    includesAny(normalized, [
+      'QUOTA_CHECK_UNAVAILABLE',
+      'QUOTA VERIFICATION IS UNAVAILABLE'
+    ])
+  ) {
+    return {
+      code: 'quota-verification',
+      title: t(
+        'intelligence.errorRecovery.quotaVerificationTitle',
+        'Quota verification unavailable'
+      ),
+      detail: t(
+        'intelligence.errorRecovery.quotaVerificationDetail',
+        'Retry later. If this continues, inspect Intelligence quota storage and configuration.'
+      )
+    }
+  }
+
   if (includesAny(normalized, ['QUOTA', 'CREDIT', 'INSUFFICIENT_FUNDS', 'PAYMENT_REQUIRED'])) {
     return {
       code: 'quota',

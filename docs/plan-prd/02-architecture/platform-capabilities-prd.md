@@ -12,7 +12,7 @@
 - 能力不可用必须返回明确 `unsupported/degraded reason`，不得伪成功。
 - 插件调用平台能力必须声明 permission、platform、command source 与审计字段。
 - 高风险 shell/PowerShell/AppleScript 优先参数化执行或 safe-shell。
-- Native transport V1 已覆盖 screenshot、capabilities、file-index、file、media 五域。
+- Native transport V1 已覆盖 screenshot、capabilities、file-index、file、media 五域；canonical 插件 context 当前只把经过 `window.capture` + verified identity 门禁的 bounded screenshot facade 暴露为 `context.utils.screenshot`，其余 transport 域不能据此视为通用插件 SDK 已开放。
 - MetaK / QuickActions SDK 的原生分享入口复用 FlowBus native share，不新增独立分享协议；插件必须先查询 native share targets 再选择 AirDrop / Mail / Messages / fallback。
 
 ## Native Share SDK 口径

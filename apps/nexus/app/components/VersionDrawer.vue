@@ -313,7 +313,7 @@ watch([manifestPreview, packageLoading, packageError], () => {
                         @change="handlePackageChange"
                       />
                       <p v-if="packageLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                        <span class="i-carbon-circle-dash animate-spin" />
+                        <span class="i-ri-loader-4-line animate-spin" />
                         {{ t('dashboard.sections.plugins.loading', 'Loading...') }}
                       </p>
                       <p v-if="packageError" class="text-xs text-red-500">
@@ -347,7 +347,7 @@ watch([manifestPreview, packageLoading, packageError], () => {
 
                     <div class="pt-2">
                       <TxButton block :disabled="loading" native-type="submit">
-                        <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
+                        <span v-if="loading" class="i-ri-loader-4-line mr-2 animate-spin" />
                         {{ submitLabel }}
                       </TxButton>
                       <p v-if="error" class="mt-2 text-center text-xs text-red-500">
@@ -397,7 +397,7 @@ watch([manifestPreview, packageLoading, packageError], () => {
                           {{ t('dashboard.sections.plugins.license.cancel') }}
                         </FlatButton>
                         <TxButton class="flex-1 rounded-xl" :disabled="!licenseAgreed || loading" @click="onLicenseSubmit">
-                          <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
+                          <span v-if="loading" class="i-ri-loader-4-line mr-2 animate-spin" />
                           {{ t('dashboard.sections.plugins.license.submit') }}
                         </TxButton>
                       </div>

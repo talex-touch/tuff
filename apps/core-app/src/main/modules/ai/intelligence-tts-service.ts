@@ -192,7 +192,8 @@ export class IntelligenceTtsService {
       format: payload.format,
       quality: payload.quality,
       providerId: payload.providerId,
-      model: payload.model
+      model: payload.model,
+      caller: payload.metadata?.caller
     })
   }
 

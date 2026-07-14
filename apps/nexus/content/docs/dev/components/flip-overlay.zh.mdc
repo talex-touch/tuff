@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [overlay, motion, transition]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # FlipOverlay 翻转遮罩
@@ -83,9 +84,12 @@ code: |
 | `maskClosable` | `boolean` | `true` | 点击遮罩关闭 |
 | `preventAccidentalClose` | `boolean` | `false` | 防误关闭（阻止遮罩关闭 + 页面退出拦截 + 红光警示） |
 | `globalMask` | `boolean` | `true` | 是否渲染全局遮罩层 |
-| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 内置卡片背景模式 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'mask'` | 内置卡片背景模式 |
 | `surfaceColor` | `string` | `''` | 内置背景基础色（默认跟随主题） |
 | `surfaceOpacity` | `number` | `0.96` | 内置背景透明度（mask 模式） |
+| `speedBoost` | `number` | `1.12` | 动画进度超过 `speedBoostAt` 后应用的 timeScale 加速。 |
+| `speedBoostAt` | `number` | `0.7` | 开启 `speedBoost` 的打开/关闭动画进度阈值。 |
+| `transitionName` | `string` | `'TxFlipOverlay-Mask'` | 遮罩层使用的 Vue transition 名称。 |
 | `header` | `boolean` | `true` | 是否启用内置 header（未使用 `#header` 时生效） |
 | `headerTitle` | `string` | `''` | 内置 header 标题 |
 | `headerDesc` | `string` | `''` | 内置 header 描述 |
@@ -93,13 +97,17 @@ code: |
 | `closeAriaLabel` | `string` | `'Close'` | 关闭按钮无障碍文案 |
 | `maskClass` | `string` | `''` | 遮罩 class |
 | `cardClass` | `string` | `''` | 卡片 class |
+| `cardStyle` | `CSSProperties` | - | 透传到 overlay 卡片节点的内联样式对象。 |
 | `border` | `'solid' \| 'dashed' \| 'dash' \| 'none'` | `'solid'` | 卡片边框样式（`dash` 等价于 `dashed`） |
 | `scrollable` | `boolean` | `true` | 内容区是否内部滚动 |
+| `expanded` | `boolean` | - | 可选受控展开动画状态，用于需要同步动效状态的外层 UI。 |
+| `animating` | `boolean` | - | 可选受控动画状态，用于需要同步动效状态的外层 UI。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
+| `update:modelValue` | `(value: boolean)` | overlay 自行关闭时以 `false` 触发。 |
 | `open` | - | 打开动画开始 |
 | `opened` | - | 打开动画完成 |
 | `close` | - | 关闭动画开始 |
@@ -116,3 +124,36 @@ code: |
 | `header-display` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义标题/描述区 |
 | `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义关闭按钮左侧操作区 |
 | `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义关闭区域（`closable=false` 时不渲染） |
+
+## 交互契约
+
+- `modelValue=true` 会挂载 overlay、解析 `source` 矩形、触发 `open`，并在卡片动画完成后触发 `opened`。
+- 内置关闭按钮、插槽 `close()` 和遮罩点击都会进入关闭流程；`maskClosable=false` 只阻止遮罩点击关闭。
+- 组件内部关闭顺序为 `close`、`update:modelValue(false)`、`closed`。父级必须同步更新 `v-model`，受控 overlay 才会完全关闭。
+- `expanded` 和 `animating` 是同步动效状态；只有外围 UI 需要观测 overlay 动画时才绑定。
+- `globalMask=true` 时堆叠 overlay 共享 body 级遮罩。下层遮罩不可交互，只有顶层响应遮罩点击。
+- `preventAccidentalClose=true` 会阻止遮罩关闭和页面退出，并用警示状态反馈误操作，而不是静默关闭。
+
+## 最佳实践
+
+- 将真实触发元素或它的 `DOMRect` 传给 `source`；`null` 会退化为居中卡片，缺少来源连续性。
+- 堆叠 overlay 尽量保持接近默认 `duration`，让共享遮罩和卡片动效同步。
+- 用 `cardStyle` 传尺寸约束（如 `width`、`maxHeight`），用 `cardClass` 复用视觉变体。
+- 常规卡片优先使用 `surface="mask"`；仅在背景仍可读时使用 `glass` / `refraction`，完全自定义卡片时使用 `pure`。
+- 优先使用 `#header-display`、`#header-actions` 或 `#header-close`；全量 `#header` 会退出内置关闭布局。
+
+## 审阅说明
+
+- **状态契约：** `TxFlipOverlay` 管理挂载与动画生命周期，但只有组件自行关闭时才触发 `update:modelValue(false)`；使用内置关闭、插槽 `close()` 或遮罩关闭后，调用方仍需同步 `v-model`。
+- **叠层契约：** `globalMask=true` 会让多个 overlay 共享视觉遮罩，但只有顶层保留可交互遮罩；尺寸接近的相邻层才应用有限位移，更深层按透明度渐隐。
+- **防误触契约：** `preventAccidentalClose` 会阻止遮罩关闭和页面退出，并闪烁警示状态；它只是交互防护，不是持久化或自动保存能力。
+- **实测覆盖:** `flip-overlay.test.ts` 覆盖默认值、header 插槽优先级、关闭顺序、card style 透传、叠层遮罩、层级位移和防误关闭行为。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`.
+- Motion implementation: `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-motion.ts`.
+- Types: `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts` verifies surface defaults, header slot priority, close event order, card style forwarding, stacked masks, layered displacement, and safety-close guards.
+
+<TuffDocSourceLink />

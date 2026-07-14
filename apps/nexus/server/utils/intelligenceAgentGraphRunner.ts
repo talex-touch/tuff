@@ -2,6 +2,7 @@ import type { IntelligenceMessage } from '@talex-touch/tuff-intelligence/light'
 import type { H3Event } from 'h3'
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph'
 import { createAudit } from './intelligenceStore'
+import { normalizeNexusIntelligenceTransportError } from './intelligenceErrorContract'
 import {
   appendRuntimeTraceEvent,
   getRuntimeSession,
@@ -173,26 +174,8 @@ function chunkForStream(content: string, chunkSize = 72): string[] {
   return chunks
 }
 
-function formatModelErrorDetail(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    const detail: Record<string, unknown> = {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-      cause: (error as { cause?: unknown }).cause,
-    }
-    const extra = error as unknown as Record<string, unknown>
-    for (const key of Object.keys(extra)) {
-      if (!(key in detail)) {
-        detail[key] = extra[key]
-      }
-    }
-    return detail
-  }
-  if (error && typeof error === 'object') {
-    return { ...error as Record<string, unknown> }
-  }
-  return { message: String(error || 'unknown error') }
+function formatModelErrorDetail(error: unknown) {
+  return normalizeNexusIntelligenceTransportError(error)
 }
 
 function buildCheckpointState(state: AgentGraphRuntimeState): RuntimeCheckpointState {
@@ -448,6 +431,7 @@ async function finalizeFailureState(
         status: metrics.status,
         stage,
         durationMs: metrics.durationMs,
+        errorCode: errorDetail.code,
         error: errorDetail,
         totalActions: metrics.totalActions,
         completedActions: metrics.completedActions,

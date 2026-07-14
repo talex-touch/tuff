@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, screen } from 'electron'
 import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
 import { getAnalyticsMessageStore } from '../modules/analytics/message-store'
+import { installBundledOfficialPluginSeeds } from '../modules/plugin/official-plugin-seed'
 import { getMainConfig, saveMainConfig } from '../modules/storage'
 import { TalexTouch } from '../types'
 import { checkDirWithCreate } from '../utils/common-util'
@@ -368,6 +369,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     this.app = app
     this.version = app.isPackaged ? TalexTouch.AppVersion.RELEASE : TalexTouch.AppVersion.DEV
+    this.prepareBundledOfficialPluginSeeds()
 
     if (!app.isPackaged) {
       devProcessManager.init()
@@ -468,6 +470,29 @@ export class TouchApp implements TalexTouch.TouchApp {
       saveMainConfig(StorageList.APP_SETTING, appSettings)
     } catch (error) {
       mainLog.warn('Failed to persist main window bounds', { error })
+    }
+  }
+
+  private prepareBundledOfficialPluginSeeds(): void {
+    if (!app.isPackaged) return
+
+    try {
+      const results = installBundledOfficialPluginSeeds({
+        seedRoot: path.join(process.resourcesPath, 'bundled-plugins'),
+        runtimePluginRoot: path.join(this.rootPath, 'modules', 'plugins')
+      })
+      for (const result of results) {
+        mainLog.info('Bundled official plugin seed prepared', {
+          meta: {
+            pluginName: result.pluginName,
+            seedVersion: result.seedVersion,
+            localVersion: result.localVersion,
+            status: result.status
+          }
+        })
+      }
+    } catch (error) {
+      mainLog.error('Failed to prepare bundled official plugin seeds', { error })
     }
   }
 

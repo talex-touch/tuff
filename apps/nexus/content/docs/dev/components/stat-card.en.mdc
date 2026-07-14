@@ -9,6 +9,8 @@ verified: true
 
 `TxStatCard` displays a primary metric with optional icon decoration, insight comparison, or progress ring. Use the default variant for simple metrics, `insight` for trend deltas, and `variant="progress"` or `progress` for bounded percentage summaries.
 
+Progress values are clamped to 0-100 for the ring. `insight` renders only when both `from` and `to` are finite numbers; otherwise the card falls back to the plain metric layout.
+
 ## Basic Usage
 
 ### Default Variant
@@ -206,8 +208,8 @@ code: |
 | `clickable` | `boolean` | `false` | Enables hover/press states. |
 | `insight` | `StatCardInsight` | - | Change indicator object (moves label to top). |
 | `variant` | `StatCardVariant` | `'default'` | Layout variant (`default` \| `progress`). |
-| `progress` | `number` | - | Progress percent (0-100). Passing this enables the progress variant. |
-| `meta` | `string` | - | Bottom meta line for progress variant. |
+| `progress` | `number` | - | Progress percent. Passing this enables the progress variant and clamps the ring to 0-100. |
+| `meta` | `string` | - | Bottom meta line for progress variant; ignored when the `meta` slot is present. |
 
 ### StatCardInsight
 
@@ -221,6 +223,7 @@ code: |
 | `suffix` | `string` | - | Overrides suffix (default `%` for percent). |
 | `precision` | `number` | - | Decimal precision. |
 
+
 ### Slots
 
 | Slot | Description |
@@ -229,8 +232,23 @@ code: |
 | `label` | Custom label area. |
 | `meta` | Meta line for progress variant. |
 
+## Best Practices
+
+- Use numeric `value` for count metrics so the default formatter can insert separators. Use the `value` slot when the unit or animated number needs custom layout.
+- Use `insight.type="delta"` for absolute changes and `insight.type="percent"` for relative changes; the default precision is `0` for deltas and `1` for percentages.
+- Reserve `variant="progress"` for bounded health, capacity, quota, or completion values. Do not use it for unbounded totals.
+- `clickable` only changes visual affordance. Wrap the card in an interactive parent or add a surrounding button/link when it must navigate.
+
 ## Review Notes
 
 - Source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
 - Recommendation: use the default variant for plain metrics, `insight` for deltas, and `variant="progress"` for bounded health or capacity values.
 - Accessibility: the root renders `role="group"`; provide nearby heading/context in dashboards so users are not left with bare numbers.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`.
+- Type contracts: `packages/tuffex/packages/components/src/stat-card/src/types.ts` exports `StatCardProps`, `StatCardInsight`, and variant types.
+- **Verified coverage:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` covers default rendering, custom value and label slots, percent and delta insights, progress activation and ring clamping, and custom progress meta slots.
+
+<TuffDocSourceLink />

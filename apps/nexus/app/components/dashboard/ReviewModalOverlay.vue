@@ -270,7 +270,7 @@ const reviewHeaderPlugin = computed(() => {
                 {{ t('dashboard.sections.plugins.actions.reject') }}
               </TxButton>
               <TxButton type="success" :disabled="loading" @click="handleApprove">
-                <span v-if="loading" class="i-carbon-circle-dash animate-spin" />
+                <span v-if="loading" class="i-ri-loader-4-line animate-spin" />
                 <span v-else class="i-carbon-checkmark" />
                 {{ t('dashboard.sections.plugins.actions.approve') }}
               </TxButton>
@@ -280,7 +280,7 @@ const reviewHeaderPlugin = computed(() => {
                 {{ t('dashboard.sections.plugins.assetCreate.back') }}
               </TxButton>
               <TxButton type="danger" :disabled="loading" @click="handleReject">
-                <span v-if="loading" class="i-carbon-circle-dash animate-spin" />
+                <span v-if="loading" class="i-ri-loader-4-line animate-spin" />
                 <span v-else class="i-carbon-close" />
                 {{ t('dashboard.sections.plugins.actions.reject') }}
               </TxButton>

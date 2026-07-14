@@ -45,7 +45,9 @@ code: |
 - Ideal for page-level loading with consistent rhythm.
 - Content line widths use a fixed sequence, keeping SSR, hydration, and tests deterministic.
 
-## API (Brief)
+## API
+
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -55,6 +57,14 @@ rows:
     description: 'No extra props; size follows the container'
 ---
 ::
+
+### Events
+
+`TxLayoutSkeleton` does not emit custom events.
+
+### Slots
+
+`TxLayoutSkeleton` does not expose slots. It always renders the fixed layout scaffold documented below.
 
 ## Interaction Contract
 
@@ -91,8 +101,25 @@ code: |
 ---
 :::
 
+## Best Practices
+
+- Give the wrapper an explicit height; the component fills `width: 100%` and `height: 100%` rather than deciding page dimensions itself.
+- Use it for page, panel, side-summary, and detail-pane loading where the final layout shape is stable.
+- Do not use it as a table row placeholder. Use `TxSkeleton`, row-level placeholders, or `TxDataTable loading` for row bodies.
+- Keep it deterministic for docs, SSR, hydration, and visual tests; content line widths intentionally use a fixed sequence instead of runtime randomness.
+
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`
-- Recommendation: give the wrapper an explicit height; use it for page-level loading, while row-level loading should use `TxSkeleton` or table loading.
-- Stability: content line widths use a fixed sequence, not randomness, which keeps docs screenshots and SSR output stable.
+- Reviewed against `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue` and `layout-skeleton.test.ts`.
+- **Verified coverage:** fixed scaffold shape, six sidebar items, eight content rows, deterministic content widths, and install registration.
+- API note: this component intentionally has no props. Size, aspect ratio, and placement must come from the parent container.
+- Rendering note: content line widths are fixed, not random, so SSR, hydration, docs snapshots, and visual tests stay stable.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`.
+- Types: `packages/tuffex/packages/components/src/layout-skeleton/index.ts` exports `TxLayoutSkeletonInstance`.
+- Coverage: `packages/tuffex/packages/components/src/layout-skeleton/__tests__/layout-skeleton.test.ts` verifies fixed scaffold counts, deterministic content widths, and install registration.
+
+<TuffDocSourceLink />
+

@@ -105,7 +105,7 @@ function handleProfileEdit() {
                 :aria-label="avatarEditText"
                 @click="emit('avatar-edit')"
               >
-                <span :class="avatarUploading ? 'i-carbon-circle-dash animate-spin' : 'i-carbon-edit'" aria-hidden="true" />
+                <span :class="avatarUploading ? 'i-ri-loader-4-line animate-spin' : 'i-carbon-edit'" aria-hidden="true" />
               </button>
             </div>
             <div class="min-w-0 flex flex-col items-start justify-center gap-2">

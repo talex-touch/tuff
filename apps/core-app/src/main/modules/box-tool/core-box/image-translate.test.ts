@@ -60,6 +60,8 @@ describe('translateCoreBoxImageItem', () => {
     delete process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR
     delete process.env.TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE_CLIPBOARD_FILE
     vi.clearAllMocks()
+    vi.restoreAllMocks()
+    vi.useRealTimers()
   })
 
   it('runs image translate scene for clipboard image item and writes translated image', async () => {
@@ -105,6 +107,7 @@ describe('translateCoreBoxImageItem', () => {
       success: true,
       translatedImageBase64: Buffer.from('translated-image').toString('base64'),
       sourceText: 'hello',
+      metadata: undefined,
       targetText: '你好'
     })
     expect(sceneMocks.runNexusScene).toHaveBeenCalledWith('corebox.screenshot.translate', {
@@ -349,8 +352,8 @@ describe('translateCoreBoxImageItem', () => {
     expect(sceneMocks.runNexusScene).not.toHaveBeenCalled()
   })
 
-  it('returns SCENE_UNAVAILABLE when Nexus screenshot scene request fails', async () => {
-    sceneMocks.runNexusScene.mockRejectedValue(new Error('provider unavailable'))
+  it('returns SCENE_UNAVAILABLE with the provider message for an unclassified scene failure', async () => {
+    sceneMocks.runNexusScene.mockRejectedValue(new Error('scene orchestration stopped'))
 
     const result = await translateImageBase64(
       Buffer.from('source-image').toString('base64'),
@@ -363,7 +366,45 @@ describe('translateCoreBoxImageItem', () => {
     expect(result).toMatchObject({
       success: false,
       code: 'SCENE_UNAVAILABLE',
-      error: 'provider unavailable'
+      error: 'scene orchestration stopped'
+    })
+    expect(pinWindowMocks.openImageTranslatePinWindow).not.toHaveBeenCalled()
+    expect(electronMocks.writeImage).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      name: 'Nexus authentication is required',
+      error: new Error('NEXUS_AUTH_REQUIRED'),
+      expected: {
+        code: 'NEXUS_AUTH_REQUIRED',
+        reason: 'Nexus provider requires a signed-in account.',
+        recovery: 'Sign in to Nexus or switch to another enabled provider.'
+      }
+    },
+    {
+      name: 'quota verification is unavailable',
+      error: Object.assign(new Error('quota cache read failed'), {
+        code: 'QUOTA_CHECK_UNAVAILABLE'
+      }),
+      expected: {
+        code: 'QUOTA_CHECK_UNAVAILABLE',
+        reason: 'Quota verification is unavailable, so the request was blocked.',
+        recovery:
+          'Retry after quota storage recovers or inspect Intelligence quota configuration.'
+      }
+    }
+  ])('normalizes scene failure when $name', async ({ error, expected }) => {
+    sceneMocks.runNexusScene.mockRejectedValue(error)
+
+    const result = await translateImageBase64(Buffer.from('source-image').toString('base64'))
+
+    expect(result).toEqual({
+      success: false,
+      code: expected.code,
+      error: expected.reason,
+      reason: expected.reason,
+      recovery: expected.recovery
     })
     expect(pinWindowMocks.openImageTranslatePinWindow).not.toHaveBeenCalled()
     expect(electronMocks.writeImage).not.toHaveBeenCalled()
@@ -439,6 +480,136 @@ describe('translateCoreBoxImageItem', () => {
     expect(electronMocks.writeImage).not.toHaveBeenCalled()
   })
 
+  it('returns authoritative scene route metadata with usage model and adapter latency', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-13T00:00:00.000Z'))
+    const translatedBase64 = Buffer.from('translated-image').toString('base64')
+    sceneMocks.runNexusScene.mockImplementation(async () => {
+      await vi.advanceTimersByTimeAsync(147)
+      return {
+        runId: 'run-image-translation',
+        sceneId: 'corebox.screenshot.translate',
+        status: 'completed',
+        mode: 'execute',
+        output: { translatedImageBase64: translatedBase64 },
+        selected: [
+          {
+            providerId: 'provider-1',
+            providerName: 'Nexus Vision',
+            capability: 'vision.ocr'
+          }
+        ],
+        usage: [
+          {
+            providerId: 'provider-1',
+            capability: 'vision.ocr',
+            model: 'vision-ocr-v2'
+          }
+        ],
+        trace: [
+          {
+            phase: 'adapter.dispatch',
+            status: 'success',
+            metadata: {
+              providerId: 'provider-1',
+              capability: 'vision.ocr',
+              latencyMs: 17
+            }
+          }
+        ]
+      }
+    })
+    sceneMocks.extractTranslatedImageFromSceneRun.mockReturnValue({
+      translatedImageBase64: translatedBase64
+    })
+
+    try {
+      const result = await translateImageBase64(
+        Buffer.from('source-image').toString('base64'),
+        'zh',
+        { openPinWindow: true }
+      )
+
+      expect(result).toEqual({
+        success: true,
+        translatedImageBase64: translatedBase64,
+        sourceText: undefined,
+        targetText: undefined,
+        metadata: {
+          runId: 'run-image-translation',
+          sceneId: 'corebox.screenshot.translate',
+          durationMs: 147,
+          stages: [
+            {
+              capability: 'vision.ocr',
+              providerId: 'provider-1',
+              providerName: 'Nexus Vision',
+              model: 'vision-ocr-v2',
+              latencyMs: 17
+            }
+          ]
+        }
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('omits malformed optional route model and latency without failing image translation', async () => {
+    const translatedBase64 = Buffer.from('translated-image').toString('base64')
+    sceneMocks.runNexusScene.mockResolvedValue({
+      runId: 'run-image-translation-malformed-optional-data',
+      sceneId: 'corebox.screenshot.translate',
+      status: 'completed',
+      mode: 'execute',
+      output: { translatedImageBase64: translatedBase64 },
+      selected: [
+        {
+          providerId: 'provider-1',
+          providerName: '   ',
+          capability: 'vision.ocr'
+        }
+      ],
+      usage: [
+        {
+          providerId: 'provider-1',
+          capability: 'vision.ocr',
+          model: { unsupported: true }
+        }
+      ],
+      trace: [
+        {
+          phase: 'adapter.dispatch',
+          status: 'success',
+          metadata: {
+            providerId: 'provider-1',
+            capability: 'vision.ocr',
+            latencyMs: '17'
+          }
+        }
+      ]
+    })
+    sceneMocks.extractTranslatedImageFromSceneRun.mockReturnValue({
+      translatedImageBase64: translatedBase64
+    })
+
+    const result = await translateImageBase64(translatedBase64, 'zh', { openPinWindow: true })
+
+    expect(result).toMatchObject({
+      success: true,
+      metadata: {
+        runId: 'run-image-translation-malformed-optional-data',
+        sceneId: 'corebox.screenshot.translate',
+        durationMs: expect.any(Number)
+      }
+    })
+    expect(result.metadata?.stages).toEqual([
+      {
+        capability: 'vision.ocr',
+        providerId: 'provider-1'
+      }
+    ])
+  })
   it('normalizes data URL payload before running screenshot scene', async () => {
     const sourceBase64 = Buffer.from('source-image').toString('base64')
     const translatedBase64 = Buffer.from('translated-image').toString('base64')

@@ -118,8 +118,10 @@ code: |
 
 ## Notes
 
-- When `multiple` is true, `modelValue` must be an array; clearing returns an empty array.
-- When `multiple` is false, clearing returns `undefined`.
+- `TxTreeSelect` reuses `TxTree` internally. The dropdown tree receives `defaultExpandedKeys`, `filterText`, and `multiple`; it does not expose `expandedKeys` or `filterMethod` controls.
+- When `multiple=true`, `modelValue` must be an array and the trigger renders selected labels as tags. Clearing returns `[]`.
+- When `multiple=false`, `modelValue` is one key or `undefined`. Selecting a node closes the dropdown, and clearing returns `undefined`.
+- Disabled nodes cannot be selected, but their caret can still expand when they have children.
 
 ## API
 
@@ -128,44 +130,44 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `modelValue` | `string \| number \| Array<string \| number> \| undefined` | - | Selected key in single mode, or selected key array in `multiple` mode. |
-| `nodes` | `TreeSelectNode[]` | `[]` | Tree nodes displayed in the dropdown. |
+| `nodes` | `TreeSelectNode[]` | `[]` | Tree nodes displayed in the dropdown and used to resolve trigger labels. |
 | `multiple` | `boolean` | `false` | Enables checkbox-style multi-select and tag display in the trigger. |
-| `disabled` | `boolean` | `false` | Disables the combobox trigger, tree interaction, and clear action. |
-| `placeholder` | `string` | `'请选择'` | Placeholder shown when nothing is selected. |
-| `searchable` | `boolean` | `true` | Shows a search input and passes its text to `TxTree` filtering. |
-| `clearable` | `boolean` | `true` | Shows a clear button when there is a selected key. |
+| `disabled` | `boolean` | `false` | Disables the trigger, dropdown interaction, keyboard toggling, and clear action. |
+| `placeholder` | `string` | `'请选择'` | Placeholder shown when no selected key resolves to a label. |
+| `searchable` | `boolean` | `true` | Shows a search input and passes its text to the inner `TxTree` as `filterText`. |
+| `clearable` | `boolean` | `true` | Shows a clear button when there is at least one selected key and the component is not disabled. |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | Popover placement for the dropdown panel. |
 | `dropdownOffset` | `number` | `6` | Popover offset from the trigger. |
-| `dropdownWidth` | `number` | `0` | Explicit Popover panel width; `0` leaves width resolution to the Popover. |
+| `dropdownWidth` | `number` | `0` | Explicit Popover panel width; `0` leaves width resolution to `TxPopover`. |
 | `dropdownMaxWidth` | `number` | `480` | Maximum Popover panel width. |
-| `dropdownMaxHeight` | `number` | `320` | Maximum tree panel height in pixels. |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Tree node keys expanded on initial render. |
+| `dropdownMaxHeight` | `number` | `320` | Maximum tree panel height in pixels. The list scrolls inside this limit. |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Initial expanded keys passed to the inner `TxTree`. |
 
 ### TreeSelectNode
 
 | Field | Type | Description |
 |------|------|------|
-| `key` | `string \| number` | Stable node key used as the selected value. |
-| `label` | `string` | Visible node label and trigger display text. |
+| `key` | `string \| number` | Stable unique key used as the selected value. |
+| `label` | `string` | Visible node label, default search target, and trigger display text. |
 | `disabled` | `boolean` | Disables selecting this node. |
 | `children` | `TreeSelectNode[]` | Optional nested child nodes. |
 
-### Events
+### TxTreeSelect Events
 
 | Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v: TreeSelectValue)` | v-model update emitted after tree selection or clear. |
-| `change` | `(v: TreeSelectValue)` | Emitted with the same value after selection or clear. |
+| `update:modelValue` | `value: TreeSelectValue` | v-model update emitted after tree selection, clear, or `setValue()`. |
+| `change` | `value: TreeSelectValue` | Emitted with the same value immediately after `update:modelValue`. |
 | `open` | - | Emitted when the Popover dropdown opens. |
 | `close` | - | Emitted when the Popover dropdown closes. |
 
-### Slots
+### TxTreeSelect Slots
 
-| Name | Description |
-|------|------|
-| `node` | Custom node label content. Receives `{ node, level, expanded, selected }`. |
+| Slot | Props | Description |
+|------|------|------|
+| `node` | `{ node, level, expanded, selected }` | Replaces the node label area inside the built-in `TxCardItem` row. Caret, checkbox, padding, and click handling remain owned by the component. |
 
-### Expose
+### Exposed Methods
 
 | Name | Type | Description |
 |------|------|------|
@@ -174,13 +176,42 @@ code: |
 | `toggle()` | `() => void` | Toggles the dropdown open state. |
 | `focus()` | `() => void` | Focuses the combobox trigger. |
 | `blur()` | `() => void` | Blurs the combobox trigger. |
-| `clear()` | `() => void` | Clears to `undefined` in single mode or `[]` in multiple mode. |
-| `setValue(v)` | `(v: TreeSelectValue) => void` | Emits the supplied value through `update:modelValue` and `change`. |
-| `getValue()` | `() => TreeSelectValue` | Returns the current `modelValue`. |
-| `getCheckedKeys()` | `() => Array<string \| number>` | Returns the currently selected keys as an array. |
+| `clear()` | `() => void` | Emits `undefined` in single mode or `[]` in multiple mode unless disabled. |
+| `setValue(value)` | `(value: TreeSelectValue) => void` | Emits the supplied value through `update:modelValue` and `change`; it does not validate against `nodes`. |
+| `getValue()` | `() => TreeSelectValue` | Returns the current `modelValue` prop. |
+| `getCheckedKeys()` | `() => Array<string \| number>` | Returns selected keys as an array in both single and multiple modes. |
+
+## Interaction Contract
+
+- The trigger is a focusable `role="combobox"`. `Enter` and `Space` toggle the dropdown; `Escape` closes it.
+- The dropdown panel is backed by `TxPopover`; placement and width props pass through to that component.
+- Search uses the inner `TxTree` default label filter. There is currently no prop to pass a custom `filterMethod` through `TxTreeSelect`.
+- Single selection closes the dropdown after emitting value events. Multiple selection keeps it open for additional checks.
+- Trigger labels are resolved from the current `nodes` tree. Unknown selected keys remain selected internally but do not render a visible label.
+- `setValue()` is an emitting helper, not internal state. The parent still owns `modelValue` through v-model.
+- `setValue` and `getCheckedKeys` are intentionally thin exposed helpers for form wrappers and test harnesses; prefer v-model for normal product code.
+
+## Best Practices
+
+- Use `TxTreeSelect` for compact ownership, namespace, category, and organization-unit selection. Use full `TxTree` when users need persistent context, bulk tree operations, or custom row controls.
+- Keep `key` values stable and independent from localized labels; label changes should not invalidate saved selections.
+- Match value shape to `multiple` before render. Switching `multiple` at runtime does not coerce an existing scalar into an array or vice versa.
+- Prefer shallow default expansion such as root departments or product areas. Deeply expanded dropdowns are harder to scan and scroll.
+- Use the `node` slot for badges or secondary labels only; avoid adding separate click targets that compete with the row selection behavior.
+- For domain-specific search, wrap the component with an external search experience or use `TxTree` directly until `filterMethod` is exposed.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`.
-- Screenshot: `.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`.
+- Reviewed against `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue` and `types.ts`.
+- Existing tests cover selection emission, empty-state rendering, and clear behavior.
 - Recommendation: use `key`/`label` in `nodes` instead of legacy select `value` fields; clearing returns `undefined` in single mode and an empty array in multiple mode.
+- Screenshot reference: `.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`.
+- Types: `packages/tuffex/packages/components/src/tree-select/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/tree-select/__tests__/tree-select.test.ts` covers selection-value emission, empty-state rendering for missing nodes, and single-select clear emission.
+
+<TuffDocSourceLink />
+

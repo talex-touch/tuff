@@ -136,6 +136,8 @@ export interface QuickOpsDiagnosticsInfo {
   defaultTimerDurationMs: number
   defaultPomodoroFocusMs: number
   defaultPomodoroBreakMs: number
+  pomodoroAdvancedLoopSupported: boolean
+  pomodoroCustomTemplateCount: number
   defaultScreenCleanDurationMs: number
 }
 

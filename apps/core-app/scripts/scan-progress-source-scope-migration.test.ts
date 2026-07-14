@@ -73,6 +73,7 @@ describe('scan progress source-scope migration cli', () => {
           rowsToMigrate: 2
         }
       })
+      expect(plan.evidenceSource.dbIdentity).toMatch(/^sha256-realpath-v1:[a-f0-9]{64}$/)
 
       const client = createClient({ url: `file:${dbPath}` })
       try {
@@ -152,6 +153,7 @@ describe('scan progress source-scope migration cli', () => {
         migratedRows: 2,
         backupTable: 'scan_progress_path_only_backup'
       })
+      expect(result.evidenceSource.dbIdentity).toMatch(/^sha256-realpath-v1:[a-f0-9]{64}$/)
 
       const client = createClient({ url: `file:${dbPath}` })
       try {

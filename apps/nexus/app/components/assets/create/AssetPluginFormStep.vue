@@ -483,7 +483,7 @@ function onSubmit() {
                 @change="handlePackageChange"
               />
               <p v-if="packageLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                <span class="i-carbon-circle-dash animate-spin" />
+                <span class="i-ri-loader-4-line animate-spin" />
                 {{ t('dashboard.sections.plugins.loading', 'Loading...') }}
               </p>
               <p v-if="packageError" class="text-xs text-red-500">
@@ -654,7 +654,7 @@ function onSubmit() {
               {{ t('common.next', 'Next') }}
             </TxButton>
             <TxButton v-else :disabled="loading || !canSubmit" native-type="submit">
-              <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
+              <span v-if="loading" class="i-ri-loader-4-line mr-2 animate-spin" />
               {{ t('dashboard.sections.plugins.createSubmit') }}
             </TxButton>
           </div>

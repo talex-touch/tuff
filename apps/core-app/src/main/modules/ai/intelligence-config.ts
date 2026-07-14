@@ -2,21 +2,25 @@ import type {
   IntelligenceCapabilityRoutingConfig,
   IntelligencePromptBinding,
   IntelligencePromptRecord,
+  IntelligenceProviderConfig,
   IntelligenceSDKPersistedConfig,
-  IntelligenceProviderConfig
 } from '@talex-touch/tuff-intelligence'
+import process from 'node:process'
 import {
   DEFAULT_CAPABILITIES,
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROVIDERS,
   IntelligenceProviderType,
   resolveIntelligencePromptTemplate,
-  toRuntimeCapabilityId
+  toRuntimeCapabilityId,
 } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { tuffIntelligence } from './intelligence-sdk'
 import { normalizeProviderForRuntime, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime'
+
+const intelligenceConfigLog = getLogger('intelligence-config')
 
 const SUPPORTED_PROVIDER_TYPES = new Set([
   'openai',
@@ -24,7 +28,7 @@ const SUPPORTED_PROVIDER_TYPES = new Set([
   'deepseek',
   'siliconflow',
   'local',
-  'custom'
+  'custom',
 ])
 const INTELLIGENCE_DEFAULT_VERSION = 2
 const DEFAULT_PROMPT_VERSION = '1.0.0'
@@ -42,8 +46,8 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
   capabilities: ['vision.ocr'],
   metadata: {
     internal: true,
-    engine: 'system-ocr'
-  }
+    engine: 'system-ocr',
+  },
 }
 
 const INTERNAL_SYSTEM_OCR_CAPABILITY_ID = 'vision.ocr'
@@ -53,9 +57,12 @@ let lastAppliedRuntimeConfigSignature: string | null = null
 let teardownConfigUpdateListener: (() => void) | null = null
 
 function normalizeStrategyId(value?: string) {
-  if (!value) return undefined
-  if (value === 'priority') return 'rule-based-default'
-  if (value === 'adaptive') return 'adaptive-default'
+  if (!value)
+    return undefined
+  if (value === 'priority')
+    return 'rule-based-default'
+  if (value === 'adaptive')
+    return 'adaptive-default'
   return value
 }
 
@@ -66,7 +73,8 @@ function cloneValue<T>(value: T): T {
 function safeJsonStringify(value: unknown): string {
   try {
     return JSON.stringify(value)
-  } catch {
+  }
+  catch {
     return '[unserializable]'
   }
 }
@@ -77,29 +85,29 @@ function buildCapabilityPromptId(capabilityId: string): string {
 
 function normalizePromptBindingCapability(
   capabilityId: string,
-  binding: IntelligencePromptBinding
+  binding: IntelligencePromptBinding,
 ): IntelligencePromptBinding {
   const { capabilityId: _ignored, ...rest } = binding
   return {
     capabilityId,
-    ...rest
+    ...rest,
   }
 }
 
 function upsertPromptBinding(
   list: IntelligencePromptBinding[],
-  binding: IntelligencePromptBinding
+  binding: IntelligencePromptBinding,
 ): boolean {
   const idx = list.findIndex(
-    (item) =>
-      item.capabilityId === binding.capabilityId &&
-      (item.providerId ?? null) === (binding.providerId ?? null)
+    item =>
+      item.capabilityId === binding.capabilityId
+      && (item.providerId ?? null) === (binding.providerId ?? null),
   )
   if (idx >= 0) {
     const current = list[idx]!
     const next = {
       ...current,
-      ...binding
+      ...binding,
     }
     if (JSON.stringify(current) !== JSON.stringify(next)) {
       list[idx] = next
@@ -113,19 +121,19 @@ function upsertPromptBinding(
 
 function upsertPromptRecord(
   list: IntelligencePromptRecord[],
-  record: IntelligencePromptRecord
+  record: IntelligencePromptRecord,
 ): boolean {
   const idx = list.findIndex(
-    (item) =>
-      item.id === record.id &&
-      item.version === record.version &&
-      (item.providerId ?? null) === (record.providerId ?? null)
+    item =>
+      item.id === record.id
+      && item.version === record.version
+      && (item.providerId ?? null) === (record.providerId ?? null),
   )
   if (idx >= 0) {
     const current = list[idx]!
     const next = {
       ...current,
-      ...record
+      ...record,
     }
     if (JSON.stringify(current) !== JSON.stringify(next)) {
       list[idx] = next
@@ -145,14 +153,14 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
   const nowTs = Date.now()
 
   for (const [capabilityId, capabilityConfig] of Object.entries(capabilities)) {
-    const promptTemplate =
-      typeof capabilityConfig.promptTemplate === 'string'
+    const promptTemplate
+      = typeof capabilityConfig.promptTemplate === 'string'
         ? capabilityConfig.promptTemplate.trim()
         : ''
 
     const candidateBinding = capabilityConfig.promptBinding
       ? normalizePromptBindingCapability(capabilityId, capabilityConfig.promptBinding)
-      : promptBindings.find((item) => item.capabilityId === capabilityId)
+      : promptBindings.find(item => item.capabilityId === capabilityId)
 
     if (!promptTemplate) {
       if (candidateBinding && !capabilityConfig.promptBinding) {
@@ -166,7 +174,7 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
       capabilityId,
       promptId: buildCapabilityPromptId(capabilityId),
       promptVersion: DEFAULT_PROMPT_VERSION,
-      channel: 'stable'
+      channel: 'stable',
     }
 
     if (!binding.promptVersion) {
@@ -193,7 +201,7 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
       capabilityId,
       providerId: binding.providerId,
       channel: binding.channel ?? 'stable',
-      updatedAt: nowTs
+      updatedAt: nowTs,
     }
     if (upsertPromptRecord(promptRegistry, record)) {
       changed = true
@@ -214,7 +222,7 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
 
 function resolveCapabilityPromptTemplate(
   config: IntelligenceSDKPersistedConfig | undefined,
-  capabilityId: string
+  capabilityId: string,
 ): string | undefined {
   const normalizedCapabilityId = toRuntimeCapabilityId(capabilityId)
   if (!config || !normalizedCapabilityId) {
@@ -225,7 +233,7 @@ function resolveCapabilityPromptTemplate(
     capabilityId: normalizedCapabilityId,
     capability: config.capabilities?.[normalizedCapabilityId],
     promptRegistry: config.promptRegistry,
-    promptBindings: config.promptBindings
+    promptBindings: config.promptBindings,
   })
 }
 
@@ -237,12 +245,12 @@ function createDefaultPersistedConfig(): IntelligenceSDKPersistedConfig {
       enableAudit: DEFAULT_GLOBAL_CONFIG.enableAudit,
       enableCache: DEFAULT_GLOBAL_CONFIG.enableCache,
       enableQuota: DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
-      cacheExpiration: DEFAULT_GLOBAL_CONFIG.cacheExpiration
+      cacheExpiration: DEFAULT_GLOBAL_CONFIG.cacheExpiration,
     },
     capabilities: cloneValue(DEFAULT_CAPABILITIES),
     promptRegistry: [],
     promptBindings: [],
-    version: INTELLIGENCE_DEFAULT_VERSION
+    version: INTELLIGENCE_DEFAULT_VERSION,
   }
   syncPromptSchema(config)
   return config
@@ -262,7 +270,7 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
       enableAudit: DEFAULT_GLOBAL_CONFIG.enableAudit,
       enableCache: DEFAULT_GLOBAL_CONFIG.enableCache,
       enableQuota: DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
-      cacheExpiration: DEFAULT_GLOBAL_CONFIG.cacheExpiration
+      cacheExpiration: DEFAULT_GLOBAL_CONFIG.cacheExpiration,
     }
     changed = true
   }
@@ -282,24 +290,43 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     changed = true
   }
 
-  const nexusDefault = DEFAULT_PROVIDERS.find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
+  const nexusDefault = DEFAULT_PROVIDERS.find(provider => provider.id === TUFF_NEXUS_PROVIDER_ID)
   if (
-    nexusDefault &&
-    !config.providers.some((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
+    nexusDefault
+    && !config.providers.some(provider => provider.id === TUFF_NEXUS_PROVIDER_ID)
   ) {
     config.providers.unshift(cloneValue(nexusDefault))
     changed = true
   }
 
-  const nexusProvider = config.providers.find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
+  const nexusProvider = config.providers.find(provider => provider.id === TUFF_NEXUS_PROVIDER_ID)
   if (nexusProvider) {
     const defaultCapabilities = nexusDefault?.capabilities ?? []
     const capabilities = new Set([...(nexusProvider.capabilities ?? []), ...defaultCapabilities])
+    capabilities.delete('audio.tts')
     if (!capabilities.has('image.translate.e2e')) {
       capabilities.add('image.translate.e2e')
     }
     if (JSON.stringify(nexusProvider.capabilities ?? []) !== JSON.stringify([...capabilities])) {
       nexusProvider.capabilities = [...capabilities]
+      changed = true
+    }
+  }
+
+  for (const [capabilityId, defaultCapability] of Object.entries(DEFAULT_CAPABILITIES)) {
+    if (!config.capabilities[capabilityId]) {
+      config.capabilities[capabilityId] = cloneValue(defaultCapability)
+      changed = true
+    }
+  }
+
+  const ttsCapability = config.capabilities['audio.tts']
+  if (Array.isArray(ttsCapability?.providers)) {
+    const providers = ttsCapability.providers.filter(
+      binding => binding.providerId !== TUFF_NEXUS_PROVIDER_ID,
+    )
+    if (providers.length !== ttsCapability.providers.length) {
+      ttsCapability.providers = providers
       changed = true
     }
   }
@@ -319,34 +346,23 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     }
   }
 
-  if (!config.capabilities['text.chat']) {
-    config.capabilities['text.chat'] = cloneValue(DEFAULT_CAPABILITIES['text.chat'])
-    changed = true
-  } else if (
-    Array.isArray(config.capabilities['text.chat'].providers) &&
-    !config.capabilities['text.chat'].providers.some(
-      (binding) => binding.providerId === TUFF_NEXUS_PROVIDER_ID
-    )
+  const textChatCapability = config.capabilities['text.chat']
+  if (
+    Array.isArray(textChatCapability?.providers)
+    && !textChatCapability.providers.some(binding => binding.providerId === TUFF_NEXUS_PROVIDER_ID)
   ) {
-    config.capabilities['text.chat'].providers.unshift({
+    textChatCapability.providers.unshift({
       providerId: TUFF_NEXUS_PROVIDER_ID,
       priority: 1,
-      enabled: false
+      enabled: false,
     })
-    changed = true
-  }
-
-  if (!config.capabilities['image.translate.e2e']) {
-    config.capabilities['image.translate.e2e'] = cloneValue(
-      DEFAULT_CAPABILITIES['image.translate.e2e']
-    )
     changed = true
   }
 
   if (process.env.TUFF_DISABLE_NATIVE_OCR !== '1') {
     if (!config.capabilities[INTERNAL_SYSTEM_OCR_CAPABILITY_ID]) {
       config.capabilities[INTERNAL_SYSTEM_OCR_CAPABILITY_ID] = cloneValue(
-        DEFAULT_CAPABILITIES[INTERNAL_SYSTEM_OCR_CAPABILITY_ID]
+        DEFAULT_CAPABILITIES[INTERNAL_SYSTEM_OCR_CAPABILITY_ID],
       )
       changed = true
     }
@@ -360,14 +376,14 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
 
       if (
         !visionOcrCapability.providers.some(
-          (binding) => binding.providerId === INTERNAL_SYSTEM_OCR_PROVIDER_ID
+          binding => binding.providerId === INTERNAL_SYSTEM_OCR_PROVIDER_ID,
         )
       ) {
         visionOcrCapability.providers.unshift({
           providerId: INTERNAL_SYSTEM_OCR_PROVIDER_ID,
           priority: 0,
           enabled: true,
-          models: [INTERNAL_SYSTEM_OCR_MODEL]
+          models: [INTERNAL_SYSTEM_OCR_MODEL],
         })
         changed = true
       }
@@ -409,8 +425,8 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     saveMainConfig(StorageList.IntelligenceConfig, stored)
   }
 
-  const normalizedStrategy =
-    normalizeStrategyId(stored.globalConfig?.defaultStrategy) ?? 'adaptive-default'
+  const normalizedStrategy
+    = normalizeStrategyId(stored.globalConfig?.defaultStrategy) ?? 'adaptive-default'
 
   const providers = (stored.providers ?? [])
     .filter((provider) => {
@@ -423,7 +439,7 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
 
   const nativeOcrDisabledByEnv = process.env.TUFF_DISABLE_NATIVE_OCR === '1'
   const hasInternalProvider = providers.some(
-    (provider) => provider.id === INTERNAL_SYSTEM_OCR_PROVIDER_ID
+    provider => provider.id === INTERNAL_SYSTEM_OCR_PROVIDER_ID,
   )
   if (!nativeOcrDisabledByEnv && !hasInternalProvider) {
     providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
@@ -438,7 +454,7 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     cacheExpiration: stored.globalConfig?.cacheExpiration,
     capabilities: stored.capabilities ?? {},
     promptRegistry: stored.promptRegistry ?? [],
-    promptBindings: stored.promptBindings ?? []
+    promptBindings: stored.promptBindings ?? [],
   }
 
   const signature = safeJsonStringify(nextRuntimeConfig)
@@ -450,6 +466,43 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
   tuffIntelligence.updateConfig(nextRuntimeConfig)
 }
 
+function resolveEffectiveCapabilityRoutingConfig(
+  capabilityMap: Record<string, IntelligenceCapabilityRoutingConfig>,
+  capabilityId: string,
+): IntelligenceCapabilityRoutingConfig | undefined {
+  const capabilityRouting = capabilityMap[capabilityId]
+  const fallbackCapabilityId
+    = capabilityId === 'search.semantic' || capabilityId === 'search.rerank'
+      ? 'embedding.generate'
+      : capabilityId === 'workflow.execute' || capabilityId === 'agent.run'
+        ? 'text.chat'
+        : undefined
+
+  if (!fallbackCapabilityId) {
+    return capabilityRouting
+  }
+
+  const hasEnabledCapabilityBinding = capabilityRouting?.providers?.some(
+    binding => binding.enabled !== false,
+  )
+  return hasEnabledCapabilityBinding
+    ? capabilityRouting
+    : (capabilityMap[fallbackCapabilityId] ?? capabilityRouting)
+}
+
+export function getEffectiveCapabilityRoutingConfig(
+  capabilityId: string,
+): IntelligenceCapabilityRoutingConfig | undefined {
+  const normalizedCapabilityId = toRuntimeCapabilityId(capabilityId)
+  if (!normalizedCapabilityId) {
+    return undefined
+  }
+  return resolveEffectiveCapabilityRoutingConfig(
+    getLatestConfig()?.capabilities ?? {},
+    normalizedCapabilityId,
+  )
+}
+
 export function getCapabilityOptions(capabilityId: string): {
   allowedProviderIds?: string[]
   modelPreference?: string[]
@@ -459,7 +512,9 @@ export function getCapabilityOptions(capabilityId: string): {
   const stored = getLatestConfig()
   const normalizedCapabilityId = toRuntimeCapabilityId(capabilityId)
   const capabilityMap = stored?.capabilities ?? {}
-  const config = normalizedCapabilityId ? capabilityMap[normalizedCapabilityId] : undefined
+  const config = normalizedCapabilityId
+    ? resolveEffectiveCapabilityRoutingConfig(capabilityMap, normalizedCapabilityId)
+    : undefined
 
   if (!config) {
     return {}
@@ -467,27 +522,27 @@ export function getCapabilityOptions(capabilityId: string): {
 
   const enabledProviderIds = new Set(
     (stored?.providers ?? [])
-      .filter((provider) => provider.enabled !== false)
-      .map((provider) => provider.id)
+      .filter(provider => provider.enabled !== false)
+      .map(provider => provider.id),
   )
   if (
-    normalizedCapabilityId === INTERNAL_SYSTEM_OCR_CAPABILITY_ID &&
-    process.env.TUFF_DISABLE_NATIVE_OCR !== '1'
+    normalizedCapabilityId === INTERNAL_SYSTEM_OCR_CAPABILITY_ID
+    && process.env.TUFF_DISABLE_NATIVE_OCR !== '1'
   ) {
     enabledProviderIds.add(INTERNAL_SYSTEM_OCR_PROVIDER_ID)
   }
-  const enabledBindings =
-    config.providers?.filter(
-      (binding) => binding.enabled !== false && enabledProviderIds.has(binding.providerId)
+  const enabledBindings
+    = config.providers?.filter(
+      binding => binding.enabled !== false && enabledProviderIds.has(binding.providerId),
     ) ?? []
   return {
     allowedProviderIds: enabledBindings.length
-      ? enabledBindings.map((binding) => binding.providerId)
+      ? enabledBindings.map(binding => binding.providerId)
       : undefined,
     modelPreference: enabledBindings
-      .flatMap((binding) => binding.models ?? [])
+      .flatMap(binding => binding.models ?? [])
       .filter((model): model is string => Boolean(model)),
-    promptTemplate: resolveCapabilityPromptTemplate(stored, normalizedCapabilityId)
+    promptTemplate: resolveCapabilityPromptTemplate(stored, normalizedCapabilityId),
   }
 }
 
@@ -521,7 +576,8 @@ export function setupConfigUpdateListener(): void {
   teardownConfigUpdateListener = subscribeMainConfig(StorageList.IntelligenceConfig, () => {
     try {
       ensureIntelligenceConfigLoaded()
-    } catch {
+    }
+    catch {
       // ignore transient storage readiness issues during startup
     }
   })
@@ -533,12 +589,21 @@ export function setupConfigUpdateListener(): void {
 export function saveIntelligenceConfig(config: IntelligenceSDKPersistedConfig): void {
   saveMainConfig(StorageList.IntelligenceConfig, config)
 }
-
 /**
- * Debug: Print current config file content
+ * Log non-sensitive persisted config metadata for startup diagnostics.
  */
 export function debugPrintConfig(): void {
   const stored = getLatestConfig()
   if (!stored) {
+    intelligenceConfigLog.debug('No persisted intelligence config found')
+    return
   }
+
+  intelligenceConfigLog.debug('Persisted intelligence config loaded', {
+    version: stored.version,
+    providerCount: stored.providers.length,
+    capabilityCount: Object.keys(stored.capabilities ?? {}).length,
+    promptCount: stored.promptRegistry?.length ?? 0,
+    promptBindingCount: stored.promptBindings?.length ?? 0,
+  })
 }

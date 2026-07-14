@@ -3,9 +3,9 @@ const { count, inc, dec } = useCount()
 </script>
 
 <template>
-  <div inline-flex m="y-3">
+  <div class="my-3 inline-flex">
     <TxButton circle size="small" variant="ghost" icon="i-carbon-subtract" @click="dec()" />
-    <div font="mono" w="15" m-auto inline-block>
+    <div class="m-auto inline-block w-15 font-mono">
       {{ count }}
     </div>
     <TxButton circle size="small" variant="ghost" icon="i-carbon-add" @click="inc()" />

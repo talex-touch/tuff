@@ -441,6 +441,9 @@ function parseCustomPomodoroTemplate(
 function matchesPomodoroTemplateKeyword(text: string, keyword: string): boolean {
   const normalizedKeyword = keyword.trim().toLowerCase()
   if (!normalizedKeyword) return false
+  if (/[\u3400-\u9fff]/.test(normalizedKeyword)) {
+    return text.includes(normalizedKeyword)
+  }
   return new RegExp(`(?:^|\\s)${escapeRegExp(normalizedKeyword)}(?:\\s|$)`, 'i').test(text)
 }
 

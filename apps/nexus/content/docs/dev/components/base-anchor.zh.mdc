@@ -5,7 +5,7 @@ category: Feedback
 status: beta
 since: 2.5.0
 tags: [popover, overlay, floating, gsap, animation]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # BaseAnchor 锚点定位
@@ -210,17 +210,22 @@ code: |
 |------|------|---------|------|
 | `modelValue` | `boolean` | `false` | 是否打开（v-model） |
 | `disabled` | `boolean` | `false` | 禁用 |
+| `eager` | `boolean` | `false` | 首次打开前就挂载浮层，适合需要预先测量尺寸的内容 |
 | `placement` | `BaseAnchorPlacement` | `'bottom-start'` | 浮动定位方向 |
 | `offset` | `number` | `8` | 与触发元素的间距 (px) |
 | `width` | `number` | `0` | 面板宽度（0 = 由内容宽度决定） |
 | `minWidth` | `number` | `0` | 最小宽度 |
 | `maxWidth` | `number` | `360` | 最大宽度 |
+| `maxHeight` | `number` | `420` | 面板最大高度，会结合视口可用高度自动收缩 |
+| `unlimitedHeight` | `boolean` | `false` | 关闭高度限制；`maxHeight <= 0` 时也会视为不限制 |
 | `matchReferenceWidth` | `boolean` | `false` | `width=0` 时是否跟随 reference 宽度 |
+| `referenceClass` | `BaseAnchorClassValue` | `undefined` | 追加到 reference 包装层的 class，不会作用于浮层面板 |
 | `virtualReference` | `BaseAnchorVirtualReference` | `undefined` | 使用虚拟 reference（如鼠标坐标）进行定位；适合 ContextMenu / 画布节点 / 光标菜单 |
 | `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer' }` | 动画配置对象，统一控制动画类型、时长、缓动与效果参数 |
 | `duration` | `number` | `432` | 兼容旧用法的动画时长 (ms)，建议改用 `animation.duration` |
 | `ease` | `string` | `'back.out(2)'` | 兼容旧用法的打开缓动，建议改用 `animation.ease` |
 | `useCard` | `boolean` | `true` | 是否使用内置 `TxCard` 包裹浮层内容 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'plain'` | `useCard=true` 时透传给 `TxCard` 的边框形态 |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
@@ -229,6 +234,7 @@ code: |
 | `surfaceMotionAdaptation` | `'auto' \| 'manual' \| 'off'` | `'auto'` | 浮层运动降级策略：`auto` 自动跟随 Anchor 动画，`manual` 使用 `panelCard.surfaceMoving`，`off` 关闭降级适配 |
 | `showArrow` | `boolean` | `false` | 是否启用跟随浮层定位的三角箭头 |
 | `arrowSize` | `number` | `10` | 箭头尺寸（px） |
+| `keepAliveContent` | `boolean` | `false` | 关闭后保留浮层内容挂载状态，避免丢失内部状态 |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 | `toggleOnReferenceClick` | `boolean` | `true` | 点击 reference 是否自动切换开关 |
@@ -260,7 +266,7 @@ code: |
 | 插槽名 | 说明 |
 |------|------|
 | `reference` | 触发元素 |
-| `default` | 弹出内容 |
+| `default` | 弹出内容；会接收最终 Floating UI 定位方向 `{ side }` |
 
 ### 暴露方法
 
@@ -278,5 +284,28 @@ code: |
 - `toggleOnReferenceClick=false` 会阻断 reference 点击切换，适合输入框等自行处理点击行为的 reference。
 - `virtualReference` 会覆盖 DOM reference 参与 Floating UI 定位，但 reference 插槽仍会渲染以保持结构与插槽契约。适合需要坐标锚点的组件。
 - `class`、`style` 与非 class attrs 会透传到浮层面板；reference 包装层样式使用 `referenceClass`。
+- `maxHeight` 会被视口剩余高度裁剪。只有面板内部自带滚动容器时才使用 `unlimitedHeight`。
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
 - 新动画优先使用 `animation` 对象；`duration` / `ease` 仅作为兼容入口参与默认值合并。
+- `eager` 会在首次打开前挂载；`keepAliveContent` 会在关闭后保留内容状态。优先用于需要测量或保留表单状态的面板，不要滥用于静态文案。
+
+## 最佳实践
+
+- 优先使用 `TxPopover`、`TxDropdownMenu` 或 `TxContextMenu`；只有在构建新的锚点基础组件或需要虚拟 reference 定位时才直接使用 `TxBaseAnchor`。
+- 浮层内容保持轻量；多步骤表单、危险确认或整屏流程应改用 Drawer/Dialog。
+- 坐标锚点菜单应传入 `virtualReference`，并在鼠标位置或画布变换后调用 `updatePosition()`。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`、`base-anchor-motion.ts`、`types.ts` 与 `base-anchor.test.ts`。
+- 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、动画变体及旧版 duration/ease 兼容，以及 surface-motion adaptation 策略。
+- 可访问性说明：`TxBaseAnchor` 只是定位基础设施。上层封装必须按内容类型提供 menu/dialog/listbox role、焦点管理与键盘导航。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`。
+- Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` 导出 `BaseAnchorProps`、`BaseAnchorAnimationOptions` 与虚拟 reference 类型。
+- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、动画及旧版兼容，以及 surface-motion adaptation。
+
+<TuffDocSourceLink />

@@ -1,4 +1,5 @@
 import { requireAdmin } from '../../../../utils/auth'
+import { normalizeNexusIntelligenceTransportError } from '../../../../utils/intelligenceErrorContract'
 import { runIntelligenceAgentGraphStream } from '../../../../utils/intelligenceAgentGraphRunner'
 import { touchRuntimeSessionHeartbeat } from '../../../../utils/tuffIntelligenceRuntimeStore'
 import {
@@ -21,19 +22,8 @@ function resolveErrorMessage(error: unknown): string {
   return 'Intelligence stream failed.'
 }
 
-function formatErrorDetail(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      cause: (error as { cause?: unknown }).cause,
-    }
-  }
-  if (error && typeof error === 'object') {
-    return { ...(error as Record<string, unknown>) }
-  }
-  return { message: String(error || 'unknown error') }
+function formatErrorDetail(error: unknown) {
+  return normalizeNexusIntelligenceTransportError(error)
 }
 
 export default defineEventHandler(async (event) => {

@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [checkbox, form, selection]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # Checkbox 复选框
@@ -167,3 +167,24 @@ code: |
 | 插槽名 | 说明 |
 |--------|------|
 | default | 自定义可见标签内容；存在时会替代 `label` 展示。 |
+
+## 最佳实践
+
+- 优先提供可见 `label` 或默认插槽。只有图标式/无可见文案控件才使用 `ariaLabel`。
+- 用 `disabled` 作为禁用状态的唯一来源；禁用后组件会退出 Tab 顺序，也不会触发 `update:modelValue` 或 `change`。
+- 紧凑设置行中需要“文案在前、控件在后”时使用 `labelPlacement="start"`。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` 与 `checkbox.test.ts`。
+- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、`fill` / `checkmark` 变体、点击/键盘事件与禁用阻断。
+- 可访问性说明:根节点负责 `role="checkbox"`、`aria-checked` 与键盘处理;应优先提供可见标签或默认插槽,仅在没有可见文案时使用 `ariaLabel`。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`。
+- Export alias: `packages/tuffex/packages/components/src/checkbox/index.ts` 同时导出 `TuffCheckbox` 与 `TxCheckbox`。
+- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` 覆盖点击/键盘切换、ARIA 标签、插槽优先级、变体 class 与禁用阻断。
+
+<TuffDocSourceLink />

@@ -1,20 +1,26 @@
 ---
 title: "VirtualList"
-description: "Virtualized list for long data sets with lower DOM cost."
+description: "Fixed-row virtualized list for long data sets with lower DOM cost and imperative scroll helpers."
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [virtual-list, performance, list]
+syncStatus: reviewed
+verified: true
 ---
 # VirtualList
 
-Virtualized list for long data sets with lower DOM cost.
+`TxVirtualList` renders only the visible slice of a fixed-height list, plus overscan rows. It is optimized for long read-only or lightly interactive lists where every item has the same height.
+
+Reviewed against `packages/tuffex/packages/components/src/virtual-list/src/types.ts`, `TxVirtualList.vue`, and `virtual-list.test.ts`.
 
 ## Basic Usage
 
-::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
+  const items = Array.from({ length: 100 }, (_, index) => `Item ${index + 1}`)
   </script>
 
   <template>
@@ -27,36 +33,103 @@ code: |
     </TxVirtualList>
   </template>
 ---
-::
+:::
+
+## Composition Examples
+
+### Stable Item Keys
+
+```vue
+<template>
+  <TxVirtualList :items="users" :item-height="44" height="360px" item-key="id">
+    <template #item="{ item }">
+      <UserRow :user="item" />
+    </template>
+  </TxVirtualList>
+</template>
+```
+
+### Imperative Scrolling
+
+```vue
+<script setup lang="ts">
+const listRef = ref()
+
+function jumpToLatest() {
+  listRef.value?.scrollToBottom()
+}
+</script>
+
+<template>
+  <TxButton @click="jumpToLatest">Latest</TxButton>
+  <TxVirtualList ref="listRef" :items="logs" :item-height="32" :height="400" />
+</template>
+```
+
+## Interaction Contract
+
+- `itemHeight` is required and every rendered row is styled with that exact pixel height.
+- Numeric `height` becomes px; string `height` is applied as-is.
+- Numeric, px, and bare numeric string heights are parsed immediately to compute the viewport. `%`, `vh`, `vw`, `rem`, and `em` heights wait for the real container height.
+- On mount, the component reads `clientHeight`; when `ResizeObserver` is available, it updates viewport height after resize.
+- `startIndex` is `floor(scrollTop / itemHeight) - overscan`, clamped to `0`.
+- `endIndex` is based on visible viewport plus `overscan`, clamped to `items.length`.
+- The spacer height is `items.length * itemHeight`; visible items are translated by `startIndex * itemHeight`.
+- `itemKey` may be a field name or function. Missing field values fall back to the visible item index.
+- `scroll` emits `{ scrollTop, startIndex, endIndex }` after internal scroll state updates.
+- `scrollToIndex(index)` clamps negative indexes to zero but does not clamp indexes above the last item; callers should pass valid indexes.
 
 ## API
 
-### TxVirtualList Props
+### Props
 
-| Name | Type | Default | Description |
-|------|------|------|------|
-| `items` | `any[]` | `[]` | Data items |
-| `itemHeight` | `number` | - | Item height |
-| `height` | `number \| string` | `320` | Container height |
-| `overscan` | `number` | `4` | Pre-render count |
-| `itemKey` | `string \| (item, index) => string \| number` | `index` | Unique key |
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `items` | `T[]` | `[]` | Full data set. |
+| `itemHeight` | `number` | required | Fixed row height in pixels. All rows must match this value. |
+| `height` | `number \| string` | `320` | Scroll container height. Numbers become px. |
+| `overscan` | `number` | `4` | Extra rows rendered before and after the viewport. |
+| `itemKey` | `keyof T \| (item: T, index: number) => string \| number` | `index` | Key resolver for rendered rows. |
 
 ### Events
 
 | Event | Payload | Description |
-|------|------|------|
-| `scroll` | `({ scrollTop, startIndex, endIndex })` | Scroll event |
+|------|---------|-------------|
+| `scroll` | `{ scrollTop: number, startIndex: number, endIndex: number }` | Emitted after the list scrolls. |
 
 ### Slots
 
-| Name | Description |
-|------|------|
-| `item` | Custom item renderer |
+| Slot | Props | Description |
+|------|------|-------------|
+| `item` | `{ item: T, index: number }` | Custom renderer for each visible item. Defaults to rendering `item` as text. |
 
 ### Expose
 
-| Name | Description |
-|------|------|
-| `scrollToIndex(index)` | Scroll to index |
-| `scrollToTop()` | Scroll to top |
-| `scrollToBottom()` | Scroll to bottom |
+| Method | Signature | Description |
+|------|-----------|-------------|
+| `scrollToIndex` | `(index: number) => void` | Sets scrollTop to `Math.max(0, index) * itemHeight`. |
+| `scrollToTop` | `() => void` | Sets scrollTop to `0`. |
+| `scrollToBottom` | `() => void` | Sets scrollTop to `max(0, totalHeight - viewHeight)`. |
+
+## Best Practices
+
+- Use only for fixed-height rows. Variable-height content will desynchronize scroll math.
+- Provide `itemKey` for objects with stable ids; index keys are acceptable only for immutable arrays.
+- Keep `overscan` modest. Higher overscan smooths fast scrolling but increases DOM work.
+- Avoid wrapping rows with vertical margins; put padding inside the fixed-height row instead.
+- Use `scroll` for analytics or lazy data triggers, not for per-frame heavy work.
+
+## Review Notes
+
+- **Viewport note:** `height` values that cannot be parsed synchronously (`%`, viewport units, `rem`, `em`) depend on the mounted element's `clientHeight`; server-side or hidden containers should provide a concrete height before relying on visible range math.
+- **Scroll note:** `scrollToIndex()` clamps negative indexes but not indexes above `items.length - 1`. Validate caller indexes for user-provided jump targets.
+- **Verified coverage:** `virtual-list.test.ts` currently checks visible item count from fixed height and the `scrollToIndex` exposed method. The docs therefore call out untested contracts—ResizeObserver, custom `itemKey`, overscan, and `scroll` payloads—explicitly for manual review.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/virtual-list/src/TxVirtualList.vue`.
+- Types: `packages/tuffex/packages/components/src/virtual-list/src/types.ts` exports `VirtualListProps`, `VirtualListEmits`, `VirtualListItemKey`, and `VirtualListKey`.
+- Export alias: `packages/tuffex/packages/components/src/virtual-list/index.ts` exports `VirtualList`, `TxVirtualList`, virtual-list types, and `TxVirtualListInstance`.
+- Coverage: `packages/tuffex/packages/components/src/virtual-list/__tests__/virtual-list.test.ts` verifies visible range rendering and imperative scrolling.
+
+<TuffDocSourceLink />

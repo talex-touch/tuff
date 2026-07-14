@@ -1,122 +1,110 @@
 ---
 title: "Agents"
-description: "Agent picker list with loading, enabled/disabled grouping, selection, and badges."
+description: "Selectable agent list with enabled/disabled grouping, loading skeletons, empty state, selection, and badges."
 category: Data
-syncStatus: migrated
+tags: [agents, list, selection]
+syncStatus: reviewed
+verified: true
 ---
 # Agents
 
-`TxAgentsList` renders a selectable agent list for workflows and AI entry points. Enabled and disabled agents are grouped separately, loading and empty states are built in, and disabled items never emit selection events.
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const selectedId = ref<string | null>('chat')
-const loading = ref(false)
-
-const agents = [
-  {
-    id: 'chat',
-    name: 'Chat Agent',
-    description: 'General conversation assistant',
-    iconClass: 'i-carbon-chat',
-    badgeText: 6,
-  },
-  {
-    id: 'code',
-    name: 'Code Agent',
-    description: 'Code generation & refactor',
-    iconClass: 'i-carbon-code',
-    badgeText: 12,
-  },
-  {
-    id: 'search',
-    name: 'Search Agent',
-    description: 'Web search & citations',
-    iconClass: 'i-carbon-search',
-  },
-  {
-    id: 'disabled',
-    name: 'Disabled Agent',
-    description: 'Not available',
-    iconClass: 'i-carbon-bot',
-    disabled: true,
-  },
-]
-</script>
+`TxAgentsList` renders a grouped, selectable list for agent pickers and AI workflow entry points. It is presentation-only: it does not start runs, call APIs, or own routing. Disabled agents are grouped separately and never emit selection events.
 
 ## Basic Usage
 
-### AgentsList
-:::TuffDemoWrapper{demo="AgentsAgentsListDemo" code-lang="vue"}
+Bind `selectedId` in the caller and update it from `select`. Use custom group titles when the list is shown outside an English-only surface.
+
+::::TuffDemoWrapper{demo="AgentsAgentsListDemo" code-lang="vue"}
 ---
 code: |
-  &lt;script setup lang="ts"&gt;
+  <script setup lang="ts">
   import { ref } from 'vue'
 
   const selectedId = ref<string | null>('chat')
-  const loading = ref(false)
   const agents = [
     { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
     { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
-    { id: 'disabled', name: 'Disabled Agent', disabled: true },
+    { id: 'legacy', name: 'Legacy Agent', disabled: true },
   ]
-  &lt;/script&gt;
+  </script>
 
   <template>
-    <TxAgentsList
-      :agents="agents"
-      :loading="loading"
-      :selected-id="selectedId"
-      @select="(id) => (selectedId = id)"
-    />
+    <TxAgentsList :agents="agents" :selected-id="selectedId" @select="selectedId = $event" />
   </template>
 ---
-:::
+::::
 
 ## API
 
-### TxAgentsList
-
-#### Props
+### TxAgentsList Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `agents` | `AgentItemProps[]` | - | Agent records to render. Enabled items are listed before disabled items. |
-| `selectedId` | `string \| null` | `null` | Marks the matching agent as selected. |
-| `loading` | `boolean` | `false` | Shows list item skeletons instead of agent rows. |
+|------|------|---------|-------------|
+| `agents` | `AgentItemProps[]` | required | Agent records. Enabled items render before disabled items. |
+| `selectedId` | `string \| null` | `null` | Marks the matching agent item as selected. |
+| `loading` | `boolean` | `false` | Shows four list-item skeleton rows instead of agent groups. |
 | `enabledTitle` | `string` | `'Enabled'` | Section title for agents where `disabled` is not set. |
 | `disabledTitle` | `string` | `'Disabled'` | Section title for agents where `disabled=true`. |
-| `emptyText` | `string` | `'No agents'` | Message shown when `agents` is empty and the list is not loading. |
+| `emptyText` | `string` | `'No agents'` | Empty-state text when `agents` is empty and the list is not loading. |
 
-#### Events
+### TxAgentsList Events
 
-| Event | Params | Description |
-|------|------|------|
-| `select` | `(id: string)` | Emitted with the selected agent id when an enabled item is clicked or activated from the keyboard. |
+| Event | Payload | Description |
+|------|---------|-------------|
+| `select` | `string` | Re-emitted from enabled `TxAgentItem` rows with the selected id. |
+
+### TxAgentItem Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `id` | `string` | required | Stable id emitted through `select`. |
+| `name` | `string` | required | Primary label. |
+| `description` | `string` | `''` | Optional secondary text. |
+| `iconClass` | `string` | `'i-carbon-bot'` | Icon class rendered in the generated avatar area. |
+| `selected` | `boolean` | `false` | Applies active styling and `aria-selected=true`. |
+| `disabled` | `boolean` | `false` | Prevents click / Enter / Space selection and applies `aria-disabled=true`. |
+| `badgeText` | `string \| number` | `''` | Optional right-side badge. Empty string, `null`, and `undefined` hide the badge slot. |
+
+## Slots
+
+### TxAgentsList
+
+`TxAgentsList` does not expose custom slots. Customize row-level badge visuals through `TxAgentItem` data/slot usage when composing items directly.
 
 ### TxAgentItem
 
-#### Props
+| Slot | Props | Description |
+|------|-------|-------------|
+| `badge` | - | Replaces the default right-side badge content when `badgeText` is present. |
 
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `id` | `string` | - | Stable id emitted by `select`. |
-| `name` | `string` | - | Primary agent label. |
-| `description` | `string` | `''` | Optional secondary text below the name. |
-| `iconClass` | `string` | `'i-carbon-bot'` | Icon class rendered in the avatar area. |
-| `selected` | `boolean` | `false` | Applies active styling and `aria-selected=true`. |
-| `disabled` | `boolean` | `false` | Disables pointer and keyboard selection and applies `aria-disabled=true`. |
-| `badgeText` | `string \| number` | `''` | Optional right-side badge content; empty, `null`, or `undefined` hides the badge. |
+### TxAgentItem Events
 
-#### Events
+| Event | Payload | Description |
+|------|---------|-------------|
+| `select` | `string` | Emitted only when an enabled item is activated by click, Enter, or Space. |
 
-| Event | Params | Description |
-|------|------|------|
-| `select` | `(id: string)` | Emitted only when the item is enabled and activated by click, Enter, or Space. |
+## Interaction Contract
 
-#### Slots
+- `TxAgentsList` computes enabled and disabled groups from the same `agents` array; it does not mutate or sort inside each group.
+- Loading state wins over list and empty rendering; `agents` content is ignored while `loading=true`.
+- Each group body has `role="listbox"` and an `aria-label` equal to the group title.
+- `TxAgentItem` is built on `TxCardItem` with `role="option"`, `clickable` only when enabled, and `avatarShape="rounded"`.
+- Disabled items suppress click, Enter, and Space selection; enabled items emit the item `id` for all three activation paths.
 
-| Slot | Description |
-|------|------|
-| `badge` | Replaces the default right-side badge content when `badgeText` is present. |
+## Best Practices
+
+- Keep this component at the picker layer. Start conversations, fetch capabilities, and run agents in the surrounding feature module.
+- Provide localized `enabledTitle`, `disabledTitle`, and `emptyText` when the surrounding page is localized.
+- Use stable ids from backend or registry data; avoid display names as ids because names may be localized or renamed.
+- Keep `badgeText` short: counts, status initials, or compact labels. Use the `badge` slot only when the badge needs custom visuals.
+- Use `loading` for initial data fetches. For per-agent execution status, add status text or badges to each agent record instead of blocking the whole list.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/agents/src/TxAgentsList.vue` confirms loading skeletons, enabled/disabled grouping, group badges, empty state, and `select` re-emit behavior.
+- Source: `packages/tuffex/packages/components/src/agents/src/TxAgentItem.vue` confirms `TxCardItem` composition, `role="option"`, disabled guards, `aria-selected`, `aria-disabled`, and `badge` slot rendering.
+- Type contracts: `packages/tuffex/packages/components/src/agents/src/types.ts` defines `AgentItemProps`, `AgentsListGroup`, and `AgentsListProps`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/agents/__tests__/agents.test.ts` covers group titles, empty text, enabled-only selection, keyboard activation, and disabled suppression.
+
+## Source
+<TuffDocSourceLink />

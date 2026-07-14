@@ -1,6 +1,7 @@
 <script setup lang="ts" name="UserProfileEditor">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
+import { formatCompactAccountLabel } from '@talex-touch/utils/account'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -115,7 +116,7 @@ watch(isLoggedIn, (loggedIn) => {
         </div>
         <div class="UserProfileEditor-Identity">
           <div class="UserProfileEditor-Name">
-            {{ displayName || t('userProfile.unknownName') }}
+            {{ formatCompactAccountLabel(displayName) || t('userProfile.unknownName') }}
           </div>
           <div class="UserProfileEditor-Email">
             {{ displayEmail || t('userProfile.unknownEmail') }}

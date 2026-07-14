@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<DataTableProps<any>>(), {
   striped: false,
   bordered: false,
   hover: true,
+  interactiveRows: false,
   selectable: false,
   selectedKeys: () => [],
   sortOnClient: true,
@@ -249,6 +250,16 @@ const colspan = computed(() => props.columns.length + (props.selectable ? 1 : 0)
 function emitRowClick(row: any, index: number) {
   emit('rowClick', { row, index })
 }
+
+function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
+  if (!props.interactiveRows || event.target !== event.currentTarget)
+    return
+  if (event.key !== 'Enter' && event.key !== ' ')
+    return
+
+  event.preventDefault()
+  emitRowClick(row, index)
+}
 </script>
 
 <template>
@@ -284,23 +295,30 @@ function emitRowClick(row: any, index: number) {
             scope="col"
             :class="columnClass(column, 'header')"
             :style="columnStyle(column)"
-            :tabindex="column.sortable ? 0 : undefined"
             :aria-sort="getColumnAriaSort(column)"
-            @click="toggleSort(column)"
-            @keydown.enter.prevent="toggleSort(column)"
-            @keydown.space.prevent="toggleSort(column)"
           >
-            <slot :name="`header-${column.key}`" :column="column">
+            <button
+              v-if="column.sortable"
+              type="button"
+              class="tx-data-table__sort-button"
+              :class="`is-align-${column.align || 'left'}`"
+              @click="toggleSort(column)"
+            >
+              <slot :name="`header-${column.key}`" :column="column">
+                {{ column.title }}
+              </slot>
+              <span class="tx-data-table__sort" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="10" height="10" :class="{ 'is-active': sortState?.key === column.key && sortState?.order === 'asc' }">
+                  <path fill="currentColor" d="M7 14l5-5 5 5z" />
+                </svg>
+                <svg viewBox="0 0 24 24" width="10" height="10" :class="{ 'is-active': sortState?.key === column.key && sortState?.order === 'desc' }">
+                  <path fill="currentColor" d="M7 10l5 5 5-5z" />
+                </svg>
+              </span>
+            </button>
+            <slot v-else :name="`header-${column.key}`" :column="column">
               {{ column.title }}
             </slot>
-            <span v-if="column.sortable" class="tx-data-table__sort" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="10" height="10" :class="{ 'is-active': sortState?.key === column.key && sortState?.order === 'asc' }">
-                <path fill="currentColor" d="M7 14l5-5 5 5z" />
-              </svg>
-              <svg viewBox="0 0 24 24" width="10" height="10" :class="{ 'is-active': sortState?.key === column.key && sortState?.order === 'desc' }">
-                <path fill="currentColor" d="M7 10l5 5 5-5z" />
-              </svg>
-            </span>
           </th>
         </tr>
       </thead>
@@ -309,7 +327,10 @@ function emitRowClick(row: any, index: number) {
           v-for="(row, index) in displayRows"
           :key="getRowKey(row, index)"
           class="tx-data-table__row"
+          :class="{ 'is-interactive': interactiveRows }"
+          :tabindex="interactiveRows ? 0 : undefined"
           @click="emitRowClick(row, index)"
+          @keydown="handleRowKeydown($event, row, index)"
         >
           <td v-if="selectable" class="tx-data-table__cell tx-data-table__cell--select">
             <TxCheckbox
@@ -429,10 +450,36 @@ function emitRowClick(row: any, index: number) {
 }
 
 .tx-data-table__th.is-sortable {
-  cursor: pointer;
+  padding: 0;
 }
 
-.tx-data-table__th.is-sortable:focus-visible {
+.tx-data-table__sort-button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  cursor: pointer;
+
+  &.is-align-center {
+    justify-content: center;
+  }
+
+  &.is-align-right {
+    justify-content: flex-end;
+  }
+}
+
+.tx-data-table__sort-button:focus-visible {
   outline: 2px solid var(--tx-color-primary, #409eff);
   outline-offset: -2px;
 }
@@ -460,6 +507,15 @@ function emitRowClick(row: any, index: number) {
 
 .tx-data-table.is-hover tbody tr:hover {
   background: color-mix(in srgb, var(--tx-color-primary-light-9, #ecf5ff) 60%, transparent);
+}
+
+.tx-data-table__row.is-interactive {
+  cursor: pointer;
+}
+
+.tx-data-table__row.is-interactive:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: -2px;
 }
 
 .tx-data-table__loading {

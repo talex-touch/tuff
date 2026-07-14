@@ -58,13 +58,13 @@ vi.mock('~/utils/renderer-log', () => ({
 }))
 
 const confirmTarget: FlowTargetInfo = {
-  description: 'Writes a temp file',
-  fullId: 'quickops.temp-text-file',
+  description: 'Starts a Pomodoro session',
+  fullId: 'quickops.start-pomodoro',
   hasFlowHandler: true,
-  icon: 'i-ri-file-text-line',
-  id: 'temp-text-file',
+  icon: 'i-ri-timer-line',
+  id: 'start-pomodoro',
   isEnabled: true,
-  name: 'Temp Text File',
+  name: 'Start Pomodoro',
   pluginId: 'quickops',
   pluginName: 'QuickOps',
   requireConfirm: true,
@@ -77,7 +77,18 @@ function createWrapper() {
     props: {
       payload: {
         type: 'json',
-        data: { text: 'hello' }
+        data: {
+          item: {
+            id: 'touch-quickops-writing-sprint',
+            source: { type: 'plugin', id: 'plugin-features', name: 'touch-quickops' },
+            meta: { pluginName: 'touch-quickops', featureId: 'quickops' }
+          },
+          query: 'start writing sprint'
+        },
+        context: {
+          sourcePluginId: 'touch-quickops',
+          sourceFeatureId: 'quickops'
+        }
       },
       visible: false
     }
@@ -137,8 +148,8 @@ describe('FlowSelector confirmation handling', () => {
     expect(document.body.textContent).toContain('flow.executionConfirmationTitle')
     expect(document.body.textContent).toContain('flow.confirmOnce')
     expect(sendMock).toHaveBeenCalledWith(FlowEvents.checkConsent, {
-      senderId: 'corebox',
-      targetId: 'quickops.temp-text-file'
+      senderId: 'touch-quickops',
+      targetId: 'quickops.start-pomodoro'
     })
   })
 
@@ -178,8 +189,8 @@ describe('FlowSelector confirmation handling', () => {
     await clickDialogButton('flow.confirmOnce')
 
     expect(sendMock).toHaveBeenCalledWith(FlowEvents.grantConsent, {
-      senderId: 'corebox',
-      targetId: 'quickops.temp-text-file',
+      senderId: 'touch-quickops',
+      targetId: 'quickops.start-pomodoro',
       mode: 'once'
     })
     expect(wrapper.emitted('select')).toEqual([
@@ -187,7 +198,7 @@ describe('FlowSelector confirmation handling', () => {
         {
           confirmationToken: 'confirm-token',
           consentToken: undefined,
-          targetId: 'quickops.temp-text-file'
+          targetId: 'quickops.start-pomodoro'
         }
       ]
     ])

@@ -5,7 +5,7 @@ category: Basic
 status: beta
 since: 1.0.0
 tags: [action, tactile, primary]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -150,9 +150,9 @@ code: |
 ---
 ::
 
-## API Specifications
+## API
 
-### Button Attributes
+### Props
 
 ::DocApiTable
 ---
@@ -199,10 +199,20 @@ rows:
     type: boolean
     default: 'false'
     description: 'Loading state'
+  - parameter: loading-variant
+    type:
+      kind: enum
+      enums: [spinner, bar]
+    default: "'spinner'"
+    description: 'Loading feedback style. `bar` only renders as a sweep layer when `block` is also true.'
   - parameter: disabled
     type: boolean
     default: 'false'
     description: 'Disabled state'
+  - parameter: border
+    type: boolean
+    default: 'true'
+    description: 'Controls whether the button keeps its border color; `false` adds the borderless class.'
   - parameter: icon
     type: string
     default: '-'
@@ -230,7 +240,7 @@ rows:
 ---
 ::
 
-### Button Events
+### Events
 
 ::DocApiTable
 ---
@@ -246,15 +256,54 @@ rows:
 ---
 ::
 
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Button label or custom inline content rendered after the optional icon / loading spinner. |
+
+### SplitButton Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | Visual variant shared by the primary and menu buttons. |
+| `size` | `'sm' \| 'md' \| 'lg' \| 'large' \| 'small' \| 'mini'` | `md` | Button density; aliases normalize to `sm`, `md`, or `lg`. |
+| `disabled` | `boolean` | `false` | Disables both the primary action and menu trigger. |
+| `loading` | `boolean` | `false` | Shows the primary spinner and disables both interactive zones. |
+| `icon` | `string` | - | Icon class shown before the primary label while not loading. |
+| `menuIcon` | `string` | `i-ri-more-2-line` | Icon class used by the menu trigger slot fallback. |
+| `menuDisabled` | `boolean` | `false` | Disables only the menu trigger in addition to global disabled/loading state. |
+| `menuWidth` | `number` | `200` | Popover width passed to `TxPopover`. |
+| `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | Popover placement. |
+| `menuOffset` | `number` | `8` | Popover offset in pixels. |
+
+### SplitButton Events
+
+| Event | Params | Description |
+|-------|--------|-------------|
+| `click` | `(event: MouseEvent)` | Emitted by the primary button when not disabled or loading. |
+| `menuOpenChange` | `(open: boolean)` | Emitted whenever the internal popover open state changes. |
+
+### SplitButton Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Primary action label. |
+| `menu` | `{ close: () => void }` | Menu content rendered inside `TxPopover`; call `close()` from menu actions after selection. |
+| `menu-icon` | - | Replaces the default more icon in the menu trigger. |
+
 ## Types
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  import type { TxButtonProps } from '@talex-touch/tuffex'
+  import type { TxButtonEmits, TxButtonProps, TxSplitButtonEmits, TxSplitButtonProps } from '@talex-touch/tuffex'
 
   export interface ButtonProps extends TxButtonProps {}
+  export interface ButtonEmits extends TxButtonEmits {}
+  export interface SplitButtonProps extends TxSplitButtonProps {}
+  export interface SplitButtonEmits extends TxSplitButtonEmits {}
 ---
-::
+:::
 
 ## Composition Notes
 
@@ -303,17 +352,35 @@ code: |
 ---
 ::
 
-## Design Principles
-- Keep a single primary button to avoid hierarchy conflicts.
-- Keep `variant` consistent within similar actions.
-- Async actions must use `loading` to avoid duplicate triggers.
-- Prefer `vibrate` on mobile to enhance tactile feedback.
+## Interaction Contract
 
-## Design Notes
-- Emphasize press feedback with smooth rebound.
-- Translucent surfaces need proper background contrast.
-- Keep icon/text spacing consistent to avoid visual drift.
+- `variant` wins over semantic `type`; when `variant` is absent, `type="text"` maps to the `ghost` variant and other semantic types map to their matching variants.
+- Size aliases normalize to `sm`, `md`, and `lg`; `large` maps to `lg`, while `small` and `mini` map to `sm`.
+- `disabled` and `loading` both disable the native `<button>` and suppress the emitted `click` event.
+- `loadingVariant="bar"` is only visible for `block` buttons; icon-only / inline buttons use the spinner slot or overlay spinner.
+- Non-block, non-circle buttons animate loading width changes with a size FLIP transition.
+- `TxSplitButton` disables both action zones while loading; `menuDisabled` only disables the menu trigger.
+
+## Best Practices
+
+- Keep one primary action per view or card. Pair `primary` with `ghost` or `secondary` for lower-priority actions.
+- Use `nativeType="submit"` only inside forms; the default `button` prevents accidental form submission.
+- Use `loading` for every async action and clear it on success and failure paths so the button cannot get stuck disabled.
+- Prefer `circle` only for icon-only actions; when `block` and `circle` are combined, the component intentionally keeps regular label layout.
+- Use `loadingVariant="bar"` for full-width submit bars and keep spinner loading for compact or icon buttons.
+- Keep menu actions in `TxSplitButton` responsible for calling the provided `close()` callback after a selection.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/button/src/button.vue`, `split-button.vue`, `types.ts`, `split-button.ts`, and both button test files.
+- **Verified coverage:** `button.test.ts` covers label rendering, semantic type mapping, variant precedence, size aliases, disabled/loading click suppression, loading bar behavior, icons, shape classes, borderless mode, and native type; `split-button.test.ts` covers menu rendering, primary click, disabled/loading suppression, and `menuOpenChange`.
+- Accessibility note: the native button handles base keyboard activation. For icon-only or `circle` buttons, provide an external accessible label through surrounding markup or attrs where the visual icon is not self-explanatory.
 
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/button/src/button.vue` and `packages/tuffex/packages/components/src/button/src/split-button.vue`.
+- Types: `packages/tuffex/packages/components/src/button/src/types.ts` and `packages/tuffex/packages/components/src/button/src/split-button.ts`.
+- Coverage: `packages/tuffex/packages/components/src/button/__tests__/button.test.ts` verifies variants, semantic type mapping, loading/disabled click suppression, icons, shapes, borderless mode, native type, and loading bar behavior. `split-button.test.ts` verifies primary click, disabled suppression, loading state, menu rendering, and `menuOpenChange`.
 
 <TuffDocSourceLink label="View source" />

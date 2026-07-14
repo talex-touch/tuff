@@ -1,0 +1,72 @@
+---
+title: Kbd
+description: 用于命令提示与菜单快捷键的键盘 token。
+category: Basic
+status: beta
+since: 1.0.0
+tags: [keyboard, shortcut, token]
+syncStatus: reviewed
+verified: true
+---
+# Kbd
+
+`TxKbd` 使用语义化 `<kbd>` 元素渲染快捷键标签。组件刻意保持轻量：默认插槽提供键位文本，props 控制尺寸和视觉色调。
+
+已人工核对 `packages/tuffex/packages/components/src/kbd/src/TxKbd.vue` 与 `kbd.test.ts`。
+
+## 基础用法
+
+### Kbd
+::::TuffDemoWrapper{demo="KbdKbdDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <span class="flex items-center gap-1">
+      <TxKbd tone="primary">⌘</TxKbd>
+      <TxKbd tone="primary">K</TxKbd>
+    </span>
+  </template>
+---
+::::
+
+## 交互契约
+
+- 根节点是 `<kbd>`，保留原生键盘提示语义。
+- `size="sm"` 是默认紧凑尺寸，适合行内帮助和菜单快捷键。
+- `tone="primary"` 用于突出产品主快捷键，不改变插槽文本。
+- 组件没有事件，也没有内部状态。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `size` | `'sm' \| 'md'` | `'sm'` | 快捷键 token 尺寸。 |
+| `tone` | `'default' \| 'primary'` | `'default'` | 视觉色调。 |
+
+### Events
+
+`TxKbd` 不派发组件事件。
+
+## Slots
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | - | 键位文本，例如 `⌘`、`Ctrl` 或 `K`。 |
+
+## 最佳实践
+
+- 组合键建议拆成多个 `TxKbd`，不要用一个长字符串承载全部内容。
+- 宿主文案应感知平台：macOS 使用 `⌘`，Windows/Linux 使用 `Ctrl`。
+- `tone="primary"` 只用于页面或命令里的主快捷键。
+- 快捷键应配合可见操作文案，单独出现不够可发现。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/kbd/src/TxKbd.vue` 确认语义化 `<kbd>` 根节点、`size` / `tone` class 和仅默认插槽内容。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/kbd/__tests__/kbd.test.ts` 覆盖快捷键内容、根标签和变体 class。
+- 导出入口:`packages/tuffex/packages/components/src/kbd/index.ts` 使用 `withInstall` 包装组件并导出 `TxKbdInstance`。
+
+## Source
+<TuffDocSourceLink />

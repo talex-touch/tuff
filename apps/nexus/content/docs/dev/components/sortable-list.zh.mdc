@@ -1,39 +1,94 @@
 ---
 title: "SortableList 拖拽排序"
-description: "用于拖拽排序的列表容器（基于 HTML5 Drag & Drop）。"
+description: "基于 HTML5 Drag & Drop 的列表排序容器，支持稳定 ID、可选拖拽手柄和排序事件。"
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [sortable, drag-drop, list]
+syncStatus: reviewed
+verified: true
 ---
 # SortableList 拖拽排序
 
-用于拖拽排序的列表容器（基于 HTML5 Drag & Drop）。
+`TxSortableList` 渲染有序列表，并在用户把一个条目拖到另一个条目上时发出重排后的数组。它适合小到中等规模、由用户管理顺序且可以接受原生 HTML5 Drag & Drop 的列表。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const list = ref([
-  { id: 'one', title: 'One' },
-  { id: 'two', title: 'Two' },
-  { id: 'three', title: 'Three' },
-  { id: 'four', title: 'Four' },
-])
-</script>
+已人工核对 `packages/tuffex/packages/components/src/sortable-list/src/types.ts`、`TxSortableList.vue` 与 `sortable-list.test.ts`。
 
 ## 基础用法
 
-### SortableList
 :::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const list = ref([
+    { id: 'one', title: '第一项' },
+    { id: 'two', title: '第二项' },
+    { id: 'three', title: '第三项' },
+  ])
+  </script>
+
   <template>
     <TxSortableList v-model="list">
-      <template #item="{ item }">
-        <div>{{ item.id }}</div>
+      <template #item="{ item, dragging }">
+        <div :class="['sortable-row', { 'sortable-row--dragging': dragging }]">
+          {{ item.title }}
+        </div>
       </template>
     </TxSortableList>
   </template>
 ---
 :::
+
+## 组合示例
+
+### 拖拽手柄模式
+
+`handle=true` 时，拖拽必须从 `[data-tx-sort-handle="true"]` 内部开始。
+
+```vue
+<template>
+  <TxSortableList v-model="steps" handle @reorder="saveOrder">
+    <template #item="{ item }">
+      <div class="flex items-center gap-2 p-3">
+        <button type="button" data-tx-sort-handle="true" aria-label="拖拽项目">☰</button>
+        <span>{{ item.title }}</span>
+      </div>
+    </template>
+  </TxSortableList>
+</template>
+```
+
+### 持久化排序
+
+```vue
+<script setup lang="ts">
+const tasks = ref([{ id: 'draft' }, { id: 'review' }, { id: 'ship' }])
+
+async function persistOrder({ items }: { items: Array<{ id: string }> }) {
+  tasks.value = items
+  await api.saveTaskOrder(items.map(item => item.id))
+}
+</script>
+
+<template>
+  <TxSortableList v-model="tasks" @reorder="persistOrder" />
+</template>
+```
+
+## 交互契约
+
+- 根节点渲染 `role="list"`；每一项渲染 `role="listitem"`。
+- 每个 item 必须有稳定字符串 `id`；`id` 用于 Vue key 和拖拽状态记录。
+- `disabled=true` 时条目不可拖拽，并阻断 drag start、drag over、drop 重排和排序事件。
+- `handle=false` 时可以从 item 内任意位置开始拖拽。
+- `handle=true` 时，drag 事件目标或祖先必须匹配 `[data-tx-sort-handle="true"]`。
+- drag start 会把 item id 写入 `dataTransfer`，使用空拖拽图片，并标记当前拖拽项。
+- drag over 只在存在活跃拖拽时标记悬停项并调用 `preventDefault()`。
+- drop 会清理拖拽状态，忽略缺失 id 和同索引 drop，然后发出 `update:modelValue` 与 `reorder`。
+- `dragend` 总会清理拖拽和悬停状态。
+- 重排使用浅数组拷贝；item 对象本身保持引用。
 
 ## API
 
@@ -41,13 +96,49 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `SortableListItem[]` | *必填* | 列表数据（必须有 `id`） |
-| `disabled` | `boolean` | `false` | 禁用拖拽 |
-| `handle` | `boolean` | `false` | 仅允许在 handle 上拖拽 |
+| `modelValue` | `SortableListItem[]` | 必填 | 有序列表数据。每一项必须提供稳定字符串 `id`。 |
+| `disabled` | `boolean` | `false` | 禁用拖拽交互与排序事件。 |
+| `handle` | `boolean` | `false` | 要求从 `[data-tx-sort-handle="true"]` 开始拖拽。 |
+
+### SortableListItem
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 用于 key 和拖拽状态的稳定身份。其它字段会保留。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value)` | v-model 更新 |
-| `reorder` | `({ from, to, items })` | 排序完成 |
+| `update:modelValue` | `SortableListItem[]` | 有效 drop 后发出重排数组。 |
+| `reorder` | `{ from: number, to: number, items: SortableListItem[] }` | 有效重排后发出来源索引、目标索引和重排后的数组。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `item` | `{ item, dragging }` | 自定义每一项渲染。未提供时显示 item `id`。 |
+
+## 最佳实践
+
+- 使用稳定的持久化 id；不要把数组索引当成可排序数据的 id。
+- 用 `v-model` 更新本地数组，用 `reorder` 在服务端有顺序要求时持久化。
+- 行内有按钮、链接、输入框或可选中文本时开启 `handle`。
+- 列表规模保持适中。超长列表应使用其它拖拽策略配合虚拟化，而不是让每一行都可拖拽。
+- 在 item slot 中提供明确的拖拽视觉提示；组件不会自动注入手柄 UI。
+- 如果需要纯键盘排序流程，应额外提供可访问的排序控制，不要只依赖该拖拽组件。
+
+## 审阅说明
+
+- **可访问性说明:** 组件提供 list/listitem 语义，但原生拖拽主要面向指针操作。设置页、命令面板或企业表单如果要求纯键盘可用，需要额外提供键盘可访问的排序流程。
+- **数据说明:** 重排会发出浅拷贝数组，并保留 item 对象引用。持久化应基于稳定 `id`，不要基于索引或对象身份。
+- **实测覆盖:** `sortable-list.test.ts` 覆盖列表语义、slot props、默认 id 渲染、重排事件、同项 drop 抑制、禁用阻断、仅手柄可拖，以及 dragend 状态清理。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/sortable-list/src/TxSortableList.vue`。
+- Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` 导出 `SortableListItem`、`SortableListProps` 与 `SortableListEmits`。
+- Export alias: `packages/tuffex/packages/components/src/sortable-list/index.ts` 导出 `SortableList`、`TxSortableList`、sortable 类型与 `TxSortableListInstance`。
+- Coverage: `packages/tuffex/packages/components/src/sortable-list/__tests__/sortable-list.test.ts` 覆盖拖拽状态、手柄模式、事件、插槽与禁用行为。
+
+<TuffDocSourceLink />

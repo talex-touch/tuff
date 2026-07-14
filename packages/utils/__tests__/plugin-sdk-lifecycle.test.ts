@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CoreBoxEvents, CoreBoxRetainedEvents, DivisionBoxEvents, FlowEvents } from '../transport/events'
 import { createDivisionBoxSDK } from '../plugin/sdk/division-box'
 import { createFeatureSDK } from '../plugin/sdk/feature-sdk'
 import { createMetaSDK } from '../plugin/sdk/meta-sdk'
 import { createQuickActionsSDK } from '../plugin/sdk/quick-actions-sdk'
+import { CoreBoxEvents, CoreBoxRetainedEvents, DivisionBoxEvents, FlowEvents } from '../transport/events'
 
 type Handler = (payload: unknown) => unknown
 
@@ -87,6 +87,39 @@ describe('plugin sdk lifecycle', () => {
 
     expect(onInput).toHaveBeenNthCalledWith(1, '')
     expect(onInput).toHaveBeenNthCalledWith(2, '')
+  })
+
+  it('feature sdk returns and awaits host push completion', async () => {
+    const { channel } = createMockChannel()
+    let releaseHostPush!: () => void
+    const hostCompletion = new Promise<void>((resolve) => {
+      releaseHostPush = resolve
+    })
+    const sdk = createFeatureSDK(
+      {
+        pushItems: vi.fn(() => hostCompletion),
+        update: vi.fn(),
+        remove: vi.fn(),
+        clear: vi.fn(),
+        getItems: vi.fn(() => []),
+      },
+      channel,
+    )
+
+    const completion = sdk.pushItems([])
+    expect(completion).toBe(hostCompletion)
+
+    let awaited = false
+    const awaitingCompletion = (async () => {
+      await completion
+      awaited = true
+    })()
+    await Promise.resolve()
+    expect(awaited).toBe(false)
+
+    releaseHostPush()
+    await awaitingCompletion
+    expect(awaited).toBe(true)
   })
 
   it('feature sdk rejects retired plugin key event listener surface', () => {

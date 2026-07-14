@@ -6,8 +6,7 @@ import type {
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse
 } from '../../../../shared/events/omni-panel'
-import type { IntelligenceInvokeResult } from '@talex-touch/tuff-intelligence'
-import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
+import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -25,6 +24,7 @@ import OmniPanelSearchBar from './components/OmniPanelSearchBar.vue'
 import {
   buildOmniPanelAiInvokeRequest,
   createOmniPanelAiInputPreview,
+  executeOmniPanelAiInvoke,
   isOmniPanelAiAction,
   normalizeOmniPanelAiResult,
   normalizeOmniPanelAiError,
@@ -41,7 +41,7 @@ import { createRendererLogger } from '../../utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
-const intelligence = createIntelligenceClient(transport)
+const intelligence = useIntelligenceSdk()
 const omniPanelLog = createRendererLogger('OmniPanel')
 const ACTION_GRID_COLUMNS = 3
 
@@ -266,11 +266,7 @@ async function executeAiFeature(
   }
 
   try {
-    const result = (await intelligence.invoke(
-      request.capabilityId,
-      request.payload,
-      request.options
-    )) as IntelligenceInvokeResult<unknown>
+    const result = await executeOmniPanelAiInvoke(intelligence, request, actionId)
     const preview = normalizeOmniPanelAiResult(result)
     aiClipboardError.value = ''
     aiPreview.value = {

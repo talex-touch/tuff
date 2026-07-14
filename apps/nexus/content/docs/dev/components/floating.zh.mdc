@@ -1,24 +1,24 @@
 ---
 title: Floating 浮动层
-description: 基于鼠标或触摸位置的轻量视差容器
+description: 基于指针位置的视差容器，支持注册绝对定位的深度图层。
 category: Design
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [floating, parallax, motion]
+syncStatus: reviewed
+verified: true
 ---
-
 # Floating 浮动层
 
-`TxFloating` 提供容器级鼠标/触摸位置跟踪，`TxFloatingElement` 按 `depth` 参数产生不同方向和强度的缓动位移。它适合用于轻量视差、引导卡片、视觉装饰和状态面板，不适合承载关键布局。
+`TxFloating` 跟踪鼠标和触摸位置，并按容器左上角计算相对坐标。`TxFloatingElement` 注册绝对定位图层，并根据每个图层的 `depth` 应用缓动的 `translate3d` 位移。
 
 ## 基础用法
 
-### 深度缓动
-多个浮动元素可以放在同一个 `TxFloating` 容器内，通过 `depth` 控制运动强度。
-
-:::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxFloating class="stage" :sensitivity="0.55" :easing-factor="0.08">
+    <TxFloating class-name="stage" :sensitivity="0.55" :easing-factor="0.08">
       <TxFloatingElement class-name="status-rail" :depth="-0.06" />
       <TxFloatingElement class-name="status-panel" :depth="0.04">
         鼠标移动时，状态层会按 depth 缓动
@@ -26,44 +26,103 @@ code: |
     </TxFloating>
   </template>
 ---
-:::
+::::
 
-## API（Lite）
+## 组合示例
 
-::TuffPropsTable
----
-rows:
-  - name: sensitivity
-    type: number
-    default: 1
-    description: 整体位移敏感度
-  - name: easingFactor
-    type: number
-    default: 0.05
-    description: 每帧靠近目标位置的比例
-  - name: disabled
-    type: boolean
-    default: false
-    description: 禁用动画、停止监听并重置子元素位置
-  - name: className
-    type: string
-    default: "''"
-    description: 透传到容器或元素的类名
-  - name: depth
-    type: number
-    default: 1
-    description: TxFloatingElement 的位移深度，支持负数反向移动
----
-::
+### 禁用动效
+
+```vue
+<template>
+  <TxFloating :disabled="prefersReducedMotion">
+    <TxFloatingElement class-name="hero-card" :depth="0.08">
+      内容
+    </TxFloatingElement>
+  </TxFloating>
+</template>
+```
+
+当 `disabled` 变为 true 时，事件监听和动画帧会停止，已注册元素的 transform 会重置为零。
+
+### 反向运动图层
+
+```vue
+<template>
+  <TxFloating class-name="scene" :sensitivity="1.2">
+    <TxFloatingElement class-name="background" :depth="-0.04" />
+    <TxFloatingElement class-name="foreground" :depth="0.1" />
+  </TxFloating>
+</template>
+```
+
+负数 `depth` 会朝正数 `depth` 的反方向移动。
 
 ## 交互契约
 
-- `TxFloating` 监听 window `mousemove` / `touchmove`，并以容器左上角为原点计算指针位置。
-- 每个元素位移目标为 `pointerPosition * (depth * sensitivity / 20)`，每帧按 `easingFactor` 缓动靠近。
-- `disabled=true` 时停止事件监听和 RAF，取消当前动画帧，并将已注册元素重置为 `translate3d(0px, 0px, 0)`。
-- `disabled=false` 后会重新启动事件监听和 RAF。
+- `TxFloating` 提供注册上下文，供子级 `TxFloatingElement` 消费。
+- 容器渲染相对定位 `div`，类名包含 `tx-floating` 和可选 `className`。
+- `TxFloatingElement` 渲染绝对定位 `div`，类名包含 `tx-floating-element` 和可选 `className`。
+- `TxFloating` 挂载时会启动 passive `mousemove` 与 `touchmove` window 监听，除非已禁用。
+- 指针坐标以 floating 容器左上角为原点。
+- 每帧会让已注册元素按 `easingFactor` 靠近 `pointerPosition * (depth * sensitivity / 20)`。
+- `disabled=true` 会停止监听、取消当前 RAF，并把 transform 重置为 `translate3d(0px, 0px, 0)`。
+- `disabled=false` 会重新启动监听与 RAF。
 - `TxFloatingElement` 挂载时注册，`depth` 变化时重新注册，卸载时注销。
+- 元素在 `TxFloating` 外部使用时仍会渲染，但不会动画。
+- 实现通过 `hasWindow()` 保护浏览器 API，避免 SSR 问题。
+
+## API
+
+### TxFloating Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `className` | `string` | `''` | 追加到容器上的类名。 |
+| `sensitivity` | `number` | `1` | 整体位移倍率。 |
+| `easingFactor` | `number` | `0.05` | 每帧靠近目标位置的比例。 |
+| `disabled` | `boolean` | `false` | 停止动效并重置已注册元素 transform。 |
+
+### TxFloatingElement Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `className` | `string` | `''` | 追加到绝对定位图层上的类名。 |
+| `depth` | `number` | `1` | 位移深度。负数会朝指针反方向移动。 |
+
+### Slots
+
+| 组件 | 插槽名 | 说明 |
+|------|------|------|
+| `TxFloating` | `default` | 浮动元素和场景内容。 |
+| `TxFloatingElement` | `default` | 图层内容。 |
+
+### Events
+
+不发出公开事件。
+
+### Exposed Methods
+
+不暴露公开实例方法。
+
+## 最佳实践
+
+- 用于装饰性视差、引导卡片或背景点缀。不要让关键布局依赖指针移动。
+- 尊重 reduced-motion 设置，并把它绑定到 `disabled`。
+- 图层数量保持少量；每个已注册图层都会在每帧更新。
+- 使用较低 `depth` 保持动效克制。数值过大很快会让界面显得脱节。
+- 通过 CSS 类提供真实静态布局位置；组件只添加 transform 偏移。
+- 避免在快速移动图层中放交互控件，除非动效非常轻微。
+
+## 审阅说明
+
+- 已人工核对 `packages/tuffex/packages/components/src/floating/src/types.ts`、`context.ts`、`TxFloating.vue`、`TxFloatingElement.vue` 与 `floating.test.ts`。
+- 浏览器监听和动画帧都经过 SSR 防护；位移动效只会在客户端挂载后存在。
+- `disabled` 不只是视觉状态：它会停止监听、取消 RAF，并重置已注册元素 transform。
 
 ## Source
+
+- Component sources: `packages/tuffex/packages/components/src/floating/src/TxFloating.vue`、`TxFloatingElement.vue` 与 `context.ts`。
+- Types: `packages/tuffex/packages/components/src/floating/src/types.ts`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/floating/__tests__/floating.test.ts` 验证缓动指针位移、disabled 监听重置、初始 disabled、depth 重新注册、卸载清理、类名 / 插槽渲染和插件安装注册。
 
 <TuffDocSourceLink />

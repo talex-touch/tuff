@@ -2,7 +2,8 @@
 title: "Scroll"
 description: "`@better-scroll/scroll-bar` powered `TxScroll` container."
 category: Layout
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Scroll
 
@@ -281,3 +282,57 @@ code: |
 | `scroll` | `{ scrollTop: number; scrollLeft: number }` | Emits absolute scroll offsets from native mode or BetterScroll position updates. |
 | `pulling-down` | - | Emits once per pull-down cycle until `finishPullDown()` is called. |
 | `pulling-up` | - | Emits once per pull-up cycle until `finishPullUp()` is called. |
+
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Main scroll content rendered inside `.tx-scroll__content`. |
+| `header` | Optional content before the default slot. In native mode it is rendered before `.tx-scroll__content`; in BetterScroll mode it is rendered inside the scroll content. |
+| `footer` | Optional content after the default slot, commonly used for load-more status. |
+
+### Expose
+
+| Name | Type | Description |
+|------|------|-------------|
+| `nativeScrollRef` | `Ref<HTMLElement \| null>` | Native scroll element ref when native mode is active. |
+| `scrollTo(x, y, time?)` | `(x: number, y: number, time?: number) => void` | Scrolls to absolute offsets. BetterScroll mode negates offsets internally and honors `time`; native mode calls `scrollTo(x, y)`. |
+| `getScrollInfo()` | `() => TxScrollInfo` | Returns current offsets, scroll size, and client size. |
+| `refresh()` | `() => void` | Calls BetterScroll `refresh()` and updates scrollability state. No-op in native mode. |
+| `finishPullDown()` | `() => void` | Resets native pull-down lock or forwards to BetterScroll `finishPullDown()` then schedules refresh. |
+| `finishPullUp()` | `() => void` | Resets native pull-up lock or forwards to BetterScroll `finishPullUp()` then schedules refresh. |
+
+## Interaction Contract
+
+- `native=true` always wins. Otherwise, `unified=true` forces BetterScroll; macOS Safari and macOS Chromium with native overscroll support use native mode unless unified is set.
+- In native mode, `direction` maps to CSS overflow and `scrollChaining=false` maps to `overscroll-behavior: contain` on enabled axes.
+- In BetterScroll mode, `direction` maps to `scrollX`, `scrollY`, and `freeScroll`; `probeType` controls scroll event frequency.
+- Content and wrapper resize changes are coalesced into one animation frame before `refresh()`; `refreshOnContentChange=false` disables mutation-observer refreshes but keeps resize refreshes.
+- Pull-down / pull-up events are locked after emission. Consumers must call `finishPullDown()` / `finishPullUp()` after async work to allow the next cycle.
+- Native pull-down is a thresholded touch fallback at scrollTop 0; `pullDownStop` applies only to BetterScroll mode.
+
+## Best Practices
+
+- Prefer native mode for plain article or document scrolling where platform behavior is enough; use BetterScroll only when consistent scrollbars, wheel bridging, bounce, or pull plugins matter.
+- Keep `scrollChaining=false` for nested panels by default. Enable it only when the parent-child scroll handoff is intentional and tested.
+- Use `noPadding` when the child component owns its own spacing, especially virtualized lists, tables, and full-bleed media.
+- For horizontal or both-axis content, set a deterministic content width or allow the component to set `width: max-content`; otherwise BetterScroll cannot infer horizontal overflow reliably.
+- Always pair `pullDownRefresh` / `pullUpLoad` with the matching finish method after async work, including failure paths.
+- Avoid passing large mutable objects through `options`; prefer first-class props for documented behavior so watchers and docs stay accurate.
+
+## Review Notes
+
+- **Runtime contract:** `native=true` always wins; otherwise `unified=true` forces BetterScroll, while macOS Safari and supported macOS Chromium default to native fallback.
+- **Axis contract:** native mode maps `direction` to CSS overflow and `overscroll-behavior`; BetterScroll maps it to `scrollX`, `scrollY`, and `freeScroll`.
+- **Refresh contract:** resize and content mutations are coalesced before `refresh()`. Pull-down/up events are lock-based and require `finishPullDown()` / `finishPullUp()` after async work.
+- **Verified coverage:** `scroll.test.ts` covers native overflow, slots, scroll events, `getScrollInfo()`, `scrollTo()`, native pull locks, and coalesced refreshes; `scroll-export.test.ts` protects the public export boundary.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/scroll/src/TxScroll.vue`.
+- Runtime helpers: `packages/tuffex/packages/components/src/scroll/src/scroll-wheel.ts`, `better-scroll-pull-plugins.ts`, and `runtime-capabilities.ts`.
+- Types: `packages/tuffex/packages/components/src/scroll/src/types.ts`.
+- Coverage: `packages/tuffex/packages/components/src/scroll/__tests__/scroll.test.ts` verifies native direction overflow, slots, scroll events, `getScrollInfo()`, `scrollTo()`, native pull locks, and coalesced BetterScroll refreshes. `scroll-export.test.ts` verifies the public export boundary.
+
+<TuffDocSourceLink />

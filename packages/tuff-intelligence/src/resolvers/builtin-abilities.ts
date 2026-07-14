@@ -1,17 +1,19 @@
 import type { IntelligenceCapabilityType } from '../types/intelligence'
 import { toRegistryCapabilityId, toRuntimeCapabilityId } from './capabilities'
 
-export type BuiltinAbilityCategory =
-  | 'analysis'
-  | 'audio'
-  | 'code'
-  | 'exchange'
-  | 'image'
-  | 'overlay'
-  | 'rag'
-  | 'text'
-  | 'vision'
-
+export type BuiltinAbilityCategory
+  = | 'agent'
+    | 'analysis'
+    | 'audio'
+    | 'code'
+    | 'exchange'
+    | 'image'
+    | 'overlay'
+    | 'rag'
+    | 'search'
+    | 'text'
+    | 'vision'
+    | 'workflow'
 export interface TuffIntelligenceBuiltinAbility {
   id: string
   runtimeId: string
@@ -55,20 +57,6 @@ export const tuffIntelligenceBuiltinAbilities = [
     description: 'General conversational completion capability.',
   }),
   createBuiltinAbility({
-    id: 'text.summarize',
-    type: 'summarize',
-    category: 'text',
-    meteringUnit: 'token',
-    description: 'Summarizes text into a concise output.',
-  }),
-  createBuiltinAbility({
-    id: 'content.extract',
-    type: 'content-extract',
-    category: 'analysis',
-    meteringUnit: 'token',
-    description: 'Extracts structured facts from unstructured content.',
-  }),
-  createBuiltinAbility({
     id: 'text.translate',
     type: 'translate',
     category: 'text',
@@ -76,25 +64,32 @@ export const tuffIntelligenceBuiltinAbilities = [
     description: 'Translates text between languages.',
   }),
   createBuiltinAbility({
-    id: 'image.translate',
-    type: 'image-translate-e2e',
-    category: 'image',
-    meteringUnit: 'image',
-    description: 'Translates image content through OCR and rendering.',
-  }),
-  createBuiltinAbility({
-    id: 'image.translate.e2e',
-    type: 'image-translate-e2e',
-    category: 'image',
-    meteringUnit: 'image',
-    description: 'Runs end-to-end image translation.',
-  }),
-  createBuiltinAbility({
-    id: 'vision.ocr',
-    type: 'vision-ocr',
-    category: 'vision',
+    id: 'text.summarize',
+    type: 'summarize',
+    category: 'text',
     meteringUnit: 'token',
-    description: 'Extracts text from images.',
+    description: 'Summarizes text into a concise output.',
+  }),
+  createBuiltinAbility({
+    id: 'text.rewrite',
+    type: 'rewrite',
+    category: 'text',
+    meteringUnit: 'token',
+    description: 'Rewrites text with a requested style, tone, or audience.',
+  }),
+  createBuiltinAbility({
+    id: 'text.grammar',
+    type: 'grammar-check',
+    category: 'text',
+    meteringUnit: 'token',
+    description: 'Checks grammar, spelling, punctuation, and style.',
+  }),
+  createBuiltinAbility({
+    id: 'text.classify',
+    type: 'classification',
+    category: 'analysis',
+    meteringUnit: 'token',
+    description: 'Classifies text into one or more categories.',
   }),
   createBuiltinAbility({
     id: 'embedding.generate',
@@ -111,11 +106,32 @@ export const tuffIntelligenceBuiltinAbilities = [
     description: 'Generates code from natural language requirements.',
   }),
   createBuiltinAbility({
+    id: 'code.explain',
+    type: 'code-explain',
+    category: 'code',
+    meteringUnit: 'token',
+    description: 'Explains code behavior, structure, and intent.',
+  }),
+  createBuiltinAbility({
     id: 'code.review',
     type: 'code-review',
     category: 'code',
     meteringUnit: 'token',
     description: 'Reviews code and returns quality feedback.',
+  }),
+  createBuiltinAbility({
+    id: 'code.refactor',
+    type: 'code-refactor',
+    category: 'code',
+    meteringUnit: 'token',
+    description: 'Refactors code while preserving behavior.',
+  }),
+  createBuiltinAbility({
+    id: 'code.debug',
+    type: 'code-debug',
+    category: 'code',
+    meteringUnit: 'token',
+    description: 'Analyzes failures and proposes debugging fixes.',
   }),
   createBuiltinAbility({
     id: 'intent.detect',
@@ -132,11 +148,116 @@ export const tuffIntelligenceBuiltinAbilities = [
     description: 'Analyzes sentiment from text.',
   }),
   createBuiltinAbility({
+    id: 'content.extract',
+    type: 'content-extract',
+    category: 'analysis',
+    meteringUnit: 'token',
+    description: 'Extracts structured facts from unstructured content.',
+  }),
+  createBuiltinAbility({
     id: 'keywords.extract',
     type: 'keywords-extract',
     category: 'analysis',
     meteringUnit: 'token',
     description: 'Extracts keywords from text.',
+  }),
+  createBuiltinAbility({
+    id: 'vision.ocr',
+    type: 'vision-ocr',
+    category: 'vision',
+    meteringUnit: 'image',
+    description: 'Extracts text from images.',
+  }),
+  createBuiltinAbility({
+    id: 'image.caption',
+    type: 'image-caption',
+    category: 'image',
+    meteringUnit: 'image',
+    description: 'Generates descriptive captions for images.',
+  }),
+  createBuiltinAbility({
+    id: 'image.analyze',
+    type: 'image-analyze',
+    category: 'image',
+    meteringUnit: 'image',
+    description: 'Analyzes image content, objects, and scenes.',
+  }),
+  createBuiltinAbility({
+    id: 'image.translate.e2e',
+    type: 'image-translate-e2e',
+    category: 'image',
+    meteringUnit: 'image',
+    description: 'Translates image content through OCR and rendering.',
+  }),
+  createBuiltinAbility({
+    id: 'image.generate',
+    type: 'image-generate',
+    category: 'image',
+    meteringUnit: 'image',
+    description: 'Generates images from text prompts.',
+  }),
+  createBuiltinAbility({
+    id: 'image.edit',
+    type: 'image-edit',
+    category: 'image',
+    meteringUnit: 'image',
+    description: 'Edits or inpaints images using a prompt.',
+  }),
+  createBuiltinAbility({
+    id: 'audio.tts',
+    type: 'tts',
+    category: 'audio',
+    meteringUnit: 'character',
+    description: 'Converts text into speech audio.',
+  }),
+  createBuiltinAbility({
+    id: 'audio.stt',
+    type: 'stt',
+    category: 'audio',
+    meteringUnit: 'audio_second',
+    description: 'Converts speech audio into text.',
+  }),
+  createBuiltinAbility({
+    id: 'audio.transcribe',
+    type: 'audio-transcribe',
+    category: 'audio',
+    meteringUnit: 'audio_second',
+    description: 'Transcribes audio with optional timestamps and diarization.',
+  }),
+  createBuiltinAbility({
+    id: 'rag.query',
+    type: 'rag-query',
+    category: 'rag',
+    meteringUnit: 'token',
+    description: 'Answers questions with retrieval-augmented generation.',
+  }),
+  createBuiltinAbility({
+    id: 'search.semantic',
+    type: 'semantic-search',
+    category: 'search',
+    meteringUnit: 'token',
+    description: 'Searches documents by semantic similarity.',
+  }),
+  createBuiltinAbility({
+    id: 'search.rerank',
+    type: 'rerank',
+    category: 'search',
+    meteringUnit: 'token',
+    description: 'Reranks candidate documents by relevance.',
+  }),
+  createBuiltinAbility({
+    id: 'workflow.execute',
+    type: 'workflow',
+    category: 'workflow',
+    meteringUnit: 'run',
+    description: 'Executes multi-step prompt workflows.',
+  }),
+  createBuiltinAbility({
+    id: 'agent.run',
+    type: 'agent',
+    category: 'agent',
+    meteringUnit: 'run',
+    description: 'Runs autonomous AI agents with tool access.',
   }),
   createBuiltinAbility({
     id: 'fx.rate.latest',

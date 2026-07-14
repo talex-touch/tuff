@@ -1,0 +1,72 @@
+---
+title: Kbd
+description: Keyboard shortcut token for command hints and menus.
+category: Basic
+status: beta
+since: 1.0.0
+tags: [keyboard, shortcut, token]
+syncStatus: reviewed
+verified: true
+---
+# Kbd
+
+`TxKbd` renders shortcut labels with a semantic `<kbd>` element. It is intentionally small: use the default slot for the key label and props for size/tone.
+
+Reviewed against `packages/tuffex/packages/components/src/kbd/src/TxKbd.vue` and `kbd.test.ts`.
+
+## Basic Usage
+
+### Kbd
+::::TuffDemoWrapper{demo="KbdKbdDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <span class="flex items-center gap-1">
+      <TxKbd tone="primary">⌘</TxKbd>
+      <TxKbd tone="primary">K</TxKbd>
+    </span>
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- The root element is `<kbd>`, so it carries native keyboard-token semantics.
+- `size="sm"` is the compact default for inline help and menu shortcuts.
+- `tone="primary"` highlights product shortcuts without changing the slot content.
+- The component has no events and no internal state.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `'sm' \| 'md'` | `'sm'` | Shortcut token size. |
+| `tone` | `'default' \| 'primary'` | `'default'` | Visual tone. |
+
+### Events
+
+`TxKbd` does not emit component events.
+
+## Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Key label, such as `⌘`, `Ctrl`, or `K`. |
+
+## Best Practices
+
+- Render key combinations as separate `TxKbd` tokens rather than one long string when spacing matters.
+- Keep labels platform-aware in host copy: `⌘` for macOS, `Ctrl` for Windows/Linux.
+- Use `tone="primary"` sparingly for the main shortcut on a page or command.
+- Pair shortcut tokens with visible action text; shortcuts alone are not discoverable enough.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/kbd/src/TxKbd.vue` confirms the semantic `<kbd>` root, `size` / `tone` classes, and default slot-only content.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/kbd/__tests__/kbd.test.ts` covers rendered shortcut content, root tag, and variant classes.
+- Export: `packages/tuffex/packages/components/src/kbd/index.ts` wraps the component with `withInstall` and exports `TxKbdInstance`.
+
+## Source
+<TuffDocSourceLink />

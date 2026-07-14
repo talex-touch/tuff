@@ -1,65 +1,129 @@
 ---
 title: "NavBar"
-description: "Top navigation bar with a title, left/right slots, and an optional back button."
+description: "Compact top navigation bar with title, action slots, safe-area padding, and back events."
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [navigation, mobile, layout]
+syncStatus: reviewed
+verified: true
 ---
 # NavBar
 
-Top navigation bar for compact app surfaces. It provides a centered title, safe-area padding, left/right action slots, and an optional default back button.
+`TxNavBar` renders a compact application header with a centered title, optional safe-area spacer, left and right action zones, and a default back button.
+
+Reviewed against `packages/tuffex/packages/components/src/nav-bar/src/types.ts`, `TxNavBar.vue`, and `nav-bar.test.ts`.
 
 ## Basic Usage
 
-### NavBar
-:::TuffDemoWrapper{demo="NavBarNavBarDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="NavBarNavBarDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  function noop() {}
   </script>
 
   <template>
-    <div style="width: 360px; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden;">
-      <TxNavBar title="Title" :show-back="true" @back="() => {}">
-        <template #right>
-          <TxButton variant="ghost" size="small">
-            Edit
-          </TxButton>
-        </template>
-      </TxNavBar>
-
-      <div style="padding: 16px; color: var(--tx-text-color-secondary);">
-        Content
-      </div>
-    </div>
+    <TxNavBar title="Settings" show-back @back="noop" @click-right="noop">
+      <template #right>
+        <span>Save</span>
+      </template>
+    </TxNavBar>
   </template>
 ---
-:::
+::::
+
+## Composition Examples
+
+### Custom Left And Title Slots
+
+Providing `left` replaces the built-in back icon. In that case a click emits `click-left`, not `back`.
+
+```vue
+<template>
+  <TxNavBar @click-left="openMenu" @click-right="save">
+    <template #left>
+      <TxIcon name="i-carbon-menu" />
+    </template>
+    <template #title>
+      <strong>Workspace</strong>
+    </template>
+    <template #right>
+      Save
+    </template>
+  </TxNavBar>
+</template>
+```
+
+### Sticky Header
+
+```vue
+<template>
+  <TxNavBar title="Inbox" fixed :z-index="3200" />
+</template>
+```
+
+Use `safeAreaTop=false` only when the parent layout already handles device safe-area padding.
+
+## Interaction Contract
+
+- The root is a `header`; left and right action zones are native `button type="button"` controls.
+- `showBack=true` renders the default back icon inside the left button when no `left` slot is provided.
+- Clicking the default back button emits both `back` and `click-left`.
+- Clicking a custom `left` slot emits only `click-left`.
+- Clicking a `right` slot emits `click-right`; an empty right zone is disabled and does not emit.
+- `disabled=true` adds `is-disabled`, disables both action buttons, and blocks all emits.
+- `fixed=true` applies sticky positioning at the top of the scroll container.
+- `zIndex` is exposed through `--tx-nav-bar-z-index`.
 
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `title` | `string` | `''` | Text rendered in the default title area. |
-| `fixed` | `boolean` | `false` | Uses sticky positioning at the top of the viewport. |
-| `safeAreaTop` | `boolean` | `true` | Adds a safe-area spacer above the bar for notched displays. |
-| `showBack` | `boolean` | `false` | Shows the built-in back button when the `left` slot is not provided. |
-| `disabled` | `boolean` | `false` | Disables back/left/right click emissions and marks the back button disabled. |
-| `zIndex` | `number` | `2000` | CSS z-index exposed through `--tx-nav-bar-z-index`. |
-
-### Slots
-
-| Name | Description |
-|------|------|
-| `left` | Replaces the default left area and built-in back button. |
-| `title` | Replaces the centered title content. |
-| `right` | Renders right-aligned actions. |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Text rendered in the center when no `title` slot is provided. |
+| `fixed` | `boolean` | `false` | Uses sticky top positioning. |
+| `safeAreaTop` | `boolean` | `true` | Renders a safe-area spacer using `env(safe-area-inset-top)`. |
+| `showBack` | `boolean` | `false` | Shows the default left back icon when no `left` slot is provided. |
+| `disabled` | `boolean` | `false` | Disables left/right buttons and suppresses events. |
+| `zIndex` | `number` | `2000` | Value assigned to `--tx-nav-bar-z-index`. |
 
 ### Events
 
-| Event | Params | Description |
-|------|------|------|
-| `back` | - | Emitted when the built-in back button is clicked. |
-| `click-left` | - | Emitted when the left area is clicked; the built-in back button also emits it. |
-| `click-right` | - | Emitted when the right area is clicked. |
+| Event | Payload | Description |
+|------|---------|-------------|
+| `back` | `void` | Emitted only by the default back button. |
+| `click-left` | `void` | Emitted by the default back button or the custom left action. |
+| `click-right` | `void` | Emitted by the right action when the `right` slot exists. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `left` | none | Replaces the default back icon and controls left-action content. |
+| `title` | none | Replaces the centered title text. |
+| `right` | none | Provides right-side action content. |
+
+## Best Practices
+
+- Prefer `@back` for navigation history and reserve `@click-left` for custom left-slot actions.
+- Keep right-slot content short; the center title uses ellipsis but the side columns still need space.
+- Do not nest another interactive button inside `left` or `right`; the action zones are already buttons.
+- Keep `safeAreaTop=true` on mobile shells unless the surrounding layout already owns safe-area spacing.
+- Use `disabled` during route transitions or save operations to prevent duplicate navigation events.
+
+## Review Notes
+
+- **Accessibility note:** The left/right action zones are native buttons. Do not pass nested buttons in `left` or `right`; use text, icons, or spans inside the slot so the button semantics remain valid.
+- **Event note:** The default back affordance emits both `back` and `click-left`; custom `left` content emits only `click-left`. Use one listener path per interaction to avoid duplicate navigation.
+- **Verified coverage:** `nav-bar.test.ts` checks title/safe-area/z-index rendering, fixed and disabled classes, default back events, custom slot events, empty disabled zones, and disabled non-emission.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/nav-bar/src/TxNavBar.vue`.
+- Types: `packages/tuffex/packages/components/src/nav-bar/src/types.ts` exports `NavBarProps` and `NavBarEmits`.
+- Export alias: `packages/tuffex/packages/components/src/nav-bar/index.ts` exports `NavBar`, `TxNavBar`, `NavBarProps`, `NavBarEmits`, and `TxNavBarInstance`.
+- Coverage: `packages/tuffex/packages/components/src/nav-bar/__tests__/nav-bar.test.ts` verifies structure, slots, safe-area behavior, and action events.
+
+<TuffDocSourceLink />

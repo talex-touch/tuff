@@ -118,6 +118,74 @@ function ensureBundledRuntimeSynced(): void {
   })
 }
 
+async function runNetworkPermissionFailureScenario(
+  permission: unknown,
+): Promise<{
+  networkCalls: string[]
+  permissionRequests: string[]
+}> {
+  const networkCalls: string[] = []
+  const permissionRequests: string[] = []
+  const permissionRecord = permission && typeof permission === 'object'
+    ? permission as { request?: (permissionId: string) => Promise<boolean> }
+    : null
+  const permissionOverride = permissionRecord?.request
+    ? {
+        ...permissionRecord,
+        request: async (permissionId: string) => {
+          permissionRequests.push(permissionId)
+          return permissionRecord.request!(permissionId)
+        },
+      }
+    : permission
+  const pluginModule = loadPluginModule(
+    new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+    createPluginGlobals({
+      http: {
+        async get() {
+          networkCalls.push('get')
+          throw new Error('network provider must remain blocked')
+        },
+        async post() {
+          networkCalls.push('post')
+          throw new Error('network provider must remain blocked')
+        },
+      },
+      permission: permissionOverride,
+      TuffItemBuilder: TestTuffItemBuilder,
+      plugin: {
+        feature: {
+          clearItems() {},
+          pushItems() {},
+          updateItem() {},
+        },
+        storage: {
+          async getFile(filename: string) {
+            if (filename === 'providers_config') {
+              return {
+                google: {
+                  enabled: true,
+                  config: {},
+                },
+              }
+            }
+            return null
+          },
+          async setFile() {},
+        },
+        box: {
+          hide() {},
+        },
+      },
+    }),
+  )
+
+  await pluginModule.onFeatureTriggered('touch-translate', 'hello world', undefined, new AbortController().signal)
+  await vi.advanceTimersByTimeAsync(250)
+
+  return { networkCalls, permissionRequests }
+}
+
 describe('touch-translation shared helpers', () => {
   it('detects target language from input text', () => {
     expect(translationTest.detectLanguage('你好，世界')).toBe('zh')
@@ -383,6 +451,79 @@ describe('touch-translation shared helpers', () => {
     await expect(pluginModule.__test.ensureNetworkPermission()).resolves.toBe(false)
     await expect(pluginModule.__test.ensureClipboardWritePermission()).resolves.toBe(false)
     await expect(pluginModule.__test.canUseTuffIntelligenceProvider({ authToken: 'token' })).resolves.toBe(false)
+  })
+
+  it('blocks network providers when permission sdk is unavailable', async () => {
+    vi.useFakeTimers()
+    try {
+      const result = await runNetworkPermissionFailureScenario(
+        withoutGlobal(),
+      )
+
+      expect(result.networkCalls).toEqual([])
+      expect(result.permissionRequests).toEqual([])
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('blocks network providers when network.internet permission is denied', async () => {
+    vi.useFakeTimers()
+    try {
+      const result = await runNetworkPermissionFailureScenario(
+        {
+          check: async () => false,
+          request: async () => false,
+        },
+      )
+
+      expect(result.networkCalls).toEqual([])
+      expect(result.permissionRequests).toEqual(['network.internet'])
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('blocks network providers without requesting when permission check fails', async () => {
+    vi.useFakeTimers()
+    try {
+      const result = await runNetworkPermissionFailureScenario(
+        {
+          check: async () => {
+            throw new Error('permission check failed')
+          },
+          request: async () => true,
+        },
+      )
+
+      expect(result.networkCalls).toEqual([])
+      expect(result.permissionRequests).toEqual([])
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('blocks network providers when permission request fails', async () => {
+    vi.useFakeTimers()
+    try {
+      const result = await runNetworkPermissionFailureScenario(
+        {
+          check: async () => false,
+          request: async () => {
+            throw new Error('permission request failed')
+          },
+        },
+      )
+
+      expect(result.networkCalls).toEqual([])
+      expect(result.permissionRequests).toEqual(['network.internet'])
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 
   it('blocks translation copy when clipboard.write permission is denied', async () => {

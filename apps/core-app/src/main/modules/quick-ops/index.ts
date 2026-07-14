@@ -55,9 +55,10 @@ import {
   hasQuickOpsDeveloperCommand
 } from '@talex-touch/utils/core-box/preview'
 import { QuickOpsEvents } from '@talex-touch/utils/transport/events'
-import { StorageList, TuffInputType, type AppSetting } from '@talex-touch/utils'
+import { normalizeLocale, StorageList, TuffInputType, type AppSetting } from '@talex-touch/utils'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import {
   createBatteryStatusInfo,
@@ -90,6 +91,7 @@ import {
   parseDurationMs,
   parseDnsQuery,
   parsePortQuery,
+  parseQuickOpsQuery,
   probeLocalTcpPort,
   quickOpsRuntime,
   resolveCommonDirectory,
@@ -1764,7 +1766,8 @@ async function createQuickOpsDeveloperPreviewResponse(
   const controller = new AbortController()
   const context: PreviewAbilityContext = {
     query: sdkQuery,
-    signal: controller.signal
+    signal: controller.signal,
+    locale: normalizeLocale(getLocale()) ?? 'en-US'
   }
   const result = await ability.execute(context)
   if (!result) {
@@ -2609,6 +2612,8 @@ interface FlowPomodoroOptions {
 function resolveFlowPomodoroOptions(session: FlowSession): FlowPomodoroOptions {
   const data = session.payload.data
   if (typeof data !== 'object' || !data) {
+    const parsed = typeof data === 'string' ? resolveTextPomodoroOptions(data) : null
+    if (parsed) return parsed
     return {
       durationMs: typeof data === 'string' ? (parseDurationMs(data) ?? undefined) : undefined,
       mode: 'focus-only'
@@ -2616,26 +2621,35 @@ function resolveFlowPomodoroOptions(session: FlowSession): FlowPomodoroOptions {
   }
 
   const payload = data as Record<string, unknown>
+  const text = readString(payload.text) ?? readString(payload.query)
+  const parsed = text ? resolveTextPomodoroOptions(text) : null
   const durationMs =
     readPositiveNumber(payload.focusDurationMs) ??
     readPositiveNumber(payload.durationMs) ??
     readDurationVariant(payload, 'focusDuration') ??
     readDurationVariant(payload, 'duration') ??
-    (typeof payload.text === 'string' ? (parseDurationMs(payload.text) ?? undefined) : undefined)
+    parsed?.durationMs ??
+    (text ? (parseDurationMs(text) ?? undefined) : undefined)
   const breakDurationMs =
-    readPositiveNumber(payload.breakDurationMs) ?? readDurationVariant(payload, 'breakDuration')
+    readPositiveNumber(payload.breakDurationMs) ??
+    readDurationVariant(payload, 'breakDuration') ??
+    parsed?.breakDurationMs
   const cycles =
     readBoundedInteger(payload.cycles, 1, 12) ??
     readBoundedInteger(payload.pomodoroCycles, 1, 12) ??
-    readBoundedInteger(payload.totalCycles, 1, 12)
+    readBoundedInteger(payload.totalCycles, 1, 12) ??
+    parsed?.cycles
   const longBreakDurationMs =
     readPositiveNumber(payload.longBreakDurationMs) ??
-    readDurationVariant(payload, 'longBreakDuration')
-  const longBreakEveryCycles = readBoundedInteger(payload.longBreakEveryCycles, 1, 12)
+    readDurationVariant(payload, 'longBreakDuration') ??
+    parsed?.longBreakDurationMs
+  const longBreakEveryCycles =
+    readBoundedInteger(payload.longBreakEveryCycles, 1, 12) ?? parsed?.longBreakEveryCycles
   const explicitMode =
     payload.mode === 'cycle' || payload.mode === 'focus-only' ? payload.mode : null
   const mode =
     explicitMode ??
+    parsed?.mode ??
     (breakDurationMs || cycles || longBreakDurationMs || longBreakEveryCycles
       ? 'cycle'
       : 'focus-only')
@@ -2647,6 +2661,27 @@ function resolveFlowPomodoroOptions(session: FlowSession): FlowPomodoroOptions {
     longBreakDurationMs,
     longBreakEveryCycles,
     mode
+  }
+}
+
+function resolveTextPomodoroOptions(text: string): FlowPomodoroOptions | null {
+  const parsed = parseQuickOpsQuery(text)
+  if (parsed?.action !== 'pomodoro-start') return null
+
+  return {
+    durationMs: parsed.durationMs,
+    breakDurationMs: parsed.breakDurationMs,
+    cycles: parsed.pomodoroCycles,
+    longBreakDurationMs: parsed.pomodoroLongBreakMs,
+    longBreakEveryCycles: parsed.pomodoroLongBreakEvery,
+    mode:
+      parsed.pomodoroMode ??
+      (parsed.breakDurationMs ||
+      parsed.pomodoroCycles ||
+      parsed.pomodoroLongBreakMs ||
+      parsed.pomodoroLongBreakEvery
+        ? 'cycle'
+        : 'focus-only')
   }
 }
 

@@ -29,7 +29,7 @@ async function onSearchClick(event: MouseEvent) {
 </script>
 
 <template>
-  <div class="HeaderControls flex items-center justify-end gap-2 text-sm">
+  <div class="HeaderControls flex shrink-0 items-center justify-end gap-2 text-sm">
     <div
       v-if="props.showSearchButton"
       class="relative"
@@ -46,7 +46,7 @@ async function onSearchClick(event: MouseEvent) {
       </button>
     </div>
 
-    <div class="relative flex items-center gap-1 sm:ml-auto">
+    <div class="relative flex shrink-0 items-center gap-1 sm:ml-auto">
       <span
         v-if="props.showLanguageToggle"
         class="HeaderControls-Divider"

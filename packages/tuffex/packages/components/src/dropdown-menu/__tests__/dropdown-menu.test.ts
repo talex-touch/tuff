@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
-import { defineComponent } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, nextTick } from 'vue'
 import TxDropdownItem from '../src/TxDropdownItem.vue'
 import TxDropdownMenu from '../src/TxDropdownMenu.vue'
 
@@ -42,12 +42,17 @@ const PopoverStub = defineComponent({
 
 function mountMenu(props: Record<string, unknown> = {}) {
   return mount(TxDropdownMenu, {
+    attachTo: document.body,
     props,
     slots: {
       trigger: '<button class="trigger">Actions</button>',
       default: `
         <TxDropdownItem class="rename-item">Rename</TxDropdownItem>
+        <TxDropdownItem class="disabled-item" disabled>Disabled</TxDropdownItem>
         <TxDropdownItem class="delete-item" danger>Delete</TxDropdownItem>
+        <div class="nested-menu" role="menu">
+          <TxDropdownItem class="nested-item">Nested</TxDropdownItem>
+        </div>
       `,
     },
     global: {
@@ -56,6 +61,10 @@ function mountMenu(props: Record<string, unknown> = {}) {
     },
   })
 }
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
 
 describe('txDropdownMenu', () => {
   it('renders trigger and menu content through Popover', () => {
@@ -125,6 +134,58 @@ describe('txDropdownMenu', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
+  it('keeps open state internally when modelValue is omitted', async () => {
+    const wrapper = mountMenu()
+
+    await wrapper.find('.open-control').trigger('click')
+    await nextTick()
+
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([true])
+    expect(wrapper.emitted('open')).toHaveLength(1)
+    expect(wrapper.findComponent(PopoverStub).props('modelValue')).toBe(true)
+    expect(document.activeElement).toBe(wrapper.find('.rename-item').element)
+
+    await wrapper.find('.rename-item').trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[1]).toEqual([false])
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.findComponent(PopoverStub).props('modelValue')).toBe(false)
+  })
+
+  it('focuses the first item and navigates enabled items with menu keys', async () => {
+    const wrapper = mountMenu({ modelValue: true })
+    await nextTick()
+
+    const renameItem = wrapper.find<HTMLElement>('.rename-item')
+    const disabledItem = wrapper.find<HTMLElement>('.disabled-item')
+    const deleteItem = wrapper.find<HTMLElement>('.delete-item')
+
+    expect(document.activeElement).toBe(renameItem.element)
+    expect(disabledItem.attributes('role')).toBe('menuitem')
+    expect(disabledItem.attributes('aria-disabled')).toBe('true')
+    expect(disabledItem.attributes('tabindex')).toBeUndefined()
+
+    await renameItem.trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(deleteItem.element)
+
+    await deleteItem.trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(renameItem.element)
+
+    await renameItem.trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(deleteItem.element)
+
+    await deleteItem.trigger('keydown', { key: 'Home' })
+    expect(document.activeElement).toBe(renameItem.element)
+
+    await renameItem.trigger('keydown', { key: 'End' })
+    expect(document.activeElement).toBe(deleteItem.element)
+
+    const nestedItem = wrapper.find<HTMLElement>('.nested-item')
+    nestedItem.element.focus()
+    await nestedItem.trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(nestedItem.element)
+  })
+
   it('selects enabled items and closes the parent dropdown when closeOnSelect is enabled', async () => {
     const close = vi.fn()
     const wrapper = mount(TxDropdownItem, {
@@ -164,6 +225,25 @@ describe('txDropdownMenu', () => {
     expect(close).not.toHaveBeenCalled()
   })
 
+  it('selects enabled items with Space', async () => {
+    const close = vi.fn()
+    const wrapper = mount(TxDropdownItem, {
+      slots: {
+        default: 'Rename',
+      },
+      global: {
+        provide: {
+          txDropdownMenu: { close, closeOnSelect: true },
+        },
+      },
+    })
+
+    await wrapper.trigger('keydown', { key: ' ' })
+
+    expect(wrapper.emitted('select')).toHaveLength(1)
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
   it('does not select or close disabled items', async () => {
     const close = vi.fn()
     const wrapper = mount(TxDropdownItem, {
@@ -183,5 +263,8 @@ describe('txDropdownMenu', () => {
     expect(wrapper.emitted('select')).toBeUndefined()
     expect(close).not.toHaveBeenCalled()
     expect(wrapper.classes()).toContain('is-disabled')
+    expect(wrapper.attributes('role')).toBe('menuitem')
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
   })
 })

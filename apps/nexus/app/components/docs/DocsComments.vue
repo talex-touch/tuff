@@ -173,7 +173,7 @@ watch(() => props.docPath, () => {
 
     <!-- Comments list -->
     <div v-if="loading" class="docs-comments__loading">
-      <span class="i-carbon-circle-dash animate-spin text-base" />
+      <span class="i-ri-loader-4-line animate-spin text-base" />
       {{ t('docs.commentsLoading') }}
     </div>
     <div v-else-if="comments.length === 0" class="docs-comments__empty">

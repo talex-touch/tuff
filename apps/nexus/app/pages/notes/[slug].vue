@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { sanitizeMarkdownHtml } from '@talex-touch/utils/renderer'
+import { sanitizeMarkdownHtml } from '@talex-touch/utils/renderer/shared/markdown-sanitizer'
 import { $fetch as rawFetch } from 'ofetch'
 import { computed } from 'vue'
 

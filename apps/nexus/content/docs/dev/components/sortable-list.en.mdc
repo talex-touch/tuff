@@ -1,53 +1,144 @@
 ---
 title: "SortableList"
-description: "HTML5 drag-and-drop list reordering."
+description: "HTML5 drag-and-drop list reordering with stable IDs, optional handles, and reorder events."
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [sortable, drag-drop, list]
+syncStatus: reviewed
+verified: true
 ---
 # SortableList
 
-`TxSortableList` renders a list of items and emits a reordered array when the user drags one item onto another. Use `handle` when only a dedicated drag handle should start reordering.
+`TxSortableList` renders an ordered list and emits a reordered array when the user drags one item onto another. Use it for small to medium user-managed lists where native HTML5 Drag & Drop is acceptable.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const list = ref([
-  { id: 'one', title: 'One' },
-  { id: 'two', title: 'Two' },
-  { id: 'three', title: 'Three' },
-  { id: 'four', title: 'Four' },
-])
-</script>
+Reviewed against `packages/tuffex/packages/components/src/sortable-list/src/types.ts`, `TxSortableList.vue`, and `sortable-list.test.ts`.
 
 ## Basic Usage
 
-### SortableList
 :::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const list = ref([
+    { id: 'one', title: 'One' },
+    { id: 'two', title: 'Two' },
+    { id: 'three', title: 'Three' },
+  ])
+  </script>
+
   <template>
     <TxSortableList v-model="list">
-      <template #item="{ item }">
-        <div>{{ item.id }}</div>
+      <template #item="{ item, dragging }">
+        <div :class="['sortable-row', { 'sortable-row--dragging': dragging }]">
+          {{ item.title }}
+        </div>
       </template>
     </TxSortableList>
   </template>
 ---
 :::
 
+## Composition Examples
+
+### Drag Handle Mode
+
+When `handle=true`, drag must start from an element inside `[data-tx-sort-handle="true"]`.
+
+```vue
+<template>
+  <TxSortableList v-model="steps" handle @reorder="saveOrder">
+    <template #item="{ item }">
+      <div class="flex items-center gap-2 p-3">
+        <button type="button" data-tx-sort-handle="true" aria-label="Drag item">☰</button>
+        <span>{{ item.title }}</span>
+      </div>
+    </template>
+  </TxSortableList>
+</template>
+```
+
+### Persisting Reorder
+
+```vue
+<script setup lang="ts">
+const tasks = ref([{ id: 'draft' }, { id: 'review' }, { id: 'ship' }])
+
+async function persistOrder({ items }: { items: Array<{ id: string }> }) {
+  tasks.value = items
+  await api.saveTaskOrder(items.map(item => item.id))
+}
+</script>
+
+<template>
+  <TxSortableList v-model="tasks" @reorder="persistOrder" />
+</template>
+```
+
+## Interaction Contract
+
+- The root renders `role="list"`; each item renders `role="listitem"`.
+- Each item must have a stable string `id`; `id` is used for Vue keys and drag bookkeeping.
+- Items are draggable unless `disabled=true`. Disabled mode also blocks drag start, drag over, drop reordering, and emitted reorder events.
+- `handle=false` allows drag start from anywhere inside the item.
+- `handle=true` requires the drag event target or one of its ancestors to match `[data-tx-sort-handle="true"]`.
+- Drag start stores the item id in `dataTransfer`, uses an empty drag image, and marks the item as dragging.
+- Drag over marks the hovered item and calls `preventDefault()` only during an active drag.
+- Drop clears drag state, ignores missing ids and same-index drops, then emits `update:modelValue` and `reorder` with the reordered copy.
+- `dragend` always clears drag and hover state.
+- Reordering uses shallow array copies; item objects are preserved.
+
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `modelValue` | `SortableListItem[]` | - | Ordered list data. Every item must provide a stable `id`. |
-| `disabled` | `boolean` | `false` | Disables dragging and prevents reorder events. |
-| `handle` | `boolean` | `false` | Requires drag start targets to be inside `[data-tx-sort-handle="true"]`. |
+|------|------|---------|-------------|
+| `modelValue` | `SortableListItem[]` | required | Ordered list data. Every item must provide a stable string `id`. |
+| `disabled` | `boolean` | `false` | Disables drag interactions and reorder emits. |
+| `handle` | `boolean` | `false` | Requires drag start from `[data-tx-sort-handle="true"]`. |
+
+### SortableListItem
+
+| Field | Type | Description |
+|------|------|-------------|
+| `id` | `string` | Stable identity used for keys and drag state. Additional fields are preserved. |
 
 ### Events
 
-| Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(value: SortableListItem[])` | Emitted with the reordered item array after a valid drop. |
-| `reorder` | `({ from, to, items })` | Emitted with source index, target index, and reordered items. |
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `SortableListItem[]` | Emitted with the reordered array after a valid drop. |
+| `reorder` | `{ from: number, to: number, items: SortableListItem[] }` | Emitted after a valid reorder with source index, target index, and reordered items. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `item` | `{ item, dragging }` | Custom renderer for each item. Falls back to the item `id`. |
+
+## Best Practices
+
+- Use stable persisted ids; never use array indexes as ids for reorderable data.
+- Update the bound array from `v-model` and persist from `reorder` when server order matters.
+- Use `handle` for rows that contain buttons, links, inputs, or selectable text.
+- Keep list sizes modest. For very long lists, combine a different drag strategy with virtualization instead of rendering every row draggable.
+- Provide visible drag affordances in the item slot; the component does not inject a handle UI.
+- Do not use this component for keyboard-only sortable flows without adding a separate accessible reorder control.
+
+## Review Notes
+
+- **Accessibility note:** The component exposes list/listitem semantics but native drag-and-drop is pointer-centric. Provide a separate keyboard-accessible reorder flow for settings screens, command palettes, or enterprise forms where keyboard-only use is required.
+- **Data note:** Reorder emits a shallow copied array and preserves item object references. Persist by stable `id`, not by index or object identity.
+- **Verified coverage:** `sortable-list.test.ts` checks list semantics, slot props, fallback item ids, reorder emits, same-item drop suppression, disabled blocking, handle-only drag start, and dragend state cleanup.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/sortable-list/src/TxSortableList.vue`.
+- Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` exports `SortableListItem`, `SortableListProps`, and `SortableListEmits`.
+- Export alias: `packages/tuffex/packages/components/src/sortable-list/index.ts` exports `SortableList`, `TxSortableList`, sortable types, and `TxSortableListInstance`.
+- Coverage: `packages/tuffex/packages/components/src/sortable-list/__tests__/sortable-list.test.ts` verifies drag state, handle mode, events, slots, and disabled behavior.
+
+<TuffDocSourceLink />

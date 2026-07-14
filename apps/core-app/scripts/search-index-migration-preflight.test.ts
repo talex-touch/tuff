@@ -55,12 +55,13 @@ describe('search index migration preflight cli', () => {
       expect(fileReport.destructiveActions).toBe(false)
       expect(fileReport.migrationDryRun.destructiveActions).toBe(false)
       expect(fileReport.migrationDryRun.mode).toBe('read-only')
-      expect(fileReport.evidenceSource).toEqual({
+      expect(fileReport.evidenceSource).toMatchObject({
         scope: 'isolated-controlled',
         detection: 'auto',
         dbPathClass: 'temporary',
         realProfileRequired: false
       })
+      expect(fileReport.evidenceSource.dbIdentity).toMatch(/^sha256-realpath-v1:[a-f0-9]{64}$/)
       expect(fileReport.migrationReadiness.scanProgressSourceScope).toBe('needs-migration')
       expect(fileReport.snapshot.sqliteRuntime).toMatchObject({
         journalMode: expect.any(String),

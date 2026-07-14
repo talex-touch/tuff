@@ -1,210 +1,220 @@
 ---
 title: Avatar 头像
-description: 用户头像与身份标识
+description: 用户头像、身份 fallback、状态点、自定义形状和叠放头像组。
 category: Basic
 status: beta
 since: 1.0.0
 tags: [avatar, identity, profile]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
-
 # Avatar 头像
 
-Avatar 头像组件用于展示用户头像、品牌标识或其他圆形内容，支持图片、文字（slot / name）、图标等多种展示方式。
+`TxAvatar` 用于展示用户图片、品牌标识、名称首字母 fallback、图标 fallback 或自定义插槽内容。`TxAvatarGroup` 会叠放头像子节点，在需要时注入统一尺寸，并在 `max` 隐藏额外成员时渲染 `+N` 溢出头像。
+
+已人工核对 `packages/tuffex/packages/components/src/avatar/src/types.ts`、`TxAvatar.vue`、`TxAvatarGroup.vue` 与 `avatar.test.ts`。
 
 ## 基础用法
 
 ### Avatar
 
-图片、名称、图标与默认内容。
-
-::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar name="Talex DreamSoul" />
+    <div class="tuff-demo-row">
+      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" alt="GitHub user" />
+      <TxAvatar name="Talex 梦魂" />
       <TxAvatar icon="user" />
-      <TxAvatar>U</TxAvatar>
-    </div>
-  </template>
----
-::
-
-## 头像尺寸
-
-提供 small/medium/large/xlarge 四种预设尺寸。
-
-::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxAvatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
-    </div>
-  </template>
----
-::
-
-## 文字头像
-
-使用文字作为头像内容。
-
-::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
       <TxAvatar>张</TxAvatar>
-      <TxAvatar>AB</TxAvatar>
-      <TxAvatar>User</TxAvatar>
     </div>
   </template>
 ---
-::
+:::
 
-## 图标头像
+### 头像尺寸
 
-使用图标作为头像内容。
-
-::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
+    <div class="tuff-demo-row">
+      <TxAvatar size="small" name="Small" />
+      <TxAvatar size="medium" name="Medium" />
+      <TxAvatar size="large" name="Large" />
+      <TxAvatar size="xlarge" name="Extra Large" />
+      <TxAvatar :size="56" name="Custom Size" />
+    </div>
+  </template>
+---
+:::
+
+### 文字头像
+
+:::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="tuff-demo-row">
+      <TxAvatar>张</TxAvatar>
+      <TxAvatar>阿博</TxAvatar>
+      <TxAvatar>用户</TxAvatar>
+    </div>
+  </template>
+---
+:::
+
+### 图标头像
+
+:::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="tuff-demo-row">
       <TxAvatar icon="user" />
       <TxAvatar icon="team" />
     </div>
   </template>
 ---
-::
+:::
 
-## 头像组
+### 头像组
 
-叠放头像并限制最大数量。
-
-::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxAvatarGroup :max="3" size="small" :overlap="10">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/2?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/3?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
-      <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+      <TxAvatar name="Talex 梦魂" />
+      <TxAvatar name="Alex Lee" />
+      <TxAvatar name="Mira Chen" />
+      <TxAvatar name="Noah Park" />
+      <TxAvatar name="Lina Song" />
     </TxAvatarGroup>
   </template>
 ---
-::
+:::
 
-## 状态
+### 状态
 
-展示在线状态角标。
-
-::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <TxAvatar status="online" name="Online" />
-      <TxAvatar status="offline" name="Offline" />
-      <TxAvatar status="busy" name="Busy" />
-      <TxAvatar status="away" name="Away" />
+    <div class="tuff-demo-row">
+      <TxAvatar status="online" name="在线" />
+      <TxAvatar status="offline" name="离线" />
+      <TxAvatar status="busy" name="忙碌" />
+      <TxAvatar status="away" name="离开" />
     </div>
   </template>
 ---
-::
+:::
 
-## 可点击头像
+## 交互契约
 
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxAvatar
-      name="Click"
-      clickable
-      @click="handleAvatarClick"
-    />
-  </template>
----
-::
+- fallback 优先级是图片、默认插槽、`icon`、`name` 首字母、默认 `user` 图标。
+- 图片加载失败后会进入同一套非图片 fallback 链路。
+- 首字母取第一个单词首字符；存在多个单词时，再取最后一个单词首字符。
+- `size` 支持预设尺寸、正数、正数数字字符串和正数 px 字符串。非法自定义尺寸会回退到预设样式。
+- 自定义数字尺寸会设置头像尺寸、字体尺寸、状态点尺寸和状态点边框宽度 CSS 变量。
+- 设置 `backgroundColor` 时也会设置 `textColor`；未传 `textColor` 时回退为白色。
+- 只有 `clickable=true` 时才会发出 `click`。
+- `TxAvatarGroup` 会保留子节点 props，只给没有自定义 size 的子头像注入 group `size`，并在 `max` 小于子节点数量时渲染 `+N`。
 
-## 契约说明
+## API
 
-Avatar fallback 优先级为图片、默认插槽、icon、name 首字母、默认 user 图标。图片加载失败后会进入同一套非图片 fallback 链路。`size` 支持预设、数字、数字字符串和 px 字符串。`TxAvatarGroup` 只会给未显式设置 size 的子头像注入统一尺寸，并在 `max` 隐藏额外头像时渲染 `+N`。
+### Props
 
-## API 参考
+#### TxAvatar
 
-### Avatar Props
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `src` | `string` | - | 头像图片地址。 |
+| `alt` | `string` | - | 图片替代文本。`src` 表示真实用户或账号图片时应提供。 |
+| `name` | `string` | - | 用于生成首字母 fallback 的名称。 |
+| `icon` | `string` | - | 传给 `TxIcon` 的图标名。 |
+| `size` | `'small' \| 'medium' \| 'large' \| 'xlarge' \| number \| \`${number}\` \| \`${number}px\`` | `'medium'` | 预设或自定义头像尺寸。合法自定义数字和 px 字符串会写入运行时尺寸变量。 |
+| `status` | `'online' \| 'offline' \| 'busy' \| 'away'` | - | 渲染在角落的状态点。 |
+| `shape` | `'circle' \| 'square' \| 'rounded'` | `'circle'` | 头像形状 class。 |
+| `clickable` | `boolean` | `false` | 启用可点击样式，并允许发出 `click` 事件。 |
+| `backgroundColor` | `string` | - | 自定义 fallback 背景色；写入 `--tx-avatar-bg`。 |
+| `textColor` | `string` | 设置 `backgroundColor` 时默认为 `'#ffffff'` | 自定义 fallback 文本颜色；只在设置 `backgroundColor` 时写入 `--tx-avatar-text`。 |
 
-::TuffPropsTable
----
-rows:
-  - name: src
-    description: '头像图片地址'
-    type: 'string'
-    default: '-'
-  - name: alt
-    description: '图片替代文本'
-    type: 'string'
-    default: '-'
-  - name: name
-    description: '名称（用于生成首字母 fallback）'
-    type: 'string'
-    default: '-'
-  - name: icon
-    description: 'icon 名称（基于 TxIcon）'
-    type: 'string'
-    default: '-'
-  - name: size
-    description: '头像尺寸'
-    type: "'small' | 'medium' | 'large' | 'xlarge' | number | `${number}` | `${number}px`"
-    default: "'medium'"
-  - name: status
-    description: '状态'
-    type: "'online' | 'offline' | 'busy' | 'away'"
-    default: '-'
-  - name: clickable
-    description: '是否可点击'
-    type: 'boolean'
-    default: 'false'
-  - name: backgroundColor
-    description: '自定义背景色'
-    type: 'string'
-    default: '-'
-  - name: textColor
-    description: '自定义文字色'
-    type: 'string'
-    default: '-'
----
-::
+#### TxAvatarGroup
 
-### Avatar Events
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `max` | `number` | 子节点数量 | 渲染 `+N` 溢出头像前最多显示的子头像数；小于 0 时按 0 处理。 |
+| `size` | `AvatarSize` | - | 注入到未自定义 size 的子头像。 |
+| `overlap` | `number \| string` | `8` | 头像重叠距离；数字会转为 px，并作为负 margin 应用在头像之间。 |
 
-::TuffPropsTable
----
-rows:
-  - name: click
-    description: '点击头像时触发（仅 clickable=true）'
-    type: '() => void'
-    default: '-'
----
-::
+### Events
 
-### Avatar Slots
+#### TxAvatar
 
-::TuffPropsTable
----
-rows:
-  - name: default
-    description: '自定义头像内容（优先级高于 icon/name）'
-    type: '-'
-    default: '-'
----
-::
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `click` | - | `clickable=true` 且点击根元素时触发。 |
+
+#### TxAvatarGroup
+
+不发出公开事件。
+
+### Slots
+
+#### TxAvatar
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | - | 自定义 fallback 内容，优先级高于 `icon` 和 `name`。 |
+
+#### TxAvatarGroup
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | - | `TxAvatar` 子节点或兼容头像 VNode。 |
+
+### Exposed Methods
+
+不暴露公开实例方法。
+
+## 样式定制
+
+| 变量 | 写入方 | 用途 |
+|------|--------|------|
+| `--tx-avatar-size` | 自定义 `size` | 头像宽高。 |
+| `--tx-avatar-font-size` | 自定义 `size` | fallback 文本和图标字号。 |
+| `--tx-avatar-status-size` | 自定义 `size` | 状态点直径。 |
+| `--tx-avatar-status-border` | 自定义 `size` | 状态点边框宽度。 |
+| `--tx-avatar-bg` | `backgroundColor` | fallback 背景色。 |
+| `--tx-avatar-text` | 搭配 `backgroundColor` 使用的 `textColor` | fallback 文本颜色。 |
+| `--tx-avatar-group-overlap` | `TxAvatarGroup.overlap` | 在 group 根节点暴露解析后的重叠距离。 |
+| `--tx-avatar-group-border` | 调用方 / 主题 | group 中头像项的边框颜色。 |
+
+预设内部还会使用 `--tx-avatar-size-preset`、`--tx-avatar-font-size-preset`、`--tx-avatar-status-size-preset` 和 `--tx-avatar-status-border-preset`；调用方应优先使用 `size` prop，而不是直接设置这些变量。
+
+## 最佳实践
+
+- 生成身份标识时优先传 `name`，不要手写固定首字母。
+- `src` 代表真实用户或账号图片时，总是提供有意义的 `alt`。
+- `status` 只表示在线/可用性；文本型系统状态使用 `TxStatusBadge`。
+- 不要把 `clickable` 作为主要操作入口；需要键盘可访问性和清晰操作语义时，头像旁边配合语义化 `TxButton`。
+- 头像组中优先让 group 注入统一 `size`，除非某个成员确实需要不同尺寸。
+
+## 审阅说明
+
+- 已人工核对 `packages/tuffex/packages/components/src/avatar/src/types.ts`、`TxAvatar.vue`、`TxAvatarGroup.vue` 与 `avatar.test.ts`。
+- API 标题已统一为共享的 `Props`、`Events`、`Slots`，再用子标题区分组件，方便自动覆盖检查和读者定位契约。
+- 已按源码确认图片 fallback 顺序、首字母生成、自定义 size 归一化、click gating、group `max` 溢出、group size 注入和 overlap CSS 变量。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts` 覆盖首字母/自定义颜色、图片错误 fallback、插槽优先级、自定义尺寸归一化、click gating 和头像组溢出。
+- 可访问性边界：组件会转发图片 `alt`，但根节点仍是非语义化 `div`；头像承担主要操作时应使用真实按钮或链接。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue`
+- Group source: `packages/tuffex/packages/components/src/avatar/src/TxAvatarGroup.vue`
+- Types: `packages/tuffex/packages/components/src/avatar/src/types.ts`
+- Tests: `packages/tuffex/packages/components/src/avatar/__tests__/avatar.test.ts`
+
+<TuffDocSourceLink />

@@ -1,54 +1,122 @@
 ---
 title: Badge
-description: Small status pill for counts and indicators
+description: Inline count, status, and dot indicators for compact UI surfaces.
 category: Feedback
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [badge, count, status]
+syncStatus: reviewed
+verified: true
 ---
 
 # Badge
 
-Compact count or status indicator.
+`TxBadge` renders a compact inline pill or dot indicator. It is intentionally not a target-wrapper badge; the default slot replaces the badge content instead of positioning the badge around another element.
+
+Reviewed against `packages/tuffex/packages/components/src/badge/src/types.ts`, `TxBadge.vue`, and `badge.test.ts`.
 
 ## Basic Usage
+
 ### Badge Variants
-Counts, labels, and dot indicators.
+
 :::TuffDemoWrapper{demo="BadgeBadgeVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxBadge :value="8" />
-    <TxBadge value="New" variant="primary" />
-    <TxBadge value="99+" variant="success" />
-    <TxBadge dot variant="error" />
+    <div class="tuff-demo-row">
+      <TxBadge :value="8" />
+      <TxBadge value="New" variant="primary" />
+      <TxBadge value="99+" variant="success" />
+      <TxBadge dot variant="error" />
+    </div>
   </template>
 ---
 :::
-## Contract
 
-`TxBadge` renders an inline pill or dot. The default slot replaces the badge content; it does not position the badge around a target element. Dot mode hides `value` text and renders only the visual dot.
+## Composition Examples
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: variant
-    type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
-    default: "'default'"
-    description: Color preset
-  - name: value
-    type: "string | number"
-    default: '0'
-    description: Badge content
-  - name: dot
-    type: boolean
-    default: 'false'
-    description: Dot mode
-  - name: color
-    type: string
-    default: '-'
-    description: Custom color
----
-:::
+### Custom Slot Content
+
+```vue
+<template>
+  <TxBadge variant="primary">
+    <strong>Beta</strong>
+  </TxBadge>
+</template>
+```
+
+### Custom Color
+
+```vue
+<template>
+  <TxBadge value="Internal" color="#111827" />
+</template>
+```
+
+### Dot Indicator
+
+```vue
+<template>
+  <TxFlex align="center" gap="8px">
+    <TxBadge dot variant="error" />
+    <span>Service degraded</span>
+  </TxFlex>
+</template>
+```
+
+## Interaction Contract
+
+- The root is an inline `span` with pill styling.
+- `variant` controls default CSS variables for background, text, and border colors.
+- `color` overrides the background via `--tx-badge-bg` and forces `--tx-badge-text: #ffffff`.
+- When `dot=true`, the component renders `.tx-badge__dot`, adds `tx-badge--dot`, and does not render `value` or default slot text.
+- When `dot=false`, the default slot takes priority over `value`.
+- `value` defaults to `0`, so an empty badge still renders `0` unless a slot or `dot` is used.
+- `TxBadge` has no click event, positioning logic, overflow truncation, or target anchoring behavior.
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `variant` | `'default' \| 'primary' \| 'success' \| 'warning' \| 'error'` | `'default'` | Color preset. |
+| `value` | `number \| string` | `0` | Badge text content when the default slot is not used and `dot=false`. |
+| `color` | `string` | - | Custom background color. Also sets text color to white. |
+| `dot` | `boolean` | `false` | Render a compact dot and hide text content. |
+
+### Events
+
+`TxBadge` does not emit component events. Attach interactions to surrounding controls when a badge needs to behave like a filter or notification target.
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Custom pill content. Ignored when `dot=true`. |
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-badge-bg` | `variant` / `color` | Badge background. |
+| `--tx-badge-text` | `variant` / `color` | Badge text color. |
+| `--tx-badge-border` | `variant` | Badge border color. |
+
+## Best Practices
+
+- Use `TxBadge` for counts and small state hints. Use `TxStatusBadge` when the label needs a status icon or permission mapping.
+- Keep badge text short; `white-space: nowrap` prevents wrapping.
+- For target-corner notification badges, position `TxBadge` in the host component. `TxBadge` does not anchor itself.
+- Do not rely on dot color alone for critical states; pair dot indicators with adjacent text.
+- Prefer variants for semantic states and reserve `color` for brand or custom taxonomy labels.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/badge/src/TxBadge.vue` confirms inline span rendering, `variant` classes, custom color CSS variables, dot mode, and default-slot precedence over `value`.
+- Type contracts: `packages/tuffex/packages/components/src/badge/src/types.ts` defines `BadgeVariant` and `BadgeProps`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/badge/__tests__/badge.test.ts` covers value rendering, slot content, dot mode, and custom color variables.
+- Export: `packages/tuffex/packages/components/src/badge/index.ts` wraps the component with `withInstall` and exports `TxBadgeInstance`.
 
 ## Source
 <TuffDocSourceLink />

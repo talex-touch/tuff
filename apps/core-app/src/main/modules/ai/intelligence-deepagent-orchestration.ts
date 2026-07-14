@@ -1,10 +1,14 @@
+import { randomUUID } from 'node:crypto'
 import type {
   AdaptedStructuredTool,
   DesktopContextSnapshot,
   IntelligenceAgentPayload,
   IntelligenceAgentResult,
+  IntelligenceChatPayload,
+  IntelligenceMessage,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligenceUsageInfo,
   WorkflowModelInputSource,
   PromptWorkflowExecution,
   ToolSource,
@@ -21,6 +25,7 @@ import {
   LangChainToolAdapter
 } from '@talex-touch/tuff-intelligence'
 import { AgentPermission } from '@talex-touch/utils'
+import { createIntelligenceContextExecutionRequest } from '@talex-touch/utils/intelligence'
 import { toolRegistry } from './agents/tool-registry'
 import { intelligenceDesktopContextService } from './intelligence-desktop-context'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
@@ -56,10 +61,16 @@ class WorkflowApprovalRequiredError extends Error {
   }
 }
 
+interface WorkflowContextSessionState {
+  initialized: boolean
+}
+
 interface DeepAgentExecutionContext {
   workflowId?: string
   workflowName?: string
   sessionId: string
+  contextSessionId: string
+  contextSessionState: WorkflowContextSessionState
   runId: string
   step: WorkflowRunStepRecord
   stepIndex: number
@@ -80,6 +91,50 @@ function now(): number {
 
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function normalizeIntelligenceUsage(value: unknown): IntelligenceUsageInfo | undefined {
+  const record = toRecord(value)
+  const promptTokens =
+    typeof record.promptTokens === 'number' && Number.isFinite(record.promptTokens)
+      ? Math.max(0, Math.floor(record.promptTokens))
+      : undefined
+  const completionTokens =
+    typeof record.completionTokens === 'number' && Number.isFinite(record.completionTokens)
+      ? Math.max(0, Math.floor(record.completionTokens))
+      : undefined
+  const totalTokens =
+    typeof record.totalTokens === 'number' && Number.isFinite(record.totalTokens)
+      ? Math.max(0, Math.floor(record.totalTokens))
+      : undefined
+  if (promptTokens === undefined && completionTokens === undefined && totalTokens === undefined) {
+    return undefined
+  }
+  const prompt = promptTokens ?? 0
+  const completion = completionTokens ?? 0
+  return {
+    promptTokens: prompt,
+    completionTokens: completion,
+    totalTokens: Math.max(totalTokens ?? prompt + completion, prompt + completion)
+  }
+}
+
+function aggregateWorkflowUsage(outputs: unknown): IntelligenceUsageInfo {
+  const aggregate: IntelligenceUsageInfo = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0
+  }
+  for (const output of Object.values(toRecord(outputs))) {
+    const usage = normalizeIntelligenceUsage(toRecord(output).usage)
+    if (!usage) {
+      continue
+    }
+    aggregate.promptTokens += usage.promptTokens
+    aggregate.completionTokens += usage.completionTokens
+    aggregate.totalTokens += usage.totalTokens
+  }
+  return aggregate
 }
 
 function stableStringify(value: unknown): string {
@@ -107,6 +162,38 @@ function stringifyForPrompt(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function isIntelligenceMessage(value: unknown): value is IntelligenceMessage {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  if (!('role' in value) || !('content' in value)) return false
+  return (
+    (value.role === 'system' || value.role === 'user' || value.role === 'assistant') &&
+    typeof value.content === 'string'
+  )
+}
+
+function hasIntelligenceMessages(
+  payload: Record<string, unknown>
+): payload is Record<string, unknown> & { messages: IntelligenceMessage[] } {
+  return Array.isArray(payload.messages) && payload.messages.every(isIntelligenceMessage)
+}
+
+function requireChatPayload(payload: Record<string, unknown>): IntelligenceChatPayload {
+  if (!hasIntelligenceMessages(payload)) {
+    throw new Error('[Intelligence] workflow text.chat payload requires valid messages')
+  }
+  return payload
+}
+
+function resolveChatPayloadInput(payload: IntelligenceChatPayload): string {
+  for (let index = payload.messages.length - 1; index >= 0; index -= 1) {
+    const message = payload.messages[index]
+    if (message.role === 'user' && message.content.trim()) {
+      return message.content.trim()
+    }
+  }
+  return ''
 }
 
 function readPath(source: unknown, path?: string): unknown {
@@ -333,6 +420,11 @@ async function getIntelligenceSdk() {
   return module.tuffIntelligence
 }
 
+async function getContextExecutionService() {
+  const module = await import('./intelligence-context-execution')
+  return module.intelligenceContextExecutionService
+}
+
 export class IntelligenceDeepAgentOrchestrationService {
   registerMcpProfiles(profiles: IntelligenceMcpProfile[]): void {
     intelligenceMcpRegistry.registerProfiles(profiles)
@@ -344,6 +436,8 @@ export class IntelligenceDeepAgentOrchestrationService {
       runId: ctx.run.id,
       prefix: 'workflow-session'
     })
+    const contextSessionId = `workflow-context.${ctx.run.id}`
+    const contextSessionState: WorkflowContextSessionState = { initialized: false }
 
     await tuffIntelligenceRuntime.startSession({
       sessionId,
@@ -376,7 +470,8 @@ export class IntelligenceDeepAgentOrchestrationService {
       metadata: {
         ...(ctx.run.metadata ?? {}),
         ...(ctx.metadata ?? {}),
-        sessionId
+        sessionId,
+        contextSessionId
       },
       outputs: {
         ...(ctx.run.outputs ?? {})
@@ -410,6 +505,8 @@ export class IntelligenceDeepAgentOrchestrationService {
             workflowId: ctx.workflow.id,
             workflowName: ctx.workflow.name,
             sessionId,
+            contextSessionId,
+            contextSessionState,
             runId: run.id,
             step,
             stepIndex: index,
@@ -475,10 +572,11 @@ export class IntelligenceDeepAgentOrchestrationService {
     runtimeOptions: IntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<PromptWorkflowExecution>> {
     const workflow = this.normalizeInlineWorkflowPayload(payload)
+    const runId = `inline_${Date.now()}_${randomUUID()}`
     const run = await this.executeWorkflowRun({
       workflow,
       run: {
-        id: `inline_${Date.now()}`,
+        id: runId,
         workflowId: workflow.id,
         workflowName: workflow.name,
         status: 'pending',
@@ -512,11 +610,7 @@ export class IntelligenceDeepAgentOrchestrationService {
 
     return {
       result: this.toPromptWorkflowExecution(run),
-      usage: {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0
-      },
+      usage: aggregateWorkflowUsage(run.outputs),
       model: 'deepagent-langchain',
       latency: Math.max(0, now() - run.startedAt),
       traceId: run.id,
@@ -572,6 +666,8 @@ export class IntelligenceDeepAgentOrchestrationService {
       prompt: this.buildAgentPrompt(payload, contextSnapshot),
       tools: await this.buildStructuredTools({
         sessionId,
+        contextSessionId: `agent-context.${sessionId}`,
+        contextSessionState: { initialized: false },
         runId: sessionId,
         step: {
           workflowStepId: 'agent.run',
@@ -613,11 +709,7 @@ export class IntelligenceDeepAgentOrchestrationService {
         toolCalls,
         iterations: 1
       },
-      usage: {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0
-      },
+      usage: result.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       model: result.model || 'deepagent-langchain',
       latency: result.durationMs,
       traceId: sessionId,
@@ -658,7 +750,9 @@ export class IntelligenceDeepAgentOrchestrationService {
       return {
         text: result.text,
         provider: result.provider,
-        model: result.model
+        model: result.model,
+        usage: result.usage,
+        latency: result.durationMs
       }
     }
 
@@ -672,7 +766,9 @@ export class IntelligenceDeepAgentOrchestrationService {
     return {
       text: result.text,
       provider: result.provider,
-      model: result.model
+      model: result.model,
+      usage: result.usage,
+      latency: result.durationMs
     }
   }
 
@@ -698,8 +794,7 @@ export class IntelligenceDeepAgentOrchestrationService {
       executionContext,
       state
     )
-    const intelligence = await getIntelligenceSdk()
-    const result = await intelligence.invoke(capabilityId, payload, {
+    const invokeOptions: IntelligenceInvokeOptions = {
       metadata: {
         ...(executionContext.metadata ?? {}),
         ...(toRecord(input.metadata) ?? {}),
@@ -720,7 +815,40 @@ export class IntelligenceDeepAgentOrchestrationService {
       preferredProviderId:
         typeof input.preferredProviderId === 'string' ? input.preferredProviderId : undefined,
       timeout: typeof input.timeout === 'number' ? input.timeout : undefined
-    })
+    }
+    let result: IntelligenceInvokeResult<unknown>
+    if (capabilityId === 'text.chat') {
+      const chatPayload = requireChatPayload(payload)
+      const contextExecutionService = await getContextExecutionService()
+      const contextMode = executionContext.contextSessionState.initialized ? 'continue' : 'new'
+      executionContext.contextSessionState.initialized = true
+      const execution = await contextExecutionService.invoke(
+        createIntelligenceContextExecutionRequest({
+          capabilityId,
+          input: resolveChatPayloadInput(chatPayload),
+          payload: chatPayload,
+          options: invokeOptions,
+          policy: {
+            entrypointId: 'workflow.use-model',
+            owner: 'workflow',
+            mode: contextMode,
+            sessionId: executionContext.contextSessionId,
+            scope: 'session',
+            objective: executionContext.workflowName || executionContext.workflowId,
+            traceId: `${executionContext.runId}:${
+              executionContext.step.workflowStepId || definitionStep.id
+            }`
+          }
+        }),
+        {
+          id: `workflow:${executionContext.workflowId}:${executionContext.runId}`,
+          type: 'host'
+        }
+      )
+      result = execution.invocation
+    } else {
+      result = await (await getIntelligenceSdk()).invoke(capabilityId, payload, invokeOptions)
+    }
 
     return {
       result: result.result,
@@ -1026,7 +1154,13 @@ export class IntelligenceDeepAgentOrchestrationService {
     sessionId: string
     prompt: string
     tools: AdaptedStructuredTool[]
-  }): Promise<{ text: string; provider?: string; model?: string; durationMs: number }> {
+  }): Promise<{
+    text: string
+    provider?: string
+    model?: string
+    usage?: IntelligenceUsageInfo
+    durationMs: number
+  }> {
     const intelligence = await getIntelligenceSdk()
     const config = await intelligence.resolveDeepAgentRuntimeConfig(options.capabilityId, {
       metadata: {
@@ -1066,16 +1200,13 @@ export class IntelligenceDeepAgentOrchestrationService {
 
     const record = toRecord(raw)
     const text = normalizeTextResult(record.text ?? record.content ?? raw)
+    const metadata = toRecord(record.metadata)
+    const usage = normalizeIntelligenceUsage(metadata.usage ?? record.usage)
     return {
       text,
-      provider:
-        typeof record.metadata === 'object'
-          ? String(toRecord(record.metadata).provider || '')
-          : undefined,
-      model:
-        typeof record.metadata === 'object'
-          ? String(toRecord(record.metadata).model || '')
-          : undefined,
+      provider: typeof metadata.provider === 'string' ? metadata.provider : undefined,
+      model: typeof metadata.model === 'string' ? metadata.model : undefined,
+      usage,
       durationMs: now() - startedAt
     }
   }

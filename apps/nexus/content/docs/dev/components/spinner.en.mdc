@@ -95,11 +95,30 @@ code: |
 ### Props
 
 | Prop | Type | Default | Description |
-|------|------|---------|------|
-| `size` | `number` | `16` | Spinner width and height in pixels. |
-| `strokeWidth` | `number` | `2` | Stroke width used by the ring and SVG fallback. |
-| `fallback` | `boolean` | `false` | Renders the SVG fallback spinner instead of the default animated shape. |
-| `visible` | `boolean` | `true` | Shows or hides the spinner with the built-in transition. |
+|------|------|---------|-------------|
+| `size` | `number` | `16` | Spinner width and height in pixels; written to `--tx-spinner-size`. |
+| `strokeWidth` | `number` | `2` | Stroke width used by the ring and SVG fallback; written to `--tx-spinner-stroke`. |
+| `fallback` | `boolean` | `false` | Renders the SVG fallback spinner instead of the default animated ball/ring shape. |
+| `visible` | `boolean` | `true` | Shows or hides the spinner with the built-in `tx-spinner-visibility` transition. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | No component-specific emits. Visibility is controlled by the `visible` prop. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| - | - | `TxSpinner` has no slots. Pair text outside the spinner for accessible status copy. |
+
+## Interaction Contract
+
+- When `visible=false`, the spinner is not rendered after the leave transition.
+- The visible root is an inline-flex `span` with `aria-busy="true"` and `aria-live="polite"`.
+- Default mode renders the animated ball/ring shape; `fallback=true` renders an SVG circle using the same `size` and `strokeWidth` props.
+- The component inherits text color from context through `currentColor`, so host components can tint it with normal CSS color.
 
 ## Dashboard Inline Waiting
 
@@ -115,10 +134,25 @@ code: |
     </span>
   </template>
 ---
-::
+:::
+
+## Best Practices
+
+- Use spinner for indeterminate waits only. Switch to `TxProgressBar` once progress is numeric or staged.
+- Keep inline spinner copy next to the icon; the spinner itself exposes busy state but no completion message.
+- Use `visible` when you want the built-in enter/leave transition; use `v-if` only when the host owns mount timing.
+- Use `fallback=true` only for constrained surfaces where the CSS ball animation is unsuitable.
 
 ## Review Notes
 
-- Source: `packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue` and `packages/tuffex/packages/components/src/spinner/src/types.ts`.
-- Screenshot: `.codex-screenshots/nexus-spinner-feedback-task-center-demo-playwright-2026-05-28.png`.
-- Recommendation: Spinner does not communicate completion; switch to `TxProgressBar` for numeric progress and `TxLoadingState` when the panel needs a complete recovery path.
+- **Accessibility note:** The visible root has `aria-busy="true"` and `aria-live="polite"`, but the spinner itself has no readable label or completion announcement. Pair it with adjacent status text for anything longer than a momentary inline wait.
+- **Verified coverage:** `spinner.test.ts` checks default accessibility attributes, default vs SVG fallback branches, CSS variable mapping for `size`/`strokeWidth`, and `visible=false` non-rendering.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue`.
+- Types: `packages/tuffex/packages/components/src/spinner/src/types.ts` exports `SpinnerProps`.
+- Export alias: `packages/tuffex/packages/components/src/spinner/index.ts` exports `Spinner`, `TxSpinner`, `SpinnerProps`, and `TxSpinnerInstance`.
+- Coverage: `packages/tuffex/packages/components/src/spinner/__tests__/spinner.test.ts` verifies rendering branches and prop-driven CSS variables.
+
+<TuffDocSourceLink />

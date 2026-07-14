@@ -2,6 +2,9 @@
 title: "SearchSelect 搜索选择器"
 description: "搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [search, select, form]
 syncStatus: reviewed
 verified: true
 ---
@@ -179,9 +182,39 @@ code: |
 ---
 :::
 
+### 插槽
+
+`TxSearchSelect` 不暴露公共插槽。输入框前缀、loading 后缀、空态和选项行都由组件内部控制，以保持键盘与 Popover 行为一致。
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `open()` | `() => void` | 未禁用时打开选项面板。 |
+| `close()` | `() => void` | 关闭选项面板。 |
+| `focus()` | `() => void` | 聚焦内部 `TxInput`。 |
+| `blur()` | `() => void` | 让内部 `TxInput` 失焦。 |
+| `clear()` | `() => void` | 调用内部输入框清空能力。 |
+
+## 最佳实践
+
+- 本地模式只放小型 `options`；大型远程数据源应使用 `remote`、`searchDebounce`，并由外部写回结果。
+- `label` 需要稳定且对用户可读，因为本地过滤只匹配 `option.label`。
+- 如果不是从受控选项列表中选择值，不要把自由关键词搜索塞进这里；请使用 `TxSearchInput`。
+- 禁用项只适合作为解释性条目；它们会展示但不可选择，不应成为唯一可用结果。
+
 ## 审阅说明
 
 - 源码：`packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`
 - 建议：本地小列表直接传 `options`；远程数据源使用 `remote` + `search` 事件，并由外部写回 `options`。
 - 交互：禁用项会展示但不可选择；清空会同步发出 `update:modelValue` 和 `change` 的空值。
 - 浮层：面板由 `TxPopover` 承载，使用 `panelBackground`、`panelShadow`、`panelRadius` 与页面表面层级对齐。
+
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`.
+- Types: `packages/tuffex/packages/components/src/search-select/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/search-select/__tests__/search-select.test.ts` 验证本地过滤并选择选项、防抖远程 search 事件，以及无匹配结果时的空态渲染。
+
+<TuffDocSourceLink />

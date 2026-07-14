@@ -2,6 +2,9 @@
 title: Pagination 分页
 description: 大数据列表的分页导航
 category: Data
+status: beta
+since: 1.0.0
+tags: [pagination, pages, navigation]
 syncStatus: reviewed
 verified: true
 ---
@@ -39,7 +42,8 @@ code: |
   </template>
 ---
 :::
-## API（Lite）
+## API
+### Props
 ::TuffPropsTable
 ---
 rows:
@@ -110,6 +114,15 @@ rows:
 - `showFirstLast` 会渲染首末页跳转按钮，边界页会禁用首/上一页或下一页/末页。
 - 当前页按钮带 `aria-current="page"`，上一页/下一页/首末页按钮带可读 `aria-label`。
 
+## 最佳实践
+
+- 优先使用 `total + pageSize`，让界面能展示数据总数；只有后端无法返回总数时才使用 `totalPages`。
+- `currentPage` 按 1 开始计数，初始化为 `1`，不要用 `0`。
+- 筛选条件或搜索词变化后，如果旧页码可能越界，应把 `currentPage` 重置为 `1`。
+- 分页控件应紧贴它控制的列表或表格。
+- 使用 `info` 插槽输出本地化范围文案，例如“正在查看第 21–40 条，共 120 条”。
+
+
 ## 后台数据运维面板
 
 分页建议紧贴表格底部，和当前筛选/选择状态共享同一组响应式数据；不要让分页脱离列表容器单独悬浮。
@@ -131,9 +144,10 @@ code: |
 
 ## 审阅说明
 
-- 源码：`packages/tuffex/packages/components/src/pagination/src/TxPagination.vue`
+- 组件源码:`packages/tuffex/packages/components/src/pagination/src/TxPagination.vue` 确认 total/pageSize 页数计算、省略号窗口生成、边界保护、首末页控制、info 插槽参数、`aria-current` 和可读分页按钮标签。
+- 类型契约:`packages/tuffex/packages/components/src/pagination/src/types.ts` 定义 `PaginationProps` 和 `PaginationEmits`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` 覆盖 total 计算页数、省略号渲染、当前页语义、越界导航抑制、首末页控制、边界禁用状态、自定义 info 插槽参数和正文列表样式隔离。
 - 建议：优先传 `total + pageSize`，只有后端只返回页数时再传 `totalPages`。
-- 可访问性：当前页使用 `aria-current="page"`；上一页、下一页、首末页按钮都带可读 `aria-label`。
 
 ## Source
 <TuffDocSourceLink />

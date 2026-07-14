@@ -34,6 +34,12 @@ const DEFAULT_OPTIONS: Required<Omit<Options, 'assets' | 'versionSync' | 'manife
   versionSync: undefined,
 }
 
+const GENERATED_PACKAGE_OUTPUT_DIRECTORIES = new Set(['out', 'build'])
+
+function isGeneratedPackageOutputEntry(entryName: string): boolean {
+  return GENERATED_PACKAGE_OUTPUT_DIRECTORIES.has(entryName) || entryName.toLowerCase().endsWith('.tpex')
+}
+
 /**
  * Resolve options with defaults
  */
@@ -254,11 +260,11 @@ export async function build(userOptions?: Options) {
   fs.rmSync(outDir, { recursive: true, force: true })
   fs.mkdirSync(outDir, { recursive: true })
 
-  // 移动 dist 下所有文件到 dist/out（排除 out 和 build 目录）
+  // Move source build output into dist/out without feeding prior package artifacts back into the next package.
   if (fs.existsSync(distPath)) {
     const distFiles = fs.readdirSync(distPath)
     for (const file of distFiles) {
-      if (file !== 'out' && file !== 'build') {
+      if (!isGeneratedPackageOutputEntry(file)) {
         const sourcePath = path.join(distPath, file)
         const destPath = path.join(outDir, file)
         fs.moveSync(sourcePath, destPath, { overwrite: true })

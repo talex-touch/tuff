@@ -1,11 +1,11 @@
-export type NetworkMethod =
-  | 'GET'
-  | 'POST'
-  | 'PUT'
-  | 'PATCH'
-  | 'DELETE'
-  | 'HEAD'
-  | 'OPTIONS'
+export type NetworkMethod
+  = | 'GET'
+    | 'POST'
+    | 'PUT'
+    | 'PATCH'
+    | 'DELETE'
+    | 'HEAD'
+    | 'OPTIONS'
 
 export type NetworkResponseType = 'json' | 'text' | 'arrayBuffer' | 'stream'
 
@@ -53,6 +53,8 @@ export interface NetworkRequestOptions<TBody = unknown> {
   skipCooldownCheck?: boolean
   proxyOverride?: NetworkProxyConfig
   responseType?: NetworkResponseType
+  /** Parse and retain non-success response data on NetworkHttpStatusError. Defaults to false. */
+  captureErrorResponseData?: boolean
   validateStatus?: number[]
 }
 

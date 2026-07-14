@@ -1,0 +1,95 @@
+{
+  "ok": true,
+  "checkedAt": "2026-07-13T23:23:41.594Z",
+  "surface": "corebox-ai-command-editor",
+  "app": {
+    "version": "2.4.13-beta.4",
+    "artifact": "apps/core-app/dist/mac-arm64/tuff.app",
+    "buildShape": "electron-vite build + electron-builder --dir",
+    "buildIdentifier": "17dbaf3",
+    "platform": "darwin-arm64",
+    "officialPluginSeed": "touch-intelligence@1.2.0"
+  },
+  "runtime": {
+    "browserHarness": "Chromium CDP attached to packaged Electron",
+    "isolatedUserData": "/tmp/tuff-ai-command-preset-20260713-v5",
+    "pluginVersion": "1.2.0",
+    "packagedSeedMatchesInstalledRuntime": true,
+    "rootResultsPermissionGranted": true,
+    "rootSearchProviderEnabled": false,
+    "featureSearchWarmupObserved": true,
+    "coreBoxShownViaShortcut": "CommandOrControl+E",
+    "providerInvoked": false
+  },
+  "editor": {
+    "query": "ai commands",
+    "ready": true,
+    "readyText": "注册表已就绪",
+    "actions": ["重新加载", "打开目录", "导入", "导出", "新建", "保存命令"],
+    "allRequiredActionsEnabled": true,
+    "initialMissingRegistryCreated": true,
+    "starterPresets": ["修正语法与拼写", "专业语气", "友好语气", "代码审查"],
+    "selectedPreset": {
+      "id": "professional-tone",
+      "name": "专业语气",
+      "aliases": ["professional", "专业语气"],
+      "promptTemplate": "Rewrite the user input in a {{tone}} professional tone for {{audience}}. Preserve its meaning and return only the rewritten text.",
+      "promptVariables": {
+        "tone": "clear and concise",
+        "audience": "workplace readers"
+      },
+      "version": "1.0.0"
+    },
+    "promptPreview": {
+      "variableCount": 2,
+      "resolved": "Rewrite the user input in a clear and concise professional tone for workplace readers. Preserve its meaning and return only the rewritten text.",
+      "allVariablesResolved": true
+    },
+    "saveApplied": true,
+    "saveMessage": "命令已保存并生效。",
+    "persistedDocument": {
+      "version": 1,
+      "commandCount": 1
+    }
+  },
+  "dynamicFeature": {
+    "exactAliasQuery": "professional",
+    "resultTitle": "专业语气",
+    "resultSubtitle": "Intelligence Custom Professional Tone",
+    "resultDescription": "将文本改写为清晰、克制的职场表达。",
+    "registeredWithoutReloadOrRestart": true,
+    "widgetOpened": true,
+    "resultViewport": { "width": 720, "height": 190 },
+    "widgetViewport": { "width": 720, "height": 600 },
+    "dynamicFeatureIconResolved": true,
+    "rendererFeatureId": "intelligence-ask",
+    "widgetSignals": [
+      "Start a conversation",
+      "AI 命令",
+      "无历史",
+      "text.chat",
+      "自动路由"
+    ],
+    "providerInvoked": false
+  },
+  "fixesValidatedByCapture": [
+    "A missing ai-commands.json is initialized as an editable empty registry instead of an invalid config.",
+    "Prompt-variable byte validation does not depend on Buffer inside the plugin VM sandbox.",
+    "Active feature items remain writable when the plugin root-search provider is disabled, while root-scoped boxItems remain gated.",
+    "Dynamically registered feature file icons resolve through the packaged plugin root before search rendering.",
+    "Starter presets create editable drafts and the System Prompt preview resolves every declared variable deterministically.",
+    "A saved custom command appears immediately as a CoreBox dynamic feature.",
+    "A dynamic custom command reuses the packaged intelligence-ask renderer and opens its no-history AI Command widget."
+  ],
+  "artifacts": [
+    "docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-command-editor-2026-07-13.png",
+    "docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-command-preset-preview-2026-07-13.png",
+    "docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-command-dynamic-feature-2026-07-13.png",
+    "docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-command-dynamic-widget-2026-07-13.png",
+    "docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/packaged-ai-command-editor-2026-07-13-probe.json"
+  ],
+  "scope": {
+    "closes": "Current-version packaged evidence for starter presets, deterministic prompt preview, save, dynamic CoreBox registration, and shared-renderer widget activation.",
+    "doesNotClose": "The 13-surface global --requireCurrentVersion gate or a real provider invocation."
+  }
+}

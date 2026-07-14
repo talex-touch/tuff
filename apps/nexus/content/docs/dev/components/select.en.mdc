@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [select, form, dropdown]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 # Select
@@ -387,6 +387,8 @@ code: |
 | `search` | `(query: string)` | Emitted in remote mode while the dropdown is open and editable text changes. |
 | `create` | `(option: TxSelectOption)` | Emitted when `allowCreate` creates an option from input. |
 
+## Slots
+
 ### TuffSelect Slots
 
 | Slot | Props | Description |
@@ -417,6 +419,22 @@ code: |
 | `focus()` | Focuses the trigger input. |
 | `blur()` | Blurs the trigger input. |
 | `clear()` | Clears the value and selected label; emits `''` in single mode and `[]` in multiple mode. |
+
+## Best Practices
+
+- Prefer `options` for data-driven lists and `TuffSelectItem` for small static templates that need custom inline markup.
+- Do not mix `options` and slot items for the same option set; `options` mode owns rendering while slot items only register when no prop options exist.
+- Keep remote search requests in the host and use `searchDebounce` to limit request volume.
+- Persist `create` results into your own options store before relying on the created value appearing in future dropdown opens.
+- Keep `modelValue` type aligned with `multiple`; use a scalar in single mode and an array in multiple mode.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/select/src/TxSelect.vue` confirms Popover-backed rendering, prop/slot option registration, single and multiple value paths, local and remote search, creation, grouped options, loading/empty/footer slots, exposed methods, and selected-label synchronization.
+- Item source: `packages/tuffex/packages/components/src/select/src/TxSelectItem.vue` confirms injected registration, slot-text label fallback, local filtering visibility, and disabled click suppression.
+- Type contracts: `packages/tuffex/packages/components/src/select/src/types.ts` defines `TxSelectValue`, model value shapes, option/group structures, prop contracts, context, and `SELECT_KEY`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/select/__tests__/select.test.ts` covers enabled/disabled selection, local filtering, remote search, selected-label resolution, numeric string matching, loading/empty states, multiple tags, creation, grouped options, footer slot, and status classes.
+- Export: `packages/tuffex/packages/components/src/select/index.ts` exports `TuffSelect`, `TuffSelectItem`, `TxSelect`, `TxSelectItem`, public types, context key, and instances.
 
 ## Source
 <TuffDocSourceLink />

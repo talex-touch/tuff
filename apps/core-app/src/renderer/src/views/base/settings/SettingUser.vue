@@ -1,6 +1,7 @@
 <script setup lang="ts" name="SettingUser">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxModal as TModal } from '@talex-touch/tuffex/modal'
+import { formatCompactAccountLabel } from '@talex-touch/utils/account'
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { isDevEnv } from '@talex-touch/utils/env'
@@ -80,6 +81,7 @@ function ensureAuthSettings() {
 ensureSecuritySettings()
 ensureAuthSettings()
 
+
 const syncEnabled = computed({
   get: () => getSyncPreferenceState().enabled,
   set: (val: boolean) => {
@@ -96,15 +98,19 @@ const syncEnabled = computed({
 const syncToggleDescription = computed(() => {
   const sync = getSyncPreferenceState()
   if (syncEnabled.value) {
-    return sync.autoEnabledAt ? '登录后默认启用，可在此关闭。' : '同步已开启。'
+    return sync.autoEnabledAt
+      ? t('settingUser.syncDescriptions.autoEnabled')
+      : t('settingUser.syncDescriptions.enabled')
   }
-  return sync.userOverridden ? '你已手动关闭，同步不会在登录时自动恢复。' : '同步已关闭。'
+  return sync.userOverridden
+    ? t('settingUser.syncDescriptions.userDisabled')
+    : t('settingUser.syncDescriptions.disabled')
 })
 
 function formatIsoTime(value: string): string {
   const normalized = value.trim()
   if (!normalized) {
-    return '未记录'
+    return t('settingUser.syncStatus.unrecorded')
   }
   const timestamp = Date.parse(normalized)
   if (!Number.isFinite(timestamp)) {
@@ -116,10 +122,10 @@ function formatIsoTime(value: string): string {
 const syncRuntimeDescription = computed(() => {
   const sync = getSyncPreferenceState()
   const statusTextMap: Record<string, string> = {
-    idle: '空闲',
-    syncing: '同步中',
-    paused: '已暂停',
-    error: '异常'
+    idle: t('settingUser.syncStatus.status.idle'),
+    syncing: t('settingUser.syncStatus.status.syncing'),
+    paused: t('settingUser.syncStatus.status.paused'),
+    error: t('settingUser.syncStatus.status.error')
   }
   const statusText = statusTextMap[sync.status] ?? sync.status
   const lastSuccess = formatIsoTime(sync.lastSuccessAt ?? '')
@@ -128,23 +134,23 @@ const syncRuntimeDescription = computed(() => {
   const lastPull = formatIsoTime(sync.lastPullAt ?? '')
   const errorCode = (sync.lastErrorCode ?? '').trim()
   const blockedTextMap: Record<string, string> = {
-    quota: '配额受限',
-    device: '设备未授权',
-    auth: '鉴权异常'
+    quota: t('settingUser.syncStatus.blocked.quota'),
+    device: t('settingUser.syncStatus.blocked.device'),
+    auth: t('settingUser.syncStatus.blocked.auth')
   }
   const blockedText = blockedTextMap[sync.blockedReason] ?? ''
   const parts = [
-    `状态：${statusText}`,
-    `最近成功：${lastSuccess}`,
-    `最近推送：${lastPush}`,
-    `最近拉取：${lastPull}`,
-    `队列：${queueDepth}`
+    t('settingUser.syncStatus.parts.status', { status: statusText }),
+    t('settingUser.syncStatus.parts.lastSuccess', { value: lastSuccess }),
+    t('settingUser.syncStatus.parts.lastPush', { value: lastPush }),
+    t('settingUser.syncStatus.parts.lastPull', { value: lastPull }),
+    t('settingUser.syncStatus.parts.queue', { count: queueDepth })
   ]
   if (blockedText) {
-    parts.push(`阻塞：${blockedText}`)
+    parts.push(t('settingUser.syncStatus.parts.blocked', { reason: blockedText }))
   }
   if (errorCode) {
-    parts.push(`错误：${errorCode}`)
+    parts.push(t('settingUser.syncStatus.parts.error', { code: errorCode }))
   }
   return parts.join(' · ')
 })
@@ -157,36 +163,32 @@ const secureStorageEnabled = computed({
     appSetting.auth.useSecureStorage = enabled
     appSetting.auth.secureStorageUserOverridden = true
     if (enabled) {
-      toast.success('已启用登录凭证持久保护')
+      toast.success(t('settingUser.secureStorage.enabledToast'))
       void refreshSecureStoreHealth()
       return
     }
-    toast.info('已切换为会话模式：登录凭证仅在本次运行有效')
+    toast.info(t('settingUser.secureStorage.disabledToast'))
   }
 })
 
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 const showRuntimeApiServer = computed(() => isDevEnv() && !isLoggedIn.value)
 
 const secureStorageDescription = computed(() => {
   if (!secureStorageEnabled.value) {
-    if (isLoggedIn.value) {
-      return '你已关闭凭证持久保护：当前为会话模式，重启后需要重新登录。'
-    }
-    return '你已关闭凭证持久保护：下次登录仅在本次会话有效。'
+    return t('settingUser.secureStorage.disabledDescription')
   }
 
   const health = secureStoreHealth.value
   if (!health) {
-    return '正在检测本地凭证保护后端。'
+    return t('settingUser.secureStorage.checkingDescription')
   }
   if (!health.available || appSetting.auth?.secureStorageUnavailable === true) {
-    return '本地安全上下文不可用，登录凭证仅在本次运行内保持。'
+    return t('settingUser.secureStorage.unavailableDescription')
   }
   if (health.backend === 'local-secret') {
-    return '本地加密保护已启用：凭证由本机 root 密钥加密保存，重启后仍可保持登录状态。'
+    return t('settingUser.secureStorage.enabledDescription')
   }
-  return '本地安全上下文不可用，登录凭证仅在本次运行内保持。'
+  return t('settingUser.secureStorage.unavailableDescription')
 })
 
 const canTriggerManualSync = computed(
@@ -324,7 +326,7 @@ async function handleSyncNow() {
     return
   }
   if (!syncEnabled.value) {
-    toast.info('请先开启同步')
+    toast.info(t('settingUser.syncEnableFirst'))
     return
   }
   if (syncSubmitting.value) {
@@ -334,10 +336,10 @@ async function handleSyncNow() {
   syncSubmitting.value = true
   try {
     await triggerManualSync('user')
-    toast.success('同步完成')
+    toast.success(t('settingUser.syncComplete'))
   } catch (error) {
-    const message = error instanceof Error ? error.message : '同步失败'
-    toast.error(message || '同步失败')
+    const message = error instanceof Error ? error.message : t('settingUser.syncFailed')
+    toast.error(message || t('settingUser.syncFailed'))
   } finally {
     syncSubmitting.value = false
   }
@@ -371,7 +373,7 @@ onMounted(() => {
   >
     <TuffBlockSlot
       v-if="isLoggedIn"
-      :title="displayName || t('settingUser.defaultName')"
+      :title="formatCompactAccountLabel(displayName) || t('settingUser.defaultName')"
       :description="displayEmail || t('settingUser.loggedIn')"
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
@@ -409,18 +411,17 @@ onMounted(() => {
     </TuffBlockSlot>
 
     <TuffBlockSwitch
-      v-if="isLoggedIn && showAdvancedSettings"
+      v-if="isLoggedIn"
       v-model="syncEnabled"
-      :title="t('settingUser.syncEnabledTitle', '默认同步')"
+      :title="t('settingUser.syncEnabledTitle')"
       :description="syncToggleDescription"
       default-icon="i-carbon-cloud-satellite-config"
       active-icon="i-carbon-cloud-satellite"
     />
 
     <TuffBlockSwitch
-      v-if="showAdvancedSettings"
       v-model="secureStorageEnabled"
-      :title="t('settingUser.secureStorageTitle', '登录凭证保护')"
+      :title="t('settingUser.secureStorageTitle')"
       :description="secureStorageDescription"
       default-icon="i-carbon-locked"
       active-icon="i-carbon-locked"
@@ -428,7 +429,7 @@ onMounted(() => {
 
     <TuffBlockSlot
       v-if="isLoggedIn"
-      :title="t('settingUser.syncStatusTitle', '同步状态')"
+      :title="t('settingUser.syncStatusTitle')"
       :description="syncRuntimeDescription"
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
@@ -441,7 +442,7 @@ onMounted(() => {
         :disabled="!canTriggerManualSync"
         @click.stop="handleSyncNow"
       >
-        {{ t('settingUser.syncNow', '立即同步') }}
+        {{ t('settingUser.syncNow') }}
       </TxButton>
     </TuffBlockSlot>
 
@@ -466,7 +467,7 @@ onMounted(() => {
     <TuffBlockSwitch
       v-if="showRuntimeApiServer"
       v-model="useLocalServer"
-      :title="t('settingUser.runtimeApiServer', '运行时 API 服务器')"
+      :title="t('settingUser.runtimeApiServer')"
       :description="runtimeServerDescription"
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"

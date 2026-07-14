@@ -1,21 +1,22 @@
 ---
 title: Collapse
-description: Expandable content panels
+description: Expandable content panels with controlled active names, accordion mode, semantic headers, and keyboard-friendly buttons.
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [collapse, disclosure, layout]
+syncStatus: reviewed
+verified: true
 ---
-
 # Collapse
 
-Expandable panels to group dense content.
+`TxCollapse` groups expandable panels and controls their active names through `v-model`. `TxCollapseItem` renders a semantic button header and an animated content region.
+
+Reviewed against `packages/tuffex/packages/components/src/collapse/src/types.ts`, `TxCollapse.vue`, `TxCollapseItem.vue`, and `collapse.test.ts`.
 
 ## Basic Usage
 
-### Accordion
-
-Toggle detail panels.
-
-::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -35,67 +36,112 @@ code: |
     </TxCollapse>
   </template>
 ---
-::
+::::
 
-## API (Lite)
-### TxCollapse Props
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: "string | string[]"
-    default: '[]'
-    description: Active panel name(s)
-  - name: accordion
-    type: boolean
-    default: 'false'
-    description: Single panel mode
----
-:::
+## Composition Examples
 
-### TxCollapse Events
-::TuffPropsTable
----
-rows:
-  - name: update:modelValue
-    type: "(value: string | string[]) => void"
-    default: '-'
-    description: v-model active panel update
-  - name: change
-    type: "(value: string | string[]) => void"
-    default: '-'
-    description: Active panel change
----
-:::
+### Accordion Mode
 
-### TxCollapseItem Props
-::TuffPropsTable
+::::TuffDemoWrapper{demo="CollapseAccordionDemo" code-lang="vue"}
 ---
-rows:
-  - name: title
-    type: string
-    default: '-'
-    description: Header text
-  - name: name
-    type: string
-    default: '-'
-    description: Unique panel identifier
-  - name: disabled
-    type: boolean
-    default: 'false'
-    description: Disable panel toggling
-  - name: arrowIcon
-    type: string
-    default: "'chevron-down'"
-    description: Toggle arrow icon
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('first')
+  </script>
+
+  <template>
+    <TxCollapse v-model="active" accordion>
+      <TxCollapseItem title="Getting Started" name="first">Starter content.</TxCollapseItem>
+      <TxCollapseItem title="Advanced" name="second">Advanced content.</TxCollapseItem>
+    </TxCollapse>
+  </template>
 ---
-:::
+::::
+
+### Custom Header Content
+
+```vue
+<template>
+  <TxCollapseItem name="security">
+    <template #title>
+      <span class="inline-flex items-center gap-2">
+        <TxIcon name="i-carbon-security" />
+        Security settings
+      </span>
+    </template>
+    Require passkeys for privileged operations.
+  </TxCollapseItem>
+</template>
+```
 
 ## Interaction Contract
 
-- Panel headers expose `role="button"`, `tabindex="0"`, `aria-expanded`, and `aria-controls`.
-- Click, Enter, and Space use the same toggle path.
-- `disabled` panels expose `aria-disabled="true"` and ignore pointer and keyboard toggles.
+- `TxCollapse` provides active state and click handling to items through Vue provide/inject.
+- `modelValue` accepts either a string or string array; internally it is normalized to `string[]`.
+- In normal mode, toggling panels emits an array of active names.
+- In accordion mode, toggling a different panel emits that panel name as a string.
+- In accordion mode, toggling the active panel closed emits `[]`.
+- `TxCollapseItem` uses `name`, falling back to `title`, then `''` as its identity.
+- Panel headers are native `button type="button"` controls with `aria-expanded` and `aria-controls`.
+- Disabled panel headers set native `disabled`, add the disabled class, and ignore toggles.
+- `arrowIcon` controls the leading `TxIcon`; the arrow rotates when active.
+- Content is kept in the DOM and hidden with `v-show`; transition classes animate height.
+- An item outside a `TxCollapse` can render, but its header click has no effect.
+
+## API
+
+### TxCollapse Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string \| string[]` | `undefined` | Active panel name(s). Arrays are used for multi-open mode. |
+| `accordion` | `boolean` | `false` | Enables single-panel mode. |
+
+### TxCollapse Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `string \| string[]` | Emitted after a panel toggles. |
+| `change` | `string \| string[]` | Same emitted value after a panel toggles. |
+
+### TxCollapseItem Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `undefined` | Header text when no `title` slot is provided. Also used as identity fallback. |
+| `name` | `string` | `undefined` | Unique panel identity. Prefer explicit names. |
+| `disabled` | `boolean` | `false` | Disables header toggling. |
+| `arrowIcon` | `string` | `'chevron-down'` | Leading icon name for the toggle arrow. |
+
+### Slots
+
+| Component | Slot | Props | Description |
+|-----------|------|-------|-------------|
+| `TxCollapse` | `default` | none | Collapse items. |
+| `TxCollapseItem` | `title` | none | Custom header content after the arrow icon. |
+| `TxCollapseItem` | `default` | none | Panel body content. |
+
+## Best Practices
+
+- Provide explicit stable `name` values. Falling back to `title` breaks when labels are localized or edited.
+- Use array `v-model` for normal mode and string `v-model` for accordion mode.
+- Do not place primary destructive actions inside the header; the whole header button toggles the panel.
+- Use disabled panels for unavailable sections, not for the currently active section.
+- Keep panel bodies reasonably short. If content is long, add structure inside the body instead of nesting many collapses.
+- Because content remains mounted with `v-show`, avoid putting expensive always-running work directly inside inactive panels.
+
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/collapse/src/types.ts`, `TxCollapse.vue`, `TxCollapseItem.vue`, and `collapse.test.ts`.
+- Existing tests cover native button semantics, `aria-expanded` / `aria-controls`, multi-panel array emits, accordion string emits, accordion close emits `[]`, and disabled item blocking.
+- Accessibility note: item headers are native buttons, not custom roles; keep header content short and descriptive, and place complex controls inside the panel body instead of inside the toggle header.
 
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/collapse/src/TxCollapse.vue` and `TxCollapseItem.vue`.
+- Types: `packages/tuffex/packages/components/src/collapse/src/types.ts` exports `CollapseProps`, `CollapseEmits`, `CollapseItemProps`, and `CollapseContext`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/collapse/__tests__/collapse.test.ts` verifies button semantics, ARIA state wiring, multi-open emits, accordion emits, and disabled item blocking.
 <TuffDocSourceLink />

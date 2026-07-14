@@ -13,9 +13,11 @@ describe('txCheckbox', () => {
 
     expect(wrapper.text()).toContain('Enable sync')
     expect(wrapper.classes()).toContain('is-checked')
+    expect(wrapper.element.tagName).toBe('BUTTON')
+    expect(wrapper.attributes('type')).toBe('button')
     expect(wrapper.attributes('role')).toBe('checkbox')
     expect(wrapper.attributes('aria-checked')).toBe('true')
-    expect(wrapper.attributes('tabindex')).toBe('0')
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
   })
 
   it('uses aria-label only when no visible label is present', () => {
@@ -77,7 +79,7 @@ describe('txCheckbox', () => {
     expect(wrapper.find('svg .tx-checkbox__tick').exists()).toBe(true)
   })
 
-  it('emits v-model and change events on click and keyboard toggle', async () => {
+  it('emits v-model and change events on click', async () => {
     const wrapper = mount(TxCheckbox, {
       props: {
         modelValue: false,
@@ -88,14 +90,6 @@ describe('txCheckbox', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([true])
     expect(wrapper.emitted('change')?.[0]).toEqual([true])
 
-    await wrapper.setProps({ modelValue: true })
-    await wrapper.trigger('keydown', { key: 'Enter' })
-
-    await wrapper.setProps({ modelValue: false })
-    await wrapper.trigger('keydown', { key: ' ' })
-
-    expect(wrapper.emitted('update:modelValue')).toEqual([[true], [false], [true]])
-    expect(wrapper.emitted('change')).toEqual([[true], [false], [true]])
   })
 
   it('does not emit events when disabled', async () => {
@@ -107,12 +101,12 @@ describe('txCheckbox', () => {
     })
 
     await wrapper.trigger('click')
-    await wrapper.trigger('keydown', { key: 'Enter' })
-    await wrapper.trigger('keydown', { key: ' ' })
 
+    expect(wrapper.element.tagName).toBe('BUTTON')
+    expect(wrapper.attributes('disabled')).toBeDefined()
     expect(wrapper.classes()).toContain('is-disabled')
     expect(wrapper.attributes('aria-disabled')).toBe('true')
-    expect(wrapper.attributes('tabindex')).toBe('-1')
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(wrapper.emitted('change')).toBeUndefined()
   })

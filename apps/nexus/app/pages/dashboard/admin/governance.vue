@@ -16,13 +16,6 @@ import type {
 import { createGovernanceFormatters } from '~/utils/admin-governance'
 import { requestJson } from '~/utils/request'
 
-definePageMeta({
-  pageTransition: {
-    name: 'fade',
-    mode: 'out-in',
-  },
-})
-
 defineI18nRoute(false)
 
 const { t, te, locale } = useI18n()

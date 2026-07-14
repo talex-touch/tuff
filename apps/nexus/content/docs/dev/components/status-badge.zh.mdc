@@ -1,6 +1,6 @@
 ---
 title: StatusBadge 状态徽标
-description: 状态标识与系统反馈
+description: 状态信号与平台感知的系统反馈徽标。
 category: Feedback
 status: beta
 since: 1.0.0
@@ -8,35 +8,35 @@ tags: [badge, status, signal]
 syncStatus: reviewed
 verified: true
 ---
-
 # StatusBadge 状态徽标
 
-> 用于状态指示与系统反馈的轻量徽标。  
-> **状态**：Beta
+`TxStatusBadge` 渲染紧凑状态文本、状态色图标、可选平台图标，并为权限或后端状态枚举提供标准化 `statusKey` 映射。
 
+已人工核对 `packages/tuffex/packages/components/src/status-badge/src/types.ts`、`TxStatusBadge.vue` 与 `status-badge.test.ts`。
 
 ## Demo
-### Status Signals
 
-成功/警告/错误/信息。
+### 状态信号
 
-::TuffDemoWrapper{demo="StatusBadgeSignalsDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="StatusBadgeSignalsDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxStatusBadge text="成功" status="success" />
-    <TxStatusBadge text="警告" status="warning" />
-    <TxStatusBadge text="错误" status="danger" />
-    <TxStatusBadge text="信息" status="info" />
+    <div class="tuff-demo-row">
+      <TxStatusBadge text="成功" status="success" />
+      <TxStatusBadge text="警告" status="warning" />
+      <TxStatusBadge text="错误" status="danger" />
+      <TxStatusBadge text="信息" status="info" />
+    </div>
   </template>
 ---
-::
+:::
 
 ### 后台运营状态
 
-在 Dashboard 首屏中，`TxStatusBadge` 通常与 `TxStatCard`、`TxProgressBar`、`TuffSwitch` 一起呈现发布、构建与同步状态。
+在 Dashboard 首屏中，`TxStatusBadge` 通常与 `TxStatCard`、`TxProgressBar` 和开关一起呈现发布、构建与同步状态。
 
-::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="已通过本地 Nexus 页面截图验证的后台状态组合。"}
+:::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="已通过本地 Nexus 页面验证的后台状态组合。"}
 ---
 code: |
   <template>
@@ -48,64 +48,68 @@ code: |
     </section>
   </template>
 ---
-::
+:::
 
-## API（简版）
-::TuffPropsTable
----
-rows:
-  - name: text
-    type: 'string'
-    default: '-'
-    description: '显示文字'
-  - name: status
-    type: "'success' | 'warning' | 'danger' | 'info' | 'muted'"
-    default: 'info'
-    description: '状态类型'
-  - name: statusKey
-    type: "'granted' | 'denied' | 'notDetermined' | 'unsupported' | string"
-    default: "''"
-    description: '映射到色调的权限/状态键'
-  - name: icon
-    type: 'string'
-    default: "''"
-    description: '自定义图标 class'
-  - name: size
-    type: "'sm' | 'md'"
-    default: 'md'
-    description: '尺寸'
-  - name: os
-    type: "'macos' | 'windows' | 'linux'"
-    default: '-'
-    description: '可选平台图标'
-  - name: osOnly
-    type: 'boolean'
-    default: 'false'
-    description: '仅渲染平台图标'
----
-::
-
-## 契约说明
-
-显式 `status` 优先于 `statusKey`。`statusKey` 会把 `granted/denied/notDetermined/unsupported` 映射到 success/danger/warning/muted，未知 key 回退到 info。平台图标会渲染在状态图标前；`osOnly` 会隐藏状态图标。点击徽标会触发 `click` 事件。
-
-## 审阅说明
-
-- 源码：`packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue`
-- 建议：状态来自后端枚举时优先传 `statusKey`，页面本地判断时再显式传 `status`。
-- 可访问性：组件使用 `role="status"`；同屏多个徽标时，文本必须能独立表达状态，不依赖颜色。
-
-## 组合示例
 ### 状态行
 
-徽标搭配头像进行状态展示。
-
-::TuffDemoWrapper{demo="StatusBadgeRowDemo" code-lang="vue"}
+:::TuffDemoWrapper{demo="StatusBadgeRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxAvatar name="TA" />
-    <TxStatusBadge text="在线" status="success" />
+    <div class="tuff-demo-row">
+      <TxAvatar name="TA" />
+      <TxStatusBadge text="在线" status="success" />
+    </div>
   </template>
 ---
-::
+:::
+
+## 交互契约
+
+- 根元素使用 `role="status"`；可见 `text` 必须不依赖颜色也能表达状态。
+- 显式 `status` 优先于 `statusKey`。
+- `statusKey` 会把 `granted → success`、`denied → danger`、`notDetermined → warning`、`unsupported → muted`、未知 key 映射为 `info`。
+- `icon` 会覆盖解析出的状态图标。
+- `os` 会在状态图标前渲染平台图标；`osOnly` 会隐藏状态图标但保留文本。
+- 点击徽标时会发出 `click`，payload 是原始 `MouseEvent`。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `text` | `string` | 必填 | 徽标可见文本。 |
+| `icon` | `string` | `''` | 自定义图标 class；省略时使用解析后的状态图标。 |
+| `status` | `'success' \| 'warning' \| 'danger' \| 'info' \| 'muted'` | - | 显式视觉色调，优先级高于 `statusKey`。 |
+| `statusKey` | `'granted' \| 'denied' \| 'notDetermined' \| 'unsupported' \| string` | `''` | 映射到色调的权限/状态 key。 |
+| `size` | `'sm' \| 'md'` | `'md'` | 徽标密度。 |
+| `os` | `'macos' \| 'windows' \| 'linux'` | - | 可选平台标记图标。 |
+| `osOnly` | `boolean` | `false` | 渲染平台图标，但隐藏状态图标。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `click` | `MouseEvent` | 点击徽标根元素时触发。 |
+
+## Slots
+
+`TxStatusBadge` 不暴露插槽。可见状态标签应放在 `text` 中；视觉差异通过 `icon`、`status`、`statusKey` 和 `os` 配置。
+
+## 最佳实践
+
+- 状态来自 API 或权限枚举时优先使用 `statusKey`；页面本地判断再使用显式 `status`。
+- 不要只靠颜色传达状态，文案应类似“同步健康”或“访问被拒绝”。
+- 只有平台差异对状态表达有实际意义时才使用 `os`。
+- 主操作应放在旁边的 `TxButton`，不要让徽标成为唯一操作控件。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue` 确认 `role="status"`、显式 `status` 优先级、`statusKey` 色调映射、OS 图标映射、`osOnly`、自定义 `icon` 和根节点点击派发。
+- 类型契约:`packages/tuffex/packages/components/src/status-badge/src/types.ts` 定义 `StatusTone`、`StatusKey`、`TxOsType`、`StatusBadgeProps` 和 `StatusBadgeEmits`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/status-badge/__tests__/status-badge.test.ts` 覆盖文本/尺寸/状态渲染、key 映射、显式 status 优先级、OS 图标、`osOnly`、自定义图标和点击派发。
+- 导出入口:`packages/tuffex/packages/components/src/status-badge/index.ts` 导出 `StatusBadge`、`TxStatusBadge`、公共类型和 `TxStatusBadgeInstance`。
+
+## Source
+<TuffDocSourceLink />

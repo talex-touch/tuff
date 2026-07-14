@@ -4,6 +4,16 @@
 > Scope: `apps/nexus/content/docs/dev/components/*.mdc`
 > Purpose: formal worktable for AI review / aireview pending component docs performance follow-up.
 
+## 2026-07-12 Closure Update
+
+- The original table below is retained as historical batch evidence. It is no longer the active approval queue.
+- Current component docs: `232/232` localized files have `syncStatus: reviewed`, `232/232` have `verified: true`, covering `116` bilingual component slugs. Current pending count is `0`.
+- First-party docs clients now use explicit locale static payloads: `/api/docs/sidebar-components/en|zh`, `/api/docs/navigation/en|zh/components`, and `/api/docs/search/en|zh`. Legacy query endpoints remain as dynamic compatibility routes.
+- English component-page sidebar + component navigation changed from the old all-locale `133,390 B / 23,565 B gzip` to `49,779 B / 8,831 B gzip`, a `62.68% / 62.53% gzip` reduction.
+- Local Wrangler cold runtime: BaseSurface `46/25/12/0`, `510,675 B`; Fusion `46/25/12/0`, `512,189 B`. Both render full prose, have one matching sidebar href, zero SQLite/wasm/content runtime requests, zero auth requests, and no horizontal overflow.
+- Cloudflare Pages `_routes.json` rule-cap regression is closed with `/en/docs`, `/en/docs/*`, `/zh/docs`, `/zh/docs/*`; rebuilt excludes are `64`, so later docs detail pages no longer fall through to a `404` Worker shell.
+- Evidence: `output/playwright/nexus-aireview-locale-static-payload-2026-07-12.{json,md}` plus the BaseSurface/Fusion locale-static screenshots.
+
 ## Summary
 
 - Source files scanned: 216 localized `.mdc` files.

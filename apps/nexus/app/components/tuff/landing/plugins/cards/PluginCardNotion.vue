@@ -7,6 +7,7 @@ import NotionBackground from '~/images/assets/plugin-cards/notion.jpg'
   <div class="PluginCardNotion inset-0 h-full w-full flex items-center justify-center bg-white/[0.06]">
     <TuffCarouselAppleBlurImage
       :src="NotionBackground"
+      :defer="true"
       alt="Notion"
       class="absolute inset-0 z-1 object-cover"
     />

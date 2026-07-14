@@ -5,7 +5,7 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [switch, toggle, state]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -149,54 +149,41 @@ code: |
 ---
 :::
 
-## 状态
-::TuffPropsTable
----
-rows:
-  - name: disabled
-    description: '禁用态'
-  - name: size
-    values: ['small', 'default', 'large']
-    description: '尺寸规格'
----
-::
+## API
 
-## API（简版）
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: 'boolean'
-    default: 'false'
-    description: '开关值'
-  - name: size
-    type: "'small' | 'default' | 'large'"
-    default: "'default'"
-    description: '尺寸'
-  - name: disabled
-    type: 'boolean'
-    default: 'false'
-    description: '禁用状态'
----
-::
+### Props
 
-## Events
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `modelValue` | `boolean` | `false` | 由 `v-model` 控制的开关状态。 |
+| `size` | `'small' \| 'default' \| 'large'` | `'default'` | 视觉尺寸。默认尺寸不添加额外 modifier class。 |
+| `disabled` | `boolean` | `false` | 移除可聚焦能力，并阻止点击、Enter、Space 切换。 |
 
-| Event | Params | Description |
+### Events
+
+| 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value: boolean) => void` | v-model 更新事件。 |
-| `change` | `(value: boolean) => void` | 用户切换后的状态变更事件。 |
+| `update:modelValue` | `(value: boolean) => void` | 启用状态下点击、Enter 或 Space 后，携带下一个开关值触发。 |
+| `change` | `(value: boolean) => void` | 启用状态下用户切换后，携带同一个下一个开关值触发。 |
 
-## Design Notes
-- 开关位移与颜色变化必须同步。
-- 小尺寸用于列表，大尺寸用于设置页。
-- 带前后 label 时，label 与 switch 应保持垂直居中。
-- 自定义颜色建议只覆盖激活态，避免破坏禁用态和焦点态。
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| - | - | `TuffSwitch` 没有插槽；标签与设置说明放在组件外部组合。 |
+
+## 交互契约
+
+- 根节点渲染 `role="switch"`、`aria-checked`、`aria-disabled`，启用时 `tabindex="0"`。
+- `disabled=true` 时设置 `tabindex="-1"`，添加 `is-disabled`，并阻止点击、Enter、Space 触发事件。
+- 启用切换会同时触发 `update:modelValue` 与 `change`；组件不会在宿主未处理 `v-model` 更新时自行修改外部状态。
+- `size="small"` 与 `size="large"` 会添加尺寸 modifier；`size="default"` 只保留基础 class。
 
 ## 组合示例
+
 ### 设置项
 开关搭配标签、说明文案和状态文本，用于设置列表。
-:::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -243,4 +230,26 @@ code: |
   }
   </style>
 ---
-:::
+::::
+
+## 最佳实践
+
+- Switch 用于即时生效的布尔设置；表单提交项或多选组优先使用 Checkbox。
+- 在开关旁提供可读文本标签；组件本身只负责控件，不渲染内置文案。
+- 标签与开关保持垂直居中，密集设置行也要保留足够点击区域。
+- 自定义激活色只使用局部 class 覆盖，保留基础组件的禁用、焦点与尺寸样式。
+
+## 审阅说明 / Review Notes
+
+- **Model contract:** `TxSwitch` 由 `modelValue` 控制。用户交互会同时派发 `update:modelValue` 与 `change`，参数为下一个 boolean；视觉状态在父级回写新 prop 后更新。
+- **键盘契约:** 启用状态响应点击、Enter 与 Space。禁用状态设置 `tabindex="-1"`，保持 `aria-disabled="true"`，且不派发事件。
+- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击与键盘派发、禁用阻断，以及禁用时的 tabindex/aria 状态。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/switch/src/TxSwitch.vue`。
+- Style source: `packages/tuffex/packages/components/src/switch/style/index.scss`。
+- Export entry: `packages/tuffex/packages/components/src/switch/index.ts` 导出 `TuffSwitch`，别名 `TxSwitch`，并使用组件自身的 `TuffSwitch` name 注册。
+- Coverage: `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts` 验证语义、尺寸 class、点击/键盘更新与禁用行为。
+
+<TuffDocSourceLink />

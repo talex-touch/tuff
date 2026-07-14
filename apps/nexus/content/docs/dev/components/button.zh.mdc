@@ -5,7 +5,7 @@ category: Basic
 status: beta
 since: 1.0.0
 tags: [action, tactile, primary]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -150,9 +150,9 @@ code: |
 ---
 ::
 
-## API Specifications
+## API
 
-### Button Attributes
+### Props
 
 ::DocApiTable
 ---
@@ -199,10 +199,20 @@ rows:
     type: boolean
     default: 'false'
     description: '是否加载中状态'
+  - parameter: loading-variant
+    type:
+      kind: enum
+      enums: [spinner, bar]
+    default: "'spinner'"
+    description: '加载反馈样式。`bar` 只有在同时设置 `block` 时才渲染为扫光层。'
   - parameter: disabled
     type: boolean
     default: 'false'
     description: '是否禁用状态'
+  - parameter: border
+    type: boolean
+    default: 'true'
+    description: '是否保留按钮边框颜色；`false` 会添加 borderless 状态。'
   - parameter: icon
     type: string
     default: '-'
@@ -230,7 +240,7 @@ rows:
 ---
 ::
 
-### Button Events
+### Events
 
 ::DocApiTable
 ---
@@ -246,15 +256,54 @@ rows:
 ---
 ::
 
-### 类型
-::TuffCodeBlock{lang="ts"}
+### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 按钮文案或自定义内联内容，渲染在可选图标 / loading spinner 之后。 |
+
+### SplitButton Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `variant` | `'primary' \| 'secondary' \| 'ghost' \| 'danger' \| 'success' \| 'warning' \| 'info'` | `primary` | 主按钮与菜单按钮共享的视觉变体。 |
+| `size` | `'sm' \| 'md' \| 'lg' \| 'large' \| 'small' \| 'mini'` | `md` | 按钮密度；别名会归一化为 `sm`、`md` 或 `lg`。 |
+| `disabled` | `boolean` | `false` | 同时禁用主操作和菜单触发器。 |
+| `loading` | `boolean` | `false` | 显示主按钮 spinner，并禁用两个交互区域。 |
+| `icon` | `string` | - | 未处于 loading 时显示在主文案前的图标类名。 |
+| `menuIcon` | `string` | `i-ri-more-2-line` | 菜单触发器默认图标类名。 |
+| `menuDisabled` | `boolean` | `false` | 在全局 disabled/loading 之外，仅禁用菜单触发器。 |
+| `menuWidth` | `number` | `200` | 透传给 `TxPopover` 的弹层宽度。 |
+| `menuPlacement` | `'top-start' \| 'top-end' \| 'bottom-start' \| 'bottom-end' \| 'right-start' \| 'right-end' \| 'left-start' \| 'left-end'` | `bottom-end` | 弹层位置。 |
+| `menuOffset` | `number` | `8` | 弹层偏移像素。 |
+
+### SplitButton Events
+
+| 事件名 | 参数 | 说明 |
+|--------|------|------|
+| `click` | `(event: MouseEvent)` | 主按钮在非 disabled / loading 状态下点击时触发。 |
+| `menuOpenChange` | `(open: boolean)` | 内部 popover 打开状态变化时触发。 |
+
+### SplitButton Slots
+
+| 插槽名 | 参数 | 说明 |
+|--------|------|------|
+| `default` | - | 主操作文案。 |
+| `menu` | `{ close: () => void }` | 渲染在 `TxPopover` 内的菜单内容；菜单项完成选择后应调用 `close()`。 |
+| `menu-icon` | - | 替换菜单触发器默认更多图标。 |
+
+## Types
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  import type { TxButtonProps } from '@talex-touch/tuffex'
+  import type { TxButtonEmits, TxButtonProps, TxSplitButtonEmits, TxSplitButtonProps } from '@talex-touch/tuffex'
 
   export interface ButtonProps extends TxButtonProps {}
+  export interface ButtonEmits extends TxButtonEmits {}
+  export interface SplitButtonProps extends TxSplitButtonProps {}
+  export interface SplitButtonEmits extends TxSplitButtonEmits {}
 ---
-::
+:::
 
 ## Composition Notes
 
@@ -303,16 +352,35 @@ code: |
 ---
 ::
 
-## Design Principles
+## 交互契约
 
-- 主按钮始终只有一个，避免操作权重冲突
-- 同类操作保持 `variant` 一致，方便用户形成记忆
-- 异步操作必须搭配 `loading`，避免重复触发
-- 移动端优先使用 `vibrate` 增强触感反馈
-- 强调按压反馈与弹性回弹
-- 透明材质与阴影层次需要配合背景使用
-- Icon 与文字间距保持一致，避免视觉偏移
+- `variant` 优先级高于语义 `type`；未设置 `variant` 时，`type="text"` 映射为 `ghost`，其它语义类型映射到对应视觉变体。
+- 尺寸别名会归一化为 `sm`、`md`、`lg`；`large` 映射为 `lg`，`small` 和 `mini` 映射为 `sm`。
+- `disabled` 和 `loading` 都会禁用原生 `<button>`，并阻止 `click` 事件向外 emit。
+- `loadingVariant="bar"` 仅在块级按钮上可见；图标按钮和普通内联按钮使用 spinner slot 或 overlay spinner。
+- 非 block、非 circle 的按钮在 loading 切换时会用尺寸 FLIP 过渡宽度变化。
+- `TxSplitButton` 在 loading 时会禁用主操作和菜单；`menuDisabled` 只额外禁用菜单触发器。
+
+## 最佳实践
+
+- 每个视图或卡片只保留一个主按钮。主动作可搭配 `ghost` 或 `secondary` 表达低优先级动作。
+- 只有在表单内才使用 `nativeType="submit"`；默认 `button` 用于避免意外提交表单。
+- 所有异步动作都应设置 `loading`，并在成功和失败路径都清理，避免按钮卡在禁用状态。
+- `circle` 优先用于纯图标动作；`block` 与 `circle` 组合时，组件会刻意保持常规文案布局。
+- 全宽提交条使用 `loadingVariant="bar"`；紧凑按钮或图标按钮继续使用 spinner loading。
+- `TxSplitButton` 的菜单动作完成选择后，应调用 slot 暴露的 `close()` 回调。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/button/src/button.vue`、`split-button.vue`、`types.ts`、`split-button.ts` 与两个 button 测试文件。
+- **实测覆盖:** `button.test.ts` 覆盖文案渲染、语义 type 映射、variant 优先级、尺寸别名、disabled/loading 点击阻断、loading bar、图标、形态 class、无边框模式与原生 type；`split-button.test.ts` 覆盖菜单渲染、主按钮点击、disabled/loading 阻断与 `menuOpenChange`。
+- 可访问性说明：原生 button 已处理基础键盘激活。图标按钮或 `circle` 按钮在图标含义不自明时，应通过外层文案或 attrs 提供可访问名称。
 
 ## Source
+
+- Component source: `packages/tuffex/packages/components/src/button/src/button.vue` and `packages/tuffex/packages/components/src/button/src/split-button.vue`.
+- Types: `packages/tuffex/packages/components/src/button/src/types.ts` and `packages/tuffex/packages/components/src/button/src/split-button.ts`.
+- Coverage: `packages/tuffex/packages/components/src/button/__tests__/button.test.ts` verifies variants, semantic type mapping, loading/disabled click suppression, icons, shapes, borderless mode, native type, and loading bar behavior. `split-button.test.ts` verifies primary click, disabled suppression, loading state, menu rendering, and `menuOpenChange`.
 
 <TuffDocSourceLink />

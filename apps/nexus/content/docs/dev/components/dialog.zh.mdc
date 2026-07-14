@@ -5,7 +5,7 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [dialog, modal, confirm]
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -184,16 +184,16 @@ code: |
 
 `message` 始终按纯文本渲染，并通过组件样式保留换行。需要展示 HTML 时，只能使用显式的 `messageHtml`，且调用点必须确保内容可信并已清洗。
 
-### TxBottomDialog 属性
+### TxBottomDialog Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
 | `message` | `string` | `''` | 对话框消息 |
-| `stay` | `number` | `0` | 自动关闭时长 (毫秒) |
+| `stay` | `number` | `0` | 预留的自动关闭时长 prop；当前运行时不会仅根据 `stay` 启动关闭计时器。 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `btns` | `DialogButton[]` | `[]` | 按钮配置 |
-| `icon` | `string` | `''` | 图标类名 |
+| `icon` | `string` | `''` | 历史 icon class prop；当前模板不渲染该值。 |
 | `index` | `number` | `0` | z-index 偏移量 |
 
 ### DialogButton 接口
@@ -211,44 +211,75 @@ code: |
 ---
 ::
 
-### TxBlowDialog 属性
+### TxBlowDialog Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
 | `message` | `string` | `''` | 纯文本消息内容 |
-| `messageHtml` | `string` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
+| `messageHtml` | `DialogMessageHtml` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
 | `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
 | `render` | `() => VNode` | `undefined` | 渲染函数 |
 
-### TxPopperDialog 属性
+### TxPopperDialog Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
 | `message` | `string` | `''` | 纯文本消息内容 |
-| `messageHtml` | `string` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
+| `messageHtml` | `DialogMessageHtml` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
 | `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
 | `render` | `() => VNode` | `undefined` | 渲染函数 |
 
-### TxTouchTip 属性
+### TxTouchTip Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 标题 |
 | `message` | `string` | `''` | 文本内容 |
-| `messageHtml` | `string` | `''` | 可信 HTML 内容，仅限已清洗的内部调用点 |
+| `messageHtml` | `DialogMessageHtml` | `''` | 可信 HTML 内容，仅限已清洗的内部调用点 |
 | `buttons` | `TouchTipButton[]` | `[]` | 按钮配置 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 
-### 无障碍支持
+### Events
 
-- 支持 ESC 关闭
-- 打开时聚焦对话框容器或确认按钮
-- 关闭时焦点恢复
-- 自动补充 `role="dialog"`、`aria-modal` 与实例级标题/描述 ARIA 关联
-- `DialogButton.onClick()` 返回 `true` 时关闭，返回 `false` 时保持打开
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| - | - | 各 Dialog 变体不触发 Vue 自定义事件；关闭统一通过必填的 `close` prop 回调完成。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| - | - | Dialog 变体不暴露插槽。`TxBlowDialog` / `TxPopperDialog` 的自定义内容使用 `comp` 或 `render`。 |
+
+## 交互契约
+
+- 所有 Dialog 变体都会 teleport 到 `body`，通过共享 z-index manager 分配层级，并通过必填 `close()` 回调关闭。
+- Escape 会在离场动画后关闭当前 dialog；`TxBottomDialog`、`TxBlowDialog`、`TxPopperDialog` 与 `TxTouchTip` 卸载时恢复之前的焦点元素。
+- `TxBottomDialog` 与 `TxTouchTip` 使用实例级标题 / 描述 id；`TxBlowDialog` 与 `TxPopperDialog` 对默认标题 / 内容区域使用稳定内部 id。
+- 普通 `message` 按文本渲染并保留换行。只有调用方完成清洗并通过 `asTrustedDialogHtml()` 标记后，才使用 `messageHtml`。
+- `DialogButton.onClick()` / `TouchTipButton.onClick()` resolve `true` 时关闭，resolve `false` 时保持打开。
+
+## 最佳实践
+
+- `TxBottomDialog` 用于移动端风格的底部确认和破坏性流程检查点。
+- `TxBlowDialog` 只用于高强调公告；它的背景 transform 动效本身就很强。
+- `TxPopperDialog` 用于紧凑的居中提示，同时保留 modal 语义。
+- `TxTouchTip` 用于触控优先、需要多个动作按钮的引导提示。
+- 不要把 `messageHtml` 接到用户生成内容路径；除非调用方已经显式清洗并标记为 trusted。
+
+## 审阅说明
+
+- 组件源码:`packages/tuffex/packages/components/src/dialog/src/TxBottomDialog.vue`、`TxBlowDialog.vue`、`TxPopperDialog.vue` 与 `TxTouchTip.vue` 确认 teleport 到 body、z-index 分配、Escape 关闭、焦点恢复、按钮返回值语义、文本与可信 HTML 路径，以及 component/render 内容挂载方式。
+- 类型契约:`packages/tuffex/packages/components/src/dialog/src/types.ts` 定义可信 HTML 品牌、`asTrustedDialogHtml`、按钮接口、dialog props 和导出实例类型。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/dialog/__tests__/dialog.test.ts` 校验 ARIA 关联、Escape 关闭、焦点恢复、文本与可信 HTML 渲染、按钮返回值语义。
+- 导出入口:`packages/tuffex/packages/components/src/dialog/index.ts` 使用 `withInstall` 包装每个 dialog，导出所有变体、`asTrustedDialogHtml` 和公共类型。
+
+## Source
+
+<TuffDocSourceLink />

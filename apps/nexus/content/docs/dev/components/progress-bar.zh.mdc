@@ -1,6 +1,6 @@
 ---
 title: ProgressBar 进度条
-description: 多状态进度条与加载反馈
+description: 支持确定进度、不确定加载、分段进度与状态反馈的进度条。
 category: Feedback
 status: beta
 since: 1.0.0
@@ -8,16 +8,16 @@ tags: [progress, bar, loading]
 syncStatus: reviewed
 verified: true
 ---
-
 # ProgressBar 进度条
 
-> 更细颗粒的进度反馈，支持 loading / success / error。  
-> **状态**：Beta
+`TxProgressBar` 覆盖已知百分比、未知时长加载、成功/错误完成文案、分段进度、tooltip 标签与可选动效。
 
+已人工核对 `packages/tuffex/packages/components/src/progress-bar/src/types.ts`、`TxProgressBar.vue` 与 `progress-bar.test.ts`。
 
 ## Demo
-### Stateful Progress
-加载、警告、成功态一屏展示。
+
+### 状态进度
+
 :::TuffDemoWrapper{demo="ProgressBarStatefulProgressDemo" code-lang="vue"}
 ---
 code: |
@@ -30,8 +30,27 @@ code: |
 ---
 :::
 
+### 分段进度
+
+:::TuffDemoWrapper{demo="ProgressBarSegmentsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const segments = [
+    { value: 25, color: 'linear-gradient(90deg, #60a5fa, #34d399)' },
+    { value: 18, color: 'linear-gradient(90deg, #a78bfa, #f472b6)' },
+    { value: 12, color: 'linear-gradient(90deg, #fb7185, #f59e0b)' },
+  ]
+  </script>
+
+  <template>
+    <TxProgressBar :segments="segments" :segments-total="100" height="14px" show-text tooltip tooltip-content="多段进度" />
+  </template>
+---
+:::
+
 ### 后台运营进度
-多条进度可组合成发布批次、质量检查、容量水位等后台状态。
+
 :::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="进度条与指标卡、状态徽标共同表达后台健康度。"}
 ---
 code: |
@@ -44,77 +63,9 @@ code: |
   </template>
 ---
 :::
-## 基础用法
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxProgressBar :percentage="45" show-text />
-    <TxProgressBar loading />
-  </template>
----
-::
 
-## API（简版）
-::TuffPropsTable
----
-rows:
-  - name: percentage
-    type: 'number'
-    default: '0'
-    description: '进度百分比'
-  - name: loading
-    type: 'boolean'
-    default: 'false'
-    description: '不确定加载态'
-  - name: status
-    type: "'success' | 'error' | 'warning'"
-    default: '-'
-    description: '状态色'
-  - name: message
-    type: 'string'
-    default: '-'
-    description: '自定义文本'
-  - name: showText
-    type: 'boolean'
-    default: 'false'
-    description: '显示百分比'
-  - name: maskVariant
-    type: "'solid' | 'dashed' | 'plain'"
-    default: 'solid'
-    description: '底部轨道样式'
-  - name: flowEffect
-    type: "'none' | 'shimmer' | 'wave' | 'particles'"
-    default: 'none'
-    description: '流动效果'
-  - name: height
-    type: 'string'
-    default: "'5px'"
-    description: '进度条高度'
-  - name: textPlacement
-    type: "'inside' | 'outside'"
-    default: 'inside'
-    description: '文本位置'
-  - name: indicatorEffect
-    type: "'none' | 'sparkle'"
-    default: 'none'
-    description: '进度端点效果'
-  - name: maskBackground
-    type: "'blur' | 'glass' | 'mask'"
-    default: 'blur'
-    description: '轨道背景风格'
----
-::
-
-## 审阅说明
-
-- 源码：`packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`
-- 建议：页面级进度优先传 `percentage`；未知时长任务使用 `loading` 或 `indeterminate`，不要伪造百分比。
-- 可访问性：组件内部使用 `role="progressbar"`；`message` 会作为辅助标签与可见文案使用。
-
-## 组合示例
 ### 状态面板
-进度条配合状态提示使用。
+
 :::TuffDemoWrapper{demo="ProgressBarStatusPanelDemo" code-lang="vue"}
 ---
 code: |
@@ -124,3 +75,90 @@ code: |
   </template>
 ---
 :::
+
+## 交互契约
+
+- 轨道渲染 `role="progressbar"`，并包含 `aria-valuemin="0"` 与 `aria-valuemax="100"`。
+- 确定进度会把 `percentage` 限制在 `0..100`，并通过 `aria-valuenow` 暴露。
+- `loading` 与 `indeterminate` 会省略 `aria-valuenow`；应使用 `message` 描述当前工作。
+- `error` 与 `success` 布尔 props 优先于 `status`。
+- `success` 或 `error` 配合 `message` 且 `percentage` 为 `0` 时，视觉宽度会解析为 `100%`，适合完成类标签。
+- `message` 优先于 `format`，`format` 优先于默认四舍五入百分比文案。
+- 只有存在 `message` 或 `showText=true` 时才显示文本；loading/indeterminate 状态只有存在 `message` 时显示文本。
+- `segments` 会忽略非正数值。填充总宽度使用 `segmentsTotal`，填充区域内的各段宽度按正数 segment 总和归一化。
+- `complete` 在解析进度到达 `100` 时每个完成周期只触发一次；进度回落到 `100` 以下后再次完成可再次触发。
+- `tooltip` 或 `tooltipContent` 会把进度条包在 `TxTooltip` 中；`tooltipProps` 会透传给该 tooltip。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `loading` | `boolean` | `false` | 不确定加载模式。 |
+| `indeterminate` | `boolean` | `false` | 不暗示 loading 的不确定进度模式。 |
+| `indeterminateVariant` | `'classic' \| 'sweep' \| 'bounce' \| 'elastic' \| 'split'` | `'sweep'` | loading/indeterminate 状态的动画变体。 |
+| `error` | `boolean` | `false` | 错误状态，覆盖 `status`。 |
+| `success` | `boolean` | `false` | 成功状态，覆盖 `status`。 |
+| `status` | `'success' \| 'error' \| 'warning' \| ''` | `''` | 视觉状态色。 |
+| `message` | `string` | `''` | 可见和可访问文本标签。 |
+| `percentage` | `number` | `0` | 限制前的确定进度值。 |
+| `segments` | `ProgressSegment[]` | - | 多段进度数据。 |
+| `segmentsTotal` | `number` | `100` | 存在 segments 时用于计算填充宽度的总量。 |
+| `height` | `string` | `'5px'` | 进度条高度。 |
+| `showText` | `boolean` | `false` | 确定进度下显示百分比文本。 |
+| `textPlacement` | `'inside' \| 'outside'` | `'inside'` | message/百分比文本位置。 |
+| `format` | `(percentage: number) => string` | - | 自定义百分比格式化函数。 |
+| `flowEffect` | `'none' \| 'shimmer' \| 'wave' \| 'particles'` | `'none'` | 确定进度填充层动效。 |
+| `indicatorEffect` | `'none' \| 'sparkle'` | `'none'` | 进度大于零时的端点指示器效果。 |
+| `hoverEffect` | `'none' \| 'glow'` | `'none'` | 外层 hover 效果。 |
+| `color` | `string` | - | 自定义填充颜色，覆盖状态颜色。 |
+| `maskVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 轨道 mask 样式。 |
+| `maskBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 轨道背景效果。 |
+| `tooltip` | `boolean` | `false` | 使用解析文本启用 tooltip。 |
+| `tooltipContent` | `string` | - | tooltip 内容覆盖。 |
+| `tooltipProps` | `Partial<TooltipProps>` | - | 透传给 `TxTooltip` 的额外 props。 |
+
+### ProgressSegment
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `number` | 段值，只有正的有限数会渲染。 |
+| `color` | `string` | 段填充色，默认回退为进度条填充色。 |
+| `label` | `string` | 预留的段标签元数据。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `complete` | - | 解析进度达到 `100` 时每个完成周期触发一次。 |
+
+### Slots
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| - | - | `TxProgressBar` 不暴露插槽。标签和 tooltip 内容通过 `message`、`format`、`tooltipContent`、`tooltipProps` 配置。 |
+
+## 最佳实践
+
+- 只有进度已知时才使用 `percentage`；未知时长使用 `loading` 或 `indeterminate`。
+- 不要为了成功态伪造 100%；操作完成时传 `success` 和简短 `message`。
+- `message` 同时作为 progressbar 可访问标签，文案应保持简短。
+- segment 代表部分总量时，用 `segmentsTotal` 保持分段进度可信。
+- 动效只用于高价值进度反馈；过多 shimmer/wave 会让仪表盘变嘈杂。
+
+## 审阅说明
+
+- 已对照 `packages/tuffex/packages/components/src/progress-bar/src/types.ts`、`TxProgressBar.vue` 与 `progress-bar.test.ts` 核对。
+- 现有测试覆盖确定进度钳制、progressbar ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次，以及 segment 按正数总和归一化。
+- API 说明：`segments` 只使用正数值。外层填充宽度基于 `segmentsTotal`，填充区域内部各段宽度按正数 segment 总和归一化。
+- 可访问性说明：`message` 会作为可访问进度标签，应保持简短并表达状态。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`.
+- Types: `packages/tuffex/packages/components/src/progress-bar/src/types.ts`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/progress-bar/__tests__/progress-bar.test.ts` 验证确定进度钳制与 ARIA 状态、不确定状态省略 `aria-valuenow`、`complete` 每个完成周期只触发一次，以及 segment 按正数总和归一化。
+
+<TuffDocSourceLink />
+

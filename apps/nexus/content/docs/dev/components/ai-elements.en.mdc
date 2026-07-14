@@ -1,0 +1,118 @@
+---
+title: AI Elements
+description: Conversation and message primitives for AI chat surfaces.
+category: Data
+status: beta
+since: 1.0.0
+tags: [ai, conversation, message]
+syncStatus: reviewed
+verified: true
+---
+# AI Elements
+
+`TxAiConversation` and `TxAiMessage` render role-based AI transcripts. The components keep the data contract small: every message has an `id`, `role`, and `content`, with optional name, avatar, timestamp, and status metadata.
+
+Reviewed against `packages/tuffex/packages/components/src/ai-elements/src/types.ts`, `TxAiConversation.vue`, and `TxAiMessage.vue`.
+
+## Conversation
+
+Use `TxAiConversation` when the host owns the message array and only needs a consistent transcript layout.
+
+### AI Conversation
+::::TuffDemoWrapper{demo="AiElementsAiConversationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { AiElementMessage } from '@talex-touch/tuffex/ai-elements'
+  import { computed } from 'vue'
+
+  const messages = computed<AiElementMessage[]>(() => [
+    { id: 'u1', role: 'user', content: 'Summarize this release review.', name: 'You' },
+    { id: 'a1', role: 'assistant', content: 'Reviewed **component docs**.', name: 'Nexus AI' },
+    { id: 't1', role: 'tool', content: '', name: 'Verifier', status: 'streaming' },
+  ])
+  </script>
+
+  <template>
+    <TxAiConversation :messages="messages" show-avatar />
+  </template>
+---
+::::
+
+## Interaction Contract
+
+- `messages` is filtered before render: empty `content` is hidden unless `status` is `pending` or `streaming`.
+- `markdown` defaults to `true`, so message bodies are rendered by `TxMarkdownView`.
+- `showAvatar` enables a role/name initial fallback when `message.avatar` is not provided.
+- Pending or streaming messages with empty content render the built-in typing indicator.
+- `TxAiConversation` uses `aria-live="polite"` so appended transcript updates are announced without stealing focus.
+
+## API
+
+### AiElementMessage
+
+| Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `id` | `string` | required | Stable key for rendering the message. |
+| `role` | `'user' \| 'assistant' \| 'system' \| 'tool'` | required | Visual and semantic role. |
+| `content` | `string` | required | Message text or Markdown source. |
+| `createdAt` | `number \| string \| Date` | - | Optional host timestamp. |
+| `name` | `string` | - | Display name; falls back to You / AI / Tool / System. |
+| `avatar` | `string` | - | Image URL used when avatars are enabled. |
+| `status` | `'pending' \| 'streaming' \| 'complete' \| 'error'` | - | Message lifecycle state. |
+
+### TxAiConversation Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `messages` | `AiElementMessage[]` | required | Transcript data. Empty content is filtered unless the message is pending or streaming. |
+| `markdown` | `boolean` | `true` | Render message content through `TxMarkdownView`. |
+| `compact` | `boolean` | `false` | Use tighter message spacing. |
+| `emptyText` | `string` | `'No messages yet'` | Built-in empty state copy when no renderable messages remain. |
+| `showAvatar` | `boolean` | `false` | Show avatar column for every rendered message. |
+
+### TxAiMessage Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `message` | `AiElementMessage` | required | Single message to render. |
+| `markdown` | `boolean` | `true` | Render message content through `TxMarkdownView`; `false` preserves plain text with wrapping. |
+| `compact` | `boolean` | `false` | Use compact row density and smaller avatar dimensions. |
+| `showAvatar` | `boolean` | `false` | Enable avatar rendering for this message. |
+
+### Events
+
+`TxAiConversation` and `TxAiMessage` do not emit component events. Update the host conversation store, then pass the new `messages` array back into `TxAiConversation`.
+
+## Slots
+
+### TxAiConversation
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `empty` | - | Replaces the built-in empty paragraph after message filtering. |
+
+### TxAiMessage
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | `{ message }` | Replaces the message content region; use for tool cards, attachments, or custom renderers. |
+| `avatar` | `{ message }` | Replaces the avatar image/fallback when `showAvatar` is enabled. |
+
+## Best Practices
+
+- Keep provider-specific streaming state in the host and map it into `status`.
+- Use stable message ids from the conversation store; do not use array indexes.
+- Keep Markdown enabled for assistant output, but sanitize or pre-normalize untrusted Markdown at the data boundary when needed.
+- Use the `default` slot for tool cards or attachments instead of overloading `content` with custom HTML.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/ai-elements/src/TxAiConversation.vue` confirms message filtering, polite live region, empty slot, and child message forwarding.
+- Source: `packages/tuffex/packages/components/src/ai-elements/src/TxAiMessage.vue` confirms role labels, status labels, Markdown/plain rendering, typing indicator, and `default` / `avatar` slots.
+- Type contracts: `packages/tuffex/packages/components/src/ai-elements/src/types.ts` defines `AiElementMessage`, `AiConversationProps`, and `AiMessageProps`.
+- **Verified coverage:** Coverage: no dedicated `ai-elements` component unit test currently exists; `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies this page is present in English and Chinese and that `AiElementsAiConversationDemo` stays registered with an existing Vue demo.
+- Export: `packages/tuffex/packages/components/src/ai-elements/index.ts` exports installable `AiConversation`, `AiMessage`, `TxAiConversation`, and `TxAiMessage`.
+
+## Source
+<TuffDocSourceLink />

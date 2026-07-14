@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 interface Props {
   height?: number | string
@@ -8,6 +8,7 @@ interface Props {
   class?: string
   alt?: string
   fill?: boolean
+  defer?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -16,17 +17,51 @@ const props = withDefaults(defineProps<Props>(), {
   class: '',
   alt: 'Background of a beautiful view',
   fill: false,
+  defer: false,
 })
 
 const isLoading = ref(true)
+const imageRef = ref<HTMLImageElement | null>(null)
+const sourceReady = ref(!props.defer)
+const resolvedSrc = computed(() => sourceReady.value ? props.src : undefined)
+let observer: IntersectionObserver | null = null
+
+function loadSource() {
+  sourceReady.value = true
+  observer?.disconnect()
+  observer = null
+}
 
 function handleLoad() {
   isLoading.value = false
 }
+
+onMounted(() => {
+  if (!props.defer)
+    return
+  if (!imageRef.value || !('IntersectionObserver' in window)) {
+    loadSource()
+    return
+  }
+
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some(entry => entry.isIntersecting))
+      loadSource()
+  }, {
+    rootMargin: '200px 0px',
+  })
+  observer.observe(imageRef.value)
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+})
 </script>
 
 <template>
   <img
+    ref="imageRef"
     class="transition duration-300" :class="
       [
         isLoading ? 'blur-sm' : 'blur-0',
@@ -34,7 +69,7 @@ function handleLoad() {
         fill ? 'h-full w-full' : '',
       ]
     "
-    :src="src"
+    :src="resolvedSrc"
     :width="width"
     :height="height"
     loading="lazy"

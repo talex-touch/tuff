@@ -133,6 +133,30 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
     })
   })
 }
+
+export const AssistantRegionSelectorWindowOption: Electron.BrowserWindowConstructorOptions = {
+  title: `${AppName} Region Selector`,
+  frame: false,
+  resizable: false,
+  movable: false,
+  minimizable: false,
+  maximizable: false,
+  fullscreenable: false,
+  skipTaskbar: true,
+  autoHideMenuBar: true,
+  show: false,
+  transparent: true,
+  hasShadow: false,
+  backgroundColor: '#00000000',
+  webPreferences: buildWindowWebPreferences('app', {
+    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    scrollBounce: false,
+    additionalArguments: buildWindowArgs({
+      touchType: 'assistant',
+      assistantType: 'region-selector'
+    })
+  })
+}
 export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: `${AppName} OmniPanel`,
   type: 'panel',

@@ -108,6 +108,12 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'native:file:*', permissions: ['fs.read'] },
   { pattern: 'native:media:*', permissions: ['media.read'] },
 
+  // Localization and Domain Lexicon APIs
+  { pattern: 'i18n:*', permissions: ['i18n.read'] },
+  { pattern: 'lexicon:resolve', permissions: ['lexicon.read'] },
+  { pattern: 'lexicon:search', permissions: ['lexicon.read'] },
+  { pattern: 'lexicon:register', permissions: ['lexicon.register'] },
+
   // Search APIs
   { pattern: 'search:root-results:*', permissions: ['search.root-results'] },
 

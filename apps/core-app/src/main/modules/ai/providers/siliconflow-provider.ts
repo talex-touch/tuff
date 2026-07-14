@@ -10,4 +10,8 @@ export class SiliconflowProvider extends OpenAiCompatibleLangChainProvider {
   protected readonly defaultChatModel = 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
   protected readonly defaultEmbeddingModel = 'netease-youdao/bce-embedding-base_v1'
   protected readonly defaultVisionModel = 'deepseek-ai/DeepSeek-OCR'
+  protected readonly defaultImageModel = 'Kwai-Kolors/Kolors'
+  protected readonly defaultTtsModel = 'fnlp/MOSS-TTSD-v0.5'
+  protected readonly defaultTtsVoice = 'fnlp/MOSS-TTSD-v0.5:alex'
+  protected readonly defaultTranscriptionModel = 'FunAudioLLM/SenseVoiceSmall'
 }

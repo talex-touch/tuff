@@ -15,20 +15,50 @@ type HostOnlyIntelligenceMethod
     | 'contextCreateCompressionSnapshot'
     | 'contextListCompressionSnapshots'
     | 'contextGetLatestCompressionSnapshot'
+    | 'contextListMemories'
     | 'contextSaveMemory'
     | 'contextReplaceMemory'
     | 'contextSetMemoryEnabled'
     | 'contextDeleteMemory'
+    | 'getQuota'
+    | 'setQuota'
+    | 'deleteQuota'
+    | 'getAllQuotas'
+    | 'checkQuota'
+    | 'getCurrentUsage'
+    | 'testProvider'
+    | 'testCapability'
+    | 'fetchModels'
+    | 'getAuditLogs'
+    | 'getTodayStats'
+    | 'getMonthStats'
+    | 'getUsageStats'
+    | 'getLocalEnvironment'
 
 const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> = {
   contextPrepareTurn: true,
   contextCreateCompressionSnapshot: true,
   contextListCompressionSnapshots: true,
   contextGetLatestCompressionSnapshot: true,
+  contextListMemories: true,
   contextSaveMemory: true,
   contextReplaceMemory: true,
   contextSetMemoryEnabled: true,
   contextDeleteMemory: true,
+  getQuota: true,
+  setQuota: true,
+  deleteQuota: true,
+  getAllQuotas: true,
+  checkQuota: true,
+  getCurrentUsage: true,
+  testProvider: true,
+  testCapability: true,
+  fetchModels: true,
+  getAuditLogs: true,
+  getTodayStats: true,
+  getMonthStats: true,
+  getUsageStats: true,
+  getLocalEnvironment: true,
 }
 
 function isHostOnlyMethod(property: PropertyKey): boolean {
@@ -56,7 +86,6 @@ function createSdkApiChannel(channel: PluginChannelClient): PluginChannelWithMai
     unRegChannel: (eventName, callback) => channel.unRegChannel(eventName, callback),
     send: (eventName, payload) => channel.send(eventName, withSdkApiPayload(payload)),
   }
-
   if (typeof channelWithMain.sendToMain === 'function') {
     const sendToMain = channelWithMain.sendToMain.bind(channelWithMain)
     sdkApiChannel.sendToMain = (eventName, payload) => sendToMain(eventName, withSdkApiPayload(payload))
@@ -85,30 +114,36 @@ function getClient(): IntelligenceSdk {
   return cachedClient
 }
 
-export const intelligence: IntelligenceSDK = new Proxy({} as IntelligenceSDK, {
-  get(_target, property, receiver) {
-    if (isHostOnlyMethod(property)) {
-      return undefined
-    }
-    return Reflect.get(getClient(), property, receiver)
-  },
-  has(_target, property) {
-    return !isHostOnlyMethod(property) && property in getClient()
-  },
-  ownKeys() {
-    return Reflect.ownKeys(getClient()).filter(property => !isHostOnlyMethod(property))
-  },
-  getOwnPropertyDescriptor(_target, property) {
-    if (isHostOnlyMethod(property)) {
-      return undefined
-    }
-    const descriptor = Reflect.getOwnPropertyDescriptor(getClient(), property)
-    if (!descriptor) {
-      return undefined
-    }
-    return {
-      ...descriptor,
-      configurable: true,
-    }
-  },
-})
+export function createPluginIntelligenceFacade(
+  resolveClient: () => IntelligenceSdk,
+): IntelligenceSDK {
+  return new Proxy({} as IntelligenceSDK, {
+    get(_target, property, receiver) {
+      if (isHostOnlyMethod(property)) {
+        return undefined
+      }
+      return Reflect.get(resolveClient(), property, receiver)
+    },
+    has(_target, property) {
+      return !isHostOnlyMethod(property) && property in resolveClient()
+    },
+    ownKeys() {
+      return Reflect.ownKeys(resolveClient()).filter(property => !isHostOnlyMethod(property))
+    },
+    getOwnPropertyDescriptor(_target, property) {
+      if (isHostOnlyMethod(property)) {
+        return undefined
+      }
+      const descriptor = Reflect.getOwnPropertyDescriptor(resolveClient(), property)
+      if (!descriptor) {
+        return undefined
+      }
+      return {
+        ...descriptor,
+        configurable: true,
+      }
+    },
+  })
+}
+
+export const intelligence: IntelligenceSDK = createPluginIntelligenceFacade(getClient)

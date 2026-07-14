@@ -83,13 +83,14 @@ Observability & feature toggles (optional):
 - `NUXT_DISABLE_PWA`
 - `NUXT_PUBLIC_RISK_CONTROL_ENABLED` (`true/1/on/yes` to enable risk control entrypoints)
 - `VITE_PLUGIN_PWA`
-- `NUXT_DISABLE_WEB_FONTS`
-- `UNOCSS_WEBFONTS`
+- `NUXT_DISABLE_WEB_FONTS` (`true` to force-disable UnoCSS remote web fonts)
+- `UNOCSS_WEBFONTS` (`true` to opt into Google web fonts; disabled by default for reproducible production builds)
 - `NUXT_DISABLE_SSR`
 - `NUXT_DISABLE_PRERENDER`
 - `NUXT_ENABLE_PAYLOAD_EXTRACTION`
 - `NUXT_DISABLE_NITRO_MINIFY`
-- `NUXT_DISABLE_NITRO_SOURCEMAP`
+- `NUXT_ENABLE_NITRO_SOURCEMAP` (`true/1/on/yes` to retain Worker source maps for an explicit diagnostic build; normal production builds omit them)
+- `NUXT_DISABLE_NITRO_SOURCEMAP` (`true` to force-disable Nitro source maps, including Sentry upload builds)
 - `NUXT_AUTH_DEBUG`
 - `TALEX_WORKFLOW_DEBUG`
 
@@ -97,6 +98,33 @@ Cloudflare bindings (wrangler / Pages settings):
 - `DB` (D1)
 - `R2`, `ASSETS`, `IMAGES`, `PACKAGES`, `PLUGIN_PACKAGES` (R2 buckets)
 - `RELEASE_SIGNATURE_PUBLIC_KEY`, `UPDATE_SIGNATURE_PUBLIC_KEY` (string bindings)
+
+## Production Content payload boundary
+
+As of `2026-07-12`, browser search and policy rendering no longer instantiate the Nuxt Content SQLite runtime. Search uses prerendered locale metadata indexes at `/api/docs/search/en|zh`, component sidebars use `/api/docs/sidebar-components/en|zh`, component navigation uses `/api/docs/navigation/en|zh/components`, policy pages use `/api/content/policy`, and full docs bodies remain behind Worker APIs. The legacy query endpoints remain available as dynamic compatibility routes.
+
+Production builds retain `dump.app.sql`, `dump.docs.sql`, and `dump.guides.sql` as Cloudflare D1 bootstrap inputs. The build trim removes prerendered `__nuxt_content/*/sql_dump.txt` client copies, and `build/check-worker-bundle.mjs` rejects client SQLite wasm, SQLite worker assets, and bundled SQLite runtime markers.
+
+Current local production evidence is recorded in `output/playwright/nexus-content-db-payload-2026-07-12.{json,md}`: `448` search records, `100,357 B / 22,955 B gzip`, nested client SQL `1,327,624 B -> 0`, client SQLite assets/runtime markers `0`, static routes `20/20`, and a `35,731,509 B / 34.08 MiB` dist. This does not replace deployed Cloudflare Pages HAR, a real OAuth provider callback, authenticated dashboard runtime, or a real bfcache hit.
+
+The follow-up locale-static evidence is `output/playwright/nexus-aireview-locale-static-payload-2026-07-12.{json,md}`. English component sidebar + component navigation is now `49,779 B / 8,831 B gzip`, down `62.68% / 62.53% gzip` from the old all-locale payload. Cloudflare Pages routes reserve `/en/docs`, `/en/docs/*`, `/zh/docs`, and `/zh/docs/*` so Nitro's 100-rule cap cannot push later prerendered docs pages back through the Worker. Local Wrangler cold loads for BaseSurface and Fusion return `200`, render full prose, use one locale sidebar entry per component, and make zero client SQLite/wasm/content runtime or auth requests.
+
+## Dev SSR route macro boundary
+
+As of `2026-07-12`, pure Nuxt dev route measurement starts one fresh process per route, waits for `Vite client warmed up`, and reports Nitro startup separately from route cold TTFB. Nested `app/pages/**/components/**` entries are recursively removed from the generated route tree, and page macro requests without `definePageMeta` use a serve-only empty-meta fast path instead of compiling the full SFC.
+
+Evidence is recorded in `output/playwright/nexus-dev-ssr-route-macro-2026-07-12.{json,md}`. Cold TTFB improved by `37.4%` for docs tabs, `51.4%` for home, `31.3%` for store, `29.9%` for sign-in, and `19.6%` for dashboard; warm responses remain in the `5-21ms` range. The fast path is dev-only, and the production build/Worker guards continue to validate the unmodified production transform path.
+
+## Landing runtime warning boundary
+
+As of `2026-07-12`, async GSAP setup captures the mounted DOM element instead of passing a Vue `Ref` as context scope, aborts after component disposal, and registers all homepage listener/tween cleanup during setup. ScrollTo `autoKill` also stays inside the plugin config. The local production smoke in `output/playwright/nexus-home-runtime-warnings-2026-07-12.{json,md}` covers desktop `/`, desktop `/new`, and mobile `/` after load, scroll, and screenshot: all return `200` with zero console warnings/errors, zero page errors, and zero horizontal overflow. This remains local Wrangler evidence and does not replace deployed Cloudflare Pages evidence.
+
+```bash
+pnpm -C "apps/nexus" run build
+node "apps/nexus/build/check-worker-bundle.mjs"
+pnpm -C "apps/nexus" run check:api-routes
+node "apps/nexus/build/check-runtime-evidence.mjs"
+```
 
 ## Recent updates
 

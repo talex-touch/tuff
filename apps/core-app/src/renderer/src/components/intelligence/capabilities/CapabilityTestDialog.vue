@@ -19,14 +19,14 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: boolean]
-  test: [providerId: string, userInput?: string]
+  'test': [providerId: string, userInput?: string]
 }>()
 
 const { t } = useI18n()
 
 const visible = computed({
   get: () => props.modelValue,
-  set: (value) => emits('update:modelValue', value)
+  set: value => emits('update:modelValue', value),
 })
 
 const selectedProviderId = ref<string>('')
@@ -35,11 +35,11 @@ const userInput = ref('')
 watch(
   () => props.enabledProviders,
   (providers) => {
-    if (providers.length > 0 && !selectedProviderId.value) {
-      selectedProviderId.value = providers[0].id
+    if (!providers.some(provider => provider.id === selectedProviderId.value)) {
+      selectedProviderId.value = providers[0]?.id || ''
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 watch(visible, (isVisible) => {
@@ -49,7 +49,8 @@ watch(visible, (isVisible) => {
 })
 
 function handleTest(): void {
-  if (!selectedProviderId.value) return
+  if (!selectedProviderId.value)
+    return
   emits('test', selectedProviderId.value, userInput.value || undefined)
 }
 

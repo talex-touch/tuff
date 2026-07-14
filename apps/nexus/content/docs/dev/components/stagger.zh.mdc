@@ -1,38 +1,34 @@
 ---
 title: "Stagger 依次进入"
-description: "用于列表/节点依次进入（enter/leave）动画。"
+description: "基于子节点 index 的 TransitionGroup enter/leave 依次动画包装器。"
 category: Layout
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [transition, animation, stagger]
+syncStatus: reviewed
+verified: true
 ---
 # Stagger 依次进入
 
-用于列表/节点依次进入（enter/leave）动画。
+`TxStagger` 包装 Vue `TransitionGroup`，并给每个渲染子节点注入 index CSS 变量，让 enter 和 leave 动画按项目顺序延迟。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const items = ref([
-  { id: 'a', text: 'Alpha' },
-  { id: 'b', text: 'Beta' },
-  { id: 'c', text: 'Gamma' },
-  { id: 'd', text: 'Delta' },
-])
-
-function add() {
-  items.value.unshift({ id: `${Date.now()}`, text: `New ${items.value.length + 1}` })
-}
-
-function remove() {
-  items.value.shift()
-}
-</script>
+已人工核对 `packages/tuffex/packages/components/src/stagger/src/types.ts`、`TxStagger.vue` 与 `stagger.test.ts`。
 
 ## 基础用法
 
-### Stagger
 :::TuffDemoWrapper{demo="StaggerStaggerDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const items = ref([
+    { id: 'a', text: 'Alpha' },
+    { id: 'b', text: 'Beta' },
+    { id: 'c', text: 'Gamma' },
+  ])
+  </script>
+
   <template>
     <TxStagger tag="div" :delay-step="30" :duration="180">
       <div v-for="item in items" :key="item.id">{{ item.text }}</div>
@@ -41,16 +37,106 @@ code: |
 ---
 :::
 
+## 组合示例
+
+### 列表过渡
+
+```vue
+<template>
+  <TxStagger tag="ul" name="tx-stagger" :delay-base="40" :delay-step="24">
+    <li v-for="notification in notifications" :key="notification.id">
+      {{ notification.title }}
+    </li>
+  </TxStagger>
+</template>
+```
+
+### 自定义 transition name
+
+```vue
+<template>
+  <TxStagger name="fade-list" :duration="240" easing="linear">
+    <article v-for="card in cards" :key="card.id">
+      {{ card.title }}
+    </article>
+  </TxStagger>
+</template>
+```
+
+```css
+.fade-list-enter-active,
+.fade-list-leave-active {
+  transition: opacity 240ms linear;
+  transition-delay: calc(var(--tx-stagger-index) * 24ms);
+}
+```
+
+## 交互契约
+
+- 组件渲染 Vue `TransitionGroup`，带 `tx-stagger` class，根标签来自 `tag`。
+- 默认插槽 VNode 会先过滤注释节点，再分配 index。
+- 每个渲染子节点会被 clone，并在保留原有 style 的同时追加 `--tx-stagger-index: <index>`。
+- timing props 会写到根节点：`--tx-stagger-duration`、`--tx-stagger-delay-step`、`--tx-stagger-delay-base`、`--tx-stagger-easing`。
+- 内置 CSS 使用 opacity 与 `translateY(6px)` 做 enter/leave 过渡。
+- `name` 与 `appear` 会在 mount 后才传给 TransitionGroup，避免初始渲染时 transition props 泄漏为根属性。
+- 子节点必须有稳定 Vue key，才能得到正确的 `TransitionGroup` move/enter/leave 行为。
+- 追加 stagger index style 时会保留子节点已有 inline style。
+
 ## API
 
 ### Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `tag` | `string` | `'div'` | 容器 tag |
-| `appear` | `boolean` | `true` | 是否首屏也执行 enter |
-| `name` | `string` | `'tx-stagger'` | TransitionGroup name |
-| `duration` | `number` | `180` | 动画时长（ms） |
-| `delayStep` | `number` | `24` | 相邻元素延迟（ms） |
-| `delayBase` | `number` | `0` | 基础延迟（ms） |
-| `easing` | `'ease'\|'ease-in'\|'ease-out'\|'ease-in-out'\|'linear'` | `'ease-out'` | 缓动 |
+| `tag` | `string` | `'div'` | 传给 `TransitionGroup` 的根标签。 |
+| `appear` | `boolean` | `true` | mount 后启用 appear transition。 |
+| `name` | `string` | `'tx-stagger'` | mount 后使用的 TransitionGroup class name 前缀。 |
+| `duration` | `number` | `180` | enter 和 leave 过渡时长，单位 ms。 |
+| `delayStep` | `number` | `24` | 每个渲染子节点 index 增加的额外延迟，单位 ms。 |
+| `delayBase` | `number` | `0` | index 延迟前的基础延迟，单位 ms。 |
+| `easing` | `'ease' \| 'ease-in' \| 'ease-out' \| 'ease-in-out' \| 'linear'` | `'ease-out'` | 内置过渡使用的 CSS timing function。 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| - | - | `TxStagger` 不触发自定义事件。过渡生命周期由 Vue `TransitionGroup` class 提供，不通过组件 emits 暴露。 |
+
+### Slots
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | - | 由 `TransitionGroup` 渲染的带 key 子 VNode。 |
+
+### CSS Variables
+
+| 变量 | 来源 | 说明 |
+|------|------|------|
+| `--tx-stagger-index` | 子节点 index | 每个子节点用于计算延迟的 index。 |
+| `--tx-stagger-duration` | `duration` | 过渡时长。 |
+| `--tx-stagger-delay-step` | `delayStep` | 每个子节点的延迟倍数。 |
+| `--tx-stagger-delay-base` | `delayBase` | 基础延迟。 |
+| `--tx-stagger-easing` | `easing` | 缓动函数。 |
+
+## 最佳实践
+
+- 子节点始终提供稳定 key。没有稳定 key 的依次过渡不可预测。
+- 长列表应保持较小 `delayStep`；过大的延迟会让后面的项目像是卡住。
+- 语义列表使用 `tag="ul"` / `li`，不要把普通 `div` 伪装成列表。
+- 不要把虚拟列表行包进 `TxStagger`；虚拟列表 DOM 复用/增删与 stagger 过渡会互相干扰。
+- 只有同时提供匹配 transition CSS 时才自定义 `name`。
+
+
+## 审阅说明
+
+- 已核对 `packages/tuffex/packages/components/src/stagger/src/TxStagger.vue`、`types.ts` 与 `stagger.test.ts`。
+- 现有测试覆盖根标签透传、插槽渲染、timing CSS 变量、transition prop 泄漏防护、注释节点过滤与子节点 stagger index 赋值。
+- 渲染说明：`name` 与 `appear` 仅在 mount 后应用，因此 SSR/client hydration 不应依赖初始渲染期间的 transition 属性。
+- 可访问性说明：`TxStagger` 不添加语义 role。先选择能保留列表、网格或 feed 语义的 `tag` 与子元素，再处理过渡样式。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/stagger/src/TxStagger.vue`.
+- Types: `packages/tuffex/packages/components/src/stagger/src/types.ts` exports `StaggerProps` and `StaggerEasing`.
+- **实测覆盖:** `packages/tuffex/packages/components/src/stagger/__tests__/stagger.test.ts` 覆盖根标签透传与插槽渲染、timing CSS 变量、transition prop 泄漏防护、注释节点过滤，以及子节点 stagger index 赋值。
+<TuffDocSourceLink />

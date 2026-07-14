@@ -1,46 +1,120 @@
 ---
 title: "CornerOverlay"
-description: "Position a small overlay badge on one corner of inline content."
-category: Basic
-syncStatus: migrated
+description: "Absolute-positioned corner badge layer for avatars, thumbnails, and small status marks."
+category: Layout
+status: beta
+since: 1.0.0
+tags: [overlay, badge, corner]
+syncStatus: reviewed
+verified: true
 ---
 # CornerOverlay
 
-Position a small overlay badge on one corner of inline content, such as status dots, verification icons, or action affordances.
+`TxCornerOverlay` wraps inline content and renders an optional corner overlay layer. It is useful for avatar status dots, verification marks, unread badges, and thumbnail annotations.
 
 ## Basic Usage
 
-### Basic
-:::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
+::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+      <span class="avatar">TD</span>
       <template #overlay>
-        <span style="width:12px;height:12px;border-radius:999px;background:#22c55e;border:2px solid var(--tx-bg-color);" />
-      </template>
-    </TxCornerOverlay>
-
-    <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
-      <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
-      <template #overlay>
-        <span style="background:var(--tx-bg-color);border-radius:999px;padding:2px;box-shadow:0 1px 6px rgba(0,0,0,.12);">
-          <TxIcon name="i-carbon-checkmark-filled" style="font-size:18px;color:var(--tx-color-primary);" />
-        </span>
+        <span class="status-dot" />
       </template>
     </TxCornerOverlay>
   </template>
 ---
-:::
+::::
+
+## Composition Examples
+
+### Clickable Overlay Content
+
+The overlay is `pointer-events: none` by default. Set `overlayPointerEvents="auto"` only when the overlay itself must receive pointer input.
+
+```vue
+<template>
+  <TxCornerOverlay overlay-pointer-events="auto" :offset-x="-4" :offset-y="-4">
+    <TxAvatar :src="avatarUrl" />
+    <template #overlay>
+      <button type="button" aria-label="Open profile actions">•••</button>
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+### CSS Offset Values
+
+```vue
+<template>
+  <TxCornerOverlay offset-x="calc(100% - 12px)" offset-y="-0.25rem">
+    <span>Base</span>
+    <template #overlay>
+      <TxBadge value="New" />
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+String offsets are preserved. Numeric offsets are converted to pixels.
+
+## Interaction Contract
+
+- The root renders an inline-block `span` with `position: relative`.
+- The overlay is rendered only when the `overlay` slot exists.
+- The overlay layer is absolutely positioned and marked `aria-hidden="true"`.
+- `placement` selects which x/y inset pair is written: top/left, top/right, bottom/left, or bottom/right.
+- `offsetX` controls `left` or `right`; `offsetY` controls `top` or `bottom`.
+- Number offsets become pixel values, while string offsets are passed through as-is.
+- `overlayPointerEvents` maps directly to the overlay style.
+- No click, focus, or keyboard behavior is added by the component.
 
 ## API
 
 ### Props
 
 | Prop | Type | Default | Description |
-| --- | --- | --- | --- |
-| placement | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `bottom-right` | Corner used to anchor the overlay layer. |
-| offsetX | `string \| number` | `0` | Horizontal offset from the selected corner; numeric values are normalized to pixels. |
-| offsetY | `string \| number` | `0` | Vertical offset from the selected corner; numeric values are normalized to pixels. |
-| overlayPointerEvents | `'none' \| 'auto'` | `none` | Pointer-events mode for the overlay layer. |
+|------|------|---------|-------------|
+| `placement` | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `'bottom-right'` | Corner used for the overlay. |
+| `offsetX` | `string \| number` | `0` | Horizontal inset. Numbers become px. |
+| `offsetY` | `string \| number` | `0` | Vertical inset. Numbers become px. |
+| `overlayPointerEvents` | `'none' \| 'auto'` | `'none'` | CSS `pointer-events` value for the overlay layer. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | none | Base inline content. |
+| `overlay` | none | Corner layer content. Omitted slot means no overlay node is rendered. |
+
+### Events
+
+No public events are emitted.
+
+### Exposed Methods
+
+No public instance methods are exposed.
+
+## Best Practices
+
+- Keep overlays decorative by default; `aria-hidden` means important status should also be represented in nearby text or labels.
+- Use negative offsets for badges that sit partly outside avatars or thumbnails.
+- Set `overlayPointerEvents="auto"` only for intentional interactive overlays, and provide a semantic control inside the slot.
+- Avoid large overlay content. This component is designed for small marks, not popovers or menus.
+- Keep the base content's size stable; the overlay is positioned absolutely and does not reserve layout space.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`, `TxCornerOverlay.vue`, and `corner-overlay.test.ts`.
+- The overlay slot is conditional and always `aria-hidden`; product-critical status still needs text or a labeled control outside the decorative layer.
+- `overlayPointerEvents="auto"` only forwards CSS pointer behavior. The slotted control owns all keyboard, focus, and label semantics.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/corner-overlay/src/TxCornerOverlay.vue`.
+- Types: `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/corner-overlay/__tests__/corner-overlay.test.ts` verifies absent overlay rendering, `aria-hidden` overlay output, default placement, placement-to-inset styles, string offsets, and pointer-event forwarding.
+
+<TuffDocSourceLink />

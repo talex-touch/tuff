@@ -120,6 +120,8 @@ After implementation:
       casting payload fields locally
 - [ ] Checked that derived state points back to the source event identifier
       (`seq`, `id`, `version`) instead of inventing a second cursor
+- [ ] If source code has a generated/runtime projection (for example an official plugin seed), compare canonical build content with the packaged projection; matching versions alone do not prove freshness.
+- [ ] Verify both fresh install and same-version/different-signature upgrade paths before claiming packaged runtime behavior.
 
 ---
 

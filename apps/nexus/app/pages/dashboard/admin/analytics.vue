@@ -21,7 +21,6 @@ definePageMeta({
     mode: 'out-in',
   },
 })
-
 defineI18nRoute(false)
 
 const { t, locale } = useI18n()

@@ -54,8 +54,14 @@ function enforceNativePermission(
   context: Pick<HandlerContext, 'plugin'> | Pick<StreamContext<unknown>, 'plugin'>,
   apiName: string
 ): void {
-  const pluginName = context.plugin?.name
-  if (!pluginName) return
+  const plugin = context.plugin
+  if (!plugin) return
+
+  if (!plugin.verified || !plugin.uniqueKey) {
+    const error = new Error('Verified plugin context is required') as CodedError
+    error.code = 'ERR_NATIVE_PLUGIN_UNVERIFIED'
+    throw error
+  }
 
   const permissionModule = getPermissionModule()
   if (!permissionModule) {
@@ -64,18 +70,21 @@ function enforceNativePermission(
     throw error
   }
 
-  permissionModule.enforcePermission(pluginName, apiName)
+  permissionModule.enforcePermission(plugin.name, apiName, plugin.sdkapi)
 }
 
 function toPermissionState(
   context: Pick<HandlerContext, 'plugin'>,
   apiName: string
 ): NativeCapabilityStatus['permission'] {
-  const pluginName = context.plugin?.name
-  if (!pluginName) return 'not-required'
+  const plugin = context.plugin
+  if (!plugin) return 'not-required'
+  if (!plugin.verified || !plugin.uniqueKey) return 'denied'
   const permissionModule = getPermissionModule()
   if (!permissionModule) return 'unknown'
-  return permissionModule.checkPermission(pluginName, apiName).allowed ? 'granted' : 'denied'
+  return permissionModule.checkPermission(plugin.name, apiName, plugin.sdkapi).allowed
+    ? 'granted'
+    : 'denied'
 }
 
 function createUnsupportedCapability(

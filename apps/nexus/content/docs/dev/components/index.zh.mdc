@@ -1,7 +1,7 @@
 ---
 title: Tuffex 组件
 description: 塔芙组件库的组件展示中心
-syncStatus: migrated
+syncStatus: reviewed
 verified: true
 ---
 
@@ -311,6 +311,7 @@ code: |
 ## 设计模式
 
 - [Foundations 设计基础](./foundations.zh.md)
+- [BaseSurface 基础表面](./base-surface.zh.md)
 - [GlassSurface 玻璃拟态](./glass-surface.zh.md)
 - [GradientBorder 渐变边框](./gradient-border.zh.md)
 - [OutlineBorder 描边容器](./outline-border.zh.md)
@@ -331,6 +332,7 @@ code: |
 
 - [Agents 智能体列表](./agents.zh.md)
 - [Chat 消息列表](./chat.zh.md)
+- [AI Elements AI 对话元素](./ai-elements.zh.md)
 - [ChatComposer 消息输入](./chat-composer.zh.md)
 - [MarkdownView Markdown 渲染](./markdown-view.zh.md)
 - [ImageGallery 图片预览](./image-gallery.zh.md)
@@ -354,13 +356,23 @@ code: |
 - [Tag 标签](./tag.zh.md)
 - [Divider 分割线](./divider.zh.md)
 - [StatCard 指标卡片](./stat-card.zh.md)
+- [IconButton 图标按钮](./icon-button.zh.md)
+- [CopyButton 复制按钮](./copy-button.zh.md)
+- [Kbd 快捷键](./kbd.zh.md)
+- [OS Icon 系统图标](./os-icon.zh.md)
+- [Badge 徽标](./badge.zh.md)
 
 ## 表单与输入
 
 - [Input 输入](./input.zh.md)
 - [CodeEditor 代码编辑器](./code-editor.zh.md)
+- [Textarea 多行输入](./textarea.zh.md)
+- [NumberInput 数字输入](./number-input.zh.md)
+- [FlatInput 扁平输入](./flat-input.zh.md)
 - [Select 选择器](./select.zh.md)
+- [MarkdownEditor Markdown 编辑器](./markdown-editor.zh.md)
 - [FlatRadio 平铺单选](./flat-radio.zh.md)
+- [FlatSelect 扁平选择](./flat-select.zh.md)
 - [SearchInput 搜索输入框](./search-input.zh.md)
 - [SearchSelect 搜索选择器](./search-select.zh.md)
 - [Checkbox 复选框](./checkbox.zh.md)
@@ -379,8 +391,10 @@ code: |
 ## 反馈与状态
 
 - [Dialog 弹窗](./dialog.zh.md)
+- [Alert 提示条](./alert.zh.md)
 - [Drawer 抽屉](./drawer.zh.md)
 - [FlipOverlay 翻转遮罩](./flip-overlay.zh.md)
+- [Modal 模态框](./modal.zh.md)
 - [Toast 提示](./toast.zh.md)
 - [Tooltip 提示](./tooltip.zh.md)
 - [Popover 弹出层](./popover.zh.md)
@@ -396,6 +410,7 @@ code: |
 - [PermissionState 权限不足](./permission-state.zh.md)
 - [SearchEmpty 搜索空态](./search-empty.zh.md)
 - [Skeleton 骨架屏](./skeleton.zh.md)
+- [Collapse 折叠](./collapse.zh.md)
 - [LayoutSkeleton 布局骨架](./layout-skeleton.zh.md)
 - [NoData 无数据](./no-data.zh.md)
 - [NoSelection 未选择](./no-selection.zh.md)
@@ -404,6 +419,7 @@ code: |
 ## 布局与导航
 
 - [Grid 栅格](./grid.zh.md)
+- [CardItem 卡片项](./card-item.zh.md)
 - [GridLayout 网格布局](./grid-layout.zh.md)
 - [Flex 弹性布局](./flex.zh.md)
 - [Stack 堆叠](./stack.zh.md)
@@ -414,6 +430,7 @@ code: |
 - [NavBar 导航栏](./nav-bar.zh.md)
 - [TabBar 底部导航](./tab-bar.zh.md)
 - [Tabs 标签页](./tabs.zh.md)
+- [Breadcrumb 面包屑](./breadcrumb.zh.md)
 - [DropdownMenu 下拉菜单](./dropdown-menu.zh.md)
 - [CommandPalette 命令面板](./command-palette.zh.md)
 - [ContextMenu 右键菜单](./context-menu.zh.md)
@@ -427,6 +444,7 @@ code: |
 - [SortableList 拖拽排序](./sortable-list.zh.md)
 - [VirtualList 虚拟列表](./virtual-list.zh.md)
 - [Steps 步骤条](./steps.zh.md)
+- [Rating 评分](./rating.zh.md)
 - [Timeline 时间线](./timeline.zh.md)
 - [Transfer 穿梭框](./transfer.zh.md)
 
@@ -437,3 +455,10 @@ code: |
 - [TypingIndicator 打字中](./typing-indicator.zh.md)
 - [MarkdownView Markdown 渲染](./markdown-view.zh.md)
 - [ImageGallery 图片预览](./image-gallery.zh.md)
+
+## 审阅说明
+
+- 中心页范围：本页是组件文档索引和组合 Demo 指南；单组件 API、Props、最佳实践细节由各组件详情页承载。
+- 源码注册表：`packages/tuffex/packages/components/src/components.ts` 定义文档覆盖测试使用的导出组件 slug 集合。
+- Demo 注册表：`apps/nexus/app/components/content/demo-registry.ts` 把本页每个 `TuffDemoWrapper` demo 映射到独立 Vue demo 文件。
+- **实测覆盖:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` 校验导出组件具备中英文文档、本地化中心页链接已文档化组件、所有 demo 引用都能解析到已注册 Vue 文件。

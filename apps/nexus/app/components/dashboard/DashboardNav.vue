@@ -217,7 +217,7 @@ const adminMenuItems = computed(() => {
     {
       id: 'intelligence',
       label: t('dashboard.sections.menu.intelligence', '实验场'),
-      icon: 'i-carbon-machine-learning-model',
+      icon: 'i-carbon-machine-learning',
     },
     {
       id: 'governance',

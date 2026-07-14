@@ -101,10 +101,11 @@ const resultTransitionName = computed(() => {
 
 type CoreBoxSendFeatureItem = TuffItem & {
   meta?: {
-    interaction?: { type?: string; sendMode?: boolean }
+    interaction?: { type?: string, sendMode?: boolean }
+    activationFeature?: CoreBoxSendFeatureItem
     payload?: Record<string, unknown>
   }
-  interaction?: { type?: string; sendMode?: boolean }
+  interaction?: { type?: string, sendMode?: boolean }
 }
 
 function getFeatureInteraction(feature: CoreBoxSendFeatureItem | null | undefined) {
@@ -117,18 +118,26 @@ function isWidgetFeature(feature: CoreBoxSendFeatureItem | null | undefined): bo
 
 function isSendModeFeature(feature: CoreBoxSendFeatureItem | null | undefined): boolean {
   const interaction = getFeatureInteraction(feature)
-  if (!interaction) return false
-  if (interaction.sendMode === false) return false
+  if (!interaction)
+    return false
+  if (interaction.sendMode === false)
+    return false
   return interaction.sendMode === true || interaction.type === 'widget'
 }
 
 const activeSendTargetItem = computed<CoreBoxSendFeatureItem | null>(() => {
-  if (!activeActivations.value || activeActivations.value.length === 0) return null
+  if (!activeActivations.value || activeActivations.value.length === 0)
+    return null
   for (const activation of activeActivations.value) {
-    if (activation.id !== 'plugin-features') continue
-    const meta = activation?.meta as { feature?: CoreBoxSendFeatureItem }
-    const feature = meta?.feature
-    if (feature && isSendModeFeature(feature)) return feature
+    if (activation.id !== 'plugin-features')
+      continue
+    const meta = activation?.meta as {
+      activationFeature?: CoreBoxSendFeatureItem
+      feature?: CoreBoxSendFeatureItem
+    }
+    const feature = meta?.activationFeature || meta?.feature
+    if (feature && isSendModeFeature(feature))
+      return feature
   }
   return null
 })
@@ -190,11 +199,70 @@ async function handleWidgetHostAction(
     item: JSON.parse(JSON.stringify(actionItem)),
     actionId: payload.actionId
   })
-  applyCoreBoxActivationState(activationState)
+  if (activationState !== null && activationState !== undefined) {
+    applyCoreBoxActivationState(activationState)
+  }
+}
+
+function getCoreBoxPluginActivationKey(activation: IProviderActivate): string | null {
+  if (activation.id !== 'plugin-features')
+    return null
+  const meta = activation.meta as Record<string, unknown> | null | undefined
+  const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : ''
+  const featureId = typeof meta?.featureId === 'string' ? meta.featureId : ''
+  return pluginName && featureId ? `${pluginName}:${featureId}` : null
+}
+
+function mergeCoreBoxWidgetActivationState(
+  next: IProviderActivate[] | null,
+  previous: IProviderActivate[] | null,
+): IProviderActivate[] | null {
+  if (!next?.length || !previous?.length)
+    return next
+
+  return next.map((activation) => {
+    const activationKey = getCoreBoxPluginActivationKey(activation)
+    if (!activationKey)
+      return activation
+    const previousActivation = previous.find(
+      candidate => getCoreBoxPluginActivationKey(candidate) === activationKey,
+    )
+    if (!previousActivation)
+      return activation
+
+    const nextMeta = (activation.meta ?? {}) as Record<string, unknown>
+    const previousMeta = (previousActivation.meta ?? {}) as Record<string, unknown>
+    const nextFeature = nextMeta.feature as TuffItem | undefined
+    const previousFeature = previousMeta.feature as TuffItem | undefined
+    const widgetFeature = isPluginWidgetRenderItem(nextFeature)
+      ? nextFeature
+      : isPluginWidgetRenderItem(previousFeature)
+        ? previousFeature
+        : null
+    if (!widgetFeature)
+      return activation
+    const activationFeature = isPluginWidgetRenderItem(nextFeature)
+      ? (nextMeta.activationFeature ?? previousMeta.activationFeature ?? previousFeature)
+      : nextFeature
+
+    return {
+      ...previousActivation,
+      ...activation,
+      meta: {
+        ...previousMeta,
+        ...nextMeta,
+        ...(activationFeature ? { activationFeature } : {}),
+        feature: widgetFeature,
+      },
+    }
+  })
 }
 
 function applyCoreBoxActivationState(state: unknown): void {
-  const activations = normalizeCoreBoxActivationState(state)
+  const activations = mergeCoreBoxWidgetActivationState(
+    normalizeCoreBoxActivationState(state),
+    activeActivations.value,
+  )
   activeActivations.value = activations
   const widgetFeature = activations
     ?.map((activation) => {

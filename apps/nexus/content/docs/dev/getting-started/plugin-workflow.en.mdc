@@ -12,44 +12,47 @@ If the plugin needs a heavier Vue/React UI, keep the same flow: Manifest declare
 
 New plugins should use `main: "index.js"` and declare the latest `sdkapi`, category, permissions, and permission reasons.
 
-:::TuffCodeBlock{lang="json"}
----
+## :::TuffCodeBlock{lang="json"}
+
 code: |
-  {
-    "id": "com.example.quick-note",
-    "name": "quick-note",
-    "version": "0.1.0",
-    "author": "Example",
-    "sdkapi": 260626,
-    "category": "productivity",
-    "description": "Save selected text as a quick note.",
-    "main": "index.js",
-    "permissions": {
-      "required": ["clipboard.read"],
-      "optional": ["clipboard.write"]
-    },
-    "permissionReasons": {
-      "clipboard.read": "Read clipboard text as note content",
-      "clipboard.write": "Copy processed note content back to the clipboard"
-    },
-    "features": [
-      {
-        "id": "quick-note.save",
-        "name": "Save Quick Note",
-        "desc": "Save input or clipboard text as a note",
-        "keywords": ["note", "memo"],
-        "push": true,
-        "acceptedInputTypes": ["text"],
-        "commands": [
-          { "type": "over", "value": ["note", "memo"] }
-        ]
-      }
-    ]
-  }
+{
+"id": "com.example.quick-note",
+"name": "quick-note",
+"version": "0.1.0",
+"author": "Example",
+"sdkapi": 260626,
+"category": "productivity",
+"description": "Save selected text as a quick note.",
+"main": "index.js",
+"permissions": {
+"required": ["clipboard.read"],
+"optional": ["clipboard.write"]
+},
+"permissionReasons": {
+"clipboard.read": "Read clipboard text as note content",
+"clipboard.write": "Copy processed note content back to the clipboard"
+},
+"features": [
+{
+"id": "quick-note.save",
+"name": "Save Quick Note",
+"desc": "Save input or clipboard text as a note",
+"keywords": ["note", "memo"],
+"push": true,
+"acceptedInputTypes": ["text"],
+"commands": [
+{ "type": "over", "value": ["note", "memo"] }
+]
+}
+]
+}
+
 ---
+
 :::
 
 Checklist:
+
 - `sdkapi >= 260114` requires `category`.
 - Keep `permissions.required` limited to startup or core-path requirements.
 - Add `permissionReasons` for every non-auto-granted permission so users understand the request.
@@ -58,40 +61,40 @@ Checklist:
 
 `index.js` is the plugin Prelude. It runs in a Node.js sandbox and reads plugin APIs from `globalThis`.
 
-:::TuffCodeBlock{lang="javascript"}
----
+## :::TuffCodeBlock{lang="javascript"}
+
 code: |
-  const { clipboard, logger, box, TuffItemBuilder } = globalThis
+const { clipboard, logger, box, TuffItemBuilder } = globalThis
 
-  const PLUGIN_NAME = 'quick-note'
-  const COPY_ACTION_ID = 'copy'
+const PLUGIN_NAME = 'quick-note'
+const COPY_ACTION_ID = 'copy'
 
-  function getQueryText(query) {
-    return typeof query === 'string' ? query : query?.text ?? ''
-  }
+function getQueryText(query) {
+return typeof query === 'string' ? query : query?.text ?? ''
+}
 
-  function buildCopyItem(text) {
-    return new TuffItemBuilder('quick-note.copy')
-      .setSource('plugin', 'plugin-features', PLUGIN_NAME)
-      .setTitle('Copy note content')
-      .setSubtitle(text.slice(0, 80))
-      .setMeta({
-        pluginName: PLUGIN_NAME,
-        defaultAction: COPY_ACTION_ID,
-      })
-      .createAndAddAction(COPY_ACTION_ID, 'copy', 'Copy', text)
-      .build()
-  }
+function buildCopyItem(text) {
+return new TuffItemBuilder('quick-note.copy')
+.setSource('plugin', 'plugin-features', PLUGIN_NAME)
+.setTitle('Copy note content')
+.setSubtitle(text.slice(0, 80))
+.setMeta({
+pluginName: PLUGIN_NAME,
+defaultAction: COPY_ACTION_ID,
+})
+.createAndAddAction(COPY_ACTION_ID, 'copy', 'Copy', text)
+.build()
+}
 
-  module.exports = {
-    async onFeatureTriggered(featureId, query, feature, signal) {
-      const text = getQueryText(query).trim()
-      if (!text) {
-        return []
-      }
-      logger.info('feature triggered', { featureId, featureName: feature?.name })
-      return [buildCopyItem(text)]
-    },
+module.exports = {
+async onFeatureTriggered(featureId, query, feature, signal) {
+const text = getQueryText(query).trim()
+if (!text) {
+return []
+}
+logger.info('feature triggered', { featureId, featureName: feature?.name })
+return [buildCopyItem(text)]
+},
 
     async onItemAction(item) {
       const action = item.actions?.find(action => action.id === COPY_ACTION_ID || action.type === 'copy')
@@ -100,11 +103,13 @@ code: |
       }
       box?.hide?.()
     },
-  }
----
+
+## }
+
 :::
 
 Checklist:
+
 - Do not use the legacy `init(ctx)` model for new plugins.
 - Treat `query` as either a string or a `TuffQuery` object.
 - Build results with `TuffItemBuilder` and include `pluginName` plus the default action in `meta`.
@@ -114,28 +119,56 @@ Checklist:
 
 Choose the smallest SDK for the task. Do not request permissions for future features.
 
-| Task | Recommended entry | Notes |
-| --- | --- | --- |
-| CoreBox results | `TuffItemBuilder`, Feature SDK | Build items directly in Prelude; use Feature SDK for more complex dynamic lists. |
-| Clipboard | `clipboard` or `useClipboard()` | Clipboard write is low risk; clipboard read requires `clipboard.read` and should be requested only when needed. |
-| Plugin settings | `storage` or `usePluginStorage()` | Use for regular settings and non-sensitive data; each plugin has a storage quota. |
-| Structured plugin data | `usePluginSqlite()` | Requires `sdkapi >= 260215` and `storage.sqlite`. |
-| Secrets | `usePluginSecret()` | API keys, tokens, and provider secrets must not be stored in plain JSON, localStorage, or logs. |
-| Private user sync | `CloudSyncSDK` | Uses `/api/v1/sync/*`; sync payloads must be encrypted through `payload_enc` or `payload_ref`. |
-| Content sharing | `CloudShareSDK` | Publishes public or team-visible plugin content packages, such as snippet packs; do not use it as private sync. |
-| Transport | typed transport SDK | New capabilities should use typed transport instead of adding raw IPC dependencies. |
+| Task                    | Recommended entry                 | Notes                                                                                                                                            |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CoreBox results         | `TuffItemBuilder`, Feature SDK    | Build items directly in Prelude; use Feature SDK for more complex dynamic lists.                                                                 |
+| Clipboard               | `clipboard` or `useClipboard()`   | Clipboard write is low risk; clipboard read requires `clipboard.read` and should be requested only when needed.                                  |
+| Plugin settings         | `storage` or `usePluginStorage()` | Use for regular settings and non-sensitive data; each plugin has a storage quota.                                                                |
+| Structured plugin data  | `usePluginSqlite()`               | Requires `sdkapi >= 260215` and `storage.sqlite`.                                                                                                |
+| Secrets                 | `usePluginSecret()`               | API keys, tokens, and provider secrets must not be stored in plain JSON, localStorage, or logs.                                                  |
+| Private user sync       | `CloudSyncSDK`                    | Uses `/api/v1/sync/*`; sync payloads must be encrypted through `payload_enc` or `payload_ref`.                                                   |
+| Content sharing         | `CloudShareSDK`                   | Publishes public or team-visible plugin content packages, such as snippet packs; do not use it as private sync.                                  |
+| Transport               | typed transport SDK               | New capabilities should use typed transport instead of adding raw IPC dependencies.                                                              |
+| AI capability / command | `intelligence`                    | Declare `intelligence.basic`, discover capability health first, and pass per-command templates through typed invoke options rather than raw IPC. |
+
+For a Raycast-style AI Command, keep the command definition in the plugin and let the host own provider selection, audit, quota, and fallback:
+
+## ::::TuffCodeBlock{lang="javascript"}
+
+code: |
+const { intelligence } = globalThis
+
+async function runRewriteCommand(text, tone) {
+const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+if (!status.available) throw new Error(status.reason || 'AI unavailable')
+
+    return intelligence.text.chat(
+      { messages: [{ role: 'user', content: text }] },
+      {
+        promptTemplate: 'Rewrite the input in a {{tone}} tone. Return only the rewritten text.',
+        promptVariables: { tone },
+      },
+    )
+
+## }
+
+::::
+
+Do not store provider credentials in the command, prompt variables, plugin storage, or logs. See [Intelligence SDK](../api/intelligence.en.md) for the typed contract.
 
 ## 4. Validate
 
 Run these local checks before publishing:
 
-:::TuffCodeBlock{lang="bash"}
----
+## :::TuffCodeBlock{lang="bash"}
+
 code: |
-  tuff validate --strict
-  tuff build
-  tuff publish --dry-run
+tuff validate --strict
+tuff build
+tuff publish --dry-run
+
 ---
+
 :::
 
 Repository changes should also include nearest-path validation such as focused Vitest, file-level ESLint, and `git diff --check`. Do not report unrelated historical lint noise as a failure of the current plugin change.
@@ -144,18 +177,21 @@ Repository changes should also include nearest-path validation such as focused V
 
 Standard publish path:
 
-:::TuffCodeBlock{lang="bash"}
----
+## :::TuffCodeBlock{lang="bash"}
+
 code: |
-  tuff login
-  tuff validate --strict
-  tuff build
-  tuff publish --dry-run
-  tuff publish --tag 0.1.0 --channel BETA
+tuff login
+tuff validate --strict
+tuff build
+tuff publish --dry-run
+tuff publish --tag 0.1.0 --channel BETA
+
 ---
+
 :::
 
 Publishing notes:
+
 - `tuff build` creates `dist/build/` and the `.tpex` plugin package.
 - `tuff publish --dry-run` previews locally without uploading.
 - Nexus API keys need at least `plugin:publish`; publisher preflight validates publisher access, and the publish scope covers the plugin read needed before upload.

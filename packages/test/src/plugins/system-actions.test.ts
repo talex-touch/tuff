@@ -305,6 +305,7 @@ describe('system actions plugin', () => {
 
   it('blocks shell action execution when safe-shell is unavailable before permission request', async () => {
     const requested: string[] = []
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     const globals = createPluginGlobals({
       permission: {
         check: async () => true,
@@ -318,21 +319,31 @@ describe('system actions plugin', () => {
       new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
       globals,
     )
+    pluginModule.__test.setSpawnShellCommandForTest(null)
 
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'system-actions',
-        actionId: 'lock-screen',
-      },
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      enumerable: true,
+      value: 'darwin',
     })
 
-    if (systemTest.isShellPlatformSupported(process.platform) && systemTest.resolveShellStatus().status !== 'available') {
+    try {
+      const result = await pluginModule.onItemAction({
+        meta: {
+          defaultAction: 'system-actions',
+          actionId: 'lock-screen',
+        },
+      })
+
       expect(result).toMatchObject({
         externalAction: true,
         status: 'blocked',
         reason: 'safe-shell-unavailable',
       })
       expect(requested).toEqual([])
+    }
+    finally {
+      Object.defineProperty(process, 'platform', platformDescriptor!)
     }
   })
 
@@ -437,5 +448,52 @@ describe('system actions plugin', () => {
       reason: 'permission-request-failed',
     })
     expect(shellCalls).toEqual([])
+  })
+
+  it('does not request or execute shell action when permission check fails', async () => {
+    const shellCalls: string[] = []
+    const requested: string[] = []
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: {
+          check: async () => {
+            throw new Error('permission check failed')
+          },
+          request: async (permissionId: string) => {
+            requested.push(permissionId)
+            return true
+          },
+        },
+      }),
+    )
+    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      enumerable: true,
+      value: 'darwin',
+    })
+
+    try {
+      const result = await pluginModule.onItemAction({
+        meta: {
+          defaultAction: 'system-actions',
+          actionId: 'lock-screen',
+        },
+      })
+
+      expect(result).toMatchObject({
+        externalAction: true,
+        status: 'blocked',
+        reason: 'permission-request-failed',
+      })
+      expect(requested).toEqual([])
+      expect(shellCalls).toEqual([])
+    }
+    finally {
+      Object.defineProperty(process, 'platform', platformDescriptor!)
+    }
   })
 })

@@ -354,6 +354,22 @@
         "name": "Global Shortcuts",
         "desc": "Register system-wide global shortcuts"
       }
+    },
+    "i18n": {
+      "read": {
+        "name": "Read App Language",
+        "desc": "Read the current app language and resolve localized plugin text"
+      }
+    },
+    "lexicon": {
+      "read": {
+        "name": "Read Domain Lexicon",
+        "desc": "Search and resolve official and plugin-scoped terminology"
+      },
+      "register": {
+        "name": "Register Domain Lexicon",
+        "desc": "Register bounded terminology inside this plugin's isolated namespace"
+      }
     }
   },
   "settingUser": {
@@ -399,6 +415,55 @@
     "deviceManagement": "Device management",
     "logoutSuccess": "Signed out",
     "logoutFailed": "Failed to sign out",
+    "loginSuccessToast": "Signed in",
+    "stepUpPrompt": "Complete secondary verification in your browser.",
+    "browserOpenManualToast": "The browser did not open automatically. Copy the sign-in link to continue.",
+    "completeBrowserLoginToast": "Complete sign-in in your browser.",
+    "loginPageReopenedToast": "Sign-in page reopened.",
+    "tokenRequired": "Enter a token",
+    "secureStorageTitle": "Login credential protection",
+    "syncNow": "Sync now",
+    "syncEnableFirst": "Turn on sync first",
+    "syncComplete": "Sync complete",
+    "syncFailed": "Sync failed",
+    "syncDescriptions": {
+      "autoEnabled": "Enabled by default after sign-in; you can turn it off here.",
+      "enabled": "Sync is on.",
+      "userDisabled": "You turned sync off; it will not automatically resume after sign-in.",
+      "disabled": "Sync is off."
+    },
+    "secureStorage": {
+      "enabledToast": "Login credential protection enabled",
+      "disabledToast": "Login credential protection disabled.",
+      "disabledDescription": "Enable login credential protection for stronger local credential protection and safer sign-in.",
+      "checkingDescription": "Checking the local credential protection backend.",
+      "unavailableDescription": "Local credential protection is unavailable. When available, enabling it gives stronger protection and safer sign-in.",
+      "enabledDescription": "Login credential protection is enabled: credentials are encrypted with this device's root key for stronger protection.",
+      "sessionModeReminder": "Login credential protection is off. Enable it in Account settings for stronger local credential protection."
+    },
+    "syncStatus": {
+      "unrecorded": "Not recorded",
+      "status": {
+        "idle": "Idle",
+        "syncing": "Syncing",
+        "paused": "Paused",
+        "error": "Error"
+      },
+      "blocked": {
+        "quota": "Quota limited",
+        "device": "Device unauthorized",
+        "auth": "Authentication issue"
+      },
+      "parts": {
+        "status": "Status: {status}",
+        "lastSuccess": "Last success: {value}",
+        "lastPush": "Last push: {value}",
+        "lastPull": "Last pull: {value}",
+        "queue": "Queue: {count}",
+        "blocked": "Blocked: {reason}",
+        "error": "Error: {code}"
+      }
+    },
     "authErrors": {
       "initializationFailed": "Authentication could not initialize. Check your connection and try again.",
       "signInFailed": "Sign-in failed. Check your connection and try again.",
@@ -1086,7 +1151,8 @@
         "storage": "Storage",
         "window": "Window",
         "search": "Search",
-        "media": "Media"
+        "media": "Media",
+        "localization": "Localization & Lexicon"
       },
       "shortcuts": {
         "title": "Shortcuts",
@@ -1206,6 +1272,22 @@
           "read": {
             "name": "Read Media",
             "desc": "Read media metadata and thumbnails"
+          }
+        },
+        "i18n": {
+          "read": {
+            "name": "Read App Language",
+            "desc": "Read the current app language and resolve localized plugin text"
+          }
+        },
+        "lexicon": {
+          "read": {
+            "name": "Read Domain Lexicon",
+            "desc": "Search and resolve official and plugin-scoped terminology"
+          },
+          "register": {
+            "name": "Register Domain Lexicon",
+            "desc": "Register bounded terminology inside this plugin's isolated namespace"
           }
         }
       },
@@ -1672,6 +1754,10 @@
       "providerDisabled": "Provider disabled",
       "authRequired": "Sign-in required",
       "quotaExceeded": "Quota exceeded",
+      "quotaCheckUnavailable": "Quota verification unavailable",
+      "networkFailure": "Network request failed",
+      "invalidRequest": "Invalid AI request",
+      "unknownFailure": "AI request failed",
       "rateLimited": "Rate limited",
       "unsupportedPlatform": "Unsupported platform",
       "permissionDenied": "Permission denied",
@@ -1692,6 +1778,9 @@
       "switchCapability": "Switch to a provider or model that supports this capability.",
       "signIn": "Sign in to Nexus, then run the action again.",
       "checkQuota": "Check credits or quota before retrying.",
+      "inspectQuota": "Inspect Intelligence quota storage and configuration, then retry.",
+      "retryNetwork": "Check the network or provider endpoint, then retry.",
+      "fixRequest": "Review the request input and parameters before retrying.",
       "retryLater": "Wait for the rate limit to reset, then retry.",
       "unsupportedPlatform": "Use this action on a supported platform.",
       "grantPermission": "Grant the required permission before executing.",
@@ -3614,6 +3703,16 @@
       "translateScreenshot": "Screenshot and translate",
       "captureScreenshot": "Capture and copy",
       "saveScreenshot": "Save screenshot",
+      "screenshotMode": "Screenshot source",
+      "screenshotModeCursorDisplay": "Display under pointer",
+      "screenshotModeSelectedDisplay": "Choose a display",
+      "screenshotModeRegion": "Select a region",
+      "screenshotRegionDisplay": "Selection display",
+      "screenshotRegionDisplayCursor": "Display under pointer",
+      "screenshotRegionSelecting": "Drag to select a screenshot region. Press Esc to cancel.",
+      "screenshotRegionSelectionUnavailable": "Region selection is unavailable. Choose a display or try again.",
+      "screenshotDisplay": "Display",
+      "screenshotDisplayPrimary": "Primary",
       "imageTranslatingShort": "Translating...",
       "screenshotTranslatingShort": "Translating...",
       "screenshotCapturingShort": "Capturing...",
@@ -3623,12 +3722,37 @@
       "clipboardImageTranslateFailed": "Clipboard image translation failed. Please try again later.",
       "screenshotTranslating": "Taking and translating a screenshot...",
       "screenshotTranslateReady": "Screenshot translation opened",
+      "screenshotTextFallbackReady": "Image translation was unavailable. OCR text translation is shown below.",
+      "screenshotTextFallbackTitle": "OCR text translation",
+      "screenshotTextFallbackSource": "Detected text",
+      "screenshotTextFallbackTarget": "Translation",
+      "screenshotTextFallbackMetadata": "OCR: {ocr} · Translation: {translation}",
+      "screenshotImageTranslateRouteTitle": "Image translation route",
+      "screenshotImageTranslateRouteStage": "{capability}: {route}",
+      "screenshotImageTranslateRouteStageLatency": "{stage} · {latency} ms",
+      "screenshotImageTranslateRouteSummary": "{duration} ms total · Run {runId}",
+      "screenshotFallbackProviderUnknown": "Unknown provider",
+      "screenshotOcrUnavailable": "Image translation is unavailable and OCR could not extract text from the screenshot.",
+      "screenshotTextTranslateUnavailable": "OCR extracted text, but text translation is unavailable. Check login, quota, or provider status.",
       "screenshotTranslateFailed": "Screenshot translation failed. Please try again later.",
       "screenshotCapturing": "Capturing and copying the screenshot...",
       "screenshotCaptureReady": "Screenshot copied. Preview is shown below.",
       "screenshotCaptureFailed": "Screenshot capture failed. Please try again later.",
       "screenshotCaptureAssistantDisabled": "Enable Assistant and the floating ball in Settings first.",
       "screenshotPermissionDenied": "Screenshot permission is denied. Allow Tuff screen recording in system privacy settings and try again.",
+      "openScreenshotPermissionSettings": "Open Screen Recording settings",
+      "openingScreenshotPermissionSettings": "Opening settings...",
+      "screenshotPermissionSettingsOpened": "Screen Recording settings opened. Allow Tuff, then retry the screenshot.",
+      "screenshotPermissionSettingsUnavailable": "Could not open Screen Recording settings. Open System Settings > Privacy & Security > Screen Recording manually.",
+      "openMicrophonePermissionSettings": "Manage microphone access",
+      "openingMicrophonePermissionSettings": "Requesting microphone access...",
+      "microphonePermissionSettingsOpened": "Microphone permission flow completed. Select Retry voice input.",
+      "microphonePermissionSettingsUnavailable": "Could not request or open Microphone settings. Allow Tuff to use the microphone in system privacy settings.",
+      "retryVoiceInput": "Retry voice input",
+      "openIntelligenceSettings": "Open AI provider settings",
+      "openingIntelligenceSettings": "Opening AI settings...",
+      "intelligenceSettingsOpened": "AI provider settings opened. Check login, quota, and provider status, then retry.",
+      "intelligenceSettingsUnavailable": "Could not open AI provider settings. Open Intelligence from the main window.",
       "screenshotUnsupported": "Native screenshot is not supported on this platform or runtime.",
       "screenshotCaptureUnavailable": "Screenshot is unavailable. Check screen recording permission or try again later.",
       "screenshotSaving": "Saving the screenshot...",
@@ -3647,6 +3771,13 @@
       "screenshotTranslateImageUnavailable": "The screenshot image is invalid. Take another screenshot and try again.",
       "imageTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status.",
       "screenshotTranslateProviderUnavailable": "Image translation is unavailable. Check login, quota, or provider status."
+    },
+    "regionSelector": {
+      "title": "Select a screenshot region",
+      "hint": "Drag across the area to capture. Press Esc or right-click to cancel.",
+      "cancel": "Cancel",
+      "submitFailed": "Could not use this region. Drag again.",
+      "cancelFailed": "Could not close the selector. Press Esc again."
     }
   },
   "settingPermission": {
@@ -3712,6 +3843,8 @@
       "authDetail": "Sign in to Tuff Nexus, then retry this AI request.",
       "quotaTitle": "AI quota unavailable",
       "quotaDetail": "Check your Nexus credits or team quota before retrying.",
+      "quotaVerificationTitle": "Quota verification unavailable",
+      "quotaVerificationDetail": "Retry later. If this continues, inspect Intelligence quota storage and configuration.",
       "providerTitle": "AI provider unavailable",
       "providerDetail": "Check provider health, credentials, or choose another model.",
       "credentialsTitle": "Provider credentials need attention",
@@ -3928,27 +4061,35 @@
     },
     "memoryReview": {
       "title": "Memory Review",
-      "description": "Manually evaluate memory candidates and save only after policy allows it",
+      "description": "Search, audit, and manage local memory through policy evaluation",
       "panelTitle": "Manual memory candidate",
+      "editTitle": "Edit saved memory",
+      "editingId": "Replacing",
       "panelDescription": "Run policy evaluation first, then explicitly confirm any local memory write.",
       "manualOnly": "Manual save only",
       "contentLabel": "Candidate content",
       "contentPlaceholder": "Enter a preference, project constraint, or temporary context to keep",
+      "summaryPlaceholder": "Optional; generated from content when empty",
+      "tagsPlaceholder": "Separate tags with commas",
       "typeLabel": "Type",
       "scopeLabel": "Scope",
       "evaluate": "Evaluate policy",
       "save": "Save memory",
+      "replace": "Confirm replacement",
       "ignore": "Ignore",
       "summary": "Summary",
       "privacy": "Privacy level",
       "confidence": "Confidence",
       "tags": "Tags",
       "contentRequired": "Enter candidate content",
-      "contentChanged": "Content changed. Evaluate again before saving.",
+      "contentChanged": "The form changed. Evaluate again before saving.",
+      "evaluationInvalidated": "The edited fields changed, so the previous policy evaluation is no longer valid.",
       "failClosed": "This result will not be written to memory.",
       "evaluateFailed": "Failed to evaluate memory policy",
       "saveFailed": "Failed to save memory",
       "saveSuccess": "Memory saved",
+      "replaceSuccess": "Memory replaced atomically",
+      "replaceConflict": "The original memory changed. Refresh and evaluate again.",
       "savedId": "Saved ID",
       "loadFailed": "Failed to load memories",
       "enable": "Enable",
@@ -3961,9 +4102,26 @@
       "deleteSuccess": "Memory deleted",
       "deleteFailed": "Failed to delete memory",
       "savedTitle": "Saved memories",
-      "savedDescription": "Review available normal memories and write a tombstone when deleting one.",
+      "savedDescription": "Find memories by keyword, type, scope, or status. Editing creates a replacement and tombstones the original.",
       "savedEmpty": "No saved memories yet",
       "usageCount": "Usage count",
+      "searchLabel": "Search",
+      "searchPlaceholder": "Search content, summary, or tags",
+      "filterAll": "All",
+      "memoryStatus": "Status",
+      "enabled": "Enabled",
+      "applyFilters": "Apply filters",
+      "edit": "Edit",
+      "sourceSession": "Source session",
+      "sourceTurn": "Source turn",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "lastUsedAt": "Last used",
+      "replacesMemory": "Replaces",
+      "notAvailable": "None",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {page}",
       "types": {
         "preference": "Preference",
         "project": "Project",
@@ -4018,6 +4176,9 @@
       "contextExcluded": "Excluded",
       "contextPolicyBlocked": "Policy blocked",
       "contextPruned": "Budget pruned",
+      "contextTombstoned": "Removed after deletion",
+      "contextReasonMemoryTombstoned": "Deleted memory removed before AI invocation",
+      "contextTombstoneNotice": "{count} deleted memory source(s) were removed after context preparation.",
       "contextIncludedSources": "Included sources",
       "contextExcludedSources": "Excluded sources",
       "contextExcludedEmpty": "No excluded sources",

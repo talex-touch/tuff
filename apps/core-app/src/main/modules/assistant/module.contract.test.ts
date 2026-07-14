@@ -34,7 +34,7 @@ const enLocaleSource = readFileSync(
 const assistantEventsSource = readFileSync(
   join(currentDir, '../../../../../../packages/utils/transport/events/assistant.ts'),
   'utf8'
-)
+).replaceAll('"', "'")
 
 describe('Assistant module startup contract', () => {
   it('keeps the module loaded by app settings instead of an environment gate', () => {
@@ -252,7 +252,7 @@ describe('Assistant module startup contract', () => {
     expect(screenshotCaptureBlock).toContain('mapScreenshotUnavailableCode')
     expect(screenshotCaptureBlock).toContain('SCREENSHOT_UNAVAILABLE')
     expect(screenshotCaptureBlock).toContain('getNativeScreenshotService')
-    expect(screenshotCaptureBlock).toContain("target: 'cursor-display'")
+    expect(screenshotCaptureBlock).toContain('normalizeScreenshotTarget(payload)')
     expect(screenshotCaptureBlock).toContain("output: 'data-url'")
     expect(screenshotCaptureBlock).toContain('writeClipboard: true')
     expect(screenshotCaptureBlock).not.toContain('translateImageBase64')
@@ -265,7 +265,7 @@ describe('Assistant module startup contract', () => {
     expect(screenshotSaveBlock).toContain('SCREENSHOT_UNAVAILABLE')
     expect(screenshotSaveBlock).toContain('SAVE_FAILED')
     expect(screenshotSaveBlock).toContain('getNativeScreenshotService')
-    expect(screenshotSaveBlock).toContain("target: 'cursor-display'")
+    expect(screenshotSaveBlock).toContain('normalizeScreenshotTarget(payload)')
     expect(screenshotSaveBlock).toContain("output: 'tfile'")
     expect(screenshotSaveBlock).toContain('writeClipboard: false')
     expect(screenshotSaveBlock).toContain('dialog.showSaveDialog')
@@ -279,7 +279,7 @@ describe('Assistant module startup contract', () => {
     expect(screenshotTranslateBlock).toContain('mapScreenshotUnavailableCode')
     expect(screenshotTranslateBlock).toContain('SCREENSHOT_UNAVAILABLE')
     expect(screenshotTranslateBlock).toContain('getNativeScreenshotService')
-    expect(screenshotTranslateBlock).toContain("target: 'cursor-display'")
+    expect(screenshotTranslateBlock).toContain('normalizeScreenshotTarget(payload)')
     expect(screenshotTranslateBlock).toContain("output: 'data-url'")
     expect(screenshotTranslateBlock).toContain('writeClipboard: false')
     expect(screenshotTranslateBlock).toContain('translateImageBase64')

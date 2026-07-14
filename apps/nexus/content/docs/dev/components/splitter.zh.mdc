@@ -1,43 +1,42 @@
 ---
 title: "Splitter 分割面板"
-description: "可拖拽分割面板，支持水平/垂直。"
+description: "双面板可拖拽布局，支持指针与键盘调整、比例夹取、吸附步进，以及水平/垂直方向。"
 category: Layout
-syncStatus: migrated
+tags: [layout, resize, panels]
+syncStatus: reviewed
+verified: true
 ---
 # Splitter 分割面板
 
-可拖拽分割面板，支持水平/垂直。
+`TxSplitter` 在一个有边界的容器内分割两个可调整面板。组件通过 `v-model` 暴露 A 面板比例，支持水平和垂直布局，并让指针拖拽与键盘调整共享同一套 clamp / snap 契约。
 
 ## 基础用法
 
-### Splitter
-:::TuffDemoWrapper{demo="SplitterSplitterDemo" code-lang="vue"}
+通过父容器提供明确宽高。组件会填满这个盒子，并把当前比例写入 CSS grid 变量。
+
+::::TuffDemoWrapper{demo="SplitterSplitterDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const ratio = ref(0.4)
+  const ratio = ref(0.42)
   </script>
 
   <template>
-    <div style="width: 520px; height: 240px; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden;">
-      <TxSplitter v-model="ratio" style="width: 100%; height: 100%;">
+    <div style="width: 520px; height: 220px;">
+      <TxSplitter v-model="ratio" :min="0.25" :max="0.75" :snap="0.05">
         <template #a>
-          <div style="height: 100%; padding: 12px; color: var(--tx-text-color-secondary);">
-            A ({{ ratio.toFixed(2) }})
-          </div>
+          <div>导航区 ({{ ratio.toFixed(2) }})</div>
         </template>
         <template #b>
-          <div style="height: 100%; padding: 12px; color: var(--tx-text-color-secondary);">
-            B
-          </div>
+          <div>内容区</div>
         </template>
       </TxSplitter>
     </div>
   </template>
 ---
-:::
+::::
 
 ## API
 
@@ -45,26 +44,57 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `number` | `0.5` | 分割比例（0-1） |
-| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | 分割方向 |
-| `min` | `number` | `0.1` | 最小比例 |
-| `max` | `number` | `0.9` | 最大比例 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `barSize` | `number` | `10` | 分割条尺寸（px） |
-| `snap` | `number` | `0` | 吸附步进（0 表示不吸附） |
+| `modelValue` | `number` | `0.5` | A 面板比例。非有限数字回退到 `0.5`；渲染值会夹取到 `0` 到 `1`。 |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal` 左右分割；`vertical` 上下分割。非法值回退为 horizontal。 |
+| `min` | `number` | `0.1` | 指针或键盘调整时可派发的最小比例。 |
+| `max` | `number` | `0.9` | 指针或键盘调整时可派发的最大比例。 |
+| `disabled` | `boolean` | `false` | 禁用指针和键盘调整。拖拽中切换为禁用会结束当前拖拽。 |
+| `barSize` | `number` | `10` | 分隔条轨道尺寸，单位 px。运行时最小值为 `6px`。 |
+| `snap` | `number` | `0` | 可选比例步进。`0` 表示不吸附；正数会把派发比例吸附到最近步进。 |
 
 ### Slots
 
-| 名称 | 说明 |
-|------|------|
-| `a` | 左/上面板 |
-| `b` | 右/下面板 |
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `a` | - | 第一个面板：水平时在左侧，垂直时在上方。 |
+| `b` | - | 第二个面板：水平时在右侧，垂直时在下方。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(ratio)` | v-model 更新 |
-| `change` | `(ratio)` | 值变化 |
-| `drag-start` | - | 开始拖拽 |
-| `drag-end` | - | 结束拖拽 |
+| `update:modelValue` | `number` | 派发下一个经过 clamp 和 snap 的比例。 |
+| `change` | `number` | 为 change 监听器派发同一个比例。 |
+| `drag-start` | `()` | 指针拖拽开始时派发。 |
+| `drag-end` | `()` | 指针拖拽结束，或因禁用/卸载被取消时派发。 |
+
+## 交互契约
+
+- 指针拖拽读取 splitter 根节点的 bounding box：水平模式使用 `clientX / width`，垂直模式使用 `clientY / height`。
+- 键盘调整在水平模式使用 ArrowLeft / ArrowRight，在垂直模式使用 ArrowUp / ArrowDown；每次先变化 `0.02`，再执行 clamp / snap。
+- 分隔条渲染 `role="separator"`；水平分割时 `aria-orientation="vertical"`，垂直分割时为 `horizontal`。
+- 禁用状态下分隔条使用 `tabindex="-1"`，指针/键盘变化会被忽略，活动拖拽会结束。
+- 组件不持久化布局。需要记住用户面板尺寸时，请在调用方保存 `v-model` 比例。
+
+## 最佳实践
+
+- 始终把 `TxSplitter` 放在有明确高度的容器中。没有边界盒子时，面板无法稳定调整。
+- `min` 和 `max` 保持足够间距，避免某个面板收缩到内容不可读。
+- 检查器/侧栏这类需要稳定比例的布局使用 `snap`；自由编辑画布保持 `0`。
+- 滚动容器放在面板 slot 内部，不要包在 splitter 根节点外，以免调整尺寸时和页面滚动冲突。
+- 弹层交互或拖拽排序流程进行时禁用 splitter，避免多个组件争夺 pointer capture。
+
+## 审阅说明
+
+- **可访问性说明:** 分隔条可聚焦，带 `role="separator"`，并支持方向键调整，但没有暴露 `aria-valuenow`、`aria-valuemin` 或 `aria-valuemax`。精确调整场景建议在外部补充可见比例/尺寸反馈。
+- **布局说明:** 渲染比例会夹取到 `0..1`；指针/键盘派发值先按 `min`/`max` 夹取，再执行 snap。调用方应保证 `min <= max`，组件不会归一化反向边界。
+- **实测覆盖:** `splitter.test.ts` 覆盖水平/垂直渲染、分隔条方向、slot 内容、比例/bar CSS 变量、带 clamp/snap 的指针拖拽、垂直坐标计算、键盘调整、禁用阻断，以及拖拽中禁用时的 drag-end。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/splitter/src/TxSplitter.vue`。
+- Types: `packages/tuffex/packages/components/src/splitter/src/types.ts` 导出 `SplitterProps`、`SplitterEmits` 与 `SplitterDirection`。
+- Export alias: `packages/tuffex/packages/components/src/splitter/index.ts` 导出 `Splitter`、`TxSplitter`、splitter 类型与 `TxSplitterInstance`。
+- Coverage: `packages/tuffex/packages/components/src/splitter/__tests__/splitter.test.ts` 覆盖渲染、指针/键盘调整、snap、禁用行为与拖拽生命周期。
+
+<TuffDocSourceLink />

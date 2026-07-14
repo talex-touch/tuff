@@ -2,7 +2,11 @@
 title: "TypingIndicator"
 description: "Inline typing and loading status indicators for chat surfaces."
 category: Feedback
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [typing, loading, chat]
+syncStatus: reviewed
+verified: true
 ---
 # TypingIndicator
 
@@ -94,3 +98,30 @@ code: |
 | `circleDashDashDeg` | `number` | `12` | Dash angle in degrees for the repeating conic pattern. |
 | `circleDashGapDeg` | `number` | `12` | Gap angle in degrees for the repeating conic pattern. |
 | `barsSize` | `number` | `12` | Height in pixels for the `bars` loader. |
+
+## Events
+
+`TxTypingIndicator` does not emit component events. It is a passive `role="status"` indicator.
+
+## Slots
+
+`TxTypingIndicator` does not expose slots. Use `text` for the accessible status label and `showText=false` only when adjacent UI already communicates the pending state.
+
+## Best Practices
+
+- Prefer the default `dots` variant for inline chat rows and compact assistant placeholders.
+- Use `ai` for brand-led generation states where the larger animated loader has enough room.
+- Use `pure`, `ring`, `circle-dash`, or `bars` for dense toolbars, message metadata rows, or skeleton-adjacent loading states.
+- Keep `showText=true` unless another visible label already names the pending operation.
+- Tune numeric size props in pixels; avoid mixing many variants in the same chat transcript.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue` confirms `role="status"`, `aria-live="polite"`, hidden decorative loaders, variant-specific CSS variables, scoped AI mask ids, and optional text rendering.
+- Type contracts: `packages/tuffex/packages/components/src/chat/src/types.ts` defines `TypingIndicatorProps` and every variant size prop.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts` covers status semantics, dot sizing, hidden labels, AI mask sizing, spinner variants, and bars rendering.
+- Export: `packages/tuffex/packages/components/src/chat/index.ts` exports `TypingIndicator`, `TxTypingIndicator`, and `TypingIndicatorProps`.
+
+## Source
+
+<TuffDocSourceLink />

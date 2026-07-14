@@ -261,4 +261,36 @@ describe('index bundling precedence', () => {
     },
     30000,
   )
+
+  it(
+    'does not feed a previous tpex archive into the next package',
+    async () => {
+      const root = await createProject({
+        rootIndexContent: 'console.log(\'clean-package\')',
+      })
+
+      try {
+        const staleArchive = 'demo-plugin-0.9.0.tpex'
+        await fs.ensureDir(path.join(root, 'dist'))
+        await fs.writeFile(path.join(root, 'dist', staleArchive), 'stale package')
+
+        await build({
+          root,
+          outDir: 'dist',
+          manifest: 'manifest.json',
+          minify: false,
+          sourcemap: false,
+        })
+
+        const packagedManifest = await fs.readJson(path.join(root, 'dist/build/manifest.json'))
+        await expect(fs.pathExists(path.join(root, 'dist', 'out', staleArchive))).resolves.toBe(false)
+        await expect(fs.pathExists(path.join(root, 'dist', 'build', staleArchive))).resolves.toBe(false)
+        expect(packagedManifest._files).not.toHaveProperty(staleArchive)
+      }
+      finally {
+        await fs.remove(root)
+      }
+    },
+    30000,
+  )
 })

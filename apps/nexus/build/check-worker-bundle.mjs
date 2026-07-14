@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { gzipSync } from 'node:zlib'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -12,6 +13,7 @@ const routesJsonPath = join(distRoot, '_routes.json')
 const serviceWorkerPath = join(distRoot, 'sw.js')
 const authHandlerPath = join(nexusRoot, 'server/api/auth/[...].ts')
 const oneMiB = 1024 * 1024
+const allowWorkerSourceMaps = isEnvFlagEnabled(process.env.NUXT_ENABLE_NITRO_SOURCEMAP)
 const distBudget = {
   maxTotalBytes: 60 * oneMiB,
   maxFileBytes: 20 * oneMiB,
@@ -19,6 +21,38 @@ const distBudget = {
   maxWorkerGzipBytes: 2.7 * oneMiB,
   maxDocsDetailHtmlBytes: 80 * 1024,
 }
+const clientChunkBudget = {
+  initialMaxBytes: 420_000,
+  heavyBytes: 500_000,
+  maxBytes: 600_000,
+}
+const sharedEntryCssBudget = {
+  maxBytes: 278_000,
+  maxGzipBytes: 50_000,
+}
+const forbiddenSharedEntryIconTokens = [
+  ['i-cib', 'apple'],
+  ['i-cib', 'linux'],
+  ['i-cib', 'safari'],
+  ['i-cib', 'microsoft-edge'],
+  ['i-carbon', 'fingerprint-recognition'],
+  ['i-simple-icons', 'snowflake'],
+  ['i-carbon', 'logo-figma'],
+  ['i-carbon', 'tool-kit'],
+  ['i-carbon', 'machine-learning-model'],
+  ['i-carbon', 'circle-dash'],
+  ['i-carbon', 'color-palette'],
+].map(parts => parts.join('-'))
+const sharedEntryAliasedIconBudgets = [
+  { token: 'i-carbon-settings', maxRuleBytes: 600 },
+  { token: 'i-carbon-fire', maxRuleBytes: 750 },
+  { token: 'i-ri-settings-3-line', maxRuleBytes: 600 },
+  { token: 'i-ri-settings-3-fill', maxRuleBytes: 550 },
+  { token: 'i-carbon-data-vis-1', maxRuleBytes: 500 },
+  { token: 'i-carbon-deployment-pattern', maxRuleBytes: 650 },
+  { token: 'i-carbon-queued', maxRuleBytes: 600 },
+  { token: 'i-carbon-ai-status', maxRuleBytes: 750 },
+]
 
 const expectedStaticRoutes = [
   ...publicPrerenderRoutes,
@@ -26,6 +60,7 @@ const expectedStaticRoutes = [
   '/zh/docs',
   ...docsApiPrerenderRoutes,
 ]
+const expectedStaticRoutePatterns = ['/en/docs/*', '/zh/docs/*']
 const workerOwnedAppRoutes = [
   '/dashboard',
   '/dashboard/team',
@@ -72,11 +107,42 @@ const forbiddenClientAuthRuntimePatterns = [
   /SessionRequired/,
   /@sidebase\/nuxt-auth\/dist\/runtime\/plugin/,
 ]
+const forbiddenClientContentDatabaseAssetPatterns = [
+  /^_nuxt\/sqlite3(?:[.-][^/]+)?\.wasm$/i,
+  /^_nuxt\/sqlite3-worker1-bundler-friendly-[^/]+\.js$/i,
+]
+const forbiddenClientContentDatabaseRuntimePatterns = [
+  /sqlite3ApiConfig/,
+  /OPFS sqlite3_vfs/,
+  /Database integrity check failed, rebuilding database/,
+  /\.oo1\.DB\(/,
+]
 const forbiddenDocsInitialLifecyclePatterns = [
   /addEventListener\(["']beforeunload/,
   /h\(window,["']beforeunload/,
   /useEventListener\(window,\s*["']beforeunload/,
 ]
+const forbiddenRemoteFontPatterns = [
+  /@import(?:url)?\(?["']?https:\/\/fonts\.googleapis\.com/i,
+  /url\(["']?https:\/\/fonts\.gstatic\.com/i,
+  /<link[^>]+href=["'][^"']*fonts\.(?:googleapis|gstatic)\.com/i,
+]
+const forbiddenUnprefixedAttributifyPatterns = [
+  /\[(?:background|blur|border|content|duration|font|justify|m|opacity|position|shadow|size|text|w)~=/,
+]
+const forbiddenLandingImagePrefetchPattern = /<link\b(?=[^>]*\brel=(["'])prefetch\1)(?=[^>]*\bas=(["'])image\2)[^>]*>/gi
+
+function isEnvFlagEnabled(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase())
+}
+const forbiddenLandingDeferredImagePattern = /\/_nuxt\/(?:calendar|notion|spotify|vscode)\.[A-Za-z0-9_-]+\.jpg/g
+const forbiddenLandingShowcaseVideoPattern = /\/shots\/(?:SearchApp|SearchFileImmediately|PluginTranslate)\.mp4/g
+const landingInitialHtmlFiles = [
+  'index.html',
+  'new/index.html',
+  'next/index.html',
+]
+const requiredContentCollections = ['app', 'docs', 'guides']
 const requiredWorkerRouteChunks = [
   {
     route: '/api/docs/page',
@@ -84,11 +150,31 @@ const requiredWorkerRouteChunks = [
   },
   {
     route: '/api/docs/navigation',
-    pattern: /^chunks\/routes\/api\/docs\/navigation\.get\.mjs$/,
+    pattern: /^chunks\/routes\/api\/docs\/navigation\/_locale\/_scope_\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/navigation/:locale/:scope',
+    pattern: /^chunks\/routes\/api\/docs\/navigation\/_locale\/_scope_\.get\.mjs$/,
   },
   {
     route: '/api/docs/sidebar-components',
-    pattern: /^chunks\/routes\/api\/docs\/sidebar-components\.get\.mjs$/,
+    pattern: /^chunks\/routes\/api\/docs\/sidebar-components\/_locale_\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/sidebar-components/:locale',
+    pattern: /^chunks\/routes\/api\/docs\/sidebar-components\/_locale_\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/search',
+    pattern: /^chunks\/routes\/api\/docs\/search\/_locale_\.get\.mjs$/,
+  },
+  {
+    route: '/api/docs/search/:locale',
+    pattern: /^chunks\/routes\/api\/docs\/search\/_locale_\.get\.mjs$/,
+  },
+  {
+    route: '/api/content/policy',
+    pattern: /^chunks\/routes\/api\/content\/policy\.get\.mjs$/,
   },
   {
     route: '/api/docs/view:get',
@@ -196,40 +282,50 @@ const htmlInitialAssetBudgets = [
     routePattern: /^(?:en|zh)\/docs\/.+\/index\.html$/,
     maxJsCount: 16,
     maxJsBytes: 620 * 1024,
+    maxJsGzipBytes: 205 * 1024,
     maxCssCount: 7,
     maxCssBytes: 400 * 1024,
+    maxCssGzipBytes: 78 * 1024,
   },
   {
     label: 'store initial assets',
     routePattern: /^store\/index\.html$/,
     maxJsCount: 42,
     maxJsBytes: 820 * 1024,
+    maxJsGzipBytes: 260 * 1024,
     maxCssCount: 18,
     maxCssBytes: 420 * 1024,
+    maxCssGzipBytes: 82 * 1024,
   },
   {
     label: 'landing initial assets',
     routePattern: /^(?:index\.html|new\/index\.html|next\/index\.html)$/,
     maxJsCount: 38,
     maxJsBytes: 860 * 1024,
+    maxJsGzipBytes: 285 * 1024,
     maxCssCount: 20,
     maxCssBytes: 420 * 1024,
+    maxCssGzipBytes: 86 * 1024,
   },
   {
     label: 'public info initial assets',
     routePattern: /^(?:pricing|license|privacy|protocol|updates)\/index\.html$/,
     maxJsCount: 20,
     maxJsBytes: 560 * 1024,
+    maxJsGzipBytes: 195 * 1024,
     maxCssCount: 9,
     maxCssBytes: 340 * 1024,
+    maxCssGzipBytes: 72 * 1024,
   },
   {
     label: 'auth initial assets',
     routePattern: /^(?:login|sign-in|forgot-password|verify-waiting|device-auth)\/index\.html$/,
     maxJsCount: 26,
     maxJsBytes: 720 * 1024,
+    maxJsGzipBytes: 235 * 1024,
     maxCssCount: 11,
     maxCssBytes: 380 * 1024,
+    maxCssGzipBytes: 76 * 1024,
   },
 ]
 
@@ -314,41 +410,82 @@ function getWorkerGzipBytes(files) {
   return gzipSync(source, { level: 9 }).byteLength
 }
 
-function checkDuplicateSqliteWasm(distFiles) {
-  const duplicateWasmFiles = distFiles
-    .filter(file => /^_nuxt\/sqlite3-[A-Za-z0-9_-]+\.wasm$/.test(file.relativePath))
+function checkClientContentDatabaseRuntime(distFiles) {
+  const findings = []
+
+  for (const file of distFiles) {
+    const assetPatterns = forbiddenClientContentDatabaseAssetPatterns
+      .filter(pattern => pattern.test(file.relativePath))
+      .map(pattern => pattern.source)
+
+    if (assetPatterns.length) {
+      findings.push({
+        file: file.relativePath,
+        patterns: assetPatterns,
+      })
+      continue
+    }
+
+    if (!/^_nuxt\/[^/]+\.js$/.test(file.relativePath))
+      continue
+
+    const source = readFileSync(file.file, 'utf8')
+    const runtimePatterns = forbiddenClientContentDatabaseRuntimePatterns
+      .filter(pattern => pattern.test(source))
+      .map(pattern => pattern.source)
+
+    if (runtimePatterns.length) {
+      findings.push({
+        file: file.relativePath,
+        patterns: runtimePatterns,
+      })
+    }
+  }
+
+  return findings
+}
+
+function checkWorkerSourceMaps(distFiles) {
+  const sourceMaps = distFiles
+    .filter(file => /^_worker\.js\/.*\.map$/.test(file.relativePath))
     .map(file => file.relativePath)
 
-  return duplicateWasmFiles
+  return {
+    retained: sourceMaps,
+    findings: allowWorkerSourceMaps ? [] : sourceMaps,
+  }
 }
 
 function checkRequiredRootSqlDumps(distFiles) {
   const distFileByPath = new Map(distFiles.map(file => [file.relativePath, file]))
-  const contentDumps = distFiles.filter(file => /^__nuxt_content\/[A-Za-z0-9_-]+\/sql_dump\.txt$/.test(file.relativePath))
   const findings = []
+  const clientContentDumps = distFiles.filter(file => /^__nuxt_content\/[A-Za-z0-9_-]+\/sql_dump\.txt$/.test(file.relativePath))
 
-  if (!contentDumps.length) {
-    findings.push('__nuxt_content SQL dumps are missing')
-    return { checked: 0, findings }
-  }
+  for (const contentDump of clientContentDumps)
+    findings.push(`prerendered client SQL dump must be trimmed: ${contentDump.relativePath}`)
 
-  for (const contentDump of contentDumps) {
-    const collectionName = contentDump.relativePath.match(/^__nuxt_content\/([A-Za-z0-9_-]+)\/sql_dump\.txt$/)?.[1]
-    if (!collectionName)
-      continue
-
+  for (const collectionName of requiredContentCollections) {
     const rootPath = `dump.${collectionName}.sql`
     const rootDump = distFileByPath.get(rootPath)
-    if (!rootDump) {
-      findings.push(`${rootPath} missing for ${contentDump.relativePath}`)
-      continue
-    }
-
-    if (rootDump.bytes !== contentDump.bytes || !readFileSync(rootDump.file).equals(readFileSync(contentDump.file)))
-      findings.push(`${rootPath} does not match ${contentDump.relativePath}`)
+    if (!rootDump || rootDump.bytes === 0)
+      findings.push(`${rootPath} is missing or empty`)
   }
 
-  return { checked: contentDumps.length, findings }
+  const routesPath = join(distRoot, '_routes.json')
+  if (!existsSync(routesPath)) {
+    findings.push('_routes.json is missing')
+  }
+  else {
+    const routes = JSON.parse(readFileSync(routesPath, 'utf8'))
+    const excludedRoutes = new Set(Array.isArray(routes.exclude) ? routes.exclude : [])
+    for (const collectionName of requiredContentCollections) {
+      const runtimePath = `/__nuxt_content/${collectionName}/sql_dump.txt`
+      if (!excludedRoutes.has(runtimePath))
+        findings.push(`${runtimePath} is not excluded from the Worker in _routes.json`)
+    }
+  }
+
+  return { checked: requiredContentCollections.length, findings }
 }
 
 function checkSizeBudgets(distFiles, distTotalBytes, workerTotalBytes, workerGzipBytes) {
@@ -384,12 +521,13 @@ function checkRoutes() {
 
   const excluded = new Set(Array.isArray(routesJson.exclude) ? routesJson.exclude : [])
   const missing = expectedStaticRoutes.filter(route => !excluded.has(route))
+  const missingPatterns = expectedStaticRoutePatterns.filter(route => !excluded.has(route))
 
   return {
-    ok: missing.length === 0,
-    message: missing.length
-      ? `Missing static route exclusions: ${missing.join(', ')}`
-      : `Static route exclusions verified: ${expectedStaticRoutes.length}`,
+    ok: missing.length === 0 && missingPatterns.length === 0,
+    message: missing.length || missingPatterns.length
+      ? `Missing static route exclusions: ${[...missing, ...missingPatterns].join(', ')}`
+      : `Static route exclusions verified: ${expectedStaticRoutes.length} routes + ${expectedStaticRoutePatterns.length} patterns`,
   }
 }
 
@@ -490,6 +628,48 @@ function checkClientSidebaseAuthRuntime(distFiles) {
       findings.push({
         file: file.relativePath,
         patterns: matches,
+      })
+    }
+  }
+
+  return findings
+}
+
+function checkRemoteFontReferences(distFiles) {
+  const findings = []
+  const styleFiles = distFiles.filter(file => /\.(?:css|html)$/.test(file.relativePath))
+
+  for (const file of styleFiles) {
+    const source = readFileSync(file.file, 'utf8')
+    const patterns = forbiddenRemoteFontPatterns
+      .filter(pattern => pattern.test(source))
+      .map(pattern => pattern.source)
+
+    if (patterns.length) {
+      findings.push({
+        file: file.relativePath,
+        patterns,
+      })
+    }
+  }
+
+  return findings
+}
+
+function checkUnprefixedAttributifyLeaks(distFiles) {
+  const findings = []
+  const cssFiles = distFiles.filter(file => /^_nuxt\/[^/]+\.css$/.test(file.relativePath))
+
+  for (const file of cssFiles) {
+    const source = readFileSync(file.file, 'utf8')
+    const patterns = forbiddenUnprefixedAttributifyPatterns
+      .filter(pattern => pattern.test(source))
+      .map(pattern => pattern.source)
+
+    if (patterns.length) {
+      findings.push({
+        file: file.relativePath,
+        patterns,
       })
     }
   }
@@ -620,20 +800,89 @@ function extractJsAssets(source) {
   return Array.from(new Set(Array.from(source.matchAll(/(?:href|src)="\/_nuxt\/([^"]+\.js)"/g), match => match[1])))
 }
 
+const assetStatsCache = new Map()
+
+function getAssetStat(asset) {
+  const cached = assetStatsCache.get(asset)
+  if (cached)
+    return cached
+
+  const source = readFileSync(join(distRoot, '_nuxt', asset))
+  const stats = {
+    bytes: source.byteLength,
+    gzipBytes: gzipSync(source).byteLength,
+  }
+  assetStatsCache.set(asset, stats)
+  return stats
+}
+
 function getAssetStats(assets) {
   const missingAssets = []
-  const bytes = assets.reduce((total, asset) => {
+  let bytes = 0
+  let gzipBytes = 0
+
+  for (const asset of assets) {
     const assetPath = join(distRoot, '_nuxt', asset)
     if (!existsSync(assetPath)) {
       missingAssets.push(asset)
-      return total
+      continue
     }
-    return total + statSync(assetPath).size
-  }, 0)
+
+    const stats = getAssetStat(asset)
+    bytes += stats.bytes
+    gzipBytes += stats.gzipBytes
+  }
 
   return {
     bytes,
+    gzipBytes,
     missingAssets,
+  }
+}
+
+function checkSharedEntryCssBudget(distFiles) {
+  const entryFiles = distFiles.filter(file => /^_nuxt\/entry\.[^/]+\.css$/.test(file.relativePath))
+  const findings = []
+
+  if (entryFiles.length !== 1) {
+    findings.push(`expected 1 shared entry CSS asset, found ${entryFiles.length}`)
+    return { entry: null, findings }
+  }
+
+  const entry = entryFiles[0]
+  const stats = getAssetStat(entry.relativePath.replace(/^_nuxt\//, ''))
+  const source = readFileSync(join(distRoot, entry.relativePath), 'utf8')
+  const rules = source.match(/[^{}]+\{[^{}]*\}/g) ?? []
+
+  if (stats.bytes > sharedEntryCssBudget.maxBytes)
+    findings.push(`shared entry CSS ${formatBytes(stats.bytes)} > ${formatBytes(sharedEntryCssBudget.maxBytes)}`)
+  if (stats.gzipBytes > sharedEntryCssBudget.maxGzipBytes)
+    findings.push(`shared entry CSS gzip ${formatBytes(stats.gzipBytes)} > ${formatBytes(sharedEntryCssBudget.maxGzipBytes)}`)
+  for (const token of forbiddenSharedEntryIconTokens) {
+    if (source.includes(token))
+      findings.push(`oversized icon selector returned to shared entry CSS: ${token}`)
+  }
+  for (const { token, maxRuleBytes } of sharedEntryAliasedIconBudgets) {
+    const rule = rules.find((candidate) => {
+      const selector = candidate.slice(0, candidate.indexOf('{'))
+      return candidate.includes('--un-icon:')
+        && selector.split(',').some(part => part.trim() === `.${token}`)
+    })
+    if (!rule) {
+      findings.push(`aliased icon selector missing from shared entry CSS: ${token}`)
+      continue
+    }
+    const ruleBytes = Buffer.byteLength(rule)
+    if (ruleBytes > maxRuleBytes)
+      findings.push(`aliased icon selector ${token} is ${formatBytes(ruleBytes)} > ${formatBytes(maxRuleBytes)}`)
+  }
+
+  return {
+    entry: {
+      asset: entry.relativePath,
+      ...stats,
+    },
+    findings,
   }
 }
 
@@ -689,10 +938,14 @@ function checkHtmlInitialAssetBudgets(distFiles) {
         issues.push(`js assets ${jsAssets.length} > ${budget.maxJsCount}`)
       if (jsStats.bytes > budget.maxJsBytes)
         issues.push(`js ${formatBytes(jsStats.bytes)} > ${formatBytes(budget.maxJsBytes)}`)
+      if (jsStats.gzipBytes > budget.maxJsGzipBytes)
+        issues.push(`js gzip ${formatBytes(jsStats.gzipBytes)} > ${formatBytes(budget.maxJsGzipBytes)}`)
       if (cssAssets.length > budget.maxCssCount)
         issues.push(`css assets ${cssAssets.length} > ${budget.maxCssCount}`)
       if (cssStats.bytes > budget.maxCssBytes)
         issues.push(`css ${formatBytes(cssStats.bytes)} > ${formatBytes(budget.maxCssBytes)}`)
+      if (cssStats.gzipBytes > budget.maxCssGzipBytes)
+        issues.push(`css gzip ${formatBytes(cssStats.gzipBytes)} > ${formatBytes(budget.maxCssGzipBytes)}`)
 
       if (issues.length) {
         findings.push({
@@ -705,6 +958,96 @@ function checkHtmlInitialAssetBudgets(distFiles) {
   }
 
   return findings
+}
+
+function checkLandingImagePrefetches() {
+  const findings = []
+
+  for (const relativePath of landingInitialHtmlFiles) {
+    const file = join(distRoot, relativePath)
+    if (!existsSync(file))
+      continue
+
+    const source = readFileSync(file, 'utf8')
+    const matches = source.match(forbiddenLandingImagePrefetchPattern) ?? []
+    if (matches.length)
+      findings.push({ file: relativePath, count: matches.length })
+  }
+
+  return findings
+}
+
+function checkLandingDeferredImageReferences() {
+  const findings = []
+
+  for (const relativePath of landingInitialHtmlFiles) {
+    const file = join(distRoot, relativePath)
+    if (!existsSync(file))
+      continue
+
+    const source = readFileSync(file, 'utf8')
+    const matches = source.match(forbiddenLandingDeferredImagePattern) ?? []
+    if (matches.length)
+      findings.push({ file: relativePath, count: matches.length })
+  }
+
+  return findings
+}
+
+function checkLandingShowcaseVideoReferences() {
+  const findings = []
+
+  for (const relativePath of landingInitialHtmlFiles) {
+    const file = join(distRoot, relativePath)
+    if (!existsSync(file))
+      continue
+
+    const source = readFileSync(file, 'utf8')
+    const matches = source.match(forbiddenLandingShowcaseVideoPattern) ?? []
+    if (matches.length)
+      findings.push({ file: relativePath, count: matches.length })
+  }
+
+  return findings
+}
+
+function checkClientChunkBudgets(distFiles) {
+  const clientChunks = distFiles.filter(file => /^_nuxt\/[^/]+\.js$/.test(file.relativePath))
+  const heavyChunks = clientChunks.filter(file => file.bytes > clientChunkBudget.heavyBytes)
+  const directlyReferencedAssets = new Set()
+
+  for (const file of distFiles.filter(file => file.relativePath.endsWith('.html'))) {
+    const source = readFileSync(file.file, 'utf8')
+    for (const asset of extractJsAssets(source))
+      directlyReferencedAssets.add(asset)
+  }
+
+  const findings = []
+  for (const chunk of clientChunks) {
+    if (chunk.bytes > clientChunkBudget.maxBytes)
+      findings.push(`${chunk.relativePath} is ${formatBytes(chunk.bytes)} > ${formatBytes(clientChunkBudget.maxBytes)}`)
+  }
+
+  const directlyReferencedHeavyChunks = heavyChunks.filter((chunk) => {
+    const asset = chunk.relativePath.replace(/^_nuxt\//, '')
+    return directlyReferencedAssets.has(asset)
+  })
+  for (const chunk of directlyReferencedHeavyChunks)
+    findings.push(`${chunk.relativePath} is a heavy chunk referenced by prerendered HTML`)
+
+  const oversizedInitialChunks = clientChunks.filter((chunk) => {
+    const asset = chunk.relativePath.replace(/^_nuxt\//, '')
+    return directlyReferencedAssets.has(asset) && chunk.bytes > clientChunkBudget.initialMaxBytes
+  })
+  for (const chunk of oversizedInitialChunks)
+    findings.push(`${chunk.relativePath} is an initial chunk ${formatBytes(chunk.bytes)} > ${formatBytes(clientChunkBudget.initialMaxBytes)}`)
+
+  return {
+    heavyChunks,
+    directlyReferencedHeavyChunks,
+    oversizedInitialChunks,
+    findings,
+  }
 }
 
 function countHtmlInitialAssetBudgetRoutes(distFiles) {
@@ -730,14 +1073,22 @@ const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
 const forbiddenRouteChunks = checkForbiddenRouteChunks(executableFiles)
 const forbiddenServiceWorkerPrecache = checkServiceWorkerPrecache()
 const clientSidebaseAuthRuntimeFindings = checkClientSidebaseAuthRuntime(distFiles)
+const remoteFontReferenceFindings = checkRemoteFontReferences(distFiles)
+const unprefixedAttributifyFindings = checkUnprefixedAttributifyLeaks(distFiles)
 const authHandlerSingletonFindings = checkAuthHandlerSingleton()
 const missingWorkerRouteChunks = checkRequiredWorkerRouteChunks(executableFiles)
-const duplicateSqliteWasm = checkDuplicateSqliteWasm(distFiles)
+const workerSourceMapCheck = checkWorkerSourceMaps(distFiles)
+const clientContentDatabaseRuntimeFindings = checkClientContentDatabaseRuntime(distFiles)
 const rootSqlDumpCheck = checkRequiredRootSqlDumps(distFiles)
 const docsDetailHtmlPayloadFindings = checkDocsDetailHtmlPayload(distFiles)
 const docsInitialLifecycleCheck = checkDocsInitialLifecycleBlockers(distFiles)
 const htmlCssBoundaryFindings = checkHtmlCssBoundaries(distFiles)
 const htmlInitialAssetBudgetFindings = checkHtmlInitialAssetBudgets(distFiles)
+const sharedEntryCssCheck = checkSharedEntryCssBudget(distFiles)
+const landingImagePrefetchFindings = checkLandingImagePrefetches()
+const landingDeferredImageFindings = checkLandingDeferredImageReferences()
+const landingShowcaseVideoFindings = checkLandingShowcaseVideoReferences()
+const clientChunkCheck = checkClientChunkBudgets(distFiles)
 const htmlInitialAssetBudgetRouteCount = countHtmlInitialAssetBudgetRoutes(distFiles)
 const sizeFindings = checkSizeBudgets(distFiles, distTotalBytes, totalBytes, workerGzipBytes)
 
@@ -756,9 +1107,18 @@ console.log(`[nexus-worker-bundle] ${routeCheck.message}`)
 console.log(`[nexus-dist-budget] Static route files verified: ${expectedStaticRoutes.length - missingStaticRouteFiles.length}/${expectedStaticRoutes.length}`)
 console.log(`[nexus-dist-budget] Worker-owned app routes verified: ${workerOwnedAppRoutes.length - workerOwnedAppRouteFindings.length}/${workerOwnedAppRoutes.length}`)
 console.log('[nexus-dist-budget] Auth handler singleton verified')
+console.log(`[nexus-dist-budget] Worker source maps verified: ${workerSourceMapCheck.retained.length} retained (explicit=${allowWorkerSourceMaps})`)
+console.log('[nexus-dist-budget] Client Content SQLite runtime verified: 0 assets / runtime markers')
 console.log(`[nexus-dist-budget] Cloudflare root SQL dumps verified: ${rootSqlDumpCheck.checked - rootSqlDumpCheck.findings.length}/${rootSqlDumpCheck.checked}`)
 console.log(`[nexus-dist-budget] Docs initial lifecycle blockers verified: ${docsInitialLifecycleCheck.checkedRoutes} routes`)
 console.log(`[nexus-dist-budget] Initial asset budgets verified: ${htmlInitialAssetBudgetRouteCount} routes / ${htmlInitialAssetBudgets.length} families`)
+if (sharedEntryCssCheck.entry) {
+  console.log(`[nexus-dist-budget] Shared entry CSS verified: ${formatBytes(sharedEntryCssCheck.entry.bytes)} / ${formatBytes(sharedEntryCssCheck.entry.gzipBytes)} gzip`)
+}
+console.log(`[nexus-dist-budget] Landing image prefetch hints verified: ${landingInitialHtmlFiles.length - landingImagePrefetchFindings.length}/${landingInitialHtmlFiles.length}`)
+console.log(`[nexus-dist-budget] Landing deferred image references verified: ${landingInitialHtmlFiles.length - landingDeferredImageFindings.length}/${landingInitialHtmlFiles.length}`)
+console.log(`[nexus-dist-budget] Landing showcase video references verified: ${landingInitialHtmlFiles.length - landingShowcaseVideoFindings.length}/${landingInitialHtmlFiles.length}`)
+console.log(`[nexus-dist-budget] Client chunk budgets verified: ${clientChunkCheck.heavyChunks.length} heavy chunks / ${clientChunkCheck.directlyReferencedHeavyChunks.length} direct heavy HTML references / ${clientChunkCheck.oversizedInitialChunks.length} oversized initial chunks`)
 
 if (missingStaticRouteFiles.length) {
   console.error('[nexus-dist-budget] missing static route files:')
@@ -802,6 +1162,18 @@ if (clientSidebaseAuthRuntimeFindings.length) {
     console.error(`  ${finding.file}: ${finding.patterns.join(', ')}`)
 }
 
+if (remoteFontReferenceFindings.length) {
+  console.error('[nexus-dist-budget] remote font references found in production HTML/CSS:')
+  for (const finding of remoteFontReferenceFindings)
+    console.error(`  ${finding.file}: ${finding.patterns.join(', ')}`)
+}
+
+if (unprefixedAttributifyFindings.length) {
+  console.error('[nexus-dist-budget] unprefixed Attributify selectors leaked into production CSS:')
+  for (const finding of unprefixedAttributifyFindings)
+    console.error(`  ${finding.file}: ${finding.patterns.join(', ')}`)
+}
+
 if (authHandlerSingletonFindings.length) {
   console.error('[nexus-dist-budget] auth handler singleton guard failed:')
   for (const finding of authHandlerSingletonFindings)
@@ -814,10 +1186,16 @@ if (missingWorkerRouteChunks.length) {
     console.error(`  ${route.route}: ${route.pattern}`)
 }
 
-if (duplicateSqliteWasm.length) {
-  console.error('[nexus-dist-budget] duplicate sqlite wasm files found:')
-  for (const file of duplicateSqliteWasm)
+if (workerSourceMapCheck.findings.length) {
+  console.error('[nexus-dist-budget] Worker source maps found without explicit retention:')
+  for (const file of workerSourceMapCheck.findings)
     console.error(`  ${file}`)
+}
+
+if (clientContentDatabaseRuntimeFindings.length) {
+  console.error('[nexus-dist-budget] client Content SQLite runtime found in production assets:')
+  for (const finding of clientContentDatabaseRuntimeFindings)
+    console.error(`  ${finding.file}: ${finding.patterns.join(', ')}`)
 }
 
 if (rootSqlDumpCheck.findings.length) {
@@ -850,11 +1228,41 @@ if (htmlInitialAssetBudgetFindings.length) {
     console.error(`  ${finding.label}: ${finding.file} -> ${finding.issues.join(', ')}`)
 }
 
+if (sharedEntryCssCheck.findings.length) {
+  console.error('[nexus-dist-budget] shared entry CSS budget violations:')
+  for (const finding of sharedEntryCssCheck.findings)
+    console.error(`  ${finding}`)
+}
+
+if (landingImagePrefetchFindings.length) {
+  console.error('[nexus-dist-budget] landing HTML contains below-fold image prefetch hints:')
+  for (const finding of landingImagePrefetchFindings)
+    console.error(`  ${finding.file}: ${finding.count}`)
+}
+
+if (landingDeferredImageFindings.length) {
+  console.error('[nexus-dist-budget] landing HTML contains deferred plugin image references:')
+  for (const finding of landingDeferredImageFindings)
+    console.error(`  ${finding.file}: ${finding.count}`)
+}
+
+if (landingShowcaseVideoFindings.length) {
+  console.error('[nexus-dist-budget] landing HTML contains deferred showcase video references:')
+  for (const finding of landingShowcaseVideoFindings)
+    console.error(`  ${finding.file}: ${finding.count}`)
+}
+
+if (clientChunkCheck.findings.length) {
+  console.error('[nexus-dist-budget] client chunk budget violations:')
+  for (const finding of clientChunkCheck.findings)
+    console.error(`  ${finding}`)
+}
+
 if (sizeFindings.length) {
   console.error('[nexus-dist-budget] size budget violations:')
   for (const finding of sizeFindings)
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || duplicateSqliteWasm.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sizeFindings.length)
+if (!routeCheck.ok || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length)
   process.exit(1)

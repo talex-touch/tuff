@@ -1,16 +1,7 @@
 import { queryCollection } from '@nuxt/content/server'
+import type { SidebarComponentItem } from '#shared/types/content-api'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
-
-interface SidebarComponentDoc {
-  title: string
-  path: string
-  normalizedPath: string
-  locale: 'en' | 'zh'
-  category: string | null
-  syncStatus: SyncStatusKey
-  verified: boolean
-}
 
 const COMPONENT_DOC_PREFIX = '/docs/dev/components/'
 const SIDEBAR_COMPONENTS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
@@ -41,6 +32,19 @@ function parseDocMeta(meta: unknown): Record<string, unknown> | null {
   if (typeof meta === 'object' && !Array.isArray(meta))
     return meta as Record<string, unknown>
   return null
+}
+
+function resolveString(recordValue: unknown, metaValue: unknown) {
+  if (typeof recordValue === 'string' && recordValue.trim())
+    return recordValue
+  return typeof metaValue === 'string' ? metaValue : ''
+}
+
+function resolveTags(recordValue: unknown, metaValue: unknown) {
+  const value = Array.isArray(recordValue) ? recordValue : metaValue
+  if (!Array.isArray(value))
+    return []
+  return value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
 }
 
 function buildComponentDocsPathPattern(locale: 'en' | 'zh' | null) {
@@ -76,20 +80,24 @@ function normalizeLocale(value: unknown): 'en' | 'zh' | null {
   return null
 }
 
+function resolveSidebarComponentsLocale(event: any) {
+  return normalizeLocale(event?.context?.params?.locale ?? getQuery(event).locale)
+}
+
 function resolveSidebarComponentsCacheKey(event: any) {
-  const locale = normalizeLocale(getQuery(event).locale)
+  const locale = resolveSidebarComponentsLocale(event)
   return locale ? `locale:${locale}` : 'locale:all'
 }
 
 export default defineCachedEventHandler(async (event) => {
-  const locale = normalizeLocale(getQuery(event).locale)
+  const locale = resolveSidebarComponentsLocale(event)
   const docs = await queryCollection(event, 'docs')
     .where('path', 'LIKE', buildComponentDocsPathPattern(locale))
     .all()
 
   const rows = docs
     .filter(item => typeof item?.path === 'string')
-    .map<SidebarComponentDoc>((item) => {
+    .map<SidebarComponentItem>((item) => {
       const record = item as unknown as Record<string, unknown>
       const meta = parseDocMeta(record.meta)
       const path = String(item.path)
@@ -97,6 +105,8 @@ export default defineCachedEventHandler(async (event) => {
 
       return {
         title: item?.title ? String(item.title) : path,
+        description: resolveString(record.description, meta?.description),
+        tags: resolveTags(record.tags, meta?.tags),
         path,
         normalizedPath: normalizePath(path),
         locale: resolveLocale(path),

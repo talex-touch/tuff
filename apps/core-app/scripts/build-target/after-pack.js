@@ -7,6 +7,7 @@ const {
   syncMissingPackagedRuntimeModules,
   syncPackagedResourceModules
 } = require('./runtime-modules')
+const { OFFICIAL_PLUGIN_BUILD_TARGETS } = require('../lib/touch-translation-runtime-sync')
 
 function ensureMacMainAppLsuiElement(context) {
   if (context.electronPlatformName !== 'darwin') return
@@ -137,6 +138,82 @@ function pruneCrossPlatformFfprobeBinaries(context) {
   }
 }
 
+function collectGeneratedPluginEntries(rootDir) {
+  const generatedEntries = []
+  const queue = [rootDir]
+
+  while (queue.length > 0) {
+    const currentDir = queue.shift()
+    if (!currentDir) continue
+
+    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+      const entryPath = path.join(currentDir, entry.name)
+      const relativePath = path.relative(rootDir, entryPath)
+      if (entry.isDirectory()) {
+        if (entry.name === 'dist') generatedEntries.push(relativePath)
+        queue.push(entryPath)
+      } else if (entry.name.toLowerCase().endsWith('.tpex')) {
+        generatedEntries.push(relativePath)
+      }
+    }
+  }
+
+  return generatedEntries
+}
+
+function verifyPackagedOfficialPluginSeeds(context) {
+  const resourcesDir = findPackagedResourcesDir(context.appOutDir, '[afterPack]')
+  if (!resourcesDir) {
+    throw new Error('[afterPack] Cannot locate packaged resources for official plugin verification')
+  }
+
+  const projectDir = context.packager?.projectDir
+  if (!projectDir) {
+    throw new Error('[afterPack] Cannot resolve CoreApp project directory')
+  }
+  const workspaceRoot = path.resolve(projectDir, '..', '..')
+
+  for (const target of OFFICIAL_PLUGIN_BUILD_TARGETS) {
+    const seedRoot = path.join(resourcesDir, 'bundled-plugins', target.pluginName)
+    const seedManifestPath = path.join(seedRoot, 'manifest.json')
+    const canonicalPackagePath = path.join(
+      workspaceRoot,
+      'plugins',
+      target.pluginName,
+      'package.json'
+    )
+
+    if (!fs.existsSync(seedManifestPath) || !fs.existsSync(canonicalPackagePath)) {
+      throw new Error(`[afterPack] Missing packaged official plugin seed: ${target.pluginName}`)
+    }
+
+    const seedManifest = JSON.parse(fs.readFileSync(seedManifestPath, 'utf8'))
+    const canonicalPackage = JSON.parse(fs.readFileSync(canonicalPackagePath, 'utf8'))
+    if (
+      seedManifest.name !== target.pluginName ||
+      typeof canonicalPackage.version !== 'string' ||
+      seedManifest.version !== canonicalPackage.version
+    ) {
+      throw new Error(
+        `[afterPack] Official plugin seed mismatch for ${target.pluginName}: ` +
+          `package=${String(canonicalPackage.version)}, manifest=${String(seedManifest.version)}`
+      )
+    }
+
+    const generatedEntries = collectGeneratedPluginEntries(seedRoot)
+    if (generatedEntries.length > 0) {
+      throw new Error(
+        `[afterPack] Official plugin seed contains generated package artifacts for ${target.pluginName}: ` +
+          generatedEntries.join(', ')
+      )
+    }
+
+    console.log(
+      `[afterPack] Verified official plugin seed ${target.pluginName}@${seedManifest.version}`
+    )
+  }
+}
+
 module.exports = async function afterPack(context) {
   ensureMacMainAppLsuiElement(context)
   const targetArch = resolveTargetArchNames(context)[0]
@@ -149,8 +226,10 @@ module.exports = async function afterPack(context) {
     logPrefix: '[afterPack]',
     requiredModules
   })
+  verifyPackagedOfficialPluginSeeds(context)
   pruneCrossPlatformFfprobeBinaries(context)
 }
 
 // Exposed for testing the prune logic in isolation.
 module.exports.pruneCrossPlatformFfprobeBinaries = pruneCrossPlatformFfprobeBinaries
+module.exports.verifyPackagedOfficialPluginSeeds = verifyPackagedOfficialPluginSeeds
