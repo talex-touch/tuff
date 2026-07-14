@@ -134,7 +134,18 @@ vi.mock('../../service/official-plugin.service', () => ({ getOfficialPlugins: vi
 vi.mock('../../utils/common-util', () => ({ debounce: (callback: unknown) => callback }))
 vi.mock('../../utils/logger', () => ({
   createLogger: () => ({
-    child: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() })
+    child: () => ({
+      debug: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      success: vi.fn(),
+      warn: vi.fn()
+    }),
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn()
   })
 }))
 vi.mock('../../utils/secure-store', () => ({
