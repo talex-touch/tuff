@@ -468,4 +468,53 @@ describe('tuff-sorter ranking strategy', () => {
     )
     expect(sorted[0]?.id).toBe('app-cleaner')
   })
+
+  it('补全命中的 item 应在其余打分相等时前置（B2 回归）', () => {
+    const plainItem = createItem({
+      id: 'feature-plain',
+      kind: 'feature',
+      title: 'Clipboard Manager',
+      sourceId: 'plugin-features'
+    })
+
+    const completedItem = createItem({
+      id: 'feature-completed',
+      kind: 'feature',
+      title: 'Clipboard Manager',
+      sourceId: 'plugin-features'
+    })
+    completedItem.meta!.completion = {
+      count: 5,
+      lastCompleted: new Date().toISOString(),
+      score: 50
+    }
+
+    // completedItem 放在输入第二位；两者其余打分因子完全相同，只有补全
+    // boost 能把它移到前面。若 sorter 未消费 meta.completion（B2 缺陷），
+    // 稳定排序会保留输入顺序、plainItem 在前，断言失败。
+    const sorted = tuffSorter.sort(
+      [plainItem, completedItem],
+      { text: 'clip' } as TuffQuery,
+      signal
+    )
+    expect(sorted[0]?.id).toBe('feature-completed')
+  })
+
+  it('无补全记录时不改变原有相对顺序（B2 控制组）', () => {
+    const first = createItem({
+      id: 'feature-first',
+      kind: 'feature',
+      title: 'Clipboard Manager',
+      sourceId: 'plugin-features'
+    })
+    const second = createItem({
+      id: 'feature-second',
+      kind: 'feature',
+      title: 'Clipboard Manager',
+      sourceId: 'plugin-features'
+    })
+
+    const sorted = tuffSorter.sort([first, second], { text: 'clip' } as TuffQuery, signal)
+    expect(sorted[0]?.id).toBe('feature-first')
+  })
 })
