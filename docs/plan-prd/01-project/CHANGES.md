@@ -1,7 +1,14 @@
 # 变更日志
 
-> 更新时间：2026-07-11
+> 更新时间：2026-07-13
 > 定位：只保留当前阶段的高信号变更索引。更早流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-13
+
+### corebox: preserve programmatic query context
+
+- Typed `setQuery` transport requests now carry optional `TuffContext` through the main-process renderer bridge, and CoreBox attaches that context only to the forced search triggered by the programmatic query.
+- Plugin feature activation keeps an immutable submission snapshot while widget render metadata refreshes, preventing a refreshed custom-render item from replacing the feature payload executed by the plugin.
 
 ## 2026-07-11
 

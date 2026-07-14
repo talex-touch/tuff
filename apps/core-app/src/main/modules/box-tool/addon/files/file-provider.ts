@@ -163,9 +163,6 @@ import { FileProviderSearchResultService } from './services/file-provider-search
 import FileSystemWatcher from '../../file-system-watcher'
 
 const fileProviderLog = getLogger('file-provider')
-const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
-const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
-const SEMANTIC_SEARCH_TIMEOUT_MS = 120
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
@@ -858,8 +855,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.normalizeFileSearchItem(item, file, extensions, { reason }),
       sanitizeExtensions: (extensions) => this.sanitizeFileExtensions(extensions),
       cleanupStaleCandidates: (paths) => this.cleanupStaleSearchCandidates(paths),
-      scheduleSemanticEnrichment: (normalizedQuery, candidateCount) =>
-        this.scheduleSemanticEnrichment(normalizedQuery, candidateCount),
+      semanticSearch: (semanticQuery, limit) =>
+        this.embeddingService?.semanticSearch(semanticQuery, limit) ?? Promise.resolve([]),
       logDebug: (message, meta) => this.logDebug(message, meta),
       formatDuration,
       now: () => performance.now()
@@ -2995,22 +2992,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     throw new Error(`file-index-search-drain-timeout:${reason}`)
   }
 
-  private scheduleSemanticEnrichment(normalizedQuery: string, candidateCount: number): void {
-    const shouldRunSemantic =
-      Boolean(this.embeddingService) &&
-      normalizedQuery.length >= SEMANTIC_TRIGGER_MIN_QUERY_LENGTH &&
-      candidateCount < SEMANTIC_TRIGGER_MAX_CANDIDATES
-
-    if (!shouldRunSemantic || !this.embeddingService) {
-      return
-    }
-
-    setTimeout(() => {
-      void this.embeddingService?.semanticSearch(normalizedQuery, 30).catch((error) => {
-        this.logWarn('Semantic enrichment failed', error)
-        return []
-      })
-    }, SEMANTIC_SEARCH_TIMEOUT_MS)
+  /**
+   * Deferred semantic recall entry point used by the search engine after first
+   * results render. Delegates to the search-result service; returns brand-new
+   * semantically-related items only (ids in `excludeIds` are filtered out), so
+   * the caller can append them to the active session without duplicates.
+   */
+  public async semanticRecall(
+    query: TuffQuery,
+    excludeIds: Set<string>,
+    signal: AbortSignal
+  ): Promise<TuffItem[]> {
+    if (!this.embeddingService) return []
+    return this.searchResultService.semanticRecall(query, excludeIds, signal)
   }
   public hasSearchFilters(rawText: string): boolean {
     return this.searchResultService.hasFilters(rawText)

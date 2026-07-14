@@ -10,23 +10,29 @@ function read(relativePath: string): string {
 
 describe('plugin window boundary contract', () => {
   const pluginModuleSource = read('src/main/modules/plugin/plugin-module.ts')
+  const windowTransportSource = read(
+    'src/main/modules/plugin/services/plugin-window-transport-service.ts'
+  )
   const coreBoxSource = read('src/main/modules/box-tool/core-box/window.ts')
   const divisionBoxSource = read('src/main/modules/division-box/session.ts')
   const preloadSource = read('src/preload/plugin-view.ts')
 
-  it('registers every privileged public window event through the protected register', () => {
+  it('delegates every privileged public window event to the protected transport service', () => {
+    expect(pluginModuleSource).toContain('registerPluginWindowTransportHandlers')
+    expect(pluginModuleSource).not.toContain('transport.on(PluginEvents.window.')
+
     for (const event of ['new', 'visible', 'command', 'property']) {
-      expect(pluginModuleSource).toMatch(
-        new RegExp(`registerProtectedWindowChannel[\\s\\S]{0,160}PluginEvents\\.window\\.${event}`)
+      expect(windowTransportSource).toMatch(
+        new RegExp(`registerProtectedWindowChannel<[\\s\\S]{0,180}PluginEvents\\.window\\.${event}`)
       )
-      expect(pluginModuleSource).not.toContain(`transport.on(PluginEvents.window.${event}`)
+      expect(windowTransportSource).not.toContain(`transport.on(PluginEvents.window.${event}`)
     }
   })
 
   it('validates and canonicalizes the request before constructing a window', () => {
-    const start = pluginModuleSource.indexOf('PluginEvents.window.new')
-    const end = pluginModuleSource.indexOf('PluginEvents.window.visible', start)
-    const handler = pluginModuleSource.slice(start, end)
+    const start = windowTransportSource.indexOf('PluginEvents.window.new')
+    const end = windowTransportSource.indexOf('PluginEvents.window.visible', start)
+    const handler = windowTransportSource.slice(start, end)
 
     expect(handler.indexOf('normalizePluginWindowRequest')).toBeGreaterThan(-1)
     expect(handler.indexOf('resolveLocalPluginWindowTarget')).toBeGreaterThan(
@@ -35,11 +41,14 @@ describe('plugin window boundary contract', () => {
     expect(handler.indexOf('new TouchWindow')).toBeGreaterThan(
       handler.indexOf('resolveLocalPluginWindowTarget')
     )
+    expect(handler).toContain('buildPublicPluginWindowOptions')
+    expect(handler).toContain('installPluginViewNavigationPolicy')
+    expect(handler).toContain('win.loadFile(target)')
     expect(handler).not.toContain('.loadURL(')
   })
 
   it('contains all plugin view surfaces with the shared host and navigation policy', () => {
-    for (const source of [pluginModuleSource, coreBoxSource, divisionBoxSource]) {
+    for (const source of [windowTransportSource, coreBoxSource, divisionBoxSource]) {
       expect(source).toContain('buildPluginViewWebPreferences')
       expect(source).toContain('installPluginViewNavigationPolicy')
     }
@@ -48,15 +57,15 @@ describe('plugin window boundary contract', () => {
   })
 
   it('removes reflective BrowserWindow and WebContents member invocation', () => {
-    expect(pluginModuleSource).not.toContain('const applyProps =')
-    expect(pluginModuleSource).not.toContain('browserWindow.webContents as unknown')
-    expect(pluginModuleSource).not.toMatch(/target\[key\]/)
+    expect(windowTransportSource).not.toContain('const applyProps =')
+    expect(windowTransportSource).not.toContain('browserWindow.webContents as unknown')
+    expect(windowTransportSource).not.toMatch(/target\[key\]/)
   })
 
   it('resolves control ids only through the owning plugin window registry', () => {
-    const start = pluginModuleSource.indexOf('PluginEvents.window.visible')
-    const end = pluginModuleSource.indexOf('PluginEvents.communicate.index', start)
-    const controls = pluginModuleSource.slice(start, end)
+    const start = windowTransportSource.indexOf('PluginEvents.window.visible')
+    const end = windowTransportSource.indexOf('PluginEvents.communicate.index', start)
+    const controls = windowTransportSource.slice(start, end)
 
     expect(controls.match(/touchPlugin\._windows\.get\(id\)/g)).toHaveLength(3)
     expect(controls).not.toContain('BrowserWindow.fromId')
