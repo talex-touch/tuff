@@ -9,18 +9,18 @@
     "type": "emoji",
     "value": "🌐"
   },
-  "description": "浏览器数据：只读搜索 Chrome、Edge、Brave、Arc 的本地书签",
+  "description": "浏览器数据：只读搜索 Chrome、Edge、Brave、Arc 的本地书签与最近历史",
   "main": "index.js",
   "permissions": {
     "required": ["fs.read", "fs.index", "search.root-results"],
     "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
-    "fs.read": "只读扫描本机浏览器 Bookmarks JSON 文件用于搜索书签",
-    "fs.index": "维护浏览器书签进入统一 indexed source lifecycle 的本地索引边界",
-    "search.root-results": "将匹配到的浏览器书签推送到 CoreBox 根搜索结果",
-    "clipboard.write": "复制书签 URL 到剪贴板",
-    "network.internet": "使用默认浏览器打开本地浏览器书签 URL"
+    "fs.read": "只读扫描本机浏览器 Bookmarks JSON 文件与 History 数据库",
+    "fs.index": "创建并清理临时只读 SQLite 副本，以受限窗口扫描浏览器历史并维护浏览器数据 indexed source 生命周期",
+    "search.root-results": "将匹配到的浏览器书签与历史推送到 CoreBox 根搜索结果",
+    "clipboard.write": "复制浏览器网址到剪贴板",
+    "network.internet": "使用默认浏览器打开本地浏览器网址"
   },
   "indexedSources": [
     {
@@ -30,6 +30,27 @@
       "admission": {
         "owner": "official-plugin",
         "notes": "Browser bookmarks remain disabled until the user enables the linked provider; after consent, the official runtime reads local browser Bookmarks JSON and maintains the indexed source lifecycle."
+      }
+    },
+    {
+      "id": "browser-history",
+      "template": "browser-history",
+      "displayName": "浏览器历史记录",
+      "storage": "ephemeral",
+      "capabilities": {
+        "scan": false,
+        "watch": false,
+        "reconcile": false,
+        "clear": false,
+        "open": false
+      },
+      "admission": {
+        "owner": "official-plugin",
+        "defaultState": "disabled",
+        "requiresUserConsent": true,
+        "clearable": false,
+        "rebuildable": false,
+        "notes": "Recent Chromium History is read only after consent by touch-browser-data through a uniquely named temporary SQLite copy. Browser History has no CoreApp indexed-source runtime handler in this slice; the plugin action dispatcher owns refresh and current-result clear."
       }
     }
   ],
@@ -47,18 +68,44 @@
       "requiresUserConsent": true,
       "pushesToRootResults": true,
       "indexedSourceId": "browser-bookmarks"
+    },
+    {
+      "id": "touch-browser-data.browser-history",
+      "displayName": "浏览器历史记录",
+      "kind": "browser-history",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 61,
+      "permissionScopes": ["root-results", "browser-data"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true,
+      "indexedSourceId": "browser-history"
     }
   ],
   "features": [
     {
       "id": "browser-data",
       "name": "浏览器数据",
-      "desc": "只读搜索本机浏览器书签",
+      "desc": "只读搜索本机浏览器书签与最近历史；历史仅从临时 SQLite 副本读取受限窗口",
       "icon": {
         "type": "emoji",
         "value": "🌐"
       },
-      "keywords": ["browser-data", "browser", "chrome", "edge", "brave", "arc", "bookmarks", "浏览器", "书签"],
+      "keywords": [
+        "browser-data",
+        "browser",
+        "chrome",
+        "edge",
+        "brave",
+        "arc",
+        "bookmarks",
+        "history",
+        "浏览器",
+        "书签",
+        "历史"
+      ],
       "push": true,
       "priority": 8,
       "acceptedInputTypes": ["text"],
@@ -70,7 +117,19 @@
       "commands": [
         {
           "type": "over",
-          "value": ["browser-data", "browser", "chrome", "edge", "brave", "arc", "bookmarks", "浏览器", "书签"]
+          "value": [
+            "browser-data",
+            "browser",
+            "chrome",
+            "edge",
+            "brave",
+            "arc",
+            "bookmarks",
+            "history",
+            "浏览器",
+            "书签",
+            "历史"
+          ]
         }
       ]
     }

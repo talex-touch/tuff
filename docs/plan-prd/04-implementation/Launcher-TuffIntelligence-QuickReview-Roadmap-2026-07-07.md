@@ -1,0 +1,76 @@
+# Launcher / TuffIntelligence / QuickReview Roadmap
+
+> 更新时间：2026-07-11
+> 定位：Alfred / uTools 高频能力对标、TuffIntelligence 产品化与 QuickReview 的执行路线。
+> 执行归属：不新增 R10；各切片分别归入 R3 Search / Indexing Runtime、R4 QuickOps、R5 Plugin Trust Boundary、R9 AI 2.5.x 后续。
+
+## Current evidence baseline
+
+- `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md:31-62` 已覆盖竞品差距与官方插件现状；本文只收敛执行顺序，不维护第二套差距矩阵。
+- `docs/plan-prd/03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md:16-28` 已确认 Browser Data 首版只读扫描 Chromium Bookmarks JSON；Obsidian、VSCode、macOS App Data、Epic 仍是路线项；Everything 仍缺 SDK/CLI 最终策略、Windows 真机 evidence 与性能基线。
+- `plugins/touch-browser-data/manifest.json:25-50` 已声明 indexed source `browser-bookmarks` 和 provider `touch-browser-data.browser-bookmarks`，默认 `ask` 且要求用户同意。
+- `plugins/touch-snippets/manifest.json:23-66` 已声明 `touch-snippets.search`、`touch-snippets.save`、`touch-snippets.manage`，并以 optional `clipboard.read` 支持 `{{clipboard}}` 占位符。
+- `plugins/touch-quickops/manifest.json:21-36` 已声明 `touch-quickops.quickops`，默认 `ask` 且受 `search.root-results` 权限控制。
+- `packages/tuff-intelligence/README.md:1-107` 已定义 provider registry、prompt/capability binding、quota/audit、storage adapter 与 ToolKit；不再增加第二套 AI SDK。
+- `packages/intelligence-uikit/README.md:33-52` 已有 Foundation、Conversation、Content、Tool / Agent 组件矩阵；业务 API、额度和 provider secret 不进入 UI Kit。
+- `plugins/touch-intelligence/README.md:1-23` 已提供 CoreBox AI Ask，支持文本追问、剪贴板图片 OCR、复制答案和 handoff session。
+- `packages/tuff-intelligence/src/types/intelligence.ts:725-754` 已定义 `IntelligenceCodeReviewPayload` / `IntelligenceCodeReviewResult`；`apps/core-app/src/renderer/src/views/omni-panel/ai-actions.ts:137-145` 已将 `builtin.ai.review` 映射到 `code.review`。
+- `.github/PULL_REQUEST_TEMPLATE/zh-CN.md:30-35` 提供 AI 自动分析复选框；`.github/workflows/pr-flags.yml:48-65` 同步 `needs-ai-review`；`.github/workflows/ai-review.yml` 已以 trusted base checkout 接通 `scripts/ci/ai-review.mjs`，且不安装或执行 PR head code。
+- `apps/core-app/AGENTS.md:34-37` 与 `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md:6-18` 继续生效：AI Stable 只承诺 CoreBox 文本 + 显式 OCR；Workflow、Review Queue、Skills、Automation 仍为 Beta。
+
+## P0 Launcher Parity
+
+| ID | Priority | Current anchor | Concrete update | Failure handling | Verification |
+| --- | --- | --- | --- | --- | --- |
+| LP-01 Browser Data + Quicklinks | P0 | `plugins/touch-browser-data/manifest.json:25-50`；`plugins/touch-browser-open/manifest.json`；`plugins/touch-browser-bookmarks/manifest.json` | 继续复用 `touch-browser-data.browser-bookmarks` / `browser-bookmarks`；下一切片只增加 Chromium History 只读临时副本扫描、manual/pinned quicklinks 分源展示和 clear/rebuild index 文案。不写回浏览器，不同步完整 URL 历史。 | 浏览器文件缺失、数据库锁定、权限拒绝、Safari 不支持均显示 `unsupported/degraded reason`；provider 未启用时不扫描。 | `pnpm plugins:validate`；新增 `packages/test/src/plugins/browser-data.test.ts` 后运行 `corepack pnpm -C "packages/test" exec vitest run "src/plugins/browser-data.test.ts"`。 |
+| LP-02 Everything / File Search productionization | P0 | `APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md:106-116`；`apps/core-app/package.json:64-79` | EV-010 独立决策前保留 `sdk-napi -> cli -> unavailable`；先补 Windows 真机 evidence、P50/P95 和 SDK/CLI/unavailable 三态诊断，不改 FileProvider / FTS schema。 | Everything 缺失、CLI 未配置、SDK 不可用必须返回 `degraded/unsupported reason`，不得将空结果包装为成功。 | `corepack pnpm -C "apps/core-app" run everything:diagnostic:verify`；Windows 真机再运行 `corepack pnpm -C "apps/core-app" run windows:capability:verify`。 |
+| LP-03 Super Panel-lite Context Actions | P1 | `RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md:60`；plugin manifest `acceptedInputTypes`；`PluginFeaturesAdapter` | 首版只接 selected text 与 clipboard image，不重做全局鼠标右键面板。新增统一 `ContextActionProvider`：`id: string`、`displayName: string`、`acceptedInputTypes: Array<'text' \| 'image' \| 'files' \| 'html'>`、`match(input): Promise<ContextActionMatch[]>`、`execute(actionId, input): Promise<ContextActionResult>`；复用 CoreBox item action，不新增 raw channel。 | 选区读取失败降级到剪贴板；剪贴板权限缺失时仅展示仍可执行的动作，不自动请求写权限。 | 新增相邻 context-action test，并运行 `corepack pnpm -C "apps/core-app" run test:omnipanel`。 |
+| LP-04 System Settings / System Actions | P1 | `plugins/touch-system-actions/manifest.json`；`plugins/touch-quick-actions/manifest.json`；`apps/core-app/AGENTS.md:39-44` | 先将“搜索系统设置”作为只读 `platform.settings` provider 接入 Settings diagnostics；执行打开动作前展示平台 capability reason。 | 平台不支持、shell capability 缺失、Linux best-effort 均显示 reason，不返回伪成功。 | `pnpm plugins:validate`；涉及 QuickOps 时运行 `corepack pnpm -C "apps/core-app" run quickops:evidence:verify`。 |
+| LP-05 Snippets / Clipboard / Emoji cleanup | P1 | `plugins/touch-snippets/manifest.json:23-66`；`plugins/clipboard-history/manifest.json`；`plugins/touch-emoji-symbols/manifest.json` | 不新建 snippets 系统；将无 feature/provider 的 `touch-code-snippets`、`touch-text-snippets` 列为合并/删除候选；动态占位符继续归属 `touch-snippets`，保持 `{{date}}`、`{{time}}`、`{{uuid}}`、`{{clipboard}}` 单一实现。 | Clipboard SDK 不可用或权限失败时 fail-closed；不得使用宿主 copy 绕过插件权限。 | `pnpm plugins:validate`；新增 snippets/clipboard focused tests。 |
+
+## P1 TuffIntelligence Productization
+
+| ID | Priority | Current anchor | Concrete update | Failure handling | Verification |
+| --- | --- | --- | --- | --- | --- |
+| TI-01 AI Command Templates in CoreBox | P1 | `plugins/touch-intelligence/index.js:20-70`；`plugins/touch-intelligence/manifest.json:39-76`；`CapabilityRegistry`；`ToolKit` | 在 `touch-intelligence` 内增加模板化 AI 命令；继续调用 `resolveIntelligenceClient()`。首切片 literal：feature `intelligence-command`、provider `touch-intelligence.intelligence-command`、commands `ai command` / `prompt` / `提示词` / `AI 模板`、required permissions `intelligence.basic` + `search.root-results`、optional `clipboard.write`。 | provider unavailable、quota exhausted、model unsupported、permission denied 复用 `AI_ERROR_MESSAGES`；成功态必须有 provider/model/latency/trace/capability metadata。 | `corepack pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"`；`corepack pnpm -C "plugins/touch-intelligence" run build`。 |
+| TI-02 Intelligence UI Kit adoption | P1 | `packages/intelligence-uikit/README.md:33-52`；`plugins/touch-intelligence/widgets/ask-panel.vue:1-151` | AI surface 优先复用 `TxAiConversation`、`TxAiMessage`、`TxAiToolCall`、`TxAiResultCard`、`TxAiCitation`；业务 API、quota 和 provider secret 留在业务层。 | 组件支持 `motion="none"` / reduced-motion；error/tool states 可键盘访问。 | `corepack pnpm -C "packages/intelligence-uikit" run lint`、`typecheck`、`test`。 |
+| TI-03 ContextHygiene / Local Knowledge continuation | P1，服从 R9.2 既有顺序 | `docs/plan-prd/TODO.md:47-60` | 不抢 2.5.0 Stable；继续 Session / Checkpoint / ContextPackage / MemoryPolicy / Tombstone / CompressionSnapshot；先为 CoreBox、Workflow、Assistant 各补一条 `prepareTurn` integration evidence。 | 敏感/secret turn 不进入 FTS、embedding、context log、sync payload；memory delete 必须 tombstone，并在 `prepareTurn` 二次过滤。 | 具体切片锁定相邻 `context*` / `memory*` focused tests；packaged CoreBox evidence 不替代上下文治理验证。 |
+| TI-04 ToolKit HITL bridge | P2 | `packages/tuff-intelligence/src/tools/tool-kit.ts` 的 `ToolKit.invoke`、`createApprovalRequest`、`toCapabilityManifest` | 将高风险 tool approval ticket 显示到现有 Workflow Review Queue；不新建 review store。 | approval gate 不可用时按 risk level fail-closed；critical 工具必须人工确认。 | `corepack pnpm -C "packages/tuff-intelligence" exec vitest run "src/tools/tool-kit.test.ts"`；新增 Workflow Review Queue integration test。 |
+
+## P1 QuickReview
+
+产品定义：**QuickReview 是 Tuff 的快速审阅入口，复用 TuffIntelligence `code.review`、OmniPanel AI Review、Workflow Review Queue 和 GitHub PR AI review script；不新建独立 review 数据库，不复制 Review Queue 状态机。**
+
+| ID | Priority | Current anchor | Concrete update | Failure handling | Verification |
+| --- | --- | --- | --- | --- | --- |
+| QR-01 Local QuickReview in launcher | P1 | `ai-actions.ts:137-145`；`intelligence.ts:725-754`；`plugins/touch-intelligence/index.js:63-70` | 在 `touch-intelligence` 增加 CoreBox feature：id `quick-review`、provider `touch-intelligence.quick-review`、name `QuickReview`、commands `review` / `quickreview` / `quick review` / `代码审查` / `评审`。首版只接受 `text`。调用固定为 `capabilityId: 'code.review'`，payload `{ code: inputText, focusAreas: ['bugs', 'best-practices', 'security'] }`；只有显式检测到语言时传 `language`。将 `summary`、`score`、`issues`、`improvements` 归一化为 assistant message，并保留 runtime metadata。 | 空文本提示“请选择或输入要审阅的代码”；权限/provider/quota/model 错误复用 `AI_ERROR_MESSAGES`；结构化结果缺字段时展示原始文本并标记 degraded。 | 扩展 `packages/test/src/plugins/intelligence.test.ts`，覆盖 command payload、空输入 fail-closed、缺 `intelligence.basic` 不调用 provider；运行该测试和插件 build。 |
+| QR-02 GitHub PR QuickReview workflow | P1 | PR template；`pr-flags.yml:48-65`；`scripts/ci/ai-review.mjs` | 新增 `.github/workflows/ai-review.yml`：name `AI PR Review`；trigger `pull_request_target` types `[opened, edited, reopened, ready_for_review, synchronize]`；permissions `contents: read`、`pull-requests: read`、`issues: write`；只 checkout base repository，然后运行 `node scripts/ci/ai-review.mjs "$GITHUB_EVENT_PATH"`。不得安装或执行 PR head code。 | 缺 `OPENAI_API_KEY` 记录 skipped 并成功退出；非允许 author association 成功跳过；GitHub API/comment 失败保持失败。 | 不调用真实 OpenAI/GitHub；补脚本 fixture test。最低 smoke：无参数运行脚本，必须输出 usage 并非零退出。 |
+| QR-03 Review Queue unification | P2，依赖 QR-01 | `intelligence-workflow-service.ts`；`useWorkflowEditor.ts` | QuickReview 只在产生 clipboard mutation 或 patch proposal 时进入现有 Review Queue；复用 `pending` / `copied` / `clipboard_replaced` / `failed`，不增加 `quickreview_*` 状态。 | copy/replace 失败保留 retry/clear；item missing 保留既有 `Review queue item not found` 错误。 | `corepack pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts"`；UI 行为变化时补 packaged visible evidence。 |
+
+## Current implementation status
+
+- `QR-02` 已落地：`AI PR Review` 使用 `pull_request_target`、显式 base SHA、最小权限、`persist-credentials: false` 与 PR 级 latest-event-wins concurrency；中英文 opt-in 和 author association fail-closed 均有 fixture 覆盖，`scripts/ci/ai-review.test.mjs` 通过 4/4。
+- `QR-01` 已落地：`touch-intelligence.quick-review` / `quick-review` 以文本调用 `code.review`，固定 bugs / best-practices / security focus，结构化或 degraded 渲染均保留 runtime metadata；attached text、Ask-like 源码前缀、line 0、pre-dispatch / cross-feature stale generation 和 transient 边界均有回归覆盖。`packages/test/src/plugins/intelligence.test.ts` 通过 59/59。
+- `LP-01` 已落地：Chromium History 通过独立临时 SQLite 副本只读扫描，每 profile 限最近 30 天 / 50 条并同时限定未来上界，关闭连接后以 bounded retry 清理 DB/WAL/SHM；同浏览器部分 profile 失败保留可读结果与 sanitized diagnostics。书签 / 历史的 result、empty、status、maintenance 均使用独立 source metadata；provider 未启用时在任何权限或本地文件访问前 fail-closed。Browser Data 通过 34/34，Browser Bookmarks 通过 16/16。
+- Plugin manifest validation 通过 23/23；FeatureSDK provider preflight 通过 3/3，CoreApp plugin contract 通过 17/17，CoreApp node typecheck 通过；`touch-intelligence` 与 `touch-browser-data` 均成功生成 `.tpex`。
+- 当前边界：CoreApp 尚无 browser-history indexed-source runtime handler，因此该 source 仍为 consent-gated ephemeral metadata；插件只通过只读 `plugin.feature.isSearchProviderEnabled(providerId)` preflight 决定可扫描 source，随后继续受 `fs.read` / `fs.index` permission gate 保护。
+
+## First implementation slices
+
+1. **QR-02 GitHub PR workflow wiring**：独立 CI 小切片，只补安全 workflow 与 fixture test；不修改 TuffIntelligence runtime。
+2. **QR-01 Local QuickReview**：扩展 `touch-intelligence` manifest、action、widget result normalization 和 package-level plugin tests；不接 files/diff upload。
+3. **LP-01 Browser Data + Quicklinks**：先补 Chromium History 只读边界和 manual/pinned source 语义；不触碰 R3 SQLite/FTS migration。
+4. TI-01、LP-02、LP-03、LP-04、LP-05、TI-02/03/04、QR-03 依各自依赖拆独立任务，不与前三项混批。
+
+## Verification matrix
+
+| Slice | Automated check | Observable contract |
+| --- | --- | --- |
+| Roadmap docs | 读取本文、`Roadmap-vNext`、`TODO.md`、`TODO-AI.md` | 本文包含 LP-01..05、TI-01..04、QR-01..03；Roadmap/TODO 只有单一入口引用，R0-R9 状态不变。 |
+| QR-01 | `corepack pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"` | `quickreview` 调用 `code.review` + 固定 focus areas；空输入不调用 provider；缺权限 fail-closed。 |
+| QR-01 build | `corepack pnpm -C "plugins/touch-intelligence" run build` | 插件构建成功，manifest/provider 可被 builder 接受。 |
+| QR-02 | `corepack pnpm exec vitest run "scripts/ci/ai-review.test.mjs"` | trusted base checkout、PR concurrency、中英文 opt-in、draft / association / credential gates 不访问真实 OpenAI/GitHub。 |
+| LP-01 | `node --test plugins/touch-browser-data/index.test.cjs` + `corepack pnpm plugins:validate` | provider consent 在权限 / filesystem 前 fail-closed；30 天窗口双边界、50 条 / profile、全局 recency、临时副本清理、partial diagnostics 与 source-scoped maintenance 均有覆盖。 |
+| TI-02 | intelligence-uikit `lint` + `typecheck` + `test` | UI Kit 导出、类型、交互测试全部通过。 |
+
+QuickReview 不提升 AI Stable 范围；任何 Workflow / Review Queue / Automation evidence 继续按 Beta 口径，不能替代 `Evidence-Matrix-AI-Stable-2026-06-18.md`。

@@ -1,6 +1,6 @@
 # Roadmap vNext
 
-> 更新时间：2026-07-06
+> 更新时间：2026-07-11
 > 定位：当前剩余工作的阶段化执行路线。本文是 R0-R9 的执行 SoT，替代旧的 npm publish / 平台验证 blocker 口径。
 
 ## 决策锁定
@@ -17,6 +17,7 @@
 - Nexus Governance：`Evidence-Matrix-Nexus-Governance-2026-06-18.md`。
 - Platform Capability：`Evidence-Matrix-Platform-2026-06-18.md`（非阻塞 smoke / regression，不恢复为 release blocker）。
 - Release Integrity：`Evidence-Matrix-Release-Integrity-2026-06-21.md`。
+- Launcher / TuffIntelligence / QuickReview：`Launcher-TuffIntelligence-QuickReview-Roadmap-2026-07-07.md`。
 
 ## Roadmap
 

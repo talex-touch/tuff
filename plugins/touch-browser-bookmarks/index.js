@@ -478,7 +478,7 @@ function formatNetworkCapabilitySuffix(capabilityState) {
   return capabilityState.reason ? ` · ${capabilityState.reason}` : ''
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability, sourceType = 'manual-quicklink' }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -487,41 +487,50 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload, ca
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
+      sourceType,
+      sourceKind: sourceType,
       defaultAction: ACTION_ID,
       actionId,
-      payload,
+      payload: {
+        ...(payload || {}),
+        sourceType,
+      },
       ...(capability ? { capability } : {}),
     })
     .build()
 }
 
 function buildBookmarkItems(featureId, bookmarks, networkCapabilityState) {
-  return bookmarks.slice(0, SHOW_BOOKMARKS).map((item, index) => buildActionItem({
-    id: `${featureId}-bookmark-${index}`,
-    featureId,
-    title: `打开 · ${item.title}`,
-    subtitle: `${truncateText(item.url)}${item.pinned ? ' · PINNED' : ''}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
-    actionId: 'open-url',
-    payload: {
-      url: item.url,
-      title: item.title,
-      source: 'bookmark',
-    },
-    capability: buildNetworkOpenCapability({
+  return bookmarks.slice(0, SHOW_BOOKMARKS).map((item, index) => {
+    const sourceType = item.pinned ? 'manual-pinned-quicklink' : 'manual-quicklink'
+    return buildActionItem({
+      id: `${featureId}-bookmark-${index}`,
       featureId,
-      source: 'bookmark',
-      url: item.url,
-      status: networkCapabilityState?.status,
-      reason: networkCapabilityState?.reason,
-    }),
-  }))
+      title: `手动收藏 · ${item.title}`,
+      subtitle: `${truncateText(item.url)}${item.pinned ? ' · PINNED' : ''}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
+      actionId: 'open-url',
+      payload: {
+        url: item.url,
+        title: item.title,
+        source: 'bookmark',
+      },
+      sourceType,
+      capability: buildNetworkOpenCapability({
+        featureId,
+        source: 'bookmark',
+        url: item.url,
+        status: networkCapabilityState?.status,
+        reason: networkCapabilityState?.reason,
+      }),
+    })
+  })
 }
 
 function buildRecentItems(featureId, recentItems, networkCapabilityState) {
   return recentItems.map((item, index) => buildActionItem({
     id: `${featureId}-recent-${index}`,
     featureId,
-    title: `最近 · ${item.title}`,
+    title: `手动最近 · ${item.title}`,
     subtitle: `${truncateText(item.url)}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
     actionId: 'open-url',
     payload: {
@@ -529,6 +538,7 @@ function buildRecentItems(featureId, recentItems, networkCapabilityState) {
       title: item.title,
       source: 'recent',
     },
+    sourceType: 'manual-recent-quicklink',
     capability: buildNetworkOpenCapability({
       featureId,
       source: 'recent',
@@ -608,6 +618,7 @@ const pluginLifecycle = {
           subtitle: `${truncateText(inputUrl)}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
           actionId: 'open-url',
           payload: { url: inputUrl, title: guessTitleFromUrl(inputUrl), source: 'quick' },
+          sourceType: 'manual-quicklink',
           capability: buildNetworkOpenCapability({
             featureId,
             source: 'quick',
@@ -623,6 +634,7 @@ const pluginLifecycle = {
           subtitle: truncateText(inputUrl),
           actionId: 'add-bookmark',
           payload: { url: inputUrl, title: guessTitleFromUrl(inputUrl) },
+          sourceType: 'manual-quicklink',
         }))
         quick.push(buildActionItem({
           id: `${featureId}-quick-copy`,
@@ -631,6 +643,7 @@ const pluginLifecycle = {
           subtitle: truncateText(inputUrl),
           actionId: 'copy-url',
           payload: { url: inputUrl },
+          sourceType: 'manual-quicklink',
         }))
       }
       else {
@@ -648,6 +661,7 @@ const pluginLifecycle = {
         title: '打开配置目录',
         subtitle: '编辑 bookmarks.json / recent-urls.json',
         actionId: 'config-open',
+        sourceType: 'manual-quicklink-config',
       }))
 
       const bookmarkItems = buildBookmarkItems(featureId, filteredBookmarks, networkCapabilityState)

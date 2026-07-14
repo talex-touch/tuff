@@ -424,4 +424,120 @@ describe('browser bookmarks plugin', () => {
       },
     })
   })
+  it('renders manual, pinned, recent, and direct quicklinks with compatible source payloads', async () => {
+    const items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }> = []
+    const files: Record<string, unknown> = {
+      'bookmarks.json': {
+        items: [
+          {
+            id: 'bookmark-regular',
+            url: 'https://regular.example/',
+            title: 'Regular manual bookmark',
+            tags: ['docs'],
+            pinned: false,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+          {
+            id: 'bookmark-pinned',
+            url: 'https://pinned.example/',
+            title: 'Pinned manual bookmark',
+            tags: ['docs'],
+            pinned: true,
+            createdAt: 1,
+            updatedAt: 3,
+          },
+        ],
+      },
+      'recent-urls.json': {
+        items: [{
+          url: 'https://recent.example/',
+          title: 'Recent manual quicklink',
+          lastUsedAt: 4_102_444_800_000,
+        }],
+      },
+    }
+    const pluginModule = loadPluginModule(browserBookmarksUrl, createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+      plugin: {
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }>) { items.push(...next) },
+        },
+        storage: {
+          async getFile(file: string) { return files[file] ?? null },
+          async setFile() {
+            throw new Error('rendering manual quicklinks must not rewrite stored records')
+          },
+        },
+      },
+    }))
+
+    await pluginModule.onFeatureTriggered('browser-bookmarks', '')
+
+    const regular = items.find(item => item.title === '手动收藏 · Regular manual bookmark')
+    const pinned = items.find(item => item.title === '手动收藏 · Pinned manual bookmark')
+    const recent = items.find(item => item.title === '手动最近 · Recent manual quicklink')
+
+    expect(regular?.meta).toMatchObject({
+      sourceType: 'manual-quicklink',
+      sourceKind: 'manual-quicklink',
+      payload: {
+        url: 'https://regular.example/',
+        title: 'Regular manual bookmark',
+        source: 'bookmark',
+        sourceType: 'manual-quicklink',
+      },
+    })
+    expect(pinned?.meta).toMatchObject({
+      sourceType: 'manual-pinned-quicklink',
+      sourceKind: 'manual-pinned-quicklink',
+      payload: {
+        url: 'https://pinned.example/',
+        title: 'Pinned manual bookmark',
+        source: 'bookmark',
+        sourceType: 'manual-pinned-quicklink',
+      },
+    })
+    expect(pinned?.subtitle).toContain('PINNED')
+    expect(recent?.meta).toMatchObject({
+      sourceType: 'manual-recent-quicklink',
+      sourceKind: 'manual-recent-quicklink',
+      payload: {
+        url: 'https://recent.example/',
+        title: 'Recent manual quicklink',
+        source: 'recent',
+        sourceType: 'manual-recent-quicklink',
+      },
+    })
+
+    await pluginModule.onFeatureTriggered('browser-bookmarks', 'https://direct.example')
+
+    const directOpen = items.find(item => item.title === '默认浏览器打开')
+    const directAdd = items.find(item => item.title === '添加到收藏')
+    const directCopy = items.find(item => item.title === '复制 URL')
+
+    expect(directOpen?.meta).toMatchObject({
+      sourceType: 'manual-quicklink',
+      sourceKind: 'manual-quicklink',
+      payload: {
+        url: 'https://direct.example/',
+        source: 'quick',
+        sourceType: 'manual-quicklink',
+      },
+    })
+    expect(directAdd?.meta?.payload).toMatchObject({
+      url: 'https://direct.example/',
+      sourceType: 'manual-quicklink',
+    })
+    expect(directAdd?.meta?.payload?.source).toBeUndefined()
+    expect(directCopy?.meta?.payload).toEqual({
+      url: 'https://direct.example/',
+      sourceType: 'manual-quicklink',
+    })
+  })
 })
