@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { createSendModeInteraction, withSendMode } from '../plugin/sdk/features'
 import type { IPluginFeature } from '../plugin'
+import { describe, expect, it } from 'vitest'
+import { createFeatureSDK } from '../plugin/sdk/feature-sdk'
+import {
+  createSendModeInteraction,
+  withSendMode,
+} from '../plugin/sdk/features'
 
-describe('Plugin Features SDK helpers', () => {
+describe('plugin Features SDK helpers', () => {
   it('enables send mode without dropping interaction fields', () => {
     expect(
       createSendModeInteraction({
@@ -32,5 +36,26 @@ describe('Plugin Features SDK helpers', () => {
     })
 
     expect(feature.interaction).toEqual({ type: 'widget', sendMode: true })
+  })
+
+  it('delegates provider consent to the host and fails closed without host support', () => {
+    const channel = { regChannel: () => () => {} }
+    const sdk = createFeatureSDK(
+      {
+        isSearchProviderEnabled: (providerId: string) =>
+          providerId === 'declared-enabled',
+      },
+      channel,
+    )
+    const sdkWithoutHostSupport = createFeatureSDK({}, channel)
+
+    expect(sdk.isSearchProviderEnabled('declared-enabled')).toBe(true)
+    expect(sdk.isSearchProviderEnabled('declared-disabled')).toBe(false)
+    expect(
+      sdkWithoutHostSupport.isSearchProviderEnabled('declared-enabled'),
+    ).toBe(false)
+
+    sdk.dispose()
+    sdkWithoutHostSupport.dispose()
   })
 })

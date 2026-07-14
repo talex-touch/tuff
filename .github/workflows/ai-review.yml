@@ -1,0 +1,38 @@
+name: AI PR Review
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+concurrency:
+  group: ai-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ai-review:
+    name: AI PR Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted base commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run AI review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          OPENAI_COMPLETIONS_PATH: ${{ vars.OPENAI_COMPLETIONS_PATH }}
+          AI_REVIEW_MODEL: ${{ vars.AI_REVIEW_MODEL }}
+          AI_REVIEW_TEMPERATURE: ${{ vars.AI_REVIEW_TEMPERATURE }}
+          AI_REVIEW_MAX_OUTPUT_TOKENS: ${{ vars.AI_REVIEW_MAX_OUTPUT_TOKENS }}
+          AI_REVIEW_PATCH_CHARACTER_LIMIT: ${{ vars.AI_REVIEW_PATCH_CHARACTER_LIMIT }}
+          AI_REVIEW_ALLOWED_ASSOCIATIONS: ${{ vars.AI_REVIEW_ALLOWED_ASSOCIATIONS }}
+        run: node scripts/ci/ai-review.mjs "$GITHUB_EVENT_PATH"

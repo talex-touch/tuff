@@ -7,6 +7,7 @@
  */
 
 import type { TuffItem } from '../../core-box/tuff'
+import { hasWindow } from '../../env'
 import { createPluginTuffTransport } from '../../transport'
 import { CoreBoxEvents } from '../../transport/events'
 import { createDisposableBag } from '../../transport/sdk'
@@ -39,7 +40,7 @@ export type KeyEventHandler = (event: ForwardedKeyEvent) => void
 function createRemovedKeyEventError(): Error {
   return Object.assign(
     new Error(
-      '[Feature SDK] onKeyEvent was removed by the hard-cut because core-box:key-event has no production sender. Use attached UI hostKeyEvent props for plugin UI keyboard handling.'
+      '[Feature SDK] onKeyEvent was removed by the hard-cut because core-box:key-event has no production sender. Use attached UI hostKeyEvent props for plugin UI keyboard handling.',
     ),
     { code: 'plugin_feature_key_event_removed' },
   )
@@ -139,6 +140,12 @@ export interface FeatureSDK {
   getItems: () => TuffItem[]
 
   /**
+   * Checks whether one of this plugin's declared root-result providers is enabled.
+   * Unknown providers and unavailable host support fail closed.
+   */
+  isSearchProviderEnabled: (providerId: string) => boolean
+
+  /**
    * Registers a listener for input changes in the CoreBox search field
    *
    * @param handler - Callback function invoked when input changes
@@ -189,8 +196,8 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
   let disposed = false
 
   const emitInput = (payload: any) => {
-    const input =
-      typeof payload?.input === 'string'
+    const input
+      = typeof payload?.input === 'string'
         ? payload.input
         : typeof payload?.query?.text === 'string'
           ? payload.query.text
@@ -224,14 +231,17 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     transport.destroy()
   }
 
-  disposables.add(
-    transport.on(CoreBoxEvents.input.change, emitInput),
-  )
+  disposables.add(transport.on(CoreBoxEvents.input.change, emitInput))
 
-  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  if (
+    hasWindow()
+    && typeof window.addEventListener === 'function'
+  ) {
     const onBeforeUnload = () => dispose()
     window.addEventListener('beforeunload', onBeforeUnload, { once: true })
-    disposables.add(() => window.removeEventListener('beforeunload', onBeforeUnload))
+    disposables.add(() =>
+      window.removeEventListener('beforeunload', onBeforeUnload),
+    )
   }
 
   return {
@@ -275,6 +285,17 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
       return boxItemsAPI.getItems()
     },
 
+    isSearchProviderEnabled(providerId: string): boolean {
+      ensureActive('isSearchProviderEnabled')
+      if (
+        !boxItemsAPI
+        || typeof boxItemsAPI.isSearchProviderEnabled !== 'function'
+      ) {
+        return false
+      }
+      return boxItemsAPI.isSearchProviderEnabled(providerId) === true
+    },
+
     onInputChange(handler: InputChangeHandler): () => void {
       ensureActive('onInputChange')
       inputChangeHandlers.add(handler)
@@ -310,7 +331,9 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
  */
 export function useFeature(): FeatureSDK {
   const boxItemsAPI = useBoxItems()
-  const channel = ensureRendererChannel('[Feature SDK] Channel not available. Make sure this is called in a plugin context.')
+  const channel = ensureRendererChannel(
+    '[Feature SDK] Channel not available. Make sure this is called in a plugin context.',
+  )
 
   return createFeatureSDK(boxItemsAPI, channel)
 }
