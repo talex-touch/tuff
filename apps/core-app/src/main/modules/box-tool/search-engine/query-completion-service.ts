@@ -179,18 +179,16 @@ export class QueryCompletionService {
         if (suggestion) {
           if (!item.meta) item.meta = {}
 
+          // The ranker (tuff-sorter) reads this to apply a bounded match boost.
+          // Do NOT mutate item.scoring.match here: tuff-sorter recomputes the
+          // match score from scratch and never reads scoring.match, so writing
+          // it had no effect on ranking.
           item.meta.completion = {
             count: suggestion.completionCount,
             lastCompleted: suggestion.lastCompleted.toISOString(),
             score: suggestion.score
           }
 
-          if (item.scoring) {
-            const boostFactor = 1 + Math.min(suggestion.completionCount * 0.1, 0.5)
-            if (item.scoring.match !== undefined) {
-              item.scoring.match *= boostFactor
-            }
-          }
           injectedCount++
         }
       }

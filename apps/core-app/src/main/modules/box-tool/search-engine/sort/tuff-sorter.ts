@@ -46,6 +46,22 @@ function getFrequencyWeightFactor(item: TuffItem): number {
   return 1
 }
 
+/**
+ * Completion boost from historical "query prefix → executed item" learning.
+ *
+ * QueryCompletionService.injectCompletionWeights writes the completion stats to
+ * `item.meta.completion`. This is the single place the ranker consumes it: the
+ * boost is applied as a bounded multiplier on the match contribution (mirroring
+ * the service's original `1 + min(count * 0.1, 0.5)` intent, i.e. up to +50%),
+ * so a previously-executed result edges out an otherwise equally-scored one
+ * without overpowering a genuine exact title match.
+ */
+function getCompletionBoostFactor(item: TuffItem): number {
+  const count = Number(item.meta?.completion?.count) || 0
+  if (count <= 0) return 1
+  return 1 + Math.min(count * 0.1, 0.5)
+}
+
 function getMatchSource(item: TuffItem): string | null {
   const source = item.meta?.extension?.source
   return typeof source === 'string' && source ? source : null
@@ -289,10 +305,12 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   // 2) frequency/recency 作为行为学习信号；
   // 3) kindBias 与 manifest priority 仅作为软偏置；
   // 4) feature/command 频次权重略高，提升常用功能的自学习效果；
-  // 5) 频次使用 log 增长，避免超高历史次数压过明显更高的匹配分。
+  // 5) 频次使用 log 增长，避免超高历史次数压过明显更高的匹配分；
+  // 6) 补全学习（meta.completion）作为 match 项的有界乘子，让"该前缀历史执行过"的结果在同分时前置。
+  const completionBoost = getCompletionBoostFactor(item)
   const frequencyWeighted = Math.log1p(Math.max(0, frequency)) * getFrequencyWeightFactor(item)
   const finalScore =
-    matchScore * MATCH_SCORE_MULTIPLIER +
+    matchScore * MATCH_SCORE_MULTIPLIER * completionBoost +
     frequencyWeighted * FREQUENCY_SCORE_MULTIPLIER +
     recency * RECENCY_SCORE_MULTIPLIER +
     kindBias * KIND_SCORE_MULTIPLIER +
