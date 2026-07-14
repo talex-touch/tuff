@@ -3,7 +3,13 @@
  * @module @talex-touch/utils/transport/events/types/core-box
  */
 
-import type { IProviderActivate, TuffItem, TuffQuery, TuffQueryInput } from '../../../core-box/tuff/tuff-dsl'
+import type {
+  IProviderActivate,
+  TuffContext,
+  TuffItem,
+  TuffQuery,
+  TuffQueryInput
+} from '../../../core-box/tuff/tuff-dsl'
 import type { IndexedSourceDiagnosticsSnapshot } from '../../../search'
 
 // ============================================================================
@@ -465,6 +471,17 @@ export interface SetInputRequest {
    * Value to set.
    */
   value: string
+}
+
+
+/**
+ * Request to set a query and optionally attach one-shot search context.
+ */
+export interface SetQueryRequest extends SetInputRequest {
+  /**
+   * Context forwarded to the next search triggered by this query.
+   */
+  context?: TuffContext
 }
 
 /**

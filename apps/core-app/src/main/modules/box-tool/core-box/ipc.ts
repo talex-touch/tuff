@@ -10,7 +10,8 @@ import type {
   GetProviderDetailsRequest,
   ProviderDetail,
   SetInputRequest,
-  SetInputVisibilityRequest
+  SetInputVisibilityRequest,
+  SetQueryRequest
 } from '@talex-touch/utils/transport/events/types'
 import type {
   MetaAction,
@@ -77,16 +78,14 @@ export class IpcManager {
     return this.transport
   }
 
-  private async sendInputValueToRenderer(value: string): Promise<void> {
+  private async sendInputValueToRenderer(request: SetQueryRequest): Promise<void> {
     const coreBoxWindow = getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
       throw new Error('CoreBox window not available')
     }
 
     const transport = this.ensureTransport()
-    await transport.sendTo(coreBoxWindow.window.webContents, CoreBoxEvents.input.setQuery, {
-      value
-    })
+    await transport.sendTo(coreBoxWindow.window.webContents, CoreBoxEvents.input.setQuery, request)
   }
 
   private handleExpandRequest(data: ExpandOptions | number): void {
@@ -328,7 +327,7 @@ export class IpcManager {
 
     const handleSetInput = async (request: SetInputRequest) => {
       const value = typeof request?.value === 'string' ? request.value : ''
-      await this.sendInputValueToRenderer(value)
+      await this.sendInputValueToRenderer({ value })
       return { value }
     }
 
@@ -337,9 +336,12 @@ export class IpcManager {
       this.onLegacy(CoreBoxRetainedEvents.legacy.setInput, CoreBoxEvents.input.set, handleSetInput)
     )
 
-    const handleSetQuery = async (request: SetInputRequest) => {
+    const handleSetQuery = async (request: SetQueryRequest) => {
       const value = typeof request?.value === 'string' ? request.value : ''
-      await this.sendInputValueToRenderer(value)
+      await this.sendInputValueToRenderer({
+        value,
+        ...(request?.context ? { context: request.context } : {})
+      })
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.setQuery, handleSetQuery))
@@ -352,7 +354,7 @@ export class IpcManager {
     )
 
     const handleClearInput = async () => {
-      await this.sendInputValueToRenderer('')
+      await this.sendInputValueToRenderer({ value: '' })
       return { cleared: true }
     }
 

@@ -1,6 +1,7 @@
 import {
   TuffInputType,
   type IProviderActivate,
+  type TuffContext,
   type TuffItem,
   type TuffQuery,
   type TuffQueryInput,
@@ -66,6 +67,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
 }
 
+function createTuffQuery(text: string, inputs: TuffQueryInput[], context?: TuffContext): TuffQuery {
+  return context ? { text, inputs, context } : { text, inputs }
+}
+
 interface DetachedDivisionPayload {
   item: TuffItem
   query?: string
@@ -94,6 +99,17 @@ function getActivationFeature(
   const meta = isRecord(activation?.meta) ? activation?.meta : null
   const feature = meta?.feature
   return isRecord(feature) ? (feature as unknown as PluginFeatureItem) : null
+}
+
+function getActivationSubmitFeature(
+  activation: IProviderActivate | null | undefined
+): PluginFeatureItem | null {
+  const meta = isRecord(activation?.meta) ? activation.meta : null
+  const activationFeature = meta?.activationFeature
+  if (isRecord(activationFeature)) {
+    return activationFeature as unknown as PluginFeatureItem
+  }
+  return getActivationFeature(activation)
 }
 
 function findWidgetActivationFeature(
@@ -207,13 +223,13 @@ function refreshActiveWidgetFeature(
 ): IProviderActivate[] | null {
   if (!activations?.length || !items.length) return activations
 
-  const widgetItemsByKey = new Map<string, TuffItem>()
+  const widgetItemsByKey = new Map<string, PluginFeatureItem>()
   for (const item of items) {
     const custom = item.render?.mode === 'custom' ? item.render.custom : null
     if (!custom || !['vue', 'webcomponent', 'arrow'].includes(custom.type)) continue
     const identity = getPluginFeatureIdentity(item)
     if (!identity) continue
-    widgetItemsByKey.set(`${identity.pluginName}:${identity.featureId}`, item)
+    widgetItemsByKey.set(`${identity.pluginName}:${identity.featureId}`, item as PluginFeatureItem)
   }
   if (!widgetItemsByKey.size) return activations
 
@@ -225,11 +241,13 @@ function refreshActiveWidgetFeature(
     const featureId = typeof meta.featureId === 'string' ? meta.featureId : ''
     const nextFeature = widgetItemsByKey.get(`${pluginName}:${featureId}`)
     if (!nextFeature || meta.feature === nextFeature) return activation
+    const activationFeature = getActivationSubmitFeature(activation)
     changed = true
     return {
       ...activation,
       meta: {
         ...meta,
+        ...(activationFeature ? { activationFeature } : {}),
         feature: nextFeature
       }
     }
@@ -444,6 +462,8 @@ export function useSearch(
   let inFlightQueryKey: string | null = null
   let lastQueryKey = ''
   let lastQueryAt = 0
+  let oneShotQueryContext: TuffContext | undefined
+  let programmaticQueryValue: string | null = null
 
   const DUPLICATE_QUERY_WINDOW_MS = 200
   function toActivations(
@@ -734,11 +754,12 @@ export function useSearch(
   async function executeSearch(options: ExecuteSearchOptions = {}): Promise<void> {
     await refreshClipboardBeforeInputBuild()
     const inputs = buildQueryInputs()
+    const queryContext = oneShotQueryContext
     const queryKey = buildQueryKey(searchVal.value, inputs, activeActivations.value)
 
     if (isDivisionBoxMode() && !isDetachedDivisionMode()) {
       beginSearchSequence(inputs, options)
-      const query: TuffQuery = { text: searchVal.value, inputs }
+      const query = createTuffQuery(searchVal.value, inputs, queryContext)
       broadcastDivisionBoxInput(query)
       return
     }
@@ -778,7 +799,7 @@ export function useSearch(
 
       try {
         inFlightQueryKey = queryKey
-        const query: TuffQuery = { text: '', inputs }
+        const query = createTuffQuery('', inputs, queryContext)
         inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
 
         logDebug('[useSearch] Sending recommendation query:', {
@@ -829,10 +850,7 @@ export function useSearch(
 
     if (!searchVal.value) {
       beginSearchSequence(inputs, options)
-      const query: TuffQuery = {
-        text: '',
-        inputs
-      }
+      const query = createTuffQuery('', inputs, queryContext)
 
       inputTransport.broadcast({
         input: query.text,
@@ -855,10 +873,7 @@ export function useSearch(
 
     try {
       inFlightQueryKey = queryKey
-      const query: TuffQuery = {
-        text: searchVal.value,
-        inputs
-      }
+      const query = createTuffQuery(searchVal.value, inputs, queryContext)
 
       logDebug('[useSearch] Sending search query:', {
         text: query.text,
@@ -967,6 +982,9 @@ export function useSearch(
 
     const isPluginFeature =
       itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
+    const pluginFeatureSnapshot = isPluginFeature
+      ? (JSON.parse(JSON.stringify(itemToExecute)) as PluginFeatureItem)
+      : null
     const metaRecord = isRecord(itemToExecute.meta) ? itemToExecute.meta : null
     const intelligence =
       metaRecord && isRecord(metaRecord.intelligence) ? metaRecord.intelligence : null
@@ -1039,7 +1057,8 @@ export function useSearch(
           meta: {
             pluginName: itemToExecute.meta?.pluginName,
             featureId: itemToExecute.meta?.featureId,
-            feature: itemToExecute
+            feature: itemToExecute,
+            activationFeature: pluginFeatureSnapshot
           },
           hideResults: false,
           showInput: shouldShowInput
@@ -1063,10 +1082,19 @@ export function useSearch(
       boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0
     const usedClipboardInput = currentInputs.length > 0 && !usedFileModeAttachment
 
-    const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
+    const serializedItem = pluginFeatureSnapshot ?? JSON.parse(JSON.stringify(itemToExecute))
     const serializedSearchResult = searchResult.value
       ? JSON.parse(JSON.stringify(searchResult.value))
       : null
+
+    if (serializedSearchResult?.query) {
+      if (oneShotQueryContext) {
+        serializedSearchResult.query.context = oneShotQueryContext
+      } else {
+        delete serializedSearchResult.query.context
+      }
+    }
+    oneShotQueryContext = undefined
 
     if (isPluginFeature && serializedSearchResult?.query) {
       serializedSearchResult.query.text = currentQueryText
@@ -1235,6 +1263,12 @@ export function useSearch(
   })
 
   watch(searchVal, (val) => {
+    if (programmaticQueryValue !== null) {
+      const shouldSkipReactiveSearch = val === programmaticQueryValue
+      programmaticQueryValue = null
+      if (shouldSkipReactiveSearch) return
+    }
+    oneShotQueryContext = undefined
     if (hasSendModePluginFeatureActivation(activeActivations.value)) {
       const cancelable = debouncedSearch as unknown as { cancel?: () => void }
       cancelable.cancel?.()
@@ -1297,8 +1331,10 @@ export function useSearch(
     activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, filteredItems)
   })
 
-  const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
+  const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value, context }) => {
     const nextValue = typeof value === 'string' ? value : ''
+    programmaticQueryValue = nextValue
+    oneShotQueryContext = context
     searchVal.value = nextValue
     void handleSearchImmediate({ force: true })
     window.dispatchEvent(new CustomEvent(CoreBoxEvents.input.focus.toEventName()))
