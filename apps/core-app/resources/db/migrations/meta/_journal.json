@@ -183,6 +183,13 @@
       "when": 1782344400000,
       "tag": "0025_scan_progress_source_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784077200000,
+      "tag": "0026_catalog_service",
+      "breakpoints": true
     }
   ]
 }
