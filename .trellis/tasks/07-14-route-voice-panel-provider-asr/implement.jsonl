@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Typed renderer-to-main Assistant transcription contract"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Transient VoicePanel recorder lifecycle and cleanup"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Focused behavior verification and localized error UX"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse governed Intelligence facade and existing Web Speech path"}
