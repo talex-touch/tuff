@@ -90,6 +90,80 @@ function createWorkflow(overrides: Partial<WorkflowDefinition> = {}): WorkflowDe
   }
 }
 
+function createWorkflowExecutionHarness(existingRun: WorkflowRunRecord | null = null) {
+  const service = new IntelligenceWorkflowService()
+  const target = service as unknown as {
+    initialize: () => Promise<void>
+    getRun: (runId: string) => Promise<WorkflowRunRecord | null>
+    getWorkflow: (workflowId: string) => Promise<WorkflowDefinition | null>
+    saveWorkflow: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition>
+    persistRun: (run: WorkflowRunRecord) => Promise<WorkflowRunRecord>
+  }
+  const executor = vi.fn(async (context) => ({
+    ...context.run,
+    status: 'completed' as const,
+    outputs: { executed: true }
+  }))
+
+  target.initialize = vi.fn(async () => undefined)
+  target.getRun = vi.fn(async () => existingRun)
+  target.getWorkflow = vi.fn(async () => createWorkflow({ id: 'workflow-persisted' }))
+  target.saveWorkflow = vi.fn(async (workflow) => workflow)
+  target.persistRun = vi.fn(async (run) => run)
+  service.setExecutor(executor)
+
+  return { service, executor }
+}
+
+describe('IntelligenceWorkflowService direct execution governance', () => {
+  it.each([
+    {
+      name: 'a fresh persisted run',
+      existingRun: null,
+      request: {
+        workflow: createWorkflow({ id: 'workflow-fresh' }),
+        inputs: { source: 'fresh' },
+        metadata: { requestId: 'fresh-request' }
+      },
+      expectedMetadata: { requestId: 'fresh-request' }
+    },
+    {
+      name: 'a resumed persisted run',
+      existingRun: {
+        id: 'run-resumed',
+        workflowId: 'workflow-persisted',
+        workflowName: 'Persisted Workflow',
+        status: 'waiting_approval' as const,
+        triggerType: 'manual' as const,
+        inputs: { source: 'previous' },
+        outputs: {},
+        steps: [],
+        startedAt: 1,
+        metadata: { retained: true }
+      },
+      request: {
+        workflowId: 'workflow-persisted',
+        inputs: { source: 'resumed' },
+        metadata: { requestId: 'resumed-request' }
+      },
+      expectedMetadata: { requestId: 'resumed-request' }
+    }
+  ])(
+    'passes self-governance and request metadata for $name',
+    async ({ existingRun, request, expectedMetadata }) => {
+      const { service, executor } = createWorkflowExecutionHarness(existingRun)
+
+      await service.runWorkflow(request)
+
+      expect(executor).toHaveBeenCalledOnce()
+      expect(executor.mock.calls[0]?.[0]).toMatchObject({
+        providerGovernance: 'self',
+        metadata: expectedMetadata
+      })
+    }
+  )
+})
+
 describe('IntelligenceWorkflowService workflow normalization', () => {
   it('seeds all P0 builtin workflow templates with stable model steps', async () => {
     const { seedBuiltinTemplates, savedWorkflows } = createTemplateSeeder()

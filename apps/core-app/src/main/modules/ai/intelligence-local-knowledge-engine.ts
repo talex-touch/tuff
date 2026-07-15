@@ -18,6 +18,7 @@ import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../db/sqlite-retry'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
+import { estimateContextTokens, normalizeContextTokenBudget } from './intelligence-token-estimate'
 
 const log = createLogger('IntelligenceKnowledge')
 const DEFAULT_CHUNK_SIZE = 1_600
@@ -51,10 +52,6 @@ function stableId(prefix: string, value: string): string {
 
 function hashContent(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex')
-}
-
-function estimateTokens(content: string): number {
-  return Math.max(1, Math.ceil(content.trim().length / 4))
 }
 
 function parseJsonRecord(value: string | null | undefined): Record<string, unknown> {
@@ -120,7 +117,7 @@ function normalizeScopes(permissionScope: KnowledgeSearchInput['permissionScope'
 
 function buildFtsQuery(query: string): string {
   const terms = query.trim().match(/[\p{L}\p{M}\p{N}_]+/gu) ?? []
-  return terms.map(term => `"${term}"*`).join(' OR ')
+  return terms.map((term) => `"${term}"*`).join(' OR ')
 }
 
 function rowToHit(row: KnowledgeRow): KnowledgeSearchHit {
@@ -141,7 +138,7 @@ function rowToHit(row: KnowledgeRow): KnowledgeSearchHit {
     chunkIndex: row.chunk_index,
     content: row.content,
     contentHash: row.chunk_hash,
-    tokenEstimate: row.token_estimate,
+    tokenEstimate: Math.max(Number(row.token_estimate) || 0, estimateContextTokens(row.content)),
     metadata: parseJsonRecord(row.chunk_metadata),
     createdAt: row.chunk_created_at,
     updatedAt: row.chunk_updated_at
@@ -292,7 +289,7 @@ export class LocalKnowledgeEngine {
             index,
             chunk,
             chunkHash,
-            estimateTokens(chunk),
+            estimateContextTokens(chunk),
             null,
             now,
             now
@@ -321,7 +318,7 @@ export class LocalKnowledgeEngine {
         chunkIndex: index,
         content: chunk,
         contentHash: hashContent(chunk),
-        tokenEstimate: estimateTokens(chunk),
+        tokenEstimate: estimateContextTokens(chunk),
         createdAt: now,
         updatedAt: now
       }))
@@ -359,7 +356,7 @@ export class LocalKnowledgeEngine {
           chunkIndex,
           content,
           contentHash,
-          estimateTokens(content),
+          estimateContextTokens(content),
           stringifyJson(input.metadata),
           now,
           now
@@ -374,7 +371,7 @@ export class LocalKnowledgeEngine {
         chunkIndex,
         content,
         contentHash,
-        tokenEstimate: estimateTokens(content),
+        tokenEstimate: estimateContextTokens(content),
         metadata: input.metadata,
         createdAt: now,
         updatedAt: now
@@ -491,7 +488,7 @@ export class LocalKnowledgeEngine {
       }
     }
 
-    const budget = Math.max(1, Math.floor(Number(input.tokenBudget || 1)))
+    const budget = normalizeContextTokenBudget(input.tokenBudget, 1)
     const selected: KnowledgeSearchHit[] = []
     const seenDocuments = new Set<string>()
     let tokenEstimate = 0
@@ -499,22 +496,24 @@ export class LocalKnowledgeEngine {
     for (const hit of searchResult.hits) {
       if (input.dedupe !== false && seenDocuments.has(hit.document.id)) continue
       const nextEstimate = tokenEstimate + hit.chunk.tokenEstimate
-      if (nextEstimate > budget && selected.length > 0) continue
+      if (nextEstimate > budget) continue
       selected.push(hit)
       seenDocuments.add(hit.document.id)
       tokenEstimate += hit.chunk.tokenEstimate
       if (selected.length >= (input.maxChunks ?? DEFAULT_CONTEXT_MAX_CHUNKS)) break
     }
+    const tokenBudgetExhausted =
+      searchResult.status === 'ok' && searchResult.hits.length > 0 && selected.length === 0
 
     return {
-      status: searchResult.status,
+      status: tokenBudgetExhausted ? 'degraded' : searchResult.status,
       contextText: selected
         .map((hit, index) => `[${index + 1}] ${hit.document.title}\n${hit.chunk.content}`)
         .join('\n\n'),
       chunks: selected,
       tokenEstimate,
       citations: selected.map((hit) => hit.citation),
-      degradedReason: searchResult.degradedReason
+      degradedReason: tokenBudgetExhausted ? 'token-budget-exhausted' : searchResult.degradedReason
     }
   }
 }

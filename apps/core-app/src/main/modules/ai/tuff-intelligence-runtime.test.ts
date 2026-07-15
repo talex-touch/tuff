@@ -10,17 +10,21 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 vi.mock('./agents', () => ({
   agentManager: {
     executeTaskImmediate: vi.fn(),
+    getAvailableAgents: vi.fn(() => []),
     shutdown: vi.fn()
   },
   toolRegistry: {
-    executeTool: vi.fn()
+    executeTool: vi.fn(),
+    getAllTools: vi.fn(() => [])
   }
 }))
 
+const intelligenceSdkMocks = vi.hoisted(() => ({
+  invoke: vi.fn()
+}))
+
 vi.mock('./intelligence-sdk', () => ({
-  tuffIntelligence: {
-    invoke: vi.fn()
-  }
+  tuffIntelligence: intelligenceSdkMocks
 }))
 
 vi.mock('../database', () => ({
@@ -67,6 +71,14 @@ type TuffIntelligenceRuntimeHarness = {
     sessionId: string,
     listener: (event: TuffIntelligenceTraceEvent) => void
   ) => () => void
+  runAgentGraph: (payload: {
+    sessionId?: string
+    objective: string
+    context?: Record<string, unknown>
+    metadata?: Record<string, unknown>
+  }) => Promise<{
+    currentTurn?: TuffIntelligenceTurn
+  } | null>
 }
 let TuffIntelligenceRuntimeCtor: new () => TuffIntelligenceRuntimeHarness
 
@@ -97,6 +109,25 @@ function createStoredSession(sessionId: string): StoredRuntimeSessionLike {
     approvals: [],
     toolCallCache: {}
   }
+}
+
+function planCapabilityAction(capabilityId: string, input: Record<string, unknown>): void {
+  intelligenceSdkMocks.invoke.mockImplementation(async (capability: string) => {
+    if (capability === 'text.chat') {
+      return {
+        result: JSON.stringify([
+          {
+            title: 'Invoke capability',
+            type: 'capability',
+            capabilityId,
+            input
+          }
+        ])
+      }
+    }
+
+    return { result: { completed: true } }
+  })
 }
 
 describe('TuffIntelligenceRuntime trace sequence', () => {
@@ -199,5 +230,70 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
     })
 
     expect(onTrace).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('TuffIntelligenceRuntime capability caller binding', () => {
+  it('binds a plugin caller and preserves metadata while replacing session and turn identifiers', async () => {
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const capabilityId = 'runtime.plugin-capability'
+    const input = { messages: [{ role: 'user', content: 'Summarize this plugin task.' }] }
+    planCapabilityAction(capabilityId, input)
+
+    const snapshot = await runtime.runAgentGraph({
+      sessionId: 'host-plugin-session',
+      objective: 'Run the plugin capability.',
+      metadata: {
+        caller: 'plugin:third-party-plugin',
+        traceId: 'plugin-capability-trace',
+        operation: 'plugin-capability-action',
+        sessionId: 'payload-session',
+        turnId: 'payload-turn'
+      }
+    })
+    const turnId = snapshot?.currentTurn?.id
+    if (!turnId) {
+      throw new Error('Capability graph did not produce a turn')
+    }
+
+    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith(capabilityId, input, {
+      metadata: {
+        caller: 'plugin:third-party-plugin',
+        traceId: 'plugin-capability-trace',
+        operation: 'plugin-capability-action',
+        sessionId: 'host-plugin-session',
+        turnId
+      }
+    })
+  })
+
+  it('falls back to the host caller for capability actions without caller metadata', async () => {
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const capabilityId = 'runtime.host-capability'
+    const input = { messages: [{ role: 'user', content: 'Summarize this host task.' }] }
+    planCapabilityAction(capabilityId, input)
+
+    const snapshot = await runtime.runAgentGraph({
+      sessionId: 'host-fallback-session',
+      objective: 'Run the host capability.',
+      metadata: {
+        traceId: 'host-capability-trace',
+        sessionId: 'payload-session',
+        turnId: 'payload-turn'
+      }
+    })
+    const turnId = snapshot?.currentTurn?.id
+    if (!turnId) {
+      throw new Error('Capability graph did not produce a turn')
+    }
+
+    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith(capabilityId, input, {
+      metadata: {
+        caller: 'intelligence.orchestrator',
+        traceId: 'host-capability-trace',
+        sessionId: 'host-fallback-session',
+        turnId
+      }
+    })
   })
 })

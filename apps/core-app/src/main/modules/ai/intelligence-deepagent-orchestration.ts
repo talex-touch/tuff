@@ -29,6 +29,11 @@ import { createIntelligenceContextExecutionRequest } from '@talex-touch/utils/in
 import { toolRegistry } from './agents/tool-registry'
 import { intelligenceDesktopContextService } from './intelligence-desktop-context'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
+import { normalizeIntelligenceError } from './intelligence-error-normalizer'
+import {
+  inheritOuterGovernance,
+  markOuterGovernedInvocation
+} from './intelligence-invoke-governance'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 
 const DEFAULT_CONTEXT_SOURCES: WorkflowDefinition['contextSources'] = [
@@ -78,6 +83,7 @@ interface DeepAgentExecutionContext {
   contextSnapshot?: DesktopContextSnapshot
   workingDirectory?: string
   metadata?: Record<string, unknown>
+  providerGovernance: 'outer' | 'self'
 }
 
 interface ToolCallMemoryEntry {
@@ -91,6 +97,14 @@ function now(): number {
 
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function resolveExecutionCaller(
+  metadata: Record<string, unknown> | undefined,
+  fallback: string
+): string {
+  const caller = metadata?.caller
+  return typeof caller === 'string' && caller.trim() ? caller.trim() : fallback
 }
 
 function normalizeIntelligenceUsage(value: unknown): IntelligenceUsageInfo | undefined {
@@ -448,6 +462,7 @@ export class IntelligenceDeepAgentOrchestrationService {
         inputs: ctx.inputs
       },
       metadata: {
+        ...(ctx.metadata ?? {}),
         workflowId: ctx.workflow.id,
         workflowName: ctx.workflow.name,
         workflowRunId: ctx.run.id,
@@ -516,6 +531,7 @@ export class IntelligenceDeepAgentOrchestrationService {
               typeof ctx.metadata?.workingDirectory === 'string'
                 ? ctx.metadata.workingDirectory
                 : undefined,
+            providerGovernance: ctx.providerGovernance ?? 'self',
             metadata: ctx.metadata
           },
           {
@@ -605,6 +621,7 @@ export class IntelligenceDeepAgentOrchestrationService {
         (payload as { continueOnError?: boolean } | undefined)?.continueOnError
       ),
       metadata: runtimeOptions.metadata,
+      providerGovernance: 'outer',
       onUpdate: async () => undefined
     })
 
@@ -679,8 +696,11 @@ export class IntelligenceDeepAgentOrchestrationService {
         stepIndex: 0,
         contextSources: DEFAULT_CONTEXT_SOURCES,
         contextSnapshot,
-        metadata: runtimeOptions.metadata
-      })
+        metadata: runtimeOptions.metadata,
+        providerGovernance: 'outer'
+      }),
+      metadata: runtimeOptions.metadata,
+      providerGovernance: 'outer'
     })
 
     const traceAfter = await tuffIntelligenceRuntime.queryTrace({
@@ -745,7 +765,9 @@ export class IntelligenceDeepAgentOrchestrationService {
         capabilityId: 'workflow.execute',
         sessionId: executionContext.sessionId,
         prompt: this.buildWorkflowPrompt(definitionStep, executionContext, state),
-        tools: []
+        tools: [],
+        metadata: executionContext.metadata,
+        providerGovernance: executionContext.providerGovernance
       })
       return {
         text: result.text,
@@ -760,7 +782,9 @@ export class IntelligenceDeepAgentOrchestrationService {
       capabilityId: 'workflow.execute',
       sessionId: executionContext.sessionId,
       prompt: this.buildWorkflowAgentPrompt(definitionStep, executionContext, state),
-      tools: await this.buildStructuredTools(executionContext)
+      tools: await this.buildStructuredTools(executionContext),
+      metadata: executionContext.metadata,
+      providerGovernance: executionContext.providerGovernance
     })
 
     return {
@@ -794,11 +818,13 @@ export class IntelligenceDeepAgentOrchestrationService {
       executionContext,
       state
     )
+    const caller = resolveExecutionCaller(executionContext.metadata, 'workflow.use-model')
+
     const invokeOptions: IntelligenceInvokeOptions = {
       metadata: {
         ...(executionContext.metadata ?? {}),
         ...(toRecord(input.metadata) ?? {}),
-        caller: 'workflow.use-model',
+        caller,
         source: 'intelligence.workflow.model',
         workflowId: executionContext.workflowId,
         workflowName: executionContext.workflowName,
@@ -816,35 +842,37 @@ export class IntelligenceDeepAgentOrchestrationService {
         typeof input.preferredProviderId === 'string' ? input.preferredProviderId : undefined,
       timeout: typeof input.timeout === 'number' ? input.timeout : undefined
     }
+    if (executionContext.providerGovernance === 'outer') {
+      markOuterGovernedInvocation(invokeOptions)
+    }
     let result: IntelligenceInvokeResult<unknown>
     if (capabilityId === 'text.chat') {
       const chatPayload = requireChatPayload(payload)
       const contextExecutionService = await getContextExecutionService()
       const contextMode = executionContext.contextSessionState.initialized ? 'continue' : 'new'
       executionContext.contextSessionState.initialized = true
-      const execution = await contextExecutionService.invoke(
-        createIntelligenceContextExecutionRequest({
-          capabilityId,
-          input: resolveChatPayloadInput(chatPayload),
-          payload: chatPayload,
-          options: invokeOptions,
-          policy: {
-            entrypointId: 'workflow.use-model',
-            owner: 'workflow',
-            mode: contextMode,
-            sessionId: executionContext.contextSessionId,
-            scope: 'session',
-            objective: executionContext.workflowName || executionContext.workflowId,
-            traceId: `${executionContext.runId}:${
-              executionContext.step.workflowStepId || definitionStep.id
-            }`
-          }
-        }),
-        {
-          id: `workflow:${executionContext.workflowId}:${executionContext.runId}`,
-          type: 'host'
+      const contextRequest = createIntelligenceContextExecutionRequest({
+        capabilityId,
+        input: resolveChatPayloadInput(chatPayload),
+        payload: chatPayload,
+        options: invokeOptions,
+        policy: {
+          entrypointId: 'workflow.use-model',
+          owner: 'workflow',
+          mode: contextMode,
+          sessionId: executionContext.contextSessionId,
+          scope: 'session',
+          objective: executionContext.workflowName || executionContext.workflowId,
+          traceId: `${executionContext.runId}:${
+            executionContext.step.workflowStepId || definitionStep.id
+          }`
         }
-      )
+      })
+      if (contextRequest.options) inheritOuterGovernance(invokeOptions, contextRequest.options)
+      const execution = await contextExecutionService.invoke(contextRequest, {
+        id: caller,
+        type: 'host'
+      })
       result = execution.invocation
     } else {
       result = await (await getIntelligenceSdk()).invoke(capabilityId, payload, invokeOptions)
@@ -1154,6 +1182,8 @@ export class IntelligenceDeepAgentOrchestrationService {
     sessionId: string
     prompt: string
     tools: AdaptedStructuredTool[]
+    metadata?: Record<string, unknown>
+    providerGovernance: 'outer' | 'self'
   }): Promise<{
     text: string
     provider?: string
@@ -1162,52 +1192,126 @@ export class IntelligenceDeepAgentOrchestrationService {
     durationMs: number
   }> {
     const intelligence = await getIntelligenceSdk()
-    const config = await intelligence.resolveDeepAgentRuntimeConfig(options.capabilityId, {
-      metadata: {
-        sessionId: options.sessionId
+    const caller = resolveExecutionCaller(options.metadata, '')
+    const selfGoverned = options.providerGovernance === 'self' && caller.startsWith('plugin:')
+
+    if (selfGoverned) {
+      const quota = await intelligence.checkQuota(caller)
+      if (!quota.allowed) {
+        throw Object.assign(
+          new Error(`[Intelligence] Quota exceeded: ${quota.reason ?? 'quota exhausted'}`),
+          { code: 'QUOTA_EXHAUSTED' }
+        )
       }
-    })
+    }
+
     const startedAt = now()
-    const adapter = new DeepAgentLangChainEngineAdapter({
-      baseUrl: config.baseUrl,
-      apiKey: config.apiKey,
-      model: config.model,
-      instructions: config.instructions,
-      metadata: {
-        ...(config.runtimeOptions.metadata ?? {}),
-        sessionId: options.sessionId,
-        adapter: 'tuff.deepagent.workflow'
-      },
-      tools: options.tools
-    })
+    const traceId = `deepagent-${randomUUID()}`
+    let provider = 'intelligence-deepagent'
+    let model = 'deepagent-langchain'
 
-    const raw = await adapter.run({
-      sessionId: options.sessionId,
-      turnId: `${options.sessionId}:${startedAt}`,
-      done: false,
-      seq: 1,
-      messages: [
-        {
-          role: 'user',
-          content: options.prompt
+    try {
+      const config = await intelligence.resolveDeepAgentRuntimeConfig(options.capabilityId, {
+        metadata: {
+          ...(options.metadata ?? {}),
+          sessionId: options.sessionId
         }
-      ],
-      events: [],
-      metadata: {
-        capabilityId: options.capabilityId
-      }
-    })
+      })
+      provider = config.providerId || provider
+      model = config.model || model
 
-    const record = toRecord(raw)
-    const text = normalizeTextResult(record.text ?? record.content ?? raw)
-    const metadata = toRecord(record.metadata)
-    const usage = normalizeIntelligenceUsage(metadata.usage ?? record.usage)
-    return {
-      text,
-      provider: typeof metadata.provider === 'string' ? metadata.provider : undefined,
-      model: typeof metadata.model === 'string' ? metadata.model : undefined,
-      usage,
-      durationMs: now() - startedAt
+      const adapter = new DeepAgentLangChainEngineAdapter({
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        model: config.model,
+        instructions: config.instructions,
+        metadata: {
+          ...(config.runtimeOptions.metadata ?? {}),
+          ...(options.metadata ?? {}),
+          sessionId: options.sessionId,
+          adapter: 'tuff.deepagent.workflow'
+        },
+        tools: options.tools
+      })
+
+      const raw = await adapter.run({
+        sessionId: options.sessionId,
+        turnId: `${options.sessionId}:${startedAt}`,
+        done: false,
+        seq: 1,
+        messages: [
+          {
+            role: 'user',
+            content: options.prompt
+          }
+        ],
+        events: [],
+        metadata: {
+          ...(options.metadata ?? {}),
+          capabilityId: options.capabilityId
+        }
+      })
+
+      const record = toRecord(raw)
+      const text = normalizeTextResult(record.text ?? record.content ?? raw)
+      const metadata = toRecord(record.metadata)
+      const usage = normalizeIntelligenceUsage(metadata.usage ?? record.usage)
+      provider =
+        typeof metadata.provider === 'string' && metadata.provider ? metadata.provider : provider
+      model = typeof metadata.model === 'string' && metadata.model ? metadata.model : model
+      const durationMs = now() - startedAt
+
+      if (selfGoverned) {
+        await intelligence.recordRuntimeAudit({
+          traceId,
+          timestamp: startedAt,
+          capabilityId: options.capabilityId,
+          provider,
+          model,
+          caller,
+          usage: usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          latency: durationMs,
+          success: true,
+          metadata: {
+            source: 'intelligence.workflow.deepagent',
+            sessionId: options.sessionId
+          }
+        })
+      }
+
+      return {
+        text,
+        provider,
+        model,
+        usage,
+        durationMs
+      }
+    } catch (error) {
+      if (selfGoverned) {
+        const normalized = normalizeIntelligenceError(error, {
+          capabilityId: options.capabilityId
+        })
+        await intelligence.recordRuntimeAudit({
+          traceId,
+          timestamp: startedAt,
+          capabilityId: options.capabilityId,
+          provider,
+          model,
+          caller,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          latency: now() - startedAt,
+          success: false,
+          error: normalized.message,
+          metadata: {
+            source: 'intelligence.workflow.deepagent',
+            sessionId: options.sessionId,
+            errorCode: normalized.code,
+            reason: normalized.reason,
+            recovery: normalized.recovery
+          }
+        })
+      }
+      throw error
     }
   }
 

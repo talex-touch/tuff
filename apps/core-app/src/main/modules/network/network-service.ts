@@ -6,11 +6,11 @@ import type {
   NetworkProxyConfig,
   NetworkRequestOptions,
   NetworkResponse,
-  NetworkRetryPolicy,
+  NetworkRetryPolicy
 } from '@talex-touch/utils/network'
 import type {
   NetworkLifecycleReason,
-  NetworkLifecycleStatusPayload,
+  NetworkLifecycleStatusPayload
 } from '@talex-touch/utils/transport/events/types'
 import type { ProxyConfig, Session } from 'electron'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
@@ -26,7 +26,7 @@ import {
   NetworkHttpStatusError,
   NetworkTimeoutError,
   resolveLocalFilePath,
-  toTfileUrl,
+  toTfileUrl
 } from '@talex-touch/utils/network'
 import { app, session } from 'electron'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
@@ -45,9 +45,9 @@ const DEFAULT_NETWORK_CONFIG: NetworkConfigSnapshot = {
       httpsProxy: '',
       socksProxy: '',
       pacUrl: '',
-      bypass: [],
+      bypass: []
     },
-    authRef: '',
+    authRef: ''
   },
   retry: {
     maxRetries: 2,
@@ -56,14 +56,14 @@ const DEFAULT_NETWORK_CONFIG: NetworkConfigSnapshot = {
     backoffFactor: 2,
     retryOnNetworkError: true,
     retryOnTimeout: true,
-    retryableStatusCodes: [408, 425, 429, 500, 502, 503, 504],
+    retryableStatusCodes: [408, 425, 429, 500, 502, 503, 504]
   },
   cooldown: {
     failureThreshold: 1,
     cooldownMs: 3000,
-    autoResetOnSuccess: true,
+    autoResetOnSuccess: true
   },
-  timeoutMs: 15000,
+  timeoutMs: 15000
 }
 
 interface NetworkStreamResponse {
@@ -71,8 +71,14 @@ interface NetworkStreamResponse {
   statusText: string
   headers: Record<string, string>
   url: string
-  stream: NodeJS.ReadableStream
+  stream: Readable
 }
+interface NetworkPolicySettlement {
+  success: () => void
+  failure: () => void
+}
+
+type NetworkResultLifecycle<T> = (result: T, settlement: NetworkPolicySettlement) => T
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -89,7 +95,7 @@ function normalizeRetryPolicy(value: unknown): NetworkRetryPolicy {
     maxRetries: normalizeNumber(source.maxRetries, DEFAULT_NETWORK_CONFIG.retry.maxRetries ?? 0),
     baseDelayMs: normalizeNumber(
       source.baseDelayMs,
-      DEFAULT_NETWORK_CONFIG.retry.baseDelayMs ?? 400,
+      DEFAULT_NETWORK_CONFIG.retry.baseDelayMs ?? 400
     ),
     maxDelayMs: normalizeNumber(source.maxDelayMs, DEFAULT_NETWORK_CONFIG.retry.maxDelayMs ?? 5000),
     backoffFactor:
@@ -106,9 +112,9 @@ function normalizeRetryPolicy(value: unknown): NetworkRetryPolicy {
         : DEFAULT_NETWORK_CONFIG.retry.retryOnTimeout,
     retryableStatusCodes: Array.isArray(source.retryableStatusCodes)
       ? source.retryableStatusCodes.filter(
-          (item): item is number => typeof item === 'number' && Number.isInteger(item),
+          (item): item is number => typeof item === 'number' && Number.isInteger(item)
         )
-      : [...(DEFAULT_NETWORK_CONFIG.retry.retryableStatusCodes ?? [])],
+      : [...(DEFAULT_NETWORK_CONFIG.retry.retryableStatusCodes ?? [])]
   }
 }
 
@@ -119,13 +125,13 @@ function normalizeCooldownPolicy(value: unknown): NetworkCooldownPolicy {
     failureThreshold: normalizeNumber(
       source.failureThreshold,
       DEFAULT_NETWORK_CONFIG.cooldown.failureThreshold ?? 1,
-      1,
+      1
     ),
     cooldownMs: normalizeNumber(source.cooldownMs, DEFAULT_NETWORK_CONFIG.cooldown.cooldownMs ?? 0),
     autoResetOnSuccess:
       typeof source.autoResetOnSuccess === 'boolean'
         ? source.autoResetOnSuccess
-        : DEFAULT_NETWORK_CONFIG.cooldown.autoResetOnSuccess,
+        : DEFAULT_NETWORK_CONFIG.cooldown.autoResetOnSuccess
   }
 }
 
@@ -141,13 +147,13 @@ function normalizeProxyConfig(value: unknown): NetworkProxyConfig {
     pacUrl: typeof customSource.pacUrl === 'string' ? customSource.pacUrl.trim() : '',
     bypass: Array.isArray(customSource.bypass)
       ? customSource.bypass.filter((item): item is string => typeof item === 'string')
-      : [],
+      : []
   }
 
   return {
     mode,
     custom,
-    authRef: typeof source.authRef === 'string' ? source.authRef : '',
+    authRef: typeof source.authRef === 'string' ? source.authRef : ''
   }
 }
 
@@ -157,33 +163,33 @@ export function normalizeNetworkConfig(value: unknown): NetworkConfigSnapshot {
     proxy: normalizeProxyConfig(source.proxy),
     retry: normalizeRetryPolicy(source.retry),
     cooldown: normalizeCooldownPolicy(source.cooldown),
-    timeoutMs: normalizeNumber(source.timeout, DEFAULT_NETWORK_CONFIG.timeoutMs, 100),
+    timeoutMs: normalizeNumber(source.timeout, DEFAULT_NETWORK_CONFIG.timeoutMs, 100)
   }
 }
 
 function mergeRetryPolicy(
   base: NetworkRetryPolicy,
-  override?: NetworkRetryPolicy,
+  override?: NetworkRetryPolicy
 ): NetworkRetryPolicy {
   return normalizeRetryPolicy({
     ...base,
-    ...(override ?? {}),
+    ...(override ?? {})
   })
 }
 
 function mergeCooldownPolicy(
   base: NetworkCooldownPolicy,
-  override?: NetworkCooldownPolicy,
+  override?: NetworkCooldownPolicy
 ): NetworkCooldownPolicy {
   return normalizeCooldownPolicy({
     ...base,
-    ...(override ?? {}),
+    ...(override ?? {})
   })
 }
 
 function mergeProxyConfig(
   base: NetworkProxyConfig,
-  override?: NetworkProxyConfig,
+  override?: NetworkProxyConfig
 ): NetworkProxyConfig {
   if (!override) {
     return normalizeProxyConfig(base)
@@ -194,14 +200,14 @@ function mergeProxyConfig(
     ...override,
     custom: {
       ...(base.custom ?? {}),
-      ...(override.custom ?? {}),
-    },
+      ...(override.custom ?? {})
+    }
   })
 }
 
 function appendQuery(
   url: string,
-  query: Record<string, string | number | boolean | null | undefined> | undefined,
+  query: Record<string, string | number | boolean | null | undefined> | undefined
 ): string {
   if (!query || Object.keys(query).length === 0) {
     return url
@@ -232,12 +238,12 @@ function getBody(method: string, body: unknown, headers: Headers): BodyInit | un
   }
 
   if (
-    typeof body === 'string'
-    || body instanceof ArrayBuffer
-    || body instanceof URLSearchParams
-    || body instanceof FormData
-    || body instanceof Blob
-    || body instanceof ReadableStream
+    typeof body === 'string' ||
+    body instanceof ArrayBuffer ||
+    body instanceof URLSearchParams ||
+    body instanceof FormData ||
+    body instanceof Blob ||
+    body instanceof ReadableStream
   ) {
     return body as BodyInit
   }
@@ -283,16 +289,16 @@ function resolveAppRootPath(): string {
 }
 
 async function resolveProxyCredential(
-  authRef?: string | null,
-): Promise<{ username: string, password: string } | null> {
+  authRef?: string | null
+): Promise<{ username: string; password: string } | null> {
   const key = typeof authRef === 'string' ? authRef.trim() : ''
   if (!key) {
     return null
   }
 
   try {
-    const decrypted
-      = (
+    const decrypted =
+      (
         await getSecureStoreValue(resolveAppRootPath(), key, (message, error) => {
           log.warn(`${message} for network proxy auth`, { error })
         })
@@ -302,7 +308,7 @@ async function resolveProxyCredential(
     }
 
     if (decrypted.startsWith('{')) {
-      const parsed = JSON.parse(decrypted) as { username?: unknown, password?: unknown }
+      const parsed = JSON.parse(decrypted) as { username?: unknown; password?: unknown }
       const username = typeof parsed.username === 'string' ? parsed.username : ''
       const password = typeof parsed.password === 'string' ? parsed.password : ''
       if (username) {
@@ -322,8 +328,7 @@ async function resolveProxyCredential(
       return null
     }
     return { username, password }
-  }
-  catch (error) {
+  } catch (error) {
     log.warn('Failed to parse proxy auth from secure store', { error })
     return null
   }
@@ -331,7 +336,7 @@ async function resolveProxyCredential(
 
 function applyProxyCredential(
   rawProxy: string,
-  credential: { username: string, password: string } | null,
+  credential: { username: string; password: string } | null
 ): string {
   if (!rawProxy || !credential) {
     return rawProxy
@@ -352,8 +357,7 @@ function applyProxyCredential(
     return normalized.includes('://')
       ? parsed.toString()
       : parsed.toString().replace(/^http:\/\//, '')
-  }
-  catch {
+  } catch {
     return normalized
   }
 }
@@ -391,7 +395,7 @@ export class NetworkService {
       timeoutMs:
         typeof patch.timeoutMs === 'number' && Number.isFinite(patch.timeoutMs)
           ? Math.max(100, Math.floor(patch.timeoutMs))
-          : current.timeoutMs,
+          : current.timeoutMs
     }
 
     saveMainConfig(StorageList.APP_SETTING, {
@@ -400,8 +404,8 @@ export class NetworkService {
         timeout: nextConfig.timeoutMs,
         proxy: nextConfig.proxy,
         retry: nextConfig.retry,
-        cooldown: nextConfig.cooldown,
-      } as AppSetting['network'],
+        cooldown: nextConfig.cooldown
+      } as AppSetting['network']
     })
 
     return nextConfig
@@ -421,7 +425,7 @@ export class NetworkService {
         retryPolicy: options.retryPolicy,
         cooldownPolicy: options.cooldownPolicy,
         skipCooldownCheck: options.skipCooldownCheck,
-        proxyOverride: options.proxyOverride,
+        proxyOverride: options.proxyOverride
       })
       return response.data
     }
@@ -437,20 +441,19 @@ export class NetworkService {
 
     try {
       const encoding = (options.encoding || 'utf-8') as BufferEncoding
-      const timeoutMs
-        = typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+      const timeoutMs =
+        typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
           ? Math.max(100, Math.floor(options.timeoutMs))
           : 0
       return await fs.readFile(localPath, {
         encoding,
-        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined
       })
-    }
-    catch (error) {
+    } catch (error) {
       if (
-        typeof options.timeoutMs === 'number'
-        && Number.isFinite(options.timeoutMs)
-        && isTimeoutLikeError(error)
+        typeof options.timeoutMs === 'number' &&
+        Number.isFinite(options.timeoutMs) &&
+        isTimeoutLikeError(error)
       ) {
         throw new NetworkTimeoutError(options.timeoutMs)
       }
@@ -472,7 +475,7 @@ export class NetworkService {
         retryPolicy: options.retryPolicy,
         cooldownPolicy: options.cooldownPolicy,
         skipCooldownCheck: options.skipCooldownCheck,
-        proxyOverride: options.proxyOverride,
+        proxyOverride: options.proxyOverride
       })
       return response.data
     }
@@ -487,20 +490,19 @@ export class NetworkService {
     }
 
     try {
-      const timeoutMs
-        = typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+      const timeoutMs =
+        typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
           ? Math.max(100, Math.floor(options.timeoutMs))
           : 0
       const bytes = await fs.readFile(localPath, {
-        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined
       })
       return toArrayBuffer(bytes)
-    }
-    catch (error) {
+    } catch (error) {
       if (
-        typeof options.timeoutMs === 'number'
-        && Number.isFinite(options.timeoutMs)
-        && isTimeoutLikeError(error)
+        typeof options.timeoutMs === 'number' &&
+        Number.isFinite(options.timeoutMs) &&
+        isTimeoutLikeError(error)
       ) {
         throw new NetworkTimeoutError(options.timeoutMs)
       }
@@ -529,7 +531,7 @@ export class NetworkService {
         headers,
         data,
         url: response.url,
-        ok: response.ok,
+        ok: response.ok
       }
     })
   }
@@ -544,33 +546,60 @@ export class NetworkService {
       headers: requestInitHeadersToRecord(init.headers),
       body: init.body,
       signal: init.signal ?? undefined,
-      validateStatus: Array.from({ length: 600 }, (_, status) => status),
+      validateStatus: Array.from({ length: 600 }, (_, status) => status)
     })
   }
 
   async requestStream(options: NetworkRequestOptions): Promise<NetworkStreamResponse> {
-    return await this.executeWithPolicies(options, async () => {
-      const response = await this.executeFetch(options)
-      const stream = response.body
-        ? Readable.fromWeb(response.body as unknown as NodeReadableStream)
-        : null
-      if (!stream) {
-        throw new Error('NETWORK_EMPTY_STREAM_BODY')
-      }
+    return await this.executeWithPolicies(
+      options,
+      async () => {
+        const response = await this.executeFetch(options)
+        const stream = response.body
+          ? Readable.fromWeb(response.body as unknown as NodeReadableStream)
+          : null
+        if (!stream) {
+          throw new Error('NETWORK_EMPTY_STREAM_BODY')
+        }
 
-      return {
-        status: response.status,
-        statusText: response.statusText,
-        headers: normalizeHeaders(response.headers),
-        url: response.url,
-        stream,
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          headers: normalizeHeaders(response.headers),
+          url: response.url,
+          stream
+        }
+      },
+      (result, settlement) => {
+        const cleanup = () => {
+          result.stream.off('end', onEnd)
+          result.stream.off('error', onError)
+          result.stream.off('close', onClose)
+        }
+        const onEnd = () => {
+          cleanup()
+          settlement.success()
+        }
+        const onError = () => {
+          cleanup()
+          settlement.failure()
+        }
+        const onClose = () => {
+          cleanup()
+        }
+
+        result.stream.once('end', onEnd)
+        result.stream.once('error', onError)
+        result.stream.once('close', onClose)
+        return result
       }
-    })
+    )
   }
 
   private async executeWithPolicies<T>(
     options: NetworkRequestOptions,
     executor: () => Promise<T>,
+    attachLifecycle?: NetworkResultLifecycle<T>
   ): Promise<T> {
     const method = (options.method ?? 'GET').toUpperCase()
     const url = appendQuery(options.url, options.query)
@@ -591,10 +620,25 @@ export class NetworkService {
       attempt += 1
       try {
         const result = await executor()
+        if (attachLifecycle) {
+          let settled = false
+          const settle = (outcome: 'success' | 'failure') => {
+            if (settled) return
+            settled = true
+            if (outcome === 'success') {
+              this.guard.recordSuccess(cooldownKey, cooldownPolicy)
+              return
+            }
+            this.guard.recordFailure(cooldownKey, cooldownPolicy)
+          }
+          return attachLifecycle(result, {
+            success: () => settle('success'),
+            failure: () => settle('failure')
+          })
+        }
         this.guard.recordSuccess(cooldownKey, cooldownPolicy)
         return result
-      }
-      catch (error) {
+      } catch (error) {
         const shouldRetry = this.shouldRetry(error, attempt, retryPolicy)
         if (!shouldRetry) {
           this.guard.recordFailure(cooldownKey, cooldownPolicy)
@@ -603,7 +647,7 @@ export class NetworkService {
 
         const delay = this.getRetryDelay(attempt, retryPolicy)
         if (delay > 0) {
-          await new Promise(resolve => setTimeout(resolve, delay))
+          await new Promise((resolve) => setTimeout(resolve, delay))
         }
       }
     }
@@ -619,19 +663,19 @@ export class NetworkService {
 
   setOnlineStatus(
     online: boolean,
-    reason: NetworkLifecycleReason = 'probe',
+    reason: NetworkLifecycleReason = 'probe'
   ): NetworkLifecycleStatusPayload {
     const previous = this.lastStatus
     const payload: NetworkLifecycleStatusPayload = {
       online,
       reason,
-      changedAt: Date.now(),
+      changedAt: Date.now()
     }
 
     if (previous?.online === online) {
       this.lastStatus = {
         ...payload,
-        changedAt: previous.changedAt,
+        changedAt: previous.changedAt
       }
       return { ...this.lastStatus }
     }
@@ -655,8 +699,7 @@ export class NetworkService {
     for (const listener of this.statusListeners) {
       try {
         listener({ ...payload })
-      }
-      catch (error) {
+      } catch (error) {
         log.warn('Network status listener failed', { error })
       }
     }
@@ -696,8 +739,8 @@ export class NetworkService {
     const config = this.getConfigFromSettings()
     const proxyConfig = mergeProxyConfig(config.proxy, options.proxyOverride)
     const targetUrl = appendQuery(options.url, options.query)
-    const timeoutMs
-      = typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+    const timeoutMs =
+      typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
         ? Math.max(100, Math.floor(options.timeoutMs))
         : config.timeoutMs
 
@@ -712,10 +755,9 @@ export class NetworkService {
         method,
         headers,
         body,
-        signal: options.signal ?? AbortSignal.timeout(timeoutMs),
+        signal: options.signal ?? AbortSignal.timeout(timeoutMs)
       })
-    }
-    catch (error) {
+    } catch (error) {
       if (isTimeoutLikeError(error)) {
         throw new NetworkTimeoutError(timeoutMs)
       }
@@ -726,13 +768,12 @@ export class NetworkService {
       const responseData = options.captureErrorResponseData
         ? await this.parseResponseBody(response, options.responseType ?? 'json')
         : undefined
-      if (!options.captureErrorResponseData)
-        await response.body?.cancel().catch(() => undefined)
+      if (!options.captureErrorResponseData) await response.body?.cancel().catch(() => undefined)
       throw new NetworkHttpStatusError(
         response.status,
         response.statusText,
         response.url,
-        responseData,
+        responseData
       )
     }
 
@@ -741,7 +782,7 @@ export class NetworkService {
 
   private async parseResponseBody(
     response: Response,
-    responseType: NetworkRequestOptions['responseType'],
+    responseType: NetworkRequestOptions['responseType']
   ): Promise<unknown> {
     if (responseType === 'text') {
       return await response.text()
@@ -758,8 +799,7 @@ export class NetworkService {
 
     try {
       return JSON.parse(text)
-    }
-    catch {
+    } catch {
       return text
     }
   }
@@ -786,7 +826,7 @@ export class NetworkService {
   private async ensureProxy(
     sessionInstance: Session,
     sessionKey: string,
-    proxyConfig: NetworkProxyConfig,
+    proxyConfig: NetworkProxyConfig
   ): Promise<void> {
     const electronConfig = await this.toElectronProxyConfig(proxyConfig)
     const signature = JSON.stringify(electronConfig)
@@ -817,7 +857,7 @@ export class NetworkService {
       return {
         mode: 'pac_script',
         pacScript: custom.pacUrl,
-        proxyBypassRules: bypass.join(','),
+        proxyBypassRules: bypass.join(',')
       }
     }
 
@@ -839,7 +879,7 @@ export class NetworkService {
     return {
       mode: 'fixed_servers',
       proxyRules: rules.join(';'),
-      proxyBypassRules: bypass.join(','),
+      proxyBypassRules: bypass.join(',')
     }
   }
 }

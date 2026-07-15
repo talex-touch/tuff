@@ -1,5 +1,9 @@
 import './intelligence-test-harness'
 import { IntelligenceContextExecutionService } from './intelligence-context-execution'
+import {
+  isOuterGovernedInvocation,
+  markOuterGovernedInvocation
+} from './intelligence-invoke-governance'
 import type {
   ContextPackage,
   IntelligenceChatPayload,
@@ -371,46 +375,147 @@ describe('IntelligenceContextExecutionService', () => {
     )
   })
 
-  it('uses a current-input-only provider payload when context preparation degrades', async () => {
-    const { IntelligenceContextExecutionService } = await import('./intelligence-context-execution')
+  it('uses a current-input-only provider payload and normalized token budget when context preparation degrades', async () => {
+    const cases: Array<{
+      name: string
+      tokenBudget: number
+      expectedTokenBudget: number
+    }> = [
+      { name: 'NaN', tokenBudget: Number.NaN, expectedTokenBudget: 1_600 },
+      {
+        name: 'positive infinity',
+        tokenBudget: Number.POSITIVE_INFINITY,
+        expectedTokenBudget: 1_600
+      },
+      {
+        name: 'negative infinity',
+        tokenBudget: Number.NEGATIVE_INFINITY,
+        expectedTokenBudget: 1_600
+      },
+      {
+        name: 'a runtime numeric string',
+        tokenBudget: '2400' as unknown as number,
+        expectedTokenBudget: 1_600
+      },
+      { name: 'a finite fraction', tokenBudget: 1_200.9, expectedTokenBudget: 1_200 }
+    ]
+
+    for (const { name, tokenBudget, expectedTokenBudget } of cases) {
+      const { IntelligenceContextExecutionService } =
+        await import('./intelligence-context-execution')
+      const prepareTurn = vi.fn(async () => {
+        throw new Error('database unavailable')
+      })
+      const revalidatePackageMemories = vi.fn()
+      const appendAssistantTurn = vi.fn()
+      const invoke = vi.fn(
+        async (_capabilityId: string, _payload: unknown, _options: IntelligenceInvokeOptions) => ({
+          result: 'Fallback answer',
+          provider: 'local-provider',
+          model: 'qwen',
+          traceId: 'fallback-trace',
+          latency: 3,
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+        })
+      )
+      const stream = vi.fn(async function* (_capabilityId: string, _payload: unknown) {})
+      const service = new IntelligenceContextExecutionService(
+        { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+        { invoke, stream } as never
+      )
+      const baseRequest = createRequest()
+      const request: IntelligenceContextExecutionRequest = {
+        ...baseRequest,
+        context: { ...baseRequest.context, tokenBudget }
+      }
+
+      const result = await service.invoke(request, {
+        id: 'touch-intelligence',
+        type: 'plugin'
+      })
+
+      const fallbackPayload = invoke.mock.calls[0]?.[1] as IntelligenceChatPayload
+      const invocationTokenBudget =
+        invoke.mock.calls[0]?.[2]?.metadata?.contextExecution?.tokenBudget
+      expect(fallbackPayload.messages, name).toEqual([
+        { role: 'system', content: 'Plugin system policy' },
+        { role: 'user', content: 'Current governed question' }
+      ])
+      expect(result.context, name).toMatchObject({
+        mode: 'continue',
+        scope: 'retrieval',
+        degradedReason: 'context_prepare_failed',
+        itemCount: 0,
+        tokenBudget: expectedTokenBudget
+      })
+      expect(Number.isFinite(result.context.tokenBudget), name).toBe(true)
+      expect(Number.isFinite(invocationTokenBudget), name).toBe(true)
+      expect(invocationTokenBudget, name).toBe(expectedTokenBudget)
+      expect(result.context).not.toHaveProperty('sessionId')
+      expect(invoke).toHaveBeenCalledTimes(1)
+      expect(revalidatePackageMemories).not.toHaveBeenCalled()
+      expect(appendAssistantTurn).not.toHaveBeenCalled()
+    }
+  })
+
+  it('blocks Bearer credentials during invoke fallback before a database-unavailable preparation can reach a provider', async () => {
+    const secret = 'Authorization: Bearer synthetic_bearer_token-Alpha.0123456789~+/'
     const prepareTurn = vi.fn(async () => {
-      throw new Error('database unavailable')
+      throw new Error('database unavailable before privacy classification')
     })
     const revalidatePackageMemories = vi.fn()
     const appendAssistantTurn = vi.fn()
-    const invoke = vi.fn(async (_capabilityId: string, _payload: unknown) => ({
-      result: 'Fallback answer',
-      provider: 'local-provider',
-      model: 'qwen',
-      traceId: 'fallback-trace',
-      latency: 3,
-      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
-    }))
-    const stream = vi.fn(async function* (_capabilityId: string, _payload: unknown) {})
+    const invoke = vi.fn()
+    const stream = vi.fn(async function* () {})
     const service = new IntelligenceContextExecutionService(
       { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
       { invoke, stream } as never
     )
+    const request = { ...createRequest(), input: secret }
 
-    const result = await service.invoke(createRequest(), {
-      id: 'touch-intelligence',
-      type: 'plugin'
-    })
+    let rejection: unknown
+    try {
+      await service.invoke(request, { id: 'touch-intelligence', type: 'plugin' })
+    } catch (error) {
+      rejection = error
+    }
 
-    const fallbackPayload = invoke.mock.calls[0]?.[1] as IntelligenceChatPayload
-    expect(fallbackPayload.messages).toEqual([
-      { role: 'system', content: 'Plugin system policy' },
-      { role: 'user', content: 'Current governed question' }
-    ])
-    expect(result.context).toMatchObject({
-      mode: 'continue',
-      scope: 'retrieval',
-      degradedReason: 'context_prepare_failed',
-      itemCount: 0
+    expect(rejection).toBeInstanceOf(Error)
+    if (!(rejection instanceof Error)) throw new Error('Expected unsafe fallback to reject')
+    expect(rejection.message).toBe('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+    expect(JSON.stringify(rejection, Object.getOwnPropertyNames(rejection))).not.toContain(secret)
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('blocks standalone JWTs during stream fallback before a database-unavailable preparation can reach a provider', async () => {
+    const secret =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJyb2xlIjoidXNlciJ9.synthetic-signature-0123456789'
+    const prepareTurn = vi.fn(async () => {
+      throw new Error('database unavailable before privacy classification')
     })
-    expect(result.context).not.toHaveProperty('sessionId')
-    expect(revalidatePackageMemories).not.toHaveBeenCalled()
-    expect(appendAssistantTurn).not.toHaveBeenCalled()
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const stream = vi.fn(async function* () {})
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream } as never
+    )
+    const request = { ...createRequest(), input: secret }
+
+    let rejection: unknown
+    try {
+      for await (const _ of service.stream(request, { id: 'touch-intelligence', type: 'plugin' })) {
+      }
+    } catch (error) {
+      rejection = error
+    }
+
+    expect(rejection).toBeInstanceOf(Error)
+    if (!(rejection instanceof Error)) throw new Error('Expected unsafe fallback to reject')
+    expect(rejection.message).toBe('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+    expect(JSON.stringify(rejection, Object.getOwnPropertyNames(rejection))).not.toContain(secret)
+    expect(stream).not.toHaveBeenCalled()
   })
 
   it('honors trusted entrypoint ownership and rejects plugin owner spoofing', async () => {
@@ -508,6 +613,53 @@ describe('IntelligenceContextExecutionService', () => {
       content: 'Current governed question'
     })
     expect(revalidatePackageMemories).toHaveBeenCalledWith(preparedPackage)
+  })
+
+  it('preserves outer governance while enriching cloned context invocation metadata', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const prepareTurn = vi.fn(async () => prepared)
+    const revalidatePackageMemories = vi.fn(async () => contextPackage)
+    const appendAssistantTurn = vi.fn(async () => prepared.turn)
+    const invoke = vi.fn(
+      async (_capabilityId: string, _payload: unknown, _options: IntelligenceInvokeOptions) => ({
+        result: 'Governed answer',
+        provider: 'local-provider',
+        model: 'qwen',
+        traceId: 'governed-trace',
+        latency: 2
+      })
+    )
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn(async function* () {}) } as never
+    )
+    const outerOptions = markOuterGovernedInvocation({
+      preferredProviderId: 'local-provider',
+      metadata: { caller: 'workflow-outer', workflowExecutionId: 'workflow-run-1' }
+    })
+
+    await service.invoke(
+      { ...createRequest(), options: outerOptions },
+      { id: 'plugin:touch-intelligence', type: 'plugin' }
+    )
+
+    const forwardedOptions = invoke.mock.calls[0]![2]
+    expect(forwardedOptions).not.toBe(outerOptions)
+    expect(isOuterGovernedInvocation(forwardedOptions)).toBe(true)
+    expect(forwardedOptions.metadata).toMatchObject({
+      caller: 'plugin:touch-intelligence',
+      workflowExecutionId: 'workflow-run-1',
+      contextExecution: {
+        packageId: 'package-1',
+        sessionId: 'session-1',
+        traceId: 'context-trace-1'
+      }
+    })
+    expect(outerOptions.metadata).toEqual({
+      caller: 'workflow-outer',
+      workflowExecutionId: 'workflow-run-1'
+    })
   })
 
   it('does not fall back around a policy-blocked current input', async () => {

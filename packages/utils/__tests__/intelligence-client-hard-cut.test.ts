@@ -172,18 +172,19 @@ describe('intelligence client hard-cut surface', () => {
     expect(typeof intelligence.invoke).toBe('function')
   })
 
-  it('exposes plugin-safe methods without host-only management or diagnostics', () => {
+  it('exposes high-level plugin capabilities without host-only management or diagnostics', () => {
     const runtimeSurface = intelligence as unknown as Record<string, unknown>
 
     expect('chat' in intelligence).toBe(false)
     expect(typeof intelligence.invoke).toBe('function')
+    expect(typeof intelligence.stream).toBe('function')
     expect(typeof intelligence.getCapabilityStatus).toBe('function')
     expect(typeof intelligence.knowledgeSearch).toBe('function')
     expect(typeof intelligence.contextInvoke).toBe('function')
     expect(typeof intelligence.contextStream).toBe('function')
     expect(typeof intelligence.contextEvaluateMemory).toBe('function')
-    expect(typeof intelligence.agentSessionStart).toBe('function')
-    expect(typeof intelligence.workflowList).toBe('function')
+    expect(typeof intelligence.agent.run).toBe('function')
+    expect(typeof intelligence.workflow.execute).toBe('function')
 
     for (const method of [
       'contextPrepareTurn',
@@ -202,6 +203,8 @@ describe('intelligence client hard-cut surface', () => {
 
     const enumerableMethods = Object.keys(runtimeSurface)
     for (const method of [
+      'contextListCheckpoints',
+      'contextListPackageLogs',
       'getQuota',
       'setQuota',
       'deleteQuota',
@@ -216,6 +219,31 @@ describe('intelligence client hard-cut surface', () => {
       'getMonthStats',
       'getUsageStats',
       'getLocalEnvironment',
+      'workflowList',
+      'workflowGet',
+      'workflowSave',
+      'workflowDelete',
+      'workflowRun',
+      'workflowHistory',
+      'workflowReviewUpdate',
+      'agentSessionStart',
+      'agentSessionHeartbeat',
+      'agentSessionPause',
+      'agentSessionRecoverable',
+      'agentSessionResume',
+      'agentSessionCancel',
+      'agentSessionGetState',
+      'agentPlan',
+      'agentExecute',
+      'agentReflect',
+      'agentToolCall',
+      'agentToolResult',
+      'agentToolApprove',
+      'agentSessionStream',
+      'agentSessionSubscribe',
+      'agentSessionHistory',
+      'agentSessionTrace',
+      'agentSessionTraceExport',
     ]) {
       expect(method in intelligence).toBe(false)
       expect(runtimeSurface[method]).toBeUndefined()

@@ -11,7 +11,7 @@ import type {
   WorkflowDefinition,
   WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
-  WorkflowTriggerType,
+  WorkflowTriggerType
 } from '@talex-touch/tuff-intelligence'
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
@@ -21,20 +21,20 @@ import type {
   BuildContextInput,
   IndexChunkInput,
   IndexDocumentInput,
-  KnowledgeSearchInput,
+  KnowledgeSearchInput
 } from '@talex-touch/utils/types/intelligence'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { ApiResponse } from '../../utils/safe-handler'
 import type { CapabilityTestPayload } from './capability-testers/base-tester'
 import {
   IntelligenceCapabilityType,
-  IntelligenceProviderType,
+  IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   intelligenceApiEvents,
   intelligenceContextEvents,
-  intelligenceKnowledgeEvents,
+  intelligenceKnowledgeEvents
 } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { createHash } from 'node:crypto'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -46,7 +46,7 @@ import {
   agentManager,
   registerAgentChannels,
   registerBuiltinAgents,
-  registerBuiltinTools,
+  registerBuiltinTools
 } from './agents'
 import { capabilityTesterRegistry } from './capability-testers'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
@@ -55,7 +55,7 @@ import {
   debugPrintConfig,
   ensureIntelligenceConfigLoaded,
   getCapabilityOptions,
-  setupConfigUpdateListener,
+  setupConfigUpdateListener
 } from './intelligence-config'
 import { intelligenceContextExecutionService } from './intelligence-context-execution'
 import { contextHygieneService } from './intelligence-context-hygiene'
@@ -84,7 +84,7 @@ const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
 const INTELLIGENCE_STREAM_REPLAY_LIMIT = 1_000
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(item => typeof item === 'string')
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -249,13 +249,13 @@ function normalizeReplayLimit(value: unknown): number {
 }
 
 function isTerminalSessionStatus(
-  status: TuffIntelligenceAgentSession['status'] | undefined,
+  status: TuffIntelligenceAgentSession['status'] | undefined
 ): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled'
 }
 
 function isRunningSessionStatus(
-  status: TuffIntelligenceAgentSession['status'] | undefined,
+  status: TuffIntelligenceAgentSession['status'] | undefined
 ): boolean {
   if (!status) {
     return false
@@ -268,7 +268,7 @@ function isRunningSessionStatus(
 
 function mapTraceToStreamEvent(
   event: TuffIntelligenceAgentTraceEvent,
-  options: { replay?: boolean } = {},
+  options: { replay?: boolean } = {}
 ): IntelligenceAgentStreamEvent {
   return {
     ...event,
@@ -276,7 +276,7 @@ function mapTraceToStreamEvent(
     timestamp: event.timestamp,
     replay: options.replay ? true : undefined,
     seq: typeof event.seq === 'number' ? event.seq : undefined,
-    payload: event.payload as Record<string, unknown> | undefined,
+    payload: event.payload as Record<string, unknown> | undefined
   }
 }
 
@@ -290,7 +290,7 @@ function normalizeCapabilityInvokeError(capabilityId: string, error: unknown): E
 
   return toNormalizedIntelligenceError(
     Object.assign(baseError, { code: 'INTELLIGENCE_CAPABILITY_UNSUPPORTED' }),
-    { capabilityId },
+    { capabilityId }
   )
 }
 
@@ -327,7 +327,7 @@ type PluginKnowledgeEntityKind = 'document' | 'chunk'
 function toPluginKnowledgeEntityId(
   scope: string,
   kind: PluginKnowledgeEntityKind,
-  value: string,
+  value: string
 ): string {
   const namespace = createHash('sha256').update(scope).digest('hex')
   const prefix = `plugin:${namespace}:${kind}:`
@@ -349,60 +349,60 @@ function createPluginKnowledgeDocumentSeed(input: IndexDocumentInput): string {
 
 function bindPluginKnowledgeDocument(
   input: IndexDocumentInput,
-  context: Pick<HandlerContext, 'plugin'>,
+  context: Pick<HandlerContext, 'plugin'>
 ): IndexDocumentInput {
   if (!context.plugin || !input || typeof input !== 'object') {
     return input
   }
 
   const scope = `plugin:${context.plugin.name}`
-  const localId = typeof input.id === 'string' && input.id
-    ? input.id
-    : createPluginKnowledgeDocumentSeed(input)
+  const localId =
+    typeof input.id === 'string' && input.id ? input.id : createPluginKnowledgeDocumentSeed(input)
   return {
     ...input,
     id: toPluginKnowledgeEntityId(scope, 'document', localId),
-    permissionScope: scope,
+    permissionScope: scope
   }
 }
 
 function bindPluginKnowledgeChunk(
   input: IndexChunkInput,
-  context: Pick<HandlerContext, 'plugin'>,
+  context: Pick<HandlerContext, 'plugin'>
 ): IndexChunkInput {
   if (!context.plugin || !input || typeof input !== 'object') {
     return input
   }
 
   const scope = `plugin:${context.plugin.name}`
-  const documentId = typeof input.documentId === 'string' && input.documentId
-    ? toPluginKnowledgeEntityId(scope, 'document', input.documentId)
-    : input.documentId
+  const documentId =
+    typeof input.documentId === 'string' && input.documentId
+      ? toPluginKnowledgeEntityId(scope, 'document', input.documentId)
+      : input.documentId
   return {
     ...input,
     documentId,
     ...(typeof input.id === 'string' && input.id
       ? { id: toPluginKnowledgeEntityId(scope, 'chunk', input.id) }
-      : {}),
+      : {})
   }
 }
 
 function bindPluginKnowledgeScope<T extends KnowledgeSearchInput>(
   input: T,
-  context: Pick<HandlerContext, 'plugin'>,
+  context: Pick<HandlerContext, 'plugin'>
 ): T {
   if (!context.plugin || !input || typeof input !== 'object') {
     return input
   }
   return {
     ...input,
-    permissionScope: `plugin:${context.plugin.name}`,
+    permissionScope: `plugin:${context.plugin.name}`
   }
 }
 
 function bindPluginInvokeCaller(
   options: IntelligenceInvokeOptions | undefined,
-  context: Pick<HandlerContext, 'plugin'>,
+  context: Pick<HandlerContext, 'plugin'>
 ): IntelligenceInvokeOptions | undefined {
   if (!context.plugin) {
     return options
@@ -412,7 +412,7 @@ function bindPluginInvokeCaller(
 
 const AUTONOMOUS_INTELLIGENCE_CAPABILITIES: Record<string, true> = {
   'agent.run': true,
-  'workflow.execute': true,
+  'workflow.execute': true
 }
 
 const enforceAutonomousIntelligencePermission = withPermission<unknown, void>(
@@ -420,15 +420,15 @@ const enforceAutonomousIntelligencePermission = withPermission<unknown, void>(
     permissionId: 'intelligence.agents',
     failClosedForPlugin: true,
     unavailableCode: 'INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE',
-    deniedCode: 'INTELLIGENCE_AGENTS_PERMISSION_DENIED',
+    deniedCode: 'INTELLIGENCE_AGENTS_PERMISSION_DENIED'
   },
-  async () => undefined,
+  async () => undefined
 )
 
 async function assertAutonomousIntelligencePermission(
   capabilityId: string,
   payload: unknown,
-  context: Pick<HandlerContext, 'plugin'>,
+  context: Pick<HandlerContext, 'plugin'>
 ): Promise<void> {
   if (!Object.hasOwn(AUTONOMOUS_INTELLIGENCE_CAPABILITIES, capabilityId)) {
     return
@@ -445,9 +445,9 @@ const intelligenceAgentEvents = {
     .module('agent')
     .event('session:heartbeat')
     .define<
-    IntelligenceSessionHeartbeatPayload,
-    ApiResponse<{ sessionId: string, heartbeatAt: string }>
-  >(),
+      IntelligenceSessionHeartbeatPayload,
+      ApiResponse<{ sessionId: string; heartbeatAt: string }>
+    >(),
   sessionPause: defineEvent('intelligence')
     .module('agent')
     .event('session:pause')
@@ -512,7 +512,7 @@ const intelligenceAgentEvents = {
     .define<
       IntelligenceSessionHistoryPayload | undefined,
       ApiResponse<TuffIntelligenceAgentSession[]>
-  >(),
+    >(),
   sessionTrace: defineEvent('intelligence')
     .module('agent')
     .event('session:trace')
@@ -521,9 +521,9 @@ const intelligenceAgentEvents = {
     .module('agent')
     .event('session:trace:export')
     .define<
-    IntelligenceTraceExportPayload,
-    ApiResponse<{ format: 'json' | 'jsonl', content: string }>
-  >(),
+      IntelligenceTraceExportPayload,
+      ApiResponse<{ format: 'json' | 'jsonl'; content: string }>
+    >()
 } as const
 const intelligenceWorkflowEvents = {
   list: defineEvent('intelligence')
@@ -553,7 +553,7 @@ const intelligenceWorkflowEvents = {
   reviewUpdate: defineEvent('intelligence')
     .module('workflow')
     .event('review:update')
-    .define<IntelligenceWorkflowReviewUpdatePayload, ApiResponse<WorkflowRunRecord>>(),
+    .define<IntelligenceWorkflowReviewUpdatePayload, ApiResponse<WorkflowRunRecord>>()
 } as const
 
 const intelligenceSessionStartEvent = intelligenceAgentEvents.sessionStart
@@ -646,8 +646,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     intelligenceLog.info('Destroying Intelligence module')
     try {
       await this.waitForAgentRuntime()
-    }
-    catch (error) {
+    } catch (error) {
       intelligenceLog.warn('Intelligence agent runtime was not ready during destroy', { error })
     }
     if (this.agentChannelsCleanup) {
@@ -662,8 +661,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private startAgentRuntime(): void {
-    if (this.agentRuntimePromise)
-      return
+    if (this.agentRuntimePromise) return
     const task = this.setupAgentRuntime()
     task.catch((error) => {
       intelligenceLog.error('Intelligence agent runtime initialization failed', { error })
@@ -682,8 +680,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     intelligenceLog.info('Initializing intelligence agent runtime')
     registerBuiltinTools()
     registerBuiltinAgents()
-    intelligenceWorkflowService.setExecutor(ctx =>
-      intelligenceDeepAgentOrchestrationService.executeWorkflowRun(ctx),
+    intelligenceWorkflowService.setExecutor((ctx) =>
+      intelligenceDeepAgentOrchestrationService.executeWorkflowRun(ctx)
     )
 
     await agentManager.init({
@@ -692,20 +690,20 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           const result = await tuffIntelligence.invoke(
             capability,
             params,
-            options as IntelligenceInvokeOptions,
+            options as IntelligenceInvokeOptions
           )
           return {
             success: true,
             data: result.result,
+            usage: result.usage
           }
-        }
-        catch (error) {
+        } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: error instanceof Error ? error.message : String(error)
           }
         }
-      },
+      }
     })
 
     await intelligenceWorkflowService.initialize()
@@ -714,10 +712,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerAgentRuntimeChannels(): void {
-    if (!this.transport || this.agentChannelsCleanup)
-      return
+    if (!this.transport || this.agentChannelsCleanup) return
     this.agentChannelsCleanup = registerAgentChannels(this.transport, {
-      waitForRuntime: () => this.waitForAgentRuntime(),
+      waitForRuntime: () => this.waitForAgentRuntime()
     })
   }
 
@@ -735,30 +732,29 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册内置 Provider Factories
    */
   private registerBuiltinProviders(): void {
-    if (!this.manager)
-      return
+    if (!this.manager) return
 
     intelligenceLog.info('Registering builtin provider factories')
 
     this.manager.registerFactory(
       IntelligenceProviderType.OPENAI,
-      config => new OpenAIProvider(config),
+      (config) => new OpenAIProvider(config)
     )
     this.manager.registerFactory(
       IntelligenceProviderType.ANTHROPIC,
-      config => new AnthropicProvider(config),
+      (config) => new AnthropicProvider(config)
     )
     this.manager.registerFactory(
       IntelligenceProviderType.DEEPSEEK,
-      config => new DeepSeekProvider(config),
+      (config) => new DeepSeekProvider(config)
     )
     this.manager.registerFactory(
       IntelligenceProviderType.SILICONFLOW,
-      config => new SiliconflowProvider(config),
+      (config) => new SiliconflowProvider(config)
     )
     this.manager.registerFactory(
       IntelligenceProviderType.LOCAL,
-      config => new LocalProvider(config),
+      (config) => new LocalProvider(config)
     )
 
     intelligenceLog.success('Builtin provider factories registered')
@@ -768,8 +764,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册自定义 Provider Factory
    */
   private registerCustomProvider(): void {
-    if (!this.manager)
-      return
+    if (!this.manager) return
 
     intelligenceLog.info('Registering custom provider factory')
 
@@ -793,7 +788,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       IntelligenceProviderType.DEEPSEEK,
       IntelligenceProviderType.SILICONFLOW,
       IntelligenceProviderType.LOCAL,
-      IntelligenceProviderType.CUSTOM,
+      IntelligenceProviderType.CUSTOM
     ]
 
     const VISION_PROVIDERS = [
@@ -801,7 +796,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       IntelligenceProviderType.ANTHROPIC,
       IntelligenceProviderType.SILICONFLOW,
       IntelligenceProviderType.LOCAL,
-      IntelligenceProviderType.CUSTOM,
+      IntelligenceProviderType.CUSTOM
     ]
 
     // ========================================================================
@@ -813,7 +808,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CHAT,
       name: 'Text Chat',
       description: 'General-purpose text chat capability',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -821,7 +816,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.TRANSLATE,
       name: 'Translation',
       description: 'Multi-language text translation',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -829,7 +824,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.SUMMARIZE,
       name: 'Summarization',
       description: 'Generate concise summaries of text content',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -837,7 +832,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.REWRITE,
       name: 'Text Rewrite',
       description: 'Rewrite text with different styles and tones',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -845,7 +840,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.GRAMMAR_CHECK,
       name: 'Grammar Check',
       description: 'Check and correct grammar, spelling, and style',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     // ========================================================================
@@ -862,8 +857,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         IntelligenceProviderType.DEEPSEEK,
         IntelligenceProviderType.SILICONFLOW,
         IntelligenceProviderType.LOCAL,
-        IntelligenceProviderType.CUSTOM,
-      ],
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     // ========================================================================
@@ -875,7 +870,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_GENERATE,
       name: 'Code Generation',
       description: 'Generate code from natural language descriptions',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -883,7 +878,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_EXPLAIN,
       name: 'Code Explanation',
       description: 'Explain code functionality and logic',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -891,7 +886,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_REVIEW,
       name: 'Code Review',
       description: 'Review code for issues, security, and best practices',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -899,7 +894,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_REFACTOR,
       name: 'Code Refactoring',
       description: 'Refactor code for better readability and maintainability',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -907,7 +902,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_DEBUG,
       name: 'Code Debugging',
       description: 'Analyze and fix code bugs',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     // ========================================================================
@@ -919,7 +914,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.INTENT_DETECT,
       name: 'Intent Detection',
       description: 'Detect user intent from text input',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -927,7 +922,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.SENTIMENT_ANALYZE,
       name: 'Sentiment Analysis',
       description: 'Analyze sentiment and emotions in text',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -935,7 +930,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CONTENT_EXTRACT,
       name: 'Content Extraction',
       description: 'Extract entities and key information from text',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -943,7 +938,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.KEYWORDS_EXTRACT,
       name: 'Keyword Extraction',
       description: 'Extract keywords and key phrases from text',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -951,7 +946,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CLASSIFICATION,
       name: 'Text Classification',
       description: 'Classify text into predefined categories',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     // ========================================================================
@@ -963,7 +958,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.VISION_OCR,
       name: 'Vision OCR',
       description: 'Optical character recognition from images',
-      supportedProviders: VISION_PROVIDERS,
+      supportedProviders: VISION_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -971,7 +966,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_CAPTION,
       name: 'Image Captioning',
       description: 'Generate descriptive captions for images',
-      supportedProviders: VISION_PROVIDERS,
+      supportedProviders: VISION_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -979,7 +974,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_ANALYZE,
       name: 'Image Analysis',
       description: 'Analyze image content, objects, and scenes',
-      supportedProviders: VISION_PROVIDERS,
+      supportedProviders: VISION_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -987,7 +982,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_TRANSLATE_E2E,
       name: 'Image Translation',
       description: 'Translate text in an image and return the translated image',
-      supportedProviders: [IntelligenceProviderType.CUSTOM],
+      supportedProviders: [IntelligenceProviderType.CUSTOM]
     })
 
     intelligenceCapabilityRegistry.register({
@@ -998,8 +993,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: [
         IntelligenceProviderType.OPENAI,
         IntelligenceProviderType.SILICONFLOW,
-        IntelligenceProviderType.CUSTOM,
-      ],
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     intelligenceCapabilityRegistry.register({
@@ -1007,7 +1002,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_EDIT,
       name: 'Image Editing',
       description: 'Edit and modify images with AI',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM]
     })
 
     // ========================================================================
@@ -1022,8 +1017,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: [
         IntelligenceProviderType.OPENAI,
         IntelligenceProviderType.SILICONFLOW,
-        IntelligenceProviderType.CUSTOM,
-      ],
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     intelligenceCapabilityRegistry.register({
@@ -1034,8 +1029,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: [
         IntelligenceProviderType.OPENAI,
         IntelligenceProviderType.SILICONFLOW,
-        IntelligenceProviderType.CUSTOM,
-      ],
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     intelligenceCapabilityRegistry.register({
@@ -1046,8 +1041,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: [
         IntelligenceProviderType.OPENAI,
         IntelligenceProviderType.SILICONFLOW,
-        IntelligenceProviderType.CUSTOM,
-      ],
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     // ========================================================================
@@ -1059,7 +1054,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.RAG_QUERY,
       name: 'RAG Query',
       description: 'Query documents with retrieval-augmented generation',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -1070,8 +1065,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: [
         IntelligenceProviderType.OPENAI,
         IntelligenceProviderType.SILICONFLOW,
-        IntelligenceProviderType.CUSTOM,
-      ],
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     intelligenceCapabilityRegistry.register({
@@ -1079,7 +1074,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.RERANK,
       name: 'Document Reranking',
       description: 'Rerank search results by relevance',
-      supportedProviders: [IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM]
     })
 
     // ========================================================================
@@ -1091,7 +1086,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.WORKFLOW,
       name: 'Workflow Execution',
       description: 'Execute multi-step prompt workflows',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceCapabilityRegistry.register({
@@ -1099,7 +1094,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.AGENT,
       name: 'Agent Execution',
       description: 'Run autonomous AI agents with tool access',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceLog.success(`Registered ${intelligenceCapabilityRegistry.size()} capabilities`)
@@ -1109,13 +1104,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册 IPC 通道处理器
    */
   private registerChannels(): void {
-    if (!this.transport)
-      return
+    if (!this.transport) return
 
     intelligenceLog.info('Registering IPC channels')
 
-    const { registerSafe, registerProtectedSafe, registerProtectedStream }
-      = this.createChannelRegistrars(this.transport)
+    const { registerSafe, registerHostOnlySafe, registerProtectedSafe, registerProtectedStream } =
+      this.createChannelRegistrars(this.transport)
 
     this.registerInvokeChannels(registerProtectedSafe, registerProtectedStream)
     this.registerKnowledgeChannels(registerProtectedSafe)
@@ -1124,8 +1118,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerStatsChannels(registerSafe)
     this.registerEnvironmentChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
-    this.registerOrchestrationChannels(registerProtectedSafe, registerSafe)
-    this.registerWorkflowChannels(registerProtectedSafe)
+    this.registerOrchestrationChannels(registerHostOnlySafe)
+    this.registerWorkflowChannels(registerHostOnlySafe)
     this.registerOrchestrationStreamChannels()
 
     intelligenceLog.success('IPC channels registered')
@@ -1141,27 +1135,38 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     const registerSafe = <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => {
       transport.on(
         event,
         safeApiHandler(handler, {
-          onError: error => createErrorLogger(action)(error),
-        }),
+          onError: (error) => createErrorLogger(action)(error)
+        })
       )
+    }
+
+    const registerHostOnlySafe = <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => {
+      registerSafe(event, action, (payload, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return handler(payload, context)
+      })
     }
 
     const registerProtectedSafe = <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => {
       transport.on(
         event,
         withPermissionSafeApi({ permissionId }, handler, {
-          onError: error => createErrorLogger(action)(error),
-        }),
+          onError: (error) => createErrorLogger(action)(error)
+        })
       )
     }
 
@@ -1169,15 +1174,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, AsyncIterable<TChunk>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void,
+      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void
     ) => {
       transport.onStream(event, async (payload, context) => {
         try {
           await withPermission({ permissionId }, async (nextPayload: TReq, nextContext) => {
             await handler(nextPayload, nextContext as unknown as StreamContext<TChunk>)
           })(payload, context as unknown as HandlerContext)
-        }
-        catch (error) {
+        } catch (error) {
           createErrorLogger(action)(error)
           context.error(error instanceof Error ? error : new Error(String(error)))
         }
@@ -1186,8 +1190,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     return {
       registerSafe,
+      registerHostOnlySafe,
       registerProtectedSafe,
-      registerProtectedStream,
+      registerProtectedStream
     }
   }
 
@@ -1196,14 +1201,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void,
     registerProtectedStream: <TReq, TChunk>(
       event: TuffEvent<TReq, AsyncIterable<TChunk>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void,
-    ) => void,
+      handler: (payload: TReq, context: StreamContext<TChunk>) => Promise<void> | void
+    ) => void
   ): void {
     registerProtectedSafe(
       intelligenceApiEvents.invoke,
@@ -1225,15 +1230,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         let result: IntelligenceInvokeResult<unknown>
         try {
           result = await tuffIntelligence.invoke(capabilityId, payload, scopedOptions)
-        }
-        catch (error) {
+        } catch (error) {
           throw normalizeCapabilityInvokeError(capabilityId, error)
         }
         intelligenceLog.success(
-          `Capability ${capabilityId} completed via ${result.provider} (${result.model})`,
+          `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
         return result
-      },
+      }
     )
 
     registerProtectedStream(
@@ -1252,16 +1256,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         intelligenceLog.info(`Streaming capability: ${capabilityId}`)
         try {
           for await (const event of tuffIntelligence.stream(capabilityId, payload, scopedOptions)) {
-            if (streamContext.isCancelled())
-              break
+            if (streamContext.isCancelled()) break
             streamContext.emit(event)
           }
           streamContext.end()
-        }
-        catch (error) {
+        } catch (error) {
           throw normalizeCapabilityInvokeError(capabilityId, error)
         }
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1271,7 +1273,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         ensureIntelligenceConfigLoaded()
         return intelligenceContextExecutionService.invoke(data, resolveContextActor(context))
-      },
+      }
     )
 
     registerProtectedStream(
@@ -1282,14 +1284,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         ensureIntelligenceConfigLoaded()
         for await (const event of intelligenceContextExecutionService.stream(
           data,
-          resolveContextActor(streamContext),
+          resolveContextActor(streamContext)
         )) {
-          if (streamContext.isCancelled())
-            break
+          if (streamContext.isCancelled()) break
           streamContext.emit(event)
         }
         streamContext.end()
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1299,7 +1300,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         ensureIntelligenceConfigLoaded()
         return await intelligenceTtsService.speak(bindPluginMetadataCaller(data, context))
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1312,8 +1313,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         const scopedData = bindPluginMetadataCaller(data, context)
-        const { messages, providerId, model, promptTemplate, promptVariables, metadata }
-          = scopedData
+        const { messages, providerId, model, promptTemplate, promptVariables, metadata } =
+          scopedData
 
         ensureIntelligenceConfigLoaded()
 
@@ -1326,13 +1327,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
             metadata: {
               ...metadata,
               promptTemplate,
-              promptVariables,
-            },
-          },
+              promptVariables
+            }
+          }
         )
 
         return result
-      },
+      }
     )
   }
 
@@ -1341,15 +1342,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
     registerProtectedSafe(
       intelligenceKnowledgeEvents.indexDocument,
       'Index local knowledge document',
       'intelligence.basic',
       async (data, context) =>
-        localKnowledgeEngine.indexDocument(bindPluginKnowledgeDocument(data, context)),
+        localKnowledgeEngine.indexDocument(bindPluginKnowledgeDocument(data, context))
     )
 
     registerProtectedSafe(
@@ -1357,15 +1358,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       'Index local knowledge chunk',
       'intelligence.basic',
       async (data, context) =>
-        localKnowledgeEngine.indexChunk(bindPluginKnowledgeChunk(data, context)),
+        localKnowledgeEngine.indexChunk(bindPluginKnowledgeChunk(data, context))
     )
 
     registerProtectedSafe(
       intelligenceKnowledgeEvents.search,
       'Search local knowledge',
       'intelligence.basic',
-      async (data, context) =>
-        localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context)),
+      async (data, context) => localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context))
     )
 
     registerProtectedSafe(
@@ -1374,8 +1374,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       'intelligence.basic',
       async (data, context) =>
         localKnowledgeEngine.buildContext(
-          bindPluginKnowledgeScope<BuildContextInput>(data, context),
-        ),
+          bindPluginKnowledgeScope<BuildContextInput>(data, context)
+        )
     )
   }
 
@@ -1384,8 +1384,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
     registerProtectedSafe(
       intelligenceContextEvents.prepareTurn,
@@ -1394,21 +1394,27 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.prepareTurn(data)
-      },
+      }
     )
 
     registerProtectedSafe(
       intelligenceContextEvents.listCheckpoints,
       'List intelligence context checkpoints',
       'intelligence.basic',
-      async data => contextHygieneService.listCheckpoints(data),
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return contextHygieneService.listCheckpoints(data)
+      }
     )
 
     registerProtectedSafe(
       intelligenceContextEvents.listPackageLogs,
       'List intelligence context package logs',
       'intelligence.basic',
-      async data => contextHygieneService.listPackageLogs(data),
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return contextHygieneService.listPackageLogs(data)
+      }
     )
 
     registerProtectedSafe(
@@ -1418,7 +1424,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.createCompressionSnapshot(data)
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1428,7 +1434,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.listCompressionSnapshots(data)
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1438,7 +1444,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.getLatestCompressionSnapshot(data.sessionId)
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1448,14 +1454,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.listMemories(data)
-      },
+      }
     )
 
     registerProtectedSafe(
       intelligenceContextEvents.evaluateMemory,
       'Evaluate intelligence memory',
       'intelligence.basic',
-      async data => contextHygieneService.evaluateMemory(data),
+      async (data) => contextHygieneService.evaluateMemory(data)
     )
 
     registerProtectedSafe(
@@ -1465,7 +1471,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.saveMemory(data)
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1475,7 +1481,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.replaceMemory(data)
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1485,7 +1491,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.setMemoryEnabled(data.memoryId, data.enabled)
-      },
+      }
     )
 
     registerProtectedSafe(
@@ -1495,7 +1501,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return contextHygieneService.deleteMemory(data.memoryId, data.reason)
-      },
+      }
     )
   }
 
@@ -1503,8 +1509,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
     registerSafe(intelligenceApiEvents.testProvider, 'Provider test', async (data, context) => {
       assertHostOwnedIntelligenceControlPlane(context)
@@ -1534,15 +1540,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         if (!tester) {
           return {
             requiresUserInput: false,
-            inputHint: '',
+            inputHint: ''
           }
         }
 
         return {
           requiresUserInput: tester.requiresUserInput(),
-          inputHint: tester.getDefaultInputHint(),
+          inputHint: tester.getDefaultInputHint()
         }
-      },
+      }
     )
 
     registerSafe(
@@ -1554,20 +1560,20 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         return resolveCapabilityStatus(data.capabilityId)
-      },
+      }
     )
 
     registerSafe(
       intelligenceApiEvents.getProviderModelOptions,
       'Get provider model options',
       async (data) => {
-        const capabilityId
-          = data && typeof data === 'object' && typeof data.capabilityId === 'string'
+        const capabilityId =
+          data && typeof data === 'object' && typeof data.capabilityId === 'string'
             ? data.capabilityId
             : 'text.chat'
 
         return getProviderModelOptions(capabilityId)
-      },
+      }
     )
 
     registerSafe(intelligenceApiEvents.testCapability, 'Capability test', async (data, context) => {
@@ -1604,7 +1610,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       const payload = await tester.generateTestPayload({
         ...rest,
         providerId,
-        userInput,
+        userInput
       } as CapabilityTestPayload)
 
       let result: IntelligenceInvokeResult<unknown>
@@ -1617,49 +1623,52 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           metadata: {
             promptTemplate: optionalString(promptTemplate),
             promptVariables,
-            caller: 'system',
-          },
+            caller: 'system'
+          }
         })
-      }
-      catch (error) {
+      } catch (error) {
         throw normalizeCapabilityInvokeError(capabilityId, error)
       }
 
       const formattedResult = tester.formatTestResult(result)
 
       intelligenceLog.success(
-        `Capability ${capabilityId} test success via ${result.provider} (${result.model})`,
+        `Capability ${capabilityId} test success via ${result.provider} (${result.model})`
       )
 
       return formattedResult
     })
 
-    registerSafe(intelligenceApiEvents.fetchModels, 'Fetch provider models', async (data, context) => {
-      assertHostOwnedIntelligenceControlPlane(context)
-      if (!data || typeof data !== 'object' || !data.provider) {
-        throw new Error('Missing provider payload')
+    registerSafe(
+      intelligenceApiEvents.fetchModels,
+      'Fetch provider models',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        if (!data || typeof data !== 'object' || !data.provider) {
+          throw new Error('Missing provider payload')
+        }
+
+        const provider = normalizeProviderForRuntime(data.provider as IntelligenceProviderConfig)
+        ensureIntelligenceConfigLoaded()
+        intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
+
+        const models = await fetchProviderModels(provider)
+        intelligenceLog.success(`Loaded ${models.length} models for provider ${provider.id}`)
+
+        return {
+          success: true,
+          models
+        }
       }
-
-      const provider = normalizeProviderForRuntime(data.provider as IntelligenceProviderConfig)
-      ensureIntelligenceConfigLoaded()
-      intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
-
-      const models = await fetchProviderModels(provider)
-      intelligenceLog.success(`Loaded ${models.length} models for provider ${provider.id}`)
-
-      return {
-        success: true,
-        models,
-      }
-    })
+    )
   }
 
   private registerStatsChannels(
     registerSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
     registerSafe(intelligenceApiEvents.getAuditLogs, 'Get audit logs', async (data, context) => {
       assertHostOwnedIntelligenceControlPlane(context)
@@ -1693,8 +1702,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
     registerSafe(
       intelligenceApiEvents.getLocalEnvironment,
@@ -1702,36 +1711,26 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       async (_data, context) => {
         assertHostOwnedIntelligenceControlPlane(context)
         return await getIntelligenceLocalEnvironment()
-      },
+      }
     )
   }
 
   private registerOrchestrationChannels(
-    registerProtectedSafe: <TReq, TRes>(
+    registerHostOnlySafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
-    registerSafe: <TReq, TRes>(
-      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
-      action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionStartEvent,
       'Start intelligence session',
-      'intelligence.basic',
-      async (data, context) => {
+      async (data) => {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid session start payload')
         }
         const payload = (data ?? {}) as IntelligenceSessionStartPayload
         const shouldAutoRun = payload.autoRunGraph === true && typeof payload.objective === 'string'
-        if (shouldAutoRun) {
-          await assertAutonomousIntelligencePermission('agent.run', data, context)
-        }
         const session = await tuffIntelligenceRuntime.startSession(payload)
         if (!shouldAutoRun) {
           return session
@@ -1745,7 +1744,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           maxSteps: payload.maxSteps,
           toolBudget: payload.toolBudget,
           continueOnError: payload.continueOnError,
-          reflectNotes: payload.reflectNotes,
+          reflectNotes: payload.reflectNotes
         })
 
         const snapshot = await tuffIntelligenceRuntime.getSessionState(session.id)
@@ -1757,153 +1756,137 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           ...session,
           status: snapshot.status,
           currentTurnId: snapshot.currentTurn?.id ?? session.currentTurnId,
-          updatedAt: snapshot.updatedAt,
+          updatedAt: snapshot.updatedAt
         }
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionHeartbeatEvent,
       'Heartbeat intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.heartbeatSession(data.sessionId)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionPauseEvent,
       'Pause intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.pauseSession(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionRecoverableEvent,
       'Get recoverable intelligence session',
-      'intelligence.basic',
       async () => {
         return tuffIntelligenceRuntime.getRecoverableSession()
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionResumeEvent,
       'Resume intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.resumeSession(data.sessionId)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionCancelEvent,
       'Cancel intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.cancelSession(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionGetStateEvent,
       'Get intelligence session state',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.getSessionState(data.sessionId)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceOrchestratorPlanEvent,
       'Plan intelligence turn',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId || !data?.objective) {
           throw new Error('sessionId and objective are required')
         }
         return tuffIntelligenceRuntime.plan(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceOrchestratorExecuteEvent,
       'Execute intelligence turn',
-      'intelligence.agents',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.execute(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceOrchestratorReflectEvent,
       'Reflect intelligence turn',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId || !data?.turnId) {
           throw new Error('sessionId and turnId are required')
         }
         return tuffIntelligenceRuntime.reflect(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
-      intelligenceToolCallEvent,
-      'Call intelligence tool',
-      'intelligence.agents',
-      async (data) => {
-        if (!data?.sessionId || !data?.toolId) {
-          throw new Error('sessionId and toolId are required')
-        }
-        return tuffIntelligenceRuntime.callTool(data)
-      },
-    )
+    registerHostOnlySafe(intelligenceToolCallEvent, 'Call intelligence tool', async (data) => {
+      if (!data?.sessionId || !data?.toolId) {
+        throw new Error('sessionId and toolId are required')
+      }
+      return tuffIntelligenceRuntime.callTool(data)
+    })
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceToolResultEvent,
       'Report intelligence tool result',
-      'intelligence.agents',
       async (data) => {
         if (!data?.sessionId || !data?.toolId || typeof data.success !== 'boolean') {
           throw new Error('sessionId, toolId and success are required')
         }
         return tuffIntelligenceRuntime.reportToolResult(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceToolApproveEvent,
       'Approve intelligence tool call',
-      'intelligence.admin',
       async (data) => {
         if (!data?.ticketId || typeof data.approved !== 'boolean') {
           throw new Error('ticketId and approved are required')
         }
         return tuffIntelligenceRuntime.approveTool(data)
-      },
+      }
     )
 
-    registerSafe(
+    registerHostOnlySafe(
       intelligenceSessionStreamEvent,
       'Stream intelligence session trace',
       async (data) => {
@@ -1911,18 +1894,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.queryTrace(data)
-      },
+      }
     )
 
-    registerSafe(
+    registerHostOnlySafe(
       intelligenceSessionHistoryEvent,
       'Query intelligence session history',
       async (data) => {
         return tuffIntelligenceRuntime.getSessionHistory(data ?? {})
-      },
+      }
     )
 
-    registerSafe(
+    registerHostOnlySafe(
       intelligenceSessionTraceEvent,
       'Query intelligence session trace',
       async (data) => {
@@ -1930,114 +1913,104 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.queryTrace(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionTraceExportEvent,
       'Export intelligence session trace',
-      'intelligence.admin',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
         return tuffIntelligenceRuntime.exportTrace(data)
-      },
+      }
     )
   }
 
   private registerWorkflowChannels(
-    registerProtectedSafe: <TReq, TRes>(
+    registerHostOnlySafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowListEvent,
       'List intelligence workflows',
-      'intelligence.basic',
       async (data) => {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid workflow list payload')
         }
         return intelligenceWorkflowService.listWorkflows(data ?? {})
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowGetEvent,
       'Get intelligence workflow',
-      'intelligence.basic',
       async (data) => {
         if (!data?.workflowId) {
           throw new Error('workflowId is required')
         }
         return intelligenceWorkflowService.getWorkflow(data.workflowId)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowSaveEvent,
       'Save intelligence workflow',
-      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid workflow payload')
         }
         return intelligenceWorkflowService.saveWorkflow(data as WorkflowDefinition)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowDeleteEvent,
       'Delete intelligence workflow',
-      'intelligence.basic',
       async (data) => {
         if (!data?.workflowId) {
           throw new Error('workflowId is required')
         }
         return intelligenceWorkflowService.deleteWorkflow(data.workflowId)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowRunEvent,
       'Run intelligence workflow',
-      'intelligence.agents',
-      async (data, context) => {
+      async (data) => {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid workflow run payload')
         }
-        await assertAutonomousIntelligencePermission('workflow.execute', data, context)
         await this.waitForAgentRuntime()
         return intelligenceWorkflowService.runWorkflow(data)
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowHistoryEvent,
       'Query intelligence workflow history',
-      'intelligence.basic',
       async (data) => {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid workflow history payload')
         }
         return intelligenceWorkflowService.listHistory(data ?? {})
-      },
+      }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowReviewUpdateEvent,
       'Update intelligence workflow review queue',
-      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid workflow review update payload')
         }
         return intelligenceWorkflowService.updateReviewQueueItem(data)
-      },
+      }
     )
   }
 
@@ -2047,199 +2020,197 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     }
 
     this.transport.onStream(intelligenceSessionSubscribeEvent, async (data, streamContext) => {
-      const guardedHandler = withPermission<IntelligenceTraceQueryPayload, void>(
-        { permissionId: 'intelligence.basic' },
-        async (payload) => {
-          if (!payload?.sessionId) {
-            throw new Error('sessionId is required')
+      const handleStream = async (
+        payload: IntelligenceTraceQueryPayload,
+        context: HandlerContext
+      ) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        if (!payload?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+
+        const sessionId = String(payload.sessionId).trim()
+        if (!sessionId) {
+          throw new Error('sessionId is required')
+        }
+
+        const fromSeq = normalizeFromSeq(payload.fromSeq)
+        const replayLimit = normalizeReplayLimit(payload.limit)
+        const filterLevel = payload.level
+        const filterType = payload.type
+
+        let closed = false
+        let doneSent = false
+        let keepaliveTimer: ReturnType<typeof setInterval> | null = null
+        let cancelWatcher: ReturnType<typeof setInterval> | null = null
+        let unsubscribe: () => void = () => {}
+
+        const sendStreamEvent = (event: IntelligenceAgentStreamEvent): boolean => {
+          if (closed || streamContext.isCancelled()) {
+            return false
           }
-
-          const sessionId = String(payload.sessionId).trim()
-          if (!sessionId) {
-            throw new Error('sessionId is required')
+          streamContext.emit(event)
+          if (event.type === 'done') {
+            doneSent = true
           }
+          return true
+        }
 
-          const fromSeq = normalizeFromSeq(payload.fromSeq)
-          const replayLimit = normalizeReplayLimit(payload.limit)
-          const filterLevel = payload.level
-          const filterType = payload.type
-
-          let closed = false
-          let doneSent = false
-          let keepaliveTimer: ReturnType<typeof setInterval> | null = null
-          let cancelWatcher: ReturnType<typeof setInterval> | null = null
-          let unsubscribe: () => void = () => {}
-
-          const sendStreamEvent = (event: IntelligenceAgentStreamEvent): boolean => {
-            if (closed || streamContext.isCancelled()) {
-              return false
-            }
-            streamContext.emit(event)
-            if (event.type === 'done') {
-              doneSent = true
-            }
-            return true
+        const closeStream = () => {
+          if (closed) {
+            return
           }
-
-          const closeStream = () => {
-            if (closed) {
-              return
-            }
-            closed = true
-            if (keepaliveTimer) {
-              clearInterval(keepaliveTimer)
-              keepaliveTimer = null
-            }
-            if (cancelWatcher) {
-              clearInterval(cancelWatcher)
-              cancelWatcher = null
-            }
-            unsubscribe()
-            try {
-              streamContext.end()
-            }
-            catch {
-              // Ignore stream close failures on disconnected clients.
-            }
+          closed = true
+          if (keepaliveTimer) {
+            clearInterval(keepaliveTimer)
+            keepaliveTimer = null
           }
-
-          const replayTrace = async () => {
-            if (!fromSeq) {
-              return
-            }
-
-            sendStreamEvent({
-              type: 'replay.started',
-              sessionId,
-              timestamp: Date.now(),
-              payload: {
-                fromSeq,
-                limit: replayLimit,
-              },
-            })
-
-            const replayEvents = await tuffIntelligenceRuntime.queryTrace({
-              sessionId,
-              fromSeq,
-              limit: replayLimit,
-              level: filterLevel,
-              type: filterType,
-            })
-
-            let replayCount = 0
-            for (const traceEvent of replayEvents) {
-              if (streamContext.isCancelled()) {
-                return
-              }
-              if (
-                sendStreamEvent(
-                  mapTraceToStreamEvent(traceEvent, {
-                    replay: true,
-                  }),
-                )
-              ) {
-                replayCount += 1
-              }
-            }
-
-            sendStreamEvent({
-              type: 'replay.finished',
-              sessionId,
-              timestamp: Date.now(),
-              payload: {
-                fromSeq,
-                replayCount,
-              },
-            })
+          if (cancelWatcher) {
+            clearInterval(cancelWatcher)
+            cancelWatcher = null
           }
-
-          const pauseOnDisconnect = async () => {
-            const snapshot = await tuffIntelligenceRuntime.getSessionState(sessionId)
-            if (!isRunningSessionStatus(snapshot?.status)) {
-              return
-            }
-            await tuffIntelligenceRuntime.pauseSession({
-              sessionId,
-              reason: 'client_disconnect',
-            })
-          }
-
+          unsubscribe()
           try {
+            streamContext.end()
+          } catch {
+            // Ignore stream close failures on disconnected clients.
+          }
+        }
+
+        const replayTrace = async () => {
+          if (!fromSeq) {
+            return
+          }
+
+          sendStreamEvent({
+            type: 'replay.started',
+            sessionId,
+            timestamp: Date.now(),
+            payload: {
+              fromSeq,
+              limit: replayLimit
+            }
+          })
+
+          const replayEvents = await tuffIntelligenceRuntime.queryTrace({
+            sessionId,
+            fromSeq,
+            limit: replayLimit,
+            level: filterLevel,
+            type: filterType
+          })
+
+          let replayCount = 0
+          for (const traceEvent of replayEvents) {
+            if (streamContext.isCancelled()) {
+              return
+            }
+            if (
+              sendStreamEvent(
+                mapTraceToStreamEvent(traceEvent, {
+                  replay: true
+                })
+              )
+            ) {
+              replayCount += 1
+            }
+          }
+
+          sendStreamEvent({
+            type: 'replay.finished',
+            sessionId,
+            timestamp: Date.now(),
+            payload: {
+              fromSeq,
+              replayCount
+            }
+          })
+        }
+
+        const pauseOnDisconnect = async () => {
+          const snapshot = await tuffIntelligenceRuntime.getSessionState(sessionId)
+          if (!isRunningSessionStatus(snapshot?.status)) {
+            return
+          }
+          await tuffIntelligenceRuntime.pauseSession({
+            sessionId,
+            reason: 'client_disconnect'
+          })
+        }
+
+        try {
+          sendStreamEvent({
+            type: 'stream.started',
+            sessionId,
+            timestamp: Date.now(),
+            payload: {
+              fromSeq: fromSeq ?? null,
+              keepaliveMs: INTELLIGENCE_STREAM_KEEPALIVE_MS,
+              limit: replayLimit
+            }
+          })
+
+          await replayTrace()
+          if (streamContext.isCancelled()) {
+            await pauseOnDisconnect()
+            return
+          }
+
+          unsubscribe = tuffIntelligenceRuntime.subscribeSessionTrace(sessionId, (traceEvent) => {
+            if (streamContext.isCancelled() || closed) {
+              return
+            }
+            if (filterLevel && traceEvent.level !== filterLevel) {
+              return
+            }
+            if (filterType && traceEvent.type !== filterType) {
+              return
+            }
+            sendStreamEvent(mapTraceToStreamEvent(traceEvent))
+          })
+
+          keepaliveTimer = setInterval(() => {
+            if (streamContext.isCancelled() || closed) {
+              return
+            }
             sendStreamEvent({
-              type: 'stream.started',
+              type: 'stream.heartbeat',
               sessionId,
               timestamp: Date.now(),
               payload: {
-                fromSeq: fromSeq ?? null,
-                keepaliveMs: INTELLIGENCE_STREAM_KEEPALIVE_MS,
-                limit: replayLimit,
-              },
+                ts: Date.now()
+              }
             })
+          }, INTELLIGENCE_STREAM_KEEPALIVE_MS)
 
-            await replayTrace()
-            if (streamContext.isCancelled()) {
-              await pauseOnDisconnect()
-              return
-            }
+          await new Promise<void>((resolve) => {
+            cancelWatcher = setInterval(() => {
+              if (!streamContext.isCancelled()) {
+                return
+              }
+              resolve()
+            }, 250)
+          })
 
-            unsubscribe = tuffIntelligenceRuntime.subscribeSessionTrace(sessionId, (traceEvent) => {
-              if (streamContext.isCancelled() || closed) {
-                return
+          await pauseOnDisconnect()
+          if (!doneSent) {
+            sendStreamEvent({
+              type: 'done',
+              sessionId,
+              timestamp: Date.now(),
+              payload: {
+                status: 'paused'
               }
-              if (filterLevel && traceEvent.level !== filterLevel) {
-                return
-              }
-              if (filterType && traceEvent.type !== filterType) {
-                return
-              }
-              sendStreamEvent(mapTraceToStreamEvent(traceEvent))
             })
-
-            keepaliveTimer = setInterval(() => {
-              if (streamContext.isCancelled() || closed) {
-                return
-              }
-              sendStreamEvent({
-                type: 'stream.heartbeat',
-                sessionId,
-                timestamp: Date.now(),
-                payload: {
-                  ts: Date.now(),
-                },
-              })
-            }, INTELLIGENCE_STREAM_KEEPALIVE_MS)
-
-            await new Promise<void>((resolve) => {
-              cancelWatcher = setInterval(() => {
-                if (!streamContext.isCancelled()) {
-                  return
-                }
-                resolve()
-              }, 250)
-            })
-
-            await pauseOnDisconnect()
-            if (!doneSent) {
-              sendStreamEvent({
-                type: 'done',
-                sessionId,
-                timestamp: Date.now(),
-                payload: {
-                  status: 'paused',
-                },
-              })
-            }
           }
-          finally {
-            closeStream()
-          }
-        },
-      )
+        } finally {
+          closeStream()
+        }
+      }
 
       try {
-        await guardedHandler(data, streamContext as unknown as HandlerContext)
-      }
-      catch (error) {
+        await handleStream(data, streamContext as unknown as HandlerContext)
+      } catch (error) {
         intelligenceLog.error('Subscribe intelligence session stream failed', { error })
         const err = error instanceof Error ? error : new Error(String(error))
         streamContext.error(err)
@@ -2251,8 +2222,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerSafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes,
-    ) => void,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
   ): void {
     registerSafe(intelligenceApiEvents.getQuota, 'Get quota', async (data, context) => {
       assertHostOwnedIntelligenceControlPlane(context)
@@ -2299,19 +2270,23 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       return await intelligenceQuotaManager.checkQuota(
         callerId,
         callerType || 'plugin',
-        estimatedTokens || 0,
+        estimatedTokens || 0
       )
     })
 
-    registerSafe(intelligenceApiEvents.getCurrentUsage, 'Get current usage', async (data, context) => {
-      assertHostOwnedIntelligenceControlPlane(context)
-      const { callerId, callerType } = data
-      if (!callerId) {
-        throw new Error('callerId is required')
+    registerSafe(
+      intelligenceApiEvents.getCurrentUsage,
+      'Get current usage',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        const { callerId, callerType } = data
+        if (!callerId) {
+          throw new Error('callerId is required')
+        }
+        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+        return await intelligenceQuotaManager.getCurrentUsage(callerId, callerType || 'plugin')
       }
-      const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-      return await intelligenceQuotaManager.getCurrentUsage(callerId, callerType || 'plugin')
-    })
+    )
   }
 }
 

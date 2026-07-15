@@ -2,12 +2,19 @@
 import { TxAiConversation } from '@talex-touch/tuffex/ai-elements'
 import { computed, defineComponent, nextTick, ref, watch } from 'vue'
 
+const INTELLIGENCE_SETTINGS_RECOVERY_CODES = new Set([
+  'NEXUS_AUTH_REQUIRED',
+  'PROVIDER_UNAVAILABLE',
+  'NETWORK_FAILURE',
+])
+
 type IntelligenceWidgetStatus =
   | 'idle'
   | 'ocr-pending'
   | 'chat-pending'
   | 'ready'
   | 'error'
+  | 'cancelled'
 
 interface IntelligenceWidgetAttachment {
   type?: 'image' | string
@@ -22,6 +29,16 @@ interface IntelligenceWidgetMessage {
   content?: string
   status?: 'pending' | 'streaming' | 'complete' | 'error' | string
   attachments?: IntelligenceWidgetAttachment[]
+}
+
+type IntelligenceWidgetVisibleMessage = Omit<
+  IntelligenceWidgetMessage,
+  'id' | 'role' | 'content' | 'status'
+> & {
+  id: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  status?: 'pending' | 'streaming' | 'complete' | 'error'
 }
 
 interface IntelligenceImageContext {
@@ -66,6 +83,7 @@ interface IntelligenceWidgetPayload {
   prompt?: string
   answer?: string
   status?: string
+  stage?: string
   provider?: string
   model?: string
   latency?: number
@@ -74,6 +92,8 @@ interface IntelligenceWidgetPayload {
   inputKinds?: string[]
   errorCode?: string
   errorMessage?: string
+  errorReason?: string
+  errorRecovery?: string
   copyStatus?: string
   copyError?: string
   copyRecovery?: string
@@ -87,6 +107,17 @@ interface IntelligenceWidgetPayload {
   modelOptions?: IntelligenceProviderModelOption[]
   selectedProviderId?: string
   selectedModel?: string
+  updatedAt?: number | string
+}
+
+interface HostKeyEventEnvelope {
+  key?: string
+  code?: string
+  ctrlKey?: boolean
+  metaKey?: boolean
+  shiftKey?: boolean
+  altKey?: boolean
+  eventId?: string | number
 }
 
 interface RuntimeMetadataItem {
@@ -161,19 +192,28 @@ export default defineComponent({
         value === 'ocr-pending' ||
         value === 'chat-pending' ||
         value === 'ready' ||
-        value === 'error'
+        value === 'error' ||
+        value === 'cancelled'
       ) {
         return value
       }
       return 'idle'
     })
     const messages = computed<IntelligenceWidgetMessage[]>(() => {
-      if (
-        Array.isArray(widgetPayload.value.messages) &&
-        widgetPayload.value.messages.length > 0
-      ) {
-        return widgetPayload.value.messages.filter(message => {
+      const source = widgetPayload.value.messages
+      if (Array.isArray(source) && source.length > 0) {
+        const terminalIndex = source.length - 1
+        const currentError = String(widgetPayload.value.errorMessage || '').trim()
+        return source.filter((message, index) => {
           const content = message?.content?.trim()
+          const isDuplicateTerminalError =
+            status.value === 'error' &&
+            index === terminalIndex &&
+            message?.role === 'assistant' &&
+            message?.status === 'error' &&
+            Boolean(currentError) &&
+            content === currentError
+          if (isDuplicateTerminalError) return false
           return Boolean(
             content ||
             message?.status === 'streaming' ||
@@ -183,12 +223,20 @@ export default defineComponent({
       }
       return []
     })
-    const isEmpty = computed(() => messages.value.length === 0)
+    const isEmpty = computed(
+      () =>
+        status.value !== 'error' &&
+        status.value !== 'cancelled' &&
+        messages.value.length === 0,
+    )
     const imageContext = computed(
       () => widgetPayload.value.imageContext || null,
     )
     const isBusy = computed(
       () => status.value === 'ocr-pending' || status.value === 'chat-pending',
+    )
+    const canCancelRequest = computed(
+      () => isBusy.value && Boolean(widgetPayload.value.requestId?.trim()),
     )
     const errorCode = computed(() =>
       String(widgetPayload.value.errorCode || '').trim(),
@@ -196,8 +244,22 @@ export default defineComponent({
     const errorMessage = computed(() =>
       String(widgetPayload.value.errorMessage || '').trim(),
     )
+    const errorReason = computed(() =>
+      String(widgetPayload.value.errorReason || '').trim(),
+    )
+    const errorRecovery = computed(() =>
+      String(widgetPayload.value.errorRecovery || '').trim(),
+    )
     const isPermissionDenied = computed(
       () => errorCode.value === 'PERMISSION_DENIED',
+    )
+    const canOpenPluginPermissions = computed(
+      () => status.value === 'error' && isPermissionDenied.value,
+    )
+    const canOpenIntelligenceSettings = computed(
+      () =>
+        status.value === 'error' &&
+        INTELLIGENCE_SETTINGS_RECOVERY_CODES.has(errorCode.value),
     )
     const copyFailed = computed(
       () => String(widgetPayload.value.copyStatus || '').trim() === 'failed',
@@ -219,7 +281,8 @@ export default defineComponent({
     )
     const canUseAnswerActions = computed(
       () =>
-        status.value === 'ready' && Boolean(widgetPayload.value.answer?.trim()),
+        (status.value === 'ready' || status.value === 'cancelled') &&
+        Boolean(widgetPayload.value.answer?.trim()),
     )
     const runtimeMetadata = computed<RuntimeMetadataItem[]>(() => {
       const payload = widgetPayload.value
@@ -397,9 +460,26 @@ export default defineComponent({
 
     function cloneMessage(
       message: IntelligenceWidgetMessage,
-    ): IntelligenceWidgetMessage {
+      index: number,
+    ): IntelligenceWidgetVisibleMessage {
+      const role =
+        message.role === 'user' ||
+        message.role === 'system' ||
+        message.role === 'tool'
+          ? message.role
+          : 'assistant'
+      const status =
+        message.status === 'pending' ||
+        message.status === 'streaming' ||
+        message.status === 'error'
+          ? message.status
+          : 'complete'
       return {
         ...message,
+        id: message.id || `message-${index}`,
+        role,
+        content: message.content || '',
+        status,
         attachments: message.attachments?.map(attachment => ({
           ...attachment,
         })),
@@ -445,6 +525,7 @@ export default defineComponent({
         prompt: payload.prompt || '',
         answer: payload.answer || '',
         status: payload.status || 'idle',
+        stage: payload.stage || '',
         provider: payload.provider || '',
         model: payload.model || '',
         latency: payload.latency,
@@ -453,6 +534,8 @@ export default defineComponent({
         inputKinds: payload.inputKinds || [],
         errorCode: payload.errorCode || '',
         errorMessage: payload.errorMessage || '',
+        errorReason: payload.errorReason || '',
+        errorRecovery: payload.errorRecovery || '',
         copyStatus: payload.copyStatus || '',
         copyError: payload.copyError || '',
         copyRecovery: payload.copyRecovery || '',
@@ -472,6 +555,38 @@ export default defineComponent({
       emit('host-action', {
         actionId,
         payload: buildHostActionPayload(),
+      })
+    }
+
+    function handleRetry() {
+      if (status.value !== 'error' || isBusy.value) return
+      emit('host-action', {
+        actionId: 'retry',
+        payload: buildHostActionPayload({
+          selectedProviderId: selectedProviderId.value,
+          selectedModel: selectedModel.value,
+        }),
+      })
+    }
+
+    function handleOpenIntelligenceSettings() {
+      if (!canOpenIntelligenceSettings.value || isBusy.value) return
+      emit('host-action', { actionId: 'open-intelligence-settings' })
+    }
+
+    function handleOpenPluginPermissions() {
+      if (!canOpenPluginPermissions.value || isBusy.value) return
+      emit('host-action', { actionId: 'open-plugin-permissions' })
+    }
+
+    function handleCancelRequest() {
+      if (!canCancelRequest.value) return
+      emit('host-action', {
+        actionId: 'cancel-request',
+        payload: buildHostActionPayload({
+          selectedProviderId: selectedProviderId.value,
+          selectedModel: selectedModel.value,
+        }),
       })
     }
 
@@ -506,9 +621,14 @@ export default defineComponent({
       isEmpty,
       imageContext,
       isBusy,
+      canCancelRequest,
       errorCode,
       errorMessage,
+      errorReason,
+      errorRecovery,
       isPermissionDenied,
+      canOpenIntelligenceSettings,
+      canOpenPluginPermissions,
       copyFailed,
       copyError,
       copyRecovery,
@@ -528,6 +648,10 @@ export default defineComponent({
       handleModelChange,
       handleContextModeChange,
       handleAnswerAction,
+      handleRetry,
+      handleOpenIntelligenceSettings,
+      handleOpenPluginPermissions,
+      handleCancelRequest,
       scrollToBottom,
     }
   },
@@ -547,7 +671,7 @@ export default defineComponent({
         </div>
 
         <TxAiConversation
-          v-else
+          v-else-if="messages.length > 0"
           class="AiChatbot__aiConversation"
           :messages="messages"
           :markdown="true"
@@ -587,6 +711,37 @@ export default defineComponent({
         </div>
 
         <div
+          v-if="canCancelRequest"
+          class="AiChatbot__requestNotice"
+          role="status"
+        >
+          <div>
+            <strong>{{ status === 'ocr-pending' ? '正在识别图片' : 'AI 正在生成' }}</strong>
+            <span>可随时停止，已生成的内容会保留。</span>
+          </div>
+          <button
+            type="button"
+            aria-label="停止生成"
+            @click="handleCancelRequest"
+          >
+            <i class="i-carbon-stop-filled" aria-hidden="true" />
+            停止生成
+          </button>
+        </div>
+
+        <div
+          v-if="status === 'cancelled'"
+          class="AiChatbot__cancelledNotice"
+          role="status"
+        >
+          <i class="i-carbon-stop-outline" aria-hidden="true" />
+          <div>
+            <strong>已停止生成</strong>
+            <span>{{ canUseAnswerActions ? '已保留当前内容，可复制或替换选中文本。' : '本次请求已取消。' }}</span>
+          </div>
+        </div>
+
+        <div
           v-if="status === 'error' && errorMessage"
           class="AiChatbot__errorNotice"
         >
@@ -594,9 +749,57 @@ export default defineComponent({
             isPermissionDenied ? '需要授权 AI 权限' : '请求失败'
           }}</strong>
           <span>{{ errorMessage }}</span>
+          <dl
+            v-if="errorReason || errorRecovery"
+            class="AiChatbot__errorDetails"
+            aria-label="错误详情"
+          >
+            <div v-if="errorReason">
+              <dt>原因</dt>
+              <dd>{{ errorReason }}</dd>
+            </div>
+            <div v-if="errorRecovery">
+              <dt>建议</dt>
+              <dd>{{ errorRecovery }}</dd>
+            </div>
+          </dl>
           <small v-if="isPermissionDenied"
             >请到插件权限设置中允许 intelligence.basic 后重试。</small
           >
+          <div class="AiChatbot__errorActions" role="group" aria-label="失败恢复操作">
+            <button
+              class="AiChatbot__errorAction AiChatbot__retryAction"
+              type="button"
+              aria-label="重试 AI 请求"
+              :disabled="isBusy"
+              @click="handleRetry"
+            >
+              <i class="i-carbon-renew" aria-hidden="true" />
+              重试请求
+            </button>
+            <button
+              v-if="canOpenPluginPermissions"
+              class="AiChatbot__errorAction AiChatbot__settingsAction"
+              type="button"
+              aria-label="检查插件权限"
+              :disabled="isBusy"
+              @click="handleOpenPluginPermissions"
+            >
+              <i class="i-carbon-security" aria-hidden="true" />
+              检查插件权限
+            </button>
+            <button
+              v-if="canOpenIntelligenceSettings"
+              class="AiChatbot__errorAction AiChatbot__settingsAction"
+              type="button"
+              aria-label="打开 AI 渠道设置"
+              :disabled="isBusy"
+              @click="handleOpenIntelligenceSettings"
+            >
+              <i class="i-carbon-settings-adjust" aria-hidden="true" />
+              检查 AI 渠道
+            </button>
+          </div>
         </div>
 
         <div v-if="copyFailed" class="AiChatbot__copyFailureNotice">
@@ -1198,6 +1401,80 @@ export default defineComponent({
   animation-delay: 0.28s;
 }
 
+.AiChatbot__requestNotice,
+.AiChatbot__cancelledNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 12px;
+  background: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 8%,
+    var(--tx-bg-color, #ffffff)
+  );
+  color: var(--ai-chat-text-secondary);
+  font-size: 12px;
+}
+
+.AiChatbot__requestNotice > div,
+.AiChatbot__cancelledNotice > div {
+  display: grid;
+  gap: 2px;
+}
+
+.AiChatbot__requestNotice strong,
+.AiChatbot__cancelledNotice strong {
+  color: var(--ai-chat-text);
+  font-size: 13px;
+}
+
+.AiChatbot__requestNotice button {
+  display: inline-flex;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--ai-chat-border);
+  border-radius: 8px;
+  background: var(--tx-bg-color, #ffffff);
+  color: var(--ai-chat-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.AiChatbot__requestNotice button:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 54%,
+    var(--ai-chat-border)
+  );
+}
+
+.AiChatbot__requestNotice button:active {
+  transform: translateY(1px);
+}
+
+.AiChatbot__requestNotice button:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--tx-color-primary, #3082ff) 60%, transparent);
+  outline-offset: 2px;
+}
+
+.AiChatbot__cancelledNotice {
+  justify-content: flex-start;
+  background: color-mix(in srgb, var(--ai-chat-text) 4%, transparent);
+}
+
+.AiChatbot__cancelledNotice > i {
+  color: var(--ai-chat-text-secondary);
+  font-size: 16px;
+}
+
 .AiChatbot__errorNotice {
   display: grid;
   gap: 6px;
@@ -1222,6 +1499,102 @@ export default defineComponent({
     var(--ai-chat-text)
   );
   font-size: 12px;
+}
+
+.AiChatbot__errorDetails {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--ai-chat-danger-border);
+  border-radius: 4px 8px 8px 4px;
+  background: color-mix(in srgb, var(--tx-bg-color, #ffffff) 48%, transparent);
+  color: var(--ai-chat-text-secondary);
+  font-size: 12px;
+}
+
+.AiChatbot__errorDetails > div {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.AiChatbot__errorDetails dt {
+  color: color-mix(
+    in srgb,
+    var(--tx-color-danger, #e5484d) 78%,
+    var(--ai-chat-text)
+  );
+  font-weight: 700;
+}
+
+.AiChatbot__errorDetails dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.AiChatbot__errorActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  gap: 8px;
+}
+
+.AiChatbot__errorAction {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--ai-chat-danger-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-bg-color, #ffffff) 78%, transparent);
+  color: var(--tx-color-danger, #e5484d);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.AiChatbot__retryAction:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--tx-color-danger, #e5484d) 12%,
+    var(--tx-bg-color, #ffffff)
+  );
+}
+
+.AiChatbot__settingsAction {
+  border-color: var(--ai-chat-border);
+  color: var(--ai-chat-text);
+}
+
+.AiChatbot__settingsAction:hover:not(:disabled) {
+  border-color: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 54%,
+    var(--ai-chat-border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--tx-color-primary, #3082ff) 9%,
+    var(--tx-bg-color, #ffffff)
+  );
+}
+
+.AiChatbot__errorAction:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.AiChatbot__errorAction:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--tx-color-primary, #3082ff) 60%, transparent);
+  outline-offset: 2px;
+}
+
+.AiChatbot__errorAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .AiChatbot__copyFailureNotice,

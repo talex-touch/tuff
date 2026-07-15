@@ -12,6 +12,8 @@ type PluginChannelWithMain = PluginChannelClient & {
 
 type HostOnlyIntelligenceMethod
   = | 'contextPrepareTurn'
+    | 'contextListCheckpoints'
+    | 'contextListPackageLogs'
     | 'contextCreateCompressionSnapshot'
     | 'contextListCompressionSnapshots'
     | 'contextGetLatestCompressionSnapshot'
@@ -34,9 +36,36 @@ type HostOnlyIntelligenceMethod
     | 'getMonthStats'
     | 'getUsageStats'
     | 'getLocalEnvironment'
+    | 'agentSessionStart'
+    | 'agentSessionHeartbeat'
+    | 'agentSessionPause'
+    | 'agentSessionRecoverable'
+    | 'agentSessionResume'
+    | 'agentSessionCancel'
+    | 'agentSessionGetState'
+    | 'agentPlan'
+    | 'agentExecute'
+    | 'agentReflect'
+    | 'agentToolCall'
+    | 'agentToolResult'
+    | 'agentToolApprove'
+    | 'agentSessionStream'
+    | 'agentSessionSubscribe'
+    | 'agentSessionHistory'
+    | 'agentSessionTrace'
+    | 'agentSessionTraceExport'
+    | 'workflowList'
+    | 'workflowGet'
+    | 'workflowSave'
+    | 'workflowDelete'
+    | 'workflowRun'
+    | 'workflowHistory'
+    | 'workflowReviewUpdate'
 
 const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> = {
   contextPrepareTurn: true,
+  contextListCheckpoints: true,
+  contextListPackageLogs: true,
   contextCreateCompressionSnapshot: true,
   contextListCompressionSnapshots: true,
   contextGetLatestCompressionSnapshot: true,
@@ -59,6 +88,31 @@ const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> =
   getMonthStats: true,
   getUsageStats: true,
   getLocalEnvironment: true,
+  agentSessionStart: true,
+  agentSessionHeartbeat: true,
+  agentSessionPause: true,
+  agentSessionRecoverable: true,
+  agentSessionResume: true,
+  agentSessionCancel: true,
+  agentSessionGetState: true,
+  agentPlan: true,
+  agentExecute: true,
+  agentReflect: true,
+  agentToolCall: true,
+  agentToolResult: true,
+  agentToolApprove: true,
+  agentSessionStream: true,
+  agentSessionSubscribe: true,
+  agentSessionHistory: true,
+  agentSessionTrace: true,
+  agentSessionTraceExport: true,
+  workflowList: true,
+  workflowGet: true,
+  workflowSave: true,
+  workflowDelete: true,
+  workflowRun: true,
+  workflowHistory: true,
+  workflowReviewUpdate: true,
 }
 
 function isHostOnlyMethod(property: PropertyKey): boolean {

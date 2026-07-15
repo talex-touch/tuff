@@ -21,8 +21,10 @@ import {
 } from '@talex-touch/tuff-intelligence'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentManager } from './agents'
+import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
+import { markOuterGovernedInvocation } from './intelligence-invoke-governance'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { setIntelligenceProviderManager, TuffIntelligenceSDK } from './intelligence-sdk'
 
@@ -272,9 +274,13 @@ describe('tuffIntelligenceSDK quota verification', () => {
     })
 
     await expect(
-      sdk.invoke('text.chat', { messages: [{ role: 'user', content: 'hello' }] }, {
-        metadata: { caller: 'quota-unavailable-caller' }
-      })
+      sdk.invoke(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'hello' }] },
+        {
+          metadata: { caller: 'quota-unavailable-caller' }
+        }
+      )
     ).rejects.toMatchObject({ code: 'QUOTA_CHECK_UNAVAILABLE' })
     expect(provider.chat).not.toHaveBeenCalled()
   })
@@ -309,12 +315,309 @@ describe('tuffIntelligenceSDK quota verification', () => {
       enableQuota: true,
       enableCache: false
     })
-    const stream = sdk.stream('text.chat', { messages: [{ role: 'user', content: 'hello' }] }, {
-      metadata: { caller: 'quota-unavailable-caller' }
-    })
+    const stream = sdk.stream(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'hello' }] },
+      {
+        metadata: { caller: 'quota-unavailable-caller' }
+      }
+    )
 
     await expect(stream.next()).rejects.toMatchObject({ code: 'QUOTA_CHECK_UNAVAILABLE' })
     expect(provider.chatStream).not.toHaveBeenCalled()
+  })
+})
+
+describe('tuffIntelligenceSDK outer-governed invokes', () => {
+  it('runs marked invokes without inner governance while unmarked invokes retain it', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test outer invoke governance',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+    const chatInvoke = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: 'outer-governed response',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        model: 'governed-chat',
+        latency: 4,
+        traceId: 'trace-outer-governed',
+        provider: IntelligenceProviderType.LOCAL
+      })
+      .mockResolvedValueOnce({
+        result: 'direct response',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        model: 'governed-chat',
+        latency: 5,
+        traceId: 'trace-direct',
+        provider: IntelligenceProviderType.LOCAL
+      })
+    const provider = createProvider(
+      {
+        id: 'governed-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Governed Chat',
+        enabled: true,
+        priority: 1,
+        models: ['governed-chat'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chat = chatInvoke
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const quotaCheck = vi
+      .spyOn(intelligenceQuotaManager, 'checkQuota')
+      .mockResolvedValue({ allowed: true })
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: true,
+      enableCache: false
+    })
+    const payload = { messages: [{ role: 'user', content: 'hello' }] }
+
+    const outerGovernedResult = await sdk.invoke<string>(
+      'text.chat',
+      payload,
+      markOuterGovernedInvocation({ metadata: { caller: 'workflow:outer-governed' } })
+    )
+
+    expect(outerGovernedResult.result).toBe('outer-governed response')
+    expect(chatInvoke).toHaveBeenCalledOnce()
+    expect(quotaCheck).not.toHaveBeenCalled()
+    expect(auditLog).not.toHaveBeenCalled()
+
+    const directResult = await sdk.invoke<string>('text.chat', payload, {
+      metadata: { caller: 'workflow:outer-governed' }
+    })
+
+    expect(directResult.result).toBe('direct response')
+    expect(chatInvoke).toHaveBeenCalledTimes(2)
+    expect(quotaCheck).toHaveBeenCalledOnce()
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityId: 'text.chat',
+        caller: 'workflow:outer-governed',
+        success: true
+      })
+    )
+  })
+
+  it('preserves provider fallback while suppressing the marked invocation failure audit', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test outer-governed failure audit suppression',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+    const primaryChat = vi.fn().mockRejectedValue(new Error('primary provider failed'))
+    const fallbackChat = vi.fn().mockResolvedValue({
+      result: 'fallback response',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'fallback-governed-chat',
+      latency: 8,
+      traceId: 'trace-outer-governed-fallback',
+      provider: IntelligenceProviderType.LOCAL
+    })
+    const primaryProvider = createProvider(
+      {
+        id: 'primary-governed-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Primary Governed Chat',
+        enabled: true,
+        priority: 1,
+        models: ['primary-governed-chat'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    primaryProvider.chat = primaryChat
+    const fallbackProvider = createProvider(
+      {
+        id: 'fallback-governed-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Fallback Governed Chat',
+        enabled: true,
+        priority: 2,
+        models: ['fallback-governed-chat'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    fallbackProvider.chat = fallbackChat
+    setIntelligenceProviderManager(new FakeProviderManager([primaryProvider, fallbackProvider]))
+    const quotaCheck = vi
+      .spyOn(intelligenceQuotaManager, 'checkQuota')
+      .mockResolvedValue({ allowed: true })
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: true,
+      enableCache: false
+    })
+
+    const result = await sdk.invoke<string>(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'hello' }] },
+      markOuterGovernedInvocation({ metadata: { caller: 'workflow:outer-governed' } })
+    )
+
+    expect(result.result).toBe('fallback response')
+    expect(primaryChat).toHaveBeenCalledOnce()
+    expect(fallbackChat).toHaveBeenCalledOnce()
+    expect(quotaCheck).not.toHaveBeenCalled()
+    expect(auditLog).not.toHaveBeenCalled()
+  })
+  it('records one fallback success and caches the ordinary invocation', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test ordinary fallback audit and cache',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM]
+    })
+    const primaryChat = vi.fn().mockRejectedValue(new Error('primary provider failed'))
+    const fallbackUsage = { promptTokens: 13, completionTokens: 8, totalTokens: 21 }
+    const fallbackChat = vi.fn().mockResolvedValue({
+      result: 'cached fallback response',
+      usage: fallbackUsage,
+      model: 'fallback-model',
+      latency: 17,
+      traceId: 'trace-ordinary-fallback',
+      provider: IntelligenceProviderType.CUSTOM
+    })
+    const primaryProvider = createProvider(
+      {
+        id: 'ordinary-primary-chat',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'Ordinary Primary Chat',
+        apiKey: 'ordinary-primary-key',
+        enabled: true,
+        priority: 1,
+        models: ['primary-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    primaryProvider.chat = primaryChat
+    const fallbackProvider = createProvider(
+      {
+        id: 'ordinary-fallback-chat',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Ordinary Fallback Chat',
+        apiKey: 'ordinary-fallback-key',
+        enabled: true,
+        priority: 2,
+        models: ['fallback-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    fallbackProvider.chat = fallbackChat
+    setIntelligenceProviderManager(new FakeProviderManager([primaryProvider, fallbackProvider]))
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: false,
+      enableCache: true
+    })
+    const payload = { messages: [{ role: 'user', content: 'cache this fallback' }] }
+
+    const firstResult = await sdk.invoke<string>('text.chat', payload)
+    const cachedResult = await sdk.invoke<string>('text.chat', payload)
+
+    expect(firstResult).toMatchObject({
+      result: 'cached fallback response',
+      provider: IntelligenceProviderType.CUSTOM,
+      model: 'fallback-model',
+      traceId: 'trace-ordinary-fallback',
+      usage: fallbackUsage,
+      latency: 17
+    })
+    expect(cachedResult).toEqual(firstResult)
+    expect(primaryChat).toHaveBeenCalledOnce()
+    expect(fallbackChat).toHaveBeenCalledOnce()
+    expect(auditLog).toHaveBeenCalledTimes(1)
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        provider: IntelligenceProviderType.CUSTOM,
+        model: 'fallback-model',
+        traceId: 'trace-ordinary-fallback',
+        usage: fallbackUsage,
+        latency: 17
+      })
+    )
+  })
+
+  it('writes one failure audit and rejects with the primary error when every provider fails', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test ordinary fallback total failure audit',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM]
+    })
+    const primaryFailure = new Error('primary provider failed')
+    const primaryChat = vi.fn().mockRejectedValue(primaryFailure)
+    const fallbackChat = vi.fn().mockRejectedValue(new Error('fallback provider failed'))
+    const primaryProvider = createProvider(
+      {
+        id: 'failing-primary-chat',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'Failing Primary Chat',
+        apiKey: 'failing-primary-key',
+        enabled: true,
+        priority: 1,
+        models: ['primary-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    primaryProvider.chat = primaryChat
+    const fallbackProvider = createProvider(
+      {
+        id: 'failing-fallback-chat',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Failing Fallback Chat',
+        apiKey: 'failing-fallback-key',
+        enabled: true,
+        priority: 2,
+        models: ['fallback-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    fallbackProvider.chat = fallbackChat
+    setIntelligenceProviderManager(new FakeProviderManager([primaryProvider, fallbackProvider]))
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: false,
+      enableCache: true
+    })
+
+    await expect(
+      sdk.invoke<string>('text.chat', {
+        messages: [{ role: 'user', content: 'all providers fail' }]
+      })
+    ).rejects.toBe(primaryFailure)
+
+    expect(primaryChat).toHaveBeenCalledOnce()
+    expect(fallbackChat).toHaveBeenCalledOnce()
+    expect(auditLog).toHaveBeenCalledTimes(1)
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        provider: 'failing-primary-chat',
+        error: 'primary provider failed'
+      })
+    )
   })
 })
 
