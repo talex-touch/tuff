@@ -974,9 +974,14 @@ export class TuffIntelligenceRuntime {
 
       const capabilityId =
         node.type === 'capability' && node.capabilityId ? node.capabilityId : 'text.chat'
+      const caller =
+        typeof options.metadata?.caller === 'string' && options.metadata.caller.trim()
+          ? options.metadata.caller.trim()
+          : 'intelligence.orchestrator'
       const invokeOptions: IntelligenceInvokeOptions = {
         metadata: {
-          caller: 'intelligence.orchestrator',
+          ...options.metadata,
+          caller,
           sessionId: stored.session.id,
           turnId: turn.id
         }

@@ -2,30 +2,34 @@ import type {
   CompressionSnapshotDraft,
   CompressionSnapshotMetadata,
   ContextPackage,
-  MemoryItem,
+  MemoryItem
 } from '@talex-touch/utils/types/intelligence'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ContextHygieneService, isMemoryUsableForContext } from './intelligence-context-hygiene'
+import {
+  ContextHygieneService,
+  isContextInputProviderSafe,
+  isMemoryUsableForContext
+} from './intelligence-context-hygiene'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 
 interface FakeRow extends Record<string, unknown> {}
 
 const dbMock = vi.hoisted(() => ({
   client: {
-    execute: vi.fn(),
-  },
+    execute: vi.fn()
+  }
 }))
 
 vi.mock('../database', () => ({
   databaseModule: {
-    getClient: () => dbMock.client,
-  },
+    getClient: () => dbMock.client
+  }
 }))
 
 vi.mock('../../db/db-write-scheduler', () => ({
   dbWriteScheduler: {
-    schedule: vi.fn(async (_label: string, operation: () => Promise<unknown>) => operation()),
-  },
+    schedule: vi.fn(async (_label: string, operation: () => Promise<unknown>) => operation())
+  }
 }))
 
 vi.mock('./intelligence-local-knowledge-engine', () => ({
@@ -35,9 +39,9 @@ vi.mock('./intelligence-local-knowledge-engine', () => ({
       contextText: '',
       chunks: [],
       tokenEstimate: 0,
-      citations: [],
-    })),
-  },
+      citations: []
+    }))
+  }
 }))
 
 function rows(value: FakeRow[] = [], rowsAffected = 0) {
@@ -55,7 +59,7 @@ function compressionSessionRow(overrides: FakeRow = {}): FakeRow {
     created_at: 1,
     updated_at: 100,
     archived_at: null,
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -75,34 +79,33 @@ function compressionSnapshotRow(overrides: FakeRow = {}): FakeRow {
       privacyLevel: 'normal',
       factState: 'confirmed',
       confidence: 0.9,
-      checkpointId: 'checkpoint-1',
+      checkpointId: 'checkpoint-1'
     }),
     created_at: 90,
-    ...overrides,
+    ...overrides
   }
 }
 
 function mockPrepareTurnWithCompressionSnapshot(
   snapshot: FakeRow,
   tombstonedMemoryId?: string,
-  sourcePrivacy: 'normal' | 'sensitive' | 'secret' = 'normal',
+  sourcePrivacy: 'normal' | 'sensitive' | 'secret' = 'normal'
 ): void {
   dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
     const sql = typeof statement === 'string' ? statement : statement.sql
     if (sql.includes('SELECT * FROM intelligence_context_sessions'))
       return rows([compressionSessionRow({ updated_at: Date.now() })])
-    if (sql.includes('FROM intelligence_compression_snapshots'))
-      return rows([snapshot])
+    if (sql.includes('FROM intelligence_compression_snapshots')) return rows([snapshot])
     if (sql.includes('(id = ? OR id = ?)')) {
       return rows([
         { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-        { id: 'turn-2', privacy_level: sourcePrivacy, created_at: 20 },
+        { id: 'turn-2', privacy_level: sourcePrivacy, created_at: 20 }
       ])
     }
     if (sql.includes('created_at >= ?')) {
       return rows([
         { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-        { id: 'turn-2', privacy_level: sourcePrivacy, created_at: 20 },
+        { id: 'turn-2', privacy_level: sourcePrivacy, created_at: 20 }
       ])
     }
     if (sql.includes('FROM intelligence_memory_tombstones'))
@@ -117,8 +120,8 @@ function mockPrepareTurnWithCompressionSnapshot(
           privacy_level: 'normal',
           token_estimate: 4,
           metadata: null,
-          created_at: 80,
-        },
+          created_at: 80
+        }
       ])
     }
     return rows([])
@@ -130,6 +133,25 @@ describe('contextHygieneService', () => {
     vi.clearAllMocks()
     dbMock.client.execute.mockReset()
     delete process.env.TUFF_INTELLIGENCE_CONTEXT_COREBOX_ONLY
+  })
+
+  it.each([
+    {
+      name: 'a realistic Bearer credential',
+      content: 'Authorization: Bearer synthetic_bearer_token-Alpha.0123456789~+/',
+      safe: false
+    },
+    {
+      name: 'a standalone realistic JWT',
+      content:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJyb2xlIjoidXNlciJ9.synthetic-signature-0123456789',
+      safe: false
+    },
+    { name: 'a short Bearer placeholder', content: 'Bearer token', safe: true },
+    { name: 'an angle-bracket Bearer placeholder', content: 'Bearer <token>', safe: true },
+    { name: 'generic dotted text', content: 'foo.bar.baz', safe: true }
+  ])('classifies $name through the provider-safe boundary', ({ content, safe }) => {
+    expect(isContextInputProviderSafe(content)).toBe(safe)
   })
 
   it('fails closed for invalid, expired, and unscoped memories', () => {
@@ -146,7 +168,7 @@ describe('contextHygieneService', () => {
       enabled: true,
       createdAt: 1_000,
       updatedAt: 9_000,
-      usageCount: 0,
+      usageCount: 0
     }
 
     expect(isMemoryUsableForContext(baseMemory, 'session-1', now)).toBe(true)
@@ -154,27 +176,27 @@ describe('contextHygieneService', () => {
       isMemoryUsableForContext(
         { ...baseMemory, scope: 'session', sourceSessionId: 'session-1' },
         'session-1',
-        now,
-      ),
+        now
+      )
     ).toBe(true)
     expect(
       isMemoryUsableForContext(
         { ...baseMemory, scope: 'session', sourceSessionId: 'session-2' },
         'session-1',
-        now,
-      ),
+        now
+      )
     ).toBe(false)
     expect(isMemoryUsableForContext({ ...baseMemory, scope: 'workspace' }, 'session-1', now)).toBe(
-      false,
+      false
     )
     expect(isMemoryUsableForContext({ ...baseMemory, scope: 'project' }, 'session-1', now)).toBe(
-      false,
+      false
     )
     expect(isMemoryUsableForContext({ ...baseMemory, enabled: false }, 'session-1', now)).toBe(
-      false,
+      false
     )
     expect(
-      isMemoryUsableForContext({ ...baseMemory, privacyLevel: 'sensitive' }, 'session-1', now),
+      isMemoryUsableForContext({ ...baseMemory, privacyLevel: 'sensitive' }, 'session-1', now)
     ).toBe(false)
     expect(isMemoryUsableForContext({ ...baseMemory, ttl: 1_000 }, 'session-1', now)).toBe(false)
     expect(isMemoryUsableForContext({ ...baseMemory, ttl: 1_001 }, 'session-1', now)).toBe(true)
@@ -188,22 +210,22 @@ describe('contextHygieneService', () => {
       owner: 'corebox',
       input: 'Summarize current clipboard',
       tokenBudget: 120,
-      traceId: 'trace-1',
+      traceId: 'trace-1'
     })
 
     expect(result.session.owner).toBe('corebox')
     expect(result.checkpoint).toMatchObject({
       type: 'session_start',
-      contextScope: 'light',
+      contextScope: 'light'
     })
-    expect(result.package.items.map(item => item.sourceType)).toEqual(['current_input'])
+    expect(result.package.items.map((item) => item.sourceType)).toEqual(['current_input'])
     expect(result.package.items[0]).toMatchObject({
-      reason: 'current user input',
+      reason: 'current user input'
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        sql: expect.stringContaining('INSERT INTO intelligence_context_sessions'),
-      }),
+        sql: expect.stringContaining('INSERT INTO intelligence_context_sessions')
+      })
     )
   })
 
@@ -216,18 +238,18 @@ describe('contextHygieneService', () => {
       input: 'Answer without history',
       explicitScope: 'none',
       startNewSession: true,
-      metadata: { contextActorId: 'touch-intelligence' },
+      metadata: { contextActorId: 'touch-intelligence' }
     })
 
     expect(result.package.scope).toBe('none')
     expect(result.package.items).toHaveLength(1)
     expect(result.package.items[0]).toMatchObject({
       sourceType: 'current_input',
-      content: 'Answer without history',
+      content: 'Answer without history'
     })
     expect(result.checkpoint).toMatchObject({
       type: 'session_start',
-      contextScope: 'none',
+      contextScope: 'none'
     })
   })
 
@@ -245,9 +267,9 @@ describe('contextHygieneService', () => {
             metadata: null,
             created_at: now - 1000,
             updated_at: now,
-            archived_at: null,
-          },
-        ]),
+            archived_at: null
+          }
+        ])
       )
       .mockResolvedValue(rows([]))
     const service = new ContextHygieneService()
@@ -258,14 +280,14 @@ describe('contextHygieneService', () => {
       continueSession: true,
       input: 'Use retrieval without history',
       explicitScope: 'retrieval',
-      metadata: { noHistory: true },
+      metadata: { noHistory: true }
     })
 
     expect(result.package.scope).toBe('retrieval')
     expect(result.package.items).toHaveLength(1)
     expect(result.package.items[0]).toMatchObject({
       sourceType: 'current_input',
-      content: 'Use retrieval without history',
+      content: 'Use retrieval without history'
     })
     expect(JSON.stringify(result.package.items)).not.toContain('prior summary')
   })
@@ -282,9 +304,9 @@ describe('contextHygieneService', () => {
           metadata: JSON.stringify({ contextActorId: 'plugin-a' }),
           created_at: 1,
           updated_at: 2,
-          archived_at: null,
-        },
-      ]),
+          archived_at: null
+        }
+      ])
     )
     const service = new ContextHygieneService()
 
@@ -295,8 +317,8 @@ describe('contextHygieneService', () => {
         input: 'Read another plugin session',
         explicitScope: 'retrieval',
         continueSession: true,
-        metadata: { contextActorId: 'plugin-b' },
-      }),
+        metadata: { contextActorId: 'plugin-b' }
+      })
     ).rejects.toThrow('CONTEXT_SESSION_SCOPE_MISMATCH')
     expect(dbMock.client.execute).toHaveBeenCalledTimes(1)
   })
@@ -346,9 +368,9 @@ describe('contextHygieneService', () => {
             metadata: null,
             created_at: now - 1000,
             updated_at: now,
-            archived_at: null,
-          },
-        ]),
+            archived_at: null
+          }
+        ])
       )
       .mockResolvedValueOnce(rows([]))
       .mockResolvedValueOnce(rows([]))
@@ -363,9 +385,9 @@ describe('contextHygieneService', () => {
             privacy_level: 'normal',
             token_estimate: 5,
             metadata: null,
-            created_at: now - 500,
-          },
-        ]),
+            created_at: now - 500
+          }
+        ])
       )
       .mockResolvedValueOnce(rows([]))
       .mockResolvedValue(rows([]))
@@ -376,7 +398,7 @@ describe('contextHygieneService', () => {
       sessionId: 'session-1',
       continueSession: true,
       input: 'continue it',
-      tokenBudget: 120,
+      tokenBudget: 120
     })
 
     expect(result.session.id).toBe('session-1')
@@ -387,61 +409,138 @@ describe('contextHygieneService', () => {
         expect.objectContaining({
           sourceType: 'recent_turn',
           sourceId: 'turn-old',
-          reason: 'explicit session continuation',
-        }),
-      ]),
+          reason: 'explicit session continuation'
+        })
+      ])
     )
   })
 
-  it('continues an archived session in a fresh checkpointed session with only its safe snapshot', async () => {
-    const writes: Array<{ sql: string, args: unknown[] }> = []
-    dbMock.client.execute.mockImplementation(async (statement: string | { sql: string, args?: unknown[] }) => {
-      const sql = typeof statement === 'string' ? statement : statement.sql
-      const args = typeof statement === 'string' ? [] : (statement.args ?? [])
-      if (sql.includes('SELECT * FROM intelligence_context_sessions')) {
-        return rows([compressionSessionRow({
-          id: 'archived-source',
-          status: 'archived',
-          summary: 'legacy summary must lose to the snapshot',
-          archived_at: 10,
-        })])
-      }
-      if (sql.includes('FROM intelligence_compression_snapshots'))
-        return args[0] === 'archived-source'
-          ? rows([compressionSnapshotRow({ session_id: 'archived-source' })])
-          : rows([])
-      if (sql.includes('(id = ? OR id = ?)')) {
-        return rows([
-          { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'normal', created_at: 20 },
-        ])
-      }
-      if (sql.includes('created_at >= ? AND created_at <= ?')) {
-        return rows([
-          { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'normal', created_at: 20 },
-        ])
-      }
-      if (sql.includes('SELECT * FROM intelligence_context_turns')) {
-        return args[0] === 'archived-source'
-          ? rows([{
-              id: 'source-raw-turn',
-              session_id: 'archived-source',
-              role: 'assistant',
-              content: 'source raw history must never continue',
-              privacy_level: 'normal',
-              token_estimate: 8,
+  it('uses the current CJK estimate for a persisted normal turn without rewriting it', async () => {
+    const statements: Array<{ sql: string; args: unknown[] }> = []
+    const now = Date.now()
+    dbMock.client.execute.mockImplementation(
+      async (statement: string | { sql: string; args?: unknown[] }) => {
+        if (typeof statement === 'string') return rows([])
+
+        const args = statement.args ?? []
+        statements.push({ sql: statement.sql, args })
+        if (statement.sql.includes('SELECT * FROM intelligence_context_sessions')) {
+          return rows([
+            {
+              id: 'session-legacy-cjk',
+              owner: 'corebox',
+              status: 'active',
+              objective: null,
+              summary: null,
               metadata: null,
-              created_at: 20,
-            }])
-          : rows([])
+              created_at: now - 100,
+              updated_at: now,
+              archived_at: null
+            }
+          ])
+        }
+        if (statement.sql.includes('FROM intelligence_compression_snapshots')) return rows([])
+        if (statement.sql.includes('SELECT * FROM intelligence_context_turns')) {
+          return rows([
+            {
+              id: 'turn-legacy-cjk',
+              session_id: 'session-legacy-cjk',
+              role: 'assistant',
+              content: '中文中文中文',
+              privacy_level: 'normal',
+              token_estimate: 1,
+              metadata: null,
+              created_at: now - 50
+            }
+          ])
+        }
+        if (statement.sql.includes('FROM intelligence_memory_items')) return rows([])
+        return rows([])
       }
-      if (sql.includes('INSERT INTO intelligence_context_sessions')
-        || sql.includes('INSERT INTO intelligence_context_checkpoints')) {
-        writes.push({ sql, args })
-      }
-      return rows([])
+    )
+    const service = new ContextHygieneService()
+
+    const result = await service.prepareTurn({
+      owner: 'corebox',
+      sessionId: 'session-legacy-cjk',
+      continueSession: true,
+      explicitScope: 'session',
+      input: 'ask',
+      tokenBudget: 10
     })
+
+    expect(result.package.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: 'recent_turn',
+          sourceId: 'turn-legacy-cjk',
+          tokenEstimate: 6
+        })
+      ])
+    )
+    expect(result.package.tokenEstimate).toBe(7)
+    expect(
+      statements.some((statement) => statement.sql.includes('UPDATE intelligence_context_turns'))
+    ).toBe(false)
+  })
+
+  it('continues an archived session in a fresh checkpointed session with only its safe snapshot', async () => {
+    const writes: Array<{ sql: string; args: unknown[] }> = []
+    dbMock.client.execute.mockImplementation(
+      async (statement: string | { sql: string; args?: unknown[] }) => {
+        const sql = typeof statement === 'string' ? statement : statement.sql
+        const args = typeof statement === 'string' ? [] : (statement.args ?? [])
+        if (sql.includes('SELECT * FROM intelligence_context_sessions')) {
+          return rows([
+            compressionSessionRow({
+              id: 'archived-source',
+              status: 'archived',
+              summary: 'legacy summary must lose to the snapshot',
+              archived_at: 10
+            })
+          ])
+        }
+        if (sql.includes('FROM intelligence_compression_snapshots'))
+          return args[0] === 'archived-source'
+            ? rows([compressionSnapshotRow({ session_id: 'archived-source' })])
+            : rows([])
+        if (sql.includes('(id = ? OR id = ?)')) {
+          return rows([
+            { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
+            { id: 'turn-2', privacy_level: 'normal', created_at: 20 }
+          ])
+        }
+        if (sql.includes('created_at >= ? AND created_at <= ?')) {
+          return rows([
+            { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
+            { id: 'turn-2', privacy_level: 'normal', created_at: 20 }
+          ])
+        }
+        if (sql.includes('SELECT * FROM intelligence_context_turns')) {
+          return args[0] === 'archived-source'
+            ? rows([
+                {
+                  id: 'source-raw-turn',
+                  session_id: 'archived-source',
+                  role: 'assistant',
+                  content: 'source raw history must never continue',
+                  privacy_level: 'normal',
+                  token_estimate: 8,
+                  metadata: null,
+                  created_at: 20
+                }
+              ])
+            : rows([])
+        }
+        if (
+          sql.includes('INSERT INTO intelligence_context_sessions') ||
+          sql.includes('INSERT INTO intelligence_context_checkpoints')
+        ) {
+          writes.push({ sql, args })
+        }
+        return rows([])
+      }
+    )
 
     const result = await new ContextHygieneService().prepareTurn({
       owner: 'corebox',
@@ -449,7 +548,7 @@ describe('contextHygieneService', () => {
       continueSession: true,
       input: 'Continue safely from the archive',
       explicitScope: 'session',
-      tokenBudget: 1_200,
+      tokenBudget: 1_200
     })
 
     expect(result.session.id).not.toBe('archived-source')
@@ -458,44 +557,59 @@ describe('contextHygieneService', () => {
       reason: 'archived-session-continuation',
       metadata: {
         continuedFromSessionId: 'archived-source',
-        continuationReason: 'archived-session-continuation',
-      },
+        continuationReason: 'archived-session-continuation'
+      }
     })
     expect(result.continuation).toEqual({
       sourceSessionId: 'archived-source',
       reason: 'archived-session-continuation',
       status: 'included',
       summarySourceType: 'compression_snapshot',
-      summarySourceId: 'snapshot-1',
+      summarySourceId: 'snapshot-1'
     })
-    expect(result.package.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        sourceType: 'summary',
-        sourceId: 'snapshot-1',
-      }),
-      expect.objectContaining({
-        sourceType: 'current_input',
-        content: 'Continue safely from the archive',
-      }),
-    ]))
+    expect(result.package.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: 'summary',
+          sourceId: 'snapshot-1'
+        }),
+        expect.objectContaining({
+          sourceType: 'current_input',
+          content: 'Continue safely from the archive'
+        })
+      ])
+    )
     expect(JSON.stringify(result.package.items)).not.toContain('source raw history')
-    expect(JSON.stringify(result.package.items)).not.toContain('legacy summary must lose to the snapshot')
-    expect(result.package.items.filter(item => item.sourceType === 'summary')).toHaveLength(1)
-    expect(result.package.items.some(item => item.sourceType === 'recent_turn')).toBe(false)
-    expect(writes.find(write => write.sql.includes('INSERT INTO intelligence_context_sessions'))?.args[0])
-      .not.toBe('archived-source')
-    expect(writes.find(write => write.sql.includes('INSERT INTO intelligence_context_checkpoints'))?.args)
-      .toEqual(expect.arrayContaining([
+    expect(JSON.stringify(result.package.items)).not.toContain(
+      'legacy summary must lose to the snapshot'
+    )
+    expect(result.package.items.filter((item) => item.sourceType === 'summary')).toHaveLength(1)
+    expect(result.package.items.some((item) => item.sourceType === 'recent_turn')).toBe(false)
+    expect(
+      writes.find((write) => write.sql.includes('INSERT INTO intelligence_context_sessions'))
+        ?.args[0]
+    ).not.toBe('archived-source')
+    expect(
+      writes.find((write) => write.sql.includes('INSERT INTO intelligence_context_checkpoints'))
+        ?.args
+    ).toEqual(
+      expect.arrayContaining([
         result.checkpoint?.id,
         result.session.id,
         'session_start',
-        'archived-session-continuation',
-      ]))
-    expect(writes.find(write => write.sql.includes('INSERT INTO intelligence_context_checkpoints'))?.args.at(-2))
-      .toBe(JSON.stringify({
+        'archived-session-continuation'
+      ])
+    )
+    expect(
+      writes
+        .find((write) => write.sql.includes('INSERT INTO intelligence_context_checkpoints'))
+        ?.args.at(-2)
+    ).toBe(
+      JSON.stringify({
         continuedFromSessionId: 'archived-source',
-        continuationReason: 'archived-session-continuation',
-      }))
+        continuationReason: 'archived-session-continuation'
+      })
+    )
   })
 
   it.each([
@@ -506,13 +620,13 @@ describe('contextHygieneService', () => {
         id: 'blocked-source',
         status: 'archived',
         summary: 'token = source-summary-secret',
-        archived_at: 10,
+        archived_at: 10
       }),
       reason: 'archived-session-continuation',
       status: 'excluded',
       degradedReason: 'summary-content-blocked',
       summarySourceType: 'session_summary',
-      summarySourceId: 'blocked-source',
+      summarySourceId: 'blocked-source'
     },
     {
       name: 'missing source session',
@@ -520,51 +634,56 @@ describe('contextHygieneService', () => {
       source: null,
       reason: 'continuation-session-missing',
       status: 'unavailable',
-      degradedReason: 'continuation-source-session-missing',
-    },
-  ])('keeps current input while continuation is unavailable for $name', async ({
-    sourceSessionId,
-    source,
-    reason,
-    status,
-    degradedReason,
-    summarySourceType,
-    summarySourceId,
-  }) => {
-    dbMock.client.execute.mockImplementation(async (statement: string | { sql: string, args?: unknown[] }) => {
-      const sql = typeof statement === 'string' ? statement : statement.sql
-      if (sql.includes('SELECT * FROM intelligence_context_sessions'))
-        return rows(source ? [source] : [])
-      if (sql.includes('FROM intelligence_compression_snapshots'))
-        return rows([])
-      return rows([])
-    })
-
-    const result = await new ContextHygieneService().prepareTurn({
-      owner: 'corebox',
-      sessionId: sourceSessionId,
-      continueSession: true,
-      input: 'Keep only the current question',
-      explicitScope: 'session',
-    })
-
-    expect(result.session.id).not.toBe(sourceSessionId)
-    expect(result.package.items).toEqual([
-      expect.objectContaining({
-        sourceType: 'current_input',
-        content: 'Keep only the current question',
-      }),
-    ])
-    expect(result.continuation).toMatchObject({
+      degradedReason: 'continuation-source-session-missing'
+    }
+  ])(
+    'keeps current input while continuation is unavailable for $name',
+    async ({
       sourceSessionId,
+      source,
       reason,
       status,
       degradedReason,
-      ...(summarySourceType ? { summarySourceType, summarySourceId } : {}),
-    })
-    expect(JSON.stringify({ checkpoint: result.checkpoint, continuation: result.continuation }))
-      .not.toContain('source-summary-secret')
-  })
+      summarySourceType,
+      summarySourceId
+    }) => {
+      dbMock.client.execute.mockImplementation(
+        async (statement: string | { sql: string; args?: unknown[] }) => {
+          const sql = typeof statement === 'string' ? statement : statement.sql
+          if (sql.includes('SELECT * FROM intelligence_context_sessions'))
+            return rows(source ? [source] : [])
+          if (sql.includes('FROM intelligence_compression_snapshots')) return rows([])
+          return rows([])
+        }
+      )
+
+      const result = await new ContextHygieneService().prepareTurn({
+        owner: 'corebox',
+        sessionId: sourceSessionId,
+        continueSession: true,
+        input: 'Keep only the current question',
+        explicitScope: 'session'
+      })
+
+      expect(result.session.id).not.toBe(sourceSessionId)
+      expect(result.package.items).toEqual([
+        expect.objectContaining({
+          sourceType: 'current_input',
+          content: 'Keep only the current question'
+        })
+      ])
+      expect(result.continuation).toMatchObject({
+        sourceSessionId,
+        reason,
+        status,
+        degradedReason,
+        ...(summarySourceType ? { summarySourceType, summarySourceId } : {})
+      })
+      expect(
+        JSON.stringify({ checkpoint: result.checkpoint, continuation: result.continuation })
+      ).not.toContain('source-summary-secret')
+    }
+  )
 
   it('writes a validated compression snapshot, checkpoint, and session CAS atomically', async () => {
     const statements: string[] = []
@@ -576,17 +695,16 @@ describe('contextHygieneService', () => {
       if (sql.includes('(id = ? OR id = ?)')) {
         return rows([
           { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'normal', created_at: 20 },
+          { id: 'turn-2', privacy_level: 'normal', created_at: 20 }
         ])
       }
       if (sql.includes('created_at >= ?')) {
         return rows([
           { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'normal', created_at: 20 },
+          { id: 'turn-2', privacy_level: 'normal', created_at: 20 }
         ])
       }
-      if (sql.includes('UPDATE intelligence_context_sessions'))
-        return rows([], 1)
+      if (sql.includes('UPDATE intelligence_context_sessions')) return rows([], 1)
       return rows([])
     })
     const service = new ContextHygieneService()
@@ -604,9 +722,9 @@ describe('contextHygieneService', () => {
         factState: 'confirmed' as const,
         confidence: 0.9,
         memoryIds: ['memory-1'],
-        ignoredField: 'not-persisted',
+        ignoredField: 'not-persisted'
       },
-      ignoredField: 'not-persisted',
+      ignoredField: 'not-persisted'
     } satisfies CompressionSnapshotDraft & {
       ignoredField: string
       metadata: CompressionSnapshotMetadata & { ignoredField: string }
@@ -615,12 +733,11 @@ describe('contextHygieneService', () => {
     const result = await service.createCompressionSnapshot({
       sessionId: 'session-1',
       expectedSessionUpdatedAt: 100,
-      snapshot,
+      snapshot
     })
 
     expect(result.status).toBe('created')
-    if (result.status !== 'created')
-      throw new Error('expected created compression snapshot')
+    if (result.status !== 'created') throw new Error('expected created compression snapshot')
     expect(result.snapshot).toMatchObject({
       sessionId: 'session-1',
       sourceTurnFrom: 'turn-1',
@@ -630,8 +747,8 @@ describe('contextHygieneService', () => {
         factState: 'confirmed',
         confidence: 0.9,
         memoryIds: ['memory-1'],
-        checkpointId: result.checkpoint.id,
-      },
+        checkpointId: result.checkpoint.id
+      }
     })
     expect(result.snapshot.metadata).not.toHaveProperty('ignoredField')
     expect(result.checkpoint).toMatchObject({
@@ -640,31 +757,35 @@ describe('contextHygieneService', () => {
       metadata: {
         snapshotId: result.snapshot.id,
         sourceTurnFrom: 'turn-1',
-        sourceTurnTo: 'turn-2',
-      },
+        sourceTurnTo: 'turn-2'
+      }
     })
     expect(statements[0]).toBe('BEGIN IMMEDIATE')
     expect(statements.at(-1)).toBe('COMMIT')
-    expect(statements).toEqual(expect.arrayContaining([
-      expect.stringContaining('INSERT INTO intelligence_compression_snapshots'),
-      expect.stringContaining('INSERT INTO intelligence_context_checkpoints'),
-      expect.stringContaining('UPDATE intelligence_context_sessions'),
-    ]))
-    expect(statements.some(sql => /\bDELETE\b/.test(sql))).toBe(false)
+    expect(statements).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('INSERT INTO intelligence_compression_snapshots'),
+        expect.stringContaining('INSERT INTO intelligence_context_checkpoints'),
+        expect.stringContaining('UPDATE intelligence_context_sessions')
+      ])
+    )
+    expect(statements.some((sql) => /\bDELETE\b/.test(sql))).toBe(false)
   })
 
   it('maps persisted compression snapshots without unknown metadata fields', async () => {
-    dbMock.client.execute.mockResolvedValueOnce(rows([
-      compressionSnapshotRow({
-        metadata: JSON.stringify({
-          privacyLevel: 'normal',
-          factState: 'confirmed',
-          confidence: 0.9,
-          checkpointId: 'checkpoint-1',
-          unknown: 'drop-me',
-        }),
-      }),
-    ]))
+    dbMock.client.execute.mockResolvedValueOnce(
+      rows([
+        compressionSnapshotRow({
+          metadata: JSON.stringify({
+            privacyLevel: 'normal',
+            factState: 'confirmed',
+            confidence: 0.9,
+            checkpointId: 'checkpoint-1',
+            unknown: 'drop-me'
+          })
+        })
+      ])
+    )
     const service = new ContextHygieneService()
 
     const result = await service.listCompressionSnapshots({ sessionId: 'session-1', limit: 5 })
@@ -676,58 +797,82 @@ describe('contextHygieneService', () => {
       metadata: {
         privacyLevel: 'normal',
         factState: 'confirmed',
-        checkpointId: 'checkpoint-1',
-      },
+        checkpointId: 'checkpoint-1'
+      }
     })
     expect(result.snapshots[0]?.metadata).not.toHaveProperty('unknown')
-    expect(dbMock.client.execute).toHaveBeenCalledWith(expect.objectContaining({
-      args: ['session-1', 5],
-    }))
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['session-1', 5]
+      })
+    )
   })
 
   it.each([
     ['missing-range', { currentState: 'State', sourceTurnFrom: '', sourceTurnTo: '' }],
-    ['oversized', { currentState: 'x'.repeat(4_001), sourceTurnFrom: 'turn-1', sourceTurnTo: 'turn-2' }],
-    ['malformed-array', { decisions: ['valid', 42], sourceTurnFrom: 'turn-1', sourceTurnTo: 'turn-2' }],
+    [
+      'oversized',
+      { currentState: 'x'.repeat(4_001), sourceTurnFrom: 'turn-1', sourceTurnTo: 'turn-2' }
+    ],
+    [
+      'malformed-array',
+      { decisions: ['valid', 42], sourceTurnFrom: 'turn-1', sourceTurnTo: 'turn-2' }
+    ]
   ])('rejects %s compression input before persistence', async (_name, snapshot) => {
     const service = new ContextHygieneService()
 
-    await expect(service.createCompressionSnapshot({
-      sessionId: 'session-1',
-      expectedSessionUpdatedAt: 100,
-      snapshot: snapshot as unknown as CompressionSnapshotDraft,
-    })).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID')
+    await expect(
+      service.createCompressionSnapshot({
+        sessionId: 'session-1',
+        expectedSessionUpdatedAt: 100,
+        snapshot: snapshot as unknown as CompressionSnapshotDraft
+      })
+    ).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID')
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
 
   it.each([
-    ['secret', { currentState: 'token = hidden-secret', sourceTurnFrom: 'turn-1', sourceTurnTo: 'turn-2' }],
-    ['sensitive', {
-      currentState: 'Sensitive state',
-      sourceTurnFrom: 'turn-1',
-      sourceTurnTo: 'turn-2',
-      metadata: { privacyLevel: 'sensitive' as const },
-    }],
-    ['user-rejected', {
-      currentState: 'Rejected state',
-      sourceTurnFrom: 'turn-1',
-      sourceTurnTo: 'turn-2',
-      metadata: { factState: 'user-rejected' as const },
-    }],
-    ['low-confidence', {
-      currentState: 'Uncertain state',
-      sourceTurnFrom: 'turn-1',
-      sourceTurnTo: 'turn-2',
-      metadata: { confidence: 0.2 },
-    }],
+    [
+      'secret',
+      { currentState: 'token = hidden-secret', sourceTurnFrom: 'turn-1', sourceTurnTo: 'turn-2' }
+    ],
+    [
+      'sensitive',
+      {
+        currentState: 'Sensitive state',
+        sourceTurnFrom: 'turn-1',
+        sourceTurnTo: 'turn-2',
+        metadata: { privacyLevel: 'sensitive' as const }
+      }
+    ],
+    [
+      'user-rejected',
+      {
+        currentState: 'Rejected state',
+        sourceTurnFrom: 'turn-1',
+        sourceTurnTo: 'turn-2',
+        metadata: { factState: 'user-rejected' as const }
+      }
+    ],
+    [
+      'low-confidence',
+      {
+        currentState: 'Uncertain state',
+        sourceTurnFrom: 'turn-1',
+        sourceTurnTo: 'turn-2',
+        metadata: { confidence: 0.2 }
+      }
+    ]
   ])('rejects %s snapshot policy input before persistence', async (_name, snapshot) => {
     const service = new ContextHygieneService()
 
-    await expect(service.createCompressionSnapshot({
-      sessionId: 'session-1',
-      expectedSessionUpdatedAt: 100,
-      snapshot,
-    })).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID')
+    await expect(
+      service.createCompressionSnapshot({
+        sessionId: 'session-1',
+        expectedSessionUpdatedAt: 100,
+        snapshot
+      })
+    ).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID')
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
 
@@ -748,22 +893,22 @@ describe('contextHygieneService', () => {
       snapshot: {
         currentState: 'Stale compression result',
         sourceTurnFrom: 'turn-1',
-        sourceTurnTo: 'turn-2',
-      },
+        sourceTurnTo: 'turn-2'
+      }
     })
 
     expect(result).toEqual({
       status: 'degraded',
       degradedReason: 'cas-conflict',
-      sessionUpdatedAt: 101,
+      sessionUpdatedAt: 101
     })
     expect(statements).toEqual([
       'BEGIN IMMEDIATE',
       'SELECT * FROM intelligence_context_sessions WHERE id = ? LIMIT 1',
-      'ROLLBACK',
+      'ROLLBACK'
     ])
-    expect(statements.some(sql => sql.includes('INSERT INTO'))).toBe(false)
-    expect(statements.some(sql => /\bDELETE\b/.test(sql))).toBe(false)
+    expect(statements.some((sql) => sql.includes('INSERT INTO'))).toBe(false)
+    expect(statements.some((sql) => /\bDELETE\b/.test(sql))).toBe(false)
   })
 
   it('rolls back snapshot and checkpoint writes when the final CAS loses', async () => {
@@ -776,13 +921,13 @@ describe('contextHygieneService', () => {
       if (sql.includes('(id = ? OR id = ?)')) {
         return rows([
           { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'normal', created_at: 20 },
+          { id: 'turn-2', privacy_level: 'normal', created_at: 20 }
         ])
       }
       if (sql.includes('created_at >= ?')) {
         return rows([
           { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'normal', created_at: 20 },
+          { id: 'turn-2', privacy_level: 'normal', created_at: 20 }
         ])
       }
       return rows([])
@@ -795,18 +940,20 @@ describe('contextHygieneService', () => {
       snapshot: {
         currentState: 'Concurrent result',
         sourceTurnFrom: 'turn-1',
-        sourceTurnTo: 'turn-2',
-      },
+        sourceTurnTo: 'turn-2'
+      }
     })
 
     expect(result).toMatchObject({ status: 'degraded', degradedReason: 'cas-conflict' })
     expect(statements).toContain('ROLLBACK')
     expect(statements).not.toContain('COMMIT')
-    expect(statements).toEqual(expect.arrayContaining([
-      expect.stringContaining('INSERT INTO intelligence_compression_snapshots'),
-      expect.stringContaining('INSERT INTO intelligence_context_checkpoints'),
-    ]))
-    expect(statements.some(sql => /\bDELETE\b/.test(sql))).toBe(false)
+    expect(statements).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('INSERT INTO intelligence_compression_snapshots'),
+        expect.stringContaining('INSERT INTO intelligence_context_checkpoints')
+      ])
+    )
+    expect(statements.some((sql) => /\bDELETE\b/.test(sql))).toBe(false)
   })
 
   it('rejects private source ranges and keeps every turn untouched', async () => {
@@ -819,31 +966,33 @@ describe('contextHygieneService', () => {
       if (sql.includes('(id = ? OR id = ?)')) {
         return rows([
           { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'secret', created_at: 20 },
+          { id: 'turn-2', privacy_level: 'secret', created_at: 20 }
         ])
       }
       if (sql.includes('created_at >= ?')) {
         return rows([
           { id: 'turn-1', privacy_level: 'normal', created_at: 10 },
-          { id: 'turn-2', privacy_level: 'secret', created_at: 20 },
+          { id: 'turn-2', privacy_level: 'secret', created_at: 20 }
         ])
       }
       return rows([])
     })
     const service = new ContextHygieneService()
 
-    await expect(service.createCompressionSnapshot({
-      sessionId: 'session-1',
-      expectedSessionUpdatedAt: 100,
-      snapshot: {
-        currentState: 'Private range',
-        sourceTurnFrom: 'turn-1',
-        sourceTurnTo: 'turn-2',
-      },
-    })).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID:source-range-privacy')
+    await expect(
+      service.createCompressionSnapshot({
+        sessionId: 'session-1',
+        expectedSessionUpdatedAt: 100,
+        snapshot: {
+          currentState: 'Private range',
+          sourceTurnFrom: 'turn-1',
+          sourceTurnTo: 'turn-2'
+        }
+      })
+    ).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID:source-range-privacy')
     expect(statements).toContain('ROLLBACK')
-    expect(statements.some(sql => sql.includes('INSERT INTO'))).toBe(false)
-    expect(statements.some(sql => /\bDELETE\b/.test(sql))).toBe(false)
+    expect(statements.some((sql) => sql.includes('INSERT INTO'))).toBe(false)
+    expect(statements.some((sql) => /\bDELETE\b/.test(sql))).toBe(false)
   })
 
   it('rejects a persisted source range with a missing endpoint', async () => {
@@ -859,18 +1008,20 @@ describe('contextHygieneService', () => {
     })
     const service = new ContextHygieneService()
 
-    await expect(service.createCompressionSnapshot({
-      sessionId: 'session-1',
-      expectedSessionUpdatedAt: 100,
-      snapshot: {
-        currentState: 'Missing endpoint',
-        sourceTurnFrom: 'turn-1',
-        sourceTurnTo: 'turn-missing',
-      },
-    })).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID:source-range-missing')
+    await expect(
+      service.createCompressionSnapshot({
+        sessionId: 'session-1',
+        expectedSessionUpdatedAt: 100,
+        snapshot: {
+          currentState: 'Missing endpoint',
+          sourceTurnFrom: 'turn-1',
+          sourceTurnTo: 'turn-missing'
+        }
+      })
+    ).rejects.toThrow('COMPRESSION_SNAPSHOT_INVALID:source-range-missing')
     expect(statements).toContain('ROLLBACK')
-    expect(statements.some(sql => sql.includes('INSERT INTO'))).toBe(false)
-    expect(statements.some(sql => /\bDELETE\b/.test(sql))).toBe(false)
+    expect(statements.some((sql) => sql.includes('INSERT INTO'))).toBe(false)
+    expect(statements.some((sql) => /\bDELETE\b/.test(sql))).toBe(false)
   })
 
   it('injects the latest valid snapshot with metadata-only provenance', async () => {
@@ -883,10 +1034,10 @@ describe('contextHygieneService', () => {
       continueSession: true,
       explicitScope: 'session',
       input: 'continue with the plan',
-      tokenBudget: 500,
+      tokenBudget: 500
     })
 
-    const summary = result.package.items.find(item => item.sourceType === 'summary')
+    const summary = result.package.items.find((item) => item.sourceType === 'summary')
     expect(summary).toMatchObject({
       sourceId: 'snapshot-1',
       reason: 'validated compression snapshot',
@@ -894,8 +1045,8 @@ describe('contextHygieneService', () => {
         snapshotId: 'snapshot-1',
         sourceTurnFrom: 'turn-1',
         sourceTurnTo: 'turn-2',
-        checkpointId: 'checkpoint-1',
-      },
+        checkpointId: 'checkpoint-1'
+      }
     })
     expect(summary?.content).toContain('Current state: Memory governance is complete')
     expect(summary?.content).toContain('Decisions:\n- Keep host ownership')
@@ -903,8 +1054,8 @@ describe('contextHygieneService', () => {
       compression: {
         status: 'included',
         snapshotId: 'snapshot-1',
-        checkpointId: 'checkpoint-1',
-      },
+        checkpointId: 'checkpoint-1'
+      }
     })
     expect(JSON.stringify(result.package.metadata)).not.toContain('prior normal turn')
   })
@@ -917,10 +1068,10 @@ describe('contextHygieneService', () => {
           factState: 'confirmed',
           confidence: 0.9,
           memoryIds: ['memory-1'],
-          checkpointId: 'checkpoint-1',
-        }),
+          checkpointId: 'checkpoint-1'
+        })
       }),
-      'memory-1',
+      'memory-1'
     )
     const service = new ContextHygieneService()
 
@@ -930,22 +1081,22 @@ describe('contextHygieneService', () => {
       continueSession: true,
       explicitScope: 'session',
       input: 'continue with the plan',
-      tokenBudget: 500,
+      tokenBudget: 500
     })
 
-    expect(result.package.items.some(item => item.sourceId === 'snapshot-1')).toBe(false)
+    expect(result.package.items.some((item) => item.sourceId === 'snapshot-1')).toBe(false)
     expect(result.package.metadata).toMatchObject({
       compression: {
         status: 'excluded',
-        degradedReason: 'snapshot-memory-tombstoned',
+        degradedReason: 'snapshot-memory-tombstoned'
       },
       excluded: expect.arrayContaining([
         expect.objectContaining({
           sourceType: 'summary',
           sourceId: 'snapshot-1',
-          reason: 'snapshot-memory-tombstoned',
-        }),
-      ]),
+          reason: 'snapshot-memory-tombstoned'
+        })
+      ])
     })
   })
 
@@ -953,18 +1104,18 @@ describe('contextHygieneService', () => {
     [
       'sensitive',
       compressionSnapshotRow({ metadata: JSON.stringify({ privacyLevel: 'sensitive' }) }),
-      'snapshot-sensitive-blocked',
+      'snapshot-sensitive-blocked'
     ],
     [
       'user-rejected',
       compressionSnapshotRow({ metadata: JSON.stringify({ factState: 'user-rejected' }) }),
-      'snapshot-user-rejected',
+      'snapshot-user-rejected'
     ],
     [
       'secret',
       compressionSnapshotRow({ current_state: 'token = hidden-snapshot-secret' }),
-      'snapshot-content-blocked',
-    ],
+      'snapshot-content-blocked'
+    ]
   ])('excludes %s snapshot content from context packages', async (_name, snapshot, reason) => {
     mockPrepareTurnWithCompressionSnapshot(snapshot)
     const service = new ContextHygieneService()
@@ -975,12 +1126,12 @@ describe('contextHygieneService', () => {
       continueSession: true,
       explicitScope: 'session',
       input: 'continue safely',
-      tokenBudget: 500,
+      tokenBudget: 500
     })
 
-    expect(result.package.items.some(item => item.sourceId === 'snapshot-1')).toBe(false)
+    expect(result.package.items.some((item) => item.sourceId === 'snapshot-1')).toBe(false)
     expect(result.package.metadata).toMatchObject({
-      compression: { status: 'excluded', degradedReason: reason },
+      compression: { status: 'excluded', degradedReason: reason }
     })
   })
 
@@ -994,15 +1145,15 @@ describe('contextHygieneService', () => {
       continueSession: true,
       explicitScope: 'session',
       input: 'continue safely',
-      tokenBudget: 500,
+      tokenBudget: 500
     })
 
-    expect(result.package.items.some(item => item.sourceId === 'snapshot-1')).toBe(false)
+    expect(result.package.items.some((item) => item.sourceId === 'snapshot-1')).toBe(false)
     expect(result.package.metadata).toMatchObject({
       compression: {
         status: 'excluded',
-        degradedReason: 'snapshot-source-privacy-blocked',
-      },
+        degradedReason: 'snapshot-source-privacy-blocked'
+      }
     })
   })
 
@@ -1014,16 +1165,18 @@ describe('contextHygieneService', () => {
       if (sql.includes('FROM intelligence_compression_snapshots'))
         throw new Error('snapshot read failed')
       if (sql.includes('SELECT * FROM intelligence_context_turns')) {
-        return rows([{
-          id: 'turn-2',
-          session_id: 'session-1',
-          role: 'assistant',
-          content: 'prior normal turn',
-          privacy_level: 'normal',
-          token_estimate: 4,
-          metadata: null,
-          created_at: 80,
-        }])
+        return rows([
+          {
+            id: 'turn-2',
+            session_id: 'session-1',
+            role: 'assistant',
+            content: 'prior normal turn',
+            privacy_level: 'normal',
+            token_estimate: 4,
+            metadata: null,
+            created_at: 80
+          }
+        ])
       }
       return rows([])
     })
@@ -1035,15 +1188,17 @@ describe('contextHygieneService', () => {
       continueSession: true,
       explicitScope: 'session',
       input: 'continue safely',
-      tokenBudget: 500,
+      tokenBudget: 500
     })
 
-    expect(result.package.items.some(item => item.sourceType === 'summary')).toBe(false)
-    expect(result.package.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceType: 'recent_turn', sourceId: 'turn-2' }),
-    ]))
+    expect(result.package.items.some((item) => item.sourceType === 'summary')).toBe(false)
+    expect(result.package.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceType: 'recent_turn', sourceId: 'turn-2' })
+      ])
+    )
     expect(result.package.metadata).toMatchObject({
-      compression: { status: 'degraded', degradedReason: 'snapshot-read-failed' },
+      compression: { status: 'degraded', degradedReason: 'snapshot-read-failed' }
     })
   })
 
@@ -1054,8 +1209,8 @@ describe('contextHygieneService', () => {
       service.saveMemory({
         type: 'preference',
         scope: 'global',
-        content: 'api_key = sk-test-secret-value',
-      }),
+        content: 'api_key = sk-test-secret-value'
+      })
     ).rejects.toThrow('MEMORY_POLICY_REJECTED_SECRET')
 
     await expect(
@@ -1063,8 +1218,8 @@ describe('contextHygieneService', () => {
         type: 'preference',
         scope: 'global',
         content: 'Safe content',
-        summary: 'token = hidden-summary-secret',
-      }),
+        summary: 'token = hidden-summary-secret'
+      })
     ).rejects.toThrow('MEMORY_POLICY_REJECTED_SECRET')
 
     await expect(
@@ -1072,8 +1227,8 @@ describe('contextHygieneService', () => {
         type: 'preference',
         scope: 'global',
         content: 'Safe content',
-        tags: ['api_key = hidden-tag-secret'],
-      }),
+        tags: ['api_key = hidden-tag-secret']
+      })
     ).rejects.toThrow('MEMORY_POLICY_REJECTED_SECRET')
 
     expect(dbMock.client.execute).not.toHaveBeenCalled()
@@ -1089,7 +1244,7 @@ describe('contextHygieneService', () => {
       tags: [' language ', 'language', 'preference'],
       confidence: 1.8,
       sourceSessionId: 'session-1',
-      sourceTurnId: 'turn-1',
+      sourceTurnId: 'turn-1'
     })
 
     expect(result).toEqual({
@@ -1104,9 +1259,9 @@ describe('contextHygieneService', () => {
         sourceSessionId: 'session-1',
         sourceTurnId: 'turn-1',
         privacyLevel: 'normal',
-        ttl: undefined,
+        ttl: undefined
       },
-      fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+      fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/)
     })
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
@@ -1115,12 +1270,12 @@ describe('contextHygieneService', () => {
     const service = new ContextHygieneService()
 
     const result = service.evaluateMemory({
-      content: 'api_key = sk-test-secret-value',
+      content: 'api_key = sk-test-secret-value'
     })
 
     expect(result).toEqual({
       status: 'rejected',
-      reason: 'secret_detected',
+      reason: 'secret_detected'
     })
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
@@ -1129,12 +1284,12 @@ describe('contextHygieneService', () => {
     const service = new ContextHygieneService()
 
     const result = service.evaluateMemory({
-      content: '请不要记住这个临时偏好。',
+      content: '请不要记住这个临时偏好。'
     })
 
     expect(result).toEqual({
       status: 'rejected',
-      reason: 'user_opt_out',
+      reason: 'user_opt_out'
     })
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
@@ -1144,12 +1299,12 @@ describe('contextHygieneService', () => {
 
     const result = service.evaluateMemory({
       content: 'My private project detail',
-      privacyLevel: 'sensitive',
+      privacyLevel: 'sensitive'
     })
 
     expect(result).toEqual({
       status: 'needs_review',
-      reason: 'sensitive_content',
+      reason: 'sensitive_content'
     })
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
@@ -1173,16 +1328,16 @@ describe('contextHygieneService', () => {
           created_at: 10,
           updated_at: 20,
           last_used_at: null,
-          usage_count: 0,
-        },
-      ]),
+          usage_count: 0
+        }
+      ])
     )
 
     const service = new ContextHygieneService()
     const result = await service.listMemories({
       scope: 'workspace',
       type: 'preference',
-      limit: 10,
+      limit: 10
     })
 
     expect(result.memories).toEqual([
@@ -1203,19 +1358,19 @@ describe('contextHygieneService', () => {
         createdAt: 10,
         updatedAt: 20,
         lastUsedAt: undefined,
-        usageCount: 0,
-      },
+        usageCount: 0
+      }
     ])
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        sql: expect.stringContaining('m.privacy_level = ?'),
-      }),
+        sql: expect.stringContaining('m.privacy_level = ?')
+      })
     )
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         sql: expect.stringContaining('t.memory_id IS NULL'),
-        args: ['normal', 'workspace', 'preference', 11, 0],
-      }),
+        args: ['normal', 'workspace', 'preference', 11, 0]
+      })
     )
     expect(result).toMatchObject({ offset: 0, limit: 10, hasMore: false })
   })
@@ -1240,7 +1395,7 @@ describe('contextHygieneService', () => {
           updated_at: 30,
           last_used_at: 25,
           usage_count: 2,
-          replaces_memory_id: 'mem-original',
+          replaces_memory_id: 'mem-original'
         },
         {
           id: 'mem-next-page',
@@ -1258,9 +1413,9 @@ describe('contextHygieneService', () => {
           created_at: 9,
           updated_at: 20,
           last_used_at: null,
-          usage_count: 0,
-        },
-      ]),
+          usage_count: 0
+        }
+      ])
     )
 
     const service = new ContextHygieneService()
@@ -1268,7 +1423,7 @@ describe('contextHygieneService', () => {
       query: '100% local_index',
       status: 'disabled',
       offset: 20,
-      limit: 1,
+      limit: 1
     })
 
     expect(result).toMatchObject({ offset: 20, limit: 1, hasMore: true })
@@ -1276,7 +1431,7 @@ describe('contextHygieneService', () => {
     expect(result.memories[0]).toMatchObject({
       id: 'mem-replacement',
       replacesMemoryId: 'mem-original',
-      enabled: false,
+      enabled: false
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1287,9 +1442,9 @@ describe('contextHygieneService', () => {
           '%100\\% local\\_index%',
           '%100\\% local\\_index%',
           2,
-          20,
-        ],
-      }),
+          20
+        ]
+      })
     )
   })
 
@@ -1310,7 +1465,7 @@ describe('contextHygieneService', () => {
       created_at: 10,
       updated_at: 20,
       last_used_at: null,
-      usage_count: 1,
+      usage_count: 1
     }
     dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
       const sql = typeof statement === 'string' ? statement : statement.sql
@@ -1327,7 +1482,7 @@ describe('contextHygieneService', () => {
       sourceSessionId: 'session-1',
       sourceTurnId: 'turn-1',
       privacyLevel: 'normal' as const,
-      enabled: true,
+      enabled: true
     }
     const evaluation = service.evaluateMemory(replacement)
 
@@ -1335,21 +1490,21 @@ describe('contextHygieneService', () => {
       memoryId: 'mem-original',
       expectedUpdatedAt: 20,
       evaluationFingerprint: evaluation.fingerprint!,
-      replacement,
+      replacement
     })
 
     expect(result.memory).toMatchObject({
       content: 'Use Chinese replies',
       replacesMemoryId: 'mem-original',
       sourceSessionId: 'session-1',
-      sourceTurnId: 'turn-1',
+      sourceTurnId: 'turn-1'
     })
     expect(result.tombstone).toMatchObject({
       memoryId: 'mem-original',
-      reason: `replaced-by:${result.memory.id}`,
+      reason: `replaced-by:${result.memory.id}`
     })
     const statements = dbMock.client.execute.mock.calls.map(([statement]) =>
-      typeof statement === 'string' ? statement : statement.sql,
+      typeof statement === 'string' ? statement : statement.sql
     )
     expect(statements[0]).toBe('BEGIN IMMEDIATE')
     expect(statements).toEqual(
@@ -1357,8 +1512,8 @@ describe('contextHygieneService', () => {
         expect.stringContaining('INSERT INTO intelligence_memory_items'),
         expect.stringContaining('UPDATE intelligence_memory_items SET enabled = 0'),
         expect.stringContaining('INSERT INTO intelligence_memory_tombstones'),
-        'COMMIT',
-      ]),
+        'COMMIT'
+      ])
     )
   })
 
@@ -1379,7 +1534,7 @@ describe('contextHygieneService', () => {
       created_at: 10,
       updated_at: 21,
       last_used_at: null,
-      usage_count: 0,
+      usage_count: 0
     }
     dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
       const sql = typeof statement === 'string' ? statement : statement.sql
@@ -1389,7 +1544,7 @@ describe('contextHygieneService', () => {
     const replacement = {
       type: 'preference' as const,
       scope: 'workspace' as const,
-      content: 'Use Chinese replies',
+      content: 'Use Chinese replies'
     }
     const evaluation = service.evaluateMemory(replacement)
 
@@ -1398,17 +1553,21 @@ describe('contextHygieneService', () => {
         memoryId: 'mem-original',
         expectedUpdatedAt: 20,
         evaluationFingerprint: evaluation.fingerprint!,
-        replacement,
-      }),
+        replacement
+      })
     ).rejects.toThrow('MEMORY_REPLACE_CONFLICT')
 
     const statements = dbMock.client.execute.mock.calls.map(([statement]) =>
-      typeof statement === 'string' ? statement : statement.sql,
+      typeof statement === 'string' ? statement : statement.sql
     )
     expect(statements).toContain('ROLLBACK')
     expect(statements).not.toContain('COMMIT')
-    expect(statements.some(sql => sql.includes('INSERT INTO intelligence_memory_items'))).toBe(false)
-    expect(statements.some(sql => sql.includes('INSERT INTO intelligence_memory_tombstones'))).toBe(false)
+    expect(statements.some((sql) => sql.includes('INSERT INTO intelligence_memory_items'))).toBe(
+      false
+    )
+    expect(
+      statements.some((sql) => sql.includes('INSERT INTO intelligence_memory_tombstones'))
+    ).toBe(false)
   })
 
   it('rolls back the replacement when the new memory cannot be persisted', async () => {
@@ -1428,21 +1587,19 @@ describe('contextHygieneService', () => {
       created_at: 10,
       updated_at: 20,
       last_used_at: null,
-      usage_count: 0,
+      usage_count: 0
     }
     dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
       const sql = typeof statement === 'string' ? statement : statement.sql
-      if (sql.includes('SELECT m.*'))
-        return rows([originalRow])
-      if (sql.includes('INSERT INTO intelligence_memory_items'))
-        throw new Error('persist failed')
+      if (sql.includes('SELECT m.*')) return rows([originalRow])
+      if (sql.includes('INSERT INTO intelligence_memory_items')) throw new Error('persist failed')
       return rows([])
     })
     const service = new ContextHygieneService()
     const replacement = {
       type: 'preference' as const,
       scope: 'workspace' as const,
-      content: 'Use Chinese replies',
+      content: 'Use Chinese replies'
     }
     const evaluation = service.evaluateMemory(replacement)
 
@@ -1451,16 +1608,18 @@ describe('contextHygieneService', () => {
         memoryId: 'mem-original',
         expectedUpdatedAt: 20,
         evaluationFingerprint: evaluation.fingerprint!,
-        replacement,
-      }),
+        replacement
+      })
     ).rejects.toThrow('persist failed')
 
     const statements = dbMock.client.execute.mock.calls.map(([statement]) =>
-      typeof statement === 'string' ? statement : statement.sql,
+      typeof statement === 'string' ? statement : statement.sql
     )
     expect(statements).toContain('ROLLBACK')
     expect(statements).not.toContain('COMMIT')
-    expect(statements.some(sql => sql.includes('INSERT INTO intelligence_memory_tombstones'))).toBe(false)
+    expect(
+      statements.some((sql) => sql.includes('INSERT INTO intelligence_memory_tombstones'))
+    ).toBe(false)
   })
 
   it('rejects replacement fields changed after evaluation before opening a transaction', async () => {
@@ -1469,7 +1628,7 @@ describe('contextHygieneService', () => {
       type: 'preference',
       scope: 'workspace',
       content: 'Use Chinese replies',
-      summary: 'Chinese replies',
+      summary: 'Chinese replies'
     })
 
     await expect(
@@ -1481,9 +1640,9 @@ describe('contextHygieneService', () => {
           type: 'preference',
           scope: 'workspace',
           content: 'Use Chinese replies',
-          summary: 'Changed after evaluation',
-        },
-      }),
+          summary: 'Changed after evaluation'
+        }
+      })
     ).rejects.toThrow('MEMORY_REPLACE_EVALUATION_MISMATCH')
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
@@ -1495,12 +1654,12 @@ describe('contextHygieneService', () => {
     const result = await service.prepareTurn({
       owner: 'corebox',
       input: 'api_key = sk-test-secret-value',
-      tokenBudget: 120,
+      tokenBudget: 120
     })
 
     expect(result.turn).toMatchObject({
       privacyLevel: 'secret',
-      content: '[redacted:private-context-turn]',
+      content: '[redacted:private-context-turn]'
     })
     expect(result.package.items).toEqual([])
     expect(result.package.metadata).toMatchObject({
@@ -1509,15 +1668,15 @@ describe('contextHygieneService', () => {
           sourceType: 'current_input',
           sourceId: result.turn.id,
           reason: 'secret-policy-blocked',
-          tokenEstimate: expect.any(Number),
-        },
-      ],
+          tokenEstimate: expect.any(Number)
+        }
+      ]
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         sql: expect.stringContaining('INSERT INTO intelligence_context_turns'),
-        args: expect.arrayContaining(['[redacted:private-context-turn]', 'secret']),
-      }),
+        args: expect.arrayContaining(['[redacted:private-context-turn]', 'secret'])
+      })
     )
     const packageLogCall = dbMock.client.execute.mock.calls.find(([arg]) => {
       return String(arg.sql).includes('INSERT INTO intelligence_context_package_logs')
@@ -1527,9 +1686,283 @@ describe('contextHygieneService', () => {
         {
           sourceType: 'current_input',
           sourceId: result.turn.id,
-          reason: 'secret-policy-blocked',
-        },
-      ],
+          reason: 'secret-policy-blocked'
+        }
+      ]
+    })
+  })
+
+  it.each([
+    {
+      name: 'a Bearer credential',
+      credential: 'Authorization: Bearer synthetic_bearer_token-Alpha.0123456789~+/'
+    },
+    {
+      name: 'a standalone JWT',
+      credential:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJyb2xlIjoidXNlciJ9.synthetic-signature-0123456789'
+    }
+  ])('redacts $name from storage, packages, and memory admission', async ({ credential }) => {
+    dbMock.client.execute.mockResolvedValue(rows([]))
+    const service = new ContextHygieneService()
+
+    expect(service.evaluateMemory({ content: credential })).toEqual({
+      status: 'rejected',
+      reason: 'secret_detected'
+    })
+
+    const result = await service.prepareTurn({
+      owner: 'corebox',
+      input: credential,
+      tokenBudget: 120
+    })
+
+    expect(result.turn).toMatchObject({
+      privacyLevel: 'secret',
+      content: '[redacted:private-context-turn]'
+    })
+    expect(result.package.items).not.toContainEqual(
+      expect.objectContaining({ sourceType: 'current_input' })
+    )
+    expect(result.package.metadata).toMatchObject({
+      excluded: [
+        expect.objectContaining({
+          sourceType: 'current_input',
+          sourceId: result.turn.id,
+          reason: 'secret-policy-blocked'
+        })
+      ]
+    })
+    expect(JSON.stringify(result.package.metadata)).not.toContain(credential)
+
+    const turnInsertCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+      return (
+        typeof statement !== 'string' &&
+        statement.sql.includes('INSERT INTO intelligence_context_turns')
+      )
+    })
+    expect(turnInsertCall?.[0].args).toEqual(
+      expect.arrayContaining(['[redacted:private-context-turn]', 'secret'])
+    )
+    expect(JSON.stringify(dbMock.client.execute.mock.calls)).not.toContain(credential)
+
+    const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+      return (
+        typeof statement !== 'string' &&
+        statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+      )
+    })
+    expect(packageLogCall).toBeDefined()
+    expect(JSON.stringify(packageLogCall?.[0].args)).not.toContain(credential)
+  })
+
+  it.each([
+    { name: 'normal', privacyLevel: 'normal' as const },
+    { name: 'private', privacyLevel: 'private' as never }
+  ])(
+    'forces secret policy over explicit $name privacy without leaking raw input',
+    async ({ privacyLevel }) => {
+      const rawSecret = 'api_key = sk-explicit-privacy-secret'
+      dbMock.client.execute.mockResolvedValue(rows([]))
+
+      const result = await new ContextHygieneService().prepareTurn({
+        owner: 'corebox',
+        input: rawSecret,
+        privacyLevel,
+        tokenBudget: 120
+      })
+
+      expect(result.turn).toMatchObject({
+        privacyLevel: 'secret',
+        content: '[redacted:private-context-turn]'
+      })
+      expect(result.package.items).not.toContainEqual(
+        expect.objectContaining({ sourceType: 'current_input' })
+      )
+      expect(result.package.metadata).toMatchObject({
+        excluded: [
+          expect.objectContaining({
+            sourceType: 'current_input',
+            sourceId: result.turn.id,
+            reason: 'secret-policy-blocked'
+          })
+        ]
+      })
+      expect(JSON.stringify(result.package.metadata)).not.toContain(rawSecret)
+
+      const turnInsertCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+        return (
+          typeof statement !== 'string' &&
+          statement.sql.includes('INSERT INTO intelligence_context_turns')
+        )
+      })
+      expect(turnInsertCall).toBeDefined()
+      expect(turnInsertCall?.[0].args).toEqual(
+        expect.arrayContaining(['[redacted:private-context-turn]', 'secret'])
+      )
+      expect(JSON.stringify(turnInsertCall?.[0].args)).not.toContain(rawSecret)
+
+      const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+        return (
+          typeof statement !== 'string' &&
+          statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+        )
+      })
+      expect(packageLogCall).toBeDefined()
+      expect(JSON.stringify(packageLogCall?.[0].args)).not.toContain(rawSecret)
+    }
+  )
+
+  it('keeps a safe explicitly private turn private', async () => {
+    dbMock.client.execute.mockResolvedValue(rows([]))
+
+    const result = await new ContextHygieneService().prepareTurn({
+      owner: 'corebox',
+      input: 'Keep this caller-designated private detail out of context.',
+      privacyLevel: 'private' as never,
+      tokenBudget: 120
+    })
+
+    expect(result.turn).toMatchObject({
+      privacyLevel: 'private',
+      content: '[redacted:private-context-turn]'
+    })
+    expect(result.package.items).not.toContainEqual(
+      expect.objectContaining({ sourceType: 'current_input' })
+    )
+    expect(result.package.metadata).toMatchObject({
+      excluded: [
+        expect.objectContaining({
+          sourceType: 'current_input',
+          sourceId: result.turn.id,
+          reason: 'private-policy-blocked'
+        })
+      ]
+    })
+  })
+
+  it.each([
+    { name: 'NaN', tokenBudget: Number.NaN },
+    { name: 'positive infinity', tokenBudget: Number.POSITIVE_INFINITY },
+    { name: 'negative infinity', tokenBudget: Number.NEGATIVE_INFINITY }
+  ])(
+    'normalizes $name before returning and persisting a mandatory context package',
+    async ({ tokenBudget }) => {
+      dbMock.client.execute.mockResolvedValue(rows([]))
+
+      const result = await new ContextHygieneService().prepareTurn({
+        owner: 'corebox',
+        input: 'Keep this mandatory current input.',
+        tokenBudget
+      })
+
+      expect(result.package.tokenBudget).toBe(1_600)
+      expect(Number.isFinite(result.package.tokenBudget)).toBe(true)
+      expect(result.package.items).toEqual([
+        expect.objectContaining({
+          sourceType: 'current_input',
+          content: 'Keep this mandatory current input.'
+        })
+      ])
+      const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+        return (
+          typeof statement !== 'string' &&
+          statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+        )
+      })
+      expect(packageLogCall).toBeDefined()
+      expect(packageLogCall?.[0].args?.[4]).toBe(1_600)
+    }
+  )
+
+  it('prunes a safe legacy summary when a secret current input leaves the package empty', async () => {
+    const legacySummary = 'Safe legacy summary plaintext must never reach context package logs.'
+    dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
+      const sql = typeof statement === 'string' ? statement : statement.sql
+      if (sql.includes('SELECT * FROM intelligence_context_sessions')) {
+        return rows([
+          compressionSessionRow({
+            summary: legacySummary,
+            updated_at: Date.now()
+          })
+        ])
+      }
+      return rows([])
+    })
+
+    const result = await new ContextHygieneService().prepareTurn({
+      owner: 'corebox',
+      sessionId: 'session-1',
+      continueSession: true,
+      explicitScope: 'session',
+      input: 'private current input',
+      privacyLevel: 'secret',
+      tokenBudget: 1
+    })
+
+    expect(result.package.items).toEqual([])
+    expect(result.package.tokenEstimate).toBe(0)
+    expect(result.package.metadata).toMatchObject({
+      excluded: expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: 'current_input',
+          reason: 'secret-policy-blocked'
+        }),
+        expect.objectContaining({
+          sourceType: 'summary',
+          reason: 'token-budget-pruned'
+        })
+      ])
+    })
+    expect(JSON.stringify(result.package.metadata)).not.toContain(legacySummary)
+
+    const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+      return (
+        typeof statement !== 'string' &&
+        statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+      )
+    })
+    expect(packageLogCall).toBeDefined()
+    const serializedPackageLog = JSON.stringify(packageLogCall?.[0].args?.slice(6, 8))
+    expect(serializedPackageLog).not.toContain(legacySummary)
+  })
+
+  it('retains an oversized normal current input while pruning an optional legacy summary', async () => {
+    const legacySummary = 'Safe optional legacy summary that exceeds the package budget.'
+    dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
+      const sql = typeof statement === 'string' ? statement : statement.sql
+      if (sql.includes('SELECT * FROM intelligence_context_sessions')) {
+        return rows([
+          compressionSessionRow({
+            summary: legacySummary,
+            updated_at: Date.now()
+          })
+        ])
+      }
+      return rows([])
+    })
+
+    const result = await new ContextHygieneService().prepareTurn({
+      owner: 'corebox',
+      sessionId: 'session-1',
+      continueSession: true,
+      explicitScope: 'session',
+      input: 'Normal current input is mandatory even when it exceeds the package budget.',
+      tokenBudget: 1
+    })
+
+    const currentInput = result.package.items.find((item) => item.sourceType === 'current_input')
+    expect(currentInput).toBeDefined()
+    expect(currentInput?.tokenEstimate).toBeGreaterThan(result.package.tokenBudget)
+    expect(result.package.tokenEstimate).toBe(currentInput?.tokenEstimate)
+    expect(result.package.items.some((item) => item.sourceType === 'summary')).toBe(false)
+    expect(result.package.metadata).toMatchObject({
+      excluded: [
+        expect.objectContaining({
+          sourceType: 'summary',
+          reason: 'token-budget-pruned'
+        })
+      ]
     })
   })
 
@@ -1549,7 +1982,7 @@ describe('contextHygieneService', () => {
             contentHash: 'chunk-hash',
             tokenEstimate: 6,
             createdAt: 10,
-            updatedAt: 20,
+            updatedAt: 20
           },
           document: {
             id: 'doc-1',
@@ -1559,7 +1992,7 @@ describe('contextHygieneService', () => {
             contentHash: 'doc-hash',
             permissionScope: 'workspace:tuff',
             createdAt: 10,
-            updatedAt: 20,
+            updatedAt: 20
           },
           score: 1.2,
           citation: {
@@ -1568,9 +2001,9 @@ describe('contextHygieneService', () => {
             title: 'Knowledge Notes',
             sourceUri: 'note://knowledge',
             sourceType: 'manual',
-            updatedAt: 20,
-          },
-        },
+            updatedAt: 20
+          }
+        }
       ],
       tokenEstimate: 6,
       citations: [
@@ -1580,9 +2013,9 @@ describe('contextHygieneService', () => {
           title: 'Knowledge Notes',
           sourceUri: 'note://knowledge',
           sourceType: 'manual',
-          updatedAt: 20,
-        },
-      ],
+          updatedAt: 20
+        }
+      ]
     })
 
     const service = new ContextHygieneService()
@@ -1591,16 +2024,16 @@ describe('contextHygieneService', () => {
       input: 'Use local knowledge retrieval',
       explicitScope: 'retrieval',
       tokenBudget: 120,
-      traceId: 'trace-retrieval',
+      traceId: 'trace-retrieval'
     })
 
-    const retrievalItem = result.package.items.find(item => item.sourceType === 'retrieval')
+    const retrievalItem = result.package.items.find((item) => item.sourceType === 'retrieval')
     expect(result.package.metadata).toMatchObject({
       retrieval: {
         status: 'ok',
         chunkCount: 1,
-        citationCount: 1,
-      },
+        citationCount: 1
+      }
     })
     expect(retrievalItem).toMatchObject({
       sourceId: 'chunk-1',
@@ -1608,13 +2041,13 @@ describe('contextHygieneService', () => {
         citation: {
           documentId: 'doc-1',
           chunkId: 'chunk-1',
-          title: 'Knowledge Notes',
+          title: 'Knowledge Notes'
         },
         documentId: 'doc-1',
         sourceType: 'manual',
         sourceUri: 'note://knowledge',
-        status: 'ok',
-      },
+        status: 'ok'
+      }
     })
 
     const packageLogCall = dbMock.client.execute.mock.calls.find(([arg]) => {
@@ -1630,12 +2063,12 @@ describe('contextHygieneService', () => {
           metadata: expect.objectContaining({
             citation: expect.objectContaining({
               documentId: 'doc-1',
-              chunkId: 'chunk-1',
+              chunkId: 'chunk-1'
             }),
-            status: 'ok',
-          }),
-        }),
-      ]),
+            status: 'ok'
+          })
+        })
+      ])
     )
   })
 
@@ -1655,7 +2088,7 @@ describe('contextHygieneService', () => {
             contentHash: 'chunk-hash',
             tokenEstimate: 500,
             createdAt: 10,
-            updatedAt: 20,
+            updatedAt: 20
           },
           document: {
             id: 'doc-large',
@@ -1664,7 +2097,7 @@ describe('contextHygieneService', () => {
             contentHash: 'doc-hash',
             permissionScope: 'workspace:tuff',
             createdAt: 10,
-            updatedAt: 20,
+            updatedAt: 20
           },
           score: 1,
           citation: {
@@ -1672,9 +2105,9 @@ describe('contextHygieneService', () => {
             chunkId: 'chunk-large',
             title: 'Large Notes',
             sourceType: 'manual',
-            updatedAt: 20,
-          },
-        },
+            updatedAt: 20
+          }
+        }
       ],
       tokenEstimate: 500,
       citations: [
@@ -1683,9 +2116,9 @@ describe('contextHygieneService', () => {
           chunkId: 'chunk-large',
           title: 'Large Notes',
           sourceType: 'manual',
-          updatedAt: 20,
-        },
-      ],
+          updatedAt: 20
+        }
+      ]
     })
 
     const service = new ContextHygieneService()
@@ -1693,19 +2126,19 @@ describe('contextHygieneService', () => {
       owner: 'corebox',
       input: 'Use local knowledge retrieval',
       explicitScope: 'retrieval',
-      tokenBudget: 20,
+      tokenBudget: 20
     })
 
-    expect(result.package.items.some(item => item.sourceId === 'chunk-large')).toBe(false)
+    expect(result.package.items.some((item) => item.sourceId === 'chunk-large')).toBe(false)
     expect(result.package.metadata).toMatchObject({
       excluded: [
         {
           sourceType: 'retrieval',
           sourceId: 'chunk-large',
           reason: 'token-budget-pruned',
-          tokenEstimate: 500,
-        },
-      ],
+          tokenEstimate: 500
+        }
+      ]
     })
     expect(JSON.stringify(result.package.metadata)).not.toContain('large retrieval content')
   })
@@ -1719,7 +2152,7 @@ describe('contextHygieneService', () => {
       chunks: [],
       tokenEstimate: 0,
       citations: [],
-      degradedReason: 'fts-unavailable',
+      degradedReason: 'fts-unavailable'
     })
 
     const service = new ContextHygieneService()
@@ -1728,18 +2161,18 @@ describe('contextHygieneService', () => {
       input: 'Need unavailable retrieval',
       explicitScope: 'retrieval',
       tokenBudget: 120,
-      metadata: { source: 'test' },
+      metadata: { source: 'test' }
     })
 
-    expect(result.package.items.some(item => item.sourceType === 'retrieval')).toBe(false)
+    expect(result.package.items.some((item) => item.sourceType === 'retrieval')).toBe(false)
     expect(result.package.metadata).toMatchObject({
       source: 'test',
       retrieval: {
         status: 'degraded',
         degradedReason: 'fts-unavailable',
         chunkCount: 0,
-        citationCount: 0,
-      },
+        citationCount: 0
+      }
     })
 
     const packageLogCall = dbMock.client.execute.mock.calls.find(([arg]) => {
@@ -1752,8 +2185,8 @@ describe('contextHygieneService', () => {
         status: 'degraded',
         degradedReason: 'fts-unavailable',
         chunkCount: 0,
-        citationCount: 0,
-      },
+        citationCount: 0
+      }
     })
   })
 
@@ -1777,29 +2210,29 @@ describe('contextHygieneService', () => {
                 citation: {
                   documentId: 'doc-1',
                   chunkId: 'chunk-1',
-                  title: 'Knowledge Notes',
+                  title: 'Knowledge Notes'
                 },
-                status: 'ok',
-              },
-            },
+                status: 'ok'
+              }
+            }
           ]),
           metadata: JSON.stringify({
             retrieval: {
               status: 'ok',
               chunkCount: 1,
-              citationCount: 1,
-            },
+              citationCount: 1
+            }
           }),
-          created_at: 20,
-        },
-      ]),
+          created_at: 20
+        }
+      ])
     )
     const service = new ContextHygieneService()
 
     const result = await service.listPackageLogs({
       sessionId: 'session-1',
       traceId: 'trace-1',
-      limit: 100,
+      limit: 100
     })
 
     expect(result.logs[0]).toMatchObject({
@@ -1816,26 +2249,26 @@ describe('contextHygieneService', () => {
           metadata: {
             citation: {
               documentId: 'doc-1',
-              chunkId: 'chunk-1',
+              chunkId: 'chunk-1'
             },
-            status: 'ok',
-          },
-        },
+            status: 'ok'
+          }
+        }
       ],
       metadata: {
         retrieval: {
           status: 'ok',
           chunkCount: 1,
-          citationCount: 1,
-        },
-      },
+          citationCount: 1
+        }
+      }
     })
     expect('content' in result.logs[0]!.items[0]!).toBe(false)
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         sql: expect.stringContaining('FROM intelligence_context_package_logs'),
-        args: ['session-1', 'trace-1', 50],
-      }),
+        args: ['session-1', 'trace-1', 50]
+      })
     )
   })
 
@@ -1850,16 +2283,16 @@ describe('contextHygieneService', () => {
           summary: null,
           context_scope: 'retrieval',
           metadata: JSON.stringify({ source: 'test' }),
-          created_at: 20,
-        },
-      ]),
+          created_at: 20
+        }
+      ])
     )
     const service = new ContextHygieneService()
 
     const result = await service.listCheckpoints({
       sessionId: 'session-1',
       type: 'session_start',
-      limit: 100,
+      limit: 100
     })
 
     expect(result.checkpoints).toEqual([
@@ -1871,14 +2304,14 @@ describe('contextHygieneService', () => {
         summary: undefined,
         contextScope: 'retrieval',
         metadata: { source: 'test' },
-        createdAt: 20,
-      },
+        createdAt: 20
+      }
     ])
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         sql: expect.stringContaining('FROM intelligence_context_checkpoints'),
-        args: ['session-1', 'session_start', 50],
-      }),
+        args: ['session-1', 'session_start', 50]
+      })
     )
   })
 
@@ -1886,7 +2319,7 @@ describe('contextHygieneService', () => {
     const service = new ContextHygieneService()
 
     await expect(service.listCheckpoints({ sessionId: '' })).rejects.toThrow(
-      'sessionId is required',
+      'sessionId is required'
     )
     expect(dbMock.client.execute).not.toHaveBeenCalled()
   })
@@ -1917,7 +2350,7 @@ describe('contextHygieneService', () => {
       created_at: now - 1_000,
       updated_at: now,
       last_used_at: null,
-      usage_count: 0,
+      usage_count: 0
     }
     dbMock.client.execute.mockImplementation(async (statement: { sql: string }) => {
       if (statement.sql.includes('INSERT INTO intelligence_memory_tombstones')) {
@@ -1927,8 +2360,8 @@ describe('contextHygieneService', () => {
         return rows([
           {
             ...memoryRow,
-            tombstone_memory_id: tombstoned ? 'memory-1' : null,
-          },
+            tombstone_memory_id: tombstoned ? 'memory-1' : null
+          }
         ])
       }
       return rows([])
@@ -1946,17 +2379,17 @@ describe('contextHygieneService', () => {
           sourceId: 'turn-1',
           reason: 'current user input',
           content: 'Continue',
-          tokenEstimate: 2,
+          tokenEstimate: 2
         },
         {
           sourceType: 'memory',
           sourceId: 'memory-1',
           reason: 'usable global memory',
           content: 'Use concise answers',
-          tokenEstimate: 6,
-        },
+          tokenEstimate: 6
+        }
       ],
-      createdAt: now,
+      createdAt: now
     }
     const service = new ContextHygieneService()
 
@@ -1972,10 +2405,10 @@ describe('contextHygieneService', () => {
           sourceType: 'memory',
           sourceId: 'memory-1',
           reason: 'memory-tombstoned',
-          tokenEstimate: 6,
-        },
+          tokenEstimate: 6
+        }
       ],
-      memoryRevalidation: { checkedCount: 1, excludedCount: 1 },
+      memoryRevalidation: { checkedCount: 1, excludedCount: 1 }
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1985,9 +2418,9 @@ describe('contextHygieneService', () => {
           expect.not.stringContaining('Use concise answers'),
           expect.stringContaining('memory-tombstoned'),
           'package-1',
-          'session-1',
-        ],
-      }),
+          'session-1'
+        ]
+      })
     )
   })
 
@@ -1999,17 +2432,17 @@ describe('contextHygieneService', () => {
 
     expect(tombstone).toMatchObject({
       memoryId: 'memory-1',
-      reason: 'user-request',
+      reason: 'user-request'
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        sql: expect.stringContaining('UPDATE intelligence_memory_items SET enabled = 0'),
-      }),
+        sql: expect.stringContaining('UPDATE intelligence_memory_items SET enabled = 0')
+      })
     )
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        sql: expect.stringContaining('INSERT INTO intelligence_memory_tombstones'),
-      }),
+        sql: expect.stringContaining('INSERT INTO intelligence_memory_tombstones')
+      })
     )
   })
 
@@ -2021,23 +2454,23 @@ describe('contextHygieneService', () => {
 
     expect(result).toMatchObject({
       memoryId: 'memory-1',
-      enabled: false,
+      enabled: false
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         sql: expect.stringContaining('SET enabled = ?'),
-        args: [0, expect.any(Number), 'memory-1'],
-      }),
+        args: [0, expect.any(Number), 'memory-1']
+      })
     )
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        sql: expect.stringContaining('privacy_level = \'normal\''),
-      }),
+        sql: expect.stringContaining("privacy_level = 'normal'")
+      })
     )
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        sql: expect.stringContaining('intelligence_memory_tombstones'),
-      }),
+        sql: expect.stringContaining('intelligence_memory_tombstones')
+      })
     )
   })
 })

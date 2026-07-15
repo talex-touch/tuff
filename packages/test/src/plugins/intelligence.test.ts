@@ -102,6 +102,11 @@ class FakeBuilder {
     return this
   }
 
+  setActions(actions: Array<Record<string, unknown>>) {
+    this.item.actions = actions
+    return this
+  }
+
   setMeta(meta: Record<string, unknown>) {
     this.item.meta = meta
     return this
@@ -1780,6 +1785,33 @@ describe('intelligence plugin', () => {
     }
   })
 
+  it('preserves bounded structured reason and recovery from invoke errors', () => {
+    const detailedError = Object.assign(new Error('provider request failed'), {
+      code: 'PROVIDER_UNAVAILABLE',
+      reason: 'Provider credentials were rejected by the upstream service.',
+      recovery: 'Update the provider credentials, then retry the request.',
+    })
+
+    expect(intelligenceTest.normalizeInvokeError(detailedError)).toMatchObject({
+      code: 'PROVIDER_UNAVAILABLE',
+      reason: 'Provider credentials were rejected by the upstream service.',
+      recovery: 'Update the provider credentials, then retry the request.',
+    })
+
+    const oversizedDetail = 'x'.repeat(300)
+    const truncated = intelligenceTest.normalizeInvokeError(
+      Object.assign(new Error('provider request failed'), {
+        code: 'PROVIDER_UNAVAILABLE',
+        reason: oversizedDetail,
+        recovery: oversizedDetail,
+      }),
+    )
+    expect(truncated.reason).toBe(`${oversizedDetail.slice(0, 239)}…`)
+    expect(truncated.recovery).toBe(`${oversizedDetail.slice(0, 239)}…`)
+    expect(intelligenceTest.normalizeInvokeError(new Error('provider request failed')))
+      .toMatchObject({ reason: '', recovery: '' })
+  })
+
   it('maps invoke result', () => {
     const mapped = intelligenceTest.mapInvokeResult(
       {
@@ -1842,6 +1874,19 @@ describe('intelligence plugin', () => {
         { role: 'user', content: '你是谁？' },
         { role: 'assistant', status: 'streaming' },
       ],
+    })
+  })
+
+  it('exposes structured error details in widget payloads', () => {
+    expect(
+      intelligenceTest.buildWidgetPayload({
+        status: 'error',
+        errorReason: ' The selected model is currently offline. ',
+        errorRecovery: ' Select an available model and retry. ',
+      }),
+    ).toMatchObject({
+      errorReason: 'The selected model is currently offline.',
+      errorRecovery: 'Select an available model and retry.',
     })
   })
 
@@ -2012,6 +2057,67 @@ describe('intelligence plugin', () => {
         inputKinds: ['text'],
       },
     })
+  })
+
+  it('declares separate host-owned recovery actions for provider and permission widget failures', () => {
+    const pluginWithBuilder = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({ TuffItemBuilder: FakeBuilder }),
+    )
+
+    for (const error of [
+      { code: 'NEXUS_AUTH_REQUIRED', message: '请先登录' },
+      { code: 'PROVIDER_UNAVAILABLE', message: '渠道不可用' },
+      { code: 'NETWORK_FAILURE', message: '网络请求失败' },
+    ] as const) {
+      const item = pluginWithBuilder.__test.buildWidgetItem('intelligence-ask', {
+        prompt: '解释这段代码',
+        status: 'error',
+        errorCode: error.code,
+        errorMessage: error.message,
+      })
+
+      expect(item.actions).toEqual([
+        {
+          id: 'open-intelligence-settings',
+          type: 'navigate',
+          label: '检查 AI 渠道',
+          primary: false,
+          payload: { path: '/intelligence/channels' },
+        },
+      ])
+    }
+
+    const permissionItem = pluginWithBuilder.__test.buildWidgetItem(
+      'intelligence-ask',
+      {
+        prompt: '解释这段代码',
+        status: 'error',
+        errorCode: 'PERMISSION_DENIED',
+        errorMessage: '插件权限已拒绝',
+      },
+    )
+
+    expect(permissionItem.actions).toEqual([
+      {
+        id: 'open-plugin-permissions',
+        type: 'navigate',
+        label: '检查插件权限',
+        primary: false,
+        payload: { path: '/plugin/touch-intelligence?tab=Permissions' },
+      },
+    ])
+
+    for (const errorCode of ['MODEL_UNSUPPORTED', 'INVALID_REQUEST']) {
+      const item = pluginWithBuilder.__test.buildWidgetItem('intelligence-ask', {
+        prompt: '解释这段代码',
+        status: 'error',
+        errorCode,
+        errorMessage: '不可恢复错误',
+      })
+
+      expect(item.actions).toBeUndefined()
+    }
   })
   it('keeps built-in command widget metadata stateless without tagging AI Ask', () => {
     const pluginWithBuilder = loadPluginModule(
@@ -2381,6 +2487,58 @@ describe('intelligence plugin', () => {
           && call[0][0].render.custom.data.provider === 'local-default',
       ),
     ).toBe(true)
+  })
+
+  it('pushes structured recovery details after a real failed AI invoke', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const invoke = vi.fn(async () => {
+      throw Object.assign(new Error('provider request failed'), {
+        code: 'PROVIDER_UNAVAILABLE',
+        reason: 'The selected provider rejected this request.',
+        recovery: 'Check the provider configuration and retry.',
+      })
+    })
+    const pluginWithFailedInvoke = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { invoke },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithFailedInvoke.onFeatureTriggered(
+      'intelligence-ask',
+      'ai summarize the incident',
+    )
+    const sendItem = pushItems.mock.calls[0]?.[0][0]
+    pushItems.mockClear()
+
+    await pluginWithFailedInvoke.onItemAction(sendItem)
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce())
+
+    const failedPayload = pushItems.mock.calls
+      .map(call => call[0][0].render?.custom?.data)
+      .find(payload => payload?.status === 'error')
+    expect(failedPayload).toMatchObject({
+      errorCode: 'PROVIDER_UNAVAILABLE',
+      errorReason: 'The selected provider rejected this request.',
+      errorRecovery: 'Check the provider configuration and retry.',
+    })
   })
 
   it('uses host-owned context execution before CoreBox AI Ask invocation', async () => {
@@ -2977,7 +3135,8 @@ describe('intelligence plugin', () => {
     const getItems = vi.fn(() => hostItems)
     const updateItem = vi.fn((id: string, update: Record<string, unknown>) => {
       const index = hostItems.findIndex(item => item.id === id)
-      if (index >= 0) hostItems[index] = { ...hostItems[index], ...update }
+      if (index >= 0)
+        hostItems[index] = { ...hostItems[index], ...update }
     })
     const streamCallbacks: Array<{
       onDelta: (
@@ -3130,7 +3289,6 @@ describe('intelligence plugin', () => {
     })
   })
 
-
   it('cancels superseded cross-feature streams and keeps the latest widget state authoritative', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
@@ -3233,7 +3391,7 @@ describe('intelligence plugin', () => {
     const lateController = { cancel: vi.fn() }
     const activeController = { cancel: vi.fn() }
     let resolveLateController!: (controller: typeof lateController) => void
-    const lateControllerPromise = new Promise<typeof lateController>(resolve => {
+    const lateControllerPromise = new Promise<typeof lateController>((resolve) => {
       resolveLateController = resolve
     })
     let streamCount = 0
@@ -3978,6 +4136,149 @@ describe('intelligence plugin', () => {
       externalAction: true,
       status: 'started',
       message: '已替换选中文本',
+    })
+  })
+  it('cancels the matching context stream, preserves its partial answer, and ignores late stream events', async () => {
+    interface WidgetItem {
+      id: string
+      subtitle?: string
+      render: { custom: { data: Record<string, unknown> } }
+      meta: Record<string, unknown>
+    }
+    const hostItems: WidgetItem[] = []
+    const firstController = { cancel: vi.fn() }
+    const secondController = { cancel: vi.fn() }
+    const streamCallbacks: Array<{
+      onDelta: (delta: string) => void
+      onEnd: (event?: { content?: string }) => void
+      onError: (error: Error) => void
+    }> = []
+    const pushItems = vi.fn((items: WidgetItem[]) => {
+      hostItems.push(...items)
+    })
+    const getItems = vi.fn(() => hostItems)
+    const updateItem = vi.fn((id: string, update: Partial<WidgetItem>) => {
+      const index = hostItems.findIndex(item => item.id === id)
+      if (index >= 0)
+        hostItems[index] = { ...hostItems[index], ...update }
+    })
+    const contextStream = vi.fn((_request, callbacks) => {
+      streamCallbacks.push(callbacks)
+      return streamCallbacks.length === 1 ? firstController : secondController
+    })
+    const pluginWithControllableStream = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        intelligence: { contextStream, invoke: vi.fn() },
+        permission: {
+          check: vi.fn(async () => true),
+          request: vi.fn(async () => true),
+        },
+        plugin: {
+          feature: { clearItems: vi.fn(), pushItems, getItems, updateItem },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithControllableStream.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 取消这个回答',
+    )
+    await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(1))
+    streamCallbacks[0].onDelta('保留这一段')
+    await vi.waitFor(() => {
+      expect(hostItems[0]?.render.custom.data).toMatchObject({
+        status: 'chat-pending',
+        answer: '保留这一段',
+      })
+    })
+
+    const matchingPayload = { ...hostItems[0].render.custom.data }
+    const cancellation = await pluginWithControllableStream.onItemAction(
+      {
+        meta: {
+          featureId: 'intelligence-ask',
+          payload: matchingPayload,
+        },
+      },
+      { actionId: 'cancel-request' },
+    )
+
+    expect(cancellation).toMatchObject({
+      externalAction: true,
+      success: true,
+      status: 'cancelled',
+    })
+    expect(firstController.cancel).toHaveBeenCalledTimes(1)
+    expect(hostItems[0]).toMatchObject({
+      render: {
+        basic: { subtitle: '已停止生成' },
+        custom: {
+          data: {
+            requestId: matchingPayload.requestId,
+            status: 'cancelled',
+            answer: '保留这一段',
+          },
+        },
+      },
+      meta: { status: 'cancelled' },
+    })
+
+    streamCallbacks[0].onDelta('不应追加')
+    streamCallbacks[0].onEnd({ content: '不应完成' })
+    streamCallbacks[0].onError(new Error('不应失败'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(hostItems[0].render.custom.data).toMatchObject({
+      requestId: matchingPayload.requestId,
+      status: 'cancelled',
+      answer: '保留这一段',
+    })
+    expect(firstController.cancel).toHaveBeenCalledTimes(1)
+
+    await pluginWithControllableStream.onFeatureTriggered(
+      'intelligence-ask',
+      'ai 更新的回答',
+    )
+    await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(2))
+    const currentPayload = { ...hostItems[0].render.custom.data }
+    const staleCancellation = await pluginWithControllableStream.onItemAction(
+      {
+        meta: {
+          featureId: 'intelligence-ask',
+          payload: matchingPayload,
+        },
+      },
+      { actionId: 'cancel-request' },
+    )
+    const missingRequestCancellation
+      = await pluginWithControllableStream.onItemAction(
+        {
+          meta: {
+            featureId: 'intelligence-ask',
+            payload: { ...currentPayload, requestId: '' },
+          },
+        },
+        { actionId: 'cancel-request' },
+      )
+
+    expect(staleCancellation).toMatchObject({ status: 'ignored', reason: 'stale-request' })
+    expect(missingRequestCancellation).toMatchObject({
+      status: 'ignored',
+      reason: 'stale-request',
+    })
+    expect(secondController.cancel).not.toHaveBeenCalled()
+    expect(hostItems[0].render.custom.data).toMatchObject({
+      requestId: currentPayload.requestId,
+      status: 'chat-pending',
     })
   })
 })
