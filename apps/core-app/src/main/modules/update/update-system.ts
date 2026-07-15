@@ -889,6 +889,20 @@ export class UpdateSystem {
 
       const signatureUrl =
         typeof task.metadata?.signatureUrl === 'string' ? task.metadata.signatureUrl : undefined
+      if (!signatureUrl) {
+        // Requiring a signature is opt-in: some historical release assets may
+        // lack a signature URL, so mandating it is gated behind an env flag
+        // until the release pipeline guarantees every asset is signed.
+        if (process.env.TUFF_UPDATE_REQUIRE_SIGNATURE === 'true') {
+          throw new Error('Update package signature is required but missing')
+        }
+        updateSystemLog.warn(
+          'Update package has no signature URL; skipping signature verification',
+          {
+            meta: { taskId }
+          }
+        )
+      }
       if (signatureUrl) {
         const verifyResult = await this.signatureVerifier.verifyFileSignature(
           filePath,
@@ -899,12 +913,16 @@ export class UpdateSystem {
         )
 
         if (!verifyResult.valid) {
-          updateSystemLog.warn('Update package signature verification failed', {
+          updateSystemLog.error('Update package signature verification failed', {
             meta: {
               taskId,
               reason: verifyResult.reason
             }
           })
+          // Fail closed: never install a package whose signature does not verify.
+          throw new Error(
+            `Update package signature verification failed: ${verifyResult.reason ?? 'unknown'}`
+          )
         }
       }
 

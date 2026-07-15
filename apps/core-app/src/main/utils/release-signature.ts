@@ -1,5 +1,7 @@
 import crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
+import path from 'node:path'
+import { app } from 'electron'
 import { getNetworkService } from '../modules/network'
 import { createLogger } from './logger'
 
@@ -12,6 +14,7 @@ export interface SignatureVerificationResult {
 
 export class SignatureVerifier {
   private readonly keyCache = new Map<string, { key: string; fetchedAt: number }>()
+  private embeddedKeyCache: string | null = null
   private readonly cacheTtlMs: number
 
   constructor(cacheTtlMs = 60 * 60 * 1000) {
@@ -74,10 +77,50 @@ export class SignatureVerifier {
     return null
   }
 
+  private async loadEmbeddedPublicKey(): Promise<string | null> {
+    if (this.embeddedKeyCache !== null) {
+      return this.embeddedKeyCache || null
+    }
+    // Same trust-root file the catalog verifier pins, resolved from the bundle
+    // without importing the catalog module (which pulls in Electron-heavy deps).
+    const relativePath = path.join('resources', 'keys', 'release-signing-public.pem')
+    const candidates = [
+      path.join(app.getAppPath(), relativePath),
+      ...(process.resourcesPath
+        ? [
+            path.join(process.resourcesPath, 'app', relativePath),
+            path.join(process.resourcesPath, relativePath)
+          ]
+        : []),
+      path.join(process.cwd(), relativePath)
+    ]
+    for (const candidate of candidates) {
+      try {
+        const key = (await fs.readFile(candidate, 'utf8')).trim()
+        if (key) {
+          this.embeddedKeyCache = key
+          return key
+        }
+      } catch {
+        // try the next candidate path
+      }
+    }
+    this.embeddedKeyCache = ''
+    return null
+  }
+
   private async fetchSignaturePublicKey(
     signatureUrl?: string,
     signatureKeyUrl?: string
   ): Promise<string | null> {
+    // Prefer the public key embedded in the app bundle. A network-fetched key
+    // can be swapped by a MITM, so the embedded key is authoritative; the
+    // network path below is only a fallback for when the embedded key is absent.
+    const embedded = await this.loadEmbeddedPublicKey()
+    if (embedded) {
+      return embedded
+    }
+
     const resolvedUrl = this.resolveSignatureKeyUrl(signatureUrl, signatureKeyUrl)
     if (!resolvedUrl) {
       return null
