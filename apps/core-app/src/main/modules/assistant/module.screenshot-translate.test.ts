@@ -11,9 +11,25 @@ import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
 type AssistantHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
+type ScreenPoint = { x: number; y: number }
+type ScreenTopologyEvent = 'display-added' | 'display-removed' | 'display-metrics-changed'
+type ScreenTopologyListener = () => void | Promise<void>
+
+type FloatingBallDisplay = {
+  workArea: { x: number; y: number; width: number; height: number }
+}
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, AssistantHandler>(),
+  screenListeners: new Map<ScreenTopologyEvent, ScreenTopologyListener>(),
+  screenOn: vi.fn((event: ScreenTopologyEvent, listener: ScreenTopologyListener): void => {
+    mocks.screenListeners.set(event, listener)
+  }),
+  screenOff: vi.fn((event: ScreenTopologyEvent, listener: ScreenTopologyListener): void => {
+    if (mocks.screenListeners.get(event) === listener) {
+      mocks.screenListeners.delete(event)
+    }
+  }),
   copyFile: vi.fn(() => Promise.resolve()),
   showSaveDialog: vi.fn<() => Promise<{ canceled: boolean; filePath?: string }>>(() =>
     Promise.resolve({
@@ -81,6 +97,10 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
   listDisplays: vi.fn<() => NativeScreenshotDisplay[]>(),
   getSupport: vi.fn(),
+  getCursorScreenPoint: vi.fn<() => ScreenPoint>(() => ({ x: 0, y: 0 })),
+  getDisplayNearestPoint: vi.fn<(point: ScreenPoint) => FloatingBallDisplay>(() => ({
+    workArea: { x: 0, y: 0, width: 1440, height: 900 }
+  })),
   touchWindows: [] as Array<{
     options: Record<string, unknown>
     window: {
@@ -90,15 +110,21 @@ const mocks = vi.hoisted(() => ({
       hide: () => void
       show: () => void
       focus: () => void
+      setBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
+      getBounds: () => { x: number; y: number; width: number; height: number }
+      isVisible: () => boolean
+      isDestroyed: () => boolean
     }
   }>,
   translateImageBase64: vi.fn<() => Promise<CoreBoxImageTranslateResponse>>(),
   translateClipboardImage: vi.fn(),
   ocr: vi.fn(),
   textTranslate: vi.fn(),
+  stt: vi.fn(),
   sendTo: vi.fn<
     (target: unknown, event: { toEventName: () => string }, payload: unknown) => Promise<void>
   >(() => Promise.resolve()),
+  broadcastToWindow: vi.fn(),
   coreBoxTrigger: vi.fn(),
   updateCoreBoxPosition: vi.fn(),
   logger: {
@@ -124,7 +150,7 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
       mocks.handlers.set(event.toEventName(), handler)
       return vi.fn()
     }),
-    broadcastToWindow: vi.fn(),
+    broadcastToWindow: mocks.broadcastToWindow,
     sendTo: mocks.sendTo
   }))
 }))
@@ -134,10 +160,11 @@ vi.mock('electron', () => ({
     showSaveDialog: mocks.showSaveDialog
   },
   screen: {
-    getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
-    getDisplayNearestPoint: vi.fn(() => ({
-      workArea: { x: 0, y: 0, width: 1440, height: 900 }
-    }))
+    getCursorScreenPoint: mocks.getCursorScreenPoint,
+    getDisplayNearestPoint: mocks.getDisplayNearestPoint,
+    on: mocks.screenOn,
+    off: mocks.screenOff,
+    removeListener: mocks.screenOff
   }
 }))
 
@@ -249,6 +276,9 @@ vi.mock('../ai/intelligence-sdk', () => ({
     },
     text: {
       translate: mocks.textTranslate
+    },
+    audio: {
+      stt: mocks.stt
     }
   }
 }))
@@ -310,6 +340,7 @@ describe('AssistantModule screenshot translation', () => {
     vi.clearAllMocks()
     vi.resetModules()
     mocks.handlers.clear()
+    mocks.screenListeners.clear()
     mocks.copyFile.mockClear()
     mocks.showSaveDialog.mockClear()
     mocks.showSaveDialog.mockResolvedValue({
@@ -322,10 +353,264 @@ describe('AssistantModule screenshot translation', () => {
     mocks.listDisplays.mockReturnValue([])
     mocks.getSupport.mockReturnValue({ supported: true, platform: 'darwin' })
     mocks.touchWindows.length = 0
+    mocks.getCursorScreenPoint.mockReset()
+    mocks.getCursorScreenPoint.mockReturnValue({ x: 0, y: 0 })
+    mocks.getDisplayNearestPoint.mockReset()
+    mocks.getDisplayNearestPoint.mockReturnValue({
+      workArea: { x: 0, y: 0, width: 1440, height: 900 }
+    })
     mocks.ocr.mockReset()
     mocks.textTranslate.mockReset()
+    mocks.stt.mockReset()
     mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
     mocks.sendTo.mockResolvedValue(undefined)
+  })
+
+  it('restores a persisted negative ball position on its saved display', async () => {
+    const savedDisplay: FloatingBallDisplay = {
+      workArea: { x: -1280, y: 0, width: 1280, height: 720 }
+    }
+    const cursorDisplay: FloatingBallDisplay = {
+      workArea: { x: 1440, y: 0, width: 1440, height: 900 }
+    }
+    mocks.getMainConfig.mockReturnValue(
+      mocks.createEnabledSetting({
+        floatingBall: {
+          enabled: true,
+          size: 56,
+          opacity: 1,
+          edgePadding: 24,
+          position: { x: -1180, y: 620 }
+        }
+      })
+    )
+    mocks.getCursorScreenPoint.mockReturnValue({ x: 1800, y: 300 })
+    mocks.getDisplayNearestPoint.mockImplementation((point) =>
+      point.x < 0 ? savedDisplay : cursorDisplay
+    )
+
+    const { module } = await createInitializedModule()
+    const floatingBall = mocks.touchWindows[0]
+    if (!floatingBall) {
+      throw new Error('Floating ball was not opened')
+    }
+
+    expect(mocks.getDisplayNearestPoint).toHaveBeenCalledWith({ x: -1180, y: 620 })
+    expect(floatingBall.window.setBounds).toHaveBeenLastCalledWith({
+      x: -1180,
+      y: 620,
+      width: 56,
+      height: 56
+    })
+
+    await module.onDestroy({} as never)
+  })
+
+  it('uses the cursor display and default edge placement for the canonical unset ball position', async () => {
+    const cursor = { x: 1800, y: 300 }
+    const cursorDisplay: FloatingBallDisplay = {
+      workArea: { x: 1440, y: 100, width: 1600, height: 900 }
+    }
+    mocks.getCursorScreenPoint.mockReturnValue(cursor)
+    mocks.getDisplayNearestPoint.mockReturnValue(cursorDisplay)
+
+    const { module } = await createInitializedModule()
+    const floatingBall = mocks.touchWindows[0]
+    if (!floatingBall) {
+      throw new Error('Floating ball was not opened')
+    }
+
+    expect(mocks.getDisplayNearestPoint).toHaveBeenCalledWith(cursor)
+    expect(floatingBall.window.setBounds).toHaveBeenLastCalledWith({
+      x: 2960,
+      y: 415,
+      width: 56,
+      height: 56
+    })
+
+    await module.onDestroy({} as never)
+  })
+
+  it('clamps an out-of-work-area persisted position wholly inside its selected display', async () => {
+    const savedDisplay: FloatingBallDisplay = {
+      workArea: { x: 1440, y: 100, width: 600, height: 400 }
+    }
+    const cursorDisplay: FloatingBallDisplay = {
+      workArea: { x: -1280, y: 0, width: 1280, height: 720 }
+    }
+    mocks.getMainConfig.mockReturnValue(
+      mocks.createEnabledSetting({
+        floatingBall: {
+          enabled: true,
+          size: 56,
+          opacity: 1,
+          edgePadding: 24,
+          position: { x: 2500, y: 760 }
+        }
+      })
+    )
+    mocks.getCursorScreenPoint.mockReturnValue({ x: -500, y: 300 })
+    mocks.getDisplayNearestPoint.mockImplementation((point) =>
+      point.x >= 1440 ? savedDisplay : cursorDisplay
+    )
+
+    const { module } = await createInitializedModule()
+    const floatingBall = mocks.touchWindows[0]
+    if (!floatingBall) {
+      throw new Error('Floating ball was not opened')
+    }
+
+    expect(mocks.getDisplayNearestPoint).toHaveBeenCalledWith({ x: 2500, y: 760 })
+    expect(floatingBall.window.setBounds).toHaveBeenLastCalledWith({
+      x: 1984,
+      y: 444,
+      width: 56,
+      height: 56
+    })
+
+    await module.onDestroy({} as never)
+  })
+
+  it('registers one topology listener for every display event and removes it on teardown', async () => {
+    const { module } = await createInitializedModule()
+    const events: ScreenTopologyEvent[] = [
+      'display-added',
+      'display-removed',
+      'display-metrics-changed'
+    ]
+    const listeners = events.map((event) => {
+      const listener = mocks.screenListeners.get(event)
+      if (!listener) {
+        throw new Error(`${event} listener was not registered`)
+      }
+      return listener
+    })
+
+    expect(mocks.screenOn).toHaveBeenCalledTimes(3)
+    expect(new Set(listeners).size).toBe(1)
+
+    await module.onDestroy({} as never)
+
+    expect(mocks.screenOff).toHaveBeenCalledTimes(3)
+    for (const event of events) {
+      expect(mocks.screenOff).toHaveBeenCalledWith(event, listeners[0])
+    }
+    expect(mocks.screenListeners.size).toBe(0)
+  })
+
+  it('reapplies the saved ball position into the remaining work area without persisting topology recovery', async () => {
+    const savedSetting = mocks.createEnabledSetting({
+      floatingBall: {
+        enabled: true,
+        size: 56,
+        opacity: 1,
+        edgePadding: 24,
+        position: { x: 2500, y: 760 }
+      }
+    })
+    mocks.getMainConfig.mockReturnValue(savedSetting)
+    mocks.getDisplayNearestPoint.mockReturnValue({
+      workArea: { x: 1440, y: 100, width: 600, height: 400 }
+    })
+
+    const { module } = await createInitializedModule()
+    const floatingBall = mocks.touchWindows[0]
+    const listener = mocks.screenListeners.get('display-removed')
+    if (!floatingBall || !listener) {
+      throw new Error('Topology recovery prerequisites were not initialized')
+    }
+
+    vi.mocked(floatingBall.window.setBounds).mockClear()
+    mocks.saveMainConfig.mockClear()
+    mocks.persistMainConfig.mockClear()
+    mocks.getDisplayNearestPoint.mockReturnValue({
+      workArea: { x: 0, y: 0, width: 800, height: 500 }
+    })
+
+    await listener()
+
+    expect(mocks.touchWindows).toHaveLength(1)
+    expect(floatingBall.window.setBounds).toHaveBeenCalledWith({
+      x: 744,
+      y: 444,
+      width: 56,
+      height: 56
+    })
+    expect(mocks.saveMainConfig).not.toHaveBeenCalled()
+    expect(mocks.persistMainConfig).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
+  })
+
+  it('reanchors a visible Voice Panel after topology recovery without reopening it and leaves it hidden otherwise', async () => {
+    const savedSetting = mocks.createEnabledSetting({
+      floatingBall: {
+        enabled: true,
+        size: 56,
+        opacity: 1,
+        edgePadding: 24,
+        position: { x: 2500, y: 760 }
+      }
+    })
+    mocks.getMainConfig.mockReturnValue(savedSetting)
+    mocks.getDisplayNearestPoint.mockReturnValue({
+      workArea: { x: 1440, y: 100, width: 600, height: 400 }
+    })
+
+    const { module } = await createInitializedModule()
+    const openPanel = mocks.handlers.get(AssistantEvents.floatingBall.openVoicePanel.toEventName())
+    if (!openPanel) {
+      throw new Error('openVoicePanel handler was not registered')
+    }
+    await openPanel({ source: 'click' }, {} as HandlerContext)
+
+    const floatingBall = mocks.touchWindows[0]
+    const voicePanel = mocks.touchWindows[1]
+    const listener = mocks.screenListeners.get('display-metrics-changed')
+    if (!floatingBall || !voicePanel || !listener) {
+      throw new Error('Visible Voice Panel topology recovery prerequisites were not initialized')
+    }
+
+    vi.mocked(floatingBall.window.getBounds).mockReturnValue({
+      x: 744,
+      y: 444,
+      width: 56,
+      height: 56
+    })
+    vi.mocked(voicePanel.window.isVisible).mockReturnValue(true)
+    vi.mocked(voicePanel.window.setBounds).mockClear()
+    vi.mocked(voicePanel.window.show).mockClear()
+    vi.mocked(voicePanel.window.focus).mockClear()
+    mocks.broadcastToWindow.mockClear()
+    mocks.getDisplayNearestPoint.mockReturnValue({
+      workArea: { x: 0, y: 0, width: 800, height: 500 }
+    })
+
+    await listener()
+
+    expect(mocks.touchWindows).toHaveLength(2)
+    expect(voicePanel.window.setBounds).toHaveBeenCalledWith({
+      x: 380,
+      y: 240,
+      width: 420,
+      height: 260
+    })
+    expect(voicePanel.window.show).not.toHaveBeenCalled()
+    expect(voicePanel.window.focus).not.toHaveBeenCalled()
+    expect(mocks.broadcastToWindow).not.toHaveBeenCalled()
+
+    vi.mocked(voicePanel.window.setBounds).mockClear()
+    vi.mocked(voicePanel.window.isVisible).mockReturnValue(false)
+
+    await listener()
+
+    expect(mocks.touchWindows).toHaveLength(2)
+    expect(voicePanel.window.setBounds).not.toHaveBeenCalled()
+    expect(voicePanel.window.show).not.toHaveBeenCalled()
+    expect(voicePanel.window.focus).not.toHaveBeenCalled()
+    expect(mocks.broadcastToWindow).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
   })
 
   it('dispatches voice text with an isolated Assistant light-context policy', async () => {
@@ -1178,5 +1463,164 @@ describe('AssistantModule screenshot translation', () => {
 
     await module.onDestroy({} as never)
     vi.useRealTimers()
+  })
+  it('routes valid VoicePanel audio through governed Intelligence STT metadata', async () => {
+    mocks.stt.mockResolvedValue({
+      result: {
+        text: '  summarize the selected text  ',
+        confidence: 0.92,
+        language: 'en'
+      },
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      provider: 'openai-compatible',
+      model: 'whisper-1',
+      traceId: 'trace-asr-1',
+      latency: 47
+    })
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.transcribeAudio.toEventName()
+    )
+
+    const result = await handler(
+      {
+        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
+        mimeType: 'audio/webm;codecs=opus',
+        durationMs: 1_250,
+        language: 'en-US'
+      },
+      {} as HandlerContext
+    )
+
+    expect(mocks.stt).toHaveBeenCalledWith(
+      {
+        audio: 'data:audio/webm;base64,YXVkaW8=',
+        format: 'webm',
+        language: 'en-US'
+      },
+      {
+        timeout: 30_000,
+        metadata: {
+          caller: 'core.assistant.voice-transcribe',
+          source: 'assistant-voice-panel-provider-asr'
+        }
+      }
+    )
+    expect(result).toEqual({
+      success: true,
+      text: 'summarize the selected text',
+      language: 'en',
+      confidence: 0.92,
+      provider: 'openai-compatible',
+      model: 'whisper-1',
+      traceId: 'trace-asr-1',
+      latencyMs: 47
+    })
+
+    await module.onDestroy({} as never)
+  })
+
+  it.each([
+    {
+      name: 'non-audio data URL',
+      payload: {
+        audioDataUrl: 'data:text/plain;base64,YXVkaW8=',
+        mimeType: 'text/plain',
+        durationMs: 1_000
+      },
+      code: 'AUDIO_INVALID'
+    },
+    {
+      name: 'mismatched MIME type',
+      payload: {
+        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
+        mimeType: 'audio/ogg',
+        durationMs: 1_000
+      },
+      code: 'AUDIO_INVALID'
+    },
+    {
+      name: 'oversized recording',
+      payload: {
+        audioDataUrl: `data:audio/webm;base64,${'A'.repeat(7_000_000)}`,
+        mimeType: 'audio/webm',
+        durationMs: 1_000
+      },
+      code: 'AUDIO_TOO_LARGE'
+    },
+    {
+      name: 'overlong recording',
+      payload: {
+        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
+        mimeType: 'audio/webm',
+        durationMs: 31_001
+      },
+      code: 'AUDIO_TOO_LONG'
+    }
+  ])('rejects $name before invoking an ASR provider', async ({ payload, code }) => {
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.transcribeAudio.toEventName()
+    )
+
+    const result = await handler(payload, {} as HandlerContext)
+
+    expect(result).toMatchObject({ success: false, code })
+    expect(mocks.stt).not.toHaveBeenCalled()
+    await module.onDestroy({} as never)
+  })
+
+  it('rejects VoicePanel transcription while Assistant is disabled', async () => {
+    mocks.getMainConfig.mockReturnValue(
+      mocks.createEnabledSetting({
+        assistant: {
+          enabled: false,
+          name: '阿洛 aler',
+          identifier: 'aler'
+        }
+      })
+    )
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.transcribeAudio.toEventName()
+    )
+
+    const result = await handler(
+      {
+        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
+        mimeType: 'audio/webm',
+        durationMs: 1_000
+      },
+      {} as HandlerContext
+    )
+
+    expect(result).toEqual({
+      success: false,
+      code: 'ASSISTANT_DISABLED',
+      error: 'Assistant is disabled.'
+    })
+    expect(mocks.stt).not.toHaveBeenCalled()
+    await module.onDestroy({} as never)
+  })
+
+  it('preserves canonical provider failures from governed VoicePanel STT', async () => {
+    mocks.stt.mockRejectedValue(new Error('No enabled providers available'))
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.transcribeAudio.toEventName()
+    )
+
+    const result = await handler(
+      {
+        audioDataUrl: 'data:audio/webm;base64,YXVkaW8=',
+        mimeType: 'audio/webm',
+        durationMs: 1_000
+      },
+      {} as HandlerContext
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'PROVIDER_UNAVAILABLE'
+    })
+    expect(result).toHaveProperty('reason')
+    expect(result).toHaveProperty('recovery')
+    await module.onDestroy({} as never)
   })
 })

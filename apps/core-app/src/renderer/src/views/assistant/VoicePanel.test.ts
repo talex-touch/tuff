@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import type {
   AssistantClipboardImageTranslateResponse,
   AssistantScreenshotDisplay,
   AssistantScreenshotRegionSelectionResponse,
-  AssistantScreenshotTranslateResponse
+  AssistantScreenshotTranslateResponse,
+  AssistantVoiceTranscribeResponse
 } from '@talex-touch/utils/transport/events/assistant'
 import VoicePanel from './VoicePanel.vue'
 
@@ -38,7 +39,16 @@ const messages: Record<string, string> = {
   'assistant.voicePanel.openMicrophonePermissionSettings': 'Open microphone settings',
   'assistant.voicePanel.microphonePermissionSettingsOpened': 'Microphone settings opened',
   'assistant.voicePanel.microphonePermissionSettingsUnavailable': 'Microphone settings unavailable',
-  'assistant.voicePanel.retryVoiceInput': 'Retry voice input'
+  'assistant.voicePanel.retryVoiceInput': 'Retry voice input',
+  'assistant.voicePanel.providerRecording': 'Provider recording',
+  'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe',
+  'assistant.voicePanel.voiceTranscribing': 'Transcribing voice',
+  'assistant.voicePanel.voiceTranscribed': 'Voice transcribed',
+  'assistant.voicePanel.voiceTranscribedWithProvider': 'Voice transcribed by {provider}',
+  'assistant.voicePanel.voiceBrowserFallback': 'Browser speech fallback ready',
+  'assistant.voicePanel.voiceTranscribeUnavailable': 'Voice transcription unavailable',
+  'assistant.voicePanel.voiceTranscribeFailed': 'Voice transcription failed',
+  'assistant.voicePanel.startListening': 'Start listening'
 }
 
 vi.mock('@talex-touch/utils/transport', () => ({
@@ -53,7 +63,7 @@ vi.mock('vue-i18n', () => ({
     t: (key: string, values?: Record<string, string> | string) => {
       const template = messages[key] ?? (typeof values === 'string' ? values : key)
       return template.replace(/\{(\w+)\}/g, (_match, name: string) =>
-        typeof values === 'object' && values ? values[name] ?? '' : ''
+        typeof values === 'object' && values ? (values[name] ?? '') : ''
       )
     }
   })
@@ -67,6 +77,9 @@ let intelligenceSettingsOpenResult: boolean
 let screenshotRegionSelectionResponse: AssistantScreenshotRegionSelectionResponse
 let submitResponse: Promise<{ accepted: boolean }>
 let closePanelResponse: Promise<void>
+let voiceTranscribeResponse: AssistantVoiceTranscribeResponse
+let mediaRecorderInstances: ControllableMediaRecorder[]
+let mediaTrackStopMock: Mock<() => void>
 
 class ControllableSpeechRecognition {
   lang = ''
@@ -101,6 +114,38 @@ class ControllableSpeechRecognition {
   }
 }
 
+class ControllableMediaRecorder {
+  static isTypeSupported(mimeType: string): boolean {
+    return mimeType.startsWith('audio/webm')
+  }
+
+  readonly mimeType: string
+  state: 'inactive' | 'recording' | 'paused' = 'inactive'
+  ondataavailable: ((event: { data: Blob }) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+  onstop: (() => void) | null = null
+  startCalls = 0
+
+  constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+    this.mimeType = options?.mimeType || 'audio/webm'
+    mediaRecorderInstances.push(this)
+  }
+
+  start(): void {
+    this.startCalls += 1
+    this.state = 'recording'
+  }
+
+  stop(): void {
+    if (this.state === 'inactive') return
+    this.state = 'inactive'
+    this.ondataavailable?.({
+      data: new Blob(['provider-audio'], { type: this.mimeType })
+    })
+    this.onstop?.()
+  }
+}
+
 let voiceWakeRuntimeEnabled: boolean
 let speechRecognitionStartError: Error | null
 let speechRecognitionInstances: ControllableSpeechRecognition[]
@@ -109,6 +154,20 @@ function enableVoiceWakeRecognition(startError: Error | null = null): void {
   voiceWakeRuntimeEnabled = true
   speechRecognitionStartError = startError
   vi.stubGlobal('SpeechRecognition', ControllableSpeechRecognition)
+}
+
+function enableProviderRecording(): void {
+  voiceWakeRuntimeEnabled = true
+  const getUserMedia = vi.fn().mockResolvedValue({
+    getTracks: () => [{ stop: mediaTrackStopMock }]
+  })
+  const navigatorWithMedia = Object.create(window.navigator) as Record<string, unknown>
+  Object.defineProperty(navigatorWithMedia, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia }
+  })
+  vi.stubGlobal('navigator', navigatorWithMedia)
+  vi.stubGlobal('MediaRecorder', ControllableMediaRecorder)
 }
 
 type Deferred<T> = {
@@ -133,6 +192,8 @@ beforeEach(() => {
   voiceWakeRuntimeEnabled = false
   speechRecognitionStartError = null
   speechRecognitionInstances = []
+  mediaRecorderInstances = []
+  mediaTrackStopMock = vi.fn()
   clipboardImageResponse = {
     success: false,
     code: 'IMAGE_UNAVAILABLE'
@@ -150,6 +211,16 @@ beforeEach(() => {
   }
   submitResponse = Promise.resolve({ accepted: true })
   closePanelResponse = Promise.resolve()
+  voiceTranscribeResponse = {
+    success: true,
+    text: 'Provider dictated request',
+    language: 'en',
+    confidence: 0.9,
+    provider: 'openai-compatible',
+    model: 'whisper-1',
+    traceId: 'trace-renderer-asr',
+    latencyMs: 35
+  }
   transportSendMock.mockReset()
   transportOnMock.mockReset()
   transportOnMock.mockReturnValue(() => undefined)
@@ -170,6 +241,8 @@ beforeEach(() => {
           return screenshotDisplaysResponse
         case 'assistant:voice-panel:submit':
           return submitResponse
+        case 'assistant:voice-panel:transcribe-audio':
+          return voiceTranscribeResponse
         case 'assistant:voice-panel:close':
           return closePanelResponse
         case 'assistant:voice-panel:select-screenshot-region':
@@ -462,6 +535,73 @@ async function surfaceScreenshotPermissionRecovery(wrapper: VueWrapper) {
   expect(wrapper.find('.error-text').text()).toBe('Screenshot permission denied')
   expect(wrapper.find('.permission-recovery-btn').exists()).toBe(true)
 }
+
+describe('VoicePanel provider ASR', () => {
+  it('records transient audio and applies a governed provider transcript', async () => {
+    enableProviderRecording()
+    const wrapper = await mountVoicePanel()
+    await openVoicePanel()
+
+    expect(mediaRecorderInstances).toHaveLength(1)
+    expect(mediaRecorderInstances[0]?.startCalls).toBe(1)
+    await findButton(wrapper, 'Stop and transcribe').trigger('click')
+
+    await vi.waitFor(() => {
+      expect(screenshotTransportCalls('assistant:voice-panel:transcribe-audio')).toHaveLength(1)
+    })
+    const transcribeCall = screenshotTransportCalls('assistant:voice-panel:transcribe-audio')[0]
+    const payload = transcribeCall?.[1] as {
+      audioDataUrl: string
+      mimeType: string
+      durationMs: number
+      language: string
+    }
+    expect(payload).toMatchObject({
+      mimeType: 'audio/webm;codecs=opus',
+      language: 'en-US'
+    })
+    expect(payload.audioDataUrl).toMatch(/^data:audio\/webm;codecs=opus;base64,/)
+    expect(payload.durationMs).toBeGreaterThan(0)
+    expect(wrapper.find<HTMLTextAreaElement>('textarea').element.value).toBe(
+      'Provider dictated request'
+    )
+    expect(mediaTrackStopMock).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it('starts the existing Web Speech fallback after provider transcription fails', async () => {
+    enableVoiceWakeRecognition()
+    enableProviderRecording()
+    voiceTranscribeResponse = {
+      success: false,
+      code: 'ASR_UNAVAILABLE',
+      error: 'Voice transcription is unavailable.'
+    }
+    const wrapper = await mountVoicePanel()
+    await openVoicePanel()
+
+    await findButton(wrapper, 'Stop and transcribe').trigger('click')
+    await vi.waitFor(() => {
+      expect(speechRecognitionInstances).toHaveLength(1)
+    })
+
+    expect(speechRecognitionInstances[0]?.startCalls).toBe(1)
+    expect(wrapper.find('.status-text').text()).toBe('Browser speech fallback ready')
+    expect(wrapper.find('.error-text').text()).toBe('Voice transcription unavailable')
+
+    speechRecognitionInstances[0]?.emitError('network')
+    await flushPromises()
+    await findButton(wrapper, 'Start listening').trigger('click')
+    await vi.waitFor(() => {
+      expect(mediaRecorderInstances).toHaveLength(2)
+    })
+    expect(mediaRecorderInstances[1]?.startCalls).toBe(1)
+    expect(wrapper.find('.intelligence-recovery-btn').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+})
 
 describe('VoicePanel microphone permission recovery', () => {
   it('opens settings once and retries with a fresh recognizer after a not-allowed callback', async () => {
@@ -762,7 +902,9 @@ describe('VoicePanel Intelligence settings recovery', () => {
       await wrapper.find('.intelligence-recovery-btn').trigger('click')
       await flushPromises()
 
-      expect(screenshotTransportCalls('assistant:voice-panel:open-intelligence-settings')).toHaveLength(1)
+      expect(
+        screenshotTransportCalls('assistant:voice-panel:open-intelligence-settings')
+      ).toHaveLength(1)
 
       wrapper.unmount()
     }
@@ -808,7 +950,6 @@ describe('VoicePanel Intelligence settings recovery', () => {
       wrapper.unmount()
     }
   )
-
 })
 
 describe('VoicePanel screenshot display selection', () => {

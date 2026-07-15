@@ -10,7 +10,8 @@ import type {
   AssistantScreenshotRegionSelectionErrorCode,
   AssistantScreenshotTranslateErrorCode,
   AssistantScreenshotFallbackStageMetadata,
-  AssistantScreenshotTextFallbackMetadata
+  AssistantScreenshotTextFallbackMetadata,
+  AssistantVoiceTranscribeErrorCode
 } from '@talex-touch/utils/transport/events/assistant'
 import type {
   CoreBoxImageTranslateRouteMetadata,
@@ -43,6 +44,18 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
+type ProviderRecordingStartResult = 'started' | 'fallback' | 'denied'
+
+const MAX_PROVIDER_RECORDING_MS = 30_000
+const MAX_PROVIDER_AUDIO_BYTES = 5 * 1024 * 1024
+const PROVIDER_RECORDING_MIME_TYPES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/ogg;codecs=opus',
+  'audio/mp4',
+  'audio/wav'
+] as const
+
 const CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS: Record<
   Exclude<AssistantClipboardImageTranslateErrorCode, IntelligenceErrorCode>,
   string
@@ -50,6 +63,18 @@ const CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS: Record<
   ASSISTANT_DISABLED: 'assistant.voicePanel.imageTranslateAssistantDisabled',
   IMAGE_UNAVAILABLE: 'assistant.voicePanel.clipboardImageTranslateImageUnavailable',
   SCENE_UNAVAILABLE: 'assistant.voicePanel.imageTranslateProviderUnavailable'
+}
+
+const VOICE_TRANSCRIBE_ERROR_KEYS: Record<
+  Exclude<AssistantVoiceTranscribeErrorCode, IntelligenceErrorCode>,
+  string
+> = {
+  ASSISTANT_DISABLED: 'assistant.voicePanel.voiceTranscribeAssistantDisabled',
+  AUDIO_INVALID: 'assistant.voicePanel.voiceTranscribeInvalid',
+  AUDIO_TOO_LARGE: 'assistant.voicePanel.voiceTranscribeTooLarge',
+  AUDIO_TOO_LONG: 'assistant.voicePanel.voiceTranscribeTooLong',
+  ASR_UNAVAILABLE: 'assistant.voicePanel.voiceTranscribeUnavailable',
+  TRANSCRIPTION_EMPTY: 'assistant.voicePanel.voiceTranscribeEmpty'
 }
 
 const SCREENSHOT_TRANSLATE_ERROR_KEYS: Record<
@@ -91,7 +116,7 @@ const SCREENSHOT_REGION_SELECTION_ERROR_KEYS: Record<
 }
 
 function requiresIntelligenceSettingsRecovery(
-  code?: AssistantScreenshotTranslateErrorCode
+  code?: AssistantScreenshotTranslateErrorCode | AssistantVoiceTranscribeErrorCode
 ): boolean {
   if (isIntelligenceErrorCode(code)) {
     return code !== 'INVALID_REQUEST' && code !== 'UNKNOWN'
@@ -100,7 +125,8 @@ function requiresIntelligenceSettingsRecovery(
   return (
     code === 'SCENE_UNAVAILABLE' ||
     code === 'OCR_UNAVAILABLE' ||
-    code === 'TEXT_TRANSLATE_UNAVAILABLE'
+    code === 'TEXT_TRANSLATE_UNAVAILABLE' ||
+    code === 'ASR_UNAVAILABLE'
   )
 }
 
@@ -127,6 +153,9 @@ const runtimeConfig = ref<AssistantRuntimeConfig>({
 })
 
 const listening = ref(false)
+const transcribingVoice = ref(false)
+const startingVoiceCapture = ref(false)
+const recordingWithProvider = ref(false)
 const submitting = ref(false)
 const closingPanel = ref(false)
 const translatingClipboardImage = ref(false)
@@ -167,7 +196,16 @@ const screenshotTextFallback = ref<{
 const imageTranslateRoute = ref<CoreBoxImageTranslateRouteMetadata | null>(null)
 
 let recognition: SpeechRecognitionLike | null = null
-let restartTimer: ReturnType<typeof setTimeout> | null = null
+let restartTimer: number | null = null
+let providerRecorder: MediaRecorder | null = null
+let providerStream: MediaStream | null = null
+let providerChunks: Blob[] = []
+let providerRecordingStartedAt = 0
+let providerStopTimer: number | null = null
+let transcribeStoppedProviderRecording = false
+let startBrowserAfterProviderStop = false
+let preferBrowserSpeechFallback = false
+let voiceCaptureGeneration = 0
 let keepListening = false
 let disposePanelOpen: (() => void) | null = null
 
@@ -192,6 +230,8 @@ const screenshotCapturePayload = computed<AssistantScreenshotCapturePayload>(() 
   return { target: 'cursor-display' }
 })
 const panelStatusText = computed(() => {
+  if (transcribingVoice.value) return t('assistant.voicePanel.voiceTranscribing')
+  if (recordingWithProvider.value) return t('assistant.voicePanel.providerRecording')
   if (voiceWakeEnabled.value) {
     return listening.value ? t('assistant.voicePanel.listening') : t('assistant.voicePanel.waiting')
   }
@@ -217,11 +257,82 @@ async function loadRuntimeConfig(): Promise<void> {
   }
 }
 
+function appendVoiceText(text: string): void {
+  const trimmed = text.trim()
+  if (!trimmed) return
+  inputText.value = [inputText.value.trim(), trimmed].filter(Boolean).join(' ')
+  interimText.value = ''
+  hasVoiceInput.value = true
+}
+
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error || new Error('Failed to read voice audio.'))
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+      reject(new Error('Voice audio data URL is unavailable.'))
+    }
+    reader.readAsDataURL(blob)
+  })
+}
+
+function resolveProviderRecordingMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return ''
+  return (
+    PROVIDER_RECORDING_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || ''
+  )
+}
+
+function releaseProviderRecordingResources(recorder: MediaRecorder | null): void {
+  if (providerStopTimer !== null) {
+    window.clearTimeout(providerStopTimer)
+    providerStopTimer = null
+  }
+  providerStream?.getTracks().forEach((track) => track.stop())
+  providerStream = null
+  if (!recorder || providerRecorder === recorder) {
+    providerRecorder = null
+  }
+  providerChunks = []
+  providerRecordingStartedAt = 0
+  recordingWithProvider.value = false
+  listening.value = false
+}
+
+function stopProviderRecording(shouldTranscribe: boolean): void {
+  const recorder = providerRecorder
+  transcribeStoppedProviderRecording = shouldTranscribe
+  if (!recorder) {
+    releaseProviderRecordingResources(null)
+    return
+  }
+
+  recordingWithProvider.value = false
+  listening.value = false
+  try {
+    if (recorder.state !== 'inactive') {
+      recorder.stop()
+      return
+    }
+  } catch {
+    // Recorder cleanup below remains authoritative.
+  }
+  releaseProviderRecordingResources(recorder)
+}
+
 function stopRecognition(): void {
-  if (restartTimer) {
-    clearTimeout(restartTimer)
+  voiceCaptureGeneration += 1
+  if (restartTimer !== null) {
+    window.clearTimeout(restartTimer)
     restartTimer = null
   }
+  startBrowserAfterProviderStop = false
+  stopProviderRecording(false)
+
   if (!recognition) {
     listening.value = false
     return
@@ -230,45 +341,44 @@ function stopRecognition(): void {
   recognition = null
   listening.value = false
   try {
+    activeRecognition.onstart = null
+    activeRecognition.onerror = null
+    activeRecognition.onresult = null
     activeRecognition.onend = null
     activeRecognition.stop()
   } catch {
-    // ignore stop errors
+    // Ignore browser recognizer stop errors.
   }
 }
 
-function scheduleRestart(): void {
-  if (!keepListening) return
-  if (restartTimer) clearTimeout(restartTimer)
-  restartTimer = setTimeout(() => {
+function scheduleBrowserRecognitionRestart(): void {
+  if (!keepListening || !preferBrowserSpeechFallback) return
+  if (restartTimer !== null) window.clearTimeout(restartTimer)
+  restartTimer = window.setTimeout(() => {
     restartTimer = null
-    startRecognition()
+    startBrowserSpeechRecognition()
   }, 400)
 }
 
-function startRecognition(): void {
-  if (!voiceWakeEnabled.value) {
-    errorMessage.value = t('assistant.voicePanel.voiceWakeDisabled')
-    return
-  }
-  if (!keepListening || recognition) return
+function startBrowserSpeechRecognition(): void {
+  if (!keepListening || recognition || providerRecorder || transcribingVoice.value) return
 
   const SpeechRecognitionCtor = resolveSpeechRecognitionCtor()
   if (!SpeechRecognitionCtor) {
     errorMessage.value = t('assistant.voicePanel.unsupported')
     listening.value = false
+    keepListening = false
     return
   }
 
   microphonePermissionDenied.value = false
   const instance = new SpeechRecognitionCtor()
   recognition = instance
-  errorMessage.value = ''
   instance.lang = runtimeConfig.value.language
   instance.continuous = true
   instance.interimResults = true
   instance.onstart = () => {
-    listening.value = true
+    if (recognition === instance) listening.value = true
   }
   instance.onerror = (event) => {
     const errorType = String(event?.error || 'unknown')
@@ -290,30 +400,24 @@ function startRecognition(): void {
       if (typeof transcript !== 'string') continue
       const trimmed = transcript.trim()
       if (!trimmed) continue
-      if (current.isFinal) {
-        finals.push(trimmed)
-      } else {
-        interims.push(trimmed)
-      }
+      if (current.isFinal) finals.push(trimmed)
+      else interims.push(trimmed)
     }
-    if (finals.length || interims.length) {
-      hasVoiceInput.value = true
-    }
-    if (finals.length) {
-      inputText.value = [inputText.value.trim(), finals.join(' ')].filter(Boolean).join(' ')
-    }
+    if (finals.length) appendVoiceText(finals.join(' '))
+    if (interims.length) hasVoiceInput.value = true
     interimText.value = interims.join(' ')
   }
   instance.onend = () => {
+    if (recognition !== instance) return
     recognition = null
     listening.value = false
-    scheduleRestart()
+    scheduleBrowserRecognitionRestart()
   }
 
   try {
     instance.start()
   } catch (error) {
-    recognition = null
+    if (recognition === instance) recognition = null
     listening.value = false
     if (
       error instanceof Error &&
@@ -325,8 +429,263 @@ function startRecognition(): void {
       return
     }
     errorMessage.value = error instanceof Error ? error.message : String(error)
-    scheduleRestart()
+    scheduleBrowserRecognitionRestart()
   }
+}
+
+async function transcribeProviderRecording(
+  blob: Blob,
+  durationMs: number,
+  captureGeneration: number
+): Promise<void> {
+  if (captureGeneration !== voiceCaptureGeneration) return
+  transcribingVoice.value = true
+  statusMessage.value = t('assistant.voicePanel.voiceTranscribing')
+  errorMessage.value = ''
+  intelligenceSettingsRecoveryVisible.value = false
+  let shouldStartBrowserFallback = false
+
+  try {
+    if (!blob.type.startsWith('audio/') || blob.size <= 0) {
+      errorMessage.value = t('assistant.voicePanel.voiceTranscribeInvalid')
+      shouldStartBrowserFallback = true
+      return
+    }
+    if (blob.size > MAX_PROVIDER_AUDIO_BYTES) {
+      errorMessage.value = t('assistant.voicePanel.voiceTranscribeTooLarge')
+      return
+    }
+
+    const audioDataUrl = await readBlobAsDataUrl(blob)
+    if (captureGeneration !== voiceCaptureGeneration) return
+    const response = await transport.send(AssistantEvents.voice.transcribeAudio, {
+      audioDataUrl,
+      mimeType: blob.type,
+      durationMs,
+      language: runtimeConfig.value.language
+    })
+    if (captureGeneration !== voiceCaptureGeneration) return
+    const text = typeof response?.text === 'string' ? response.text.trim() : ''
+    if (!response?.success || !text) {
+      intelligenceSettingsRecoveryVisible.value = requiresIntelligenceSettingsRecovery(
+        response?.code
+      )
+      errorMessage.value = formatVoiceTranscribeError(response?.code, response?.error)
+      shouldStartBrowserFallback = Boolean(resolveSpeechRecognitionCtor())
+      return
+    }
+
+    appendVoiceText(text)
+    keepListening = false
+    const providerLabel = [response.provider, response.model].filter(Boolean).join(' · ')
+    statusMessage.value = providerLabel
+      ? t('assistant.voicePanel.voiceTranscribedWithProvider', { provider: providerLabel })
+      : t('assistant.voicePanel.voiceTranscribed')
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : String(error)
+    shouldStartBrowserFallback = Boolean(resolveSpeechRecognitionCtor())
+  } finally {
+    transcribingVoice.value = false
+    if (captureGeneration !== voiceCaptureGeneration) {
+      if (keepListening) void startRecognition()
+    } else if (shouldStartBrowserFallback) {
+      preferBrowserSpeechFallback = true
+      keepListening = true
+      statusMessage.value = t('assistant.voicePanel.voiceBrowserFallback')
+      startBrowserSpeechRecognition()
+    }
+  }
+}
+
+async function startProviderRecording(): Promise<ProviderRecordingStartResult> {
+  if (
+    typeof MediaRecorder === 'undefined' ||
+    !navigator.mediaDevices?.getUserMedia ||
+    !keepListening
+  ) {
+    return 'fallback'
+  }
+
+  startingVoiceCapture.value = true
+  microphonePermissionDenied.value = false
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      },
+      video: false
+    })
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === 'NotAllowedError' || error.name === 'SecurityError')
+    ) {
+      errorMessage.value = t('assistant.voicePanel.permissionDenied')
+      microphonePermissionDenied.value = true
+      keepListening = false
+      startingVoiceCapture.value = false
+      return 'denied'
+    }
+    errorMessage.value = t('assistant.voicePanel.providerRecordingUnavailable')
+    startingVoiceCapture.value = false
+    return 'fallback'
+  }
+
+  if (!keepListening) {
+    stream.getTracks().forEach((track) => track.stop())
+    startingVoiceCapture.value = false
+    return 'denied'
+  }
+
+  const mimeType = resolveProviderRecordingMimeType()
+  let recorder: MediaRecorder
+  try {
+    recorder = new MediaRecorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      audioBitsPerSecond: 64_000
+    })
+  } catch {
+    try {
+      recorder = new MediaRecorder(stream)
+    } catch {
+      stream.getTracks().forEach((track) => track.stop())
+      errorMessage.value = t('assistant.voicePanel.providerRecordingUnavailable')
+      startingVoiceCapture.value = false
+      return 'fallback'
+    }
+  }
+
+  providerStream = stream
+  providerRecorder = recorder
+  providerChunks = []
+  providerRecordingStartedAt = Date.now()
+  transcribeStoppedProviderRecording = false
+  startBrowserAfterProviderStop = false
+  preferBrowserSpeechFallback = false
+  const captureGeneration = voiceCaptureGeneration
+
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) providerChunks.push(event.data)
+  }
+  recorder.onerror = (event) => {
+    const recorderError = 'error' in event ? event.error : undefined
+    errorMessage.value =
+      recorderError instanceof Error
+        ? recorderError.message
+        : t('assistant.voicePanel.providerRecordingUnavailable')
+    startBrowserAfterProviderStop = Boolean(resolveSpeechRecognitionCtor())
+    keepListening = startBrowserAfterProviderStop
+    stopProviderRecording(false)
+  }
+  recorder.onstop = () => {
+    const shouldTranscribe = transcribeStoppedProviderRecording
+    const shouldStartBrowser = startBrowserAfterProviderStop
+    const durationMs = Math.max(1, Date.now() - providerRecordingStartedAt)
+    const chunks = providerChunks
+    const recordedMimeType = recorder.mimeType || chunks[0]?.type || mimeType
+    const blob = new Blob(chunks, { type: recordedMimeType })
+    transcribeStoppedProviderRecording = false
+    startBrowserAfterProviderStop = false
+    releaseProviderRecordingResources(recorder)
+
+    if (shouldTranscribe) {
+      void transcribeProviderRecording(blob, durationMs, captureGeneration)
+      return
+    }
+    if (shouldStartBrowser && keepListening) {
+      preferBrowserSpeechFallback = true
+      statusMessage.value = t('assistant.voicePanel.voiceBrowserFallback')
+      startBrowserSpeechRecognition()
+    }
+  }
+
+  try {
+    recorder.start(250)
+  } catch {
+    releaseProviderRecordingResources(recorder)
+    errorMessage.value = t('assistant.voicePanel.providerRecordingUnavailable')
+    startingVoiceCapture.value = false
+    return 'fallback'
+  }
+
+  recordingWithProvider.value = true
+  listening.value = true
+  errorMessage.value = ''
+  intelligenceSettingsRecoveryVisible.value = false
+  statusMessage.value = t('assistant.voicePanel.providerRecording')
+  providerStopTimer = window.setTimeout(() => {
+    keepListening = false
+    stopProviderRecording(true)
+  }, MAX_PROVIDER_RECORDING_MS)
+  startingVoiceCapture.value = false
+  return 'started'
+}
+
+async function startRecognition(): Promise<void> {
+  if (!voiceWakeEnabled.value) {
+    errorMessage.value = t('assistant.voicePanel.voiceWakeDisabled')
+    return
+  }
+  if (
+    !keepListening ||
+    recognition ||
+    providerRecorder ||
+    startingVoiceCapture.value ||
+    transcribingVoice.value
+  ) {
+    return
+  }
+  if (restartTimer !== null) {
+    window.clearTimeout(restartTimer)
+    restartTimer = null
+  }
+
+  if (preferBrowserSpeechFallback) {
+    startBrowserSpeechRecognition()
+    return
+  }
+
+  const result = await startProviderRecording()
+  if (result === 'started' || result === 'denied' || !keepListening) return
+
+  preferBrowserSpeechFallback = true
+  statusMessage.value = t('assistant.voicePanel.voiceBrowserFallback')
+  startBrowserSpeechRecognition()
+}
+
+function toggleVoiceInput(): void {
+  if (startingVoiceCapture.value || transcribingVoice.value) return
+  if (providerRecorder) {
+    keepListening = false
+    stopProviderRecording(true)
+    return
+  }
+  if (recognition) {
+    const shouldRestartProvider = !listening.value
+    keepListening = false
+    stopRecognition()
+    if (!shouldRestartProvider) return
+  }
+  if (restartTimer !== null) {
+    window.clearTimeout(restartTimer)
+    restartTimer = null
+  }
+
+  preferBrowserSpeechFallback = false
+  keepListening = true
+  void startRecognition()
+}
+
+function formatVoiceTranscribeError(
+  code?: AssistantVoiceTranscribeErrorCode,
+  fallback?: string
+): string {
+  if (isIntelligenceErrorCode(code)) return formatIntelligenceError(code, fallback)
+  if (code) return t(VOICE_TRANSCRIBE_ERROR_KEYS[code])
+  return fallback || t('assistant.voicePanel.voiceTranscribeFailed')
 }
 
 function formatClipboardImageTranslateError(
@@ -467,6 +826,8 @@ async function loadScreenshotDisplays(): Promise<void> {
 }
 
 async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
+  stopRecognition()
+  preferBrowserSpeechFallback = false
   sourceText.value = payload?.source || ''
   inputText.value = ''
   interimText.value = ''
@@ -485,11 +846,7 @@ async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   inputArea.value?.focus({ preventScroll: true })
   await Promise.all([loadRuntimeConfig(), loadScreenshotDisplays()])
   keepListening = voiceWakeEnabled.value
-  if (keepListening) {
-    startRecognition()
-  } else {
-    stopRecognition()
-  }
+  if (keepListening) void startRecognition()
 }
 
 async function submitText(): Promise<void> {
@@ -744,8 +1101,9 @@ async function recoverMicrophonePermission(): Promise<void> {
     statusMessage.value = ''
     errorMessage.value = ''
     microphonePermissionDenied.value = false
+    preferBrowserSpeechFallback = false
     keepListening = true
-    startRecognition()
+    void startRecognition()
     return
   }
 
@@ -1024,7 +1382,7 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="screenshotActionBusy"
+          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
           @click="translateClipboardImage"
         >
           {{
@@ -1036,7 +1394,7 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="screenshotActionBusy"
+          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
           @click="translateScreenshot"
         >
           {{
@@ -1048,7 +1406,7 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="screenshotActionBusy"
+          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
           @click="captureScreenshot"
         >
           {{
@@ -1060,7 +1418,7 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="screenshotActionBusy"
+          :disabled="screenshotActionBusy || transcribingVoice || startingVoiceCapture"
           @click="saveScreenshot"
         >
           {{
@@ -1072,16 +1430,27 @@ onBeforeUnmount(() => {
         <button
           class="secondary-btn"
           type="button"
-          :disabled="!voiceWakeEnabled"
-          @click="startRecognition"
+          :disabled="!voiceWakeEnabled || startingVoiceCapture || transcribingVoice"
+          @click="toggleVoiceInput"
         >
           {{
-            listening
-              ? t('assistant.voicePanel.listeningAction')
-              : t('assistant.voicePanel.startListening')
+            startingVoiceCapture
+              ? t('assistant.voicePanel.voicePreparing')
+              : transcribingVoice
+                ? t('assistant.voicePanel.voiceTranscribingShort')
+                : recordingWithProvider
+                  ? t('assistant.voicePanel.stopAndTranscribe')
+                  : listening
+                    ? t('assistant.voicePanel.stopListening')
+                    : t('assistant.voicePanel.startListening')
           }}
         </button>
-        <button class="primary-btn" type="button" :disabled="submitting" @click="submitText">
+        <button
+          class="primary-btn"
+          type="button"
+          :disabled="submitting || transcribingVoice || startingVoiceCapture"
+          @click="submitText"
+        >
           {{
             submitting
               ? t('assistant.voicePanel.submitting')

@@ -7,7 +7,7 @@ const {
   accessibilityClientMock,
   ensureXdotoolAvailableMock,
   isXdotoolAvailableMock,
-  getSelectionCaptureCapabilityPatchMock,
+  captureSelectionMock,
   runNexusSceneMock,
   extractTranslatedTextFromSceneRunMock
 } = vi.hoisted(() => ({
@@ -31,7 +31,7 @@ const {
   accessibilityClientMock: vi.fn(() => true),
   ensureXdotoolAvailableMock: vi.fn(async () => undefined),
   isXdotoolAvailableMock: vi.fn(async () => true),
-  getSelectionCaptureCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'supported' })),
+  captureSelectionMock: vi.fn(),
   runNexusSceneMock: vi.fn(),
   extractTranslatedTextFromSceneRunMock: vi.fn()
 }))
@@ -168,8 +168,10 @@ vi.mock('../system/linux-desktop-tools', () => ({
     'Linux desktop automation requires xdotool to be installed and available in PATH.'
 }))
 
-vi.mock('../platform/capability-adapter', () => ({
-  getSelectionCaptureCapabilityPatch: getSelectionCaptureCapabilityPatchMock
+vi.mock('../system/selection-capture', () => ({
+  selectionCaptureService: {
+    capture: captureSelectionMock
+  }
 }))
 
 vi.mock('../system/active-app', () => ({
@@ -390,34 +392,29 @@ describe('OmniPanelModule execute dispatch', () => {
 })
 
 describe('OmniPanelModule selection capture diagnostics', () => {
-  it('reports unsupported Linux selection capture when xdotool is unavailable', async () => {
-    getSelectionCaptureCapabilityPatchMock.mockResolvedValue({
-      supportLevel: 'unsupported',
-      reason: 'Linux desktop automation requires xdotool to be installed and available in PATH.',
-      issueCode: 'XDTOOL_MISSING',
+  it('delegates Linux capture diagnostics to the shared selection capture service', async () => {
+    const expected = {
+      text: '',
+      supportLevel: 'unsupported' as const,
+      issueCode: 'unsupported' as const,
+      issueMessage:
+        'Linux desktop automation requires xdotool to be installed and available in PATH.',
       limitations: [
         'Linux desktop automation requires xdotool to be installed and available in PATH.'
-      ]
-    } as never)
+      ],
+      capturedAt: 1_784_115_200_000
+    }
+    captureSelectionMock.mockResolvedValue(expected)
 
     const result = await withPlatform('linux', async () => {
       const module = new OmniPanelModule() as unknown as {
-        captureSelectionText: () => Promise<{
-          text: string
-          supportLevel: string
-          issueCode?: string
-          issueMessage?: string
-        }>
+        captureSelectionText: () => Promise<typeof expected>
       }
       return await module.captureSelectionText()
     })
 
-    expect(result).toMatchObject({
-      text: '',
-      supportLevel: 'unsupported',
-      issueCode: 'unsupported'
-    })
-    expect(result.issueMessage).toContain('xdotool')
+    expect(captureSelectionMock).toHaveBeenCalledWith({ enabled: true })
+    expect(result).toEqual(expected)
   })
 })
 
