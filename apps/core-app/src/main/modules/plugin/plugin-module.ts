@@ -53,6 +53,7 @@ import {
   registerPluginLocalizationChannels
 } from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
+import { pluginHostBridge } from './host/plugin-host-bridge'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
 import { PluginInstaller } from './plugin-installer'
@@ -1500,6 +1501,16 @@ export class PluginModule extends BaseModule {
     this.transport = ioRuntime.transport
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
+
+    // C1-B stage 1: verify the isolated plugin host process starts and its
+    // control channel round-trips. Flag-gated and off by default, so it never
+    // affects normal startup; the real Prelude runtime wires in via stage 2.
+    if (process.env.TUFF_PLUGIN_ISOLATION === '1') {
+      pluginHostBridge.start()
+      void pluginHostBridge.ping().then((ok) => {
+        pluginModuleLog.info(`[C1-B] plugin host connectivity self-check: ${ok ? 'OK' : 'FAILED'}`)
+      })
+    }
 
     const pluginRuntime = buildPluginManagerRuntime({
       pluginRootDir: file.dirPath!,

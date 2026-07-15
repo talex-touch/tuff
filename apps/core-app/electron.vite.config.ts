@@ -159,6 +159,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: 'src/main/index.ts',
+          'plugin-host': 'src/main/modules/plugin/host/plugin-host-process.ts',
           'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
           'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
           'file-reconcile-worker':
@@ -185,6 +186,8 @@ export default defineConfig({
               return 'thumbnail-worker.js'
             } else if (chunkInfo.name === 'search-index-worker') {
               return 'search-index-worker.js'
+            } else if (chunkInfo.name === 'plugin-host') {
+              return 'plugin-host.js'
             } else if (chunkInfo.name === 'index') {
               return 'index.js'
             }
