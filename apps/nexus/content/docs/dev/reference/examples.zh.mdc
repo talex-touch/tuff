@@ -1,52 +1,52 @@
 # 示例
 
-本页只做索引。**单一来源（SoT）在仓库 `examples/` 目录**，不再在文档内复制大段示例代码。
+本页只做索引。**单一来源（SoT）在仓库 `apps/nexus/examples/` 目录**，不再在文档内复制大段示例代码。
 
 ## 使用规则
 
-1. 先改 `examples/` 源文件，再改本索引。
+1. 先改 `apps/nexus/examples/` 源文件，再改本索引。
 2. 本页仅维护文件清单与用途说明，不粘贴整段代码。
 3. 若示例文件被删除/重命名，必须同步更新本页，保证入口可追踪。
 
 ## 插件基础与生命周期
 
-- `examples/basic-usage.js`：基础 SDK 消息发送（search/translate/notify）。
-- `examples/complete-example.js`：完整插件初始化、存储、通知与剪贴板链路。
-- `examples/index.js`：轻量 SDK 封装（`sendMessage` / `communicateWithPlugin`）。
-- `examples/plugin-index-example.js`：`IFeatureLifeCycle` 入口与消息分发样例。
-- `examples/plugin-receiver-example.js`：接收端插件消息处理样例。
+- `apps/nexus/examples/basic-usage.js`：基础 SDK 消息发送（search/translate/notify）。
+- `apps/nexus/examples/complete-example.js`：完整插件初始化、存储、通知与剪贴板链路。
+- `apps/nexus/examples/index.js`：轻量 SDK 封装（`sendMessage` / `communicateWithPlugin`）。
+- `apps/nexus/examples/plugin-index-example.js`：`IFeatureLifeCycle` 入口与消息分发样例。
+- `apps/nexus/examples/plugin-receiver-example.js`：接收端插件消息处理样例。
 
 ## 插件通信 / Channel
 
-- `examples/communicate-example.js`：`communicateWithPlugin` 基础调用。
-- `examples/complete-communication-example.js`：批量通信、错误处理、状态探测。
+- `apps/nexus/examples/communicate-example.js`：`communicateWithPlugin` 基础调用。
+- `apps/nexus/examples/complete-communication-example.js`：批量通信、错误处理、状态探测。
 
 ## 消息与通知
 
-- `examples/message-system-example.js`：统一消息发送样例。
-- `examples/notification-example.js`：通知显示、更新、隐藏样例。
+- `apps/nexus/examples/message-system-example.js`：统一消息发送样例。
+- `apps/nexus/examples/notification-example.js`：通知显示、更新、隐藏样例。
 
 ## Power / 能力降级
 
-- `examples/power-sdk-example.js`：低电量模式降级与恢复策略。
+- `apps/nexus/examples/power-sdk-example.js`：低电量模式降级与恢复策略。
 
 ## DivisionBox
 
-- `examples/division-box/README.md`
-- `examples/division-box/basic-usage.ts`
-- `examples/division-box/keepalive-mode.ts`
-- `examples/division-box/custom-header.ts`
-- `examples/division-box/flow-integration.ts`
-- `examples/division-box/flow-usage-example.ts`
-- `examples/division-box/manifest-example.json`
+- `apps/nexus/examples/division-box/README.md`
+- `apps/nexus/examples/division-box/basic-usage.ts`
+- `apps/nexus/examples/division-box/keepalive-mode.ts`
+- `apps/nexus/examples/division-box/custom-header.ts`
+- `apps/nexus/examples/division-box/flow-integration.ts`
+- `apps/nexus/examples/division-box/flow-usage-example.ts`
+- `apps/nexus/examples/division-box/manifest-example.json`
 
 ## 工具包与通用能力
 
-- `examples/util-pkg/tuff-help`
-- `examples/util-pkg/tuff-test`
-- `examples/util-pkg/tuff-utils`
+- `apps/nexus/examples/util-pkg/tuff-help`
+- `apps/nexus/examples/util-pkg/tuff-test`
+- `apps/nexus/examples/util-pkg/tuff-utils`
 
 ## 维护建议
 
-- 文档审阅优先看源码：`examples/`。
+- 文档审阅优先看源码：`apps/nexus/examples/`。
 - 行为差异以运行时与类型定义为准：`packages/utils/`。

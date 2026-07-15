@@ -4,6 +4,8 @@ import nuxt from './.nuxt/eslint.config.mjs'
 
 export default antfu(
   {
+    // Doc-facing sample sources indexed by content/docs/dev/reference/examples.*.mdc
+    ignores: ['examples/**'],
     unocss: true,
     pnpm: true,
     formatters: false,

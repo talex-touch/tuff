@@ -33,11 +33,9 @@ This repository is a pnpm workspace monorepo. The **desktop app** is the core, w
 - `packages/`: shared libraries and component kits.
 - `plugins/`: plugin examples and standalone plugins.
 - `docs/`: engineering/PRD/analysis documents.
-- `examples/`: SDK and feature usage samples.
 - `scripts/`: CI and maintenance scripts.
 - `build/`: build config outputs (small set of files).
-- `plan/`, `issues/`, `reports/`, `shots/`: planning, issue tracking, reports, screenshots.
-- `.github/`, `.husky/`, `.workflow/`, `.spec-workflow/`, `.vscode/`, `.idea/`: collaboration/tooling configs.
+- `.github/`, `.husky/`, `.trellis/`, `.vscode/`: collaboration/tooling configs.
 - Key files: `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `eslint.config.js`, `commitlint.config.cts`, `README.md`, `README.zh-CN.md`, `AGENTS.md`, `CLAUDE.md`.
 
 ## Subproject Details

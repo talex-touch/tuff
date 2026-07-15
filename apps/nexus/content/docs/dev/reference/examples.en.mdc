@@ -1,52 +1,52 @@
 # Examples
 
-This page is an index only. **The single source of truth (SoT) is the repository `examples/` directory**. Large copied code blocks are intentionally removed.
+This page is an index only. **The single source of truth (SoT) is the repository `apps/nexus/examples/` directory**. Large copied code blocks are intentionally removed.
 
 ## Rules
 
-1. Update source files in `examples/` first, then update this index.
+1. Update source files in `apps/nexus/examples/` first, then update this index.
 2. Keep this page as a file map + purpose notes only.
 3. If files are renamed/removed, update this index in the same change.
 
 ## Plugin Basics & Lifecycle
 
-- `examples/basic-usage.js`: basic SDK message flow (`search`/`translate`/`notify`).
-- `examples/complete-example.js`: full plugin init + storage + notification + clipboard flow.
-- `examples/index.js`: lightweight SDK wrapper (`sendMessage` / `communicateWithPlugin`).
-- `examples/plugin-index-example.js`: `IFeatureLifeCycle` entry and message dispatch sample.
-- `examples/plugin-receiver-example.js`: receiver-side plugin message handlers.
+- `apps/nexus/examples/basic-usage.js`: basic SDK message flow (`search`/`translate`/`notify`).
+- `apps/nexus/examples/complete-example.js`: full plugin init + storage + notification + clipboard flow.
+- `apps/nexus/examples/index.js`: lightweight SDK wrapper (`sendMessage` / `communicateWithPlugin`).
+- `apps/nexus/examples/plugin-index-example.js`: `IFeatureLifeCycle` entry and message dispatch sample.
+- `apps/nexus/examples/plugin-receiver-example.js`: receiver-side plugin message handlers.
 
 ## Plugin Communication / Channel
 
-- `examples/communicate-example.js`: basic `communicateWithPlugin` usage.
-- `examples/complete-communication-example.js`: batch messaging, error handling, status probing.
+- `apps/nexus/examples/communicate-example.js`: basic `communicateWithPlugin` usage.
+- `apps/nexus/examples/complete-communication-example.js`: batch messaging, error handling, status probing.
 
 ## Messaging & Notifications
 
-- `examples/message-system-example.js`: unified message sending examples.
-- `examples/notification-example.js`: notification show/update/hide flow.
+- `apps/nexus/examples/message-system-example.js`: unified message sending examples.
+- `apps/nexus/examples/notification-example.js`: notification show/update/hide flow.
 
 ## Power / Degradation Strategy
 
-- `examples/power-sdk-example.js`: low-power degrade and recovery pattern.
+- `apps/nexus/examples/power-sdk-example.js`: low-power degrade and recovery pattern.
 
 ## DivisionBox
 
-- `examples/division-box/README.md`
-- `examples/division-box/basic-usage.ts`
-- `examples/division-box/keepalive-mode.ts`
-- `examples/division-box/custom-header.ts`
-- `examples/division-box/flow-integration.ts`
-- `examples/division-box/flow-usage-example.ts`
-- `examples/division-box/manifest-example.json`
+- `apps/nexus/examples/division-box/README.md`
+- `apps/nexus/examples/division-box/basic-usage.ts`
+- `apps/nexus/examples/division-box/keepalive-mode.ts`
+- `apps/nexus/examples/division-box/custom-header.ts`
+- `apps/nexus/examples/division-box/flow-integration.ts`
+- `apps/nexus/examples/division-box/flow-usage-example.ts`
+- `apps/nexus/examples/division-box/manifest-example.json`
 
 ## Utility Packages
 
-- `examples/util-pkg/tuff-help`
-- `examples/util-pkg/tuff-test`
-- `examples/util-pkg/tuff-utils`
+- `apps/nexus/examples/util-pkg/tuff-help`
+- `apps/nexus/examples/util-pkg/tuff-test`
+- `apps/nexus/examples/util-pkg/tuff-utils`
 
 ## Maintenance Notes
 
-- Review behavior from source files in `examples/`.
+- Review behavior from source files in `apps/nexus/examples/`.
 - Use `packages/utils/` as the authority for runtime contracts and types.
