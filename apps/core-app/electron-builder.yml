@@ -48,11 +48,6 @@ files:
   - '!**/*.rmeta'
   # Keep js-tiktoken ESM runtime files: @langchain/core imports js-tiktoken/lite via ESM,
   # which resolves to dist/lite.js from the package exports map in packaged builds.
-  # tesseract.js is unused — OCR runs through the native module (@talex-touch/tuff-native,
-  # ocr-worker.ts recognizeImageText); no source references tesseract at all. Its ~29MB WASM
-  # core shipped for nothing. (Vestigial dep — ideally also drop tesseract.js from package.json.)
-  - '!**/node_modules/tesseract.js-core/**'
-  - '!**/node_modules/tesseract.js/**'
   # mathjs is bundled into out/main/index.js (not externalized) to enable tree-shaking.
   # Only mathjs/number subset (~2MB) gets bundled; the full ~13MB mathjs package in node_modules is unused.
   - '!**/node_modules/mathjs/**'
