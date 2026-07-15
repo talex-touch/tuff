@@ -36,8 +36,8 @@ export function instantiateCommandPreset(
     const id = `${preset.id}${suffix}`
     const aliases = preset.aliases.map(alias => `${alias}${suffix}`)
     if (
-      !usedIds.has(id.toLocaleLowerCase()) &&
-      aliases.every(alias => !usedAliases.has(alias.toLocaleLowerCase()))
+      !usedIds.has(id.toLocaleLowerCase())
+      && aliases.every(alias => !usedAliases.has(alias.toLocaleLowerCase()))
     ) {
       return {
         ...preset,

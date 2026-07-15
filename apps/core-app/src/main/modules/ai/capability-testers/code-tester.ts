@@ -9,7 +9,7 @@ import type {
   IntelligenceCodeRefactorResult,
   IntelligenceCodeReviewPayload,
   IntelligenceCodeReviewResult,
-  IntelligenceInvokeResult,
+  IntelligenceInvokeResult
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
@@ -29,12 +29,14 @@ export class CodeGenerateTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'code-generate'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceCodeGeneratePayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceCodeGeneratePayload> {
     const description = input.userInput || 'Write a function to calculate fibonacci numbers'
     return {
       description,
       language: 'typescript',
-      includeComments: true,
+      includeComments: true
     }
   }
 
@@ -44,7 +46,7 @@ export class CodeGenerateTester extends BaseCapabilityTester<
 
     return this.buildTestResult(result, {
       message: '代码生成测试成功',
-      textPreview: preview,
+      textPreview: preview
     })
   }
 
@@ -68,7 +70,7 @@ export class CodeExplainTester extends BaseCapabilityTester<
       code: input.userInput || DEFAULT_JAVASCRIPT_SAMPLE,
       language: 'javascript',
       depth: 'detailed',
-      targetAudience: 'intermediate',
+      targetAudience: 'intermediate'
     }
   }
 
@@ -78,7 +80,7 @@ export class CodeExplainTester extends BaseCapabilityTester<
 
     return this.buildTestResult(result, {
       message: `代码解释完成，提炼 ${result.result?.keyPoints?.length || 0} 个要点`,
-      textPreview: preview,
+      textPreview: preview
     })
   }
 
@@ -101,7 +103,7 @@ export class CodeReviewTester extends BaseCapabilityTester<
     return {
       code: input.userInput || DEFAULT_JAVASCRIPT_SAMPLE,
       language: 'javascript',
-      focusAreas: ['bugs', 'style', 'best-practices'],
+      focusAreas: ['bugs', 'style', 'best-practices']
     }
   }
 
@@ -111,7 +113,7 @@ export class CodeReviewTester extends BaseCapabilityTester<
 
     return this.buildTestResult(result, {
       message: `代码审查完成，发现 ${issueCount} 个问题`,
-      textPreview: summary,
+      textPreview: summary
     })
   }
 
@@ -130,12 +132,14 @@ export class CodeRefactorTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'code-refactor'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceCodeRefactorPayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceCodeRefactorPayload> {
     return {
       code: input.userInput || DEFAULT_JAVASCRIPT_SAMPLE,
       language: 'javascript',
       goals: ['readability', 'maintainability'],
-      preserveInterface: true,
+      preserveInterface: true
     }
   }
 
@@ -145,7 +149,7 @@ export class CodeRefactorTester extends BaseCapabilityTester<
 
     return this.buildTestResult(result, {
       message: `代码重构完成，包含 ${result.result?.changes?.length || 0} 项变更`,
-      textPreview: preview || result.result?.explanation || '',
+      textPreview: preview || result.result?.explanation || ''
     })
   }
 
@@ -167,15 +171,15 @@ export class CodeDebugTester extends BaseCapabilityTester<
   async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceCodeDebugPayload> {
     return {
       code:
-        input.userInput
-        || `function average(values) {
+        input.userInput ||
+        `function average(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
 console.log(average([]))`,
       language: 'javascript',
       error: 'average([]) returns NaN',
-      context: 'Fix the edge case without changing the public function name.',
+      context: 'Fix the edge case without changing the public function name.'
     }
   }
 
@@ -184,7 +188,7 @@ console.log(average([]))`,
 
     return this.buildTestResult(result, {
       message: '代码调试分析完成',
-      textPreview: diagnosis || result.result?.explanation || result.result?.fixedCode || '',
+      textPreview: diagnosis || result.result?.explanation || result.result?.fixedCode || ''
     })
   }
 

@@ -2,12 +2,12 @@
 import { TxAiConversation } from '@talex-touch/tuffex/ai-elements'
 import { computed, defineComponent, nextTick, ref, watch } from 'vue'
 
-type IntelligenceWidgetStatus =
-  | 'idle'
-  | 'ocr-pending'
-  | 'chat-pending'
-  | 'ready'
-  | 'error'
+type IntelligenceWidgetStatus
+  = | 'idle'
+    | 'ocr-pending'
+    | 'chat-pending'
+    | 'ready'
+    | 'error'
 
 interface IntelligenceWidgetAttachment {
   type?: 'image' | string
@@ -35,11 +35,11 @@ interface IntelligenceImageContext {
 
 type IntelligenceContextMode = 'new' | 'continue' | 'stateless'
 
-type IntelligenceContextContinuationReason =
-  | 'archived-session-continuation'
-  | 'expired-session-continuation'
-  | 'idle-session-continuation'
-  | 'continuation-session-missing'
+type IntelligenceContextContinuationReason
+  = | 'archived-session-continuation'
+    | 'expired-session-continuation'
+    | 'idle-session-continuation'
+    | 'continuation-session-missing'
 
 interface IntelligenceContextContinuationSummary {
   reason?: IntelligenceContextContinuationReason
@@ -119,21 +119,23 @@ const AUTO_MODEL_VALUE = '__auto__'
 function formatContextContinuation(
   summary: IntelligenceContextContinuationSummary,
 ): string {
-  const base =
-    summary.reason === 'archived-session-continuation'
+  const base
+    = summary.reason === 'archived-session-continuation'
       ? '已从归档会话摘要开启新会话'
       : summary.reason === 'expired-session-continuation'
         ? '已从过期会话摘要开启新会话'
         : summary.reason === 'idle-session-continuation'
           ? '长时间未活动，已从摘要开启新会话'
           : '原会话不可用，已开启新会话'
-  if (summary.status === 'excluded') return `${base}（摘要已阻止）`
-  if (summary.status === 'unavailable') return `${base}（摘要不可用）`
+  if (summary.status === 'excluded')
+    return `${base}（摘要已阻止）`
+  if (summary.status === 'unavailable')
+    return `${base}（摘要不可用）`
   return base
 }
 
 export default defineComponent({
-  name: 'ask-panel',
+  name: 'AskPanel',
   components: {
     TxAiConversation,
   },
@@ -158,10 +160,10 @@ export default defineComponent({
     const status = computed<IntelligenceWidgetStatus>(() => {
       const value = widgetPayload.value.status
       if (
-        value === 'ocr-pending' ||
-        value === 'chat-pending' ||
-        value === 'ready' ||
-        value === 'error'
+        value === 'ocr-pending'
+        || value === 'chat-pending'
+        || value === 'ready'
+        || value === 'error'
       ) {
         return value
       }
@@ -169,15 +171,15 @@ export default defineComponent({
     })
     const messages = computed<IntelligenceWidgetMessage[]>(() => {
       if (
-        Array.isArray(widgetPayload.value.messages) &&
-        widgetPayload.value.messages.length > 0
+        Array.isArray(widgetPayload.value.messages)
+        && widgetPayload.value.messages.length > 0
       ) {
-        return widgetPayload.value.messages.filter(message => {
+        return widgetPayload.value.messages.filter((message) => {
           const content = message?.content?.trim()
           return Boolean(
-            content ||
-            message?.status === 'streaming' ||
-            message?.status === 'pending',
+            content
+            || message?.status === 'streaming'
+            || message?.status === 'pending',
           )
         })
       }
@@ -244,17 +246,20 @@ export default defineComponent({
       const continuation = contextPackage?.continuation
 
       if (provider) {
-        const providerValue =
-          provider.toLowerCase() === 'local' ? 'Local/Ollama (local)' : provider
+        const providerValue
+          = provider.toLowerCase() === 'local' ? 'Local/Ollama (local)' : provider
         items.push({ label: 'Provider', value: providerValue })
       }
-      if (model) items.push({ label: 'Model', value: model })
+      if (model)
+        items.push({ label: 'Model', value: model })
       if (Number.isFinite(latency) && latency >= 0)
         items.push({ label: 'Latency', value: `${Math.round(latency)} ms` })
-      if (traceId) items.push({ label: 'Trace', value: traceId })
+      if (traceId)
+        items.push({ label: 'Trace', value: traceId })
       if (inputKinds.length > 0)
         items.push({ label: 'Input kind', value: inputKinds.join(', ') })
-      if (capabilityId) items.push({ label: 'Capability', value: capabilityId })
+      if (capabilityId)
+        items.push({ label: 'Capability', value: capabilityId })
       if (contextPackage) {
         items.push({
           label: 'Context boundary',
@@ -266,27 +271,29 @@ export default defineComponent({
             value: formatContextContinuation(continuation),
           })
         }
-        if (Number.isFinite(contextItemCount) && contextItemCount >= 0)
+        if (Number.isFinite(contextItemCount) && contextItemCount >= 0) {
           items.push({
             label: 'Context items',
             value: String(contextItemCount),
           })
+        }
         if (
-          Number.isFinite(contextTokenEstimate) &&
-          contextTokenEstimate >= 0 &&
-          Number.isFinite(contextTokenBudget) &&
-          contextTokenBudget > 0
+          Number.isFinite(contextTokenEstimate)
+          && contextTokenEstimate >= 0
+          && Number.isFinite(contextTokenBudget)
+          && contextTokenBudget > 0
         ) {
           items.push({
             label: 'Context tokens',
             value: `${Math.round(contextTokenEstimate)} / ${Math.round(contextTokenBudget)}`,
           })
         }
-        if (Number.isFinite(retrievalItemCount) && retrievalItemCount > 0)
+        if (Number.isFinite(retrievalItemCount) && retrievalItemCount > 0) {
           items.push({
             label: 'Retrieval items',
             value: String(retrievalItemCount),
           })
+        }
         if (Number.isFinite(citationCount) && citationCount > 0)
           items.push({ label: 'Citations', value: String(citationCount) })
         if (degradedReason)
@@ -312,7 +319,7 @@ export default defineComponent({
         ? widgetPayload.value.modelOptions
         : []
       return values
-        .map(option => {
+        .map((option) => {
           const providerId = String(option?.providerId || '').trim()
           const providerName = String(option?.providerName || providerId).trim()
           const providerType = String(option?.providerType || '').trim()
@@ -341,10 +348,12 @@ export default defineComponent({
         )
     })
     const flattenedModelOptions = computed<ModelSelectOption[]>(() => {
-      return modelOptions.value.flatMap(provider => {
+      return modelOptions.value.flatMap((provider) => {
         const orderedModels = [...provider.models].sort((a, b) => {
-          if (provider.defaultModel && a === provider.defaultModel) return -1
-          if (provider.defaultModel && b === provider.defaultModel) return 1
+          if (provider.defaultModel && a === provider.defaultModel)
+            return -1
+          if (provider.defaultModel && b === provider.defaultModel)
+            return 1
           return a.localeCompare(b)
         })
         return orderedModels.map(model => ({
@@ -361,9 +370,10 @@ export default defineComponent({
     const filteredModelGroups = computed(() => {
       const query = modelSearch.value.trim().toLowerCase()
       return modelOptions.value
-        .map(provider => {
-          const models = provider.models.filter(model => {
-            if (!query) return true
+        .map((provider) => {
+          const models = provider.models.filter((model) => {
+            if (!query)
+              return true
             return [
               provider.providerId,
               provider.providerName,
@@ -376,7 +386,8 @@ export default defineComponent({
         .filter(provider => provider.models.length > 0)
     })
     const selectedModelSummary = computed(() => {
-      if (!selectedProviderId.value || !selectedModel.value) return '自动路由'
+      if (!selectedProviderId.value || !selectedModel.value)
+        return '自动路由'
       const provider = modelOptions.value.find(
         option => option.providerId === selectedProviderId.value,
       )
@@ -390,7 +401,8 @@ export default defineComponent({
       'stateless',
     ]
     const contextMode = computed<IntelligenceContextMode>(() => {
-      if (isAiCommand.value) return 'stateless'
+      if (isAiCommand.value)
+        return 'stateless'
       const value = widgetPayload.value.contextMode
       return value === 'continue' || value === 'stateless' ? value : 'new'
     })
@@ -411,7 +423,8 @@ export default defineComponent({
     function scrollToBottom(force = false) {
       void nextTick(() => {
         const el = contentRef.value
-        if (!el) return
+        if (!el)
+          return
         const apply = () => {
           el.scrollTop = el.scrollHeight
           el.scrollTo?.({
@@ -468,7 +481,8 @@ export default defineComponent({
     }
 
     function handleAnswerAction(actionId: 'copy-answer' | 'replace-answer') {
-      if (!canUseAnswerActions.value || isBusy.value) return
+      if (!canUseAnswerActions.value || isBusy.value)
+        return
       emit('host-action', {
         actionId,
         payload: buildHostActionPayload(),
@@ -491,7 +505,8 @@ export default defineComponent({
     }
 
     function handleContextModeChange(mode: IntelligenceContextMode) {
-      if (mode === contextMode.value || isBusy.value) return
+      if (mode === contextMode.value || isBusy.value)
+        return
       emit('host-action', {
         actionId: 'select-context-mode',
         payload: buildHostActionPayload({ contextMode: mode }),
@@ -563,9 +578,9 @@ export default defineComponent({
         >
           <strong>Execution metadata</strong>
           <dl>
-            <template v-for="item in runtimeMetadata" :key="item.label">
-              <dt>{{ item.label }}</dt>
-              <dd>{{ item.value }}</dd>
+            <template v-for="metadataItem in runtimeMetadata" :key="metadataItem.label">
+              <dt>{{ metadataItem.label }}</dt>
+              <dd>{{ metadataItem.value }}</dd>
             </template>
           </dl>
         </div>
@@ -579,7 +594,7 @@ export default defineComponent({
             v-if="imageContext.preview"
             :src="imageContext.preview"
             alt="图片上下文"
-          />
+          >
           <div>
             <strong>{{ imageContext.title || '图片上下文' }}</strong>
             <span>{{ imageContext.note || '图片已作为上下文引用。' }}</span>
@@ -594,9 +609,7 @@ export default defineComponent({
             isPermissionDenied ? '需要授权 AI 权限' : '请求失败'
           }}</strong>
           <span>{{ errorMessage }}</span>
-          <small v-if="isPermissionDenied"
-            >请到插件权限设置中允许 intelligence.basic 后重试。</small
-          >
+          <small v-if="isPermissionDenied">请到插件权限设置中允许 intelligence.basic 后重试。</small>
         </div>
 
         <div v-if="copyFailed" class="AiChatbot__copyFailureNotice">
@@ -687,14 +700,16 @@ export default defineComponent({
         type="search"
         placeholder="搜索渠道或模型"
         aria-label="搜索渠道或模型"
-      />
+      >
       <select
         class="AiChatbot__modelSelect"
         :value="selectedModelValue"
         aria-label="选择渠道模型"
         @change="handleModelChange"
       >
-        <option :value="AUTO_MODEL_VALUE">自动路由</option>
+        <option :value="AUTO_MODEL_VALUE">
+          自动路由
+        </option>
         <template
           v-for="provider in filteredModelGroups"
           :key="provider.providerId"

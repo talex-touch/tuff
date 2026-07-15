@@ -6,7 +6,7 @@ import type {
   IntelligenceIntentDetectResult,
   IntelligenceInvokeResult,
   IntelligenceKeywordsExtractResult,
-  IntelligenceSentimentAnalyzeResult,
+  IntelligenceSentimentAnalyzeResult
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
@@ -18,7 +18,7 @@ export class IntentDetectTester extends BaseCapabilityTester {
     const text = input.userInput || '帮我打开聊天应用'
     return {
       text,
-      possibleIntents: ['open_app', 'search', 'calculate', 'translate', 'unknown'],
+      possibleIntents: ['open_app', 'search', 'calculate', 'translate', 'unknown']
     }
   }
 
@@ -28,7 +28,7 @@ export class IntentDetectTester extends BaseCapabilityTester {
 
     return this.buildTestResult(result, {
       message: `意图识别: ${intent} (置信度: ${(confidence * 100).toFixed(1)}%)`,
-      textPreview: JSON.stringify(result.result, null, 2),
+      textPreview: JSON.stringify(result.result, null, 2)
     })
   }
 
@@ -48,7 +48,7 @@ export class SentimentAnalyzeTester extends BaseCapabilityTester {
     const text = input.userInput || '这个产品真的太棒了，我非常喜欢！'
     return {
       text,
-      granularity: 'document',
+      granularity: 'document'
     }
   }
 
@@ -58,7 +58,7 @@ export class SentimentAnalyzeTester extends BaseCapabilityTester {
 
     return this.buildTestResult(result, {
       message: `情感分析: ${sentiment} (得分: ${score.toFixed(2)})`,
-      textPreview: JSON.stringify(result.result, null, 2),
+      textPreview: JSON.stringify(result.result, null, 2)
     })
   }
 
@@ -75,22 +75,22 @@ export class KeywordsExtractTester extends BaseCapabilityTester {
   readonly capabilityType = 'keywords-extract'
 
   async generateTestPayload(input: CapabilityTestPayload): Promise<unknown> {
-    const text
-      = input.userInput
-        || '人工智能正在改变我们的生活方式，从智能手机到自动驾驶汽车，AI技术无处不在。'
+    const text =
+      input.userInput ||
+      '人工智能正在改变我们的生活方式，从智能手机到自动驾驶汽车，AI技术无处不在。'
     return {
       text,
-      maxKeywords: 5,
+      maxKeywords: 5
     }
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>) {
     const keywords = result.result?.keywords || []
-    const keywordList = keywords.map(k => k.term).join(', ')
+    const keywordList = keywords.map((k) => k.term).join(', ')
 
     return this.buildTestResult(result, {
       message: `提取了 ${keywords.length} 个关键词`,
-      textPreview: keywordList || '无关键词',
+      textPreview: keywordList || '无关键词'
     })
   }
 
@@ -109,14 +109,16 @@ export class ContentExtractTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'content-extract'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceContentExtractPayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceContentExtractPayload> {
     return {
       text:
-        input.userInput
-        || 'Talex 团队计划在 2026-07-15 发布 Touch AI SDK，联系人是 dev@example.com。',
+        input.userInput ||
+        'Talex 团队计划在 2026-07-15 发布 Touch AI SDK，联系人是 dev@example.com。',
       extractTypes: ['dates', 'people', 'organizations', 'products', 'emails'],
       language: 'zh-CN',
-      includeContext: true,
+      includeContext: true
     }
   }
 
@@ -126,7 +128,7 @@ export class ContentExtractTester extends BaseCapabilityTester<
 
     return this.buildTestResult(result, {
       message: `内容抽取完成，识别 ${entityCount} 个实体`,
-      textPreview: JSON.stringify(result.result, null, 2),
+      textPreview: JSON.stringify(result.result, null, 2)
     })
   }
 
@@ -145,24 +147,26 @@ export class TextClassifyTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'text-classify'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceClassificationPayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceClassificationPayload> {
     return {
       text: input.userInput || '帮我把最近复制的会议记录整理成行动项并提醒我跟进。',
       categories: ['search', 'automation', 'writing', 'reminder', 'developer-tool'],
       multiLabel: true,
-      threshold: 0.3,
+      threshold: 0.3
     }
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceClassificationResult>) {
     const predictions = result.result?.predictions || []
     const preview = predictions
-      .map(item => `${item.category} ${(item.confidence * 100).toFixed(1)}%`)
+      .map((item) => `${item.category} ${(item.confidence * 100).toFixed(1)}%`)
       .join(', ')
 
     return this.buildTestResult(result, {
       message: `文本分类完成，返回 ${predictions.length} 个分类`,
-      textPreview: preview || result.result?.explanation || '',
+      textPreview: preview || result.result?.explanation || ''
     })
   }
 

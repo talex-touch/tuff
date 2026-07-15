@@ -1533,8 +1533,7 @@ export class AssistantModule extends BaseModule {
       })
       if (!result.success) {
         if (result.code === 'SCENE_UNAVAILABLE' || isIntelligenceErrorCode(result.code)) {
-          const degradedReason: AssistantScreenshotFallbackReason =
-            `IMAGE_TRANSLATE_${result.code}`
+          const degradedReason: AssistantScreenshotFallbackReason = `IMAGE_TRANSLATE_${result.code}`
           return await this.translateScreenshotWithOcrFallback(
             screenshotDataUrl,
             targetLang,

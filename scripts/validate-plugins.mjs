@@ -124,7 +124,8 @@ for (const pluginName of pluginDirs) {
   if (!fs.existsSync(manifestPath)) {
     // Package-backed directories may be Surface-only; manifest-only runtime plugins intentionally have no npm package.
     logWarn(pluginName, hasPackageJson ? 'manifest.json not found — skipping Surface-only plugin' : 'manifest.json not found — skipping')
-    if (!pluginHasError) passedPlugins++
+    if (!pluginHasError)
+      passedPlugins++
     continue
   }
 

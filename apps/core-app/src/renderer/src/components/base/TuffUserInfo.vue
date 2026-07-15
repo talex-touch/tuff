@@ -34,7 +34,6 @@ const {
 } = useAccountOverview()
 const appSdk = useAppSdk()
 
-
 const planLabel = computed(() =>
   subscriptionStatus.value ? formatPlan(subscriptionStatus.value.plan) : '-'
 )
@@ -244,7 +243,10 @@ watch(profileVisible, (visible) => {
                   <div class="UserProfile-Identity">
                     <div class="UserProfile-NameRow">
                       <p class="UserProfile-Name">
-                        {{ formatCompactAccountLabel(displayName) || t('userProfile.unknownName', 'User') }}
+                        {{
+                          formatCompactAccountLabel(displayName) ||
+                          t('userProfile.unknownName', 'User')
+                        }}
                       </p>
                       <span class="UserProfile-Badge">
                         {{ statusBadgeLabel }}
@@ -254,7 +256,8 @@ watch(profileVisible, (visible) => {
                       {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
                     </p>
                     <p class="UserProfile-MetaText">
-                      {{ t('userProfile.id', 'User ID') }}: {{ formatCompactAccountLabel(displayId) || '-' }}
+                      {{ t('userProfile.id', 'User ID') }}:
+                      {{ formatCompactAccountLabel(displayId) || '-' }}
                     </p>
                     <p v-if="profileBio" class="UserProfile-MetaText">
                       {{ profileBio }}

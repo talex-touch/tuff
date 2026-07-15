@@ -13,17 +13,20 @@ import { BaseCapabilityTester } from './base-tester'
 const SAMPLE_DOCUMENTS = [
   {
     id: 'alfred',
-    content: 'Alfred provides keyboard-first launcher workflows, snippets, clipboard history, and automation.',
+    content:
+      'Alfred provides keyboard-first launcher workflows, snippets, clipboard history, and automation.',
     metadata: { product: 'Alfred' }
   },
   {
     id: 'utools',
-    content: 'uTools focuses on plugin-driven quick actions, search, translation, OCR, and local productivity tools.',
+    content:
+      'uTools focuses on plugin-driven quick actions, search, translation, OCR, and local productivity tools.',
     metadata: { product: 'uTools' }
   },
   {
     id: 'talex-touch',
-    content: 'Talex Touch combines desktop command palette, AI capability routing, SDK APIs, and workflow execution.',
+    content:
+      'Talex Touch combines desktop command palette, AI capability routing, SDK APIs, and workflow execution.',
     metadata: { product: 'Talex Touch' }
   }
 ]
@@ -69,7 +72,9 @@ export class SemanticSearchTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'semantic-search'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceSemanticSearchPayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceSemanticSearchPayload> {
     return {
       query: input.userInput || 'plugin quick action automation',
       documents: SAMPLE_DOCUMENTS,
@@ -97,7 +102,10 @@ export class SemanticSearchTester extends BaseCapabilityTester<
   }
 }
 
-export class RerankTester extends BaseCapabilityTester<IntelligenceRerankPayload, IntelligenceRerankResult> {
+export class RerankTester extends BaseCapabilityTester<
+  IntelligenceRerankPayload,
+  IntelligenceRerankResult
+> {
   readonly capabilityType = 'rerank'
 
   async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceRerankPayload> {

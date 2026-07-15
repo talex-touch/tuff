@@ -1332,13 +1332,8 @@ export class TuffIntelligenceSDK {
       totalTokens: queryResult.usage?.totalTokens ?? 0
     }
     const threshold = normalizeSemanticThreshold(payload.threshold)
-    const ranked: Array<{
-      id: string
-      content: string
-      score: number
-      metadata?: Record<string, any>
-      index: number
-    }> = []
+    const ranked: Array<IntelligenceSemanticSearchResult['results'][number] & { index: number }> =
+      []
 
     for (let index = 0; index < documents.length; index += 1) {
       const document = documents[index]

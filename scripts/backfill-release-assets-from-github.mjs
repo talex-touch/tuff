@@ -53,7 +53,7 @@ function inferPlatformArch(filename) {
     return null
   return {
     platform,
-    arch: inferArch(filename)
+    arch: inferArch(filename),
   }
 }
 
@@ -74,17 +74,17 @@ function pickPreferredCandidate(existing, candidates) {
 
   const scoreByPlatformExt = {
     win32: {
-      '.exe': 20
+      '.exe': 20,
     },
     darwin: {
       '.dmg': 20,
-      '.zip': 10
+      '.zip': 10,
     },
     linux: {
       '.appimage': 20,
       '.deb': 15,
-      '.snap': 10
-    }
+      '.snap': 10,
+    },
   }
 
   const scored = candidates.map((item) => {
@@ -130,9 +130,9 @@ async function fetchGitHubRelease(repo, tag, githubToken, timeoutMs) {
   const releaseResp = await fetchWithTimeout(
     releaseUrl,
     {
-      headers: buildGitHubHeaders(githubToken)
+      headers: buildGitHubHeaders(githubToken),
     },
-    timeoutMs
+    timeoutMs,
   )
 
   if (!releaseResp.ok) {
@@ -157,9 +157,9 @@ async function fetchManifestAsset(manifestAsset, githubToken, timeoutMs) {
   const response = await fetchWithTimeout(
     manifestAsset.browser_download_url,
     {
-      headers: buildGitHubHeaders(githubToken, { Accept: 'application/octet-stream' })
+      headers: buildGitHubHeaders(githubToken, { Accept: 'application/octet-stream' }),
     },
-    timeoutMs
+    timeoutMs,
   )
 
   if (!response.ok)
@@ -197,7 +197,7 @@ function resolveManifestArtifactsMap(manifestPayload) {
     map.set(name, {
       platform: typeof artifact?.platform === 'string' ? artifact.platform.trim() : '',
       arch: typeof artifact?.arch === 'string' ? artifact.arch.trim() : '',
-      sha256: normalizeSha(artifact?.sha256)
+      sha256: normalizeSha(artifact?.sha256),
     })
   }
 
@@ -217,8 +217,8 @@ function normalizeGitHubCandidates(assets, manifestArtifactsMap) {
 
     if (
       filename === 'tuff-release-manifest.json'
-      || /(^|-)latest[^/]*\.ya?ml$/i.test(filename)
-      || /(^|-)builder-debug\.ya?ml$/i.test(filename)
+      || /(?:^|-)latest[^/]*\.ya?ml$/i.test(filename)
+      || /(?:^|-)builder-debug\.ya?ml$/i.test(filename)
       || /\.ya?ml$/i.test(filename)
     ) {
       skipped.push({ filename, reason: 'meta-file' })
@@ -332,7 +332,7 @@ function buildBackfillPlan({ nexusAssets, ghCandidates, manifestMeta }) {
       sha256: targetSha256,
       contentType: selected.contentType || 'application/octet-stream',
       changedFields,
-      reason: existing.filename === selected.filename ? 'sha256/backfill' : 'pair-aligned-fallback'
+      reason: existing.filename === selected.filename ? 'sha256/backfill' : 'pair-aligned-fallback',
     })
   }
 
@@ -363,13 +363,13 @@ async function applyBackfill(baseUrl, tag, nexusKey, updates, timeoutMs) {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${nexusKey}`,
+          'Authorization': `Bearer ${nexusKey}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json'
+          'Accept': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       },
-      timeoutMs
+      timeoutMs,
     )
 
     if (!response.ok) {
@@ -423,13 +423,13 @@ async function main() {
     try {
       manifestMeta = {
         asset: manifestAsset,
-        ...(await fetchManifestAsset(manifestAsset, githubToken, timeoutMs))
+        ...(await fetchManifestAsset(manifestAsset, githubToken, timeoutMs)),
       }
     }
     catch (error) {
       manifestMeta = {
         asset: manifestAsset,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       }
     }
   }
@@ -441,7 +441,7 @@ async function main() {
   const { updates, warnings } = buildBackfillPlan({
     nexusAssets: nexus.assets,
     ghCandidates,
-    manifestMeta
+    manifestMeta,
   })
 
   let applied = []

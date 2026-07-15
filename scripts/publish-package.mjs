@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { getArgValue, hasFlag } from './lib/argv-utils.mjs'
 import { publishPackages } from './package-publish.config.mjs'
@@ -76,7 +76,8 @@ function getPackageInfo() {
 }
 
 function ensureCleanGit() {
-  if (skipGitCheck) return
+  if (skipGitCheck)
+    return
 
   const status = runOutput('git status --porcelain')
   if (status) {
@@ -85,7 +86,8 @@ function ensureCleanGit() {
 }
 
 function getDistTag(version) {
-  if (explicitTag) return explicitTag
+  if (explicitTag)
+    return explicitTag
   return version.includes('-') ? 'next' : 'latest'
 }
 
@@ -111,7 +113,8 @@ function waitForPackage(packageName, timeoutAttempts = 12) {
       console.log(`[publish-package] ${packageName}@${manifest.version} is available on npm.`)
       return
     }
-    if (attempt === timeoutAttempts) break
+    if (attempt === timeoutAttempts)
+      break
     console.log(`[publish-package] Waiting for ${packageName}@${manifest.version} (${attempt}/${timeoutAttempts})...`)
     sleep(10_000)
   }
@@ -134,10 +137,12 @@ function packPackage(packageInfo, tempRoot) {
     .find(line => line.endsWith('.tgz'))
 
   if (packedPath) {
-    if (path.isAbsolute(packedPath)) return packedPath
+    if (path.isAbsolute(packedPath))
+      return packedPath
 
     const destinationPath = path.join(destination, packedPath)
-    if (fs.existsSync(destinationPath)) return destinationPath
+    if (fs.existsSync(destinationPath))
+      return destinationPath
 
     return path.join(repoRoot, packageInfo.path, packedPath)
   }
@@ -163,7 +168,8 @@ function verifyRegistryManifest(packageInfo, version) {
       }
     }
     catch (error) {
-      if (String(error?.message || error).includes('Registry manifest still contains')) throw error
+      if (String(error?.message || error).includes('Registry manifest still contains'))
+        throw error
     }
   }
 }
@@ -175,11 +181,14 @@ function main() {
 
   ensureCleanGit()
 
-  if (!skipTests && packageInfo.testCommand) run(packageInfo.testCommand)
+  if (!skipTests && packageInfo.testCommand)
+    run(packageInfo.testCommand)
   for (const command of packageInfo.preBuildCommands ?? []) {
-    if (!skipBuild) run(command)
+    if (!skipBuild)
+      run(command)
   }
-  if (!skipBuild && packageInfo.buildCommand) run(packageInfo.buildCommand)
+  if (!skipBuild && packageInfo.buildCommand)
+    run(packageInfo.buildCommand)
 
   for (const packageName of packageInfo.waitForPackages ?? []) {
     waitForPackage(packageName)

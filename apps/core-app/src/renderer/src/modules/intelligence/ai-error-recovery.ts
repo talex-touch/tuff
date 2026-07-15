@@ -41,12 +41,7 @@ export function resolveIntelligenceErrorRecovery(
     }
   }
 
-  if (
-    includesAny(normalized, [
-      'QUOTA_CHECK_UNAVAILABLE',
-      'QUOTA VERIFICATION IS UNAVAILABLE'
-    ])
-  ) {
+  if (includesAny(normalized, ['QUOTA_CHECK_UNAVAILABLE', 'QUOTA VERIFICATION IS UNAVAILABLE'])) {
     return {
       code: 'quota-verification',
       title: t(

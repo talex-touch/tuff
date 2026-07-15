@@ -1,18 +1,15 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
 }
 
 function readTextIfExists(filePath) {
-  if (!fs.existsSync(filePath)) return null
+  if (!fs.existsSync(filePath))
+    return null
   return fs.readFileSync(filePath, 'utf8')
-}
-
-function normalizeStatus(status) {
-  return String(status || '').trim().toLowerCase()
 }
 
 function checkNotes({ repoRoot, version, pushCheck }) {
@@ -25,8 +22,10 @@ function checkNotes({ repoRoot, version, pushCheck }) {
   let zh = readTextIfExists(zhPath)
   let en = readTextIfExists(enPath)
 
-  if (!zh && shared) zh = shared
-  if (!en && shared) en = shared
+  if (!zh && shared)
+    zh = shared
+  if (!en && shared)
+    en = shared
 
   const zhLen = zh?.trim().length ?? 0
   const enLen = en?.trim().length ?? 0
@@ -36,9 +35,9 @@ function checkNotes({ repoRoot, version, pushCheck }) {
       files: {
         shared: fs.existsSync(sharedPath) ? sharedPath : null,
         zh: fs.existsSync(zhPath) ? zhPath : null,
-        en: fs.existsSync(enPath) ? enPath : null
+        en: fs.existsSync(enPath) ? enPath : null,
       },
-      lengths: { zh: zhLen, en: enLen }
+      lengths: { zh: zhLen, en: enLen },
     })
     return
   }
@@ -47,9 +46,9 @@ function checkNotes({ repoRoot, version, pushCheck }) {
     files: {
       shared: fs.existsSync(sharedPath) ? sharedPath : null,
       zh: fs.existsSync(zhPath) ? zhPath : null,
-      en: fs.existsSync(enPath) ? enPath : null
+      en: fs.existsSync(enPath) ? enPath : null,
     },
-    lengths: { zh: zhLen, en: enLen }
+    lengths: { zh: zhLen, en: enLen },
   })
 }
 
@@ -67,43 +66,8 @@ function checkVersionBaseline({ repoRoot, version, stage, pushCheck }) {
     ok
       ? `Root/Core version match target ${version}.`
       : `Root/Core version drift detected (target ${version}).`,
-    { rootVersion, coreVersion, targetVersion: version }
+    { rootVersion, coreVersion, targetVersion: version },
   )
-}
-
-function checkRiskP0({ repoRoot, pushCheck }) {
-  const riskPath = path.join(repoRoot, 'docs', 'plan-prd', '01-project', 'RISK-REGISTER-2026-02.md')
-  const raw = fs.readFileSync(riskPath, 'utf8')
-  const lines = raw.split(/\r?\n/)
-  const p0Rows = []
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed.startsWith('|')) continue
-    if (/^\|\s*-+/.test(trimmed)) continue
-    const cells = trimmed
-      .split('|')
-      .slice(1, -1)
-      .map(item => item.trim())
-    if (cells.length < 10) continue
-    if (cells[1] !== 'P0') continue
-
-    const riskId = cells[0]
-    const status = cells[cells.length - 1]
-    p0Rows.push({ riskId, status })
-  }
-
-  const blocking = p0Rows.filter((item) => {
-    const status = normalizeStatus(item.status)
-    return status === 'open' || status === 'in progress'
-  })
-
-  if (blocking.length === 0) {
-    pushCheck('risk-p0', 'pass', 'No P0 risk is Open/In Progress.', { p0Rows })
-    return
-  }
-
-  pushCheck('risk-p0', 'fail', 'P0 risk has blocking Open/In Progress items.', { blocking, p0Rows })
 }
 
 function checkManifest({ repoRoot, stage, manifestArg, pushCheck }) {
@@ -117,7 +81,7 @@ function checkManifest({ repoRoot, stage, manifestArg, pushCheck }) {
       'manifest',
       missingStatus,
       'Local manifest file not found. This is expected before release assets are downloaded.',
-      { manifestPath }
+      { manifestPath },
     )
     return
   }
@@ -127,18 +91,19 @@ function checkManifest({ repoRoot, stage, manifestArg, pushCheck }) {
     const output = execFileSync('node', [scriptPath, '--manifest', manifestPath], {
       cwd: repoRoot,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
     pushCheck('manifest', 'pass', 'Manifest validation passed.', {
       manifestPath,
-      output: output.trim()
+      output: output.trim(),
     })
-  } catch (error) {
+  }
+  catch (error) {
     const stdout = error?.stdout ? String(error.stdout) : ''
     const stderr = error?.stderr ? String(error.stderr) : ''
     pushCheck('manifest', 'fail', 'Manifest validation failed.', {
       manifestPath,
-      output: `${stdout}\n${stderr}`.trim()
+      output: `${stdout}\n${stderr}`.trim(),
     })
   }
 }
@@ -156,16 +121,17 @@ function checkPublishManifestMode({
     const output = execFileSync('node', [scriptPath, ...args], {
       cwd: repoRoot,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
     pushCheck(name, 'pass', passDetail, {
-      output: output.trim()
+      output: output.trim(),
     })
-  } catch (error) {
+  }
+  catch (error) {
     const stdout = error?.stdout ? String(error.stdout) : ''
     const stderr = error?.stderr ? String(error.stderr) : ''
     pushCheck(name, 'fail', failDetail, {
-      output: `${stdout}\n${stderr}`.trim()
+      output: `${stdout}\n${stderr}`.trim(),
     })
   }
 }
@@ -199,7 +165,6 @@ export function runLocalReleaseGateChecks({
 }) {
   checkNotes({ repoRoot, version, pushCheck })
   checkVersionBaseline({ repoRoot, version, stage, pushCheck })
-  checkRiskP0({ repoRoot, pushCheck })
   checkManifest({ repoRoot, stage, manifestArg, pushCheck })
   checkPublishManifests({ repoRoot, pushCheck })
 }

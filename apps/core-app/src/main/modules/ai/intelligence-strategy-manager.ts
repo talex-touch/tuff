@@ -1,6 +1,6 @@
 import type {
   IntelligenceInvokeOptions,
-  IntelligenceProviderConfig,
+  IntelligenceProviderConfig
 } from '@talex-touch/tuff-intelligence'
 
 export interface StrategySelectionRequest {
@@ -23,12 +23,9 @@ export interface StrategyManager {
 const DEFAULT_STRATEGY_ID = 'adaptive-default'
 
 function normalizeStrategyId(strategyId?: string | null): string {
-  if (!strategyId)
-    return DEFAULT_STRATEGY_ID
-  if (strategyId === 'priority')
-    return 'rule-based-default'
-  if (strategyId === 'adaptive')
-    return DEFAULT_STRATEGY_ID
+  if (!strategyId) return DEFAULT_STRATEGY_ID
+  if (strategyId === 'priority') return 'rule-based-default'
+  if (strategyId === 'adaptive') return DEFAULT_STRATEGY_ID
   return strategyId
 }
 
@@ -36,17 +33,16 @@ function sortByPriority(providers: IntelligenceProviderConfig[]): IntelligencePr
   return [...providers].sort((a, b) => {
     const priorityA = a.priority ?? 999
     const priorityB = b.priority ?? 999
-    if (priorityA !== priorityB)
-      return priorityA - priorityB
+    if (priorityA !== priorityB) return priorityA - priorityB
     return a.id.localeCompare(b.id)
   })
 }
 
 function buildFallbackProviders(
   providers: IntelligenceProviderConfig[],
-  selectedProviderId: string,
+  selectedProviderId: string
 ): IntelligenceProviderConfig[] {
-  return providers.filter(provider => provider.id !== selectedProviderId)
+  return providers.filter((provider) => provider.id !== selectedProviderId)
 }
 
 class DefaultStrategyManager implements StrategyManager {
@@ -73,13 +69,13 @@ class DefaultStrategyManager implements StrategyManager {
     // Handle explicit provider preference.
     if (options.preferredProviderId) {
       const preferred = sortedProviders.find(
-        provider => provider.id === options.preferredProviderId,
+        (provider) => provider.id === options.preferredProviderId
       )
       if (preferred) {
         return {
           selectedProvider: preferred,
           fallbackProviders: buildFallbackProviders(sortedProviders, preferred.id),
-          reasoning: `Explicit preference for ${options.preferredProviderId}`,
+          reasoning: `Explicit preference for ${options.preferredProviderId}`
         }
       }
     }
@@ -88,14 +84,14 @@ class DefaultStrategyManager implements StrategyManager {
     if (options.modelPreference && options.modelPreference.length > 0) {
       for (const preferredModel of options.modelPreference) {
         const providerWithModel = sortedProviders.find(
-          provider =>
-            provider.models?.includes(preferredModel) || provider.defaultModel === preferredModel,
+          (provider) =>
+            provider.models?.includes(preferredModel) || provider.defaultModel === preferredModel
         )
         if (providerWithModel) {
           return {
             selectedProvider: providerWithModel,
             fallbackProviders: buildFallbackProviders(sortedProviders, providerWithModel.id),
-            reasoning: `Model preference for ${preferredModel}`,
+            reasoning: `Model preference for ${preferredModel}`
           }
         }
       }
@@ -113,9 +109,9 @@ class DefaultStrategyManager implements StrategyManager {
         selectedProvider,
         fallbackProviders: [
           ...sortedProviders.slice(selectedIndex + 1),
-          ...sortedProviders.slice(0, selectedIndex),
+          ...sortedProviders.slice(0, selectedIndex)
         ],
-        reasoning: 'Round-robin provider selection',
+        reasoning: 'Round-robin provider selection'
       }
     }
 
@@ -125,7 +121,7 @@ class DefaultStrategyManager implements StrategyManager {
     return {
       selectedProvider: selected,
       fallbackProviders: fallbacks,
-      reasoning: `${strategyId} priority-based selection`,
+      reasoning: `${strategyId} priority-based selection`
     }
   }
 }

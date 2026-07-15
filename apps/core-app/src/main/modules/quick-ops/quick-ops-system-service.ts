@@ -55,7 +55,7 @@ export function createDiagnosticsInfo(settings: QuickOpsResolvedSettings): Quick
     defaultPomodoroBreakMs: settings.defaultPomodoroBreakMs,
     pomodoroAdvancedLoopSupported: true,
     pomodoroCustomTemplateCount: settings.pomodoroTemplates.custom.filter(
-      template => template.enabled
+      (template) => template.enabled
     ).length,
     defaultScreenCleanDurationMs: settings.defaultScreenCleanDurationMs
   }

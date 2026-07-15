@@ -2977,7 +2977,8 @@ describe('intelligence plugin', () => {
     const getItems = vi.fn(() => hostItems)
     const updateItem = vi.fn((id: string, update: Record<string, unknown>) => {
       const index = hostItems.findIndex(item => item.id === id)
-      if (index >= 0) hostItems[index] = { ...hostItems[index], ...update }
+      if (index >= 0)
+        hostItems[index] = { ...hostItems[index], ...update }
     })
     const streamCallbacks: Array<{
       onDelta: (
@@ -3130,7 +3131,6 @@ describe('intelligence plugin', () => {
     })
   })
 
-
   it('cancels superseded cross-feature streams and keeps the latest widget state authoritative', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
@@ -3233,7 +3233,7 @@ describe('intelligence plugin', () => {
     const lateController = { cancel: vi.fn() }
     const activeController = { cancel: vi.fn() }
     let resolveLateController!: (controller: typeof lateController) => void
-    const lateControllerPromise = new Promise<typeof lateController>(resolve => {
+    const lateControllerPromise = new Promise<typeof lateController>((resolve) => {
       resolveLateController = resolve
     })
     let streamCount = 0

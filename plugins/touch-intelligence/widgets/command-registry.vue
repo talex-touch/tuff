@@ -80,7 +80,7 @@ function parseAliases(value: string): string[] {
 }
 
 export default defineComponent({
-  name: 'command-registry',
+  name: 'CommandRegistry',
   props: {
     item: { type: Object, required: true },
     payload: {
@@ -129,8 +129,8 @@ export default defineComponent({
     )
     const statusDetail = computed(
       () =>
-        props.payload?.operationMessage ||
-        `${props.payload?.registeredCount ?? commands.value.length} 个已注册，${props.payload?.rejectedCount ?? 0} 个已跳过`,
+        props.payload?.operationMessage
+        || `${props.payload?.registeredCount ?? commands.value.length} 个已注册，${props.payload?.rejectedCount ?? 0} 个已跳过`,
     )
     const selectedCommand = computed(() =>
       commands.value.find(command => command.id === selectedId.value),
@@ -214,7 +214,8 @@ export default defineComponent({
       const preset = starterPresets.value.find(
         item => item.id === presetId.value,
       )
-      if (!preset) return
+      if (!preset)
+        return
       if (!canCreate.value) {
         clientError.value = `命令数量已达到 ${limits.value.commands} 个上限。`
         presetId.value = ''
@@ -225,9 +226,11 @@ export default defineComponent({
         const command = instantiateCommandPreset(preset, commands.value)
         selectedId.value = ''
         applyDraft(command, true)
-      } catch {
+      }
+      catch {
         clientError.value = '无法为该模板生成唯一命令，请检查现有 ID 与别名。'
-      } finally {
+      }
+      finally {
         presetId.value = ''
       }
     }
@@ -238,13 +241,14 @@ export default defineComponent({
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
           return null
         if (
-          new TextEncoder().encode(JSON.stringify(parsed)).byteLength >
-          limits.value.variableBytes
+          new TextEncoder().encode(JSON.stringify(parsed)).byteLength
+            > limits.value.variableBytes
         ) {
           return null
         }
         return parsed
-      } catch {
+      }
+      catch {
         return null
       }
     }
@@ -259,8 +263,8 @@ export default defineComponent({
       const promptVariables = parseVariables()
 
       if (!/^[a-z0-9][a-z0-9-]{0,47}$/.test(id)) {
-        clientError.value =
-          'ID 只能使用小写字母、数字和连字符，最长 48 个字符。'
+        clientError.value
+          = 'ID 只能使用小写字母、数字和连字符，最长 48 个字符。'
         return null
       }
       if (!name || name.length > 64) {
@@ -272,16 +276,16 @@ export default defineComponent({
         return null
       }
       if (
-        aliases.length === 0 ||
-        aliases.length > limits.value.aliases ||
-        aliases.some(alias => alias.length > 48 || alias.startsWith('/'))
+        aliases.length === 0
+        || aliases.length > limits.value.aliases
+        || aliases.some(alias => alias.length > 48 || alias.startsWith('/'))
       ) {
         clientError.value = `别名需要 1-${limits.value.aliases} 个，单项最长 48 个字符且不要以 / 开头。`
         return null
       }
       if (
-        !promptTemplate ||
-        promptTemplate.length > limits.value.templateChars
+        !promptTemplate
+        || promptTemplate.length > limits.value.templateChars
       ) {
         clientError.value = `Prompt 不能为空，且最长 ${limits.value.templateChars} 个字符。`
         return null
@@ -327,9 +331,11 @@ export default defineComponent({
     }
 
     function saveCommand() {
-      if (!canEdit.value) return
+      if (!canEdit.value)
+        return
       const command = validateDraft()
-      if (!command) return
+      if (!command)
+        return
       emit('host-action', {
         actionId: 'save-custom-ai-command',
         payload: { originalId: originalId.value, command },
@@ -337,7 +343,8 @@ export default defineComponent({
     }
 
     function deleteCommand() {
-      if (!canEdit.value || !originalId.value) return
+      if (!canEdit.value || !originalId.value)
+        return
       if (!deleteArmed.value) {
         deleteArmed.value = true
         return
@@ -369,24 +376,27 @@ export default defineComponent({
     async function importRegistry(event: Event) {
       const input = event.target as HTMLInputElement
       const file = input.files?.[0]
-      if (!file) return
+      if (!file)
+        return
       try {
-        const document = JSON.parse(await file.text())
+        const registryDocument = JSON.parse(await file.text())
         if (
-          !document ||
-          typeof document !== 'object' ||
-          Array.isArray(document)
+          !registryDocument
+          || typeof registryDocument !== 'object'
+          || Array.isArray(registryDocument)
         ) {
           throw new Error('invalid')
         }
         emit('host-action', {
           actionId: 'import-custom-ai-commands',
-          payload: { document },
+          payload: { document: registryDocument },
         })
         clientError.value = ''
-      } catch {
+      }
+      catch {
         clientError.value = '导入失败：请选择有效的 JSON 配置文件。'
-      } finally {
+      }
+      finally {
         input.value = ''
       }
     }
@@ -411,10 +421,13 @@ export default defineComponent({
       () => props.hostKeyEvent?.eventId,
       () => {
         const event = props.hostKeyEvent
-        if (!event) return
+        if (!event)
+          return
         const modifier = event.metaKey || event.ctrlKey
-        if (modifier && event.key?.toLocaleLowerCase() === 's') saveCommand()
-        if (modifier && event.key?.toLocaleLowerCase() === 'n') startCreate()
+        if (modifier && event.key?.toLocaleLowerCase() === 's')
+          saveCommand()
+        if (modifier && event.key?.toLocaleLowerCase() === 'n')
+          startCreate()
       },
     )
 
@@ -462,17 +475,25 @@ export default defineComponent({
         <span>{{ statusDetail }}</span>
       </div>
       <div class="CommandRegistry__toolbar" aria-label="注册表操作">
-        <button type="button" @click="reloadRegistry">重新加载</button>
-        <button type="button" @click="openConfigFolder">打开目录</button>
-        <button type="button" @click="triggerImport">导入</button>
-        <button type="button" @click="exportRegistry">导出</button>
+        <button type="button" @click="reloadRegistry">
+          重新加载
+        </button>
+        <button type="button" @click="openConfigFolder">
+          打开目录
+        </button>
+        <button type="button" @click="triggerImport">
+          导入
+        </button>
+        <button type="button" @click="exportRegistry">
+          导出
+        </button>
         <input
           ref="importInput"
           class="CommandRegistry__fileInput"
           type="file"
           accept="application/json,.json"
           @change="importRegistry"
-        />
+        >
       </div>
     </header>
 
@@ -547,7 +568,7 @@ export default defineComponent({
                 v-model="draft.id"
                 autocomplete="off"
                 placeholder="formal-polish"
-              />
+              >
             </label>
             <label>
               <span>版本</span>
@@ -555,7 +576,7 @@ export default defineComponent({
                 v-model="draft.version"
                 autocomplete="off"
                 placeholder="1.0.0"
-              />
+              >
             </label>
           </div>
 
@@ -565,7 +586,7 @@ export default defineComponent({
               v-model="draft.name"
               autocomplete="off"
               placeholder="正式润色"
-            />
+            >
           </label>
 
           <label>
@@ -575,7 +596,7 @@ export default defineComponent({
               autocomplete="off"
               maxlength="160"
               placeholder="说明这个命令会如何处理当前文本"
-            />
+            >
           </label>
 
           <label>
@@ -584,10 +605,8 @@ export default defineComponent({
               v-model="aliasText"
               autocomplete="off"
               :placeholder="`逗号分隔，最多 ${limits.aliases} 个`"
-            />
-            <small
-              >不要加 / 前缀；内置命令与其它自定义命令的别名不可重复。</small
             >
+            <small>不要加 / 前缀；内置命令与其它自定义命令的别名不可重复。</small>
           </label>
 
           <label>
@@ -598,12 +617,10 @@ export default defineComponent({
               rows="5"
               placeholder="Rewrite the input for {{audience}}. Return only the result."
             />
-            <small
-              >{{ draft.promptTemplate.length }}/{{
-                limits.templateChars
-              }}
-              characters</small
-            >
+            <small>{{ draft.promptTemplate.length }}/{{
+              limits.templateChars
+            }}
+              characters</small>
           </label>
 
           <label>
@@ -612,12 +629,10 @@ export default defineComponent({
               v-model="variablesText"
               rows="4"
               spellcheck="false"
-              placeholder='{ "audience": "customers" }'
+              placeholder="{ &quot;audience&quot;: &quot;customers&quot; }"
             />
-            <small
-              >仅接受 JSON object，最大
-              {{ limits.variableBytes }} bytes。</small
-            >
+            <small>仅接受 JSON object，最大
+              {{ limits.variableBytes }} bytes。</small>
           </label>
 
           <section
@@ -638,7 +653,9 @@ export default defineComponent({
             <pre v-if="promptPreview.valid">{{
               promptPreview.rendered || '尚未输入 Prompt Template。'
             }}</pre>
-            <p v-else>修正 Prompt Variables JSON 后显示确定性预览。</p>
+            <p v-else>
+              修正 Prompt Variables JSON 后显示确定性预览。
+            </p>
             <small
               v-if="
                 promptPreview.valid && promptPreview.missingVariables.length

@@ -10,32 +10,32 @@ const aiClient = vi.hoisted(() => ({
   contextReplaceMemory: vi.fn(),
   contextListMemories: vi.fn(),
   contextSetMemoryEnabled: vi.fn(),
-  contextDeleteMemory: vi.fn(),
+  contextDeleteMemory: vi.fn()
 }))
 
 vi.mock('@talex-touch/utils/renderer', () => ({
-  useIntelligenceSdk: () => aiClient,
+  useIntelligenceSdk: () => aiClient
 }))
 
 vi.mock('@talex-touch/tuffex/button', () => ({
   TxButton: {
     name: 'TxButton',
     props: ['disabled', 'loading'],
-    template: '<button :disabled="disabled || loading"><slot /></button>',
-  },
+    template: '<button :disabled="disabled || loading"><slot /></button>'
+  }
 }))
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key,
-  }),
+    t: (key: string) => key
+  })
 }))
 
 vi.mock('vue-sonner', () => ({
   toast: {
     success: vi.fn(),
-    error: vi.fn(),
-  },
+    error: vi.fn()
+  }
 }))
 
 function createMemory(overrides: Partial<MemoryItem> = {}): MemoryItem {
@@ -55,7 +55,7 @@ function createMemory(overrides: Partial<MemoryItem> = {}): MemoryItem {
     updatedAt: 2,
     lastUsedAt: 3,
     usageCount: 4,
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -84,16 +84,18 @@ describe('intelligenceMemoryReview', () => {
         summary: 'Prefers Simplified Chinese replies',
         tags: ['language'],
         confidence: 0.9,
-        privacyLevel: 'normal',
-      },
+        privacyLevel: 'normal'
+      }
     })
-    aiClient.contextSaveMemory.mockResolvedValueOnce(createMemory({
-      id: 'mem_1',
-      scope: 'global',
-      content: '老板喜欢中文回复',
-      summary: 'Prefers Simplified Chinese replies',
-      updatedAt: 1,
-    }))
+    aiClient.contextSaveMemory.mockResolvedValueOnce(
+      createMemory({
+        id: 'mem_1',
+        scope: 'global',
+        content: '老板喜欢中文回复',
+        summary: 'Prefers Simplified Chinese replies',
+        updatedAt: 1
+      })
+    )
 
     const wrapper = mountMemoryReview()
     await wrapper.get('[data-testid="memory-review-content"]').setValue('  老板喜欢中文回复  ')
@@ -110,7 +112,7 @@ describe('intelligenceMemoryReview', () => {
       sourceSessionId: undefined,
       sourceTurnId: undefined,
       privacyLevel: undefined,
-      ttl: undefined,
+      ttl: undefined
     })
     expect(aiClient.contextSaveMemory).not.toHaveBeenCalled()
 
@@ -128,7 +130,7 @@ describe('intelligenceMemoryReview', () => {
       sourceTurnId: undefined,
       privacyLevel: 'normal',
       ttl: undefined,
-      enabled: true,
+      enabled: true
     })
     expect(aiClient.contextListMemories).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('mem_1')
@@ -139,7 +141,7 @@ describe('intelligenceMemoryReview', () => {
     async (status) => {
       aiClient.contextEvaluateMemory.mockResolvedValueOnce({
         status,
-        reason: status === 'rejected' ? 'secret_detected' : 'sensitive_content',
+        reason: status === 'rejected' ? 'secret_detected' : 'sensitive_content'
       })
 
       const wrapper = mountMemoryReview()
@@ -150,7 +152,7 @@ describe('intelligenceMemoryReview', () => {
       expect(wrapper.find('[data-testid="memory-review-save"]').exists()).toBe(false)
       expect(aiClient.contextSaveMemory).not.toHaveBeenCalled()
       expect(aiClient.contextReplaceMemory).not.toHaveBeenCalled()
-    },
+    }
   )
 
   it.each([
@@ -158,7 +160,7 @@ describe('intelligenceMemoryReview', () => {
     ['memory-review-summary', 'changed summary'],
     ['memory-review-tags', 'changed, tags'],
     ['memory-review-type', 'project'],
-    ['memory-review-scope', 'workspace'],
+    ['memory-review-scope', 'workspace']
   ])('invalidates evaluation when %s changes', async (testId, value) => {
     aiClient.contextEvaluateMemory.mockResolvedValueOnce({
       status: 'suggested',
@@ -170,8 +172,8 @@ describe('intelligenceMemoryReview', () => {
         summary: 'Original candidate',
         tags: [],
         confidence: 1,
-        privacyLevel: 'normal',
-      },
+        privacyLevel: 'normal'
+      }
     })
 
     const wrapper = mountMemoryReview()
@@ -192,13 +194,13 @@ describe('intelligenceMemoryReview', () => {
       memories: [createMemory()],
       offset: 0,
       limit: 20,
-      hasMore: false,
+      hasMore: false
     })
     aiClient.contextDeleteMemory.mockResolvedValueOnce({
       id: 'memdel_1',
       memoryId: 'mem_existing',
       reason: 'user-memory-review-delete',
-      createdAt: 3,
+      createdAt: 3
     })
 
     const wrapper = mountMemoryReview()
@@ -210,7 +212,7 @@ describe('intelligenceMemoryReview', () => {
       scope: undefined,
       status: 'all',
       offset: 0,
-      limit: 20,
+      limit: 20
     })
     expect(wrapper.text()).toContain('Use Chinese replies')
     expect(wrapper.text()).toContain('session-1')
@@ -221,7 +223,7 @@ describe('intelligenceMemoryReview', () => {
 
     expect(aiClient.contextDeleteMemory).toHaveBeenCalledWith({
       memoryId: 'mem_existing',
-      reason: 'user-memory-review-delete',
+      reason: 'user-memory-review-delete'
     })
     expect(wrapper.text()).not.toContain('Use Chinese replies')
   })
@@ -244,7 +246,7 @@ describe('intelligenceMemoryReview', () => {
       scope: 'workspace',
       status: 'disabled',
       offset: 0,
-      limit: 20,
+      limit: 20
     })
   })
 
@@ -256,13 +258,13 @@ describe('intelligenceMemoryReview', () => {
       summary: 'Concise Chinese',
       tags: ['language', 'concise'],
       replacesMemoryId: original.id,
-      updatedAt: 5,
+      updatedAt: 5
     })
     aiClient.contextListMemories.mockResolvedValueOnce({
       memories: [original],
       offset: 0,
       limit: 20,
-      hasMore: false,
+      hasMore: false
     })
     aiClient.contextEvaluateMemory.mockResolvedValueOnce({
       status: 'suggested',
@@ -276,11 +278,11 @@ describe('intelligenceMemoryReview', () => {
         confidence: 0.9,
         sourceSessionId: 'session-1',
         sourceTurnId: 'turn-1',
-        privacyLevel: 'normal',
-      },
+        privacyLevel: 'normal'
+      }
     })
-    let resolveReplacement!: (value: { memory: MemoryItem, tombstone: object }) => void
-    const replacementPromise = new Promise<{ memory: MemoryItem, tombstone: object }>((resolve) => {
+    let resolveReplacement!: (value: { memory: MemoryItem; tombstone: object }) => void
+    const replacementPromise = new Promise<{ memory: MemoryItem; tombstone: object }>((resolve) => {
       resolveReplacement = resolve
     })
     aiClient.contextReplaceMemory.mockReturnValueOnce(replacementPromise)
@@ -288,7 +290,9 @@ describe('intelligenceMemoryReview', () => {
     const wrapper = mountMemoryReview()
     await flushPromises()
     await wrapper.get('[data-testid="memory-review-edit-mem_existing"]').trigger('click')
-    await wrapper.get('[data-testid="memory-review-content"]').setValue('Use concise Chinese replies')
+    await wrapper
+      .get('[data-testid="memory-review-content"]')
+      .setValue('Use concise Chinese replies')
     await wrapper.get('[data-testid="memory-review-summary"]').setValue('Concise Chinese')
     await wrapper.get('[data-testid="memory-review-tags"]').setValue('language, concise')
     await wrapper.get('[data-testid="memory-review-evaluate"]').trigger('click')
@@ -313,13 +317,13 @@ describe('intelligenceMemoryReview', () => {
         sourceTurnId: 'turn-1',
         privacyLevel: 'normal',
         ttl: undefined,
-        enabled: true,
-      },
+        enabled: true
+      }
     })
 
     resolveReplacement({
       memory: replacement,
-      tombstone: { id: 'memdel_1', memoryId: original.id },
+      tombstone: { id: 'memdel_1', memoryId: original.id }
     })
     await flushPromises()
     expect(wrapper.text()).toContain('mem_replacement')
@@ -330,7 +334,7 @@ describe('intelligenceMemoryReview', () => {
       memories: [createMemory()],
       offset: 0,
       limit: 20,
-      hasMore: false,
+      hasMore: false
     })
     aiClient.contextEvaluateMemory.mockResolvedValueOnce({
       status: 'suggested',
@@ -344,8 +348,8 @@ describe('intelligenceMemoryReview', () => {
         confidence: 0.9,
         sourceSessionId: 'session-1',
         sourceTurnId: 'turn-1',
-        privacyLevel: 'normal',
-      },
+        privacyLevel: 'normal'
+      }
     })
     aiClient.contextReplaceMemory.mockRejectedValueOnce(new Error('MEMORY_REPLACE_CONFLICT'))
 
@@ -366,12 +370,12 @@ describe('intelligenceMemoryReview', () => {
       memories: [createMemory({ id: 'mem_toggle', content: 'Use concise replies' })],
       offset: 0,
       limit: 20,
-      hasMore: false,
+      hasMore: false
     })
     aiClient.contextSetMemoryEnabled.mockResolvedValueOnce({
       memoryId: 'mem_toggle',
       enabled: false,
-      updatedAt: 3,
+      updatedAt: 3
     })
 
     const wrapper = mountMemoryReview()
@@ -381,7 +385,7 @@ describe('intelligenceMemoryReview', () => {
 
     expect(aiClient.contextSetMemoryEnabled).toHaveBeenCalledWith({
       memoryId: 'mem_toggle',
-      enabled: false,
+      enabled: false
     })
     expect(wrapper.text()).toContain('intelligence.memoryReview.disabled')
   })

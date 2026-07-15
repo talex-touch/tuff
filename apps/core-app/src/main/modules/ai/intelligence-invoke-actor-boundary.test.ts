@@ -16,16 +16,22 @@ vi.mock('../sentry/sentry-service', () => {
   return {
     SentryServiceModule,
     getSentryService: vi.fn(() => service),
-    setSentryServiceInstance: vi.fn(),
+    setSentryServiceInstance: vi.fn()
   }
 })
 
 const intelligenceSdkMocks = vi.hoisted(() => ({
-  invoke: vi.fn(async () => ({ provider: 'test-provider', model: 'test-model' })),
+  invoke: vi.fn(
+    async (): Promise<{
+      provider: string
+      model: string
+      result?: { audio: string; format: string }
+    }> => ({ provider: 'test-provider', model: 'test-model' })
+  ),
   stream: vi.fn(async function* () {
     yield { type: 'text-delta', text: 'streamed response' }
   }),
-  updateConfig: vi.fn(),
+  updateConfig: vi.fn()
 }))
 const intelligenceEventMocks = vi.hoisted(() => {
   const event = (name: string) => ({ toEventName: () => name })
@@ -34,32 +40,29 @@ const intelligenceEventMocks = vi.hoisted(() => {
       invoke: event('intelligence:api:invoke'),
       stream: event('intelligence:api:stream'),
       ttsSpeak: event('intelligence:api:tts-speak'),
-      chatLangChain: event('intelligence:api:chat-langchain'),
+      chatLangChain: event('intelligence:api:chat-langchain')
     },
     intelligenceContextEvents: {
       execute: event('intelligence:context:execute'),
-      stream: event('intelligence:context:stream'),
-    },
+      stream: event('intelligence:context:stream')
+    }
   }
 })
 
 vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', () => ({
   ...intelligenceEventMocks,
-  intelligenceKnowledgeEvents: {},
+  intelligenceKnowledgeEvents: {}
 }))
 vi.mock('@talex-touch/utils/transport/events/types', () => ({
-  isIntelligenceErrorCode: vi.fn(() => false),
+  isIntelligenceErrorCode: vi.fn(() => false)
 }))
 
 vi.mock('./intelligence-sdk', () => ({
-  tuffIntelligence: intelligenceSdkMocks,
+  tuffIntelligence: intelligenceSdkMocks
 }))
 
 type InvokeHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
-type StreamHandler = (
-  payload: unknown,
-  context: StreamContext<unknown>,
-) => Promise<void> | void
+type StreamHandler = (payload: unknown, context: StreamContext<unknown>) => Promise<void> | void
 
 interface InvokeChannelRegistrar {
   registerInvokeChannels: (registerInvoke: unknown, registerStream: unknown) => void
@@ -67,8 +70,8 @@ interface InvokeChannelRegistrar {
 
 async function registerInvokeHandlers() {
   const { IntelligenceModule } = await import('./intelligence-module')
-  const { intelligenceApiEvents }
-    = await import('@talex-touch/utils/transport/sdk/domains/intelligence')
+  const { intelligenceApiEvents } =
+    await import('@talex-touch/utils/transport/sdk/domains/intelligence')
   const invokeHandlers = new Map<string, InvokeHandler>()
   const streamHandlers = new Map<string, StreamHandler>()
   const registerInvoke = vi.fn(
@@ -76,20 +79,20 @@ async function registerInvokeHandlers() {
       event: TuffEvent<unknown, unknown> & { toEventName: () => string },
       _action: string,
       _permissionId: string,
-      handler: InvokeHandler,
+      handler: InvokeHandler
     ) => {
       invokeHandlers.set(event.toEventName(), handler)
-    },
+    }
   )
   const registerStream = vi.fn(
     (
       event: TuffEvent<unknown, unknown> & { toEventName: () => string },
       _action: string,
       _permissionId: string,
-      handler: StreamHandler,
+      handler: StreamHandler
     ) => {
       streamHandlers.set(event.toEventName(), handler)
-    },
+    }
   )
 
   const module = new IntelligenceModule() as unknown as InvokeChannelRegistrar
@@ -99,7 +102,7 @@ async function registerInvokeHandlers() {
 
 function pluginContext(): HandlerContext {
   return {
-    plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true },
+    plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
   } as HandlerContext
 }
 
@@ -123,11 +126,11 @@ describe('intelligenceModule invoke actor boundary', () => {
       preferredProviderId: 'approved-provider',
       modelPreference: ['approved-model'],
       timeout: 4_000,
-      metadata: { traceId: 'plugin-trace-1', requestKind: 'completion' },
+      metadata: { traceId: 'plugin-trace-1', requestKind: 'completion' }
     }
     await handler(
       { capabilityId: 'text.chat', payload: { messages: [] }, options: sharedOptions },
-      pluginContext(),
+      pluginContext()
     )
     await handler(
       {
@@ -135,23 +138,29 @@ describe('intelligenceModule invoke actor boundary', () => {
         payload: { messages: [] },
         options: {
           ...sharedOptions,
-          metadata: { ...sharedOptions.metadata, caller: 'host:spoofed' },
-        },
+          metadata: { ...sharedOptions.metadata, caller: 'host:spoofed' }
+        }
       },
-      pluginContext(),
+      pluginContext()
     )
 
     expect(intelligenceSdkMocks.invoke).toHaveBeenNthCalledWith(
       1,
       'text.chat',
       { messages: [] },
-      { ...sharedOptions, metadata: { ...sharedOptions.metadata, caller: 'plugin:third-party-plugin' } },
+      {
+        ...sharedOptions,
+        metadata: { ...sharedOptions.metadata, caller: 'plugin:third-party-plugin' }
+      }
     )
     expect(intelligenceSdkMocks.invoke).toHaveBeenNthCalledWith(
       2,
       'text.chat',
       { messages: [] },
-      { ...sharedOptions, metadata: { ...sharedOptions.metadata, caller: 'plugin:third-party-plugin' } },
+      {
+        ...sharedOptions,
+        metadata: { ...sharedOptions.metadata, caller: 'plugin:third-party-plugin' }
+      }
     )
   })
 
@@ -168,7 +177,7 @@ describe('intelligenceModule invoke actor boundary', () => {
       ...pluginContext(),
       emit: vi.fn(),
       end: vi.fn(),
-      isCancelled: vi.fn(() => false),
+      isCancelled: vi.fn(() => false)
     } as unknown as StreamContext<unknown>
     await handler(
       {
@@ -177,10 +186,10 @@ describe('intelligenceModule invoke actor boundary', () => {
         options: {
           preferredProviderId: 'approved-provider',
           timeout: 2_000,
-          metadata: { caller: 'plugin:other-plugin', traceId: 'plugin-stream-trace' },
-        },
+          metadata: { caller: 'plugin:other-plugin', traceId: 'plugin-stream-trace' }
+        }
       },
-      streamContext,
+      streamContext
     )
 
     expect(intelligenceSdkMocks.stream).toHaveBeenCalledWith(
@@ -189,8 +198,8 @@ describe('intelligenceModule invoke actor boundary', () => {
       {
         preferredProviderId: 'approved-provider',
         timeout: 2_000,
-        metadata: { caller: 'plugin:third-party-plugin', traceId: 'plugin-stream-trace' },
-      },
+        metadata: { caller: 'plugin:third-party-plugin', traceId: 'plugin-stream-trace' }
+      }
     )
   })
 
@@ -210,7 +219,7 @@ describe('intelligenceModule invoke actor boundary', () => {
         model: 'approved-chat-model',
         promptTemplate: 'Respond about {subject} in a {tone} style.',
         promptVariables: { subject: 'caller binding', tone: 'precise' },
-        metadata: { traceId: 'plugin-chat-missing', requestKind: 'langchain' },
+        metadata: { traceId: 'plugin-chat-missing', requestKind: 'langchain' }
       },
       {
         messages: [{ role: 'user', content: 'Reject spoofed caller.' }],
@@ -221,9 +230,9 @@ describe('intelligenceModule invoke actor boundary', () => {
         metadata: {
           caller: 'host:spoofed',
           traceId: 'plugin-chat-spoofed',
-          requestKind: 'langchain',
-        },
-      },
+          requestKind: 'langchain'
+        }
+      }
     ]
 
     for (const request of requests) {
@@ -242,9 +251,9 @@ describe('intelligenceModule invoke actor boundary', () => {
             ...request.metadata,
             caller: 'plugin:third-party-plugin',
             promptTemplate: request.promptTemplate,
-            promptVariables: request.promptVariables,
-          },
-        },
+            promptVariables: request.promptVariables
+          }
+        }
       )
     }
   })
@@ -262,12 +271,12 @@ describe('intelligenceModule invoke actor boundary', () => {
       .mockResolvedValueOnce({
         result: { audio: 'ZmFrZS1hdWRpbw==', format: 'mp3' },
         provider: 'tts-provider',
-        model: 'tts-model',
+        model: 'tts-model'
       })
       .mockResolvedValueOnce({
         result: { audio: 'ZmFrZS1hdWRpbw==', format: 'mp3' },
         provider: 'tts-provider',
-        model: 'tts-model',
+        model: 'tts-model'
       })
 
     const requests = [
@@ -282,7 +291,7 @@ describe('intelligenceModule invoke actor boundary', () => {
         sourceTraceId: 'plugin-tts-missing',
         providerId: 'approved-tts-provider',
         model: 'approved-tts-model',
-        metadata: { traceId: 'plugin-tts-missing', requestKind: 'speech' },
+        metadata: { traceId: 'plugin-tts-missing', requestKind: 'speech' }
       },
       {
         text: 'Replace a spoofed TTS caller.',
@@ -298,9 +307,9 @@ describe('intelligenceModule invoke actor boundary', () => {
         metadata: {
           caller: 'host:spoofed',
           traceId: 'plugin-tts-spoofed',
-          requestKind: 'speech',
-        },
-      },
+          requestKind: 'speech'
+        }
+      }
     ]
 
     for (const request of requests) {
@@ -318,7 +327,7 @@ describe('intelligenceModule invoke actor boundary', () => {
           speed: request.speed,
           pitch: request.pitch,
           format: request.format,
-          quality: request.quality,
+          quality: request.quality
         },
         {
           preferredProviderId: request.providerId,
@@ -327,9 +336,9 @@ describe('intelligenceModule invoke actor boundary', () => {
             ...request.metadata,
             caller: 'plugin:third-party-plugin',
             entry: 'tts-speak',
-            sourceTraceId: request.sourceTraceId,
-          },
-        },
+            sourceTraceId: request.sourceTraceId
+          }
+        }
       )
     }
   })
@@ -351,7 +360,7 @@ describe('intelligenceModule invoke actor boundary', () => {
       model: 'host-chat-model',
       promptTemplate: 'Discuss {subject}.',
       promptVariables,
-      metadata,
+      metadata
     })
 
     await handler(payload, {} as HandlerContext)
@@ -365,9 +374,9 @@ describe('intelligenceModule invoke actor boundary', () => {
         metadata: {
           ...metadata,
           promptTemplate: payload.promptTemplate,
-          promptVariables,
-        },
-      },
+          promptVariables
+        }
+      }
     )
     expect(payload.metadata).toBe(metadata)
     expect(payload.promptVariables).toBe(promptVariables)
@@ -385,7 +394,7 @@ describe('intelligenceModule invoke actor boundary', () => {
     intelligenceSdkMocks.invoke.mockResolvedValueOnce({
       result: { audio: 'ZmFrZS1hdWRpbw==', format: 'mp3' },
       provider: 'tts-provider',
-      model: 'tts-model',
+      model: 'tts-model'
     })
     const metadata = Object.freeze({ caller: 'host:corebox', traceId: 'host-tts-trace' })
     const payload = Object.freeze({
@@ -399,7 +408,7 @@ describe('intelligenceModule invoke actor boundary', () => {
       sourceTraceId: 'host-tts-source-trace',
       providerId: 'host-tts-provider',
       model: 'host-tts-model',
-      metadata,
+      metadata
     })
 
     await handler(payload, {} as HandlerContext)
@@ -413,7 +422,7 @@ describe('intelligenceModule invoke actor boundary', () => {
         speed: payload.speed,
         pitch: payload.pitch,
         format: payload.format,
-        quality: payload.quality,
+        quality: payload.quality
       },
       {
         preferredProviderId: payload.providerId,
@@ -421,9 +430,9 @@ describe('intelligenceModule invoke actor boundary', () => {
         metadata: {
           ...metadata,
           entry: 'tts-speak',
-          sourceTraceId: payload.sourceTraceId,
-        },
-      },
+          sourceTraceId: payload.sourceTraceId
+        }
+      }
     )
     expect(payload.metadata).toBe(metadata)
   })
@@ -443,31 +452,31 @@ describe('intelligenceModule invoke actor boundary', () => {
       ...pluginContext(),
       emit: vi.fn(),
       end: vi.fn(),
-      isCancelled: vi.fn(() => false),
+      isCancelled: vi.fn(() => false)
     } as unknown as StreamContext<unknown>
     const unavailableAgentsPermission = {
       name: 'Error',
       message: "Permission runtime is unavailable for 'intelligence.agents'",
       code: 'INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE',
       permissionId: 'intelligence.agents',
-      pluginId: 'third-party-plugin',
+      pluginId: 'third-party-plugin'
     }
 
     await expect(
-      invokeHandler({ capabilityId: 'agent.run', payload: {}, options: {} }, pluginContext()),
+      invokeHandler({ capabilityId: 'agent.run', payload: {}, options: {} }, pluginContext())
     ).rejects.toMatchObject(unavailableAgentsPermission)
     await expect(
-      streamHandler(
-        { capabilityId: 'workflow.execute', payload: {}, options: {} },
-        streamContext,
-      ),
+      streamHandler({ capabilityId: 'workflow.execute', payload: {}, options: {} }, streamContext)
     ).rejects.toMatchObject(unavailableAgentsPermission)
 
     expect(intelligenceSdkMocks.invoke).not.toHaveBeenCalled()
     expect(intelligenceSdkMocks.stream).not.toHaveBeenCalled()
 
     await expect(
-      invokeHandler({ capabilityId: 'text.chat', payload: { messages: [] }, options: {} }, pluginContext()),
+      invokeHandler(
+        { capabilityId: 'text.chat', payload: { messages: [] }, options: {} },
+        pluginContext()
+      )
     ).resolves.toEqual({ provider: 'test-provider', model: 'test-model' })
     expect(intelligenceSdkMocks.invoke).toHaveBeenCalledOnce()
   })
@@ -483,17 +492,13 @@ describe('intelligenceModule invoke actor boundary', () => {
 
     const options = {
       preferredProviderId: 'approved-provider',
-      metadata: { caller: 'host:corebox', traceId: 'host-trace-1' },
+      metadata: { caller: 'host:corebox', traceId: 'host-trace-1' }
     }
     await handler(
       { capabilityId: 'text.chat', payload: { messages: [] }, options },
-      {} as HandlerContext,
+      {} as HandlerContext
     )
 
-    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith(
-      'text.chat',
-      { messages: [] },
-      options,
-    )
+    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith('text.chat', { messages: [] }, options)
   })
 })

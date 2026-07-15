@@ -32,7 +32,7 @@ import type {
   PrepareContextTurnResult,
   ReplaceMemoryInput,
   ReplaceMemoryResult,
-  SetMemoryEnabledResult,
+  SetMemoryEnabledResult
 } from '@talex-touch/utils/types/intelligence'
 import crypto from 'node:crypto'
 import process from 'node:process'
@@ -180,11 +180,11 @@ interface ResolvedContinuation {
   excluded?: ContextPackageExcludedItem
 }
 
-type MemoryContextExclusionReason
-  = | 'memory-disabled'
-    | 'memory-expired'
-    | 'memory-privacy-blocked'
-    | 'memory-scope-mismatch'
+type MemoryContextExclusionReason =
+  | 'memory-disabled'
+  | 'memory-expired'
+  | 'memory-privacy-blocked'
+  | 'memory-scope-mismatch'
 
 function id(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${crypto.randomBytes(6).toString('hex')}`
@@ -195,38 +195,32 @@ function estimateTokens(content: string): number {
 }
 
 function parseJsonRecord(value: string | null | undefined): Record<string, unknown> {
-  if (!value)
-    return {}
+  if (!value) return {}
   try {
     const parsed = JSON.parse(value)
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
-  }
-  catch {
+  } catch {
     return {}
   }
 }
 
 function parseJsonArray(value: string | null | undefined): string[] {
-  if (!value)
-    return []
+  if (!value) return []
   try {
     const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string') : []
-  }
-  catch {
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : []
+  } catch {
     return []
   }
 }
 
 function parsePackageLogItems(value: string | null | undefined): ContextPackageLog['items'] {
-  if (!value)
-    return []
+  if (!value) return []
   try {
     const parsed = JSON.parse(value)
-    if (!Array.isArray(parsed))
-      return []
+    if (!Array.isArray(parsed)) return []
     return parsed
-      .filter(item => item && typeof item === 'object')
+      .filter((item) => item && typeof item === 'object')
       .map((item) => {
         const record = item as Record<string, unknown>
         return {
@@ -235,39 +229,34 @@ function parsePackageLogItems(value: string | null | undefined): ContextPackageL
           reason: String(record.reason || ''),
           tokenEstimate: Math.max(0, Math.floor(Number(record.tokenEstimate || 0))),
           metadata:
-            record.metadata
-            && typeof record.metadata === 'object'
-            && !Array.isArray(record.metadata)
+            record.metadata &&
+            typeof record.metadata === 'object' &&
+            !Array.isArray(record.metadata)
               ? (record.metadata as Record<string, unknown>)
-              : undefined,
+              : undefined
         }
       })
-      .filter(item => item.sourceId && item.reason)
-  }
-  catch {
+      .filter((item) => item.sourceId && item.reason)
+  } catch {
     return []
   }
 }
 
 function stringifyJson(value: Record<string, unknown> | undefined): string | null {
-  if (!value || Object.keys(value).length === 0)
-    return null
+  if (!value || Object.keys(value).length === 0) return null
   return JSON.stringify(value)
 }
 
 function normalizeScope(input: PrepareContextTurnInput): ContextScope {
-  if (input.explicitScope)
-    return input.explicitScope
-  if (input.metadata?.noHistory === true)
-    return 'none'
-  if (input.continueSession)
-    return 'session'
+  if (input.explicitScope) return input.explicitScope
+  if (input.metadata?.noHistory === true) return 'none'
+  if (input.continueSession) return 'session'
   return 'light'
 }
 
 function isExplicitNewTopic(input: string): boolean {
   return /(?:^|\s)(?:new session|new topic|clear context|no history|不带历史|清理上下文|新会话|新话题)(?:\s|$)/i.test(
-    input,
+    input
   )
 }
 
@@ -277,48 +266,43 @@ function containsSecret(content: string): boolean {
     /\bghp_\w{20,}\b/,
     /\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*\S+/i,
     /(?:恢复码|口令)\s*[:=：]\s*\S+/,
-    /-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/,
-  ].some(pattern => pattern.test(content))
+    /-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/
+  ].some((pattern) => pattern.test(content))
 }
 
 function optsOutOfMemory(content: string): boolean {
   return [
     /\b(do not remember|don't remember|dont remember|forget this)\b/i,
-    /(不要记住|别记住|不要记忆|不要保存|别保存|不要记录|别记录|不用记住|不需要记住)/,
-  ].some(pattern => pattern.test(content))
+    /(不要记住|别记住|不要记忆|不要保存|别保存|不要记录|别记录|不用记住|不需要记住)/
+  ].some((pattern) => pattern.test(content))
 }
 
 function clampConfidence(value: number | undefined): number {
-  if (typeof value !== 'number' || Number.isNaN(value))
-    return 0.6
+  if (typeof value !== 'number' || Number.isNaN(value)) return 0.6
   return Math.min(1, Math.max(0, value))
 }
 
 function normalizeMemorySummary(input: EvaluateMemoryInput, content: string): string {
-  const summarySource
-    = typeof input.summary === 'string' ? input.summary.trim() || content : content
+  const summarySource =
+    typeof input.summary === 'string' ? input.summary.trim() || content : content
   const summary = summarySource.replace(/\s+/g, ' ').trim()
   return summary.slice(0, 240)
 }
 
 function normalizeMemoryTags(tags: string[] | undefined): string[] {
-  if (!Array.isArray(tags))
-    return []
+  if (!Array.isArray(tags)) return []
   return Array.from(
     new Set(
       tags
-        .filter(tag => typeof tag === 'string')
-        .map(tag => tag.trim())
+        .filter((tag) => typeof tag === 'string')
+        .map((tag) => tag.trim())
         .filter(Boolean)
-        .map(tag => tag.slice(0, 40)),
-    ),
+        .map((tag) => tag.slice(0, 40))
+    )
   ).slice(0, 12)
 }
 
-function memoryEvaluationFingerprint(
-  content: string,
-  candidate: MemoryPolicyCandidate,
-): string {
+function memoryEvaluationFingerprint(content: string, candidate: MemoryPolicyCandidate): string {
   return crypto
     .createHash('sha256')
     .update(
@@ -332,8 +316,8 @@ function memoryEvaluationFingerprint(
         sourceSessionId: candidate.sourceSessionId ?? null,
         sourceTurnId: candidate.sourceTurnId ?? null,
         privacyLevel: candidate.privacyLevel,
-        ttl: candidate.ttl ?? null,
-      }),
+        ttl: candidate.ttl ?? null
+      })
     )
     .digest('hex')
 }
@@ -341,7 +325,7 @@ function memoryEvaluationFingerprint(
 function createMemoryItem(
   input: MemoryUpsertInput,
   now = Date.now(),
-  forcedId?: string,
+  forcedId?: string
 ): MemoryItem {
   const content = String(input.content || '').trim()
   if (!content) {
@@ -373,7 +357,7 @@ function createMemoryItem(
     enabled: input.enabled ?? true,
     createdAt: now,
     updatedAt: now,
-    usageCount: 0,
+    usageCount: 0
   }
 }
 
@@ -382,26 +366,20 @@ function compressionSnapshotError(reason: string): Error {
 }
 
 function normalizeCompressionText(value: unknown, field: string): string | undefined {
-  if (value === undefined || value === null || value === '')
-    return undefined
-  if (typeof value !== 'string')
-    throw compressionSnapshotError(`${field}-type`)
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') throw compressionSnapshotError(`${field}-type`)
   const normalized = value.trim()
-  if (!normalized)
-    return undefined
-  if (normalized.length > COMPRESSION_TEXT_MAX)
-    throw compressionSnapshotError(`${field}-oversized`)
+  if (!normalized) return undefined
+  if (normalized.length > COMPRESSION_TEXT_MAX) throw compressionSnapshotError(`${field}-oversized`)
   return normalized
 }
 
 function normalizeCompressionArray(value: unknown, field: string): string[] {
-  if (value === undefined || value === null)
-    return []
+  if (value === undefined || value === null) return []
   if (!Array.isArray(value) || value.length > COMPRESSION_ARRAY_MAX)
     throw compressionSnapshotError(`${field}-shape`)
   return value.map((item) => {
-    if (typeof item !== 'string')
-      throw compressionSnapshotError(`${field}-item-type`)
+    if (typeof item !== 'string') throw compressionSnapshotError(`${field}-item-type`)
     const normalized = item.trim()
     if (!normalized || normalized.length > COMPRESSION_ARRAY_ITEM_MAX)
       throw compressionSnapshotError(`${field}-item-size`)
@@ -409,21 +387,33 @@ function normalizeCompressionArray(value: unknown, field: string): string[] {
   })
 }
 
-function compressionMetadataFromRecord(record: Record<string, unknown>): CompressionSnapshotMetadata {
+function compressionMetadataFromRecord(
+  record: Record<string, unknown>
+): CompressionSnapshotMetadata {
   const metadata: CompressionSnapshotMetadata = {}
-  if (record.privacyLevel === 'normal' || record.privacyLevel === 'sensitive' || record.privacyLevel === 'secret')
+  if (
+    record.privacyLevel === 'normal' ||
+    record.privacyLevel === 'sensitive' ||
+    record.privacyLevel === 'secret'
+  )
     metadata.privacyLevel = record.privacyLevel
-  if (record.factState === 'confirmed' || record.factState === 'inferred' || record.factState === 'user-rejected')
+  if (
+    record.factState === 'confirmed' ||
+    record.factState === 'inferred' ||
+    record.factState === 'user-rejected'
+  )
     metadata.factState = record.factState
   if (typeof record.confidence === 'number' && Number.isFinite(record.confidence))
     metadata.confidence = record.confidence
   if (Array.isArray(record.memoryIds)) {
-    metadata.memoryIds = Array.from(new Set(
-      record.memoryIds
-        .slice(0, COMPRESSION_MEMORY_IDS_MAX)
-        .flatMap(item => typeof item === 'string' ? [item.trim()] : [])
-        .filter(item => Boolean(item) && item.length <= 128),
-    ))
+    metadata.memoryIds = Array.from(
+      new Set(
+        record.memoryIds
+          .slice(0, COMPRESSION_MEMORY_IDS_MAX)
+          .flatMap((item) => (typeof item === 'string' ? [item.trim()] : []))
+          .filter((item) => Boolean(item) && item.length <= 128)
+      )
+    )
   }
   if (typeof record.checkpointId === 'string' && record.checkpointId.trim().length <= 128)
     metadata.checkpointId = record.checkpointId.trim()
@@ -431,8 +421,7 @@ function compressionMetadataFromRecord(record: Record<string, unknown>): Compres
 }
 
 function normalizeCompressionMetadata(value: unknown): CompressionSnapshotMetadata {
-  if (value === undefined || value === null)
-    return {}
+  if (value === undefined || value === null) return {}
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw compressionSnapshotError('metadata-shape')
   const record = value as Record<string, unknown>
@@ -449,21 +438,27 @@ function normalizeCompressionMetadata(value: unknown): CompressionSnapshotMetada
   if (record.memoryIds !== undefined) {
     if (!Array.isArray(record.memoryIds) || record.memoryIds.length > COMPRESSION_MEMORY_IDS_MAX)
       throw compressionSnapshotError('metadata-memory-ids')
-    const memoryIds = Array.from(new Set(record.memoryIds.map((memoryId) => {
-      if (typeof memoryId !== 'string')
-        throw compressionSnapshotError('metadata-memory-id-type')
-      const normalized = memoryId.trim()
-      if (!normalized || normalized.length > 128)
-        throw compressionSnapshotError('metadata-memory-id-size')
-      return normalized
-    })))
+    const memoryIds = Array.from(
+      new Set(
+        record.memoryIds.map((memoryId) => {
+          if (typeof memoryId !== 'string')
+            throw compressionSnapshotError('metadata-memory-id-type')
+          const normalized = memoryId.trim()
+          if (!normalized || normalized.length > 128)
+            throw compressionSnapshotError('metadata-memory-id-size')
+          return normalized
+        })
+      )
+    )
     metadata.memoryIds = memoryIds
   }
   delete metadata.checkpointId
   return metadata
 }
 
-function normalizeCompressionSnapshotDraft(input: CompressionSnapshotDraft): NormalizedCompressionSnapshot {
+function normalizeCompressionSnapshotDraft(
+  input: CompressionSnapshotDraft
+): NormalizedCompressionSnapshot {
   if (!input || typeof input !== 'object' || Array.isArray(input))
     throw compressionSnapshotError('snapshot-shape')
   const record = input as unknown as Record<string, unknown>
@@ -481,28 +476,24 @@ function normalizeCompressionSnapshotDraft(input: CompressionSnapshotDraft): Nor
     openQuestions: normalizeCompressionArray(record.openQuestions, 'open-questions'),
     sourceTurnFrom,
     sourceTurnTo,
-    metadata: normalizeCompressionMetadata(record.metadata),
+    metadata: normalizeCompressionMetadata(record.metadata)
   }
   const contentSize = [snapshot.goal, snapshot.currentState]
     .filter((value): value is string => Boolean(value))
     .concat(snapshot.decisions, snapshot.constraints, snapshot.artifacts, snapshot.openQuestions)
     .reduce((total, value) => total + value.length, 0)
-  if (contentSize === 0)
-    throw compressionSnapshotError('empty')
-  if (contentSize > COMPRESSION_TOTAL_MAX)
-    throw compressionSnapshotError('oversized')
+  if (contentSize === 0) throw compressionSnapshotError('empty')
+  if (contentSize > COMPRESSION_TOTAL_MAX) throw compressionSnapshotError('oversized')
   return snapshot
 }
 
 function renderCompressionSnapshot(snapshot: CompressionSnapshotContent): string {
   const sections: string[] = []
-  if (snapshot.goal)
-    sections.push(`Goal: ${snapshot.goal}`)
-  if (snapshot.currentState)
-    sections.push(`Current state: ${snapshot.currentState}`)
+  if (snapshot.goal) sections.push(`Goal: ${snapshot.goal}`)
+  if (snapshot.currentState) sections.push(`Current state: ${snapshot.currentState}`)
   const appendList = (label: string, values: string[]): void => {
     if (values.length > 0)
-      sections.push(`${label}:\n${values.map(value => `- ${value}`).join('\n')}`)
+      sections.push(`${label}:\n${values.map((value) => `- ${value}`).join('\n')}`)
   }
   appendList('Decisions', snapshot.decisions)
   appendList('Constraints', snapshot.constraints)
@@ -524,7 +515,7 @@ function compressionSnapshotFromRow(row: CompressionSnapshotRow): CompressionSna
     sourceTurnFrom: row.source_turn_from ?? undefined,
     sourceTurnTo: row.source_turn_to ?? undefined,
     metadata: compressionMetadataFromRecord(parseJsonRecord(row.metadata)),
-    createdAt: row.created_at,
+    createdAt: row.created_at
   }
 }
 
@@ -532,13 +523,11 @@ function getCompressionSnapshotPolicyExclusionReason(snapshot: CompressionSnapsh
   const metadata = snapshot.metadata
   if (metadata?.privacyLevel && metadata.privacyLevel !== 'normal')
     return `snapshot-${metadata.privacyLevel}-blocked`
-  if (metadata?.factState === 'user-rejected')
-    return 'snapshot-user-rejected'
+  if (metadata?.factState === 'user-rejected') return 'snapshot-user-rejected'
   if (metadata?.confidence !== undefined && metadata.confidence < 0.5)
     return 'snapshot-low-confidence'
   const content = renderCompressionSnapshot(snapshot)
-  if (!content || containsSecret(content))
-    return 'snapshot-content-blocked'
+  if (!content || containsSecret(content)) return 'snapshot-content-blocked'
   return null
 }
 
@@ -556,7 +545,7 @@ function sessionFromRow(row: SessionRow): ContextSession {
     metadata: parseJsonRecord(row.metadata),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    archivedAt: row.archived_at ?? undefined,
+    archivedAt: row.archived_at ?? undefined
   }
 }
 
@@ -569,7 +558,7 @@ function turnFromRow(row: TurnRow): ContextTurn {
     privacyLevel: row.privacy_level,
     tokenEstimate: row.token_estimate,
     metadata: parseJsonRecord(row.metadata),
-    createdAt: row.created_at,
+    createdAt: row.created_at
   }
 }
 
@@ -591,14 +580,14 @@ function memoryFromRow(row: MemoryRow): MemoryItem {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastUsedAt: row.last_used_at ?? undefined,
-    usageCount: row.usage_count,
+    usageCount: row.usage_count
   }
 }
 
 function getMemoryContextExclusionReason(
   memory: MemoryItem,
   sessionId: string,
-  now: number,
+  now: number
 ): MemoryContextExclusionReason | null {
   if (!memory.enabled) {
     return 'memory-disabled'
@@ -613,9 +602,9 @@ function getMemoryContextExclusionReason(
     return null
   }
   if (
-    memory.scope === 'session'
-    && Boolean(memory.sourceSessionId)
-    && memory.sourceSessionId === sessionId
+    memory.scope === 'session' &&
+    Boolean(memory.sourceSessionId) &&
+    memory.sourceSessionId === sessionId
   ) {
     return null
   }
@@ -629,20 +618,20 @@ function getMemoryContextExclusionReason(
 export function isMemoryUsableForContext(
   memory: MemoryItem,
   sessionId: string,
-  now = Date.now(),
+  now = Date.now()
 ): boolean {
   return getMemoryContextExclusionReason(memory, sessionId, now) === null
 }
 
 function serializePackageLogItems(contextPackage: ContextPackage): string {
   return JSON.stringify(
-    contextPackage.items.map(item => ({
+    contextPackage.items.map((item) => ({
       sourceType: item.sourceType,
       sourceId: item.sourceId,
       reason: item.reason,
       tokenEstimate: item.tokenEstimate,
-      metadata: item.metadata,
-    })),
+      metadata: item.metadata
+    }))
   )
 }
 
@@ -666,8 +655,8 @@ function readExcludedItems(value: unknown): ContextPackageExcludedItem[] {
         sourceType,
         sourceId,
         reason,
-        tokenEstimate: Math.max(0, Math.floor(Number(record.tokenEstimate) || 0)),
-      },
+        tokenEstimate: Math.max(0, Math.floor(Number(record.tokenEstimate) || 0))
+      }
     ]
   })
 }
@@ -682,7 +671,7 @@ function packageLogFromRow(row: PackageLogRow): ContextPackageLog {
     tokenEstimate: row.token_estimate,
     items: parsePackageLogItems(row.items),
     metadata: parseJsonRecord(row.metadata),
-    createdAt: row.created_at,
+    createdAt: row.created_at
   }
 }
 
@@ -695,7 +684,7 @@ function checkpointFromRow(row: CheckpointRow): ContextCheckpoint {
     summary: row.summary ?? undefined,
     contextScope: row.context_scope,
     metadata: parseJsonRecord(row.metadata),
-    createdAt: row.created_at,
+    createdAt: row.created_at
   }
 }
 
@@ -715,14 +704,14 @@ export class ContextHygieneService {
   private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
     return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
       priority: 'interactive',
-      maxQueueWaitMs: 8_000,
+      maxQueueWaitMs: 8_000
     })
   }
 
   private async persistMemory(
     client: Client,
     memory: MemoryItem,
-    allowUpdate: boolean,
+    allowUpdate: boolean
   ): Promise<void> {
     const onConflict = allowUpdate
       ? `
@@ -765,21 +754,18 @@ export class ContextHygieneService {
         memory.createdAt,
         memory.updatedAt,
         memory.lastUsedAt ?? null,
-        memory.usageCount,
-      ],
+        memory.usageCount
+      ]
     })
   }
 
   private async getCompressionSnapshotExclusionReason(
-    snapshot: CompressionSnapshot,
+    snapshot: CompressionSnapshot
   ): Promise<string | null> {
     const policyReason = getCompressionSnapshotPolicyExclusionReason(snapshot)
-    if (policyReason)
-      return policyReason
-    if (!snapshot.sourceTurnFrom || !snapshot.sourceTurnTo)
-      return 'snapshot-source-range-invalid'
-    if (!snapshot.metadata?.checkpointId)
-      return 'snapshot-checkpoint-missing'
+    if (policyReason) return policyReason
+    if (!snapshot.sourceTurnFrom || !snapshot.sourceTurnTo) return 'snapshot-source-range-invalid'
+    if (!snapshot.metadata?.checkpointId) return 'snapshot-checkpoint-missing'
 
     const client = this.requireClient()
     const endpointsResult = await client.execute({
@@ -788,13 +774,12 @@ export class ContextHygieneService {
         FROM intelligence_context_turns
         WHERE session_id = ? AND (id = ? OR id = ?)
       `,
-      args: [snapshot.sessionId, snapshot.sourceTurnFrom, snapshot.sourceTurnTo],
+      args: [snapshot.sessionId, snapshot.sourceTurnFrom, snapshot.sourceTurnTo]
     })
     const endpoints = endpointsResult.rows as unknown as CompressionSourceTurnRow[]
-    const sourceFrom = endpoints.find(turn => turn.id === snapshot.sourceTurnFrom)
-    const sourceTo = endpoints.find(turn => turn.id === snapshot.sourceTurnTo)
-    if (!sourceFrom || !sourceTo)
-      return 'snapshot-source-range-invalid'
+    const sourceFrom = endpoints.find((turn) => turn.id === snapshot.sourceTurnFrom)
+    const sourceTo = endpoints.find((turn) => turn.id === snapshot.sourceTurnTo)
+    if (!sourceFrom || !sourceTo) return 'snapshot-source-range-invalid'
     if (sourceFrom.id !== sourceTo.id && sourceFrom.created_at >= sourceTo.created_at)
       return 'snapshot-source-range-invalid'
 
@@ -805,17 +790,15 @@ export class ContextHygieneService {
         WHERE session_id = ? AND created_at >= ? AND created_at <= ?
         ORDER BY created_at ASC, id ASC
       `,
-      args: [snapshot.sessionId, sourceFrom.created_at, sourceTo.created_at],
+      args: [snapshot.sessionId, sourceFrom.created_at, sourceTo.created_at]
     })
     const sourceTurns = rangeResult.rows as unknown as CompressionSourceTurnRow[]
-    if (sourceTurns.length === 0)
-      return 'snapshot-source-range-invalid'
-    if (sourceTurns.some(turn => turn.privacy_level !== 'normal'))
+    if (sourceTurns.length === 0) return 'snapshot-source-range-invalid'
+    if (sourceTurns.some((turn) => turn.privacy_level !== 'normal'))
       return 'snapshot-source-privacy-blocked'
 
     const memoryIds = Array.from(new Set(snapshot.metadata.memoryIds ?? []))
-    if (memoryIds.length === 0)
-      return null
+    if (memoryIds.length === 0) return null
     const result = await client.execute({
       sql: `
         SELECT memory_id
@@ -823,7 +806,7 @@ export class ContextHygieneService {
         WHERE memory_id IN (${memoryIds.map(() => '?').join(', ')})
         LIMIT 1
       `,
-      args: memoryIds,
+      args: memoryIds
     })
     return result.rows.length > 0 ? 'snapshot-memory-tombstoned' : null
   }
@@ -838,14 +821,14 @@ export class ContextHygieneService {
     const client = this.requireClient()
     const result = await client.execute({
       sql: 'SELECT * FROM intelligence_context_sessions WHERE id = ? LIMIT 1',
-      args: [sessionId],
+      args: [sessionId]
     })
     const row = result.rows[0] as unknown as SessionRow | undefined
     return row ? sessionFromRow(row) : null
   }
 
   private async getLatestActiveSession(
-    owner: ContextSession['owner'],
+    owner: ContextSession['owner']
   ): Promise<ContextSession | null> {
     const client = this.requireClient()
     const result = await client.execute({
@@ -855,7 +838,7 @@ export class ContextHygieneService {
         ORDER BY updated_at DESC
         LIMIT 1
       `,
-      args: [owner],
+      args: [owner]
     })
     const row = result.rows[0] as unknown as SessionRow | undefined
     return row ? sessionFromRow(row) : null
@@ -863,7 +846,7 @@ export class ContextHygieneService {
 
   private async createSession(
     input: PrepareContextTurnInput,
-    now: number,
+    now: number
   ): Promise<ContextSession> {
     const client = this.requireClient()
     const session: ContextSession = {
@@ -873,7 +856,7 @@ export class ContextHygieneService {
       objective: input.objective,
       metadata: input.metadata,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     }
 
     await this.withDbWrite('intelligence.context.createSession', async () => {
@@ -892,8 +875,8 @@ export class ContextHygieneService {
           stringifyJson(session.metadata),
           now,
           now,
-          null,
-        ],
+          null
+        ]
       })
     })
     return session
@@ -905,7 +888,7 @@ export class ContextHygieneService {
     reason: string,
     contextScope: ContextScope,
     now: number,
-    metadata?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): Promise<ContextCheckpoint> {
     const client = this.requireClient()
     const checkpoint: ContextCheckpoint = {
@@ -915,7 +898,7 @@ export class ContextHygieneService {
       reason,
       contextScope,
       metadata,
-      createdAt: now,
+      createdAt: now
     }
     await this.withDbWrite('intelligence.context.checkpoint', async () => {
       await client.execute({
@@ -932,8 +915,8 @@ export class ContextHygieneService {
           null,
           contextScope,
           stringifyJson(metadata),
-          now,
-        ],
+          now
+        ]
       })
     })
     return checkpoint
@@ -942,7 +925,7 @@ export class ContextHygieneService {
   private async resolveSession(
     input: PrepareContextTurnInput,
     scope: ContextScope,
-    now: number,
+    now: number
   ): Promise<{
     session: ContextSession
     checkpoint?: ContextCheckpoint
@@ -952,35 +935,36 @@ export class ContextHygieneService {
     this.assertOwner(owner)
 
     const requestedSessionId = input.sessionId?.trim()
-    const explicitNew
-      = input.startNewSession === true || scope === 'none' || isExplicitNewTopic(input.input)
+    const explicitNew =
+      input.startNewSession === true || scope === 'none' || isExplicitNewTopic(input.input)
     const wantsContinuation = input.continueSession === true && !explicitNew
-    const contextActorId
-      = typeof input.metadata?.contextActorId === 'string' ? input.metadata.contextActorId.trim() : ''
+    const contextActorId =
+      typeof input.metadata?.contextActorId === 'string' ? input.metadata.contextActorId.trim() : ''
     const requested = requestedSessionId ? await this.getSession(requestedSessionId) : null
     if (
-      requested
-      && (requested.owner !== owner
-        || (contextActorId && requested.metadata?.contextActorId !== contextActorId))
+      requested &&
+      (requested.owner !== owner ||
+        (contextActorId && requested.metadata?.contextActorId !== contextActorId))
     ) {
       throw new Error('CONTEXT_SESSION_SCOPE_MISMATCH')
     }
 
-    const latest
-      = requested ?? (explicitNew || contextActorId ? null : await this.getLatestActiveSession(owner))
+    const latest =
+      requested ?? (explicitNew || contextActorId ? null : await this.getLatestActiveSession(owner))
     const inactive = latest ? latest.status !== 'active' : false
-    const idle = latest ? latest.status === 'active' && now - latest.updatedAt > SESSION_IDLE_MS : false
+    const idle = latest
+      ? latest.status === 'active' && now - latest.updatedAt > SESSION_IDLE_MS
+      : false
 
     let continuation: ContinuationBoundary | undefined
     if (wantsContinuation && !requested) {
       continuation = {
         sourceSessionId: requestedSessionId,
-        reason: 'continuation-session-missing',
+        reason: 'continuation-session-missing'
       }
-    }
-    else if (wantsContinuation && requested && (inactive || idle)) {
-      const reason: ContextContinuationReason
-        = requested.status === 'archived'
+    } else if (wantsContinuation && requested && (inactive || idle)) {
+      const reason: ContextContinuationReason =
+        requested.status === 'archived'
           ? 'archived-session-continuation'
           : requested.status === 'expired'
             ? 'expired-session-continuation'
@@ -988,7 +972,7 @@ export class ContextHygieneService {
       continuation = {
         sourceSession: requested,
         sourceSessionId: requested.id,
-        reason,
+        reason
       }
     }
 
@@ -999,7 +983,7 @@ export class ContextHygieneService {
             ...(continuation.sourceSessionId
               ? { continuedFromSessionId: continuation.sourceSessionId }
               : {}),
-            continuationReason: continuation.reason,
+            continuationReason: continuation.reason
           }
         : input.metadata
       const shouldGenerateSessionId = Boolean(requested || wantsContinuation)
@@ -1007,19 +991,19 @@ export class ContextHygieneService {
         {
           ...input,
           sessionId: shouldGenerateSessionId ? undefined : input.sessionId,
-          metadata: continuationMetadata,
+          metadata: continuationMetadata
         },
-        now,
+        now
       )
-      const checkpointReason
-        = continuation?.reason
-          ?? (explicitNew ? 'explicit-new-context' : idle ? 'long-inactivity' : 'new-session')
+      const checkpointReason =
+        continuation?.reason ??
+        (explicitNew ? 'explicit-new-context' : idle ? 'long-inactivity' : 'new-session')
       const checkpointMetadata = continuation
         ? {
             ...(continuation.sourceSessionId
               ? { continuedFromSessionId: continuation.sourceSessionId }
               : {}),
-            continuationReason: continuation.reason,
+            continuationReason: continuation.reason
           }
         : undefined
       const checkpoint = await this.createCheckpoint(
@@ -1028,7 +1012,7 @@ export class ContextHygieneService {
         checkpointReason,
         scope,
         now,
-        checkpointMetadata,
+        checkpointMetadata
       )
       return { session, checkpoint, continuation }
     }
@@ -1045,7 +1029,7 @@ export class ContextHygieneService {
         ORDER BY created_at DESC
         LIMIT ?
       `,
-      args: [sessionId, limit],
+      args: [sessionId, limit]
     })
     return (result.rows as unknown as TurnRow[]).map(turnFromRow).reverse()
   }
@@ -1066,18 +1050,18 @@ export class ContextHygieneService {
         ORDER BY m.updated_at DESC
         LIMIT 5
       `,
-      args: [now, sessionId],
+      args: [now, sessionId]
     })
     return (result.rows as unknown as MemoryRow[])
       .map(memoryFromRow)
-      .filter(memory => isMemoryUsableForContext(memory, sessionId, now))
+      .filter((memory) => isMemoryUsableForContext(memory, sessionId, now))
   }
 
   private async saveTurn(
     sessionId: string,
     input: PrepareContextTurnInput,
     now: number,
-    role: ContextTurn['role'] = 'user',
+    role: ContextTurn['role'] = 'user'
   ): Promise<ContextTurn> {
     const client = this.requireClient()
     const privacyLevel = input.privacyLevel ?? (containsSecret(input.input) ? 'secret' : 'normal')
@@ -1090,7 +1074,7 @@ export class ContextHygieneService {
       privacyLevel,
       tokenEstimate: estimateTokens(persistedContent),
       metadata: input.metadata,
-      createdAt: now,
+      createdAt: now
     }
 
     await this.withDbWrite('intelligence.context.saveTurn', async () => {
@@ -1108,24 +1092,22 @@ export class ContextHygieneService {
           turn.privacyLevel,
           turn.tokenEstimate,
           stringifyJson(turn.metadata),
-          now,
-        ],
+          now
+        ]
       })
       await client.execute({
         sql: 'UPDATE intelligence_context_sessions SET updated_at = ? WHERE id = ?',
-        args: [now, sessionId],
+        args: [now, sessionId]
       })
     })
 
     return turn
   }
 
-  private async resolveContinuation(
-    boundary: ContinuationBoundary,
-  ): Promise<ResolvedContinuation> {
+  private async resolveContinuation(boundary: ContinuationBoundary): Promise<ResolvedContinuation> {
     const metadataBase = {
       ...(boundary.sourceSessionId ? { sourceSessionId: boundary.sourceSessionId } : {}),
-      reason: boundary.reason,
+      reason: boundary.reason
     }
     const sourceSession = boundary.sourceSession
     if (!sourceSession) {
@@ -1133,8 +1115,8 @@ export class ContextHygieneService {
         summary: {
           ...metadataBase,
           status: 'unavailable',
-          degradedReason: 'continuation-source-session-missing',
-        },
+          degradedReason: 'continuation-source-session-missing'
+        }
       }
     }
 
@@ -1149,7 +1131,7 @@ export class ContextHygieneService {
           status: exclusionReason ? 'excluded' : 'included',
           summarySourceType: 'compression_snapshot',
           summarySourceId: snapshot.id,
-          ...(exclusionReason ? { degradedReason: exclusionReason } : {}),
+          ...(exclusionReason ? { degradedReason: exclusionReason } : {})
         }
         if (exclusionReason) {
           return {
@@ -1158,8 +1140,8 @@ export class ContextHygieneService {
               sourceType: 'summary',
               sourceId: snapshot.id,
               reason: exclusionReason,
-              tokenEstimate,
-            },
+              tokenEstimate
+            }
           }
         }
         return {
@@ -1176,9 +1158,9 @@ export class ContextHygieneService {
               snapshotId: snapshot.id,
               sourceTurnFrom: snapshot.sourceTurnFrom,
               sourceTurnTo: snapshot.sourceTurnTo,
-              checkpointId: snapshot.metadata?.checkpointId,
-            },
-          },
+              checkpointId: snapshot.metadata?.checkpointId
+            }
+          }
         }
       }
 
@@ -1188,8 +1170,8 @@ export class ContextHygieneService {
           summary: {
             ...metadataBase,
             status: 'unavailable',
-            degradedReason: 'continuation-summary-unavailable',
-          },
+            degradedReason: 'continuation-summary-unavailable'
+          }
         }
       }
 
@@ -1201,14 +1183,14 @@ export class ContextHygieneService {
             status: 'excluded',
             summarySourceType: 'session_summary',
             summarySourceId: sourceSession.id,
-            degradedReason: 'summary-content-blocked',
+            degradedReason: 'summary-content-blocked'
           },
           excluded: {
             sourceType: 'summary',
             sourceId: sourceSession.id,
             reason: 'summary-content-blocked',
-            tokenEstimate,
-          },
+            tokenEstimate
+          }
         }
       }
 
@@ -1217,7 +1199,7 @@ export class ContextHygieneService {
           ...metadataBase,
           status: 'included',
           summarySourceType: 'session_summary',
-          summarySourceId: sourceSession.id,
+          summarySourceId: sourceSession.id
         },
         item: {
           sourceType: 'summary',
@@ -1227,18 +1209,17 @@ export class ContextHygieneService {
           tokenEstimate,
           metadata: {
             sourceSessionId: sourceSession.id,
-            continuationReason: boundary.reason,
-          },
-        },
+            continuationReason: boundary.reason
+          }
+        }
       }
-    }
-    catch {
+    } catch {
       return {
         summary: {
           ...metadataBase,
           status: 'unavailable',
-          degradedReason: 'continuation-summary-read-failed',
-        },
+          degradedReason: 'continuation-summary-read-failed'
+        }
       }
     }
   }
@@ -1264,7 +1245,7 @@ export class ContextHygieneService {
           sourceType: item.sourceType,
           sourceId: item.sourceId,
           reason: 'token-budget-pruned',
-          tokenEstimate: item.tokenEstimate,
+          tokenEstimate: item.tokenEstimate
         })
         return
       }
@@ -1278,15 +1259,14 @@ export class ContextHygieneService {
         sourceId: input.turn.id,
         reason: 'current user input',
         content: input.turn.content,
-        tokenEstimate: input.turn.tokenEstimate,
+        tokenEstimate: input.turn.tokenEstimate
       })
-    }
-    else {
+    } else {
       excluded.push({
         sourceType: 'current_input',
         sourceId: input.turn.id,
         reason: `${input.turn.privacyLevel}-policy-blocked`,
-        tokenEstimate: input.turn.tokenEstimate,
+        tokenEstimate: input.turn.tokenEstimate
       })
     }
 
@@ -1294,30 +1274,28 @@ export class ContextHygieneService {
 
     const continuationMetadata = input.continuation?.summary
     if (input.continuation && continuationMetadata) {
-      const canIncludeContinuation
-        = includeHistory && (input.scope === 'session' || input.scope === 'retrieval')
+      const canIncludeContinuation =
+        includeHistory && (input.scope === 'session' || input.scope === 'retrieval')
       if (!canIncludeContinuation && input.continuation.item) {
         continuationMetadata.status = 'excluded'
         continuationMetadata.degradedReason = 'continuation-history-disabled'
         excluded.push({
           sourceType: 'summary',
           sourceId:
-            continuationMetadata.summarySourceId
-            ?? continuationMetadata.sourceSessionId
-            ?? 'continuation',
+            continuationMetadata.summarySourceId ??
+            continuationMetadata.sourceSessionId ??
+            'continuation',
           reason: 'continuation-history-disabled',
-          tokenEstimate: input.continuation.item.tokenEstimate,
+          tokenEstimate: input.continuation.item.tokenEstimate
         })
-      }
-      else if (input.continuation.item) {
+      } else if (input.continuation.item) {
         const itemCount = items.length
         addItem(input.continuation.item)
         if (items.length === itemCount) {
           continuationMetadata.status = 'excluded'
           continuationMetadata.degradedReason = 'token-budget-pruned'
         }
-      }
-      else if (input.continuation.excluded) {
+      } else if (input.continuation.excluded) {
         excluded.push(input.continuation.excluded)
       }
     }
@@ -1334,22 +1312,21 @@ export class ContextHygieneService {
             sourceTurnFrom: snapshot.sourceTurnFrom,
             sourceTurnTo: snapshot.sourceTurnTo,
             checkpointId: snapshot.metadata?.checkpointId,
-            tokenEstimate: summaryTokenEstimate,
+            tokenEstimate: summaryTokenEstimate
           }
           if (exclusionReason) {
             excluded.push({
               sourceType: 'summary',
               sourceId: snapshot.id,
               reason: exclusionReason,
-              tokenEstimate: summaryTokenEstimate,
+              tokenEstimate: summaryTokenEstimate
             })
             compressionMetadata = {
               status: 'excluded',
               degradedReason: exclusionReason,
-              ...snapshotMetadata,
+              ...snapshotMetadata
             }
-          }
-          else {
+          } else {
             const itemCount = items.length
             addItem({
               sourceType: 'summary',
@@ -1357,44 +1334,41 @@ export class ContextHygieneService {
               reason: 'validated compression snapshot',
               content: summary,
               tokenEstimate: summaryTokenEstimate,
-              metadata: snapshotMetadata,
+              metadata: snapshotMetadata
             })
             compressionMetadata = {
               status: items.length > itemCount ? 'included' : 'pruned',
-              ...snapshotMetadata,
+              ...snapshotMetadata
             }
           }
-        }
-        else if (input.session.summary && !containsSecret(input.session.summary)) {
+        } else if (input.session.summary && !containsSecret(input.session.summary)) {
           addItem({
             sourceType: 'summary',
             sourceId: input.session.id,
             reason: 'validated legacy session summary',
             content: input.session.summary,
-            tokenEstimate: estimateTokens(input.session.summary),
+            tokenEstimate: estimateTokens(input.session.summary)
           })
           compressionMetadata = { status: 'legacy' }
         }
-      }
-      catch {
+      } catch {
         compressionMetadata = {
           status: 'degraded',
-          degradedReason: 'snapshot-read-failed',
+          degradedReason: 'snapshot-read-failed'
         }
       }
     }
 
     if (includeHistory && (input.scope === 'session' || input.scope === 'retrieval')) {
       for (const turn of await this.listRecentTurns(input.session.id, 6)) {
-        if (turn.id === input.turn.id)
-          continue
+        if (turn.id === input.turn.id) continue
         addItem({
           sourceType: 'recent_turn',
           sourceId: turn.id,
           reason: 'explicit session continuation',
           content: turn.content,
           tokenEstimate: turn.tokenEstimate,
-          metadata: { role: turn.role },
+          metadata: { role: turn.role }
         })
       }
     }
@@ -1406,7 +1380,7 @@ export class ContextHygieneService {
           sourceId: memory.id,
           reason: `usable ${memory.scope} memory`,
           content: memory.summary || memory.content,
-          tokenEstimate: estimateTokens(memory.summary || memory.content),
+          tokenEstimate: estimateTokens(memory.summary || memory.content)
         })
       }
     }
@@ -1416,13 +1390,13 @@ export class ContextHygieneService {
         query: input.turn.content,
         tokenBudget: Math.max(1, input.tokenBudget - tokenEstimate),
         maxChunks: 4,
-        dedupe: true,
+        dedupe: true
       })
       retrievalMetadata = {
         status: retrieval.status,
         degradedReason: retrieval.degradedReason,
         chunkCount: retrieval.chunks.length,
-        citationCount: retrieval.citations.length,
+        citationCount: retrieval.citations.length
       }
       for (const hit of retrieval.chunks) {
         addItem({
@@ -1437,23 +1411,23 @@ export class ContextHygieneService {
             sourceType: hit.document.sourceType,
             sourceUri: hit.document.sourceUri,
             status: retrieval.status,
-            degradedReason: retrieval.degradedReason,
-          },
+            degradedReason: retrieval.degradedReason
+          }
         })
       }
     }
 
-    const packageMetadataBase
-      = retrievalMetadata || compressionMetadata || continuationMetadata
+    const packageMetadataBase =
+      retrievalMetadata || compressionMetadata || continuationMetadata
         ? {
             ...(input.metadata ?? {}),
             ...(retrievalMetadata ? { retrieval: retrievalMetadata } : {}),
             ...(compressionMetadata ? { compression: compressionMetadata } : {}),
-            ...(continuationMetadata ? { continuation: continuationMetadata } : {}),
+            ...(continuationMetadata ? { continuation: continuationMetadata } : {})
           }
         : input.metadata
-    const packageMetadata
-      = excluded.length > 0 ? { ...(packageMetadataBase ?? {}), excluded } : packageMetadataBase
+    const packageMetadata =
+      excluded.length > 0 ? { ...(packageMetadataBase ?? {}), excluded } : packageMetadataBase
 
     const contextPackage: ContextPackage = {
       id: id('ctxpkg'),
@@ -1464,7 +1438,7 @@ export class ContextHygieneService {
       tokenEstimate,
       items,
       metadata: packageMetadata,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     }
 
     await this.savePackageLog(contextPackage)
@@ -1475,9 +1449,9 @@ export class ContextHygieneService {
     const memoryIds = Array.from(
       new Set(
         contextPackage.items
-          .filter(item => item.sourceType === 'memory')
-          .map(item => item.sourceId),
-      ),
+          .filter((item) => item.sourceType === 'memory')
+          .map((item) => item.sourceId)
+      )
     )
     if (memoryIds.length === 0) {
       return contextPackage
@@ -1492,10 +1466,10 @@ export class ContextHygieneService {
         LEFT JOIN intelligence_memory_tombstones t ON t.memory_id = m.id
         WHERE m.id IN (${memoryIds.map(() => '?').join(', ')})
       `,
-      args: memoryIds,
+      args: memoryIds
     })
     const rowsById = new Map(
-      (result.rows as unknown as MemoryRevalidationRow[]).map(row => [row.id, row]),
+      (result.rows as unknown as MemoryRevalidationRow[]).map((row) => [row.id, row])
     )
     const excluded: ContextPackageExcludedItem[] = []
     const items = contextPackage.items.filter((item) => {
@@ -1515,7 +1489,7 @@ export class ContextHygieneService {
         sourceType: item.sourceType,
         sourceId: item.sourceId,
         reason,
-        tokenEstimate: item.tokenEstimate,
+        tokenEstimate: item.tokenEstimate
       })
       return false
     })
@@ -1533,9 +1507,9 @@ export class ContextHygieneService {
         excluded: [...readExcludedItems(contextPackage.metadata?.excluded), ...excluded],
         memoryRevalidation: {
           checkedCount: memoryIds.length,
-          excludedCount: excluded.length,
-        },
-      },
+          excludedCount: excluded.length
+        }
+      }
     }
     await this.updatePackageLog(revalidatedPackage)
     return revalidatedPackage
@@ -1555,8 +1529,8 @@ export class ContextHygieneService {
           serializePackageLogItems(contextPackage),
           stringifyJson(contextPackage.metadata),
           contextPackage.id,
-          contextPackage.sessionId,
-        ],
+          contextPackage.sessionId
+        ]
       })
     })
   }
@@ -1579,8 +1553,8 @@ export class ContextHygieneService {
           contextPackage.tokenEstimate,
           serializePackageLogItems(contextPackage),
           stringifyJson(contextPackage.metadata),
-          contextPackage.createdAt,
-        ],
+          contextPackage.createdAt
+        ]
       })
     })
   }
@@ -1592,11 +1566,11 @@ export class ContextHygieneService {
 
     const now = Date.now()
     const scope = normalizeScope(input)
-    const { session, checkpoint, continuation: continuationBoundary } = await this.resolveSession(
-      input,
-      scope,
-      now,
-    )
+    const {
+      session,
+      checkpoint,
+      continuation: continuationBoundary
+    } = await this.resolveSession(input, scope, now)
     const continuation = continuationBoundary
       ? await this.resolveContinuation(continuationBoundary)
       : undefined
@@ -1608,7 +1582,7 @@ export class ContextHygieneService {
       tokenBudget: Math.max(1, Math.floor(input.tokenBudget ?? DEFAULT_TOKEN_BUDGET)),
       traceId: input.traceId,
       metadata: input.metadata,
-      continuation,
+      continuation
     })
 
     return {
@@ -1616,7 +1590,7 @@ export class ContextHygieneService {
       turn,
       checkpoint,
       package: contextPackage,
-      continuation: continuation?.summary,
+      continuation: continuation?.summary
     }
   }
 
@@ -1636,23 +1610,22 @@ export class ContextHygieneService {
       {
         input: content,
         privacyLevel: input.privacyLevel,
-        metadata: input.metadata,
+        metadata: input.metadata
       },
       Date.now(),
-      'assistant',
+      'assistant'
     )
   }
 
   async createCompressionSnapshot(
-    input: CreateCompressionSnapshotInput,
+    input: CreateCompressionSnapshotInput
   ): Promise<CreateCompressionSnapshotResult> {
     const sessionId = String(input?.sessionId || '').trim()
     if (!sessionId || !Number.isFinite(input?.expectedSessionUpdatedAt))
       throw compressionSnapshotError('request')
     const normalized = normalizeCompressionSnapshotDraft(input.snapshot)
     const summary = renderCompressionSnapshot(normalized)
-    if (containsSecret(summary))
-      throw compressionSnapshotError('secret-content')
+    if (containsSecret(summary)) throw compressionSnapshotError('secret-content')
     if (normalized.metadata.privacyLevel && normalized.metadata.privacyLevel !== 'normal')
       throw compressionSnapshotError('privacy-blocked')
     if (normalized.metadata.factState === 'user-rejected')
@@ -1666,17 +1639,16 @@ export class ContextHygieneService {
       try {
         const sessionResult = await client.execute({
           sql: 'SELECT * FROM intelligence_context_sessions WHERE id = ? LIMIT 1',
-          args: [sessionId],
+          args: [sessionId]
         })
         const session = sessionResult.rows[0] as unknown as SessionRow | undefined
-        if (!session || session.status === 'expired')
-          throw compressionSnapshotError('session')
+        if (!session || session.status === 'expired') throw compressionSnapshotError('session')
         if (session.updated_at !== input.expectedSessionUpdatedAt) {
           await client.execute('ROLLBACK')
           return {
             status: 'degraded',
             degradedReason: 'cas-conflict',
-            sessionUpdatedAt: session.updated_at,
+            sessionUpdatedAt: session.updated_at
           }
         }
 
@@ -1686,13 +1658,12 @@ export class ContextHygieneService {
             FROM intelligence_context_turns
             WHERE session_id = ? AND (id = ? OR id = ?)
           `,
-          args: [sessionId, normalized.sourceTurnFrom, normalized.sourceTurnTo],
+          args: [sessionId, normalized.sourceTurnFrom, normalized.sourceTurnTo]
         })
         const endpoints = endpointsResult.rows as unknown as CompressionSourceTurnRow[]
-        const sourceFrom = endpoints.find(turn => turn.id === normalized.sourceTurnFrom)
-        const sourceTo = endpoints.find(turn => turn.id === normalized.sourceTurnTo)
-        if (!sourceFrom || !sourceTo)
-          throw compressionSnapshotError('source-range-missing')
+        const sourceFrom = endpoints.find((turn) => turn.id === normalized.sourceTurnFrom)
+        const sourceTo = endpoints.find((turn) => turn.id === normalized.sourceTurnTo)
+        if (!sourceFrom || !sourceTo) throw compressionSnapshotError('source-range-missing')
         if (sourceFrom.id !== sourceTo.id && sourceFrom.created_at >= sourceTo.created_at)
           throw compressionSnapshotError('source-range-order')
 
@@ -1703,10 +1674,10 @@ export class ContextHygieneService {
             WHERE session_id = ? AND created_at >= ? AND created_at <= ?
             ORDER BY created_at ASC, id ASC
           `,
-          args: [sessionId, sourceFrom.created_at, sourceTo.created_at],
+          args: [sessionId, sourceFrom.created_at, sourceTo.created_at]
         })
         const sourceTurns = rangeResult.rows as unknown as CompressionSourceTurnRow[]
-        if (sourceTurns.length === 0 || sourceTurns.some(turn => turn.privacy_level !== 'normal'))
+        if (sourceTurns.length === 0 || sourceTurns.some((turn) => turn.privacy_level !== 'normal'))
           throw compressionSnapshotError('source-range-privacy')
 
         const now = Date.now()
@@ -1723,7 +1694,7 @@ export class ContextHygieneService {
           sourceTurnFrom: normalized.sourceTurnFrom,
           sourceTurnTo: normalized.sourceTurnTo,
           metadata: { ...normalized.metadata, checkpointId },
-          createdAt: now,
+          createdAt: now
         }
         const checkpoint: ContextCheckpoint = {
           id: checkpointId,
@@ -1735,9 +1706,9 @@ export class ContextHygieneService {
           metadata: {
             snapshotId: snapshot.id,
             sourceTurnFrom: snapshot.sourceTurnFrom,
-            sourceTurnTo: snapshot.sourceTurnTo,
+            sourceTurnTo: snapshot.sourceTurnTo
           },
-          createdAt: now,
+          createdAt: now
         }
         const sessionUpdatedAt = Math.max(now, session.updated_at + 1)
         const sessionMetadata = {
@@ -1747,8 +1718,8 @@ export class ContextHygieneService {
             checkpointId,
             sourceTurnFrom: snapshot.sourceTurnFrom,
             sourceTurnTo: snapshot.sourceTurnTo,
-            updatedAt: sessionUpdatedAt,
-          },
+            updatedAt: sessionUpdatedAt
+          }
         }
 
         await client.execute({
@@ -1770,8 +1741,8 @@ export class ContextHygieneService {
             snapshot.sourceTurnFrom ?? null,
             snapshot.sourceTurnTo ?? null,
             JSON.stringify(snapshot.metadata),
-            snapshot.createdAt,
-          ],
+            snapshot.createdAt
+          ]
         })
         await client.execute({
           sql: `
@@ -1787,8 +1758,8 @@ export class ContextHygieneService {
             checkpoint.summary ?? null,
             checkpoint.contextScope,
             stringifyJson(checkpoint.metadata),
-            checkpoint.createdAt,
-          ],
+            checkpoint.createdAt
+          ]
         })
         const casResult = await client.execute({
           sql: `
@@ -1801,15 +1772,15 @@ export class ContextHygieneService {
             JSON.stringify(sessionMetadata),
             sessionUpdatedAt,
             sessionId,
-            input.expectedSessionUpdatedAt,
-          ],
+            input.expectedSessionUpdatedAt
+          ]
         })
         if (Number(casResult.rowsAffected ?? 0) !== 1) {
           await client.execute('ROLLBACK')
           return {
             status: 'degraded',
             degradedReason: 'cas-conflict',
-            sessionUpdatedAt: session.updated_at,
+            sessionUpdatedAt: session.updated_at
           }
         }
 
@@ -1818,10 +1789,9 @@ export class ContextHygieneService {
           status: 'created',
           snapshot,
           checkpoint,
-          sessionUpdatedAt,
+          sessionUpdatedAt
         }
-      }
-      catch (error) {
+      } catch (error) {
         await client.execute('ROLLBACK').catch(() => undefined)
         throw error
       }
@@ -1829,11 +1799,10 @@ export class ContextHygieneService {
   }
 
   async listCompressionSnapshots(
-    input: ListCompressionSnapshotsInput,
+    input: ListCompressionSnapshotsInput
   ): Promise<ListCompressionSnapshotsResult> {
     const sessionId = String(input?.sessionId || '').trim()
-    if (!sessionId)
-      throw compressionSnapshotError('session-query')
+    if (!sessionId) throw compressionSnapshotError('session-query')
     const limit = Math.min(50, Math.max(1, Math.floor(input.limit ?? 20)))
     const client = this.requireClient()
     const result = await client.execute({
@@ -1845,10 +1814,12 @@ export class ContextHygieneService {
         ORDER BY created_at DESC, id DESC
         LIMIT ?
       `,
-      args: [sessionId, limit],
+      args: [sessionId, limit]
     })
     return {
-      snapshots: (result.rows as unknown as CompressionSnapshotRow[]).map(compressionSnapshotFromRow),
+      snapshots: (result.rows as unknown as CompressionSnapshotRow[]).map(
+        compressionSnapshotFromRow
+      )
     }
   }
 
@@ -1884,11 +1855,11 @@ export class ContextHygieneService {
         ORDER BY created_at DESC
         LIMIT ?
       `,
-      args,
+      args
     })
 
     return {
-      logs: (result.rows as unknown as PackageLogRow[]).map(packageLogFromRow),
+      logs: (result.rows as unknown as PackageLogRow[]).map(packageLogFromRow)
     }
   }
 
@@ -1916,11 +1887,11 @@ export class ContextHygieneService {
         ORDER BY created_at DESC
         LIMIT ?
       `,
-      args,
+      args
     })
 
     return {
-      checkpoints: (result.rows as unknown as CheckpointRow[]).map(checkpointFromRow),
+      checkpoints: (result.rows as unknown as CheckpointRow[]).map(checkpointFromRow)
     }
   }
 
@@ -1934,8 +1905,7 @@ export class ContextHygieneService {
 
     if (status === 'enabled') {
       where.push('m.enabled = 1')
-    }
-    else if (status === 'disabled') {
+    } else if (status === 'disabled') {
       where.push('m.enabled = 0')
     }
     if (input.scope) {
@@ -1947,7 +1917,9 @@ export class ContextHygieneService {
       args.push(input.type)
     }
 
-    const query = String(input.query || '').trim().slice(0, 200)
+    const query = String(input.query || '')
+      .trim()
+      .slice(0, 200)
     if (query) {
       const pattern = `%${query.replace(/[\\%_]/g, '\\$&')}%`
       where.push(`(
@@ -1975,7 +1947,7 @@ export class ContextHygieneService {
         ORDER BY m.updated_at DESC, m.id ASC
         LIMIT ? OFFSET ?
       `,
-      args,
+      args
     })
 
     const rows = result.rows as unknown as MemoryRow[]
@@ -1983,7 +1955,7 @@ export class ContextHygieneService {
       memories: rows.slice(0, limit).map(memoryFromRow),
       offset,
       limit,
-      hasMore: rows.length > limit,
+      hasMore: rows.length > limit
     }
   }
 
@@ -2006,10 +1978,10 @@ export class ContextHygieneService {
 
     const evaluation = this.evaluateMemory(input.replacement)
     if (
-      evaluation.status !== 'suggested'
-      || !evaluation.candidate
-      || !evaluation.fingerprint
-      || evaluation.fingerprint !== input.evaluationFingerprint
+      evaluation.status !== 'suggested' ||
+      !evaluation.candidate ||
+      !evaluation.fingerprint ||
+      evaluation.fingerprint !== input.evaluationFingerprint
     ) {
       throw new Error('MEMORY_REPLACE_EVALUATION_MISMATCH')
     }
@@ -2027,17 +1999,17 @@ export class ContextHygieneService {
         sourceTurnId: evaluation.candidate.sourceTurnId,
         privacyLevel: evaluation.candidate.privacyLevel,
         ttl: evaluation.candidate.ttl,
-        enabled: true,
+        enabled: true
       },
       now,
-      id('mem'),
+      id('mem')
     )
     replacement.replacesMemoryId = memoryId
     const tombstone: MemoryTombstone = {
       id: id('memdel'),
       memoryId,
       reason: `replaced-by:${replacement.id}`,
-      createdAt: now,
+      createdAt: now
     }
     const client = this.requireClient()
 
@@ -2052,7 +2024,7 @@ export class ContextHygieneService {
             WHERE m.id = ? AND m.privacy_level = 'normal' AND t.memory_id IS NULL
             LIMIT 1
           `,
-          args: [memoryId],
+          args: [memoryId]
         })
         const current = currentResult.rows[0] as unknown as MemoryRow | undefined
         if (!current || current.updated_at !== input.expectedUpdatedAt) {
@@ -2062,18 +2034,17 @@ export class ContextHygieneService {
         await this.persistMemory(client, replacement, false)
         await client.execute({
           sql: 'UPDATE intelligence_memory_items SET enabled = 0, updated_at = ? WHERE id = ?',
-          args: [now, memoryId],
+          args: [now, memoryId]
         })
         await client.execute({
           sql: `
             INSERT INTO intelligence_memory_tombstones (id, memory_id, reason, created_at)
             VALUES (?, ?, ?, ?)
           `,
-          args: [tombstone.id, tombstone.memoryId, tombstone.reason, tombstone.createdAt],
+          args: [tombstone.id, tombstone.memoryId, tombstone.reason, tombstone.createdAt]
         })
         await client.execute('COMMIT')
-      }
-      catch (error) {
+      } catch (error) {
         await client.execute('ROLLBACK').catch(() => undefined)
         throw error
       }
@@ -2103,14 +2074,14 @@ export class ContextHygieneService {
               WHERE t.memory_id = intelligence_memory_items.id
             )
         `,
-        args: [enabled ? 1 : 0, updatedAt, normalizedMemoryId],
+        args: [enabled ? 1 : 0, updatedAt, normalizedMemoryId]
       })
     })
 
     return {
       memoryId: normalizedMemoryId,
       enabled,
-      updatedAt,
+      updatedAt
     }
   }
 
@@ -2119,14 +2090,14 @@ export class ContextHygieneService {
     if (!content) {
       return {
         status: 'rejected',
-        reason: 'empty_content',
+        reason: 'empty_content'
       }
     }
 
     if (optsOutOfMemory(content)) {
       return {
         status: 'rejected',
-        reason: 'user_opt_out',
+        reason: 'user_opt_out'
       }
     }
 
@@ -2134,14 +2105,14 @@ export class ContextHygieneService {
     if (privacyLevel === 'secret' || containsSecret(content)) {
       return {
         status: 'rejected',
-        reason: 'secret_detected',
+        reason: 'secret_detected'
       }
     }
 
     if (privacyLevel === 'sensitive') {
       return {
         status: 'needs_review',
-        reason: 'sensitive_content',
+        reason: 'sensitive_content'
       }
     }
 
@@ -2154,13 +2125,13 @@ export class ContextHygieneService {
       sourceSessionId: input.sourceSessionId,
       sourceTurnId: input.sourceTurnId,
       privacyLevel,
-      ttl: input.ttl,
+      ttl: input.ttl
     }
     return {
       status: 'suggested',
       reason: 'explicit_memory_candidate',
       candidate,
-      fingerprint: memoryEvaluationFingerprint(content, candidate),
+      fingerprint: memoryEvaluationFingerprint(content, candidate)
     }
   }
 
@@ -2173,20 +2144,20 @@ export class ContextHygieneService {
       id: id('memdel'),
       memoryId,
       reason,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     }
 
     await this.withDbWrite('intelligence.context.deleteMemory', async () => {
       await client.execute({
         sql: 'UPDATE intelligence_memory_items SET enabled = 0, updated_at = ? WHERE id = ?',
-        args: [tombstone.createdAt, memoryId],
+        args: [tombstone.createdAt, memoryId]
       })
       await client.execute({
         sql: `
           INSERT INTO intelligence_memory_tombstones (id, memory_id, reason, created_at)
           VALUES (?, ?, ?, ?)
         `,
-        args: [tombstone.id, memoryId, tombstone.reason, tombstone.createdAt],
+        args: [tombstone.id, memoryId, tombstone.reason, tombstone.createdAt]
       })
     })
 

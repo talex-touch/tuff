@@ -390,8 +390,7 @@ describe('translateCoreBoxImageItem', () => {
       expected: {
         code: 'QUOTA_CHECK_UNAVAILABLE',
         reason: 'Quota verification is unavailable, so the request was blocked.',
-        recovery:
-          'Retry after quota storage recovers or inspect Intelligence quota configuration.'
+        recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.'
       }
     }
   ])('normalizes scene failure when $name', async ({ error, expected }) => {

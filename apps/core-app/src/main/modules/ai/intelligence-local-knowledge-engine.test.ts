@@ -117,7 +117,7 @@ describe('LocalKnowledgeEngine', () => {
     })
     expect(dbMock.client.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: ['"CoreBox"* OR "follow"* OR "up"*', 'manual', 'workspace:tuff', 1, 100, 20],
+        args: ['"CoreBox"* OR "follow"* OR "up"*', 'manual', 'workspace:tuff', 1, 100, 20]
       })
     )
   })

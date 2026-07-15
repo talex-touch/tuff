@@ -13,9 +13,9 @@ function resolveVariable(
   let current: unknown = variables
   for (const segment of name.split('.')) {
     if (
-      current === null ||
-      typeof current !== 'object' ||
-      !Object.prototype.hasOwnProperty.call(current, segment)
+      current === null
+      || typeof current !== 'object'
+      || !Object.prototype.hasOwnProperty.call(current, segment)
     ) {
       return undefined
     }

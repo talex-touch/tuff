@@ -5,7 +5,7 @@ import type { LocalizedTextValue } from '@talex-touch/utils/i18n'
 import type {
   NetworkMethod,
   NetworkRequestOptions,
-  NetworkResponseType,
+  NetworkResponseType
 } from '@talex-touch/utils/network'
 import type {
   IFeatureLifeCycle,
@@ -17,12 +17,12 @@ import type {
   ITargetFeatureLifeCycle,
   ITouchPlugin,
   PluginIssue,
-  PluginMeta,
+  PluginMeta
 } from '@talex-touch/utils/plugin'
 import type { IPluginChannelBridge } from '@talex-touch/utils/plugin/sdk'
 import type {
   PluginChannelClient,
-  PluginStandardChannelData,
+  PluginStandardChannelData
 } from '@talex-touch/utils/plugin/sdk/channel-client'
 import type { IndexedSourceDescriptor, SearchProviderDescriptor } from '@talex-touch/utils/search'
 import type { ITuffTransport } from '@talex-touch/utils/transport'
@@ -61,7 +61,7 @@ import type {
   QuickOpsSessionsGetResponse,
   QuickOpsSystemInfoGetResponse,
   QuickOpsSystemProxyGetResponse,
-  SecureStoreHealthResponse,
+  SecureStoreHealthResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
@@ -84,7 +84,7 @@ import {
   createPluginLocalizationSDK,
   createPluginScreenshotSDK,
   createPluginTuffTransport,
-  createQuickActionsSDK,
+  createQuickActionsSDK
 } from '@talex-touch/utils/plugin/sdk'
 import { isSearchProviderEnabledByConfig } from '@talex-touch/utils/search'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -92,7 +92,7 @@ import {
   AppEvents,
   ClipboardEvents,
   PluginEvents,
-  QuickOpsEvents,
+  QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
@@ -100,7 +100,7 @@ import {
   PluginLogAppendEvent,
   PluginStorageUpdatedEvent,
   TalexEvents,
-  touchEventBus,
+  touchEventBus
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { useSafeUserAgent } from '../../hooks/use-electron-guard'
@@ -120,11 +120,11 @@ import { getPermissionModule } from '../permission'
 import {
   loadPluginFeatureContext,
   loadPluginFeatureContextFromContent,
-  PluginFeature,
+  PluginFeature
 } from './plugin-feature'
 import {
   bundlePluginPreludeFromContent,
-  bundlePluginPreludeFromFile,
+  bundlePluginPreludeFromFile
 } from './runtime/plugin-prelude-compiler'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
@@ -152,12 +152,12 @@ function createSafePluginDialogApi() {
     showOpenDialog: (...args: Parameters<typeof dialog.showOpenDialog>) =>
       dialog.showOpenDialog(...args),
     showSaveDialog: (...args: Parameters<typeof dialog.showSaveDialog>) =>
-      dialog.showSaveDialog(...args),
+      dialog.showSaveDialog(...args)
   }
 }
 
 function createSafePluginClipboardApi(
-  copyAndPaste: PluginClipboardApi['copyAndPaste'],
+  copyAndPaste: PluginClipboardApi['copyAndPaste']
 ): PluginClipboardApi {
   return {
     readText: (...args) => clipboard.readText(...args),
@@ -166,7 +166,7 @@ function createSafePluginClipboardApi(
     writeImage: (...args) => clipboard.writeImage(...args),
     clear: (...args) => clipboard.clear(...args),
     has: (...args) => clipboard.has(...args),
-    copyAndPaste,
+    copyAndPaste
   }
 }
 
@@ -177,17 +177,16 @@ function createSafePluginOpenUrl(pluginName: string, logger: PluginLogger) {
       const error = new Error(`PLUGIN_OPEN_URL_BLOCKED:${decision.reason}`)
       logger.warn(`[Plugin ${pluginName}] openUrl blocked`, {
         reason: decision.reason,
-        protocol: decision.protocol,
+        protocol: decision.protocol
       })
       throw error
     }
 
     try {
       await shell.openExternal(decision.url)
-    }
-    catch (error) {
+    } catch (error) {
       logger.warn(`[Plugin ${pluginName}] openUrl failed`, {
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
       throw error
     }
@@ -196,23 +195,23 @@ function createSafePluginOpenUrl(pluginName: string, logger: PluginLogger) {
 
 function withPluginSdkapiPayload(payload: unknown, sdkapi?: number): unknown {
   if (
-    !payload
-    || typeof payload !== 'object'
-    || Array.isArray(payload)
-    || typeof sdkapi !== 'number'
+    !payload ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload) ||
+    typeof sdkapi !== 'number'
   ) {
     return payload
   }
 
   return {
     ...(payload as Record<string, unknown>),
-    _sdkapi: sdkapi,
+    _sdkapi: sdkapi
   }
 }
 
 function createRemovedChannelError(capability: 'channel.raw' | 'channel.sendSync'): Error {
   return new Error(
-    `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`,
+    `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
   )
 }
 
@@ -255,30 +254,29 @@ const disallowedArrays = [
   '首款',
   '首张',
   '排行',
-  '排名系统',
+  '排名系统'
 ]
 
 const pluginSystemLog = createLogger('PluginSystem').child('Plugin')
 const TRANSIENT_ISSUE_CODES = new Set([
   'RUNTIME_ERROR',
   'AUTO_DISABLED_EXCESSIVE_ERRORS',
-  'LIFECYCLE_SCRIPT_FAILED',
+  'LIFECYCLE_SCRIPT_FAILED'
 ])
 const CHANNEL_SOURCE_TRANSPORT = 'transport' as PluginStandardChannelData['header']['type']
 const CHANNEL_SUCCESS_CODE = 200 as PluginStandardChannelData['code']
 
 function getRuntimeErrorCode(error: unknown): string | undefined {
-  if (!error || typeof error !== 'object')
-    return undefined
+  if (!error || typeof error !== 'object') return undefined
   const code = (error as { code?: unknown }).code
   return typeof code === 'string' ? code : undefined
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return (
-    value !== null
-    && (typeof value === 'object' || typeof value === 'function')
-    && typeof (value as { then?: unknown }).then === 'function'
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
   )
 }
 
@@ -324,26 +322,26 @@ interface PluginHttpClient {
   request: <T = unknown>(config: PluginHttpRequestConfig) => Promise<PluginHttpResponse<T>>
   get: <T = unknown>(
     url: string,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
   ) => Promise<PluginHttpResponse<T>>
   post: <T = unknown>(
     url: string,
     data?: unknown,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
   ) => Promise<PluginHttpResponse<T>>
   put: <T = unknown>(
     url: string,
     data?: unknown,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
   ) => Promise<PluginHttpResponse<T>>
   patch: <T = unknown>(
     url: string,
     data?: unknown,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
   ) => Promise<PluginHttpResponse<T>>
   delete: <T = unknown>(
     url: string,
-    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>,
+    config?: Omit<PluginHttpRequestConfig, 'url' | 'method' | 'data'>
   ) => Promise<PluginHttpResponse<T>>
 }
 
@@ -354,7 +352,7 @@ const ALLOWED_HTTP_METHODS = new Set<NetworkMethod>([
   'PATCH',
   'DELETE',
   'HEAD',
-  'OPTIONS',
+  'OPTIONS'
 ])
 
 function normalizeNetworkMethod(method?: string): NetworkMethod {
@@ -366,7 +364,7 @@ function normalizeNetworkMethod(method?: string): NetworkMethod {
 }
 
 function normalizeResponseType(
-  responseType: PluginHttpResponseType | undefined,
+  responseType: PluginHttpResponseType | undefined
 ): NetworkRequestOptions['responseType'] {
   if (responseType === 'arraybuffer') {
     return 'arrayBuffer'
@@ -379,8 +377,8 @@ function createPluginHttpClient(): PluginHttpClient {
 
   const send = async <T>(config: PluginHttpRequestConfig): Promise<PluginHttpResponse<T>> => {
     const method = normalizeNetworkMethod(config.method)
-    const timeoutMs
-      = typeof config.timeoutMs === 'number'
+    const timeoutMs =
+      typeof config.timeoutMs === 'number'
         ? config.timeoutMs
         : typeof config.timeout === 'number'
           ? config.timeout
@@ -393,7 +391,7 @@ function createPluginHttpClient(): PluginHttpClient {
       body: config.data,
       signal: config.signal,
       timeoutMs,
-      responseType: normalizeResponseType(config.responseType),
+      responseType: normalizeResponseType(config.responseType)
     })
 
     return {
@@ -402,7 +400,7 @@ function createPluginHttpClient(): PluginHttpClient {
       statusText: response.statusText,
       headers: response.headers,
       config,
-      url: response.url,
+      url: response.url
     }
   }
 
@@ -412,7 +410,7 @@ function createPluginHttpClient(): PluginHttpClient {
     post: (url, data, config = {}) => send({ ...config, url, method: 'POST', data }),
     put: (url, data, config = {}) => send({ ...config, url, method: 'PUT', data }),
     patch: (url, data, config = {}) => send({ ...config, url, method: 'PATCH', data }),
-    delete: (url, config = {}) => send({ ...config, url, method: 'DELETE' }),
+    delete: (url, config = {}) => send({ ...config, url, method: 'DELETE' })
   }
 }
 
@@ -450,9 +448,9 @@ export class TouchPlugin implements ITouchPlugin {
       meta: {
         pluginName: this.name,
         featureId: feature.id,
-        kind: 'plugin.widgetLoadFailed',
+        kind: 'plugin.widgetLoadFailed'
       },
-      system: { silent: false },
+      system: { silent: false }
     })
   }
 
@@ -523,7 +521,7 @@ export class TouchPlugin implements ITouchPlugin {
   _performanceMetrics = {
     loadStartTime: 0,
     loadEndTime: 0,
-    lastActiveTime: 0,
+    lastActiveTime: 0
   }
 
   _runtimeStats = {
@@ -531,7 +529,7 @@ export class TouchPlugin implements ITouchPlugin {
     requestCount: 0,
     lastActiveAt: 0,
     errorCount: 0,
-    errorTimestamps: [] as number[],
+    errorTimestamps: [] as number[]
   }
 
   /**
@@ -551,31 +549,31 @@ export class TouchPlugin implements ITouchPlugin {
       meta: this.meta,
       build: this.build,
       searchProviders: this.searchProviders
-        ? this.searchProviders.map(provider => ({
+        ? this.searchProviders.map((provider) => ({
             ...provider,
             policy: {
               ...provider.policy,
-              permissionScopes: [...provider.policy.permissionScopes],
-            },
+              permissionScopes: [...provider.policy.permissionScopes]
+            }
           }))
         : undefined,
       indexedSources: this.indexedSources
-        ? this.indexedSources.map(source => ({
+        ? this.indexedSources.map((source) => ({
             ...source,
             platforms: [...source.platforms],
             capabilities: { ...source.capabilities },
             admission: source.admission
               ? {
                   ...source.admission,
-                  permissionScopes: [...source.admission.permissionScopes],
+                  permissionScopes: [...source.admission.permissionScopes]
                 }
-              : undefined,
+              : undefined
           }))
         : undefined,
       icon: {
         type: this.icon.type,
         value: this.icon.value,
-        status: this.icon.status,
+        status: this.icon.status
       },
       dev: this.dev,
       status: this.status,
@@ -590,11 +588,11 @@ export class TouchPlugin implements ITouchPlugin {
             reasons: { ...this.declaredPermissions.reasons },
             localizedReasons: this.declaredPermissions.localizedReasons
               ? { ...this.declaredPermissions.localizedReasons }
-              : undefined,
+              : undefined
           }
         : undefined,
       features: this.features
-        .filter(feature => !feature.experimental || this.dev?.enable)
+        .filter((feature) => !feature.experimental || this.dev?.enable)
         .map((feature) => {
           // 防御性检查：确保 feature 有 toJSONObject 方法
           if (typeof feature.toJSONObject === 'function') {
@@ -602,7 +600,7 @@ export class TouchPlugin implements ITouchPlugin {
           }
           // 如果不是 PluginFeature 实例，尝试手动构造对象
           pluginSystemLog.warn(
-            `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`,
+            `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`
           )
           return {
             id: feature.id,
@@ -616,10 +614,10 @@ export class TouchPlugin implements ITouchPlugin {
             priority: feature.priority || 0,
             experimental: feature.experimental,
             acceptedInputTypes: feature.acceptedInputTypes,
-            omniTransfer: feature.omniTransfer,
+            omniTransfer: feature.omniTransfer
           }
         }),
-      issues: this.issues,
+      issues: this.issues
     }
   }
 
@@ -633,7 +631,7 @@ export class TouchPlugin implements ITouchPlugin {
     if (this.transport) {
       this.transport.broadcast(PluginEvents.push.statusUpdated, {
         plugin: this.name,
-        status: this._status,
+        status: this._status
       })
     }
   }
@@ -644,7 +642,7 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   addFeature(feature: IPluginFeature): boolean {
-    if (this.features.some(item => item.id === feature.id || item.name === feature.name)) {
+    if (this.features.some((item) => item.id === feature.id || item.name === feature.name)) {
       return false
     }
 
@@ -660,18 +658,17 @@ export class TouchPlugin implements ITouchPlugin {
       disallowedArrays.filter((item: string) => name.includes(item) || desc.includes(item)).length
     ) {
       pluginSystemLog.error(
-        `[Plugin ${this.name}] Feature add error, name or desc contains disallowed words.`,
+        `[Plugin ${this.name}] Feature add error, name or desc contains disallowed words.`
       )
       return false
     }
 
-    if (commands.length < 1)
-      return false
+    if (commands.length < 1) return false
 
     const shouldInitializeIcon = !(feature instanceof PluginFeature)
     // 如果已经是 PluginFeature 实例，直接使用；否则创建新实例
-    const pluginFeature
-      = feature instanceof PluginFeature
+    const pluginFeature =
+      feature instanceof PluginFeature
         ? feature
         : new PluginFeature(this.pluginPath, feature, this.dev)
 
@@ -679,7 +676,7 @@ export class TouchPlugin implements ITouchPlugin {
       void pluginFeature.icon.init().catch((error) => {
         pluginSystemLog.warn(
           `[Plugin ${this.name}] Failed to initialize dynamic feature icon: ${feature.id}`,
-          { error: toError(error) },
+          { error: toError(error) }
         )
       })
     }
@@ -688,16 +685,15 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   delFeature(featureId: string): boolean {
-    const featureIndex = this.features.findIndex(feature => feature.id === featureId)
-    if (featureIndex < 0)
-      return false
+    const featureIndex = this.features.findIndex((feature) => feature.id === featureId)
+    if (featureIndex < 0) return false
 
     this.features.splice(featureIndex, 1)
     return true
   }
 
   getFeature(featureId: string): IPluginFeature | null {
-    return this.features.find(f => f.id === featureId) || null
+    return this.features.find((f) => f.id === featureId) || null
   }
 
   getFeatures(): IPluginFeature[] {
@@ -706,19 +702,19 @@ export class TouchPlugin implements ITouchPlugin {
 
   async triggerFeature(
     feature: IPluginFeature,
-    query: TuffQuery | undefined,
+    query: TuffQuery | undefined
   ): Promise<boolean | void> {
     const executeStart = Date.now()
     const logFeatureBreadcrumb = (
       stage: string,
-      extra?: { errorCode?: string, durationMs?: number },
+      extra?: { errorCode?: string; durationMs?: number }
     ) => {
       this.logger.debug('[Breadcrumb] feature execute', {
         pluginName: this.name,
         featureId: feature.id,
         stage,
         durationMs: extra?.durationMs,
-        errorCode: extra?.errorCode,
+        errorCode: extra?.errorCode
       })
     }
 
@@ -738,7 +734,7 @@ export class TouchPlugin implements ITouchPlugin {
       const interactionPath = feature.interaction.path
       if (!interactionPath) {
         this.logger.error(
-          `Security Alert: Aborted loading view with invalid path: ${interactionPath}`,
+          `Security Alert: Aborted loading view with invalid path: ${interactionPath}`
         )
         return
       }
@@ -747,17 +743,16 @@ export class TouchPlugin implements ITouchPlugin {
 
       if (!this.pluginLifecycle) {
         this.logger.warn(
-          `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`,
+          `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`
         )
       }
       try {
         await PluginViewLoader.loadPluginView(this, feature, query)
         logFeatureBreadcrumb('webcontent-ready', { durationMs: Date.now() - executeStart })
-      }
-      catch (error) {
+      } catch (error) {
         logFeatureBreadcrumb('webcontent-failed', {
           durationMs: Date.now() - executeStart,
-          errorCode: getRuntimeErrorCode(error),
+          errorCode: getRuntimeErrorCode(error)
         })
         this.handleRuntimeError('loadPluginView', error)
         return false
@@ -772,15 +767,15 @@ export class TouchPlugin implements ITouchPlugin {
       if (needsRegistration) {
         logFeatureBreadcrumb('widget-register-start')
         if (
-          !registrationFeature
-          || registrationFeature.interaction?.type !== 'widget'
-          || !registrationFeature.interaction.path
+          !registrationFeature ||
+          registrationFeature.interaction?.type !== 'widget' ||
+          !registrationFeature.interaction.path
         ) {
           logFeatureBreadcrumb('widget-register-failed', {
-            durationMs: Date.now() - executeStart,
+            durationMs: Date.now() - executeStart
           })
           this.logger.warn(
-            `Widget renderer feature unavailable for feature: ${feature.id} (rendererFeatureId=${rendererFeatureId || feature.id})`,
+            `Widget renderer feature unavailable for feature: ${feature.id} (rendererFeatureId=${rendererFeatureId || feature.id})`
           )
           this.notifyWidgetLoadFailure(feature)
           return false
@@ -789,11 +784,10 @@ export class TouchPlugin implements ITouchPlugin {
         let registration: Awaited<ReturnType<typeof widgetManager.registerWidget>>
         try {
           registration = await widgetManager.registerWidget(this, registrationFeature)
-        }
-        catch (error) {
+        } catch (error) {
           logFeatureBreadcrumb('widget-register-error', {
             durationMs: Date.now() - executeStart,
-            errorCode: getRuntimeErrorCode(error),
+            errorCode: getRuntimeErrorCode(error)
           })
           this.handleRuntimeError('registerWidget', error)
           this.notifyWidgetLoadFailure(feature)
@@ -801,17 +795,17 @@ export class TouchPlugin implements ITouchPlugin {
         }
         if (!registration) {
           logFeatureBreadcrumb('widget-register-failed', {
-            durationMs: Date.now() - executeStart,
+            durationMs: Date.now() - executeStart
           })
           this.logger.warn(`Widget interaction failed to load for feature: ${feature.id}`)
           this.notifyWidgetLoadFailure(feature)
           return false
         }
         logFeatureBreadcrumb('widget-register-ready', {
-          durationMs: Date.now() - executeStart,
+          durationMs: Date.now() - executeStart
         })
         this.logger.info(
-          `Widget interaction ready for feature: ${feature.id} (rendererFeature=${registrationFeature.id}, id=${registration.widgetId}, file=${registration.filePath})`,
+          `Widget interaction ready for feature: ${feature.id} (rendererFeature=${registrationFeature.id}, id=${registration.widgetId}, file=${registration.filePath})`
         )
       }
     }
@@ -822,26 +816,24 @@ export class TouchPlugin implements ITouchPlugin {
         feature.id,
         query,
         feature,
-        controller.signal,
+        controller.signal
       )
       if (isPromiseLike(result)) {
         result = (await result) as boolean | void
       }
-    }
-    catch (error) {
+    } catch (error) {
       logFeatureBreadcrumb('lifecycle-error', {
         durationMs: Date.now() - executeStart,
-        errorCode: getRuntimeErrorCode(error),
+        errorCode: getRuntimeErrorCode(error)
       })
       this.handleRuntimeError('onFeatureTriggered', error)
     }
     try {
-      this._featureEvent.get(feature.id)?.forEach(fn => fn.onLaunch?.(feature))
-    }
-    catch (error) {
+      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
+    } catch (error) {
       logFeatureBreadcrumb('on-launch-error', {
         durationMs: Date.now() - executeStart,
-        errorCode: getRuntimeErrorCode(error),
+        errorCode: getRuntimeErrorCode(error)
       })
       this.handleRuntimeError('onLaunch', error)
     }
@@ -859,15 +851,13 @@ export class TouchPlugin implements ITouchPlugin {
       if (isPromiseLike(result)) {
         await result
       }
-    }
-    catch (error) {
+    } catch (error) {
       this.handleRuntimeError('onFeatureTriggered', error)
     }
 
     try {
-      this._featureEvent.get(feature.id)?.forEach(fn => fn.onInputChanged?.(query?.text ?? ''))
-    }
-    catch (error) {
+      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query?.text ?? ''))
+    } catch (error) {
       this.handleRuntimeError('onInputChanged', error)
     }
   }
@@ -877,13 +867,13 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private abortFeatureControllers(): void {
-    this.featureControllers.forEach(controller => controller.abort())
+    this.featureControllers.forEach((controller) => controller.abort())
     this.featureControllers.clear()
   }
 
   public clearCoreBoxItems(): void {
     pluginSystemLog.debug(
-      `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`,
+      `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`
     )
 
     this._searchItems = []
@@ -894,7 +884,7 @@ export class TouchPlugin implements ITouchPlugin {
     const coreBoxDestroyed = coreBoxWindow?.window.isDestroyed()
 
     pluginSystemLog.debug(
-      `[Plugin ${this.name}] CoreBox window available for clearing: ${coreBoxAvailable}`,
+      `[Plugin ${this.name}] CoreBox window available for clearing: ${coreBoxAvailable}`
     )
 
     const boxItemManager = getBoxItemManager()
@@ -902,10 +892,9 @@ export class TouchPlugin implements ITouchPlugin {
 
     if (!coreBoxWindow || coreBoxDestroyed) {
       pluginSystemLog.warn(
-        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${coreBoxAvailable}, destroyed: ${coreBoxDestroyed}`,
+        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${coreBoxAvailable}, destroyed: ${coreBoxDestroyed}`
       )
-    }
-    else {
+    } else {
       pluginSystemLog.debug(`[Plugin ${this.name}] Cleared search results via BoxItemManager`)
     }
   }
@@ -917,31 +906,31 @@ export class TouchPlugin implements ITouchPlugin {
    */
   private enrichItemWithSource(
     item: TuffItem,
-    scope: BoxItemWriteScope = 'root-results',
+    scope: BoxItemWriteScope = 'root-results'
   ): TuffItem {
-    const pushProviderIds
-      = this.searchProviders
-        ?.filter(provider => provider.mode === 'push' && provider.policy.pushesToRootResults)
-        .map(provider => provider.id) ?? []
-    const itemFeatureId
-      = typeof item.meta?.featureId === 'string' && item.meta.featureId.trim()
+    const pushProviderIds =
+      this.searchProviders
+        ?.filter((provider) => provider.mode === 'push' && provider.policy.pushesToRootResults)
+        .map((provider) => provider.id) ?? []
+    const itemFeatureId =
+      typeof item.meta?.featureId === 'string' && item.meta.featureId.trim()
         ? item.meta.featureId.trim()
         : undefined
     const matchedFeatureProviderId = itemFeatureId
       ? this.searchProviders?.find(
-        provider =>
-          provider.mode === 'push'
-          && provider.policy.pushesToRootResults
-          && provider.featureId === itemFeatureId,
-      )?.id
+          (provider) =>
+            provider.mode === 'push' &&
+            provider.policy.pushesToRootResults &&
+            provider.featureId === itemFeatureId
+        )?.id
       : undefined
-    const declaredSearchProviderId
-      = typeof item.meta?.searchProviderId === 'string' && item.meta.searchProviderId.trim()
+    const declaredSearchProviderId =
+      typeof item.meta?.searchProviderId === 'string' && item.meta.searchProviderId.trim()
         ? item.meta.searchProviderId.trim()
         : undefined
     const fallbackSearchProviderId = pushProviderIds.length === 1 ? pushProviderIds[0] : undefined
-    const searchProviderId
-      = scope === 'root-results'
+    const searchProviderId =
+      scope === 'root-results'
         ? declaredSearchProviderId || matchedFeatureProviderId || fallbackSearchProviderId
         : undefined
     const meta = { ...item.meta }
@@ -956,13 +945,13 @@ export class TouchPlugin implements ITouchPlugin {
         // Preserve source.id if already set (e.g., 'plugin-features' for onItemAction routing)
         id: item.source?.id || this.name,
         name: item.source?.name || this.name,
-        version: this.version,
+        version: this.version
       },
       meta: {
         ...meta,
         pluginName: meta.pluginName || this.name,
-        ...(searchProviderId ? { searchProviderId } : {}),
-      },
+        ...(searchProviderId ? { searchProviderId } : {})
+      }
     }
   }
 
@@ -970,7 +959,7 @@ export class TouchPlugin implements ITouchPlugin {
     const permissionModule = getPermissionModule()
     if (!permissionModule) {
       this.logger.warn(
-        `[Feature SDK] Ignored boxItems.${method} because permission module is unavailable.`,
+        `[Feature SDK] Ignored boxItems.${method} because permission module is unavailable.`
       )
       return false
     }
@@ -978,36 +967,34 @@ export class TouchPlugin implements ITouchPlugin {
     const result = permissionModule.checkPermission(
       this.name,
       'search:root-results:push',
-      this.sdkapi,
+      this.sdkapi
     )
-    if (result.allowed)
-      return true
+    if (result.allowed) return true
 
     this.logger.warn(
-      `[Feature SDK] Ignored boxItems.${method}: ${result.reason || 'search.root-results denied'}`,
+      `[Feature SDK] Ignored boxItems.${method}: ${result.reason || 'search.root-results denied'}`
     )
     return false
   }
 
   private isRootResultsProviderEnabled(item?: TuffItem): boolean {
-    const providers
-      = this.searchProviders?.filter(
-        provider => provider.mode === 'push' && provider.policy.pushesToRootResults,
+    const providers =
+      this.searchProviders?.filter(
+        (provider) => provider.mode === 'push' && provider.policy.pushesToRootResults
       ) ?? []
-    if (providers.length === 0)
-      return true
+    if (providers.length === 0) return true
 
-    const itemProviderId
-      = typeof item?.meta?.searchProviderId === 'string' && item.meta.searchProviderId.trim()
+    const itemProviderId =
+      typeof item?.meta?.searchProviderId === 'string' && item.meta.searchProviderId.trim()
         ? item.meta.searchProviderId.trim()
         : undefined
     const targetProviderIds = itemProviderId
       ? [itemProviderId]
-      : providers.map(provider => provider.id)
+      : providers.map((provider) => provider.id)
     const configs = getSearchProviderUserConfigs()
 
-    return targetProviderIds.every(providerId =>
-      isSearchProviderEnabledByConfig(providerId, providers, configs),
+    return targetProviderIds.every((providerId) =>
+      isSearchProviderEnabledByConfig(providerId, providers, configs)
     )
   }
 
@@ -1029,8 +1016,7 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private ensureRootResultsProviderEnabled(method: string, item?: TuffItem): boolean {
-    if (this.isRootResultsProviderEnabled(item))
-      return true
+    if (this.isRootResultsProviderEnabled(item)) return true
 
     this.logger.warn(`[Feature SDK] Ignored boxItems.${method}: search provider is disabled.`)
     return false
@@ -1045,7 +1031,7 @@ export class TouchPlugin implements ITouchPlugin {
     dev: IPluginDev,
     pluginPath: string,
     platforms: IPlatform = {},
-    options?: { skipDataInit?: boolean, runtime?: TouchPluginRuntimeContext },
+    options?: { skipDataInit?: boolean; runtime?: TouchPluginRuntimeContext }
   ) {
     this.name = name
     this.icon = icon
@@ -1066,7 +1052,7 @@ export class TouchPlugin implements ITouchPlugin {
       name,
       new PluginLoggerManager(this.pluginPath, this, (log) => {
         touchEventBus.emit(TalexEvents.PLUGIN_LOG_APPEND, new PluginLogAppendEvent(log))
-      }),
+      })
     )
     this.runtimeContext = options?.runtime ?? null
 
@@ -1121,7 +1107,7 @@ export class TouchPlugin implements ITouchPlugin {
       { kind: 'config', name: 'config', path: this.getConfigPath() },
       { kind: 'runtimeLogs', name: 'logs', path: this.getRuntimeLogsPath() },
       { kind: 'dataLogs', name: 'data-logs', path: this.getLogsPath() },
-      { kind: 'temp', name: 'temp', path: this.getTempPath() },
+      { kind: 'temp', name: 'temp', path: this.getTempPath() }
     ]
   }
 
@@ -1163,7 +1149,7 @@ export class TouchPlugin implements ITouchPlugin {
       source: `runtime:${source}`,
       code: errorCode,
       meta: { error: err.stack, code: errorCode },
-      timestamp: Date.now(),
+      timestamp: Date.now()
     })
 
     this._runtimeStats.errorCount += 1
@@ -1174,20 +1160,20 @@ export class TouchPlugin implements ITouchPlugin {
     // Sliding window: keep only timestamps within 60s
     const windowMs = 60_000
     this._runtimeStats.errorTimestamps = this._runtimeStats.errorTimestamps.filter(
-      t => now - t < windowMs,
+      (t) => now - t < windowMs
     )
 
     // Auto-disable if >10 errors in sliding window
     if (this._runtimeStats.errorTimestamps.length > 10) {
       this.logger.error(
-        `[Runtime] Plugin auto-disabled: ${this._runtimeStats.errorTimestamps.length} errors in 60s window`,
+        `[Runtime] Plugin auto-disabled: ${this._runtimeStats.errorTimestamps.length} errors in 60s window`
       )
       this.issues.push({
         type: 'error',
         message: `Plugin auto-disabled due to excessive runtime errors (${this._runtimeStats.errorTimestamps.length} errors in 60s).`,
         source: `runtime:${source}`,
         code: 'AUTO_DISABLED_EXCESSIVE_ERRORS',
-        timestamp: Date.now(),
+        timestamp: Date.now()
       })
       this.status = PluginStatus.CRASHED
       this.pluginLifecycle = null
@@ -1213,7 +1199,7 @@ export class TouchPlugin implements ITouchPlugin {
       loadTime: loadTime > 0 ? loadTime : 0,
       memoryUsage: estimatedMemory,
       cpuUsage: 0, // CPU usage tracking would require more complex implementation
-      lastActiveTime: this._performanceMetrics.lastActiveTime,
+      lastActiveTime: this._performanceMetrics.lastActiveTime
     }
   }
 
@@ -1223,7 +1209,7 @@ export class TouchPlugin implements ITouchPlugin {
       this.getConfigPath(),
       this.getLogsPath(),
       this.getVerifyPath(),
-      this.getTempPath(),
+      this.getTempPath()
     ]
 
     directories.forEach((dir) => {
@@ -1232,14 +1218,14 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   async enable(): Promise<boolean> {
-    const blockedSdkIssue = this.issues.find(issue => issue.code === 'SDKAPI_BLOCKED')
+    const blockedSdkIssue = this.issues.find((issue) => issue.code === 'SDKAPI_BLOCKED')
     if (this.loadError?.code === 'SDKAPI_BLOCKED' || blockedSdkIssue) {
       this.setLoadState('load_failed', {
         code: 'SDKAPI_BLOCKED',
         message:
-          this.loadError?.message
-          || blockedSdkIssue?.message
-          || 'Plugin sdkapi is incompatible with the enforced runtime baseline.',
+          this.loadError?.message ||
+          blockedSdkIssue?.message ||
+          'Plugin sdkapi is incompatible with the enforced runtime baseline.'
       })
       this.status = PluginStatus.LOAD_FAILED
       this.logger.warn('Attempted to enable plugin blocked by sdkapi hard-cut.')
@@ -1251,9 +1237,9 @@ export class TouchPlugin implements ITouchPlugin {
       return false
     }
     if (
-      this.status !== PluginStatus.DISABLED
-      && this.status !== PluginStatus.LOADED
-      && this.status !== PluginStatus.CRASHED
+      this.status !== PluginStatus.DISABLED &&
+      this.status !== PluginStatus.LOADED &&
+      this.status !== PluginStatus.CRASHED
     ) {
       this.logger.warn(`Attempted to enable plugin with invalid status: ${this.status}`)
       return false
@@ -1289,8 +1275,8 @@ export class TouchPlugin implements ITouchPlugin {
             key: `plugin-dev-prelude:${this.name}:${remoteIndexUrl}`,
             failureThreshold: 1,
             cooldownMs: 3000,
-            autoResetOnSuccess: true,
-          },
+            autoResetOnSuccess: true
+          }
         })
         const scriptContent = response.data
         const bundledContent = shouldBundlePrelude
@@ -1299,21 +1285,20 @@ export class TouchPlugin implements ITouchPlugin {
               this.pluginPath,
               this.getTempPath(),
               scriptContent,
-              this.logger,
+              this.logger
             )
           : null
         const executableContent = bundledContent ?? scriptContent
         this.pluginLifecycle = loadPluginFeatureContextFromContent(
           this,
           executableContent,
-          this.getFeatureUtil(),
+          this.getFeatureUtil()
         ) as IFeatureLifeCycle
         if (bundledContent) {
           this.logger.info('[Dev] Prelude bundled successfully.')
         }
         this.logger.info(`[Dev] Remote script executed successfully.`)
-      }
-      else {
+      } else {
         // Prod mode: load from local file
         const featureIndex = path.resolve(this.pluginPath, 'index.js')
         pluginSystemLog.debug(`[Plugin ${this.name}] Loading index.js from: ${featureIndex}`)
@@ -1324,39 +1309,35 @@ export class TouchPlugin implements ITouchPlugin {
               this.pluginPath,
               this.getTempPath(),
               featureIndex,
-              this.logger,
+              this.logger
             )
             if (bundledContent) {
               this.pluginLifecycle = loadPluginFeatureContextFromContent(
                 this,
                 bundledContent,
-                this.getFeatureUtil(),
+                this.getFeatureUtil()
               ) as IFeatureLifeCycle
-            }
-            else {
+            } else {
               this.pluginLifecycle = loadPluginFeatureContext(
                 this,
                 featureIndex,
-                this.getFeatureUtil(),
+                this.getFeatureUtil()
               ) as IFeatureLifeCycle
             }
-          }
-          else {
+          } else {
             this.pluginLifecycle = loadPluginFeatureContext(
               this,
               featureIndex,
-              this.getFeatureUtil(),
+              this.getFeatureUtil()
             ) as IFeatureLifeCycle
           }
-        }
-        else {
+        } else {
           this.logger.info(
-            `No index.js found for plugin '${this.name}', running without lifecycle.`,
+            `No index.js found for plugin '${this.name}', running without lifecycle.`
           )
         }
       }
-    }
-    catch (e: unknown) {
+    } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Unknown error'
       const stack = e instanceof Error ? e.stack : undefined
       this.logger.error('[Lifecycle] enable failed', e as Error)
@@ -1366,7 +1347,7 @@ export class TouchPlugin implements ITouchPlugin {
         source: 'index.js',
         code: 'LIFECYCLE_SCRIPT_FAILED',
         meta: { error: stack },
-        timestamp: Date.now(),
+        timestamp: Date.now()
       })
       this.status = PluginStatus.CRASHED
       return false
@@ -1384,10 +1365,9 @@ export class TouchPlugin implements ITouchPlugin {
     try {
       const initResult = this.pluginLifecycle?.onInit?.()
       if (isPromiseLike(initResult)) {
-        Promise.resolve(initResult).catch(error => this.handleRuntimeError('onInit', error))
+        Promise.resolve(initResult).catch((error) => this.handleRuntimeError('onInit', error))
       }
-    }
-    catch (error) {
+    } catch (error) {
       this.handleRuntimeError('onInit', error)
     }
     transport
@@ -1396,7 +1376,7 @@ export class TouchPlugin implements ITouchPlugin {
 
     this.logger.info('[Lifecycle] enabled')
     pluginSystemLog.debug(
-      `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`,
+      `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`
     )
     pluginSystemLog.debug(`[Plugin] Plugin ${this.name} is enabled.`)
 
@@ -1410,7 +1390,7 @@ export class TouchPlugin implements ITouchPlugin {
       PluginStatus.ENABLED,
       PluginStatus.ACTIVE,
       PluginStatus.CRASHED,
-      PluginStatus.LOAD_FAILED,
+      PluginStatus.LOAD_FAILED
     ]
     if (!stoppableStates.includes(this.status)) {
       return Promise.resolve(false)
@@ -1435,7 +1415,7 @@ export class TouchPlugin implements ITouchPlugin {
         if (!win.window.isDestroyed()) {
           if (!app.isPackaged) {
             pluginSystemLog.debug(
-              `[Plugin] Gracefully closing window ${id} for plugin ${this.name}`,
+              `[Plugin] Gracefully closing window ${id} for plugin ${this.name}`
             )
             win.window.hide()
             setTimeout(() => {
@@ -1443,16 +1423,14 @@ export class TouchPlugin implements ITouchPlugin {
                 win.close()
               }
             }, 50)
-          }
-          else {
+          } else {
             win.close()
           }
         }
         this._windows.delete(id)
-      }
-      catch (error: unknown) {
+      } catch (error: unknown) {
         pluginSystemLog.warn(
-          `[Plugin] Error closing window ${id} for plugin ${this.name}: ${toError(error).message}`,
+          `[Plugin] Error closing window ${id} for plugin ${this.name}: ${toError(error).message}`
         )
         this._windows.delete(id)
       }
@@ -1465,10 +1443,9 @@ export class TouchPlugin implements ITouchPlugin {
 
     try {
       viewCacheManager.releasePlugin(this.name)
-    }
-    catch (error: unknown) {
+    } catch (error: unknown) {
       this.logger.warn('Failed to evict cached UI views during disable()', {
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
     }
 
@@ -1480,12 +1457,11 @@ export class TouchPlugin implements ITouchPlugin {
 
     // Clean up any registered recommendation providers
     try {
-      const { SearchEngineCore }
-        = require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
+      const { SearchEngineCore } =
+        require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
       const engine = SearchEngineCore.getInstance().getRecommendationEngine()
       engine?.unregisterPluginProviders(this.name)
-    }
-    catch {
+    } catch {
       // SearchEngineCore may not be initialized; safe to ignore
     }
 
@@ -1507,7 +1483,7 @@ export class TouchPlugin implements ITouchPlugin {
         const listeners = this._featureEvent.get(id) || []
         listeners.splice(listeners.indexOf(callback), 1)
         this._featureEvent.set(id, listeners)
-      },
+      }
     }
   }
 
@@ -1529,8 +1505,8 @@ export class TouchPlugin implements ITouchPlugin {
         const handler = (event: ITouchEvent<TalexEvents>) => {
           const storageEvent = event as PluginStorageUpdatedEvent
           if (
-            storageEvent.pluginName === pluginName
-            && (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
+            storageEvent.pluginName === pluginName &&
+            (storageEvent.fileName === fileName || storageEvent.fileName === undefined)
           ) {
             const config = this.getPluginFile(fileName)
             callback(config)
@@ -1542,7 +1518,7 @@ export class TouchPlugin implements ITouchPlugin {
         return () => {
           touchEventBus.off(TalexEvents.PLUGIN_STORAGE_UPDATED, handler)
         }
-      },
+      }
     }
   }
 
@@ -1551,7 +1527,7 @@ export class TouchPlugin implements ITouchPlugin {
     const getDefaultLowPowerThreshold = () => {
       return clampBatteryPercent(
         deviceIdleService.getSettings().blockBatteryBelowPercent,
-        DEFAULT_LOW_POWER_THRESHOLD,
+        DEFAULT_LOW_POWER_THRESHOLD
       )
     }
 
@@ -1571,14 +1547,14 @@ export class TouchPlugin implements ITouchPlugin {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         })
         const levelRaw = (battery as { level?: unknown } | null | undefined)?.level
         const chargingRaw = (battery as { charging?: unknown } | null | undefined)?.charging
 
-        const percent
-          = typeof levelRaw === 'number' && Number.isFinite(levelRaw)
+        const percent =
+          typeof levelRaw === 'number' && Number.isFinite(levelRaw)
             ? Math.max(0, Math.min(100, levelRaw))
             : null
         const charging = typeof chargingRaw === 'boolean' ? chargingRaw : true
@@ -1588,18 +1564,17 @@ export class TouchPlugin implements ITouchPlugin {
           lowPower: onBattery && percent !== null && percent <= threshold,
           onBattery,
           percent,
-          threshold,
+          threshold
         }
-      }
-      catch (error) {
+      } catch (error) {
         pluginSystemLog.debug(`[Plugin ${pluginName}] Failed to query low power status.`, {
-          error: toError(error),
+          error: toError(error)
         })
         return {
           lowPower: false,
           onBattery: false,
           percent: null,
-          threshold,
+          threshold
         }
       }
     }
@@ -1619,22 +1594,21 @@ export class TouchPlugin implements ITouchPlugin {
           percent: number | null
           threshold: number
         }) => void,
-        options: { threshold?: number, emitImmediately?: boolean } = {},
+        options: { threshold?: number; emitImmediately?: boolean } = {}
       ): () => void {
         const intervalMs = 60_000
         let disposed = false
         let lastSignature = ''
 
         const emit = async (force = false) => {
-          if (disposed)
-            return
+          if (disposed) return
 
           const status = await getLowPowerStatus({ threshold: options.threshold })
           const signature = [
             status.lowPower,
             status.onBattery,
             status.percent ?? 'null',
-            status.threshold,
+            status.threshold
           ].join(':')
           if (!force && signature === lastSignature) {
             return
@@ -1644,14 +1618,10 @@ export class TouchPlugin implements ITouchPlugin {
 
           try {
             callback(status)
-          }
-          catch (error) {
-            pluginSystemLog.warn(
-              `[Plugin ${pluginName}] Low power listener callback failed.`,
-              {
-                error: toError(error),
-              },
-            )
+          } catch (error) {
+            pluginSystemLog.warn(`[Plugin ${pluginName}] Low power listener callback failed.`, {
+              error: toError(error)
+            })
           }
         }
 
@@ -1667,7 +1637,7 @@ export class TouchPlugin implements ITouchPlugin {
           disposed = true
           clearInterval(timer)
         }
-      },
+      }
     }
   }
 
@@ -1681,8 +1651,8 @@ export class TouchPlugin implements ITouchPlugin {
       plugin: {
         name: pluginName,
         uniqueKey: this._uniqueChannelKey ?? '',
-        verified: Boolean(this._uniqueChannelKey),
-      },
+        verified: Boolean(this._uniqueChannelKey)
+      }
     })
 
     return {
@@ -1690,47 +1660,47 @@ export class TouchPlugin implements ITouchPlugin {
         transport.invoke(
           PluginEvents.storage.getSecret,
           { pluginName, key },
-          createPluginContext(),
+          createPluginContext()
         ) as Promise<string | null>,
 
-      set: (key: string, value: string | null): Promise<{ success: boolean, error?: string }> =>
+      set: (key: string, value: string | null): Promise<{ success: boolean; error?: string }> =>
         transport.invoke(
           PluginEvents.storage.setSecret,
           { pluginName, key, value },
-          createPluginContext(),
-        ) as Promise<{ success: boolean, error?: string }>,
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>,
 
-      delete: (key: string): Promise<{ success: boolean, error?: string }> =>
+      delete: (key: string): Promise<{ success: boolean; error?: string }> =>
         transport.invoke(
           PluginEvents.storage.deleteSecret,
           { pluginName, key },
-          createPluginContext(),
-        ) as Promise<{ success: boolean, error?: string }>,
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>,
 
       health: (): Promise<SecureStoreHealthResponse> =>
         transport.invoke(
           PluginEvents.storage.getSecretHealth,
           undefined,
-          createPluginContext(),
-        ) as Promise<SecureStoreHealthResponse>,
+          createPluginContext()
+        ) as Promise<SecureStoreHealthResponse>
     }
   }
 
   private createRecommendSDK(pluginName: string) {
     const getEngine = () => {
-      const { SearchEngineCore }
-        = require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
+      const { SearchEngineCore } =
+        require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
       return SearchEngineCore.getInstance().getRecommendationEngine()
     }
 
     return {
       registerProvider: (
-        provider: import('@talex-touch/utils/core-box').RecommendProvider,
+        provider: import('@talex-touch/utils/core-box').RecommendProvider
       ): (() => void) => {
         const engine = getEngine()
         if (!engine) {
           pluginSystemLog.warn(
-            `[Plugin ${pluginName}] RecommendationEngine not available, cannot register provider`,
+            `[Plugin ${pluginName}] RecommendationEngine not available, cannot register provider`
           )
           return () => {}
         }
@@ -1738,10 +1708,9 @@ export class TouchPlugin implements ITouchPlugin {
       },
       unregisterProvider: (providerId: string): boolean => {
         const engine = getEngine()
-        if (!engine)
-          return false
+        if (!engine) return false
         return engine.unregisterPluginProvider(providerId)
-      },
+      }
     }
   }
 
@@ -1762,23 +1731,22 @@ export class TouchPlugin implements ITouchPlugin {
           let plugins = Array.from(manager.plugins.values()) as TouchPlugin[]
 
           if (resolvedFilters.status !== undefined) {
-            plugins = plugins.filter(plugin => plugin.status === resolvedFilters.status)
+            plugins = plugins.filter((plugin) => plugin.status === resolvedFilters.status)
           }
           if (resolvedFilters.enabled !== undefined) {
             const enabledNames = manager.enabledPlugins
             plugins = plugins.filter(
-              plugin => enabledNames.has(plugin.name) === resolvedFilters.enabled,
+              (plugin) => enabledNames.has(plugin.name) === resolvedFilters.enabled
             )
           }
           if (resolvedFilters.dev !== undefined) {
-            plugins = plugins.filter(plugin => plugin.dev?.enable === resolvedFilters.dev)
+            plugins = plugins.filter((plugin) => plugin.dev?.enable === resolvedFilters.dev)
           }
 
-          return plugins.map(plugin => plugin.toJSONObject())
-        }
-        catch (error) {
+          return plugins.map((plugin) => plugin.toJSONObject())
+        } catch (error) {
           pluginSystemLog.error(`[Plugin ${pluginName}] Failed to list plugins`, {
-            error: toError(error),
+            error: toError(error)
           })
           return []
         }
@@ -1797,10 +1765,9 @@ export class TouchPlugin implements ITouchPlugin {
 
           const plugin = manager.plugins.get(name) as TouchPlugin | undefined
           return plugin ? plugin.toJSONObject() : null
-        }
-        catch (error) {
+        } catch (error) {
           pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin ${name}`, {
-            error: toError(error),
+            error: toError(error)
           })
           return null
         }
@@ -1819,14 +1786,13 @@ export class TouchPlugin implements ITouchPlugin {
 
           const plugin = manager.plugins.get(name)
           return plugin ? plugin.status : -1
-        }
-        catch (error) {
+        } catch (error) {
           pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}`, {
-            error: toError(error),
+            error: toError(error)
           })
           throw error
         }
-      },
+      }
     }
   }
 
@@ -1851,12 +1817,11 @@ export class TouchPlugin implements ITouchPlugin {
               name: pluginName,
               uniqueKey: this._uniqueChannelKey ?? '',
               verified: Boolean(this._uniqueChannelKey),
-              sdkapi: this.sdkapi,
-            },
-          },
+              sdkapi: this.sdkapi
+            }
+          }
         )) as ClipboardActionResult
-        if (result?.success)
-          return true
+        if (result?.success) return true
 
         const error = new Error(result?.message || '自动粘贴失败') as Error & {
           code?: ClipboardActionResult['code']
@@ -1865,7 +1830,7 @@ export class TouchPlugin implements ITouchPlugin {
         error.code = result?.code
         error.result = result
         throw error
-      }),
+      })
     )
     const dialogUtil = createSafePluginDialogApi()
     const openUrl = createSafePluginOpenUrl(pluginName, this.logger)
@@ -1873,7 +1838,7 @@ export class TouchPlugin implements ITouchPlugin {
     const onTransport = (
       eventName: string,
       shouldHandle: (context: { plugin?: { name?: string } } | undefined) => boolean,
-      handler: (event: PluginStandardChannelData) => unknown,
+      handler: (event: PluginStandardChannelData) => unknown
     ): (() => void) => {
       return transport.on(defineRawEvent(eventName), async (payload, context) => {
         if (!shouldHandle(context)) {
@@ -1888,7 +1853,7 @@ export class TouchPlugin implements ITouchPlugin {
           header: {
             status: 'request',
             type: CHANNEL_SOURCE_TRANSPORT,
-            plugin: pluginContextName,
+            plugin: pluginContextName
           },
           code: CHANNEL_SUCCESS_CODE,
           data: payload as unknown,
@@ -1896,7 +1861,7 @@ export class TouchPlugin implements ITouchPlugin {
           reply: (_code, data) => {
             replied = true
             replyData = data
-          },
+          }
         }
 
         const result = await handler(event)
@@ -1910,9 +1875,9 @@ export class TouchPlugin implements ITouchPlugin {
       sendToRenderer: (eventName, payload) =>
         transport.sendToPlugin(pluginName, defineRawEvent(eventName), payload),
       onMain: (eventName, handler) =>
-        onTransport(eventName, context => !context?.plugin, handler),
+        onTransport(eventName, (context) => !context?.plugin, handler),
       onRenderer: (eventName, handler) =>
-        onTransport(eventName, context => context?.plugin?.name === pluginName, handler),
+        onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler)
     }
 
     Object.defineProperty(channelBridge as unknown as Record<string, unknown>, 'raw', {
@@ -1920,7 +1885,7 @@ export class TouchPlugin implements ITouchPlugin {
       enumerable: false,
       get() {
         throw createRemovedChannelError('channel.raw')
-      },
+      }
     })
 
     const touchChannel = {
@@ -1930,30 +1895,29 @@ export class TouchPlugin implements ITouchPlugin {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
             verified: Boolean(this._uniqueChannelKey),
-            sdkapi: this.sdkapi,
-          },
+            sdkapi: this.sdkapi
+          }
         })
       },
       onMain: (eventName: string, handler: (data: unknown) => unknown) =>
-        channelBridge.onMain(eventName, handler),
+        channelBridge.onMain(eventName, handler)
     }
     const pluginSdkChannel: PluginChannelClient = {
       regChannel: (eventName, callback) => channelBridge.onMain(eventName, callback),
       unRegChannel: () => false,
-      send: touchChannel.send,
+      send: touchChannel.send
     }
     const pluginSdkTransport = createPluginTuffTransport(pluginSdkChannel)
     const localization = createPluginLocalizationSDK(pluginSdkTransport, this.sdkapi)
     const screenshot = createPluginScreenshotSDK(pluginSdkTransport)
     const hasPluginPermission = (permissionId: string): boolean => {
       const permissionModule = getPermissionModule()
-      if (!permissionModule)
-        return false
+      if (!permissionModule) return false
       return permissionModule.getStore().hasPermission(pluginName, permissionId, this.sdkapi)
     }
     const permission = {
       check: async (permissionId: string) => hasPluginPermission(permissionId),
-      request: async (permissionId: string) => hasPluginPermission(permissionId),
+      request: async (permissionId: string) => hasPluginPermission(permissionId)
     }
     const pluginIntelligenceTransport: ITuffTransport = {
       ...pluginSdkTransport,
@@ -1961,14 +1925,14 @@ export class TouchPlugin implements ITouchPlugin {
         pluginSdkTransport.send(
           event,
           withPluginSdkapiPayload(payload, this.sdkapi) as never,
-          options,
+          options
         )) as ITuffTransport['send'],
       stream: ((event, payload, options) =>
         pluginSdkTransport.stream(
           event,
           withPluginSdkapiPayload(payload, this.sdkapi) as never,
-          options,
-        )) as ITuffTransport['stream'],
+          options
+        )) as ITuffTransport['stream']
     }
     const baseIntelligence = createIntelligenceClient(pluginIntelligenceTransport)
     const pluginIntelligence = createPluginIntelligenceFacade(() => baseIntelligence)
@@ -1986,10 +1950,10 @@ export class TouchPlugin implements ITouchPlugin {
           onEnd?: (event: unknown) => void
           onError?: (error: Error) => void
         },
-        invokeOptions?: Record<string, unknown>,
+        invokeOptions?: Record<string, unknown>
       ) => {
         if (!hasPluginPermission('intelligence.basic')) {
-          const error = new Error('Permission \'intelligence.basic\' denied')
+          const error = new Error("Permission 'intelligence.basic' denied")
           options.onError?.(error)
           throw error
         }
@@ -2000,8 +1964,8 @@ export class TouchPlugin implements ITouchPlugin {
             stream: true,
             metadata: {
               ...((invokeOptions?.metadata as Record<string, unknown> | undefined) ?? {}),
-              caller: `plugin:${pluginName}`,
-            },
+              caller: `plugin:${pluginName}`
+            }
           })) {
             const row = event as {
               type?: string
@@ -2010,26 +1974,20 @@ export class TouchPlugin implements ITouchPlugin {
               usage?: unknown
               metadata?: Record<string, unknown>
             }
-            if (row.type === 'start')
-              options.onStart?.(event)
-            else if (row.type === 'delta')
-              options.onDelta?.(row.delta || '', event)
-            else if (row.type === 'message' && row.message)
-              options.onMessage?.(row.message, event)
-            else if (row.type === 'usage' && row.usage)
-              options.onUsage?.(row.usage, event)
+            if (row.type === 'start') options.onStart?.(event)
+            else if (row.type === 'delta') options.onDelta?.(row.delta || '', event)
+            else if (row.type === 'message' && row.message) options.onMessage?.(row.message, event)
+            else if (row.type === 'usage' && row.usage) options.onUsage?.(row.usage, event)
             else if (row.type === 'metadata' && row.metadata)
               options.onMetadata?.(row.metadata, event)
-            else if (row.type === 'end')
-              options.onEnd?.(event)
+            else if (row.type === 'end') options.onEnd?.(event)
           }
-        }
-        catch (error) {
+        } catch (error) {
           const normalized = error instanceof Error ? error : new Error(String(error))
           options.onError?.(normalized)
           throw normalized
         }
-      },
+      }
     }
     const quickOps = {
       capabilities: (): Promise<QuickOpsCapabilityGetResponse> =>
@@ -2037,177 +1995,177 @@ export class TouchPlugin implements ITouchPlugin {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsCapabilityGetResponse>,
       sessions: (): Promise<QuickOpsSessionsGetResponse> =>
         transport.invoke(QuickOpsEvents.sessions.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsSessionsGetResponse>,
       auditRecent: (request?: QuickOpsAuditGetRequest): Promise<QuickOpsAuditGetResponse> =>
         transport.invoke(QuickOpsEvents.audit.get, request ?? {}, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsAuditGetResponse>,
       systemInfo: (): Promise<QuickOpsSystemInfoGetResponse> =>
         transport.invoke(QuickOpsEvents.systemInfo.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsSystemInfoGetResponse>,
       tuffDiagnostics: (): Promise<QuickOpsDiagnosticsGetResponse> =>
         transport.invoke(QuickOpsEvents.tuffDiagnostics.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsDiagnosticsGetResponse>,
       diskSpace: (): Promise<QuickOpsDiskSpaceGetResponse> =>
         transport.invoke(QuickOpsEvents.diskSpace.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsDiskSpaceGetResponse>,
       directoryUsage: (
-        request?: QuickOpsDirectoryUsageGetRequest,
+        request?: QuickOpsDirectoryUsageGetRequest
       ): Promise<QuickOpsDirectoryUsageGetResponse> =>
         transport.invoke(QuickOpsEvents.directoryUsage.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsDirectoryUsageGetResponse>,
       queryLocalIp: (): Promise<QuickOpsQueryLocalIpGetResponse> =>
         transport.invoke(QuickOpsEvents.queryLocalIp.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsQueryLocalIpGetResponse>,
       portStatus: (request: QuickOpsPortStatusGetRequest): Promise<QuickOpsPortStatusGetResponse> =>
         transport.invoke(QuickOpsEvents.portStatus.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsPortStatusGetResponse>,
       dnsQuery: (request: QuickOpsDnsQueryGetRequest): Promise<QuickOpsDnsQueryGetResponse> =>
         transport.invoke(QuickOpsEvents.dnsQuery.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsDnsQueryGetResponse>,
       fileHash: (request: QuickOpsFileHashGetRequest): Promise<QuickOpsFileHashGetResponse> =>
         transport.invoke(QuickOpsEvents.fileHash.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsFileHashGetResponse>,
       fileBase64: (request: QuickOpsFileBase64GetRequest): Promise<QuickOpsFileBase64GetResponse> =>
         transport.invoke(QuickOpsEvents.fileBase64.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsFileBase64GetResponse>,
       recentDownload: (): Promise<QuickOpsRecentDownloadGetResponse> =>
         transport.invoke(QuickOpsEvents.recentDownload.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsRecentDownloadGetResponse>,
       commonDirectory: (
-        request?: QuickOpsCommonDirectoryGetRequest,
+        request?: QuickOpsCommonDirectoryGetRequest
       ): Promise<QuickOpsCommonDirectoryGetResponse> =>
         transport.invoke(QuickOpsEvents.commonDirectory.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsCommonDirectoryGetResponse>,
       pathFormat: (request: QuickOpsPathFormatGetRequest): Promise<QuickOpsPathFormatGetResponse> =>
         transport.invoke(QuickOpsEvents.pathFormat.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsPathFormatGetResponse>,
       formatText: (request: QuickOpsFormatTextGetRequest): Promise<QuickOpsFormatTextGetResponse> =>
         transport.invoke(QuickOpsEvents.formatText.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsFormatTextGetResponse>,
       networkStatus: (): Promise<QuickOpsNetworkStatusGetResponse> =>
         transport.invoke(QuickOpsEvents.networkStatus.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsNetworkStatusGetResponse>,
       batteryStatus: (): Promise<QuickOpsBatteryStatusGetResponse> =>
         transport.invoke(QuickOpsEvents.batteryStatus.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsBatteryStatusGetResponse>,
       systemProxy: (): Promise<QuickOpsSystemProxyGetResponse> =>
         transport.invoke(QuickOpsEvents.systemProxy.get, undefined, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsSystemProxyGetResponse>,
       developerPreview: (
-        request: QuickOpsDeveloperPreviewRequest,
+        request: QuickOpsDeveloperPreviewRequest
       ): Promise<QuickOpsDeveloperPreviewResponse> =>
         transport.invoke(QuickOpsEvents.developerPreview.get, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
+            verified: Boolean(this._uniqueChannelKey)
+          }
         }) as Promise<QuickOpsDeveloperPreviewResponse>,
       saveDeveloperPreview: (
-        request: QuickOpsDeveloperPreviewSaveRequest,
+        request: QuickOpsDeveloperPreviewSaveRequest
       ): Promise<QuickOpsDeveloperPreviewSaveResponse> =>
         transport.invoke(QuickOpsEvents.developerPreview.save, request, {
           plugin: {
             name: pluginName,
             uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-          },
-        }) as Promise<QuickOpsDeveloperPreviewSaveResponse>,
+            verified: Boolean(this._uniqueChannelKey)
+          }
+        }) as Promise<QuickOpsDeveloperPreviewSaveResponse>
     }
 
     type BoxChannelHandler = (data: PluginStandardChannelData) => unknown
@@ -2229,13 +2187,12 @@ export class TouchPlugin implements ITouchPlugin {
       },
       unRegChannel: (eventName, callback) => {
         const disposer = boxChannelHandlers.get(eventName)?.get(callback)
-        if (!disposer)
-          return false
+        if (!disposer) return false
         disposer()
         boxChannelHandlers.get(eventName)?.delete(callback)
         return true
       },
-      send: (eventName, arg) => channelBridge.sendToMain(eventName, arg),
+      send: (eventName, arg) => channelBridge.sendToMain(eventName, arg)
     }
 
     const boxItemManager = getBoxItemManager()
@@ -2254,7 +2211,7 @@ export class TouchPlugin implements ITouchPlugin {
           processedItem.icon.value,
           this.dev,
           processedItem.icon.colorful,
-          processedItem.icon.color,
+          processedItem.icon.color
         )
         await icon.init()
         processedItem.icon = {
@@ -2262,15 +2219,15 @@ export class TouchPlugin implements ITouchPlugin {
           value: icon.value,
           status: icon.status,
           color: icon.color,
-          colorful: icon.colorful,
+          colorful: icon.colorful
         }
       }
 
       // Process render.basic.icon
       if (
-        processedItem.render?.basic?.icon
-        && typeof processedItem.render.basic.icon === 'object'
-        && processedItem.render.basic.icon.type === 'file'
+        processedItem.render?.basic?.icon &&
+        typeof processedItem.render.basic.icon === 'object' &&
+        processedItem.render.basic.icon.type === 'file'
       ) {
         const basicIcon = processedItem.render.basic.icon
         const icon = new TuffIconImpl(
@@ -2279,7 +2236,7 @@ export class TouchPlugin implements ITouchPlugin {
           basicIcon.value,
           this.dev,
           basicIcon.colorful,
-          basicIcon.color,
+          basicIcon.color
         )
         await icon.init()
         processedItem.render = {
@@ -2291,9 +2248,9 @@ export class TouchPlugin implements ITouchPlugin {
               value: icon.value,
               status: icon.status,
               color: icon.color,
-              colorful: icon.colorful,
-            },
-          },
+              colorful: icon.colorful
+            }
+          }
         }
       }
 
@@ -2309,20 +2266,16 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const pushBoxItems = async (items: TuffItem[], scope: BoxItemWriteScope): Promise<void> => {
-      if (!ensureBoxItemsActive('pushItems'))
-        return
-      if (!this.ensureRootResultsPermission('pushItems'))
-        return
+      if (!ensureBoxItemsActive('pushItems')) return
+      if (!this.ensureRootResultsPermission('pushItems')) return
       const processed = await Promise.all(items.map(processItemIcon))
-      if (!ensureBoxItemsActive('pushItems'))
-        return
-      if (!this.ensureRootResultsPermission('pushItems'))
-        return
-      const enriched = processed.map(item => this.enrichItemWithSource(item, scope))
+      if (!ensureBoxItemsActive('pushItems')) return
+      if (!this.ensureRootResultsPermission('pushItems')) return
+      const enriched = processed.map((item) => this.enrichItemWithSource(item, scope))
 
-      const acceptedItems
-        = scope === 'root-results'
-          ? enriched.filter(item => this.isRootResultsProviderEnabled(item))
+      const acceptedItems =
+        scope === 'root-results'
+          ? enriched.filter((item) => this.isRootResultsProviderEnabled(item))
           : enriched
       if (acceptedItems.length === 0) {
         if (scope === 'root-results') {
@@ -2336,27 +2289,24 @@ export class TouchPlugin implements ITouchPlugin {
     const updateBoxItem = (
       id: string,
       updates: Partial<TuffItem>,
-      scope: BoxItemWriteScope,
+      scope: BoxItemWriteScope
     ): void => {
-      if (!ensureBoxItemsActive('update'))
-        return
-      if (!this.ensureRootResultsPermission('update'))
-        return
+      if (!ensureBoxItemsActive('update')) return
+      if (!this.ensureRootResultsPermission('update')) return
       if (scope === 'root-results') {
         const existing = boxItemManager.get(id)
-        const providerGuardItem
-          = existing && updates
+        const providerGuardItem =
+          existing && updates
             ? this.enrichItemWithSource({
                 ...existing,
                 ...updates,
                 meta: {
                   ...existing.meta,
-                  ...updates.meta,
-                },
+                  ...updates.meta
+                }
               })
             : this.enrichItemWithSource({ ...(updates as TuffItem), id })
-        if (!this.ensureRootResultsProviderEnabled('update', providerGuardItem))
-          return
+        if (!this.ensureRootResultsProviderEnabled('update', providerGuardItem)) return
       }
       boxItemManager.update(id, updates)
     }
@@ -2372,18 +2322,13 @@ export class TouchPlugin implements ITouchPlugin {
        * @param item - 要推送的 item
        */
       push: async (item: TuffItem) => {
-        if (!ensureBoxItemsActive('push'))
-          return
-        if (!this.ensureRootResultsPermission('push'))
-          return
+        if (!ensureBoxItemsActive('push')) return
+        if (!this.ensureRootResultsPermission('push')) return
         const processed = await processItemIcon(item)
-        if (!ensureBoxItemsActive('push'))
-          return
-        if (!this.ensureRootResultsPermission('push'))
-          return
+        if (!ensureBoxItemsActive('push')) return
+        if (!this.ensureRootResultsPermission('push')) return
         const enriched = this.enrichItemWithSource(processed)
-        if (!this.ensureRootResultsProviderEnabled('push', enriched))
-          return
+        if (!this.ensureRootResultsProviderEnabled('push', enriched)) return
         boxItemManager.upsert(enriched)
       },
 
@@ -2406,8 +2351,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @param id - item id
        */
       remove: (id: string) => {
-        if (!ensureBoxItemsActive('remove'))
-          return
+        if (!ensureBoxItemsActive('remove')) return
         boxItemManager.delete(id)
       },
 
@@ -2424,7 +2368,7 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getItems: (): TuffItem[] => {
         return boxItemManager.getBySource(this.name)
-      },
+      }
     }
 
     const activeFeatureItems = {
@@ -2433,7 +2377,7 @@ export class TouchPlugin implements ITouchPlugin {
         updateBoxItem(id, updates, 'active-feature'),
       remove: boxItems.remove,
       clear: boxItems.clear,
-      getItems: boxItems.getItems,
+      getItems: boxItems.getItems
     }
 
     const powerSDK = this.createPowerSDK(pluginName, transport)
@@ -2484,7 +2428,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @returns True if the feature was found and updated, false otherwise
        */
       setPriority: (featureId: string, priority: number): boolean => {
-        const feature = this.features.find(f => f.id === featureId)
+        const feature = this.features.find((f) => f.id === featureId)
         if (feature) {
           feature.priority = priority
           return true
@@ -2498,7 +2442,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @returns The priority value if found, null otherwise
        */
       getPriority: (featureId: string): number | null => {
-        const feature = this.features.find(f => f.id === featureId)
+        const feature = this.features.find((f) => f.id === featureId)
         return feature ? feature.priority : null
       },
 
@@ -2508,7 +2452,7 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getFeaturesByPriority: (): IPluginFeature[] => {
         return [...this.features].sort((a, b) => b.priority - a.priority)
-      },
+      }
     }
 
     const pluginInfo = {
@@ -2529,8 +2473,8 @@ export class TouchPlugin implements ITouchPlugin {
           status: this.status,
           platforms: this.platforms,
           pluginPath: this.pluginPath,
-          features: this.features.map(f => f.toJSONObject()),
-          issues: this.issues,
+          features: this.features.map((f) => f.toJSONObject()),
+          issues: this.issues
         }
       },
 
@@ -2604,7 +2548,7 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getPlatforms: () => {
         return this.platforms
-      },
+      }
     }
 
     const pluginsAPI = this.createPluginsAPI(pluginName)
@@ -2612,7 +2556,7 @@ export class TouchPlugin implements ITouchPlugin {
     const boxSDK = createBoxSDK(boxChannel)
     const featureSDK = createFeatureSDK(activeFeatureItems, channelBridge)
     const quickActionsSDK = createQuickActionsSDK(channelBridge, this.name, {
-      sdkapi: this.sdkapi,
+      sdkapi: this.sdkapi
     })
     const flow = createFlowSDK(touchChannel, pluginName)
 
@@ -2633,7 +2577,7 @@ export class TouchPlugin implements ITouchPlugin {
       i18n: localization.i18n,
       lexicon: localization.lexicon,
       power: powerSDK,
-      recommend: recommendSDK,
+      recommend: recommendSDK
     }
 
     return {
@@ -2665,7 +2609,7 @@ export class TouchPlugin implements ITouchPlugin {
       plugin: pluginAPI,
       plugins: pluginsAPI,
       TuffItemBuilder,
-      URLSearchParams,
+      URLSearchParams
     }
   }
 
@@ -2678,8 +2622,7 @@ export class TouchPlugin implements ITouchPlugin {
   __index__(): string | undefined {
     const dev = this.dev && this.dev.enable
 
-    if (dev)
-      pluginSystemLog.debug(`[Plugin] Plugin is now dev-mode: ${this.name}`)
+    if (dev) pluginSystemLog.debug(`[Plugin] Plugin is now dev-mode: ${this.name}`)
 
     return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
   }
@@ -2693,12 +2636,12 @@ export class TouchPlugin implements ITouchPlugin {
       relative: path.relative(runtimeContext.rootPath, this.pluginPath),
       root: runtimeContext.rootPath,
       app: app.getAppPath?.(),
-      plugin: this.pluginPath,
+      plugin: this.pluginPath
     }
 
     const pluginUa = `TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
-    const mainWindow
-      = typeof runtimeContext.mainWindowId === 'number'
+    const mainWindow =
+      typeof runtimeContext.mainWindowId === 'number'
         ? (BrowserWindow.fromId(runtimeContext.mainWindowId) ?? undefined)
         : undefined
     const mainUserAgent = useSafeUserAgent(mainWindow) ?? app.userAgentFallback ?? ''
@@ -2708,7 +2651,7 @@ export class TouchPlugin implements ITouchPlugin {
       _: {
         indexPath,
         preload,
-        isWebviewInit: this.webViewInit,
+        isWebviewInit: this.webViewInit
       },
       attrs: {
         enableRemoteModule: 'false',
@@ -2716,11 +2659,11 @@ export class TouchPlugin implements ITouchPlugin {
         webpreferences: 'contextIsolation=false',
         // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: 'false',
-        useragent: userAgent,
+        useragent: userAgent
         // partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
-      js: `${getJs([this.name, JSON.stringify(_path), this.sdkapi, this.version])}`,
+      js: `${getJs([this.name, JSON.stringify(_path), this.sdkapi, this.version])}`
     }
   }
 
@@ -2745,7 +2688,7 @@ export class TouchPlugin implements ITouchPlugin {
     if (!safePath.resolvedPath) {
       pluginSystemLog.warn(`[Plugin ${this.name}] Invalid file path`, {
         meta: { fileName },
-        error: safePath.error,
+        error: safePath.error
       })
       return {}
     }
@@ -2767,8 +2710,8 @@ export class TouchPlugin implements ITouchPlugin {
   savePluginFile(
     fileName: string,
     content: unknown,
-    options?: { broadcast?: boolean },
-  ): { success: boolean, error?: string } {
+    options?: { broadcast?: boolean }
+  ): { success: boolean; error?: string } {
     const configPath = this.getConfigPath()
     const safePath = resolveSafePath(configPath, fileName)
     if (!safePath.resolvedPath) {
@@ -2783,7 +2726,7 @@ export class TouchPlugin implements ITouchPlugin {
     if (Buffer.byteLength(configData, 'utf-8') > PLUGIN_CONFIG_MAX_SIZE) {
       return {
         success: false,
-        error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`,
+        error: `File size exceeds the ${PLUGIN_CONFIG_MAX_SIZE} limit for plugin ${this.name}`
       }
     }
 
@@ -2805,8 +2748,8 @@ export class TouchPlugin implements ITouchPlugin {
    */
   deletePluginFile(
     fileName: string,
-    options?: { broadcast?: boolean },
-  ): { success: boolean, error?: string } {
+    options?: { broadcast?: boolean }
+  ): { success: boolean; error?: string } {
     const configPath = this.getConfigPath()
     const safePath = resolveSafePath(configPath, fileName)
     if (!safePath.resolvedPath) {
@@ -2832,10 +2775,9 @@ export class TouchPlugin implements ITouchPlugin {
    */
   listPluginFiles(): string[] {
     const configPath = this.getConfigPath()
-    if (!fse.existsSync(configPath))
-      return []
+    if (!fse.existsSync(configPath)) return []
 
-    return fse.readdirSync(configPath).filter(file => file.endsWith('.json'))
+    return fse.readdirSync(configPath).filter((file) => file.endsWith('.json'))
   }
 
   /**
@@ -2864,8 +2806,7 @@ export class TouchPlugin implements ITouchPlugin {
         if (stats.isDirectory()) {
           dirCount++
           calculateSize(itemPath)
-        }
-        else {
+        } else {
           fileCount++
           totalSize += stats.size
         }
@@ -2873,8 +2814,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     for (const root of this.getStorageRoots()) {
-      if (!fse.existsSync(root.path))
-        continue
+      if (!fse.existsSync(root.path)) continue
       dirCount++
       calculateSize(root.path)
     }
@@ -2884,7 +2824,7 @@ export class TouchPlugin implements ITouchPlugin {
       fileCount,
       dirCount,
       maxSize,
-      usagePercent: Math.min(100, (totalSize / maxSize) * 100),
+      usagePercent: Math.min(100, (totalSize / maxSize) * 100)
     }
   }
 
@@ -2919,16 +2859,15 @@ export class TouchPlugin implements ITouchPlugin {
             type: 'directory' as const,
             size: dirSize,
             modified: stats.mtimeMs,
-            children,
+            children
           })
-        }
-        else {
+        } else {
           result.push({
             name: item,
             path: itemRelativePath,
             type: 'file' as const,
             size: stats.size,
-            modified: stats.mtimeMs,
+            modified: stats.mtimeMs
           })
         }
       }
@@ -2937,7 +2876,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     return this.getStorageRoots()
-      .filter(root => fse.existsSync(root.path))
+      .filter((root) => fse.existsSync(root.path))
       .map((root) => {
         const children = buildTree(root.path, root.name)
         const stats = fse.statSync(root.path)
@@ -2947,7 +2886,7 @@ export class TouchPlugin implements ITouchPlugin {
           type: 'directory' as const,
           size: children.reduce((sum, child) => sum + child.size, 0),
           modified: stats.mtimeMs,
-          children,
+          children
         }
       })
   }
@@ -2972,7 +2911,7 @@ export class TouchPlugin implements ITouchPlugin {
     if (!safePath.resolvedPath) {
       pluginSystemLog.warn(`[Plugin ${this.name}] Invalid file path`, {
         meta: { fileName },
-        error: safePath.error,
+        error: safePath.error
       })
       return null
     }
@@ -3006,7 +2945,7 @@ export class TouchPlugin implements ITouchPlugin {
       size: stats.size,
       created: stats.birthtimeMs,
       modified: stats.mtimeMs,
-      type: fileType,
+      type: fileType
     }
 
     // 读取文件内容（根据类型和大小限制）
@@ -3018,27 +2957,22 @@ export class TouchPlugin implements ITouchPlugin {
             const text = fse.readFileSync(filePath, 'utf-8')
             try {
               result.content = JSON.parse(text)
-            }
-            catch {
+            } catch {
               // 如果解析失败，保持文本格式
               result.content = text
             }
-          }
-          else {
+          } else {
             result.content = fse.readFileSync(filePath, 'utf-8')
           }
-        }
-        else if (fileType === 'image') {
+        } else if (fileType === 'image') {
           // 对于图片，返回 base64
           const buffer = fse.readFileSync(filePath)
           result.content = `data:image/${ext.slice(1)};base64,${buffer.toString('base64')}`
         }
-      }
-      catch (error) {
+      } catch (error) {
         pluginSystemLog.error(`Failed to read file content: ${fileName}`, { error: toError(error) })
       }
-    }
-    else {
+    } else {
       result.truncated = true
     }
 
@@ -3049,30 +2983,27 @@ export class TouchPlugin implements ITouchPlugin {
    * 清空存储
    * @returns 操作结果
    */
-  clearStorage(): { success: boolean, error?: string } {
+  clearStorage(): { success: boolean; error?: string } {
     try {
       for (const root of this.getStorageRoots()) {
         if (fse.existsSync(root.path)) {
           fse.emptyDirSync(root.path)
-        }
-        else if (root.kind !== 'runtimeLogs') {
+        } else if (root.kind !== 'runtimeLogs') {
           fse.ensureDirSync(root.path)
         }
       }
       try {
         this.broadcastStorageUpdate()
-      }
-      catch (error) {
+      } catch (error) {
         pluginSystemLog.warn(`[Plugin ${this.name}] Failed to broadcast storage cleanup`, {
-          error: toError(error),
+          error: toError(error)
         })
       }
       return { success: true }
-    }
-    catch (error) {
+    } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
   }
@@ -3091,7 +3022,7 @@ export class TouchPlugin implements ITouchPlugin {
       '.jpeg': 'image',
       '.gif': 'image',
       '.webp': 'image',
-      '.svg': 'image',
+      '.svg': 'image'
     }
 
     return typeMap[ext] || 'other'
@@ -3106,7 +3037,7 @@ export class TouchPlugin implements ITouchPlugin {
       text: 50 * 1024, // 50KB
       log: 50 * 1024, // 50KB
       image: 5 * 1024 * 1024, // 5MB
-      other: 0, // 不预览
+      other: 0 // 不预览
     }
 
     return sizeMap[fileType] || 0
@@ -3125,7 +3056,7 @@ export class TouchPlugin implements ITouchPlugin {
    * @param content 配置内容
    * @returns 保存结果
    */
-  savePluginConfig(content: object): { success: boolean, error?: string } {
+  savePluginConfig(content: object): { success: boolean; error?: string } {
     return this.savePluginFile('config.json', content)
   }
 
@@ -3136,12 +3067,12 @@ export class TouchPlugin implements ITouchPlugin {
     const transport = this.resolveTransport()
     transport.broadcast(PluginEvents.storage.update, {
       name: this.name,
-      fileName,
+      fileName
     })
 
     touchEventBus.emit(
       TalexEvents.PLUGIN_STORAGE_UPDATED,
-      new PluginStorageUpdatedEvent(this.name, fileName),
+      new PluginStorageUpdatedEvent(this.name, fileName)
     )
   }
 }

@@ -19,7 +19,7 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: IntelligenceProviderConfig]
-  'change': []
+  change: []
 }>()
 
 const { t } = useI18n()
@@ -31,49 +31,48 @@ const localModels = computed({
   set: (value: string[]) => {
     intelligenceSettings.updateProvider(props.modelValue.id, { models: value })
     emits('change')
-  },
+  }
 })
 
 const localDefaultModel = computed({
   get: () => props.modelValue.defaultModel || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      defaultModel: value || undefined,
+      defaultModel: value || undefined
     })
     emits('change')
-  },
+  }
 })
 
 const localInstructions = computed({
   get: () => props.modelValue.instructions || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      instructions: value || undefined,
+      instructions: value || undefined
     })
     emits('change')
-  },
+  }
 })
 
 const allModels = ref<string[]>([])
 const DEFAULT_MODEL_GROUP_FALLBACK = '__default_model_group__'
 const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
-  'openai': 'OpenAI',
-  'anthropic': 'Anthropic',
-  'deepseek': 'DeepSeek',
-  'siliconflow': 'SiliconFlow',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  deepseek: 'DeepSeek',
+  siliconflow: 'SiliconFlow',
   'ascend-tribe': 'Ascend Tribe',
-  'local': 'Local Model',
-  'custom': 'Custom Provider',
+  local: 'Local Model',
+  custom: 'Custom Provider'
 }
 
 function formatGroupLabel(value: string): string {
   const cleaned = (value || '').trim()
-  if (!cleaned)
-    return cleaned
+  if (!cleaned) return cleaned
   return cleaned
     .split(/[\s_-]+/)
     .filter(Boolean)
-    .map(segment => segment[0].toUpperCase() + segment.slice(1))
+    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
     .join(' ')
 }
 
@@ -87,8 +86,7 @@ function normalizeModelList(list: string[] = []): string[] {
     .map(normalizeModel)
     .filter(Boolean)
     .filter((model) => {
-      if (seen.has(model))
-        return false
+      if (seen.has(model)) return false
       seen.add(model)
       return true
     })
@@ -98,8 +96,7 @@ function addToAllModels(values: string | string[]): void {
   const items = Array.isArray(values) ? values : [values]
   const normalized = normalizeModelList(items)
 
-  if (!normalized.length)
-    return
+  if (!normalized.length) return
 
   const merged = new Set(allModels.value)
   normalized.forEach((model) => {
@@ -139,20 +136,18 @@ const transferData = computed(() => {
   const pool = new Set<string>()
   allModels.value.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (normalized)
-      pool.add(normalized)
+    if (normalized) pool.add(normalized)
   })
   localModels.value.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (normalized)
-      pool.add(normalized)
+    if (normalized) pool.add(normalized)
   })
 
   return Array.from(pool)
     .sort((a, b) => a.localeCompare(b))
-    .map(model => ({
+    .map((model) => ({
       key: model,
-      label: model,
+      label: model
     }))
 })
 
@@ -160,7 +155,7 @@ const transferSelectedModels = computed<string[]>({
   get: () => localModels.value,
   set: (value) => {
     applyModelUpdates(value ?? [])
-  },
+  }
 })
 
 const newModelInput = ref('')
@@ -198,7 +193,7 @@ const defaultModelGroups = computed(() => {
   const fallbackKey = fallbackName ? fallbackName.toLowerCase() : DEFAULT_MODEL_GROUP_FALLBACK
   const fallbackLabel = fallbackName || t('intelligence.config.model.group.other')
 
-  const grouped = new Map<string, { label: string, models: Set<string> }>()
+  const grouped = new Map<string, { label: string; models: Set<string> }>()
 
   function ensureGroup(key: string, label: string) {
     if (!grouped.has(key)) {
@@ -209,8 +204,7 @@ const defaultModelGroups = computed(() => {
 
   localModels.value.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (!normalized)
-      return
+    if (!normalized) return
 
     const slashIndex = normalized.indexOf('/')
     const hasProviderPrefix = slashIndex > 0
@@ -225,17 +219,15 @@ const defaultModelGroups = computed(() => {
   })
 
   const sortedGroups = Array.from(grouped.entries()).sort(([keyA], [keyB]) => {
-    if (keyA === fallbackKey)
-      return 1
-    if (keyB === fallbackKey)
-      return -1
+    if (keyA === fallbackKey) return 1
+    if (keyB === fallbackKey) return -1
     return keyA.localeCompare(keyB)
   })
 
   return sortedGroups.map(([key, { label, models }]) => ({
     key,
     label,
-    models: Array.from(models).sort((a, b) => a.localeCompare(b)),
+    models: Array.from(models).sort((a, b) => a.localeCompare(b))
   }))
 })
 
@@ -244,22 +236,19 @@ function resolveDialogSource(event?: MouseEvent): HTMLElement | null {
 }
 
 function openModelsDialog(event?: MouseEvent) {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   modelsDialogSource.value = resolveDialogSource(event)
   showModelsDrawer.value = true
 }
 
 function openDefaultModelDrawer(event?: MouseEvent) {
-  if (props.disabled || localModels.value.length === 0)
-    return
+  if (props.disabled || localModels.value.length === 0) return
   defaultModelDialogSource.value = resolveDialogSource(event)
   showDefaultModelDrawer.value = true
 }
 
 function openInstructionsDrawer(event?: MouseEvent) {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   instructionsDialogSource.value = resolveDialogSource(event)
   showInstructionsDrawer.value = true
 }
@@ -304,8 +293,7 @@ function validateDefaultModel(): boolean {
 function handleAddModel() {
   const modelName = normalizeModel(newModelInput.value)
 
-  if (!modelName)
-    return
+  if (!modelName) return
 
   if (localModels.value.includes(modelName)) {
     toast.warning(t('intelligence.config.model.modelExists'))
@@ -325,8 +313,7 @@ function handleInstructionsChange() {
 }
 
 async function handleFetchModels() {
-  if (!canFetchModels.value || isFetching.value)
-    return
+  if (!canFetchModels.value || isFetching.value) return
 
   isFetching.value = true
   modelsError.value = ''
@@ -340,7 +327,7 @@ async function handleFetchModels() {
       apiKey: props.modelValue.apiKey,
       baseUrl: props.modelValue.baseUrl,
       models: [...localModels.value],
-      timeout: props.modelValue.timeout || 30000,
+      timeout: props.modelValue.timeout || 30000
     }
 
     const result = await aiClient.fetchModels(fetchConfig)
@@ -349,22 +336,19 @@ async function handleFetchModels() {
       applyModelUpdates([...localModels.value, ...result.models])
 
       toast.success(
-        t('intelligence.config.api.modelsFetchedToast', { count: result.models.length }),
+        t('intelligence.config.api.modelsFetchedToast', { count: result.models.length })
       )
-    }
-    else {
+    } else {
       const message = result.message || t('intelligence.config.api.modelsFetchEmpty')
       modelsError.value = message
       toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message }))
     }
-  }
-  catch (error) {
-    const message
-      = error instanceof Error ? error.message : t('intelligence.config.api.modelsFetchFailed')
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : t('intelligence.config.api.modelsFetchFailed')
     modelsError.value = message
     toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message }))
-  }
-  finally {
+  } finally {
     isFetching.value = false
   }
 }
@@ -375,14 +359,14 @@ watch(
     allModels.value = []
     addToAllModels(localModels.value)
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 watch(
   () => localModels.value,
   (models) => {
     addToAllModels(models)
-  },
+  }
 )
 </script>
 
@@ -406,7 +390,8 @@ watch(
           </span>
           <span v-else class="text-[var(--tx-text-color-primary)]">
             {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
-          </span></span>
+          </span></span
+        >
         <TxButton variant="flat">
           {{ t('intelligence.config.model.editModels') }}
         </TxButton>
@@ -467,7 +452,7 @@ watch(
             :filter-placeholder="t('intelligence.config.model.transferFilterPlaceholder')"
             :titles="[
               t('intelligence.config.model.transferAll'),
-              t('intelligence.config.model.transferEnabled'),
+              t('intelligence.config.model.transferEnabled')
             ]"
             target-order="original"
           />
@@ -480,7 +465,7 @@ watch(
             :placeholder="t('intelligence.config.model.addModelPlaceholder')"
             class="add-model-input"
             @keyup.enter="handleAddModel"
-          >
+          />
           <TxButton
             variant="flat"
             class="add-model-button"

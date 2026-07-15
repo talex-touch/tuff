@@ -2,9 +2,9 @@
 
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { stdin as input, stdout as output } from 'node:process'
 import { createInterface } from 'node:readline/promises'
-import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import chalk from 'chalk'
 
@@ -46,15 +46,16 @@ function getGitStatusLines() {
     encoding: 'utf-8',
     cwd: rootDir,
   }).trim()
-  if (!status) return []
+  if (!status)
+    return []
   return status.split('\n').filter(Boolean)
 }
 
 function getChangedFiles() {
   const lines = getGitStatusLines()
   return lines
-    .map((line) => line.slice(3).trim())
-    .map((path) => (path.includes(' -> ') ? path.split(' -> ').pop() : path))
+    .map(line => line.slice(3).trim())
+    .map(path => (path.includes(' -> ') ? path.split(' -> ').pop() : path))
     .filter(Boolean)
 }
 
@@ -83,13 +84,14 @@ function stageFiles(files) {
   if (!files.length) {
     return
   }
-  const args = files.map((file) => `"${file}"`).join(' ')
+  const args = files.map(file => `"${file}"`).join(' ')
   execSync(`git add -- ${args}`, { stdio: 'inherit', cwd: rootDir })
 }
 
 function formatFileList(files) {
-  if (!files.length) return ''
-  return files.map((file) => `  - ${file}`).join('\n')
+  if (!files.length)
+    return ''
+  return files.map(file => `  - ${file}`).join('\n')
 }
 
 async function confirmAction(question) {
@@ -158,7 +160,7 @@ async function runVersionSync() {
       env: { ...process.env, TALEX_VERSION_SYNC_CHILD: '1' },
     })
   }
-  catch (error) {
+  catch {
     log.error('bumpp failed.')
     process.exit(1)
   }
@@ -169,7 +171,7 @@ async function runVersionSync() {
   try {
     runCommand('node scripts/sync-core-package.mjs')
   }
-  catch (error) {
+  catch {
     log.error('sync-core-package failed.')
     process.exit(1)
   }
@@ -178,7 +180,7 @@ async function runVersionSync() {
   try {
     runCommand('pnpm install --lockfile-only --ignore-scripts')
   }
-  catch (error) {
+  catch {
     log.error('pnpm install failed.')
     process.exit(1)
   }
@@ -208,7 +210,7 @@ async function runVersionSync() {
       log.info(`Pushing tag ${tagName}...`)
       runCommand(`git push origin ${tagName}`)
     }
-    catch (error) {
+    catch {
       log.error('Failed to create or push tag.')
       process.exit(1)
     }
@@ -225,7 +227,7 @@ async function runVersionSync() {
   const tagName = `v${versionAfter}`
   ensureTagNotExists(tagName)
 
-  const lockfiles = changedFiles.filter((file) => file.endsWith('pnpm-lock.yaml'))
+  const lockfiles = changedFiles.filter(file => file.endsWith('pnpm-lock.yaml'))
   const filesToCommit = Array.from(new Set([...VERSION_FILES, ...lockfiles]))
   stageFiles(filesToCommit)
 

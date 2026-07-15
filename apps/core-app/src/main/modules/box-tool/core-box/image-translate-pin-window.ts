@@ -22,7 +22,7 @@ const PIN_OPACITY_OPTIONS = [
   { label: '100%', value: 1 },
   { label: '85%', value: 0.85 },
   { label: '70%', value: 0.7 },
-  { label: '55%', value: 0.55 },
+  { label: '55%', value: 0.55 }
 ] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -39,15 +39,15 @@ function escapeHtml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
-    .replaceAll('\'', '&#39;')
+    .replaceAll("'", '&#39;')
 }
 
 function buildHtml(payload: ImageTranslatePinWindowPayload): string {
   const sourceText = payload.sourceText?.trim()
   const targetText = payload.targetText?.trim()
   const imageSrc = `data:${resolveImageMimeType(payload.imageMimeType)};base64,${payload.translatedImageBase64}`
-  const shouldRenderClientOverlay
-    = isRecord(payload.overlay) && payload.overlay.mode === 'client-render' && Boolean(targetText)
+  const shouldRenderClientOverlay =
+    isRecord(payload.overlay) && payload.overlay.mode === 'client-render' && Boolean(targetText)
 
   return `<!doctype html>
 <html>
@@ -165,7 +165,7 @@ function buildHtml(payload: ImageTranslatePinWindowPayload): string {
 </html>`
 }
 
-function resolveWindowSize(image: Electron.NativeImage): { width: number, height: number } {
+function resolveWindowSize(image: Electron.NativeImage): { width: number; height: number } {
   const size = image.getSize()
   if (size.width <= 0 || size.height <= 0) {
     return { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT }
@@ -176,7 +176,7 @@ function resolveWindowSize(image: Electron.NativeImage): { width: number, height
   const scale = Math.min(maxImageWidth / size.width, maxImageHeight / size.height, 1)
   return {
     width: Math.max(420, Math.round(size.width * scale) + 48),
-    height: Math.max(320, Math.round(size.height * scale) + 138),
+    height: Math.max(320, Math.round(size.height * scale) + 138)
   }
 }
 
@@ -192,20 +192,19 @@ function resolveWindowBounds(image: Electron.NativeImage): {
     const workArea = display.workArea
     const width = Math.min(
       desired.width,
-      Math.max(MIN_PIN_WIDTH, workArea.width - WORK_AREA_INSET * 2),
+      Math.max(MIN_PIN_WIDTH, workArea.width - WORK_AREA_INSET * 2)
     )
     const height = Math.min(
       desired.height,
-      Math.max(MIN_PIN_HEIGHT, workArea.height - WORK_AREA_INSET * 2),
+      Math.max(MIN_PIN_HEIGHT, workArea.height - WORK_AREA_INSET * 2)
     )
     return {
       x: workArea.x + Math.max(0, Math.round((workArea.width - width) / 2)),
       y: workArea.y + Math.max(0, Math.round((workArea.height - height) / 2)),
       width,
-      height,
+      height
     }
-  }
-  catch {
+  } catch {
     return desired
   }
 }
@@ -215,9 +214,9 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function resolveZoomedWindowBounds(
-  center: { x: number, y: number },
-  baseSize: { width: number, height: number },
-  zoom: number,
+  center: { x: number; y: number },
+  baseSize: { width: number; height: number },
+  zoom: number
 ): Electron.Rectangle {
   let width = Math.max(MIN_PIN_WIDTH, Math.round(baseSize.width * zoom))
   let height = Math.max(MIN_PIN_HEIGHT, Math.round(baseSize.height * zoom))
@@ -225,31 +224,26 @@ function resolveZoomedWindowBounds(
   try {
     const workArea = screen.getDisplayNearestPoint({
       x: Math.round(center.x),
-      y: Math.round(center.y),
+      y: Math.round(center.y)
     }).workArea
     width = Math.min(width, Math.max(MIN_PIN_WIDTH, workArea.width - WORK_AREA_INSET * 2))
     height = Math.min(height, Math.max(MIN_PIN_HEIGHT, workArea.height - WORK_AREA_INSET * 2))
     return {
-      x: clamp(
-        Math.round(center.x - width / 2),
-        workArea.x,
-        workArea.x + workArea.width - width,
-      ),
+      x: clamp(Math.round(center.x - width / 2), workArea.x, workArea.x + workArea.width - width),
       y: clamp(
         Math.round(center.y - height / 2),
         workArea.y,
-        workArea.y + workArea.height - height,
+        workArea.y + workArea.height - height
       ),
       width,
-      height,
+      height
     }
-  }
-  catch {
+  } catch {
     return {
       x: Math.round(center.x - width / 2),
       y: Math.round(center.y - height / 2),
       width,
-      height,
+      height
     }
   }
 }
@@ -257,7 +251,7 @@ function resolveZoomedWindowBounds(
 function registerPinWindowActions(
   window: BrowserWindow,
   image: Electron.NativeImage,
-  payload: ImageTranslatePinWindowPayload,
+  payload: ImageTranslatePinWindowPayload
 ): void {
   const sourceText = payload.sourceText?.trim()
   const targetText = payload.targetText?.trim()
@@ -266,38 +260,31 @@ function registerPinWindowActions(
   let zoomIndex = PIN_ZOOM_LEVELS.indexOf(1)
   let zoomCenter = {
     x: initialBounds.x + initialBounds.width / 2,
-    y: initialBounds.y + initialBounds.height / 2,
+    y: initialBounds.y + initialBounds.height / 2
   }
   let lastZoomBounds = { ...initialBounds }
 
   const closeWindow = (): void => {
-    if (!window.isDestroyed())
-      window.close()
+    if (!window.isDestroyed()) window.close()
   }
   const applyZoomIndex = (nextIndex: number, force = false): void => {
-    if (window.isDestroyed())
-      return
+    if (window.isDestroyed()) return
     const currentBounds = window.getBounds()
     if (
-      currentBounds.x !== lastZoomBounds.x
-      || currentBounds.y !== lastZoomBounds.y
-      || currentBounds.width !== lastZoomBounds.width
-      || currentBounds.height !== lastZoomBounds.height
+      currentBounds.x !== lastZoomBounds.x ||
+      currentBounds.y !== lastZoomBounds.y ||
+      currentBounds.width !== lastZoomBounds.width ||
+      currentBounds.height !== lastZoomBounds.height
     ) {
       zoomCenter = {
         x: currentBounds.x + currentBounds.width / 2,
-        y: currentBounds.y + currentBounds.height / 2,
+        y: currentBounds.y + currentBounds.height / 2
       }
     }
     const normalizedIndex = clamp(Math.round(nextIndex), 0, PIN_ZOOM_LEVELS.length - 1)
-    if (!force && normalizedIndex === zoomIndex)
-      return
+    if (!force && normalizedIndex === zoomIndex) return
     zoomIndex = normalizedIndex
-    const nextBounds = resolveZoomedWindowBounds(
-      zoomCenter,
-      baseSize,
-      PIN_ZOOM_LEVELS[zoomIndex],
-    )
+    const nextBounds = resolveZoomedWindowBounds(zoomCenter, baseSize, PIN_ZOOM_LEVELS[zoomIndex])
     window.setBounds(nextBounds)
     lastZoomBounds = nextBounds
   }
@@ -308,26 +295,25 @@ function registerPinWindowActions(
     applyZoomIndex(PIN_ZOOM_LEVELS.indexOf(1), true)
   }
   const applyOpacity = (opacity: number): void => {
-    if (!window.isDestroyed())
-      window.setOpacity(opacity)
+    if (!window.isDestroyed()) window.setOpacity(opacity)
   }
 
   const template: MenuItemConstructorOptions[] = [
     {
       label: 'Copy Translated Image',
-      click: () => clipboard.writeImage(image),
-    },
+      click: () => clipboard.writeImage(image)
+    }
   ]
   if (targetText) {
     template.push({
       label: 'Copy Translation',
-      click: () => clipboard.writeText(targetText),
+      click: () => clipboard.writeText(targetText)
     })
   }
   if (sourceText) {
     template.push({
       label: 'Copy Source Text',
-      click: () => clipboard.writeText(sourceText),
+      click: () => clipboard.writeText(sourceText)
     })
   }
   template.push(
@@ -344,12 +330,12 @@ function registerPinWindowActions(
           label: option.label,
           type: 'radio',
           checked: index === 0,
-          click: () => applyOpacity(option.value),
-        }),
-      ),
+          click: () => applyOpacity(option.value)
+        })
+      )
     },
     { type: 'separator' },
-    { label: 'Close', click: closeWindow },
+    { label: 'Close', click: closeWindow }
   )
   const menu = Menu.buildFromTemplate(template)
 
@@ -365,24 +351,20 @@ function registerPinWindowActions(
     }
     if (input.shift && (input.control || input.meta) && input.key.toLowerCase() === 'c') {
       event.preventDefault()
-      if (targetText)
-        clipboard.writeText(targetText)
+      if (targetText) clipboard.writeText(targetText)
       else clipboard.writeImage(image)
       return
     }
 
-    if (!(input.control || input.meta) || input.alt)
-      return
+    if (!(input.control || input.meta) || input.alt) return
     const key = input.key.toLowerCase()
     if (key === '+' || key === '=' || key === 'add') {
       event.preventDefault()
       stepZoom(1)
-    }
-    else if (key === '-' || key === 'subtract') {
+    } else if (key === '-' || key === 'subtract') {
       event.preventDefault()
       stepZoom(-1)
-    }
-    else if (key === '0') {
+    } else if (key === '0') {
       event.preventDefault()
       resetZoom()
     }
@@ -390,7 +372,7 @@ function registerPinWindowActions(
 }
 
 export async function openImageTranslatePinWindow(
-  payload: ImageTranslatePinWindowPayload,
+  payload: ImageTranslatePinWindowPayload
 ): Promise<BrowserWindow> {
   const image = nativeImage.createFromBuffer(Buffer.from(payload.translatedImageBase64, 'base64'))
   const { x, y, width, height } = resolveWindowBounds(image)
@@ -408,15 +390,15 @@ export async function openImageTranslatePinWindow(
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
-    },
+      sandbox: true
+    }
   })
 
   touchWindow.window.setAlwaysOnTop(true, 'floating')
   touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   registerPinWindowActions(touchWindow.window, image, payload)
   await touchWindow.window.loadURL(
-    `data:text/html;charset=utf-8,${encodeURIComponent(buildHtml(payload))}`,
+    `data:text/html;charset=utf-8,${encodeURIComponent(buildHtml(payload))}`
   )
   touchWindow.window.show()
   return touchWindow.window

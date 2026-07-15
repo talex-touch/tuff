@@ -425,6 +425,4 @@ describe('CoreBox source metadata', () => {
       })
     }
   )
-
-
 })

@@ -51,7 +51,9 @@ export class ImageCaptionTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'image-caption'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceImageCaptionPayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceImageCaptionPayload> {
     return {
       source: resolveImageSource(input),
       style: 'brief',
@@ -85,7 +87,9 @@ export class ImageAnalyzeTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'image-analyze'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceImageAnalyzePayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceImageAnalyzePayload> {
     return {
       source: resolveImageSource(input),
       analysisTypes: ['objects', 'text', 'colors', 'composition', 'scene'],
@@ -154,7 +158,9 @@ export class ImageGenerateTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'image-generate'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceImageGeneratePayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceImageGeneratePayload> {
     return {
       prompt: input.userInput || 'A compact productivity launcher interface, clean dark UI',
       width: 1024,
@@ -168,7 +174,8 @@ export class ImageGenerateTester extends BaseCapabilityTester<
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceImageGenerateResult>) {
     const imageCount = result.result?.images?.length || 0
     const first = result.result?.images?.[0]
-    const preview = first?.revisedPrompt || first?.url || (first?.base64 ? 'base64 image returned' : '')
+    const preview =
+      first?.revisedPrompt || first?.url || (first?.base64 ? 'base64 image returned' : '')
 
     return this.buildTestResult(result, {
       message: `图片生成完成，返回 ${imageCount} 张图片`,
@@ -200,7 +207,8 @@ export class ImageEditTester extends BaseCapabilityTester<
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceImageEditResult>) {
-    const preview = result.result?.revisedPrompt || result.result?.image?.url || 'edited image returned'
+    const preview =
+      result.result?.revisedPrompt || result.result?.image?.url || 'edited image returned'
 
     return this.buildTestResult(result, {
       message: '图片编辑测试成功',

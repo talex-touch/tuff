@@ -469,9 +469,7 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
           const status =
             typeof systemPreferences.getMediaAccessStatus === 'function'
               ? systemPreferences.getMediaAccessStatus(
-                  'microphone' as Parameters<
-                    typeof systemPreferences.getMediaAccessStatus
-                  >[0]
+                  'microphone' as Parameters<typeof systemPreferences.getMediaAccessStatus>[0]
                 )
               : undefined
           if (status === 'denied') {

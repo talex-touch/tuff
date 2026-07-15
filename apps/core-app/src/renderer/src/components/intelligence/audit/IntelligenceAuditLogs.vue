@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { ContextCheckpointSafeSummary, ContextPackageLogExplainItem, ContextPackageLogSafeSummary } from './context-package-log-summary'
+import type {
+  ContextCheckpointSafeSummary,
+  ContextPackageLogExplainItem,
+  ContextPackageLogSafeSummary
+} from './context-package-log-summary'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
@@ -7,10 +11,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
-
   getContextExplainReasonI18nKey,
   summarizeContextCheckpoint,
-  summarizeContextPackageLog,
+  summarizeContextPackageLog
 } from './context-package-log-summary'
 
 interface IntelligenceAuditLogEntry {
@@ -60,22 +63,19 @@ async function loadLogs(append = false) {
     const newLogs = await aiClient.getAuditLogs({
       caller: props.callerId,
       limit: limit.value,
-      offset: append ? logs.value.length : 0,
+      offset: append ? logs.value.length : 0
     })
 
     if (append) {
       logs.value.push(...newLogs)
-    }
-    else {
+    } else {
       logs.value = newLogs
     }
 
     hasMore.value = newLogs.length === limit.value
-  }
-  catch (error) {
+  } catch (error) {
     intelligenceAuditLog.error('Failed to load logs:', error)
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
@@ -84,85 +84,81 @@ onMounted(() => loadLogs())
 
 async function loadPackageLogsForTrace(traceId: string) {
   if (
-    packageLogsLoading.value[traceId]
-    || packageLogsByTraceId.value[traceId]
-    || packageLogsErrorByTraceId.value[traceId]
+    packageLogsLoading.value[traceId] ||
+    packageLogsByTraceId.value[traceId] ||
+    packageLogsErrorByTraceId.value[traceId]
   ) {
     return
   }
 
   packageLogsLoading.value = {
     ...packageLogsLoading.value,
-    [traceId]: true,
+    [traceId]: true
   }
   try {
     const result = await aiClient.contextListPackageLogs({
       traceId,
-      limit: 5,
+      limit: 5
     })
     const summaries = result.logs.map(summarizeContextPackageLog)
     packageLogsByTraceId.value = {
       ...packageLogsByTraceId.value,
-      [traceId]: summaries,
+      [traceId]: summaries
     }
     await loadCheckpointsForPackageLogs(summaries)
-  }
-  catch (error) {
+  } catch (error) {
     intelligenceAuditLog.error('Failed to load context package logs:', error)
     packageLogsErrorByTraceId.value = {
       ...packageLogsErrorByTraceId.value,
-      [traceId]: t('intelligence.audit.contextLoadFailed'),
+      [traceId]: t('intelligence.audit.contextLoadFailed')
     }
-  }
-  finally {
+  } finally {
     packageLogsLoading.value = {
       ...packageLogsLoading.value,
-      [traceId]: false,
+      [traceId]: false
     }
   }
 }
 
 async function loadCheckpointsForPackageLogs(summaries: ContextPackageLogSafeSummary[]) {
   const sessionIds = Array.from(
-    new Set(summaries.map(summary => summary.sessionId).filter(Boolean)),
+    new Set(summaries.map((summary) => summary.sessionId).filter(Boolean))
   )
-  await Promise.all(sessionIds.map(sessionId => loadCheckpointsForSession(sessionId)))
+  await Promise.all(sessionIds.map((sessionId) => loadCheckpointsForSession(sessionId)))
 }
 
 async function loadCheckpointsForSession(sessionId: string) {
   if (
-    checkpointsLoadingBySessionId.value[sessionId]
-    || checkpointsBySessionId.value[sessionId]
-    || checkpointsErrorBySessionId.value[sessionId]
+    checkpointsLoadingBySessionId.value[sessionId] ||
+    checkpointsBySessionId.value[sessionId] ||
+    checkpointsErrorBySessionId.value[sessionId]
   ) {
     return
   }
 
   checkpointsLoadingBySessionId.value = {
     ...checkpointsLoadingBySessionId.value,
-    [sessionId]: true,
+    [sessionId]: true
   }
   try {
     const result = await aiClient.contextListCheckpoints({
       sessionId,
-      limit: 5,
+      limit: 5
     })
     checkpointsBySessionId.value = {
       ...checkpointsBySessionId.value,
-      [sessionId]: result.checkpoints.map(summarizeContextCheckpoint),
+      [sessionId]: result.checkpoints.map(summarizeContextCheckpoint)
     }
-  }
-  catch (error) {
+  } catch (error) {
     intelligenceAuditLog.error('Failed to load context checkpoints:', error)
     checkpointsErrorBySessionId.value = {
       ...checkpointsErrorBySessionId.value,
-      [sessionId]: t('intelligence.audit.contextLoadFailed'),
+      [sessionId]: t('intelligence.audit.contextLoadFailed')
     }
-  }
-  finally {
+  } finally {
     checkpointsLoadingBySessionId.value = {
       ...checkpointsLoadingBySessionId.value,
-      [sessionId]: false,
+      [sessionId]: false
     }
   }
 }
@@ -199,9 +195,9 @@ function handleExportCSV() {
     'Estimated Cost',
     'Latency (ms)',
     'Success',
-    'Error',
+    'Error'
   ]
-  const rows = logs.value.map(log => [
+  const rows = logs.value.map((log) => [
     log.traceId,
     new Date(log.timestamp).toISOString(),
     log.capabilityId,
@@ -214,11 +210,11 @@ function handleExportCSV() {
     log.estimatedCost?.toFixed(6) || '',
     log.latency,
     log.success ? 'Yes' : 'No',
-    log.error || '',
+    log.error || ''
   ])
   const csv = [
     headers.join(','),
-    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
   ].join('\n')
   const filename = `intelligence-audit-${new Date().toISOString().split('T')[0]}.csv`
   downloadAsFile(csv, filename, 'text/csv')
@@ -247,8 +243,7 @@ function formatTime(timestamp: number): string {
 }
 
 function formatLatency(ms: number): string {
-  if (ms < 1000)
-    return `${ms}ms`
+  if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
 }
 
@@ -256,7 +251,7 @@ function formatSourceTypes(summary: ContextPackageLogSafeSummary): string {
   if (summary.sourceTypes.length === 0) {
     return t('intelligence.audit.contextNoSources')
   }
-  return summary.sourceTypes.map(source => `${source.sourceType} x${source.count}`).join(', ')
+  return summary.sourceTypes.map((source) => `${source.sourceType} x${source.count}`).join(', ')
 }
 
 function formatExplainItem(item: ContextPackageLogExplainItem): string {
@@ -279,14 +274,14 @@ function formatCitation(item: ContextPackageLogExplainItem): string {
     citation.documentId,
     citation.chunkId,
     citation.sourceType,
-    citation.sourceUri,
+    citation.sourceUri
   ]
     .filter(Boolean)
     .join(' · ')
 }
 
 function checkpointsForPackage(
-  summary: ContextPackageLogSafeSummary,
+  summary: ContextPackageLogSafeSummary
 ): ContextCheckpointSafeSummary[] {
   return checkpointsBySessionId.value[summary.sessionId] ?? []
 }
@@ -434,8 +429,10 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
                   </TxButton>
                 </div>
                 <div class="context-package-line secondary">
-                  <span>{{ t('intelligence.audit.contextSources') }}:
-                    {{ formatSourceTypes(summary) }}</span>
+                  <span
+                    >{{ t('intelligence.audit.contextSources') }}:
+                    {{ formatSourceTypes(summary) }}</span
+                  >
                   <span v-if="summary.retrievalItemCount">
                     {{ t('intelligence.audit.contextRetrieval') }}: {{ summary.retrievalItemCount }}
                   </span>
@@ -587,13 +584,10 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
             {{ t('intelligence.audit.contextDegradedReason') }}:
             {{ selectedContextPackage.degradedReason }}
           </p>
-          <p
-            v-if="selectedContextPackage.tombstoneCount"
-            class="context-explain-drawer-warning"
-          >
+          <p v-if="selectedContextPackage.tombstoneCount" class="context-explain-drawer-warning">
             {{
               t('intelligence.audit.contextTombstoneNotice', {
-                count: selectedContextPackage.tombstoneCount,
+                count: selectedContextPackage.tombstoneCount
               })
             }}
           </p>

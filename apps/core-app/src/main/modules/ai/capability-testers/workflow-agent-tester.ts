@@ -65,7 +65,10 @@ export class WorkflowExecuteTester extends BaseCapabilityTester<unknown, PromptW
   }
 }
 
-export class AgentRunTester extends BaseCapabilityTester<IntelligenceAgentPayload, IntelligenceAgentResult> {
+export class AgentRunTester extends BaseCapabilityTester<
+  IntelligenceAgentPayload,
+  IntelligenceAgentResult
+> {
   readonly capabilityType = 'agent-run'
 
   async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceAgentPayload> {
@@ -75,7 +78,10 @@ export class AgentRunTester extends BaseCapabilityTester<IntelligenceAgentPayloa
         'Compare Talex Touch with Alfred and uTools, then propose one SDK capability improvement.',
       context: 'Capability tester smoke test: prefer concise, actionable output.',
       maxIterations: 3,
-      constraints: ['Do not call external tools unless explicitly available.', 'Return a prioritized next action.'],
+      constraints: [
+        'Do not call external tools unless explicitly available.',
+        'Return a prioritized next action.'
+      ],
       memory: [
         {
           role: 'system',

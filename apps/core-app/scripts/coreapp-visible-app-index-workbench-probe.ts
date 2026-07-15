@@ -1341,13 +1341,15 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
 
       await evaluate(send, `(${waitForAppIndexReadyExpression()})()`, 22_000)
 
-      await evaluate(send, `(${buildSeedExpression(seedEntries)})()`, 110_000).then(
-        (seedResult: any) => {
-          result.seedResults = seedResult?.results ?? []
-          result.diagnostics = seedResult?.diagnostics ?? {}
-          result.reindexResults = seedResult?.reindexResults ?? {}
-        }
-      )
+      await evaluate<{
+        results?: unknown[]
+        diagnostics?: Record<string, unknown>
+        reindexResults?: Record<string, unknown>
+      }>(send, `(${buildSeedExpression(seedEntries)})()`, 110_000).then((seedResult) => {
+        result.seedResults = seedResult?.results ?? []
+        result.diagnostics = seedResult?.diagnostics ?? {}
+        result.reindexResults = seedResult?.reindexResults ?? {}
+      })
 
       result.sqliteSeed = await seedEntriesWithSqliteFallback(
         options.userDataDir,

@@ -33,15 +33,13 @@ async function loadStats() {
   try {
     const [today, month] = await Promise.all([
       aiClient.getTodayStats(props.callerId),
-      aiClient.getMonthStats(props.callerId),
+      aiClient.getMonthStats(props.callerId)
     ])
     todayStats.value = today
     monthStats.value = month
-  }
-  catch {
+  } catch {
     toast.error(t('intelligence.audit.loadStatsFailed'))
-  }
-  finally {
+  } finally {
     isLoading.value = false
   }
 }
@@ -52,31 +50,25 @@ watch(() => props.callerId, loadStats)
 
 const successRate = computed(() => {
   const stats = todayStats.value
-  if (!stats || stats.requestCount === 0)
-    return 0
+  if (!stats || stats.requestCount === 0) return 0
   return Math.round((stats.successCount / stats.requestCount) * 100)
 })
 
 const monthSuccessRate = computed(() => {
   const stats = monthStats.value
-  if (!stats || stats.requestCount === 0)
-    return 0
+  if (!stats || stats.requestCount === 0) return 0
   return Math.round((stats.successCount / stats.requestCount) * 100)
 })
 
 function formatCost(cost: number): string {
-  if (cost < 0.01)
-    return `$${cost.toFixed(4)}`
-  if (cost < 1)
-    return `$${cost.toFixed(3)}`
+  if (cost < 0.01) return `$${cost.toFixed(4)}`
+  if (cost < 1) return `$${cost.toFixed(3)}`
   return `$${cost.toFixed(2)}`
 }
 
 function formatNumber(num: number): string {
-  if (num >= 1000000)
-    return `${(num / 1000000).toFixed(1)}M`
-  if (num >= 1000)
-    return `${(num / 1000).toFixed(1)}K`
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
   return num.toString()
 }
 </script>
@@ -133,7 +125,7 @@ function formatNumber(num: number): string {
                 :class="{
                   success: successRate >= 90,
                   warning: successRate >= 70 && successRate < 90,
-                  error: successRate < 70,
+                  error: successRate < 70
                 }"
                 :style="{ width: `${successRate}%` }"
               />
@@ -200,7 +192,7 @@ function formatNumber(num: number): string {
                 :class="{
                   success: monthSuccessRate >= 90,
                   warning: monthSuccessRate >= 70 && monthSuccessRate < 90,
-                  error: monthSuccessRate < 70,
+                  error: monthSuccessRate < 70
                 }"
                 :style="{ width: `${monthSuccessRate}%` }"
               />

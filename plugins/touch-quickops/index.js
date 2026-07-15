@@ -651,7 +651,7 @@ function buildConfirmationRequiredItems(featureId, action, query) {
     query,
     action,
     'confirmation-token-required',
-    'blocked-until-confirmed'
+    'blocked-until-confirmed',
   )
 
   return [
@@ -1632,8 +1632,8 @@ const pluginLifecycle = {
   async onItemAction(item, context = {}) {
     const selectedActionId = context.actionId || item?.meta?.defaultAction
     if (
-      selectedActionId === DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID ||
-      selectedActionId === DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID
+      selectedActionId === DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID
+      || selectedActionId === DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID
     ) {
       if (typeof quickOps?.saveDeveloperPreview !== 'function') {
         return {

@@ -6,8 +6,8 @@ export function createGitHubClient({ token, userAgent = 'tuff-ci-bot' }) {
   async function request(endpoint, init = {}) {
     const url = new URL(normalizeEndpoint(endpoint), 'https://api.github.com')
     const headers = {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github+json',
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github+json',
       'User-Agent': userAgent,
       ...(init.headers ?? {}),
     }

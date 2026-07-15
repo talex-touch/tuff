@@ -36,7 +36,7 @@ const promptDraft = reactive({
   name: '',
   category: '',
   description: '',
-  content: '',
+  content: ''
 })
 const autoSaveStatus = ref<'idle' | 'pending' | 'saving' | 'saved'>('idle')
 let isApplyingDraft = false
@@ -47,34 +47,32 @@ const promptTestResult = ref<UiCapabilityTestResult | null>(null)
 const promptTesting = ref(false)
 
 const capabilityList = computed<IntelligenceCapabilityConfig[]>(() =>
-  Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id)),
+  Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id))
 )
 
 watch(
   capabilityList,
   (list) => {
-    if (!list.length)
-      return
-    if (!list.some(cap => cap.id === testCapabilityId.value)) {
+    if (!list.length) return
+    if (!list.some((cap) => cap.id === testCapabilityId.value)) {
       testCapabilityId.value = list[0].id
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 const providerMap = computed(
-  () => new Map(providers.value.map(provider => [provider.id, provider])),
+  () => new Map(providers.value.map((provider) => [provider.id, provider]))
 )
 
 const testEnabledBindings = computed(() => {
   const capability = (capabilities.value || {})[testCapabilityId.value]
-  if (!capability?.providers)
-    return []
+  if (!capability?.providers) return []
   return capability.providers
-    .filter(binding => binding.enabled !== false)
-    .map(binding => ({
+    .filter((binding) => binding.enabled !== false)
+    .map((binding) => ({
       ...binding,
-      provider: providerMap.value.get(binding.providerId),
+      provider: providerMap.value.get(binding.providerId)
     }))
 })
 
@@ -85,8 +83,7 @@ async function handlePromptTest(options: {
   userInput?: string
   promptTemplate?: string
 }): Promise<void> {
-  if (promptTesting.value)
-    return
+  if (promptTesting.value) return
   promptTesting.value = true
   promptTestResult.value = null
 
@@ -97,23 +94,21 @@ async function handlePromptTest(options: {
       userInput: options.userInput,
       model: options.model,
       promptTemplate: promptDraft.content,
-      promptVariables: options.promptVariables,
+      promptVariables: options.promptVariables
     })) as UiCapabilityTestResult
 
     promptTestResult.value = {
       ...response,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  catch (error) {
+  } catch (error) {
     promptTestResult.value = {
       success: false,
       message:
         error instanceof Error ? error.message : t('settings.intelligence.capabilityTestFailed'),
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  finally {
+  } finally {
     promptTesting.value = false
   }
 }
@@ -121,7 +116,7 @@ async function handlePromptTest(options: {
 const filterOptions = computed(() => [
   { value: 'all', label: t('settings.intelligence.promptFilterAll') },
   { value: 'builtin', label: t('settings.intelligence.builtin') },
-  { value: 'custom', label: t('settings.intelligence.custom') },
+  { value: 'custom', label: t('settings.intelligence.custom') }
 ])
 
 const orderedPrompts = computed<PromptTemplate[]>(() => {
@@ -133,35 +128,33 @@ const orderedPrompts = computed<PromptTemplate[]>(() => {
 const visiblePrompts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return orderedPrompts.value.filter((prompt) => {
-    const matchesFilter
-      = filterMode.value === 'all'
+    const matchesFilter =
+      filterMode.value === 'all'
         ? true
         : filterMode.value === 'builtin'
           ? prompt.builtin
           : !prompt.builtin
 
-    if (!matchesFilter)
-      return false
-    if (!query)
-      return true
+    if (!matchesFilter) return false
+    if (!query) return true
     return (
-      prompt.name.toLowerCase().includes(query)
-      || (prompt.description && prompt.description.toLowerCase().includes(query))
-      || prompt.content.toLowerCase().includes(query)
+      prompt.name.toLowerCase().includes(query) ||
+      (prompt.description && prompt.description.toLowerCase().includes(query)) ||
+      prompt.content.toLowerCase().includes(query)
     )
   })
 })
 
 const promptListItems = computed(() =>
-  visiblePrompts.value.map(prompt => ({
+  visiblePrompts.value.map((prompt) => ({
     id: prompt.id,
     title: prompt.name,
     description: prompt.description || t('settings.intelligence.promptMetaDescription'),
     badgeLabel: prompt.builtin
       ? t('settings.intelligence.builtin')
       : t('settings.intelligence.custom'),
-    badgeVariant: prompt.builtin ? 'info' : 'success',
-  })),
+    badgeVariant: prompt.builtin ? 'info' : 'success'
+  }))
 )
 
 watch(
@@ -171,17 +164,16 @@ watch(
       selectedPromptId.value = null
       return
     }
-    if (!selectedPromptId.value || !list.some(prompt => prompt.id === selectedPromptId.value)) {
+    if (!selectedPromptId.value || !list.some((prompt) => prompt.id === selectedPromptId.value)) {
       selectedPromptId.value = list[0].id
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 const selectedPrompt = computed<PromptTemplate | null>(() => {
-  if (!selectedPromptId.value)
-    return null
-  return orderedPrompts.value.find(prompt => prompt.id === selectedPromptId.value) ?? null
+  if (!selectedPromptId.value) return null
+  return orderedPrompts.value.find((prompt) => prompt.id === selectedPromptId.value) ?? null
 })
 
 const isBuiltinSelected = computed(() => !!selectedPrompt.value?.builtin)
@@ -215,31 +207,30 @@ watch(
     }
     isApplyingDraft = false
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 const isDirty = computed(() => {
-  if (!selectedPrompt.value || !isCustomEditable.value)
-    return false
+  if (!selectedPrompt.value || !isCustomEditable.value) return false
   return (
-    selectedPrompt.value.name !== promptDraft.name
-    || (selectedPrompt.value.category ?? '') !== promptDraft.category
-    || (selectedPrompt.value.description ?? '') !== promptDraft.description
-    || selectedPrompt.value.content !== promptDraft.content
+    selectedPrompt.value.name !== promptDraft.name ||
+    (selectedPrompt.value.category ?? '') !== promptDraft.category ||
+    (selectedPrompt.value.description ?? '') !== promptDraft.description ||
+    selectedPrompt.value.content !== promptDraft.content
   )
 })
 
 const promptStats = computed(() => ({
   total: orderedPrompts.value.length,
   builtin: promptManager.prompts.builtin.length,
-  custom: promptManager.prompts.custom.length,
+  custom: promptManager.prompts.custom.length
 }))
 
 const totalWordsApprox = computed(() =>
   orderedPrompts.value.reduce((sum, prompt) => {
     const words = prompt.content.trim().split(/\s+/).filter(Boolean).length
     return sum + words
-  }, 0),
+  }, 0)
 )
 
 const autoSaveStatusText = computed(() => {
@@ -273,8 +264,7 @@ function flushPendingPromptChanges(): void {
   autoSaveStatus.value = ok ? 'saved' : 'idle'
   if (ok) {
     window.setTimeout(() => {
-      if (autoSaveStatus.value === 'saved')
-        autoSaveStatus.value = 'idle'
+      if (autoSaveStatus.value === 'saved') autoSaveStatus.value = 'idle'
     }, 1200)
   }
 }
@@ -292,8 +282,7 @@ async function handleOpenFolder(): Promise<void> {
   try {
     await appSdk.openPromptsFolder()
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
-  }
-  catch {
+  } catch {
     toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
 }
@@ -301,13 +290,13 @@ async function handleOpenFolder(): Promise<void> {
 function handleCreatePrompt(): void {
   flushPendingPromptChanges()
   const name = t('settings.intelligence.promptNewDefaultName', {
-    index: promptStats.value.custom + 1,
+    index: promptStats.value.custom + 1
   })
   const newId = promptManager.addCustomPrompt({
     name,
     category: 'custom',
     description: t('settings.intelligence.promptDescriptionPlaceholder'),
-    content: '',
+    content: ''
   })
   filterMode.value = 'custom'
   searchQuery.value = ''
@@ -316,8 +305,7 @@ function handleCreatePrompt(): void {
 }
 
 function handleDuplicatePrompt(): void {
-  if (!selectedPrompt.value)
-    return
+  if (!selectedPrompt.value) return
   flushPendingPromptChanges()
   const suffix = t('settings.intelligence.promptDuplicateSuffix')
   const name = `${selectedPrompt.value.name} ${suffix}`.trim()
@@ -325,7 +313,7 @@ function handleDuplicatePrompt(): void {
     name,
     category: selectedPrompt.value.category ?? '',
     description: selectedPrompt.value.description ?? '',
-    content: selectedPrompt.value.content,
+    content: selectedPrompt.value.content
   })
   filterMode.value = 'custom'
   selectedPromptId.value = newId
@@ -333,19 +321,16 @@ function handleDuplicatePrompt(): void {
 }
 
 function persistPrompt(showSuccessToast: boolean, showErrorToast: boolean = true): boolean {
-  if (!selectedPrompt.value || !isCustomEditable.value)
-    return false
+  if (!selectedPrompt.value || !isCustomEditable.value) return false
   const ok = promptManager.updateCustomPrompt(selectedPrompt.value.id, {
     name: promptDraft.name,
     category: promptDraft.category,
     description: promptDraft.description,
-    content: promptDraft.content,
+    content: promptDraft.content
   })
   if (ok) {
-    if (showSuccessToast)
-      toast.success(t('settings.intelligence.promptSaveSuccess'))
-  }
-  else if (showErrorToast) {
+    if (showSuccessToast) toast.success(t('settings.intelligence.promptSaveSuccess'))
+  } else if (showErrorToast) {
     toast.error(t('settings.intelligence.promptSaveFailed'))
   }
   return ok
@@ -356,8 +341,7 @@ function handleSavePrompt(): void {
 }
 
 function scheduleAutoSave(): void {
-  if (!selectedPrompt.value || !isCustomEditable.value || isApplyingDraft)
-    return
+  if (!selectedPrompt.value || !isCustomEditable.value || isApplyingDraft) return
   autoSaveStatus.value = 'pending'
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer)
@@ -392,26 +376,23 @@ function runAutoSave(): void {
 watch(
   () => ({ ...promptDraft }),
   () => {
-    if (isApplyingDraft || !isCustomEditable.value)
-      return
+    if (isApplyingDraft || !isCustomEditable.value) return
     scheduleAutoSave()
   },
-  { deep: true },
+  { deep: true }
 )
 
 // Delete confirmation
 const deletePromptConfirmVisible = ref(false)
 
 function handleDeletePrompt(): void {
-  if (!selectedPrompt.value || !isCustomEditable.value)
-    return
+  if (!selectedPrompt.value || !isCustomEditable.value) return
   flushPendingPromptChanges()
   deletePromptConfirmVisible.value = true
 }
 
 async function confirmDeletePrompt(): Promise<boolean> {
-  if (!selectedPrompt.value)
-    return true
+  if (!selectedPrompt.value) return true
   const deletedId = selectedPrompt.value.id
   const deleted = promptManager.deleteCustomPrompt(deletedId)
   if (!deleted) {
@@ -419,7 +400,7 @@ async function confirmDeletePrompt(): Promise<boolean> {
     return true
   }
   toast.success(t('settings.intelligence.promptDeleteSuccess'))
-  const next = visiblePrompts.value.find(prompt => prompt.id !== deletedId)
+  const next = visiblePrompts.value.find((prompt) => prompt.id !== deletedId)
   selectedPromptId.value = next?.id ?? orderedPrompts.value[0]?.id ?? null
   return true
 }
@@ -429,13 +410,11 @@ function closeDeletePromptConfirm() {
 }
 
 async function handleCopyContent(): Promise<void> {
-  if (!selectedPrompt.value)
-    return
+  if (!selectedPrompt.value) return
   try {
     await navigator.clipboard.writeText(selectedPrompt.value.content)
     toast.success(t('settings.intelligence.promptCopySuccess'))
-  }
-  catch {
+  } catch {
     toast.error(t('settings.intelligence.promptCopyFailed'))
   }
 }
@@ -447,18 +426,15 @@ function triggerImport(): void {
 async function handleImport(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  if (!file)
-    return
+  if (!file) return
   try {
     const text = await file.text()
     const payload = JSON.parse(text)
     const imported = promptManager.importPrompts(payload)
     toast.success(t('settings.intelligence.promptImportSuccess', { count: imported }))
-  }
-  catch {
+  } catch {
     toast.error(t('settings.intelligence.promptImportFailed'))
-  }
-  finally {
+  } finally {
     input.value = ''
   }
 }
@@ -637,7 +613,7 @@ onBeforeUnmount(() => {
                   type="text"
                   :placeholder="t('settings.intelligence.promptNamePlaceholder')"
                   :disabled="isBuiltinSelected"
-                >
+                />
               </TuffBlockSlot>
 
               <TuffBlockSlot
@@ -654,7 +630,7 @@ onBeforeUnmount(() => {
                   type="text"
                   :placeholder="t('settings.intelligence.promptCategoryPlaceholder')"
                   :disabled="isBuiltinSelected"
-                >
+                />
               </TuffBlockSlot>
 
               <TuffBlockSlot
@@ -854,7 +830,7 @@ onBeforeUnmount(() => {
       type="file"
       accept="application/json"
       @change="handleImport"
-    >
+    />
 
     <TxBottomDialog
       v-if="deletePromptConfirmVisible"
@@ -862,7 +838,7 @@ onBeforeUnmount(() => {
       :message="t('settings.intelligence.promptDeleteConfirm')"
       :btns="[
         { content: t('common.cancel'), type: 'info', onClick: () => true },
-        { content: t('common.confirm'), type: 'error', onClick: confirmDeletePrompt },
+        { content: t('common.confirm'), type: 'error', onClick: confirmDeletePrompt }
       ]"
       :close="closeDeletePromptConfirm"
     />

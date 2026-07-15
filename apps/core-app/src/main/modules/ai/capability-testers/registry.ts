@@ -4,7 +4,7 @@ import {
   IntentDetectTester,
   KeywordsExtractTester,
   SentimentAnalyzeTester,
-  TextClassifyTester,
+  TextClassifyTester
 } from './analysis-tester'
 import { AudioTranscribeTester, SttCapabilityTester, TtsCapabilityTester } from './audio-tester'
 import { ChatCapabilityTester } from './chat-tester'
@@ -13,7 +13,7 @@ import {
   CodeExplainTester,
   CodeGenerateTester,
   CodeRefactorTester,
-  CodeReviewTester,
+  CodeReviewTester
 } from './code-tester'
 import { EmbeddingCapabilityTester } from './embedding-tester'
 import {
@@ -21,7 +21,7 @@ import {
   ImageCaptionTester,
   ImageEditTester,
   ImageGenerateTester,
-  ImageTranslateE2eTester,
+  ImageTranslateE2eTester
 } from './image-tester'
 import { RagQueryTester, RerankTester, SemanticSearchTester } from './search-tester'
 import { SummarizeCapabilityTester } from './summarize-tester'

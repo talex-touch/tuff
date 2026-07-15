@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
   const image = {
-    getSize: vi.fn(() => ({ width: 320, height: 240 })),
+    getSize: vi.fn(() => ({ width: 320, height: 240 }))
   }
   const menu = { popup: vi.fn() }
 
@@ -14,10 +14,10 @@ const electronMocks = vi.hoisted(() => {
     writeText: vi.fn(),
     getCursorScreenPoint: vi.fn(() => ({ x: 640, y: 360 })),
     getDisplayNearestPoint: vi.fn(() => ({
-      workArea: { x: 0, y: 0, width: 1280, height: 720 },
+      workArea: { x: 0, y: 0, width: 1280, height: 720 }
     })),
     buildFromTemplate: vi.fn((_template: unknown) => menu),
-    menu,
+    menu
   }
 })
 
@@ -26,7 +26,7 @@ const pinWindowMocks = vi.hoisted(() => ({
   bounds: { x: 0, y: 0, width: 420, height: 378 },
   setAlwaysOnTop: vi.fn(),
   setVisibleOnAllWorkspaces: vi.fn(),
-  setBounds: vi.fn((bounds: { x: number, y: number, width: number, height: number }) => {
+  setBounds: vi.fn((bounds: { x: number; y: number; width: number; height: number }) => {
     pinWindowMocks.bounds = { ...bounds }
   }),
   getBounds: vi.fn(() => ({ ...pinWindowMocks.bounds })),
@@ -35,24 +35,24 @@ const pinWindowMocks = vi.hoisted(() => ({
   show: vi.fn(),
   close: vi.fn(),
   isDestroyed: vi.fn(() => false),
-  webContentsOn: vi.fn(),
+  webContentsOn: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   clipboard: {
     writeImage: electronMocks.writeImage,
-    writeText: electronMocks.writeText,
+    writeText: electronMocks.writeText
   },
   Menu: {
-    buildFromTemplate: electronMocks.buildFromTemplate,
+    buildFromTemplate: electronMocks.buildFromTemplate
   },
   nativeImage: {
-    createFromBuffer: electronMocks.createFromBuffer,
+    createFromBuffer: electronMocks.createFromBuffer
   },
   screen: {
     getCursorScreenPoint: electronMocks.getCursorScreenPoint,
-    getDisplayNearestPoint: electronMocks.getDisplayNearestPoint,
-  },
+    getDisplayNearestPoint: electronMocks.getDisplayNearestPoint
+  }
 }))
 
 vi.mock('../../../core/touch-window', () => ({
@@ -67,20 +67,20 @@ vi.mock('../../../core/touch-window', () => ({
       loadURL: pinWindowMocks.loadURL,
       show: pinWindowMocks.show,
       close: pinWindowMocks.close,
-      isDestroyed: pinWindowMocks.isDestroyed,
+      isDestroyed: pinWindowMocks.isDestroyed
     }
 
     constructor(options: unknown) {
       pinWindowMocks.options.push(options)
-      const bounds = options as Partial<{ x: number, y: number, width: number, height: number }>
+      const bounds = options as Partial<{ x: number; y: number; width: number; height: number }>
       pinWindowMocks.bounds = {
         x: bounds.x ?? 0,
         y: bounds.y ?? 0,
         width: bounds.width ?? 420,
-        height: bounds.height ?? 378,
+        height: bounds.height ?? 378
       }
     }
-  },
+  }
 }))
 
 import { openImageTranslatePinWindow } from './image-translate-pin-window'
@@ -115,16 +115,14 @@ function menuItems(): ContextMenuItem[] {
 }
 
 function menuItem(label: string): ContextMenuItem {
-  const item = menuItems().find(candidate => candidate.label === label)
-  if (!item)
-    throw new Error(`Expected ${label} menu item`)
+  const item = menuItems().find((candidate) => candidate.label === label)
+  if (!item) throw new Error(`Expected ${label} menu item`)
   return item
 }
 
 function submenuItem(parentLabel: string, label: string): ContextMenuItem {
-  const item = menuItem(parentLabel).submenu?.find(candidate => candidate.label === label)
-  if (!item)
-    throw new Error(`Expected ${parentLabel} > ${label} menu item`)
+  const item = menuItem(parentLabel).submenu?.find((candidate) => candidate.label === label)
+  if (!item) throw new Error(`Expected ${parentLabel} > ${label} menu item`)
   return item
 }
 
@@ -142,7 +140,7 @@ describe('openImageTranslatePinWindow', () => {
     electronMocks.image.getSize.mockReturnValue({ width: 320, height: 240 })
     electronMocks.getCursorScreenPoint.mockReturnValue({ x: 640, y: 360 })
     electronMocks.getDisplayNearestPoint.mockReturnValue({
-      workArea: { x: 0, y: 0, width: 1280, height: 720 },
+      workArea: { x: 0, y: 0, width: 1280, height: 720 }
     })
     pinWindowMocks.bounds = { x: 0, y: 0, width: 420, height: 378 }
   })
@@ -155,7 +153,7 @@ describe('openImageTranslatePinWindow', () => {
     electronMocks.image.getSize.mockReturnValue({ width: 1200, height: 900 })
     electronMocks.getCursorScreenPoint.mockReturnValue({ x: 400, y: 260 })
     electronMocks.getDisplayNearestPoint.mockReturnValue({
-      workArea: { x: 100, y: 80, width: 640, height: 480 },
+      workArea: { x: 100, y: 80, width: 640, height: 480 }
     })
 
     await openImageTranslatePinWindow({ translatedImageBase64: translatedImageBase64() })
@@ -170,12 +168,12 @@ describe('openImageTranslatePinWindow', () => {
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true,
-      },
+        sandbox: true
+      }
     })
     expect(pinWindowMocks.show).toHaveBeenCalledOnce()
     expect(pinWindowMocks.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
-      visibleOnFullScreen: true,
+      visibleOnFullScreen: true
     })
   })
 
@@ -183,13 +181,13 @@ describe('openImageTranslatePinWindow', () => {
     await openImageTranslatePinWindow({
       translatedImageBase64: translatedImageBase64(),
       sourceText: ' source text ',
-      targetText: ' translated text ',
+      targetText: ' translated text '
     })
 
     expect(
       menuItems()
-        .map(item => item.label)
-        .filter(Boolean),
+        .map((item) => item.label)
+        .filter(Boolean)
     ).toEqual([
       'Copy Translated Image',
       'Copy Translation',
@@ -198,7 +196,7 @@ describe('openImageTranslatePinWindow', () => {
       'Zoom Out',
       'Reset Zoom',
       'Opacity',
-      'Close',
+      'Close'
     ])
 
     menuItem('Copy Translated Image').click?.()
@@ -225,7 +223,7 @@ describe('openImageTranslatePinWindow', () => {
       x: 378,
       y: 124,
       width: 525,
-      height: 473,
+      height: 473
     })
 
     menuItem('Reset Zoom').click?.()
@@ -233,7 +231,7 @@ describe('openImageTranslatePinWindow', () => {
       x: 430,
       y: 171,
       width: 420,
-      height: 378,
+      height: 378
     })
 
     submenuItem('Opacity', '70%').click?.()
@@ -243,12 +241,12 @@ describe('openImageTranslatePinWindow', () => {
   it('handles close, copy, and zoom keyboard shortcuts', async () => {
     await openImageTranslatePinWindow({
       translatedImageBase64: translatedImageBase64(),
-      targetText: 'translated text',
+      targetText: 'translated text'
     })
     expect(
       menuItems()
-        .map(item => item.label)
-        .filter(Boolean),
+        .map((item) => item.label)
+        .filter(Boolean)
     ).toEqual([
       'Copy Translated Image',
       'Copy Translation',
@@ -256,7 +254,7 @@ describe('openImageTranslatePinWindow', () => {
       'Zoom Out',
       'Reset Zoom',
       'Opacity',
-      'Close',
+      'Close'
     ])
 
     const keyHandler = webContentsHandler('before-input-event')
@@ -268,7 +266,7 @@ describe('openImageTranslatePinWindow', () => {
     const copyPreventDefault = vi.fn()
     keyHandler(
       { preventDefault: copyPreventDefault },
-      { key: 'C', shift: true, control: true, meta: false },
+      { key: 'C', shift: true, control: true, meta: false }
     )
     expect(copyPreventDefault).toHaveBeenCalledOnce()
     expect(electronMocks.writeText).toHaveBeenCalledWith('translated text')
@@ -276,40 +274,40 @@ describe('openImageTranslatePinWindow', () => {
     const zoomInPreventDefault = vi.fn()
     keyHandler(
       { preventDefault: zoomInPreventDefault },
-      { key: '+', control: false, meta: true, alt: false },
+      { key: '+', control: false, meta: true, alt: false }
     )
     expect(zoomInPreventDefault).toHaveBeenCalledOnce()
     expect(pinWindowMocks.setBounds).toHaveBeenLastCalledWith({
       x: 378,
       y: 124,
       width: 525,
-      height: 473,
+      height: 473
     })
 
     const zoomOutPreventDefault = vi.fn()
     keyHandler(
       { preventDefault: zoomOutPreventDefault },
-      { key: '-', control: false, meta: true, alt: false },
+      { key: '-', control: false, meta: true, alt: false }
     )
     expect(zoomOutPreventDefault).toHaveBeenCalledOnce()
     expect(pinWindowMocks.setBounds).toHaveBeenLastCalledWith({
       x: 430,
       y: 171,
       width: 420,
-      height: 378,
+      height: 378
     })
   })
 
   it('offers source copy without a target translation', async () => {
     await openImageTranslatePinWindow({
       translatedImageBase64: translatedImageBase64(),
-      sourceText: 'source text',
+      sourceText: 'source text'
     })
 
     expect(
       menuItems()
-        .map(item => item.label)
-        .filter(Boolean),
+        .map((item) => item.label)
+        .filter(Boolean)
     ).toEqual([
       'Copy Translated Image',
       'Copy Source Text',
@@ -317,7 +315,7 @@ describe('openImageTranslatePinWindow', () => {
       'Zoom Out',
       'Reset Zoom',
       'Opacity',
-      'Close',
+      'Close'
     ])
   })
 
@@ -325,21 +323,14 @@ describe('openImageTranslatePinWindow', () => {
     await openImageTranslatePinWindow({
       translatedImageBase64: translatedImageBase64(),
       sourceText: '   ',
-      targetText: '   ',
+      targetText: '   '
     })
 
     expect(
       menuItems()
-        .map(item => item.label)
-        .filter(Boolean),
-    ).toEqual([
-      'Copy Translated Image',
-      'Zoom In',
-      'Zoom Out',
-      'Reset Zoom',
-      'Opacity',
-      'Close',
-    ])
+        .map((item) => item.label)
+        .filter(Boolean)
+    ).toEqual(['Copy Translated Image', 'Zoom In', 'Zoom Out', 'Reset Zoom', 'Opacity', 'Close'])
 
     const preventDefault = vi.fn()
     webContentsHandler('before-input-event')(
@@ -348,8 +339,8 @@ describe('openImageTranslatePinWindow', () => {
         key: 'c',
         shift: true,
         control: false,
-        meta: true,
-      },
+        meta: true
+      }
     )
     expect(preventDefault).toHaveBeenCalledOnce()
     expect(electronMocks.writeImage).toHaveBeenCalledWith(electronMocks.image)
@@ -360,7 +351,7 @@ describe('openImageTranslatePinWindow', () => {
     await openImageTranslatePinWindow({
       translatedImageBase64: translatedImageBase64(),
       sourceText: `<script>alert('source')</script>`,
-      targetText: `&<script>alert("target")</script>`,
+      targetText: `&<script>alert("target")</script>`
     })
 
     expect(electronMocks.createFromBuffer).toHaveBeenCalledWith(Buffer.from('translated-image'))
@@ -369,7 +360,7 @@ describe('openImageTranslatePinWindow', () => {
     expect(url).toMatch(/^data:text\/html;charset=utf-8,/)
     const html = decodeURIComponent(url.slice(url.indexOf(',') + 1))
     expect(html).toContain(
-      'Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\';"',
+      "Content-Security-Policy\" content=\"default-src 'none'; img-src data:; style-src 'unsafe-inline';\""
     )
     expect(html).toContain('Right-click: copy · zoom · opacity · close')
     expect(html).toContain('&lt;script&gt;alert(&#39;source&#39;)&lt;/script&gt;')
@@ -383,7 +374,7 @@ describe('openImageTranslatePinWindow', () => {
       translatedImageBase64: translatedImageBase64(),
       imageMimeType: 'image/jpeg',
       targetText: '<你好>',
-      overlay: { mode: 'client-render' },
+      overlay: { mode: 'client-render' }
     })
 
     const url = String(pinWindowMocks.loadURL.mock.calls[0]?.[0] ?? '')
