@@ -33,11 +33,9 @@
 - `packages/`：共享工具包与组件库。
 - `plugins/`：插件示例与可独立运行的插件项目。
 - `docs/`：工程与产品文档、PRD、分析报告。
-- `examples/`：SDK/功能使用示例与对接样例。
 - `scripts/`：CI/工具脚本与工程维护脚本。
 - `build/`：构建配置产物（少量文件）。
-- `plan/`、`issues/`、`reports/`、`shots/`：计划、议题、报告与截图归档。
-- `.github/`、`.husky/`、`.workflow/`、`.spec-workflow/`、`.vscode/`、`.idea/` 等：协作与工具链配置。
+- `.github/`、`.husky/`、`.trellis/`、`.vscode/` 等：协作与工具链配置。
 - 关键文件：`package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`eslint.config.js`、`commitlint.config.cts`、`README.md`、`README.zh-CN.md`、`AGENTS.md`、`CLAUDE.md`。
 
 ## 子项目结构详解
