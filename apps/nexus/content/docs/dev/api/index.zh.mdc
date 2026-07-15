@@ -10,14 +10,12 @@ SDK 以插件运行时上下文为基础，统一输出窗口控制、剪贴板�
 
 ## 安装
 
-## :::TuffCodeBlock{lang="bash"}
-
-code: |
-pnpm add @talex-touch/utils
-
+::TuffCodeBlock{lang="bash"}
 ---
-
-:::
+code: |
+  pnpm add @talex-touch/utils
+---
+::
 
 ## API 参考
 
@@ -52,54 +50,54 @@ pnpm add @talex-touch/utils
 
 ## 快速开始
 
-## :::TuffCodeBlock{lang="typescript"}
-
+::TuffCodeBlock{lang="typescript"}
+---
 code: |
-import {
-useBox,
-useClipboard,
-usePluginStorage,
-usePowerSDK,
-useFeature,
-useDivisionBox
-} from '@talex-touch/utils/plugin/sdk'
-import { useTuffTransport } from '@talex-touch/utils/transport'
+  import {
+  useBox,
+  useClipboard,
+  usePluginStorage,
+  usePowerSDK,
+  useFeature,
+  useDivisionBox
+  } from '@talex-touch/utils/plugin/sdk'
+  import { useTuffTransport } from '@talex-touch/utils/transport'
 
-// 初始化 SDK
-const box = useBox()
-const clipboard = useClipboard()
-const storage = usePluginStorage()
-const power = usePowerSDK()
-const transport = useTuffTransport()
-const feature = useFeature()
-const divisionBox = useDivisionBox()
+  // 初始化 SDK
+  const box = useBox()
+  const clipboard = useClipboard()
+  const storage = usePluginStorage()
+  const power = usePowerSDK()
+  const transport = useTuffTransport()
+  const feature = useFeature()
+  const divisionBox = useDivisionBox()
 
-// 使用示例
-async function init() {
-// 读取配置
-const config = await storage.getFile('config.json')
+  // 使用示例
+  async function init() {
+  // 读取配置
+  const config = await storage.getFile('config.json')
 
-    // 读取低电量状态
-    const lowPower = await power.isLowPower({ threshold: 25 })
-    if (lowPower) {
-      console.log('电池模式下跳过重负载任务')
-    }
+      // 读取低电量状态
+      const lowPower = await power.isLowPower({ threshold: 25 })
+      if (lowPower) {
+        console.log('电池模式下跳过重负载任务')
+      }
 
-    // 监听输入变化
-    feature.onInputChange(async (input) => {
-      const results = await search(input)
-      feature.pushItems(results)
-    })
+      // 监听输入变化
+      feature.onInputChange(async (input) => {
+        const results = await search(input)
+        feature.pushItems(results)
+      })
 
-    // 监听剪贴板
-    await box.allowClipboard(ClipboardType.TEXT)
-    clipboard.history.onDidChange((item) => {
-      console.log('剪贴板变化:', item)
-    })
+      // 监听剪贴板
+      await box.allowClipboard(ClipboardType.TEXT)
+      clipboard.history.onDidChange((item) => {
+        console.log('剪贴板变化:', item)
+      })
 
-## }
-
-:::
+  }
+---
+::
 
 ---
 
@@ -109,68 +107,60 @@ const config = await storage.getFile('config.json')
 
 所有 SDK 都通过 `use*` 函数获取实例，无需手动传递 context：
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-// ✅ 正确
-const storage = usePluginStorage()
-await storage.getFile('config.json')
-
-// ❌ 错误（旧版 API，已废弃）
-// const storage = ctx.storage
-// await storage.getItem('key')
-
+::TuffCodeBlock{lang="typescript"}
 ---
+code: |
+  // ✅ 正确
+  const storage = usePluginStorage()
+  await storage.getFile('config.json')
 
-:::
+  // ❌ 错误（旧版 API，已废弃）
+  // const storage = ctx.storage
+  // await storage.getItem('key')
+---
+::
 
 **2. 自动上下文检测**
 
 SDK 会自动检测插件上下文，无需手动配置：
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-const storage = usePluginStorage()
-// 自动获取当前插件名称，无需传递
-
+::TuffCodeBlock{lang="typescript"}
 ---
-
-:::
+code: |
+  const storage = usePluginStorage()
+  // 自动获取当前插件名称，无需传递
+---
+::
 
 **3. 返回 Dispose 函数**
 
 所有监听器都返回取消订阅函数：
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-const unsubscribe = feature.onInputChange((input) => {
-// ...
-})
-
-// 组件卸载时取消订阅
-onUnmounted(() => {
-unsubscribe()
-})
-
+::TuffCodeBlock{lang="typescript"}
 ---
+code: |
+  const unsubscribe = feature.onInputChange((input) => {
+  // ...
+  })
 
-:::
+  // 组件卸载时取消订阅
+  onUnmounted(() => {
+  unsubscribe()
+  })
+---
+::
 
 **4. Promise 异步**
 
 所有异步操作返回 Promise：
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-const config = await storage.getFile('config.json')
-await clipboard.copyAndPaste({ text: 'Hello' })
-
+::TuffCodeBlock{lang="typescript"}
 ---
-
-:::
+code: |
+  const config = await storage.getFile('config.json')
+  await clipboard.copyAndPaste({ text: 'Hello' })
+---
+::
 
 ---
 
@@ -181,20 +171,18 @@ await clipboard.copyAndPaste({ text: 'Hello' })
 
 ## 类型导入
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-import type {
-TuffItem,
-TuffQuery,
-ClipboardType,
-DivisionBoxConfig,
-FlowPayload
-} from '@talex-touch/utils/plugin/sdk'
-
+::TuffCodeBlock{lang="typescript"}
 ---
-
-:::
+code: |
+  import type {
+  TuffItem,
+  TuffQuery,
+  ClipboardType,
+  DivisionBoxConfig,
+  FlowPayload
+  } from '@talex-touch/utils/plugin/sdk'
+---
+::
 
 ---
 

@@ -21,25 +21,23 @@ Localization SDK 是插件读取主机语言、解析本地化值、创建可跨
 
 只声明插件实际使用的权限：
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-{
-"sdkapi": 260713,
-"permissions": {
-"required": ["i18n.read", "lexicon.read"],
-"optional": ["lexicon.register"]
-},
-"permissionReasons": {
-"i18n.read": "按主机语言解析插件文案",
-"lexicon.read": "查询宿主领域词库",
-"lexicon.register": "在插件启用期间注册插件私有别名"
-}
-}
-
+::TuffCodeBlock{lang="json"}
 ---
-
-:::
+code: |
+  {
+  "sdkapi": 260713,
+  "permissions": {
+  "required": ["i18n.read", "lexicon.read"],
+  "optional": ["lexicon.register"]
+  },
+  "permissionReasons": {
+  "i18n.read": "按主机语言解析插件文案",
+  "lexicon.read": "查询宿主领域词库",
+  "lexicon.register": "在插件启用期间注册插件私有别名"
+  }
+  }
+---
+::
 
 | 权限               | 对应方法                       |
 | ------------------ | ------------------------------ |
@@ -53,68 +51,66 @@ code: |
 
 ## Runtime 用法
 
-## :::TuffCodeBlock{lang="typescript"}
-
+::TuffCodeBlock{lang="typescript"}
+---
 code: |
-export default {
-async onInit(context) {
-const { i18n, lexicon } = context.utils
+  export default {
+  async onInit(context) {
+  const { i18n, lexicon } = context.utils
 
-      const locale = await i18n.getLocale()
-      const title = await i18n.resolveText(
-        {
-          default: 'Unit Converter',
-          locales: { 'zh-CN': '单位换算' }
-        },
-        locale
-      )
-      const message = i18n.createMessage('plugin.ready', { title })
+        const locale = await i18n.getLocale()
+        const title = await i18n.resolveText(
+          {
+            default: 'Unit Converter',
+            locales: { 'zh-CN': '单位换算' }
+          },
+          locale
+        )
+        const message = i18n.createMessage('plugin.ready', { title })
 
-      const meter = await lexicon.resolve('unit.length.meter', {
-        locale,
-        domain: 'unit'
-      })
-      const matches = await lexicon.search('米', {
-        locale,
-        domain: 'unit',
-        limit: 5
-      })
+        const meter = await lexicon.resolve('unit.length.meter', {
+          locale,
+          domain: 'unit'
+        })
+        const matches = await lexicon.search('米', {
+          locale,
+          domain: 'unit',
+          limit: 5
+        })
 
-      context.utils.logger.info(
-        `${message}:${meter?.label ?? 'missing'}:${matches.length}`
-      )
-    }
+        context.utils.logger.info(
+          `${message}:${meter?.label ?? 'missing'}:${matches.length}`
+        )
+      }
 
-## }
-
-:::
+  }
+---
+::
 
 ## Renderer 用法
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-import {
-usePluginI18n,
-usePluginLexicon
-} from '@talex-touch/utils/plugin/sdk'
-
-const i18n = usePluginI18n()
-const lexicon = usePluginLexicon()
-
-const locale = await i18n.getLocale()
-const label = await i18n.resolveText({
-default: 'Ready',
-locales: { 'zh-CN': '就绪' }
-})
-const capabilities = await lexicon.search('就绪', {
-locale,
-domain: 'capability'
-})
-
+::TuffCodeBlock{lang="typescript"}
 ---
+code: |
+  import {
+  usePluginI18n,
+  usePluginLexicon
+  } from '@talex-touch/utils/plugin/sdk'
 
-:::
+  const i18n = usePluginI18n()
+  const lexicon = usePluginLexicon()
+
+  const locale = await i18n.getLocale()
+  const label = await i18n.resolveText({
+  default: 'Ready',
+  locales: { 'zh-CN': '就绪' }
+  })
+  const capabilities = await lexicon.search('就绪', {
+  locale,
+  domain: 'capability'
+  })
+---
+::
 
 Renderer hooks 需要已建立的插件 renderer channel。不要在普通应用 renderer 中调用，也不要在插件 channel ready 前调用。
 
@@ -140,34 +136,32 @@ Renderer hooks 需要已建立的插件 renderer channel。不要在普通应用
 
 ## 注册插件私有词条
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-const result = await context.utils.lexicon.register(
-[
-{
-id: 'status.ready',
-domain: 'capability',
-version: '1',
-labels: {
-default: 'Ready',
-locales: { 'zh-CN': '就绪' }
-},
-aliases: {
-default: ['ready'],
-locales: { 'zh-CN': ['就绪'] }
-}
-}
-],
-{ replace: false }
-)
-
-// 宿主分配 plugin:<pluginId>:status.ready。
-console.log(result.ids[0])
-
+::TuffCodeBlock{lang="typescript"}
 ---
+code: |
+  const result = await context.utils.lexicon.register(
+  [
+  {
+  id: 'status.ready',
+  domain: 'capability',
+  version: '1',
+  labels: {
+  default: 'Ready',
+  locales: { 'zh-CN': '就绪' }
+  },
+  aliases: {
+  default: ['ready'],
+  locales: { 'zh-CN': ['就绪'] }
+  }
+  }
+  ],
+  { replace: false }
+  )
 
-:::
+  // 宿主分配 plugin:<pluginId>:status.ready。
+  console.log(result.ids[0])
+---
+::
 
 注册边界：
 

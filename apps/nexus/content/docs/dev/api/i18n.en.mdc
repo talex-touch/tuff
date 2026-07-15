@@ -21,25 +21,23 @@ The current host locales are `en-US` and `zh-CN`.
 
 Declare only the permissions used by the plugin:
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-{
-"sdkapi": 260713,
-"permissions": {
-"required": ["i18n.read", "lexicon.read"],
-"optional": ["lexicon.register"]
-},
-"permissionReasons": {
-"i18n.read": "Resolve plugin labels using the host locale",
-"lexicon.read": "Search the host Domain Lexicon",
-"lexicon.register": "Register plugin-scoped aliases while the plugin is enabled"
-}
-}
-
+::TuffCodeBlock{lang="json"}
 ---
-
-:::
+code: |
+  {
+  "sdkapi": 260713,
+  "permissions": {
+  "required": ["i18n.read", "lexicon.read"],
+  "optional": ["lexicon.register"]
+  },
+  "permissionReasons": {
+  "i18n.read": "Resolve plugin labels using the host locale",
+  "lexicon.read": "Search the host Domain Lexicon",
+  "lexicon.register": "Register plugin-scoped aliases while the plugin is enabled"
+  }
+  }
+---
+::
 
 | Permission         | Required by                    |
 | ------------------ | ------------------------------ |
@@ -53,68 +51,66 @@ The host checks the SDK marker, manifest declaration, current grant, loaded plug
 
 ## Runtime usage
 
-## :::TuffCodeBlock{lang="typescript"}
-
+::TuffCodeBlock{lang="typescript"}
+---
 code: |
-export default {
-async onInit(context) {
-const { i18n, lexicon } = context.utils
+  export default {
+  async onInit(context) {
+  const { i18n, lexicon } = context.utils
 
-      const locale = await i18n.getLocale()
-      const title = await i18n.resolveText(
-        {
-          default: 'Unit Converter',
-          locales: { 'zh-CN': '单位换算' }
-        },
-        locale
-      )
-      const message = i18n.createMessage('plugin.ready', { title })
+        const locale = await i18n.getLocale()
+        const title = await i18n.resolveText(
+          {
+            default: 'Unit Converter',
+            locales: { 'zh-CN': '单位换算' }
+          },
+          locale
+        )
+        const message = i18n.createMessage('plugin.ready', { title })
 
-      const meter = await lexicon.resolve('unit.length.meter', {
-        locale,
-        domain: 'unit'
-      })
-      const matches = await lexicon.search('meter', {
-        locale,
-        domain: 'unit',
-        limit: 5
-      })
+        const meter = await lexicon.resolve('unit.length.meter', {
+          locale,
+          domain: 'unit'
+        })
+        const matches = await lexicon.search('meter', {
+          locale,
+          domain: 'unit',
+          limit: 5
+        })
 
-      context.utils.logger.info(
-        `${message}:${meter?.label ?? 'missing'}:${matches.length}`
-      )
-    }
+        context.utils.logger.info(
+          `${message}:${meter?.label ?? 'missing'}:${matches.length}`
+        )
+      }
 
-## }
-
-:::
+  }
+---
+::
 
 ## Renderer usage
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-import {
-usePluginI18n,
-usePluginLexicon
-} from '@talex-touch/utils/plugin/sdk'
-
-const i18n = usePluginI18n()
-const lexicon = usePluginLexicon()
-
-const locale = await i18n.getLocale()
-const label = await i18n.resolveText({
-default: 'Ready',
-locales: { 'zh-CN': '就绪' }
-})
-const capabilities = await lexicon.search('ready', {
-locale,
-domain: 'capability'
-})
-
+::TuffCodeBlock{lang="typescript"}
 ---
+code: |
+  import {
+  usePluginI18n,
+  usePluginLexicon
+  } from '@talex-touch/utils/plugin/sdk'
 
-:::
+  const i18n = usePluginI18n()
+  const lexicon = usePluginLexicon()
+
+  const locale = await i18n.getLocale()
+  const label = await i18n.resolveText({
+  default: 'Ready',
+  locales: { 'zh-CN': '就绪' }
+  })
+  const capabilities = await lexicon.search('ready', {
+  locale,
+  domain: 'capability'
+  })
+---
+::
 
 Renderer hooks require an active plugin renderer channel. Do not call them from a normal application renderer or before the plugin channel is ready.
 
@@ -140,34 +136,32 @@ Supported domains are `unit`, `currency`, `timezone`, `capability`, `fileType`, 
 
 ## Register plugin-scoped entries
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-const result = await context.utils.lexicon.register(
-[
-{
-id: 'status.ready',
-domain: 'capability',
-version: '1',
-labels: {
-default: 'Ready',
-locales: { 'zh-CN': '就绪' }
-},
-aliases: {
-default: ['ready'],
-locales: { 'zh-CN': ['就绪'] }
-}
-}
-],
-{ replace: false }
-)
-
-// The host assigns plugin:<pluginId>:status.ready.
-console.log(result.ids[0])
-
+::TuffCodeBlock{lang="typescript"}
 ---
+code: |
+  const result = await context.utils.lexicon.register(
+  [
+  {
+  id: 'status.ready',
+  domain: 'capability',
+  version: '1',
+  labels: {
+  default: 'Ready',
+  locales: { 'zh-CN': '就绪' }
+  },
+  aliases: {
+  default: ['ready'],
+  locales: { 'zh-CN': ['就绪'] }
+  }
+  }
+  ],
+  { replace: false }
+  )
 
-:::
+  // The host assigns plugin:<pluginId>:status.ready.
+  console.log(result.ids[0])
+---
+::
 
 Registration boundaries:
 
