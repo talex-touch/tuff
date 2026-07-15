@@ -123,6 +123,7 @@ import {
 } from '../utils/storage-usage'
 import { tempFileService } from '../service/temp-file.service'
 import { registerSystemSecureStoreHandlers } from './system-secure-store-handlers'
+import { registerSystemSelectionCaptureHandlers } from './system-selection-capture-handlers'
 import { registerSystemShellHandlers } from './system-shell-handlers'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
@@ -1391,6 +1392,7 @@ export class CommonChannelModule extends BaseModule {
           includeIcon: payload?.includeIcon === true
         })
       }),
+      ...registerSystemSelectionCaptureHandlers(transport),
       ...registerSystemSecureStoreHandlers(transport, {
         rootPath: () => touchApp.rootPath,
         logger: log

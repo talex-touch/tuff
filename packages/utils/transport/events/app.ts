@@ -33,6 +33,8 @@ import type {
   PluginStats,
   ReadFileRequest,
   RendererPerfReport,
+  SelectionCaptureRequest,
+  SelectionCaptureResult,
   SecureValueGetRequest,
   SecureValueSetRequest,
   SecureStoreHealthResponse,
@@ -279,6 +281,15 @@ export const AppEvents = {
       .module("system")
       .event("get-active-app")
       .define<GetActiveAppRequest, ActiveAppSnapshot | null>(),
+
+    /**
+     * Capture selected text from the active application for a verified plugin.
+     * The host requires `clipboard.read` before invoking platform capture.
+     */
+    captureSelection: defineEvent("app")
+      .module("system")
+      .event("capture-selection")
+      .define<SelectionCaptureRequest, SelectionCaptureResult>(),
 
     /**
      * Read a secure local value.

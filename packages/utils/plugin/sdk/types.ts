@@ -11,6 +11,7 @@ import type {
 import type { IPluginFeature } from "../index";
 import type { PluginStandardChannelData } from "./channel-client";
 import type { PluginI18nSDK, PluginLexiconSDK } from "./localization";
+import type { PluginSystemSDK } from './system'
 import path from "node:path";
 
 /**
@@ -264,6 +265,9 @@ export interface IPluginUtils {
    */
   screenshot: import("./screenshot").PluginScreenshotSDK;
 
+  /** Permission-gated active-app and selected-text facade. */
+  system: PluginSystemSDK;
+
   /** Host locale and localized-text resolver facade. */
   i18n: PluginI18nSDK;
 
@@ -331,6 +335,9 @@ export interface IPluginUtils {
 
     /** Permission-gated native screenshot facade mirror. */
     screenshot: import("./screenshot").PluginScreenshotSDK;
+
+    /** Permission-gated active-app and selected-text facade mirror. */
+    system: PluginSystemSDK;
 
     /** Host locale and localized-text resolver facade. */
     i18n: PluginI18nSDK;
