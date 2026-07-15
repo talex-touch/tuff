@@ -269,6 +269,29 @@ type StorageReadiness =
 - Database checkpoint code depends on the writer's drain/readiness interface,
   not on FileProvider worker internals.
 
+### Progressive first-run query visibility
+
+- App and File indexed sources expose asynchronous record batches as soon as the
+  provider-local rows they reference commit. Source adapters never buffer a whole
+  scan before the first `yield`.
+- The runtime writer commits bounded batches independently, then advances a
+  monotonic `sourceGeneration`. Read connections and cache invalidation consume
+  that post-commit generation; diagnostic progress events do not establish
+  visibility.
+- Search cache entries carry the relevant source-generation signature or are
+  invalidated precisely when those generations advance.
+- A visible CoreBox with a non-empty query coalesces generation changes and starts
+  a new caller-owned search no slower than one second after a matching batch can
+  be read. Scan completion forces one final refresh.
+- Each refresh is a full ranked replacement snapshot, not an append-only batch.
+  The renderer preserves selection by item id where possible and refreshes
+  silently without searching, recommendation warm-up, or indexing-progress hint
+  UI. Existing terminal no-result behavior remains unchanged.
+- `establish-single-search-index-writer` owns streaming batches, commit
+  generations, and cache coherence. `scope-search-sessions-and-streams` owns
+  caller isolation and renderer replacement. Parent integration verifies the
+  end-to-end latency and cross-caller invariants.
+
 ## Provider Lifecycle and Control Plane
 
 After request, storage, and index ownership are stable, define an executable

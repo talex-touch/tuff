@@ -226,6 +226,13 @@ export interface CoreBoxSearchUpdatePayload {
   items: TuffItem[];
 }
 
+
+export interface CoreBoxSearchIndexCommitPayload {
+  revision: number;
+  providerIds: string[];
+  committedAt: number;
+}
+
 export interface CoreBoxSearchEndPayload {
   searchId: string;
   cancelled?: boolean;

@@ -4,8 +4,9 @@
 
 Make `IndexingRuntime` the only semantic path for shared search-index mutations
 and one dedicated SQLite writer the physical owner of FTS writes and DDL. Remove
-duplicate File/App writes without losing provider-local persistence, migration
-evidence, or rollback capability.
+duplicate File/App writes while making every committed first-run batch searchable
+before the full scan completes, without losing provider-local persistence,
+migration evidence, or rollback capability.
 
 ## Parent and Dependency
 
@@ -36,6 +37,17 @@ evidence, or rollback capability.
 - Search index initialization has an `initialized` boolean but no single-flight
   promise at
   `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts:118`.
+- The App indexed-source adapter waits for the complete provider scan before its
+  first `yield` at
+  `apps/core-app/src/main/modules/box-tool/search-engine/app-indexed-source.ts:48`.
+- FileProvider accumulates all scan batches and waits for worker drain before
+  returning at
+  `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts:1413`;
+  `file-indexed-source.ts:150` therefore cannot yield a first batch early.
+- Search cache entries live for five seconds and are not invalidated by index
+  mutations at
+  `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:82` and
+  `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:659`.
 
 ## Requirements
 
@@ -59,6 +71,15 @@ evidence, or rollback capability.
   checkpoint, and parity evidence before legacy removal.
 - Database checkpoint coordination depends on the writer interface, not
   FileProvider worker internals.
+- App/File indexed sources stream a batch immediately after its provider-local
+  transaction commits; adapters must not retain all first-run batches until
+  terminal drain.
+- The writer commits bounded batches independently and advances a monotonic
+  generation per source only after the batch is readable by search connections.
+- Search cache lookup is generation-aware or receives precise source
+  invalidation, so a post-commit query cannot return a pre-commit empty snapshot.
+- The writer publishes a generic committed-generation signal. File/App progress
+  events remain diagnostics and are not used as data-visibility signals.
 
 ## Acceptance Criteria
 
@@ -76,6 +97,10 @@ evidence, or rollback capability.
 - [ ] Copy-based migration preflight/simulation, focused tests, type-check, and
   packaged indexing diagnostics pass.
 - [ ] Legacy `file_fts` retain policy is unchanged.
+- [ ] App and File first-run contract tests keep the scan unfinished while a
+  concurrent reader observes an earlier committed matching batch.
+- [ ] Repeating an identical query after a generation advance cannot hit the
+  pre-commit cache entry.
 
 ## Out of Scope
 
@@ -83,3 +108,6 @@ evidence, or rollback capability.
 - Adding new indexed sources or finishing Quicklinks/Browser Bookmarks products.
 - Provider lifecycle registry consolidation.
 - Search relevance/ranking changes.
+- Renderer refresh/session transport implementation, owned by
+  `07-09-scope-search-sessions-and-streams`; this task owns the committed-batch
+  and generation contract it consumes.

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const commitHub = vi.hoisted(() => ({
+  markCommitted: vi.fn()
+}))
+
 const workerMock = vi.hoisted(() => {
   type Handler = (payload: unknown) => void
 
@@ -52,6 +56,10 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
   })
 }))
 
+vi.mock('../search-index-commit-hub', () => ({
+  searchIndexCommitHub: commitHub
+}))
+
 import { SearchIndexWorkerClient } from './search-index-worker-client'
 
 function taskIdOf(message: unknown): string {
@@ -71,6 +79,7 @@ function messageTypeOf(message: unknown): string {
 describe('SearchIndexWorkerClient init gate', () => {
   beforeEach(() => {
     workerMock.workers.length = 0
+    commitHub.markCommitted.mockClear()
   })
 
   afterEach(() => {
@@ -263,6 +272,7 @@ describe('SearchIndexWorkerClient init gate', () => {
     })
 
     await expect(removePromise).resolves.toBe(4)
+    expect(commitHub.markCommitted).toHaveBeenCalledWith(['file-provider'])
   })
 
   it('normalizes scan progress writes before dispatching worker tasks', async () => {
@@ -367,6 +377,7 @@ describe('SearchIndexWorkerClient init gate', () => {
       indexedItems: 1,
       progressRows: 1
     })
+    expect(commitHub.markCommitted).toHaveBeenCalledWith(['file-provider'])
   })
 
   it('unwraps structured worker error messages', async () => {

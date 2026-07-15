@@ -24,6 +24,7 @@ describe('port-policy', () => {
     expect(allowlist.has(ClipboardEvents.change.toEventName())).toBe(true)
     expect(allowlist.has(AppEvents.fileIndex.progress.toEventName())).toBe(true)
     expect(allowlist.has(CoreBoxEvents.search.update.toEventName())).toBe(true)
+    expect(allowlist.has(CoreBoxEvents.search.indexCommitted.toEventName())).toBe(true)
   })
 
   it('parses env override list', () => {

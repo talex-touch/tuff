@@ -4,8 +4,9 @@
 
 Replace global UI-coupled search state with request-scoped sessions and
 caller-owned delivery. CoreBox, ApplicationIndex, DivisionBox, AI agents, and
-background callers must be able to search concurrently without cancelling,
-activating, caching, or receiving results for one another.
+background callers must search concurrently without cancelling, activating,
+caching, or receiving results for one another, including when a visible CoreBox
+query refreshes as first-run index batches commit.
 
 ## Parent and Dependency
 
@@ -13,6 +14,9 @@ activating, caching, or receiving results for one another.
 - Priority: P1.
 - Explicit prerequisite: `07-09-serialize-search-gather-updates` must be
   completed and archived or otherwise verified before this task starts.
+- Progressive first-run refresh may be developed against a test generation
+  source, but production enablement depends on the committed-generation contract
+  from `07-09-establish-single-search-index-writer`.
 
 ## Background
 
@@ -33,6 +37,10 @@ activating, caching, or receiving results for one another.
 - The query event advertises streaming, but renderers use invoke plus global
   update/end listeners at `packages/utils/transport/events/index.ts:1133` and
   `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts:852`.
+- `useSearch.ts` starts queries on input/window events and has no index-commit
+  subscription; later App/File commits cannot refresh an unchanged query.
+- Existing renderer updates merge append-only, so they cannot provide the full
+  replacement and reordering semantics required by a fresh index generation.
 
 ## Requirements
 
@@ -54,6 +62,16 @@ activating, caching, or receiving results for one another.
 - Cache immutable result snapshots only; never cache session/controller/sink
   envelopes.
 - Destroy must abort and await all live sessions.
+- A visible CoreBox caller with a non-empty query may opt into committed index
+  generation refreshes. Changes are coalesced so a matching committed record is
+  reflected within one second, with one mandatory final refresh on scan
+  completion.
+- Every refresh uses a new caller-owned session and a full replacement snapshot;
+  it never revives a completed session or restarts another caller.
+- Renderer replacement preserves the selected item by id when it remains in the
+  result set and falls back deterministically when it disappears.
+- Index-driven refresh is silent: searching, recommendation warm-up, and
+  indexing-progress hints are not rendered. Terminal no-result behavior remains.
 
 ## Acceptance Criteria
 
@@ -71,9 +89,17 @@ activating, caching, or receiving results for one another.
   gather controller.
 - [ ] Existing ranking/provider behavior remains unchanged outside explicit
   caller activation context.
+- [ ] During an unfinished first App/File scan, a stable CoreBox query displays a
+  newly committed matching item within one second without text edits.
+- [ ] Generation refresh replaces and reorders the snapshot, preserves selection
+  by item id, and performs exactly one final refresh after completion.
+- [ ] Transient CoreBox searching, recommendation warm-up, and indexing hints are
+  absent while terminal no-result behavior remains available.
 
 ## Out of Scope
 
 - Provider lifecycle/control-plane consolidation.
-- Search relevance tuning or UI redesign.
+- Search relevance tuning or broader UI redesign beyond progressive snapshot
+  replacement, selection preservation, transient-hint removal, and existing
+  terminal no-result behavior.
 - FTS write ownership and storage hydration changes.

@@ -11,6 +11,8 @@ import type { ModuleInitContext } from 'packages/utils/types/modules'
 import type { TouchApp } from '../../../core/touch-app'
 import type { DbUtils } from '../../../db/utils'
 import type { ProviderContext } from './types'
+import type { StreamContext } from '@talex-touch/utils/transport/main'
+import type { CoreBoxSearchIndexCommitPayload } from '@talex-touch/utils/transport/events/types'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
@@ -54,6 +56,7 @@ import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
 import { SearchIndexService } from './search-index-service'
+import { searchIndexCommitHub } from './search-index-commit-hub'
 import { searchLogger } from './search-logger'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
@@ -149,6 +152,8 @@ export class SearchEngineCore
   private readonly providerHealthService = new ProviderHealthService()
   private searchCache = new Map<string, SearchCacheEntry>()
   private searchFirstResultMetrics = new Map<string, SearchFirstResultMetrics>()
+  private readonly indexCommitStreams = new Set<StreamContext<CoreBoxSearchIndexCommitPayload>>()
+  private indexCommitUnsubscribe: (() => void) | null = null
 
   private touchApp: TouchApp | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
@@ -272,6 +277,21 @@ export class SearchEngineCore
   /** Expose RecommendationEngine for plugin SDK integration */
   public getRecommendationEngine(): RecommendationEngine | null {
     return this.recommendationEngine
+  }
+
+  registerIndexCommitStream(context: StreamContext<CoreBoxSearchIndexCommitPayload>): void {
+    this.indexCommitStreams.add(context)
+  }
+
+  private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
+    this.searchCache.clear()
+    for (const context of this.indexCommitStreams) {
+      if (context.isCancelled()) {
+        this.indexCommitStreams.delete(context)
+        continue
+      }
+      context.emit(payload)
+    }
   }
 
   registerProvider(provider: ISearchProvider<ProviderContext>): void {
@@ -1749,7 +1769,14 @@ export class SearchEngineCore
     const db = databaseModule.getDb()
     const auxDb = databaseModule.getAuxDb()
     instance.dbUtils = createDbUtils(db, auxDb)
-    instance.searchIndexService = new SearchIndexService(db, { logger: searchLogger })
+    instance.indexCommitUnsubscribe?.()
+    instance.indexCommitUnsubscribe = searchIndexCommitHub.subscribe((payload) => {
+      instance.handleSearchIndexCommit(payload)
+    })
+    instance.searchIndexService = new SearchIndexService(db, {
+      logger: searchLogger,
+      onCommitted: (providerIds) => searchIndexCommitHub.markCommitted(providerIds)
+    })
     void instance.searchIndexService.warmup().catch((error) => {
       searchEngineLog.warn('Search index warmup failed', { error })
     })
@@ -1923,6 +1950,14 @@ export class SearchEngineCore
     }
     this.currentGatherController?.abort()
     this.providerRegistry.destroy()
+    this.indexCommitUnsubscribe?.()
+    this.indexCommitUnsubscribe = null
+    for (const context of this.indexCommitStreams) {
+      if (!context.isCancelled()) {
+        context.end()
+      }
+    }
+    this.indexCommitStreams.clear()
 
     // 停止汇总服务
     this.usageSummaryService?.stop()

@@ -102,6 +102,7 @@ import type {
   CoreBoxLayoutUpdateRequest,
   CoreBoxNoResultsPayload,
   CoreBoxSearchEndPayload,
+  CoreBoxSearchIndexCommitPayload,
   CoreBoxSearchUpdatePayload,
   CoreBoxTogglePinRequest,
   CoreBoxTogglePinResponse,
@@ -1170,6 +1171,16 @@ export const CoreBoxEvents = {
     update: defineRawEvent<CoreBoxSearchUpdatePayload, void>(
       "core-box:search-update",
     ),
+
+    /**
+     * Stream committed search-index revisions to CoreBox renderers.
+     */
+    indexCommitted: defineEvent("core-box")
+      .module("search")
+      .event("index-committed")
+      .define<void, AsyncIterable<CoreBoxSearchIndexCommitPayload>>({
+        stream: { enabled: true },
+      }),
 
     /**
      * Mark search finished/cancelled.

@@ -13,6 +13,12 @@ import { useSearch } from './useSearch'
 
 const state = vi.hoisted(() => ({
   listeners: new Map<string, (payload?: unknown) => void>(),
+  streams: new Map<
+    string,
+    { onData: (payload: unknown) => void; onError?: (error: unknown) => void }
+  >(),
+  streamCancel: vi.fn(),
+  beforeUnmountCallbacks: [] as Array<() => void>,
   send: vi.fn(),
   appSetting: {
     searchEngine: { logsEnabled: false },
@@ -43,6 +49,15 @@ vi.mock('@talex-touch/utils/transport', () => ({
       return () => {
         state.listeners.delete(key)
       }
+    },
+    stream: async (
+      event: { toEventName?: () => string } | string,
+      _payload: unknown,
+      options: { onData: (payload: unknown) => void; onError?: (error: unknown) => void }
+    ) => {
+      const key = typeof event === 'string' ? event : event.toEventName?.() || String(event)
+      state.streams.set(key, options)
+      return { cancel: state.streamCancel }
     },
     send: state.send
   })
@@ -77,7 +92,9 @@ vi.mock('vue', async (importOriginal) => {
   return {
     ...actual,
     onMounted: (callback: () => void) => callback(),
-    onBeforeUnmount: vi.fn()
+    onBeforeUnmount: (callback: () => void) => {
+      state.beforeUnmountCallbacks.push(callback)
+    }
   }
 })
 
@@ -184,6 +201,9 @@ describe('useSearch CoreBox reopen behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     state.listeners.clear()
+    state.streams.clear()
+    state.streamCancel.mockClear()
+    state.beforeUnmountCallbacks.length = 0
     state.boxItems = []
     state.boxItemsRef = ref(state.boxItems)
     state.windowState.type = 'corebox'
@@ -304,6 +324,159 @@ describe('useSearch CoreBox reopen behavior', () => {
         query: { text: 'aaa', inputs: [] }
       }
     )
+  })
+
+  it('coalesces committed index refreshes and preserves the selected item', async () => {
+    vi.useFakeTimers()
+    const boxOptions = createBoxOptions()
+    let progressiveQueryCount = 0
+    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName.includes('provider')) return []
+      if (eventName !== 'core-box:query') return undefined
+
+      const query = getSearchQueryText(payload)
+      if (query !== 'keep-selected') return createSearchResult(query)
+      progressiveQueryCount += 1
+      const itemIds = progressiveQueryCount === 1 ? ['first', 'selected'] : ['selected', 'new']
+      return {
+        ...createSearchResult(query, progressiveQueryCount),
+        items: itemIds.map(
+          (id) =>
+            ({
+              id,
+              kind: 'app',
+              source: { id: 'test-source', type: 'system' },
+              render: { mode: 'default', basic: { title: id } }
+            }) as TuffItem
+        ),
+        sessionId: `progressive-${progressiveQueryCount}`
+      }
+    })
+
+    const hook = useSearch(boxOptions, createClipboardOptions())
+    await flushPromises()
+    hook.searchVal.value = 'keep-selected'
+    await nextTick()
+    await flushPromises()
+
+    const endListener = Array.from(state.listeners.entries()).find(([name]) =>
+      name.includes('search-end')
+    )?.[1]
+    endListener?.({ searchId: 'progressive-1' })
+    boxOptions.focus = 1
+    const clipboardRequestsBeforeRefresh = state.latestClipboardRequests.length
+    state.send.mockClear()
+
+    const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+      name.includes('index-committed')
+    )?.[1]
+    expect(commitStream).toBeDefined()
+    commitStream?.onData({ revision: 1, providerIds: ['app-provider'], committedAt: 1 })
+    commitStream?.onData({ revision: 2, providerIds: ['file-provider'], committedAt: 2 })
+
+    await vi.advanceTimersByTimeAsync(499)
+    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await flushPromises()
+
+    const queryCalls = state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
+    expect(queryCalls).toHaveLength(1)
+    expect(hook.res.value.map((item) => item.id)).toEqual(['selected', 'new'])
+    expect(boxOptions.focus).toBe(0)
+    expect(state.latestClipboardRequests).toHaveLength(clipboardRequestsBeforeRefresh)
+
+    for (const callback of state.beforeUnmountCallbacks) callback()
+    expect(state.streamCancel).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('runs one trailing committed index refresh after an in-flight search ends', async () => {
+    vi.useFakeTimers()
+    const queryText = 'progressive-refresh'
+    let holdNextQuery = false
+    let progressiveResponseCount = 0
+    const firstRefresh = {
+      resolve: null as ((value: TuffSearchResult) => void) | null
+    }
+    let firstRefreshResolved = false
+    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName.includes('provider')) return []
+      if (eventName !== 'core-box:query') return undefined
+
+      const query = getSearchQueryText(payload)
+      if (query !== queryText) return createSearchResult(query)
+
+      progressiveResponseCount += 1
+      if (holdNextQuery) {
+        holdNextQuery = false
+        return new Promise<TuffSearchResult>((resolve) => {
+          firstRefresh.resolve = resolve
+        })
+      }
+      return createSearchResult(query, progressiveResponseCount)
+    })
+
+    try {
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = queryText
+      await nextTick()
+      await flushPromises()
+
+      const endListener = Array.from(state.listeners.entries()).find(([name]) =>
+        name.includes('search-end')
+      )?.[1]
+      expect(endListener).toBeDefined()
+      endListener?.({ searchId: 'session-1' })
+      state.send.mockClear()
+      holdNextQuery = true
+
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      expect(commitStream).toBeDefined()
+      commitStream?.onData({ revision: 1, providerIds: ['app-provider'], committedAt: 1 })
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
+      ).toHaveLength(1)
+      expect(firstRefresh.resolve).not.toBeNull()
+
+      commitStream?.onData({ revision: 2, providerIds: ['file-provider'], committedAt: 2 })
+      await vi.advanceTimersByTimeAsync(499)
+      expect(
+        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
+      ).toHaveLength(1)
+
+      firstRefresh.resolve?.(createSearchResult(queryText, 2))
+      firstRefreshResolved = true
+      await flushPromises()
+      endListener?.({ searchId: 'session-2' })
+      await flushPromises()
+
+      await vi.advanceTimersByTimeAsync(1)
+      await flushPromises()
+      expect(
+        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
+      ).toHaveLength(2)
+
+      endListener?.({ searchId: 'session-3' })
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(500)
+      expect(
+        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
+      ).toHaveLength(2)
+    } finally {
+      if (!firstRefreshResolved && firstRefresh.resolve) {
+        firstRefresh.resolve(createSearchResult(queryText, 2))
+      }
+      for (const callback of state.beforeUnmountCallbacks) callback()
+      vi.useRealTimers()
+    }
   })
 
   it('does not activate expired clipboard input during implicit search refresh', async () => {

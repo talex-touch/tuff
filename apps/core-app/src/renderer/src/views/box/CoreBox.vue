@@ -39,8 +39,6 @@ import BoxInput from './BoxInput.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
 import { resolveCoreBoxCompletionDisplay } from './completion-display'
-import { resolveCoreBoxSearchState } from './search-state'
-import IndexingHintTag from './tag/IndexingHintTag.vue'
 import TagSection from './tag/TagSection.vue'
 import { devLog } from '~/utils/dev-log'
 import { useI18n } from 'vue-i18n'
@@ -80,7 +78,6 @@ const {
   select,
   res,
   loading,
-  recommendationPending,
   activeItem,
   activeActivations,
   replaceSearchResults,
@@ -749,28 +746,7 @@ const resultHoverClass = computed(
   () => `CoreBoxResultHover-${themeConfig.value.results.hoverStyle}`
 )
 
-const searchState = computed(() =>
-  resolveCoreBoxSearchState({
-    query: searchVal.value,
-    resultCount: res.value.length,
-    loading: loading.value,
-    recommendationPending: recommendationPending.value,
-    mode: boxOptions.mode
-  })
-)
-const shouldShowResultArea = computed(
-  () => !isUIMode.value && (res.value.length > 0 || !!searchState.value)
-)
-
-watch(
-  () => [searchState.value?.kind ?? '', shouldShowResultArea.value] as const,
-  () => {
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
-    })
-  },
-  { flush: 'post' }
-)
+const shouldShowResultArea = computed(() => !isUIMode.value && res.value.length > 0)
 
 type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
 
@@ -894,7 +870,6 @@ const customCss = computed(() => {
         />
 
         <div class="CoreBox-Configure" :style="getCanvasAreaStyle('actions')">
-          <IndexingHintTag :query="searchVal" />
           <button
             v-if="isSendModeActive"
             class="CoreBox-SendButton"
@@ -981,27 +956,6 @@ const customCss = computed(() => {
                   />
                 </div>
               </Transition>
-              <div
-                v-if="searchState"
-                class="CoreBoxSearchState"
-                :class="`CoreBoxSearchState--${searchState.tone}`"
-                role="status"
-                aria-live="polite"
-              >
-                <TuffIcon
-                  :icon="{ type: 'class', value: searchState.icon }"
-                  class="CoreBoxSearchState-Icon"
-                  :class="{ 'CoreBoxSearchState-Icon--spin': searchState.tone === 'progress' }"
-                />
-                <div class="CoreBoxSearchState-Text">
-                  <div class="CoreBoxSearchState-Title">
-                    {{ t(searchState.titleKey, searchState.titleFallback) }}
-                  </div>
-                  <div class="CoreBoxSearchState-Detail">
-                    {{ t(searchState.detailKey, searchState.detailFallback) }}
-                  </div>
-                </div>
-              </div>
             </div>
           </TxScroll>
           <CoreBoxFooter
@@ -1318,56 +1272,6 @@ div.CoreBoxRes.CoreBoxRes--widget {
 
 .CoreBoxRes-ScrollContent {
   width: 100%;
-}
-
-.CoreBoxSearchState {
-  min-height: 128px;
-  padding: 18px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.CoreBoxSearchState-Icon {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  color: var(--tx-text-color-placeholder);
-}
-
-.CoreBoxSearchState-Icon--spin {
-  animation: corebox-state-spin 0.9s linear infinite;
-}
-
-.CoreBoxSearchState-Text {
-  min-width: 0;
-  max-width: 420px;
-}
-
-.CoreBoxSearchState-Title {
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.CoreBoxSearchState-Detail {
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 17px;
-  color: var(--tx-text-color-secondary);
-}
-
-.CoreBoxSearchState--progress .CoreBoxSearchState-Icon {
-  color: var(--tx-color-primary);
-}
-
-@keyframes corebox-state-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .CoreBoxRes-ScrollContent.has-footer {

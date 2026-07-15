@@ -24,7 +24,8 @@
     "07-09-scope-search-sessions-and-streams",
     "07-09-gate-search-on-storage-hydration",
     "07-09-establish-single-search-index-writer",
-    "07-09-unify-search-provider-lifecycle"
+    "07-09-unify-search-provider-lifecycle",
+    "07-15-progressive-corebox-index-search"
   ],
   "parent": null,
   "relatedFiles": [],

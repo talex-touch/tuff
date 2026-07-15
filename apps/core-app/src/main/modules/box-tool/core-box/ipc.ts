@@ -290,6 +290,12 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
+      transport.onStream(CoreBoxEvents.search.indexCommitted, (_payload, context) => {
+        searchEngineCore.registerIndexCommitStream(context)
+      })
+    )
+
+    this.transportDisposers.push(
       transport.on(CoreBoxEvents.search.cancel, ({ searchId }) => {
         if (searchId && searchEngineCore.getCurrentGatherController()) {
           searchEngineCore.cancelSearch(searchId)

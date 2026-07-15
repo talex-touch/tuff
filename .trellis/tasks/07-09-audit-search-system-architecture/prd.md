@@ -68,6 +68,11 @@ Treat this as P1.
   reusable search pipeline.
 - Cancellation must address the requested live session and be a no-op for a
   stale or completed session.
+- Index-generation refresh of an unchanged renderer query must create a new
+  caller-owned session and deliver a replacement snapshot; it must not append
+  into or revive a completed session.
+- Index-driven refresh is coalesced and opt-in for visible UI callers. It must
+  never restart AI or background searches implicitly.
 - Current evidence:
   `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:152`,
   `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:676`,
@@ -107,6 +112,12 @@ Treat this as P1.
   handing it to `IndexingRuntime`.
 - Index initialization must be single-flight. Runtime readiness checks must be
   non-destructive; repair and migration must be explicit operations.
+- App/File scans publish records incrementally after each provider-local commit
+  instead of buffering an entire first run before the runtime sees its first
+  batch.
+- Each committed batch advances a monotonic source generation used to version or
+  invalidate dependent search-cache entries. Indexing progress is not a commit
+  signal.
 - Temporary write-origin and duplicate-mutation evidence is required before a
   provider's legacy path is removed.
 - Current evidence:
@@ -230,14 +241,20 @@ SQLite ownership, and cross-child regression review.
 - [ ] R5 acceptance: failed load, unload/reload, shutdown, and provider health
   transitions are explicit and leave no registered listener, timer, poller, or
   worker behind.
+- [ ] Progressive-index acceptance: while a first App/File scan is still
+  running, an unchanged visible CoreBox query observes a newly committed matching
+  record within one second, receives a final replacement snapshot at completion,
+  and never restarts or cancels AI/background callers.
 - [ ] Parent integration acceptance: targeted tests, CoreApp type-check, packaged
   cold-start, concurrent UI/AI search, and SQLite preflight/simulation evidence
   pass without modifying unrelated work.
 
 ## Out of Scope
 
-- Search ranking, relevance, or visual UX redesign unless required to preserve
-  the session/stream contract.
+- Search relevance/ranking or broader visual UX redesign. The explicitly
+  requested removal of transient CoreBox searching, recommendation warm-up, and
+  indexing hints plus selection preservation during progressive refresh are in
+  scope; terminal no-result UX remains unchanged.
 - Adding new indexed sources or completing Quicklinks/Browser Bookmarks product
   features as part of the ownership migration.
 - A wholesale rewrite of `SearchEngineCore`, FileProvider, AppProvider, the
