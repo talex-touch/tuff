@@ -19,29 +19,27 @@ const DENIED_MODULE_PREFIXES = [
   'extract-file-icon/'
 ]
 
-// Dangerous Node built-ins the Prelude must never require directly. Plugins get
-// their capabilities through the injected SDK (http/storage/clipboard/...), so
-// direct access to these is unnecessary and is the most direct RCE / arbitrary
-// filesystem / raw network escape. `worker_threads` is intentionally omitted —
-// it is handled separately via the instrumented wrapper in createPluginRequire.
+// Node built-ins the Prelude must not require directly — LIMITED to modules no
+// official plugin legitimately needs (verified across plugins/*).
+//
+// IMPORTANT: official plugins DO use child_process / fs / os / process, so those
+// are intentionally NOT denied — blacklisting them would break the plugin
+// ecosystem. Their RCE/FS risk is exactly why process isolation (C1-B) exists:
+// the root fix runs the Prelude in a utilityProcess, not a require blacklist.
+// `worker_threads` is handled separately via its instrumented wrapper.
 const DENIED_NODE_BUILTINS = new Set([
-  'child_process',
-  'fs',
-  'fs/promises',
   'net',
   'dgram',
   'tls',
   'http',
   'https',
   'http2',
-  'os',
   'vm',
   'cluster',
   'module',
   'inspector',
   'repl',
-  'v8',
-  'process'
+  'v8'
 ])
 
 const instrumentedWorkerThreadsModuleCache = new Map<string, typeof import('node:worker_threads')>()
