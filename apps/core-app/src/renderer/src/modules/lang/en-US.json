@@ -1696,11 +1696,102 @@
       "searchingTitle": "Searching",
       "searchingDetail": "Checking local providers and indexed content.",
       "recommendationLoadingTitle": "Preparing recommendations",
-      "recommendationLoadingDetail": "Recent and frequent actions are warming up.",
-      "noResultsTitle": "No results found",
-      "noResultsDetail": "Check spelling, retry the search, or open File Index settings.",
-      "retryAction": "Retry",
-      "fileIndexSettingsAction": "File Index settings"
+      "recommendationLoadingDetail": "Recent and frequent actions are warming up."
+    },
+    "contextActions": {
+      "title": "Context Actions",
+      "sourceDetail": "Source: {source} · {detail}",
+      "reviewScore": "Review score: {score}",
+      "sources": {
+        "intelligence": "Tuff Intelligence",
+        "browser": "Browser Open",
+        "ocr": "System OCR"
+      },
+      "context": {
+        "selectedText": "Selected text context",
+        "clipboardImage": "Clipboard image context",
+        "unavailable": "No usable context was captured",
+        "imagePreview": "Clipboard image loaded for this explicit action only.",
+        "withIssue": "{preview} · Capture note: {issue}"
+      },
+      "actions": {
+        "quickReview": {
+          "title": "QuickReview",
+          "description": "Check defects, security risks, and best practices"
+        },
+        "translate": {
+          "title": "Translate",
+          "description": "Translate selected text with the existing Translation plugin"
+        },
+        "summarize": {
+          "title": "Summarize",
+          "description": "Extract the main conclusions from selected text"
+        },
+        "polish": {
+          "title": "Polish",
+          "description": "Improve wording, grammar, and professional tone"
+        },
+        "rewrite": {
+          "title": "Rewrite",
+          "description": "Rewrite the text in a clearer, more natural style"
+        },
+        "saveSnippet": {
+          "title": "Save as Snippet",
+          "description": "Pass the selected text to the Snippets plugin"
+        },
+        "webSearch": {
+          "title": "Search the web",
+          "description": "Search selected text in the default browser"
+        },
+        "devTools": {
+          "title": "Developer tools",
+          "description": "Use existing local JSON, Base64, URL/JWT tools"
+        },
+        "ocr": {
+          "title": "Run OCR",
+          "description": "Extract image text with the system OCR capability"
+        },
+        "translateImageText": {
+          "title": "Translate image text",
+          "description": "Run OCR, then translate the recognized text"
+        },
+        "explainImage": {
+          "title": "Explain image with AI",
+          "description": "Describe the image with an enabled vision provider"
+        }
+      },
+      "results": {
+        "quickReview": "QuickReview completed",
+        "summarize": "Summary generated",
+        "polish": "Polishing completed",
+        "rewrite": "Rewrite completed",
+        "webSearch": "Search opened in the browser",
+        "ocr": "OCR completed",
+        "translateImageText": "Image text translated",
+        "explainImage": "Image explanation generated"
+      },
+      "errors": {
+        "emptyResult": "The capability returned an empty result. Retry or switch providers.",
+        "emptyContext": "No selected text was captured and the clipboard does not contain an image.",
+        "textRequired": "This action requires selected text.",
+        "imageRequired": "This action requires a clipboard image.",
+        "browserBlocked": "The external URL policy blocked this search URL.",
+        "browserOpen": "The system browser could not be opened.",
+        "ocrEmpty": "OCR did not recognize text to translate.",
+        "actionInputMismatch": "The action does not accept this context type.",
+        "actionUnavailable": "This action is currently unavailable."
+      },
+      "unavailable": {
+        "capability": "Capability {capability} has no usable provider",
+        "plugin": "Plugin {plugin} is missing, disabled, or unavailable",
+        "detail": "Unavailable: {reason}",
+        "unknown": "Unknown reason"
+      },
+      "status": {
+        "success": "{action} · Succeeded",
+        "error": "{action} · Failed",
+        "copyResult": "Copy result"
+      }
     },
     "intelligence": {
       "emptyPrompt": "Type a question to ask the AI",

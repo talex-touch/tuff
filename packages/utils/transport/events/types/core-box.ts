@@ -8,24 +8,25 @@ import type {
   TuffContext,
   TuffItem,
   TuffQuery,
-  TuffQueryInput
-} from '../../../core-box/tuff/tuff-dsl'
-import type { IndexedSourceDiagnosticsSnapshot } from '../../../search'
+  TuffQueryInput,
+} from "../../../core-box/tuff/tuff-dsl";
+import type { IndexedSourceDiagnosticsSnapshot } from "../../../search";
 
 export interface CoreBoxImageTranslateRouteStage {
-  capability: string
-  providerId: string
-  providerName?: string
-  model?: string
-  latencyMs?: number
+  capability: string;
+  providerId: string;
+  providerName?: string;
+  model?: string;
+  latencyMs?: number;
 }
 
 export interface CoreBoxImageTranslateRouteMetadata {
-  runId: string
-  sceneId: string
-  durationMs: number
-  stages: CoreBoxImageTranslateRouteStage[]
+  runId: string;
+  sceneId: string;
+  durationMs: number;
+  stages: CoreBoxImageTranslateRouteStage[];
 }
+export type { CoreBoxContextActionsOpenRequest } from "../../../core-box/context-actions";
 
 // ============================================================================
 // UI Types
@@ -493,7 +494,6 @@ export interface SetInputRequest {
   context?: TuffContext;
 }
 
-
 /**
  * Request to set a query and optionally attach one-shot search context.
  */
@@ -501,7 +501,7 @@ export interface SetQueryRequest extends SetInputRequest {
   /**
    * Context forwarded to the next search triggered by this query.
    */
-  context?: TuffContext
+  context?: TuffContext;
 }
 
 /**

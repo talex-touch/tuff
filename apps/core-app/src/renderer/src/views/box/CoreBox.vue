@@ -101,11 +101,11 @@ const resultTransitionName = computed(() => {
 
 type CoreBoxSendFeatureItem = TuffItem & {
   meta?: {
-    interaction?: { type?: string, sendMode?: boolean }
+    interaction?: { type?: string; sendMode?: boolean }
     activationFeature?: CoreBoxSendFeatureItem
     payload?: Record<string, unknown>
   }
-  interaction?: { type?: string, sendMode?: boolean }
+  interaction?: { type?: string; sendMode?: boolean }
 }
 
 function getFeatureInteraction(feature: CoreBoxSendFeatureItem | null | undefined) {
@@ -118,26 +118,21 @@ function isWidgetFeature(feature: CoreBoxSendFeatureItem | null | undefined): bo
 
 function isSendModeFeature(feature: CoreBoxSendFeatureItem | null | undefined): boolean {
   const interaction = getFeatureInteraction(feature)
-  if (!interaction)
-    return false
-  if (interaction.sendMode === false)
-    return false
+  if (!interaction) return false
+  if (interaction.sendMode === false) return false
   return interaction.sendMode === true || interaction.type === 'widget'
 }
 
 const activeSendTargetItem = computed<CoreBoxSendFeatureItem | null>(() => {
-  if (!activeActivations.value || activeActivations.value.length === 0)
-    return null
+  if (!activeActivations.value || activeActivations.value.length === 0) return null
   for (const activation of activeActivations.value) {
-    if (activation.id !== 'plugin-features')
-      continue
+    if (activation.id !== 'plugin-features') continue
     const meta = activation?.meta as {
       activationFeature?: CoreBoxSendFeatureItem
       feature?: CoreBoxSendFeatureItem
     }
     const feature = meta?.activationFeature || meta?.feature
-    if (feature && isSendModeFeature(feature))
-      return feature
+    if (feature && isSendModeFeature(feature)) return feature
   }
   return null
 })
@@ -205,8 +200,7 @@ async function handleWidgetHostAction(
 }
 
 function getCoreBoxPluginActivationKey(activation: IProviderActivate): string | null {
-  if (activation.id !== 'plugin-features')
-    return null
+  if (activation.id !== 'plugin-features') return null
   const meta = activation.meta as Record<string, unknown> | null | undefined
   const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : ''
   const featureId = typeof meta?.featureId === 'string' ? meta.featureId : ''
@@ -215,20 +209,17 @@ function getCoreBoxPluginActivationKey(activation: IProviderActivate): string | 
 
 function mergeCoreBoxWidgetActivationState(
   next: IProviderActivate[] | null,
-  previous: IProviderActivate[] | null,
+  previous: IProviderActivate[] | null
 ): IProviderActivate[] | null {
-  if (!next?.length || !previous?.length)
-    return next
+  if (!next?.length || !previous?.length) return next
 
   return next.map((activation) => {
     const activationKey = getCoreBoxPluginActivationKey(activation)
-    if (!activationKey)
-      return activation
+    if (!activationKey) return activation
     const previousActivation = previous.find(
-      candidate => getCoreBoxPluginActivationKey(candidate) === activationKey,
+      (candidate) => getCoreBoxPluginActivationKey(candidate) === activationKey
     )
-    if (!previousActivation)
-      return activation
+    if (!previousActivation) return activation
 
     const nextMeta = (activation.meta ?? {}) as Record<string, unknown>
     const previousMeta = (previousActivation.meta ?? {}) as Record<string, unknown>
@@ -239,8 +230,7 @@ function mergeCoreBoxWidgetActivationState(
       : isPluginWidgetRenderItem(previousFeature)
         ? previousFeature
         : null
-    if (!widgetFeature)
-      return activation
+    if (!widgetFeature) return activation
     const activationFeature = isPluginWidgetRenderItem(nextFeature)
       ? (nextMeta.activationFeature ?? previousMeta.activationFeature ?? previousFeature)
       : nextFeature
@@ -252,8 +242,8 @@ function mergeCoreBoxWidgetActivationState(
         ...previousMeta,
         ...nextMeta,
         ...(activationFeature ? { activationFeature } : {}),
-        feature: widgetFeature,
-      },
+        feature: widgetFeature
+      }
     }
   })
 }
@@ -261,7 +251,7 @@ function mergeCoreBoxWidgetActivationState(
 function applyCoreBoxActivationState(state: unknown): void {
   const activations = mergeCoreBoxWidgetActivationState(
     normalizeCoreBoxActivationState(state),
-    activeActivations.value,
+    activeActivations.value
   )
   activeActivations.value = activations
   const widgetFeature = activations
@@ -744,16 +734,6 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   await focusWindowAndInput()
 }
 
-async function handleRetrySearch(): Promise<void> {
-  await handleSearchImmediate({ force: true })
-  await focusWindowAndInput()
-}
-
-function handleOpenFileIndexSettings(): void {
-  void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
-  void router.push('/setting?section=file-index').catch(() => {})
-}
-
 const { themeConfig, themeCSSVars, canvasConfig, canvasEnabled } = useCoreBoxTheme()
 const showLogo = computed(() => themeConfig.value.logo.position !== 'hidden')
 const logoOrderRight = computed(() => themeConfig.value.logo.position === 'right')
@@ -1013,24 +993,6 @@ const customCss = computed(() => {
                   </div>
                   <div class="CoreBoxSearchState-Detail">
                     {{ t(searchState.detailKey, searchState.detailFallback) }}
-                  </div>
-                  <div v-if="searchState.kind === 'no-results'" class="CoreBoxSearchState-Actions">
-                    <button
-                      type="button"
-                      class="CoreBoxSearchState-Action"
-                      @click="handleRetrySearch"
-                    >
-                      <TuffIcon :icon="{ type: 'class', value: 'i-ri-refresh-line' }" />
-                      <span>{{ t('coreBox.searchState.retryAction') }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="CoreBoxSearchState-Action"
-                      @click="handleOpenFileIndexSettings"
-                    >
-                      <TuffIcon :icon="{ type: 'class', value: 'i-ri-folder-settings-line' }" />
-                      <span>{{ t('coreBox.searchState.fileIndexSettingsAction') }}</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1392,40 +1354,8 @@ div.CoreBoxRes.CoreBoxRes--widget {
   color: var(--tx-text-color-secondary);
 }
 
-.CoreBoxSearchState-Actions {
-  margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.CoreBoxSearchState-Action {
-  height: 28px;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--tx-bg-color) 86%, var(--tx-fill-color-light));
-  color: var(--tx-text-color-primary);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.CoreBoxSearchState-Action:hover {
-  border-color: color-mix(in srgb, var(--tx-color-primary) 45%, var(--tx-border-color));
-  color: var(--tx-color-primary);
-}
-
 .CoreBoxSearchState--progress .CoreBoxSearchState-Icon {
   color: var(--tx-color-primary);
-}
-
-.CoreBoxSearchState--empty .CoreBoxSearchState-Icon {
-  color: var(--tx-text-color-secondary);
 }
 
 @keyframes corebox-state-spin {

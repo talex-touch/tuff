@@ -95,6 +95,7 @@ import type {
   CancelSearchRequest,
   CancelSearchResponse,
   CoreBoxClearItemsPayload,
+  CoreBoxContextActionsOpenRequest,
   CoreBoxExecuteRequest,
   CoreBoxInputChangeRequest,
   CoreBoxIndexingDiagnosticsResponse,
@@ -1236,6 +1237,19 @@ export const CoreBoxEvents = {
      * Set query from main process.
      */
     setQuery: CoreBoxRetainedEvents.input.setQuery,
+  },
+
+  /**
+   * Explicit Context Actions entry.
+   */
+  contextActions: {
+    /**
+     * Open CoreBox with a captured text or clipboard-image context.
+     */
+    open: defineEvent("core-box")
+      .module("context-actions")
+      .event("open")
+      .define<CoreBoxContextActionsOpenRequest, void>(),
   },
 
   /**

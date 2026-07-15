@@ -136,6 +136,15 @@ vi.mock('../addon/system/system-actions-provider', () => ({
   }
 }))
 
+vi.mock('../addon/context-actions/context-actions-provider', () => ({
+  contextActionsProvider: {
+    id: 'context-actions',
+    type: 'system',
+    supportedInputTypes: [TuffInputType.Text, TuffInputType.Image],
+    onSearch: vi.fn()
+  }
+}))
+
 vi.mock('../addon/system/windows-shell-file-provider', () => ({
   windowsShellFileProvider: {
     id: 'windows-shell-file-provider',
