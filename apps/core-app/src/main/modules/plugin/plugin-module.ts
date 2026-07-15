@@ -1502,14 +1502,29 @@ export class PluginModule extends BaseModule {
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
 
-    // C1-B stage 1: verify the isolated plugin host process starts and its
-    // control channel round-trips. Flag-gated and off by default, so it never
-    // affects normal startup; the real Prelude runtime wires in via stage 2.
+    // C1-B experimental core (flag-gated, off by default): start the isolated
+    // host, then run a synthetic closed-loop self-check — load a Prelude into
+    // the child, call its lifecycle, and round-trip an SDK call back to main.
+    // This proves the architecture; per-plugin real-device regression is a
+    // separate iteration and default-on is intentionally NOT enabled here.
     if (process.env.TUFF_PLUGIN_ISOLATION === '1') {
       pluginHostBridge.start()
-      void pluginHostBridge.ping().then((ok) => {
-        pluginModuleLog.info(`[C1-B] plugin host connectivity self-check: ${ok ? 'OK' : 'FAILED'}`)
-      })
+      void (async () => {
+        try {
+          const connected = await pluginHostBridge.ping()
+          pluginModuleLog.info(`[C1-B] host connectivity: ${connected ? 'OK' : 'FAILED'}`)
+          const script = `module.exports = { onFeatureTriggered: async () => (await test.echo('ping')) === 'echoed:ping' }`
+          const lifecycle = await pluginHostBridge.loadPlugin('__c1b_selfcheck__', '/tmp', script, {
+            test: { echo: (value: string) => `echoed:${value}` }
+          })
+          const result = await lifecycle.onFeatureTriggered?.('t', {})
+          pluginModuleLog.info(
+            `[C1-B] Prelude+lifecycle+SDK round-trip self-check: ${result === true ? 'OK' : 'FAILED'}`
+          )
+        } catch (error) {
+          pluginModuleLog.error('[C1-B] isolation self-check error', { error })
+        }
+      })()
     }
 
     const pluginRuntime = buildPluginManagerRuntime({
