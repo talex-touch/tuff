@@ -167,26 +167,23 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
   })
 
-  it('routes item navigate actions through the provided navigation callback', async () => {
+  it('routes the declared intelligence recovery action without executing the plugin item', async () => {
     const navigate = vi.fn()
-    useActionPanel({ navigate })
-
-    getListener(CoreBoxEvents.metaOverlay.itemAction)({
-      actionId: 'open-settings',
-      item: createItem({
-        actions: [
-          {
-            id: 'open-settings',
-            type: 'navigate',
-            label: 'Open settings',
-            payload: { path: '/settings/plugins' }
-          }
-        ]
-      })
+    const actionPanel = useActionPanel({ navigate })
+    const item = createItem({
+      actions: [
+        {
+          id: 'open-intelligence-settings',
+          type: 'navigate',
+          label: 'Check AI channels',
+          payload: { path: '/intelligence/channels' }
+        }
+      ]
     })
-    await flushAsyncAction()
 
-    expect(navigate).toHaveBeenCalledWith('/settings/plugins')
+    await actionPanel.executeAction('open-intelligence-settings', item)
+
+    expect(navigate).toHaveBeenCalledWith('/intelligence/channels')
     expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
   })
 

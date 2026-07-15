@@ -290,5 +290,14 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     window.removeEventListener('corebox:toggle-pin', handleTogglePinEvent)
   })
 
-  return reactive({ visible, item, isPinned, open, close, handleAction, togglePin })
+  return reactive({
+    visible,
+    item,
+    isPinned,
+    open,
+    close,
+    handleAction,
+    executeAction,
+    togglePin
+  })
 }

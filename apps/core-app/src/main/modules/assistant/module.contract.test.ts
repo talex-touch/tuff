@@ -76,6 +76,28 @@ describe('Assistant module startup contract', () => {
     }
   })
 
+  it('loads Assistant renderer surfaces through exact async component declarations', () => {
+    for (const { component, path } of [
+      { component: 'FloatingBall', path: './views/assistant/FloatingBall.vue' },
+      { component: 'VoicePanel', path: './views/assistant/VoicePanel.vue' },
+      {
+        component: 'ScreenshotRegionSelector',
+        path: './views/assistant/ScreenshotRegionSelector.vue'
+      }
+    ]) {
+      const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+      expect(appEntranceSource).not.toMatch(
+        new RegExp(`^\\s*import\\s+(?!\\()[^\\n]*['\"]${escapedPath}['\"][^\\n]*$`, 'm')
+      )
+      expect(appEntranceSource).toMatch(
+        new RegExp(
+          `const\\s+${component}\\s*=\\s*defineAsyncComponent\\(\\s*\\(\\s*\\)\\s*=>\\s*import\\(\\s*['\"]${escapedPath}['\"]\\s*\\)\\s*\\)`
+        )
+      )
+    }
+  })
+
   it('keeps floating ball window visibility, drag persistence, and click handoff wired', () => {
     for (const expected of [
       'getRuntimeConfig',
@@ -139,7 +161,7 @@ describe('Assistant module startup contract', () => {
     expect(openVoicePanelBlock).toBeTruthy()
     expect(openVoicePanelBlock).toContain('this.beginVoicePanelAutoHideSuppression()')
     expect(openVoicePanelBlock).toContain('try {')
-    expect(openVoicePanelBlock).toContain('voiceWindow.window.setBounds')
+    expect(openVoicePanelBlock).toContain('this.applyVoicePanelBounds(voiceWindow, anchorBounds)')
     expect(openVoicePanelBlock).toContain('voiceWindow.window.show()')
     expect(openVoicePanelBlock).toContain('voiceWindow.window.focus()')
     expect(openVoicePanelBlock).toContain('this.transport.broadcastToWindow')
@@ -292,7 +314,7 @@ describe('Assistant module startup contract', () => {
       'ASSISTANT_DISABLED',
       'IMAGE_UNAVAILABLE',
       'SCENE_UNAVAILABLE',
-      'formatClipboardImageTranslateError(response?.code, response?.error)'
+      'response?.reason || response?.error'
     ]) {
       expect(voicePanelSource).toContain(expected)
     }

@@ -8,13 +8,16 @@ import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
 import { useAppState } from './modules/hooks/useAppStates'
 import { useStartupInfo } from './modules/hooks/useStartupInfo'
 import { resolvedTheme } from './modules/storage/theme-style'
-import FloatingBall from './views/assistant/FloatingBall.vue'
-import VoicePanel from './views/assistant/VoicePanel.vue'
-import ScreenshotRegionSelector from './views/assistant/ScreenshotRegionSelector.vue'
 import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
 import OmniPanel from './views/omni-panel/OmniPanel.vue'
 import { createRendererLogger } from './utils/renderer-log'
+
+const FloatingBall = defineAsyncComponent(() => import('./views/assistant/FloatingBall.vue'))
+const VoicePanel = defineAsyncComponent(() => import('./views/assistant/VoicePanel.vue'))
+const ScreenshotRegionSelector = defineAsyncComponent(
+  () => import('./views/assistant/ScreenshotRegionSelector.vue')
+)
 
 const props = defineProps<{
   onReady: () => Promise<void>
