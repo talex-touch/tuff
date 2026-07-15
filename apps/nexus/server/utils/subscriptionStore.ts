@@ -234,7 +234,24 @@ export async function activateCode(
   const now = new Date()
   const expiresAt = new Date(now.getTime() + activationCode.durationDays * 24 * 60 * 60 * 1000).toISOString()
 
-  // Log activation
+  // Atomically claim one use of the code via compare-and-swap on the `uses`
+  // count we read above. A concurrent activation that already incremented
+  // `uses` makes this match zero rows, so a single-use code can't be redeemed
+  // twice under D1's concurrent execution.
+  const newUses = activationCode.uses + 1
+  const newStatus = newUses >= activationCode.maxUses ? 'exhausted' : 'active'
+
+  const claim = await db.prepare(`
+    UPDATE ${ACTIVATION_CODES_TABLE}
+    SET uses = ?1, status = ?2
+    WHERE id = ?3 AND status = 'active' AND uses = ?4;
+  `).bind(newUses, newStatus, activationCode.id, activationCode.uses).run()
+
+  if (Number((claim as any)?.meta?.changes ?? 0) < 1) {
+    throw createError({ statusCode: 409, statusMessage: 'Code was already used' })
+  }
+
+  // Log activation only after the code use is successfully claimed.
   await db.prepare(`
     INSERT INTO ${ACTIVATION_LOGS_TABLE} (id, code_id, user_id, activated_at, plan, expires_at)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6);
@@ -246,16 +263,6 @@ export async function activateCode(
     activationCode.plan,
     expiresAt,
   ).run()
-
-  // Update code usage
-  const newUses = activationCode.uses + 1
-  const newStatus = newUses >= activationCode.maxUses ? 'exhausted' : 'active'
-
-  await db.prepare(`
-    UPDATE ${ACTIVATION_CODES_TABLE}
-    SET uses = ?1, status = ?2
-    WHERE id = ?3;
-  `).bind(newUses, newStatus, activationCode.id).run()
 
   return {
     plan: activationCode.plan,

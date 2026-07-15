@@ -388,11 +388,17 @@ export async function useInvite(
   const newUses = invite.uses + 1
   const newStatus = newUses >= invite.maxUses ? 'accepted' : 'pending'
 
-  await db.prepare(`
+  // Compare-and-swap on the `uses` count so a single-use invite can't be
+  // accepted twice by concurrent requests.
+  const claim = await db.prepare(`
     UPDATE ${INVITES_TABLE}
     SET uses = ?1, status = ?2
-    WHERE id = ?3;
-  `).bind(newUses, newStatus, invite.id).run()
+    WHERE id = ?3 AND status = 'pending' AND uses = ?4;
+  `).bind(newUses, newStatus, invite.id, invite.uses).run()
+
+  if (Number((claim as any)?.meta?.changes ?? 0) < 1) {
+    throw createError({ statusCode: 409, statusMessage: 'Invite was already used' })
+  }
 
   return {
     ...invite,
