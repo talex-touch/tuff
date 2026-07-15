@@ -3,7 +3,7 @@ import type {
   IntelligenceProviderConfig,
   IntelligenceProviderSyncPayload,
   IntelligenceProviderSyncRecord,
-  TestResult,
+  TestResult
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
@@ -20,7 +20,7 @@ import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import {
   isNexusManagedProvider,
-  TUFF_NEXUS_PROVIDER_ID,
+  TUFF_NEXUS_PROVIDER_ID
 } from '~/modules/intelligence/nexus-provider'
 import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
@@ -34,7 +34,7 @@ const {
   selectedProvider,
   addProvider,
   updateProvider,
-  removeProvider,
+  removeProvider
 } = useIntelligenceManager()
 
 const testResult = ref<TestResult | null>(null)
@@ -47,7 +47,7 @@ const basicEditorVisible = ref(false)
 const basicDraft = ref({ id: '', name: '', type: IntelligenceProviderType.CUSTOM })
 
 const canEditSelectedProvider = computed(
-  () => !!selectedProvider.value && !isNexusManagedProvider(selectedProvider.value),
+  () => !!selectedProvider.value && !isNexusManagedProvider(selectedProvider.value)
 )
 
 function normalizeProviderType(type: string): IntelligenceProviderType {
@@ -79,8 +79,8 @@ function toNexusFallbackProvider(): IntelligenceProviderConfig {
     metadata: {
       origin: 'tuff-nexus',
       source: 'core-fallback',
-      syncedFromNexus: true,
-    },
+      syncedFromNexus: true
+    }
   }
 }
 
@@ -88,9 +88,9 @@ function mergeProviderFromNexus(record: IntelligenceProviderSyncRecord): void {
   const normalizedType = normalizeProviderType(record.type)
   const nexusPreferred = isNexusManagedProvider(record)
   const resolvedProviderId = nexusPreferred ? TUFF_NEXUS_PROVIDER_ID : record.id
-  const existing = providers.value.find(item => item.id === resolvedProviderId)
-  const hasCredential
-    = normalizedType === IntelligenceProviderType.LOCAL || nexusPreferred || Boolean(existing?.apiKey)
+  const existing = providers.value.find((item) => item.id === resolvedProviderId)
+  const hasCredential =
+    normalizedType === IntelligenceProviderType.LOCAL || nexusPreferred || Boolean(existing?.apiKey)
 
   const nextProvider: IntelligenceProviderConfig = {
     id: resolvedProviderId,
@@ -112,8 +112,8 @@ function mergeProviderFromNexus(record: IntelligenceProviderSyncRecord): void {
       syncedFromNexus: true,
       hasApiKey: record.hasApiKey,
       nexusPreferred,
-      syncedAt: Date.now(),
-    },
+      syncedAt: Date.now()
+    }
   }
 
   if (nexusPreferred) {
@@ -121,7 +121,7 @@ function mergeProviderFromNexus(record: IntelligenceProviderSyncRecord): void {
     nextProvider.priority = 1
     nextProvider.metadata = {
       ...(nextProvider.metadata || {}),
-      origin: 'tuff-nexus',
+      origin: 'tuff-nexus'
     }
   }
 
@@ -134,7 +134,7 @@ function mergeProviderFromNexus(record: IntelligenceProviderSyncRecord): void {
 }
 
 function ensureNexusPreferredProvider(): void {
-  const existing = providers.value.find(item => item.id === TUFF_NEXUS_PROVIDER_ID)
+  const existing = providers.value.find((item) => item.id === TUFF_NEXUS_PROVIDER_ID)
   if (!existing) {
     addProvider(toNexusFallbackProvider())
     return
@@ -146,14 +146,13 @@ function ensureNexusPreferredProvider(): void {
       ...(existing.metadata || {}),
       origin: 'tuff-nexus',
       syncedFromNexus: true,
-      syncedAt: Date.now(),
-    },
+      syncedAt: Date.now()
+    }
   })
 }
 
 async function syncProvidersFromNexus(): Promise<void> {
-  if (isSyncingFromNexus.value)
-    return
+  if (isSyncingFromNexus.value) return
   isSyncingFromNexus.value = true
   syncError.value = ''
   syncMessage.value = ''
@@ -163,9 +162,9 @@ async function syncProvidersFromNexus(): Promise<void> {
       '/api/dashboard/intelligence/providers/sync',
       {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json' }
       },
-      'intelligence:sync-providers',
+      'intelligence:sync-providers'
     )
 
     if (!response) {
@@ -187,14 +186,12 @@ async function syncProvidersFromNexus(): Promise<void> {
     }
 
     syncMessage.value = t('settings.intelligence.syncFromNexusSuccess', {
-      count: incomingProviders.length,
+      count: incomingProviders.length
     })
-  }
-  catch (error) {
-    syncError.value
-      = error instanceof Error ? error.message : t('settings.intelligence.syncFromNexusFailed')
-  }
-  finally {
+  } catch (error) {
+    syncError.value =
+      error instanceof Error ? error.message : t('settings.intelligence.syncFromNexusFailed')
+  } finally {
     isSyncingFromNexus.value = false
   }
 }
@@ -209,14 +206,13 @@ function createProviderCopy(provider: IntelligenceProviderConfig): IntelligenceP
     metadata: {
       ...(provider.metadata || {}),
       copiedFrom: provider.id,
-      copiedAt: Date.now(),
-    },
+      copiedAt: Date.now()
+    }
   }
 }
 
 function handleDuplicateProvider(): void {
-  if (!selectedProvider.value || isNexusManagedProvider(selectedProvider.value))
-    return
+  if (!selectedProvider.value || isNexusManagedProvider(selectedProvider.value)) return
   const copied = createProviderCopy(selectedProvider.value)
   addProvider(copied)
   selectedProviderId.value = copied.id
@@ -224,22 +220,20 @@ function handleDuplicateProvider(): void {
 }
 
 function handleOpenBasicEditor(): void {
-  if (!selectedProvider.value || !canEditSelectedProvider.value)
-    return
+  if (!selectedProvider.value || !canEditSelectedProvider.value) return
   basicDraft.value = {
     id: selectedProvider.value.id,
     name: selectedProvider.value.name,
-    type: normalizeProviderType(selectedProvider.value.type),
+    type: normalizeProviderType(selectedProvider.value.type)
   }
   basicEditorVisible.value = true
 }
 
 function handleSaveBasicEditor(): void {
-  if (!selectedProvider.value || basicDraft.value.id !== selectedProvider.value.id)
-    return
+  if (!selectedProvider.value || basicDraft.value.id !== selectedProvider.value.id) return
   updateProvider(selectedProvider.value.id, {
     name: basicDraft.value.name.trim() || selectedProvider.value.name,
-    type: basicDraft.value.type,
+    type: basicDraft.value.type
   })
   basicEditorVisible.value = false
 }
@@ -255,7 +249,7 @@ function handleAddProvider(): void {
     priority: 3,
     models: [],
     timeout: 30000,
-    rateLimit: {},
+    rateLimit: {}
   })
   selectedProviderId.value = id
 }
@@ -270,34 +264,30 @@ function handleUpdateProvider(updatedProvider: IntelligenceProviderConfig): void
 }
 
 async function handleTestProvider(): Promise<void> {
-  if (!selectedProvider.value || isTesting.value)
-    return
+  if (!selectedProvider.value || isTesting.value) return
   isTesting.value = true
   testResult.value = null
   try {
     const response = (await aiClient.testProvider(selectedProvider.value)) as TestResult
     testResult.value = response
-  }
-  catch (error) {
+  } catch (error) {
     testResult.value = {
       success: false,
       message:
         error instanceof Error ? error.message : t('settings.intelligence.connectionTestFailed'),
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  finally {
+  } finally {
     isTesting.value = false
   }
 }
 
 function handleDeleteProvider(): void {
-  if (!selectedProvider.value)
-    return
+  if (!selectedProvider.value) return
   const deletedId = selectedProvider.value.id
 
   // Find current index before deletion
-  const currentIndex = providers.value.findIndex(p => p.id === deletedId)
+  const currentIndex = providers.value.findIndex((p) => p.id === deletedId)
 
   // Remove the provider
   removeProvider(deletedId)
@@ -308,8 +298,7 @@ function handleDeleteProvider(): void {
     // Try to select the provider at the same index, or the last one if index is out of bounds
     const newIndex = Math.min(currentIndex, remainingProviders.length - 1)
     selectedProviderId.value = remainingProviders[newIndex].id
-  }
-  else {
+  } else {
     selectedProviderId.value = null
   }
 
@@ -318,7 +307,7 @@ function handleDeleteProvider(): void {
 }
 
 function navigateToNextProvider(): void {
-  const currentIndex = providers.value.findIndex(p => p.id === selectedProviderId.value)
+  const currentIndex = providers.value.findIndex((p) => p.id === selectedProviderId.value)
   if (currentIndex < providers.value.length - 1) {
     selectedProviderId.value = providers.value[currentIndex + 1].id
     testResult.value = null
@@ -326,7 +315,7 @@ function navigateToNextProvider(): void {
 }
 
 function navigateToPreviousProvider(): void {
-  const currentIndex = providers.value.findIndex(p => p.id === selectedProviderId.value)
+  const currentIndex = providers.value.findIndex((p) => p.id === selectedProviderId.value)
   if (currentIndex > 0) {
     selectedProviderId.value = providers.value[currentIndex - 1].id
     testResult.value = null
@@ -335,7 +324,7 @@ function navigateToPreviousProvider(): void {
 
 useKeyboardNavigation({
   onNavigateDown: navigateToNextProvider,
-  onNavigateUp: navigateToPreviousProvider,
+  onNavigateUp: navigateToPreviousProvider
 })
 </script>
 

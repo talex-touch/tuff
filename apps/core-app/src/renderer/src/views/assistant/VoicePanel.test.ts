@@ -53,7 +53,7 @@ vi.mock('vue-i18n', () => ({
     t: (key: string, values?: Record<string, string> | string) => {
       const template = messages[key] ?? (typeof values === 'string' ? values : key)
       return template.replace(/\{(\w+)\}/g, (_match, name: string) =>
-        typeof values === 'object' && values ? values[name] ?? '' : ''
+        typeof values === 'object' && values ? (values[name] ?? '') : ''
       )
     }
   })
@@ -762,7 +762,9 @@ describe('VoicePanel Intelligence settings recovery', () => {
       await wrapper.find('.intelligence-recovery-btn').trigger('click')
       await flushPromises()
 
-      expect(screenshotTransportCalls('assistant:voice-panel:open-intelligence-settings')).toHaveLength(1)
+      expect(
+        screenshotTransportCalls('assistant:voice-panel:open-intelligence-settings')
+      ).toHaveLength(1)
 
       wrapper.unmount()
     }
@@ -808,7 +810,6 @@ describe('VoicePanel Intelligence settings recovery', () => {
       wrapper.unmount()
     }
   )
-
 })
 
 describe('VoicePanel screenshot display selection', () => {

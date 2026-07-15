@@ -19,8 +19,8 @@ describe('check-release-gates local checks', () => {
       },
     })
 
-    const sourceCheck = checks.find((item) => item.name === 'publish-manifests')
-    const packCheck = checks.find((item) => item.name === 'publish-manifests-pack')
+    const sourceCheck = checks.find(item => item.name === 'publish-manifests')
+    const packCheck = checks.find(item => item.name === 'publish-manifests-pack')
 
     assert.equal(sourceCheck?.status, 'pass')
     assert.equal(packCheck?.status, 'pass')

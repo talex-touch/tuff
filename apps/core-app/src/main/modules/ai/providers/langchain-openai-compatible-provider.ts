@@ -24,7 +24,7 @@ import type {
   IntelligenceUsageInfo,
   IntelligenceVisionImageSource,
   IntelligenceVisionOcrPayload,
-  IntelligenceVisionOcrResult,
+  IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
@@ -71,7 +71,7 @@ function stripOpenAiEndpointSuffix(value: string): string {
 export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
   const trimmed = stripOpenAiEndpointSuffix(baseUrl)
   const lower = trimmed.toLowerCase()
-  if (OPENAI_VERSION_SUFFIXES.some(suffix => lower.endsWith(suffix))) {
+  if (OPENAI_VERSION_SUFFIXES.some((suffix) => lower.endsWith(suffix))) {
     return trimmed
   }
   return `${trimmed}/v1`
@@ -106,7 +106,7 @@ function extractNestedReasoningText(value: unknown, depth = 0): string {
   }
   if (Array.isArray(value)) {
     return value
-      .map(item => extractNestedReasoningText(item, depth + 1))
+      .map((item) => extractNestedReasoningText(item, depth + 1))
       .filter(Boolean)
       .join('\n')
       .trim()
@@ -122,12 +122,11 @@ function extractNestedReasoningText(value: unknown, depth = 0): string {
     row.summary,
     row.output_text,
     row.reasoning_text,
-    row.thinking_text,
+    row.thinking_text
   ]
   for (const candidate of directCandidates) {
     const text = extractNestedReasoningText(candidate, depth + 1)
-    if (text)
-      return text
+    if (text) return text
   }
 
   const nestedCandidates = [
@@ -136,12 +135,11 @@ function extractNestedReasoningText(value: unknown, depth = 0): string {
     row.analysis,
     row.delta,
     row.message,
-    row.payload,
+    row.payload
   ]
   for (const candidate of nestedCandidates) {
     const text = extractNestedReasoningText(candidate, depth + 1)
-    if (text)
-      return text
+    if (text) return text
   }
 
   return ''
@@ -183,32 +181,27 @@ export function extractReasoningContent(rawMessage: Record<string, unknown>): st
     responseMetadata.reasoningContent,
     responseMetadata.reasoning_text,
     responseMetadata.thinking,
-    responseMetadata.thinking_text,
+    responseMetadata.thinking_text
   ]
 
   for (const candidate of candidates) {
     const text = extractNestedReasoningText(candidate)
-    if (text)
-      return text
+    if (text) return text
   }
 
   return undefined
 }
 
 export function extractTextContent(content: unknown): string {
-  if (typeof content === 'string')
-    return content
+  if (typeof content === 'string') return content
   if (Array.isArray(content)) {
     return content
       .map((item) => {
-        if (typeof item === 'string')
-          return item
+        if (typeof item === 'string') return item
         if (item && typeof item === 'object') {
           const row = item as Record<string, unknown>
-          if (typeof row.text === 'string')
-            return row.text
-          if (typeof row.content === 'string')
-            return row.content
+          if (typeof row.text === 'string') return row.text
+          if (typeof row.content === 'string') return row.content
         }
         return ''
       })
@@ -216,10 +209,8 @@ export function extractTextContent(content: unknown): string {
       .join('\n')
   }
   const row = asRecord(content)
-  if (typeof row.text === 'string')
-    return row.text
-  if (typeof row.content === 'string')
-    return row.content
+  if (typeof row.text === 'string') return row.text
+  if (typeof row.content === 'string') return row.content
   return ''
 }
 
@@ -245,14 +236,14 @@ function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     usageMetadata.prompt_tokens,
     usageMetadata.promptTokens,
     tokenUsage.promptTokens,
-    tokenUsage.prompt_tokens,
+    tokenUsage.prompt_tokens
   )
   const completionTokens = numberFrom(
     usageMetadata.output_tokens,
     usageMetadata.completion_tokens,
     usageMetadata.completionTokens,
     tokenUsage.completionTokens,
-    tokenUsage.completion_tokens,
+    tokenUsage.completion_tokens
   )
 
   const totalTokens = numberFrom(
@@ -260,22 +251,20 @@ function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     usageMetadata.totalTokens,
     tokenUsage.totalTokens,
     tokenUsage.total_tokens,
-    promptTokens + completionTokens,
+    promptTokens + completionTokens
   )
 
   return {
     promptTokens,
     completionTokens,
-    totalTokens,
+    totalTokens
   }
 }
 
 function resolveModelName(rawMessage: Record<string, unknown>, fallback: string): string {
   const responseMetadata = asRecord(rawMessage.response_metadata)
-  if (typeof responseMetadata.model_name === 'string')
-    return responseMetadata.model_name
-  if (typeof responseMetadata.model === 'string')
-    return responseMetadata.model
+  if (typeof responseMetadata.model_name === 'string') return responseMetadata.model_name
+  if (typeof responseMetadata.model === 'string') return responseMetadata.model
   return fallback
 }
 
@@ -324,36 +313,31 @@ interface ImageFilePayload {
 
 function parseDataUrl(
   value: string,
-  fallbackMimeType: string,
-): { buffer: Buffer, mimeType: string } | null {
+  fallbackMimeType: string
+): { buffer: Buffer; mimeType: string } | null {
   const match = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/)
-  if (!match)
-    return null
+  if (!match) return null
   const mimeType = match[1] || fallbackMimeType
   const isBase64 = Boolean(match[2])
   const payload = match[3] || ''
   return {
     mimeType,
-    buffer: isBase64 ? Buffer.from(payload, 'base64') : Buffer.from(decodeURIComponent(payload)),
+    buffer: isBase64 ? Buffer.from(payload, 'base64') : Buffer.from(decodeURIComponent(payload))
   }
 }
 
 function extensionFromImageMime(mimeType: string): string {
   const normalized = mimeType.toLowerCase()
-  if (normalized.includes('jpeg') || normalized.includes('jpg'))
-    return 'jpg'
-  if (normalized.includes('webp'))
-    return 'webp'
-  if (normalized.includes('gif'))
-    return 'gif'
-  if (normalized.includes('bmp'))
-    return 'bmp'
+  if (normalized.includes('jpeg') || normalized.includes('jpg')) return 'jpg'
+  if (normalized.includes('webp')) return 'webp'
+  if (normalized.includes('gif')) return 'gif'
+  if (normalized.includes('bmp')) return 'bmp'
   return 'png'
 }
 
 async function toImageFilePayload(
   source: IntelligenceVisionImageSource,
-  fallbackName: string,
+  fallbackName: string
 ): Promise<ImageFilePayload> {
   if (source.type === 'file' && source.filePath) {
     const buffer = await readFile(source.filePath)
@@ -361,17 +345,17 @@ async function toImageFilePayload(
       throw new Error('Image payload is required')
     }
     const mimeType = detectMime(source.filePath)
-    const extension
-      = path.extname(source.filePath).replace(/^\./, '') || extensionFromImageMime(mimeType)
+    const extension =
+      path.extname(source.filePath).replace(/^\./, '') || extensionFromImageMime(mimeType)
     return {
       blob: new Blob([new Uint8Array(buffer)], { type: mimeType }),
       filename: `${fallbackName}.${extension}`,
-      mimeType,
+      mimeType
     }
   }
 
-  const raw
-    = source.type === 'data-url'
+  const raw =
+    source.type === 'data-url'
       ? source.dataUrl
       : source.type === 'base64'
         ? source.base64
@@ -382,7 +366,7 @@ async function toImageFilePayload(
   }
   const parsed = parseDataUrl(value, 'image/png') ?? {
     buffer: Buffer.from(value, 'base64'),
-    mimeType: 'image/png',
+    mimeType: 'image/png'
   }
   if (parsed.buffer.byteLength === 0) {
     throw new Error('Image payload is required')
@@ -390,18 +374,18 @@ async function toImageFilePayload(
   return {
     blob: new Blob([new Uint8Array(parsed.buffer)], { type: parsed.mimeType }),
     filename: `${fallbackName}.${extensionFromImageMime(parsed.mimeType)}`,
-    mimeType: parsed.mimeType,
+    mimeType: parsed.mimeType
   }
 }
 
 function normalizeImageSize(width?: number, height?: number): string | undefined {
   if (
-    typeof width !== 'number'
-    || typeof height !== 'number'
-    || !Number.isFinite(width)
-    || !Number.isFinite(height)
-    || width <= 0
-    || height <= 0
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
   ) {
     return undefined
   }
@@ -418,8 +402,7 @@ function normalizeImageCount(count?: number): number | undefined {
 function appendImagePromptModifiers(payload: IntelligenceImageGeneratePayload): string {
   const prompt = payload.prompt.trim()
   const modifiers: string[] = []
-  if (payload.style?.trim())
-    modifiers.push(`Style: ${payload.style.trim()}`)
+  if (payload.style?.trim()) modifiers.push(`Style: ${payload.style.trim()}`)
   if (payload.negativePrompt?.trim()) {
     modifiers.push(`Avoid: ${payload.negativePrompt.trim()}`)
   }
@@ -433,17 +416,17 @@ function normalizeOpenAiImageItems(value: unknown): Array<{
 }> {
   return Array.isArray(value)
     ? value
-        .map(item => asRecord(item))
-        .map(item => ({
+        .map((item) => asRecord(item))
+        .map((item) => ({
           ...(typeof item.url === 'string' ? { url: item.url } : {}),
           ...(typeof item.b64_json === 'string' ? { base64: item.b64_json } : {}),
           ...(typeof item.base64 === 'string' ? { base64: item.base64 } : {}),
           ...(typeof item.revised_prompt === 'string'
             ? { revisedPrompt: item.revised_prompt }
             : {}),
-          ...(typeof item.revisedPrompt === 'string' ? { revisedPrompt: item.revisedPrompt } : {}),
+          ...(typeof item.revisedPrompt === 'string' ? { revisedPrompt: item.revisedPrompt } : {})
         }))
-        .filter(item => Boolean(item.url || item.base64))
+        .filter((item) => Boolean(item.url || item.base64))
     : []
 }
 
@@ -453,12 +436,12 @@ function extractImageUsage(raw: Record<string, unknown>): IntelligenceUsageInfo 
   const completionTokens = numberFrom(
     usage.output_tokens,
     usage.completion_tokens,
-    usage.completionTokens,
+    usage.completionTokens
   )
   const totalTokens = numberFrom(
     usage.total_tokens,
     usage.totalTokens,
-    promptTokens + completionTokens,
+    promptTokens + completionTokens
   )
   return { promptTokens, completionTokens, totalTokens }
 }
@@ -486,7 +469,7 @@ function normalizeSpeechFormat(format: IntelligenceTTSPayload['format']): {
   }
 }
 
-function normalizeAudioFormat(format?: string): { extension: string, mimeType: string } {
+function normalizeAudioFormat(format?: string): { extension: string; mimeType: string } {
   switch (format?.toLowerCase()) {
     case 'mp3':
       return { extension: 'mp3', mimeType: 'audio/mpeg' }
@@ -504,30 +487,24 @@ function normalizeAudioFormat(format?: string): { extension: string, mimeType: s
   }
 }
 
-function parseAudioDataUrl(value: string): { buffer: Buffer, mimeType: string } | null {
+function parseAudioDataUrl(value: string): { buffer: Buffer; mimeType: string } | null {
   return parseDataUrl(value, 'audio/wav')
 }
 
 function extensionFromMime(mimeType: string, fallback: string): string {
   const normalized = mimeType.toLowerCase()
-  if (normalized.includes('mpeg'))
-    return 'mp3'
-  if (normalized.includes('ogg') || normalized.includes('opus'))
-    return 'ogg'
-  if (normalized.includes('flac'))
-    return 'flac'
-  if (normalized.includes('mp4') || normalized.includes('m4a'))
-    return 'm4a'
-  if (normalized.includes('webm'))
-    return 'webm'
-  if (normalized.includes('wav'))
-    return 'wav'
+  if (normalized.includes('mpeg')) return 'mp3'
+  if (normalized.includes('ogg') || normalized.includes('opus')) return 'ogg'
+  if (normalized.includes('flac')) return 'flac'
+  if (normalized.includes('mp4') || normalized.includes('m4a')) return 'm4a'
+  if (normalized.includes('webm')) return 'webm'
+  if (normalized.includes('wav')) return 'wav'
   return fallback
 }
 
 function toAudioFilePayload(
   audio: ArrayBuffer | string,
-  format?: string,
+  format?: string
 ): {
   blob: Blob
   filename: string
@@ -540,8 +517,7 @@ function toAudioFilePayload(
 
   if (audio instanceof ArrayBuffer) {
     buffer = Buffer.from(audio)
-  }
-  else {
+  } else {
     const value = typeof audio === 'string' ? audio.trim() : ''
     if (!value) {
       throw new Error('Audio payload is required')
@@ -551,8 +527,7 @@ function toAudioFilePayload(
       buffer = parsed.buffer
       mimeType = parsed.mimeType
       extension = extensionFromMime(mimeType, extension)
-    }
-    else {
+    } else {
       buffer = Buffer.from(value, 'base64')
     }
   }
@@ -564,32 +539,32 @@ function toAudioFilePayload(
   return {
     blob: new Blob([new Uint8Array(buffer)], { type: mimeType }),
     filename: `audio.${extension}`,
-    mimeType,
+    mimeType
   }
 }
 
 function readAudioSegments(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
     ? value.filter(
-        (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object',
+        (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object'
       )
     : []
 }
 
 function readAudioConfidence(
   record: Record<string, unknown>,
-  segments: Array<Record<string, unknown>>,
+  segments: Array<Record<string, unknown>>
 ): number {
   if (typeof record.confidence === 'number' && Number.isFinite(record.confidence)) {
     return Math.min(1, Math.max(0, record.confidence))
   }
   const scores = segments
-    .map(segment => segment.confidence)
+    .map((segment) => segment.confidence)
     .filter((score): score is number => typeof score === 'number' && Number.isFinite(score))
   if (scores.length > 0) {
     return Math.min(
       1,
-      Math.max(0, scores.reduce((total, score) => total + score, 0) / scores.length),
+      Math.max(0, scores.reduce((total, score) => total + score, 0) / scores.length)
     )
   }
   return typeof record.text === 'string' && record.text.trim() ? 1 : 0
@@ -597,7 +572,7 @@ function readAudioConfidence(
 
 function readAudioDuration(
   record: Record<string, unknown>,
-  segments: Array<Record<string, unknown>>,
+  segments: Array<Record<string, unknown>>
 ): number {
   if (typeof record.duration === 'number' && Number.isFinite(record.duration)) {
     return Math.max(0, record.duration)
@@ -641,7 +616,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     const model = options.modelPreference?.[0] || this.config.defaultModel || this.defaultChatModel
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/langchain/chat',
+      endpoint: '/langchain/chat'
     })
     return model
   }
@@ -656,12 +631,12 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
   protected resolveTtsModel(
     payload: IntelligenceTTSPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): string {
     const model = options.modelPreference?.[0] || this.resolveDefaultTtsModel(payload)
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/audio/speech',
+      endpoint: '/audio/speech'
     })
     return model
   }
@@ -670,7 +645,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     const model = options.modelPreference?.[0] || this.defaultImageModel
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/images',
+      endpoint: '/images'
     })
     return model
   }
@@ -679,7 +654,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     const model = options.modelPreference?.[0] || this.defaultTranscriptionModel
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/audio/transcriptions',
+      endpoint: '/audio/transcriptions'
     })
     return model
   }
@@ -701,14 +676,14 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       timeout: params.options.timeout,
       configuration: {
         baseURL: this.resolveBaseUrl(),
-        fetch: createNetworkServiceFetch(),
-      },
+        fetch: createNetworkServiceFetch()
+      }
     })
   }
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -718,7 +693,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       model: modelName,
       options,
       temperature: payload.temperature,
-      maxTokens: payload.maxTokens,
+      maxTokens: payload.maxTokens
     })
 
     const response = await model.invoke(toLangChainMessages(payload.messages))
@@ -733,13 +708,13 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       latency: Date.now() - startTime,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
-  async* chatStream(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const modelName = this.resolveChatModel(options)
     const model = await this.createChatModel({
@@ -747,14 +722,13 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       options,
       temperature: payload.temperature,
       maxTokens: payload.maxTokens,
-      streaming: true,
+      streaming: true
     })
 
     const stream = await model.stream(toLangChainMessages(payload.messages))
     for await (const chunk of stream) {
       const text = extractTextContent(asRecord(chunk).content)
-      if (!text)
-        continue
+      if (!text) continue
       yield { delta: text, done: false }
     }
 
@@ -763,7 +737,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
   async embedding(
     payload: IntelligenceEmbeddingPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<number[]>> {
     if (!this.embeddingSupported) {
       throw new Error(`[${this.type}] Embedding capability is unsupported`)
@@ -775,7 +749,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
     this.validateModel(modelName, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/langchain/embedding',
+      endpoint: '/langchain/embedding'
     })
 
     const { OpenAIEmbeddings } = await getLangChainOpenAiModule()
@@ -785,8 +759,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       timeout: options.timeout,
       configuration: {
         baseURL: this.resolveBaseUrl(),
-        fetch: createNetworkServiceFetch(),
-      },
+        fetch: createNetworkServiceFetch()
+      }
     })
 
     const textInput = payload.text
@@ -795,8 +769,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     if (Array.isArray(textInput)) {
       const vectors = await embeddings.embedDocuments(textInput.filter(Boolean))
       result = vectors[0] ?? []
-    }
-    else {
+    } else {
       result = await embeddings.embedQuery(textInput)
     }
 
@@ -805,30 +778,30 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       usage: {
         promptTokens: 0,
         completionTokens: 0,
-        totalTokens: 0,
+        totalTokens: 0
       },
       model: modelName,
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
   async translate(
     payload: IntelligenceTranslatePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
-          content: `You are a professional translator. Translate the following text to ${payload.targetLang}.`,
+          content: `You are a professional translator. Translate the following text to ${payload.targetLang}.`
         },
         {
           role: 'user',
-          content: payload.text,
-        },
-      ],
+          content: payload.text
+        }
+      ]
     }
 
     return this.chat(chatPayload, options)
@@ -838,7 +811,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     source: IntelligenceVisionImageSource,
     prompt: string,
     options: IntelligenceInvokeOptions,
-    maxTokens?: number,
+    maxTokens?: number
   ): Promise<{
     rawMessage: Record<string, unknown>
     rawContent: string
@@ -852,15 +825,15 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
 
     const startedAt = Date.now()
     const traceId = this.generateTraceId()
-    const modelName
-      = options.modelPreference?.[0]
-        || this.config.defaultModel
-        || this.defaultVisionModel
-        || this.defaultChatModel
+    const modelName =
+      options.modelPreference?.[0] ||
+      this.config.defaultModel ||
+      this.defaultVisionModel ||
+      this.defaultChatModel
 
     this.validateModel(modelName, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/langchain/vision',
+      endpoint: '/langchain/vision'
     })
 
     const imageDataUrl = await toVisionDataUrl(source)
@@ -870,9 +843,9 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       new HumanMessage({
         content: [
           { type: 'text', text: 'Analyze the supplied image according to the instructions.' },
-          { type: 'image_url', image_url: { url: imageDataUrl } },
-        ] as unknown as string,
-      }),
+          { type: 'image_url', image_url: { url: imageDataUrl } }
+        ] as unknown as string
+      })
     ])
     const rawMessage = asRecord(response)
 
@@ -881,30 +854,30 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       rawContent: extractTextContent(rawMessage.content),
       modelName,
       traceId,
-      startedAt,
+      startedAt
     }
   }
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
-    const prompt
-      = payload.prompt
-        || 'Extract all text from this image and return the result as JSON with fields: text, confidence, language, keywords, blocks.'
+    const prompt =
+      payload.prompt ||
+      'Extract all text from this image and return the result as JSON with fields: text, confidence, language, keywords, blocks.'
     const { rawMessage, rawContent, modelName, traceId, startedAt } = await this.invokeVisionImage(
       payload.source,
       prompt,
       options,
-      options.metadata?.maxTokens as number | undefined,
+      options.metadata?.maxTokens as number | undefined
     )
     const parsed = this.safeParseJson(rawContent)
     const parsedRecord = asRecord(parsed)
     const hasParsed = Object.keys(parsedRecord).length > 0
 
     const text = typeof parsedRecord.text === 'string' ? parsedRecord.text : rawContent
-    const confidence
-      = typeof parsedRecord.confidence === 'number' ? parsedRecord.confidence : undefined
+    const confidence =
+      typeof parsedRecord.confidence === 'number' ? parsedRecord.confidence : undefined
     const language = typeof parsedRecord.language === 'string' ? parsedRecord.language : undefined
     const keywords = Array.isArray(parsedRecord.keywords)
       ? parsedRecord.keywords.filter((item): item is string => typeof item === 'string')
@@ -922,27 +895,27 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       latency: Date.now() - startedAt,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
   async imageCaption(
     payload: IntelligenceImageCaptionPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>> {
     const language = payload.language || 'the image language'
     const style = payload.style || 'brief'
-    const maxLength
-      = typeof payload.maxLength === 'number'
-        && Number.isFinite(payload.maxLength)
-        && payload.maxLength > 0
+    const maxLength =
+      typeof payload.maxLength === 'number' &&
+      Number.isFinite(payload.maxLength) &&
+      payload.maxLength > 0
         ? Math.floor(payload.maxLength)
         : undefined
     const { rawMessage, rawContent, modelName, traceId, startedAt } = await this.invokeVisionImage(
       payload.source,
       `Generate a ${style} image caption in ${language}.${maxLength ? ` Keep the caption under ${maxLength} characters.` : ''} Return JSON with fields: caption, alternativeCaptions, tags, confidence.`,
       options,
-      512,
+      512
     )
     const result = this.normalizeImageCaptionResult(rawContent, maxLength)
     return {
@@ -952,13 +925,13 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       latency: Date.now() - startedAt,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
   async imageAnalyze(
     payload: IntelligenceImageAnalyzePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>> {
     const analysisTypes = payload.analysisTypes?.length
       ? payload.analysisTypes.join(', ')
@@ -967,7 +940,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       payload.source,
       `Analyze this image in ${payload.language || 'the image language'} for: ${analysisTypes}.${payload.detailed ? ' Include detailed findings.' : ''} Return JSON with fields: description, objects, faces, colors, scene, text, tags. Objects require name and confidence (0-1); colors require color and percentage; scene requires type and confidence (0-1).`,
       options,
-      payload.detailed ? 2_000 : 1_000,
+      payload.detailed ? 2_000 : 1_000
     )
     const result = this.normalizeImageAnalyzeResult(rawContent)
 
@@ -978,13 +951,13 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       latency: Date.now() - startedAt,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
   async imageGenerate(
     payload: IntelligenceImageGeneratePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>> {
     const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : ''
     if (!prompt) {
@@ -1000,8 +973,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       method: 'POST',
       url: `${this.resolveBaseUrl()}/images/generations`,
       headers: {
-        'Authorization': `Bearer ${this.resolveApiKey()}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.resolveApiKey()}`,
+        'Content-Type': 'application/json'
       },
       body: {
         model: modelName,
@@ -1011,21 +984,21 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         ...(payload.quality ? { quality: payload.quality } : {}),
         ...(typeof payload.seed === 'number' && Number.isFinite(payload.seed)
           ? { seed: Math.floor(payload.seed) }
-          : {}),
+          : {})
       },
       timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,
         retryOnTimeout: false,
-        retryableStatusCodes: [],
+        retryableStatusCodes: []
       },
       cooldownPolicy: {
         key: `${this.config.id}:image.generate`,
         failureThreshold: 2,
         cooldownMs: 15_000,
-        autoResetOnSuccess: true,
-      },
+        autoResetOnSuccess: true
+      }
     })
     const raw = asRecord(response.data)
     const images = normalizeOpenAiImageItems(raw.data)
@@ -1038,19 +1011,19 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         images,
         ...(typeof payload.seed === 'number' && Number.isFinite(payload.seed)
           ? { seed: Math.floor(payload.seed) }
-          : {}),
+          : {})
       },
       usage: extractImageUsage(raw),
       model: typeof raw.model === 'string' ? raw.model : modelName,
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
   async imageEdit(
     payload: IntelligenceImageEditPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>> {
     const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : ''
     if (!prompt) {
@@ -1074,7 +1047,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       method: 'POST',
       url: `${this.resolveBaseUrl()}/images/edits`,
       headers: {
-        Authorization: `Bearer ${this.resolveApiKey()}`,
+        Authorization: `Bearer ${this.resolveApiKey()}`
       },
       body: form,
       timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
@@ -1082,14 +1055,14 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         maxRetries: 0,
         retryOnNetworkError: false,
         retryOnTimeout: false,
-        retryableStatusCodes: [],
+        retryableStatusCodes: []
       },
       cooldownPolicy: {
         key: `${this.config.id}:image.edit`,
         failureThreshold: 2,
         cooldownMs: 15_000,
-        autoResetOnSuccess: true,
-      },
+        autoResetOnSuccess: true
+      }
     })
     const raw = asRecord(response.data)
     const images = normalizeOpenAiImageItems(raw.data)
@@ -1102,21 +1075,21 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       result: {
         image: {
           ...(first.url ? { url: first.url } : {}),
-          ...(first.base64 ? { base64: first.base64 } : {}),
+          ...(first.base64 ? { base64: first.base64 } : {})
         },
-        ...(first.revisedPrompt ? { revisedPrompt: first.revisedPrompt } : {}),
+        ...(first.revisedPrompt ? { revisedPrompt: first.revisedPrompt } : {})
       },
       usage: extractImageUsage(raw),
       model: typeof raw.model === 'string' ? raw.model : modelName,
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
   async tts(
     payload: IntelligenceTTSPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceTTSResult>> {
     const text = typeof payload.text === 'string' ? payload.text.trim() : ''
     if (!text) {
@@ -1134,15 +1107,15 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       method: 'POST',
       url: `${this.resolveBaseUrl()}/audio/speech`,
       headers: {
-        'Authorization': `Bearer ${this.resolveApiKey()}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.resolveApiKey()}`,
+        'Content-Type': 'application/json'
       },
       body: {
         model: modelName,
         input: text,
         voice,
         response_format: responseFormat,
-        ...(speed ? { speed } : {}),
+        ...(speed ? { speed } : {})
       },
       responseType: 'arrayBuffer',
       timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
@@ -1150,14 +1123,14 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         maxRetries: 0,
         retryOnNetworkError: false,
         retryOnTimeout: false,
-        retryableStatusCodes: [],
+        retryableStatusCodes: []
       },
       cooldownPolicy: {
         key: `${this.config.id}:audio.tts`,
         failureThreshold: 2,
         cooldownMs: 15_000,
-        autoResetOnSuccess: true,
-      },
+        autoResetOnSuccess: true
+      }
     })
 
     if (response.data.byteLength === 0) {
@@ -1167,23 +1140,23 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return {
       result: {
         audio: arrayBufferToDataUrl(response.data, mimeType),
-        format: responseFormat,
+        format: responseFormat
       },
       usage: {
         promptTokens: 0,
         completionTokens: 0,
-        totalTokens: 0,
+        totalTokens: 0
       },
       model: modelName,
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
   async stt(
     payload: IntelligenceSTTPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceSTTResult>> {
     const result = await this.invokeAudioTranscription(
       {
@@ -1191,11 +1164,11 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         language: payload.language,
         format: payload.format,
         enableTimestamps: payload.enableTimestamps,
-        task: 'transcribe',
+        task: 'transcribe'
       },
-      options,
+      options
     )
-    const segments = readAudioSegments(result.raw.segments).map(segment => ({
+    const segments = readAudioSegments(result.raw.segments).map((segment) => ({
       text: typeof segment.text === 'string' ? segment.text : '',
       start:
         typeof segment.start === 'number' && Number.isFinite(segment.start) ? segment.start : 0,
@@ -1203,7 +1176,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       ...(typeof segment.speaker === 'string' ? { speaker: segment.speaker } : {}),
       ...(typeof segment.confidence === 'number' && Number.isFinite(segment.confidence)
         ? { confidence: segment.confidence }
-        : {}),
+        : {})
     }))
     return {
       ...result.invokeResult,
@@ -1211,14 +1184,14 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         text: result.text,
         confidence: readAudioConfidence(result.raw, readAudioSegments(result.raw.segments)),
         ...(result.language ? { language: result.language } : {}),
-        ...(segments.length > 0 ? { segments } : {}),
-      },
+        ...(segments.length > 0 ? { segments } : {})
+      }
     }
   }
 
   async audioTranscribe(
     payload: IntelligenceAudioTranscribePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>> {
     const result = await this.invokeAudioTranscription(payload, options)
     const rawSegments = readAudioSegments(result.raw.segments)
@@ -1230,7 +1203,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       end: typeof segment.end === 'number' && Number.isFinite(segment.end) ? segment.end : 0,
       ...(typeof segment.confidence === 'number' && Number.isFinite(segment.confidence)
         ? { confidence: segment.confidence }
-        : {}),
+        : {})
     }))
     return {
       ...result.invokeResult,
@@ -1238,14 +1211,14 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         text: result.text,
         language: result.language || payload.language || '',
         duration: readAudioDuration(result.raw, rawSegments),
-        ...(segments.length > 0 ? { segments } : {}),
-      },
+        ...(segments.length > 0 ? { segments } : {})
+      }
     }
   }
 
   private async invokeAudioTranscription(
     payload: IntelligenceAudioTranscribePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<{
     invokeResult: Omit<IntelligenceInvokeResult<unknown>, 'result'>
     raw: Record<string, unknown>
@@ -1275,7 +1248,7 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       method: 'POST',
       url: `${this.resolveBaseUrl()}/audio/${endpoint}`,
       headers: {
-        Authorization: `Bearer ${this.resolveApiKey()}`,
+        Authorization: `Bearer ${this.resolveApiKey()}`
       },
       body: form,
       timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
@@ -1283,14 +1256,14 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         maxRetries: 0,
         retryOnNetworkError: false,
         retryOnTimeout: false,
-        retryableStatusCodes: [],
+        retryableStatusCodes: []
       },
       cooldownPolicy: {
         key: `${this.config.id}:audio.${endpoint}`,
         failureThreshold: 2,
         cooldownMs: 15_000,
-        autoResetOnSuccess: true,
-      },
+        autoResetOnSuccess: true
+      }
     })
     const raw = asRecord(response.data)
     const text = typeof raw.text === 'string' ? raw.text : ''
@@ -1304,11 +1277,11 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
         model: typeof raw.model === 'string' ? raw.model : modelName,
         latency: Date.now() - startTime,
         traceId,
-        provider: this.type,
+        provider: this.type
       },
       raw,
       text,
-      language: typeof raw.language === 'string' ? raw.language : '',
+      language: typeof raw.language === 'string' ? raw.language : ''
     }
   }
 }

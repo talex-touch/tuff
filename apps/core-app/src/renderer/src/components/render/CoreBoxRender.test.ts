@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import CoreBoxRender from './CoreBoxRender.vue'
 
 vi.mock('./BoxItem.vue', () => ({
-  default: { name: 'BoxItem', template: '<div />' },
+  default: { name: 'BoxItem', template: '<div />' }
 }))
 
 vi.mock('./WidgetFrame.vue', () => ({
@@ -13,8 +13,8 @@ vi.mock('./WidgetFrame.vue', () => ({
     name: 'WidgetFrame',
     emits: ['host-action'],
     template:
-      '<button class="widget-action" @click="$emit(\'host-action\', { actionId: \'select-context-mode\', payload: { contextMode: \'stateless\' } })">Use stateless context</button>',
-  },
+      "<button class=\"widget-action\" @click=\"$emit('host-action', { actionId: 'select-context-mode', payload: { contextMode: 'stateless' } })\">Use stateless context</button>"
+  }
 }))
 
 function createWidgetItem(): TuffItem {
@@ -27,13 +27,13 @@ function createWidgetItem(): TuffItem {
       custom: {
         type: 'vue',
         content: 'touch-intelligence::intelligence-ask',
-        data: {},
-      },
+        data: {}
+      }
     },
     meta: {
       pluginName: 'touch-intelligence',
-      featureId: 'intelligence-ask',
-    },
+      featureId: 'intelligence-ask'
+    }
   }
 }
 
@@ -43,8 +43,8 @@ describe('coreBoxRender widget interactions', () => {
       props: {
         active: true,
         item: createWidgetItem(),
-        index: 0,
-      },
+        index: 0
+      }
     })
 
     await wrapper.get('.widget-action').trigger('click')
@@ -53,9 +53,9 @@ describe('coreBoxRender widget interactions', () => {
       [
         {
           actionId: 'select-context-mode',
-          payload: { contextMode: 'stateless' },
-        },
-      ],
+          payload: { contextMode: 'stateless' }
+        }
+      ]
     ])
     expect(wrapper.emitted('trigger')).toBeUndefined()
   })

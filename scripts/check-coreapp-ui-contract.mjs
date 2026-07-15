@@ -16,7 +16,7 @@ const LEGACY_PRIMITIVES = new Set([
   'components/base/select/TSelect.vue',
   'components/base/select/TLabelSelect.vue',
   'components/base/select/TLabelSelectItem.vue',
-  'components/base/TuffIcon.vue'
+  'components/base/TuffIcon.vue',
 ])
 
 const LEGACY_ALLOWED = new Set([
@@ -30,18 +30,18 @@ const LEGACY_ALLOWED = new Set([
   'components/base/select/TLabelSelectItem.vue',
   'components/tabs/TTabs.vue',
   'components/menu/TouchMenu.vue',
-  'components/menu/TouchMenuItem.vue'
+  'components/menu/TouchMenuItem.vue',
 ])
 
 const files = await globby(['**/*.{vue,ts}'], {
   cwd: rendererRoot,
   absolute: true,
-  gitignore: true
+  gitignore: true,
 })
 
 const violations = []
-const importSpecifierPattern =
-  /(?:import\s+(?:type\s+)?[\s\S]*?\s+from\s*|export\s+[\s\S]*?\s+from\s*|import\s*\(\s*)['"]([^'"]+)['"]/g
+const importSpecifierPattern
+  = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]/g
 
 function normalizeRendererPath(filePath) {
   return relative(rendererRoot, filePath).replace(/\\/g, '/')
@@ -73,14 +73,16 @@ function importCandidates(resolvedPath) {
 
 for (const file of files) {
   const rel = normalizeRendererPath(file)
-  if (LEGACY_ALLOWED.has(rel)) continue
+  if (LEGACY_ALLOWED.has(rel))
+    continue
   const source = readFileSync(file, 'utf8')
   const matches = source.matchAll(importSpecifierPattern)
   for (const match of matches) {
-    const resolvedPath = resolveImportPath(match[1], file)
-    if (!resolvedPath) continue
+    const resolvedPath = resolveImportPath(match[1] ?? match[2], file)
+    if (!resolvedPath)
+      continue
     const legacyImport = importCandidates(resolvedPath).find(candidate =>
-      LEGACY_PRIMITIVES.has(candidate)
+      LEGACY_PRIMITIVES.has(candidate),
     )
     if (legacyImport) {
       violations.push(`${rel}: imports ${legacyImport}`)

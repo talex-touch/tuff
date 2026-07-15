@@ -20,7 +20,8 @@ function getMakeWidgetId() {
       ;({
         makeWidgetId: makeWidgetIdLoader,
       } = require('@talex-touch/utils/plugin/widget'))
-    } catch {
+    }
+    catch {
       makeWidgetIdLoader = (pluginName, featureId) =>
         `${pluginName}::${featureId}`
     }
@@ -37,7 +38,8 @@ function getContextExecutionRequestFactory() {
         createIntelligenceContextExecutionRequest:
           contextExecutionRequestFactoryLoader,
       } = require('@talex-touch/utils/intelligence'))
-    } catch {
+    }
+    catch {
       contextExecutionRequestFactoryLoader = ({
         capabilityId,
         input,
@@ -113,7 +115,8 @@ function resolveAuthSessionGetStateEvent() {
   try {
     const { AuthEvents } = require('@talex-touch/utils/transport/events')
     return AuthEvents.session.getState.toEventName()
-  } catch {
+  }
+  catch {
     return 'auth:session:get-state'
   }
 }
@@ -136,8 +139,8 @@ const AI_ERROR_MESSAGES = {
   UNKNOWN: 'AI 调用失败',
 }
 
-const AI_SYSTEM_PROMPT =
-  '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
+const AI_SYSTEM_PROMPT
+  = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
 const AI_COMMAND_VERSION = '1.0.0'
 const CUSTOM_AI_COMMANDS_FILE = 'ai-commands.json'
 const CUSTOM_AI_COMMANDS_SCHEMA_VERSION = 1
@@ -268,16 +271,18 @@ function isKnownIntelligenceFeature(featureId) {
 function normalizeFeaturePrompt(featureId, value) {
   const text = normalizePrompt(value)
   const command = resolveAiCommand(featureId)
-  if (!command || !text) return text
+  if (!command || !text)
+    return text
 
   const lowerText = text.toLocaleLowerCase()
   for (const prefix of command.prefixes) {
     for (const candidate of [prefix, `/${prefix}`]) {
       const normalizedCandidate = candidate.toLocaleLowerCase()
-      if (lowerText === normalizedCandidate) return ''
+      if (lowerText === normalizedCandidate)
+        return ''
       if (
-        lowerText.startsWith(normalizedCandidate) &&
-        /^[\s:：,，]/.test(text.slice(candidate.length, candidate.length + 1))
+        lowerText.startsWith(normalizedCandidate)
+        && /^[\s:：,，]/.test(text.slice(candidate.length, candidate.length + 1))
       ) {
         return text
           .slice(candidate.length)
@@ -291,7 +296,8 @@ function normalizeFeaturePrompt(featureId, value) {
 
 function buildAiCommandInvokeOptions(featureId, baseOptions) {
   const command = resolveAiCommand(featureId)
-  if (!command) return baseOptions
+  if (!command)
+    return baseOptions
   return {
     ...baseOptions,
     promptTemplate: command.promptTemplate,
@@ -305,10 +311,12 @@ function buildAiCommandInvokeOptions(featureId, baseOptions) {
 }
 
 function cloneMetadataRecord(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return null
   try {
     return JSON.parse(JSON.stringify(value))
-  } catch {
+  }
+  catch {
     return null
   }
 }
@@ -318,20 +326,23 @@ function getUtf8ByteLength(value) {
   let byteLength = 0
   for (let index = 0; index < text.length; index += 1) {
     const codeUnit = text.charCodeAt(index)
-    if (codeUnit <= 0x7f) {
+    if (codeUnit <= 0x7F) {
       byteLength += 1
-    } else if (codeUnit <= 0x7ff) {
+    }
+    else if (codeUnit <= 0x7FF) {
       byteLength += 2
-    } else if (
-      codeUnit >= 0xd800 &&
-      codeUnit <= 0xdbff &&
-      index + 1 < text.length &&
-      text.charCodeAt(index + 1) >= 0xdc00 &&
-      text.charCodeAt(index + 1) <= 0xdfff
+    }
+    else if (
+      codeUnit >= 0xD800
+      && codeUnit <= 0xDBFF
+      && index + 1 < text.length
+      && text.charCodeAt(index + 1) >= 0xDC00
+      && text.charCodeAt(index + 1) <= 0xDFFF
     ) {
       byteLength += 4
       index += 1
-    } else {
+    }
+    else {
       byteLength += 3
     }
   }
@@ -351,10 +362,10 @@ function getReservedAiCommandAliases() {
 
 function normalizeCustomAiCommand(raw, index, seenIds, seenAliases) {
   if (
-    !raw ||
-    typeof raw !== 'object' ||
-    Array.isArray(raw) ||
-    raw.enabled === false
+    !raw
+    || typeof raw !== 'object'
+    || Array.isArray(raw)
+    || raw.enabled === false
   ) {
     return null
   }
@@ -365,14 +376,14 @@ function normalizeCustomAiCommand(raw, index, seenIds, seenAliases) {
   const promptTemplate = normalizeText(raw.promptTemplate)
   const version = normalizeText(raw.version) || AI_COMMAND_VERSION
   if (
-    !/^[a-z0-9][a-z0-9-]{0,47}$/.test(id) ||
-    !name ||
-    name.length > 64 ||
-    description.length > 160 ||
-    !promptTemplate ||
-    promptTemplate.length > MAX_CUSTOM_AI_COMMAND_TEMPLATE_CHARS ||
-    !/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version) ||
-    seenIds.has(id)
+    !/^[a-z0-9][a-z0-9-]{0,47}$/.test(id)
+    || !name
+    || name.length > 64
+    || description.length > 160
+    || !promptTemplate
+    || promptTemplate.length > MAX_CUSTOM_AI_COMMAND_TEMPLATE_CHARS
+    || !/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version)
+    || seenIds.has(id)
   ) {
     return null
   }
@@ -385,9 +396,9 @@ function normalizeCustomAiCommand(raw, index, seenIds, seenAliases) {
     ),
   )
   if (
-    prefixes.length === 0 ||
-    prefixes.length > MAX_CUSTOM_AI_COMMAND_ALIASES ||
-    prefixes.some(prefix => prefix.length > 48 || prefix.startsWith('/'))
+    prefixes.length === 0
+    || prefixes.length > MAX_CUSTOM_AI_COMMAND_ALIASES
+    || prefixes.some(prefix => prefix.length > 48 || prefix.startsWith('/'))
   ) {
     return null
   }
@@ -397,23 +408,24 @@ function normalizeCustomAiCommand(raw, index, seenIds, seenAliases) {
   if (
     aliasKeys.some(
       alias =>
-        seenAliases.has(alias) ||
-        seenAliases.has(`/${alias}`) ||
-        reservedAliases.has(alias) ||
-        reservedAliases.has(`/${alias}`),
+        seenAliases.has(alias)
+        || seenAliases.has(`/${alias}`)
+        || reservedAliases.has(alias)
+        || reservedAliases.has(`/${alias}`),
     )
   ) {
     return null
   }
 
-  const promptVariables =
-    raw.promptVariables === undefined
+  const promptVariables
+    = raw.promptVariables === undefined
       ? {}
       : cloneMetadataRecord(raw.promptVariables)
-  if (!promptVariables) return null
+  if (!promptVariables)
+    return null
   if (
-    getUtf8ByteLength(JSON.stringify(promptVariables)) >
-    MAX_CUSTOM_AI_COMMAND_VARIABLE_BYTES
+    getUtf8ByteLength(JSON.stringify(promptVariables))
+    > MAX_CUSTOM_AI_COMMAND_VARIABLE_BYTES
   ) {
     return null
   }
@@ -442,17 +454,18 @@ function parseCustomAiCommandConfig(raw) {
   if (typeof config === 'string') {
     try {
       config = JSON.parse(config)
-    } catch {
+    }
+    catch {
       return { valid: false, commands: [], rejectedCount: 0 }
     }
   }
 
   if (
-    !config ||
-    typeof config !== 'object' ||
-    Array.isArray(config) ||
-    config.version !== CUSTOM_AI_COMMANDS_SCHEMA_VERSION ||
-    !Array.isArray(config.commands)
+    !config
+    || typeof config !== 'object'
+    || Array.isArray(config)
+    || config.version !== CUSTOM_AI_COMMANDS_SCHEMA_VERSION
+    || !Array.isArray(config.commands)
   ) {
     return { valid: false, commands: [], rejectedCount: 0 }
   }
@@ -469,9 +482,9 @@ function parseCustomAiCommandConfig(raw) {
     valid: true,
     commands,
     rejectedCount:
-      sourceCommands.length -
-      commands.length +
-      Math.max(0, config.commands.length - MAX_CUSTOM_AI_COMMANDS),
+      sourceCommands.length
+      - commands.length
+      + Math.max(0, config.commands.length - MAX_CUSTOM_AI_COMMANDS),
   }
 }
 
@@ -485,13 +498,13 @@ async function loadCustomAiCommandConfig() {
     const storedFiles = plugin.storage.listFiles
       ? await plugin.storage.listFiles()
       : []
-    const missingConfig =
-      stored == null ||
-      (stored &&
-        typeof stored === 'object' &&
-        !Array.isArray(stored) &&
-        Object.keys(stored).length === 0 &&
-        !storedFiles.includes(CUSTOM_AI_COMMANDS_FILE))
+    const missingConfig
+      = stored == null
+        || (stored
+          && typeof stored === 'object'
+          && !Array.isArray(stored)
+          && Object.keys(stored).length === 0
+          && !storedFiles.includes(CUSTOM_AI_COMMANDS_FILE))
     if (missingConfig) {
       const emptyConfig = {
         version: CUSTOM_AI_COMMANDS_SCHEMA_VERSION,
@@ -509,7 +522,8 @@ async function loadCustomAiCommandConfig() {
       return { valid: true, commands: [], rejectedCount: 0 }
     }
     return parseCustomAiCommandConfig(stored)
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.(
       '[touch-intelligence] failed to load custom AI Commands',
       error,
@@ -552,9 +566,9 @@ async function reloadCustomAiCommands() {
   }
 
   if (
-    !features?.addFeature ||
-    !features?.removeFeature ||
-    !features?.getFeature
+    !features?.addFeature
+    || !features?.removeFeature
+    || !features?.getFeature
   ) {
     return {
       applied: false,
@@ -587,12 +601,13 @@ async function reloadCustomAiCommands() {
     registeredCustomAiCommandFeatureIds.clear()
     for (const command of previousCommands) {
       if (
-        features.getFeature(command.featureId) ||
-        features.addFeature(buildCustomAiCommandFeature(command))
+        features.getFeature(command.featureId)
+        || features.addFeature(buildCustomAiCommandFeature(command))
       ) {
         customAiCommands.set(command.featureId, command)
         registeredCustomAiCommandFeatureIds.add(command.featureId)
-      } else {
+      }
+      else {
         logger?.error?.(
           `[touch-intelligence] failed to restore custom AI Command: ${command.featureId}`,
         )
@@ -679,18 +694,21 @@ async function commitCustomAiCommandDocument(document) {
   }
   try {
     const stored = await plugin.storage.getFile?.(CUSTOM_AI_COMMANDS_FILE)
-    if (stored != null) previousDocument = stored
+    if (stored != null)
+      previousDocument = stored
     await plugin.storage.setFile(
       CUSTOM_AI_COMMANDS_FILE,
       buildCustomAiCommandDocument(parsed.commands),
     )
     const result = await reloadCustomAiCommands()
-    if (result.applied) return { ...result, reason: '' }
+    if (result.applied)
+      return { ...result, reason: '' }
 
     await plugin.storage.setFile(CUSTOM_AI_COMMANDS_FILE, previousDocument)
     await reloadCustomAiCommands()
     return { ...result, reason: 'registry-conflict' }
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.(
       '[touch-intelligence] failed to save custom AI Commands',
       error,
@@ -698,7 +716,8 @@ async function commitCustomAiCommandDocument(document) {
     try {
       await plugin.storage.setFile(CUSTOM_AI_COMMANDS_FILE, previousDocument)
       await reloadCustomAiCommands()
-    } catch (rollbackError) {
+    }
+    catch (rollbackError) {
       logger?.error?.(
         '[touch-intelligence] failed to restore custom AI Commands after save error',
         rollbackError,
@@ -731,7 +750,8 @@ async function upsertCustomAiCommand(payload = {}) {
   const existingIndex = candidate.commands.findIndex(
     item => item.id === (originalId || nextId),
   )
-  if (existingIndex >= 0) candidate.commands[existingIndex] = command
+  if (existingIndex >= 0)
+    candidate.commands[existingIndex] = command
   else candidate.commands.push(command)
   return commitCustomAiCommandDocument(candidate)
 }
@@ -762,13 +782,16 @@ async function deleteCustomAiCommand(commandId) {
 
 function truncateText(value, max = 88) {
   const text = normalizeText(value)
-  if (!text) return ''
-  if (text.length <= max) return text
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
   return `${text.slice(0, max - 1)}…`
 }
 
 function getQueryText(query) {
-  if (typeof query === 'string') return query
+  if (typeof query === 'string')
+    return query
   return query?.text ?? ''
 }
 
@@ -780,13 +803,15 @@ function hasAiPrefix(raw) {
 
 function normalizePrompt(raw) {
   const input = normalizeText(raw)
-  if (!input) return ''
+  if (!input)
+    return ''
 
   const withoutPrefix = input.replace(
     /^(?:@?ai|\/ai|智能|问答)[\s:：，,。?？]*/i,
     '',
   )
-  if (withoutPrefix !== input) return normalizeText(withoutPrefix)
+  if (withoutPrefix !== input)
+    return normalizeText(withoutPrefix)
   return input
 }
 
@@ -820,42 +845,45 @@ function buildContextTraceId(featureId, requestId) {
 function shouldSkipOptionalHandoff(error) {
   const message = toErrorMessage(error).toLowerCase()
   return (
-    message.includes('not authenticated') ||
-    message.includes('auth required') ||
-    message.includes('nexus_auth_required') ||
-    message.includes('permission') ||
-    message.includes('denied') ||
-    message.includes('intelligence.basic') ||
-    message.includes('未登录') ||
-    message.includes('需要登录')
+    message.includes('not authenticated')
+    || message.includes('auth required')
+    || message.includes('nexus_auth_required')
+    || message.includes('permission')
+    || message.includes('denied')
+    || message.includes('intelligence.basic')
+    || message.includes('未登录')
+    || message.includes('需要登录')
   )
 }
 
 function shouldFallbackFromStream(error) {
   const message = toErrorMessage(error).toLowerCase()
   return (
-    message.includes('stream-capable transport') ||
-    message.includes('transport.stream') ||
-    message.includes('not authenticated') ||
-    message.includes('auth required') ||
-    message.includes('nexus_auth_required') ||
-    message.includes('permission') ||
-    message.includes('denied') ||
-    message.includes('intelligence.basic') ||
-    message.includes('未登录') ||
-    message.includes('需要登录')
+    message.includes('stream-capable transport')
+    || message.includes('transport.stream')
+    || message.includes('not authenticated')
+    || message.includes('auth required')
+    || message.includes('nexus_auth_required')
+    || message.includes('permission')
+    || message.includes('denied')
+    || message.includes('intelligence.basic')
+    || message.includes('未登录')
+    || message.includes('需要登录')
   )
 }
 
 function normalizeHistory(messages) {
-  if (!Array.isArray(messages)) return []
+  if (!Array.isArray(messages))
+    return []
 
   return messages
-    .map(message => {
+    .map((message) => {
       const role = normalizeText(message?.role)
       const content = normalizeText(message?.content)
-      if (!content) return null
-      if (role !== 'user' && role !== 'assistant') return null
+      if (!content)
+        return null
+      if (role !== 'user' && role !== 'assistant')
+        return null
       return { role, content }
     })
     .filter(Boolean)
@@ -867,17 +895,19 @@ function cloneHistory(messages) {
 
 function keepNewestBusinessMessages(messages) {
   const normalized = cloneHistory(messages)
-  if (normalized.length <= MAX_HISTORY_MESSAGES) return normalized
+  if (normalized.length <= MAX_HISTORY_MESSAGES)
+    return normalized
   return normalized.slice(normalized.length - MAX_HISTORY_MESSAGES)
 }
 
 async function loadStoredHistory(featureId) {
   try {
     const raw = await plugin?.storage?.getFile?.(HISTORY_FILE)
-    const byFeature =
-      raw && typeof raw === 'object' ? raw[resolveFeatureId(featureId)] : null
+    const byFeature
+      = raw && typeof raw === 'object' ? raw[resolveFeatureId(featureId)] : null
     return keepNewestBusinessMessages(byFeature?.messages || [])
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.(
       '[touch-intelligence] failed to load conversation history',
       error,
@@ -895,7 +925,8 @@ async function saveStoredHistory(featureId, messages) {
       updatedAt: Date.now(),
     }
     await plugin?.storage?.setFile?.(HISTORY_FILE, next)
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.(
       '[touch-intelligence] failed to save conversation history',
       error,
@@ -910,10 +941,12 @@ function canCommitResponse(session, requestId) {
 }
 
 function cancelStreamController(controller) {
-  if (!controller || controller.cancelled || typeof controller.cancel !== 'function') return
+  if (!controller || controller.cancelled || typeof controller.cancel !== 'function')
+    return
   try {
     controller.cancel()
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] failed to cancel superseded context stream', error)
   }
 }
@@ -989,8 +1022,8 @@ function buildHandoffContext({
         ]
       : []),
   ])
-  const conversation =
-    messages.length > 0
+  const conversation
+    = messages.length > 0
       ? {
           conversation: {
             messages,
@@ -1012,11 +1045,12 @@ function buildHandoffContext({
 }
 
 async function ensureHandoffSession(client, session, params) {
-  const handoffSessionId =
-    normalizeText(session.handoffSessionId) ||
-    buildHandoffSessionId(params.featureId)
+  const handoffSessionId
+    = normalizeText(session.handoffSessionId)
+      || buildHandoffSessionId(params.featureId)
 
-  if (!client?.agentSessionStart) return ''
+  if (!client?.agentSessionStart)
+    return ''
 
   try {
     const handoff = await client.agentSessionStart({
@@ -1038,16 +1072,19 @@ async function ensureHandoffSession(client, session, params) {
     }
     session.handoffSessionId = handoffSessionId
     return handoffSessionId
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] handoff session unavailable', error)
-    if (shouldSkipOptionalHandoff(error)) session.handoffSessionId = ''
+    if (shouldSkipOptionalHandoff(error))
+      session.handoffSessionId = ''
   }
 
   return ''
 }
 
 async function updateHandoffSession(client, session, params) {
-  if (!client?.agentSessionStart || !session.handoffSessionId) return
+  if (!client?.agentSessionStart || !session.handoffSessionId)
+    return
 
   try {
     await client.agentSessionStart({
@@ -1062,7 +1099,8 @@ async function updateHandoffSession(client, session, params) {
         lastRequestId: params.requestId,
       },
     })
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.(
       '[touch-intelligence] failed to update handoff session',
       error,
@@ -1071,15 +1109,17 @@ async function updateHandoffSession(client, session, params) {
 }
 
 function summarizeContextContinuation(value) {
-  if (!value || typeof value !== 'object') return null
+  if (!value || typeof value !== 'object')
+    return null
 
   const reason = normalizeText(value.reason)
   const status = normalizeText(value.status)
   if (
-    !CONTEXT_CONTINUATION_REASONS.has(reason) ||
-    !CONTEXT_CONTINUATION_STATUSES.has(status)
-  )
+    !CONTEXT_CONTINUATION_REASONS.has(reason)
+    || !CONTEXT_CONTINUATION_STATUSES.has(status)
+  ) {
     return null
+  }
 
   const sourceSessionId = normalizeText(value.sourceSessionId)
   const summarySourceType = normalizeText(value.summarySourceType)
@@ -1098,7 +1138,8 @@ function summarizeContextContinuation(value) {
 }
 
 function summarizeContextPackage(contextPackage) {
-  if (!contextPackage || typeof contextPackage !== 'object') return null
+  if (!contextPackage || typeof contextPackage !== 'object')
+    return null
 
   const items = Array.isArray(contextPackage.items) ? contextPackage.items : []
   const safeSourceTypes = normalizeStringList(contextPackage.sourceTypes)
@@ -1108,19 +1149,21 @@ function summarizeContextPackage(contextPackage) {
 
   for (const sourceType of safeSourceTypes) {
     sourceTypes[sourceType] = (sourceTypes[sourceType] || 0) + 1
-    if (sourceType === 'retrieval') retrievalItemCount += 1
+    if (sourceType === 'retrieval')
+      retrievalItemCount += 1
   }
   for (const item of items) {
     const sourceType = normalizeText(item?.sourceType) || 'unknown'
     sourceTypes[sourceType] = (sourceTypes[sourceType] || 0) + 1
-    if (sourceType === 'retrieval') retrievalItemCount += 1
+    if (sourceType === 'retrieval')
+      retrievalItemCount += 1
     if (item?.metadata?.citation && typeof item.metadata.citation === 'object')
       citationCount += 1
   }
 
-  const retrieval =
-    contextPackage.metadata?.retrieval &&
-    typeof contextPackage.metadata.retrieval === 'object'
+  const retrieval
+    = contextPackage.metadata?.retrieval
+      && typeof contextPackage.metadata.retrieval === 'object'
       ? contextPackage.metadata.retrieval
       : null
   const metadataCitationCount = Number(retrieval?.citationCount)
@@ -1169,10 +1212,11 @@ function hasExplicitMemoryIntent(prompt) {
 }
 
 function summarizeMemoryPolicy(result) {
-  if (!result || typeof result !== 'object') return null
+  if (!result || typeof result !== 'object')
+    return null
 
-  const candidate =
-    result.candidate && typeof result.candidate === 'object'
+  const candidate
+    = result.candidate && typeof result.candidate === 'object'
       ? result.candidate
       : null
   const summary = {
@@ -1199,10 +1243,12 @@ function summarizeMemoryPolicy(result) {
 }
 
 async function evaluateMemoryPolicyForAsk(client, { prompt, contextState }) {
-  if (typeof client?.contextEvaluateMemory !== 'function') return null
+  if (typeof client?.contextEvaluateMemory !== 'function')
+    return null
 
   const content = normalizeText(prompt)
-  if (!content || !hasExplicitMemoryIntent(content)) return null
+  if (!content || !hasExplicitMemoryIntent(content))
+    return null
 
   try {
     const result = await client.contextEvaluateMemory({
@@ -1220,7 +1266,8 @@ async function evaluateMemoryPolicyForAsk(client, { prompt, contextState }) {
       },
     })
     return summarizeMemoryPolicy(result)
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] memory policy unavailable', error)
     return null
   }
@@ -1235,11 +1282,11 @@ function normalizeContextMode(value, fallback = 'new') {
 
 function normalizeContextOwner(value, fallback = 'corebox') {
   const owner = normalizeText(value)
-  return owner === 'corebox' ||
-    owner === 'workflow' ||
-    owner === 'omni-panel' ||
-    owner === 'assistant' ||
-    owner === 'system'
+  return owner === 'corebox'
+    || owner === 'workflow'
+    || owner === 'omni-panel'
+    || owner === 'assistant'
+    || owner === 'system'
     ? owner
     : fallback
 }
@@ -1263,8 +1310,8 @@ function buildContextExecutionRequest({
   forceStateless = false,
 }) {
   const execution = entrypointContext?.execution
-  const requestedSessionId =
-    normalizeText(execution?.sessionId) || session.contextSessionId
+  const requestedSessionId
+    = normalizeText(execution?.sessionId) || session.contextSessionId
   const requestedMode = normalizeContextMode(
     execution?.mode ?? session.contextMode,
     requestedSessionId ? 'continue' : 'new',
@@ -1300,7 +1347,8 @@ function buildContextExecutionRequest({
 
 function truncateForContext(value, max = MAX_OCR_CONTEXT_CHARS) {
   const text = normalizeText(value)
-  if (text.length <= max) return text
+  if (text.length <= max)
+    return text
   return text.slice(0, max)
 }
 
@@ -1308,7 +1356,8 @@ function buildUserMessageContent(prompt, context = {}) {
   const normalizedPrompt = normalizeText(prompt)
   const ocrText = truncateForContext(context.ocrText)
 
-  if (!ocrText) return normalizedPrompt
+  if (!ocrText)
+    return normalizedPrompt
 
   const task = normalizedPrompt || '请总结剪贴板图片中的文字。'
   return `${task}\n\n以下是剪贴板图片的 OCR 文本，请只基于这些文字回答：\n${ocrText}`
@@ -1346,10 +1395,10 @@ function buildInvokeOptions({
   contextPackage,
   memoryPolicy,
 }) {
-  const contextSummary =
-    contextPackage && typeof contextPackage === 'object' ? contextPackage : null
-  const memoryPolicySummary =
-    memoryPolicy && typeof memoryPolicy === 'object' ? memoryPolicy : null
+  const contextSummary
+    = contextPackage && typeof contextPackage === 'object' ? contextPackage : null
+  const memoryPolicySummary
+    = memoryPolicy && typeof memoryPolicy === 'object' ? memoryPolicy : null
   return {
     metadata: {
       caller: CALLER_ID,
@@ -1389,10 +1438,10 @@ function normalizeModelSelection(selection = {}) {
   const providerId = normalizeText(selection.providerId)
   const model = normalizeText(selection.model)
   if (
-    !providerId ||
-    !model ||
-    providerId === AUTO_MODEL_SELECTION ||
-    model === AUTO_MODEL_SELECTION
+    !providerId
+    || !model
+    || providerId === AUTO_MODEL_SELECTION
+    || model === AUTO_MODEL_SELECTION
   ) {
     return {
       providerId: '',
@@ -1420,7 +1469,8 @@ function buildModelSelectionInvokeOptions(baseOptions, selection = {}) {
 }
 
 function normalizeStringList(values) {
-  if (!Array.isArray(values)) return []
+  if (!Array.isArray(values))
+    return []
   return Array.from(
     new Set(values.map(value => normalizeText(value)).filter(Boolean)),
   )
@@ -1428,14 +1478,17 @@ function normalizeStringList(values) {
 
 function normalizeLatency(value) {
   const latency = Number(value)
-  if (!Number.isFinite(latency) || latency < 0) return undefined
+  if (!Number.isFinite(latency) || latency < 0)
+    return undefined
   return Math.round(latency)
 }
 
 function formatLatency(latency) {
   const normalized = normalizeLatency(latency)
-  if (normalized === undefined) return ''
-  if (normalized < 1000) return `${normalized}ms`
+  if (normalized === undefined)
+    return ''
+  if (normalized < 1000)
+    return `${normalized}ms`
   return `${(normalized / 1000).toFixed(normalized >= 10000 ? 0 : 1)}s`
 }
 
@@ -1488,7 +1541,8 @@ async function streamChatAnswer({
   if (!canCommitResponse(session, requestId)) {
     throw new Error('INTELLIGENCE_STREAM_SUPERSEDED')
   }
-  if (typeof client?.contextStream !== 'function') return null
+  if (typeof client?.contextStream !== 'function')
+    return null
 
   let answer = ''
   let hasVisibleDelta = false
@@ -1502,17 +1556,19 @@ async function streamChatAnswer({
   let latency = 0
   let safeContextPackage = contextPackage
   const startedAt = Date.now()
-  const updateContextPackage = event => {
+  const updateContextPackage = (event) => {
     const next = summarizeContextPackage(
       event?.context || event?.metadata?.contextExecution,
     )
-    if (next) safeContextPackage = next
+    if (next)
+      safeContextPackage = next
   }
 
   try {
     await new Promise((resolve, reject) => {
-      const settleStream = callback => {
-        if (streamSettled) return
+      const settleStream = (callback) => {
+        if (streamSettled)
+          return
         streamSettled = true
         if (session.activeStreamController === streamController) {
           session.activeStreamController = null
@@ -1523,7 +1579,8 @@ async function streamChatAnswer({
         callback()
       }
       cancelSupersededStream = () => {
-        if (streamSettled) return
+        if (streamSettled)
+          return
         streamSuperseded = true
         cancelStreamController(streamController)
         settleStream(() => reject(new Error('INTELLIGENCE_STREAM_SUPERSEDED')))
@@ -1538,10 +1595,12 @@ async function streamChatAnswer({
             traceId = normalizeText(event?.traceId) || traceId
           },
           onDelta(delta, event) {
-            if (streamSettled || !canCommitResponse(session, requestId)) return
+            if (streamSettled || !canCommitResponse(session, requestId))
+              return
             const nextContent = normalizeText(event?.content)
             const nextDelta = normalizeText(delta)
-            if (!nextContent && !nextDelta) return
+            if (!nextContent && !nextDelta)
+              return
             hasVisibleDelta = true
             answer = nextContent || `${answer}${nextDelta}`
             provider = normalizeText(event?.provider) || provider
@@ -1577,18 +1636,19 @@ async function streamChatAnswer({
             void eventUsage
           },
           onEnd(event) {
-            if (streamSettled) return
+            if (streamSettled)
+              return
             updateContextPackage(event)
-            answer =
-              normalizeText(event?.content) ||
-              normalizeText(event?.result) ||
-              answer
+            answer
+              = normalizeText(event?.content)
+                || normalizeText(event?.result)
+                || answer
             provider = normalizeText(event?.provider) || provider
             model = normalizeText(event?.model) || model
             traceId = normalizeText(event?.traceId) || traceId
-            latency =
-              normalizeLatency(event?.metadata?.latency) ||
-              Date.now() - startedAt
+            latency
+              = normalizeLatency(event?.metadata?.latency)
+                || Date.now() - startedAt
             settleStream(resolve)
           },
           onError(error) {
@@ -1596,11 +1656,13 @@ async function streamChatAnswer({
           },
         })
       Promise.resolve(controllerPromise)
-        .then(controller => {
-          if (!controller || typeof controller.cancel !== 'function') return
+        .then((controller) => {
+          if (!controller || typeof controller.cancel !== 'function')
+            return
           streamController = controller
           if (streamSettled) {
-            if (streamSuperseded) cancelStreamController(controller)
+            if (streamSuperseded)
+              cancelStreamController(controller)
             return
           }
           if (!canCommitResponse(session, requestId)) {
@@ -1613,7 +1675,8 @@ async function streamChatAnswer({
         })
         .catch(error => settleStream(() => reject(error)))
     })
-  } catch (error) {
+  }
+  catch (error) {
     if (!hasVisibleDelta && shouldFallbackFromStream(error)) {
       logger?.warn?.(
         '[touch-intelligence] context stream unavailable, falling back to invoke',
@@ -1624,7 +1687,8 @@ async function streamChatAnswer({
     throw error
   }
 
-  if (!answer) throw createPluginError('EMPTY_RESPONSE')
+  if (!answer)
+    throw createPluginError('EMPTY_RESPONSE')
 
   return {
     requestId,
@@ -1644,8 +1708,10 @@ async function streamChatAnswer({
 }
 
 function toErrorMessage(error) {
-  if (!error) return ''
-  if (typeof error === 'string') return error
+  if (!error)
+    return ''
+  if (typeof error === 'string')
+    return error
   return normalizeText(error.message || String(error))
 }
 
@@ -1658,11 +1724,13 @@ function createPluginError(code, message) {
 }
 
 async function getAuthState() {
-  if (!touchChannel?.send) return null
+  if (!touchChannel?.send)
+    return null
 
   try {
     return await touchChannel.send(AUTH_SESSION_GET_STATE_EVENT)
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] failed to resolve auth state', error)
     return null
   }
@@ -1681,75 +1749,84 @@ function normalizeInvokeError(error) {
   let code = AI_ERROR_MESSAGES[rawCode] ? rawCode : 'UNKNOWN'
   if (code === 'UNKNOWN') {
     if (
-      lower.includes('not authenticated') ||
-      lower.includes('auth required') ||
-      lower.includes('nexus_auth_required') ||
-      lower.includes('未登录') ||
-      lower.includes('需要登录')
+      lower.includes('not authenticated')
+      || lower.includes('auth required')
+      || lower.includes('nexus_auth_required')
+      || lower.includes('未登录')
+      || lower.includes('需要登录')
     ) {
       code = 'NEXUS_AUTH_REQUIRED'
-    } else if (
-      lower.includes('permission') ||
-      lower.includes('denied') ||
-      lower.includes('intelligence.basic')
+    }
+    else if (
+      lower.includes('permission')
+      || lower.includes('denied')
+      || lower.includes('intelligence.basic')
     ) {
       code = 'PERMISSION_DENIED'
-    } else if (
-      lower.includes('quota_check_unavailable') ||
-      lower.includes('quota verification is unavailable') ||
-      lower.includes('配额校验')
+    }
+    else if (
+      lower.includes('quota_check_unavailable')
+      || lower.includes('quota verification is unavailable')
+      || lower.includes('配额校验')
     ) {
       code = 'QUOTA_CHECK_UNAVAILABLE'
-    } else if (
-      lower.includes('quota') ||
-      lower.includes('rate limit') ||
-      lower.includes('too many')
+    }
+    else if (
+      lower.includes('quota')
+      || lower.includes('rate limit')
+      || lower.includes('too many')
     ) {
       code = 'QUOTA_EXHAUSTED'
-    } else if (
-      lower.includes('network') ||
-      lower.includes('fetch failed') ||
-      lower.includes('timeout') ||
-      lower.includes('timed out') ||
-      lower.includes('econn')
+    }
+    else if (
+      lower.includes('network')
+      || lower.includes('fetch failed')
+      || lower.includes('timeout')
+      || lower.includes('timed out')
+      || lower.includes('econn')
     ) {
       code = 'NETWORK_FAILURE'
-    } else if (
-      lower.includes('provider') ||
-      lower.includes('api key') ||
-      lower.includes('not configured') ||
-      lower.includes('provider_config_unavailable') ||
-      lower.includes('no enabled providers') ||
-      lower.includes('no providers available')
+    }
+    else if (
+      lower.includes('provider')
+      || lower.includes('api key')
+      || lower.includes('not configured')
+      || lower.includes('provider_config_unavailable')
+      || lower.includes('no enabled providers')
+      || lower.includes('no providers available')
     ) {
       code = 'PROVIDER_UNAVAILABLE'
-    } else if (
-      lower.includes('capability unsupported') ||
-      lower.includes('capability not supported') ||
-      lower.includes('unsupported capability')
+    }
+    else if (
+      lower.includes('capability unsupported')
+      || lower.includes('capability not supported')
+      || lower.includes('unsupported capability')
     ) {
       code = 'CAPABILITY_UNSUPPORTED'
-    } else if (
-      lower.includes('model unsupported') ||
-      lower.includes('model does not support') ||
-      lower.includes('unsupported model') ||
-      lower.includes('unsupported') ||
-      lower.includes('not supported')
+    }
+    else if (
+      lower.includes('model unsupported')
+      || lower.includes('model does not support')
+      || lower.includes('unsupported model')
+      || lower.includes('unsupported')
+      || lower.includes('not supported')
     ) {
       code = 'MODEL_UNSUPPORTED'
-    } else if (lower.includes('invalid request') || lower.includes('invalid_request')) {
+    }
+    else if (lower.includes('invalid request') || lower.includes('invalid_request')) {
       code = 'INVALID_REQUEST'
-    } else if (
-      lower.includes('empty response') ||
-      lower.includes('未返回可用内容')
+    }
+    else if (
+      lower.includes('empty response')
+      || lower.includes('未返回可用内容')
     ) {
       code = 'EMPTY_RESPONSE'
     }
   }
 
   const fallback = AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN
-  const detail =
-    rawMessage && rawMessage !== fallback
+  const detail
+    = rawMessage && rawMessage !== fallback
       ? `：${truncateText(rawMessage, 120)}`
       : ''
   return {
@@ -1759,15 +1836,18 @@ function normalizeInvokeError(error) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request) return false
+  if (!permission?.check || !permission?.request)
+    return false
 
   try {
     const hasPermission = await permission.check(permissionId)
-    if (hasPermission) return true
+    if (hasPermission)
+      return true
 
     const granted = await permission.request(permissionId, reason)
     return Boolean(granted)
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] Failed to request permission', error)
     return false
   }
@@ -1790,41 +1870,57 @@ function buildIntelligenceMeta(details = {}) {
   const errorMessage = normalizeText(details.errorMessage)
   const inputKinds = normalizeStringList(details.inputKinds)
   const capabilities = normalizeStringList(details.capabilities)
-  const contextPackage =
-    details.contextPackage && typeof details.contextPackage === 'object'
+  const contextPackage
+    = details.contextPackage && typeof details.contextPackage === 'object'
       ? details.contextPackage
       : null
-  const memoryPolicy =
-    details.memoryPolicy && typeof details.memoryPolicy === 'object'
+  const memoryPolicy
+    = details.memoryPolicy && typeof details.memoryPolicy === 'object'
       ? details.memoryPolicy
       : null
   const latency = normalizeLatency(details.latency)
 
-  if (status) meta.status = status
-  if (stage) meta.stage = stage
-  if (requestId) meta.requestId = requestId
-  if (capabilityId) meta.capabilityId = capabilityId
-  if (capabilities.length > 0) meta.capabilities = capabilities
-  if (provider) meta.provider = provider
-  if (model) meta.model = model
-  if (traceId) meta.traceId = traceId
-  if (latency !== undefined) meta.latency = latency
-  if (inputKinds.length > 0) meta.inputKinds = inputKinds
-  if (errorCode) meta.errorCode = errorCode
-  if (errorMessage) meta.errorMessage = errorMessage
+  if (status)
+    meta.status = status
+  if (stage)
+    meta.stage = stage
+  if (requestId)
+    meta.requestId = requestId
+  if (capabilityId)
+    meta.capabilityId = capabilityId
+  if (capabilities.length > 0)
+    meta.capabilities = capabilities
+  if (provider)
+    meta.provider = provider
+  if (model)
+    meta.model = model
+  if (traceId)
+    meta.traceId = traceId
+  if (latency !== undefined)
+    meta.latency = latency
+  if (inputKinds.length > 0)
+    meta.inputKinds = inputKinds
+  if (errorCode)
+    meta.errorCode = errorCode
+  if (errorMessage)
+    meta.errorMessage = errorMessage
   if (handoffSessionId) {
     meta.handoffSessionId = handoffSessionId
     meta.sessionId = handoffSessionId
   }
   if (contextPackage) {
-    if (contextPackage.traceId) meta.contextTraceId = contextPackage.traceId
+    if (contextPackage.traceId)
+      meta.contextTraceId = contextPackage.traceId
     if (contextPackage.sessionId)
       meta.contextSessionId = contextPackage.sessionId
-    if (contextPackage.id) meta.contextPackageId = contextPackage.id
+    if (contextPackage.id)
+      meta.contextPackageId = contextPackage.id
   }
   if (memoryPolicy) {
-    if (memoryPolicy.status) meta.memoryPolicyStatus = memoryPolicy.status
-    if (memoryPolicy.reason) meta.memoryPolicyReason = memoryPolicy.reason
+    if (memoryPolicy.status)
+      meta.memoryPolicyStatus = memoryPolicy.status
+    if (memoryPolicy.reason)
+      meta.memoryPolicyReason = memoryPolicy.reason
   }
 
   return meta
@@ -1849,8 +1945,10 @@ function buildInfoItem({
     .setSubtitle(subtitle)
     .setIcon(ICON)
 
-  if (description) builder.setDescription(description)
-  if (accessory) builder.setAccessory(accessory)
+  if (description)
+    builder.setDescription(description)
+  if (accessory)
+    builder.setAccessory(accessory)
 
   const meta = {
     pluginName: PLUGIN_NAME,
@@ -1874,8 +1972,8 @@ function buildInfoItem({
 }
 
 function buildCustomAiCommandRegistryItem(result, viewState = {}) {
-  const status =
-    viewState.operationStatus || (result.applied ? 'ready' : 'error')
+  const status
+    = viewState.operationStatus || (result.applied ? 'ready' : 'error')
   const operationMessage = normalizeText(viewState.operationMessage)
   const commands = Array.from(customAiCommands.values()).map(
     serializeCustomAiCommand,
@@ -1887,8 +1985,8 @@ function buildCustomAiCommandRegistryItem(result, viewState = {}) {
       `${commands.length}/${MAX_CUSTOM_AI_COMMANDS} 个命令 · ${result.rejectedCount} 个跳过`,
     )
     .setDescription(
-      operationMessage ||
-        '创建、编辑、删除或导入自定义命令；保存后立即原子更新 CoreBox feature。',
+      operationMessage
+      || '创建、编辑、删除或导入自定义命令；保存后立即原子更新 CoreBox feature。',
     )
     .setIcon(ICON)
     .setCustomRender(
@@ -1934,7 +2032,8 @@ async function pushCustomAiCommandRegistryState(viewState = {}) {
 
 function resolveDisplayPrompt(prompt, hasImage) {
   const normalizedPrompt = normalizePrompt(prompt)
-  if (normalizedPrompt) return normalizedPrompt
+  if (normalizedPrompt)
+    return normalizedPrompt
   return hasImage ? '分析剪贴板图片' : ''
 }
 
@@ -1974,16 +2073,18 @@ function buildWidgetMessages(state = {}) {
       content: answer,
       status: state.status === 'chat-pending' ? 'streaming' : 'complete',
     })
-  } else if (state.status === 'error') {
+  }
+  else if (state.status === 'error') {
     messages.push({
       id: `${normalizeText(state.requestId) || 'draft'}-assistant-error`,
       role: 'assistant',
       content: normalizeText(state.errorMessage) || AI_ERROR_MESSAGES.UNKNOWN,
       status: 'error',
     })
-  } else if (
-    state.status === 'ocr-pending' ||
-    state.status === 'chat-pending'
+  }
+  else if (
+    state.status === 'ocr-pending'
+    || state.status === 'chat-pending'
   ) {
     messages.push({
       id: `${normalizeText(state.requestId) || 'draft'}-assistant-pending`,
@@ -1997,17 +2098,18 @@ function buildWidgetMessages(state = {}) {
 
 function buildImageContext(state = {}) {
   const hasImage = Boolean(
-    state.imageDataUrl ||
-    state.ocrText ||
-    normalizeStringList(state.inputKinds).includes(INPUT_TYPE_IMAGE),
+    state.imageDataUrl
+    || state.ocrText
+    || normalizeStringList(state.inputKinds).includes(INPUT_TYPE_IMAGE),
   )
-  if (!hasImage) return null
+  if (!hasImage)
+    return null
 
   const errorCode = normalizeText(state.errorCode)
-  const unsupported =
-    errorCode === 'MODEL_UNSUPPORTED' ||
-    errorCode === 'CAPABILITY_UNSUPPORTED' ||
-    errorCode === 'PROVIDER_UNAVAILABLE'
+  const unsupported
+    = errorCode === 'MODEL_UNSUPPORTED'
+      || errorCode === 'CAPABILITY_UNSUPPORTED'
+      || errorCode === 'PROVIDER_UNAVAILABLE'
   return {
     type: 'image',
     title: '剪贴板图片上下文',
@@ -2152,12 +2254,12 @@ function buildWidgetItem(featureId, state = {}) {
     prompt: prompt || renderState.prompt,
   })
   const subtitleMap = {
-    idle: '等待 AI 输入',
+    'idle': '等待 AI 输入',
     'ready-to-send': '按回车发送到 AI',
     'ocr-pending': '正在识别剪贴板图片…',
     'chat-pending': 'AI 正在思考…',
-    ready: '回答已生成',
-    error: 'AI 请求失败',
+    'ready': '回答已生成',
+    'error': 'AI 请求失败',
   }
 
   return new TuffItemBuilder(WIDGET_ITEM_ID)
@@ -2222,8 +2324,8 @@ async function pushWidgetState(featureId, state = {}) {
       contextMode: normalizeContextMode(state.contextMode, session.contextMode),
     })
     if (
-      typeof plugin.feature.getItems === 'function' &&
-      typeof plugin.feature.updateItem === 'function'
+      typeof plugin.feature.getItems === 'function'
+      && typeof plugin.feature.updateItem === 'function'
     ) {
       const items = plugin.feature.getItems()
       if (Array.isArray(items) && items.some(current => current?.id === WIDGET_ITEM_ID)) {
@@ -2239,7 +2341,8 @@ async function pushWidgetState(featureId, state = {}) {
     plugin.feature.clearItems()
     await plugin.feature.pushItems([item])
     return item
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] failed to push widget state', error)
     return null
   }
@@ -2356,8 +2459,8 @@ function buildErrorItem(
   history = [],
   retryContext = {},
 ) {
-  const normalizedError =
-    typeof error === 'object' && error?.code && error?.message
+  const normalizedError
+    = typeof error === 'object' && error?.code && error?.message
       ? error
       : normalizeInvokeError(error)
 
@@ -2402,19 +2505,19 @@ function getQueryInputs(query) {
 }
 
 function extractAttachedText(query) {
-  const attachedInput = getQueryInputs(query).find(input => {
+  const attachedInput = getQueryInputs(query).find((input) => {
     return (
-      (input?.type === INPUT_TYPE_TEXT || input?.type === INPUT_TYPE_HTML) &&
-      typeof input?.content === 'string' &&
-      normalizeText(input.content)
+      (input?.type === INPUT_TYPE_TEXT || input?.type === INPUT_TYPE_HTML)
+      && typeof input?.content === 'string'
+      && normalizeText(input.content)
     )
   })
   return normalizeText(attachedInput?.content)
 }
 
 function extractEntrypointContext(query) {
-  const entrypoint =
-    query && typeof query === 'object' ? query.context?.entrypoint : null
+  const entrypoint
+    = query && typeof query === 'object' ? query.context?.entrypoint : null
   const execution = entrypoint?.execution
   const id = normalizeText(entrypoint?.id)
   const mode = normalizeContextMode(execution?.mode, '')
@@ -2447,11 +2550,11 @@ function extractEntrypointContext(query) {
 }
 
 function extractImageDataUrl(query) {
-  const imageInput = getQueryInputs(query).find(input => {
+  const imageInput = getQueryInputs(query).find((input) => {
     return (
-      input?.type === INPUT_TYPE_IMAGE &&
-      typeof input?.content === 'string' &&
-      input.content.startsWith('data:image/')
+      input?.type === INPUT_TYPE_IMAGE
+      && typeof input?.content === 'string'
+      && input.content.startsWith('data:image/')
     )
   })
   return imageInput?.content || ''
@@ -2459,7 +2562,8 @@ function extractImageDataUrl(query) {
 
 function extractInputKinds(query) {
   const inputKinds = new Set()
-  if (normalizeText(getQueryText(query))) inputKinds.add(INPUT_TYPE_TEXT)
+  if (normalizeText(getQueryText(query)))
+    inputKinds.add(INPUT_TYPE_TEXT)
 
   for (const input of getQueryInputs(query)) {
     if (typeof input?.type === 'string' && input.type.trim()) {
@@ -2535,10 +2639,11 @@ function resolveDraft(session, payload, prompt) {
 }
 
 function normalizeModelOptions(values) {
-  if (!Array.isArray(values)) return []
+  if (!Array.isArray(values))
+    return []
 
   return values
-    .map(option => {
+    .map((option) => {
       const providerId = normalizeText(option?.providerId)
       const providerName = normalizeText(option?.providerName) || providerId
       const providerType = normalizeText(option?.providerType)
@@ -2567,19 +2672,21 @@ function resolveAvailableModelSelection(options, selection = {}) {
 
   const isAvailable = options.some(
     option =>
-      option.providerId === normalized.providerId &&
-      option.models.includes(normalized.model),
+      option.providerId === normalized.providerId
+      && option.models.includes(normalized.model),
   )
   return isAvailable ? normalized : { providerId: '', model: '' }
 }
 
 async function resolveModelOptions(client) {
-  if (!client?.getProviderModelOptions) return null
+  if (!client?.getProviderModelOptions)
+    return null
   try {
     return normalizeModelOptions(
       await client.getProviderModelOptions({ capabilityId: 'text.chat' }),
     )
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] failed to load model options', error)
     return null
   }
@@ -2618,8 +2725,8 @@ async function dispatchPrompt({
   const aiCommand = resolveAiCommand(resolvedFeatureId)
   const normalizedPrompt = normalizeFeaturePrompt(resolvedFeatureId, prompt)
   const session = getSession(resolvedFeatureId)
-  const isolatedEntrypoint =
-    Boolean(aiCommand) || entrypointContext?.execution?.isolated === true
+  const isolatedEntrypoint
+    = Boolean(aiCommand) || entrypointContext?.execution?.isolated === true
   let resolvedHistory = isolatedEntrypoint ? [] : cloneHistory(historySnapshot)
   let resolvedOcrText = normalizeText(ocrText)
   let selected = normalizeModelSelection({
@@ -2633,13 +2740,16 @@ async function dispatchPrompt({
   let contextPackage = null
   let memoryPolicy = null
 
-  if (!displayPrompt) return
+  if (!displayPrompt)
+    return
 
   try {
-    if (!canCommitResponse(session, requestId)) return
+    if (!canCommitResponse(session, requestId))
+      return
     const client = resolveIntelligenceClient()
     const modelOptions = await refreshSessionModelOptions(session, client)
-    if (!canCommitResponse(session, requestId)) return
+    if (!canCommitResponse(session, requestId))
+      return
     selected = resolveAvailableModelSelection(modelOptions, selected)
     const handoffSessionId = isolatedEntrypoint
       ? ''
@@ -2650,10 +2760,11 @@ async function dispatchPrompt({
           requestId,
           inputKinds,
         })
-    if (!canCommitResponse(session, requestId)) return
+    if (!canCommitResponse(session, requestId))
+      return
     if (
-      !isolatedEntrypoint &&
-      session.history.length > resolvedHistory.length
+      !isolatedEntrypoint
+      && session.history.length > resolvedHistory.length
     ) {
       resolvedHistory = cloneHistory(session.history)
     }
@@ -2679,7 +2790,8 @@ async function dispatchPrompt({
         throw createPluginError('OCR_EMPTY')
       }
 
-      if (!canCommitResponse(session, requestId)) return
+      if (!canCommitResponse(session, requestId))
+        return
 
       if (draftId && session.drafts.has(draftId)) {
         storeDraft(session, {
@@ -2763,7 +2875,8 @@ async function dispatchPrompt({
       contextPackage,
       memoryPolicy,
     })
-    if (!canCommitResponse(session, requestId)) return
+    if (!canCommitResponse(session, requestId))
+      return
 
     let mapped = streamed
     if (!mapped && typeof client?.contextInvoke === 'function') {
@@ -2796,9 +2909,9 @@ async function dispatchPrompt({
 
     contextPackage = mapped.contextPackage || contextPackage
     if (
-      !isolatedEntrypoint &&
-      contextPackage?.sessionId &&
-      contextRequest.context.mode !== 'stateless'
+      !isolatedEntrypoint
+      && contextPackage?.sessionId
+      && contextRequest.context.mode !== 'stateless'
     ) {
       session.contextSessionId = contextPackage.sessionId
       session.contextMode = 'continue'
@@ -2815,7 +2928,8 @@ async function dispatchPrompt({
       throw createPluginError('EMPTY_RESPONSE')
     }
 
-    if (!canCommitResponse(session, requestId)) return
+    if (!canCommitResponse(session, requestId))
+      return
 
     if (!isolatedEntrypoint) {
       session.history = keepNewestBusinessMessages([
@@ -2852,8 +2966,10 @@ async function dispatchPrompt({
       contextPackage,
       memoryPolicy,
     })
-  } catch (error) {
-    if (!canCommitResponse(session, requestId)) return
+  }
+  catch (error) {
+    if (!canCommitResponse(session, requestId))
+      return
 
     session.activeRequestId = ''
     session.uiRequestId = requestId
@@ -2885,18 +3001,21 @@ async function dispatchPrompt({
 }
 
 async function copyAnswer(answer) {
-  if (!clipboard?.writeText) return false
+  if (!clipboard?.writeText)
+    return false
 
   const canCopy = await ensurePermission(
     'clipboard.write',
     '需要剪贴板权限以复制 AI 回答',
   )
-  if (!canCopy) return false
+  if (!canCopy)
+    return false
 
   try {
     await clipboard.writeText(answer)
     return true
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] failed to copy answer', error)
     return false
   }
@@ -2961,7 +3080,8 @@ async function replaceAnswer(answer) {
     return replaced
       ? { success: true }
       : normalizeReplaceAnswerFailure({ code: 'AUTO_PASTE_FAILED' })
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-intelligence] failed to replace selection', error)
     return normalizeReplaceAnswerFailure(error)
   }
@@ -2995,8 +3115,8 @@ const pluginLifecycle = {
         resolvedFeatureId,
         queryContext.prompt,
       )
-      queryContext.prompt =
-        explicitPrompt || (commandStateless ? extractAttachedText(query) : '')
+      queryContext.prompt
+        = explicitPrompt || (commandStateless ? extractAttachedText(query) : '')
       queryContext.shouldShowEntry = Boolean(
         queryContext.prompt || queryContext.imageDataUrl,
       )
@@ -3030,7 +3150,8 @@ const pluginLifecycle = {
         draft.prompt,
         Boolean(draft.imageDataUrl || draft.ocrText),
       )
-      if (!displayPrompt) return true
+      if (!displayPrompt)
+        return true
 
       const hasPermission = await ensurePermission(
         'intelligence.basic',
@@ -3088,7 +3209,8 @@ const pluginLifecycle = {
         entrypointContext: draft.entrypointContext,
       })
       return true
-    } catch (error) {
+    }
+    catch (error) {
       const normalizedError = normalizeInvokeError(error)
       logger?.error?.('[touch-intelligence] Failed to handle feature', error)
       await pushWidgetState(featureId, {
@@ -3105,11 +3227,12 @@ const pluginLifecycle = {
     try {
       const actionId = context?.actionId || item?.meta?.actionId
       const actionFeatureId = normalizeText(item?.meta?.featureId)
-      const isWidgetHostAction =
-        (isKnownIntelligenceFeature(actionFeatureId) ||
-          actionFeatureId === CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID) &&
-        Boolean(actionId)
-      if (item?.meta?.defaultAction !== ACTION_ID && !isWidgetHostAction) return
+      const isWidgetHostAction
+        = (isKnownIntelligenceFeature(actionFeatureId)
+          || actionFeatureId === CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID)
+        && Boolean(actionId)
+      if (item?.meta?.defaultAction !== ACTION_ID && !isWidgetHostAction)
+        return
       const payload = item.meta?.payload || {}
       const prompt = normalizePrompt(payload.prompt)
       const featureId = resolveFeatureId(item.meta?.featureId)
@@ -3124,13 +3247,16 @@ const pluginLifecycle = {
         if (actionId === 'reload-custom-ai-commands') {
           result = await reloadCustomAiCommands()
           successMessage = '配置已重新加载。'
-        } else if (actionId === 'save-custom-ai-command') {
+        }
+        else if (actionId === 'save-custom-ai-command') {
           result = await upsertCustomAiCommand(payload)
           successMessage = '命令已保存并生效。'
-        } else if (actionId === 'delete-custom-ai-command') {
+        }
+        else if (actionId === 'delete-custom-ai-command') {
           result = await deleteCustomAiCommand(payload.commandId)
           successMessage = '命令已删除。'
-        } else if (actionId === 'import-custom-ai-commands') {
+        }
+        else if (actionId === 'import-custom-ai-commands') {
           result = await commitCustomAiCommandDocument(payload.document)
           successMessage = '命令配置已导入并生效。'
         }
@@ -3158,7 +3284,8 @@ const pluginLifecycle = {
 
       if (actionId === 'copy-answer') {
         const answer = normalizeText(payload.answer)
-        if (!answer) return
+        if (!answer)
+          return
 
         const copied = await copyAnswer(answer)
         if (!copied) {
@@ -3211,7 +3338,8 @@ const pluginLifecycle = {
 
       if (actionId === 'replace-answer') {
         const answer = normalizeText(payload.answer)
-        if (!answer) return
+        if (!answer)
+          return
 
         const replacement = await replaceAnswer(answer)
         if (!replacement.success) {
@@ -3369,7 +3497,8 @@ const pluginLifecycle = {
           hasImageContext,
         )
 
-        if (!displayPrompt) return
+        if (!displayPrompt)
+          return
 
         supersedeAllActiveRequests()
         const hasPermission = await ensurePermission(
@@ -3396,8 +3525,8 @@ const pluginLifecycle = {
           }
         }
 
-        const historySnapshot =
-          commandStateless || draft.entrypointContext?.execution?.isolated
+        const historySnapshot
+          = commandStateless || draft.entrypointContext?.execution?.isolated
             ? []
             : actionId === 'retry' && Array.isArray(payload.history)
               ? cloneHistory(payload.history)
@@ -3435,7 +3564,8 @@ const pluginLifecycle = {
         })
         return { externalAction: true }
       }
-    } catch (error) {
+    }
+    catch (error) {
       logger?.error?.('[touch-intelligence] Action failed', {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,

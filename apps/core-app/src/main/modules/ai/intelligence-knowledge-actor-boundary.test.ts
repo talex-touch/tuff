@@ -16,17 +16,17 @@ vi.mock('../sentry/sentry-service', () => {
   return {
     SentryServiceModule,
     getSentryService: vi.fn(() => service),
-    setSentryServiceInstance: vi.fn(),
+    setSentryServiceInstance: vi.fn()
   }
 })
 
 const localKnowledgeEngineMocks = vi.hoisted(() => ({
   indexDocument: vi.fn(async (input: { id?: string }) => ({
     document: { id: input.id },
-    chunks: [],
+    chunks: []
   })),
   indexChunk: vi.fn(async (input: { id?: string; documentId?: string }) => ({
-    chunk: { id: input.id, documentId: input.documentId },
+    chunk: { id: input.id, documentId: input.documentId }
   })),
   search: vi.fn(async () => ({ status: 'ok', hits: [] })),
   buildContext: vi.fn(async () => ({
@@ -34,15 +34,15 @@ const localKnowledgeEngineMocks = vi.hoisted(() => ({
     contextText: '',
     chunks: [],
     tokenEstimate: 0,
-    citations: [],
-  })),
+    citations: []
+  }))
 }))
 
 vi.mock('./intelligence-local-knowledge-engine', () => ({
-  localKnowledgeEngine: localKnowledgeEngineMocks,
+  localKnowledgeEngine: localKnowledgeEngineMocks
 }))
 vi.mock('@talex-touch/utils/transport/events/types', () => ({
-  isIntelligenceErrorCode: vi.fn(() => false),
+  isIntelligenceErrorCode: vi.fn(() => false)
 }))
 
 type KnowledgeHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
@@ -59,10 +59,10 @@ function captureKnowledgeHandlers(): Map<string, KnowledgeHandler> {
       event: TuffEvent<unknown, unknown> & { toEventName: () => string },
       _action: string,
       _permissionId: string,
-      handler: KnowledgeHandler,
+      handler: KnowledgeHandler
     ) => {
       handlers.set(event.toEventName(), handler)
-    },
+    }
   )
   const module = new IntelligenceModule() as unknown as KnowledgeChannelRegistrar
   module.registerKnowledgeChannels(register)
@@ -71,7 +71,7 @@ function captureKnowledgeHandlers(): Map<string, KnowledgeHandler> {
 
 function getHandler(
   handlers: Map<string, KnowledgeHandler>,
-  eventKey: KnowledgeEventKey,
+  eventKey: KnowledgeEventKey
 ): KnowledgeHandler {
   const handler = handlers.get(intelligenceKnowledgeEvents[eventKey].toEventName())
   if (!handler) {
@@ -82,7 +82,7 @@ function getHandler(
 
 function pluginContext(pluginId = 'notes-plugin'): HandlerContext {
   return {
-    plugin: { name: pluginId, uniqueKey: `${pluginId}-key`, verified: true },
+    plugin: { name: pluginId, uniqueKey: `${pluginId}-key`, verified: true }
   } as HandlerContext
 }
 
@@ -110,7 +110,7 @@ describe('intelligenceModule local knowledge actor boundary', () => {
       content: 'Plugin-owned searchable text.',
       permissionScope: 'plugin:other-plugin',
       metadata: { category: 'guide' },
-      chunkSize: 320,
+      chunkSize: 320
     }
     const implicitPayload = {
       sourceType: 'plugin',
@@ -118,7 +118,7 @@ describe('intelligenceModule local knowledge actor boundary', () => {
       title: 'Release Notes',
       content: 'Stable implicit identity source.',
       metadata: { category: 'release-notes' },
-      chunkSize: 480,
+      chunkSize: 480
     }
 
     await indexDocument(explicitPayload, pluginContext())
@@ -136,12 +136,12 @@ describe('intelligenceModule local knowledge actor boundary', () => {
     expect(explicitFirst).toEqual({
       ...explicitPayload,
       id: expect.any(String),
-      permissionScope: 'plugin:notes-plugin',
+      permissionScope: 'plugin:notes-plugin'
     })
     expect(implicitFirst).toEqual({
       ...implicitPayload,
       id: expect.any(String),
-      permissionScope: 'plugin:notes-plugin',
+      permissionScope: 'plugin:notes-plugin'
     })
     expect(explicitFirst.id).not.toBe(explicitPayload.id)
     expect(implicitFirst.id).toEqual(expect.any(String))
@@ -159,8 +159,8 @@ describe('intelligenceModule local knowledge actor boundary', () => {
           id: 'shared-document',
           sourceType: 'plugin',
           title: 'Shared Document',
-          content: 'Shared source content.',
-        },
+          content: 'Shared source content.'
+        }
       },
       {
         name: 'implicit id',
@@ -168,9 +168,9 @@ describe('intelligenceModule local knowledge actor boundary', () => {
           sourceType: 'plugin',
           sourceUri: 'plugin://shared/source',
           title: 'Shared Source',
-          content: 'Shared source content.',
-        },
-      },
+          content: 'Shared source content.'
+        }
+      }
     ]
 
     for (const { payload } of payloads) {
@@ -191,15 +191,15 @@ describe('intelligenceModule local knowledge actor boundary', () => {
     const handlers = captureKnowledgeHandlers()
     const indexDocument = getHandler(handlers, 'indexDocument')
     const indexChunk = getHandler(handlers, 'indexChunk')
-    const documentResult = await indexDocument(
+    const documentResult = (await indexDocument(
       {
         id: 'document-local-id',
         sourceType: 'plugin',
         title: 'Chunk Parent',
-        content: 'Parent content.',
+        content: 'Parent content.'
       },
-      pluginContext(),
-    ) as { document: { id: string } }
+      pluginContext()
+    )) as { document: { id: string } }
     const scopedDocumentId = documentResult.document.id
 
     await indexChunk(
@@ -208,9 +208,9 @@ describe('intelligenceModule local knowledge actor boundary', () => {
         documentId: scopedDocumentId,
         chunkIndex: 3,
         content: 'A returned document id must remain usable.',
-        metadata: { section: 'returned-parent' },
+        metadata: { section: 'returned-parent' }
       },
-      pluginContext(),
+      pluginContext()
     )
     const returnedParentChunk = lastInput(localKnowledgeEngineMocks.indexChunk)
 
@@ -219,7 +219,7 @@ describe('intelligenceModule local knowledge actor boundary', () => {
       documentId: 'plugin:other-plugin:document-local-id',
       chunkIndex: 7,
       content: 'An attacker cannot select another plugin document.',
-      metadata: { section: 'attacker-parent' },
+      metadata: { section: 'attacker-parent' }
     }
     await indexChunk(attackerPayload, pluginContext())
     const attackerFirst = lastInput(localKnowledgeEngineMocks.indexChunk)
@@ -233,13 +233,13 @@ describe('intelligenceModule local knowledge actor boundary', () => {
       documentId: scopedDocumentId,
       chunkIndex: 3,
       content: 'A returned document id must remain usable.',
-      metadata: { section: 'returned-parent' },
+      metadata: { section: 'returned-parent' }
     })
     expect(returnedParentChunk.id).not.toBe('chunk-local-id')
     expect(attackerFirst).toEqual({
       ...attackerPayload,
       id: expect.any(String),
-      documentId: expect.any(String),
+      documentId: expect.any(String)
     })
     expect(attackerFirst.id).not.toBe(attackerPayload.id)
     expect(attackerFirst.documentId).not.toBe(attackerPayload.documentId)
@@ -254,7 +254,7 @@ describe('intelligenceModule local knowledge actor boundary', () => {
     const scopeVariants = [
       { name: 'string scope', permissionScope: 'host:core-app' },
       { name: 'scope array', permissionScope: ['plugin:other-plugin', 'host:core-app'] },
-      { name: 'omitted scope' },
+      { name: 'omitted scope' }
     ] as const
 
     for (const variant of scopeVariants) {
@@ -264,12 +264,12 @@ describe('intelligenceModule local knowledge actor boundary', () => {
         limit: 11,
         sourceType: ['plugin', 'manual'],
         timeRange: { from: 100, to: 200 },
-        metadata: { team: 'intelligence', priority: 2 },
+        metadata: { team: 'intelligence', priority: 2 }
       }
       await search(searchPayload, pluginContext())
       expect(lastInput(localKnowledgeEngineMocks.search)).toEqual({
         ...searchPayload,
-        permissionScope: 'plugin:notes-plugin',
+        permissionScope: 'plugin:notes-plugin'
       })
 
       const contextPayload = {
@@ -281,12 +281,12 @@ describe('intelligenceModule local knowledge actor boundary', () => {
         metadata: { team: 'intelligence', reviewed: true },
         tokenBudget: 1_200,
         maxChunks: 6,
-        dedupe: false,
+        dedupe: false
       }
       await buildContext(contextPayload, pluginContext())
       expect(lastInput(localKnowledgeEngineMocks.buildContext)).toEqual({
         ...contextPayload,
-        permissionScope: 'plugin:notes-plugin',
+        permissionScope: 'plugin:notes-plugin'
       })
     }
   })
@@ -306,8 +306,8 @@ describe('intelligenceModule local knowledge actor boundary', () => {
           sourceType: 'manual',
           title: 'Host Document',
           content: 'Host-owned content.',
-          permissionScope: 'workspace:host',
-        },
+          permissionScope: 'workspace:host'
+        }
       },
       {
         eventKey: 'indexChunk',
@@ -316,8 +316,8 @@ describe('intelligenceModule local knowledge actor boundary', () => {
           id: 'host-chunk',
           documentId: 'host-document',
           chunkIndex: 1,
-          content: 'Host-owned chunk.',
-        },
+          content: 'Host-owned chunk.'
+        }
       },
       {
         eventKey: 'search',
@@ -325,8 +325,8 @@ describe('intelligenceModule local knowledge actor boundary', () => {
         payload: {
           query: 'host query',
           permissionScope: ['workspace:host', 'workspace:other'],
-          limit: 5,
-        },
+          limit: 5
+        }
       },
       {
         eventKey: 'buildContext',
@@ -335,9 +335,9 @@ describe('intelligenceModule local knowledge actor boundary', () => {
           query: 'host context query',
           permissionScope: 'workspace:host',
           tokenBudget: 800,
-          maxChunks: 3,
-        },
-      },
+          maxChunks: 3
+        }
+      }
     ]
 
     for (const { eventKey, operation, payload } of calls) {

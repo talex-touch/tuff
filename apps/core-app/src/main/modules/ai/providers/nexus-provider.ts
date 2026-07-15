@@ -17,7 +17,7 @@ import type {
   IntelligenceTTSResult,
   IntelligenceUsageInfo,
   IntelligenceVisionOcrPayload,
-  IntelligenceVisionOcrResult,
+  IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import type { IntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { StringDecoder } from 'node:string_decoder'
@@ -68,11 +68,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNexusStreamEventType(value: string): value is NexusStreamEventType {
   return (
-    value === 'start'
-    || value === 'delta'
-    || value === 'usage'
-    || value === 'end'
-    || value === 'error'
+    value === 'start' ||
+    value === 'delta' ||
+    value === 'usage' ||
+    value === 'end' ||
+    value === 'error'
   )
 }
 
@@ -85,30 +85,25 @@ function readOptionalNumber(value: unknown): number | undefined {
 }
 
 function parseUsage(value: unknown): IntelligenceUsageInfo | undefined {
-  if (!isRecord(value))
-    return undefined
+  if (!isRecord(value)) return undefined
   return {
     promptTokens: readOptionalNumber(value.promptTokens) ?? 0,
     completionTokens: readOptionalNumber(value.completionTokens) ?? 0,
-    totalTokens: readOptionalNumber(value.totalTokens) ?? 0,
+    totalTokens: readOptionalNumber(value.totalTokens) ?? 0
   }
 }
 
 function parseNexusStreamEvent(value: string): NexusStreamEvent | null {
-  if (value === '[DONE]')
-    return { type: 'end' }
+  if (value === '[DONE]') return { type: 'end' }
   let parsed: unknown
   try {
     parsed = JSON.parse(value)
-  }
-  catch {
+  } catch {
     throw new Error('NEXUS_AI_STREAM_INVALID_EVENT')
   }
-  if (!isRecord(parsed))
-    return null
+  if (!isRecord(parsed)) return null
   const type = readOptionalString(parsed.type)
-  if (!type || !isNexusStreamEventType(type))
-    return null
+  if (!type || !isNexusStreamEventType(type)) return null
   return {
     type,
     delta: typeof parsed.delta === 'string' ? parsed.delta : undefined,
@@ -120,7 +115,7 @@ function parseNexusStreamEvent(value: string): NexusStreamEvent | null {
     model: readOptionalString(parsed.model),
     latency: readOptionalNumber(parsed.latency),
     traceId: readOptionalString(parsed.traceId),
-    provider: readOptionalString(parsed.provider),
+    provider: readOptionalString(parsed.provider)
   }
 }
 
@@ -130,59 +125,53 @@ function createNexusTransportError(failureData: NexusTransportFailure): Error & 
   recovery?: string
 } {
   const failure = new Error(
-    failureData.message || failureData.reason || 'NEXUS_AI_TRANSPORT_FAILED',
+    failureData.message || failureData.reason || 'NEXUS_AI_TRANSPORT_FAILED'
   ) as Error & {
     code?: IntelligenceErrorCode
     reason?: string
     recovery?: string
   }
-  if (failureData.code)
-    failure.code = failureData.code
-  if (failureData.reason)
-    failure.reason = failureData.reason
-  if (failureData.recovery)
-    failure.recovery = failureData.recovery
+  if (failureData.code) failure.code = failureData.code
+  if (failureData.reason) failure.reason = failureData.reason
+  if (failureData.recovery) failure.recovery = failureData.recovery
   return failure
 }
 
 function parseNexusHttpFailure(value: unknown): NexusTransportFailure | null {
-  if (!isRecord(value))
-    return null
+  if (!isRecord(value)) return null
 
   const nested = isRecord(value.data) ? value.data : null
-  const candidate = nested && isIntelligenceErrorCode(nested.code)
-    ? nested
-    : isIntelligenceErrorCode(value.code)
-      ? value
-      : null
-  if (!candidate || !isIntelligenceErrorCode(candidate.code))
-    return null
+  const candidate =
+    nested && isIntelligenceErrorCode(nested.code)
+      ? nested
+      : isIntelligenceErrorCode(value.code)
+        ? value
+        : null
+  if (!candidate || !isIntelligenceErrorCode(candidate.code)) return null
 
   return {
     code: candidate.code,
     message:
-      readOptionalString(candidate.message)
-      || readOptionalString(value.message)
-      || readOptionalString(value.statusMessage),
+      readOptionalString(candidate.message) ||
+      readOptionalString(value.message) ||
+      readOptionalString(value.statusMessage),
     reason: readOptionalString(candidate.reason),
-    recovery: readOptionalString(candidate.recovery),
+    recovery: readOptionalString(candidate.recovery)
   }
 }
 
 function extractSseData(frame: string): string | null {
   const data = frame
     .split('\n')
-    .filter(line => line.startsWith('data:'))
-    .map(line => line.slice(5).trimStart())
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trimStart())
     .join('\n')
   return data || null
 }
 
 function toBuffer(value: unknown): Buffer {
-  if (Buffer.isBuffer(value))
-    return value
-  if (value instanceof Uint8Array)
-    return Buffer.from(value)
+  if (Buffer.isBuffer(value)) return value
+  if (value instanceof Uint8Array) return Buffer.from(value)
   return Buffer.from(String(value))
 }
 
@@ -207,7 +196,7 @@ function normalizeUsage(usage?: Partial<IntelligenceUsageInfo>): IntelligenceUsa
   return {
     promptTokens: usage?.promptTokens ?? 0,
     completionTokens: usage?.completionTokens ?? 0,
-    totalTokens: usage?.totalTokens ?? 0,
+    totalTokens: usage?.totalTokens ?? 0
   }
 }
 
@@ -226,7 +215,7 @@ function parseJsonResult<T extends object>(value: unknown, fallback: T): T {
     trimmed,
     trimmed.includes('{') && trimmed.includes('}')
       ? trimmed.slice(trimmed.indexOf('{'), trimmed.lastIndexOf('}') + 1)
-      : '',
+      : ''
   ].filter((item): item is string => Boolean(item))
 
   for (const candidate of candidates) {
@@ -235,8 +224,7 @@ function parseJsonResult<T extends object>(value: unknown, fallback: T): T {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return { ...fallback, ...(parsed as Partial<T>) }
       }
-    }
-    catch {
+    } catch {
       // Try the next candidate.
     }
   }
@@ -263,50 +251,51 @@ export class NexusProvider extends IntelligenceProvider {
   private async invokeNexus<T>(
     capabilityId: string,
     payload: unknown,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<T>> {
     const token = this.assertAuthToken()
     const startedAt = Date.now()
-    const response = await getNetworkService().request<NexusInvokeResponse<T>>({
-      method: 'POST',
-      url: buildInvokeUrl(),
-      headers: {
-        'Authorization': normalizeBearerToken(token),
-        'Content-Type': 'application/json',
-      },
-      body: {
-        capabilityId,
-        payload,
-        options: {
-          providerId: options.preferredProviderId,
-          modelPreference: options.modelPreference,
-          timeoutMs: options.timeout,
-          metadata: options.metadata,
+    const response = await getNetworkService()
+      .request<NexusInvokeResponse<T>>({
+        method: 'POST',
+        url: buildInvokeUrl(),
+        headers: {
+          Authorization: normalizeBearerToken(token),
+          'Content-Type': 'application/json'
         },
-      },
-      responseType: 'json',
-      captureErrorResponseData: true,
-      timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
-      retryPolicy: {
-        maxRetries: 0,
-        retryOnNetworkError: false,
-        retryOnTimeout: false,
-        retryableStatusCodes: [],
-      },
-      cooldownPolicy: {
-        key: `nexus-ai:${capabilityId}`,
-        failureThreshold: 2,
-        cooldownMs: 15_000,
-        autoResetOnSuccess: true,
-      },
-    }).catch((error: unknown) => {
-      if (error instanceof NetworkHttpStatusError) {
-        const failure = parseNexusHttpFailure(error.responseData)
-        if (failure)
-          throw createNexusTransportError(failure)
-      }
-      throw error
-    })
+        body: {
+          capabilityId,
+          payload,
+          options: {
+            providerId: options.preferredProviderId,
+            modelPreference: options.modelPreference,
+            timeoutMs: options.timeout,
+            metadata: options.metadata
+          }
+        },
+        responseType: 'json',
+        captureErrorResponseData: true,
+        timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
+        retryPolicy: {
+          maxRetries: 0,
+          retryOnNetworkError: false,
+          retryOnTimeout: false,
+          retryableStatusCodes: []
+        },
+        cooldownPolicy: {
+          key: `nexus-ai:${capabilityId}`,
+          failureThreshold: 2,
+          cooldownMs: 15_000,
+          autoResetOnSuccess: true
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof NetworkHttpStatusError) {
+          const failure = parseNexusHttpFailure(error.responseData)
+          if (failure) throw createNexusTransportError(failure)
+        }
+        throw error
+      })
 
     const invocation = response.data?.invocation
     if (!invocation) {
@@ -319,29 +308,29 @@ export class NexusProvider extends IntelligenceProvider {
       model: invocation.model || this.config.defaultModel || this.config.models?.[0] || 'nexus',
       latency: invocation.latency ?? Date.now() - startedAt,
       traceId: invocation.traceId || this.generateTraceId(),
-      provider: invocation.provider || this.config.id,
+      provider: invocation.provider || this.config.id
     }
   }
 
   chat(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     return this.invokeNexus('text.chat', payload, options)
   }
 
-  async* chatStream(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const token = this.assertAuthToken()
     const response = await getNetworkService().requestStream({
       method: 'POST',
       url: buildStreamUrl(),
       headers: {
-        'Accept': 'text/event-stream',
-        'Authorization': normalizeBearerToken(token),
-        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: normalizeBearerToken(token),
+        'Content-Type': 'application/json'
       },
       body: {
         capabilityId: 'text.chat',
@@ -351,22 +340,22 @@ export class NexusProvider extends IntelligenceProvider {
           modelPreference: options.modelPreference,
           allowedProviderIds: options.allowedProviderIds,
           timeoutMs: options.timeout,
-          metadata: options.metadata,
-        },
+          metadata: options.metadata
+        }
       },
       timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
       retryPolicy: {
         maxRetries: 0,
         retryOnNetworkError: false,
         retryOnTimeout: false,
-        retryableStatusCodes: [],
+        retryableStatusCodes: []
       },
       cooldownPolicy: {
         key: 'nexus-ai:text.chat:stream',
         failureThreshold: 2,
         cooldownMs: 15_000,
-        autoResetOnSuccess: true,
-      },
+        autoResetOnSuccess: true
+      }
     })
 
     const decoder = new StringDecoder('utf8')
@@ -389,11 +378,9 @@ export class NexusProvider extends IntelligenceProvider {
 
     const consumeFrame = function* (frame: string): Generator<IntelligenceStreamChunk> {
       const data = extractSseData(frame)
-      if (!data)
-        return
+      if (!data) return
       const event = parseNexusStreamEvent(data)
-      if (!event)
-        return
+      if (!event) return
       applyMetadata(event)
       if (event.type === 'error') {
         throw createNexusTransportError(event)
@@ -409,7 +396,7 @@ export class NexusProvider extends IntelligenceProvider {
           traceId,
           provider,
           model,
-          latency,
+          latency
         }
         return
       }
@@ -422,7 +409,7 @@ export class NexusProvider extends IntelligenceProvider {
           traceId,
           provider,
           model,
-          latency,
+          latency
         }
       }
     }
@@ -433,49 +420,46 @@ export class NexusProvider extends IntelligenceProvider {
       buffer = frames.pop() ?? ''
       for (const frame of frames) {
         yield* consumeFrame(frame)
-        if (ended)
-          return
+        if (ended) return
       }
     }
 
     buffer = `${buffer}${decoder.end()}`.replaceAll('\r\n', '\n')
-    if (buffer.trim())
-      yield* consumeFrame(buffer)
-    if (!ended)
-      throw new Error('NEXUS_AI_STREAM_INCOMPLETE')
+    if (buffer.trim()) yield* consumeFrame(buffer)
+    if (!ended) throw new Error('NEXUS_AI_STREAM_INCOMPLETE')
   }
 
   embedding(
     _payload: IntelligenceEmbeddingPayload,
-    _options: IntelligenceInvokeOptions,
+    _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<number[]>> {
     return Promise.reject(new Error('[custom] Embedding capability is unsupported'))
   }
 
   translate(
     payload: IntelligenceTranslatePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     return this.invokeNexus('text.translate', payload, options)
   }
 
   summarize(
     payload: IntelligenceSummarizePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     return this.invokeNexus('text.summarize', payload, options)
   }
 
   rewrite(
     payload: IntelligenceRewritePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     return this.invokeNexus('text.rewrite', payload, options)
   }
 
   async codeExplain(
     payload: IntelligenceCodeExplainPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceCodeExplainResult>> {
     const result = await this.invokeNexus<unknown>('code.explain', payload, options)
     return {
@@ -483,14 +467,14 @@ export class NexusProvider extends IntelligenceProvider {
       result: parseJsonResult(result.result, {
         explanation: typeof result.result === 'string' ? result.result : '',
         summary: '',
-        keyPoints: [],
-      }),
+        keyPoints: []
+      })
     }
   }
 
   async codeReview(
     payload: IntelligenceCodeReviewPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceCodeReviewResult>> {
     const result = await this.invokeNexus<unknown>('code.review', payload, options)
     return {
@@ -499,21 +483,21 @@ export class NexusProvider extends IntelligenceProvider {
         summary: typeof result.result === 'string' ? result.result : '',
         score: 0,
         issues: [],
-        improvements: [],
-      }),
+        improvements: []
+      })
     }
   }
 
   visionOcr(
     payload: IntelligenceVisionOcrPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
     return this.invokeNexus('vision.ocr', payload, options)
   }
 
   async imageTranslateE2e(
     payload: IntelligenceImageTranslateE2ePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>> {
     this.assertAuthToken()
     const startedAt = Date.now()
@@ -522,11 +506,11 @@ export class NexusProvider extends IntelligenceProvider {
         imageBase64: payload.imageBase64,
         targetLang: payload.targetLang || 'zh',
         sourceLang: payload.sourceLang,
-        imageMimeType: payload.imageMimeType,
+        imageMimeType: payload.imageMimeType
       },
       capability: 'image.translate.e2e',
       providerId: options.preferredProviderId,
-      timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
+      timeoutMs: options.timeout ?? this.config.timeout ?? 30_000
     })
     const translated = extractTranslatedImageFromSceneRun(run)
     if (!translated) {
@@ -539,19 +523,19 @@ export class NexusProvider extends IntelligenceProvider {
         imageMimeType: translated.imageMimeType,
         sourceText: translated.sourceText,
         targetText: translated.targetText,
-        overlay: translated.overlay,
+        overlay: translated.overlay
       },
       usage: normalizeUsage(),
       model: this.config.defaultModel || this.config.models?.[0] || 'nexus-image-translate',
       latency: Date.now() - startedAt,
       traceId: typeof run?.runId === 'string' ? run.runId : this.generateTraceId(),
-      provider: this.config.id,
+      provider: this.config.id
     }
   }
 
   tts(
     payload: IntelligenceTTSPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceTTSResult>> {
     return this.invokeNexus('audio.tts', payload, options)
   }

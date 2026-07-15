@@ -7,7 +7,8 @@ const process = require('node:process')
 let spawnCommandSafe
 try {
   ;({ spawnCommandSafe } = require('@talex-touch/utils/common/utils/safe-shell'))
-} catch {
+}
+catch {
   spawnCommandSafe = null
 }
 
@@ -22,16 +23,8 @@ const SHELL_PERMISSION_ID = 'system.shell'
 const FS_READ_PERMISSION_ID = 'fs.read'
 const CONFIG_FILE = 'workspace-scripts.json'
 
-/** Characters / patterns that should never appear in a structured command request. */
-const SHELL_NEVER_PATTERN = /[\0\r\n]/
-
-/** Shell control/substitution tokens are not supported by structured spawning. */
-const SHELL_CONTROL_PATTERN = /[;&|`<>]|\$\(/u
-
-/** Combined safety check before command strings are split into executable + args. */
-const SHELL_VALIDATION_PATTERN = new RegExp(
-  `${SHELL_NEVER_PATTERN.source}|${SHELL_CONTROL_PATTERN.source}`,
-)
+/** Characters and shell control/substitution tokens forbidden in structured commands. */
+const SHELL_VALIDATION_PATTERN = /[\0\r\n;&|`<>]|\$\(/u
 
 // ---------------------------------------------------------------------------
 // i18n — minimal bilingual support for plugin-side strings.
@@ -40,8 +33,10 @@ const SHELL_VALIDATION_PATTERN = new RegExp(
 // ---------------------------------------------------------------------------
 function detectLocale() {
   try {
-    if (typeof plugin?.getLocale === 'function') return plugin.getLocale()
-  } catch { /* ignore */ }
+    if (typeof plugin?.getLocale === 'function')
+      return plugin.getLocale()
+  }
+  catch { /* ignore */ }
   // Fallback: check system env; default zh
   const lang = process.env.LANG || process.env.LC_ALL || process.env.LC_MESSAGES || ''
   return lang.toLowerCase().startsWith('en') ? 'en' : 'zh'
@@ -49,9 +44,9 @@ function detectLocale() {
 const t = (zh, en) => (detectLocale() === 'en' ? en : zh)
 
 const SHELL_STATUS_LABELS = {
-  available: t('可用', 'Available'),
+  'available': t('可用', 'Available'),
   'permission-missing': t('缺少权限', 'Permission Missing'),
-  unsupported: t('不可用', 'Unavailable'),
+  'unsupported': t('不可用', 'Unavailable'),
 }
 
 const DEFAULT_CONFIG = {
@@ -63,13 +58,14 @@ const DEFAULT_CONFIG = {
 // Caches (TTL-based to avoid repeated I/O during fast typing in CoreBox)
 // ---------------------------------------------------------------------------
 const CACHE_TTL_MS = 5_000
-let configCache = { value: null, ts: 0 }
-let packageScriptsCache = { key: '', value: [], ts: 0 }
-let shellCapabilityCache = { value: null, ts: 0 }
-let configLock = false // simple mutex for config read-modify-write
+const configCache = { value: null, ts: 0 }
+const packageScriptsCache = { key: '', value: [], ts: 0 }
+const shellCapabilityCache = { value: null, ts: 0 }
+let configLock = Promise.resolve() // serializes config read-modify-write operations
 
 function cacheGet(cache) {
-  if (Date.now() - cache.ts < CACHE_TTL_MS) return cache.value
+  if (Date.now() - cache.ts < CACHE_TTL_MS)
+    return cache.value
   return undefined
 }
 function cacheSet(cache, value) {
@@ -106,13 +102,16 @@ function normalizeText(value) {
 
 function truncateText(value, max = 96) {
   const text = normalizeText(value)
-  if (!text) return ''
-  if (text.length <= max) return text
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
   return `${text.slice(0, max - 1)}…`
 }
 
 function getQueryText(query) {
-  if (typeof query === 'string') return query
+  if (typeof query === 'string')
+    return query
   return query?.text ?? ''
 }
 
@@ -121,12 +120,14 @@ async function ensurePermission(permissionId, reason) {
     return { granted: false, reason: 'permission-sdk-unavailable' }
   }
   try {
-    if (await permission.check(permissionId)) return { granted: true, reason: '' }
+    if (await permission.check(permissionId))
+      return { granted: true, reason: '' }
     const granted = await permission.request(permissionId, reason)
     return granted
       ? { granted: true, reason: '' }
       : { granted: false, reason: 'permission-denied' }
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-workspace-scripts] Failed to request permission', error)
     return { granted: false, reason: 'permission-request-failed' }
   }
@@ -134,23 +135,27 @@ async function ensurePermission(permissionId, reason) {
 
 // Unified permission-state check (used for both UI diagnostics and guards).
 async function resolvePermissionState(permissionId) {
-  if (!permission?.check) return { granted: false, reason: 'permission-sdk-unavailable' }
+  if (!permission?.check)
+    return { granted: false, reason: 'permission-sdk-unavailable' }
   try {
     return { granted: Boolean(await permission.check(permissionId)) }
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-workspace-scripts] Failed to check permission', error)
     return { granted: false, reason: 'permission-check-failed' }
   }
 }
 
 function resolveShellStatus() {
-  if (!spawnCommandSafe) return { status: 'unsupported', reason: 'safe-command-unavailable' }
+  if (!spawnCommandSafe)
+    return { status: 'unsupported', reason: 'safe-command-unavailable' }
   return { status: 'available' }
 }
 
 async function resolveShellCapabilityState() {
   const cached = cacheGet(shellCapabilityCache)
-  if (cached) return cached
+  if (cached)
+    return cached
 
   const shellStatus = resolveShellStatus()
   if (shellStatus.status !== 'available') {
@@ -201,7 +206,8 @@ function buildShellCapability({
       requiresAdmin: Boolean(requiresAdmin),
     },
   }
-  if (resolved.reason) capability.reason = resolved.reason
+  if (resolved.reason)
+    capability.reason = resolved.reason
   return capability
 }
 
@@ -209,11 +215,13 @@ function buildShellCapability({
 // Config
 // ---------------------------------------------------------------------------
 function parseScriptsConfig(raw) {
-  if (!raw) return { ...DEFAULT_CONFIG }
+  if (!raw)
+    return { ...DEFAULT_CONFIG }
   if (typeof raw === 'string') {
     try {
       return parseScriptsConfig(JSON.parse(raw))
-    } catch (err) {
+    }
+    catch (err) {
       logger?.warn?.('[touch-workspace-scripts] Config JSON parse failed, falling back to defaults', err?.message)
       return { ...DEFAULT_CONFIG }
     }
@@ -228,7 +236,8 @@ function parseScriptsConfig(raw) {
 }
 
 function parsePackageScriptsMap(scripts) {
-  if (!scripts || typeof scripts !== 'object') return []
+  if (!scripts || typeof scripts !== 'object')
+    return []
   return Object.entries(scripts)
     .filter(([, command]) => typeof command === 'string' && normalizeText(command))
     .map(([name]) => ({
@@ -242,15 +251,18 @@ function parsePackageScriptsMap(scripts) {
 async function ensureConfigFile() {
   try {
     const existing = await plugin.storage.getFile(CONFIG_FILE)
-    if (!existing) await plugin.storage.setFile(CONFIG_FILE, DEFAULT_CONFIG)
-  } catch (error) {
+    if (!existing)
+      await plugin.storage.setFile(CONFIG_FILE, DEFAULT_CONFIG)
+  }
+  catch (error) {
     logger?.warn?.('[touch-workspace-scripts] Failed to ensure config file', error)
   }
 }
 
 async function loadConfig() {
   const cached = cacheGet(configCache)
-  if (cached) return cached
+  if (cached)
+    return cached
   const raw = await plugin.storage.getFile(CONFIG_FILE)
   const parsed = parseScriptsConfig(raw)
   cacheSet(configCache, parsed)
@@ -263,7 +275,8 @@ async function saveConfig(config) {
 }
 
 async function selectWorkspace() {
-  if (!dialog) return null
+  if (!dialog)
+    return null
   const result = await dialog.showOpenDialog({
     title: t('选择工作区目录', 'Select Workspace Directory'),
     properties: ['openDirectory'],
@@ -273,24 +286,29 @@ async function selectWorkspace() {
 }
 
 async function readPackageScripts(workspacePath) {
-  if (!workspacePath) return []
+  if (!workspacePath)
+    return []
   const cached = cacheGetPackageScripts(workspacePath)
-  if (cached) return cached
+  if (cached)
+    return cached
 
   const canRead = await ensurePermission(FS_READ_PERMISSION_ID, t(
     '需要读取 workspace 的 package.json 脚本列表',
     'Need to read package.json scripts from workspace',
   ))
-  if (!canRead.granted) return []
+  if (!canRead.granted)
+    return []
   const packagePath = path.join(workspacePath, 'package.json')
-  if (!fs.existsSync(packagePath)) return []
+  if (!fs.existsSync(packagePath))
+    return []
   try {
     const raw = await fsp.readFile(packagePath, 'utf8')
     const parsed = JSON.parse(raw)
     const scripts = parsePackageScriptsMap(parsed?.scripts)
     cacheSetPackageScripts(workspacePath, scripts)
     return scripts
-  } catch (error) {
+  }
+  catch (error) {
     logger?.warn?.('[touch-workspace-scripts] Failed to read package scripts', error)
     return []
   }
@@ -386,7 +404,8 @@ function buildCommandItems(featureId, keyword, workspacePath, packageCommands, c
   const items = []
 
   packageCommands.forEach((script) => {
-    if (!matchKeyword(script.title, keyword) && !matchKeyword(script.command, keyword)) return
+    if (!matchKeyword(script.title, keyword) && !matchKeyword(script.command, keyword))
+      return
     items.push(buildActionItem({
       id: `${featureId}-${script.id}`,
       featureId,
@@ -409,8 +428,10 @@ function buildCommandItems(featureId, keyword, workspacePath, packageCommands, c
   customCommands.forEach((cmd, index) => {
     const commandText = typeof cmd.command === 'string' ? cmd.command : ''
     const title = typeof cmd.title === 'string' ? cmd.title : commandText || `Command ${index + 1}`
-    if (!commandText) return
-    if (!matchKeyword(title, keyword) && !matchKeyword(commandText, keyword)) return
+    if (!commandText)
+      return
+    if (!matchKeyword(title, keyword) && !matchKeyword(commandText, keyword))
+      return
     items.push(buildActionItem({
       id: `${featureId}-custom-${index}`,
       featureId,
@@ -449,42 +470,49 @@ function buildCommandItems(featureId, keyword, workspacePath, packageCommands, c
 // Command execution
 // ---------------------------------------------------------------------------
 function matchKeyword(target, keyword) {
-  if (!keyword) return true
+  if (!keyword)
+    return true
   return target.toLowerCase().includes(keyword.toLowerCase())
 }
 
 function resolveCommandCwd(commandCwd, workspacePath) {
-  if (!commandCwd || commandCwd === '.') return workspacePath || process.cwd()
-  if (path.isAbsolute(commandCwd)) return commandCwd
+  if (!commandCwd || commandCwd === '.')
+    return workspacePath || process.cwd()
+  if (path.isAbsolute(commandCwd))
+    return commandCwd
   return path.join(workspacePath || process.cwd(), commandCwd)
 }
 
 function splitCommand(command) {
   const normalizedCommand = normalizeText(command)
-  if (!normalizedCommand) return { ok: false, reason: 'empty-command' }
+  if (!normalizedCommand)
+    return { ok: false, reason: 'empty-command' }
   if (SHELL_VALIDATION_PATTERN.test(normalizedCommand)) {
     return { ok: false, reason: 'unsupported-shell-syntax' }
   }
 
-  const parts = normalizedCommand.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || []
-  if (!parts.length) return { ok: false, reason: 'empty-command' }
+  const parts = normalizedCommand.match(/(?:[^\s"']|"[^"]*"|'[^']*')+/g) || []
+  if (!parts.length)
+    return { ok: false, reason: 'empty-command' }
 
   const [executable, ...args] = parts.map((part) => {
     const first = part[0]
     const last = part[part.length - 1]
-    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    if ((first === '"' && last === '"') || (first === '\'' && last === '\'')) {
       return part.slice(1, -1)
     }
     return part
   })
 
-  if (!executable) return { ok: false, reason: 'empty-command' }
+  if (!executable)
+    return { ok: false, reason: 'empty-command' }
   return { ok: true, command: normalizedCommand, executable, args }
 }
 
 function validateCommandRequest(command, cwd) {
   const parsed = splitCommand(command)
-  if (!parsed.ok) return parsed
+  if (!parsed.ok)
+    return parsed
 
   const normalizedCwd = normalizeText(cwd) || process.cwd()
   const resolvedCwd = path.resolve(normalizedCwd)
@@ -492,7 +520,8 @@ function validateCommandRequest(command, cwd) {
     if (!fs.existsSync(resolvedCwd) || !fs.statSync(resolvedCwd).isDirectory()) {
       return { ok: false, reason: 'cwd-unavailable', command: parsed.command, cwd: resolvedCwd }
     }
-  } catch {
+  }
+  catch {
     return { ok: false, reason: 'cwd-unavailable', command: parsed.command, cwd: resolvedCwd }
   }
   return { ...parsed, cwd: resolvedCwd }
@@ -543,7 +572,8 @@ function runCommand(command, cwd) {
 }
 
 async function showRunBlocked(result) {
-  if (!dialog?.showMessageBox) return
+  if (!dialog?.showMessageBox)
+    return
   await dialog.showMessageBox({
     type: 'warning',
     buttons: [t('好的', 'OK')],
@@ -556,7 +586,8 @@ async function showRunBlocked(result) {
 }
 
 async function confirmRun(command) {
-  if (!dialog) return true
+  if (!dialog)
+    return true
   const result = await dialog.showMessageBox({
     type: 'question',
     buttons: [t('取消', 'Cancel'), t('运行', 'Run')],
@@ -577,7 +608,8 @@ async function confirmRun(command) {
 async function executeCommand(payload) {
   const command = typeof payload.command === 'string' ? payload.command : ''
   const cwd = typeof payload.cwd === 'string' ? payload.cwd : process.cwd()
-  if (!command) return
+  if (!command)
+    return
 
   const shellStatus = resolveShellStatus()
   if (shellStatus.status !== 'available') {
@@ -594,7 +626,8 @@ async function executeCommand(payload) {
   }
 
   const confirmed = await confirmRun(command)
-  if (!confirmed) return { externalAction: true, status: 'cancelled' }
+  if (!confirmed)
+    return { externalAction: true, status: 'cancelled' }
 
   const result = runCommand(command, cwd)
   if (!result?.ok) {
@@ -628,7 +661,8 @@ const pluginLifecycle = {
       plugin.feature.clearItems()
       plugin.feature.pushItems([...headerItems, ...commandItems])
       return true
-    } catch (error) {
+    }
+    catch (error) {
       logger?.error?.('[touch-workspace-scripts] Failed to handle feature', error)
       plugin.feature.clearItems()
       plugin.feature.pushItems([
@@ -645,7 +679,8 @@ const pluginLifecycle = {
 
   async onItemAction(item) {
     try {
-      if (item?.meta?.defaultAction !== ACTION_ID) return
+      if (item?.meta?.defaultAction !== ACTION_ID)
+        return
       const actionId = item.meta?.actionId
 
       if (actionId === 'config-init') {
@@ -657,25 +692,26 @@ const pluginLifecycle = {
         return { externalAction: true }
       }
       if (actionId === 'workspace-select') {
-        // Use simple lock to avoid race with onFeatureTriggered reads
-        while (configLock) await new Promise(r => setTimeout(r, 10))
-        configLock = true
-        try {
+        const selectWorkspaceTask = configLock.then(async () => {
           const config = await loadConfig()
           const selected = await selectWorkspace()
           if (selected) {
             config.workspacePath = selected
             await saveConfig(config)
           }
-        } finally {
-          configLock = false
-        }
+        })
+        configLock = selectWorkspaceTask.then(
+          () => undefined,
+          () => undefined,
+        )
+        await selectWorkspaceTask
         return { externalAction: true }
       }
       if (actionId === 'run-command') {
         return await executeCommand(item.meta?.payload || {})
       }
-    } catch (error) {
+    }
+    catch (error) {
       logger?.error?.('[touch-workspace-scripts] Action failed', error)
     }
   },

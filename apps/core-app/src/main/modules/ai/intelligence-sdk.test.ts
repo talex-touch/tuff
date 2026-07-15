@@ -272,9 +272,13 @@ describe('tuffIntelligenceSDK quota verification', () => {
     })
 
     await expect(
-      sdk.invoke('text.chat', { messages: [{ role: 'user', content: 'hello' }] }, {
-        metadata: { caller: 'quota-unavailable-caller' }
-      })
+      sdk.invoke(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'hello' }] },
+        {
+          metadata: { caller: 'quota-unavailable-caller' }
+        }
+      )
     ).rejects.toMatchObject({ code: 'QUOTA_CHECK_UNAVAILABLE' })
     expect(provider.chat).not.toHaveBeenCalled()
   })
@@ -309,9 +313,13 @@ describe('tuffIntelligenceSDK quota verification', () => {
       enableQuota: true,
       enableCache: false
     })
-    const stream = sdk.stream('text.chat', { messages: [{ role: 'user', content: 'hello' }] }, {
-      metadata: { caller: 'quota-unavailable-caller' }
-    })
+    const stream = sdk.stream(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'hello' }] },
+      {
+        metadata: { caller: 'quota-unavailable-caller' }
+      }
+    )
 
     await expect(stream.next()).rejects.toMatchObject({ code: 'QUOTA_CHECK_UNAVAILABLE' })
     expect(provider.chatStream).not.toHaveBeenCalled()

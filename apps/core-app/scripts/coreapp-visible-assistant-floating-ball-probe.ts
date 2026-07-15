@@ -779,16 +779,6 @@ function clickFloatingBallExpression(): string {
   })()`
 }
 
-function updateFloatingBallPositionExpression(x: number, y: number): string {
-  return `(async () => {
-    const invoke = window.electron?.ipcRenderer?.invoke?.bind(window.electron.ipcRenderer)
-    if (!invoke) return { updated: false, reason: 'ipc-invoke-unavailable' }
-    invoke('assistant:floating-ball:update-position', { x: ${Math.round(x)}, y: ${Math.round(y)} }).catch(() => undefined)
-    await new Promise((resolve) => setTimeout(resolve, 6500))
-    return { updated: true }
-  })()`
-}
-
 function readPersistedSettingExpression(): string {
   return `(async () => {
     const setting = window.__talex_touch_storage_singletons__?.get?.('storage:app-setting.ini')?.data

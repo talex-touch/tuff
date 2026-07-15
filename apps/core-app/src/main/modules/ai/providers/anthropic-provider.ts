@@ -13,7 +13,7 @@ import type {
   IntelligenceUsageInfo,
   IntelligenceVisionImageSource,
   IntelligenceVisionOcrPayload,
-  IntelligenceVisionOcrResult,
+  IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -69,7 +69,7 @@ function resolveUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     usageMetadata.promptTokens,
     usage.input_tokens,
     usage.prompt_tokens,
-    usage.promptTokens,
+    usage.promptTokens
   )
   const completionTokens = numberFrom(
     usageMetadata.output_tokens,
@@ -77,7 +77,7 @@ function resolveUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     usageMetadata.completionTokens,
     usage.output_tokens,
     usage.completion_tokens,
-    usage.completionTokens,
+    usage.completionTokens
   )
 
   const totalTokens = numberFrom(
@@ -85,13 +85,13 @@ function resolveUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsag
     usageMetadata.totalTokens,
     usage.total_tokens,
     usage.totalTokens,
-    promptTokens + completionTokens,
+    promptTokens + completionTokens
   )
 
   return {
     promptTokens,
     completionTokens,
-    totalTokens,
+    totalTokens
   }
 }
 
@@ -112,33 +112,30 @@ function detectMime(filePath: string): string {
   }
 }
 
-function parseDataUrl(input: string): { mimeType: string, base64: string } | null {
+function parseDataUrl(input: string): { mimeType: string; base64: string } | null {
   const matched = input.match(/^data:(.+?);base64,(.+)$/)
-  if (!matched)
-    return null
+  if (!matched) return null
   return {
     mimeType: matched[1] || 'image/png',
-    base64: matched[2] || '',
+    base64: matched[2] || ''
   }
 }
 
 async function toAnthropicImageSource(
-  source: IntelligenceVisionImageSource,
-): Promise<{ mimeType: string, base64: string }> {
+  source: IntelligenceVisionImageSource
+): Promise<{ mimeType: string; base64: string }> {
   if (source.type === 'data-url' && source.dataUrl) {
     const parsed = parseDataUrl(source.dataUrl)
-    if (!parsed)
-      throw new Error('[AnthropicProvider] Invalid data URL image source')
+    if (!parsed) throw new Error('[AnthropicProvider] Invalid data URL image source')
     return parsed
   }
 
   if (source.type === 'base64' && source.base64) {
     const parsed = source.base64.startsWith('data:') ? parseDataUrl(source.base64) : null
-    if (parsed)
-      return parsed
+    if (parsed) return parsed
     return {
       mimeType: 'image/png',
-      base64: source.base64,
+      base64: source.base64
     }
   }
 
@@ -146,7 +143,7 @@ async function toAnthropicImageSource(
     const image = await readFile(source.filePath)
     return {
       mimeType: detectMime(source.filePath),
-      base64: image.toString('base64'),
+      base64: image.toString('base64')
     }
   }
 
@@ -177,20 +174,20 @@ export class AnthropicProvider extends IntelligenceProvider {
       timeout: params.options.timeout,
       anthropicApiUrl: baseUrl,
       clientOptions: {
-        baseURL: baseUrl,
-      },
+        baseURL: baseUrl
+      }
     }
 
     return new ChatAnthropic(modelConfig as ConstructorParameters<typeof ChatAnthropic>[0])
   }
 
   private resolveChatModel(options: IntelligenceInvokeOptions): string {
-    const model
-      = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
+    const model =
+      options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
 
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/langchain/chat',
+      endpoint: '/langchain/chat'
     })
 
     return model
@@ -198,7 +195,7 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -208,7 +205,7 @@ export class AnthropicProvider extends IntelligenceProvider {
       model: modelName,
       options,
       temperature: payload.temperature,
-      maxTokens: payload.maxTokens,
+      maxTokens: payload.maxTokens
     })
 
     const response = await model.invoke(toLangChainMessages(payload.messages))
@@ -222,13 +219,13 @@ export class AnthropicProvider extends IntelligenceProvider {
       latency: Date.now() - startTime,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
-  async* chatStream(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const modelName = this.resolveChatModel(options)
 
@@ -237,14 +234,13 @@ export class AnthropicProvider extends IntelligenceProvider {
       options,
       temperature: payload.temperature,
       maxTokens: payload.maxTokens,
-      streaming: true,
+      streaming: true
     })
 
     const stream = await model.stream(toLangChainMessages(payload.messages))
     for await (const chunk of stream) {
       const text = extractTextContent(asRecord(chunk).content)
-      if (!text)
-        continue
+      if (!text) continue
       yield { delta: text, done: false }
     }
 
@@ -253,26 +249,26 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async embedding(
     _payload: IntelligenceEmbeddingPayload,
-    _options: IntelligenceInvokeOptions,
+    _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<number[]>> {
     throw new Error('[AnthropicProvider] Embedding not supported')
   }
 
   async translate(
     payload: import('@talex-touch/tuff-intelligence').IntelligenceTranslatePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
-          content: `You are a professional translator. Translate the following text to ${payload.targetLang}. Return only the translated text, without any explanations.`,
+          content: `You are a professional translator. Translate the following text to ${payload.targetLang}. Return only the translated text, without any explanations.`
         },
         {
           role: 'user',
-          content: payload.text,
-        },
-      ],
+          content: payload.text
+        }
+      ]
     }
 
     return this.chat(chatPayload, options)
@@ -282,7 +278,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     source: IntelligenceVisionImageSource,
     prompt: string,
     options: IntelligenceInvokeOptions,
-    maxTokens: number,
+    maxTokens: number
   ): Promise<{
     rawMessage: Record<string, unknown>
     rawContent: string
@@ -292,12 +288,12 @@ export class AnthropicProvider extends IntelligenceProvider {
   }> {
     const startedAt = Date.now()
     const traceId = this.generateTraceId()
-    const modelName
-      = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
+    const modelName =
+      options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
 
     this.validateModel(modelName, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/langchain/vision',
+      endpoint: '/langchain/vision'
     })
 
     const imageSource = await toAnthropicImageSource(source)
@@ -310,10 +306,10 @@ export class AnthropicProvider extends IntelligenceProvider {
             type: 'image',
             source_type: 'base64',
             mime_type: imageSource.mimeType,
-            data: imageSource.base64,
-          },
-        ] as unknown as string,
-      }),
+            data: imageSource.base64
+          }
+        ] as unknown as string
+      })
     ])
     const rawMessage = asRecord(response)
 
@@ -322,30 +318,30 @@ export class AnthropicProvider extends IntelligenceProvider {
       rawContent: extractTextContent(rawMessage.content),
       modelName,
       traceId,
-      startedAt,
+      startedAt
     }
   }
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
-    const prompt
-      = payload.prompt
-        || 'Extract all text from this image and return the result as JSON with fields: text, confidence, language, keywords, blocks.'
+    const prompt =
+      payload.prompt ||
+      'Extract all text from this image and return the result as JSON with fields: text, confidence, language, keywords, blocks.'
     const { rawMessage, rawContent, modelName, traceId, startedAt } = await this.invokeVisionImage(
       payload.source,
       prompt,
       options,
-      1_000,
+      1_000
     )
     const parsed = this.safeParseJson(rawContent)
     const parsedRecord = asRecord(parsed)
     const hasParsed = Object.keys(parsedRecord).length > 0
 
     const text = typeof parsedRecord.text === 'string' ? parsedRecord.text : rawContent
-    const confidence
-      = typeof parsedRecord.confidence === 'number' ? parsedRecord.confidence : undefined
+    const confidence =
+      typeof parsedRecord.confidence === 'number' ? parsedRecord.confidence : undefined
     const language = typeof parsedRecord.language === 'string' ? parsedRecord.language : undefined
     const keywords = Array.isArray(parsedRecord.keywords)
       ? parsedRecord.keywords.filter((item): item is string => typeof item === 'string')
@@ -363,24 +359,26 @@ export class AnthropicProvider extends IntelligenceProvider {
       latency: Date.now() - startedAt,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
   async imageCaption(
     payload: IntelligenceImageCaptionPayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>> {
     const style = payload.style || 'brief'
-    const maxLength
-      = typeof payload.maxLength === 'number' && Number.isFinite(payload.maxLength) && payload.maxLength > 0
+    const maxLength =
+      typeof payload.maxLength === 'number' &&
+      Number.isFinite(payload.maxLength) &&
+      payload.maxLength > 0
         ? Math.floor(payload.maxLength)
         : undefined
     const { rawMessage, rawContent, modelName, traceId, startedAt } = await this.invokeVisionImage(
       payload.source,
       `Generate a ${style} image caption in ${payload.language || 'the image language'}.${maxLength ? ` Keep the caption under ${maxLength} characters.` : ''} Return JSON with fields: caption, alternativeCaptions, tags, confidence.`,
       options,
-      512,
+      512
     )
 
     return {
@@ -390,13 +388,13 @@ export class AnthropicProvider extends IntelligenceProvider {
       latency: Date.now() - startedAt,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
   async imageAnalyze(
     payload: IntelligenceImageAnalyzePayload,
-    options: IntelligenceInvokeOptions,
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>> {
     const analysisTypes = payload.analysisTypes?.length
       ? payload.analysisTypes.join(', ')
@@ -405,7 +403,7 @@ export class AnthropicProvider extends IntelligenceProvider {
       payload.source,
       `Analyze this image in ${payload.language || 'the image language'} for: ${analysisTypes}.${payload.detailed ? ' Include detailed findings.' : ''} Return JSON with fields: description, objects, faces, colors, scene, text, tags. Objects require name and confidence (0-1); colors require color and percentage; scene requires type and confidence (0-1).`,
       options,
-      payload.detailed ? 2_000 : 1_000,
+      payload.detailed ? 2_000 : 1_000
     )
 
     return {
@@ -415,7 +413,7 @@ export class AnthropicProvider extends IntelligenceProvider {
       latency: Date.now() - startedAt,
       traceId,
       provider: this.type,
-      reasoning: extractReasoningContent(rawMessage),
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 }

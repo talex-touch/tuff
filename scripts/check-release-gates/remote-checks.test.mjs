@@ -247,22 +247,23 @@ describe('check-release-gates remote checks', () => {
     assert.equal(
       checks
         .find(item => item.name === 'remote-download-endpoint')
-        ?.results.every(item =>
-          item.hasExp &&
-          item.hasValidExp &&
-          item.hasValidSig &&
-          item.hasUnexpectedQuery === false
+        ?.results
+        .every(item =>
+          item.hasExp
+          && item.hasValidExp
+          && item.hasValidSig
+          && item.hasUnexpectedQuery === false,
         ),
-      true
+      true,
     )
   })
 
   it('fails gate-e when the GitHub release manifest asset is not uploaded', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-release-manifest.json'
           ? { ...asset, state: 'starter' }
-          : asset
+          : asset,
       ),
     })
 
@@ -276,10 +277,10 @@ describe('check-release-gates remote checks', () => {
 
   it('keeps a non-uploaded GitHub release manifest asset as a warning before gate-e', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-release-manifest.json'
           ? { ...asset, state: 'starter' }
-          : asset
+          : asset,
       ),
     })
 
@@ -293,10 +294,10 @@ describe('check-release-gates remote checks', () => {
 
   it('fails gate-e when the GitHub release manifest asset download URL points at another tag', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-release-manifest.json'
           ? { ...asset, browser_download_url: 'https://github.example.test/v2.4.12-beta.7/tuff-release-manifest.json' }
-          : asset
+          : asset,
       ),
     })
 
@@ -317,10 +318,10 @@ describe('check-release-gates remote checks', () => {
 
   it('keeps GitHub release manifest asset download URL filename drift as a warning before gate-e', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-release-manifest.json'
           ? { ...asset, browser_download_url: `https://github.example.test/${tag}/release-manifest-old.json` }
-          : asset
+          : asset,
       ),
     })
 
@@ -357,7 +358,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
       matrixCheck?.mismatches.map(item => item.reason).sort(),
-      ['filename-mismatch', 'sha256-mismatch']
+      ['filename-mismatch', 'sha256-mismatch'],
     )
   })
 
@@ -404,7 +405,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
       matrixCheck?.mismatches.map(item => item.reason),
-      ['duplicate-nexus-asset']
+      ['duplicate-nexus-asset'],
     )
     assert.equal(matrixCheck?.mismatches[0]?.key, 'win32/x64')
   })
@@ -451,11 +452,11 @@ describe('check-release-gates remote checks', () => {
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
       matrixCheck?.mismatches.map(item => item.reason),
-      ['signature-url-mismatch']
+      ['signature-url-mismatch'],
     )
     assert.equal(
       matrixCheck?.mismatches[0]?.expected,
-      `/api/releases/${tag}/signature/win32/x64`
+      `/api/releases/${tag}/signature/win32/x64`,
     )
   })
 
@@ -474,7 +475,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
       matrixCheck?.mismatches.map(item => item.reason),
-      ['signature-url-not-canonical']
+      ['signature-url-not-canonical'],
     )
     assert.deepEqual(matrixCheck?.mismatches[0], {
       key: 'win32/x64',
@@ -511,7 +512,7 @@ describe('check-release-gates remote checks', () => {
         byteLength: 0,
         contentType: 'application/octet-stream',
         kind: 'empty',
-      }
+      },
     )
   })
 
@@ -533,7 +534,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(signatureCheck?.status, 'fail')
     assert.equal(
       signatureCheck?.results.find(item => item.platform === 'darwin' && item.arch === 'arm64')?.reason,
-      'json-signature-body'
+      'json-signature-body',
     )
   })
 
@@ -552,11 +553,11 @@ describe('check-release-gates remote checks', () => {
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
       matrixCheck?.mismatches.map(item => item.reason),
-      ['download-url-mismatch']
+      ['download-url-mismatch'],
     )
     assert.equal(
       matrixCheck?.mismatches[0]?.expected,
-      `/api/releases/${tag}/download/win32/x64`
+      `/api/releases/${tag}/download/win32/x64`,
     )
   })
 
@@ -594,7 +595,7 @@ describe('check-release-gates remote checks', () => {
         validResponse: true,
         responseKind: 'redirect',
         location: 'https://github.example.test/releases/download/artifact',
-      }
+      },
     )
   })
 
@@ -669,7 +670,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(
       downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')?.hasValidExp,
-      false
+      false,
     )
   })
 
@@ -688,7 +689,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(
       downloadCheck?.results.find(item => item.platform === 'darwin' && item.arch === 'arm64')?.hasValidSig,
-      false
+      false,
     )
   })
 
@@ -726,7 +727,7 @@ describe('check-release-gates remote checks', () => {
         responseKind: 'redirect',
         location: null,
         reason: 'missing-redirect-location',
-      }
+      },
     )
   })
 
@@ -749,7 +750,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(
       downloadCheck?.results.find(item => item.platform === 'darwin' && item.arch === 'arm64')?.reason,
-      'json-download-body'
+      'json-download-body',
     )
   })
 
@@ -997,7 +998,7 @@ describe('check-release-gates remote checks', () => {
   it('fails gate-e when GitHub release assets are missing manifest core artifacts', async () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().filter(
-        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg'
+        asset => asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
       ),
     })
 
@@ -1018,10 +1019,10 @@ describe('check-release-gates remote checks', () => {
 
   it('fails gate-e when GitHub release core assets have no download URL', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
           ? { name: asset.name }
-          : asset
+          : asset,
       ),
     })
 
@@ -1042,10 +1043,10 @@ describe('check-release-gates remote checks', () => {
 
   it('fails gate-e when GitHub release core asset download URLs point at another tag', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
           ? { ...asset, browser_download_url: 'https://github.example.test/v2.4.12-beta.7/tuff-core-2.4.12-beta.8-win32-x64-setup.exe' }
-          : asset
+          : asset,
       ),
     })
 
@@ -1072,10 +1073,10 @@ describe('check-release-gates remote checks', () => {
 
   it('fails gate-e when GitHub release core assets are not uploaded', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
           ? { ...asset, state: 'starter' }
-          : asset
+          : asset,
       ),
     })
 
@@ -1101,7 +1102,7 @@ describe('check-release-gates remote checks', () => {
       githubAssets: [
         ...githubAssets,
         {
-          ...githubAssets.find((asset) => asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'),
+          ...githubAssets.find(asset => asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'),
           browser_download_url: `https://github.example.test/${tag}/duplicate-win32.exe`,
         },
       ],
@@ -1202,7 +1203,7 @@ describe('check-release-gates remote checks', () => {
   it('fails gate-e when GitHub release assets are missing manifest signature sidecars', async () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().filter(
-        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig'
+        asset => asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
       ),
     })
 
@@ -1224,10 +1225,10 @@ describe('check-release-gates remote checks', () => {
 
   it('fails gate-e when GitHub release signature sidecars have no download URL', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
           ? { name: asset.name }
-          : asset
+          : asset,
       ),
     })
 
@@ -1249,10 +1250,10 @@ describe('check-release-gates remote checks', () => {
 
   it('keeps GitHub release signature download URL drift as a warning before gate-e', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
           ? { ...asset, browser_download_url: `https://github.example.test/${tag}/wrong-sidecar.sig` }
-          : asset
+          : asset,
       ),
     })
 
@@ -1280,10 +1281,10 @@ describe('check-release-gates remote checks', () => {
 
   it('keeps non-uploaded GitHub release signature sidecars as a warning before gate-e', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map((asset) =>
+      githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
           ? { ...asset, state: 'starter' }
-          : asset
+          : asset,
       ),
     })
 
@@ -1319,7 +1320,7 @@ describe('check-release-gates remote checks', () => {
   it('keeps missing GitHub release assets as a warning before gate-e', async () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().filter(
-        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
+        asset => asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
       ),
     })
 
@@ -1341,7 +1342,7 @@ describe('check-release-gates remote checks', () => {
   it('keeps missing GitHub release signature sidecars as a warning before gate-e', async () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().filter(
-        (asset) => asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
+        asset => asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
       ),
     })
 
@@ -1432,7 +1433,7 @@ describe('check-release-gates remote checks', () => {
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
       matrixCheck?.mismatches.map(item => item.reason).sort(),
-      ['missing-manifest-artifact', 'missing-manifest-artifact']
+      ['missing-manifest-artifact', 'missing-manifest-artifact'],
     )
   })
 

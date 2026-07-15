@@ -2,7 +2,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceVisionImageSource,
   IntelligenceVisionOcrPayload,
-  IntelligenceVisionOcrResult,
+  IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
 import { existsSync, readdirSync } from 'node:fs'
@@ -14,8 +14,7 @@ import { BaseCapabilityTester } from './base-tester'
 import { createSampleImageSource } from './image-tester'
 
 function isVisionSource(value: unknown): value is IntelligenceVisionImageSource {
-  if (!value || typeof value !== 'object' || !('type' in value))
-    return false
+  if (!value || typeof value !== 'object' || !('type' in value)) return false
 
   const { type } = value
   if (type === 'data-url') {
@@ -42,20 +41,20 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
       source,
       prompt: getCapabilityPrompt('vision.ocr'),
       includeKeywords: true,
-      includeLayout: true,
+      includeLayout: true
     }
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceVisionOcrResult>) {
     const ocrResult = result.result
-    const preview
-      = ocrResult.text.length > 200 ? `${ocrResult.text.slice(0, 200)}...` : ocrResult.text
+    const preview =
+      ocrResult.text.length > 200 ? `${ocrResult.text.slice(0, 200)}...` : ocrResult.text
 
     const keywords = ocrResult.keywords?.length ? `\n关键词: ${ocrResult.keywords.join(', ')}` : ''
 
     return this.buildTestResult(result, {
       message: 'OCR 测试成功',
-      textPreview: preview + keywords,
+      textPreview: preview + keywords
     })
   }
 
@@ -68,14 +67,14 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
   }
 
   private async loadSampleImageSource(
-    folder: string,
+    folder: string
   ): Promise<IntelligenceVisionOcrPayload['source']> {
     const dir = this.resolveSampleDirectory(folder)
     if (!dir) {
       return createSampleImageSource()
     }
 
-    const files = readdirSync(dir).filter(file => /\.(?:png|jpe?g|webp|gif|bmp)$/i.test(file))
+    const files = readdirSync(dir).filter((file) => /\.(?:png|jpe?g|webp|gif|bmp)$/i.test(file))
 
     if (files.length === 0) {
       return createSampleImageSource()
@@ -88,7 +87,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
 
     return {
       type: 'data-url',
-      dataUrl: `data:${mime};base64,${buffer.toString('base64')}`,
+      dataUrl: `data:${mime};base64,${buffer.toString('base64')}`
     }
   }
 
@@ -96,7 +95,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
     const guesses = [
       path.resolve(process.cwd(), 'apps/core-app/resources/intelligence/test-capability', folder),
       path.resolve(process.cwd(), 'resources/intelligence/test-capability', folder),
-      path.resolve(process.resourcesPath, 'intelligence/test-capability', folder),
+      path.resolve(process.resourcesPath, 'intelligence/test-capability', folder)
     ]
 
     for (const guess of guesses) {

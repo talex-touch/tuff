@@ -13,13 +13,38 @@ const permissionRef = {
 }
 globalThis.permission = permissionRef
 globalThis.TuffItemBuilder = class {
-  constructor(id) { this.item = { id, meta: {} } }
-  setSource(type, id, name) { this.item.source = { type, id, name }; return this }
-  setTitle(title) { this.item.title = title; return this }
-  setSubtitle(subtitle) { this.item.subtitle = subtitle; return this }
-  setIcon(icon) { this.item.icon = icon; return this }
-  setMeta(meta) { this.item.meta = { ...this.item.meta, ...meta }; return this }
-  build() { return this.item }
+  constructor(id) {
+    this.item = { id, meta: {} }
+  }
+
+  setSource(type, id, name) {
+    this.item.source = { type, id, name }
+    return this
+  }
+
+  setTitle(title) {
+    this.item.title = title
+    return this
+  }
+
+  setSubtitle(subtitle) {
+    this.item.subtitle = subtitle
+    return this
+  }
+
+  setIcon(icon) {
+    this.item.icon = icon
+    return this
+  }
+
+  setMeta(meta) {
+    this.item.meta = { ...this.item.meta, ...meta }
+    return this
+  }
+
+  build() {
+    return this.item
+  }
 }
 
 const {
@@ -117,7 +142,10 @@ test('resolveShellCapabilityState reports missing permission without requesting 
 test('resolveShellCapabilityState returns cached result on second call', async () => {
   setSpawnShellCommandForTest(() => ({ unref() {} }))
   let callCount = 0
-  permissionRef.check = async () => { callCount++; return true }
+  permissionRef.check = async () => {
+    callCount++
+    return true
+  }
 
   // Clear any stale cache
   const { cacheInvalidate } = require('./index.js').__test
@@ -152,7 +180,10 @@ test('runCommand fails closed when safe command runner is unavailable', () => {
 test('runCommand blocks command with pipe character', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tuff-workspace-scripts-'))
   let called = false
-  setSpawnShellCommandForTest(() => { called = true; return { pid: 1, unref() {} } })
+  setSpawnShellCommandForTest(() => {
+    called = true
+    return { pid: 1, unref() {} }
+  })
   const result = runCommand('echo ok | sh', tempDir)
   assert.equal(result.ok, false)
   assert.equal(result.reason, 'unsupported-shell-syntax')
@@ -160,7 +191,8 @@ test('runCommand blocks command with pipe character', () => {
 })
 
 test('resolveSpawnRequest keeps structured args on non-Windows', () => {
-  if (process.platform === 'win32') return
+  if (process.platform === 'win32')
+    return
   assert.deepEqual(resolveSpawnRequest({ executable: 'pnpm', args: ['test'] }), {
     executable: 'pnpm',
     args: ['test'],

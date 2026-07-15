@@ -11,7 +11,7 @@ const repoRoot = path.dirname(scriptsDir)
 const scriptPath = path.join(scriptsDir, 'update-validate-release-manifest.mjs')
 const sampleManifestPath = path.join(
   repoRoot,
-  'docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json'
+  'docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json',
 )
 
 function runValidator(manifestPath) {
@@ -72,7 +72,7 @@ describe('update release manifest validator', () => {
         assert.match(output, /release\.channel must match release\.version suffix/)
         assert.match(output, /artifacts\[1\]\.name must be unique/)
         return true
-      }
+      },
     )
   })
 
@@ -108,7 +108,7 @@ describe('update release manifest validator', () => {
         const output = `${error.stdout ?? ''}\n${error.stderr ?? ''}`
         assert.match(output, /artifacts\[1\]\.sha256 must be unique/)
         return true
-      }
+      },
     )
   })
 
@@ -139,7 +139,7 @@ describe('update release manifest validator', () => {
         assert.match(output, /artifacts\[0\]\.platform does not match artifact name/)
         assert.match(output, /artifacts\[0\]\.arch does not match artifact name/)
         return true
-      }
+      },
     )
   })
 
@@ -177,7 +177,7 @@ describe('update release manifest validator', () => {
         const output = `${error.stdout ?? ''}\n${error.stderr ?? ''}`
         assert.match(output, /artifacts\[1\]\.platform\/arch must be unique for core artifacts/)
         return true
-      }
+      },
     )
   })
 
@@ -207,7 +207,7 @@ describe('update release manifest validator', () => {
         const output = `${error.stdout ?? ''}\n${error.stderr ?? ''}`
         assert.match(output, /must be a downloadable artifact, not release metadata/)
         return true
-      }
+      },
     )
   })
 
@@ -245,10 +245,10 @@ describe('update release manifest validator', () => {
         assert.match(output, /artifacts\[0\]\.signature is required for core artifacts/)
         assert.match(
           output,
-          /artifacts\[1\]\.signature must point to the artifact \.sig\/\.asc sidecar/
+          /artifacts\[1\]\.signature must point to the artifact \.sig\/\.asc sidecar/,
         )
         return true
-      }
+      },
     )
   })
 
@@ -285,7 +285,7 @@ describe('update release manifest validator', () => {
         assert.match(output, /signature sidecar must not be listed as a downloadable artifact/)
         assert.match(output, /must be a downloadable artifact, not release metadata/)
         return true
-      }
+      },
     )
   })
 })

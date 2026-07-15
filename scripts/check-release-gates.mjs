@@ -1,8 +1,8 @@
 import process from 'node:process'
-import { getArgValue, hasFlag, toBool } from './lib/argv-utils.mjs'
-import { normalizeBaseUrl } from './lib/http-utils.mjs'
 import { runLocalReleaseGateChecks } from './check-release-gates/local-checks.mjs'
 import { checkRemoteRelease } from './check-release-gates/remote-checks.mjs'
+import { getArgValue, hasFlag, toBool } from './lib/argv-utils.mjs'
+import { normalizeBaseUrl } from './lib/http-utils.mjs'
 
 const repoRoot = process.cwd()
 const argv = process.argv
@@ -49,7 +49,7 @@ async function main() {
     strict,
     baseUrl: baseUrlArg ? normalizeBaseUrl(baseUrlArg) : null,
     result,
-    checks
+    checks,
   }
 
   console.log(JSON.stringify(summary, null, 2))

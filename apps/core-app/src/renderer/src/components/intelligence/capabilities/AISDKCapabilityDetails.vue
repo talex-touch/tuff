@@ -2,7 +2,7 @@
 import type {
   IntelligenceCapabilityConfig,
   IntelligenceCapabilityProviderBinding,
-  IntelligenceProviderConfig,
+  IntelligenceProviderConfig
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
@@ -33,7 +33,7 @@ const emits = defineEmits<{
   toggleProvider: [providerId: string, enabled: boolean]
   updateModels: [providerId: string, value: string[]]
   updatePrompt: [prompt: string]
-  test: [params?: { providerId?: string, userInput?: string }]
+  test: [params?: { providerId?: string; userInput?: string }]
   reorderProviders: [bindings: IntelligenceCapabilityProviderBinding[]]
 }>()
 
@@ -52,14 +52,14 @@ let promptTimer: number | null = null
 let syncingFromProps = false
 
 const providerMetaMap = computed(
-  () => new Map(props.providers.map(provider => [provider.id, provider])),
+  () => new Map(props.providers.map((provider) => [provider.id, provider]))
 )
 
 const selectedProviderIds = computed(() => {
   return new Set(
     (props.capability.providers || [])
-      .filter(binding => binding.enabled !== false)
-      .map(binding => binding.providerId),
+      .filter((binding) => binding.enabled !== false)
+      .map((binding) => binding.providerId)
   )
 })
 
@@ -75,47 +75,46 @@ const bindingMap = computed(() => {
 
 const enabledBindings = computed<CapabilityBinding[]>(() => {
   return (props.capability.providers || [])
-    .filter(binding => binding.enabled !== false)
+    .filter((binding) => binding.enabled !== false)
     .slice()
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-    .map(binding => ({
+    .map((binding) => ({
       ...binding,
-      provider: providerMetaMap.value.get(binding.providerId),
+      provider: providerMetaMap.value.get(binding.providerId)
     }))
 })
 
 const disabledProviders = computed<CapabilityBinding[]>(() => {
-  const enabledIds = new Set(enabledBindings.value.map(binding => binding.providerId))
+  const enabledIds = new Set(enabledBindings.value.map((binding) => binding.providerId))
   const disabledSet = new Set<string>()
   const leftover = (props.capability.providers || [])
-    .filter(binding => binding.enabled === false)
+    .filter((binding) => binding.enabled === false)
     .map((binding) => {
       disabledSet.add(binding.providerId)
       return {
         ...binding,
-        provider: providerMetaMap.value.get(binding.providerId),
+        provider: providerMetaMap.value.get(binding.providerId)
       }
     })
 
   const remaining = props.providers
-    .filter(provider => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
-    .map(provider => ({
+    .filter((provider) => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
+    .map((provider) => ({
       providerId: provider.id,
       enabled: false,
       priority: undefined,
-      provider,
+      provider
     }))
 
   return [...leftover, ...remaining]
 })
 
 const focusedProvider = computed(
-  () => props.providers.find(provider => provider.id === focusedProviderId.value) || null,
+  () => props.providers.find((provider) => provider.id === focusedProviderId.value) || null
 )
 
 const focusedBinding = computed(() => {
-  if (!focusedProviderId.value)
-    return null
+  if (!focusedProviderId.value) return null
   return bindingMap.value.get(focusedProviderId.value) ?? null
 })
 
@@ -144,27 +143,22 @@ const promptSummary = computed(() => {
 })
 
 const testSummary = computed(() => {
-  if (!props.testResult)
-    return ''
+  if (!props.testResult) return ''
   const pieces: string[] = []
-  if (props.testResult.provider)
-    pieces.push(props.testResult.provider)
-  if (props.testResult.model)
-    pieces.push(props.testResult.model)
-  if (props.testResult.latency)
-    pieces.push(`${props.testResult.latency}ms`)
-  if (props.testResult.tokensPerSecond)
-    pieces.push(`${props.testResult.tokensPerSecond}/s`)
+  if (props.testResult.provider) pieces.push(props.testResult.provider)
+  if (props.testResult.model) pieces.push(props.testResult.model)
+  if (props.testResult.latency) pieces.push(`${props.testResult.latency}ms`)
+  if (props.testResult.tokensPerSecond) pieces.push(`${props.testResult.tokensPerSecond}/s`)
   return pieces.join(' · ')
 })
 
 const enabledProvidersForTest = computed(() => {
   const eligibleProviderIds = testEligibleProviderIds.value
   return props.providers.filter(
-    provider =>
-      selectedProviderIds.value.has(provider.id)
-      && provider.enabled
-      && (eligibleProviderIds === null || eligibleProviderIds.has(provider.id)),
+    (provider) =>
+      selectedProviderIds.value.has(provider.id) &&
+      provider.enabled &&
+      (eligibleProviderIds === null || eligibleProviderIds.has(provider.id))
   )
 })
 
@@ -174,18 +168,16 @@ watch(
     syncingFromProps = true
     promptValue.value = value || ''
     syncingFromProps = false
-  },
+  }
 )
 
 function flushPrompt(): void {
-  if (syncingFromProps)
-    return
+  if (syncingFromProps) return
   emits('updatePrompt', promptValue.value)
 }
 
 function schedulePromptSync(): void {
-  if (syncingFromProps)
-    return
+  if (syncingFromProps) return
   if (promptTimer) {
     clearTimeout(promptTimer)
   }
@@ -203,7 +195,7 @@ watch(
   () => props.capability.id,
   () => {
     flushPrompt()
-  },
+  }
 )
 
 function handleProviderFocus(providerId: string): void {
@@ -215,15 +207,14 @@ function emitProvidersOrder(bindings: CapabilityBinding[]): void {
     const { provider: _provider, ...rest } = binding
     return {
       ...rest,
-      priority: index + 1,
+      priority: index + 1
     }
   })
   emits('reorderProviders', reordered)
 }
 
 function handleModelTransferUpdates(models: string[]): void {
-  if (!focusedProviderId.value)
-    return
+  if (!focusedProviderId.value) return
   emits('updateModels', focusedProviderId.value, models)
 }
 
@@ -237,8 +228,7 @@ function openModelDialogForProvider(providerId: string, event?: MouseEvent): voi
 }
 
 function openModelDialog(event?: MouseEvent): void {
-  if (!canEditModels.value)
-    return
+  if (!canEditModels.value) return
   modelDialogSource.value = resolveDialogSource(event)
   showModelDialog.value = true
 }
@@ -248,21 +238,21 @@ function openPromptDrawer(): void {
 }
 
 async function handleTest(): Promise<void> {
-  if (props.isTesting)
-    return
+  if (props.isTesting) return
 
   try {
     const [meta, providerOptions] = await Promise.all([
       intelligence.getCapabilityTestMeta({ capabilityId: props.capability.id }),
-      intelligence.getProviderModelOptions({ capabilityId: props.capability.id }),
+      intelligence.getProviderModelOptions({ capabilityId: props.capability.id })
     ])
     testMeta.value = meta
     testEligibleProviderIds.value = new Set(
-      providerOptions.filter(provider => provider.available).map(provider => provider.providerId),
+      providerOptions
+        .filter((provider) => provider.available)
+        .map((provider) => provider.providerId)
     )
     showTestDialog.value = true
-  }
-  catch (error) {
+  } catch (error) {
     capabilityDetailsLog.error('Failed to prepare capability test:', error)
     testMeta.value = { requiresUserInput: false, inputHint: '' }
     testEligibleProviderIds.value = new Set()
@@ -283,17 +273,17 @@ watch(
       return
     }
     if (
-      focusedProviderId.value
-      && props.providers.some(provider => provider.id === focusedProviderId.value)
+      focusedProviderId.value &&
+      props.providers.some((provider) => provider.id === focusedProviderId.value)
     ) {
       return
     }
     const firstActive = props.capability.providers?.find(
-      binding => binding.enabled !== false,
+      (binding) => binding.enabled !== false
     )?.providerId
     focusedProviderId.value = firstActive ?? props.providers[0].id
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 )
 
 onBeforeUnmount(() => {
@@ -327,7 +317,7 @@ onBeforeUnmount(() => {
               <i class="i-carbon-catalog" aria-hidden="true" />
               {{
                 t('settings.intelligence.capabilityBindingsStat', {
-                  count: capability.providers?.length || 0,
+                  count: capability.providers?.length || 0
                 })
               }}
             </span>

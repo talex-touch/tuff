@@ -10,11 +10,7 @@ interface PermissionOptions {
   unavailableCode?: string
 }
 
-type PermissionHandler = (
-  payload: unknown,
-  context: HandlerContext,
-) => Promise<unknown> | unknown
-
+type PermissionHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
 
 interface CapturedRegistration {
   permissionId: string
@@ -33,45 +29,45 @@ const permissionMocks = vi.hoisted(() => ({
     (options: PermissionOptions, callback: PermissionHandler): PermissionHandler => {
       return async (payload, context) => {
         if (
-          context.plugin
-          && options.permissionId === 'intelligence.agents'
-          && options.failClosedForPlugin
-          && !permissionMocks.runtimeAvailable
+          context.plugin &&
+          options.permissionId === 'intelligence.agents' &&
+          options.failClosedForPlugin &&
+          !permissionMocks.runtimeAvailable
         ) {
           const error = new Error(
-            `Permission runtime is unavailable for '${options.permissionId}'`,
+            `Permission runtime is unavailable for '${options.permissionId}'`
           ) as Error & { code?: string }
           error.code = options.unavailableCode
           throw error
         }
         return await callback(payload, context)
       }
-    },
-  ),
+    }
+  )
 }))
 
 const runtimeMocks = vi.hoisted(() => ({
   runAgentGraph: vi.fn(),
-  startSession: vi.fn(),
+  startSession: vi.fn()
 }))
 
 const workflowServiceMocks = vi.hoisted(() => ({
-  runWorkflow: vi.fn(),
+  runWorkflow: vi.fn()
 }))
 
 vi.mock('../permission/channel-guard', () => ({
-  withPermission: permissionMocks.withPermission,
+  withPermission: permissionMocks.withPermission
 }))
 
 vi.mock('./tuff-intelligence-runtime', () => ({
-  tuffIntelligenceRuntime: runtimeMocks,
+  tuffIntelligenceRuntime: runtimeMocks
 }))
 
 vi.mock('./intelligence-workflow-service', () => ({
-  intelligenceWorkflowService: workflowServiceMocks,
+  intelligenceWorkflowService: workflowServiceMocks
 }))
 vi.mock('@talex-touch/utils/transport/events/types', () => ({
-  isIntelligenceErrorCode: vi.fn(() => false),
+  isIntelligenceErrorCode: vi.fn(() => false)
 }))
 
 vi.mock('../sentry/sentry-service', () => {
@@ -85,7 +81,7 @@ vi.mock('../sentry/sentry-service', () => {
   return {
     SentryServiceModule,
     getSentryService: vi.fn(() => service),
-    setSentryServiceInstance: vi.fn(),
+    setSentryServiceInstance: vi.fn()
   }
 })
 
@@ -96,10 +92,10 @@ function captureAutonomousHandlers() {
       event: TuffEvent<unknown, unknown> & { toEventName: () => string },
       _action: string,
       permissionId: string,
-      handler: PermissionHandler,
+      handler: PermissionHandler
     ) => {
       registrations.set(event.toEventName(), { permissionId, handler })
-    },
+    }
   )
   const module = new IntelligenceModule() as unknown as AutonomousChannelRegistrar
   const waitForAgentRuntime = vi.fn(async () => undefined)
@@ -128,30 +124,34 @@ describe('intelligenceModule autonomous permission boundary', () => {
   it('keeps inert session starts basic while fail-closing plugin graph autoruns', async () => {
     const { sessionStart } = captureAutonomousHandlers()
     const pluginContext = {
-      plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true },
+      plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
     } as HandlerContext
 
     expect(sessionStart.permissionId).toBe('intelligence.basic')
     await expect(
-      sessionStart.handler({ autoRunGraph: true, objective: 'run tools' }, pluginContext),
+      sessionStart.handler({ autoRunGraph: true, objective: 'run tools' }, pluginContext)
     ).rejects.toMatchObject({ code: 'INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE' })
     expect(runtimeMocks.runAgentGraph).not.toHaveBeenCalled()
 
-    await expect(sessionStart.handler({ objective: 'draft only' }, pluginContext)).resolves.toEqual({
-      id: 'inert-session',
-    })
+    await expect(sessionStart.handler({ objective: 'draft only' }, pluginContext)).resolves.toEqual(
+      {
+        id: 'inert-session'
+      }
+    )
     expect(runtimeMocks.runAgentGraph).not.toHaveBeenCalled()
   })
 
   it('registers workflow runs as agents-only and blocks plugins before agent runtime', async () => {
     const { workflowRun, waitForAgentRuntime } = captureAutonomousHandlers()
     const pluginContext = {
-      plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true },
+      plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
     } as HandlerContext
 
     expect(workflowRun.permissionId).toBe('intelligence.agents')
-    await expect(workflowRun.handler({ workflowId: 'workflow-1' }, pluginContext)).rejects.toMatchObject({
-      code: 'INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE',
+    await expect(
+      workflowRun.handler({ workflowId: 'workflow-1' }, pluginContext)
+    ).rejects.toMatchObject({
+      code: 'INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE'
     })
     expect(waitForAgentRuntime).not.toHaveBeenCalled()
     expect(workflowServiceMocks.runWorkflow).not.toHaveBeenCalled()
@@ -162,7 +162,7 @@ describe('intelligenceModule autonomous permission boundary', () => {
     const workflow = { workflowId: 'workflow-1' }
 
     await expect(workflowRun.handler(workflow, {} as HandlerContext)).resolves.toEqual({
-      id: 'workflow-run-host',
+      id: 'workflow-run-host'
     })
     expect(waitForAgentRuntime).toHaveBeenCalledOnce()
     expect(workflowServiceMocks.runWorkflow).toHaveBeenCalledOnce()

@@ -74,7 +74,9 @@ describe('AI capability tester registry coverage', () => {
     const { capabilityTesterRegistry } = await import('./registry')
     const registeredCapabilityIds = await registerModuleCapabilities()
 
-    expect(registeredCapabilityIds).toEqual(expect.arrayContaining([...EXPECTED_STABLE_CAPABILITY_IDS]))
+    expect(registeredCapabilityIds).toEqual(
+      expect.arrayContaining([...EXPECTED_STABLE_CAPABILITY_IDS])
+    )
 
     const missingTesterIds = registeredCapabilityIds.filter(
       (capabilityId) => !capabilityTesterRegistry.has(capabilityId)
@@ -86,7 +88,9 @@ describe('AI capability tester registry coverage', () => {
   it('keeps every stable registered capability visible in the default capability config', async () => {
     const registeredCapabilityIds = await registerModuleCapabilities()
 
-    expect(registeredCapabilityIds).toEqual(expect.arrayContaining([...EXPECTED_STABLE_CAPABILITY_IDS]))
+    expect(registeredCapabilityIds).toEqual(
+      expect.arrayContaining([...EXPECTED_STABLE_CAPABILITY_IDS])
+    )
 
     const missingDefaultCapabilityIds = EXPECTED_STABLE_CAPABILITY_IDS.filter(
       (capabilityId) => !Object.prototype.hasOwnProperty.call(DEFAULT_CAPABILITIES, capabilityId)

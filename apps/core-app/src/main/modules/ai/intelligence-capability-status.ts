@@ -31,7 +31,7 @@ function providerCanServeCapability(provider: IntelligenceProviderConfig): boole
 }
 
 export function resolveCapabilityStatus(
-  capabilityId: string,
+  capabilityId: string
 ): IntelligenceCapabilityStatusSnapshot {
   ensureIntelligenceConfigLoaded()
   const capability = intelligenceCapabilityRegistry.get(capabilityId)
@@ -40,7 +40,7 @@ export function resolveCapabilityStatus(
       capabilityId,
       available: false,
       providerIds: [],
-      reason: 'capability-not-found',
+      reason: 'capability-not-found'
     }
   }
 
@@ -51,18 +51,18 @@ export function resolveCapabilityStatus(
     .filter((provider) => {
       const config = provider.getConfig()
       return (
-        capability.supportedProviders.includes(config.type)
-        && (allowedProviderIds.size === 0 || allowedProviderIds.has(config.id))
-        && providerCanServeCapability(config)
-        && providerSupportsCapability(provider, capabilityId, capability.type, false)
+        capability.supportedProviders.includes(config.type) &&
+        (allowedProviderIds.size === 0 || allowedProviderIds.has(config.id)) &&
+        providerCanServeCapability(config) &&
+        providerSupportsCapability(provider, capabilityId, capability.type, false)
       )
     })
-    .map(provider => provider.getConfig().id)
+    .map((provider) => provider.getConfig().id)
 
   return {
     capabilityId,
     available: providerIds.length > 0,
     providerIds,
-    reason: providerIds.length > 0 ? undefined : 'no-enabled-provider',
+    reason: providerIds.length > 0 ? undefined : 'no-enabled-provider'
   }
 }

@@ -19,9 +19,12 @@ export function compareVersionCore(left, right) {
   if (!l || !r) {
     return null
   }
-  if (l.major !== r.major) return l.major > r.major ? 1 : -1
-  if (l.minor !== r.minor) return l.minor > r.minor ? 1 : -1
-  if (l.patch !== r.patch) return l.patch > r.patch ? 1 : -1
+  if (l.major !== r.major)
+    return l.major > r.major ? 1 : -1
+  if (l.minor !== r.minor)
+    return l.minor > r.minor ? 1 : -1
+  if (l.patch !== r.patch)
+    return l.patch > r.patch ? 1 : -1
   return 0
 }
 
@@ -29,7 +32,8 @@ export function getProjectVersion(workspaceRoot) {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8'))
     return typeof pkg.version === 'string' ? pkg.version : '0.0.0'
-  } catch {
+  }
+  catch {
     return '0.0.0'
   }
 }

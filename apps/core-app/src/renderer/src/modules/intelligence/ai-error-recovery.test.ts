@@ -18,7 +18,6 @@ describe('ai-error-recovery', () => {
       title: 'AI provider unavailable'
     })
 
-
     expect(
       resolveIntelligenceErrorRecovery({ error: 'Unsupported capability: vision.ocr' }, t)
     ).toMatchObject({
@@ -50,12 +49,13 @@ describe('ai-error-recovery', () => {
     const quotaVerificationRecovery = {
       code: 'quota-verification',
       title: 'Quota verification unavailable',
-      detail: 'Retry later. If this continues, inspect Intelligence quota storage and configuration.'
+      detail:
+        'Retry later. If this continues, inspect Intelligence quota storage and configuration.'
     }
 
-    expect(
-      resolveIntelligenceErrorRecovery({ errorCode: 'QUOTA_CHECK_UNAVAILABLE' }, t)
-    ).toEqual(quotaVerificationRecovery)
+    expect(resolveIntelligenceErrorRecovery({ errorCode: 'QUOTA_CHECK_UNAVAILABLE' }, t)).toEqual(
+      quotaVerificationRecovery
+    )
 
     expect(
       resolveIntelligenceErrorRecovery({ error: 'quota verification is unavailable' }, t)

@@ -313,7 +313,7 @@ test('buildFlowAdapterTrace redacts request and payload values', () => {
     { targetId: 'quickops.copy-to-clipboard' },
     'confirmation-token-required',
     'blocked-until-confirmed',
-    ['text']
+    ['text'],
   )
 
   assert.equal(trace.targetId, 'quickops.copy-to-clipboard')

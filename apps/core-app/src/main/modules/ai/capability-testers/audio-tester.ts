@@ -30,7 +30,8 @@ export class TtsCapabilityTester extends BaseCapabilityTester<
   }
 
   formatTestResult(result: IntelligenceInvokeResult<IntelligenceTTSResult>) {
-    const duration = typeof result.result?.duration === 'number' ? `${result.result.duration}s` : 'unknown'
+    const duration =
+      typeof result.result?.duration === 'number' ? `${result.result.duration}s` : 'unknown'
     const sampleRate =
       typeof result.result?.sampleRate === 'number' ? `, ${result.result.sampleRate}Hz` : ''
 

@@ -23,7 +23,7 @@ describe('check-release-gates cli', () => {
       {
         cwd: repoRoot,
         encoding: 'utf8',
-      }
+      },
     )
     const summary = JSON.parse(output)
 

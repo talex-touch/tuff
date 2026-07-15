@@ -8,25 +8,25 @@ import { isNexusProviderConfig, NexusProvider } from './nexus-provider'
 
 const networkMocks = vi.hoisted(() => ({
   request: vi.fn(),
-  requestStream: vi.fn(),
+  requestStream: vi.fn()
 }))
 
 const sceneMocks = vi.hoisted(() => ({
   runNexusScene: vi.fn(),
-  extractTranslatedImageFromSceneRun: vi.fn(),
+  extractTranslatedImageFromSceneRun: vi.fn()
 }))
 
 vi.mock('../../network', () => ({
-  getNetworkService: () => networkMocks,
+  getNetworkService: () => networkMocks
 }))
 
 vi.mock('../../nexus/runtime-base', () => ({
-  getRuntimeNexusBaseUrl: () => 'https://nexus.example.com',
+  getRuntimeNexusBaseUrl: () => 'https://nexus.example.com'
 }))
 
 vi.mock('../../nexus/scene-client', () => ({
   runNexusScene: sceneMocks.runNexusScene,
-  extractTranslatedImageFromSceneRun: sceneMocks.extractTranslatedImageFromSceneRun,
+  extractTranslatedImageFromSceneRun: sceneMocks.extractTranslatedImageFromSceneRun
 }))
 
 describe('nexusProvider', () => {
@@ -41,23 +41,23 @@ describe('nexusProvider', () => {
           model: 'gpt-4o-mini',
           latency: 42,
           traceId: 'trace_nexus_1',
-          provider: 'ip_nexus_ai',
-        },
-      },
+          provider: 'ip_nexus_ai'
+        }
+      }
     })
     sceneMocks.runNexusScene.mockResolvedValue({
       runId: 'run_image_1',
       sceneId: 'corebox.screenshot.translate',
       status: 'completed',
       mode: 'execute',
-      output: {},
+      output: {}
     })
     sceneMocks.extractTranslatedImageFromSceneRun.mockReturnValue({
       translatedImageBase64: 'dHJhbnNsYXRlZA==',
       imageMimeType: 'image/png',
       sourceText: 'hello',
       targetText: '你好',
-      overlay: { blocks: [] },
+      overlay: { blocks: [] }
     })
   })
 
@@ -76,12 +76,12 @@ describe('nexusProvider', () => {
       apiKey: 'app-token',
       defaultModel: 'gpt-4o-mini',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
 
     const result = await provider.chat(
       { messages: [{ role: 'user', content: 'hi' }] },
-      { timeout: 12_000, metadata: { capabilityId: 'text.chat' } },
+      { timeout: 12_000, metadata: { capabilityId: 'text.chat' } }
     )
 
     expect(networkMocks.request).toHaveBeenCalledWith(
@@ -89,25 +89,25 @@ describe('nexusProvider', () => {
         method: 'POST',
         url: 'https://nexus.example.com/api/v1/intelligence/invoke',
         headers: expect.objectContaining({
-          'Authorization': 'Bearer app-token',
-          'Content-Type': 'application/json',
+          Authorization: 'Bearer app-token',
+          'Content-Type': 'application/json'
         }),
         body: expect.objectContaining({
           capabilityId: 'text.chat',
           payload: {
-            messages: [{ role: 'user', content: 'hi' }],
-          },
+            messages: [{ role: 'user', content: 'hi' }]
+          }
         }),
         captureErrorResponseData: true,
-        timeoutMs: 12_000,
-      }),
+        timeoutMs: 12_000
+      })
     )
     expect(result).toMatchObject({
       result: 'hello',
       usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
       model: 'gpt-4o-mini',
       traceId: 'trace_nexus_1',
-      provider: 'ip_nexus_ai',
+      provider: 'ip_nexus_ai'
     })
   })
 
@@ -123,9 +123,9 @@ describe('nexusProvider', () => {
           code: 'QUOTA_EXHAUSTED',
           message: 'Provider quota has been exhausted.',
           reason: 'The caller has exhausted its request, token, or cost quota.',
-          recovery: 'Wait for quota reset, lower token usage, or adjust quota settings.',
-        },
-      },
+          recovery: 'Wait for quota reset, lower token usage, or adjust quota settings.'
+        }
+      }
     )
     networkMocks.request.mockRejectedValueOnce(upstreamError)
     const provider = new NexusProvider({
@@ -135,7 +135,7 @@ describe('nexusProvider', () => {
       enabled: true,
       apiKey: 'app-token',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
 
     const thrown = await provider
@@ -149,7 +149,7 @@ describe('nexusProvider', () => {
       code: 'QUOTA_EXHAUSTED',
       message: 'Provider quota has been exhausted.',
       reason: 'The caller has exhausted its request, token, or cost quota.',
-      recovery: 'Wait for quota reset, lower token usage, or adjust quota settings.',
+      recovery: 'Wait for quota reset, lower token usage, or adjust quota settings.'
     })
   })
 
@@ -162,9 +162,9 @@ describe('nexusProvider', () => {
         statusCode: 503,
         statusMessage: 'Service Unavailable',
         data: {
-          message: 'Legacy provider failure without a canonical code.',
-        },
-      },
+          message: 'Legacy provider failure without a canonical code.'
+        }
+      }
     )
     networkMocks.request.mockRejectedValueOnce(upstreamError)
     const provider = new NexusProvider({
@@ -174,11 +174,11 @@ describe('nexusProvider', () => {
       enabled: true,
       apiKey: 'app-token',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
 
     await expect(provider.chat({ messages: [{ role: 'user', content: 'hi' }] }, {})).rejects.toBe(
-      upstreamError,
+      upstreamError
     )
     expect(upstreamError.status).toBe(503)
   })
@@ -207,7 +207,7 @@ describe('nexusProvider', () => {
       '',
       'event: end',
       'data: {"type":"end"}',
-      '',
+      ''
     ].join('\n')
     const encoded = new TextEncoder().encode(sse)
     const utf8Offset = sse.indexOf('你')
@@ -219,8 +219,8 @@ describe('nexusProvider', () => {
       stream: Readable.from([
         encoded.subarray(0, utf8Offset + 1),
         encoded.subarray(utf8Offset + 1, utf8Offset + 2),
-        encoded.subarray(utf8Offset + 2),
-      ]),
+        encoded.subarray(utf8Offset + 2)
+      ])
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',
@@ -230,13 +230,13 @@ describe('nexusProvider', () => {
       apiKey: 'app-token',
       defaultModel: 'configured-chat-model',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
 
     const chunks: IntelligenceStreamChunk[] = []
     for await (const chunk of provider.chatStream(
       { messages: [{ role: 'user', content: 'hi' }] },
-      { timeout: 12_000, metadata: { capabilityId: 'text.chat' } },
+      { timeout: 12_000, metadata: { capabilityId: 'text.chat' } }
     )) {
       chunks.push(chunk)
     }
@@ -248,7 +248,7 @@ describe('nexusProvider', () => {
         traceId: 'trace_nexus_stream_1',
         provider: 'ip_nexus_ai',
         model: 'gpt-4o-mini',
-        latency: 42,
+        latency: 42
       },
       {
         delta: '你',
@@ -256,7 +256,7 @@ describe('nexusProvider', () => {
         traceId: 'trace_nexus_stream_1',
         provider: 'ip_nexus_ai',
         model: 'gpt-4o-mini',
-        latency: 42,
+        latency: 42
       },
       {
         delta: '!',
@@ -264,7 +264,7 @@ describe('nexusProvider', () => {
         traceId: 'trace_nexus_stream_1',
         provider: 'ip_nexus_ai',
         model: 'gpt-4o-mini',
-        latency: 42,
+        latency: 42
       },
       {
         delta: '',
@@ -273,8 +273,8 @@ describe('nexusProvider', () => {
         traceId: 'trace_nexus_stream_1',
         provider: 'ip_nexus_ai',
         model: 'gpt-4o-mini',
-        latency: 42,
-      },
+        latency: 42
+      }
     ])
     expect(networkMocks.request).not.toHaveBeenCalled()
     expect(networkMocks.requestStream).toHaveBeenCalledOnce()
@@ -283,16 +283,16 @@ describe('nexusProvider', () => {
         method: 'POST',
         url: 'https://nexus.example.com/api/v1/intelligence/stream',
         headers: expect.objectContaining({
-          'Authorization': 'Bearer app-token',
+          Authorization: 'Bearer app-token',
           'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
+          Accept: 'text/event-stream'
         }),
         body: expect.objectContaining({
           capabilityId: 'text.chat',
-          payload: { messages: [{ role: 'user', content: 'hi' }] },
+          payload: { messages: [{ role: 'user', content: 'hi' }] }
         }),
-        timeoutMs: 12_000,
-      }),
+        timeoutMs: 12_000
+      })
     )
   })
 
@@ -301,7 +301,7 @@ describe('nexusProvider', () => {
       'event: error',
       'data: {"type":"error","message":"Provider quota has been exhausted.","code":"QUOTA_EXHAUSTED","reason":"The caller has exhausted its request, token, or cost quota.","recovery":"Wait for quota reset, lower token usage, or adjust quota settings."}',
       '',
-      '',
+      ''
     ].join('\n')
     const encoded = new TextEncoder().encode(sse)
     const fieldOffset = sse.indexOf('"reason"')
@@ -313,8 +313,8 @@ describe('nexusProvider', () => {
       stream: Readable.from([
         encoded.subarray(0, fieldOffset),
         encoded.subarray(fieldOffset, fieldOffset + 9),
-        encoded.subarray(fieldOffset + 9),
-      ]),
+        encoded.subarray(fieldOffset + 9)
+      ])
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',
@@ -323,17 +323,17 @@ describe('nexusProvider', () => {
       enabled: true,
       apiKey: 'app-token',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
 
-    await expect(provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] }, {}).next())
-      .rejects
-      .toMatchObject({
-        message: 'Provider quota has been exhausted.',
-        code: 'QUOTA_EXHAUSTED',
-        reason: 'The caller has exhausted its request, token, or cost quota.',
-        recovery: 'Wait for quota reset, lower token usage, or adjust quota settings.',
-      })
+    await expect(
+      provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] }, {}).next()
+    ).rejects.toMatchObject({
+      message: 'Provider quota has been exhausted.',
+      code: 'QUOTA_EXHAUSTED',
+      reason: 'The caller has exhausted its request, token, or cost quota.',
+      recovery: 'Wait for quota reset, lower token usage, or adjust quota settings.'
+    })
     expect(networkMocks.request).not.toHaveBeenCalled()
     expect(networkMocks.requestStream).toHaveBeenCalledOnce()
   })
@@ -346,7 +346,7 @@ describe('nexusProvider', () => {
       'event: error',
       'data: {"type":"error","message":"Quota verification is temporarily unavailable.","code":"QUOTA_CHECK_UNAVAILABLE","reason":"Quota verification is unavailable, so the request was blocked.","recovery":"Retry after quota storage recovers or inspect Intelligence quota configuration."}',
       '',
-      '',
+      ''
     ].join('\n')
     const encoded = new TextEncoder().encode(sse)
     const errorOffset = sse.indexOf('event: error')
@@ -357,8 +357,8 @@ describe('nexusProvider', () => {
       url: 'https://nexus.example.com/api/v1/intelligence/stream',
       stream: Readable.from([
         encoded.subarray(0, errorOffset + 18),
-        encoded.subarray(errorOffset + 18),
-      ]),
+        encoded.subarray(errorOffset + 18)
+      ])
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',
@@ -367,19 +367,19 @@ describe('nexusProvider', () => {
       enabled: true,
       apiKey: 'app-token',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
     const stream = provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] }, {})
 
     await expect(stream.next()).resolves.toMatchObject({
       value: { delta: 'Visible answer', done: false },
-      done: false,
+      done: false
     })
     await expect(stream.next()).rejects.toMatchObject({
       message: 'Quota verification is temporarily unavailable.',
       code: 'QUOTA_CHECK_UNAVAILABLE',
       reason: 'Quota verification is unavailable, so the request was blocked.',
-      recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.',
+      recovery: 'Retry after quota storage recovers or inspect Intelligence quota configuration.'
     })
     expect(networkMocks.request).not.toHaveBeenCalled()
     expect(networkMocks.requestStream).toHaveBeenCalledOnce()
@@ -393,7 +393,7 @@ describe('nexusProvider', () => {
       statusText: 'OK',
       headers: { 'content-type': 'text/event-stream' },
       url: 'https://nexus.example.com/api/v1/intelligence/stream',
-      stream: Readable.from([encoded.subarray(0, 29), encoded.subarray(29)]),
+      stream: Readable.from([encoded.subarray(0, 29), encoded.subarray(29)])
     })
     const provider = new NexusProvider({
       id: 'tuff-nexus-default',
@@ -402,15 +402,14 @@ describe('nexusProvider', () => {
       enabled: true,
       apiKey: 'app-token',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
     const stream = provider.chatStream({ messages: [{ role: 'user', content: 'hi' }] }, {})
     let thrown: unknown
 
     try {
       await stream.next()
-    }
-    catch (error) {
+    } catch (error) {
       thrown = error
     }
 
@@ -429,7 +428,7 @@ describe('nexusProvider', () => {
       enabled: true,
       apiKey: 'guest',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
 
     const thrown = await provider
@@ -441,7 +440,7 @@ describe('nexusProvider', () => {
       message: 'NEXUS_AUTH_REQUIRED',
       code: 'NEXUS_AUTH_REQUIRED',
       reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.',
+      recovery: 'Sign in to Nexus or switch to another enabled provider.'
     })
     expect(networkMocks.request).not.toHaveBeenCalled()
     expect(networkMocks.requestStream).not.toHaveBeenCalled()
@@ -455,7 +454,7 @@ describe('nexusProvider', () => {
       enabled: true,
       apiKey: 'app-token',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'guest' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'guest' }
     })
 
     const thrown = await provider
@@ -468,7 +467,7 @@ describe('nexusProvider', () => {
       message: 'NEXUS_AUTH_REQUIRED',
       code: 'NEXUS_AUTH_REQUIRED',
       reason: 'Nexus provider requires a signed-in account.',
-      recovery: 'Sign in to Nexus or switch to another enabled provider.',
+      recovery: 'Sign in to Nexus or switch to another enabled provider.'
     })
     expect(networkMocks.request).not.toHaveBeenCalled()
     expect(networkMocks.requestStream).not.toHaveBeenCalled()
@@ -483,7 +482,7 @@ describe('nexusProvider', () => {
       apiKey: 'app-token',
       defaultModel: 'nexus-image',
       priority: 1,
-      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' },
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
 
     const result = await provider.imageTranslateE2e(
@@ -491,9 +490,9 @@ describe('nexusProvider', () => {
         imageBase64: 'aW1hZ2U=',
         imageMimeType: 'image/png',
         targetLang: 'zh',
-        sourceLang: 'en',
+        sourceLang: 'en'
       },
-      { timeout: 15_000, preferredProviderId: 'tencent-image' },
+      { timeout: 15_000, preferredProviderId: 'tencent-image' }
     )
 
     expect(sceneMocks.runNexusScene).toHaveBeenCalledWith('corebox.screenshot.translate', {
@@ -501,11 +500,11 @@ describe('nexusProvider', () => {
         imageBase64: 'aW1hZ2U=',
         targetLang: 'zh',
         sourceLang: 'en',
-        imageMimeType: 'image/png',
+        imageMimeType: 'image/png'
       },
       capability: 'image.translate.e2e',
       providerId: 'tencent-image',
-      timeoutMs: 15_000,
+      timeoutMs: 15_000
     })
     expect(result).toMatchObject({
       result: {
@@ -513,11 +512,11 @@ describe('nexusProvider', () => {
         imageMimeType: 'image/png',
         sourceText: 'hello',
         targetText: '你好',
-        overlay: { blocks: [] },
+        overlay: { blocks: [] }
       },
       model: 'nexus-image',
       traceId: 'run_image_1',
-      provider: 'tuff-nexus-default',
+      provider: 'tuff-nexus-default'
     })
   })
 })

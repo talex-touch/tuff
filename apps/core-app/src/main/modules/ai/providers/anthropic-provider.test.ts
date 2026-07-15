@@ -94,7 +94,12 @@ describe('AnthropicProvider vision image capabilities', () => {
       { metadata: { capabilityId: 'image.caption' } }
     )
     const analysis = await provider.imageAnalyze(
-      { source, analysisTypes: ['objects', 'colors', 'scene', 'text'], language: 'en', detailed: true },
+      {
+        source,
+        analysisTypes: ['objects', 'colors', 'scene', 'text'],
+        language: 'en',
+        detailed: true
+      },
       { metadata: { capabilityId: 'image.analyze' } }
     )
 

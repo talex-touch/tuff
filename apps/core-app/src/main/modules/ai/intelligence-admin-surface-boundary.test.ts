@@ -16,7 +16,7 @@ vi.mock('../sentry/sentry-service', () => {
   return {
     SentryServiceModule,
     getSentryService: vi.fn(() => service),
-    setSentryServiceInstance: vi.fn(),
+    setSentryServiceInstance: vi.fn()
   }
 })
 
@@ -26,27 +26,27 @@ const intelligenceSdkMocks = vi.hoisted(() => ({
   queryAuditLogs: vi.fn(),
   getTodayStats: vi.fn(),
   getMonthStats: vi.fn(),
-  getUsageStats: vi.fn(),
+  getUsageStats: vi.fn()
 }))
 const adminOperationMocks = vi.hoisted(() => ({
   fetchProviderModels: vi.fn(),
-  getIntelligenceLocalEnvironment: vi.fn(),
+  getIntelligenceLocalEnvironment: vi.fn()
 }))
 const discoveryMocks = vi.hoisted(() => ({
   getCapabilityTestMeta: vi.fn(() => undefined),
   resolveCapabilityStatus: vi.fn((capabilityId: string) => ({
     capabilityId,
     available: true,
-    providerIds: ['discovery-provider'],
+    providerIds: ['discovery-provider']
   })),
   getProviderModelOptions: vi.fn(() => [
     {
       providerId: 'discovery-provider',
       providerName: 'Discovery Provider',
       models: ['discovery-model'],
-      defaultModel: 'discovery-model',
-    },
-  ]),
+      defaultModel: 'discovery-model'
+    }
+  ])
 }))
 const intelligenceEventMocks = vi.hoisted(() => {
   const event = (name: string) => ({ toEventName: () => name })
@@ -62,39 +62,39 @@ const intelligenceEventMocks = vi.hoisted(() => {
       getTodayStats: event('intelligence:api:get-today-stats'),
       getMonthStats: event('intelligence:api:get-month-stats'),
       getUsageStats: event('intelligence:api:get-usage-stats'),
-      getLocalEnvironment: event('intelligence:api:get-local-environment'),
+      getLocalEnvironment: event('intelligence:api:get-local-environment')
     },
-    intelligenceContextEvents: {},
+    intelligenceContextEvents: {}
   }
 })
 
 vi.mock('@talex-touch/utils/transport/sdk/domains/intelligence', () => ({
   ...intelligenceEventMocks,
-  intelligenceKnowledgeEvents: {},
+  intelligenceKnowledgeEvents: {}
 }))
 vi.mock('@talex-touch/utils/transport/events/types', () => ({
-  isIntelligenceErrorCode: vi.fn(() => false),
+  isIntelligenceErrorCode: vi.fn(() => false)
 }))
 vi.mock('./intelligence-sdk', () => ({
   setIntelligenceProviderManager: vi.fn(),
-  tuffIntelligence: intelligenceSdkMocks,
+  tuffIntelligence: intelligenceSdkMocks
 }))
 vi.mock('./provider-models', () => ({
-  fetchProviderModels: adminOperationMocks.fetchProviderModels,
+  fetchProviderModels: adminOperationMocks.fetchProviderModels
 }))
 vi.mock('./intelligence-local-environment', () => ({
-  getIntelligenceLocalEnvironment: adminOperationMocks.getIntelligenceLocalEnvironment,
+  getIntelligenceLocalEnvironment: adminOperationMocks.getIntelligenceLocalEnvironment
 }))
 vi.mock('./capability-testers', () => ({
   capabilityTesterRegistry: {
-    get: discoveryMocks.getCapabilityTestMeta,
-  },
+    get: discoveryMocks.getCapabilityTestMeta
+  }
 }))
 vi.mock('./intelligence-capability-status', () => ({
-  resolveCapabilityStatus: discoveryMocks.resolveCapabilityStatus,
+  resolveCapabilityStatus: discoveryMocks.resolveCapabilityStatus
 }))
 vi.mock('./intelligence-provider-model-options', () => ({
-  getProviderModelOptions: discoveryMocks.getProviderModelOptions,
+  getProviderModelOptions: discoveryMocks.getProviderModelOptions
 }))
 
 type AdminHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
@@ -113,10 +113,10 @@ function captureAdminHandlers() {
     (
       event: TuffEvent<unknown, unknown> & { toEventName: () => string },
       _action: string,
-      handler: AdminHandler,
+      handler: AdminHandler
     ) => {
       handlers.set(event.toEventName(), handler)
-    },
+    }
   )
   const module = new IntelligenceModule() as unknown as AdminChannelRegistrar
 
@@ -137,7 +137,7 @@ function getHandler(handlers: Map<string, AdminHandler>, eventKey: AdminEventKey
 
 function pluginContext(): HandlerContext {
   return {
-    plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true },
+    plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
   } as HandlerContext
 }
 
@@ -145,7 +145,7 @@ const providerPayload = {
   id: 'plugin-provider',
   name: 'Plugin Provider',
   type: 'local',
-  enabled: true,
+  enabled: true
 }
 
 describe('intelligenceModule admin surface boundary', () => {
@@ -158,37 +158,37 @@ describe('intelligenceModule admin surface boundary', () => {
       name: 'provider diagnostics',
       eventKey: 'testProvider',
       payload: { provider: providerPayload },
-      operation: intelligenceSdkMocks.testProvider,
+      operation: intelligenceSdkMocks.testProvider
     },
     {
       name: 'capability diagnostics',
       eventKey: 'testCapability',
       payload: { capabilityId: 'text.chat', providerId: 'plugin-provider' },
-      operation: intelligenceSdkMocks.invoke,
+      operation: intelligenceSdkMocks.invoke
     },
     {
       name: 'provider model fetching',
       eventKey: 'fetchModels',
       payload: { provider: providerPayload },
-      operation: adminOperationMocks.fetchProviderModels,
+      operation: adminOperationMocks.fetchProviderModels
     },
     {
       name: 'cross-caller audit logs',
       eventKey: 'getAuditLogs',
       payload: { callerId: 'plugin:other-plugin', limit: 10 },
-      operation: intelligenceSdkMocks.queryAuditLogs,
+      operation: intelligenceSdkMocks.queryAuditLogs
     },
     {
       name: 'today cross-caller stats',
       eventKey: 'getTodayStats',
       payload: { callerId: 'plugin:other-plugin' },
-      operation: intelligenceSdkMocks.getTodayStats,
+      operation: intelligenceSdkMocks.getTodayStats
     },
     {
       name: 'monthly cross-caller stats',
       eventKey: 'getMonthStats',
       payload: { callerId: 'plugin:other-plugin' },
-      operation: intelligenceSdkMocks.getMonthStats,
+      operation: intelligenceSdkMocks.getMonthStats
     },
     {
       name: 'usage cross-caller stats',
@@ -197,27 +197,27 @@ describe('intelligenceModule admin surface boundary', () => {
         callerId: 'plugin:other-plugin',
         periodType: 'day',
         startPeriod: '2026-07-14',
-        endPeriod: '2026-07-14',
+        endPeriod: '2026-07-14'
       },
-      operation: intelligenceSdkMocks.getUsageStats,
+      operation: intelligenceSdkMocks.getUsageStats
     },
     {
       name: 'local environment inspection',
       eventKey: 'getLocalEnvironment',
       payload: undefined,
-      operation: adminOperationMocks.getIntelligenceLocalEnvironment,
-    },
+      operation: adminOperationMocks.getIntelligenceLocalEnvironment
+    }
   ] as const)(
     'rejects verified plugin access to $name before privileged work',
     async ({ eventKey, payload, operation }) => {
       const handler = getHandler(captureAdminHandlers(), eventKey)
 
       await expect(handler(payload, pluginContext())).rejects.toThrow(
-        'INTELLIGENCE_HOST_ONLY_CAPABILITY',
+        'INTELLIGENCE_HOST_ONLY_CAPABILITY'
       )
       expect(operation).not.toHaveBeenCalled()
     },
-    15_000,
+    15_000
   )
 
   it('keeps safe capability discovery available to verified plugins', async () => {
@@ -226,31 +226,28 @@ describe('intelligenceModule admin surface boundary', () => {
     await expect(
       getHandler(handlers, 'getCapabilityTestMeta')(
         { capabilityId: 'unknown.capability' },
-        pluginContext(),
-      ),
+        pluginContext()
+      )
     ).resolves.toEqual({ requiresUserInput: false, inputHint: '' })
     await expect(
-      getHandler(handlers, 'getCapabilityStatus')(
-        { capabilityId: 'text.chat' },
-        pluginContext(),
-      ),
+      getHandler(handlers, 'getCapabilityStatus')({ capabilityId: 'text.chat' }, pluginContext())
     ).resolves.toEqual({
       capabilityId: 'text.chat',
       available: true,
-      providerIds: ['discovery-provider'],
+      providerIds: ['discovery-provider']
     })
     await expect(
       getHandler(handlers, 'getProviderModelOptions')(
         { capabilityId: 'text.chat' },
-        pluginContext(),
-      ),
+        pluginContext()
+      )
     ).resolves.toEqual([
       {
         providerId: 'discovery-provider',
         providerName: 'Discovery Provider',
         models: ['discovery-model'],
-        defaultModel: 'discovery-model',
-      },
+        defaultModel: 'discovery-model'
+      }
     ])
   })
 

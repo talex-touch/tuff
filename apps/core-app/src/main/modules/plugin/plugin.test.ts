@@ -8,7 +8,7 @@ import {
   FlowEvents,
   NativeEvents,
   PluginEvents,
-  QuickOpsEvents,
+  QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
 import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import fse from 'fs-extra'
@@ -24,36 +24,36 @@ const permissionModuleMock = vi.hoisted(() => ({
     (
       pluginId: string,
       apiName: string,
-      sdkapi?: number,
-    ) => { allowed: boolean, permissionId: string, pluginId: string, reason?: string }
+      sdkapi?: number
+    ) => { allowed: boolean; permissionId: string; pluginId: string; reason?: string }
   >(() => ({
     allowed: true,
     permissionId: 'search.root-results',
-    pluginId: 'test-plugin',
-  })),
+    pluginId: 'test-plugin'
+  }))
 }))
 
 const appSettingsMock = vi.hoisted(() => ({
-  value: {} as Record<string, unknown>,
+  value: {} as Record<string, unknown>
 }))
 
 const notificationModuleMock = vi.hoisted(() => ({
-  showInternalSystemNotification: vi.fn(() => ({ id: 'notification-id' })),
+  showInternalSystemNotification: vi.fn(() => ({ id: 'notification-id' }))
 }))
 
 vi.mock('../permission', () => ({
-  getPermissionModule: () => permissionModuleMock,
+  getPermissionModule: () => permissionModuleMock
 }))
 
 vi.mock('../notification', () => ({
-  notificationModule: notificationModuleMock,
+  notificationModule: notificationModuleMock
 }))
 
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => appSettingsMock.value),
   isMainStorageReady: vi.fn(() => true),
   saveMainConfig: vi.fn(),
-  subscribeMainConfig: vi.fn(() => vi.fn()),
+  subscribeMainConfig: vi.fn(() => vi.fn())
 }))
 
 vi.mock('@talex-touch/utils/plugin/node', () => {
@@ -80,37 +80,37 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn(),
     removeHandler: vi.fn(),
-    on: vi.fn(),
+    on: vi.fn()
   },
   MessageChannelMain: class MessageChannelMain {
     port1 = {
       on: vi.fn(),
       postMessage: vi.fn(),
       start: vi.fn(),
-      close: vi.fn(),
+      close: vi.fn()
     }
 
     port2 = {
       on: vi.fn(),
       postMessage: vi.fn(),
       start: vi.fn(),
-      close: vi.fn(),
+      close: vi.fn()
     }
-  },
+  }
 }))
 
 vi.mock('talex-mica-electron', () => ({
   IS_WINDOWS_11: false,
   WIN10: false,
   MicaBrowserWindow: class MicaBrowserWindow {},
-  useMicaElectron: vi.fn(),
+  useMicaElectron: vi.fn()
 }))
 
 vi.mock('@sentry/electron/main', () => {
   const scope = {
     setTag: vi.fn(),
     setLevel: vi.fn(),
-    setContext: vi.fn(),
+    setContext: vi.fn()
   }
 
   return {
@@ -121,29 +121,29 @@ vi.mock('@sentry/electron/main', () => {
     setTag: vi.fn(),
     withScope: (callback: (s: typeof scope) => void) => callback(scope),
     captureMessage: vi.fn(),
-    captureException: vi.fn(),
+    captureException: vi.fn()
   }
 })
 
 vi.mock('../../core', () => ({
   genTouchApp: () => ({
     channel: {},
-    window: { window: { id: 1 } },
-  }),
+    window: { window: { id: 1 } }
+  })
 }))
 
 vi.mock('../box-tool/core-box/manager', () => ({
   CoreBoxManager: {
     getInstance: () => ({
-      exitUIMode: vi.fn(),
-    }),
-  },
+      exitUIMode: vi.fn()
+    })
+  }
 }))
 
 vi.mock('../box-tool/core-box/view-cache', () => ({
   viewCacheManager: {
-    releasePlugin: vi.fn(),
-  },
+    releasePlugin: vi.fn()
+  }
 }))
 
 const boxItemManagerMock = vi.hoisted(() => ({
@@ -153,21 +153,21 @@ const boxItemManagerMock = vi.hoisted(() => ({
   update: vi.fn(),
   delete: vi.fn(),
   get: vi.fn(),
-  getBySource: vi.fn(() => []),
+  getBySource: vi.fn(() => [])
 }))
 
 vi.mock('../box-tool/item-sdk', () => ({
-  getBoxItemManager: () => boxItemManagerMock,
+  getBoxItemManager: () => boxItemManagerMock
 }))
 
 vi.mock('../box-tool/core-box', () => ({
-  getCoreBoxWindow: vi.fn(),
+  getCoreBoxWindow: vi.fn()
 }))
 
 vi.mock('./widget/widget-manager', () => ({
   widgetManager: {
-    registerWidget: vi.fn(),
-  },
+    registerWidget: vi.fn()
+  }
 }))
 
 function clearBoxItemMocks(): void {
@@ -183,7 +183,7 @@ function clearBoxItemMocks(): void {
   permissionModuleMock.checkPermission.mockReturnValue({
     allowed: true,
     permissionId: 'search.root-results',
-    pluginId: 'test-plugin',
+    pluginId: 'test-plugin'
   })
   notificationModuleMock.showInternalSystemNotification.mockClear()
   notificationModuleMock.showInternalSystemNotification.mockReturnValue({ id: 'notification-id' })
@@ -204,9 +204,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -220,7 +220,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
 
     plugin.status = PluginStatus.ENABLED
@@ -230,8 +230,8 @@ describe('touchPlugin.triggerFeature', () => {
       {
         id: 'before-disable',
         source: { type: 'plugin', id: 'custom', name: 'custom' },
-        render: { mode: 'default' },
-      } satisfies TuffItem,
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
     expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
 
@@ -240,8 +240,8 @@ describe('touchPlugin.triggerFeature', () => {
       {
         id: 'after-disable',
         source: { type: 'plugin', id: 'custom', name: 'custom' },
-        render: { mode: 'default' },
-      } satisfies TuffItem,
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
 
     expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
@@ -252,7 +252,7 @@ describe('touchPlugin.triggerFeature', () => {
       allowed: false,
       permissionId: 'search.root-results',
       pluginId: 'test-plugin',
-      reason: 'Permission \'search.root-results\' is not declared in plugin manifest',
+      reason: "Permission 'search.root-results' is not declared in plugin manifest"
     })
 
     const transport = {
@@ -261,9 +261,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -277,7 +277,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
 
     plugin.status = PluginStatus.ENABLED
@@ -286,14 +286,14 @@ describe('touchPlugin.triggerFeature', () => {
       {
         id: 'blocked-root-result',
         source: { type: 'plugin', id: 'custom', name: 'custom' },
-        render: { mode: 'default' },
-      } satisfies TuffItem,
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
 
     expect(permissionModuleMock.checkPermission).toHaveBeenCalledWith(
       'test-plugin',
       'search:root-results:push',
-      undefined,
+      undefined
     )
     expect(boxItemManagerMock.batchUpsert).not.toHaveBeenCalled()
   })
@@ -301,8 +301,8 @@ describe('touchPlugin.triggerFeature', () => {
   it('blocks root result pushes when the plugin search provider is disabled by settings', async () => {
     appSettingsMock.value = {
       searchProviders: {
-        providers: [{ providerId: 'test-plugin.root-results', enabled: false, order: 10 }],
-      },
+        providers: [{ providerId: 'test-plugin.root-results', enabled: false, order: 10 }]
+      }
     }
 
     const transport = {
@@ -311,9 +311,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -327,7 +327,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.searchProviders = [
       {
@@ -344,9 +344,9 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
-      },
+          pushesToRootResults: true
+        }
+      }
     ]
     plugin.status = PluginStatus.ENABLED
 
@@ -355,8 +355,8 @@ describe('touchPlugin.triggerFeature', () => {
       {
         id: 'blocked-disabled-provider',
         source: { type: 'plugin', id: 'custom', name: 'custom' },
-        render: { mode: 'default' },
-      } satisfies TuffItem,
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
     boxItems.update('blocked-disabled-provider', { meta: { updated: true } } as Partial<TuffItem>)
     boxItems.remove('blocked-disabled-provider')
@@ -372,8 +372,8 @@ describe('touchPlugin.triggerFeature', () => {
   it('delivers active feature item changes despite a disabled root results provider', async () => {
     appSettingsMock.value = {
       searchProviders: {
-        providers: [{ providerId: 'test-plugin.root-results', enabled: false, order: 10 }],
-      },
+        providers: [{ providerId: 'test-plugin.root-results', enabled: false, order: 10 }]
+      }
     }
 
     const transport = {
@@ -382,9 +382,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -398,7 +398,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.searchProviders = [
       {
@@ -415,9 +415,9 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
-      },
+          pushesToRootResults: true
+        }
+      }
     ]
     plugin.status = PluginStatus.ENABLED
 
@@ -426,24 +426,24 @@ describe('touchPlugin.triggerFeature', () => {
       {
         id: 'active-feature-item',
         source: { type: 'plugin', id: 'custom', name: 'custom' },
-        render: { mode: 'default' },
-      } satisfies TuffItem,
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
     await Promise.resolve()
     await Promise.resolve()
 
     feature.updateItem('active-feature-item', {
-      meta: { updated: true },
+      meta: { updated: true }
     } as Partial<TuffItem>)
 
     expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledWith([
       expect.objectContaining({
         id: 'active-feature-item',
-        meta: expect.not.objectContaining({ searchProviderId: expect.any(String) }),
-      }),
+        meta: expect.not.objectContaining({ searchProviderId: expect.any(String) })
+      })
     ])
     expect(boxItemManagerMock.update).toHaveBeenCalledWith('active-feature-item', {
-      meta: { updated: true },
+      meta: { updated: true }
     })
   })
 
@@ -454,9 +454,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -470,7 +470,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.searchProviders = [
       {
@@ -487,16 +487,16 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
-      },
+          pushesToRootResults: true
+        }
+      }
     ]
     plugin.status = PluginStatus.ENABLED
 
     await plugin.getFeatureUtil().boxItems.push({
       id: 'blocked-ask-provider',
       source: { type: 'plugin', id: 'custom', name: 'custom' },
-      render: { mode: 'default' },
+      render: { mode: 'default' }
     } satisfies TuffItem)
 
     expect(permissionModuleMock.checkPermission).toHaveBeenCalled()
@@ -506,8 +506,8 @@ describe('touchPlugin.triggerFeature', () => {
   it('tags pushed root result items with the plugin search provider id', async () => {
     appSettingsMock.value = {
       searchProviders: {
-        providers: [{ providerId: 'test-plugin.root-results', enabled: true, order: 10 }],
-      },
+        providers: [{ providerId: 'test-plugin.root-results', enabled: true, order: 10 }]
+      }
     }
 
     const transport = {
@@ -516,9 +516,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -532,7 +532,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.searchProviders = [
       {
@@ -549,16 +549,16 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
-      },
+          pushesToRootResults: true
+        }
+      }
     ]
     plugin.status = PluginStatus.ENABLED
 
     await plugin.getFeatureUtil().boxItems.push({
       id: 'tagged-provider-item',
       source: { type: 'plugin', id: 'custom', name: 'custom' },
-      render: { mode: 'default' },
+      render: { mode: 'default' }
     } satisfies TuffItem)
 
     expect(boxItemManagerMock.upsert).toHaveBeenCalledWith(
@@ -566,17 +566,17 @@ describe('touchPlugin.triggerFeature', () => {
         id: 'tagged-provider-item',
         meta: expect.objectContaining({
           pluginName: 'test-plugin',
-          searchProviderId: 'test-plugin.root-results',
-        }),
-      }),
+          searchProviderId: 'test-plugin.root-results'
+        })
+      })
     )
   })
 
   it('preserves explicit color and colorful icon intent on pushed root result items', async () => {
     appSettingsMock.value = {
       searchProviders: {
-        providers: [{ providerId: 'test-plugin.root-results', enabled: true, order: 10 }],
-      },
+        providers: [{ providerId: 'test-plugin.root-results', enabled: true, order: 10 }]
+      }
     }
 
     const transport = {
@@ -585,9 +585,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -601,7 +601,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.searchProviders = [
       {
@@ -618,9 +618,9 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
-      },
+          pushesToRootResults: true
+        }
+      }
     ]
     plugin.status = PluginStatus.ENABLED
 
@@ -635,20 +635,20 @@ describe('touchPlugin.triggerFeature', () => {
             type: 'url',
             value: 'https://example.test/logo.svg',
             color: '#22c55e',
-            colorful: true,
-          },
-        },
-      },
+            colorful: true
+          }
+        }
+      }
     } satisfies TuffItem)
 
     expect(boxItemManagerMock.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         render: expect.objectContaining({
           basic: expect.objectContaining({
-            icon: expect.objectContaining({ color: '#22c55e', colorful: true }),
-          }),
-        }),
-      }),
+            icon: expect.objectContaining({ color: '#22c55e', colorful: true })
+          })
+        })
+      })
     )
   })
 
@@ -657,9 +657,9 @@ describe('touchPlugin.triggerFeature', () => {
       searchProviders: {
         providers: [
           { providerId: 'test-plugin.search', enabled: true, order: 10 },
-          { providerId: 'test-plugin.manage', enabled: false, order: 20 },
-        ],
-      },
+          { providerId: 'test-plugin.manage', enabled: false, order: 20 }
+        ]
+      }
     }
 
     const transport = {
@@ -668,9 +668,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -684,7 +684,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.searchProviders = [
       {
@@ -702,8 +702,8 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
+          pushesToRootResults: true
+        }
       },
       {
         id: 'test-plugin.manage',
@@ -720,9 +720,9 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
-      },
+          pushesToRootResults: true
+        }
+      }
     ]
     plugin.status = PluginStatus.ENABLED
 
@@ -731,14 +731,14 @@ describe('touchPlugin.triggerFeature', () => {
         id: 'visible-search-item',
         source: { type: 'plugin', id: 'custom', name: 'custom' },
         meta: { featureId: 'search' },
-        render: { mode: 'default' },
+        render: { mode: 'default' }
       } satisfies TuffItem,
       {
         id: 'hidden-manage-item',
         source: { type: 'plugin', id: 'custom', name: 'custom' },
         meta: { featureId: 'manage' },
-        render: { mode: 'default' },
-      } satisfies TuffItem,
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
 
     expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledWith([
@@ -746,9 +746,9 @@ describe('touchPlugin.triggerFeature', () => {
         id: 'visible-search-item',
         meta: expect.objectContaining({
           featureId: 'search',
-          searchProviderId: 'test-plugin.search',
-        }),
-      }),
+          searchProviderId: 'test-plugin.search'
+        })
+      })
     ])
   })
 
@@ -757,9 +757,9 @@ describe('touchPlugin.triggerFeature', () => {
       searchProviders: {
         providers: [
           { providerId: 'test-plugin.search', enabled: true, order: 10 },
-          { providerId: 'test-plugin.manage', enabled: false, order: 20 },
-        ],
-      },
+          { providerId: 'test-plugin.manage', enabled: false, order: 20 }
+        ]
+      }
     }
 
     const transport = {
@@ -768,9 +768,9 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -784,7 +784,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.searchProviders = [
       {
@@ -802,8 +802,8 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
+          pushesToRootResults: true
+        }
       },
       {
         id: 'test-plugin.manage',
@@ -820,9 +820,9 @@ describe('touchPlugin.triggerFeature', () => {
           permissionScopes: ['root-results'],
           defaultState: 'ask',
           requiresUserConsent: true,
-          pushesToRootResults: true,
-        },
-      },
+          pushesToRootResults: true
+        }
+      }
     ]
     plugin.status = PluginStatus.ENABLED
 
@@ -831,17 +831,17 @@ describe('touchPlugin.triggerFeature', () => {
       source: { type: 'plugin', id: 'custom', name: 'custom' },
       meta: {
         featureId: 'search',
-        searchProviderId: 'test-plugin.search',
+        searchProviderId: 'test-plugin.search'
       },
-      render: { mode: 'default' },
+      render: { mode: 'default' }
     } satisfies TuffItem)
 
     plugin.getFeatureUtil().boxItems.update('existing-search-item', {
-      meta: { updated: true },
+      meta: { updated: true }
     } as Partial<TuffItem>)
 
     expect(boxItemManagerMock.update).toHaveBeenCalledWith('existing-search-item', {
-      meta: { updated: true },
+      meta: { updated: true }
     })
   })
 
@@ -849,11 +849,11 @@ describe('touchPlugin.triggerFeature', () => {
     const coreBoxWindow = {
       window: {
         id: 1,
-        isDestroyed: () => false,
-      },
+        isDestroyed: () => false
+      }
     }
     vi.mocked(getCoreBoxWindow).mockReturnValue(
-      coreBoxWindow as unknown as ReturnType<typeof getCoreBoxWindow>,
+      coreBoxWindow as unknown as ReturnType<typeof getCoreBoxWindow>
     )
     vi.mocked(widgetManager.registerWidget).mockResolvedValue(null)
 
@@ -862,8 +862,8 @@ describe('touchPlugin.triggerFeature', () => {
       invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -877,14 +877,14 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true },
+      { skipDataInit: true }
     )
 
     const feature = {
       id: 'test-feature',
       name: 'Test Feature',
       desc: '',
-      interaction: { type: 'widget', path: '/widget.vue' },
+      interaction: { type: 'widget', path: '/widget.vue' }
     } as IPluginFeature
 
     const result = await plugin.triggerFeature(feature, { text: '', inputs: [] })
@@ -899,9 +899,9 @@ describe('touchPlugin.triggerFeature', () => {
       meta: {
         pluginName: 'test-plugin',
         featureId: 'test-feature',
-        kind: 'plugin.widgetLoadFailed',
+        kind: 'plugin.widgetLoadFailed'
       },
-      system: { silent: false },
+      system: { silent: false }
     })
     expect(transport.sendToWindow).not.toHaveBeenCalled()
   })
@@ -916,7 +916,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true },
+      { skipDataInit: true }
     )
     const sharedWidget = {
       id: 'shared-widget',
@@ -926,7 +926,7 @@ describe('touchPlugin.triggerFeature', () => {
       push: false,
       platform: 'all',
       commands: [{ type: 'over', value: ['shared'] }],
-      interaction: { type: 'widget', path: '/widgets/shared.vue' },
+      interaction: { type: 'widget', path: '/widgets/shared.vue' }
     } as IPluginFeature
     const dynamicFeature = {
       id: 'dynamic-command',
@@ -938,8 +938,8 @@ describe('touchPlugin.triggerFeature', () => {
       commands: [{ type: 'over', value: ['dynamic'] }],
       interaction: {
         type: 'widget',
-        rendererFeatureId: 'shared-widget',
-      },
+        rendererFeatureId: 'shared-widget'
+      }
     } as IPluginFeature
     const onFeatureTriggered = vi.fn(() => true)
     const query = { text: 'summarize this', inputs: [] }
@@ -952,7 +952,7 @@ describe('touchPlugin.triggerFeature', () => {
     vi.mocked(widgetManager.registerWidget).mockReset()
     vi.mocked(widgetManager.registerWidget).mockResolvedValue({
       widgetId: 'test-plugin::shared-widget',
-      filePath: '/tmp/widgets/shared.vue',
+      filePath: '/tmp/widgets/shared.vue'
     } as never)
 
     await expect(plugin.triggerFeature(registeredDynamicFeature, query)).resolves.toBe(true)
@@ -962,7 +962,7 @@ describe('touchPlugin.triggerFeature', () => {
       'dynamic-command',
       query,
       registeredDynamicFeature,
-      expect.any(AbortSignal),
+      expect.any(AbortSignal)
     )
   })
 
@@ -976,7 +976,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true },
+      { skipDataInit: true }
     )
     const dynamicFeature = {
       id: 'dynamic-command',
@@ -988,8 +988,8 @@ describe('touchPlugin.triggerFeature', () => {
       commands: [{ type: 'over', value: ['dynamic'] }],
       interaction: {
         type: 'widget',
-        rendererFeatureId: 'missing-widget',
-      },
+        rendererFeatureId: 'missing-widget'
+      }
     } as IPluginFeature
     const onFeatureTriggered = vi.fn(() => true)
 
@@ -998,7 +998,10 @@ describe('touchPlugin.triggerFeature', () => {
     vi.mocked(widgetManager.registerWidget).mockReset()
 
     await expect(
-      plugin.triggerFeature(plugin.getFeature('dynamic-command')!, { text: 'summarize this', inputs: [] }),
+      plugin.triggerFeature(plugin.getFeature('dynamic-command')!, {
+        text: 'summarize this',
+        inputs: []
+      })
     ).resolves.toBe(false)
 
     expect(widgetManager.registerWidget).not.toHaveBeenCalled()
@@ -1006,8 +1009,8 @@ describe('touchPlugin.triggerFeature', () => {
     expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'plugin-widget-load-failed:test-plugin:dynamic-command',
-        meta: expect.objectContaining({ kind: 'plugin.widgetLoadFailed' }),
-      }),
+        meta: expect.objectContaining({ kind: 'plugin.widgetLoadFailed' })
+      })
     )
   })
 
@@ -1020,8 +1023,8 @@ describe('touchPlugin.triggerFeature', () => {
       invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1035,14 +1038,14 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true },
+      { skipDataInit: true }
     )
 
     const feature = {
       id: 'test-feature',
       name: 'Test Feature',
       desc: '',
-      interaction: { type: 'widget', path: '/widget.vue' },
+      interaction: { type: 'widget', path: '/widget.vue' }
     } as IPluginFeature
 
     await expect(plugin.triggerFeature(feature, { text: '', inputs: [] })).resolves.toBe(false)
@@ -1051,12 +1054,12 @@ describe('touchPlugin.triggerFeature', () => {
         id: 'plugin-widget-load-failed:test-plugin:test-feature',
         title: 'Widget 加载失败',
         message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。',
-        level: 'error',
-      }),
+        level: 'error'
+      })
     )
     expect(plugin.issues.at(-1)).toMatchObject({
       code: 'RUNTIME_ERROR',
-      source: 'runtime:registerWidget',
+      source: 'runtime:registerWidget'
     })
   })
 
@@ -1066,8 +1069,8 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1081,7 +1084,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
 
     await plugin.getFeatureUtil().plugin.secret.set('providers.baidu.secretKey', 'secret-value')
@@ -1092,22 +1095,22 @@ describe('touchPlugin.triggerFeature', () => {
       {
         pluginName: 'test-plugin',
         key: 'providers.baidu.secretKey',
-        value: 'secret-value',
+        value: 'secret-value'
       },
       {
         plugin: {
           name: 'test-plugin',
           uniqueKey: expect.any(String),
-          verified: expect.any(Boolean),
-        },
-      },
+          verified: expect.any(Boolean)
+        }
+      }
     )
     expect(transport.invoke).toHaveBeenCalledWith(PluginEvents.storage.getSecretHealth, undefined, {
       plugin: {
         name: 'test-plugin',
         uniqueKey: expect.any(String),
-        verified: expect.any(Boolean),
-      },
+        verified: expect.any(Boolean)
+      }
     })
   })
 
@@ -1118,8 +1121,8 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1133,7 +1136,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
 
     const featureUtil = plugin.getFeatureUtil()
@@ -1145,15 +1148,15 @@ describe('touchPlugin.triggerFeature', () => {
       plugin: {
         name: 'test-plugin',
         uniqueKey: '',
-        verified: false,
-      },
+        verified: false
+      }
     }
     const quickOpsCases = [
       {
         method: 'capabilities',
         event: QuickOpsEvents.capabilities.get,
         payload: undefined,
-        args: [],
+        args: []
       },
       { method: 'sessions', event: QuickOpsEvents.sessions.get, payload: undefined, args: [] },
       { method: 'auditRecent', event: QuickOpsEvents.audit.get, payload: {}, args: [] },
@@ -1161,99 +1164,99 @@ describe('touchPlugin.triggerFeature', () => {
         method: 'auditRecent',
         event: QuickOpsEvents.audit.get,
         payload: { limit: 5 },
-        args: [{ limit: 5 }],
+        args: [{ limit: 5 }]
       },
       { method: 'systemInfo', event: QuickOpsEvents.systemInfo.get, payload: undefined, args: [] },
       {
         method: 'tuffDiagnostics',
         event: QuickOpsEvents.tuffDiagnostics.get,
         payload: undefined,
-        args: [],
+        args: []
       },
       { method: 'diskSpace', event: QuickOpsEvents.diskSpace.get, payload: undefined, args: [] },
       {
         method: 'directoryUsage',
         event: QuickOpsEvents.directoryUsage.get,
         payload: { deep: true },
-        args: [{ deep: true }],
+        args: [{ deep: true }]
       },
       {
         method: 'queryLocalIp',
         event: QuickOpsEvents.queryLocalIp.get,
         payload: undefined,
-        args: [],
+        args: []
       },
       {
         method: 'portStatus',
         event: QuickOpsEvents.portStatus.get,
         payload: { port: 5173 },
-        args: [{ port: 5173 }],
+        args: [{ port: 5173 }]
       },
       {
         method: 'dnsQuery',
         event: QuickOpsEvents.dnsQuery.get,
         payload: { hostname: 'example.com', deep: true },
-        args: [{ hostname: 'example.com', deep: true }],
+        args: [{ hostname: 'example.com', deep: true }]
       },
       {
         method: 'fileHash',
         event: QuickOpsEvents.fileHash.get,
         payload: { path: '/tmp/demo.txt' },
-        args: [{ path: '/tmp/demo.txt' }],
+        args: [{ path: '/tmp/demo.txt' }]
       },
       {
         method: 'fileBase64',
         event: QuickOpsEvents.fileBase64.get,
         payload: { path: '/tmp/demo.txt' },
-        args: [{ path: '/tmp/demo.txt' }],
+        args: [{ path: '/tmp/demo.txt' }]
       },
       {
         method: 'recentDownload',
         event: QuickOpsEvents.recentDownload.get,
         payload: undefined,
-        args: [],
+        args: []
       },
       {
         method: 'commonDirectory',
         event: QuickOpsEvents.commonDirectory.get,
         payload: { query: 'logs' },
-        args: [{ query: 'logs' }],
+        args: [{ query: 'logs' }]
       },
       {
         method: 'pathFormat',
         event: QuickOpsEvents.pathFormat.get,
         payload: { path: '/tmp/demo.txt' },
-        args: [{ path: '/tmp/demo.txt' }],
+        args: [{ path: '/tmp/demo.txt' }]
       },
       {
         method: 'formatText',
         event: QuickOpsEvents.formatText.get,
         payload: { text: 'Hello QuickOps', mode: 'snake' },
-        args: [{ text: 'Hello QuickOps', mode: 'snake' }],
+        args: [{ text: 'Hello QuickOps', mode: 'snake' }]
       },
       {
         method: 'networkStatus',
         event: QuickOpsEvents.networkStatus.get,
         payload: undefined,
-        args: [],
+        args: []
       },
       {
         method: 'batteryStatus',
         event: QuickOpsEvents.batteryStatus.get,
         payload: undefined,
-        args: [],
+        args: []
       },
       {
         method: 'systemProxy',
         event: QuickOpsEvents.systemProxy.get,
         payload: undefined,
-        args: [],
+        args: []
       },
       {
         method: 'developerPreview',
         event: QuickOpsEvents.developerPreview.get,
         payload: { query: { text: 'json', inputs: [] } },
-        args: [{ query: { text: 'json', inputs: [] } }],
+        args: [{ query: { text: 'json', inputs: [] } }]
       },
       {
         method: 'saveDeveloperPreview',
@@ -1263,8 +1266,8 @@ describe('touchPlugin.triggerFeature', () => {
           payload: {
             abilityId: 'preview.quickops.developer',
             title: 'QR Code 生成',
-            primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E',
-          },
+            primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E'
+          }
         },
         args: [
           {
@@ -1272,13 +1275,13 @@ describe('touchPlugin.triggerFeature', () => {
             payload: {
               abilityId: 'preview.quickops.developer',
               title: 'QR Code 生成',
-              primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E',
-            },
-          },
-        ],
-      },
+              primaryValue: 'data:image/svg+xml;charset=utf-8,%3Csvg%20/%3E'
+            }
+          }
+        ]
+      }
     ] as const
-    const expectedMethods = Array.from(new Set(quickOpsCases.map(item => item.method)))
+    const expectedMethods = Array.from(new Set(quickOpsCases.map((item) => item.method)))
 
     expect(Object.keys(quickOps)).toEqual(expectedMethods)
     expect(featureUtil.plugin.quickOps).toBe(featureUtil.quickOps)
@@ -1288,7 +1291,7 @@ describe('touchPlugin.triggerFeature', () => {
       expect(transport.invoke).toHaveBeenLastCalledWith(
         quickOpsCase.event,
         quickOpsCase.payload,
-        pluginContext,
+        pluginContext
       )
     }
   })
@@ -1299,16 +1302,16 @@ describe('touchPlugin.triggerFeature', () => {
       data: {
         sessionId: 'flow-session-1',
         state: 'COMPLETED',
-        ackPayload: { state: 'stopped' },
-      },
+        ackPayload: { state: 'stopped' }
+      }
     }
     const transport = {
       invoke: vi.fn().mockResolvedValue(response),
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1322,7 +1325,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
 
     const featureUtil = plugin.getFeatureUtil()
@@ -1332,14 +1335,14 @@ describe('touchPlugin.triggerFeature', () => {
         {
           type: 'json',
           data: { action: 'stop' },
-          context: { sourcePluginId: 'test-plugin' },
+          context: { sourcePluginId: 'test-plugin' }
         },
         {
           preferredTarget: 'quickops.stop-timer',
           skipSelector: true,
-          requireAck: true,
-        },
-      ),
+          requireAck: true
+        }
+      )
     ).resolves.toEqual(response.data)
     expect(featureUtil.plugin.flow).toBe(featureUtil.flow)
     const [event, payload, context] = vi.mocked(transport.invoke).mock.calls.at(-1)!
@@ -1349,21 +1352,21 @@ describe('touchPlugin.triggerFeature', () => {
       payload: {
         type: 'json',
         data: { action: 'stop' },
-        context: { sourcePluginId: 'test-plugin' },
+        context: { sourcePluginId: 'test-plugin' }
       },
       options: {
         preferredTarget: 'quickops.stop-timer',
         skipSelector: true,
-        requireAck: true,
+        requireAck: true
       },
-      _sdkapi: undefined,
+      _sdkapi: undefined
     })
     expect(context).toEqual({
       plugin: {
         name: 'test-plugin',
         uniqueKey: '',
-        verified: false,
-      },
+        verified: false
+      }
     })
   })
 
@@ -1373,8 +1376,8 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1388,14 +1391,14 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.sdkapi = SdkApi.V260713
     Reflect.set(plugin, '_uniqueChannelKey', 'verified-clipboard-key')
 
     const featureUtil = plugin.getFeatureUtil()
     await expect(
-      featureUtil.clipboard.copyAndPaste({ text: 'replacement', delayMs: 50 }),
+      featureUtil.clipboard.copyAndPaste({ text: 'replacement', delayMs: 50 })
     ).resolves.toBe(true)
     expect(transport.invoke).toHaveBeenCalledWith(
       ClipboardEvents.copyAndPaste,
@@ -1405,15 +1408,15 @@ describe('touchPlugin.triggerFeature', () => {
           name: 'clipboard-plugin',
           uniqueKey: 'verified-clipboard-key',
           verified: true,
-          sdkapi: SdkApi.V260713,
-        },
-      },
+          sdkapi: SdkApi.V260713
+        }
+      }
     )
 
     vi.mocked(transport.invoke).mockResolvedValueOnce({
       success: false,
       code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
-      message: 'Automation permission denied.',
+      message: 'Automation permission denied.'
     })
     await expect(featureUtil.clipboard.copyAndPaste({ text: 'replacement' })).rejects.toMatchObject(
       {
@@ -1421,9 +1424,9 @@ describe('touchPlugin.triggerFeature', () => {
         code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
         result: {
           success: false,
-          code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
-        },
-      },
+          code: 'MACOS_AUTOMATION_PERMISSION_DENIED'
+        }
+      }
     )
   })
 
@@ -1442,7 +1445,7 @@ describe('touchPlugin.triggerFeature', () => {
       scaleFactor: 2,
       durationMs: 12,
       sizeBytes: 2048,
-      wroteClipboard: false,
+      wroteClipboard: false
     }
     // The main-process transport surface is broader than this test's plugin SDK boundary.
     const transport = {
@@ -1450,8 +1453,8 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1465,7 +1468,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     const resolvedPluginSdkapi = SdkApi.V260713
     plugin.sdkapi = resolvedPluginSdkapi
@@ -1474,8 +1477,8 @@ describe('touchPlugin.triggerFeature', () => {
         name: 'screenshot-plugin',
         uniqueKey: 'verified-screenshot-key',
         verified: true,
-        sdkapi: resolvedPluginSdkapi,
-      },
+        sdkapi: resolvedPluginSdkapi
+      }
     }
     Reflect.set(plugin, '_uniqueChannelKey', pluginContext.plugin.uniqueKey)
 
@@ -1489,13 +1492,13 @@ describe('touchPlugin.triggerFeature', () => {
     await featureUtil.screenshot.capture({
       target: 'display',
       displayId: 'display-external',
-      output: 'data-url',
+      output: 'data-url'
     })
     const regionCapture = await featureUtil.screenshot.capture({
       target: 'region',
       displayId: 'display-1',
       region: { x: 10, y: 20, width: 300, height: 200 },
-      output: 'tfile',
+      output: 'tfile'
     })
 
     expect(regionCapture).toEqual({
@@ -1511,7 +1514,7 @@ describe('touchPlugin.triggerFeature', () => {
       scaleFactor: 2,
       durationMs: 12,
       sizeBytes: 2048,
-      wroteClipboard: false,
+      wroteClipboard: false
     })
     expect(regionCapture).not.toHaveProperty('path')
 
@@ -1521,11 +1524,11 @@ describe('touchPlugin.triggerFeature', () => {
       { event: NativeEvents.screenshot.listDisplays, payload: undefined },
       {
         event: NativeEvents.screenshot.capture,
-        payload: { target: 'cursor-display', writeClipboard: true },
+        payload: { target: 'cursor-display', writeClipboard: true }
       },
       {
         event: NativeEvents.screenshot.capture,
-        payload: { target: 'display', displayId: 'display-external', output: 'data-url' },
+        payload: { target: 'display', displayId: 'display-external', output: 'data-url' }
       },
       {
         event: NativeEvents.screenshot.capture,
@@ -1533,9 +1536,9 @@ describe('touchPlugin.triggerFeature', () => {
           target: 'region',
           displayId: 'display-1',
           region: { x: 10, y: 20, width: 300, height: 200 },
-          output: 'tfile',
-        },
-      },
+          output: 'tfile'
+        }
+      }
     ]
 
     expect(calls).toHaveLength(expectedCalls.length)
@@ -1552,8 +1555,8 @@ describe('touchPlugin.triggerFeature', () => {
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1567,7 +1570,7 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.sdkapi = SdkApi.V260713
 
@@ -1576,7 +1579,7 @@ describe('touchPlugin.triggerFeature', () => {
     expect(featureUtil.plugin.i18n).toBe(featureUtil.i18n)
     expect(featureUtil.plugin.lexicon).toBe(featureUtil.lexicon)
     expect(featureUtil.i18n.createMessage('plugin.status', { count: 2 })).toBe(
-      '$i18n:plugin.status|{"count":2}',
+      '$i18n:plugin.status|{"count":2}'
     )
     await expect(featureUtil.i18n.getLocale()).resolves.toBe('zh-CN')
 
@@ -1588,8 +1591,8 @@ describe('touchPlugin.triggerFeature', () => {
         name: 'touch-localization',
         uniqueKey: '',
         verified: false,
-        sdkapi: SdkApi.V260713,
-      },
+        sdkapi: SdkApi.V260713
+      }
     })
   })
 
@@ -1597,13 +1600,13 @@ describe('touchPlugin.triggerFeature', () => {
     const transport = {
       invoke: vi.fn().mockResolvedValue({
         ok: true,
-        result: { result: 'pong' },
+        result: { result: 'pong' }
       }),
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
-      },
+        revokeKey: vi.fn()
+      }
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1617,13 +1620,13 @@ describe('touchPlugin.triggerFeature', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     plugin.sdkapi = 260615
     const featureUtil = plugin.getFeatureUtil()
 
     await expect(featureUtil.intelligence.invoke('text.chat', { messages: [] })).resolves.toEqual({
-      result: 'pong',
+      result: 'pong'
     })
     expect(featureUtil.plugin.intelligence).toBe(featureUtil.intelligence)
 
@@ -1633,15 +1636,15 @@ describe('touchPlugin.triggerFeature', () => {
       capabilityId: 'text.chat',
       payload: { messages: [] },
       options: undefined,
-      _sdkapi: 260615,
+      _sdkapi: 260615
     })
     expect(context).toEqual({
       plugin: {
         name: 'touch-intelligence',
         uniqueKey: '',
         verified: false,
-        sdkapi: 260615,
-      },
+        sdkapi: 260615
+      }
     })
   })
 })
@@ -1661,35 +1664,35 @@ describe('touchPlugin feature identity', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
     const original = {
       id: 'shared-feature-id',
       name: 'Original Feature',
       desc: 'Original feature description',
       icon: { type: 'class', value: 'i-ri-test-tube-line' },
-      commands: [{ type: 'over', value: ['original'] }],
+      commands: [{ type: 'over', value: ['original'] }]
     } as IPluginFeature
     const duplicateId = {
       id: 'shared-feature-id',
       name: 'Different Feature Name',
       desc: 'Different feature description',
       icon: { type: 'class', value: 'i-ri-test-tube-line' },
-      commands: [{ type: 'over', value: ['different'] }],
+      commands: [{ type: 'over', value: ['different'] }]
     } as IPluginFeature
     const retained = {
       id: 'retained-feature-id',
       name: 'Retained Feature',
       desc: 'Retained feature description',
       icon: { type: 'class', value: 'i-ri-test-tube-line' },
-      commands: [{ type: 'over', value: ['retained'] }],
+      commands: [{ type: 'over', value: ['retained'] }]
     } as IPluginFeature
     const removable = {
       id: 'removable-feature-id',
       name: 'Removable Feature',
       desc: 'Removable feature description',
       icon: { type: 'class', value: 'i-ri-test-tube-line' },
-      commands: [{ type: 'over', value: ['removable'] }],
+      commands: [{ type: 'over', value: ['removable'] }]
     } as IPluginFeature
 
     expect(plugin.addFeature(original)).toBe(true)
@@ -1716,16 +1719,18 @@ describe('touchPlugin feature identity', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
 
-    expect(plugin.addFeature({
-      id: 'dynamic-file-icon',
-      name: 'Dynamic File Icon',
-      desc: 'Dynamic feature with a packaged icon',
-      icon: { type: 'file', value: 'assets/logo.svg' },
-      commands: [{ type: 'over', value: ['dynamic-icon'] }],
-    } as IPluginFeature)).toBe(true)
+    expect(
+      plugin.addFeature({
+        id: 'dynamic-file-icon',
+        name: 'Dynamic File Icon',
+        desc: 'Dynamic feature with a packaged icon',
+        icon: { type: 'file', value: 'assets/logo.svg' },
+        commands: [{ type: 'over', value: ['dynamic-icon'] }]
+      } as IPluginFeature)
+    ).toBe(true)
     expect(init).toHaveBeenCalledTimes(1)
   })
 })
@@ -1737,26 +1742,26 @@ describe('touchPlugin storage overview', () => {
 
   it('includes runtime logs in storage stats, tree, and cleanup', () => {
     const existsSync = vi.spyOn(fse, 'existsSync').mockReturnValue(true)
-    const readdirSync = vi.spyOn(fse, 'readdirSync').mockImplementation((targetPath) => {
+    const readdirSync = vi.spyOn(fse, 'readdirSync').mockImplementation(((
+      targetPath: Parameters<typeof fse.readdirSync>[0]
+    ) => {
       const normalizedPath = String(targetPath)
-      if (normalizedPath.endsWith(path.join('data', 'config')))
-        return ['settings.json'] as any
-      if (normalizedPath.endsWith(path.join('test-plugin-source', 'logs')))
-        return ['session.log'] as any
-      return [] as any
-    })
+      if (normalizedPath.endsWith(path.join('data', 'config'))) return ['settings.json']
+      if (normalizedPath.endsWith(path.join('test-plugin-source', 'logs'))) return ['session.log']
+      return []
+    }) as typeof fse.readdirSync)
     const statSync = vi.spyOn(fse, 'statSync').mockImplementation((targetPath) => {
       const normalizedPath = String(targetPath)
-      const isDirectory
-        = normalizedPath.endsWith('config')
-          || normalizedPath.endsWith('logs')
-          || normalizedPath.endsWith('data-logs')
-          || normalizedPath.endsWith('temp')
+      const isDirectory =
+        normalizedPath.endsWith('config') ||
+        normalizedPath.endsWith('logs') ||
+        normalizedPath.endsWith('data-logs') ||
+        normalizedPath.endsWith('temp')
       return {
         isDirectory: () => isDirectory,
         size: normalizedPath.endsWith('session.log') ? 42 : 20,
-        mtimeMs: 123,
-      } as any
+        mtimeMs: 123
+      } as ReturnType<typeof fse.statSync>
     })
     const emptyDirSync = vi.spyOn(fse, 'emptyDirSync').mockImplementation(() => undefined)
 
@@ -1769,7 +1774,7 @@ describe('touchPlugin storage overview', () => {
       { enable: false, address: '' },
       '/tmp/test-plugin-source',
       {},
-      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } },
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
     )
 
     const stats = plugin.getStorageStats()
@@ -1778,7 +1783,7 @@ describe('touchPlugin storage overview', () => {
 
     expect(stats.fileCount).toBe(2)
     expect(stats.totalSize).toBe(62)
-    expect(tree.map(node => node.name)).toContain('logs')
+    expect(tree.map((node) => node.name)).toContain('logs')
     expect(result).toEqual({ success: true })
     expect(emptyDirSync).toHaveBeenCalledWith('/tmp/test-plugin-source/logs')
     expect(existsSync).toHaveBeenCalled()
@@ -1805,7 +1810,7 @@ describe('touchPlugin.setRuntime', () => {
       { enable: true, address: 'http://localhost' },
       '/tmp',
       {},
-      { skipDataInit: true },
+      { skipDataInit: true }
     )
 
     expect(ensureDirSync).not.toHaveBeenCalled()
@@ -1815,23 +1820,23 @@ describe('touchPlugin.setRuntime', () => {
     expect(ensureDirSync).toHaveBeenCalledTimes(5)
     expect(ensureDirSync).toHaveBeenNthCalledWith(
       1,
-      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data'),
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data')
     )
     expect(ensureDirSync).toHaveBeenNthCalledWith(
       2,
-      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'config'),
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'config')
     )
     expect(ensureDirSync).toHaveBeenNthCalledWith(
       3,
-      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'logs'),
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'logs')
     )
     expect(ensureDirSync).toHaveBeenNthCalledWith(
       4,
-      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'verify'),
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'verify')
     )
     expect(ensureDirSync).toHaveBeenNthCalledWith(
       5,
-      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'temp'),
+      path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'temp')
     )
   })
 })
@@ -1849,9 +1854,9 @@ describe('touchPlugin.enable', () => {
       invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
       keyManager: {
         requestKey: vi.fn(),
-        revokeKey: vi.fn(),
+        revokeKey: vi.fn()
       },
-      sendToPlugin: vi.fn().mockResolvedValue(undefined),
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain
 
     TouchPlugin.setTransport(transport)
@@ -1865,20 +1870,20 @@ describe('touchPlugin.enable', () => {
       { enable: false, address: '' },
       '/tmp',
       {},
-      { skipDataInit: true },
+      { skipDataInit: true }
     )
 
     plugin.issues.push({
       type: 'error',
       code: 'SDKAPI_BLOCKED',
-      message: 'sdk blocked',
+      message: 'sdk blocked'
     })
 
     await expect(plugin.enable()).resolves.toBe(false)
     expect(plugin.loadState).toBe('load_failed')
     expect(plugin.loadError).toEqual({
       code: 'SDKAPI_BLOCKED',
-      message: 'sdk blocked',
+      message: 'sdk blocked'
     })
   })
 })

@@ -11,31 +11,31 @@ const electronMocks = vi.hoisted(() => {
     session: {
       fromPartition: vi.fn(() => ({
         fetch,
-        setProxy,
-      })),
-    },
+        setProxy
+      }))
+    }
   }
 })
 
 vi.mock('electron', () => ({
   app: {
-    getPath: vi.fn(() => '/tmp'),
+    getPath: vi.fn(() => '/tmp')
   },
-  session: electronMocks.session,
+  session: electronMocks.session
 }))
 
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => undefined),
-  saveMainConfig: vi.fn(),
+  saveMainConfig: vi.fn()
 }))
 
 vi.mock('../../utils/app-root-path', () => ({
-  resolveRuntimeRootPath: vi.fn(() => '/tmp'),
+  resolveRuntimeRootPath: vi.fn(() => '/tmp')
 }))
 
 vi.mock('../../utils/local-file-policy', () => ({
   getAllowedLocalFileRoots: vi.fn(() => ['/tmp']),
-  isAllowedLocalFilePath: vi.fn(() => true),
+  isAllowedLocalFilePath: vi.fn(() => true)
 }))
 
 vi.mock('../../utils/logger', () => ({
@@ -43,12 +43,12 @@ vi.mock('../../utils/logger', () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    debug: vi.fn(),
-  })),
+    debug: vi.fn()
+  }))
 }))
 
 vi.mock('../../utils/secure-store', () => ({
-  getSecureStoreValue: vi.fn(),
+  getSecureStoreValue: vi.fn()
 }))
 
 describe('networkService cooldown policy', () => {
@@ -71,11 +71,11 @@ describe('networkService cooldown policy', () => {
       cooldownPolicy: {
         key: 'provider:health',
         failureThreshold: 1,
-        cooldownMs: 30_000,
+        cooldownMs: 30_000
       },
       retryPolicy: {
-        maxRetries: 0,
-      },
+        maxRetries: 0
+      }
     }
 
     await expect(service.request(options)).rejects.toThrow('offline')
@@ -96,18 +96,18 @@ describe('networkService cooldown policy', () => {
       cooldownPolicy: {
         key: 'provider:health',
         failureThreshold: 1,
-        cooldownMs: 30_000,
+        cooldownMs: 30_000
       },
       retryPolicy: {
-        maxRetries: 0,
-      },
+        maxRetries: 0
+      }
     }
 
     await expect(service.request(baseOptions)).rejects.toThrow('offline')
     await expect(
-      service.request({ ...baseOptions, skipCooldownCheck: true }),
+      service.request({ ...baseOptions, skipCooldownCheck: true })
     ).resolves.toMatchObject({
-      ok: true,
+      ok: true
     })
     await expect(service.request(baseOptions)).resolves.toMatchObject({ ok: true })
     expect(electronMocks.fetch).toHaveBeenCalledTimes(3)
@@ -127,11 +127,11 @@ describe('networkService cooldown policy', () => {
       cooldownPolicy: {
         key: 'provider:models',
         failureThreshold: 1,
-        cooldownMs: 30_000,
+        cooldownMs: 30_000
       },
       retryPolicy: {
-        maxRetries: 0,
-      },
+        maxRetries: 0
+      }
     }
 
     await expect(service.request(options)).rejects.toThrow('offline')
@@ -164,28 +164,28 @@ describe('networkService cooldown policy', () => {
     const responseData = {
       code: 'AUTH_INVALID',
       message: 'The access token is invalid',
-      recovery: 'Sign in again',
+      recovery: 'Sign in again'
     }
     electronMocks.fetch.mockResolvedValueOnce(
       new Response(JSON.stringify(responseData), {
         status: 401,
-        statusText: 'Unauthorized',
-      }),
+        statusText: 'Unauthorized'
+      })
     )
 
     const request = service.request({
       method: 'POST',
       url: 'https://api.example.test/invoke',
       retryPolicy: {
-        maxRetries: 0,
-      },
+        maxRetries: 0
+      }
     })
 
     await expect(request).rejects.toBeInstanceOf(NetworkHttpStatusError)
     await expect(request).rejects.toMatchObject({
       status: 401,
       code: 'NETWORK_HTTP_STATUS_401',
-      responseData: undefined,
+      responseData: undefined
     })
   })
 
@@ -194,13 +194,13 @@ describe('networkService cooldown policy', () => {
     const responseData = {
       code: 'AUTH_INVALID',
       message: 'The access token is invalid',
-      recovery: 'Sign in again',
+      recovery: 'Sign in again'
     }
     electronMocks.fetch.mockResolvedValueOnce(
       new Response(JSON.stringify(responseData), {
         status: 401,
-        statusText: 'Unauthorized',
-      }),
+        statusText: 'Unauthorized'
+      })
     )
 
     const request = service.request({
@@ -210,17 +210,17 @@ describe('networkService cooldown policy', () => {
       cooldownPolicy: {
         key: 'provider:invoke',
         failureThreshold: 1,
-        cooldownMs: 30_000,
+        cooldownMs: 30_000
       },
       retryPolicy: {
-        maxRetries: 0,
-      },
+        maxRetries: 0
+      }
     })
 
     await expect(request).rejects.toBeInstanceOf(NetworkHttpStatusError)
     await expect(request).rejects.toMatchObject({
       status: 401,
-      responseData,
+      responseData
     })
     await expect(
       service.request({
@@ -229,12 +229,12 @@ describe('networkService cooldown policy', () => {
         cooldownPolicy: {
           key: 'provider:invoke',
           failureThreshold: 1,
-          cooldownMs: 30_000,
+          cooldownMs: 30_000
         },
         retryPolicy: {
-          maxRetries: 0,
-        },
-      }),
+          maxRetries: 0
+        }
+      })
     ).rejects.toBeInstanceOf(NetworkCooldownError)
     expect(electronMocks.fetch).toHaveBeenCalledTimes(1)
   })

@@ -81,7 +81,6 @@ function ensureAuthSettings() {
 ensureSecuritySettings()
 ensureAuthSettings()
 
-
 const syncEnabled = computed({
   get: () => getSyncPreferenceState().enabled,
   set: (val: boolean) => {

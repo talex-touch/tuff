@@ -14,7 +14,7 @@ vi.mock('../sentry/sentry-service', () => {
   return {
     SentryServiceModule,
     getSentryService: vi.fn(() => service),
-    setSentryServiceInstance: vi.fn(),
+    setSentryServiceInstance: vi.fn()
   }
 })
 
@@ -26,18 +26,18 @@ interface ContextChannelRegistrar {
 
 async function registerContextHandlers() {
   const { IntelligenceModule } = await import('./intelligence-module')
-  const { intelligenceContextEvents }
-    = await import('@talex-touch/utils/transport/sdk/domains/intelligence')
+  const { intelligenceContextEvents } =
+    await import('@talex-touch/utils/transport/sdk/domains/intelligence')
   const handlers = new Map<string, ContextHandler>()
   const register = vi.fn(
     (
       event: TuffEvent<unknown, unknown> & { toEventName: () => string },
       _action: string,
       _permissionId: string,
-      handler: ContextHandler,
+      handler: ContextHandler
     ) => {
       handlers.set(event.toEventName(), handler)
-    },
+    }
   )
 
   const module = new IntelligenceModule() as unknown as ContextChannelRegistrar
@@ -50,7 +50,7 @@ describe('intelligenceModule context ownership boundary', () => {
     {
       name: 'prepare-turn',
       eventKey: 'prepareTurn',
-      payload: { owner: 'corebox', input: 'hidden context request' },
+      payload: { owner: 'corebox', input: 'hidden context request' }
     },
     {
       name: 'compression-create',
@@ -61,25 +61,25 @@ describe('intelligenceModule context ownership boundary', () => {
         snapshot: {
           currentState: 'hidden summary',
           sourceTurnFrom: 'turn-1',
-          sourceTurnTo: 'turn-2',
-        },
-      },
+          sourceTurnTo: 'turn-2'
+        }
+      }
     },
     {
       name: 'compression-list',
       eventKey: 'listCompressionSnapshots',
-      payload: { sessionId: 'session-1' },
+      payload: { sessionId: 'session-1' }
     },
     {
       name: 'compression-latest',
       eventKey: 'getLatestCompressionSnapshot',
-      payload: { sessionId: 'session-1' },
+      payload: { sessionId: 'session-1' }
     },
     { name: 'list', eventKey: 'listMemories', payload: {} },
     {
       name: 'save',
       eventKey: 'saveMemory',
-      payload: { type: 'preference', scope: 'global', content: 'Use concise answers' },
+      payload: { type: 'preference', scope: 'global', content: 'Use concise answers' }
     },
     {
       name: 'replace',
@@ -88,33 +88,33 @@ describe('intelligenceModule context ownership boundary', () => {
         memoryId: 'memory-1',
         expectedUpdatedAt: 1,
         evaluationFingerprint: 'a'.repeat(64),
-        replacement: { type: 'preference', scope: 'global', content: 'Use concise answers' },
-      },
+        replacement: { type: 'preference', scope: 'global', content: 'Use concise answers' }
+      }
     },
     {
       name: 'set-enabled',
       eventKey: 'setMemoryEnabled',
-      payload: { memoryId: 'memory-1', enabled: false },
+      payload: { memoryId: 'memory-1', enabled: false }
     },
     {
       name: 'delete',
       eventKey: 'deleteMemory',
-      payload: { memoryId: 'memory-1' },
-    },
+      payload: { memoryId: 'memory-1' }
+    }
   ] as const)(
     'rejects plugin calls to $name',
     async ({ eventKey, payload }) => {
       const { handlers, intelligenceContextEvents } = await registerContextHandlers()
       const handler = handlers.get(intelligenceContextEvents[eventKey].toEventName())
       const pluginContext = {
-        plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true },
+        plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
       } as HandlerContext
 
       expect(handler).toBeDefined()
       await expect(handler?.(payload, pluginContext)).rejects.toThrow(
-        'INTELLIGENCE_HOST_ONLY_CAPABILITY',
+        'INTELLIGENCE_HOST_ONLY_CAPABILITY'
       )
     },
-    15_000,
+    15_000
   )
 })

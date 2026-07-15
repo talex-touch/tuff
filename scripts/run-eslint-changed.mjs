@@ -1,8 +1,8 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import fs from 'node:fs'
-import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -18,8 +18,10 @@ function run(command, args, options = {}) {
     ...options,
   })
 
-  if (result.stdout) process.stdout.write(result.stdout)
-  if (result.stderr) process.stderr.write(result.stderr)
+  if (result.stdout)
+    process.stdout.write(result.stdout)
+  if (result.stderr)
+    process.stderr.write(result.stderr)
   return result.status ?? 1
 }
 
@@ -94,7 +96,8 @@ function getChangedFiles() {
   )
 
   if (result.status !== 0) {
-    if (result.stderr) process.stderr.write(result.stderr)
+    if (result.stderr)
+      process.stderr.write(result.stderr)
     process.exit(result.status ?? 1)
   }
 
@@ -117,7 +120,8 @@ function groupByWorkspace(files) {
       continue
     }
     const relativeFile = file.slice(workspace.length + 1)
-    if (!relativeFile) continue
+    if (!relativeFile)
+      continue
     const list = groups.get(workspace) ?? []
     list.push(relativeFile)
     groups.set(workspace, list)
@@ -159,12 +163,14 @@ function main() {
 
   for (const [workspace, workspaceFiles] of groups.entries()) {
     const code = lintWorkspace(workspace, workspaceFiles)
-    if (code !== 0) exitCode = code
+    if (code !== 0)
+      exitCode = code
   }
 
   if (rootFiles.length > 0) {
     const code = lintRoot(rootFiles)
-    if (code !== 0) exitCode = code
+    if (code !== 0)
+      exitCode = code
   }
 
   if (exitCode !== 0) {

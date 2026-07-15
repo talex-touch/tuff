@@ -236,8 +236,8 @@ function sortWindows(windows) {
 
 function selectDevPair(windows) {
   const list = sortWindows(windows)
-  const terminalPattern = /(terminal|powershell|cmd|iterm|warp)/i
-  const browserPattern = /(chrome|edge|firefox|brave|opera|safari)/i
+  const terminalPattern = /terminal|powershell|cmd|iterm|warp/i
+  const browserPattern = /chrome|edge|firefox|brave|opera|safari/i
 
   let terminal = list.find(item => terminalPattern.test(item.name) || terminalPattern.test(item.title))
   let browser = list.find(item => browserPattern.test(item.name) || browserPattern.test(item.title))

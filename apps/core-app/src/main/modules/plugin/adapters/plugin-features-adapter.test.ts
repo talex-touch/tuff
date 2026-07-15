@@ -287,14 +287,14 @@ describe('plugin-features-adapter', () => {
     const onItemAction = vi.fn(async () => ({
       externalAction: true,
       shouldActivate: true,
-      activation,
+      activation
     }))
     const plugin = {
       ...createPlugin(),
       status: PluginStatus.ACTIVE,
       pluginLifecycle: {
-        onItemAction,
-      },
+        onItemAction
+      }
     } as unknown as ITouchPlugin
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
 
@@ -307,10 +307,10 @@ describe('plugin-features-adapter', () => {
           pluginName: 'test-plugin',
           actionId: 'copy-answer',
           payload: {
-            answer: 'ready answer',
-          },
-        },
-      },
+            answer: 'ready answer'
+          }
+        }
+      }
     } as never)
 
     expect(result).toEqual(activation)
@@ -319,11 +319,11 @@ describe('plugin-features-adapter', () => {
         meta: expect.objectContaining({
           actionId: 'copy-answer',
           payload: expect.objectContaining({
-            answer: 'ready answer',
-          }),
-        }),
+            answer: 'ready answer'
+          })
+        })
       }),
-      { actionId: undefined },
+      { actionId: undefined }
     )
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })

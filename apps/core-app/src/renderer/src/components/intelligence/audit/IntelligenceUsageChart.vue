@@ -46,12 +46,12 @@ async function loadChartData() {
       callerId: props.callerId || 'system',
       periodType: 'day',
       startPeriod,
-      endPeriod,
+      endPeriod
     })
 
     // Fill missing days with empty data
     const filledData: IntelligenceUsageSummary[] = []
-    const dataMap = new Map(data.map(d => [d.period, d]))
+    const dataMap = new Map(data.map((d) => [d.period, d]))
 
     for (let i = 0; i < days; i++) {
       const date = new Date(startDate)
@@ -69,17 +69,15 @@ async function loadChartData() {
           promptTokens: 0,
           completionTokens: 0,
           totalCost: 0,
-          avgLatency: 0,
-        },
+          avgLatency: 0
+        }
       )
     }
 
     chartData.value = filledData
-  }
-  catch {
+  } catch {
     toast.error(t('intelligence.audit.loadChartFailed'))
-  }
-  finally {
+  } finally {
     isLoading.value = false
   }
 }
@@ -89,14 +87,11 @@ watch(() => props.callerId, loadChartData)
 watch(() => props.days, loadChartData)
 
 const maxValue = computed(() => {
-  if (chartData.value.length === 0)
-    return 1
+  if (chartData.value.length === 0) return 1
 
   const values = chartData.value.map((d) => {
-    if (activeMetric.value === 'requests')
-      return d.requestCount
-    if (activeMetric.value === 'tokens')
-      return d.totalTokens
+    if (activeMetric.value === 'requests') return d.requestCount
+    if (activeMetric.value === 'tokens') return d.totalTokens
     return d.totalCost
   })
 
@@ -147,7 +142,7 @@ const chartBars = computed(() => {
       period: d.period,
       dayLabel,
       weekday,
-      data: d,
+      data: d
     }
   })
 })
@@ -159,9 +154,9 @@ const totalStats = computed(() => {
       tokens: acc.tokens + d.totalTokens,
       cost: acc.cost + d.totalCost,
       success: acc.success + d.successCount,
-      failure: acc.failure + d.failureCount,
+      failure: acc.failure + d.failureCount
     }),
-    { requests: 0, tokens: 0, cost: 0, success: 0, failure: 0 },
+    { requests: 0, tokens: 0, cost: 0, success: 0, failure: 0 }
   )
 
   return totals
@@ -172,16 +167,12 @@ function formatValue(value: number, metric: 'requests' | 'tokens' | 'cost'): str
     case 'requests':
       return value.toLocaleString()
     case 'tokens':
-      if (value >= 1000000)
-        return `${(value / 1000000).toFixed(1)}M`
-      if (value >= 1000)
-        return `${(value / 1000).toFixed(1)}K`
+      if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+      if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
       return value.toString()
     case 'cost':
-      if (value < 0.01)
-        return `$${value.toFixed(4)}`
-      if (value < 1)
-        return `$${value.toFixed(3)}`
+      if (value < 0.01) return `$${value.toFixed(4)}`
+      if (value < 1) return `$${value.toFixed(3)}`
       return `$${value.toFixed(2)}`
   }
 }

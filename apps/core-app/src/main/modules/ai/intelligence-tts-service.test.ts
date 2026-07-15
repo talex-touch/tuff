@@ -108,6 +108,10 @@ describe('intelligenceTtsService', () => {
     expect(invokeMock).toHaveBeenCalledTimes(2)
     expect(callerA).toMatchObject({ provider: 'provider-a', traceId: 'trace-a', cacheHit: false })
     expect(callerB).toMatchObject({ provider: 'provider-b', traceId: 'trace-b', cacheHit: false })
-    expect(callerBRepeat).toMatchObject({ provider: 'provider-b', traceId: 'trace-b', cacheHit: true })
+    expect(callerBRepeat).toMatchObject({
+      provider: 'provider-b',
+      traceId: 'trace-b',
+      cacheHit: true
+    })
   })
 })

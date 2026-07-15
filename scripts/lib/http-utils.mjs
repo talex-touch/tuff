@@ -7,7 +7,8 @@ export async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     return await fetch(url, { ...options, signal: controller.signal })
-  } finally {
+  }
+  finally {
     clearTimeout(timer)
   }
 }

@@ -810,10 +810,7 @@ export function verifySearchIndexMigrationEvidence(
       () => verifyDatabaseEvidenceCorrelation(inputs),
       {
         preflightDbIdentity: readString(inputs.preflight, ['evidenceSource', 'dbIdentity']),
-        ftsSimulationDbIdentity: readString(inputs.ftsSimulation, [
-          'evidenceSource',
-          'dbIdentity'
-        ]),
+        ftsSimulationDbIdentity: readString(inputs.ftsSimulation, ['evidenceSource', 'dbIdentity']),
         scanProgressSimulationDbIdentity: readString(inputs.scanProgressSimulation, [
           'evidenceSource',
           'dbIdentity'

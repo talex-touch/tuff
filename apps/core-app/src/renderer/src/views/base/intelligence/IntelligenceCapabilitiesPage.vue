@@ -1,16 +1,16 @@
 <script lang="ts" name="IntelligenceCapabilitiesPage" setup>
 import type {
   IntelligenceCapabilityConfig,
-  IntelligenceCapabilityProviderBinding,
+  IntelligenceCapabilityProviderBinding
 } from '@talex-touch/tuff-intelligence'
 import type { ITuffIcon } from '@talex-touch/utils'
 import type {
   CapabilityBinding,
-  CapabilityTestResult,
+  CapabilityTestResult
 } from '~/components/intelligence/capabilities/types'
 import type {
   TuffItemBadge,
-  TuffItemStatusDot,
+  TuffItemStatusDot
 } from '~/components/tuff/template/TuffItemTemplate.vue'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, reactive, ref, watch } from 'vue'
@@ -32,7 +32,7 @@ const {
   updateCapability,
   setCapabilityProviders,
   updateProvider,
-  saveSettings,
+  saveSettings
 } = useIntelligenceManager()
 
 const searchQuery = ref('')
@@ -53,61 +53,52 @@ const CAPABILITY_USAGE_ORDER = [
   'image.translate.e2e',
   'audio.transcribe',
   'audio.tts',
-  'embedding.generate',
+  'embedding.generate'
 ] as const
 const capabilityUsageRank = new Map<string, number>(
-  CAPABILITY_USAGE_ORDER.map((id, index) => [id, index]),
+  CAPABILITY_USAGE_ORDER.map((id, index) => [id, index])
 )
 
 function getCapabilityUsageRank(capability: IntelligenceCapabilityConfig): number {
   const exactRank = capabilityUsageRank.get(capability.id)
-  if (exactRank !== undefined)
-    return exactRank
+  if (exactRank !== undefined) return exactRank
 
   const searchable = `${capability.id} ${capability.label || ''}`.toLowerCase()
-  if (searchable.includes('chat') || searchable.includes('对话'))
-    return 0.5
-  if (searchable.includes('translate') || searchable.includes('翻译'))
-    return 1.5
-  if (searchable.includes('summar') || searchable.includes('摘要'))
-    return 2.5
-  if (searchable.includes('intent') || searchable.includes('意图'))
-    return 3.5
-  if (searchable.includes('code') || searchable.includes('代码'))
-    return 7.5
+  if (searchable.includes('chat') || searchable.includes('对话')) return 0.5
+  if (searchable.includes('translate') || searchable.includes('翻译')) return 1.5
+  if (searchable.includes('summar') || searchable.includes('摘要')) return 2.5
+  if (searchable.includes('intent') || searchable.includes('意图')) return 3.5
+  if (searchable.includes('code') || searchable.includes('代码')) return 7.5
   if (
-    searchable.includes('image')
-    || searchable.includes('vision')
-    || searchable.includes('图像')
+    searchable.includes('image') ||
+    searchable.includes('vision') ||
+    searchable.includes('图像')
   ) {
     return 10.5
   }
-  if (searchable.includes('audio') || searchable.includes('音频'))
-    return 14.5
+  if (searchable.includes('audio') || searchable.includes('音频')) return 14.5
   return 1000
 }
 
 const capabilityList = computed<IntelligenceCapabilityConfig[]>(() =>
   Object.values(capabilities.value || {}).sort((a, b) => {
     const rankDiff = getCapabilityUsageRank(a) - getCapabilityUsageRank(b)
-    if (rankDiff !== 0)
-      return rankDiff
+    if (rankDiff !== 0) return rankDiff
     return (a.label || a.id).localeCompare(b.label || b.id)
-  }),
+  })
 )
 const providerMap = computed(
-  () => new Map(providers.value.map(provider => [provider.id, provider])),
+  () => new Map(providers.value.map((provider) => [provider.id, provider]))
 )
 
 const filteredCapabilities = computed(() => {
-  if (!searchQuery.value.trim())
-    return capabilityList.value
+  if (!searchQuery.value.trim()) return capabilityList.value
   const query = searchQuery.value.toLowerCase()
   return capabilityList.value.filter(
-    capability =>
-      capability.id.toLowerCase().includes(query)
-      || (capability.label?.toLowerCase().includes(query) ?? false)
-      || (capability.description?.toLowerCase().includes(query) ?? false),
+    (capability) =>
+      capability.id.toLowerCase().includes(query) ||
+      (capability.label?.toLowerCase().includes(query) ?? false) ||
+      (capability.description?.toLowerCase().includes(query) ?? false)
   )
 })
 
@@ -116,10 +107,9 @@ const hasPendingCapabilityChanges = ref(false)
 const saveState = ref<'idle' | 'dirty' | 'saved' | 'error'>('idle')
 const saveErrorDetail = ref('')
 const selectedCapability = computed<IntelligenceCapabilityConfig | null>(() => {
-  if (!selectedCapabilityId.value)
-    return null
+  if (!selectedCapabilityId.value) return null
   const values = Object.values(capabilityList.value)
-  return values.find(entry => entry.id === selectedCapabilityId.value) ?? null
+  return values.find((entry) => entry.id === selectedCapabilityId.value) ?? null
 })
 
 watch(
@@ -129,7 +119,7 @@ watch(
       selectedCapabilityId.value = list[0].id
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 watch(filteredCapabilities, (list) => {
@@ -137,7 +127,7 @@ watch(filteredCapabilities, (list) => {
     selectedCapabilityId.value = null
     return
   }
-  if (!selectedCapabilityId.value || !list.some(item => item.id === selectedCapabilityId.value)) {
+  if (!selectedCapabilityId.value || !list.some((item) => item.id === selectedCapabilityId.value)) {
     selectedCapabilityId.value = list[0].id
   }
 })
@@ -147,7 +137,7 @@ function handleSelectCapability(id: string): void {
 }
 
 function getCapabilityIcon(capability: IntelligenceCapabilityConfig): ITuffIcon {
-  const iconMap: Record<string, { icon: string, color: string }> = {
+  const iconMap: Record<string, { icon: string; color: string }> = {
     'text.chat': { icon: 'i-carbon-chat', color: '#1e88e5' },
     'embedding.generate': { icon: 'i-carbon-data-base', color: '#7b1fa2' },
     'vision.ocr': { icon: 'i-carbon-image-search', color: '#fb8c00' },
@@ -155,21 +145,21 @@ function getCapabilityIcon(capability: IntelligenceCapabilityConfig): ITuffIcon 
     'text.summarize': { icon: 'i-carbon-document-tasks', color: '#e53935' },
     'audio.transcribe': { icon: 'i-carbon-microphone', color: '#00acc1' },
     'code.generate': { icon: 'i-carbon-code', color: '#5e35b1' },
-    'intent.detect': { icon: 'i-carbon-explore', color: '#f4511e' },
+    'intent.detect': { icon: 'i-carbon-explore', color: '#f4511e' }
   }
   const config = iconMap[capability.id] || { icon: 'i-carbon-cube', color: '#757575' }
   return {
     type: 'class',
-    value: config.icon,
+    value: config.icon
   }
 }
 
 function getConfiguredProviderCount(capability: IntelligenceCapabilityConfig): number {
-  return capability.providers?.filter(provider => provider.enabled !== false).length ?? 0
+  return capability.providers?.filter((provider) => provider.enabled !== false).length ?? 0
 }
 
 function getCapabilityStatus(
-  capability: IntelligenceCapabilityConfig,
+  capability: IntelligenceCapabilityConfig
 ): 'configured' | 'unconfigured' {
   return getConfiguredProviderCount(capability) > 0 ? 'configured' : 'unconfigured'
 }
@@ -180,26 +170,25 @@ function getCapabilityBadge(capability: IntelligenceCapabilityConfig): TuffItemB
     return {
       text: String(configuredCount),
       icon: 'i-carbon-checkmark',
-      status: 'success',
+      status: 'success'
     }
   }
   return {
     text: t('settings.intelligence.capabilityNotConfigured'),
     icon: 'i-carbon-warning-alt',
-    status: 'muted',
+    status: 'muted'
   }
 }
 
 function getCapabilityStatusDot(
-  capability: IntelligenceCapabilityConfig,
+  capability: IntelligenceCapabilityConfig
 ): TuffItemStatusDot | undefined {
-  if (getCapabilityStatus(capability) !== 'configured')
-    return undefined
+  if (getCapabilityStatus(capability) !== 'configured') return undefined
   return {
     class: 'is-active',
     label: t('settings.intelligence.capabilitySummary', {
-      count: getConfiguredProviderCount(capability),
-    }),
+      count: getConfiguredProviderCount(capability)
+    })
   }
 }
 
@@ -209,20 +198,19 @@ const capabilityTesting = reactive<Record<string, boolean>>({})
 function updateCapabilityBinding(
   capabilityId: string,
   providerId: string,
-  patch: Partial<IntelligenceCapabilityProviderBinding>,
+  patch: Partial<IntelligenceCapabilityProviderBinding>
 ): void {
   const capability = capabilities.value[capabilityId]
   const current = capability?.providers ? [...capability.providers] : []
-  const index = current.findIndex(binding => binding.providerId === providerId)
+  const index = current.findIndex((binding) => binding.providerId === providerId)
   if (index === -1) {
     current.push({
       providerId,
       enabled: true,
       priority: current.length + 1,
-      ...patch,
+      ...patch
     })
-  }
-  else {
+  } else {
     current[index] = { ...current[index], ...patch }
   }
   setCapabilityProviders(capabilityId, current)
@@ -232,7 +220,7 @@ function updateCapabilityBinding(
 function handleCapabilityProviderToggle(
   capabilityId: string,
   providerId: string,
-  enabled: boolean,
+  enabled: boolean
 ): void {
   if (enabled) {
     updateCapabilityBinding(capabilityId, providerId, { enabled: true })
@@ -240,19 +228,17 @@ function handleCapabilityProviderToggle(
     if (provider && !provider.enabled) {
       updateProvider(providerId, { enabled: true })
     }
-  }
-  else {
+  } else {
     const capability = capabilities.value[capabilityId]
-    if (!capability?.providers)
-      return
-    const remaining = capability.providers.filter(binding => binding.providerId !== providerId)
+    if (!capability?.providers) return
+    const remaining = capability.providers.filter((binding) => binding.providerId !== providerId)
     setCapabilityProviders(capabilityId, remaining)
     markCapabilityDirty()
   }
 }
 
 function handleCapabilityModels(capabilityId: string, providerId: string, models: string[]): void {
-  const normalized = models.map(token => token.trim()).filter(Boolean)
+  const normalized = models.map((token) => token.trim()).filter(Boolean)
   updateCapabilityBinding(capabilityId, providerId, { models: normalized })
 }
 
@@ -263,37 +249,32 @@ function handleCapabilityPrompt(capabilityId: string, prompt: string): void {
 
 function activeBindings(capabilityId: string): CapabilityBinding[] {
   const capability = capabilities.value[capabilityId]
-  if (!capability?.providers)
-    return []
+  if (!capability?.providers) return []
   return capability.providers
-    .filter(binding => binding.enabled !== false)
-    .map(binding => ({
+    .filter((binding) => binding.enabled !== false)
+    .map((binding) => ({
       ...binding,
-      provider: providerMap.value.get(binding.providerId),
+      provider: providerMap.value.get(binding.providerId)
     }))
 }
 
 function onToggleProvider(providerId: string, enabled: boolean): void {
-  if (!selectedCapability.value)
-    return
+  if (!selectedCapability.value) return
   handleCapabilityProviderToggle(selectedCapability.value.id, providerId, enabled)
 }
 
 function onUpdateModels(providerId: string, models: string[]): void {
-  if (!selectedCapability.value)
-    return
+  if (!selectedCapability.value) return
   handleCapabilityModels(selectedCapability.value.id, providerId, models)
 }
 
 function onUpdatePrompt(prompt: string): void {
-  if (!selectedCapability.value)
-    return
+  if (!selectedCapability.value) return
   handleCapabilityPrompt(selectedCapability.value.id, prompt)
 }
 
 function onReorderProviders(bindings: IntelligenceCapabilityProviderBinding[]): void {
-  if (!selectedCapability.value)
-    return
+  if (!selectedCapability.value) return
   setCapabilityProviders(selectedCapability.value.id, bindings)
   markCapabilityDirty()
 }
@@ -315,8 +296,7 @@ async function handleSaveCapabilities(): Promise<void> {
         saveState.value = 'idle'
       }
     }, 1800)
-  }
-  catch (error) {
+  } catch (error) {
     capabilityPageLog.error('Failed to save capability settings', error)
     saveState.value = 'error'
     hasPendingCapabilityChanges.value = true
@@ -325,9 +305,9 @@ async function handleSaveCapabilities(): Promise<void> {
 }
 
 function formatSaveError(error: unknown): string {
-  const details
-    = error && typeof error === 'object'
-      ? (error as { details?: { reason?: string, version?: number } }).details
+  const details =
+    error && typeof error === 'object'
+      ? (error as { details?: { reason?: string; version?: number } }).details
       : undefined
   const message = error instanceof Error ? error.message : String(error || '')
 
@@ -336,12 +316,12 @@ function formatSaveError(error: unknown): string {
   }
   if (details?.reason === 'conflict') {
     return t('settings.intelligence.capabilitySaveErrorConflict', {
-      version: details.version ?? '-',
+      version: details.version ?? '-'
     })
   }
   if (details?.reason === 'remote-failed') {
     return t('settings.intelligence.capabilitySaveErrorRemote', {
-      version: details.version ?? '-',
+      version: details.version ?? '-'
     })
   }
 
@@ -356,10 +336,9 @@ async function handleCapabilityTest(
     model?: string
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
-  },
+  }
 ): Promise<void> {
-  if (capabilityTesting[capabilityId])
-    return
+  if (capabilityTesting[capabilityId]) return
   capabilityTesting[capabilityId] = true
   capabilityTests[capabilityId] = null
 
@@ -370,23 +349,21 @@ async function handleCapabilityTest(
       userInput: params?.userInput,
       model: params?.model,
       promptTemplate: params?.promptTemplate,
-      promptVariables: params?.promptVariables,
+      promptVariables: params?.promptVariables
     })) as CapabilityTestResult
 
     // 使用格式化后的结果
     capabilityTests[capabilityId] = {
       ...response,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  catch (error) {
+  } catch (error) {
     capabilityTests[capabilityId] = {
       success: false,
       message: error instanceof Error ? error.message : '能力测试失败',
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  finally {
+  } finally {
     capabilityTesting[capabilityId] = false
   }
 }

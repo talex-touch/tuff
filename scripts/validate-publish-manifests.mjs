@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { getArgValue, hasFlag } from './lib/argv-utils.mjs'
 import {
   dependencyFieldPaths,
   ignoredPackages,
@@ -13,7 +14,6 @@ import {
   publishPackages,
   sourceForbiddenProtocols,
 } from './package-publish.config.mjs'
-import { getArgValue, hasFlag } from './lib/argv-utils.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
@@ -57,13 +57,15 @@ function getByPath(target, fieldPath) {
 
 function getDependencyEntries(manifest, fieldPath) {
   const value = getByPath(manifest, fieldPath)
-  if (!value) return []
+  if (!value)
+    return []
 
   if (Array.isArray(value)) {
-    return value.map((dependencyName) => ({ dependencyName, spec: dependencyName }))
+    return value.map(dependencyName => ({ dependencyName, spec: dependencyName }))
   }
 
-  if (typeof value !== 'object') return []
+  if (typeof value !== 'object')
+    return []
 
   return Object.entries(value).map(([dependencyName, spec]) => ({
     dependencyName,
@@ -78,7 +80,8 @@ function findForbiddenSpecIssues({ manifest, manifestPath, packageInfo, forbidde
     const entries = getDependencyEntries(manifest, fieldPath)
     for (const { dependencyName, spec } of entries) {
       const matchedProtocol = forbiddenProtocols.find(protocol => spec.startsWith(protocol))
-      if (!matchedProtocol) continue
+      if (!matchedProtocol)
+        continue
 
       issues.push({
         package: packageInfo.name,
@@ -98,7 +101,8 @@ function findForbiddenSpecIssues({ manifest, manifestPath, packageInfo, forbidde
 }
 
 function getPublishPackageByFilter() {
-  if (!filterValue) return publishPackages
+  if (!filterValue)
+    return publishPackages
   const filters = filterValue.split(',').map(item => item.trim()).filter(Boolean)
   return publishPackages.filter((packageInfo) => {
     return filters.some((filter) => {
@@ -193,10 +197,12 @@ function runPack(packageInfo, tempRoot) {
     .find(line => line.endsWith('.tgz'))
 
   if (packedPath) {
-    if (path.isAbsolute(packedPath)) return packedPath
+    if (path.isAbsolute(packedPath))
+      return packedPath
 
     const destinationPath = path.join(destination, packedPath)
-    if (fs.existsSync(destinationPath)) return destinationPath
+    if (fs.existsSync(destinationPath))
+      return destinationPath
 
     return path.join(packageDir, packedPath)
   }
@@ -257,12 +263,18 @@ function printIssues(issues) {
   console.error('[publish-manifest] Validation failed:')
   for (const issue of issues) {
     console.error(`- package: ${issue.package}`)
-    if (issue.packagePath) console.error(`  packagePath: ${issue.packagePath}`)
-    if (issue.manifestPath) console.error(`  manifestPath: ${toPosixPath(path.relative(repoRoot, issue.manifestPath))}`)
-    if (issue.phase) console.error(`  phase: ${issue.phase}`)
-    if (issue.field) console.error(`  field: ${issue.field}`)
-    if (issue.dependency) console.error(`  dependency: ${issue.dependency}`)
-    if (issue.value) console.error(`  value: ${issue.value}`)
+    if (issue.packagePath)
+      console.error(`  packagePath: ${issue.packagePath}`)
+    if (issue.manifestPath)
+      console.error(`  manifestPath: ${toPosixPath(path.relative(repoRoot, issue.manifestPath))}`)
+    if (issue.phase)
+      console.error(`  phase: ${issue.phase}`)
+    if (issue.field)
+      console.error(`  field: ${issue.field}`)
+    if (issue.dependency)
+      console.error(`  dependency: ${issue.dependency}`)
+    if (issue.value)
+      console.error(`  value: ${issue.value}`)
     console.error(`  reason: ${issue.reason}`)
   }
 }

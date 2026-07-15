@@ -6,19 +6,6 @@ const mode = process.argv[2] || 'verify'
 const root = process.cwd()
 const workflowPath = '.github/workflows/intelligence.yml'
 
-const testFiles = [
-  'packages/tuff-intelligence/src/resolvers/intelligence-resolvers.test.ts',
-  'apps/core-app/src/main/modules/ai/intelligence-config.test.ts',
-  'apps/core-app/src/main/modules/ai/intelligence-sdk.test.ts',
-  'apps/core-app/src/main/modules/ai/intelligence-shared-resolver-contract.test.ts',
-  'apps/nexus/server/utils/intelligenceProviderRegistryBridge.test.ts',
-  'apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts',
-  'apps/nexus/server/utils/tuffIntelligenceAbilityAggregation.test.ts',
-  'apps/nexus/server/utils/tuffIntelligenceProviderAdapters.test.ts',
-  'apps/nexus/server/utils/__tests__/intelligence-agent-graph-runner.test.ts',
-  'apps/nexus/server/utils/__tests__/intelligence-agent-runtime-bridge.test.ts',
-]
-
 const diffCheckPaths = [
   'mise.toml',
   workflowPath,
@@ -50,12 +37,15 @@ function runParallel(groups) {
   }))
 
   for (const result of results) {
-    if (result.stdout) process.stdout.write(result.stdout)
-    if (result.stderr) process.stderr.write(result.stderr)
+    if (result.stdout)
+      process.stdout.write(result.stdout)
+    if (result.stderr)
+      process.stderr.write(result.stderr)
   }
 
   const failed = results.find(result => result.status !== 0)
-  if (failed) process.exit(failed.status ?? 1)
+  if (failed)
+    process.exit(failed.status ?? 1)
 }
 
 function dev() {
@@ -88,15 +78,24 @@ function parity() {
   console.log('intelligence parity ok: GitHub workflow runs mise run intelligence:verify')
 }
 
-if (mode === 'dev') dev()
-else if (mode === 'changed') changed()
-else if (mode === 'release') release()
-else if (mode === 'parity') parity()
+if (mode === 'dev') {
+  dev()
+}
+else if (mode === 'changed') {
+  changed()
+}
+else if (mode === 'release') {
+  release()
+}
+else if (mode === 'parity') {
+  parity()
+}
 else if (mode === 'verify') {
   changed()
   release()
   parity()
-} else {
+}
+else {
   throw new Error(`Unknown intelligence verify mode: ${mode}`)
 }
 

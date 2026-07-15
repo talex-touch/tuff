@@ -97,7 +97,7 @@ function matchesKeyword(action, keyword) {
   if (action.kind === 'internal')
     return true
   const lower = keyword.toLowerCase()
-  return action.keywords?.some((item) => item.toLowerCase().includes(lower))
+  return action.keywords?.some(item => item.toLowerCase().includes(lower))
     || action.title.toLowerCase().includes(lower)
     || action.subtitle.toLowerCase().includes(lower)
 }
@@ -156,10 +156,6 @@ async function requestShellPermissionState() {
     logger?.warn?.('[touch-snipaste] Failed to request permission')
     return { granted: false, reason: 'permission-request-failed' }
   }
-}
-
-async function requestShellPermission() {
-  return (await requestShellPermissionState()).granted
 }
 
 function buildInfoItem({ id, featureId, title, subtitle, meta }) {
@@ -240,7 +236,7 @@ function normalizeAction(action, source) {
     ? action.subtitle.trim()
     : (args.length > 0 ? args.join(' ') : '')
   const keywords = Array.isArray(action.keywords)
-    ? action.keywords.filter((item) => typeof item === 'string' && item.trim())
+    ? action.keywords.filter(item => typeof item === 'string' && item.trim())
     : []
 
   if (source === 'custom' && args.length === 0 && normalizedArgs.ok)
@@ -291,7 +287,7 @@ async function readSettings() {
       try {
         return JSON.parse(settings)
       }
-      catch (error) {
+      catch {
         logger?.warn?.('[touch-snipaste] Failed to parse settings.json')
         return null
       }
@@ -299,7 +295,7 @@ async function readSettings() {
     if (typeof settings === 'object')
       return settings
   }
-  catch (error) {
+  catch {
     return null
   }
   return null
@@ -310,13 +306,13 @@ async function loadCustomActions() {
   if (!settings || !Array.isArray(settings.actions))
     return []
   return settings.actions
-    .map((action) => normalizeAction(action, 'custom'))
+    .map(action => normalizeAction(action, 'custom'))
     .filter(Boolean)
 }
 
 async function resolveActions() {
-  const internal = INTERNAL_ACTIONS.map((action) => normalizeAction(action, 'internal')).filter(Boolean)
-  const builtins = BUILTIN_ACTIONS.map((action) => normalizeAction(action, 'builtin')).filter(Boolean)
+  const internal = INTERNAL_ACTIONS.map(action => normalizeAction(action, 'internal')).filter(Boolean)
+  const builtins = BUILTIN_ACTIONS.map(action => normalizeAction(action, 'builtin')).filter(Boolean)
   const custom = await loadCustomActions()
   return [...internal, ...builtins, ...custom]
 }
@@ -472,7 +468,7 @@ const pluginLifecycle = {
         subtitle: '命令行指令需 Snipaste 已运行才会生效',
       }))
 
-      actions.filter((action) => matchesKeyword(action, keyword)).forEach((action) => {
+      actions.filter(action => matchesKeyword(action, keyword)).forEach((action) => {
         const itemCapability = action.invalidReason
           ? { status: 'blocked', reason: action.invalidReason }
           : capability
@@ -515,7 +511,7 @@ const pluginLifecycle = {
         return
 
       const actions = await resolveActions()
-      const action = actions.find((entry) => entry.key === actionId)
+      const action = actions.find(entry => entry.key === actionId)
       if (!action)
         return
 

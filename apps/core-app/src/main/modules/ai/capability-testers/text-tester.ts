@@ -46,7 +46,9 @@ export class GrammarCheckTester extends BaseCapabilityTester<
 > {
   readonly capabilityType = 'grammar-check'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceGrammarCheckPayload> {
+  async generateTestPayload(
+    input: CapabilityTestPayload
+  ): Promise<IntelligenceGrammarCheckPayload> {
     return {
       text: input.userInput || 'This are a short sentence with grammar mistake.',
       language: 'en',
