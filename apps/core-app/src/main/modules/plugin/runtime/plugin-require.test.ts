@@ -31,25 +31,28 @@ describe('createPluginRequire', () => {
     expectDenied(() => pluginRequire('./native-addon.node'), './native-addon.node')
   })
 
-  it('denies dangerous Node built-ins (RCE / FS / raw network)', () => {
+  it('denies raw-network / vm / introspection built-ins official plugins never use', () => {
     const pluginRequire = createPluginRequire('test-plugin')
 
-    expectDenied(() => pluginRequire('child_process'), 'child_process')
-    expectDenied(() => pluginRequire('node:child_process'), 'node:child_process')
-    expectDenied(() => pluginRequire('fs'), 'fs')
-    expectDenied(() => pluginRequire('node:fs/promises'), 'node:fs/promises')
     expectDenied(() => pluginRequire('net'), 'net')
-    expectDenied(() => pluginRequire('os'), 'os')
+    expectDenied(() => pluginRequire('node:net'), 'node:net')
+    expectDenied(() => pluginRequire('http'), 'http')
+    expectDenied(() => pluginRequire('tls'), 'tls')
     expectDenied(() => pluginRequire('vm'), 'vm')
-    expectDenied(() => pluginRequire('process'), 'process')
+    expectDenied(() => pluginRequire('inspector'), 'inspector')
   })
 
-  it('allows safe utility built-ins', () => {
+  it('allows utility + plugin-used built-ins (child_process/fs/os by design)', () => {
     const pluginRequire = createPluginRequire('test-plugin')
 
     expect(pluginRequire('path')).toBeTruthy()
     expect(pluginRequire('node:url')).toBeTruthy()
     expect(pluginRequire('util')).toBeTruthy()
+    // Official plugins legitimately use these; process isolation (C1-B) is the
+    // real fix, not a require blacklist that would break them.
+    expect(pluginRequire('node:child_process')).toBeTruthy()
+    expect(pluginRequire('node:fs')).toBeTruthy()
+    expect(pluginRequire('node:os')).toBeTruthy()
   })
 
   it('keeps worker_threads available through the instrumented wrapper', () => {
