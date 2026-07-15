@@ -19,6 +19,31 @@ const DENIED_MODULE_PREFIXES = [
   'extract-file-icon/'
 ]
 
+// Dangerous Node built-ins the Prelude must never require directly. Plugins get
+// their capabilities through the injected SDK (http/storage/clipboard/...), so
+// direct access to these is unnecessary and is the most direct RCE / arbitrary
+// filesystem / raw network escape. `worker_threads` is intentionally omitted —
+// it is handled separately via the instrumented wrapper in createPluginRequire.
+const DENIED_NODE_BUILTINS = new Set([
+  'child_process',
+  'fs',
+  'fs/promises',
+  'net',
+  'dgram',
+  'tls',
+  'http',
+  'https',
+  'http2',
+  'os',
+  'vm',
+  'cluster',
+  'module',
+  'inspector',
+  'repl',
+  'v8',
+  'process'
+])
+
 const instrumentedWorkerThreadsModuleCache = new Map<string, typeof import('node:worker_threads')>()
 
 export class PluginRuntimeDeniedModuleError extends Error {
@@ -47,12 +72,20 @@ function isNativeAddonRequest(moduleId: string): boolean {
   return normalized.endsWith('.node') || normalized.includes('.node/')
 }
 
+function isDeniedNodeBuiltin(moduleId: string): boolean {
+  const bare = stripQueryAndHash(moduleId).replace(/^node:/, '')
+  return DENIED_NODE_BUILTINS.has(bare)
+}
+
 function isDeniedModuleId(moduleId: string): boolean {
   const normalized = normalizeModuleId(moduleId)
   if (DENIED_MODULE_EXACT_IDS.has(normalized)) {
     return true
   }
   if (DENIED_MODULE_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
+    return true
+  }
+  if (isDeniedNodeBuiltin(normalized)) {
     return true
   }
   return isNativeAddonRequest(normalized)

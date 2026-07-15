@@ -31,6 +31,27 @@ describe('createPluginRequire', () => {
     expectDenied(() => pluginRequire('./native-addon.node'), './native-addon.node')
   })
 
+  it('denies dangerous Node built-ins (RCE / FS / raw network)', () => {
+    const pluginRequire = createPluginRequire('test-plugin')
+
+    expectDenied(() => pluginRequire('child_process'), 'child_process')
+    expectDenied(() => pluginRequire('node:child_process'), 'node:child_process')
+    expectDenied(() => pluginRequire('fs'), 'fs')
+    expectDenied(() => pluginRequire('node:fs/promises'), 'node:fs/promises')
+    expectDenied(() => pluginRequire('net'), 'net')
+    expectDenied(() => pluginRequire('os'), 'os')
+    expectDenied(() => pluginRequire('vm'), 'vm')
+    expectDenied(() => pluginRequire('process'), 'process')
+  })
+
+  it('allows safe utility built-ins', () => {
+    const pluginRequire = createPluginRequire('test-plugin')
+
+    expect(pluginRequire('path')).toBeTruthy()
+    expect(pluginRequire('node:url')).toBeTruthy()
+    expect(pluginRequire('util')).toBeTruthy()
+  })
+
   it('keeps worker_threads available through the instrumented wrapper', () => {
     const pluginRequire = createPluginRequire('test-plugin')
 
