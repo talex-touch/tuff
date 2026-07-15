@@ -128,49 +128,65 @@ import { formatResult } from "./_shared/format";
 插件可通过 `context.utils.intelligence` 或 `context.utils.plugin.intelligence` 调用 AI 能力，并读取 capability/provider/model 发现信息。发现接口是只读能力，用于在 Alfred / uTools 类插件体验里先判断入口是否可用，再决定展示动作或降级说明。
 
 ```typescript
-export default {
-  async onInit(context) {
-    const { intelligence } = context.utils;
-
-    const status = await intelligence.getCapabilityStatus({
-      capabilityId: "text.chat",
-    });
-    const providers = await intelligence.getProviderModelOptions({
-      capabilityId: "text.chat",
-    });
-
-    if (!status.available) {
-      context.utils.logger.warn(
-        `text.chat unavailable: ${status.reason ?? "no provider"}`,
-      );
-      return;
-    }
-
-    const result = await intelligence.text.chat(
-      {
-        messages: [{ role: "user", content: "Summarize current selection" }],
-      },
-      {
-        allowedProviderIds: providers
-          .filter((provider) => provider.available)
-          .map((provider) => provider.providerId),
-      },
+export async function summarizeCurrentSelection(context) {
+  const { intelligence, system } = context.utils;
+  const selection = await system.captureSelection();
+  if (!selection.text) {
+    context.utils.logger.warn(
+      `Selection unavailable: ${selection.issueCode ?? "empty"}`,
     );
+    return;
+  }
 
-    context.utils.logger.info(result.provider);
-  },
-};
+  const status = await intelligence.getCapabilityStatus({
+    capabilityId: "text.chat",
+  });
+  const providers = await intelligence.getProviderModelOptions({
+    capabilityId: "text.chat",
+  });
+
+  if (!status.available) {
+    context.utils.logger.warn(
+      `text.chat unavailable: ${status.reason ?? "no provider"}`,
+    );
+    return;
+  }
+
+  return await intelligence.text.chat(
+    {
+      messages: [
+        {
+          role: "user",
+          content: `Summarize the current selection:\n\n${selection.text}`,
+        },
+      ],
+    },
+    {
+      allowedProviderIds: providers
+        .filter((provider) => provider.available)
+        .map((provider) => provider.providerId),
+    },
+  );
+}
 ```
 
 `getCapabilityStatus()`、`getProviderModelOptions()` 与 `intelligence.text.*` / `intelligence.image.*` / `intelligence.audio.*` 等 domain wrapper 会走 typed Intelligence transport，并携带当前插件 `sdkapi` marker；`chat` 旧别名仍保持 hard-cut，不会恢复。
 
+`system.captureSelection()` / `captureSelectedText()` 需要 manifest 声明并获准 `clipboard.read`。宿主先验证插件 identity，再复用 OmniPanel 的选区服务：macOS 优先 AXSelectedText，其余情况使用可恢复剪贴板快照的复制 fallback。空选区、禁用与不支持平台返回 `issueCode` / `issueMessage` / `limitations`，不会把空字符串伪装成成功；选中文本不得写入普通日志、持久历史或审计 metadata。
+
 宿主的默认 Nexus provider 通过已认证 `/api/v1/intelligence/stream` 消费真实 provider token SSE；delta/usage/end 会保留 Nexus 实际 `traceId/provider/model`，最终 latency 位于 `end.metadata.latency`。整次调用只发一个 start event，它可能携带首选 provider 的 provisional routing metadata；候选 provider 只有在首个可见 delta 前失败时才可切换，任何 delta 输出后失败都会直接进入 error，不能把另一个 provider 的回答拼接到已有前缀。官方 `touch-intelligence` 的 stream-to-`contextInvoke()` compatibility 也只允许在 widget 展示首个 delta 前发生，并会在 feature query/send/retry supersede 时调用旧 `StreamController.cancel()`；晚返回的旧 controller 也会自取消。插件必须按标准 stream event 渲染，不能依赖 delta 数量、切分粒度或 start event 作为最终路由结论。
 
-ContextHygiene 采用宿主所有权边界：插件 facade 不暴露 raw `contextPrepareTurn()`、`contextCreateCompressionSnapshot()`、`contextListCompressionSnapshots()`、`contextGetLatestCompressionSnapshot()`、`contextListMemories()`、`contextSaveMemory()`、`contextReplaceMemory()`、`contextSetMemoryEnabled()` 或 `contextDeleteMemory()`。对话插件应使用 `contextInvoke()` / `contextStream()`，只提交当前输入、new/continue/stateless intent、基础 payload 与 provider 选项；宿主会忽略不可信 user/assistant history，完成最终 Memory 复核与统一消息组装，并只回传 metadata-only context 摘要。`contextEvaluateMemory()` 和安全 checkpoint/package-log 查询仍可用；绕过 facade 直接调用 host-only typed event 会得到 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。
+ContextHygiene 采用宿主所有权边界：插件 facade 不暴露 raw `contextPrepareTurn()`、`contextListCheckpoints()`、`contextListPackageLogs()`、CompressionSnapshot 或 Memory 管理方法。checkpoint 可含 summary/reason/任意 metadata，package log 还允许无 session filter 并携带 trace/source/item metadata；在 session/record 没有 verified plugin owner 前，`metadata-only` 不能作为跨 actor 授权。对话插件只使用 `contextInvoke()` / `contextStream()` 提交当前输入与 new/continue/stateless intent；宿主完成最终 Memory 复核、预算和消息组装，仅回传安全 context summary。纯策略预览 `contextEvaluateMemory()` 仍可用；raw host-only event 在 SQLite/service 前返回 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。
 
 Intelligence quota/usage control plane 同样属于宿主：插件 facade 不暴露 `getQuota()`、`setQuota()`、`deleteQuota()`、`getAllQuotas()`、`checkQuota()` 或 `getCurrentUsage()`，绕过 facade 发送对应 typed event 也会得到 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。插件不应自行选择 quota caller；普通 `invoke()` / `stream()` 以及 provider-backed compatibility routes `chatLangChain()` / `ttsSpeak()` 的 `metadata.caller` 都会在宿主 transport boundary 强制绑定为 `plugin:<manifest plugin id>`，缺失或伪造 caller 不能绕过或跨插件计费。TTS cache 同时按 caller 隔离，不能向另一插件复用 trace/result。
 
-`intelligence.basic` 只覆盖普通受治理的 AI 能力；自主执行必须额外声明并获授高风险 `intelligence.agents`。该门禁覆盖 generic `invoke("agent.run")` / `invoke("workflow.execute")`、对应 stream、`agentSessionStart({ autoRunGraph: true })` 与 `workflowRun()`；普通 `text.chat`、非自动运行的 session 创建和 host caller 不受影响。permission runtime 不可用或 grant 缺失时分别返回 `INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE` / `INTELLIGENCE_AGENTS_PERMISSION_DENIED`，且必须在 Agent runtime/provider/tool 执行前失败。
+Daily/monthly usage aggregation treats the canonical caller id as opaque：`plugin:<id>`（including ids that themselves contain `:`）is persisted byte-for-byte, so plugin quota counters cannot disappear through delimiter parsing.
+
+`intelligence.basic` 只覆盖普通受治理的 AI 能力；高层自主执行 `invoke("agent.run")` / `invoke("workflow.execute")` 及对应 stream 必须额外声明并获授高风险 `intelligence.agents`。低层 `agentSession*`、`agentPlan/Execute/Reflect`、`agentTool*` 与持久化 `workflowList/Get/Save/Delete/Run/History/ReviewUpdate` 都属于宿主 control plane：插件 facade 不暴露，raw typed request/stream 在任何读取、修改、运行、订阅或 provider/tool 副作用前返回 `INTELLIGENCE_HOST_ONLY_CAPABILITY`。高层 `intelligence.agent.run()` / `intelligence.workflow.execute()` 仍可用；普通 `text.chat` 和 host caller 不受影响。permission runtime 不可用或 grant 缺失时分别返回 `INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE` / `INTELLIGENCE_AGENTS_PERMISSION_DENIED`。
+
+Autonomous plugin execution retains the same actor identity after permission approval：generic `agent.run` / `workflow.execute` binds caller at the verified invoke/stream boundary, then propagates it through internal workflow model/context calls and DeepAgent config/adapter metadata. A nested `metadata.caller` cannot replace the transport-authenticated plugin caller；host-owned low-level session/workflow APIs preserve their existing host metadata semantics.
+
+Host-owned persisted/direct workflows retain self-governed DeepAgent prompt/agent provider checks when they execute with a canonical non-host caller：each call checks quota before runtime config/adapter work and writes prompt-free usage/failure audit. This is defense in depth for host orchestration, not a plugin registry API. Generic plugin `agent.run` / `workflow.execute` remains outer-governed；its identity-bound in-memory marker prevents duplicate inner quota/audit while preserving provider selection, fallback, cache, result, and caller behavior.
 
 Provider diagnostic/admin surfaces 也不属于插件 SDK：`testProvider()`、`testCapability()`、`fetchModels()`、跨 caller audit/usage stats 与 `getLocalEnvironment()` 不可发现，raw typed event 同样 host-only。插件只使用 `getCapabilityStatus()`、`getProviderModelOptions()`、`getCapabilityTestMeta()` 做只读 capability discovery，再通过受治理 domain wrapper 调用；不得借宿主 provider test/fetch 绕过 network permission、消耗策略或读取本机工具/配置路径。
 

@@ -25,7 +25,7 @@ pnpm add @talex-touch/utils
 | ---------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
 | [Plugin Context](./plugin-context.zh.md)                   | `IPluginContext` / `context.utils`             | Canonical lifecycle capability facade            |
 | [Box SDK](./box.zh.md)                                     | `useBox()`                                     | 控制 CoreBox 窗口                                |
-| [Clipboard SDK](./clipboard.zh.md)                         | `useClipboard()`                               | 剪贴板读写和历史                                 |
+| [Clipboard SDK](./clipboard.zh.md)                         | `useClipboard()` / `system.captureSelection()` | 剪贴板、选中文本和历史                           |
 | [TempFile SDK](./temp-file.zh.md)                          | `useTempPluginFiles()`                         | 临时文件创建与清理                               |
 | [Storage SDK](./storage.zh.md)                             | `usePluginStorage()`                           | 插件数据持久化                                   |
 | [Download SDK](./download.zh.md)                           | `useDownloadSdk()`                             | 下载任务管理                                     |

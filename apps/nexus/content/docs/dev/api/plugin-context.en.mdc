@@ -29,6 +29,7 @@ quickActions,
 quickOps,
 intelligence,
 screenshot,
+system,
 i18n,
 lexicon,
 power,
@@ -51,6 +52,7 @@ openUrl
         quickOps,
         intelligence,
         screenshot,
+        system,
         i18n,
         lexicon,
         power,
@@ -81,6 +83,7 @@ openUrl
 | `clipboard`, `storage`, `secret` | Clipboard, plugin data, and protected credentials    | [Clipboard](./clipboard.en.md), [Storage](./storage.en.md)           |
 | `intelligence`                   | AI capability discovery, invoke, and stream          | [Intelligence](./intelligence.en.md)                                 |
 | `screenshot`                     | Permission-gated display, cursor, and region capture | [Screenshot](./screenshot.en.md)                                     |
+| `system`                         | Active app and permission-gated selected text        | [Clipboard](./clipboard.en.md)                                       |
 | `i18n`, `lexicon`                | Host locale and plugin-scoped Domain Lexicon         | [Localization](./i18n.en.md)                                         |
 | `quickActions`, `quickOps`       | Global actions and bounded built-in tools            | [Quick Actions](./quick-actions.en.md), [QuickOps](./quickops.en.md) |
 | `divisionBox`, `channel`         | Independent windows and plugin transport             | [DivisionBox](./division-box.en.md), [Channel](./channel.en.md)      |
@@ -90,7 +93,7 @@ Protected capabilities still require the matching `manifest.json` permission dec
 
 ## Legacy global compatibility
 
-Existing `index.js` plugins may still read utilities such as `logger`, `clipboard`, `storage`, `feature`, `box`, and `openUrl` from `globalThis`. New lifecycle code should capture `context.utils` in `onInit` instead, because it exposes the complete typed SDK surface, including `secret`, `intelligence`, `screenshot`, `i18n`, and `lexicon`.
+Existing `index.js` plugins may still read utilities such as `logger`, `clipboard`, `storage`, `feature`, `box`, and `openUrl` from `globalThis`. New lifecycle code should capture `context.utils` in `onInit` instead, because it exposes the complete typed SDK surface, including `secret`, `intelligence`, `screenshot`, `system`, `i18n`, and `lexicon`.
 
 ---
 
