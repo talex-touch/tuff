@@ -38,12 +38,12 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
-    "@vitejs/plugin-vue": "^6.0.6",
-    "@vue/test-utils": "^2.4.9",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.4.11",
     "eslint": "catalog:dev",
     "typescript": "catalog:dev",
-    "vite": "^7.3.2",
-    "vitest": "^3.2.4",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7",
     "vue-tsc": "catalog:dev"
   }
 }

@@ -1,6 +1,6 @@
 [tools]
-node = "24"
-pnpm = "10"
+node = "24.18.0"
+pnpm = "10.34.4"
 
 [tasks."ai-docs:dev"]
 description = "Fast AI docs validation"

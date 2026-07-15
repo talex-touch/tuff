@@ -2,7 +2,7 @@
   "name": "@talex-touch/touch-emoji-symbols-plugin",
   "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.32.1",
+  "packageManager": "pnpm@10.34.4",
   "scripts": {
     "test": "node --test index.test.cjs",
     "build": "node ../../packages/tuff-cli/bin/tuff.js builder"

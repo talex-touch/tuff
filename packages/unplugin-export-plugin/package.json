@@ -89,7 +89,7 @@
   "devDependencies": {
     "@antfu/eslint-config": "^5.4.1",
     "@types/cli-progress": "^3.11.6",
-    "@types/debug": "^4.1.12",
+    "@types/debug": "^4.1.13",
     "@types/fs-extra": "^11.0.4",
     "@types/glob": "^8.1.0",
     "@types/node": "^18.19.130",
@@ -102,7 +102,7 @@
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.2",
-    "vitest": "^3.2.4"
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
   }
 }

@@ -62,7 +62,7 @@
     "zod": "^3.25.32"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260426.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
     "eslint": "^9.39.4",
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",

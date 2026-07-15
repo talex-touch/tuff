@@ -1,11 +1,11 @@
 # Included workspace roots
 packages:
-  - 'packages/*'                  # Shared SDK / utils / types / tuffex
+  - 'packages/*' # Shared SDK / utils / types / tuffex
   - packages/tuffex/packages/components # Nested tuffex component package
-  - 'apps/core-app'               # Electron main product
-  - 'apps/nexus'                  # Documentation & ecosystem site (Nuxt)
-  - 'apps/tuff-analyse'          # Internal Vite analysis dashboard
-  - 'plugins/*'                   # Official & example plugins
+  - 'apps/core-app' # Electron main product
+  - 'apps/nexus' # Documentation & ecosystem site (Nuxt)
+  - 'apps/tuff-analyse' # Internal Vite analysis dashboard
+  - 'plugins/*' # Official & example plugins
 
   # --- Exclusions ---
   # Archived / prototype apps not part of active workspace
@@ -15,8 +15,8 @@ packages:
   # Build artifacts (prevent pnpm from crawling generated files)
   - '!apps/**/out/**'
   - '!apps/**/dist/**'
-  - '!apps/**/.output/**'         # Nuxt output
-  - '!apps/**/.nuxt/**'           # Nuxt dev cache
+  - '!apps/**/.output/**' # Nuxt output
+  - '!apps/**/.nuxt/**' # Nuxt dev cache
   - '!apps/**/.vitepress/**'
   - '!packages/**/dist/**'
   - '!packages/**/.vitepress/**'
@@ -38,63 +38,63 @@ catalog:
   '@langchain/core': ^0.3.80
   '@langchain/langgraph': ^0.2.74
   '@langchain/openai': ^0.3.17
-  '@sentry/nuxt': ^10.50.0
+  '@sentry/nuxt': ^10.64.0
   '@sidebase/nuxt-auth': ^0.9.4
-  ai-elements-vue: ^1.4.0
+  ai-elements-vue: ^1.5.0
   echarts: ^6.1.0
   fighting-design: 0.25.1
   gsap: ^3.15.0
   jsqr: ^1.4.0
   jszip: ^3.10.1
-  markdown-it: ^14.1.1
-  mermaid: ^11.14.0
+  markdown-it: ^14.3.0
+  mermaid: ^11.16.0
   next-auth: ~4.21.1
   nodemailer: ^7.0.13
   ogl: ^1.0.11
   openapi-typescript: ^7.13.0
   qrcode: ^1.5.4
-  sass: ^1.99.0
+  sass: ^1.101.0
   simplex-noise: ^4.0.3
   theme-colors: ^0.1.0
   typeit: ^8.8.7
-  vitepress: 2.0.0-alpha.9
+  vitepress: 2.0.0-alpha.18
   vue-sonner: ^2.0.9
 
 catalogs:
   build:
-    '@nuxt/content': ^3.13.0
+    '@nuxt/content': ^3.15.0
     '@nuxt/devtools': ^2.7.0
-    '@nuxt/eslint': ^1.15.2
-    '@nuxt/kit': ^4.4.2
+    '@nuxt/eslint': 1.15.2
+    '@nuxt/kit': ^4.4.8
     '@nuxtjs/color-mode': ^3.5.2
-    '@nuxtjs/i18n': ^10.3.0
+    '@nuxtjs/i18n': ^10.4.0
     '@pinia/nuxt': ^0.11.3
-    '@unocss/eslint-config': ^66.6.8
-    '@unocss/nuxt': ^66.6.8
-    '@unocss/preset-typography': ^66.6.8
+    '@unocss/eslint-config': ^66.7.5
+    '@unocss/nuxt': ^66.7.5
+    '@unocss/preset-typography': ^66.7.5
     '@vite-pwa/nuxt': ^1.1.1
     '@vueuse/nuxt': ^13.9.0
-    nuxt: ^4.4.2
-    unocss: ^66.6.8
+    nuxt: ^4.4.8
+    unocss: ^66.7.5
     unplugin: ^2.3.11
-    vite: ^7.3.2
+    vite: ^7.3.6
   dev:
     '@antfu/eslint-config': ^5.4.1
-    '@cloudflare/workers-types': ^4.20260426.1
-    baseline-browser-mapping: ^2.10.23
+    '@cloudflare/workers-types': ^4.20260702.1
+    baseline-browser-mapping: ^2.10.42
     eslint: ^9.39.4
     eslint-plugin-format: ^1.5.0
     nitro-cloudflare-dev: ^0.2.2
     typescript: ^5.9.3
-    vue-tsc: ^3.2.7
-    webpack: ^5.106.2
-    wrangler: ^4.85.0
+    vue-tsc: ^3.3.6
+    webpack: ^5.108.4
+    wrangler: 4.107.1
   frontend:
-    '@vueuse/core': ^14.2.1
+    '@vueuse/core': ^14.3.0
     pinia: ^3.0.4
-    vue: ^3.5.33
+    vue: ^3.5.39
   icons:
-    '@iconify-json/carbon': ^1.2.20
+    '@iconify-json/carbon': ^1.2.24
     '@iconify-json/twemoji': ^1.2.5
   conflicts_next-auth_t4_24_14:
     next-auth: ~4.24.14

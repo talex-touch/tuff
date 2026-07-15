@@ -59,15 +59,15 @@
     "vue": "^3.5.27"
   },
   "dependencies": {
-    "@vueuse/core": "^14.2.1",
-    "dayjs": "^1.11.20",
-    "marked": "^17.0.4",
+    "@vueuse/core": "^14.3.0",
+    "dayjs": "^1.11.21",
+    "marked": "^17.0.6",
     "mathjs": "^15.2.0",
     "path-browserify": "^1.0.1",
-    "vue": "^3.5.33"
+    "vue": "^3.5.39"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^3.2.4",
-    "vitest": "^3.2.4"
+    "@vitest/coverage-v8": "^3.2.7",
+    "vitest": "^3.2.7"
   }
 }
