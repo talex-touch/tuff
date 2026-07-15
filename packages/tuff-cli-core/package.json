@@ -31,15 +31,15 @@
   "dependencies": {
     "@arrow-js/core": "1.0.6",
     "@talex-touch/utils": "workspace:*",
-    "@vue/compiler-sfc": "^3.5.33",
-    "chalk": "^5.6.0",
+    "@vue/compiler-sfc": "^3.5.39",
+    "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",
     "compressing": "^1.10.5",
-    "esbuild": "^0.28.0",
-    "fs-extra": "^11.3.1",
+    "esbuild": "^0.28.1",
+    "fs-extra": "^11.3.6",
     "glob": "^10.5.0",
     "pathe": "^1.1.2",
-    "vite": "^7.3.2"
+    "vite": "^7.3.6"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.6",
@@ -50,6 +50,6 @@
     "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   }
 }

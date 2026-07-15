@@ -6,11 +6,11 @@
   },
   "license": "MIT",
   "dependencies": {
-    "v-wave": "^3.0.4"
+    "v-wave": "^3.1.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.6",
-    "vite": "^7.3.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "vite": "^7.3.6",
     "vite-plugin-dts": "^4.5.4"
   }
 }

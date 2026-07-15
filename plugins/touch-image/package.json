@@ -47,16 +47,16 @@
     "@iconify-json/ri": "^1.2.10",
     "@talex-touch/unplugin-export-plugin": "^0.2.13",
     "@talex-touch/utils": "workspace:^",
-    "@unocss/preset-icons": "^66.6.8",
-    "@unocss/preset-uno": "^66.6.8",
-    "unocss": "^66.6.8",
-    "vue": "^3.5.33"
+    "@unocss/preset-icons": "^66.7.5",
+    "@unocss/preset-uno": "^66.7.5",
+    "unocss": "^66.7.5",
+    "vue": "^3.5.39"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.6",
+    "@vitejs/plugin-vue": "^6.0.7",
     "sass": "catalog:",
     "typescript": "^5.9.3",
-    "vite": "^7.3.2",
-    "vue-tsc": "^3.2.7"
+    "vite": "^7.3.6",
+    "vue-tsc": "^3.3.6"
   }
 }
