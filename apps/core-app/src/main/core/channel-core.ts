@@ -11,6 +11,7 @@ import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
 import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 import { resolveMissingHandlerPolicy } from './channel-missing-handler-policy'
+import { resolvePluginNameByWebContents } from '../modules/plugin/runtime/plugin-view-registry'
 import {
   RAW_MAIN_PROCESS_CHANNEL,
   RAW_PLUGIN_PROCESS_CHANNEL,
@@ -182,7 +183,13 @@ class TouchChannel {
       if (header && typeof header === 'object' && header !== null) {
         const { uniqueKey } = header as Record<string, unknown>
 
-        const pluginName = this.keyToNameMap.get(uniqueKey as string)
+        const declaredPluginName = this.keyToNameMap.get(uniqueKey as string)
+        // Verify the real sender. A compromised plugin view can omit or forge
+        // uniqueKey to masquerade as a trusted MAIN caller, so if the sender's
+        // webContents is a registered plugin surface, force it onto the PLUGIN
+        // channel (and its permission checks) regardless of what it declared.
+        const senderPluginName = resolvePluginNameByWebContents(e.sender?.id)
+        const pluginName = senderPluginName ?? declaredPluginName
 
         return {
           header: {

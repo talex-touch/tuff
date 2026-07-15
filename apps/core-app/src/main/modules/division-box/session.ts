@@ -31,6 +31,10 @@ import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from '../plugin/runtime/plugin-view-security-profile'
 import { buildPluginViewWebPreferences } from '../plugin/runtime/plugin-view-host'
 import {
+  registerPluginWebContents,
+  unregisterPluginWebContents
+} from '../plugin/runtime/plugin-view-registry'
+import {
   createPluginViewNavigationPolicy,
   installPluginViewNavigationPolicy
 } from '../plugin/runtime/plugin-window-policy'
@@ -566,6 +570,14 @@ export class DivisionBoxSession {
     this.uiView = new WebContentsView({ webPreferences })
     if (navigationPolicy) {
       installPluginViewNavigationPolicy(this.uiView.webContents, navigationPolicy)
+    }
+    if (plugin) {
+      // Register this plugin surface so the channel layer can verify its origin.
+      const pluginViewWebContentsId = this.uiView.webContents.id
+      registerPluginWebContents(pluginViewWebContentsId, plugin.name)
+      this.uiView.webContents.once('destroyed', () => {
+        unregisterPluginWebContents(pluginViewWebContentsId)
+      })
     }
     metrics.viewCreate = performance.now() - viewCreateStart
     this.attachedPlugin = plugin ?? null
