@@ -40,6 +40,10 @@ import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from '../../plugin/runtime/plugin-view-security-profile'
 import { buildPluginViewWebPreferences } from '../../plugin/runtime/plugin-view-host'
 import {
+  registerPluginWebContents,
+  unregisterPluginWebContents
+} from '../../plugin/runtime/plugin-view-registry'
+import {
   createPluginViewNavigationPolicy,
   installPluginViewNavigationPolicy
 } from '../../plugin/runtime/plugin-window-policy'
@@ -1473,6 +1477,15 @@ export class WindowManager {
     const view = (this.uiView = new WebContentsView({ webPreferences }))
     if (navigationPolicy) {
       installPluginViewNavigationPolicy(view.webContents, navigationPolicy)
+    }
+    if (plugin) {
+      // Register this plugin surface so the channel layer can verify its origin
+      // and stop it from masquerading as a first-party (MAIN) caller.
+      const pluginViewWebContentsId = view.webContents.id
+      registerPluginWebContents(pluginViewWebContentsId, plugin.name)
+      view.webContents.once('destroyed', () => {
+        unregisterPluginWebContents(pluginViewWebContentsId)
+      })
     }
     metrics.viewCreate = performance.now() - viewCreateStart
     this.attachedPlugin = plugin ?? null
