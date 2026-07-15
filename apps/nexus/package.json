@@ -59,8 +59,7 @@
     "ogl": "catalog:",
     "simplex-noise": "catalog:",
     "theme-colors": "^0.1.0",
-    "typeit": "catalog:",
-    "vue-sonner": "catalog:"
+    "typeit": "catalog:"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
