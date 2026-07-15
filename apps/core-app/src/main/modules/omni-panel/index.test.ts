@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
   getTuffTransportMainMock,
+  getCoreBoxWindowMock,
   loggerWarnMock,
   touchWindowInstances,
   accessibilityClientMock,
@@ -17,6 +18,7 @@ const {
     sendTo: vi.fn(),
     sendToWindow: vi.fn()
   })),
+  getCoreBoxWindowMock: vi.fn(() => null),
   loggerWarnMock: vi.fn(),
   touchWindowInstances: [] as Array<{
     window: {
@@ -71,6 +73,10 @@ vi.mock('electron', () => ({
     readText: vi.fn(() => ''),
     availableFormats: vi.fn(() => []),
     readBuffer: vi.fn(() => Buffer.from('')),
+    readImage: vi.fn(() => ({
+      isEmpty: () => true,
+      toPNG: () => Buffer.from('')
+    })),
     clear: vi.fn(),
     writeBuffer: vi.fn()
   },
@@ -198,7 +204,7 @@ vi.mock('../storage', () => ({
 }))
 
 vi.mock('../box-tool/core-box/window', () => ({
-  getCoreBoxWindow: vi.fn(() => null)
+  getCoreBoxWindow: getCoreBoxWindowMock
 }))
 
 vi.mock('../../core/eventbus/touch-event', async (importOriginal) => {
@@ -552,7 +558,6 @@ describe('OmniPanel smoke', () => {
       panelWindow: {
         window: { hide: () => void; isVisible: () => boolean; isDestroyed: () => boolean }
       }
-      isVisible: boolean
     }
 
     await module.ensureWindow()
@@ -565,12 +570,10 @@ describe('OmniPanel smoke', () => {
     expect(blurHandler).toBeTypeOf('function')
 
     module.panelWindow.window.isVisible = () => true
-    module.isVisible = true
     panel.window.hide.mockClear()
     blurHandler?.()
 
     expect(panel.window.hide).toHaveBeenCalledTimes(1)
-    expect(module.isVisible).toBe(false)
   })
 
   it('supports show -> execute builtin -> hide flow', async () => {
@@ -865,57 +868,138 @@ describe('OmniPanel execute failure paths', () => {
 })
 
 describe('OmniPanel shortcut and input-hook guards', () => {
-  it('falls back to toggle immediately when shortcut key map is unavailable', () => {
+  it('opens CoreBox Context Actions immediately when shortcut key map is unavailable', () => {
     const module = new OmniPanelModule() as unknown as {
       shortcutHoldEnabled: boolean
       inputHookKeys: null
       inputHook: null
       handleShortcutPressed: () => void
-      toggle: (options: { captureSelection: boolean; source: string }) => void
+      openCoreBoxContextActions: (source: 'shortcut') => Promise<void>
       syncInputHookState: () => void
-      shouldCaptureSelection: () => boolean
     }
 
-    const toggleMock = vi.fn()
+    const openContextActions = vi.fn(async () => {})
     module.shortcutHoldEnabled = true
     module.inputHookKeys = null
     module.inputHook = null
-    module.toggle = toggleMock as unknown as (options: {
-      captureSelection: boolean
-      source: string
-    }) => void
+    module.openCoreBoxContextActions = openContextActions
     module.syncInputHookState = vi.fn()
-    module.shouldCaptureSelection = vi.fn(() => true)
 
     module.handleShortcutPressed()
-    expect(toggleMock).toHaveBeenCalledWith({ captureSelection: true, source: 'shortcut' })
+
+    expect(openContextActions).toHaveBeenCalledWith('shortcut')
   })
 
-  it('degrades shortcut capture when accessibility capture is unavailable', () => {
-    const module = new OmniPanelModule() as unknown as {
-      shortcutHoldEnabled: boolean
-      inputHookKeys: null
-      inputHook: null
-      handleShortcutPressed: () => void
-      toggle: (options: { captureSelection: boolean; source: string }) => void
-      syncInputHookState: () => void
-      shouldCaptureSelection: () => boolean
+  it('forwards selected text to CoreBox without reading a clipboard image', async () => {
+    const { clipboard } = await import('electron')
+    getCoreBoxWindowMock.mockReturnValueOnce({
+      window: { id: 77, isDestroyed: () => false }
+    } as never)
+
+    const transport = {
+      sendToWindow: vi.fn(
+        async (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) =>
+          undefined
+      )
     }
+    const module = new OmniPanelModule() as unknown as {
+      transport: typeof transport
+      captureSelectionText: () => Promise<{
+        text: string
+        supportLevel: 'supported'
+      }>
+      hide: () => void
+      openCoreBoxContextActions: (source: 'shortcut') => Promise<void>
+    }
+    module.transport = transport
+    module.captureSelectionText = vi.fn(async () => ({
+      text: 'selected text',
+      supportLevel: 'supported' as const
+    }))
+    module.hide = vi.fn()
 
-    const toggleMock = vi.fn()
-    module.shortcutHoldEnabled = true
-    module.inputHookKeys = null
-    module.inputHook = null
-    module.toggle = toggleMock as unknown as (options: {
-      captureSelection: boolean
-      source: string
-    }) => void
-    module.syncInputHookState = vi.fn()
-    module.shouldCaptureSelection = vi.fn(() => false)
+    await module.openCoreBoxContextActions('shortcut')
 
-    module.handleShortcutPressed()
+    const contextCall = transport.sendToWindow.mock.calls.find(
+      ([, event]) =>
+        typeof (event as { toEventName?: () => string }).toEventName === 'function' &&
+        (event as { toEventName: () => string }).toEventName().includes('context-actions')
+    )
+    expect(contextCall?.[2]).toMatchObject({
+      input: {
+        type: 'text',
+        source: 'selected-text',
+        content: 'selected text',
+        available: true
+      },
+      context: {
+        mode: 'context-actions',
+        inputType: 'text',
+        source: 'selected-text',
+        available: true
+      }
+    })
+    expect(clipboard.readImage).not.toHaveBeenCalled()
+  })
 
-    expect(toggleMock).toHaveBeenCalledWith({ captureSelection: false, source: 'shortcut' })
+  it('forwards clipboard image context when no selected text is captured', async () => {
+    const { clipboard } = await import('electron')
+    vi.mocked(clipboard.readImage).mockReturnValueOnce({
+      isEmpty: () => false,
+      toPNG: () => Buffer.from('image-bytes')
+    } as never)
+    getCoreBoxWindowMock.mockReturnValueOnce({
+      window: { id: 77, isDestroyed: () => false }
+    } as never)
+
+    const transport = {
+      sendToWindow: vi.fn(
+        async (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) =>
+          undefined
+      )
+    }
+    const module = new OmniPanelModule() as unknown as {
+      transport: typeof transport
+      captureSelectionText: () => Promise<{
+        text: string
+        supportLevel: 'best_effort'
+        issueCode: 'empty'
+        issueMessage: string
+      }>
+      hide: () => void
+      openCoreBoxContextActions: (source: 'shortcut') => Promise<void>
+    }
+    module.transport = transport
+    module.captureSelectionText = vi.fn(async () => ({
+      text: '',
+      supportLevel: 'best_effort' as const,
+      issueCode: 'empty' as const,
+      issueMessage: 'No selected text'
+    }))
+    module.hide = vi.fn()
+
+    await module.openCoreBoxContextActions('shortcut')
+
+    const contextCall = transport.sendToWindow.mock.calls.find(
+      ([, event]) =>
+        typeof (event as { toEventName?: () => string }).toEventName === 'function' &&
+        (event as { toEventName: () => string }).toEventName().includes('context-actions')
+    )
+    expect(contextCall?.[2]).toMatchObject({
+      input: {
+        type: 'image',
+        source: 'clipboard-image',
+        available: true,
+        mimeType: 'image/png',
+        content: 'data:image/png;base64,aW1hZ2UtYnl0ZXM='
+      },
+      context: {
+        mode: 'context-actions',
+        inputType: 'image',
+        source: 'clipboard-image',
+        available: true
+      }
+    })
   })
 
   it('re-arms and triggers shortcut when combo already active long enough', () => {
@@ -926,25 +1010,22 @@ describe('OmniPanel shortcut and input-hook guards', () => {
       shortcutComboStartedAt: number | null
       shortcutTriggerArmed: boolean
       handleShortcutPressed: () => void
-      toggle: (options: { captureSelection: boolean; source: string }) => void
+      openCoreBoxContextActions: (source: 'shortcut') => Promise<void>
     }
 
-    const triggerMock = vi.fn()
+    const triggerMock = vi.fn(async () => {})
     module.shortcutHoldEnabled = true
     module.inputHookKeys = { P: 25 }
     module.shortcutComboActive = true
     module.shortcutComboStartedAt = Date.now() - 500
     module.shortcutTriggerArmed = false
-    module.toggle = triggerMock as unknown as (options: {
-      captureSelection: boolean
-      source: string
-    }) => void
+    module.openCoreBoxContextActions = triggerMock
 
     module.handleShortcutPressed()
 
     expect(module.shortcutTriggerArmed).toBe(false)
     expect(triggerMock).toHaveBeenCalledTimes(1)
-    expect(triggerMock).toHaveBeenCalledWith({ captureSelection: true, source: 'shortcut' })
+    expect(triggerMock).toHaveBeenCalledWith('shortcut')
   })
 
   it('cleans up input hook when both mouse long press and shortcut hold are disabled', () => {

@@ -171,6 +171,14 @@ vi.mock('../addon/system/main-window-provider', () => ({
 vi.mock('../addon/system/system-actions-provider', () => ({
   systemActionsProvider: { id: 'system-actions-provider', type: 'system', onSearch: vi.fn() }
 }))
+vi.mock('../addon/context-actions/context-actions-provider', () => ({
+  contextActionsProvider: {
+    id: 'context-actions',
+    type: 'system',
+    supportedInputTypes: [TuffInputType.Text, TuffInputType.Image],
+    onSearch: vi.fn()
+  }
+}))
 
 vi.mock('../core-box/window', () => ({
   windowManager: {

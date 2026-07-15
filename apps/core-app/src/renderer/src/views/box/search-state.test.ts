@@ -51,7 +51,7 @@ describe('CoreBox search state', () => {
     ).toBe('searching')
   })
 
-  it('shows retry and settings recovery when a query finishes without results', () => {
+  it('stays visually quiet when a query finishes without results', () => {
     expect(
       resolveCoreBoxSearchState({
         query: 'definitely-missing',
@@ -59,8 +59,8 @@ describe('CoreBox search state', () => {
         loading: false,
         recommendationPending: false,
         mode: BoxMode.INPUT
-      })?.kind
-    ).toBe('no-results')
+      })
+    ).toBeNull()
   })
 
   it('does not show a state when nothing is loading and no query exists', () => {
