@@ -6,6 +6,7 @@ Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
 - **基础操作**：读写剪贴板内容（文本、HTML、图片、文件）
 - **历史管理**：查询、搜索、删除剪贴板历史记录
 - **复制粘贴**：将内容复制到剪贴板并自动粘贴到当前活动应用
+- **选中文本**：读取当前活动应用的文本选区，并在 fallback 后恢复原剪贴板内容
 - **自动标签**：为文本内容打标签（URL、API Key、Token、账号/密码、邮箱），便于分类与匹配
 
 所有操作通过 TuffTransport 在主进程执行，避免 WebContents 焦点问题导致的剪贴板操作失败。
@@ -15,6 +16,7 @@ Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
 - `useClipboard()` 已切换到 `ClipboardEvents.*` 事件域（如 `getHistory`、`read`、`copyAndPaste`）。
 - Clipboard SDK 不再依赖 `clipboard:*` raw channel 事件作为主通道。
 - 插件代码必须使用 SDK / typed transport 入口。历史 `clipboard:*` raw channel 名称仅作为迁移参考，不再作为受支持的扩展面。
+- `system.captureSelection()` 使用 typed App/System event，要求 verified plugin 与 `clipboard.read`；不暴露 raw selection channel。
 
 ## 介绍
 
@@ -23,7 +25,7 @@ Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  import { useClipboard } from '@talex-touch/utils/plugin/sdk'
+  import { system, useClipboard } from '@talex-touch/utils/plugin/sdk'
   
   const clipboard = useClipboard()
   
@@ -36,6 +38,10 @@ code: |
   
   // 复制并粘贴到当前应用
   await clipboard.copyAndPaste({ text: 'Pasted content' })
+
+  // 读取当前活动应用的选中文本
+  const selection = await system.captureSelection()
+  if (!selection.text) console.warn(selection.issueCode)
 ---
 :::
 
@@ -49,6 +55,31 @@ code: |
 ---
 code: |
   const clipboard = useClipboard()
+---
+:::
+
+---
+
+## 选中文本捕获
+
+**system.captureSelection() / captureSelectedText()**
+
+读取当前活动应用的文本选区。宿主会在访问辅助功能 API、快捷键或剪贴板前验证插件 identity 与 `clipboard.read` 权限。macOS 优先使用 AXSelectedText；fallback 会保存全部剪贴板格式、发送平台复制快捷键并恢复原快照。
+
+返回值包含 `text`、`supportLevel`、`capturedAt`，以及可选的 `issueCode`、`issueMessage`、`limitations`。`empty`、`disabled`、`failed`、`unsupported` 都是显式非成功状态。不得把选中文本写入普通日志、持久历史或审计 metadata。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { system } from '@talex-touch/utils/plugin/sdk'
+
+  const result = await system.captureSelection()
+  if (!result.text) {
+    console.warn(result.issueCode, result.issueMessage)
+    return
+  }
+
+  // 仅在本次用户触发的动作中使用 result.text。
 ---
 :::
 

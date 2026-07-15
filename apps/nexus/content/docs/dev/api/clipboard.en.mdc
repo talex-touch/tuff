@@ -6,6 +6,7 @@ The Clipboard SDK lets plugins access system clipboard features, including:
 - **Basic operations**: read/write clipboard content (text, HTML, images, files)
 - **History management**: query, search, and delete clipboard history
 - **Copy & paste**: write content to clipboard and auto-paste into the active app
+- **Selected text**: capture the active app's current text selection without leaving clipboard mutations behind
 - **Automatic tags**: classify text content (URL, API Key, Token, account/password, email) for quick matching
 
 All operations are executed in the main process via TuffTransport to avoid WebContents focus issues.
@@ -15,6 +16,7 @@ All operations are executed in the main process via TuffTransport to avoid WebCo
 - `useClipboard()` now uses `ClipboardEvents.*` as the primary transport domain (`getHistory`, `read`, `copyAndPaste`, etc.).
 - Clipboard SDK no longer relies on `clipboard:*` raw channel events as the main path.
 - Plugin code must use the SDK/typed transport entry points. Historical raw `clipboard:*` channel names are migration references only, not a supported extension surface.
+- `system.captureSelection()` uses the typed App/System event and requires a verified plugin with `clipboard.read`; it does not expose a raw selection channel.
 
 ## Introduction
 
@@ -23,7 +25,7 @@ All operations are executed in the main process via TuffTransport to avoid WebCo
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
-  import { useClipboard } from '@talex-touch/utils/plugin/sdk'
+  import { system, useClipboard } from '@talex-touch/utils/plugin/sdk'
   
   const clipboard = useClipboard()
   
@@ -36,6 +38,10 @@ code: |
   
   // Copy and paste to active app
   await clipboard.copyAndPaste({ text: 'Pasted content' })
+
+  // Capture selected text from the active app
+  const selection = await system.captureSelection()
+  if (!selection.text) console.warn(selection.issueCode)
 ---
 :::
 
@@ -49,6 +55,31 @@ Returns a unified clipboard SDK instance.
 ---
 code: |
   const clipboard = useClipboard()
+---
+:::
+
+---
+
+## Selected Text Capture
+
+**system.captureSelection() / captureSelectedText()**
+
+Capture the current text selection from the active application. The host verifies plugin identity and the `clipboard.read` permission before touching accessibility APIs, shortcuts, or the clipboard. macOS prefers AXSelectedText; the fallback snapshots every clipboard format, issues the platform copy shortcut, and restores the snapshot.
+
+The result includes `text`, `supportLevel`, `capturedAt`, and optional `issueCode`, `issueMessage`, and `limitations`. Treat `empty`, `disabled`, `failed`, and `unsupported` as explicit non-success states. Do not write selected text to ordinary logs, persistent history, or audit metadata.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { system } from '@talex-touch/utils/plugin/sdk'
+
+  const result = await system.captureSelection()
+  if (!result.text) {
+    console.warn(result.issueCode, result.issueMessage)
+    return
+  }
+
+  // Use result.text only for the user-triggered action.
 ---
 :::
 

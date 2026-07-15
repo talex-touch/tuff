@@ -206,3 +206,324 @@ usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 ```ts
 usage: aggregateWorkflowUsage(run.outputs)
 ```
+
+## Scenario: Opaque Intelligence Caller Aggregation
+
+### Scope
+
+- Trigger: Intelligence audit logs are folded into day/month usage rows for quota enforcement and analytics.
+- Canonical plugin callers contain `:` (`plugin:<manifest id>`); caller ids are opaque values, not delimiter-encoded tuples.
+
+### Contract
+
+- Preserve caller ids byte-for-byte through grouping and DB upsert.
+- Use structured bucket fields for caller, period type, and period; never recover them with `split(":")`.
+- Every audit contributes to exactly one day and one month bucket.
+- Distinct callers such as `plugin:acme` and `plugin:acme:beta` remain distinct.
+- Aggregate requests, success/failure, prompt/completion/total tokens, cost, and weighted latency exactly.
+- `system` keeps system caller type; existing non-system callers keep plugin caller type.
+
+### Validation
+
+- Pure aggregation tests cover one-colon and multi-colon callers, system, separate buckets, totals, and weighted latency.
+- Focused diagnostics and lint must pass.
+- Quota code must query the same opaque caller id/caller type written by aggregation.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+const [caller, periodType, period] = key.split(":");
+```
+
+#### Correct
+
+```ts
+for (const { callerId, callerType, periodType, period, summary } of buckets) {
+  // persist structured fields directly
+}
+```
+
+## Scenario: Local Knowledge Context Budget Integrity
+
+### Scope
+
+- Trigger: changing local-knowledge search results, Context Builder packing, chunk token estimates, or retrieval metadata.
+- The host-owned `tokenBudget` is a hard upper bound for complete indexed chunks, not a target that the first result may exceed.
+
+### Contract
+
+- Skip every candidate whose addition would make aggregate `tokenEstimate` exceed the normalized budget, including the first candidate.
+- Continue scanning after an oversized candidate so later smaller hits remain eligible.
+- Do not truncate chunk content during packing; chunk identity, citation, and indexed text stay aligned.
+- If search is `ok` with hits but no complete chunk fits, return `degraded` with `degradedReason: "token-budget-exhausted"`, empty context/chunks/citations, and zero token estimate.
+- A genuine zero-hit search remains an `ok` empty result. Preserve upstream unavailable/degraded reasons.
+- Use the shared host-owned conservative estimator for ContextHygiene and local knowledge. Count contiguous ASCII runs as `ceil(codePoints / 4)`, each non-ASCII code point as at least one, and emoji more conservatively; do not reintroduce per-service UTF-16 `length / 4` copies.
+- Re-evaluate persisted turn/chunk content when mapping rows and expose `max(storedEstimate, currentContentEstimate)`. This is a read-time budget guard, not a SQLite rewrite.
+- Treat the result as tokenizer-independent budget governance only. Never document or bill it as an exact provider/model token count.
+- Allow aggregate overflow only through an explicit normal `current_input` admission. Never derive the exception from `items.length`, because a privacy-blocked current turn would transfer it to the first optional summary/turn/memory/retrieval item.
+- Normalize runtime token budgets before arithmetic: accept only finite numbers, floor and clamp them to at least 1, use the service's finite fallback for every other value, and never coerce numeric strings. ContextHygiene falls back to 1,600; local knowledge fails closed to 1.
+- Apply the same normalizer to storage-degraded `IntelligenceContextExecutionSummary` and Provider options metadata; the fallback path must never reintroduce `NaN`, infinity, or string coercion.
+
+### Validation
+
+- Focused tests put an oversized hit before a smaller hit and assert only the fitting hit and citation are returned within budget.
+- Focused tests make every hit oversized and assert the explicit empty degraded result without leaked chunk text.
+- Pure estimator tests cover whitespace, ASCII boundaries, CJK, emoji/ZWJ sequences, and mixed text.
+- Legacy-row regressions store a low CJK estimate, prove current content controls packing/package totals, and prove no update rewrites the historical row.
+- A privacy regression excludes a secret current input, presents an oversized safe legacy summary as the first optional source, and asserts empty package content plus metadata-only privacy/budget exclusions. A companion case keeps an oversized normal current input while pruning the optional summary.
+- Normalization regressions cover fractions, zero/negative, omitted/null/string, `NaN`, and both infinities; service tests assert finite persisted/returned budgets and fail-closed knowledge packing.
+- Degraded-summary regressions force preparation failure and assert malformed budgets become finite 1,600 in both the returned summary and Provider invocation metadata; a valid fraction still floors.
+- Existing dedupe, `maxChunks`, filtering, FTS failure, lint, and node type-check coverage must remain green.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (nextEstimate > budget && selected.length > 0) continue
+```
+
+#### Correct
+
+```ts
+if (nextEstimate > budget) continue
+```
+
+## Scenario: Assistant Floating-Ball Display Restore
+
+### Scope
+
+- Trigger: changing Assistant floating-ball position persistence, initial bounds, display selection, or desktop work-area handling.
+- Electron desktop coordinates may be negative when a display sits left of or above the primary display.
+
+### Contract
+
+- Only the canonical `{ x: -1, y: -1 }` pair means no saved position; every other finite pair is a persisted desktop coordinate.
+- Resolve a persisted position with `screen.getDisplayNearestPoint(savedPoint)`, not the current cursor display.
+- Resolve the unset/default position from `screen.getCursorScreenPoint()` and retain existing edge-padding/default-height placement.
+- Clamp the complete floating-ball bounds into the resolved display work area so removed displays and layout changes recover visibly.
+- Preserve size, opacity, debounced persistence, click behavior, and the existing settings schema.
+- After successful module initialization, register one shared handler for `display-added`, `display-removed`, and `display-metrics-changed`; remove that exact handler during teardown.
+- Display events must not create Assistant windows or overwrite the persisted position used to recover a temporarily disconnected display.
+- Reapply bounds to a live floating ball. Reanchor only a visible Voice Panel, without show, focus, or `panelOpened` broadcast side effects.
+
+### Validation
+
+- Focused tests cover a negative saved coordinate while the cursor is on another display, canonical unset placement, and off-work-area clamping.
+- Focused lifecycle tests assert all three listeners share handler identity, teardown removes them, and no live ball means no window creation.
+- Focused recovery tests assert removed-display clamping without config persistence and visible/hidden Voice Panel behavior without focus/show/broadcast side effects.
+- Main-process lint and node type-check must pass.
+- Code/focused tests do not replace real multi-display/HiDPI or current-version packaged evidence.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+const x = saved.x >= 0 ? saved.x : defaultX
+```
+
+#### Correct
+
+```ts
+const hasSavedPosition = saved.x !== -1 || saved.y !== -1
+const anchor = hasSavedPosition ? saved : screen.getCursorScreenPoint()
+const display = screen.getDisplayNearestPoint(anchor)
+```
+
+## Scenario: Mode-Isolated Renderer Surface Loading
+
+### Scope
+
+- Trigger: changing `AppEntrance.vue` or another renderer entry shared by mutually exclusive Electron window modes.
+- Static SFC imports enter the shared startup graph even when the active window mode can never render that surface.
+
+### Contract
+
+- Mode-exclusive Assistant surfaces use named `defineAsyncComponent(() => import(exactPath))` declarations; do not keep a static import of the same SFC.
+- Preserve template branch order, component tags, startup mode logging, and the behavior inside each surface.
+- Do not lazy-load latency-critical CoreBox/DivisionBox or unrelated window modes as part of an Assistant-only isolation change.
+- Do not add a loading overlay, remote fetch, preload bridge, duplicate registry, or dependency solely to split the chunk.
+
+### Validation
+
+- A focused source contract rejects static imports for each exact mode-exclusive path and requires its named dynamic declaration.
+- Run web type-check and targeted lint.
+- Run the production renderer build and confirm distinct JavaScript chunks for each surface; a source assertion alone does not prove Rollup output.
+- Chunk presence proves isolation wiring, not measured startup latency, packaged install-size reduction, or current-version visual evidence.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+import VoicePanel from './views/assistant/VoicePanel.vue'
+```
+
+#### Correct
+
+```ts
+const VoicePanel = defineAsyncComponent(
+  () => import('./views/assistant/VoicePanel.vue')
+)
+```
+
+## Scenario: Context Execution Degraded Secret Fallback
+
+### Scope
+
+- Trigger: changing host-owned `contextInvoke` / `contextStream`, ContextHygiene preparation, storage-degraded fallbacks, or current-only Provider payloads.
+- The availability fallback runs before durable privacy classification can be guaranteed, so it must enforce the same synchronous host secret policy itself.
+
+### Contract
+
+- Reuse the ContextHygiene classifier. Never copy its regex list into ContextExecution.
+- Classify raw input before constructing a degraded current-only payload. Unsafe input throws stable `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED` for invoke and stream.
+- Do not call the Provider, append an assistant turn, or include raw secret content in errors, logs, summaries, audit metadata, or recovery detail.
+- Safe input keeps the existing `context_prepare_failed` current-only fallback and caller/governance metadata.
+
+### Validation
+
+- Force preparation to fail before classification, then assert secret-bearing invoke and stream requests both reject and their Provider methods remain untouched.
+- Assert the surfaced error is stable and contains no secret value; retain the safe degraded-fallback regression.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+catch {
+  return assembler.currentOnly(request)
+}
+```
+
+#### Correct
+
+```ts
+catch {
+  if (!isContextInputProviderSafe(request.input))
+    throw new Error('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+  return assembler.currentOnly(request)
+}
+```
+
+## Scenario: Monotonic Context Privacy Classification
+
+### Scope
+
+- Trigger: changing `PrepareContextTurnInput.privacyLevel`, secret detection, turn persistence, redaction, or ContextPackage current-input admission.
+- A caller privacy hint may make safe content more private; it must never downgrade content the host classifies as secret.
+
+### Contract
+
+- Run host secret detection before honoring the caller hint. Detected secret always resolves to `privacyLevel: "secret"` regardless of explicit `normal` or `private`.
+- Redact secret content before SQLite writes and exclude it from ContextPackage with `secret-policy-blocked` metadata-only evidence.
+- Never include the raw secret in turn results, package logs, metadata, errors, or audit data.
+- Preserve explicit `private` for safe content, including canonical redaction and `private-policy-blocked` exclusion.
+- Keep one shared classifier for normal persistence and degraded Provider fallback. It must recognize credential-like `Bearer` values (at least 16 standard token characters) and JSON-looking three-segment JWTs.
+- Preserve bounded false-positive behavior: short placeholders such as `Bearer token` / `Bearer <token>` and generic dotted text such as `foo.bar.baz` remain safe.
+
+### Validation
+
+- Table-test explicit normal/private hints on secret-bearing input and assert secret classification, redacted persistence, exclusion, and raw-value absence across every serialized payload.
+- Keep a safe explicit-private control so the fix cannot erase valid caller privacy intent.
+- Credential classifier tests exercise realistic synthetic Bearer/JWT values through MemoryPolicy, turn persistence/package logging, and degraded invoke/stream; assert Provider isolation and raw-value absence.
+- Pair every expanded credential pattern with explicit placeholder/non-secret controls.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+const privacyLevel = input.privacyLevel ?? (containsSecret(input.input) ? 'secret' : 'normal')
+```
+
+#### Correct
+
+```ts
+const privacyLevel = containsSecret(input.input)
+  ? 'secret'
+  : (input.privacyLevel ?? 'normal')
+```
+
+## Scenario: Ollama NDJSON Stream Integrity
+
+### Scope
+
+- Trigger: changing `LocalProvider.chatStream()`, NetworkService stream chunk conversion, Ollama NDJSON framing, or terminal usage mapping.
+- Node transport chunks and UTF-8 code points are independent boundaries; neither may be treated as a complete string or JSON frame.
+
+### Contract
+
+- Use one stateful UTF-8 decoder for the entire response. Convert Buffer/Uint8Array/string adapter chunks to bytes before decoder writes and flush it exactly once at EOF.
+- Keep an independent newline buffer for Ollama NDJSON. Parse only complete lines during streaming, then process the final buffered line after decoder flush.
+- A final `done: true` line without trailing newline emits any content delta followed by exactly one terminal chunk carrying Ollama prompt/completion/total usage.
+- If Ollama omits `done`, emit one synthetic terminal chunk after all buffered text. Preserve the existing newline-terminated done and typed pre-output HTTP 404 compatibility fallback.
+- Treat the first non-empty Ollama delta as the provider-internal compatibility commit point. Compatibility fallback requires `NetworkHttpStatusError.status === 404` before that point; arbitrary parser/provider messages containing `404`, post-delta 404s, and every other error propagate unchanged without fallback deltas or synthetic success.
+- Do not claim built-in llama.cpp/GGUF management from this compatibility path; runtime binaries, model lifecycle UI, packaging, and device smoke need separate evidence.
+
+### Validation
+
+- Split synthetic Chinese and emoji bytes inside code points and split NDJSON at different boundaries; assert exact ordered text and no replacement character.
+- End a usage-bearing done frame without `\n`; assert final delta, exact usage, and a single done chunk.
+- Keep focused non-stream chat, model discovery, OCR, and 404 fallback coverage green.
+- Cover all sides of fallback classification: typed pre-output HTTP 404 returns compatibility chunks; a generic error message containing `404` propagates unchanged; post-delta typed 404 returns the original error, never calls compatibility, and emits no second-backend/done chunk.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+buffer += chunk.toString('utf8')
+```
+
+#### Correct
+
+```ts
+buffer += decoder.write(toStreamBuffer(chunk))
+// EOF: buffer += decoder.end()
+```
+
+## Scenario: Network Stream Cooldown Settlement
+
+### Scope
+
+- Trigger: changing `NetworkService.requestStream()`, stream transport conversion, cooldown/retry policy, or an AI provider that consumes the returned body.
+- A successful HTTP response object proves only that the stream opened; it does not prove the body completed.
+
+### Contract
+
+- Preserve fetch/open retry and HTTP status behavior. Do not retry a body failure after the stream has been handed to a consumer because visible bytes may already exist.
+- Defer guard success until the Node readable emits normal `end`. Apply the configured `autoResetOnSuccess` only then.
+- Record a readable `error` as exactly one guard failure and leave the same error observable to async iteration.
+- Treat early `close` without `end` or `error` as consumer cancellation: record neither success nor failure, so prior guard state remains unchanged.
+- Remove lifecycle listeners after the first terminal event and make policy settlement idempotent.
+
+### Validation
+
+- Prime one failure under `failureThreshold: 2`; opening an unconsumed stream must not reset it.
+- After one prior failure, yield a body chunk and then error; the consumer receives the error and the next same-key request is blocked without another fetch.
+- Fully consume a body and prove a later single failure does not activate threshold-two cooldown.
+- Destroy a stream early and prove the next failure is executed, then the following request is blocked: cancellation added no failure and cleared none.
+- Keep LocalProvider UTF-8/framing/fallback regressions green; downstream parser errors are provider failures, not transport body errors.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+const result = await openStream();
+guard.recordSuccess(key);
+return result;
+```
+
+#### Correct
+
+```ts
+stream.once("end", settleSuccess);
+stream.once("error", settleFailure);
+stream.once("close", cleanupWithoutSettlement);
+```
