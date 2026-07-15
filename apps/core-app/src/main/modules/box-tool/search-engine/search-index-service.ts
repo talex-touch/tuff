@@ -117,6 +117,7 @@ export interface SearchIndexServiceOptions {
    */
   directMode?: boolean
   logger?: SearchIndexRuntimeLogger
+  onCommitted?: (providerIds: readonly string[]) => void
 }
 
 export class SearchIndexService {
@@ -125,6 +126,7 @@ export class SearchIndexService {
   private pinyinPromise: Promise<typeof import('pinyin-pro')> | null = null
   private readonly directMode: boolean
   private readonly runtimeLogger: SearchIndexRuntimeLogger
+  private readonly onCommitted?: (providerIds: readonly string[]) => void
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
   private readonly logWindowMs = 12_000
   private readonly slowLogThresholdMs = 1_500
@@ -150,6 +152,7 @@ export class SearchIndexService {
   ) {
     this.directMode = options?.directMode ?? false
     this.runtimeLogger = options?.logger ?? noopSearchIndexRuntimeLogger
+    this.onCommitted = options?.onCommitted
   }
 
   async warmup(): Promise<void> {
@@ -336,6 +339,7 @@ export class SearchIndexService {
     }
 
     this.recordOperationLog('index', items.length, performance.now() - start)
+    this.onCommitted?.(items.map((item) => item.providerId))
   }
 
   async removeItems(itemIds: string[]): Promise<void> {
@@ -359,6 +363,7 @@ export class SearchIndexService {
       })
     }
     this.recordOperationLog('remove', itemIds.length, performance.now() - start)
+    this.onCommitted?.([])
   }
 
   async removeProviderItems(providerId: string, itemIds: string[]): Promise<number> {
@@ -405,6 +410,9 @@ export class SearchIndexService {
       performance.now() - start,
       `provider=${providerId}`
     )
+    if (removedItems > 0) {
+      this.onCommitted?.([providerId])
+    }
     return removedItems
   }
 

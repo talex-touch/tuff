@@ -23,7 +23,7 @@ import {
   CoreBoxRetainedEvents,
   DivisionBoxEvents
 } from '@talex-touch/utils/transport/events'
-import { hasWindow } from '@talex-touch/utils/env'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
@@ -52,6 +52,8 @@ interface SearchEndData {
 
 interface ExecuteSearchOptions {
   force?: boolean
+  preserveSelection?: boolean
+  refreshClipboard?: boolean
 }
 
 type BoxData = {
@@ -469,8 +471,14 @@ export function useSearch(
   let lastQueryAt = 0
   let oneShotQueryContext: TuffContext | undefined
   let programmaticQueryValue: string | null = null
+  let indexCommitRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  let indexCommitRefreshPending = false
+  let indexCommitStreamDisposed = false
+  let indexCommitStreamController: { cancel: () => void } | null = null
+  let indexCommitStreamRetryTimer: ReturnType<typeof setTimeout> | null = null
 
   const DUPLICATE_QUERY_WINDOW_MS = 200
+  const INDEX_COMMIT_REFRESH_INTERVAL_MS = 500
   function toActivations(
     state: ActivationState | IProviderActivate[] | null | undefined
   ): IProviderActivate[] | null {
@@ -773,10 +781,15 @@ export function useSearch(
   }
 
   async function executeSearch(options: ExecuteSearchOptions = {}): Promise<void> {
-    await refreshClipboardBeforeInputBuild()
+    if (options.refreshClipboard !== false) {
+      await refreshClipboardBeforeInputBuild()
+    }
     const inputs = buildQueryInputs()
     const queryContext = oneShotQueryContext
     const queryKey = buildQueryKey(searchVal.value, inputs, activeActivations.value)
+    const selectedItemId = options.preserveSelection
+      ? (res.value[boxOptions.focus]?.id ?? null)
+      : null
 
     if (isDivisionBoxMode() && !isDetachedDivisionMode()) {
       beginSearchSequence(inputs, options)
@@ -887,7 +900,9 @@ export function useSearch(
     }
 
     const currentSequence = beginSearchSequence(inputs, options)
-    boxOptions.focus = 0
+    if (!options.preserveSelection) {
+      boxOptions.focus = 0
+    }
     loading.value = true
     // Don't clear results immediately - this causes UI flicker
     // Results will be replaced when new search completes
@@ -953,6 +968,12 @@ export function useSearch(
       }
 
       searchResults.value = filteredItems
+      if (options.preserveSelection) {
+        const preservedIndex = selectedItemId
+          ? res.value.findIndex((item) => item.id === selectedItemId)
+          : -1
+        boxOptions.focus = preservedIndex >= 0 ? preservedIndex : res.value.length > 0 ? 0 : -1
+      }
       if (currentSearchId.value) {
         const pendingUpdates = pendingSearchUpdatesById.get(currentSearchId.value)
         if (pendingUpdates && pendingUpdates.length > 0) {
@@ -993,6 +1014,100 @@ export function useSearch(
     const cancelable = debouncedSearch as unknown as { cancel?: () => void }
     cancelable.cancel?.()
     await executeSearch(options)
+  }
+
+  function shouldRefreshForIndexCommit(): boolean {
+    return (
+      !isDivisionBoxMode() &&
+      hasWindow() &&
+      (!hasDocument() || !document.hidden) &&
+      Boolean(searchVal.value.trim()) &&
+      !hasPluginFeatureActivation(activeActivations.value)
+    )
+  }
+
+  function scheduleIndexCommitRefresh(): void {
+    if (!shouldRefreshForIndexCommit()) return
+    indexCommitRefreshPending = true
+    if (indexCommitRefreshTimer) return
+
+    indexCommitRefreshTimer = setTimeout(() => {
+      indexCommitRefreshTimer = null
+      void runIndexCommitRefresh()
+    }, INDEX_COMMIT_REFRESH_INTERVAL_MS)
+  }
+
+  async function runIndexCommitRefresh(): Promise<void> {
+    if (!indexCommitRefreshPending) return
+    if (!shouldRefreshForIndexCommit()) {
+      indexCommitRefreshPending = false
+      return
+    }
+    if (loading.value || inFlightQueryKey !== null) {
+      scheduleIndexCommitRefresh()
+      return
+    }
+
+    indexCommitRefreshPending = false
+    await handleSearchImmediate({
+      force: true,
+      preserveSelection: true,
+      refreshClipboard: false
+    })
+    if (indexCommitRefreshPending) {
+      scheduleIndexCommitRefresh()
+    }
+  }
+
+  function scheduleIndexCommitStreamRetry(): void {
+    if (indexCommitStreamDisposed || indexCommitStreamController || indexCommitStreamRetryTimer) {
+      return
+    }
+    indexCommitStreamRetryTimer = setTimeout(() => {
+      indexCommitStreamRetryTimer = null
+      startIndexCommitStream()
+    }, 1_000)
+  }
+
+  function startIndexCommitStream(): void {
+    if (isDivisionBoxMode() || indexCommitStreamDisposed || indexCommitStreamController) return
+    void transport
+      .stream(CoreBoxEvents.search.indexCommitted, undefined, {
+        onData: () => {
+          scheduleIndexCommitRefresh()
+        },
+        onError: (error) => {
+          devLog('Search index commit stream failed:', error)
+          indexCommitStreamController = null
+          scheduleIndexCommitStreamRetry()
+        }
+      })
+      .then((controller) => {
+        if (indexCommitStreamDisposed) {
+          controller.cancel()
+          return
+        }
+        indexCommitStreamController = controller
+      })
+      .catch((error) => {
+        devLog('Failed to start search index commit stream:', error)
+        scheduleIndexCommitStreamRetry()
+      })
+  }
+
+  function stopIndexCommitStream(): void {
+    indexCommitStreamDisposed = true
+    indexCommitStreamController?.cancel()
+    indexCommitStreamController = null
+    indexCommitRefreshPending = false
+    if (indexCommitRefreshTimer) {
+      clearTimeout(indexCommitRefreshTimer)
+      indexCommitRefreshTimer = null
+    }
+    if (indexCommitStreamRetryTimer) {
+      clearTimeout(indexCommitStreamRetryTimer)
+      indexCommitStreamRetryTimer = null
+    }
   }
 
   async function handleExecute(item?: TuffItem): Promise<void> {
@@ -1410,6 +1525,7 @@ export function useSearch(
   let coreBoxShownHandler: (() => void) | null = null
 
   onMounted(() => {
+    startIndexCommitStream()
     transport.send(CoreBoxEvents.provider.getActivated).then((providers) => {
       activeActivations.value = toActivations(providers as ActivationState | IProviderActivate[])
     })
@@ -1444,6 +1560,7 @@ export function useSearch(
   })
 
   onBeforeUnmount(() => {
+    stopIndexCommitStream()
     unregSearchUpdate()
     unregContextActionsOpen()
     unregSetQuery()

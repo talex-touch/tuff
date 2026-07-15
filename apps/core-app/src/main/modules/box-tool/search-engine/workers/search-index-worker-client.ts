@@ -10,6 +10,7 @@
  * they remain on the main-thread SearchIndexService for low latency.
  */
 import type { SearchIndexItem } from '../search-index-service'
+import { searchIndexCommitHub } from '../search-index-commit-hub'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsResponse,
@@ -157,7 +158,8 @@ export class SearchIndexWorkerClient {
     if (items.length === 0) return
     await this.ensureInitialized()
     const taskId = this.generateTaskId('indexItems')
-    return this.sendAndWait(taskId, { type: 'indexItems', taskId, items })
+    await this.sendAndWait(taskId, { type: 'indexItems', taskId, items })
+    searchIndexCommitHub.markCommitted(items.map((item) => item.providerId))
   }
 
   /**
@@ -167,20 +169,25 @@ export class SearchIndexWorkerClient {
     if (itemIds.length === 0) return
     await this.ensureInitialized()
     const taskId = this.generateTaskId('removeItems')
-    return this.sendAndWait(taskId, { type: 'removeItems', taskId, itemIds })
+    await this.sendAndWait(taskId, { type: 'removeItems', taskId, itemIds })
+    searchIndexCommitHub.markCommitted()
   }
 
   async removeProviderItems(providerId: string, itemIds: string[]): Promise<number> {
     if (itemIds.length === 0) return 0
     await this.ensureInitialized()
     const taskId = this.generateTaskId('removeProviderItems')
-    const result = await this.sendAndWaitWithResult<number>(taskId, {
-      type: 'removeProviderItems',
-      taskId,
-      providerId,
-      itemIds
-    })
-    return result ?? 0
+    const result =
+      (await this.sendAndWaitWithResult<number>(taskId, {
+        type: 'removeProviderItems',
+        taskId,
+        providerId,
+        itemIds
+      })) ?? 0
+    if (result > 0) {
+      searchIndexCommitHub.markCommitted([providerId])
+    }
+    return result
   }
 
   /**
@@ -189,12 +196,16 @@ export class SearchIndexWorkerClient {
   async removeByProvider(providerId: string): Promise<number> {
     await this.ensureInitialized()
     const taskId = this.generateTaskId('removeByProvider')
-    const result = await this.sendAndWaitWithResult<number>(taskId, {
-      type: 'removeByProvider',
-      taskId,
-      providerId
-    })
-    return result ?? 0
+    const result =
+      (await this.sendAndWaitWithResult<number>(taskId, {
+        type: 'removeByProvider',
+        taskId,
+        providerId
+      })) ?? 0
+    if (result > 0) {
+      searchIndexCommitHub.markCommitted([providerId])
+    }
+    return result
   }
 
   /**
@@ -231,22 +242,23 @@ export class SearchIndexWorkerClient {
     }
     await this.ensureInitialized()
     const taskId = this.generateTaskId('persistAndIndex')
-    const result = await this.sendAndWaitWithResult<PersistAndIndexSummary>(taskId, {
+    const summary = (await this.sendAndWaitWithResult<PersistAndIndexSummary>(taskId, {
       type: 'persistAndIndex',
       taskId,
       entries
-    })
-    return (
-      result ?? {
-        entries: entries.length,
-        chunks: 0,
-        persistedRows: 0,
-        indexedItems: 0,
-        fileUpdates: 0,
-        progressRows: 0,
-        embeddings: 0
-      }
-    )
+    })) ?? {
+      entries: entries.length,
+      chunks: 0,
+      persistedRows: 0,
+      indexedItems: 0,
+      fileUpdates: 0,
+      progressRows: 0,
+      embeddings: 0
+    }
+    if (summary.indexedItems > 0) {
+      searchIndexCommitHub.markCommitted(entries.map((entry) => entry.indexItem.providerId))
+    }
+    return summary
   }
 
   async upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>> {

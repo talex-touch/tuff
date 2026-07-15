@@ -7,6 +7,7 @@ const DEFAULT_PORT_CHANNELS = new Set<string>([
   ClipboardEvents.change.toEventName(),
   AppEvents.fileIndex.progress.toEventName(),
   CoreBoxEvents.search.update.toEventName(),
+  CoreBoxEvents.search.indexCommitted.toEventName(),
   CoreBoxEvents.search.end.toEventName(),
   CoreBoxEvents.search.noResults.toEventName(),
 ])

@@ -99,6 +99,45 @@ describe('SearchIndexService delta/hash', () => {
     expect(first.keywordHash).toBe(second.keywordHash)
   })
 
+  it('notifies provider commits only after the index transaction succeeds', async () => {
+    const order: string[] = []
+    const onCommitted = vi.fn((providerIds: readonly string[]) => {
+      order.push(`committed:${providerIds.join(',')}`)
+    })
+    const db = {
+      transaction: vi.fn(async (callback: (tx: unknown) => Promise<void>) => {
+        await callback({})
+        order.push('transaction')
+      })
+    }
+    const service = new SearchIndexService(
+      db as unknown as ConstructorParameters<typeof SearchIndexService>[0],
+      { directMode: true, onCommitted }
+    )
+    const harness = service as unknown as {
+      initialized: boolean
+      prepareDocument: (item: SearchIndexItem) => Promise<never>
+      applyDocument: (tx: unknown, doc: unknown) => Promise<void>
+      recordOperationLog: () => void
+    }
+    harness.initialized = true
+    harness.prepareDocument = vi.fn(async () => ({}) as never)
+    harness.applyDocument = vi.fn(async () => undefined)
+    harness.recordOperationLog = vi.fn()
+
+    await service.indexItems([
+      {
+        itemId: 'app:demo',
+        providerId: 'app-provider',
+        type: 'app',
+        name: 'Demo App'
+      }
+    ])
+
+    expect(order).toEqual(['transaction', 'committed:app-provider'])
+    expect(onCommitted).toHaveBeenCalledTimes(1)
+  })
+
   it('lookupBySubsequence 先用 SQLite LIKE 形状预过滤并保持结果排序', async () => {
     const queryTexts: string[] = []
     const db = {
@@ -156,9 +195,10 @@ describe('SearchIndexService delta/hash', () => {
         })
       )
     }
+    const onCommitted = vi.fn()
     const service = new SearchIndexService(
       db as unknown as ConstructorParameters<typeof SearchIndexService>[0],
-      { directMode: true }
+      { directMode: true, onCommitted }
     )
 
     await expect(service.removeProviderItems('quicklink', ['shared-key'])).resolves.toBe(1)
@@ -171,6 +211,7 @@ describe('SearchIndexService delta/hash', () => {
       )
     ).toBe(true)
     expect(deleteCalls).toHaveLength(2)
+    expect(onCommitted).toHaveBeenCalledWith(['quicklink'])
   })
 
   it('removeByProvider returns the actual removed row count', async () => {

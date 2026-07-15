@@ -80,12 +80,9 @@ function measureResultContentHeight(resultContent: HTMLElement): number {
   return Math.ceil(Math.max(visualBottom + paddingBottom, paddingTop + paddingBottom))
 }
 
-function calculateDesiredHeight(
-  resultCount: number,
-  options: { hasSearchState?: boolean } = {}
-): number {
+function calculateDesiredHeight(resultCount: number): number {
   const headerHeight = getHeaderHeight()
-  if (resultCount === 0 && !options.hasSearchState) return clampHeight(headerHeight)
+  if (resultCount === 0) return clampHeight(headerHeight)
 
   const scrollRoot = document.querySelector('.CoreBoxRes-Main .scroll-area')
   if (!scrollRoot) {
@@ -101,26 +98,10 @@ function calculateDesiredHeight(
   // can lock the next height to current viewport height and prevent shrinking.
   const resultContent = scrollRoot.querySelector('.CoreBoxRes-ScrollContent') as HTMLElement | null
   if (resultContent) {
-    const searchState = resultContent.querySelector('.CoreBoxSearchState') as HTMLElement | null
-    if (searchState && resultCount === 0) {
-      const stateRect = searchState.getBoundingClientRect()
-      if (Number.isFinite(stateRect.bottom) && stateRect.bottom > headerHeight) {
-        return clampHeight(Math.ceil(stateRect.bottom + HEIGHT_SAFETY_PADDING))
-      }
-    }
-
     const contentHeight = measureResultContentHeight(resultContent)
     if (Number.isFinite(contentHeight) && contentHeight > 0) {
       return clampHeight(contentHeight + headerHeight + HEIGHT_SAFETY_PADDING)
     }
-
-    if (searchState) {
-      const stateRect = searchState.getBoundingClientRect()
-      if (Number.isFinite(stateRect.bottom) && stateRect.bottom > headerHeight) {
-        return clampHeight(Math.ceil(stateRect.bottom + HEIGHT_SAFETY_PADDING))
-      }
-    }
-
     return clampHeight(headerHeight)
   }
 
@@ -168,9 +149,7 @@ export function useResize(options: UseResizeOptions): void {
     const isRecommendationPending = recommendationEnabled
       ? (recommendationPending?.value ?? false)
       : false
-    const hasSearchState = document.querySelector('.CoreBoxSearchState') !== null
-
-    const height = calculateDesiredHeight(resultCount, { hasSearchState })
+    const height = calculateDesiredHeight(resultCount)
     const forceMax = hasForceMaxActivation(activeActivations.value)
 
     const payload: CoreBoxLayoutUpdateRequest = {

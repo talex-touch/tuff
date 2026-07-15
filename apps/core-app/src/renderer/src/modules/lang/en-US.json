@@ -1686,18 +1686,6 @@
     "footer": {
       "indexing": "Indexing {progress}%"
     },
-    "indexingHint": {
-      "remaining": "Finishes in {time}",
-      "inProgress": "Indexing..."
-    },
-    "searchState": {
-      "idleTitle": "Ready to search",
-      "idleDetail": "Type a keyword to search apps, files, commands, or AI actions.",
-      "searchingTitle": "Searching",
-      "searchingDetail": "Checking local providers and indexed content.",
-      "recommendationLoadingTitle": "Preparing recommendations",
-      "recommendationLoadingDetail": "Recent and frequent actions are warming up."
-    },
     "contextActions": {
       "title": "Context Actions",
       "sourceDetail": "Source: {source} · {detail}",

@@ -2,12 +2,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (payload?: unknown) => unknown>(),
+  streamHandlers: new Map<string, (payload: unknown, context: unknown) => unknown>(),
   on: vi.fn(
     (event: { toEventName?: () => string } | string, handler: (payload?: unknown) => unknown) => {
       const eventName = typeof event === 'string' ? event : event.toEventName?.() || String(event)
       mocks.handlers.set(eventName, handler)
       return () => {
         mocks.handlers.delete(eventName)
+      }
+    }
+  ),
+  onStream: vi.fn(
+    (
+      event: { toEventName?: () => string } | string,
+      handler: (payload: unknown, context: unknown) => unknown
+    ) => {
+      const eventName = typeof event === 'string' ? event : event.toEventName?.() || String(event)
+      mocks.streamHandlers.set(eventName, handler)
+      return () => {
+        mocks.streamHandlers.delete(eventName)
       }
     }
   ),
@@ -35,7 +48,8 @@ const mocks = vi.hoisted(() => ({
     cancelSearch: vi.fn(),
     deactivateProvider: vi.fn(),
     deactivateProviders: vi.fn(),
-    getProvidersByIds: vi.fn(() => [])
+    getProvidersByIds: vi.fn(() => []),
+    registerIndexCommitStream: vi.fn()
   },
   logger: {
     warn: vi.fn(),
@@ -56,6 +70,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
     on: mocks.on,
+    onStream: mocks.onStream,
     sendTo: mocks.sendTo
   }))
 }))
@@ -173,11 +188,22 @@ describe('CoreBox IPC hide transport', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.handlers.clear()
+    mocks.streamHandlers.clear()
     mocks.isPinned.mockReturnValue(false)
     mocks.isCollapsed = false
     mocks.currentWindow = null
     ipcManager.unregister()
     ipcManager.register()
+  })
+
+  it('registers the search-index commit stream with SearchEngineCore', () => {
+    const handler = mocks.streamHandlers.get(CoreBoxEvents.search.indexCommitted.toEventName())
+    const context = { streamId: 'index-commit-stream' }
+
+    expect(handler).toBeTypeOf('function')
+    handler?.(undefined, context)
+
+    expect(mocks.searchEngineCore.registerIndexCommitStream).toHaveBeenCalledWith(context)
   })
 
   it('maps canonical hide payload into an immediate manager trigger', () => {
