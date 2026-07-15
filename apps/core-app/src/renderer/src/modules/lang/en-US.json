@@ -133,7 +133,7 @@
   "beginner": {
     "language": {
       "title": "Welcome to Tuff",
-      "desc": "We've set your language to {lang}",
+      "desc": "We've set your language to 「{lang}」",
       "followSystem": "Follow system language",
       "systemDetected": "Detected system language: {lang}",
       "systemTag": "System default",
