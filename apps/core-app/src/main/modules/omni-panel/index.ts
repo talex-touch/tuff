@@ -9,6 +9,7 @@ import type {
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { SelectionCaptureResult as HostSelectionCaptureResult } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type {
   OmniPanelContextSource,
@@ -25,16 +26,12 @@ import type {
   OmniPanelFeatureExecuteRequest,
   OmniPanelFeatureExecuteResponse,
   OmniPanelFeatureReorderRequest,
-  OmniPanelSelectionIssueCode,
-  OmniPanelSelectionSupportLevel,
   OmniPanelShowRequest,
   OmniPanelTransferTarget
 } from '../../../shared/events/omni-panel'
-import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import process from 'node:process'
-import { promisify } from 'node:util'
 import {
   StorageList,
   TuffInputType,
@@ -47,10 +44,8 @@ import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transpo
 import { app, clipboard, screen, shell, systemPreferences } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { getSelectionCaptureCapabilityPatch } from '../platform/capability-adapter'
 import { activeAppService } from '../system/active-app'
-import { sendPlatformShortcut } from '../system/desktop-shortcut'
-import { getXdotoolUnavailableReason } from '../system/linux-desktop-tools'
+import { selectionCaptureService } from '../system/selection-capture'
 import { TouchWindow } from '../../core/touch-window'
 import { getCoreBoxWindow } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
@@ -79,7 +74,6 @@ import { createDesktopContextCapsule } from '../../../shared/intelligence/deskto
 import { createLogger } from '../../utils/logger'
 
 const omniPanelLog = createLogger('OmniPanel')
-const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
 const DEFAULT_LONG_PRESS_MS = 600
 const MIN_LONG_PRESS_MS = 200
@@ -100,17 +94,12 @@ const OMNI_SOURCE_VALUES: OmniPanelContextSource[] = [
   'command',
   'unknown'
 ]
-const COPY_COMMAND_TIMEOUT_MS = 900
-const COPY_RESULT_POLL_DELAY_MS = 120
 const SELECTION_TRANSLATE_SCENE_ID = 'corebox.selection.translate'
 
-interface SelectionCaptureResult {
-  text: string
-  supportLevel: OmniPanelSelectionSupportLevel
-  issueCode?: OmniPanelSelectionIssueCode
-  issueMessage?: string
-  limitations?: string[]
-}
+type SelectionCaptureResult = Pick<
+  HostSelectionCaptureResult,
+  'text' | 'supportLevel' | 'issueCode' | 'issueMessage' | 'limitations'
+>
 
 interface InputHookEvent {
   button?: number
@@ -173,13 +162,6 @@ interface OmniPanelSettingRecord {
   featureHub?: {
     items?: unknown[]
   }
-}
-
-interface ClipboardSnapshot {
-  items: Array<{
-    format: string
-    data: Buffer
-  }>
 }
 
 interface ExecutePayloadValidationResult {
@@ -1567,158 +1549,7 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private async captureSelectionText(): Promise<SelectionCaptureResult> {
-    const selectionCapability = await getSelectionCaptureCapabilityPatch({
-      enabled: this.shouldCaptureSelection()
-    })
-
-    if (selectionCapability.supportLevel === 'unsupported') {
-      return {
-        text: '',
-        supportLevel: selectionCapability.supportLevel,
-        issueCode: selectionCapability.issueCode === 'DISABLED' ? 'disabled' : 'unsupported',
-        issueMessage: selectionCapability.reason,
-        limitations: selectionCapability.limitations
-      }
-    }
-
-    const baseResult: Omit<SelectionCaptureResult, 'text'> = {
-      supportLevel: selectionCapability.supportLevel,
-      limitations: selectionCapability.limitations
-    }
-
-    if (process.platform === 'darwin') {
-      const directSelection = await this.captureMacSelectionTextDirectly()
-      if (directSelection) {
-        return {
-          text: directSelection.trim(),
-          ...baseResult
-        }
-      }
-    }
-
-    const previousText = clipboard.readText().trim()
-    const clipboardSnapshot = this.snapshotClipboard()
-    const start = Date.now()
-    try {
-      await this.withTimeout(this.simulateCopyCommand(), COPY_COMMAND_TIMEOUT_MS, 'copy-command')
-      await this.delay(COPY_RESULT_POLL_DELAY_MS)
-      const text = clipboard.readText().trim()
-      if (!text || text === previousText) {
-        omniPanelLog.debug('No fresh selected text captured after copy command', {
-          meta: {
-            platform: process.platform
-          }
-        })
-        return {
-          text: '',
-          ...baseResult,
-          issueCode: 'empty',
-          issueMessage: 'No selected text was captured from the active application.'
-        }
-      }
-      return {
-        text,
-        ...baseResult
-      }
-    } catch (error) {
-      const issueMessage =
-        error instanceof Error ? error.message : 'Failed to capture selected text'
-      omniPanelLog.warn('Selection capture failed, reporting explicit empty-context reason', {
-        error,
-        meta: {
-          platform: process.platform
-        }
-      })
-      return {
-        text: '',
-        ...baseResult,
-        issueCode: issueMessage === getXdotoolUnavailableReason() ? 'unsupported' : 'failed',
-        issueMessage,
-        limitations:
-          issueMessage === getXdotoolUnavailableReason()
-            ? [getXdotoolUnavailableReason()]
-            : baseResult.limitations
-      }
-    } finally {
-      if (!this.restoreClipboard(clipboardSnapshot)) {
-        omniPanelLog.warn('Clipboard snapshot restore failed after capture')
-      }
-      omniPanelLog.debug('Selection capture completed', {
-        meta: {
-          costMs: Date.now() - start
-        }
-      })
-    }
-  }
-
-  private async captureMacSelectionTextDirectly(): Promise<string | null> {
-    try {
-      const script = [
-        'tell application "System Events"',
-        '  tell (first process whose frontmost is true)',
-        '    try',
-        '      set focusedElement to value of attribute "AXFocusedUIElement"',
-        '      set selectedText to value of attribute "AXSelectedText" of focusedElement',
-        '      if selectedText is missing value then',
-        '        return ""',
-        '      end if',
-        '      return selectedText',
-        '    on error',
-        '      return ""',
-        '    end try',
-        '  end tell',
-        'end tell'
-      ].join('\n')
-      const { stdout } = await execFileAsync('osascript', ['-e', script])
-      const selectedText = typeof stdout === 'string' ? stdout.trim() : ''
-      return selectedText || null
-    } catch {
-      return null
-    }
-  }
-
-  private snapshotClipboard(): ClipboardSnapshot {
-    const formats = clipboard.availableFormats()
-    const items: ClipboardSnapshot['items'] = []
-    for (const format of formats) {
-      try {
-        items.push({
-          format,
-          data: clipboard.readBuffer(format)
-        })
-      } catch (error) {
-        omniPanelLog.debug(`Skip clipboard format snapshot: ${format}`, { error })
-      }
-    }
-    return { items }
-  }
-
-  private restoreClipboard(snapshot: ClipboardSnapshot): boolean {
-    try {
-      clipboard.clear()
-      for (const item of snapshot.items) {
-        clipboard.writeBuffer(item.format, item.data)
-      }
-      return true
-    } catch (error) {
-      omniPanelLog.warn('Failed to restore clipboard snapshot', { error })
-      return false
-    }
-  }
-
-  private async simulateCopyCommand(): Promise<void> {
-    const selectionCapability = await getSelectionCaptureCapabilityPatch({
-      enabled: this.shouldCaptureSelection()
-    })
-    if (selectionCapability.supportLevel === 'unsupported') {
-      throw new Error(
-        selectionCapability.reason ||
-          getXdotoolUnavailableReason() ||
-          'Selection capture unavailable'
-      )
-    }
-
-    await sendPlatformShortcut('copy')
+    return await selectionCaptureService.capture({ enabled: this.shouldCaptureSelection() })
   }
 
   private setupInputHook(): void {
@@ -1940,28 +1771,6 @@ export class OmniPanelModule extends BaseModule {
     this.shortcutLastHoldDurationMs = 0
     this.shortcutTriggerArmed = false
     this.clearShortcutArmExpiryTimer()
-  }
-
-  private async delay(ms: number): Promise<void> {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, ms)
-    })
-  }
-
-  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-    let timeoutId: NodeJS.Timeout | null = null
-    try {
-      const timeoutPromise = new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error(`${label} timeout after ${timeoutMs}ms`))
-        }, timeoutMs)
-      })
-      return await Promise.race([promise, timeoutPromise])
-    } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-    }
   }
 
   private performShutdownCleanup(): void {

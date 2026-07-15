@@ -1,7 +1,7 @@
 # PRD: Tuff 2.5.3 本地知识检索与上下文构建
 
 > 更新时间：2026-06-24
-> 状态：Planned / Direction Locked
+> 状态：In Progress / Foundation Landed
 > 目标版本：2.5.3
 
 ## 1. 最终目标
@@ -62,6 +62,9 @@ MVP `search` 必须支持 query、limit、sourceType、timeRange、permissionSco
 - `LocalKnowledgeEngine` metadata filters 已支持 dotted nested path 与数组 scalar 包含匹配。
 - ContextHygiene `retrieval` scope 已消费 `buildContext()` 返回的 citation，把 citation、document id、source type/uri、retrieval status 与 degraded reason 写入 `ContextPackage.items[].metadata`。
 - `ContextPackage.metadata.retrieval` 记录 status、degradedReason、chunkCount 与 citationCount，metadata-only `contextListPackageLogs` typed SDK / CoreApp channel 可按 session/trace 读取 package log；这不代表 embeddings/rerank 或最近 UI explain drawer 已完成。
+- 2026-07-13 token-budget hardening：`buildContext()` 现将 normalized `tokenBudget` 作为严格聚合上限，跳过超限 chunk 后继续尝试较小候选；检索有命中但全部超限时返回 `degraded / token-budget-exhausted` 与空上下文，不截断 citation 对应的索引正文。本项只闭合 Context Builder 预算合同，不代表 embeddings/rerank、真实 profile 或 production evidence 已完成。
+- 2026-07-13 multilingual token-estimate hardening：ContextHygiene 与 LocalKnowledgeEngine 已统一使用 tokenizer-independent Unicode-aware estimator；连续 ASCII 仍按 `ceil(codePoints / 4)` 近似，CJK 等非 ASCII 至少各计 1、emoji 更保守。旧 knowledge row 在读取/预算打包时使用 `max(stored, current-content estimate)`，不改写 SQLite 且不允许遗留低值绕过预算；该 estimate 不宣称等同任何 Provider 的实际 token/计费结果。
+- 2026-07-13 runtime budget normalization：`buildContext()` 不再通过 `Number(...)` 强制转换 untrusted runtime 值；有限 number 向下取整且最小为 1，非 number、`NaN` 与正负无穷统一 fail-closed 到预算 1。数字字符串不能把 typed SDK 外输入变成更大预算，valid finite caller budget 与 SDK/API 类型保持不变。
 
 ## 5. 质量与安全约束
 
@@ -75,7 +78,7 @@ MVP `search` 必须支持 query、limit、sourceType、timeRange、permissionSco
 ## 6. 验收清单
 
 - [ ] 未配置 embeddings 时，FTS5 + metadata 检索可独立完成最近路径召回。
-- [ ] Context Builder 可在 token budget 内返回带 citation 的上下文片段。
+- [x] Context Builder 可在 token budget 内返回带 citation 的上下文片段。
 - [ ] 权限/来源/时间过滤在 search 和 buildContext 两层生效。
 - [ ] embeddings / rerank 不可用时系统降级为关键词检索，并展示 degraded reason。
 - [ ] 索引与检索性能有可观测日志，不阻塞 CoreApp 启动。

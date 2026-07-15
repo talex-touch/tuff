@@ -30,6 +30,37 @@ export interface AssistantVoiceSubmitPayload {
   source?: "voice" | "manual";
 }
 
+export interface AssistantVoiceTranscribePayload {
+  audioDataUrl: string;
+  mimeType: string;
+  durationMs: number;
+  language?: string;
+}
+
+export type AssistantVoiceTranscribeErrorCode =
+  | "ASSISTANT_DISABLED"
+  | "AUDIO_INVALID"
+  | "AUDIO_TOO_LARGE"
+  | "AUDIO_TOO_LONG"
+  | "ASR_UNAVAILABLE"
+  | "TRANSCRIPTION_EMPTY"
+  | IntelligenceErrorCode;
+
+export interface AssistantVoiceTranscribeResponse {
+  success: boolean;
+  text?: string;
+  language?: string;
+  confidence?: number;
+  provider?: string;
+  model?: string;
+  traceId?: string;
+  latencyMs?: number;
+  error?: string;
+  reason?: string;
+  recovery?: string;
+  code?: AssistantVoiceTranscribeErrorCode;
+}
+
 export type AssistantClipboardImageTranslateErrorCode =
   | "ASSISTANT_DISABLED"
   | "IMAGE_UNAVAILABLE"
@@ -207,6 +238,13 @@ export const AssistantEvents = {
       .module("voice-panel")
       .event("submit")
       .define<AssistantVoiceSubmitPayload, { accepted: boolean }>(),
+    transcribeAudio: defineEvent("assistant")
+      .module("voice-panel")
+      .event("transcribe-audio")
+      .define<
+        AssistantVoiceTranscribePayload,
+        AssistantVoiceTranscribeResponse
+      >(),
     translateClipboardImage: translateClipboardImageEvent,
     listScreenshotDisplays: defineEvent("assistant")
       .module("voice-panel")

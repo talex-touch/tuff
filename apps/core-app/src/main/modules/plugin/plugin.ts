@@ -83,6 +83,7 @@ import {
   createPluginIntelligenceFacade,
   createPluginLocalizationSDK,
   createPluginScreenshotSDK,
+  createPluginSystemSDK,
   createPluginTuffTransport,
   createQuickActionsSDK
 } from '@talex-touch/utils/plugin/sdk'
@@ -1910,6 +1911,7 @@ export class TouchPlugin implements ITouchPlugin {
     const pluginSdkTransport = createPluginTuffTransport(pluginSdkChannel)
     const localization = createPluginLocalizationSDK(pluginSdkTransport, this.sdkapi)
     const screenshot = createPluginScreenshotSDK(pluginSdkTransport)
+    const system = createPluginSystemSDK(pluginSdkTransport)
     const hasPluginPermission = (permissionId: string): boolean => {
       const permissionModule = getPermissionModule()
       if (!permissionModule) return false
@@ -1935,60 +1937,7 @@ export class TouchPlugin implements ITouchPlugin {
         )) as ITuffTransport['stream']
     }
     const baseIntelligence = createIntelligenceClient(pluginIntelligenceTransport)
-    const pluginIntelligence = createPluginIntelligenceFacade(() => baseIntelligence)
-    const intelligence = {
-      ...pluginIntelligence,
-      stream: async <T = unknown>(
-        capabilityId: string,
-        payload: unknown,
-        options: {
-          onStart?: (event: unknown) => void
-          onDelta?: (delta: string, event: unknown) => void
-          onMessage?: (message: unknown, event: unknown) => void
-          onUsage?: (usage: unknown, event: unknown) => void
-          onMetadata?: (metadata: Record<string, unknown>, event: unknown) => void
-          onEnd?: (event: unknown) => void
-          onError?: (error: Error) => void
-        },
-        invokeOptions?: Record<string, unknown>
-      ) => {
-        if (!hasPluginPermission('intelligence.basic')) {
-          const error = new Error("Permission 'intelligence.basic' denied")
-          options.onError?.(error)
-          throw error
-        }
-        try {
-          const { tuffIntelligence } = await import('../ai/intelligence-sdk')
-          for await (const event of tuffIntelligence.stream<T>(capabilityId, payload, {
-            ...invokeOptions,
-            stream: true,
-            metadata: {
-              ...((invokeOptions?.metadata as Record<string, unknown> | undefined) ?? {}),
-              caller: `plugin:${pluginName}`
-            }
-          })) {
-            const row = event as {
-              type?: string
-              delta?: string
-              message?: unknown
-              usage?: unknown
-              metadata?: Record<string, unknown>
-            }
-            if (row.type === 'start') options.onStart?.(event)
-            else if (row.type === 'delta') options.onDelta?.(row.delta || '', event)
-            else if (row.type === 'message' && row.message) options.onMessage?.(row.message, event)
-            else if (row.type === 'usage' && row.usage) options.onUsage?.(row.usage, event)
-            else if (row.type === 'metadata' && row.metadata)
-              options.onMetadata?.(row.metadata, event)
-            else if (row.type === 'end') options.onEnd?.(event)
-          }
-        } catch (error) {
-          const normalized = error instanceof Error ? error : new Error(String(error))
-          options.onError?.(normalized)
-          throw normalized
-        }
-      }
-    }
+    const intelligence = createPluginIntelligenceFacade(() => baseIntelligence)
     const quickOps = {
       capabilities: (): Promise<QuickOpsCapabilityGetResponse> =>
         transport.invoke(QuickOpsEvents.capabilities.get, undefined, {
@@ -2574,6 +2523,7 @@ export class TouchPlugin implements ITouchPlugin {
       flow,
       intelligence,
       screenshot,
+      system,
       i18n: localization.i18n,
       lexicon: localization.lexicon,
       power: powerSDK,
@@ -2594,6 +2544,7 @@ export class TouchPlugin implements ITouchPlugin {
       permission,
       intelligence,
       screenshot,
+      system,
       i18n: localization.i18n,
       lexicon: localization.lexicon,
       divisionBox: divisionBoxSDK,

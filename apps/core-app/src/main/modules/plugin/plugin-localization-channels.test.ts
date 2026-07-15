@@ -6,11 +6,16 @@ import type {
 import { SdkApi } from '@talex-touch/utils/plugin'
 import {
   type AppLocale,
+  DomainLexiconRegistry,
   ScopedDomainLexiconRegistry,
   officialDomainLexiconRegistry
 } from '@talex-touch/utils/i18n'
+import {
+  replaceOfficialDomainLexiconRegistryForHost,
+  UNIT_LEXICON_ENTRIES
+} from '@talex-touch/utils/i18n/unit-lexicon'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   checkPermission: vi.fn(),
@@ -96,6 +101,10 @@ describe('registerPluginLocalizationChannels', () => {
     mocks.getPermissionModule.mockReturnValue({ checkPermission: mocks.checkPermission })
     mocks.getPluginByName.mockReturnValue({ sdkapi: SdkApi.V260713 })
     mocks.checkPermission.mockReturnValue({ allowed: true })
+  })
+
+  afterEach(() => {
+    replaceOfficialDomainLexiconRegistryForHost(new DomainLexiconRegistry(UNIT_LEXICON_ENTRIES))
   })
 
   it('projects the host locale and resolves localized values through verified plugin channels', async () => {
@@ -274,4 +283,116 @@ describe('registerPluginLocalizationChannels', () => {
       }
     }
   )
+  it('projects the active official snapshot while preserving caller-local overlays', async () => {
+    const { invoke } = registerChannels()
+    const pluginBContext = {
+      plugin: { name: 'plugin-b', verified: true, uniqueKey: 'plugin-b-key' }
+    } as HandlerContext
+
+    await invoke(PluginEvents.lexicon.register, {
+      entries: [
+        {
+          id: 'private-active-proof',
+          domain: 'capability',
+          version: '1',
+          labels: { default: 'Plugin A Private Active Proof' },
+          aliases: { default: ['plugin-a-active-private'] }
+        }
+      ],
+      _sdkapi: SdkApi.V260713
+    })
+
+    replaceOfficialDomainLexiconRegistryForHost(
+      new DomainLexiconRegistry([
+        {
+          id: 'unit.length.catalog-meter',
+          domain: 'unit',
+          source: 'catalog:official.domain-lexicon@2026.07.15',
+          version: '2026.07.15',
+          labels: {
+            default: 'active catalog meter',
+            locales: {
+              'zh-CN': '活动目录米',
+              'en-US': 'active catalog meter'
+            }
+          },
+          aliases: {
+            default: ['active-catalog-alias'],
+            locales: {
+              'zh-CN': ['活动目录别名'],
+              'en-US': ['active-catalog-alias']
+            }
+          }
+        }
+      ])
+    )
+
+    await expect(
+      invoke(PluginEvents.lexicon.resolve, {
+        id: 'unit.length.catalog-meter',
+        options: { locale: 'en-US' },
+        _sdkapi: SdkApi.V260713
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        label: 'active catalog meter',
+        entry: expect.objectContaining({
+          source: 'catalog:official.domain-lexicon@2026.07.15'
+        })
+      })
+    )
+    await expect(
+      invoke(PluginEvents.lexicon.search, {
+        query: '活动目录别名',
+        options: { locale: 'zh-CN' },
+        _sdkapi: SdkApi.V260713
+      })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        label: '活动目录米',
+        entry: expect.objectContaining({ id: 'unit.length.catalog-meter' })
+      })
+    ])
+
+    await expect(
+      invoke(PluginEvents.lexicon.resolve, {
+        id: 'private-active-proof',
+        _sdkapi: SdkApi.V260713
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        label: 'Plugin A Private Active Proof',
+        entry: expect.objectContaining({ source: 'plugin:plugin-a' })
+      })
+    )
+    await expect(
+      invoke(
+        PluginEvents.lexicon.resolve,
+        { id: 'private-active-proof', _sdkapi: SdkApi.V260713 },
+        pluginBContext
+      )
+    ).resolves.toBeNull()
+    await expect(
+      invoke(
+        PluginEvents.lexicon.search,
+        { query: 'plugin-a-active-private', _sdkapi: SdkApi.V260713 },
+        pluginBContext
+      )
+    ).resolves.toEqual([])
+
+    await expect(
+      invoke(PluginEvents.lexicon.register, {
+        entries: [
+          {
+            id: 'unit.length.catalog-meter',
+            domain: 'unit',
+            version: '1',
+            labels: { default: 'Collision' },
+            aliases: { default: ['collision'] }
+          }
+        ],
+        _sdkapi: SdkApi.V260713
+      })
+    ).rejects.toThrow(/official/i)
+  })
 })

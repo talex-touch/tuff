@@ -65,6 +65,8 @@ for await (const event of stream) {
 
 整次调用只产生一个 `start`；若首选 provider 在首个可见 `delta` 前失败且调用方没有显式锁定 provider，SDK 可尝试下一候选并继续使用原 provisional start。任一候选输出 delta 后即提交该回答，后续错误直接抛出，不再跨 provider fallback 或重放非流式 invoke。
 
+非流式 invoke 的 provider fallback 以整次调用的最终结果记账：fallback 成功时只写一条使用实际 fallback provider/model/trace/usage/latency 的成功审计，并按原始调用 cache key 缓存；不得先把 primary 失败持久化成一次失败调用。只有所有候选均失败时才写一条 canonical failure audit，并继续抛出原 primary error。outer-governed 内部 invoke 仍不重复写审计，但成功结果可缓存。
+
 ## Renderer 端使用
 
 ### useIntelligenceSdk
@@ -109,6 +111,14 @@ const csv = exportToCSV(logs)
 downloadAsFile(csv, 'audit-logs.csv', 'text/csv')
 ```
 
+### Local / Ollama-compatible Provider
+
+CoreApp `LocalProvider` 已支持用户现有 Ollama 服务：通过统一 NetworkService 调用 `/api/chat`（非流式/NDJSON 流式）并从 `/api/tags` 发现模型，无需 API key，始终使用 local direct proxy；仅当捕获到 `NetworkHttpStatusError.status === 404` 且尚未输出时才回退到 OpenAI-compatible local endpoint，普通错误消息中的 `404` 不会切换 backend。流式解码使用单一 UTF-8 decoder，CJK/emoji 即使跨网络 chunk 也不会产生替换字符；无尾换行的最终 `done` frame 仍保留 delta 与 Ollama usage，且只产生一个 terminal chunk。
+首个非空 Ollama delta 是该 provider 内部 compatibility commit point：之后即使出现 typed HTTP 404 或任意其他 stream error 也原样传播，不会切到第二个 local backend 拼接另一份回答；只有尚未输出的 typed HTTP 404 才允许兼容回退。
+NetworkService 不把 stream response object 视为调用成功：只有 body 正常 `end` 才按 `autoResetOnSuccess` 清理失败计数，body `error` 会记录一次 cooldown failure 并继续传给消费者；主动取消导致的 early close 不计成功或失败。body 已交付后不做自动 retry/replay，避免重复可见 delta。
+
+这只是 **Ollama-compatible 兼容层**。内置 llama.cpp/GGUF binary、模型下载/checksum、删除/加载/停止、资源诊断、管理 UI、平台打包与设备 smoke 仍未实现，不得把现有 LocalProvider 表述为 2.5.5 built-in runtime 完成。
+
 ### 本地知识库
 
 本地知识库是 SQLite FTS5 检索能力，不等同于 `search.semantic`，不会自动采集文件或聊天内容。宿主页必须为索引与查询显式选择可信 `permissionScope`；插件请求则由 main-process 依据 verified transport identity 强制绑定为 `plugin:<manifest plugin id>`，忽略缺失或伪造 scope。
@@ -138,7 +148,10 @@ const context = await intelligence.knowledgeBuildContext({
 })
 ```
 
-`knowledgeSearch` 返回 `ok`、`degraded` 或 `unavailable` 状态；调用方必须处理空命中和 `degradedReason`，不得把检索失败伪装为“没有结果”。所有知识库调用需要 `intelligence.basic` 权限。
+`knowledgeSearch` 返回 `ok`、`degraded` 或 `unavailable` 状态；调用方必须处理空命中和 `degradedReason`，不得把检索失败伪装为“没有结果”。`knowledgeBuildContext` 把 `tokenBudget` 作为硬上限：完整 chunk 超限时跳过并继续寻找后续可容纳结果；有检索命中但没有任何 chunk 可容纳时返回 `degraded / token-budget-exhausted`，不会截断 chunk 或泄漏超预算正文。所有知识库调用需要 `intelligence.basic` 权限。
+其中 `tokenEstimate` 是宿主共享的保守预算估算：连续 ASCII 近似按每 4 个 code point 计 1，CJK 等非 ASCII 至少各计 1，emoji 按更高权重计算；读取旧数据时只允许上调旧估算，不能借旧值绕过预算。该值不等同于具体 Provider tokenizer 的实际计费 token。
+运行时预算值只接受有限 `number`：ContextHygiene 对省略、非 number、`NaN` 与正负无穷回退到 1,600；LocalKnowledgeEngine 对同类非法值回退到最小预算 1，且不把数字字符串强制转换为预算。有限小数向下取整，零/负数收敛到 1；typed SDK 签名不变。
+同一归一规则也适用于 ContextHygiene prepare 失败后的 `context_prepare_failed` summary/runtime metadata，降级路径不会重新产生 `NaN`、无穷或数字字符串 coercion。
 
 插件获得的 knowledge document/chunk id 是宿主生成的 opaque actor-namespaced id：追加 chunk 时必须复用索引响应中的 `document.id`，不得构造或依赖 SQLite 全局 id。相同插件与输入保持确定性，不同插件即使提交相同本地 id/内容也不会碰撞；宿主可按产品策略显式聚合插件公开内容，但插件不能搜索或覆盖其他 scope。
 
@@ -216,7 +229,7 @@ OpenAI-compatible provider 已实现 `audio.tts`、`audio.stt`、`audio.transcri
 
 `getCapabilityStatus` 与 `getProviderModelOptions` 共享运行时方法检查；后者仅返回具备模型且真正实现该能力的候选供应商，并在 capability binding 声明模型时仅展示该 binding 的模型。未声明 binding 时，内置 OpenAI-compatible provider 使用能力专属默认模型，而不是把全局聊天模型暴露给图片、语音或 embedding 入口：OpenAI 图像使用 `gpt-image-1`，STT/转录使用 `whisper-1` / `gpt-4o-transcribe`，TTS 使用 `tts-1` / `tts-1-hd`；SiliconFlow 图像生成使用 `Kwai-Kolors/Kolors`，STT/转录使用 `FunAudioLLM/SenseVoiceSmall`，TTS 使用 `fnlp/MOSS-TTSD-v0.5`，embedding/search fallback 使用 `netease-youdao/bce-embedding-base_v1` / `BAAI/bge-m3`。自定义 OpenAI-compatible provider 如果在全局 `models` 混放多类模型，必须通过 capability binding 明确每个能力可选模型。任何可执行入口都必须仅展示和选择 `available: true` 的选项。`workflow.execute` 和 `agent.run` 由内部编排运行：声明 `text.chat` 的 provider 即可作为其运行时供应商，无需重复声明这两个内部能力；未配置已启用的专用 binding 时，两者继承 `text.chat` 的 provider 与模型 binding。
 
-DeepAgent/Workflow 的 token signal 必须来自 provider：OpenAI Responses `usage` 与 LangChain `AIMessage.usage_metadata` 会归一为 `promptTokens/completionTokens/totalTokens`；Agent 结果、prompt/agent step output 与 workflow 顶层 aggregate 逐层保留，model step usage 同样纳入总计。只有 provider/step 均未返回 usage 时才显式回退为全零，不得把“采集缺失”误写成真实零成本。
+DeepAgent/Workflow 的 token signal 必须来自 provider：OpenAI Responses `usage` 与 LangChain `AIMessage.usage_metadata` 会归一为 `promptTokens/completionTokens/totalTokens`；Agent 结果、prompt/agent step output 与 workflow 顶层 aggregate 逐层保留，model step usage 同样纳入总计。Legacy `AgentExecutor` 的 execute/chat/plan LLM fallback 也必须把 provider usage 回传到 `AgentResult`，并以 channel 绑定的 caller 进入 SDK quota/audit。只有 provider/step 均未返回 usage 时才显式回退为全零，不得把“采集缺失”误写成真实零成本。
 
 ## 配额管理
 
@@ -412,7 +425,7 @@ Nexus token SSE 的 `error` frame 同样携带 canonical `code/message/reason/re
 
 ## 最佳实践
 
-1. **传递 caller**: 插件和 host 内部调用都必须传递稳定 `metadata.caller`，以启用配额控制和审计追踪
+1. **传递 caller**: 插件和 host 内部调用都必须传递稳定 `metadata.caller`，以启用配额控制和审计追踪；legacy Agent channel 会覆盖插件 spoofed caller，并为未显式命名的 host 任务使用 `intelligence.agent-executor`
 2. **合理设置配额**: 为插件和产品入口设置合适的配额，防止滥用
 3. **使用流式响应**: 长文本生成使用流式响应提升用户体验
 4. **按错误码恢复**: 捕获 typed `code/reason/recovery`；不要用字符串包含判断区分 quota、登录或 provider 失败

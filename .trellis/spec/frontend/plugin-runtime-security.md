@@ -295,6 +295,256 @@ features.addFeature({
 makeWidgetId(pluginName, "intelligence-ask");
 ```
 
+## Scenario: Declared Widget Host Navigation
+
+### 1. Scope / Trigger
+
+- Trigger: a custom widget emits `host-action` for an internal host route instead of a plugin lifecycle command.
+- This contract spans widget events, the current `TuffItem.actions` declaration, CoreBox dispatch, `useActionPanel`, and renderer navigation.
+
+### 2. Signatures
+
+```ts
+interface WidgetHostAction {
+  actionId: string;
+  payload?: Record<string, unknown>;
+}
+
+interface DeclaredWidgetNavigationAction {
+  id: string;
+  type: "navigate";
+  primary?: boolean;
+  payload: { path: string };
+}
+
+executeAction(actionId: string, targetItem: TuffItem): Promise<void>;
+```
+
+### 3. Contracts
+
+- A widget navigation event is host-owned only when `actionId` matches an action on the current item and that action has `type: "navigate"`.
+- Route through the public `useActionPanel.executeAction(actionId, item)` path. The declared action payload is authoritative; the widget event cannot replace its `path`.
+- The CoreBox navigation callback hides CoreBox, then pushes the declared internal route.
+- Undeclared actions and declared `execute` actions retain the plugin execution path, including the existing item-meta payload merge and `CoreBoxEvents.item.execute` transport call.
+- Do not grant widgets generic `copy`, `open`, or arbitrary host-action dispatch as part of a navigation-only change.
+- Internal tab deep links are allow-listed by the destination component. A missing or invalid `?tab=` selects the component default; navigating to another plugin without a tab query must not leak the previous selection.
+
+### 4. Validation & Error Matrix
+
+| Widget event | Current item declaration | Required result |
+| --- | --- | --- |
+| Matching action id | `type: "navigate"`, non-empty `payload.path` | Hide CoreBox and navigate; no plugin execute transport |
+| Matching action id | `type: "execute"` | Preserve plugin item execution |
+| Unknown action id | Missing | Preserve plugin item execution so existing widget commands keep working |
+| Spoofed event payload path | Declared navigate action has a different path | Ignore event path; use declared action payload |
+| Valid plugin tab deep link | `?tab=Permissions` | Select the exact declared Permissions tab |
+| Missing or invalid plugin tab | None / unsupported value | Select `Overview` |
+
+### 5. Good / Base / Bad Cases
+
+- Good: AI provider failures declare `open-intelligence-settings -> /intelligence/channels`; permission failures declare `open-plugin-permissions -> /plugin/touch-intelligence?tab=Permissions`. Each widget emits only its matching id after a user click.
+- Base: `retry`, `select-model`, and `select-context-mode` remain plugin actions because the item does not declare them as navigation.
+- Bad: a widget emits an undeclared route, overrides the declared path in event payload, or routes every host action through navigation dispatch.
+
+### 6. Tests Required
+
+- Hook test: call public `executeAction()` with a declared navigate action; assert the navigation callback receives the exact declared path and `CoreBoxEvents.item.execute` is not sent.
+- Plugin item test: assert each recoverable error code declares exactly one non-primary navigate action and unrelated errors declare none.
+- Widget test: click the visible recovery control and assert exactly one matching `host-action`; assert non-recoverable and non-error states hide it.
+- Deep-link test: valid `Permissions` selects that tab, invalid values fall back to `Overview`, and plugin navigation without `?tab=` resets prior selection.
+- Renderer type-check must prove CoreBox can call the public hook method without bypasses.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (payload.actionId === "open-settings") {
+  router.push(String(payload.payload?.path));
+}
+```
+
+The widget controls the route and bypasses the item's declarative action contract.
+
+#### Correct
+
+```ts
+const declared = item.actions?.find((action) => action.id === payload.actionId);
+if (declared?.type === "navigate") {
+  await actionPanel.executeAction(payload.actionId, item);
+  return;
+}
+```
+
+The host validates intent against the current item and reuses the established navigation executor.
+
+## Scenario: Structured Plugin Intelligence Failure Guidance
+
+### 1. Scope / Trigger
+
+- Trigger: a governed Intelligence call rejects with canonical `code`, `message`, and optional user-safe `reason` / `recovery` fields.
+- The boundary spans plugin error normalization, widget state, item metadata, custom-render payload, and widget retry events.
+
+### 2. Signatures
+
+```ts
+interface NormalizedPluginIntelligenceError {
+  code: string;
+  message: string;
+  reason: string;
+  recovery: string;
+}
+
+interface IntelligenceWidgetFailurePayload {
+  errorCode: string;
+  errorMessage: string;
+  errorReason: string;
+  errorRecovery: string;
+}
+```
+
+`errorReason` and `errorRecovery` are trimmed plain text with a maximum of 240 characters each.
+
+### 3. Contracts
+
+- Preserve supplied canonical reason/recovery separately from the localized summary message; do not parse them back out of provider strings.
+- Missing structured fields remain empty. Never invent a generic reason/recovery placeholder that could misstate the failure.
+- Apply the same 240-character bound during error normalization, widget-state mapping, custom payload creation, and metadata mapping.
+- Push both fields through every widget error writer and retain them in the retry action payload.
+- Render details through Vue text interpolation under `原因` / `建议`. Never use raw HTML for provider/runtime failure content.
+- When the terminal assistant error message exactly matches `errorMessage`, suppress only that final duplicate from `TxAiConversation`; preserve earlier/distinct history and do not render empty-conversation copy in error state.
+
+### 4. Validation & Error Matrix
+
+| Input | Required result |
+| --- | --- |
+| Canonical reason/recovery present | Trim, truncate with existing ellipsis behavior, preserve both fields end to end |
+| One field missing | Render only the populated row |
+| Both fields missing | Render no error-details group or empty labels |
+| Markup-like detail text | Display escaped text; do not create DOM from it |
+| Retry after structured failure | Host payload retains the bounded reason/recovery values |
+
+### 5. Good / Base / Bad Cases
+
+- Good: `PROVIDER_UNAVAILABLE` displays the localized error summary plus the runtime's bounded reason and concrete recovery guidance.
+- Base: a plugin-local permission denial has no structured guidance and keeps the existing permission hint without empty detail rows.
+- Bad: discard runtime recovery, concatenate it into `errorMessage`, expose an unbounded provider body, or render it with `v-html`.
+
+### 6. Tests Required
+
+- Normalizer test: supplied values are trimmed, bounded at 240 characters, and missing values remain empty.
+- Lifecycle test: a real rejected plugin invoke reaches the pushed custom widget payload with code, reason, and recovery intact.
+- Payload/meta test: `buildWidgetPayload()` and item Intelligence metadata expose the separate fields.
+- Widget test: visible labels and escaped values render only when populated; retry emits both fields.
+- Deduplication test: matching terminal error appears once in the notice, prior/distinct messages remain, non-error states are unchanged, and no empty-state copy appears.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const errorMessage = `${failure.message}: ${failure.recovery}`;
+```
+
+This destroys structure, duplicates content, and prevents safe conditional presentation.
+
+#### Correct
+
+```ts
+const failureState = {
+  errorCode: failure.code,
+  errorMessage: failure.message,
+  errorReason: truncateText(failure.reason, 240),
+  errorRecovery: truncateText(failure.recovery, 240),
+};
+```
+
+The widget can present bounded guidance without guessing or parsing provider text.
+
+## Scenario: User-Initiated Plugin AI Cancellation
+
+### 1. Scope / Trigger
+
+- Trigger: an official AI widget is in `ocr-pending` or `chat-pending` and the user selects `停止生成`.
+- The boundary spans widget payload identity, plugin session state, transport stream controllers, stale callback guards, and cancelled-state presentation.
+
+### 2. Signatures
+
+```ts
+interface CancelIntelligenceWidgetAction {
+  actionId: "cancel-request";
+  payload: {
+    requestId: string;
+    prompt: string;
+    answer: string;
+    status: "ocr-pending" | "chat-pending";
+  };
+}
+
+type IntelligenceWidgetStatus =
+  | "idle"
+  | "ocr-pending"
+  | "chat-pending"
+  | "ready"
+  | "cancelled"
+  | "error";
+```
+
+### 3. Contracts
+
+- Show the stop control only for a pending widget with a non-empty current `requestId`.
+- Accept cancellation only when `payload.requestId === session.activeRequestId`; missing or stale ids are no-ops.
+- Cancel only the matching feature session through `supersedeActiveRequest(session)`. Never cancel every plugin session for a user stop.
+- A context-stream controller is cancelled exactly once. If cancellation occurs before a cancellable controller exists, clear request authority so later OCR/invoke completion is ignored.
+- Push neutral `cancelled` state immediately. Preserve visible partial answer and current provider/model/context metadata, but do not commit the incomplete answer as completed conversation history.
+- `canCommitResponse()` remains the authority for rejecting late delta/end/error callbacks after cancellation.
+- Partial cancelled output stays eligible for copy and replace actions; cancellation is not a red error and must not create an `IntelligenceErrorCode`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Matching active request with stream controller | Cancel once; push `cancelled`; preserve partial answer |
+| Matching request before controller/invoke completion | Clear authority; ignore eventual completion |
+| Missing request id | Return ignored; no controller or widget mutation |
+| Stale request id while newer request is active | Return ignored; newer pending state remains authoritative |
+| Late delta/end/error after stop | Ignore; cancelled widget remains unchanged |
+
+### 5. Good / Base / Bad Cases
+
+- Good: stop a streaming answer after one delta; the current text remains copyable and later provider callbacks cannot overwrite it.
+- Base: stop before the first delta; show `已停止生成` with no empty-conversation or error fallback.
+- Bad: call `supersedeAllActiveRequests()`, trust only widget status, accept a stale id, or report cancellation as provider failure.
+
+### 6. Tests Required
+
+- Runtime integration: matching cancellation calls the controller once, preserves partial output, and rejects late callbacks.
+- Stale guard: missing/stale ids cannot cancel or replace a newer pending request.
+- Widget behavior: pending states expose one semantic `停止生成` action with current request payload; ready/error/idle/cancelled states hide it.
+- Cancelled presentation: neutral stopped copy renders and partial answer copy/replace controls remain available.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (actionId === "cancel-request") {
+  supersedeAllActiveRequests();
+}
+```
+
+One stale widget can cancel unrelated or newer feature work.
+
+#### Correct
+
+```ts
+if (payload.requestId !== session.activeRequestId) return ignored;
+supersedeActiveRequest(session);
+await pushWidgetState(featureId, { status: "cancelled", answer: payload.answer });
+```
+
+Cancellation is identity-bound, local to one session, and leaves a stable user-visible terminal state.
+
 ## Scenario: Plugin Intelligence Quota Ownership
 
 ### 1. Scope / Trigger
@@ -336,6 +586,7 @@ function bindPluginInvokeCaller(
 - Hide host-only methods from property reads, `in`, and own-key enumeration. Facade omission is developer guidance, not the security boundary.
 - Raw typed-event calls from a plugin must fail before payload validation, storage import, or quota mutation.
 - Invoke-time internal quota checks remain active; plugins do not preflight or administer them through the public facade.
+- Non-stream fallback audit/cache follows the terminal invocation outcome: successful fallback writes one success using the actual fallback result and caches it under the original key; exhausted fallback writes one failure and rethrows the primary error. Never persist a recoverable primary failure as an extra billed/audited call.
 
 ### 4. Validation & Error Matrix
 
@@ -347,6 +598,9 @@ function bindPluginInvokeCaller(
 | Plugin supplies another caller id | Host overwrites it with `plugin:<plugin id>` |
 | Host sends a quota event | Continue to normal payload validation and quota manager |
 | Host invokes with an explicit caller | Preserve the host caller |
+| Primary provider fails, fallback succeeds | One success audit with fallback identity/usage; result cached |
+| Every provider fails | One failure audit; primary error preserved |
+| Outer-governed fallback succeeds | No inner audit; result may be cached |
 
 ### 5. Good / Base / Bad Cases
 
@@ -360,6 +614,7 @@ function bindPluginInvokeCaller(
 - Raw transport: every quota handler rejects a verified plugin context with `INTELLIGENCE_HOST_ONLY_CAPABILITY`; assert storage is untouched.
 - Actor binding: invoke and stream override missing/spoofed plugin callers and preserve unrelated options; host callers remain unchanged.
 - Regression: text/chat capability execution with `intelligence.basic` remains available and still passes through internal quota enforcement.
+- Fallback regression: ordinary success uses one fallback audit plus cache reuse; total failure uses one failure audit; outer-governed calls remain audit-free.
 
 ### 7. Wrong vs Correct
 
@@ -389,8 +644,8 @@ await tuffIntelligence.invoke(capabilityId, payload.payload, options);
 
 ### 1. Scope / Trigger
 
-- Trigger: a plugin requests Agent or workflow execution through a generic capability, session auto-run, or workflow-run API.
-- `intelligence.basic` covers ordinary governed model calls. Any path that can plan and execute tools requires the existing high-risk `intelligence.agents` grant.
+- Trigger: a plugin requests Agent or workflow execution through a governed generic capability. Low-level Agent session/orchestrator/tool events and persisted workflow control-plane events are host APIs, not permission-granted plugin APIs.
+- `intelligence.basic` covers ordinary governed model calls. High-level paths that can plan and execute tools require the existing high-risk `intelligence.agents` grant.
 
 ### 2. Signatures
 
@@ -410,9 +665,12 @@ assertAutonomousIntelligencePermission(
 ### 3. Contracts
 
 - Apply the agents gate to generic invoke and stream before config loading, provider selection, or Agent runtime startup when the capability is `agent.run` or `workflow.execute`.
-- Apply the same gate before creating an auto-running session and before direct `workflowRun()` execution.
-- Register direct workflow run with `intelligence.agents`, not `intelligence.basic`.
-- Inert session creation remains available under basic permission. Host context remains allowed.
+- Every plugin surface, including the main-process lifecycle `context.utils.intelligence`, must use the typed stream transport. It must carry `_sdkapi` and verified plugin context, return `StreamController`, and never replace the protected handler with a direct `tuffIntelligence.stream` call.
+- Legacy `AgentsEvents.api.execute` / `executeImmediate` must use the same fail-closed agents gate. The channel overwrites plugin caller with `plugin:<transport id>`, preserves explicit host caller, and defaults missing host caller to `intelligence.agent-executor` before runtime readiness or queueing.
+- LLM-backed legacy Agent execute/chat/plan fallbacks forward only safe caller/agent/task/session metadata to Intelligence. Provider usage must flow through the bridge into `AgentResult`; it must not be replaced by hard-coded zero tokens.
+- Keep `workflowList/Get/Save/Delete/Run/History/ReviewUpdate` host-only regardless of `intelligence.agents`; a grant authorizes high-level autonomous execution, not ownership of shared persisted workflow definitions or history.
+- Reject raw plugin workflow events before storage lookup, mutation, runtime wait, or provider/tool work.
+- Keep `agentSession*`, `agentPlan/Execute/Reflect`, and `agentTool*` host-only regardless of plugin grants; `agent.run()` / `workflow.execute()` remain the plugin autonomy surface and host context retains the full runtime.
 - Permission runtime absence must fail closed for plugin autonomous requests.
 
 ### 4. Validation & Error Matrix
@@ -421,22 +679,29 @@ assertAutonomousIntelligencePermission(
 | --- | --- |
 | Basic-only plugin invokes/streams autonomous capability | `INTELLIGENCE_AGENTS_PERMISSION_DENIED`; runtime untouched |
 | Permission runtime unavailable | `INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE`; runtime untouched |
-| Basic-only plugin starts inert session | Session creation remains available |
-| Plugin starts `autoRunGraph` session | Require `intelligence.agents` before session creation |
-| Plugin calls direct workflow run | Require `intelligence.agents` before wait/runtime |
-| Host performs the same operations | Preserve host behavior |
+| Lifecycle facade streams autonomous capability | Same protected typed handler and `intelligence.agents` gate |
+| Lifecycle stream cancellation | Protocol cancel event carries the same plugin identity |
+| Legacy Agent plugin caller missing/spoofed | Gate first; manager receives canonical plugin caller |
+| Legacy Agent host caller missing | Manager receives `intelligence.agent-executor` |
+| Legacy Agent LLM success | SDK quota/audit sees caller; AgentResult preserves provider usage |
+| Plugin sends a raw low-level Agent session/orchestrator/tool event | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; runtime untouched |
+| Plugin reads/enumerates a low-level Agent runtime method | Missing/`undefined`; high-level `agent.run` remains |
+| Plugin calls any persisted workflow control-plane event | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; storage/runtime untouched |
+| Host performs low-level session or persisted workflow operations | Preserve host behavior |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: a plugin declares and receives `intelligence.agents`, then runs an approved Agent workflow.
-- Base: a chat plugin with only `intelligence.basic` calls `text.chat` or creates a non-running session.
-- Bad: a basic-only plugin routes around tool permissions through generic `invoke("agent.run")`, `workflow.execute`, `autoRunGraph`, or `workflowRun()`.
+- Good: a plugin declares and receives `intelligence.agents`, then calls the governed `agent.run()` / `workflow.execute()` wrapper.
+- Base: a chat plugin with only `intelligence.basic` calls `text.chat`; no low-level session or persisted workflow surface is needed.
+- Bad: a basic-only plugin routes around tool permissions through generic `invoke("agent.run")` / `workflow.execute`, or sends raw low-level Agent/workflow events after any grant.
 
 ### 6. Tests Required
 
 - Generic invoke/stream tests must prove both autonomous capability ids fail before the Intelligence SDK and that `text.chat` still runs.
-- Session tests must distinguish inert creation from `autoRunGraph` and assert no orphan session is created on permission failure.
-- Workflow tests must assert registration permission id plus defense-in-depth handler rejection before runtime.
+- Lifecycle facade tests must prove stream start/cancel protocol routing, `_sdkapi`, plugin identity, and returned controller; protected-handler tests own the denial-before-runtime assertion.
+- Legacy Agent channel tests cover denied/unavailable-before-runtime, plugin spoof overwrite, host preservation/default, queued/immediate paths; executor tests cover safe invoke metadata, execute/plan fallback usage, and provider failure.
+- Session boundary tests must prove facade omission plus raw plugin request/stream denial before trace query, subscription, mutation, timer, or disconnect-pause side effects, while host session behavior remains.
+- Workflow boundary tests must prove facade omission plus raw plugin list/get/save/delete/run/history/review denial before service/runtime work while host behavior remains.
 - Permission-guard tests own granted/denied/unavailable matrix behavior and stable error fields.
 
 ### 7. Wrong vs Correct
@@ -665,4 +930,186 @@ localKnowledgeEngine.search(data);
 
 ```ts
 localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context));
+```
+
+## Scenario: Autonomous Intelligence Caller Propagation
+
+### 1. Scope / Trigger
+
+- Trigger: a verified plugin runs a governed high-level Workflow or Agent capability after `intelligence.agents` succeeds; host code may separately use low-level session and persisted workflow control planes.
+- Permission approval does not make payload `metadata.caller` trustworthy and does not unlock host-only Agent/workflow methods.
+
+### 2. Contract
+
+- Generic invoke/stream boundaries overwrite missing/spoofed caller with `plugin:<manifest plugin id>`; raw plugin low-level Agent and persisted workflow requests fail host-only before caller propagation, storage, or runtime access.
+- Session runtime capability nodes preserve the caller supplied by governed high-level/internal execution while host-owning `sessionId` and `turnId`; absent host caller falls back to `intelligence.orchestrator`.
+- Workflow runtime session metadata, stable model invoke options, host-owned context actor id, DeepAgent runtime config, adapter construction, and adapter state all retain the bound caller.
+- Workflow step/input metadata cannot replace the bound caller.
+- Non-identity metadata and provider/model/tool options survive.
+- Host payload object and supplied caller remain unchanged.
+- Existing `intelligence.agents` denial still happens before runtime/provider/tool work.
+
+### 3. Validation Matrix
+
+| Path | Plugin result | Host result |
+| --- | --- | --- |
+| `agentSessionStart(autoRunGraph)` | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no start/graph | Supplied metadata preserved |
+| Runtime capability node | Governed high-level/internal caller retained | Internal fallback if caller absent |
+| `workflowRun` | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no service/runtime | Payload identity preserved |
+| Workflow model/context | Bound caller wins over step spoof | Host workflow fallback preserved |
+| Workflow DeepAgent prompt/agent | Caller in config/adapter/state | Host metadata preserved |
+
+### 4. Tests Required
+
+- Channel tests cover raw plugin Agent/workflow denial, host session/workflow identity, high-level caller binding, and agents denial before runtime.
+- Runtime graph tests cover governed high-level/internal caller and host fallback.
+- Workflow orchestration tests cover runtime session, model/context, prompt/agent adapter paths, and spoof precedence.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```ts
+metadata: { caller: "intelligence.orchestrator", sessionId, turnId }
+```
+
+#### Correct
+
+```ts
+metadata: { ...requestMetadata, caller: resolvedCaller, sessionId, turnId }
+```
+
+## Scenario: Direct Workflow DeepAgent Governance
+
+### 1. Scope / Trigger
+
+- Trigger: a host-owned persisted/direct workflow executes prompt or agent steps with a canonical non-host caller and calls the DeepAgent adapter outside the generic Intelligence SDK wrapper.
+- Stable model steps already use governed SDK invoke; prompt/agent steps require defense-in-depth provider governance even though the persisted registry is not plugin-callable.
+
+### 2. Contract
+
+- Persisted/direct workflow executor context uses `providerGovernance: "self"`; generic `workflow.execute` uses `"outer"`.
+- Self-governance applies only to canonical bound non-host callers carried by host orchestration.
+- Check caller quota before runtime-config resolution, adapter construction, or provider work.
+- Quota denial blocks all downstream work and returns the existing canonical quota failure path.
+- Each successful self-governed DeepAgent call records caller, capability, provider/model, normalized usage, latency, and safe source/session metadata.
+- Failure records zero usage plus canonical code/message/reason/recovery, then rethrows so workflow step status remains failed.
+- Audit metadata must not contain prompt text, adapter messages, credentials, or tool payloads.
+- Outer-governed generic Agent/Workflow calls must not perform duplicate inner quota checks or audits.
+- Outer-owned stable model steps carry an in-memory, identity-bound marker into SDK invoke; the SDK skips only its inner quota check and success/failure audit while preserving provider selection, execution, fallback, cache, result, and caller metadata.
+- Context request/options cloning must explicitly inherit that marker. Serialized fields and caller-controlled metadata cannot forge it.
+- Host direct workflows retain existing behavior.
+
+### 3. Validation Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Self + plugin + quota allowed | Provider runs; one safe audit |
+| Self + plugin + quota denied | No config/adapter/provider work |
+| Self + plugin + provider failure | Canonical failure audit; step fails |
+| Outer generic Agent/Workflow | No inner quota/audit duplication |
+| Outer generic stable model step | One outer charge/audit; provider/fallback behavior unchanged |
+| Spoofed outer-governance metadata | Ordinary SDK quota/audit still applies |
+| Direct stable model step | Existing governed SDK invoke |
+| Host direct workflow | Existing host semantics |
+
+### 4. Tests Required
+
+- Workflow service tests prove fresh/resumed direct runs pass `self`.
+- Orchestration tests prove quota ordering, success audit, failure audit, no prompt leakage, denied short-circuit, and outer no-duplication.
+- Marker tests prove identity-only, non-serializable ownership, explicit clone inheritance, outer stable invoke/context marking, unmarked direct paths, and unchanged fallback.
+- Focused diagnostics and orchestration/workflow lint pass.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const raw = await adapter.run(state); // direct provider call for a bound non-host caller, no quota/audit
+```
+
+#### Correct
+
+```ts
+await checkQuota(caller);
+const raw = await adapter.run(state);
+await recordRuntimeAudit(toSafeAudit(raw));
+```
+
+## Scenario: Plugin Context Observability Ownership
+
+### Scope
+
+- Trigger: a plugin reads ContextHygiene checkpoints or ContextPackage build logs through typed SDK methods or raw events.
+- `metadata-only` describes content minimization, not ownership. Checkpoint summary/reason/metadata and package trace/source/item metadata remain actor-sensitive.
+
+### Contract
+
+- Hide `contextListCheckpoints` and `contextListPackageLogs` from the plugin facade across property reads, membership, enumeration, and TypeScript surface.
+- Reject raw plugin query events with `INTELLIGENCE_HOST_ONLY_CAPABILITY` before ContextHygieneService or SQLite access. A guessed/returned session ID is not an authorization token.
+- Preserve full query behavior for CoreApp renderer host callers.
+- Keep `contextInvoke`, `contextStream`, and pure `contextEvaluateMemory` plugin-callable; they return host-curated summaries/policy decisions rather than arbitrary stored rows.
+- Reintroducing plugin observability requires a durable verified owner/namespace on sessions and logs plus cross-plugin tests; redaction alone is insufficient.
+
+### Validation
+
+- Facade tests prove both query methods are absent while safe context methods remain.
+- Handler tests prove plugin checkpoint and unfiltered package-log requests fail before service calls.
+- Host tests preserve payload object identity and exact service results for both queries.
+
+### Wrong vs Correct
+
+#### Wrong
+
+```ts
+return contextHygieneService.listPackageLogs(payload); // payload may omit sessionId
+```
+
+#### Correct
+
+```ts
+assertHostOwnedIntelligenceControlPlane(context);
+return contextHygieneService.listPackageLogs(payload);
+```
+
+## Scenario: Plugin Selected-Text Capture Boundary
+
+### 1. Scope / Trigger
+
+- Trigger: a plugin reads the active application's selected text for an AI command, transform, translation, or contextual action.
+- The boundary spans plugin System SDK, typed App/System transport, permission middleware, platform capability detection, accessibility lookup, copy fallback, and clipboard restoration.
+
+### 2. Contracts
+
+- `system.captureSelection()` / `captureSelectedText()` is the only plugin entry point; do not add a raw selection channel or plugin-side `navigator.clipboard` fallback.
+- Require verified plugin identity and granted `clipboard.read` before accessibility, keyboard shortcut, or clipboard work. Missing permission runtime, denial, identity failure, and SDK mismatch fail closed before the service.
+- OmniPanel and plugins reuse one host-owned selection capture service. macOS tries AXSelectedText first; copy fallback follows the current platform capability adapter.
+- Snapshot and restore every readable clipboard format on fallback success, empty selection, timeout, and failure. Restore failure is a failed capture and must not return selected text as success.
+- Return typed `supportLevel`, `issueCode`, `issueMessage`, `limitations`, and `capturedAt`; empty/disabled/failed/unsupported are explicit non-success states.
+- Never write selected text to ordinary logs, audit metadata, persistent history, sync payloads, or permission diagnostics.
+
+### 3. Tests Required
+
+- Service tests prove macOS direct preference, copy fallback, multi-format restore, empty/error restore, unsupported state, and fail-closed restore failure.
+- Handler tests prove unverified, unavailable, denied, and SDK-mismatched plugin calls perform zero service work; a verified permitted call preserves result identity.
+- SDK tests prove the typed event is used and malformed host envelopes reject without fabricating text.
+- OmniPanel regression proves it delegates to the shared service and preserves existing context metadata.
+
+### 4. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const text = await navigator.clipboard.readText()
+await intelligence.text.chat({ messages: [{ role: 'user', content: text }] })
+```
+
+#### Correct
+
+```ts
+const selection = await system.captureSelection()
+if (!selection.text) return
+await intelligence.text.chat({
+  messages: [{ role: 'user', content: selection.text }]
+})
 ```

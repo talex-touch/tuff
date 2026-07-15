@@ -242,6 +242,30 @@ export interface ActiveAppSnapshot {
   lastUpdated: number
 }
 
+/**
+ * Request payload for capturing selected text from the active application.
+ * `_sdkapi` is injected by the plugin runtime when available.
+ */
+export interface SelectionCaptureRequest {
+  _sdkapi?: number
+}
+
+export type SelectionCaptureSupportLevel = 'supported' | 'best_effort' | 'unsupported'
+
+export type SelectionCaptureIssueCode = 'disabled' | 'empty' | 'failed' | 'unsupported'
+
+/**
+ * Selected-text capture result with explicit platform and recovery metadata.
+ */
+export interface SelectionCaptureResult {
+  text: string
+  supportLevel: SelectionCaptureSupportLevel
+  issueCode?: SelectionCaptureIssueCode
+  issueMessage?: string
+  limitations?: string[]
+  capturedAt: number
+}
+
 export type AutoStartGetResponse = boolean
 
 export type AutoStartUpdateRequest = boolean

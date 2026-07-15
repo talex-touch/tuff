@@ -95,6 +95,15 @@ const INPUT_TYPE_HTML = 'html'
 const INPUT_TYPE_IMAGE = 'image'
 const HISTORY_FILE = 'conversation-history.json'
 const AUTO_MODEL_SELECTION = '__auto__'
+const OPEN_INTELLIGENCE_SETTINGS_ACTION_ID = 'open-intelligence-settings'
+const INTELLIGENCE_SETTINGS_PATH = '/intelligence/channels'
+const OPEN_PLUGIN_PERMISSIONS_ACTION_ID = 'open-plugin-permissions'
+const PLUGIN_PERMISSIONS_PATH = `/plugin/${PLUGIN_NAME}?tab=Permissions`
+const INTELLIGENCE_SETTINGS_RECOVERY_CODES = new Set([
+  'NEXUS_AUTH_REQUIRED',
+  'PROVIDER_UNAVAILABLE',
+  'NETWORK_FAILURE',
+])
 const CONTEXT_CONTINUATION_REASONS = new Set([
   'archived-session-continuation',
   'expired-session-continuation',
@@ -1832,6 +1841,17 @@ function normalizeInvokeError(error) {
   return {
     code,
     message: `${fallback}${detail}`,
+    reason: truncateText(normalizeText(error?.reason), 240),
+    recovery: truncateText(normalizeText(error?.recovery), 240),
+  }
+}
+
+function buildWidgetErrorState(normalizedError = {}) {
+  return {
+    errorCode: normalizeText(normalizedError.code),
+    errorMessage: normalizeText(normalizedError.message),
+    errorReason: truncateText(normalizeText(normalizedError.reason), 240),
+    errorRecovery: truncateText(normalizeText(normalizedError.recovery), 240),
   }
 }
 
@@ -1868,6 +1888,8 @@ function buildIntelligenceMeta(details = {}) {
   const handoffSessionId = normalizeText(details.handoffSessionId)
   const errorCode = normalizeText(details.errorCode)
   const errorMessage = normalizeText(details.errorMessage)
+  const errorReason = truncateText(normalizeText(details.errorReason), 240)
+  const errorRecovery = truncateText(normalizeText(details.errorRecovery), 240)
   const inputKinds = normalizeStringList(details.inputKinds)
   const capabilities = normalizeStringList(details.capabilities)
   const contextPackage
@@ -1904,6 +1926,10 @@ function buildIntelligenceMeta(details = {}) {
     meta.errorCode = errorCode
   if (errorMessage)
     meta.errorMessage = errorMessage
+  if (errorReason)
+    meta.errorReason = errorReason
+  if (errorRecovery)
+    meta.errorRecovery = errorRecovery
   if (handoffSessionId) {
     meta.handoffSessionId = handoffSessionId
     meta.sessionId = handoffSessionId
@@ -2148,6 +2174,8 @@ function buildWidgetPayload(state = {}) {
     inputKinds: normalizeStringList(state.inputKinds),
     errorCode: normalizeText(state.errorCode),
     errorMessage: normalizeText(state.errorMessage),
+    errorReason: truncateText(normalizeText(state.errorReason), 240),
+    errorRecovery: truncateText(normalizeText(state.errorRecovery), 240),
     copyStatus: normalizeText(state.copyStatus),
     copyError: normalizeText(state.copyError),
     copyRecovery: normalizeText(state.copyRecovery),
@@ -2170,6 +2198,36 @@ function buildWidgetPayload(state = {}) {
   }
 }
 
+function buildWidgetHostActions(state = {}) {
+  if (normalizeText(state.status) !== 'error')
+    return []
+
+  const errorCode = normalizeText(state.errorCode)
+  if (errorCode === 'PERMISSION_DENIED') {
+    return [
+      {
+        id: OPEN_PLUGIN_PERMISSIONS_ACTION_ID,
+        type: 'navigate',
+        label: '检查插件权限',
+        primary: false,
+        payload: { path: PLUGIN_PERMISSIONS_PATH },
+      },
+    ]
+  }
+  if (!INTELLIGENCE_SETTINGS_RECOVERY_CODES.has(errorCode))
+    return []
+
+  return [
+    {
+      id: OPEN_INTELLIGENCE_SETTINGS_ACTION_ID,
+      type: 'navigate',
+      label: '检查 AI 渠道',
+      primary: false,
+      payload: { path: INTELLIGENCE_SETTINGS_PATH },
+    },
+  ]
+}
+
 function resolveWidgetAction(state = {}) {
   const contextPackage = cloneMetadataRecord(state.contextPackage)
   const memoryPolicy = cloneMetadataRecord(state.memoryPolicy)
@@ -2186,7 +2244,7 @@ function resolveWidgetAction(state = {}) {
       },
     }
   }
-  if (status === 'ready') {
+  if (status === 'ready' || (status === 'cancelled' && normalizeText(state.answer))) {
     return {
       actionId: 'copy-answer',
       payload: {
@@ -2216,6 +2274,8 @@ function resolveWidgetAction(state = {}) {
         inputKinds: state.inputKinds,
         errorCode: state.errorCode,
         errorMessage: state.errorMessage,
+        errorReason: state.errorReason,
+        errorRecovery: state.errorRecovery,
         handoffSessionId: state.handoffSessionId,
         contextPackage,
         memoryPolicy,
@@ -2259,10 +2319,11 @@ function buildWidgetItem(featureId, state = {}) {
     'ocr-pending': '正在识别剪贴板图片…',
     'chat-pending': 'AI 正在思考…',
     'ready': '回答已生成',
+    'cancelled': '已停止生成',
     'error': 'AI 请求失败',
   }
 
-  return new TuffItemBuilder(WIDGET_ITEM_ID)
+  const builder = new TuffItemBuilder(WIDGET_ITEM_ID)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitleMap[status] || commandTitle)
@@ -2306,6 +2367,8 @@ function buildWidgetItem(featureId, state = {}) {
         inputKinds: renderState.inputKinds,
         errorCode: renderState.errorCode,
         errorMessage: renderState.errorMessage,
+        errorReason: renderState.errorReason,
+        errorRecovery: renderState.errorRecovery,
         handoffSessionId: renderState.handoffSessionId,
         contextPackage: renderState.contextPackage,
         memoryPolicy: renderState.memoryPolicy,
@@ -2313,7 +2376,11 @@ function buildWidgetItem(featureId, state = {}) {
         selectedModel: renderState.selectedModel,
       }),
     })
-    .build()
+
+  const hostActions = buildWidgetHostActions(renderState)
+  if (hostActions.length > 0)
+    builder.setActions(hostActions)
+  return builder.build()
 }
 
 async function pushWidgetState(featureId, state = {}) {
@@ -2480,8 +2547,7 @@ function buildErrorItem(
       history: cloneHistory(history),
       draftId: retryContext.draftId,
       inputKinds: retryContext.inputKinds,
-      errorCode: normalizedError.code,
-      errorMessage: normalizedError.message,
+      ...buildWidgetErrorState(normalizedError),
       handoffSessionId: retryContext.handoffSessionId,
       selectedProviderId: retryContext.selectedProviderId,
       selectedModel: retryContext.selectedModel,
@@ -2492,8 +2558,7 @@ function buildErrorItem(
       stage: 'error',
       capabilityId: retryContext.capabilityId || 'text.chat',
       inputKinds: retryContext.inputKinds,
-      errorCode: normalizedError.code,
-      errorMessage: normalizedError.message,
+      ...buildWidgetErrorState(normalizedError),
     },
   })
 }
@@ -2987,8 +3052,7 @@ async function dispatchPrompt({
       inputKinds,
       imageDataUrl,
       ocrText: resolvedOcrText,
-      errorCode: normalizedError.code,
-      errorMessage: normalizedError.message,
+      ...buildWidgetErrorState(normalizedError),
       handoffSessionId: session.handoffSessionId,
       history: resolvedHistory,
       modelOptions: session.modelOptions,
@@ -3166,8 +3230,7 @@ const pluginLifecycle = {
           prompt: displayPrompt,
           status: 'error',
           stage: 'error',
-          errorCode: normalizedError.code,
-          errorMessage: normalizedError.message,
+          ...buildWidgetErrorState(normalizedError),
           handoffSessionId: commandStateless ? '' : session.handoffSessionId,
           history: commandStateless ? [] : cloneHistory(session.history),
         })
@@ -3216,8 +3279,7 @@ const pluginLifecycle = {
       await pushWidgetState(featureId, {
         status: 'error',
         stage: 'error',
-        errorCode: normalizedError.code,
-        errorMessage: normalizedError.message,
+        ...buildWidgetErrorState(normalizedError),
       })
       return true
     }
@@ -3281,6 +3343,50 @@ const pluginLifecycle = {
       }
       const commandStateless = Boolean(resolveAiCommand(featureId))
       const session = getSession(featureId)
+
+      if (actionId === 'cancel-request') {
+        const requestId = normalizeText(payload.requestId)
+        if (!requestId || session.activeRequestId !== requestId) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'ignored',
+            reason: 'stale-request',
+          }
+        }
+
+        supersedeActiveRequest(session)
+        await pushWidgetState(featureId, {
+          prompt,
+          requestId,
+          answer: normalizeText(payload.answer),
+          provider: payload.provider,
+          model: payload.model,
+          traceId: payload.traceId,
+          latency: payload.latency,
+          status: 'cancelled',
+          stage:
+            normalizeText(payload.stage)
+            || (normalizeText(payload.status) === 'ocr-pending' ? 'ocr' : 'chat'),
+          capabilityId: normalizeText(payload.capabilityId) || 'text.chat',
+          handoffSessionId: commandStateless ? '' : session.handoffSessionId,
+          inputKinds: Array.isArray(payload.inputKinds) ? payload.inputKinds : [],
+          imageDataUrl: payload.imageDataUrl,
+          ocrText: payload.ocrText,
+          history: cloneHistory(session.history),
+          modelOptions: session.modelOptions,
+          selectedProviderId: session.selectedProviderId,
+          selectedModel: session.selectedModel,
+          contextMode: session.contextMode,
+          contextPackage: payload.contextPackage,
+        })
+        return {
+          externalAction: true,
+          success: true,
+          status: 'cancelled',
+          message: '已停止生成',
+        }
+      }
 
       if (actionId === 'copy-answer') {
         const answer = normalizeText(payload.answer)
@@ -3514,8 +3620,7 @@ const pluginLifecycle = {
             status: 'error',
             stage: 'error',
             inputKinds: draft.inputKinds,
-            errorCode: normalizedError.code,
-            errorMessage: normalizedError.message,
+            ...buildWidgetErrorState(normalizedError),
             handoffSessionId: commandStateless ? '' : session.handoffSessionId,
           })
           return {

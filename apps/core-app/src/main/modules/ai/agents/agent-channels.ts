@@ -4,7 +4,7 @@
  * Handles communication between renderer and main process for agents.
  */
 
-import type { AgentDescriptor, AgentResult, AgentTool } from '@talex-touch/utils'
+import type { AgentDescriptor, AgentResult, AgentTask, AgentTool } from '@talex-touch/utils'
 import type {
   AgentsStoreInstallRequest,
   AgentsStoreSearchRequest
@@ -12,15 +12,31 @@ import type {
 import {
   AgentsEvents,
   type ITuffTransportMain,
+  type HandlerContext,
   type TuffEvent
 } from '@talex-touch/utils/transport/main'
 import { agentStoreService } from '../../../service/agent-store.service'
 import { createLogger } from '../../../utils/logger'
+import { withPermission } from '../../permission/channel-guard'
 import { agentManager } from './agent-manager'
 
 const agentChannelsLog = createLogger('Intelligence').child('AgentChannels')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
 const logInfo = (...args: unknown[]) => agentChannelsLog.info(formatLogArgs(args))
+const DEFAULT_AGENT_CALLER = 'intelligence.agent-executor'
+const AGENT_EXECUTION_PERMISSION = {
+  permissionId: 'intelligence.agents',
+  failClosedForPlugin: true,
+  unavailableCode: 'INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE',
+  deniedCode: 'INTELLIGENCE_AGENTS_PERMISSION_DENIED'
+} as const
+
+function bindAgentTaskCaller(task: AgentTask, context: HandlerContext): AgentTask {
+  const caller = context.plugin
+    ? `plugin:${context.plugin.name}`
+    : task.caller?.trim() || DEFAULT_AGENT_CALLER
+  return task.caller === caller ? task : { ...task, caller }
+}
 
 interface AgentChannelOptions {
   waitForRuntime?: () => Promise<void>
@@ -76,19 +92,31 @@ export function registerAgentChannels(
 
   // Execute a task (queued)
   cleanups.push(
-    transport.on(AgentsEvents.api.execute, async (payload): Promise<{ taskId: string }> => {
-      await waitForRuntime()
-      const taskId = await agentManager.executeTask(payload)
-      return { taskId }
-    })
+    transport.on(
+      AgentsEvents.api.execute,
+      withPermission<AgentTask, { taskId: string }>(
+        AGENT_EXECUTION_PERMISSION,
+        async (payload, context): Promise<{ taskId: string }> => {
+          await waitForRuntime()
+          const taskId = await agentManager.executeTask(bindAgentTaskCaller(payload, context))
+          return { taskId }
+        }
+      )
+    )
   )
 
   // Execute a task immediately
   cleanups.push(
-    transport.on(AgentsEvents.api.executeImmediate, async (payload): Promise<AgentResult> => {
-      await waitForRuntime()
-      return agentManager.executeTaskImmediate(payload)
-    })
+    transport.on(
+      AgentsEvents.api.executeImmediate,
+      withPermission<AgentTask, AgentResult>(
+        AGENT_EXECUTION_PERMISSION,
+        async (payload, context): Promise<AgentResult> => {
+          await waitForRuntime()
+          return agentManager.executeTaskImmediate(bindAgentTaskCaller(payload, context))
+        }
+      )
+    )
   )
 
   // Cancel a task

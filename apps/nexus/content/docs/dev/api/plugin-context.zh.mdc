@@ -14,51 +14,53 @@ code: |
   import type { IPluginLifecycle } from '@talex-touch/utils/plugin/sdk'
 
   const lifecycle: IPluginLifecycle = {
-  async onInit(context) {
-  const {
-  logger,
-  http,
-  storage,
-  secret,
-  clipboard,
-  channel,
-  dialog,
-  box,
-  feature,
-  quickActions,
-  quickOps,
-  intelligence,
-  screenshot,
-  i18n,
-  lexicon,
-  power,
-  recommend,
-  divisionBox,
-  openUrl
-  } = context.utils
+    async onInit(context) {
+      const {
+        logger,
+        http,
+        storage,
+        secret,
+        clipboard,
+        channel,
+        dialog,
+        box,
+        feature,
+        quickActions,
+        quickOps,
+        intelligence,
+        screenshot,
+        system,
+        i18n,
+        lexicon,
+        power,
+        recommend,
+        divisionBox,
+        openUrl
+      } = context.utils
 
-        logger.info(`Loaded ${context.pluginName}`)
-        void [
-          http,
-          storage,
-          secret,
-          clipboard,
-          channel,
-          dialog,
-          box,
-          feature,
-          quickActions,
-          quickOps,
-          intelligence,
-          screenshot,
-          i18n,
-          lexicon,
-          power,
-          recommend,
-          divisionBox,
-          openUrl
-        ]
-      },
+      logger.info(`Loaded ${context.pluginName}`)
+      void [
+        http,
+        storage,
+        secret,
+        clipboard,
+        channel,
+        dialog,
+        box,
+        feature,
+        quickActions,
+        quickOps,
+        intelligence,
+        screenshot,
+        system,
+        i18n,
+        lexicon,
+        power,
+        recommend,
+        divisionBox,
+        openUrl
+      ]
+    },
 
       onFeatureTriggered(featureId, query) {
         // query 可以是 string，也可以是带 text/image/files/html inputs 的 TuffQuery。
@@ -81,6 +83,7 @@ code: |
 | `clipboard`, `storage`, `secret` | 剪贴板、插件数据与受保护凭据              | [Clipboard](./clipboard.zh.md)、[Storage](./storage.zh.md)           |
 | `intelligence`                   | AI capability discovery、invoke 与 stream | [Intelligence](./intelligence.zh.md)                                 |
 | `screenshot`                     | 权限门禁下的显示器、指针屏幕与区域截图    | [Screenshot](./screenshot.zh.md)                                     |
+| `system`                         | 前台应用与 permission-gated 选中文本        | [Clipboard](./clipboard.zh.md)                                       |
 | `i18n`, `lexicon`                | 主机语言与插件隔离 Domain Lexicon         | [Localization](./i18n.zh.md)                                         |
 | `quickActions`, `quickOps`       | 全局动作与 bounded built-in tools         | [Quick Actions](./quick-actions.zh.md)、[QuickOps](./quickops.zh.md) |
 | `divisionBox`, `channel`         | 独立窗口与插件 transport                  | [DivisionBox](./division-box.zh.md)、[Channel](./channel.zh.md)      |
@@ -90,7 +93,7 @@ code: |
 
 ## Legacy global 兼容
 
-现有 `index.js` 插件仍可从 `globalThis` 读取 `logger`、`clipboard`、`storage`、`feature`、`box`、`openUrl` 等 utilities。新 lifecycle 代码应在 `onInit` 中获取 `context.utils`，因为它才包含完整 typed SDK surface，包括 `secret`、`intelligence`、`screenshot`、`i18n` 与 `lexicon`。
+现有 `index.js` 插件仍可从 `globalThis` 读取 `logger`、`clipboard`、`storage`、`feature`、`box`、`openUrl` 等 utilities。新 lifecycle 代码应在 `onInit` 中获取 `context.utils`，因为它才包含完整 typed SDK surface，包括 `secret`、`intelligence`、`screenshot`、`system`、`i18n` 与 `lexicon`。
 
 ---
 

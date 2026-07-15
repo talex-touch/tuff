@@ -3,6 +3,7 @@
 import { sql } from 'drizzle-orm'
 import {
   customType,
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -1224,3 +1225,75 @@ export const flowAuditLogs = sqliteTable(
     stateIdx: index('idx_flow_audit_state').on(table.state)
   })
 )
+
+// =============================================================================
+// 15. CatalogService
+// =============================================================================
+
+export const catalogPacks = sqliteTable(
+  'catalog_packs',
+  {
+    type: text('type', { enum: ['domain-lexicon'] }).notNull(),
+    packId: text('pack_id').notNull(),
+    version: text('version').notNull(),
+    schemaVersion: integer('schema_version').notNull(),
+    payloadSha256: text('payload_sha256').notNull(),
+    payloadBytes: integer('payload_bytes').notNull(),
+    entryCount: integer('entry_count').notNull(),
+    localesJson: text('locales_json').notNull(),
+    minSdkapi: integer('min_sdkapi').notNull(),
+    source: text('source', { enum: ['builtin', 'remote'] }).notNull(),
+    signatureStatus: text('signature_status', { enum: ['builtin', 'verified'] }).notNull(),
+    status: text('status', { enum: ['ready', 'active', 'previous'] }).notNull(),
+    createdAt: integer('created_at').notNull(),
+    importedAt: integer('imported_at').notNull(),
+    activatedAt: integer('activated_at')
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.type, table.packId, table.version] }),
+    statusIdx: index('idx_catalog_packs_type_status').on(table.type, table.status)
+  })
+)
+
+export const catalogDomainLexiconEntries = sqliteTable(
+  'catalog_domain_lexicon_entries',
+  {
+    packType: text('pack_type', { enum: ['domain-lexicon'] }).notNull(),
+    packId: text('pack_id').notNull(),
+    packVersion: text('pack_version').notNull(),
+    entryId: text('entry_id').notNull(),
+    domain: text('domain').notNull(),
+    labelsJson: text('labels_json').notNull(),
+    aliasesJson: text('aliases_json').notNull(),
+    searchBoostJson: text('search_boost_json'),
+    deprecated: integer('deprecated', { mode: 'boolean' }).notNull().default(false),
+    replacedBy: text('replaced_by'),
+    metadataJson: text('metadata_json')
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.packType, table.packId, table.packVersion, table.entryId]
+    }),
+    packFk: foreignKey({
+      columns: [table.packType, table.packId, table.packVersion],
+      foreignColumns: [catalogPacks.type, catalogPacks.packId, catalogPacks.version]
+    }).onDelete('cascade'),
+    packIdx: index('idx_catalog_domain_lexicon_entries_pack').on(
+      table.packType,
+      table.packId,
+      table.packVersion
+    )
+  })
+)
+
+export const catalogState = sqliteTable('catalog_state', {
+  type: text('type', { enum: ['domain-lexicon'] }).primaryKey(),
+  activePackId: text('active_pack_id').notNull(),
+  activePackVersion: text('active_pack_version').notNull(),
+  previousPackId: text('previous_pack_id'),
+  previousPackVersion: text('previous_pack_version'),
+  lastCheckedAt: integer('last_checked_at'),
+  lastUpdatedAt: integer('last_updated_at').notNull(),
+  rollbackReason: text('rollback_reason'),
+  updatedAt: integer('updated_at').notNull()
+})

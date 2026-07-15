@@ -476,9 +476,56 @@ export const UNIT_LEXICON_ENTRIES: readonly DomainLexiconEntry[] =
     ),
   ]);
 
-export const officialDomainLexiconRegistry = new DomainLexiconRegistry(
-  UNIT_LEXICON_ENTRIES,
-);
+class ActiveOfficialDomainLexiconRegistry extends DomainLexiconRegistry {
+  private snapshot: DomainLexiconRegistry;
+
+  constructor(snapshot: DomainLexiconRegistry) {
+    super([]);
+    this.snapshot = snapshot;
+  }
+
+  replaceSnapshot(snapshot: DomainLexiconRegistry): void {
+    if (snapshot === this) {
+      throw new Error(
+        "Official domain lexicon snapshot cannot reference its facade",
+      );
+    }
+    this.snapshot = snapshot;
+  }
+
+  override resolve(...args: Parameters<DomainLexiconRegistry["resolve"]>) {
+    return this.snapshot.resolve(...args);
+  }
+
+  override matchAlias(
+    ...args: Parameters<DomainLexiconRegistry["matchAlias"]>
+  ) {
+    return this.snapshot.matchAlias(...args);
+  }
+
+  override search(...args: Parameters<DomainLexiconRegistry["search"]>) {
+    return this.snapshot.search(...args);
+  }
+
+  override list(...args: Parameters<DomainLexiconRegistry["list"]>) {
+    return this.snapshot.list(...args);
+  }
+}
+
+const activeOfficialDomainLexiconRegistry =
+  new ActiveOfficialDomainLexiconRegistry(
+    new DomainLexiconRegistry(UNIT_LEXICON_ENTRIES),
+  );
+
+export const officialDomainLexiconRegistry: DomainLexiconRegistry =
+  activeOfficialDomainLexiconRegistry;
+
+/** @internal Main-process CatalogService commit hook. Not exported by the public i18n barrel. */
+export function replaceOfficialDomainLexiconRegistryForHost(
+  snapshot: DomainLexiconRegistry,
+): void {
+  activeOfficialDomainLexiconRegistry.replaceSnapshot(snapshot);
+}
 
 export function isUnitLexiconMetadata(
   value: unknown,

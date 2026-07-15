@@ -42,7 +42,7 @@
 - 公共包发布不再作为当前 Roadmap 阻塞项；版本变更后以 GitHub 自动发版 workflow 结果为准。
 - 平台验证不再作为待办、平台后续或证据缺口追踪。
 - OmniPanel Writing Tools、Workflow / Review Queue / Skills / Automation 继续保持 MVP/Beta，不进入当前 Stable 承诺。
-- 本地模型 runtime `2.5.5` 与 ASR `2.5.8` 只保持 PRD 锁方向，不抢当前 AI 文本/OCR evidence。
+- 本地模型 runtime `2.5.5` 与完整 ASR `2.5.8` 仍不抢当前 AI 文本/OCR evidence；VoicePanel 已有受治理云端短音频 `audio.stt` 小切片只计 code/focused evidence，不代表 R9.4 本地 runtime、策略、artifact 或 packaged provider 闭环。
 
 ## 5. 质量门禁
 
