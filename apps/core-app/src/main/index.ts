@@ -19,6 +19,7 @@ import { assistantModule } from './modules/assistant'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
 import { buildVerificationModule } from './modules/build-verification'
+import { catalogModule } from './modules/catalog'
 import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
 import { divisionBoxModule } from './modules/division-box'
@@ -170,6 +171,7 @@ const foregroundModulesToLoad = [
   trayManagerModule,
   nativeCapabilitiesModule,
   networkModule,
+  catalogModule,
   analyticsModule,
   permissionCheckerModule,
   permissionModule, // Plugin permission management - before plugin module
