@@ -1,6 +1,6 @@
 import { readBody, createError } from 'h3'
 import { requireAuth } from '../../utils/auth'
-import { upsertDevice } from '../../utils/authStore'
+import { renameDevice } from '../../utils/authStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
@@ -10,7 +10,10 @@ export default defineEventHandler(async (event) => {
   if (!deviceId || !name) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid payload.' })
   }
-  const device = await upsertDevice(event, userId, deviceId, { deviceName: name })
+  const device = await renameDevice(event, userId, deviceId, name)
+  if (!device) {
+    throw createError({ statusCode: 404, statusMessage: 'Device not found.' })
+  }
   return device
 })
 

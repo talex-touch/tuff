@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import crypto from 'uncrypto'
@@ -1962,6 +1962,16 @@ export async function createPasswordResetToken(event: H3Event, userId: string, t
   return token
 }
 
+export async function hasRecentPasswordResetToken(event: H3Event, userId: string, windowMs: number): Promise<boolean> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const since = new Date(Date.now() - windowMs).toISOString()
+  const row = await db.prepare(`
+    SELECT 1 FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ? AND created_at >= ? LIMIT 1
+  `).bind(userId, since).first()
+  return Boolean(row)
+}
+
 export async function consumePasswordResetToken(event: H3Event, token: string): Promise<string | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -2147,16 +2157,13 @@ export interface MergeUserInput {
   metadata?: Record<string, any> | null
 }
 
-export async function mergeLegacySyncItemsForUsers(
+function buildLegacySyncItemsMergeStatements(
   db: D1Database,
   sourceUserId: string,
   targetUserId: string
-): Promise<void> {
-  if (!(await tableExists(db, 'sync_items'))) {
-    return
-  }
-
-  await db.prepare(`
+): D1PreparedStatement[] {
+  return [
+    db.prepare(`
     DELETE FROM sync_items
     WHERE user_id = ?1
       AND EXISTS (
@@ -2167,9 +2174,8 @@ export async function mergeLegacySyncItemsForUsers(
           AND target.key = sync_items.key
           AND target.updated_at >= sync_items.updated_at
       )
-  `).bind(sourceUserId, targetUserId).run()
-
-  await db.prepare(`
+  `).bind(sourceUserId, targetUserId),
+    db.prepare(`
     DELETE FROM sync_items
     WHERE user_id = ?2
       AND EXISTS (
@@ -2180,13 +2186,25 @@ export async function mergeLegacySyncItemsForUsers(
           AND source.key = sync_items.key
           AND source.updated_at > sync_items.updated_at
       )
-  `).bind(sourceUserId, targetUserId).run()
-
-  await db.prepare(`
+  `).bind(sourceUserId, targetUserId),
+    db.prepare(`
     UPDATE sync_items
     SET user_id = ?2
     WHERE user_id = ?1
-  `).bind(sourceUserId, targetUserId).run()
+  `).bind(sourceUserId, targetUserId),
+  ]
+}
+
+export async function mergeLegacySyncItemsForUsers(
+  db: D1Database,
+  sourceUserId: string,
+  targetUserId: string
+): Promise<void> {
+  if (!(await tableExists(db, 'sync_items'))) {
+    return
+  }
+
+  await db.batch(buildLegacySyncItemsMergeStatements(db, sourceUserId, targetUserId))
 }
 
 export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise<void> {
@@ -2212,106 +2230,120 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
   const now = new Date().toISOString()
   const mergedBy = input.mergedByUserId ?? null
 
-  await db.prepare(`
+  // D1 has no interactive transaction, so run the whole account re-parent as a
+  // single db.batch(): every write commits together or none do, preventing a
+  // half-merged account if a statement (or the Worker) fails mid-sequence.
+  // Optional-table existence is read up front since the batch is a fixed list.
+  const [hasSyncItems, hasApiKeys, hasPlugins, hasPluginReviews, hasPluginRatings, hasActivationLogs, hasTelemetryEvents] = await Promise.all([
+    tableExists(db, 'sync_items'),
+    tableExists(db, 'api_keys'),
+    tableExists(db, 'plugins'),
+    tableExists(db, 'plugin_reviews'),
+    tableExists(db, 'plugin_ratings'),
+    tableExists(db, 'activation_logs'),
+    tableExists(db, 'telemetry_events'),
+  ])
+
+  const statements: D1PreparedStatement[] = [
+    db.prepare(`
     INSERT OR IGNORE INTO ${CREDENTIALS_TABLE} (user_id, password_hash, password_salt, updated_at)
     SELECT ?, password_hash, password_salt, updated_at
     FROM ${CREDENTIALS_TABLE}
     WHERE user_id = ?
-  `).bind(input.targetUserId, input.sourceUserId).run()
-
-  await db.prepare(`DELETE FROM ${CREDENTIALS_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
-
-  await db.prepare(`
+  `).bind(input.targetUserId, input.sourceUserId),
+    db.prepare(`DELETE FROM ${CREDENTIALS_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
+    db.prepare(`
     UPDATE ${ACCOUNTS_TABLE}
     SET user_id = ?
     WHERE user_id = ?
-  `).bind(input.targetUserId, input.sourceUserId).run()
-
-  await db.prepare(`
+  `).bind(input.targetUserId, input.sourceUserId),
+    db.prepare(`
     UPDATE ${PASSKEYS_TABLE}
     SET user_id = ?
     WHERE user_id = ?
-  `).bind(input.targetUserId, input.sourceUserId).run()
-
-  await db.prepare(`
+  `).bind(input.targetUserId, input.sourceUserId),
+    db.prepare(`
     UPDATE ${DEVICES_TABLE}
     SET user_id = ?
     WHERE user_id = ?
-  `).bind(input.targetUserId, input.sourceUserId).run()
-
-  await db.prepare(`
+  `).bind(input.targetUserId, input.sourceUserId),
+    db.prepare(`
     UPDATE ${LOGIN_HISTORY_TABLE}
     SET user_id = ?
     WHERE user_id = ?
-  `).bind(input.targetUserId, input.sourceUserId).run()
+  `).bind(input.targetUserId, input.sourceUserId),
+    db.prepare(`DELETE FROM ${LOGIN_TOKEN_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
+    db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
+    db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE user_id = ?`).bind(input.sourceUserId),
+  ]
 
-  await db.prepare(`DELETE FROM ${LOGIN_TOKEN_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
-  await db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
-  await db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
+  if (hasSyncItems)
+    statements.push(...buildLegacySyncItemsMergeStatements(db, input.sourceUserId, input.targetUserId))
 
-  await mergeLegacySyncItemsForUsers(db, input.sourceUserId, input.targetUserId)
-
-  if (await tableExists(db, 'api_keys')) {
-    await db.prepare(`
+  if (hasApiKeys) {
+    statements.push(db.prepare(`
       UPDATE api_keys
       SET user_id = ?1
       WHERE user_id = ?2
-    `).bind(input.targetUserId, input.sourceUserId).run()
+    `).bind(input.targetUserId, input.sourceUserId))
   }
 
-  if (await tableExists(db, 'plugins')) {
-    await db.prepare(`
+  if (hasPlugins) {
+    statements.push(db.prepare(`
       UPDATE plugins
       SET user_id = ?1
       WHERE user_id = ?2
-    `).bind(input.targetUserId, input.sourceUserId).run()
+    `).bind(input.targetUserId, input.sourceUserId))
   }
 
-  if (await tableExists(db, 'plugin_reviews')) {
-    await db.prepare(`
+  if (hasPluginReviews) {
+    statements.push(
+      db.prepare(`
       DELETE FROM plugin_reviews
       WHERE user_id = ?1
         AND plugin_id IN (SELECT plugin_id FROM plugin_reviews WHERE user_id = ?2)
-    `).bind(input.sourceUserId, input.targetUserId).run()
-
-    await db.prepare(`
+    `).bind(input.sourceUserId, input.targetUserId),
+      db.prepare(`
       UPDATE plugin_reviews
       SET user_id = ?1
       WHERE user_id = ?2
-    `).bind(input.targetUserId, input.sourceUserId).run()
+    `).bind(input.targetUserId, input.sourceUserId),
+    )
   }
 
-  if (await tableExists(db, 'plugin_ratings')) {
-    await db.prepare(`
+  if (hasPluginRatings) {
+    statements.push(
+      db.prepare(`
       DELETE FROM plugin_ratings
       WHERE user_id = ?1
         AND plugin_id IN (SELECT plugin_id FROM plugin_ratings WHERE user_id = ?2)
-    `).bind(input.sourceUserId, input.targetUserId).run()
-
-    await db.prepare(`
+    `).bind(input.sourceUserId, input.targetUserId),
+      db.prepare(`
       UPDATE plugin_ratings
       SET user_id = ?1
       WHERE user_id = ?2
-    `).bind(input.targetUserId, input.sourceUserId).run()
+    `).bind(input.targetUserId, input.sourceUserId),
+    )
   }
 
-  if (await tableExists(db, 'activation_logs')) {
-    await db.prepare(`
+  if (hasActivationLogs) {
+    statements.push(db.prepare(`
       UPDATE activation_logs
       SET user_id = ?1
       WHERE user_id = ?2
-    `).bind(input.targetUserId, input.sourceUserId).run()
+    `).bind(input.targetUserId, input.sourceUserId))
   }
 
-  if (await tableExists(db, 'telemetry_events')) {
-    await db.prepare(`
+  if (hasTelemetryEvents) {
+    statements.push(db.prepare(`
       UPDATE telemetry_events
       SET user_id = ?1
       WHERE user_id = ?2
-    `).bind(input.targetUserId, input.sourceUserId).run()
+    `).bind(input.targetUserId, input.sourceUserId))
   }
 
-  await db.prepare(`
+  statements.push(
+    db.prepare(`
     UPDATE ${USERS_TABLE}
     SET status = 'merged',
         merged_to_user_id = ?,
@@ -2319,20 +2351,22 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
         merged_by_user_id = ?,
         disabled_at = COALESCE(disabled_at, ?)
     WHERE id = ?
-  `).bind(input.targetUserId, now, mergedBy, now, input.sourceUserId).run()
-
-  await db.prepare(`
+  `).bind(input.targetUserId, now, mergedBy, now, input.sourceUserId),
+    db.prepare(`
     INSERT INTO ${MERGE_LOGS_TABLE} (id, source_user_id, target_user_id, merged_by_user_id, reason, metadata, merged_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    crypto.randomUUID(),
-    input.sourceUserId,
-    input.targetUserId,
-    mergedBy,
-    input.reason ?? null,
-    input.metadata ? JSON.stringify(input.metadata) : null,
-    now
-  ).run()
+      crypto.randomUUID(),
+      input.sourceUserId,
+      input.targetUserId,
+      mergedBy,
+      input.reason ?? null,
+      input.metadata ? JSON.stringify(input.metadata) : null,
+      now
+    ),
+  )
+
+  await db.batch(statements)
 }
 
 function getRequestIp(event: H3Event): string | null {
@@ -2657,6 +2691,27 @@ export async function revokeInactiveDevices(
   `).bind(now, userId, ...ids).run()
 
   return summaries
+}
+
+export async function renameDevice(
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+  deviceName: string
+): Promise<AuthDevice | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  // Owner-scoped update only. Unlike upsertDevice, this never re-parents a
+  // device owned by another user, so a rename can't hijack someone else's
+  // device or bump their token_version.
+  const result = await db.prepare(`
+    UPDATE ${DEVICES_TABLE}
+    SET device_name = ?
+    WHERE id = ? AND user_id = ?
+  `).bind(deviceName, deviceId, userId).run()
+  if (Number((result as any)?.meta?.changes ?? 0) < 1)
+    return null
+  return getDevice(event, userId, deviceId)
 }
 
 export async function revokeDevice(event: H3Event, userId: string, deviceId: string): Promise<void> {

@@ -6,6 +6,8 @@ import {
 } from '@talex-touch/tuff-intelligence/light'
 import type { H3Event } from 'h3'
 import crypto from 'uncrypto'
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto'
+import { Buffer } from 'node:buffer'
 import { readCloudflareBindings } from './cloudflare'
 
 const PROVIDERS_TABLE = 'intelligence_providers'
@@ -395,28 +397,68 @@ function normalizeAuditMetadata(value?: Record<string, any> | null): string | nu
   }
 }
 
-// ---------- Simple encryption for API keys ----------
+// ---------- API key encryption (AES-256-GCM) ----------
+//
+// User-supplied provider API keys are stored encrypted in the D1
+// `api_key_encrypted` column, mirroring the AES-256-GCM + HKDF pattern used by
+// providerCredentialStore / storageCredentialStore. Fails closed in production
+// when no key is configured. Legacy repeating-key XOR ciphertext written before
+// this change stays decryptable for backward compatibility.
 
-function getEncryptionKey(): string {
-  return process.env.NUXT_INTELLIGENCE_ENCRYPT_KEY || 'tuff-intelligence-default-key-change-me'
+const AES_256_KEY_BYTES = 32
+const AES_GCM_NONCE_BYTES = 12
+const AES_GCM_TAG_BYTES = 16
+const API_KEY_ENVELOPE_PREFIX = 'v1:a256gcm:'
+const LEGACY_ENCRYPTION_KEY = 'tuff-intelligence-default-key-change-me'
+const DEV_FALLBACK_ENCRYPTION_KEY = 'tuff-intelligence-dev-encrypt-key'
+
+function resolveApiKeyEncryptionSecret(): Buffer {
+  const configured = process.env.NUXT_INTELLIGENCE_ENCRYPT_KEY
+  if (configured && configured.trim())
+    return createHash('sha256').update(configured).digest()
+
+  if (process.env.NODE_ENV === 'production')
+    throw new Error('NUXT_INTELLIGENCE_ENCRYPT_KEY is not configured; refusing to encrypt provider API keys with a default key.')
+
+  return createHash('sha256').update(DEV_FALLBACK_ENCRYPTION_KEY).digest()
+}
+
+function deriveApiKeyEncryptionKey(masterSecret: Buffer): Buffer {
+  const salt = createHash('sha256').update('tuff-intelligence-secure-store:provider-api-key').digest()
+  const info = Buffer.from('intelligence-secure-store:v1:provider-api-key', 'utf-8')
+  return Buffer.from(hkdfSync('sha256', masterSecret, salt, info, AES_256_KEY_BYTES))
 }
 
 function encryptApiKey(apiKey: string): string {
-  const key = getEncryptionKey()
-  const bytes = new TextEncoder().encode(apiKey)
-  const keyBytes = new TextEncoder().encode(key)
-  const keyLength = keyBytes.length || 1
-  const encrypted = new Uint8Array(bytes.length)
-  for (let i = 0; i < bytes.length; i++) {
-    const keyByte = keyBytes[i % keyLength] ?? 0
-    const plainByte = bytes[i] ?? 0
-    encrypted[i] = plainByte ^ keyByte
-  }
-  return btoa(String.fromCharCode(...encrypted))
+  const key = deriveApiKeyEncryptionKey(resolveApiKeyEncryptionSecret())
+  const nonce = randomBytes(AES_GCM_NONCE_BYTES)
+  const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: AES_GCM_TAG_BYTES })
+  const ciphertext = Buffer.concat([cipher.update(apiKey, 'utf-8'), cipher.final()])
+  const packed = Buffer.concat([nonce, cipher.getAuthTag(), ciphertext])
+  return API_KEY_ENVELOPE_PREFIX + packed.toString('base64')
 }
 
 function decryptApiKey(encrypted: string): string {
-  const key = getEncryptionKey()
+  if (encrypted.startsWith(API_KEY_ENVELOPE_PREFIX))
+    return decryptApiKeyGcm(encrypted.slice(API_KEY_ENVELOPE_PREFIX.length))
+
+  return decryptApiKeyLegacyXor(encrypted)
+}
+
+function decryptApiKeyGcm(packedBase64: string): string {
+  const packed = Buffer.from(packedBase64, 'base64')
+  const nonce = packed.subarray(0, AES_GCM_NONCE_BYTES)
+  const tag = packed.subarray(AES_GCM_NONCE_BYTES, AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES)
+  const ciphertext = packed.subarray(AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES)
+  const key = deriveApiKeyEncryptionKey(resolveApiKeyEncryptionSecret())
+  const decipher = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: AES_GCM_TAG_BYTES })
+  decipher.setAuthTag(tag)
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8')
+}
+
+// Backward compatibility: decrypt legacy repeating-key XOR + base64 ciphertext.
+function decryptApiKeyLegacyXor(encrypted: string): string {
+  const key = process.env.NUXT_INTELLIGENCE_ENCRYPT_KEY || LEGACY_ENCRYPTION_KEY
   const bytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
   const keyBytes = new TextEncoder().encode(key)
   const keyLength = keyBytes.length || 1

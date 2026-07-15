@@ -191,6 +191,9 @@ export class DatabaseModule extends BaseModule {
 
   private async configureSqliteClient(client: Client, label: 'primary' | 'aux'): Promise<void> {
     await client.execute('PRAGMA journal_mode = WAL')
+    // Enforce declared foreign keys. SQLite defaults this OFF per-connection,
+    // which silently disabled every onDelete: 'cascade' in the schema.
+    await client.execute('PRAGMA foreign_keys = ON')
     await client.execute('PRAGMA busy_timeout = 30000')
     await client.execute('PRAGMA synchronous = NORMAL')
     await client.execute('PRAGMA locking_mode = NORMAL')
@@ -805,6 +808,7 @@ export class DatabaseModule extends BaseModule {
       await this.ensureRecommendationTables()
       await this.ensureAnalyticsTables()
       await this.ensureScanProgressSourceScopeMigration()
+      await this.ensureSearchPerformanceIndexes()
 
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
@@ -831,6 +835,30 @@ export class DatabaseModule extends BaseModule {
     }
 
     this.scheduleBackgroundStartupTasks(dirPath!)
+  }
+
+  private async ensureSearchPerformanceIndexes(): Promise<void> {
+    if (!this.client) return
+
+    // Hot-path indexes for migration-created tables, added at runtime
+    // (idempotent) to match the existing ensure* pattern. Cover the
+    // per-keystroke completion LIKE, recommendation ORDER BY, embedding
+    // (source_type, source_id) lookups, and usage_logs range scans.
+    const statements = [
+      'CREATE INDEX IF NOT EXISTS idx_query_completions_prefix ON query_completions (prefix)',
+      'CREATE INDEX IF NOT EXISTS idx_item_usage_execute_count ON item_usage_stats (execute_count)',
+      'CREATE INDEX IF NOT EXISTS idx_item_usage_last_executed ON item_usage_stats (last_executed)',
+      'CREATE INDEX IF NOT EXISTS idx_embeddings_source ON embeddings (source_type, source_id)',
+      'CREATE INDEX IF NOT EXISTS idx_usage_logs_action_ts ON usage_logs (action, timestamp)'
+    ]
+
+    try {
+      for (const statement of statements) {
+        await this.client.execute(statement)
+      }
+    } catch (error) {
+      dbLog.warn('Failed to ensure search performance indexes', { error })
+    }
   }
 
   private async ensureKeywordMappingsProviderColumn(): Promise<void> {

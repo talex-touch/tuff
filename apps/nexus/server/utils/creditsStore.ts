@@ -1021,17 +1021,32 @@ export async function consumeCredits(
   if (nextUserUsed > userQuota)
     throw new Error('User credits exceeded.')
 
-  await db.prepare(`
+  const teamUpdate = await db.prepare(`
     UPDATE ${CREDIT_BALANCES_TABLE}
     SET used = used + ?
-    WHERE scope = 'team' AND scope_id = ? AND month = ?
-  `).bind(normalizedAmount, activeCreditTeam.teamId, month).run()
+    WHERE scope = 'team' AND scope_id = ? AND month = ? AND used + ? <= quota
+  `).bind(normalizedAmount, activeCreditTeam.teamId, month, normalizedAmount).run()
 
-  await db.prepare(`
+  if (Number((teamUpdate as any)?.meta?.changes ?? 0) < 1)
+    throw new Error('Team credits exceeded.')
+
+  const userUpdate = await db.prepare(`
     UPDATE ${CREDIT_BALANCES_TABLE}
     SET used = used + ?
-    WHERE scope = 'user' AND scope_id = ? AND month = ?
-  `).bind(normalizedAmount, userId, month).run()
+    WHERE scope = 'user' AND scope_id = ? AND month = ? AND used + ? <= quota
+  `).bind(normalizedAmount, userId, month, normalizedAmount).run()
+
+  if (Number((userUpdate as any)?.meta?.changes ?? 0) < 1) {
+    // Compensating rollback: the team balance was already debited above. D1 has
+    // no interactive transaction, so undo the team debit before failing so a
+    // concurrent caller can't leave the team over-charged.
+    await db.prepare(`
+      UPDATE ${CREDIT_BALANCES_TABLE}
+      SET used = used - ?
+      WHERE scope = 'team' AND scope_id = ? AND month = ?
+    `).bind(normalizedAmount, activeCreditTeam.teamId, month).run()
+    throw new Error('User credits exceeded.')
+  }
 
   const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
   const id = crypto.randomUUID()

@@ -352,6 +352,30 @@ export class StorageModule extends BaseModule {
    * @param name - Configuration name
    * @returns Configuration data (deep copy)
    */
+  /**
+   * Resolve a config key to an absolute on-disk path, rejecting path traversal.
+   * Config keys arrive from IPC callers (including plugins via the storage
+   * channel), so a key like `../../x` must not escape the storage directory.
+   */
+  private resolveConfigPath(name: string): string {
+    if (!this.filePath) throw new Error(`Config path not set (name=${name})`)
+    if (
+      typeof name !== 'string' ||
+      name.length === 0 ||
+      name.includes('\0') ||
+      name.includes('/') ||
+      name.includes('\\')
+    ) {
+      throw new Error(`Invalid config name: ${JSON.stringify(name)}`)
+    }
+    const resolved = path.resolve(this.filePath, name)
+    const rel = path.relative(this.filePath, resolved)
+    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`Config name escapes storage directory: ${JSON.stringify(name)}`)
+    }
+    return resolved
+  }
+
   getConfig(name: string): object {
     if (!this.filePath) throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
 
@@ -373,7 +397,7 @@ export class StorageModule extends BaseModule {
     }
 
     // Load from disk
-    const p = path.resolve(this.filePath!, name)
+    const p = this.resolveConfigPath(name)
     let file = {}
 
     let serialized: string | undefined
@@ -451,7 +475,7 @@ export class StorageModule extends BaseModule {
   reloadConfig(name: string): object {
     if (!this.filePath) throw new Error(`Config ${name} not found`)
 
-    const filePath = path.resolve(this.filePath, name)
+    const filePath = this.resolveConfigPath(name)
     let file = {}
 
     let serialized: string | undefined
@@ -658,7 +682,7 @@ export class StorageModule extends BaseModule {
     if (lastPersisted === configData) {
       return
     }
-    const p = path.join(this.filePath, name)
+    const p = this.resolveConfigPath(name)
 
     const disposePersist = enterPerfContext(`Storage.persist:${name}`, {
       bytes: configData.length

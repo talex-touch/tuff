@@ -4,10 +4,12 @@ import { getImage } from '../../utils/imageStorage'
 export default defineEventHandler(async (event) => {
   const key = event.context.params?.key
 
-  if (!key) {
+  // Reject path traversal in the object key. `%2F` in the route decodes to `/`,
+  // which would let `<userId>%2F<blobId>` address another user's private blob.
+  if (!key || key.includes('/') || key.includes('\\') || key.includes('..') || key.includes('\0')) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Image key is required',
+      statusMessage: 'Invalid image key',
     })
   }
 
