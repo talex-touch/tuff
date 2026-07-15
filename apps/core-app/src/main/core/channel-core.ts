@@ -1,6 +1,7 @@
 import type { WebContentsView } from 'electron'
 import type { TalexTouch } from '../types'
 import { Buffer } from 'node:buffer'
+import { randomBytes } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { structuredStrictStringify } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -155,7 +156,7 @@ class TouchChannel {
       return this.nameToKeyMap.get(name)!
     }
 
-    const key = Math.random().toString(36).substring(2)
+    const key = randomBytes(16).toString('hex')
     this.keyToNameMap.set(key, name)
     this.nameToKeyMap.set(name, key)
 
@@ -549,7 +550,7 @@ class TouchChannel {
       return Promise.resolve()
     }
 
-    const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
+    const uniqueId = `${new Date().getTime()}#${eventName}@${randomBytes(8).toString('hex')}`
 
     const data = {
       code: DataCode.SUCCESS,
