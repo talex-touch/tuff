@@ -703,6 +703,7 @@ export default defineComponent({
           durationMs: animationSize.value.durationMs,
           easing: animationSize.value.easing,
           observeTarget: 'both',
+          innerClass: contentScrollable.value ? 'tx-tabs__auto-sizer-inner--fill' : undefined,
           outerClass,
         },
         {
@@ -1181,8 +1182,14 @@ export default defineComponent({
   position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   height: 100%;
   box-sizing: border-box;
+}
+
+.tx-tabs--top .tx-tabs__main,
+.tx-tabs--bottom .tx-tabs__main {
+  height: auto;
 }
 
 .tx-tabs--auto-height {
@@ -1227,6 +1234,11 @@ export default defineComponent({
 
 .tx-tabs__auto-sizer--fill {
   height: 100%;
+}
+
+.tx-tabs__auto-sizer--fill :deep(.tx-tabs__auto-sizer-inner--fill) {
+  height: 100%;
+  min-height: 0;
 }
 
 .tx-tabs__content-scroll {
