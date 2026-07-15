@@ -1,6 +1,9 @@
 import type { WindowSecurityProfile } from '../../../core/window-security-profile'
 import type { PluginInjections } from './plugin-injections'
 import { SdkApi, isSupportedSdkVersion } from '@talex-touch/utils/plugin'
+import { createLogger } from '../../../utils/logger'
+
+const pluginViewSecurityLog = createLogger('PluginViewSecurity')
 
 export type PluginViewSecurityProfile = Extract<
   WindowSecurityProfile,
@@ -53,9 +56,19 @@ export function resolvePluginViewSecurityProfile(
   context: PluginViewSecurityContext
 ): ResolvedPluginViewSecurityProfile {
   const candidateProfile = resolveCandidateProfile(plugin, context)
+  // H2: opt-in hard override. With TUFF_PLUGIN_SECURE_VIEWS=1 every plugin
+  // surface is forced onto the secure profile (contextIsolation on, no
+  // nodeIntegration). Off by default so legacy plugins that need the compat
+  // runtime keep working; making it the default requires per-plugin user
+  // consent + real-device legacy regression (follow-up).
+  const secureViewsForced = process.env.TUFF_PLUGIN_SECURE_VIEWS === '1'
+  const effectiveProfile: PluginViewSecurityProfile =
+    secureViewsForced && candidateProfile.profile === 'compat-plugin-view'
+      ? 'trusted-plugin-view'
+      : candidateProfile.profile
   const resolved = {
     candidateProfile: candidateProfile.profile,
-    effectiveProfile: candidateProfile.profile,
+    effectiveProfile,
     reason: candidateProfile.reason
   }
   const diagnostic: PluginViewSecurityDiagnostic = {
@@ -64,6 +77,18 @@ export function resolvePluginViewSecurityProfile(
     ...resolved
   }
   securityDiagnostics.set(`${diagnostic.plugin}:${diagnostic.source}`, diagnostic)
+  if (candidateProfile.profile === 'compat-plugin-view') {
+    if (effectiveProfile === 'trusted-plugin-view') {
+      pluginViewSecurityLog.info(
+        `Forced secure profile for compat plugin surface: ${diagnostic.plugin} (TUFF_PLUGIN_SECURE_VIEWS=1, reason=${resolved.reason})`
+      )
+    } else {
+      // Surface which plugins still run on the insecure compat profile and why.
+      pluginViewSecurityLog.warn(
+        `Plugin surface on INSECURE compat profile: ${diagnostic.plugin} (source=${diagnostic.source}, reason=${resolved.reason})`
+      )
+    }
+  }
   return resolved
 }
 
