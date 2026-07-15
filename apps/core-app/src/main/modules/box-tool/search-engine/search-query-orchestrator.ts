@@ -1,5 +1,9 @@
 import type { IProviderActivate, ISearchProvider, TuffItem, TuffQuery } from '@talex-touch/utils'
-import { TuffInputType } from '@talex-touch/utils'
+import {
+  CONTEXT_ACTIONS_PROVIDER_ID,
+  TuffInputType,
+  isContextActionQuery
+} from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { everythingProvider } from '../addon/files/everything-provider'
@@ -83,6 +87,9 @@ export class SearchQueryOrchestrator {
     })
     try {
       let selected = providers
+      if (isContextActionQuery(query)) {
+        selected = selected.filter((provider) => provider.id === CONTEXT_ACTIONS_PROVIDER_ID)
+      }
       const inputTypes = query.inputs?.map((input) => input.type) ?? []
       if (inputTypes.some((type) => type !== TuffInputType.Text)) {
         selected = selected.filter(

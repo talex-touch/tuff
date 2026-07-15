@@ -1,4 +1,5 @@
 import type {
+  ContextActionInput,
   MaybePromise,
   ModuleDestroyContext,
   ModuleInitContext,
@@ -28,9 +29,14 @@ import type {
   OmniPanelShowRequest,
   OmniPanelTransferTarget
 } from '../../../shared/events/omni-panel'
+import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import process from 'node:process'
-import { StorageList, TuffInputType } from '@talex-touch/utils'
+import {
+  StorageList,
+  TuffInputType,
+  createCoreBoxContextActionsOpenRequest
+} from '@talex-touch/utils'
 import { ShortcutTriggerKind } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { OMNI_TRANSFER_DECLARATIVE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -49,6 +55,7 @@ import { extractTranslatedTextFromSceneRun, runNexusScene } from '../nexus/scene
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
+import { t } from '../../utils/i18n-helper'
 import {
   OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS,
   OMNI_PANEL_BUILTIN_FEATURE_MAP,
@@ -302,7 +309,6 @@ export class OmniPanelModule extends BaseModule {
   private transportDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
   private panelWindow: TouchWindow | null = null
-  private isVisible = false
   private inputHook: InputHookApi | null = null
   private inputHookKeys: InputHookKeyMap | null = null
   private mouseLongPressEnabled = false
@@ -398,7 +404,6 @@ export class OmniPanelModule extends BaseModule {
       this.panelWindow.window.close()
     }
     this.panelWindow = null
-    this.isVisible = false
   }
 
   private getSettingsSnapshot(setting?: AppSetting): OmniPanelSettings {
@@ -649,10 +654,8 @@ export class OmniPanelModule extends BaseModule {
       this.syncInputHookState()
     }
 
-    const captureSelection = this.shouldCaptureSelection()
-
     if (!this.inputHookKeys) {
-      void this.toggle({ captureSelection, source: 'shortcut' })
+      void this.openCoreBoxContextActions('shortcut')
       return
     }
 
@@ -688,7 +691,7 @@ export class OmniPanelModule extends BaseModule {
     if (!this.shortcutTriggerArmed) return
     this.shortcutTriggerArmed = false
     this.clearShortcutArmExpiryTimer()
-    void this.toggle({ captureSelection: this.shouldCaptureSelection(), source: 'shortcut' })
+    void this.openCoreBoxContextActions('shortcut')
   }
 
   private syncInputHookState(): void {
@@ -785,14 +788,9 @@ export class OmniPanelModule extends BaseModule {
     window.window.setAlwaysOnTop(true, 'floating')
     window.window.on('closed', () => {
       this.panelWindow = null
-      this.isVisible = false
     })
-    window.window.on('hide', () => {
-      this.isVisible = false
-    })
-    window.window.on('show', () => {
-      this.isVisible = true
-    })
+    window.window.on('hide', () => {})
+    window.window.on('show', () => {})
     window.window.on('blur', () => {
       if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
       if (!this.panelWindow.window.isVisible()) return
@@ -814,14 +812,6 @@ export class OmniPanelModule extends BaseModule {
     return window
   }
 
-  private async toggle(options?: OmniPanelShowRequest): Promise<void> {
-    if (this.isVisible) {
-      this.hide()
-      return
-    }
-    await this.show(options)
-  }
-
   private async show(options?: OmniPanelShowRequest): Promise<void> {
     const targetWindow = await this.ensureWindow()
     const normalizedSource = normalizeContextSource(options?.source)
@@ -839,7 +829,6 @@ export class OmniPanelModule extends BaseModule {
     this.positionWindowNearCursor(targetWindow)
     targetWindow.window.show()
     targetWindow.window.focus()
-    this.isVisible = true
     await this.pushContext(
       text,
       normalizedSource.source,
@@ -850,10 +839,85 @@ export class OmniPanelModule extends BaseModule {
     this.notifyFeatureRefresh('show')
   }
 
+  private async openCoreBoxContextActions(source: OmniPanelContextSource): Promise<void> {
+    const coreBoxWindow = getCoreBoxWindow()
+    if (!coreBoxWindow || coreBoxWindow.window.isDestroyed() || !this.transport) {
+      omniPanelLog.warn('CoreBox unavailable for explicit Context Actions trigger')
+      return
+    }
+
+    const captureResult = normalizeSelectionCaptureResult(await this.captureSelectionText())
+    const capturedAt = Date.now()
+    const diagnostic = {
+      supportLevel: captureResult.supportLevel,
+      issueCode: captureResult.issueCode,
+      issueMessage: captureResult.issueMessage,
+      limitations: captureResult.limitations
+    }
+
+    let input: ContextActionInput
+    if (captureResult.text.trim()) {
+      input = {
+        type: 'text',
+        source: 'selected-text',
+        content: captureResult.text.trim(),
+        capturedAt,
+        available: true,
+        diagnostic
+      }
+    } else {
+      const image = clipboard.readImage()
+      if (!image.isEmpty()) {
+        input = {
+          type: 'image',
+          source: 'clipboard-image',
+          content: `data:image/png;base64,${image.toPNG().toString('base64')}`,
+          mimeType: 'image/png',
+          capturedAt,
+          available: true,
+          diagnostic
+        }
+      } else {
+        input = {
+          type: 'text',
+          source: 'selected-text',
+          content: '',
+          capturedAt,
+          available: false,
+          diagnostic: {
+            ...diagnostic,
+            issueCode: diagnostic.issueCode ?? 'empty',
+            issueMessage: diagnostic.issueMessage ?? t('coreBox.contextActions.errors.emptyContext')
+          }
+        }
+      }
+    }
+
+    const request = createCoreBoxContextActionsOpenRequest(randomUUID(), input)
+    this.hide()
+    await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.ui.show, undefined)
+    void this.transport
+      .sendToWindow(coreBoxWindow.window.id, CoreBoxRetainedEvents.legacy.show, undefined)
+      .catch(() => {})
+    await this.transport.sendToWindow(
+      coreBoxWindow.window.id,
+      CoreBoxEvents.contextActions.open,
+      request
+    )
+
+    omniPanelLog.debug('Explicit Context Actions request forwarded to CoreBox', {
+      meta: {
+        source,
+        inputType: input.type,
+        available: input.available,
+        supportLevel: input.diagnostic?.supportLevel
+      }
+    })
+  }
+
   private hide(): void {
     if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
     this.panelWindow.window.hide()
-    this.isVisible = false
   }
 
   private positionWindowNearCursor(targetWindow: TouchWindow): void {

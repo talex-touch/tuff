@@ -1696,11 +1696,78 @@
       "searchingTitle": "正在搜索",
       "searchingDetail": "正在检查本地 Provider 和索引内容。",
       "recommendationLoadingTitle": "正在准备推荐",
-      "recommendationLoadingDetail": "最近使用和高频动作正在预热。",
-      "noResultsTitle": "未找到结果",
-      "noResultsDetail": "检查关键词、重试搜索，或打开文件索引设置。",
-      "retryAction": "重试",
-      "fileIndexSettingsAction": "文件索引设置"
+      "recommendationLoadingDetail": "最近使用和高频动作正在预热。"
+    },
+    "contextActions": {
+      "title": "上下文动作",
+      "sourceDetail": "来源：{source} · {detail}",
+      "reviewScore": "Review 评分：{score}",
+      "sources": {
+        "intelligence": "Tuff Intelligence",
+        "browser": "Browser Open",
+        "ocr": "系统 OCR"
+      },
+      "context": {
+        "selectedText": "选中文本上下文",
+        "clipboardImage": "剪贴板图片上下文",
+        "unavailable": "未获取到可用上下文",
+        "imagePreview": "已读取剪贴板图片，仅在本次显式操作中使用。",
+        "withIssue": "{preview} · 捕获提示：{issue}"
+      },
+      "actions": {
+        "quickReview": { "title": "QuickReview", "description": "检查缺陷、安全风险和最佳实践" },
+        "translate": { "title": "翻译", "description": "使用现有 Translation 插件翻译选中文本" },
+        "summarize": { "title": "总结", "description": "提取选中文本的主要结论" },
+        "polish": { "title": "润色", "description": "优化表达、语法和专业度" },
+        "rewrite": { "title": "改写", "description": "以更简洁自然的方式重写" },
+        "saveSnippet": {
+          "title": "保存为 Snippet",
+          "description": "交给 Snippets 插件保存当前文本"
+        },
+        "webSearch": { "title": "网页搜索", "description": "在系统默认浏览器中搜索选中文本" },
+        "devTools": {
+          "title": "开发工具",
+          "description": "使用现有 JSON、Base64、URL/JWT 等本地工具"
+        },
+        "ocr": { "title": "OCR 识别", "description": "使用系统 OCR 提取图片文字" },
+        "translateImageText": {
+          "title": "翻译图片文字",
+          "description": "先 OCR，再翻译识别出的文字"
+        },
+        "explainImage": { "title": "AI 解释图片", "description": "使用视觉能力解释图片主要内容" }
+      },
+      "results": {
+        "quickReview": "QuickReview 已完成",
+        "summarize": "总结已生成",
+        "polish": "润色已完成",
+        "rewrite": "改写已完成",
+        "webSearch": "已在浏览器中打开搜索",
+        "ocr": "OCR 识别已完成",
+        "translateImageText": "图片文字翻译已完成",
+        "explainImage": "图片解释已生成"
+      },
+      "errors": {
+        "emptyResult": "能力返回了空结果，请重试或切换 Provider。",
+        "emptyContext": "没有捕获到选中文本，剪贴板中也没有图片。",
+        "textRequired": "该动作需要选中文本。",
+        "imageRequired": "该动作需要剪贴板图片。",
+        "browserBlocked": "该搜索地址被外部 URL 安全策略阻止。",
+        "browserOpen": "无法打开系统浏览器。",
+        "ocrEmpty": "OCR 未识别出可翻译的文字。",
+        "actionInputMismatch": "动作与当前上下文类型不匹配。",
+        "actionUnavailable": "当前动作不可用。"
+      },
+      "unavailable": {
+        "capability": "能力 {capability} 没有可用 Provider",
+        "plugin": "插件 {plugin} 未安装、未启用或当前不可用",
+        "detail": "不可用：{reason}",
+        "unknown": "未知原因"
+      },
+      "status": {
+        "success": "{action} · 执行成功",
+        "error": "{action} · 执行失败",
+        "copyResult": "复制结果"
+      }
     },
     "intelligence": {
       "emptyPrompt": "输入要询问 AI 的问题",

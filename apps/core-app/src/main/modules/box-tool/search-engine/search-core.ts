@@ -42,6 +42,7 @@ import {
 import { previewProvider } from '../addon/preview'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
+import { contextActionsProvider } from '../addon/context-actions/context-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
 import { windowManager } from '../core-box/window'
 import { indexingRuntime, type IndexingRuntime } from './indexing-runtime'
@@ -238,6 +239,7 @@ export class SearchEngineCore
 
     this.registerProvider(mainWindowProvider)
     this.registerProvider(systemActionsProvider)
+    this.registerProvider(contextActionsProvider)
     this.registerProvider(appProvider)
 
     // Native providers provide fast first-frame candidates; file-provider remains the index/enrichment layer.

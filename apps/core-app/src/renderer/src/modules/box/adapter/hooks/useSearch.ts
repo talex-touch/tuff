@@ -1,5 +1,9 @@
 import {
+  CONTEXT_ACTIONS_PROVIDER_ID,
   TuffInputType,
+  normalizeCoreBoxContextActionsOpenRequest,
+  toContextActionQuery,
+  type CoreBoxContextActionsOpenRequest,
   type IProviderActivate,
   type TuffContext,
   type TuffItem,
@@ -415,6 +419,7 @@ export function useSearch(
   })
 
   const searchResult = ref<TuffSearchResult | null>(null)
+  const contextActionRequest = shallowRef<CoreBoxContextActionsOpenRequest | null>(null)
   const loading = ref(false)
   const recommendationPending = ref(false)
   const activeActivations = ref<IProviderActivate[] | null>(null)
@@ -531,7 +536,8 @@ export function useSearch(
       ? activations.map(getActivationKey).sort().join('|')
       : ''
     const inputsKey = buildInputsKey(inputs)
-    return `${text}::${activationKey}::${inputsKey}`
+    const contextSessionId = contextActionRequest.value?.context.sessionId ?? ''
+    return `${text}::${activationKey}::${inputsKey}::${contextSessionId}`
   }
 
   function hasPluginFeatureActivation(activations: IProviderActivate[] | null): boolean {
@@ -551,11 +557,36 @@ export function useSearch(
     )
   }
 
+  function buildCurrentQuery(
+    text: string,
+    inputs: TuffQueryInput[],
+    context?: TuffContext
+  ): TuffQuery {
+    const request = contextActionRequest.value
+    if (!request) return createTuffQuery(text, inputs, context)
+
+    const contextQuery = toContextActionQuery(request)
+    return {
+      ...contextQuery,
+      text,
+      inputs: inputs.length === 1 ? [inputs[0]] : contextQuery.inputs,
+      context: {
+        ...(context ?? {}),
+        ...contextQuery.context
+      }
+    }
+  }
+
   function buildQueryInputs(options?: {
     queryText?: string
     allowPendingTextClipboard?: boolean
     includeClipboardImage?: boolean
   }): TuffQueryInput[] {
+    const contextRequest = contextActionRequest.value
+    if (contextRequest) {
+      return [...toContextActionQuery(contextRequest).inputs]
+    }
+
     const queryText = options?.queryText ?? searchVal.value
     const inputs = buildClipboardQueryInputs({
       clipboardItem: clipboardOptions?.last,
@@ -591,14 +622,13 @@ export function useSearch(
   async function refreshClipboardBeforeInputBuild(
     intent: 'implicit' | 'explicit' = 'implicit'
   ): Promise<void> {
-    if (!clipboardOptions) return
+    if (contextActionRequest.value || !clipboardOptions) return
     if (
       clipboardOptions.activeClipboardSource &&
       (clipboardOptions.last || clipboardOptions.pendingAutoFillItem)
     ) {
       return
     }
-
     try {
       const latest = await getLatestClipboard({ refresh: true })
       if (!latest) {
@@ -750,7 +780,7 @@ export function useSearch(
 
     if (isDivisionBoxMode() && !isDetachedDivisionMode()) {
       beginSearchSequence(inputs, options)
-      const query = createTuffQuery(searchVal.value, inputs, queryContext)
+      const query = buildCurrentQuery(searchVal.value, inputs, queryContext)
       broadcastDivisionBoxInput(query)
       return
     }
@@ -790,7 +820,7 @@ export function useSearch(
 
       try {
         inFlightQueryKey = queryKey
-        const query = createTuffQuery('', inputs, queryContext)
+        const query = buildCurrentQuery('', inputs, queryContext)
         inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
 
         logDebug('[useSearch] Sending recommendation query:', {
@@ -841,7 +871,7 @@ export function useSearch(
 
     if (!searchVal.value) {
       beginSearchSequence(inputs, options)
-      const query = createTuffQuery('', inputs, queryContext)
+      const query = buildCurrentQuery('', inputs, queryContext)
 
       inputTransport.broadcast({
         input: query.text,
@@ -864,7 +894,7 @@ export function useSearch(
 
     try {
       inFlightQueryKey = queryKey
-      const query = createTuffQuery(searchVal.value, inputs, queryContext)
+      const query = buildCurrentQuery(searchVal.value, inputs, queryContext)
 
       logDebug('[useSearch] Sending search query:', {
         text: query.text,
@@ -1198,6 +1228,16 @@ export function useSearch(
   }
 
   async function handleExit(): Promise<void> {
+    if (contextActionRequest.value) {
+      contextActionRequest.value = null
+      activeActivations.value = null
+      await transport
+        .send(CoreBoxEvents.provider.deactivate, { id: CONTEXT_ACTIONS_PROVIDER_ID })
+        .catch(() => null)
+      transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
+      return
+    }
+
     if (activeActivations.value && activeActivations.value.length > 0) {
       await deactivateAllProviders()
       return
@@ -1248,6 +1288,17 @@ export function useSearch(
   )
 
   watch(searchVal, (newSearchVal) => {
+    if (contextActionRequest.value && newSearchVal.trim()) {
+      contextActionRequest.value = null
+      activeActivations.value =
+        activeActivations.value?.filter(
+          (activation) => activation.id !== CONTEXT_ACTIONS_PROVIDER_ID
+        ) ?? null
+      void transport.send(CoreBoxEvents.provider.deactivate, {
+        id: CONTEXT_ACTIONS_PROVIDER_ID
+      })
+    }
+
     if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND) {
       boxOptions.mode = newSearchVal.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
     }
@@ -1322,7 +1373,31 @@ export function useSearch(
     activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, filteredItems)
   })
 
+  const unregContextActionsOpen = transport.on(
+    CoreBoxEvents.contextActions.open,
+    async (payload) => {
+      const request = normalizeCoreBoxContextActionsOpenRequest(payload)
+      if (!request) return
+
+      await transport.send(CoreBoxEvents.provider.deactivateAll).catch(() => null)
+      contextActionRequest.value = request
+      activeActivations.value = null
+      searchVal.value = ''
+      searchResults.value = []
+      searchResult.value = null
+      boxOptions.mode = BoxMode.INPUT
+      boxOptions.data = {}
+      boxOptions.focus = 0
+
+      await handleSearchImmediate({ force: true })
+      window.dispatchEvent(new CustomEvent(CoreBoxEvents.input.focus.toEventName()))
+      window.dispatchEvent(new CustomEvent(CoreBoxRetainedEvents.legacy.focusInput.toEventName()))
+    }
+  )
+
   const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value, context }) => {
+    contextActionRequest.value = null
+    void transport.send(CoreBoxEvents.provider.deactivate, { id: CONTEXT_ACTIONS_PROVIDER_ID })
     const nextValue = typeof value === 'string' ? value : ''
     programmaticQueryValue = nextValue
     oneShotQueryContext = context
@@ -1370,6 +1445,7 @@ export function useSearch(
 
   onBeforeUnmount(() => {
     unregSearchUpdate()
+    unregContextActionsOpen()
     unregSetQuery()
     unregSearchEnd()
     unregItemClear()
