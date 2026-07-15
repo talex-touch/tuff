@@ -271,3 +271,36 @@ Closed the remaining P1 ContextHygiene explain gap by turning `memory-tombstoned
 - Capture Workflow owner/scope/run-isolation packaged metadata before upgrading R9-E context evidence.
 - Capture OmniPanel packaged context execution separately; do not reuse this generic Workflow runtime smoke.
 - Task remains completed but unarchived because this session did not create a work commit.
+
+
+## Session 4: Progressive CoreBox index search
+
+**Date**: 2026-07-15
+**Task**: Progressive CoreBox index search
+**Branch**: `master`
+
+### Summary
+
+Removed transient CoreBox indexing/search hints and added post-commit App/File index refresh with bounded coalescing, selection preservation, and lifecycle cleanup.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d85bb7ea6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

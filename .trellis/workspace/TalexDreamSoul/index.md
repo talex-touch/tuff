@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 3
-- **Last Active**: 2026-07-10
+- **Total Sessions**: 4
+- **Last Active**: 2026-07-15
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~107 | Active |
+| `journal-1.md` | ~306 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 4 | 2026-07-15 | Progressive CoreBox index search | `d85bb7ea6` | `master` |
 | 3 | 2026-07-10 | Serialize async search gather updates | `f40d92698`, `efdcbecee` | `master` |
 | 2 | 2026-07-10 | Contain plugin window privilege boundary | `bd95a0009`, `7db0a9db9` | `master` |
 | 1 | 2026-07-04 | Fix CoreBox recommendation logos | `eed7430f9` | `master` |
